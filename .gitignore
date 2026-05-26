@@ -1,0 +1,8 @@
+/target
+.env
+data/
+diaries/
+*.swp
+*.swo
+*~
+.DS_Store
