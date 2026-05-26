@@ -26,7 +26,7 @@ A Rust-based travel companion backend that tracks trips, logs GPS positions, aut
 
 ```bash
 git clone <repo>
-cd traveler-app
+cd shiny
 
 # Configure environment
 cp .env .env.local

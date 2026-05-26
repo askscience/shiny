@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use tracing_subscriber::EnvFilter;
 
-use traveler_app::api;
-use traveler_app::api::AppState;
-use traveler_app::config::Config;
-use traveler_app::db;
-use traveler_app::services::diary_gen::DiaryGenerator;
-use traveler_app::services::gpsd::GpsdService;
-use traveler_app::services::ollama::OllamaClient;
-use traveler_app::services::osm::OsmService;
-use traveler_app::services::web_search::SearchService;
+use shiny::api;
+use shiny::api::AppState;
+use shiny::config::Config;
+use shiny::db;
+use shiny::services::diary_gen::DiaryGenerator;
+use shiny::services::gpsd::GpsdService;
+use shiny::services::ollama::OllamaClient;
+use shiny::services::osm::OsmService;
+use shiny::services::web_search::SearchService;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

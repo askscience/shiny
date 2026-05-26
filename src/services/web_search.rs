@@ -10,7 +10,7 @@ impl SearchService {
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::builder()
-                .user_agent("TravelerApp/0.1 (traveler-app)")
+                .user_agent("Shiny/0.1 (shiny)")
                 .build()
                 .unwrap(),
         }
