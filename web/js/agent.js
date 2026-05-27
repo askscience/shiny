@@ -5,6 +5,7 @@ import {
   applyDockDestinationGroup,
   destinationKeyForArtifact,
 } from './artifactStore.js';
+import { loadContextInsights } from './insights/insightCards.js';
 import { speak } from './voice.js';
 import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
@@ -59,7 +60,13 @@ async function ingestAgentArtifacts(artifacts) {
   if (destKey) {
     applyDockDestinationGroup(destKey, ids);
   }
-  if (primary) renderArtifact(primary);
+  if (primary) {
+    renderArtifact(primary);
+    if (primary.coordinates?.lat != null && primary.coordinates?.lon != null) {
+      const dest = primary.destination || primary.title;
+      void loadContextInsights(dest, primary.coordinates.lat, primary.coordinates.lon);
+    }
+  }
   if (artifacts.length > 1) {
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: {

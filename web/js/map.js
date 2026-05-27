@@ -129,8 +129,12 @@ function getPanelFitPadding() {
   const panel = document.getElementById('travel-panel');
   const panelOpen = panel?.classList.contains('visible') && window.innerWidth >= 768;
   const panelW = panelOpen ? (panel.offsetWidth || 420) + 32 : 32;
+  const hudTop =
+    parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--hud-header-total')
+    ) || 58;
   return {
-    paddingTopLeft: [panelW, 72],
+    paddingTopLeft: [panelW, hudTop + 12],
     paddingBottomRight: [32, 140],
   };
 }

@@ -11,7 +11,8 @@ export function startGpsTracking() {
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude: lat, longitude: lon, heading, speed, altitude } = pos.coords;
-      document.getElementById('gps-dot').className = 'dot on';
+      const gpsDot = document.getElementById('gps-dot');
+      if (gpsDot) gpsDot.className = 'dot on';
 
       window.dispatchEvent(new CustomEvent('gps:update', {
         detail: { lat, lon, heading: heading ?? deriveHeading(lat, lon), speed, altitude },
@@ -20,7 +21,8 @@ export function startGpsTracking() {
       submitLocation(lat, lon, heading, speed, altitude);
     },
     () => {
-      document.getElementById('gps-dot').className = 'dot off';
+      const gpsDot = document.getElementById('gps-dot');
+      if (gpsDot) gpsDot.className = 'dot off';
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
   );

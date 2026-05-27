@@ -13,6 +13,8 @@ import { initSettings } from './settings.js';
 import { initTrips } from './trips.js';
 import { loadArtifacts } from './artifactStore.js';
 import { initArtifactDock } from './artifacts.js';
+import { initInsightCards } from './insights/insightCards.js';
+import { initHudLeft } from './hudLeft.js';
 import { initTextInput, openTextInput, isTextInputOpen } from './textInput.js';
 
 function showToast(message, type = 'info') {
@@ -55,6 +57,8 @@ async function boot() {
   await refreshGpsPosition();
   initSphere();
   initArtifactDock();
+  initHudLeft();
+  initInsightCards();
   initSettings();
   initTrips();
   initTextInput(submitTextToAgent);

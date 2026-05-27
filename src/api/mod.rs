@@ -8,6 +8,7 @@ pub mod chat;
 pub mod search;
 pub mod agent;
 pub mod voice;
+pub mod insights;
 
 use axum::Router;
 use axum::routing::{get, post};
@@ -73,6 +74,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chat/history", get(chat::history))
         .route("/api/search", post(search::search_web))
         .route("/api/agent", post(agent::handle_agent))
+        .route("/api/insights/context", get(insights::context))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))
         .route("/api/artifacts/:id", get(artifacts::get_one).put(artifacts::update))
         .route("/api/tts", post(voice::tts))

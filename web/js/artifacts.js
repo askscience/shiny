@@ -9,6 +9,7 @@ import {
   setActiveDestination,
 } from './artifactStore.js';
 import { navigateToDestination, previewDestination } from './map.js';
+import { loadContextInsights } from './insights/insightCards.js';
 
 const panel = document.getElementById('travel-panel');
 const backdrop = document.getElementById('travel-panel-backdrop');
@@ -165,6 +166,7 @@ function renderDayBlocks(days, scroll) {
 
 function openPanel() {
   if (!panel) return;
+  document.getElementById('app')?.classList.add('panel-open');
   panel.classList.remove('hidden');
   backdrop?.classList.remove('hidden');
   requestAnimationFrame(() => {
@@ -177,6 +179,7 @@ function openPanel() {
 function closePanel() {
   panel?.classList.remove('visible');
   backdrop?.classList.remove('visible');
+  document.getElementById('app')?.classList.remove('panel-open');
   setTimeout(() => {
     panel?.classList.add('hidden');
     backdrop?.classList.add('hidden');
@@ -423,6 +426,10 @@ export async function openSavedArtifact(id) {
     const artifact = await getArtifact(id);
     const destKey = destinationKeyForArtifact(artifact);
     if (destKey) setActiveDestination(destKey);
+    if (artifact.coordinates?.lat != null && artifact.coordinates?.lon != null) {
+      const dest = artifact.destination || artifact.title;
+      void loadContextInsights(dest, artifact.coordinates.lat, artifact.coordinates.lon);
+    }
     renderArtifact(artifact);
   } catch (e) {
     if (e.status === 404) {

@@ -117,6 +117,60 @@ export function getSummaries() {
   return summaries;
 }
 
+/** Display name for a saved destination chip (city the user asked for). */
+export function destinationLabel(summary) {
+  if (!summary) return '';
+  if (summary.destination) return formatPlaceName(summary.destination);
+  if ((summary.type || summary.artifact_type) === 'travel_plan') {
+    return formatPlaceName(summary.title);
+  }
+  if (summary.subtitle) return formatPlaceName(summary.subtitle);
+  return formatPlaceName(summary.title);
+}
+
+function formatPlaceName(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .replace(/^trip to\s+/i, '')
+    .replace(/\s+travel plan$/i, '')
+    .trim();
+}
+
+function summaryPriority(s) {
+  const type = s.type || s.artifact_type || '';
+  if (type === 'travel_plan') return 3;
+  if (s.theme === 'overview') return 2;
+  return 1;
+}
+
+/**
+ * Unique saved destinations for the left HUD (one chip per city).
+ * @returns {{ key: string, label: string, artifactId: string }[]}
+ */
+export function getSavedDestinations() {
+  const entries = new Map();
+  for (const s of summaries) {
+    const key = destinationKeyForSummary(s);
+    if (!key) continue;
+    const label = destinationLabel(s);
+    if (!label) continue;
+    const score = summaryPriority(s);
+    const prev = entries.get(key);
+    if (!prev || score > prev.score || (s.updated_at || '') > (prev.updated_at || '')) {
+      entries.set(key, {
+        key,
+        label,
+        artifactId: s.id,
+        score,
+        updated_at: s.updated_at || '',
+      });
+    }
+  }
+  return [...entries.values()]
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+    .map(({ key, label, artifactId }) => ({ key, label, artifactId }));
+}
+
 export function getCachedArtifact(id) {
   return cache.get(id) || null;
 }

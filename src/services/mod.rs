@@ -6,3 +6,4 @@ pub mod diary_gen;
 pub mod supertonic;
 pub mod artifacts;
 pub mod agent_tools;
+pub mod insights;

@@ -1,0 +1,226 @@
+/* Top HUD: one horizontal row — clock, meteo, saved places | action icons */
+
+#hud-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--hud-header-pad) 12px 10px 12px;
+  pointer-events: none;
+  animation: hudFadeIn 0.6s var(--ease-out) both;
+}
+
+.hud-header-main {
+  flex: 1;
+  min-width: 0;
+  height: var(--hud-bar-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+#hud-top {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+/* Clock — body font for readability */
+.hud-clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: var(--hud-bar-height);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-glass);
+  flex-shrink: 0;
+}
+
+.hud-clock-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .hud-clock-icon {
+  filter: brightness(0) invert(1);
+}
+
+.hud-clock-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+#hud-clock-time {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+#hud-clock-date {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+/* Meteo pill */
+.hud-meteo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: var(--hud-bar-height);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-glass);
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.hud-meteo.loading {
+  opacity: 0.65;
+}
+
+#hud-meteo-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] #hud-meteo-icon {
+  filter: brightness(0) invert(1);
+}
+
+#hud-meteo-temp {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+#hud-meteo-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Saved places — horizontal scroll, fills remaining width */
+.hud-trips-scroll,
+#hud-saved-trips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 2px;
+}
+
+.hud-trips-scroll::-webkit-scrollbar,
+#hud-saved-trips::-webkit-scrollbar {
+  display: none;
+}
+
+.hud-trips-empty {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 12px;
+  height: var(--hud-bar-height);
+  display: inline-flex;
+  align-items: center;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.hud-trip-chip {
+  flex-shrink: 0;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  height: var(--hud-bar-height);
+  padding: 0 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+
+.hud-trip-chip:hover {
+  background: var(--glass-strong);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="light"] .hud-trip-chip:hover {
+  border-color: rgba(15, 23, 42, 0.14);
+}
+
+.hud-trip-chip.active {
+  background: rgba(125, 211, 252, 0.18);
+  border-color: rgba(125, 211, 252, 0.45);
+}
+
+[data-theme="light"] .hud-trip-chip.active {
+  background: rgba(2, 132, 199, 0.12);
+  border-color: rgba(2, 132, 199, 0.35);
+}
+
+@media (max-width: 767px) {
+  #hud-clock-date {
+    display: none;
+  }
+
+  #hud-meteo-label {
+    display: none;
+  }
+
+  .hud-trip-chip {
+    font-size: 11px;
+    padding: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #hud-header {
+    animation: none;
+  }
+}

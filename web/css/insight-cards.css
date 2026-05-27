@@ -1,0 +1,179 @@
+/* Persistent destination insight cards (notification style) */
+
+#insight-cards {
+  position: fixed;
+  top: var(--hud-header-total);
+  right: 16px;
+  left: auto;
+  z-index: 26;
+  max-height: calc(100vh - var(--hud-header-total) - 180px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(340px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+#insight-cards:empty {
+  display: none;
+}
+
+#insight-cards::-webkit-scrollbar {
+  display: none;
+}
+
+/* Right side stays clear of the travel panel on the left */
+@media (min-width: 768px) {
+  #app.panel-open #insight-cards {
+    right: 16px;
+    left: auto;
+    max-width: min(320px, calc(100vw - min(420px, 42vw) - 32px));
+  }
+}
+
+@media (max-width: 767px) {
+  #app.panel-open #insight-cards {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.insight-card {
+  width: 100%;
+  max-width: min(340px, calc(100vw - 32px));
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  padding-right: 36px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-glass);
+  pointer-events: auto;
+  position: relative;
+  animation: insightIn 0.45s var(--ease-out) both;
+}
+
+.insight-card-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(125, 211, 252, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+}
+
+[data-theme="light"] .insight-card-icon {
+  background: rgba(2, 132, 199, 0.1);
+  border-color: rgba(2, 132, 199, 0.2);
+}
+
+.insight-card-icon img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.95;
+}
+
+[data-theme="dark"] .insight-card-icon img {
+  filter: brightness(0) invert(1);
+}
+
+.insight-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.insight-card-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1.25;
+}
+
+.insight-card-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.insight-card-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.insight-card-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+[data-theme="light"] .insight-card-close:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.insight-card.kind-weather .insight-card-icon {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+[data-theme="light"] .insight-card.kind-weather .insight-card-icon {
+  background: rgba(2, 132, 199, 0.12);
+  border-color: rgba(2, 132, 199, 0.25);
+}
+
+.insight-card.kind-event .insight-card-icon {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.insight-card.kind-place .insight-card-icon {
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.28);
+}
+
+@keyframes insightIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insight-card {
+    animation: none;
+  }
+}
+
+@media (max-width: 767px) {
+  #insight-cards {
+    right: 12px;
+    max-width: min(300px, calc(100vw - 24px));
+  }
+}

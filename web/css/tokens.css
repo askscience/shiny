@@ -18,6 +18,10 @@
   --radius-lg: 24px;
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.35);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Fixed top HUD row (clock + meteo + saved places) */
+  --hud-bar-height: 40px;
+  --hud-header-pad: max(8px, env(safe-area-inset-top));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 10px);
 }
 
 [data-theme="light"] {

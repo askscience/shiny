@@ -31,6 +31,11 @@ pub struct RouteResult {
 }
 
 impl OsmService {
+    /// Shared HTTP client (Overpass, Nominatim, OSRM, etc.).
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::builder()

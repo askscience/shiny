@@ -10,6 +10,13 @@ body.compose-active #chrome-bottom {
 
 body.compose-active #travel-panel,
 body.compose-active #travel-panel-backdrop,
+body.compose-active #hud-header,
+body.compose-active #insight-cards {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s var(--ease-out);
+}
+
 body.compose-active #hud-transcript {
   opacity: 0;
   pointer-events: none;
