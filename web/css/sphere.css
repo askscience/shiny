@@ -36,9 +36,7 @@
 }
 
 #sphere-container:focus-visible {
-  outline: 2px solid rgba(125, 211, 252, 0.55);
-  outline-offset: 8px;
-  border-radius: 50%;
+  outline: none;
 }
 
 #sphere-container.pressed {
@@ -57,6 +55,12 @@
   background: transparent;
   border: none;
   pointer-events: none;
+}
+
+[data-theme="light"] #sphere-container {
+  filter:
+    drop-shadow(0 6px 24px rgba(2, 132, 199, 0.5))
+    drop-shadow(0 2px 12px rgba(15, 23, 42, 0.35));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -19,3 +19,18 @@
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.35);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+[data-theme="light"] {
+  --bg: #eef0f4;
+  --glass: rgba(255, 255, 255, 0.82);
+  --glass-strong: rgba(255, 255, 255, 0.94);
+  --glass-border: rgba(15, 23, 42, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.6);
+  --text: #0f172a;
+  --muted: rgba(15, 23, 42, 0.55);
+  --accent: #0284c7;
+  --accent-warm: #d97706;
+  --accent-live: #16a34a;
+  --accent-error: #dc2626;
+  --shadow-glass: 0 8px 28px rgba(15, 23, 42, 0.12);
+}

@@ -29,7 +29,7 @@
   border: 1px solid transparent;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  color: var(--text);
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease-out);
   animation: dockSlideIn 0.35s var(--ease-out) both;
@@ -59,10 +59,30 @@
   filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(125, 211, 252, 0.8));
 }
 
+[data-theme="light"] .artifact-dock-btn {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="light"] .artifact-dock-btn:hover {
+  background: rgba(15, 23, 42, 0.1);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme="light"] .artifact-dock-icon {
+  filter: none;
+  opacity: 0.75;
+}
+
+[data-theme="light"] .artifact-dock-btn.active .artifact-dock-icon {
+  filter: drop-shadow(0 0 4px rgba(2, 132, 199, 0.5));
+  opacity: 1;
+}
+
 .artifact-dock-overflow {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  color: var(--text);
   color: #fff;
 }
 

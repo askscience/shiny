@@ -282,6 +282,23 @@
   }
 }
 
+[data-theme="light"] #travel-panel-backdrop {
+  background: rgba(15, 23, 42, 0.2);
+}
+
+[data-theme="light"] #travel-panel {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(248, 250, 252, 0.96) 100%
+  );
+}
+
+[data-theme="light"] .panel-prose,
+[data-theme="light"] .panel-day-story {
+  color: rgba(15, 23, 42, 0.88);
+}
+
 @media (prefers-reduced-motion: reduce) {
   #travel-panel,
   #travel-panel-backdrop,

@@ -8,7 +8,9 @@ import {
 import { prepareVoice, startListening, cancelListening, isListening } from './voice.js';
 import { sendToAgent, sendToAgentCompose } from './agent.js';
 import { startGpsTracking, refreshActiveTrip } from './gps.js';
+import { initTheme } from './theme.js';
 import { initSettings } from './settings.js';
+import { initTrips } from './trips.js';
 import { loadArtifacts } from './artifactStore.js';
 import { initArtifactDock } from './artifacts.js';
 import { initTextInput, openTextInput, isTextInputOpen } from './textInput.js';
@@ -47,12 +49,14 @@ async function boot() {
     return;
   }
 
+  initTheme();
   document.getElementById('app').classList.remove('hidden');
   initMap();
   await refreshGpsPosition();
   initSphere();
   initArtifactDock();
   initSettings();
+  initTrips();
   initTextInput(submitTextToAgent);
   startGpsTracking();
   wireSphere();

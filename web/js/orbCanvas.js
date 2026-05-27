@@ -1,6 +1,6 @@
 /** Siri-style fluid orb — canvas only, circular clip, no square DOM layers */
 
-const PALETTES = {
+const PALETTES_DARK = {
   idle: ['#5eead4', '#a78bfa', '#38bdf8', '#c084fc', '#22d3ee'],
   listening: ['#fcd34d', '#fb923c', '#f97316', '#fbbf24', '#fde68a'],
   conversation: ['#6ee7b7', '#34d399', '#2dd4bf', '#4ade80', '#86efac'],
@@ -10,6 +10,8 @@ const PALETTES = {
   downloading: ['#93c5fd', '#60a5fa', '#818cf8', '#3b82f6', '#a5b4fc'],
   disabled: ['#64748b', '#475569', '#94a3b8', '#334155', '#64748b'],
 };
+
+let themeMode = 'dark';
 
 function hexToRgba(hex, a) {
   const h = hex.replace('#', '');
@@ -27,8 +29,9 @@ class OrbRenderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: true });
     this.displaySize = 80;
-    this.palette = PALETTES.idle;
+    this.palette = PALETTES_DARK.idle;
     this.stateKey = 'idle';
+    this.themeMode = themeMode;
     this.intensity = 0;
     this.t = 0;
     this.running = true;
@@ -60,7 +63,12 @@ class OrbRenderer {
 
   setPalette(state) {
     this.stateKey = state;
-    this.palette = PALETTES[state] || PALETTES.idle;
+    this.palette = PALETTES_DARK[state] || PALETTES_DARK.idle;
+  }
+
+  setTheme(mode) {
+    this.themeMode = mode === 'light' ? 'light' : 'dark';
+    this.setPalette(this.stateKey);
   }
 
   setIntensity(v) {
@@ -97,10 +105,13 @@ class OrbRenderer {
 
     ctx.clearRect(0, 0, w, w);
 
-    // Outer glow — circular shadow on the orb edge only
+    // Outer glow — soft bloom, no hard ring
     ctx.save();
-    ctx.shadowColor = hexToRgba(this.palette[0], 0.55 + glowI * 0.25);
-    ctx.shadowBlur = (18 + glowI * 22) * this.dpr;
+    const glowA = this.themeMode === 'light'
+      ? 0.72 + glowI * 0.28
+      : 0.55 + glowI * 0.25;
+    ctx.shadowColor = hexToRgba(this.palette[0], glowA);
+    ctx.shadowBlur = (this.themeMode === 'light' ? 22 + glowI * 26 : 14 + glowI * 18) * this.dpr;
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.004)';
@@ -128,16 +139,20 @@ class OrbRenderer {
       const r = b.radius * w * pulse * (0.92 + Math.sin(this.t * 2 + i) * 0.08);
 
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      const midA = this.themeMode === 'light' ? 0.78 : 0.65;
+      const outerA = this.themeMode === 'light' ? 0.22 : 0.15;
       g.addColorStop(0, color);
-      g.addColorStop(0.35, hexToRgba(color, 0.65));
-      g.addColorStop(0.7, hexToRgba(color, 0.15));
+      g.addColorStop(0.35, hexToRgba(color, midA));
+      g.addColorStop(0.7, hexToRgba(color, outerA));
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, w);
     }
 
+    ctx.globalAlpha = 1;
+
     // Secondary slow swirl layer
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = this.themeMode === 'light' ? 0.65 : 0.55;
     const swirl = ctx.createRadialGradient(
       cx + Math.cos(this.t * 0.4) * R * 0.35,
       cy + Math.sin(this.t * 0.35) * R * 0.35,
@@ -178,17 +193,20 @@ class OrbRenderer {
 
     ctx.restore();
 
-    // Ripples while active
+    // Soft glow pulse while active (no ring border)
     if (glowI > 0.12) {
       const rippleT = (this.t * 1.8) % 1;
       for (let i = 0; i < 2; i++) {
         const p = (rippleT + i * 0.5) % 1;
-        const rr = R + p * R * 0.35;
+        const rr = R + p * R * 0.28;
+        const g = ctx.createRadialGradient(cx, cy, rr * 0.85, cx, cy, rr);
+        const rippleA = this.themeMode === 'light' ? 0.28 : 0.12;
+        g.addColorStop(0, hexToRgba(this.palette[0], (1 - p) * rippleA));
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-        ctx.strokeStyle = hexToRgba(this.palette[0], (1 - p) * 0.35);
-        ctx.lineWidth = 1.5 * this.dpr;
-        ctx.stroke();
+        ctx.fill();
       }
     }
   }
@@ -196,8 +214,15 @@ class OrbRenderer {
 
 export function initOrbCanvas(canvas) {
   if (renderer) renderer.destroy();
+  themeMode = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
   renderer = new OrbRenderer(canvas);
+  renderer.setTheme(themeMode);
   return renderer;
+}
+
+export function setOrbTheme(theme) {
+  themeMode = theme === 'light' ? 'light' : 'dark';
+  renderer?.setTheme(themeMode);
 }
 
 export function setOrbPalette(state) {

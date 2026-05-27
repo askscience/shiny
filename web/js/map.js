@@ -1,5 +1,11 @@
 let map = null;
+let baseTileLayer = null;
 let userMarker = null;
+
+const MAP_TILES = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+};
 let routeLayer = null;
 let routeCasingLayer = null;
 let destinationMarker = null;
@@ -21,11 +27,16 @@ export function initMap() {
     keyboard: false,
   }).setView([currentPos.lat, currentPos.lon], 16);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  baseTileLayer = L.tileLayer(MAP_TILES[theme], {
     maxZoom: 19,
     crossOrigin: 'anonymous',
     subdomains: 'abcd',
   }).addTo(map);
+
+  window.addEventListener('theme:change', (e) => {
+    setMapTheme(e.detail?.theme);
+  });
 
   userMarker = L.circleMarker([currentPos.lat, currentPos.lon], {
     radius: 6,
@@ -73,6 +84,17 @@ export function initMap() {
   setTimeout(() => map.invalidateSize(), 200);
 
   return map;
+}
+
+export function setMapTheme(theme) {
+  if (!map) return;
+  const key = theme === 'light' ? 'light' : 'dark';
+  if (baseTileLayer) map.removeLayer(baseTileLayer);
+  baseTileLayer = L.tileLayer(MAP_TILES[key], {
+    maxZoom: 19,
+    crossOrigin: 'anonymous',
+    subdomains: 'abcd',
+  }).addTo(map);
 }
 
 export function updatePosition({ lat, lon, heading }) {
