@@ -35,6 +35,7 @@ impl OsmService {
         Self {
             client: reqwest::Client::builder()
                 .user_agent("Shiny/0.1 (shiny)")
+                .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap(),
         }
@@ -113,12 +114,40 @@ impl OsmService {
             profile, from_lon, from_lat, to_lon, to_lat
         );
 
-        let resp = self.client.get(&url).send().await?;
+        let resp = self.client.get(&url).send().await.map_err(|e| {
+            if e.is_connect() {
+                AppError::BadRequest(
+                    "Driving directions service unreachable. Check your internet connection.".into(),
+                )
+            } else if e.is_timeout() {
+                AppError::BadRequest("Driving directions timed out. Try again.".into())
+            } else {
+                AppError::Http(e)
+            }
+        })?;
+        if !resp.status().is_success() {
+            return Err(AppError::BadRequest(format!(
+                "Routing service returned HTTP {}",
+                resp.status()
+            )));
+        }
         let data: serde_json::Value = resp.json().await.map_err(|e| {
             AppError::Internal(format!("Failed to parse route response: {}", e))
         })?;
 
-        let route = data["routes"][0].clone();
+        let code = data["code"].as_str().unwrap_or("Unknown");
+        if code != "Ok" {
+            let msg = data["message"]
+                .as_str()
+                .unwrap_or("no route found between these points");
+            return Err(AppError::BadRequest(format!("Routing failed: {}", msg)));
+        }
+
+        let route = data["routes"]
+            .as_array()
+            .and_then(|arr| arr.first())
+            .ok_or_else(|| AppError::BadRequest("Routing returned no routes".into()))?
+            .clone();
         let legs = route["legs"][0].clone();
 
         let total_distance = route["distance"].as_f64().unwrap_or(0.0);
@@ -152,6 +181,12 @@ impl OsmService {
                     .collect()
             })
             .unwrap_or_default();
+
+        if geometry.len() < 2 {
+            return Err(AppError::BadRequest(
+                "Routing returned empty geometry".into(),
+            ));
+        }
 
         Ok(RouteResult {
             total_distance_meters: total_distance,

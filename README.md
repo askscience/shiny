@@ -12,6 +12,7 @@ A Rust-based travel companion backend that tracks trips, logs GPS positions, aut
 - **AI Chat** — Conversational agent aware of your travel history and diary entries
 - **Silent Diary Cron** — Daily auto-generation at a configurable time
 - **Bearer Token Auth** — Simple but effective authentication
+- **Web Navigator UI** — Map-first driving interface with voice AI companion
 
 ## Quick Start
 
@@ -19,8 +20,10 @@ A Rust-based travel companion backend that tracks trips, logs GPS positions, aut
 
 - Rust 1.75+ (edition 2021)
 - SQLite (bundled automatically)
+- Python 3.9+ with `pip install 'supertonic[serve]'` (for TTS)
 - [Ollama](https://ollama.com) with `gemma4:31b-cloud` (optional — AI features degrade gracefully)
 - [GPSD](https://gpsd.io) running on `localhost:2947` (optional — falls back to mock data)
+- ~500MB disk for Supertonic ONNX + ~50MB per Vosk language
 
 ### Setup
 
@@ -32,11 +35,48 @@ cd shiny
 cp .env .env.local
 # Edit .env.local to match your setup
 
-# Run
+# Terminal 1: Supertonic TTS sidecar
+./voice/start_supertonic.sh
+
+# Terminal 2: API + Web UI
 RUST_LOG=info cargo run
 ```
 
-The server starts on `http://0.0.0.0:8080` by default.
+The server starts on `http://0.0.0.0:8080` by default. Open it in a browser (HTTPS required for mic on non-localhost).
+
+Or set `AUTO_START_SUPERTONIC=true` in `.env` to spawn the TTS sidecar automatically.
+
+## Web Navigator UI
+
+The built-in web interface (`web/`) provides a **map-first driving navigator**:
+
+- **OpenStreetMap** follows your GPS with heading rotation
+- **Central sphere** — short tap for one AI voice turn, long press for continuous conversation
+- **Vosk STT** — offline speech recognition in the browser (models auto-download by language)
+- **Supertonic 3 TTS** — on-device text-to-speech via local sidecar ([Hugging Face model](https://huggingface.co/Supertone/supertonic-3))
+- **AI artifacts** — slide-up cards for monuments, POIs, routes, and travel plans
+
+### Voice interaction
+
+| Gesture | Action |
+|---|---|
+| Short tap sphere | Listen once → AI reply spoken aloud |
+| Long press sphere | Continuous conversation until tap again |
+| ⚙ Settings | Change language (auto-downloads Vosk model) |
+
+Language defaults to your browser/system locale on first launch.
+
+### New API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/agent` | AI agent with tool execution + artifacts |
+| POST | `/api/tts` | Supertonic TTS proxy (returns WAV) |
+| GET | `/api/voice/status` | Vosk + Supertonic readiness |
+| POST | `/api/voice/download` | Download Vosk model for language |
+| GET | `/api/voice/models/vosk/{lang}.tar.gz` | Serve Vosk model to browser |
+| GET | `/api/voice/languages` | Supported languages |
+| GET | `/api/trips/active` | Current active trip |
 
 ### Configuration (.env)
 
@@ -45,13 +85,18 @@ The server starts on `http://0.0.0.0:8080` by default.
 | `SERVER_HOST` | `0.0.0.0` | Bind address |
 | `SERVER_PORT` | `8080` | HTTP port |
 | `DATABASE_URL` | `sqlite:data/traveler.db` | SQLite database path |
-| `OLLAMA_URL` | `http://ollama.local:11434` | Ollama API base URL |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama API base URL |
 | `OLLAMA_MODEL` | `gemma4:31b-cloud` | Ollama model name |
 | `GPSD_HOST` | `127.0.0.1` | GPSD daemon host |
 | `GPSD_PORT` | `2947` | GPSD daemon port |
 | `DIARY_AUTO_GENERATE` | `true` | Enable daily diary cron |
 | `DIARY_GENERATE_TIME` | `21:00` | Diary generation time (HH:MM) |
 | `LOG_LEVEL` | `info` | Logging verbosity |
+| `SUPERTONIC_URL` | `http://127.0.0.1:7788` | Supertonic TTS sidecar URL |
+| `SUPERTONIC_VOICE` | `M1` | Default TTS voice preset |
+| `VOSK_MODELS_DIR` | `data/vosk-models` | Downloaded Vosk model storage |
+| `AUTO_START_SUPERTONIC` | `false` | Spawn Supertonic sidecar on startup |
+| `WEB_DIR` | `web` | Static web UI directory |
 
 ## Architecture
 
@@ -173,6 +218,7 @@ Auto-generated diary entries follow a Markdown list format:
 | Service | If Unavailable |
 |---|---|
 | Ollama | Chat/diary/search return errors; app runs normally |
+| Supertonic | TTS fails; STT still works |
 | GPSD | Falls back to mock GPS data (Paris, random drift) |
 | Nominatim/OSRM | Map endpoints return errors |
 | DuckDuckGo | Search returns empty results |

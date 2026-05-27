@@ -1,3 +1,4 @@
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 use tracing_subscriber::EnvFilter;
@@ -10,6 +11,7 @@ use shiny::services::diary_gen::DiaryGenerator;
 use shiny::services::gpsd::GpsdService;
 use shiny::services::ollama::OllamaClient;
 use shiny::services::osm::OsmService;
+use shiny::services::supertonic::SupertonicClient;
 use shiny::services::web_search::SearchService;
 
 #[tokio::main]
@@ -27,6 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting Traveler REST API server...");
 
+    std::fs::create_dir_all("data").ok();
+
+    if config.auto_start_supertonic {
+        spawn_supertonic_sidecar(&config.supertonic_url);
+    }
+
     let pool = db::init_pool(&config.database_url).await?;
     db::run_migrations(&pool).await?;
 
@@ -38,6 +46,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!(
             "Ollama not available at {}. AI features (chat, diary gen) will fail.",
             config.ollama_url
+        );
+    }
+
+    let supertonic = SupertonicClient::new(
+        config.supertonic_url.clone(),
+        config.supertonic_voice.clone(),
+    );
+
+    if supertonic.is_available().await {
+        tracing::info!("Supertonic TTS available at {}", config.supertonic_url);
+    } else {
+        tracing::warn!(
+            "Supertonic not available at {}. TTS will fail until sidecar is started.",
+            config.supertonic_url
         );
     }
 
@@ -65,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         osm,
         gpsd,
         diary_gen: diary_gen.clone(),
+        supertonic,
     };
 
     if config.diary_auto_generate {
@@ -75,11 +98,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = format!("{}:{}", config.server_host, config.server_port);
     tracing::info!("Server listening on http://{}", addr);
+    tracing::info!("Web UI served from / (static files in {})", config.web_dir);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn spawn_supertonic_sidecar(supertonic_url: &str) {
+    let port = supertonic_url
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
+        .unwrap_or(7788);
+
+    match Command::new("supertonic")
+        .args(["serve", "--host", "127.0.0.1", "--port", &port.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(_) => tracing::info!("Started Supertonic sidecar on port {}", port),
+        Err(e) => tracing::warn!("Could not auto-start Supertonic: {}", e),
+    }
 }
 
 fn spawn_diary_cron(diary_gen: Arc<DiaryGenerator>, generate_time: String) {

@@ -1,0 +1,193 @@
+/* Full-screen compose mode — flat input, streaming reply on the left */
+
+body.compose-active #chrome-bottom {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(12px);
+  transition: opacity 0.28s var(--ease-out), visibility 0.28s, transform 0.28s var(--ease-out);
+}
+
+body.compose-active #travel-panel,
+body.compose-active #travel-panel-backdrop,
+body.compose-active #hud-transcript {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.compose-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 38;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+  background: linear-gradient(
+    165deg,
+    rgba(7, 8, 10, 0.12) 0%,
+    rgba(7, 8, 10, 0.45) 45%,
+    rgba(7, 8, 10, 0.88) 100%
+  );
+}
+
+.compose-mode.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.compose-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background 0.2s;
+}
+
+.compose-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.compose-stream {
+  grid-row: 1;
+  align-self: end;
+  justify-self: start;
+  width: 100%;
+  max-width: min(520px, 100%);
+  padding:
+    max(56px, calc(env(safe-area-inset-top) + 44px))
+    max(20px, env(safe-area-inset-right))
+    16px
+    max(20px, env(safe-area-inset-left));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.compose-stream::-webkit-scrollbar {
+  display: none;
+}
+
+.compose-reply {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 6.2vw, 34px);
+  font-weight: 500;
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-align: left;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.65);
+  min-height: 1.32em;
+}
+
+.compose-reply:empty {
+  display: none;
+}
+
+.compose-thinking {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 8px;
+  animation: composePulse 1.2s ease-in-out infinite;
+}
+
+.compose-thinking.hidden {
+  display: none;
+}
+
+.compose-input-wrap {
+  grid-row: 2;
+  width: 100%;
+  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(7, 8, 10, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+#text-input-field,
+.compose-field {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  max-height: 30vh;
+  padding:
+    18px
+    max(20px, env(safe-area-inset-right))
+    max(18px, calc(env(safe-area-inset-bottom) + 8px))
+    max(20px, env(safe-area-inset-left));
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: clamp(22px, 5.8vw, 30px);
+  font-weight: 500;
+  line-height: 1.35;
+  resize: none;
+  outline: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#text-input-field::placeholder,
+.compose-field::placeholder {
+  color: rgba(244, 244, 245, 0.32);
+}
+
+#text-input-field:focus,
+.compose-field:focus {
+  outline: none;
+}
+
+@keyframes composePulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+/* Mobile: reply above input, full width, still left-aligned */
+@media (max-width: 640px) {
+  .compose-stream {
+    max-width: 100%;
+    align-self: start;
+    padding-top: max(52px, calc(env(safe-area-inset-top) + 40px));
+    max-height: 50vh;
+  }
+
+  .compose-reply {
+    font-size: clamp(22px, 6.5vw, 28px);
+  }
+
+  #text-input-field,
+  .compose-field {
+    font-size: clamp(20px, 5.5vw, 26px);
+    min-height: 52px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compose-thinking {
+    animation: none;
+    opacity: 0.7;
+  }
+}

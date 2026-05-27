@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Travel Navigator</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/sphere.css">
+  <link rel="stylesheet" href="/css/text-input.css">
+  <link rel="stylesheet" href="/css/artifacts.css">
+  <link rel="stylesheet" href="/css/travel-panel.css">
+</head>
+<body>
+  <!-- Login overlay -->
+  <div id="login-overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h1>Travel Navigator</h1>
+      <p>Your map-first AI travel companion</p>
+      <div id="login-form">
+        <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+        <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+        <input type="text" id="register-name" placeholder="Name (register only)" class="hidden">
+        <button id="login-btn" class="btn-primary">Sign In</button>
+        <button id="register-btn" class="btn-secondary">Create Account</button>
+      </div>
+      <p id="login-error" class="error-text hidden"></p>
+    </div>
+  </div>
+
+  <!-- Voice prep overlay -->
+  <div id="voice-overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2 id="voice-overlay-title">Preparing voice</h2>
+      <div class="voice-prep-ring" aria-hidden="true"></div>
+      <div id="voice-prep-percent" class="voice-prep-percent">0%</div>
+      <p id="voice-overlay-status">Downloading models…</p>
+    </div>
+  </div>
+
+  <!-- Main navigator -->
+  <div id="app" class="hidden">
+    <div id="map"></div>
+    <div id="map-vignette" aria-hidden="true"></div>
+
+    <div id="hud-top">
+      <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="nav-arrow" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 4l-8 14h16L12 4z"/>
+      </svg>
+    </div>
+
+    <div id="travel-panel-backdrop" class="hidden" aria-hidden="true"></div>
+    <div id="travel-panel" class="hidden" aria-label="Travel details"></div>
+
+    <div id="chrome-bottom">
+      <button type="button" id="sphere-container" aria-label="Voice assistant">
+        <canvas id="orb-canvas" aria-hidden="true"></canvas>
+      </button>
+      <div id="artifact-dock" class="hidden" aria-label="Saved cards"></div>
+    </div>
+
+    <div id="compose-mode" class="compose-mode hidden" aria-hidden="true">
+      <button type="button" id="compose-close" class="compose-close">Done</button>
+      <div class="compose-stream">
+        <div id="compose-reply" class="compose-reply"></div>
+        <div id="compose-thinking" class="compose-thinking hidden">Thinking…</div>
+      </div>
+      <div class="compose-input-wrap">
+        <textarea id="text-input-field" class="compose-field" rows="1" placeholder="Ask anything…" autocomplete="off" enterkeyhint="send"></textarea>
+      </div>
+    </div>
+
+    <div id="hud-transcript">
+      <div id="reply-text" class="hidden"></div>
+    </div>
+
+  </div>
+
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>Settings</h2>
+      <label for="lang-select">Language</label>
+      <select id="lang-select"></select>
+      <div class="settings-section">
+        <h3>Trips</h3>
+        <ul id="trips-list" class="trips-list"></ul>
+      </div>
+      <button id="settings-close" class="btn-primary">Done</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/vendor/vosk-browser/vosk.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

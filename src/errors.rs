@@ -34,7 +34,14 @@ impl IntoResponse for AppError {
             }
             AppError::Http(e) => {
                 tracing::error!("HTTP error: {}", e);
-                (StatusCode::BAD_GATEWAY, "External service error".into())
+                let msg = if e.is_connect() {
+                    "Could not reach an external service. Check your network connection.".into()
+                } else if e.is_timeout() {
+                    "Request timed out. Try again.".into()
+                } else {
+                    format!("External service error: {}", e)
+                };
+                (StatusCode::BAD_GATEWAY, msg)
             }
         };
 

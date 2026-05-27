@@ -3,3 +3,6 @@ pub mod web_search;
 pub mod gpsd;
 pub mod osm;
 pub mod diary_gen;
+pub mod supertonic;
+pub mod artifacts;
+pub mod agent_tools;

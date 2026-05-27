@@ -6,3 +6,4 @@ diaries/
 *.swo
 *~
 .DS_Store
+vosk-browser-*.tgz

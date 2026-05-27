@@ -20,6 +20,12 @@ pub struct TripListResponse {
 }
 
 #[derive(Serialize)]
+pub struct ActiveTripResponse {
+    pub success: bool,
+    pub data: Option<Trip>,
+}
+
+#[derive(Serialize)]
 pub struct TripStatsResponse {
     pub success: bool,
     pub data: TripStats,
@@ -66,6 +72,17 @@ pub async fn list(
     Ok(Json(TripListResponse {
         success: true,
         data: trips,
+    }))
+}
+
+pub async fn get_active(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+) -> Result<Json<ActiveTripResponse>, AppError> {
+    let trip = crate::services::agent_tools::fetch_active_trip(&state.pool, &traveler.id).await?;
+    Ok(Json(ActiveTripResponse {
+        success: true,
+        data: trip,
     }))
 }
 

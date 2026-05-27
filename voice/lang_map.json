@@ -1,0 +1,149 @@
+{
+  "en": {
+    "supertonic": "en",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+    "vosk_folder": "vosk-model-small-en-us-0.15"
+  },
+  "fr": {
+    "supertonic": "fr",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip",
+    "vosk_folder": "vosk-model-small-fr-0.22"
+  },
+  "de": {
+    "supertonic": "de",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip",
+    "vosk_folder": "vosk-model-small-de-0.15"
+  },
+  "es": {
+    "supertonic": "es",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
+    "vosk_folder": "vosk-model-small-es-0.42"
+  },
+  "it": {
+    "supertonic": "it",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip",
+    "vosk_folder": "vosk-model-small-it-0.22"
+  },
+  "pt": {
+    "supertonic": "pt",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip",
+    "vosk_folder": "vosk-model-small-pt-0.3"
+  },
+  "ru": {
+    "supertonic": "ru",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip",
+    "vosk_folder": "vosk-model-small-ru-0.22"
+  },
+  "ja": {
+    "supertonic": "ja",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-ja-0.22.zip",
+    "vosk_folder": "vosk-model-small-ja-0.22"
+  },
+  "ko": {
+    "supertonic": "ko",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-ko-0.22.zip",
+    "vosk_folder": "vosk-model-small-ko-0.22"
+  },
+  "zh": {
+    "supertonic": "en",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip",
+    "vosk_folder": "vosk-model-small-cn-0.22"
+  },
+  "nl": {
+    "supertonic": "nl",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-nl-0.22.zip",
+    "vosk_folder": "vosk-model-small-nl-0.22"
+  },
+  "pl": {
+    "supertonic": "pl",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-pl-0.22.zip",
+    "vosk_folder": "vosk-model-small-pl-0.22"
+  },
+  "tr": {
+    "supertonic": "tr",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip",
+    "vosk_folder": "vosk-model-small-tr-0.3"
+  },
+  "vi": {
+    "supertonic": "vi",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-vn-0.4.zip",
+    "vosk_folder": "vosk-model-small-vn-0.4"
+  },
+  "hi": {
+    "supertonic": "hi",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-hi-0.22.zip",
+    "vosk_folder": "vosk-model-small-hi-0.22"
+  },
+  "cs": {
+    "supertonic": "cs",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-cs-0.4-rhasspy-0.2.zip",
+    "vosk_folder": "vosk-model-small-cs-0.4-rhasspy-0.2"
+  },
+  "uk": {
+    "supertonic": "uk",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-small-uk-v3-small.zip",
+    "vosk_folder": "vosk-model-small-uk-v3-small"
+  },
+  "el": {
+    "supertonic": "el",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-el-gr-0.7.zip",
+    "vosk_folder": "vosk-model-el-gr-0.7"
+  },
+  "ar": {
+    "supertonic": "ar",
+    "vosk_zip": "https://alphacephei.com/vosk/models/vosk-model-ar-mgb2-0.4.zip",
+    "vosk_folder": "vosk-model-ar-mgb2-0.4"
+  },
+  "bg": {
+    "supertonic": "bg",
+    "vosk_stt_fallback": "en"
+  },
+  "da": {
+    "supertonic": "da",
+    "vosk_stt_fallback": "en"
+  },
+  "et": {
+    "supertonic": "et",
+    "vosk_stt_fallback": "en"
+  },
+  "fi": {
+    "supertonic": "fi",
+    "vosk_stt_fallback": "en"
+  },
+  "hr": {
+    "supertonic": "hr",
+    "vosk_stt_fallback": "en"
+  },
+  "hu": {
+    "supertonic": "hu",
+    "vosk_stt_fallback": "en"
+  },
+  "id": {
+    "supertonic": "id",
+    "vosk_stt_fallback": "en"
+  },
+  "lt": {
+    "supertonic": "lt",
+    "vosk_stt_fallback": "en"
+  },
+  "lv": {
+    "supertonic": "lv",
+    "vosk_stt_fallback": "en"
+  },
+  "ro": {
+    "supertonic": "ro",
+    "vosk_stt_fallback": "en"
+  },
+  "sk": {
+    "supertonic": "sk",
+    "vosk_stt_fallback": "en"
+  },
+  "sl": {
+    "supertonic": "sl",
+    "vosk_stt_fallback": "en"
+  },
+  "sv": {
+    "supertonic": "sv",
+    "vosk_stt_fallback": "en"
+  }
+}

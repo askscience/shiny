@@ -72,12 +72,20 @@ impl OllamaClient {
             .post(format!("{}/api/chat", self.base_url))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| self.map_request_error("chat", e))?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
+            let detail = resp.text().await.unwrap_or_default();
             return Err(AppError::Internal(format!(
-                "Ollama API error: {}",
-                resp.status()
+                "Ollama chat failed ({}){}",
+                status,
+                if detail.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {}", detail.trim())
+                }
             )));
         }
 
@@ -105,12 +113,20 @@ impl OllamaClient {
             .post(format!("{}/api/generate", self.base_url))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| self.map_request_error("generate", e))?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
+            let detail = resp.text().await.unwrap_or_default();
             return Err(AppError::Internal(format!(
-                "Ollama generate error: {}",
-                resp.status()
+                "Ollama generate failed ({}){}",
+                status,
+                if detail.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {}", detail.trim())
+                }
             )));
         }
 
@@ -119,6 +135,22 @@ impl OllamaClient {
         })?;
 
         Ok(data.response)
+    }
+
+    fn map_request_error(&self, op: &str, err: reqwest::Error) -> AppError {
+        if err.is_connect() {
+            AppError::Internal(format!(
+                "AI unavailable — cannot reach Ollama at {} for {}. Start Ollama or set OLLAMA_URL.",
+                self.base_url, op
+            ))
+        } else if err.is_timeout() {
+            AppError::Internal(format!(
+                "AI request timed out during {}. Try again or use a smaller model.",
+                op
+            ))
+        } else {
+            AppError::Http(err)
+        }
     }
 
     pub async fn is_available(&self) -> bool {

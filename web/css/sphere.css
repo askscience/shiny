@@ -1,0 +1,66 @@
+/* Voice orb — canvas only; zero square backgrounds or box-shadows */
+
+#chrome-bottom {
+  position: fixed;
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 24px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+#chrome-bottom #sphere-container,
+#chrome-bottom #artifact-dock {
+  pointer-events: auto;
+}
+
+#sphere-container {
+  display: block;
+  width: 80px;
+  height: 80px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  box-shadow: none;
+  transition: transform 0.2s var(--ease-out);
+}
+
+#sphere-container:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.55);
+  outline-offset: 8px;
+  border-radius: 50%;
+}
+
+#sphere-container.pressed {
+  transform: scale(0.94);
+}
+
+#sphere-container.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+#orb-canvas {
+  display: block;
+  width: 80px;
+  height: 80px;
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #orb-canvas {
+    opacity: 0.95;
+  }
+}
