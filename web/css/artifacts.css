@@ -1,18 +1,18 @@
-/* Artifact dock — under AI orb in #chrome-bottom */
+/* Artifact dock icon styles (shared with sphere.css for dock layout) */
 
 #artifact-dock {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: var(--glass);
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-glass);
-  max-width: min(calc(100vw - 32px), 320px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: var(--shadow-float);
+  max-width: min(calc(100vw - 32px), 340px);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -23,71 +23,61 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   border: 1px solid transparent;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease-out);
-  animation: dockSlideIn 0.35s var(--ease-out) both;
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast),
+    transform var(--duration-fast) var(--ease-spring);
+  animation: dockSlideIn var(--duration-normal) var(--ease-out) both;
 }
 
 .artifact-dock-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--glass-hover);
+  border-color: var(--glass-border);
+  transform: scale(1.08);
 }
 
 .artifact-dock-btn.active {
-  background: rgba(125, 211, 252, 0.18);
-  border-color: rgba(125, 211, 252, 0.45);
-  box-shadow: 0 0 12px rgba(125, 211, 252, 0.25);
+  background: var(--accent-soft);
+  border-color: rgba(255, 107, 74, 0.35);
+  box-shadow: 0 0 16px var(--accent-glow);
 }
 
 .artifact-dock-icon {
   width: 18px;
   height: 18px;
   pointer-events: none;
-  filter: brightness(0) invert(1);
-  opacity: 0.92;
+  opacity: 0.85;
+  transition: opacity var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
+}
+
+.artifact-dock-btn:hover .artifact-dock-icon {
+  opacity: 1;
+  transform: scale(1.08);
 }
 
 .artifact-dock-btn.active .artifact-dock-icon {
   opacity: 1;
-  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(125, 211, 252, 0.8));
-}
-
-[data-theme="light"] .artifact-dock-btn {
-  background: rgba(15, 23, 42, 0.05);
-}
-
-[data-theme="light"] .artifact-dock-btn:hover {
-  background: rgba(15, 23, 42, 0.1);
-  border-color: rgba(15, 23, 42, 0.12);
-}
-
-[data-theme="light"] .artifact-dock-icon {
-  filter: none;
-  opacity: 0.75;
-}
-
-[data-theme="light"] .artifact-dock-btn.active .artifact-dock-icon {
-  filter: drop-shadow(0 0 4px rgba(2, 132, 199, 0.5));
-  opacity: 1;
 }
 
 .artifact-dock-overflow {
-  font-size: 11px;
+  font-family: var(--font-display);
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text);
-  color: #fff;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  padding: 0 6px;
 }
 
 @keyframes dockSlideIn {
-  from { opacity: 0; transform: scale(0.8); }
+  from { opacity: 0; transform: scale(0.7); }
   to { opacity: 1; transform: scale(1); }
 }
 

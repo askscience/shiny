@@ -1,3 +1,5 @@
+/* Overlays — login, settings, trips */
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -5,37 +7,102 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(7, 8, 10, 0.88);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background 0.35s var(--ease-out);
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background: rgba(8, 9, 13, 0.82);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  transition: opacity var(--duration-normal) var(--ease-out);
+  animation: overlayIn var(--duration-slow) var(--ease-out) both;
 }
 
 [data-theme="light"] .overlay {
-  background: rgba(248, 250, 252, 0.92);
+  background: rgba(244, 245, 247, 0.88);
+}
+
+#login-overlay {
+  background:
+    var(--gradient-mesh),
+    rgba(8, 9, 13, 0.92);
+}
+
+[data-theme="light"] #login-overlay {
+  background:
+    var(--gradient-mesh),
+    rgba(244, 245, 247, 0.94);
 }
 
 .overlay-card {
-  background: var(--glass-strong);
+  position: relative;
+  background: var(--surface-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  padding: 36px 28px;
-  width: min(380px, 90vw);
+  padding: 40px 32px 32px;
+  width: min(420px, 100%);
   text-align: center;
-  box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  animation: cardIn var(--duration-slow) var(--ease-out) 0.08s both;
+  overflow: hidden;
+}
+
+.overlay-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 1px;
+  background: var(--gradient-brand);
+  opacity: 0.6;
+}
+
+.brand-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-glow);
+}
+
+.brand-logo svg {
+  width: 26px;
+  height: 26px;
+  color: #fff;
 }
 
 .overlay-card h1, .overlay-card h2 {
-  margin-bottom: 8px;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 1.5rem;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.5rem, 5vw, 1.75rem);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
 }
 
-.overlay-card p {
+.brand-tagline {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  margin-bottom: 28px;
+  max-width: 280px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.overlay-card p:not(.brand-tagline):not(.error-text) {
   color: var(--muted);
   font-size: 14px;
   margin-bottom: 20px;
@@ -43,76 +110,117 @@
 
 .overlay-card input, .overlay-card select {
   width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 12px;
+  padding: 15px 18px;
+  margin-bottom: 10px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--glass);
   color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast), background var(--duration-fast);
+}
+
+.overlay-card input::placeholder {
+  color: var(--muted);
 }
 
 .overlay-card input:focus, .overlay-card select:focus {
   outline: none;
-  border-color: rgba(125, 211, 252, 0.4);
+  border-color: rgba(255, 107, 74, 0.45);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--glass-hover);
 }
 
 .overlay-card label {
   display: block;
   text-align: left;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
 .btn-primary, .btn-secondary {
   width: 100%;
-  padding: 14px;
+  padding: 15px 20px;
   border: none;
   border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-size: 14px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
   margin-bottom: 8px;
-  transition: opacity 0.2s, transform 0.15s;
+  transition:
+    opacity var(--duration-fast),
+    transform var(--duration-fast) var(--ease-spring),
+    box-shadow var(--duration-fast);
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
-.btn-primary:hover { opacity: 0.9; }
+.btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
 
 .btn-secondary {
   background: transparent;
-  color: var(--accent);
-  border: 1px solid rgba(125, 211, 252, 0.35);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+.btn-secondary:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="light"] .overlay-card input,
+[data-theme="light"] .overlay-card select {
+  background: rgba(15, 20, 25, 0.04);
 }
 
 .error-text {
   color: var(--accent-error);
   font-size: 13px;
-  margin-top: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
 .voice-prep-ring {
-  width: 80px;
-  height: 80px;
+  width: 72px;
+  height: 72px;
   margin: 24px auto;
   border-radius: 50%;
-  border: 2px solid rgba(125, 211, 252, 0.2);
+  border: 2px solid var(--accent-soft);
   border-top-color: var(--accent);
-  animation: spin 1.2s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 .voice-prep-percent {
   font-family: var(--font-display);
-  font-size: 1.25rem;
-  color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 600;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-bottom: 8px;
 }
 
@@ -120,40 +228,66 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Settings & trips panels */
+#settings-panel .overlay-card,
+#trips-panel .overlay-card {
+  text-align: left;
+}
+
+#settings-panel h2,
+#trips-panel h2 {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
 .settings-section {
   margin: 20px 0 16px;
-  text-align: left;
 }
 
 .settings-section h3 {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   margin-bottom: 10px;
-  color: var(--text);
+  color: var(--muted);
 }
 
 .trips-list {
   list-style: none;
-  max-height: min(50vh, 320px);
+  max-height: min(50vh, 360px);
   overflow-y: auto;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.25);
-  margin-bottom: 16px;
-}
-
-[data-theme="light"] .trips-list {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass);
+  margin-bottom: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
 }
 
 .trip-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 13px;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 14px;
+  transition: background var(--duration-fast);
+}
+
+.trip-item:hover {
+  background: var(--glass-hover);
 }
 
 .trip-item:last-child { border-bottom: none; }
@@ -164,30 +298,55 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 500;
 }
 
 .trip-item-status {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--glass);
 }
 
-.trip-active .trip-item-status { color: var(--accent-live); }
+.trip-active .trip-item-status {
+  color: var(--accent-live);
+  background: rgba(74, 222, 128, 0.12);
+}
 
 .trip-start-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--glass-border);
+  padding: 6px 14px;
+  border: 1px solid var(--accent);
   border-radius: 999px;
-  background: transparent;
+  background: var(--accent-soft);
   color: var(--accent);
+  font-family: var(--font-display);
   font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition: background var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
+}
+
+.trip-start-btn:hover {
+  background: rgba(255, 107, 74, 0.22);
+  transform: scale(1.04);
 }
 
 .trips-empty {
-  padding: 16px;
+  padding: 24px 16px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .overlay-card {
+    animation: none;
+  }
 }

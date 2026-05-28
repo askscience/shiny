@@ -1,15 +1,15 @@
-/* Voice orb — canvas only; zero square backgrounds or box-shadows */
+/* Voice orb — canvas only; dock styles in artifacts.css */
 
 #chrome-bottom {
   position: fixed;
-  bottom: max(28px, calc(env(safe-area-inset-bottom) + 24px));
+  bottom: max(32px, calc(env(safe-area-inset-bottom) + 28px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 35;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   pointer-events: none;
 }
 
@@ -20,8 +20,8 @@
 
 #sphere-container {
   display: block;
-  width: 80px;
-  height: 80px;
+  width: 84px;
+  height: 84px;
   padding: 0;
   margin: 0;
   border: 0;
@@ -32,7 +32,23 @@
   appearance: none;
   outline: none;
   box-shadow: none;
-  transition: transform 0.2s var(--ease-out);
+  position: relative;
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+#sphere-container::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 107, 74, 0.2);
+  opacity: 0;
+  transition: opacity var(--duration-normal), transform var(--duration-normal) var(--ease-out);
+}
+
+#sphere-container:hover::before {
+  opacity: 1;
+  animation: orbRing 2.5s ease-in-out infinite;
 }
 
 #sphere-container:focus-visible {
@@ -40,18 +56,18 @@
 }
 
 #sphere-container.pressed {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 #sphere-container.disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   pointer-events: none;
 }
 
 #orb-canvas {
   display: block;
-  width: 80px;
-  height: 80px;
+  width: 84px;
+  height: 84px;
   background: transparent;
   border: none;
   pointer-events: none;
@@ -59,12 +75,15 @@
 
 [data-theme="light"] #sphere-container {
   filter:
-    drop-shadow(0 6px 24px rgba(2, 132, 199, 0.5))
-    drop-shadow(0 2px 12px rgba(15, 23, 42, 0.35));
+    drop-shadow(0 8px 28px rgba(232, 77, 47, 0.35))
+    drop-shadow(0 2px 12px rgba(15, 23, 42, 0.2));
+}
+
+@keyframes orbRing {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.08); opacity: 0.3; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #orb-canvas {
-    opacity: 0.95;
-  }
+  #sphere-container::before { animation: none; }
 }

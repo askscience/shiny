@@ -1,4 +1,4 @@
-/* Top HUD: one horizontal row — clock, meteo, saved places | action icons */
+/* Top HUD — unified glass island */
 
 #hud-header {
   position: fixed;
@@ -7,11 +7,11 @@
   right: 0;
   z-index: 35;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  padding: var(--hud-header-pad) 12px 10px 12px;
+  padding: var(--hud-header-pad) 14px 12px 14px;
   pointer-events: none;
-  animation: hudFadeIn 0.6s var(--ease-out) both;
+  animation: hudFadeIn 0.7s var(--ease-out) both;
 }
 
 .hud-header-main {
@@ -20,8 +20,16 @@
   height: var(--hud-bar-height);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   pointer-events: auto;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: var(--shadow-glass);
+  overflow: hidden;
+  padding: 0 4px;
 }
 
 #hud-top {
@@ -29,51 +37,53 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
   pointer-events: auto;
 }
 
-/* Clock — body font for readability */
+.hud-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* Clock */
 .hud-clock {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
-  height: var(--hud-bar-height);
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-glass);
+  padding: 0 14px;
+  height: calc(var(--hud-bar-height) - 8px);
   flex-shrink: 0;
 }
 
 .hud-clock-icon {
-  width: 16px;
-  height: 16px;
-  opacity: 0.85;
+  width: 15px;
+  height: 15px;
+  opacity: 0.7;
   flex-shrink: 0;
+  color: var(--accent);
 }
 
 [data-theme="dark"] .hud-clock-icon {
-  filter: brightness(0) invert(1);
+  filter: none;
 }
 
 .hud-clock-text {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  line-height: 1.2;
+  line-height: 1;
   white-space: nowrap;
 }
 
 #hud-clock-time {
-  font-family: var(--font-body);
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.02em;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -81,71 +91,68 @@
 #hud-clock-date {
   font-family: var(--font-body);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--muted);
   letter-spacing: 0.01em;
 }
 
-/* Meteo pill */
+/* Meteo */
 .hud-meteo {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
-  height: var(--hud-bar-height);
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-glass);
+  padding: 0 14px;
+  height: calc(var(--hud-bar-height) - 8px);
   flex-shrink: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-fast);
 }
 
 .hud-meteo.loading {
-  opacity: 0.65;
+  opacity: 0.5;
 }
 
 #hud-meteo-icon {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   flex-shrink: 0;
 }
 
 [data-theme="dark"] #hud-meteo-icon {
-  filter: brightness(0) invert(1);
+  filter: none;
 }
 
 #hud-meteo-temp {
-  font-family: var(--font-body);
+  font-family: var(--font-display);
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 #hud-meteo-label {
   font-family: var(--font-body);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
 }
 
-/* Saved places — horizontal scroll, fills remaining width */
+/* Saved places scroll */
 .hud-trips-scroll,
 #hud-saved-trips {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  padding: 0 2px;
+  padding: 0 8px 0 4px;
+  mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 16px), transparent);
 }
 
 .hud-trips-scroll::-webkit-scrollbar,
@@ -156,52 +163,46 @@
 .hud-trips-empty {
   font-family: var(--font-body);
   font-size: 11px;
+  font-weight: 500;
   color: var(--muted);
   padding: 0 12px;
-  height: var(--hud-bar-height);
-  display: inline-flex;
-  align-items: center;
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
 .hud-trip-chip {
   flex-shrink: 0;
-  border: 1px solid var(--glass-border);
-  background: var(--glass);
-  color: var(--text);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 500;
-  height: var(--hud-bar-height);
-  padding: 0 14px;
+  height: calc(var(--hud-bar-height) - 12px);
+  padding: 0 12px;
   border-radius: 999px;
   cursor: pointer;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    transform var(--duration-fast) var(--ease-spring);
   white-space: nowrap;
 }
 
 .hud-trip-chip:hover {
-  background: var(--glass-strong);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-[data-theme="light"] .hud-trip-chip:hover {
-  border-color: rgba(15, 23, 42, 0.14);
+  background: var(--glass-hover);
+  color: var(--text);
 }
 
 .hud-trip-chip.active {
-  background: rgba(125, 211, 252, 0.18);
-  border-color: rgba(125, 211, 252, 0.45);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 [data-theme="light"] .hud-trip-chip.active {
-  background: rgba(2, 132, 199, 0.12);
-  border-color: rgba(2, 132, 199, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 @media (max-width: 767px) {
@@ -215,7 +216,15 @@
 
   .hud-trip-chip {
     font-size: 11px;
-    padding: 0 12px;
+    padding: 0 10px;
+  }
+
+  .hud-header-main {
+    padding: 0 2px;
+  }
+
+  .hud-clock, .hud-meteo {
+    padding: 0 10px;
   }
 }
 

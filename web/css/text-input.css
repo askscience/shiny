@@ -1,11 +1,14 @@
-/* Full-screen compose mode — flat input, streaming reply on the left */
+/* Full-screen compose mode */
 
 body.compose-active #chrome-bottom {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(12px);
-  transition: opacity 0.28s var(--ease-out), visibility 0.28s, transform 0.28s var(--ease-out);
+  transform: translateY(16px) scale(0.95);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    visibility var(--duration-normal),
+    transform var(--duration-normal) var(--ease-out);
 }
 
 body.compose-active #travel-panel,
@@ -14,7 +17,7 @@ body.compose-active #hud-header,
 body.compose-active #insight-cards {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s var(--ease-out);
+  transition: opacity var(--duration-normal) var(--ease-out);
 }
 
 body.compose-active #hud-transcript {
@@ -31,13 +34,28 @@ body.compose-active #hud-transcript {
   grid-template-rows: 1fr auto;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.3s var(--ease-out);
-  background: linear-gradient(
-    165deg,
-    rgba(7, 8, 10, 0.12) 0%,
-    rgba(7, 8, 10, 0.45) 45%,
-    rgba(7, 8, 10, 0.88) 100%
-  );
+  transition: opacity var(--duration-normal) var(--ease-out);
+  background:
+    var(--gradient-mesh),
+    linear-gradient(
+      175deg,
+      rgba(8, 9, 13, 0.15) 0%,
+      rgba(8, 9, 13, 0.55) 40%,
+      rgba(8, 9, 13, 0.92) 100%
+    );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="light"] .compose-mode {
+  background:
+    var(--gradient-mesh),
+    linear-gradient(
+      175deg,
+      rgba(244, 245, 247, 0.2) 0%,
+      rgba(244, 245, 247, 0.7) 40%,
+      rgba(244, 245, 247, 0.96) 100%
+    );
 }
 
 .compose-mode.visible {
@@ -47,26 +65,32 @@ body.compose-active #hud-transcript {
 
 .compose-close {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
+  top: max(14px, env(safe-area-inset-top));
   right: max(16px, env(safe-area-inset-right));
   z-index: 2;
-  padding: 10px 16px;
-  border: none;
+  padding: 10px 18px;
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: background 0.2s;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    transform var(--duration-fast) var(--ease-spring);
 }
 
 .compose-close:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--glass-hover);
+  color: var(--text);
+  transform: scale(1.04);
 }
 
 .compose-stream {
@@ -74,12 +98,12 @@ body.compose-active #hud-transcript {
   align-self: end;
   justify-self: start;
   width: 100%;
-  max-width: min(520px, 100%);
+  max-width: min(560px, 100%);
   padding:
-    max(56px, calc(env(safe-area-inset-top) + 44px))
-    max(20px, env(safe-area-inset-right))
-    16px
-    max(20px, env(safe-area-inset-left));
+    max(60px, calc(env(safe-area-inset-top) + 48px))
+    max(24px, env(safe-area-inset-right))
+    20px
+    max(24px, env(safe-area-inset-left));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -90,15 +114,14 @@ body.compose-active #hud-transcript {
 }
 
 .compose-reply {
-  font-family: var(--font-display);
-  font-size: clamp(24px, 6.2vw, 34px);
-  font-weight: 500;
-  line-height: 1.32;
+  font-family: var(--font-editorial);
+  font-size: clamp(1.75rem, 6vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.25;
   letter-spacing: -0.02em;
   color: var(--text);
   text-align: left;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.65);
-  min-height: 1.32em;
+  min-height: 1.25em;
 }
 
 .compose-reply:empty {
@@ -106,14 +129,14 @@ body.compose-active #hud-transcript {
 }
 
 .compose-thinking {
-  font-family: var(--font-body);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
-  margin-top: 8px;
-  animation: composePulse 1.2s ease-in-out infinite;
+  color: var(--accent);
+  margin-top: 16px;
+  animation: composePulse 1.4s ease-in-out infinite;
 }
 
 .compose-thinking.hidden {
@@ -124,32 +147,33 @@ body.compose-active #hud-transcript {
   grid-row: 2;
   width: 100%;
   padding: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(7, 8, 10, 0.55);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--glass-border);
+  background: var(--surface-strong);
+  backdrop-filter: blur(32px) saturate(1.4);
+  -webkit-backdrop-filter: blur(32px) saturate(1.4);
 }
 
 #text-input-field,
 .compose-field {
   display: block;
   width: 100%;
-  min-height: 56px;
+  min-height: 60px;
   max-height: 30vh;
   padding:
-    18px
-    max(20px, env(safe-area-inset-right))
-    max(18px, calc(env(safe-area-inset-bottom) + 8px))
-    max(20px, env(safe-area-inset-left));
+    20px
+    max(24px, env(safe-area-inset-right))
+    max(20px, calc(env(safe-area-inset-bottom) + 10px))
+    max(24px, env(safe-area-inset-left));
   margin: 0;
   border: none;
   border-radius: 0;
   background: transparent;
   color: var(--text);
-  font-family: var(--font-body);
-  font-size: clamp(22px, 5.8vw, 30px);
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 4.5vw, 1.75rem);
   font-weight: 500;
   line-height: 1.35;
+  letter-spacing: -0.02em;
   resize: none;
   outline: none;
   box-shadow: none;
@@ -159,7 +183,7 @@ body.compose-active #hud-transcript {
 
 #text-input-field::placeholder,
 .compose-field::placeholder {
-  color: rgba(244, 244, 245, 0.32);
+  color: var(--muted);
 }
 
 #text-input-field:focus,
@@ -168,27 +192,26 @@ body.compose-active #hud-transcript {
 }
 
 @keyframes composePulse {
-  0%, 100% { opacity: 0.45; }
+  0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
 
-/* Mobile: reply above input, full width, still left-aligned */
 @media (max-width: 640px) {
   .compose-stream {
     max-width: 100%;
     align-self: start;
-    padding-top: max(52px, calc(env(safe-area-inset-top) + 40px));
+    padding-top: max(56px, calc(env(safe-area-inset-top) + 44px));
     max-height: 50vh;
   }
 
   .compose-reply {
-    font-size: clamp(22px, 6.5vw, 28px);
+    font-size: clamp(1.5rem, 6.5vw, 2rem);
   }
 
   #text-input-field,
   .compose-field {
-    font-size: clamp(20px, 5.5vw, 26px);
-    min-height: 52px;
+    font-size: clamp(1.125rem, 5vw, 1.5rem);
+    min-height: 56px;
   }
 }
 

@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Travel Navigator</title>
+  <meta name="theme-color" content="#08090d">
+  <title>Atlas — Travel Navigator</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/auth.css">
@@ -16,15 +17,26 @@
   <link rel="stylesheet" href="/css/hud-left.css">
 </head>
 <body>
+  <div id="grain" aria-hidden="true"></div>
+
   <!-- Login overlay -->
   <div id="login-overlay" class="overlay hidden">
     <div class="overlay-card">
-      <h1>Travel Navigator</h1>
-      <p>Your map-first AI travel companion</p>
+      <div class="brand-mark">
+        <div class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 3c-2.5 3-4 6.5-4 9a4 4 0 0 0 8 0c0-2.5-1.5-6-4-9z"/>
+            <path d="M3 12h18"/>
+          </svg>
+        </div>
+        <h1>Atlas</h1>
+      </div>
+      <p class="brand-tagline">Your map-first AI travel companion — explore, navigate, discover.</p>
       <div id="login-form">
-        <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+        <input type="email" id="login-email" placeholder="Email address" autocomplete="email">
         <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
-        <input type="text" id="register-name" placeholder="Name (register only)" class="hidden">
+        <input type="text" id="register-name" placeholder="Full name" class="hidden">
         <button id="login-btn" class="btn-primary">Sign In</button>
         <button id="register-btn" class="btn-secondary">Create Account</button>
       </div>
@@ -42,43 +54,44 @@
     <header id="hud-header" aria-label="Status and controls">
       <div class="hud-header-main">
         <div class="hud-clock" aria-live="polite">
-          <img class="hud-clock-icon" src="/icons/hud/clock.svg" alt="" width="18" height="18">
+          <img class="hud-clock-icon" src="/icons/hud/clock.svg" alt="" width="15" height="15">
           <div class="hud-clock-text">
             <span id="hud-clock-time">--:--</span>
             <span id="hud-clock-date"></span>
           </div>
         </div>
+        <div class="hud-divider" aria-hidden="true"></div>
         <div class="hud-meteo" id="hud-meteo" title="Weather at your position">
-          <img id="hud-meteo-icon" src="/icons/insights/weather-cloud.svg" alt="" width="20" height="20">
+          <img id="hud-meteo-icon" src="/icons/insights/weather-cloud.svg" alt="" width="17" height="17">
           <span id="hud-meteo-temp">—°</span>
           <span id="hud-meteo-label">…</span>
         </div>
+        <div class="hud-divider" aria-hidden="true"></div>
         <div id="hud-saved-trips" class="hud-trips-scroll empty" role="list" aria-label="Saved places"></div>
       </div>
       <div id="hud-top">
-      <button type="button" id="theme-toggle-btn" class="icon-btn" title="Light mode" aria-label="Toggle light or dark theme">
-        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="4"/>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-        </svg>
-        <svg class="icon-moon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>
-        </svg>
-      </button>
-      <button type="button" id="trips-btn" class="icon-btn" title="Trips" aria-label="Your trips">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M8 6h8"/>
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-          <path d="M6 8h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8z"/>
-          <path d="M10 12h4M10 16h4"/>
-        </svg>
-      </button>
-      <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-      </button>
+        <button type="button" id="theme-toggle-btn" class="icon-btn" title="Light mode" aria-label="Toggle light or dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>
+          </svg>
+        </button>
+        <button type="button" id="trips-btn" class="icon-btn" title="Trips" aria-label="Your trips">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 8h12l-1.5 12H7.5L6 8z"/>
+            <path d="M9 8V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            <path d="M10 13h4M10 17h4"/>
+          </svg>
+        </button>
+        <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -102,7 +115,7 @@
       <button type="button" id="compose-close" class="compose-close">Done</button>
       <div class="compose-stream">
         <div id="compose-reply" class="compose-reply"></div>
-        <div id="compose-thinking" class="compose-thinking hidden">Thinking…</div>
+        <div id="compose-thinking" class="compose-thinking hidden">Thinking</div>
       </div>
       <div class="compose-input-wrap">
         <textarea id="text-input-field" class="compose-field" rows="1" placeholder="Ask anything…" autocomplete="off" enterkeyhint="send"></textarea>
@@ -121,7 +134,7 @@
   <div id="settings-panel" class="overlay hidden">
     <div class="overlay-card">
       <h2>Settings</h2>
-      <label for="lang-select">Language</label>
+      <label for="lang-select">Voice Language</label>
       <select id="lang-select"></select>
       <button id="settings-close" class="btn-primary">Done</button>
     </div>
@@ -130,7 +143,7 @@
   <!-- Trips panel -->
   <div id="trips-panel" class="overlay hidden">
     <div class="overlay-card">
-      <h2>Your trips</h2>
+      <h2>Your Trips</h2>
       <ul id="trips-list" class="trips-list"></ul>
       <button id="trips-close" class="btn-primary">Done</button>
     </div>

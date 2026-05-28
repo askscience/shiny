@@ -1,11 +1,11 @@
 /** Siri-style fluid orb — canvas only, circular clip, no square DOM layers */
 
 const PALETTES_DARK = {
-  idle: ['#5eead4', '#a78bfa', '#38bdf8', '#c084fc', '#22d3ee'],
-  listening: ['#fcd34d', '#fb923c', '#f97316', '#fbbf24', '#fde68a'],
-  conversation: ['#6ee7b7', '#34d399', '#2dd4bf', '#4ade80', '#86efac'],
+  idle: ['#ff6b4a', '#5eead4', '#a78bfa', '#ff8f6b', '#34d399'],
+  listening: ['#fcd34d', '#ff6b4a', '#f97316', '#fbbf24', '#fde68a'],
+  conversation: ['#5eead4', '#34d399', '#2dd4bf', '#4ade80', '#6ee7b7'],
   processing: ['#e9d5ff', '#c084fc', '#a78bfa', '#f0abfc', '#d8b4fe'],
-  speaking: ['#67e8f9', '#22d3ee', '#38bdf8', '#a5f3fc', '#7dd3fc'],
+  speaking: ['#ff8f6b', '#ff6b4a', '#5eead4', '#67e8f9', '#a5f3fc'],
   error: ['#fca5a5', '#f87171', '#fb7185', '#ef4444', '#fecdd3'],
   downloading: ['#93c5fd', '#60a5fa', '#818cf8', '#3b82f6', '#a5b4fc'],
   disabled: ['#64748b', '#475569', '#94a3b8', '#334155', '#64748b'],
@@ -28,7 +28,7 @@ class OrbRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: true });
-    this.displaySize = 80;
+    this.displaySize = 84;
     this.palette = PALETTES_DARK.idle;
     this.stateKey = 'idle';
     this.themeMode = themeMode;

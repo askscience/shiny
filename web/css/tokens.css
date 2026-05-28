@@ -1,40 +1,97 @@
 :root {
-  --bg: #07080a;
-  --glass: rgba(12, 14, 18, 0.55);
-  --glass-strong: rgba(12, 14, 18, 0.78);
+  /* Core palette — deep noir with violet undertone */
+  --bg: #08090d;
+  --bg-elevated: #0f1117;
+  --surface: rgba(15, 17, 24, 0.72);
+  --surface-strong: rgba(18, 20, 28, 0.92);
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-strong: rgba(255, 255, 255, 0.08);
   --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.04);
-  --text: #f4f4f5;
-  --muted: rgba(244, 244, 245, 0.55);
-  --accent: #7dd3fc;
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --glass-hover: rgba(255, 255, 255, 0.1);
+
+  /* Text */
+  --text: #f8f9fb;
+  --text-secondary: rgba(248, 249, 251, 0.72);
+  --muted: rgba(248, 249, 251, 0.45);
+
+  /* Accents — coral warmth + mint clarity */
+  --accent: #ff6b4a;
+  --accent-soft: rgba(255, 107, 74, 0.14);
+  --accent-glow: rgba(255, 107, 74, 0.35);
+  --accent-mint: #5eead4;
+  --accent-mint-soft: rgba(94, 234, 212, 0.12);
   --accent-warm: #fbbf24;
-  --accent-live: #86efac;
+  --accent-live: #4ade80;
+  --accent-violet: #a78bfa;
   --accent-error: #f87171;
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'Instrument Sans', sans-serif;
-  --font-editorial: 'Cormorant Garamond', Georgia, serif;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.35);
+
+  /* Gradients */
+  --gradient-brand: linear-gradient(135deg, #ff6b4a 0%, #ff8f6b 50%, #5eead4 100%);
+  --gradient-mesh: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(255, 107, 74, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(94, 234, 212, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 40% at 60% 30%, rgba(167, 139, 250, 0.08) 0%, transparent 45%);
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-editorial: 'Instrument Serif', Georgia, serif;
+
+  /* Spacing & shape */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-xl: 36px;
+
+  /* Elevation */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  --shadow-glow: 0 0 40px var(--accent-glow);
+
+  /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Fixed top HUD row (clock + meteo + saved places) */
-  --hud-bar-height: 40px;
-  --hud-header-pad: max(8px, env(safe-area-inset-top));
-  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 10px);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 0.18s;
+  --duration-normal: 0.35s;
+  --duration-slow: 0.55s;
+
+  /* HUD layout */
+  --hud-bar-height: 44px;
+  --hud-header-pad: max(10px, env(safe-area-inset-top));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
 }
 
 [data-theme="light"] {
-  --bg: #eef0f4;
-  --glass: rgba(255, 255, 255, 0.82);
-  --glass-strong: rgba(255, 255, 255, 0.94);
-  --glass-border: rgba(15, 23, 42, 0.1);
-  --glass-highlight: rgba(255, 255, 255, 0.6);
-  --text: #0f172a;
-  --muted: rgba(15, 23, 42, 0.55);
-  --accent: #0284c7;
+  --bg: #f4f5f7;
+  --bg-elevated: #ffffff;
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-strong: rgba(255, 255, 255, 0.94);
+  --glass: rgba(255, 255, 255, 0.65);
+  --glass-strong: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-hover: rgba(15, 23, 42, 0.04);
+
+  --text: #0f1419;
+  --text-secondary: rgba(15, 20, 25, 0.75);
+  --muted: rgba(15, 20, 25, 0.48);
+
+  --accent: #e84d2f;
+  --accent-soft: rgba(232, 77, 47, 0.1);
+  --accent-glow: rgba(232, 77, 47, 0.2);
+  --accent-mint: #0d9488;
+  --accent-mint-soft: rgba(13, 148, 136, 0.1);
   --accent-warm: #d97706;
   --accent-live: #16a34a;
+  --accent-violet: #7c3aed;
   --accent-error: #dc2626;
-  --shadow-glass: 0 8px 28px rgba(15, 23, 42, 0.12);
+
+  --gradient-mesh: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(232, 77, 47, 0.1) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(13, 148, 136, 0.08) 0%, transparent 50%);
+
+  --shadow-glass: 0 8px 32px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04) inset;
+  --shadow-float: 0 16px 48px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06) inset;
+  --shadow-glow: 0 0 32px var(--accent-glow);
 }
