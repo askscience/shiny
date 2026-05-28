@@ -177,3 +177,36 @@
     max-width: min(300px, calc(100vw - 24px));
   }
 }
+
+/* Voice model download progress card */
+.voice-download-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+[data-theme="light"] .voice-download-bar {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.voice-download-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.35s var(--ease-out);
+}
+
+.voice-download-text {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+#voice-download-card .insight-card-icon svg {
+  width: 20px;
+  height: 20px;
+  opacity: 0.9;
+}

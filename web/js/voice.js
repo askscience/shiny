@@ -14,14 +14,46 @@ let currentAudio = null;
 let sttLang = 'en';
 let silenceTimer = null;
 
-const overlay = document.getElementById('voice-overlay');
-const percentEl = document.getElementById('voice-prep-percent');
-const statusEl = document.getElementById('voice-overlay-status');
-const titleEl = document.getElementById('voice-overlay-title');
+function createDownloadCard(lang) {
+  const existing = document.getElementById('voice-download-card');
+  if (existing) existing.remove();
 
-function setProgress(pct, status) {
-  if (percentEl) percentEl.textContent = `${Math.round(pct)}%`;
-  if (statusEl && status) statusEl.textContent = status;
+  const container = document.getElementById('insight-cards');
+  if (!container) return null;
+
+  const card = document.createElement('div');
+  card.id = 'voice-download-card';
+  card.className = 'insight-card';
+  card.innerHTML = `
+    <div class="insight-card-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </div>
+    <div class="insight-card-body">
+      <div class="insight-card-title">Preparing voice (${lang.toUpperCase()})</div>
+      <div class="voice-download-bar">
+        <div class="voice-download-bar-fill" style="width: 10%"></div>
+      </div>
+      <div class="voice-download-text">Checking models…</div>
+    </div>
+  `;
+  container.appendChild(card);
+  return card;
+}
+
+function updateDownloadCard(card, pct, status) {
+  if (!card) return;
+  const fill = card.querySelector('.voice-download-bar-fill');
+  const text = card.querySelector('.voice-download-text');
+  if (fill) fill.style.width = `${Math.round(pct)}%`;
+  if (text && status) text.textContent = status;
+}
+
+function removeDownloadCard(card) {
+  if (card) card.remove();
 }
 
 function clearSilenceTimer() {
@@ -50,9 +82,8 @@ export async function prepareVoice() {
   const lang = getVoiceLang();
   setVoiceReady(false);
   setSphereState('downloading');
-  overlay.classList.remove('hidden');
-  titleEl.textContent = `Preparing voice (${lang.toUpperCase()})`;
-  setProgress(10, 'Checking models…');
+
+  const card = createDownloadCard(lang);
 
   let status;
   try {
@@ -64,19 +95,43 @@ export async function prepareVoice() {
   sttLang = status.stt_lang || lang;
 
   if (status.vosk === 'missing') {
-    setProgress(30, 'Downloading Vosk speech model…');
-    await apiFetch('/api/voice/download', {
-      method: 'POST',
-      body: JSON.stringify({ lang }),
-    });
+    updateDownloadCard(card, 30, 'Downloading Vosk speech model…');
+    try {
+      await apiFetch('/api/voice/download', {
+        method: 'POST',
+        body: JSON.stringify({ lang }),
+      });
+    } catch (e) {
+      updateDownloadCard(card, 0, 'Download failed');
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: 'Voice model download failed', type: 'error' },
+      }));
+      await sleep(2000);
+      removeDownloadCard(card);
+      setVoiceReady(true);
+      setSphereState('error');
+      return;
+    }
   }
 
-  setProgress(70, 'Loading speech recognizer…');
-  await initVosk(sttLang);
+  updateDownloadCard(card, 70, 'Loading speech recognizer…');
+  try {
+    await initVosk(sttLang);
+  } catch (e) {
+    updateDownloadCard(card, 0, 'Model load failed');
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { message: 'Speech model failed to load', type: 'error' },
+    }));
+    await sleep(2000);
+    removeDownloadCard(card);
+    setVoiceReady(true);
+    setSphereState('error');
+    return;
+  }
 
-  setProgress(100, 'Ready');
-  await sleep(400);
-  overlay.classList.add('hidden');
+  updateDownloadCard(card, 100, 'Ready');
+  await sleep(600);
+  removeDownloadCard(card);
   setVoiceReady(true);
   setSphereState('idle');
 }

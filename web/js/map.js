@@ -19,8 +19,8 @@ export function initMap() {
   map = L.map('map', {
     zoomControl: false,
     attributionControl: false,
-    dragging: false,
-    touchZoom: false,
+    dragging: true,
+    touchZoom: true,
     scrollWheelZoom: false,
     doubleClickZoom: false,
     boxZoom: false,

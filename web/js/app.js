@@ -74,7 +74,7 @@ async function boot() {
 
   await loadArtifacts();
 
-  await prepareVoice();
+  prepareVoice();
   wireVoiceResults();
 }
 
