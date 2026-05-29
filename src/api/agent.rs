@@ -10,6 +10,7 @@ use crate::services::agent_tools::{
     execute_action, fetch_active_trip, parse_actions, strip_action_blocks, AgentContext,
 };
 use crate::services::artifacts::Artifact;
+use crate::services::navigation::NavigationSession;
 
 const MAX_ITERATIONS: usize = 4;
 
@@ -35,6 +36,8 @@ pub struct AgentResponse {
     pub mode: String,
     pub artifacts: Vec<Artifact>,
     pub actions_taken: Vec<ActionTaken>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub navigation: Option<NavigationSession>,
 }
 
 #[derive(Serialize)]
@@ -107,6 +110,7 @@ pub async fn handle_agent(
          - Wrong: ```json {{\"action\":\"list_trips\"}} ``` or {{\"action\":\"list_trips\"}}\n\
          - Right: {{\"action\":\"list_trips\",\"params\":{{}}}}\n\
          - For trip/itinerary requests use plan_trip (web research + route + narrative journey card plus nightlife/food/culture guides in the dock).\n\
+         - For \"take me to\", \"navigate to\", \"directions to\", \"drive to\" → use navigate_to (starts turn-by-turn navigator; no artifact panel).\n\
          \n\
          ## Tools\n{}\n\n\
          ## Context\n{}\n{}\nDiary: {}\n\
@@ -122,6 +126,7 @@ pub async fn handle_agent(
 
     let mut artifacts: Vec<Artifact> = Vec::new();
     let mut actions_taken: Vec<ActionTaken> = Vec::new();
+    let mut navigation: Option<NavigationSession> = None;
     let mut final_reply = String::new();
 
     for _ in 0..MAX_ITERATIONS {
@@ -144,6 +149,13 @@ pub async fn handle_agent(
                         action: outcome.action.clone(),
                         result: outcome.result.clone(),
                     });
+                    if outcome.action == "navigate_to" && outcome.result == "ok" {
+                        if let Ok(nav) = serde_json::from_value::<NavigationSession>(
+                            outcome.data.get("navigator").cloned().unwrap_or(json!({})),
+                        ) {
+                            navigation = Some(nav);
+                        }
+                    }
                     let trip_id = active_trip.as_ref().map(|t| t.id.as_str());
                     let mut produced: Vec<Artifact> = Vec::new();
                     if let Some(art) = outcome.artifact {
@@ -207,5 +219,6 @@ pub async fn handle_agent(
         mode,
         artifacts,
         actions_taken,
+        navigation,
     }))
 }

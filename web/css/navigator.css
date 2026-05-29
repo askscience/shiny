@@ -1,0 +1,181 @@
+/* Navigator mode — minimal HUD, Google Maps-style follow */
+
+body.navigator-active #hud-saved-trips,
+body.navigator-active #hud-top,
+body.navigator-active .hud-divider,
+body.navigator-active #insight-cards,
+body.navigator-active #artifact-dock,
+body.navigator-active #travel-panel,
+body.navigator-active #travel-panel-backdrop,
+body.navigator-active #hud-transcript,
+body.navigator-active #reply-text {
+  display: none !important;
+  pointer-events: none;
+}
+
+body.navigator-active #app {
+  overflow: hidden;
+  background: var(--bg);
+}
+
+body.navigator-active .hud-header-main {
+  max-width: min(320px, 55vw);
+}
+
+body.navigator-active #map-vignette {
+  display: none;
+}
+
+body.navigator-active .leaflet-container {
+  cursor: default;
+}
+
+body.navigator-active #map-stage {
+  transition: none;
+  will-change: transform;
+}
+
+#nav-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(132px, calc(env(safe-area-inset-bottom) + 116px));
+  z-index: 36;
+  width: min(420px, calc(100vw - 28px));
+  padding: 16px 18px 14px;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  box-shadow: var(--shadow-float);
+  pointer-events: auto;
+  animation: navBannerIn var(--duration-normal) var(--ease-out) both;
+}
+
+#nav-banner.hidden {
+  display: none !important;
+}
+
+#nav-banner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--gradient-brand);
+}
+
+#nav-instruction {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: var(--text);
+  padding-right: 36px;
+  margin-bottom: 6px;
+}
+
+#nav-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+#nav-dest {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+#nav-exit {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--glass);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast), color var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
+}
+
+#nav-exit:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+  transform: scale(1.08);
+}
+
+body.navigator-active #chrome-bottom {
+  gap: 0;
+}
+
+/* Small chevron puck — fixed on screen, map rotates underneath */
+#nav-puck {
+  --nav-puck-top: 62%;
+  position: fixed;
+  top: var(--nav-puck-top);
+  left: 50%;
+  z-index: 22;
+  width: 18px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: #4a9eff;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5));
+}
+
+#nav-puck.hidden {
+  display: none !important;
+}
+
+.nav-puck-chevron {
+  display: block;
+  width: 18px;
+  height: 22px;
+}
+
+body.navigator-active .leaflet-marker-pane,
+body.navigator-active .leaflet-shadow-pane,
+body.navigator-active .user-marker {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes navBannerIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #nav-banner { animation: none; }
+}
+
+@media (max-width: 640px) {
+  #nav-banner {
+    width: calc(100vw - 24px);
+    bottom: max(124px, calc(env(safe-area-inset-bottom) + 108px));
+  }
+
+  #nav-instruction {
+    font-size: 14px;
+  }
+
+  #nav-puck {
+    --nav-puck-top: 64%;
+  }
+}

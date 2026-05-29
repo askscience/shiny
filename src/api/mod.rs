@@ -66,6 +66,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/map/reverse", get(trips::map_reverse))
         .route("/api/map/route", get(trips::map_route))
         .route("/api/map/poi", get(trips::map_poi))
+        .route("/api/navigate/start", get(trips::navigate_start))
         .route("/api/diary", get(diary::list))
         .route("/api/diary/:date", get(diary::get_by_date))
         .route("/api/diary/search", get(diary::search))

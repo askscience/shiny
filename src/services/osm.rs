@@ -13,9 +13,11 @@ pub struct GeoPlace {
     pub lon: f64,
     pub category: Option<String>,
     pub place_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouteStep {
     pub distance: f64,
     pub duration: f64,
@@ -61,21 +63,61 @@ impl OsmService {
 
         let places = data
             .into_iter()
-            .filter_map(|v| {
-                Some(GeoPlace {
-                    display_name: v.get("display_name")?.as_str()?.to_string(),
-                    lat: v.get("lat")?.as_str()?.parse().ok()?,
-                    lon: v.get("lon")?.as_str()?.parse().ok()?,
-                    category: v.get("category").and_then(|c| c.as_str().map(String::from)),
-                    place_type: v.get("type").and_then(|t| t.as_str().map(String::from)),
-                })
-            })
+            .filter_map(|v| parse_geo_place(v))
             .collect();
 
         // Rate limit: max 1 req/sec for Nominatim
         tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
 
         Ok(places)
+    }
+
+    /// Geocode biased toward the user's current position — picks the nearest relevant match.
+    pub async fn geocode_near(
+        &self,
+        query: &str,
+        near_lat: f64,
+        near_lon: f64,
+        limit: Option<usize>,
+    ) -> Result<GeoPlace, AppError> {
+        let query = normalize_destination_query(query);
+        if query.is_empty() {
+            return Err(AppError::BadRequest("destination required".into()));
+        }
+
+        let limit = limit.unwrap_or(8);
+        let url = format!(
+            "https://nominatim.openstreetmap.org/search?q={}&format=jsonv2&limit={}&lat={}&lon={}",
+            urlencoding(&query),
+            limit,
+            near_lat,
+            near_lon,
+        );
+
+        let resp = self.client.get(&url).send().await?;
+        let data: Vec<serde_json::Value> = resp.json().await.map_err(|e| {
+            AppError::Internal(format!("Failed to parse geocode response: {}", e))
+        })?;
+
+        let mut places: Vec<GeoPlace> = data.into_iter().filter_map(parse_geo_place).collect();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
+
+        if places.is_empty() {
+            return Err(AppError::BadRequest(format!(
+                "Could not find \"{}\" on the map",
+                query
+            )));
+        }
+
+        let query_lower = query.to_lowercase();
+        places.sort_by(|a, b| {
+            score_place(a, &query_lower, near_lat, near_lon)
+                .partial_cmp(&score_place(b, &query_lower, near_lat, near_lon))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(places.remove(0))
     }
 
     pub async fn reverse_geocode(&self, lat: f64, lon: f64) -> Result<GeoPlace, AppError> {
@@ -99,6 +141,7 @@ impl OsmService {
             lon: lon,
             category: v.get("category").and_then(|c| c.as_str().map(String::from)),
             place_type: v.get("type").and_then(|t| t.as_str().map(String::from)),
+            name: v.get("name").and_then(|n| n.as_str().map(String::from)),
         };
 
         tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
@@ -247,6 +290,7 @@ impl OsmService {
                                 .map(String::from)
                                 .or_else(|| el["tags"]["tourism"].as_str().map(String::from)),
                             place_type: Some("poi".into()),
+                            name: el["tags"]["name"].as_str().map(String::from),
                         })
                     })
                     .collect()
@@ -265,4 +309,95 @@ fn urlencoding(s: &str) -> String {
             _ => format!("%{:02X}", c as u8),
         })
         .collect()
+}
+
+fn parse_geo_place(v: serde_json::Value) -> Option<GeoPlace> {
+    Some(GeoPlace {
+        display_name: v.get("display_name")?.as_str()?.to_string(),
+        lat: v.get("lat")?.as_str()?.parse().ok()?,
+        lon: v.get("lon")?.as_str()?.parse().ok()?,
+        category: v.get("category").and_then(|c| c.as_str().map(String::from)),
+        place_type: v.get("type").and_then(|t| t.as_str().map(String::from)),
+        name: v.get("name").and_then(|n| n.as_str().map(String::from)),
+    })
+}
+
+fn normalize_destination_query(raw: &str) -> String {
+    let mut q = raw.trim().trim_matches('"').to_string();
+    let lower = q.to_lowercase();
+    const PREFIXES: &[&str] = &[
+        "please drive me to ",
+        "please take me to ",
+        "please navigate to ",
+        "drive me to ",
+        "take me to ",
+        "navigate me to ",
+        "navigate to ",
+        "directions to ",
+        "go to ",
+        "portami a ",
+        "guidami a ",
+        "guidami verso ",
+        "naviga verso ",
+        "naviga a ",
+        "indicazioni per ",
+        "voglio andare a ",
+    ];
+    for prefix in PREFIXES {
+        if lower.starts_with(prefix) {
+            q = q[prefix.len()..].trim().to_string();
+            break;
+        }
+    }
+    q.trim_end_matches(|c: char| c.is_ascii_punctuation()).trim().to_string()
+}
+
+pub fn place_label(place: &GeoPlace) -> String {
+    place
+        .name
+        .clone()
+        .or_else(|| {
+            place
+                .display_name
+                .split(',')
+                .next()
+                .map(|s| s.trim().to_string())
+        })
+        .unwrap_or_else(|| place.display_name.clone())
+}
+
+fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r = 6371.0;
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lon = (lon2 - lon1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lon / 2.0).sin().powi(2);
+    2.0 * r * a.sqrt().asin()
+}
+
+/// Lower score = better match (distance-weighted, name/type bonuses).
+fn score_place(place: &GeoPlace, query: &str, near_lat: f64, near_lon: f64) -> f64 {
+    let dist = haversine_km(near_lat, near_lon, place.lat, place.lon);
+    let label = place_label(place).to_lowercase();
+    let full = place.display_name.to_lowercase();
+
+    let mut score = dist;
+
+    if label == query || full.starts_with(query) {
+        score -= 80.0;
+    } else if label.contains(query) || full.contains(query) {
+        score -= 40.0;
+    }
+
+    match place.place_type.as_deref() {
+        Some("city" | "town" | "village" | "municipality" | "administrative") => score -= 25.0,
+        Some("suburb" | "neighbourhood") => score -= 10.0,
+        _ => {}
+    }
+
+    if dist > 500.0 {
+        score += 200.0;
+    }
+
+    score
 }

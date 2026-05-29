@@ -75,7 +75,8 @@ Reply in the user's language. Keep spoken replies under 2 sentences. Use `show_a
 |--------|--------|-------------|
 | map_search | q, limit? | Geocode place name |
 | map_reverse | lat, lon | Reverse geocode coordinates |
-| map_route | from_lat, from_lon, to_lat, to_lon, profile? | Route (car/bike/foot) |
+| map_route | from_lat, from_lon, to_lat, to_lon, profile? | Route preview card (car/bike/foot) |
+| navigate_to | destination **or** to_lat + to_lon, profile? | Start turn-by-turn navigator (uses GPS + OSRM road directions) |
 | map_poi | lat, lon, radius?, amenity? | Nearby POIs |
 
 ## Diary Tools
@@ -98,6 +99,18 @@ Reply in the user's language. Keep spoken replies under 2 sentences. Use `show_a
 | action | params | description |
 |--------|--------|-------------|
 | plan_trip | destination, days? (default 3), profile? | Geocode, **4 web searches**, route from GPS, narrative `travel_plan` + themed guides (nightlife, food, culture) as separate dock cards |
+
+Example — start driving navigation:
+```text
+{"action": "navigate_to", "params": {"destination": "Eiffel Tower, Paris"}}
+```
+
+With coordinates:
+```text
+{"action": "navigate_to", "params": {"to_lat": 48.8584, "to_lon": 2.2945, "name": "Eiffel Tower"}}
+```
+
+**Navigation workflow:** For “take me to”, “navigate to”, “directions to”, “drive me to” → use `navigate_to` (not `plan_trip` or `show_artifact`). The app enters navigator mode: live GPS, turn-by-turn instructions from OpenStreetMap roads via OSRM, minimal UI (clock, weather, voice orb only). Keep the spoken reply to one short sentence.
 
 Example:
 ```text

@@ -7,6 +7,7 @@ use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::{DiaryEntry, Location, Traveler, Trip};
 use crate::services::artifacts::{self, Artifact, PlanDay, RouteMeta};
+use crate::services::navigation::build_navigation_session;
 use crate::services::web_search::SearchResult;
 
 #[derive(Debug, Clone)]
@@ -33,7 +34,8 @@ pub async fn execute_action(
     action: &str,
     params: &Value,
 ) -> Result<ActionOutcome, AppError> {
-    let outcome = match action {
+    let action_key = normalize_action_name(action);
+    let outcome = match action_key.as_str() {
         "create_trip" => {
             let name = param_str(params, "name").ok_or_else(|| AppError::BadRequest("name required".into()))?;
             let description = params.get("description").and_then(|v| v.as_str()).map(String::from);
@@ -56,7 +58,7 @@ pub async fn execute_action(
                 start_trip_internal(&state.pool, &traveler.id, &trip.id).await?
             };
             ok(
-                action,
+                &action_key,
                 json!({
                     "trip": trip,
                     "auto_started": !had_active,
@@ -65,31 +67,31 @@ pub async fn execute_action(
         }
         "list_trips" => {
             let trips = fetch_trips(&state.pool, &traveler.id).await?;
-            ok(action, json!({ "trips": trips }))
+            ok(&action_key, json!({ "trips": trips }))
         }
         "get_trip" => {
             let id = param_str(params, "trip_id").ok_or_else(|| AppError::BadRequest("trip_id required".into()))?;
             let trip = fetch_trip(&state.pool, &traveler.id, &id).await?;
-            ok(action, json!({ "trip": trip }))
+            ok(&action_key, json!({ "trip": trip }))
         }
         "get_active_trip" => {
             let trip = fetch_active_trip(&state.pool, &traveler.id).await?;
-            ok(action, json!({ "trip": trip }))
+            ok(&action_key, json!({ "trip": trip }))
         }
         "start_trip" => {
             let id = param_str(params, "trip_id").ok_or_else(|| AppError::BadRequest("trip_id required".into()))?;
             let trip = start_trip_internal(&state.pool, &traveler.id, &id).await?;
-            ok(action, json!({ "trip": trip }))
+            ok(&action_key, json!({ "trip": trip }))
         }
         "end_trip" => {
             let id = param_str(params, "trip_id").ok_or_else(|| AppError::BadRequest("trip_id required".into()))?;
             let trip = end_trip_internal(state, &traveler.id, &id).await?;
-            ok(action, json!({ "trip": trip }))
+            ok(&action_key, json!({ "trip": trip }))
         }
         "trip_stats" => {
             let id = param_str(params, "trip_id").ok_or_else(|| AppError::BadRequest("trip_id required".into()))?;
             let stats = trip_stats_internal(&state.pool, &traveler.id, &id).await?;
-            ok(action, json!({ "stats": stats }))
+            ok(&action_key, json!({ "stats": stats }))
         }
         "submit_location" => {
             let lat = param_f64(params, "latitude").ok_or_else(|| AppError::BadRequest("latitude required".into()))?;
@@ -120,7 +122,7 @@ pub async fn execute_action(
             .bind(&location.source)
             .execute(&state.pool)
             .await?;
-            ok(action, json!({ "location": location }))
+            ok(&action_key, json!({ "location": location }))
         }
         "list_locations" => {
             let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
@@ -142,7 +144,7 @@ pub async fn execute_action(
                 .fetch_all(&state.pool)
                 .await?
             };
-            ok(action, json!({ "locations": rows, "count": rows.len() }))
+            ok(&action_key, json!({ "locations": rows, "count": rows.len() }))
         }
         "trip_route" => {
             let id = param_str(params, "trip_id").ok_or_else(|| AppError::BadRequest("trip_id required".into()))?;
@@ -157,19 +159,19 @@ pub async fn execute_action(
                 .iter()
                 .map(|l| json!({ "lat": l.latitude, "lon": l.longitude, "timestamp": l.timestamp, "speed": l.speed }))
                 .collect();
-            ok(action, json!({ "route": route }))
+            ok(&action_key, json!({ "route": route }))
         }
         "map_search" => {
             let q = param_str(params, "q").ok_or_else(|| AppError::BadRequest("q required".into()))?;
             let limit = params.get("limit").and_then(|v| v.as_u64()).map(|n| n as usize);
             let places = state.osm.geocode(&q, limit).await?;
-            ok(action, json!({ "places": places }))
+            ok(&action_key, json!({ "places": places }))
         }
         "map_reverse" => {
             let lat = param_f64(params, "lat").or(ctx.lat).ok_or_else(|| AppError::BadRequest("lat required".into()))?;
             let lon = param_f64(params, "lon").or(ctx.lon).ok_or_else(|| AppError::BadRequest("lon required".into()))?;
             let place = state.osm.reverse_geocode(lat, lon).await?;
-            ok(action, json!({ "place": place }))
+            ok(&action_key, json!({ "place": place }))
         }
         "map_route" => {
             let from_lat = param_f64(params, "from_lat").or(ctx.lat).ok_or_else(|| AppError::BadRequest("from_lat required".into()))?;
@@ -200,12 +202,21 @@ pub async fn execute_action(
                 destination: None,
             };
             ActionOutcome {
-                action: action.to_string(),
+                action: action_key.clone(),
                 result: "ok".into(),
                 data: json!({ "route": route }),
                 artifact: Some(artifact),
                 extra_artifacts: vec![],
             }
+        }
+        "navigate_to" => {
+            let from_lat = param_f64(params, "from_lat").or(ctx.lat).ok_or_else(|| AppError::BadRequest("from_lat required — enable GPS".into()))?;
+            let from_lon = param_f64(params, "from_lon").or(ctx.lon).ok_or_else(|| AppError::BadRequest("from_lon required — enable GPS".into()))?;
+            let session = build_navigation_session(&state.osm, from_lat, from_lon, params).await?;
+            ok(
+                &action_key,
+                json!({ "navigator": session }),
+            )
         }
         "map_poi" => {
             let lat = param_f64(params, "lat").or(ctx.lat).ok_or_else(|| AppError::BadRequest("lat required".into()))?;
@@ -215,7 +226,7 @@ pub async fn execute_action(
             let places = state.osm.nearby_poi(lat, lon, radius, amenity).await?;
             let artifact = artifacts::poi_list(&places);
             ActionOutcome {
-                action: action.to_string(),
+                action: action_key.clone(),
                 result: "ok".into(),
                 data: json!({ "places": places }),
                 artifact: Some(artifact),
@@ -231,7 +242,7 @@ pub async fn execute_action(
             .bind(limit)
             .fetch_all(&state.pool)
             .await?;
-            ok(action, json!({ "entries": entries }))
+            ok(&action_key, json!({ "entries": entries }))
         }
         "get_diary" => {
             let date = param_str(params, "date").ok_or_else(|| AppError::BadRequest("date required".into()))?;
@@ -243,7 +254,7 @@ pub async fn execute_action(
             .fetch_optional(&state.pool)
             .await?
             .ok_or_else(|| AppError::NotFound(format!("No diary entry for {}", date)))?;
-            ok(action, json!({ "entry": entry }))
+            ok(&action_key, json!({ "entry": entry }))
         }
         "search_diary" => {
             let q = param_str(params, "q").ok_or_else(|| AppError::BadRequest("q required".into()))?;
@@ -259,7 +270,7 @@ pub async fn execute_action(
             .bind(limit)
             .fetch_all(&state.pool)
             .await?;
-            ok(action, json!({ "entries": entries }))
+            ok(&action_key, json!({ "entries": entries }))
         }
         "generate_diary" => {
             let date = params
@@ -268,7 +279,7 @@ pub async fn execute_action(
                 .map(String::from)
                 .unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
             let entry = state.diary_gen.generate_for_date(&traveler.id, &date).await?;
-            ok(action, json!({ "entry": entry }))
+            ok(&action_key, json!({ "entry": entry }))
         }
         "web_search" => {
             let query = param_str(params, "query").ok_or_else(|| AppError::BadRequest("query required".into()))?;
@@ -301,7 +312,7 @@ pub async fn execute_action(
                 destination: None,
             };
             ActionOutcome {
-                action: action.to_string(),
+                action: action_key.clone(),
                 result: "ok".into(),
                 data: json!({ "results": results, "summary": summary }),
                 artifact: Some(artifact),
@@ -436,7 +447,7 @@ pub async fn execute_action(
             }
 
             outcome_with_artifacts(
-                action,
+                &action_key,
                 json!({
                     "destination": place,
                     "guides_created": guides.len() + 1,
@@ -449,7 +460,7 @@ pub async fn execute_action(
         "show_artifact" => {
             let artifact = artifacts::build_from_params(params);
             ActionOutcome {
-                action: action.to_string(),
+                action: action_key.clone(),
                 result: "ok".into(),
                 data: json!({ "artifact": artifact }),
                 artifact: Some(artifact),
@@ -477,7 +488,7 @@ pub async fn execute_action(
             };
             let artifact = artifacts::merge_update(&state.pool, &traveler.id, &artifact_id, update).await?;
             ActionOutcome {
-                action: action.to_string(),
+                action: action_key.clone(),
                 result: "ok".into(),
                 data: json!({ "artifact": artifact }),
                 artifact: Some(artifact),
@@ -485,6 +496,7 @@ pub async fn execute_action(
             }
         }
         other => {
+            tracing::warn!("Unknown agent action: {:?}", other);
             return Err(AppError::BadRequest(format!("Unknown action: {}", other)));
         }
     };
@@ -892,6 +904,15 @@ fn haversine(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     2.0 * r * a.sqrt().asin()
 }
 
+fn normalize_action_name(raw: &str) -> String {
+    let a = raw.trim().trim_matches('"').to_lowercase();
+    match a.as_str() {
+        "navigate" | "start_navigation" | "start_navigator" | "navigation"
+        | "directions" | "drive_to" | "navigate-to" | "go_to" => "navigate_to".into(),
+        _ => a,
+    }
+}
+
 pub fn parse_actions(text: &str) -> Vec<(String, Value)> {
     let normalized = text
         .replace("```json", "")
@@ -905,7 +926,11 @@ pub fn parse_actions(text: &str) -> Vec<(String, Value)> {
         if let Some(end) = find_json_end(&normalized[abs_start..]) {
             let slice = &normalized[abs_start..abs_start + end + 1];
             if let Ok(v) = serde_json::from_str::<Value>(slice) {
-                if let Some(action) = v.get("action").and_then(|a| a.as_str()) {
+                let action = v
+                    .get("action")
+                    .and_then(|a| a.as_str())
+                    .or_else(|| v.get("tool").and_then(|a| a.as_str()));
+                if let Some(action) = action {
                     let params = v
                         .get("params")
                         .cloned()

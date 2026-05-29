@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/css/travel-panel.css">
   <link rel="stylesheet" href="/css/insight-cards.css">
   <link rel="stylesheet" href="/css/hud-left.css">
+  <link rel="stylesheet" href="/css/navigator.css">
 </head>
 <body>
   <div id="grain" aria-hidden="true"></div>
@@ -46,7 +47,9 @@
 
   <!-- Main navigator -->
   <div id="app" class="hidden">
-    <div id="map"></div>
+    <div id="map-stage">
+      <div id="map"></div>
+    </div>
     <div id="map-vignette" aria-hidden="true"></div>
 
     <div id="insight-cards" class="hidden" aria-live="polite" aria-label="Destination insights"></div>
@@ -95,10 +98,17 @@
       </div>
     </header>
 
-    <div id="nav-arrow" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 4l-8 14h16L12 4z"/>
+    <div id="nav-puck" class="hidden" aria-hidden="true">
+      <svg class="nav-puck-chevron" viewBox="0 0 24 28" aria-hidden="true">
+        <path d="M12 2 L20 24 L12 19 L4 24 Z" fill="currentColor" stroke="#fff" stroke-width="1.75" stroke-linejoin="round"/>
       </svg>
+    </div>
+
+    <div id="nav-banner" class="hidden" aria-live="polite" aria-label="Navigation">
+      <button type="button" id="nav-exit" aria-label="End navigation">&times;</button>
+      <div id="nav-instruction">Continue on route</div>
+      <div id="nav-meta">—</div>
+      <div id="nav-dest"></div>
     </div>
 
     <div id="travel-panel-backdrop" class="hidden" aria-hidden="true"></div>

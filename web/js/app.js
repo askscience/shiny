@@ -15,6 +15,7 @@ import { loadArtifacts } from './artifactStore.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudLeft } from './hudLeft.js';
+import { initNavigator } from './navigator.js';
 import { initTextInput, openTextInput, isTextInputOpen } from './textInput.js';
 
 function showToast(message, type = 'info') {
@@ -58,6 +59,7 @@ async function boot() {
   initSphere();
   initArtifactDock();
   initHudLeft();
+  initNavigator();
   initInsightCards();
   initSettings();
   initTrips();

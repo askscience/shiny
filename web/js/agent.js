@@ -10,6 +10,13 @@ import { speak } from './voice.js';
 import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
+import { startNavigator, isNavigatorActive } from './navigator.js';
+import {
+  fetchNavigationSession,
+  looksLikeNavigationRequest,
+  extractDestinationFromMessage,
+  agentFailedNavigation,
+} from './navigationApi.js';
 
 const TRIP_ACTIONS = new Set(['create_trip', 'start_trip', 'end_trip']);
 
@@ -49,6 +56,7 @@ function pickPrimaryArtifact(artifacts) {
 }
 
 async function ingestAgentArtifacts(artifacts) {
+  if (isNavigatorActive()) return;
   if (!artifacts?.length) return;
   const ids = [];
   for (const art of artifacts) {
@@ -91,6 +99,45 @@ async function streamText(text, onStream, delayMs = 14) {
   }
 }
 
+async function handleNavigation(res, userMessage, context) {
+  if (res?.navigation) {
+    const started = await startNavigator(res.navigation);
+    if (started) {
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: `Navigating to ${res.navigation.destination}`, type: 'info' },
+      }));
+    }
+    return started;
+  }
+
+  if (!looksLikeNavigationRequest(userMessage) && !agentFailedNavigation(res)) {
+    return false;
+  }
+
+  const destination = extractDestinationFromMessage(userMessage);
+  if (!destination || context?.lat == null || context?.lon == null) {
+    return false;
+  }
+
+  try {
+    const session = await fetchNavigationSession({
+      destination,
+      from_lat: context.lat,
+      from_lon: context.lon,
+    });
+    const started = await startNavigator(session);
+    if (started) {
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: `Navigating to ${session.destination}`, type: 'info' },
+      }));
+    }
+    return started;
+  } catch (e) {
+    console.warn('Navigation fallback failed:', e);
+    return false;
+  }
+}
+
 export async function sendToAgent(message, mode, context) {
   const lang = localStorage.getItem('voice.lang') ||
     (navigator.language || 'en').split('-')[0];
@@ -104,6 +151,8 @@ export async function sendToAgent(message, mode, context) {
     });
 
     await ingestAgentArtifacts(res.artifacts);
+
+    await handleNavigation(res, message, context);
 
     await syncTripsAfterAgent(res);
 
@@ -154,6 +203,8 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     await streamText(res.reply || '', onStream, 12);
 
     await ingestAgentArtifacts(res.artifacts);
+
+    await handleNavigation(res, message, context);
 
     await syncTripsAfterAgent(res);
 

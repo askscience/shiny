@@ -1,11 +1,12 @@
 use axum::extract::{Path, State, Extension, Query};
 use axum::Json;
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::{CreateTripRequest, Trip, Traveler, UpdateTripRequest, TripStats, Location};
+use crate::services::navigation::{build_navigation_session, NavigationSession};
 
 #[derive(Serialize)]
 pub struct TripResponse {
@@ -377,6 +378,47 @@ pub async fn map_poi(
     }))
 }
 
+#[derive(Deserialize)]
+pub struct NavigateStartParams {
+    pub destination: Option<String>,
+    pub to_lat: Option<f64>,
+    pub to_lon: Option<f64>,
+    pub name: Option<String>,
+    pub from_lat: Option<f64>,
+    pub from_lon: Option<f64>,
+    pub profile: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct NavigateStartResponse {
+    pub success: bool,
+    pub data: NavigationSession,
+}
+
+pub async fn navigate_start(
+    State(state): State<AppState>,
+    Extension(_traveler): Extension<Traveler>,
+    Query(params): Query<NavigateStartParams>,
+) -> Result<Json<NavigateStartResponse>, AppError> {
+    let from_lat = params.from_lat.ok_or_else(|| AppError::BadRequest("from_lat required".into()))?;
+    let from_lon = params.from_lon.ok_or_else(|| AppError::BadRequest("from_lon required".into()))?;
+
+    let query = serde_json::json!({
+        "destination": params.destination,
+        "to_lat": params.to_lat,
+        "to_lon": params.to_lon,
+        "name": params.name,
+        "profile": params.profile,
+    });
+
+    let session = build_navigation_session(&state.osm, from_lat, from_lon, &query).await?;
+
+    Ok(Json(NavigateStartResponse {
+        success: true,
+        data: session,
+    }))
+}
+
 fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let r = 6371.0;
     let d_lat = (lat2 - lat1).to_radians();
@@ -386,8 +428,6 @@ fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let c = 2.0 * a.sqrt().asin();
     r * c
 }
-
-use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct MapSearchParams {

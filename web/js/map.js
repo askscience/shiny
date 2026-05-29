@@ -8,12 +8,21 @@ const MAP_TILES = {
 };
 let routeLayer = null;
 let routeCasingLayer = null;
+let routeTraveledLayer = null;
 let destinationMarker = null;
 let artifactMarker = null;
 let navigationActive = false;
+let navigatorFollow = false;
+let lastMapPan = { lat: null, lon: null };
+let displayBearing = 0;
+let bearingInitialized = false;
+let navRouteGeometry = null;
 let currentHeading = 0;
 let currentPos = { lat: 48.8566, lon: 2.3522 };
 let gpsAccurate = false;
+
+const NAV_ZOOM = 18;
+const NAV_PUCK_FRAC = 0.62;
 
 export function initMap() {
   map = L.map('map', {
@@ -39,11 +48,12 @@ export function initMap() {
   });
 
   userMarker = L.circleMarker([currentPos.lat, currentPos.lon], {
-    radius: 6,
-    fillColor: '#7dd3fc',
+    radius: 7,
+    fillColor: '#5eead4',
     fillOpacity: 0.95,
     color: '#fff',
-    weight: 2,
+    weight: 2.5,
+    className: 'user-marker',
   }).addTo(map);
 
   window.addEventListener('gps:update', (e) => {
@@ -59,7 +69,6 @@ export function initMap() {
       map.removeLayer(artifactMarker);
       artifactMarker = null;
     }
-    // Keep the route visible while navigating — closing the panel should not erase it
   });
 
   window.addEventListener('artifact:route', (e) => {
@@ -73,7 +82,10 @@ export function initMap() {
   window.addEventListener('map:resize', () => {
     if (!map) return;
     map.invalidateSize();
-    if (navigationActive && routeLayer) {
+    if (navigatorFollow && lastMapPan.lat != null) {
+      centerMapOnNavPuck(lastMapPan.lat, lastMapPan.lon);
+      setMapBearing(displayBearing);
+    } else if (navigationActive && routeLayer) {
       const bounds = routeLayer.getBounds();
       bounds.extend([currentPos.lat, currentPos.lon]);
       map.fitBounds(bounds, { ...getPanelFitPadding(), maxZoom: 13 });
@@ -97,6 +109,153 @@ export function setMapTheme(theme) {
   }).addTo(map);
 }
 
+export function setNavigatorFollow(on, routeGeometry = null) {
+  navigatorFollow = on;
+  navRouteGeometry = routeGeometry;
+  setNavigationMode(on);
+  const puck = document.getElementById('nav-puck');
+  if (puck) puck.classList.toggle('hidden', !on);
+  if (userMarker) {
+    const el = userMarker.getElement?.();
+    if (el) el.style.opacity = on ? '0' : '1';
+  }
+  if (on && map) {
+    lastMapPan = { lat: null, lon: null };
+    bearingInitialized = false;
+    displayBearing = currentHeading || 0;
+    map.setZoom(NAV_ZOOM);
+    updateNavigatorCamera({
+      lat: currentPos.lat,
+      lon: currentPos.lon,
+      heading: currentHeading,
+      routeGeometry: navRouteGeometry,
+    });
+    map.invalidateSize();
+    requestAnimationFrame(() => map.invalidateSize());
+  } else {
+    lastMapPan = { lat: null, lon: null };
+    displayBearing = 0;
+    bearingInitialized = false;
+    navRouteGeometry = null;
+    clearMapBearing();
+    if (userMarker) {
+      const el = userMarker.getElement?.();
+      if (el) el.style.opacity = '1';
+    }
+    map?.invalidateSize();
+    requestAnimationFrame(() => map?.invalidateSize());
+  }
+}
+
+export function setNavigatorRouteGeometry(geometry) {
+  navRouteGeometry = geometry;
+}
+
+function bearingBetween(lat1, lon1, lat2, lon2) {
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+  const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180)
+    - Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function bearingAlongRoute(lat, lon, geometry, fromIdx = 0) {
+  if (!geometry?.length) return null;
+  let idx = Math.max(0, fromIdx);
+  let ahead = 0;
+  const target = 35;
+  while (idx < geometry.length - 1 && ahead < target) {
+    const seg = metersBetween(geometry[idx][0], geometry[idx][1], geometry[idx + 1][0], geometry[idx + 1][1]);
+    ahead += seg;
+    idx++;
+  }
+  const tip = geometry[Math.min(idx, geometry.length - 1)];
+  return bearingBetween(lat, lon, tip[0], tip[1]);
+}
+
+function smoothBearing(target) {
+  if (!bearingInitialized) {
+    displayBearing = target;
+    bearingInitialized = true;
+    return displayBearing;
+  }
+  let diff = ((target - displayBearing + 540) % 360) - 180;
+  if (Math.abs(diff) > 120) displayBearing = target;
+  else displayBearing = (displayBearing + diff * 0.22 + 360) % 360;
+  return displayBearing;
+}
+
+function puckOffsetPx() {
+  const h = map?.getSize()?.y || window.innerHeight;
+  return Math.round(h * (NAV_PUCK_FRAC - 0.5));
+}
+
+function getMapStage() {
+  return document.getElementById('map-stage');
+}
+
+function navMapScale(bearing) {
+  const rad = ((bearing % 90) + 90) % 90 * Math.PI / 180;
+  const corner = Math.abs(Math.sin(rad)) + Math.abs(Math.cos(rad));
+  return Math.max(1.4, corner * 1.08);
+}
+
+function setMapBearing(bearing) {
+  const stage = getMapStage();
+  if (!stage) return;
+  const origin = `50% ${NAV_PUCK_FRAC * 100}%`;
+  const scale = navMapScale(bearing);
+  stage.style.transformOrigin = origin;
+  stage.style.transform = `rotate(${-bearing}deg) scale(${scale})`;
+}
+
+function clearMapBearing() {
+  const stage = getMapStage();
+  if (!stage) return;
+  stage.style.transform = '';
+  stage.style.transformOrigin = '';
+}
+
+function centerMapOnNavPuck(lat, lon) {
+  map.setView([lat, lon], map.getZoom(), { animate: false });
+  map.panBy([0, -puckOffsetPx()], { animate: false });
+}
+
+/** Heading-up camera: center GPS under puck, then rotate map stage. */
+export function updateNavigatorCamera({ lat, lon, heading, routeGeometry, routeIdx = 0 }) {
+  if (!navigatorFollow || !map) return;
+
+  const geom = routeGeometry || navRouteGeometry;
+  let targetBearing = bearingAlongRoute(lat, lon, geom, routeIdx);
+  if (targetBearing == null && heading != null && !isNaN(heading)) {
+    targetBearing = heading;
+  }
+  if (targetBearing == null && lastMapPan.lat != null) {
+    targetBearing = bearingBetween(lastMapPan.lat, lastMapPan.lon, lat, lon);
+  }
+
+  const moved = lastMapPan.lat == null
+    || metersBetween(lastMapPan.lat, lastMapPan.lon, lat, lon) >= 1;
+  if (moved) {
+    lastMapPan = { lat, lon };
+    centerMapOnNavPuck(lat, lon);
+  }
+
+  if (targetBearing != null) {
+    smoothBearing(targetBearing);
+  }
+  setMapBearing(displayBearing);
+}
+
+function metersBetween(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export function updatePosition({ lat, lon, heading }) {
   currentPos = { lat, lon };
   gpsAccurate = true;
@@ -104,25 +263,21 @@ export function updatePosition({ lat, lon, heading }) {
     currentHeading = heading;
   }
   userMarker.setLatLng([lat, lon]);
-  if (!navigationActive) {
-    map.setView([lat, lon], map.getZoom(), { animate: true });
-  }
 
-  const arrow = document.getElementById('nav-arrow');
-  if (arrow) {
-    arrow.style.transform = `translate(-50%, -90px) rotate(${currentHeading}deg)`;
+  if (!navigatorFollow && !navigationActive) {
+    map.setView([lat, lon], map.getZoom(), { animate: true });
   }
 }
 
 function clearRouteLayers() {
-  if (routeLayer) {
-    map.removeLayer(routeLayer);
-    routeLayer = null;
-  }
-  if (routeCasingLayer) {
-    map.removeLayer(routeCasingLayer);
-    routeCasingLayer = null;
-  }
+  [routeLayer, routeCasingLayer, routeTraveledLayer].forEach((layer) => {
+    if (layer) {
+      map.removeLayer(layer);
+    }
+  });
+  routeLayer = null;
+  routeCasingLayer = null;
+  routeTraveledLayer = null;
 }
 
 function getPanelFitPadding() {
@@ -141,10 +296,13 @@ function getPanelFitPadding() {
 
 function setNavigationMode(active) {
   navigationActive = active;
-  document.body.classList.toggle('nav-active', active);
+  document.body.classList.toggle('nav-active', active && !navigatorFollow);
   if (!map) return;
-  const enable = active;
-  if (enable) {
+  if (active && navigatorFollow) {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.scrollWheelZoom.disable();
+  } else if (active) {
     map.dragging.enable();
     map.touchZoom.enable();
     map.scrollWheelZoom.enable();
@@ -165,14 +323,16 @@ export function clearNavigation() {
     map.removeLayer(artifactMarker);
     artifactMarker = null;
   }
-  setNavigationMode(false);
+  if (!navigatorFollow) {
+    setNavigationMode(false);
+  }
 }
 
 function showDestinationMarker(coords) {
   if (destinationMarker) map.removeLayer(destinationMarker);
   destinationMarker = L.circleMarker([coords.lat, coords.lon], {
-    radius: 9,
-    fillColor: '#fbbf24',
+    radius: 10,
+    fillColor: '#ff6b4a',
     fillOpacity: 1,
     color: '#fff',
     weight: 2.5,
@@ -187,7 +347,10 @@ function fitRouteView(points, dest) {
   const bounds = L.latLngBounds(points);
   bounds.extend([currentPos.lat, currentPos.lon]);
   if (dest) bounds.extend([dest.lat, dest.lon]);
-  map.fitBounds(bounds, { ...getPanelFitPadding(), maxZoom: 13 });
+  const padding = navigatorFollow
+    ? { paddingTopLeft: [40, 80], paddingBottomRight: [40, 200] }
+    : getPanelFitPadding();
+  map.fitBounds(bounds, { ...padding, maxZoom: navigatorFollow ? NAV_ZOOM : 13 });
 }
 
 function normalizeGeometry(geometry) {
@@ -198,6 +361,46 @@ function normalizeGeometry(geometry) {
   }).filter(Boolean);
 }
 
+function drawRouteLines(points, { dashed = false, progressIdx = null } = {}) {
+  const lineOpts = {
+    lineCap: 'round',
+    lineJoin: 'round',
+    ...(dashed ? { dashArray: '10 14', opacity: 0.75 } : {}),
+  };
+
+  const traveled = progressIdx != null && progressIdx > 0
+    ? points.slice(0, progressIdx + 1)
+    : [];
+  const remaining = progressIdx != null && progressIdx > 0
+    ? points.slice(progressIdx)
+    : points;
+
+  if (traveled.length > 1) {
+    routeTraveledLayer = L.polyline(traveled, {
+      color: 'rgba(148, 163, 184, 0.45)',
+      weight: 6,
+      opacity: 0.6,
+      ...lineOpts,
+    }).addTo(map);
+  }
+
+  if (!dashed) {
+    routeCasingLayer = L.polyline(remaining, {
+      color: '#0f172a',
+      weight: 11,
+      opacity: 0.55,
+      ...lineOpts,
+    }).addTo(map);
+  }
+
+  routeLayer = L.polyline(remaining, {
+    color: dashed ? '#fbbf24' : '#5eead4',
+    weight: dashed ? 4 : 6,
+    opacity: dashed ? 0.85 : 0.95,
+    ...lineOpts,
+  }).addTo(map);
+}
+
 export function drawRouteGeometry(geometry, { fit = false, navigate = false, dest = null, dashed = false } = {}) {
   if (!geometry?.length || !map) return false;
   clearRouteLayers();
@@ -205,27 +408,7 @@ export function drawRouteGeometry(geometry, { fit = false, navigate = false, des
   const points = normalizeGeometry(geometry);
   if (points.length < 2) return false;
 
-  const lineOpts = {
-    lineCap: 'round',
-    lineJoin: 'round',
-    ...(dashed ? { dashArray: '10 14', opacity: 0.75 } : {}),
-  };
-
-  if (!dashed) {
-    routeCasingLayer = L.polyline(points, {
-      color: '#0c4a6e',
-      weight: 10,
-      opacity: 0.55,
-      ...lineOpts,
-    }).addTo(map);
-  }
-
-  routeLayer = L.polyline(points, {
-    color: dashed ? '#fbbf24' : '#7dd3fc',
-    weight: dashed ? 4 : 5,
-    opacity: dashed ? 0.85 : 0.95,
-    ...lineOpts,
-  }).addTo(map);
+  drawRouteLines(points, { dashed });
 
   if (navigate) {
     setNavigationMode(true);
@@ -237,13 +420,63 @@ export function drawRouteGeometry(geometry, { fit = false, navigate = false, des
   return true;
 }
 
-async function fetchOsrmRouteDirect(fromLat, fromLon, toLat, toLon) {
-  const url = `https://router.project-osrm.org/route/v1/car/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson`;
+/** Navigator: draw route with traveled/remaining split. */
+export function drawNavigatorRoute(geometry, { dest = null, fit = false, progressIdx = null } = {}) {
+  if (!geometry?.length || !map) return false;
+  clearRouteLayers();
+
+  const points = normalizeGeometry(geometry);
+  if (points.length < 2) return false;
+
+  drawRouteLines(points, { progressIdx: progressIdx ?? null });
+
+  if (dest) showDestinationMarker(dest);
+  if (fit) fitRouteView(points, dest);
+  map.invalidateSize();
+  return true;
+}
+
+async function fetchOsrmRouteFull(fromLat, fromLon, toLat, toLon, profile = 'car') {
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${fromLon},${fromLat};${toLon},${toLat}?steps=true&geometries=geojson&overview=full`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const data = await res.json();
-  if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) return null;
-  return data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+  if (data.code !== 'Ok' || !data.routes?.[0]) return null;
+  const route = data.routes[0];
+  const geometry = route.geometry?.coordinates?.map(([lon, lat]) => [lat, lon]) || [];
+  const leg = route.legs?.[0];
+  const steps = (leg?.steps || []).map((s) => ({
+    distance: s.distance,
+    duration: s.duration,
+    instruction: s.maneuver?.instruction || '',
+  }));
+  return {
+    geometry,
+    steps,
+    distance_km: (route.distance || 0) / 1000,
+    duration_min: (route.duration || 0) / 60,
+  };
+}
+
+export async function fetchRouteData(fromLat, fromLon, toLat, toLon, profile = 'car') {
+  const { apiFetch } = await import('./api.js');
+  try {
+    const res = await apiFetch(
+      `/api/map/route?from_lat=${fromLat}&from_lon=${fromLon}&to_lat=${toLat}&to_lon=${toLon}&profile=${profile}`
+    );
+    const d = res.data;
+    if (d?.geometry?.length > 1) {
+      return {
+        geometry: d.geometry,
+        steps: d.steps || [],
+        distance_km: (d.total_distance_meters || 0) / 1000,
+        duration_min: (d.total_duration_seconds || 0) / 60,
+      };
+    }
+  } catch (e) {
+    console.warn('Backend route failed:', e);
+  }
+  return fetchOsrmRouteFull(fromLat, fromLon, toLat, toLon, profile);
 }
 
 export function refreshGpsPosition() {
@@ -269,29 +502,9 @@ export function refreshGpsPosition() {
 
 export async function drawRoute(toLat, toLon, { navigate = false, artifactRef = null } = {}) {
   const dest = { lat: toLat, lon: toLon };
-  const fromLat = currentPos.lat;
-  const fromLon = currentPos.lon;
-
-  const { apiFetch } = await import('./api.js');
-  try {
-    const res = await apiFetch(
-      `/api/map/route?from_lat=${fromLat}&from_lon=${fromLon}&to_lat=${toLat}&to_lon=${toLon}&profile=car`
-    );
-    const geom = res.data?.geometry;
-    if (geom?.length > 1) {
-      return drawRouteGeometry(geom, { navigate, fit: navigate, dest });
-    }
-  } catch (e) {
-    console.warn('Backend route failed, trying OSRM from browser:', e);
-  }
-
-  try {
-    const geom = await fetchOsrmRouteDirect(fromLat, fromLon, toLat, toLon);
-    if (geom?.length > 1) {
-      return drawRouteGeometry(geom, { navigate, fit: navigate, dest });
-    }
-  } catch (e) {
-    console.warn('Browser OSRM failed:', e);
+  const route = await fetchRouteData(currentPos.lat, currentPos.lon, toLat, toLon, 'car');
+  if (route?.geometry?.length > 1) {
+    return drawRouteGeometry(route.geometry, { navigate, fit: navigate, dest });
   }
 
   if (artifactRef) {
@@ -300,7 +513,6 @@ export async function drawRoute(toLat, toLon, { navigate = false, artifactRef = 
   return false;
 }
 
-/** Show destination on map without drawing a route (panel open). */
 export function previewDestination(artifact) {
   const dest = resolveDestination(artifact);
   if (dest) showDestinationMarker(dest);
@@ -326,10 +538,6 @@ function drawDirectPath(dest) {
   return drawRouteGeometry(points, { navigate: true, dest, dashed: true });
 }
 
-/**
- * Show route A (GPS) → B (artifact coordinates). No AI — only map math + optional OSRM.
- * Returns { ok, mode: 'driving' | 'saved' | 'direct' }
- */
 export async function navigateToDestination(artifact) {
   if (!map) return { ok: false, mode: null };
 
@@ -343,7 +551,6 @@ export async function navigateToDestination(artifact) {
   await refreshGpsPosition();
   showDestinationMarker(dest);
 
-  // Always route from live GPS → destination (never reuse old plan geometry)
   const live = await drawRoute(dest.lat, dest.lon, { navigate: true, artifactRef: artifact });
   if (live) return { ok: true, mode: 'driving' };
 
@@ -368,6 +575,9 @@ export async function loadActiveRoute(tripId) {
     clearNavigation();
     return;
   }
+  const { isNavigatorActive } = await import('./navigator.js');
+  if (isNavigatorActive()) return;
+
   const { apiFetch } = await import('./api.js');
   try {
     const res = await apiFetch(`/api/trips/${tripId}/route`);
@@ -375,7 +585,7 @@ export async function loadActiveRoute(tripId) {
     setNavigationMode(false);
     const points = res.data.map((p) => [p.lat, p.lon]);
     if (points.length > 1) {
-      routeLayer = L.polyline(points, { color: '#7dd3fc', weight: 3, opacity: 0.5 }).addTo(map);
+      routeLayer = L.polyline(points, { color: '#5eead4', weight: 3, opacity: 0.5 }).addTo(map);
     }
   } catch (_) {}
 }

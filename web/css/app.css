@@ -44,6 +44,13 @@ html, body {
   height: 100%;
 }
 
+#map-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
 #map {
   position: absolute;
   inset: 0;
@@ -83,33 +90,7 @@ body.nav-active #map-vignette {
     linear-gradient(to bottom, rgba(8, 9, 13, 0.25) 0%, transparent 18%, transparent 76%, rgba(8, 9, 13, 0.4) 100%);
 }
 
-#nav-arrow {
-  position: fixed;
-  top: 42%;
-  left: 50%;
-  transform: translate(-50%, -90px);
-  z-index: 20;
-  width: 32px;
-  height: 32px;
-  pointer-events: none;
-  color: var(--accent-mint);
-  filter: drop-shadow(0 0 12px rgba(94, 234, 212, 0.6));
-  transition: transform var(--duration-fast) var(--ease-out), opacity var(--duration-normal);
-  opacity: 0.3;
-}
-
-body.nav-active #nav-arrow {
-  opacity: 1;
-  filter: drop-shadow(0 0 20px rgba(94, 234, 212, 0.9));
-  animation: navPulse 2s ease-in-out infinite;
-}
-
-#nav-arrow svg {
-  width: 100%;
-  height: 100%;
-}
-
-.glass-pill {
+body.nav-active #map-vignette {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -278,11 +259,6 @@ body.nav-active #nav-arrow {
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-8px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes navPulse {
-  0%, 100% { transform: translate(-50%, -90px) scale(1); }
-  50% { transform: translate(-50%, -94px) scale(1.06); }
 }
 
 @keyframes dotPulse {
