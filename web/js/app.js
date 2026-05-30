@@ -5,10 +5,11 @@ import {
   initSphere, setSphereState, onShortTap, onLongPressStart, onLongPressEnd,
   onDoubleTap, isConversationMode, setConversationMode, setMicLevel, resetMicLevel,
 } from './sphere.js';
-import { prepareVoice, startListening, cancelListening, isListening } from './voice.js';
+import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
 import { sendToAgent, sendToAgentCompose } from './agent.js';
 import { startGpsTracking, refreshActiveTrip } from './gps.js';
 import { initTheme } from './theme.js';
+import { initAccent } from './accent.js';
 import { initSettings } from './settings.js';
 import { initTrips } from './trips.js';
 import { loadArtifacts } from './artifactStore.js';
@@ -32,6 +33,7 @@ function showToast(message, type = 'info') {
 }
 
 function cancelVoiceInput() {
+  if (isWakeAwaitingCommand()) return;
   cancelListening();
   setConversationMode(false);
   resetMicLevel();
@@ -53,6 +55,7 @@ async function boot() {
   }
 
   initTheme();
+  initAccent();
   document.getElementById('app').classList.remove('hidden');
   initMap();
   await refreshGpsPosition();
@@ -101,7 +104,7 @@ function wireSphere() {
   onLongPressStart(async () => {
     if (!voiceReady() || isListening()) return;
     try {
-      await startListening('continuous');
+      await startListening('wake');
     } catch (e) {
       setConversationMode(false);
       setSphereState('error');
@@ -110,14 +113,18 @@ function wireSphere() {
   });
 
   onLongPressEnd(() => {
-    cancelVoiceInput();
+    releaseWakeHold();
+    if (!isListening()) {
+      setConversationMode(false);
+      resetMicLevel();
+      if (!isTextInputOpen()) setSphereState('idle');
+    }
   });
 
   onDoubleTap(() => {
     if (!voiceReady()) return;
-    if (isListening()) cancelVoiceInput();
+    if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
     openTextInput();
-    setSphereState('idle');
   });
 }
 
@@ -139,21 +146,14 @@ function wireVoiceResults() {
     const ctx = getCurrentPosition();
     const agentMode = mode === 'continuous' ? 'continuous' : 'single';
 
+    setConversationMode(false);
+    resetMicLevel();
+
     try {
       await sendToAgent(text, agentMode, ctx);
     } catch (_) {}
 
-    if (isConversationMode() && mode === 'continuous') {
-      setTimeout(async () => {
-        if (isConversationMode()) {
-          try {
-            await startListening('continuous');
-          } catch (_) {
-            setSphereState('idle');
-          }
-        }
-      }, 500);
-    }
+    if (!isTextInputOpen()) setSphereState('idle');
   });
 
   window.addEventListener('voice:level', (e) => {

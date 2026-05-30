@@ -181,7 +181,7 @@ function smoothBearing(target) {
   }
   let diff = ((target - displayBearing + 540) % 360) - 180;
   if (Math.abs(diff) > 120) displayBearing = target;
-  else displayBearing = (displayBearing + diff * 0.22 + 360) % 360;
+  else displayBearing = (displayBearing + diff * 0.35 + 360) % 360;
   return displayBearing;
 }
 
@@ -235,7 +235,7 @@ export function updateNavigatorCamera({ lat, lon, heading, routeGeometry, routeI
   }
 
   const moved = lastMapPan.lat == null
-    || metersBetween(lastMapPan.lat, lastMapPan.lon, lat, lon) >= 1;
+    || metersBetween(lastMapPan.lat, lastMapPan.lon, lat, lon) >= 0.3;
   if (moved) {
     lastMapPan = { lat, lon };
     centerMapOnNavPuck(lat, lon);

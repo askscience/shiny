@@ -206,6 +206,73 @@
 }
 
 @media (max-width: 767px) {
+  :root {
+    --hud-mobile-trips-height: 36px;
+  }
+
+  #hud-saved-trips {
+    display: none !important;
+  }
+
+  .hud-trips-mobile-scroll,
+  #hud-saved-trips-mobile {
+    display: flex;
+    position: fixed;
+    top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 8px);
+    left: 14px;
+    right: 14px;
+    z-index: 34;
+    height: 32px;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    pointer-events: auto;
+    padding: 0 2px;
+    mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 12px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 12px), transparent);
+  }
+
+  #hud-saved-trips-mobile::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hud-trip-bubble {
+    flex-shrink: 0;
+    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 500;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    box-shadow: var(--shadow-sm);
+    transition:
+      background var(--duration-fast),
+      color var(--duration-fast),
+      border-color var(--duration-fast);
+    white-space: nowrap;
+  }
+
+  .hud-trip-bubble:hover {
+    background: var(--glass-hover);
+    color: var(--text);
+  }
+
+  .hud-trip-bubble.active {
+    background: var(--accent-soft);
+    border-color: var(--accent-glow);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
   #hud-clock-date {
     display: none;
   }
@@ -214,17 +281,18 @@
     display: none;
   }
 
-  .hud-trip-chip {
-    font-size: 11px;
-    padding: 0 10px;
-  }
-
   .hud-header-main {
     padding: 0 2px;
   }
 
   .hud-clock, .hud-meteo {
     padding: 0 10px;
+  }
+}
+
+@media (min-width: 768px) {
+  #hud-saved-trips-mobile {
+    display: none !important;
   }
 }
 

@@ -1,7 +1,10 @@
 import { apiFetch, getVoiceLang, setVoiceLang } from './api.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
+import { getAiName } from './preferences.js';
 
 const SILENCE_TIMEOUT_MS = 8000;
+const WAKE_WAIT_TIMEOUT_MS = 15000;
+const WAKE_COMMAND_TIMEOUT_MS = 8000;
 
 let voskModel = null;
 let recognizer = null;
@@ -13,6 +16,8 @@ let listenMode = 'single';
 let currentAudio = null;
 let sttLang = 'en';
 let silenceTimer = null;
+let wakeDetected = false;
+let awaitingCommand = false;
 
 function createDownloadCard(lang) {
   const existing = document.getElementById('voice-download-card');
@@ -63,6 +68,40 @@ function clearSilenceTimer() {
   }
 }
 
+function resetWakeState() {
+  wakeDetected = false;
+  awaitingCommand = false;
+}
+
+function normalizeSpeech(text) {
+  return text.toLowerCase().replace(/[^\w\s,]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractAfterWake(text) {
+  const aiName = normalizeSpeech(getAiName());
+  const norm = normalizeSpeech(text);
+  if (!aiName) return null;
+
+  const patterns = [
+    new RegExp(`^hey[,\\s]+${escapeRegex(aiName)}[,\\s]*(.*)$`),
+    new RegExp(`^hey\\s+${escapeRegex(aiName)}[,\\s]*(.*)$`),
+  ];
+  for (const re of patterns) {
+    const m = norm.match(re);
+    if (m) return (m[1] || '').trim();
+  }
+
+  const inline = norm.indexOf(`hey ${aiName}`);
+  if (inline >= 0) {
+    return norm.slice(inline + `hey ${aiName}`.length).replace(/^[,.\s]+/, '').trim();
+  }
+  return null;
+}
+
 function armSilenceTimer() {
   clearSilenceTimer();
   if (listenMode !== 'single') return;
@@ -76,6 +115,69 @@ function armSilenceTimer() {
     }));
     window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
   }, SILENCE_TIMEOUT_MS);
+}
+
+function armWakeWaitTimer() {
+  clearSilenceTimer();
+  silenceTimer = setTimeout(() => {
+    silenceTimer = null;
+    if (!listening || wakeDetected || awaitingCommand) return;
+    cancelListening();
+    setSphereState('idle');
+    window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
+  }, WAKE_WAIT_TIMEOUT_MS);
+}
+
+function armWakeCommandTimer() {
+  clearSilenceTimer();
+  silenceTimer = setTimeout(() => {
+    silenceTimer = null;
+    if (!listening || !awaitingCommand) return;
+    cancelListening();
+    setSphereState('idle');
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { message: "Didn't catch that", type: 'info' },
+    }));
+    window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
+  }, WAKE_COMMAND_TIMEOUT_MS);
+}
+
+function dispatchVoiceResult(text) {
+  clearSilenceTimer();
+  const mode = listenMode;
+  stopListening();
+  window.dispatchEvent(new CustomEvent('voice:result', { detail: { text, mode } }));
+}
+
+function handleWakeTranscript(text, isFinal) {
+  if (awaitingCommand) {
+    if (isFinal && text) dispatchVoiceResult(text);
+    return;
+  }
+
+  const remainder = extractAfterWake(text);
+  if (remainder === null) return;
+
+  wakeDetected = true;
+  if (remainder) {
+    dispatchVoiceResult(remainder);
+    return;
+  }
+
+  if (isFinal) {
+    awaitingCommand = true;
+    setSphereState('listening');
+    armWakeCommandTimer();
+  }
+}
+
+function handleTranscript(text, isFinal) {
+  if (!text) return;
+  if (listenMode === 'wake') {
+    handleWakeTranscript(text, isFinal);
+    return;
+  }
+  if (isFinal) dispatchVoiceResult(text);
 }
 
 export async function prepareVoice() {
@@ -154,7 +256,8 @@ export async function startListening(mode) {
   if (listening) return;
   listenMode = mode;
   listening = true;
-  setSphereState(mode === 'continuous' ? 'conversation' : 'listening');
+  resetWakeState();
+  setSphereState(mode === 'single' ? 'listening' : 'conversation');
 
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -173,11 +276,12 @@ export async function startListening(mode) {
 
     recognizer.on('result', (msg) => {
       const text = msg.result?.text?.trim();
-      if (text) {
-        clearSilenceTimer();
-        stopListening();
-        window.dispatchEvent(new CustomEvent('voice:result', { detail: { text, mode: listenMode } }));
-      }
+      handleTranscript(text, true);
+    });
+
+    recognizer.on('partialresult', (msg) => {
+      const text = msg.result?.partial?.trim();
+      if (listenMode === 'wake') handleTranscript(text, false);
     });
 
     const source = audioContext.createMediaStreamSource(mediaStream);
@@ -196,9 +300,11 @@ export async function startListening(mode) {
     source.connect(processor);
     processor.connect(audioContext.destination);
 
-    armSilenceTimer();
+    if (mode === 'single') armSilenceTimer();
+    else if (mode === 'wake') armWakeWaitTimer();
   } catch (e) {
     listening = false;
+    resetWakeState();
     clearSilenceTimer();
     setSphereState('error');
     const msg = normalizeMicError(e);
@@ -219,6 +325,7 @@ function normalizeMicError(e) {
 export function stopListening() {
   if (!listening && !processor && !mediaStream) return;
   listening = false;
+  resetWakeState();
   clearSilenceTimer();
   try {
     processor?.disconnect();
@@ -236,6 +343,15 @@ export function stopListening() {
 export function cancelListening() {
   stopListening();
   window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'user' } }));
+}
+
+/** Long-press release: cancel wake wait if phrase not heard yet. */
+export function releaseWakeHold() {
+  if (listenMode !== 'wake' || !listening) return;
+  if (!wakeDetected && !awaitingCommand) {
+    cancelListening();
+    setSphereState('idle');
+  }
 }
 
 export async function speak(text, lang) {
@@ -277,4 +393,8 @@ export function isListening() {
 
 export function getListenMode() {
   return listenMode;
+}
+
+export function isWakeAwaitingCommand() {
+  return listenMode === 'wake' && (wakeDetected || awaitingCommand);
 }

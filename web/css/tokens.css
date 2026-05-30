@@ -15,10 +15,10 @@
   --text-secondary: rgba(248, 249, 251, 0.72);
   --muted: rgba(248, 249, 251, 0.45);
 
-  /* Accents — coral warmth + mint clarity */
-  --accent: #ff6b4a;
-  --accent-soft: rgba(255, 107, 74, 0.14);
-  --accent-glow: rgba(255, 107, 74, 0.35);
+  /* Accents — mid blue + mint clarity */
+  --accent: #4a7fd4;
+  --accent-soft: rgba(74, 127, 212, 0.14);
+  --accent-glow: rgba(74, 127, 212, 0.35);
   --accent-mint: #5eead4;
   --accent-mint-soft: rgba(94, 234, 212, 0.12);
   --accent-warm: #fbbf24;
@@ -27,8 +27,8 @@
   --accent-error: #f87171;
 
   /* Gradients */
-  --gradient-brand: linear-gradient(135deg, #ff6b4a 0%, #ff8f6b 50%, #5eead4 100%);
-  --gradient-mesh: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(255, 107, 74, 0.18) 0%, transparent 55%),
+  --gradient-brand: linear-gradient(135deg, #4a7fd4 0%, #6b9de8 50%, #5eead4 100%);
+  --gradient-mesh: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(74, 127, 212, 0.18) 0%, transparent 55%),
     radial-gradient(ellipse 70% 50% at 80% 90%, rgba(94, 234, 212, 0.12) 0%, transparent 50%),
     radial-gradient(ellipse 50% 40% at 60% 30%, rgba(167, 139, 250, 0.08) 0%, transparent 45%);
 
@@ -60,7 +60,8 @@
   /* HUD layout */
   --hud-bar-height: 44px;
   --hud-header-pad: max(10px, env(safe-area-inset-top));
-  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
+  --hud-mobile-trips-height: 0px;
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px + var(--hud-mobile-trips-height));
 }
 
 [data-theme="light"] {
@@ -78,9 +79,9 @@
   --text-secondary: rgba(15, 20, 25, 0.75);
   --muted: rgba(15, 20, 25, 0.48);
 
-  --accent: #e84d2f;
-  --accent-soft: rgba(232, 77, 47, 0.1);
-  --accent-glow: rgba(232, 77, 47, 0.2);
+  --accent: #3d6fbf;
+  --accent-soft: rgba(61, 111, 191, 0.1);
+  --accent-glow: rgba(61, 111, 191, 0.2);
   --accent-mint: #0d9488;
   --accent-mint-soft: rgba(13, 148, 136, 0.1);
   --accent-warm: #d97706;
@@ -88,7 +89,7 @@
   --accent-violet: #7c3aed;
   --accent-error: #dc2626;
 
-  --gradient-mesh: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(232, 77, 47, 0.1) 0%, transparent 55%),
+  --gradient-mesh: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(61, 111, 191, 0.1) 0%, transparent 55%),
     radial-gradient(ellipse 70% 50% at 80% 90%, rgba(13, 148, 136, 0.08) 0%, transparent 50%);
 
   --shadow-glass: 0 8px 32px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04) inset;

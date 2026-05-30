@@ -11,6 +11,7 @@ import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
+import { getAiName } from './preferences.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -138,16 +139,19 @@ async function handleNavigation(res, userMessage, context) {
   }
 }
 
-export async function sendToAgent(message, mode, context) {
+function buildAgentBody(message, mode, context) {
   const lang = localStorage.getItem('voice.lang') ||
     (navigator.language || 'en').split('-')[0];
+  return { message, mode, lang, context, ai_name: getAiName() };
+}
 
+export async function sendToAgent(message, mode, context) {
   setSphereState('processing');
 
   try {
     const res = await apiFetch('/api/agent', {
       method: 'POST',
-      body: JSON.stringify({ message, mode, lang, context }),
+      body: JSON.stringify(buildAgentBody(message, mode, context)),
     });
 
     await ingestAgentArtifacts(res.artifacts);
@@ -157,7 +161,8 @@ export async function sendToAgent(message, mode, context) {
     await syncTripsAfterAgent(res);
 
     setSphereState('speaking');
-    await speak(res.reply, lang);
+    await speak(res.reply, localStorage.getItem('voice.lang') ||
+      (navigator.language || 'en').split('-')[0]);
     setSphereState('idle');
 
     const replyEl = document.getElementById('reply-text');
@@ -187,17 +192,15 @@ export async function sendToAgent(message, mode, context) {
   }
 }
 
-/** Text compose mode: no TTS, no sphere state, streams reply into compose panel */
+/** Text compose mode: streams reply into compose panel */
 export async function sendToAgentCompose(message, context, { onStream, onDone, onError }) {
-  const lang = localStorage.getItem('voice.lang') ||
-    (navigator.language || 'en').split('-')[0];
-
   onStream?.('');
+  setSphereState('processing');
 
   try {
     const res = await apiFetch('/api/agent', {
       method: 'POST',
-      body: JSON.stringify({ message, mode: 'single', lang, context }),
+      body: JSON.stringify(buildAgentBody(message, 'single', context)),
     });
 
     await streamText(res.reply || '', onStream, 12);
@@ -212,6 +215,8 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     return res;
   } catch (e) {
     const msg = e.message || 'Agent unavailable';
+    setSphereState('error');
+    setTimeout(() => setSphereState('compose'), 2000);
     onError?.(msg);
     return null;
   }

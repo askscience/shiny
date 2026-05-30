@@ -19,6 +19,7 @@ pub struct AgentRequest {
     pub message: String,
     pub mode: Option<String>,
     pub lang: Option<String>,
+    pub ai_name: Option<String>,
     pub context: Option<AgentContextBody>,
 }
 
@@ -49,6 +50,13 @@ pub struct ActionTaken {
 fn load_skill_reference() -> String {
     std::fs::read_to_string("web/skills/traveler-api-tools.md")
         .unwrap_or_else(|_| "Use JSON action blocks.".into())
+}
+
+fn first_name(full: &str) -> String {
+    full.split_whitespace()
+        .next()
+        .unwrap_or(full)
+        .to_string()
 }
 
 pub async fn handle_agent(
@@ -98,8 +106,19 @@ pub async fn handle_agent(
             .join("; ")
     };
 
+    let ai_name = body
+        .ai_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Atlas")
+        .to_string();
+    let user_first = first_name(&traveler.name);
+
     let system = format!(
-        "You are a travel navigator AI. Reply in language code '{}'. Keep spoken replies to 1-2 short sentences.\n\
+        "You are {}, a travel navigator AI. Reply in language code '{}'. Keep spoken replies to 1-2 short sentences.\n\
+         The user may wake you by saying \"hey {}\".\n\
+         Address the user as {} when it feels natural.\n\
          \n\
          ## Tool protocol (strict)\n\
          - To call a tool, output ONLY raw JSON on its own line — no markdown fences, no ```json blocks, no prose.\n\
@@ -113,10 +132,10 @@ pub async fn handle_agent(
          - For \"take me to\", \"navigate to\", \"directions to\", \"drive to\" → use navigate_to (starts turn-by-turn navigator; no artifact panel).\n\
          \n\
          ## Tools\n{}\n\n\
-         ## Context\n{}\n{}\nDiary: {}\n\
+         ## Context\nUser name: {}\n{}\n{}\nDiary: {}\n\
          Mode: {} — plan_trip may save several dock guides at once; keep the spoken reply short and point users to the icons below the orb.\n\
          To modify an existing saved card (hours, tips, sections), use update_artifact with artifact_id — not show_artifact.",
-        lang, skill, location_line, trip_line, diary_line, mode
+        ai_name, lang, ai_name.to_lowercase(), user_first, skill, user_first, location_line, trip_line, diary_line, mode
     );
 
     let mut messages = vec![

@@ -1,19 +1,45 @@
-/* Full-screen compose mode */
+/* Compose mode — replies + orb above input at bottom */
+
+:root {
+  --compose-input-height: 84px;
+  --compose-orb-size: 84px;
+  --compose-stack-height: calc(var(--compose-input-height) + var(--compose-orb-size) + 12px);
+}
+
+body.compose-active {
+  --compose-stack-height: calc(var(--compose-input-height) + var(--compose-orb-size) + 12px);
+}
+
+body.compose-active.compose-awaiting {
+  --compose-stack-height: calc(var(--compose-orb-size) + max(24px, env(safe-area-inset-bottom)));
+}
+
+body.compose-active #artifact-dock {
+  display: none !important;
+}
 
 body.compose-active #chrome-bottom {
-  opacity: 0;
-  visibility: hidden;
+  position: fixed;
+  left: 50%;
+  bottom: var(--compose-input-height);
+  transform: translateX(-50%);
+  z-index: 42;
   pointer-events: none;
-  transform: translateY(16px) scale(0.95);
-  transition:
-    opacity var(--duration-normal) var(--ease-out),
-    visibility var(--duration-normal),
-    transform var(--duration-normal) var(--ease-out);
+  transition: bottom var(--duration-normal) var(--ease-out);
+}
+
+body.compose-active.compose-awaiting #chrome-bottom {
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 8px));
+}
+
+body.compose-active #sphere-container {
+  pointer-events: none;
 }
 
 body.compose-active #travel-panel,
 body.compose-active #travel-panel-backdrop,
 body.compose-active #hud-header,
+body.compose-active #hud-saved-trips-mobile,
 body.compose-active #insight-cards {
   opacity: 0;
   pointer-events: none;
@@ -28,23 +54,26 @@ body.compose-active #hud-transcript {
 .compose-mode {
   position: fixed;
   inset: 0;
-  z-index: 38;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr auto;
+  z-index: 36;
+  display: flex;
+  flex-direction: column;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  padding-bottom: var(--compose-stack-height);
+  box-sizing: border-box;
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    padding-bottom var(--duration-normal) var(--ease-out);
   background:
     var(--gradient-mesh),
     linear-gradient(
       175deg,
-      rgba(8, 9, 13, 0.15) 0%,
-      rgba(8, 9, 13, 0.55) 40%,
-      rgba(8, 9, 13, 0.92) 100%
+      rgba(8, 9, 13, 0.12) 0%,
+      rgba(8, 9, 13, 0.45) 45%,
+      rgba(8, 9, 13, 0.72) 100%
     );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 [data-theme="light"] .compose-mode {
@@ -52,9 +81,9 @@ body.compose-active #hud-transcript {
     var(--gradient-mesh),
     linear-gradient(
       175deg,
-      rgba(244, 245, 247, 0.2) 0%,
-      rgba(244, 245, 247, 0.7) 40%,
-      rgba(244, 245, 247, 0.96) 100%
+      rgba(244, 245, 247, 0.15) 0%,
+      rgba(244, 245, 247, 0.55) 45%,
+      rgba(244, 245, 247, 0.88) 100%
     );
 }
 
@@ -94,19 +123,19 @@ body.compose-active #hud-transcript {
 }
 
 .compose-stream {
-  grid-row: 1;
-  align-self: end;
-  justify-self: start;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   max-width: min(560px, 100%);
   padding:
     max(60px, calc(env(safe-area-inset-top) + 48px))
     max(24px, env(safe-area-inset-right))
-    20px
+    16px
     max(24px, env(safe-area-inset-left));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  align-self: flex-start;
 }
 
 .compose-stream::-webkit-scrollbar {
@@ -144,25 +173,33 @@ body.compose-active #hud-transcript {
 }
 
 .compose-input-wrap {
-  grid-row: 2;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
   width: 100%;
-  padding: 0;
   border-top: 1px solid var(--glass-border);
   background: var(--surface-strong);
   backdrop-filter: blur(32px) saturate(1.4);
   -webkit-backdrop-filter: blur(32px) saturate(1.4);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.compose-input-wrap.hidden {
+  display: none !important;
 }
 
 #text-input-field,
 .compose-field {
   display: block;
   width: 100%;
-  min-height: 60px;
-  max-height: 30vh;
+  min-height: 52px;
+  max-height: 22vh;
   padding:
-    20px
+    16px
     max(24px, env(safe-area-inset-right))
-    max(20px, calc(env(safe-area-inset-bottom) + 10px))
+    max(16px, calc(env(safe-area-inset-bottom) + 8px))
     max(24px, env(safe-area-inset-left));
   margin: 0;
   border: none;
@@ -170,7 +207,7 @@ body.compose-active #hud-transcript {
   background: transparent;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: clamp(1.25rem, 4.5vw, 1.75rem);
+  font-size: clamp(1.125rem, 4vw, 1.5rem);
   font-weight: 500;
   line-height: 1.35;
   letter-spacing: -0.02em;
@@ -199,9 +236,7 @@ body.compose-active #hud-transcript {
 @media (max-width: 640px) {
   .compose-stream {
     max-width: 100%;
-    align-self: start;
     padding-top: max(56px, calc(env(safe-area-inset-top) + 44px));
-    max-height: 50vh;
   }
 
   .compose-reply {
@@ -210,8 +245,8 @@ body.compose-active #hud-transcript {
 
   #text-input-field,
   .compose-field {
-    font-size: clamp(1.125rem, 5vw, 1.5rem);
-    min-height: 56px;
+    font-size: clamp(1.0625rem, 4.5vw, 1.375rem);
+    min-height: 48px;
   }
 }
 

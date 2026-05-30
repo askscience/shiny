@@ -7,7 +7,7 @@ let highFrequency = false;
 const SUBMIT_INTERVAL_MS = 30000;
 
 const GPS_OPTS_NORMAL = { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 };
-const GPS_OPTS_NAV = { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 };
+const GPS_OPTS_NAV = { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 };
 
 let lastEmitAt = 0;
 let lastEmitLat = null;
@@ -39,7 +39,7 @@ function shouldEmitPosition(lat, lon) {
   const now = Date.now();
   if (lastEmitLat == null) return true;
   const dist = metersBetween(lastEmitLat, lastEmitLon, lat, lon);
-  if (dist >= 10 || now - lastEmitAt >= 1000) return true;
+  if (dist >= 2 || now - lastEmitAt >= 100) return true;
   return false;
 }
 
@@ -86,7 +86,7 @@ function deriveHeading(lat, lon, navMode) {
     return currentHeadingCache;
   }
   const dist = metersBetween(prevLat, prevLon, lat, lon);
-  if (navMode && dist < 5) return currentHeadingCache;
+  if (navMode && dist < 2) return currentHeadingCache;
   if (dist < 2) return currentHeadingCache;
 
   const fromLat = prevLat;

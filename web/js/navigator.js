@@ -172,7 +172,7 @@ function onGpsUpdate({ lat, lon, heading, speed }) {
   });
 
   const now = Date.now();
-  if (idx !== lastRouteDrawIdx || now - lastRouteDrawAt > 2500) {
+  if (idx !== lastRouteDrawIdx || now - lastRouteDrawAt > 800) {
     lastRouteDrawIdx = idx;
     lastRouteDrawAt = now;
     drawNavigatorRoute(session.geometry, {

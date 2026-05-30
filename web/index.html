@@ -98,6 +98,8 @@
       </div>
     </header>
 
+    <div id="hud-saved-trips-mobile" class="hud-trips-mobile-scroll empty" role="list" aria-label="Saved places"></div>
+
     <div id="nav-puck" class="hidden" aria-hidden="true">
       <svg class="nav-puck-chevron" viewBox="0 0 24 28" aria-hidden="true">
         <path d="M12 2 L20 24 L12 19 L4 24 Z" fill="currentColor" stroke="#fff" stroke-width="1.75" stroke-linejoin="round"/>
@@ -144,8 +146,22 @@
   <div id="settings-panel" class="overlay hidden">
     <div class="overlay-card">
       <h2>Settings</h2>
-      <label for="lang-select">Voice Language</label>
-      <select id="lang-select"></select>
+      <div class="settings-section">
+        <h3>Appearance</h3>
+        <label for="accent-picker">Accent color</label>
+        <input type="color" id="accent-picker" value="#4a7fd4">
+      </div>
+      <div class="settings-section">
+        <h3>Assistant</h3>
+        <label for="ai-name-input">Assistant name</label>
+        <input type="text" id="ai-name-input" placeholder="Atlas" maxlength="32" autocomplete="off">
+        <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Atlas</span>&rdquo; to activate voice on long press.</p>
+      </div>
+      <div class="settings-section">
+        <h3>Voice</h3>
+        <label for="lang-select">Language</label>
+        <select id="lang-select"></select>
+      </div>
       <button id="settings-close" class="btn-primary">Done</button>
     </div>
   </div>

@@ -41,7 +41,7 @@
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 107, 74, 0.2);
+  border: 1px solid var(--accent-glow);
   opacity: 0;
   transition: opacity var(--duration-normal), transform var(--duration-normal) var(--ease-out);
 }
@@ -75,7 +75,7 @@
 
 [data-theme="light"] #sphere-container {
   filter:
-    drop-shadow(0 8px 28px rgba(232, 77, 47, 0.35))
+    drop-shadow(0 8px 28px var(--accent-glow))
     drop-shadow(0 2px 12px rgba(15, 23, 42, 0.2));
 }
 

@@ -1,6 +1,7 @@
 /* Navigator mode — minimal HUD, Google Maps-style follow */
 
 body.navigator-active #hud-saved-trips,
+body.navigator-active #hud-saved-trips-mobile,
 body.navigator-active #hud-top,
 body.navigator-active .hud-divider,
 body.navigator-active #insight-cards,

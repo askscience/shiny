@@ -19,6 +19,9 @@ const meteoIconEl = document.getElementById('hud-meteo-icon');
 const meteoTempEl = document.getElementById('hud-meteo-temp');
 const meteoLabelEl = document.getElementById('hud-meteo-label');
 const tripsEl = document.getElementById('hud-saved-trips');
+const tripsMobileEl = document.getElementById('hud-saved-trips-mobile');
+
+const mobileQuery = window.matchMedia('(max-width: 767px)');
 
 let clockTimer = null;
 let lastWeatherKey = '';
@@ -138,34 +141,55 @@ async function refreshLocalWeather(lat, lon) {
   }
 }
 
-function renderSavedTrips() {
-  if (!tripsEl) return;
-  const destinations = getSavedDestinations();
-  const active = getActiveDestination();
-  tripsEl.innerHTML = '';
+function buildTripChip(dest, active) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = mobileQuery.matches ? 'hud-trip-bubble' : 'hud-trip-chip';
+  if (dest.key === active) btn.classList.add('active');
+  btn.textContent = dest.label;
+  btn.title = `Open ${dest.label}`;
+  btn.setAttribute('aria-label', dest.label);
+  btn.addEventListener('click', () => selectDestination(dest));
+  return btn;
+}
+
+function renderInto(container, destinations, active) {
+  if (!container) return;
+  container.innerHTML = '';
 
   if (!destinations.length) {
-    tripsEl.classList.add('empty');
+    container.classList.add('empty');
     const hint = document.createElement('span');
     hint.className = 'hud-trips-empty';
     hint.textContent = 'No saved places yet';
-    tripsEl.appendChild(hint);
+    container.appendChild(hint);
     return;
   }
 
-  tripsEl.classList.remove('empty');
-
+  container.classList.remove('empty');
   destinations.forEach((dest) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'hud-trip-chip';
-    if (dest.key === active) btn.classList.add('active');
-    btn.textContent = dest.label;
-    btn.title = `Open ${dest.label}`;
-    btn.setAttribute('aria-label', dest.label);
-    btn.addEventListener('click', () => selectDestination(dest));
-    tripsEl.appendChild(btn);
+    container.appendChild(buildTripChip(dest, active));
   });
+}
+
+function renderSavedTrips() {
+  const destinations = getSavedDestinations();
+  const active = getActiveDestination();
+  const isMobile = mobileQuery.matches;
+
+  if (isMobile) {
+    renderInto(tripsMobileEl, destinations, active);
+    if (tripsEl) {
+      tripsEl.innerHTML = '';
+      tripsEl.classList.add('empty');
+    }
+  } else {
+    renderInto(tripsEl, destinations, active);
+    if (tripsMobileEl) {
+      tripsMobileEl.innerHTML = '';
+      tripsMobileEl.classList.add('empty');
+    }
+  }
 }
 
 async function selectDestination(dest) {
@@ -197,6 +221,7 @@ export function initHudLeft() {
   window.addEventListener('gps:update', onPositionUpdate);
 
   renderSavedTrips();
+  mobileQuery.addEventListener('change', renderSavedTrips);
   window.addEventListener('artifact:dock', renderSavedTrips);
   window.addEventListener('artifact:saved', renderSavedTrips);
   window.addEventListener('artifact:updated', renderSavedTrips);
