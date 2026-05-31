@@ -32,9 +32,21 @@ let currentStepIdx = 0;
 let lastRerouteAt = 0;
 let lastRouteDrawIdx = -1;
 let lastRouteDrawAt = 0;
+let routeProgressIdx = 0;
+let lastProgressLat = null;
+let lastProgressLon = null;
 const REROUTE_COOLDOWN_MS = 15000;
 const ARRIVAL_RADIUS_M = 45;
 const OFF_ROUTE_M = 90;
+const MIN_PROGRESS_ADVANCE_M = 15;
+
+function resetRouteProgress() {
+  routeProgressIdx = 0;
+  lastProgressLat = null;
+  lastProgressLon = null;
+  lastRouteDrawIdx = -1;
+  lastRouteDrawAt = 0;
+}
 
 function haversineM(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -144,7 +156,13 @@ async function rerouteFrom(lat, lon) {
   totalDurationS = (route.duration_min || 0) * 60;
   traveledM = 0;
   currentStepIdx = 0;
-  drawNavigatorRoute(route.geometry, { dest: { lat: session.to_lat, lon: session.to_lon } });
+  resetRouteProgress();
+  lastProgressLat = lat;
+  lastProgressLon = lon;
+  drawNavigatorRoute(route.geometry, {
+    dest: { lat: session.to_lat, lon: session.to_lon },
+    anchor: { lat, lon },
+  });
   updateBanner();
 }
 
@@ -163,21 +181,38 @@ function onGpsUpdate({ lat, lon, heading, speed }) {
   currentStepIdx = stepIndexForDistance(traveledM);
   updateBanner();
 
+  // Only advance route progress when the user actually moves — GPS jitter was
+  // creeping the index forward and erasing the blue line while standing still.
+  let progressIdx = routeProgressIdx;
+  const movedSinceProgress = lastProgressLat != null
+    ? haversineM(lastProgressLat, lastProgressLon, lat, lon)
+    : Infinity;
+  if (
+    idx > routeProgressIdx
+    && (movedSinceProgress >= MIN_PROGRESS_ADVANCE_M || idx >= routeProgressIdx + 10)
+  ) {
+    routeProgressIdx = Math.min(idx, session.geometry.length - 1);
+    lastProgressLat = lat;
+    lastProgressLon = lon;
+    progressIdx = routeProgressIdx;
+  }
+
   updateNavigatorCamera({
     lat,
     lon,
     heading,
     routeGeometry: session.geometry,
-    routeIdx: idx,
+    routeIdx: progressIdx,
   });
 
   const now = Date.now();
-  if (idx !== lastRouteDrawIdx || now - lastRouteDrawAt > 800) {
-    lastRouteDrawIdx = idx;
+  if (progressIdx !== lastRouteDrawIdx || now - lastRouteDrawAt > 800) {
+    lastRouteDrawIdx = progressIdx;
     lastRouteDrawAt = now;
     drawNavigatorRoute(session.geometry, {
       dest: { lat: session.to_lat, lon: session.to_lon },
-      progressIdx: idx,
+      progressIdx,
+      anchor: { lat, lon },
     });
   }
 
@@ -210,6 +245,7 @@ export async function startNavigator(nav) {
   traveledM = 0;
   currentStepIdx = 0;
   lastRerouteAt = Date.now();
+  resetRouteProgress();
   active = true;
 
   setUiActive(true);
@@ -218,12 +254,13 @@ export async function startNavigator(nav) {
 
   setNavigatorFollow(true, nav.geometry);
 
+  const pos = getCurrentPosition();
   drawNavigatorRoute(nav.geometry, {
     dest: { lat: nav.to_lat, lon: nav.to_lon },
     fit: false,
+    anchor: { lat: pos.lat, lon: pos.lon },
   });
 
-  const pos = getCurrentPosition();
   onGpsUpdate({ ...pos, heading: pos.heading });
 
   updateBanner();
@@ -236,6 +273,7 @@ export function stopNavigator() {
   active = false;
   session = null;
   steps = [];
+  resetRouteProgress();
   setUiActive(false);
   setNavigatorFollow(false);
   setHighFrequencyGps(false);

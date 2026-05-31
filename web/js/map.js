@@ -376,19 +376,36 @@ function normalizeGeometry(geometry) {
   }).filter(Boolean);
 }
 
-function drawRouteLines(points, { dashed = false, progressIdx = null } = {}) {
+function drawRouteLines(points, { dashed = false, progressIdx = null, anchor = null } = {}) {
   const lineOpts = {
     lineCap: 'round',
     lineJoin: 'round',
     ...(dashed ? { dashArray: '10 14', opacity: 0.75 } : {}),
   };
 
-  const traveled = progressIdx != null && progressIdx > 0
-    ? points.slice(0, progressIdx + 1)
-    : [];
-  const remaining = progressIdx != null && progressIdx > 0
-    ? points.slice(progressIdx)
-    : points;
+  let traveled = [];
+  let remaining = points;
+
+  if (progressIdx != null && progressIdx >= 0 && points.length >= 2) {
+    const idx = Math.min(Math.max(0, progressIdx), points.length - 1);
+    if (idx > 0) {
+      traveled = points.slice(0, idx + 1);
+    }
+
+    remaining = points.slice(idx);
+    if (anchor?.lat != null && anchor?.lon != null) {
+      // Tie the visible route to live GPS so it cannot vanish as progress advances.
+      const tail = remaining.length > 1 ? remaining.slice(1) : [points[points.length - 1]];
+      remaining = [[anchor.lat, anchor.lon], ...tail];
+    }
+    if (remaining.length < 2) {
+      const end = points[points.length - 1];
+      const start = anchor?.lat != null
+        ? [anchor.lat, anchor.lon]
+        : points[Math.max(0, points.length - 2)];
+      remaining = [start, end];
+    }
+  }
 
   if (traveled.length > 1) {
     routeTraveledLayer = L.polyline(traveled, {
@@ -436,14 +453,14 @@ export function drawRouteGeometry(geometry, { fit = false, navigate = false, des
 }
 
 /** Navigator: draw route with traveled/remaining split. */
-export function drawNavigatorRoute(geometry, { dest = null, fit = false, progressIdx = null } = {}) {
+export function drawNavigatorRoute(geometry, { dest = null, fit = false, progressIdx = null, anchor = null } = {}) {
   if (!geometry?.length || !map) return false;
   clearRouteLayers();
 
   const points = normalizeGeometry(geometry);
   if (points.length < 2) return false;
 
-  drawRouteLines(points, { progressIdx: progressIdx ?? null });
+  drawRouteLines(points, { progressIdx: progressIdx ?? null, anchor });
 
   if (dest) showDestinationMarker(dest);
   if (fit) fitRouteView(points, dest);
