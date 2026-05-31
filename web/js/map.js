@@ -30,11 +30,13 @@ export function initMap() {
     attributionControl: false,
     dragging: true,
     touchZoom: true,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
+    scrollWheelZoom: true,
+    doubleClickZoom: true,
     boxZoom: false,
     keyboard: false,
   }).setView([currentPos.lat, currentPos.lon], 16);
+
+  bindMapZoomGuards();
 
   const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
   baseTileLayer = L.tileLayer(MAP_TILES[theme], {
@@ -294,6 +296,21 @@ function getPanelFitPadding() {
   };
 }
 
+function bindMapZoomGuards() {
+  const stage = document.getElementById('map-stage');
+  if (!stage) return;
+
+  // Keep pinch / ctrl+wheel zoom on the map, not the whole page.
+  const blockPageZoom = (e) => {
+    if (e.target.closest('#map-stage')) e.preventDefault();
+  };
+  stage.addEventListener('gesturestart', blockPageZoom, { passive: false });
+  stage.addEventListener('gesturechange', blockPageZoom, { passive: false });
+  stage.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) e.preventDefault();
+  }, { passive: false });
+}
+
 function setNavigationMode(active) {
   navigationActive = active;
   document.body.classList.toggle('nav-active', active && !navigatorFollow);
@@ -302,10 +319,12 @@ function setNavigationMode(active) {
     map.dragging.disable();
     map.touchZoom.disable();
     map.scrollWheelZoom.disable();
+    map.doubleClickZoom.disable();
   } else {
     map.dragging.enable();
     map.touchZoom.enable();
-    map.scrollWheelZoom.disable();
+    map.scrollWheelZoom.enable();
+    map.doubleClickZoom.enable();
   }
 }
 
