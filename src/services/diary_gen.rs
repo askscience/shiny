@@ -73,6 +73,7 @@ impl DiaryGenerator {
             .generate(
                 &prompt,
                 Some("You are a travel diary writer. Generate concise, factual diary entries in markdown list format."),
+                None,
             )
             .await?;
 

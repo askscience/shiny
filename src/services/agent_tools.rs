@@ -16,6 +16,7 @@ pub struct AgentContext {
     pub lon: Option<f64>,
     pub heading: Option<f64>,
     pub lang: String,
+    pub ollama_model: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -289,7 +290,11 @@ pub async fn execute_action(
                     "Summarize these search results in 2-3 sentences in language '{}': {:?}",
                     ctx.lang, results
                 );
-                state.ollama.generate(&prompt, None).await.ok()
+                state
+                    .ollama
+                    .generate(&prompt, None, ctx.ollama_model.as_deref())
+                    .await
+                    .ok()
             } else {
                 None
             };
@@ -364,6 +369,7 @@ pub async fn execute_action(
                 num_days,
                 &ctx.lang,
                 &overview_search,
+                ctx.ollama_model.as_deref(),
             )
             .await;
 
@@ -439,6 +445,7 @@ pub async fn execute_action(
                                 &results,
                                 place.lat,
                                 place.lon,
+                                ctx.ollama_model.as_deref(),
                             )
                             .await,
                         );
@@ -510,6 +517,7 @@ async fn build_overview_story(
     num_days: u32,
     lang: &str,
     results: &[SearchResult],
+    model: Option<&str>,
 ) -> (String, Vec<artifacts::ArtifactSection>) {
     let snippets: Vec<String> = results
         .iter()
@@ -526,7 +534,7 @@ async fn build_overview_story(
              Include exactly {} day objects in days array.",
             lang, destination, num_days, snippets.join("\n"), num_days
         );
-        if let Ok(raw) = state.ollama.generate(&prompt, None).await {
+        if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
             if let Ok(v) = serde_json::from_str::<Value>(&extract_json_object(&raw)) {
                 let intro = v
                     .get("intro")
@@ -589,6 +597,7 @@ async fn build_theme_guide(
     results: &[SearchResult],
     lat: f64,
     lon: f64,
+    model: Option<&str>,
 ) -> Artifact {
     let snippets: Vec<String> = results
         .iter()
@@ -609,7 +618,7 @@ async fn build_theme_guide(
              Reply with ONLY JSON: {{\"title\":\"short catchy title\",\"narrative\":\"2-3 paragraphs, sensory and practical, no bullet lists\"}}",
             theme_label, destination, lang, theme_label, snippets.join("\n")
         );
-        if let Ok(raw) = state.ollama.generate(&prompt, None).await {
+        if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
             if let Ok(v) = serde_json::from_str::<Value>(&extract_json_object(&raw)) {
                 let t = v.get("title").and_then(|x| x.as_str()).unwrap_or(theme).to_string();
                 let n = v
@@ -689,6 +698,7 @@ async fn build_plan_days(
     num_days: u32,
     lang: &str,
     results: &[SearchResult],
+    model: Option<&str>,
 ) -> Vec<PlanDay> {
     if state.ollama.is_available().await {
         let snippets: Vec<String> = results
@@ -704,7 +714,7 @@ async fn build_plan_days(
              Rules: exactly {} days; 4–6 items per day; each item should include time (24h), place name, duration, and a short practical tip.",
             num_days, destination, lang, snippets.join("\n"), num_days
         );
-        if let Ok(raw) = state.ollama.generate(&prompt, None).await {
+        if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
             if let Some(days) = parse_plan_days_json(&raw) {
                 if !days.is_empty() {
                     return days;

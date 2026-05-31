@@ -38,7 +38,7 @@ pub async fn search_web(
             body.query, results_text
         );
 
-        match state.ollama.generate(&prompt, None).await {
+        match state.ollama.generate(&prompt, None, None).await {
             Ok(s) => Some(s),
             Err(_) => None,
         }

@@ -2,7 +2,7 @@ import { apiFetch, getVoiceLang, setVoiceLang, getTraveler } from './api.js';
 import { logout } from './auth.js';
 import { changeLanguage } from './voice.js';
 import { applyAccent, getStoredAccent } from './accent.js';
-import { getAiName, setAiName, setAccent } from './preferences.js';
+import { getAiName, setAiName, setAccent, getOllamaModel, setOllamaModel } from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 
 const panel = document.getElementById('settings-panel');
@@ -16,8 +16,11 @@ const aiNameHint = document.getElementById('ai-name-hint');
 const profileNameInput = document.getElementById('profile-name-input');
 const profileAvatarInput = document.getElementById('profile-avatar-input');
 const profileAvatarPreview = document.getElementById('profile-avatar-preview');
+const ollamaModelSelect = document.getElementById('ollama-model-select');
+const ollamaModelHint = document.getElementById('ollama-model-hint');
 
 let pendingAvatar = undefined;
+let serverDefaultModel = '';
 
 function updateAiNameHint() {
   if (aiNameHint) aiNameHint.textContent = getAiName();
@@ -31,6 +34,61 @@ function loadProfileFields() {
     name: traveler?.name || traveler?.username || '',
     avatar: traveler?.avatar || null,
   });
+}
+
+function populateOllamaModelSelect(models, selected) {
+  if (!ollamaModelSelect) return;
+  ollamaModelSelect.innerHTML = '';
+
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = serverDefaultModel
+    ? `Default (${serverDefaultModel})`
+    : 'Default (server)';
+  ollamaModelSelect.appendChild(defaultOpt);
+
+  models.forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    ollamaModelSelect.appendChild(opt);
+  });
+
+  const stored = selected ?? getOllamaModel();
+  if (stored && [...ollamaModelSelect.options].some((o) => o.value === stored)) {
+    ollamaModelSelect.value = stored;
+  } else {
+    ollamaModelSelect.value = '';
+  }
+}
+
+async function loadOllamaModels() {
+  if (!ollamaModelSelect) return;
+  try {
+    const res = await apiFetch('/api/ollama/models');
+    const { models = [], default: defaultModel, available } = res.data || {};
+    serverDefaultModel = defaultModel || '';
+    populateOllamaModelSelect(models);
+
+    if (ollamaModelHint) {
+      if (!available) {
+        ollamaModelHint.textContent = 'Ollama is offline — using the server default model.';
+      } else if (!models.length) {
+        ollamaModelHint.textContent = 'No models found in Ollama. Pull one with: ollama pull llama3.2';
+      } else {
+        ollamaModelHint.textContent = 'Models from your local Ollama server.';
+      }
+    }
+  } catch (e) {
+    populateOllamaModelSelect([]);
+    if (ollamaModelHint) {
+      if (e.status === 404) {
+        ollamaModelHint.textContent = 'Model list unavailable — restart the server, then refresh the page.';
+      } else {
+        ollamaModelHint.textContent = 'Could not load models — using the server default.';
+      }
+    }
+  }
 }
 
 export async function initSettings() {
@@ -66,6 +124,12 @@ export async function initSettings() {
     });
   }
 
+  ollamaModelSelect?.addEventListener('change', () => {
+    setOllamaModel(ollamaModelSelect.value);
+  });
+
+  await loadOllamaModels();
+
   profileAvatarInput?.addEventListener('change', async () => {
     const file = profileAvatarInput.files?.[0];
     if (!file) return;
@@ -88,6 +152,7 @@ export async function initSettings() {
     if (aiNameInput) aiNameInput.value = getAiName();
     updateAiNameHint();
     loadProfileFields();
+    void loadOllamaModels();
     panel?.classList.remove('hidden');
   });
 
@@ -104,6 +169,7 @@ export async function initSettings() {
     }
     setAiName(aiNameInput?.value || '');
     updateAiNameHint();
+    setOllamaModel(ollamaModelSelect?.value || '');
 
     const name = profileNameInput?.value.trim();
     const traveler = getTraveler();
@@ -143,4 +209,5 @@ export function refreshSettingsUI() {
   updateAiNameHint();
   loadProfileFields();
   if (select) select.value = getVoiceLang();
+  void loadOllamaModels();
 }

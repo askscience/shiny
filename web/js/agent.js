@@ -11,7 +11,7 @@ import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
-import { getAiName } from './preferences.js';
+import { getAiName, getOllamaModel } from './preferences.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -142,7 +142,10 @@ async function handleNavigation(res, userMessage, context) {
 function buildAgentBody(message, mode, context) {
   const lang = localStorage.getItem('voice.lang') ||
     (navigator.language || 'en').split('-')[0];
-  return { message, mode, lang, context, ai_name: getAiName() };
+  const body = { message, mode, lang, context, ai_name: getAiName() };
+  const model = getOllamaModel();
+  if (model) body.ollama_model = model;
+  return body;
 }
 
 function setAgentAwaiting(on) {

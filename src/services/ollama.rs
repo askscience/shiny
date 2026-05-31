@@ -55,14 +55,18 @@ impl OllamaClient {
         }
     }
 
-    pub async fn chat(&self, messages: Vec<(String, String)>) -> Result<String, AppError> {
+    pub async fn chat(
+        &self,
+        messages: Vec<(String, String)>,
+        model: Option<&str>,
+    ) -> Result<String, AppError> {
         let msgs: Vec<ChatMessage> = messages
             .into_iter()
             .map(|(role, content)| ChatMessage { role, content })
             .collect();
 
         let body = ChatRequest {
-            model: self.model.clone(),
+            model: self.resolve_model(model).to_string(),
             messages: msgs,
             stream: false,
         };
@@ -96,14 +100,19 @@ impl OllamaClient {
         Ok(data.message.content)
     }
 
-    pub async fn generate(&self, prompt: &str, system: Option<&str>) -> Result<String, AppError> {
+    pub async fn generate(
+        &self,
+        prompt: &str,
+        system: Option<&str>,
+        model: Option<&str>,
+    ) -> Result<String, AppError> {
         let full_prompt = match system {
             Some(sys) => format!("{}\n\n{}", sys, prompt),
             None => prompt.to_string(),
         };
 
         let body = GenerateRequest {
-            model: self.model.clone(),
+            model: self.resolve_model(model).to_string(),
             prompt: full_prompt,
             stream: false,
         };
@@ -151,6 +160,51 @@ impl OllamaClient {
         } else {
             AppError::Http(err)
         }
+    }
+
+    pub fn default_model(&self) -> &str {
+        &self.model
+    }
+
+    fn resolve_model<'a>(&'a self, override_model: Option<&'a str>) -> &'a str {
+        override_model
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .unwrap_or(&self.model)
+    }
+
+    pub async fn list_models(&self) -> Result<Vec<String>, AppError> {
+        let resp = self
+            .client
+            .get(format!("{}/api/tags", self.base_url))
+            .send()
+            .await
+            .map_err(|e| self.map_request_error("list models", e))?;
+
+        if !resp.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "Ollama list models failed ({})",
+                resp.status()
+            )));
+        }
+
+        #[derive(Deserialize)]
+        struct TagsResponse {
+            models: Vec<TagModel>,
+        }
+
+        #[derive(Deserialize)]
+        struct TagModel {
+            name: String,
+        }
+
+        let data: TagsResponse = resp.json().await.map_err(|e| {
+            AppError::Internal(format!("Failed to parse Ollama models: {}", e))
+        })?;
+
+        let mut names: Vec<String> = data.models.into_iter().map(|m| m.name).collect();
+        names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        Ok(names)
     }
 
     pub async fn is_available(&self) -> bool {

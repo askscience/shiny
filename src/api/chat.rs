@@ -99,7 +99,7 @@ pub async fn send_message(
 
     messages.push(("user".to_string(), body.message.clone()));
 
-    let reply = state.ollama.chat(messages).await?;
+    let reply = state.ollama.chat(messages, None).await?;
 
     sqlx::query(
         "INSERT INTO chat_messages (id, traveler_id, role, content, timestamp) \

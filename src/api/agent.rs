@@ -20,6 +20,7 @@ pub struct AgentRequest {
     pub mode: Option<String>,
     pub lang: Option<String>,
     pub ai_name: Option<String>,
+    pub ollama_model: Option<String>,
     pub context: Option<AgentContextBody>,
 }
 
@@ -77,6 +78,12 @@ pub async fn handle_agent(
         lon: ctx_body.lon,
         heading: ctx_body.heading,
         lang: lang.clone(),
+        ollama_model: body
+            .ollama_model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from),
     };
 
     let active_trip = fetch_active_trip(&state.pool, &traveler.id).await?;
@@ -149,7 +156,10 @@ pub async fn handle_agent(
     let mut final_reply = String::new();
 
     for _ in 0..MAX_ITERATIONS {
-        let response = state.ollama.chat(messages.clone()).await?;
+        let response = state
+            .ollama
+            .chat(messages.clone(), ctx.ollama_model.as_deref())
+            .await?;
         let actions = parse_actions(&response);
 
         if actions.is_empty() {
