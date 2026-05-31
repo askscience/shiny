@@ -14,6 +14,28 @@ function readActiveDestination() {
 
 let activeDestinationKey = readActiveDestination();
 
+/** At most one saved card per topic for a destination. */
+const DOCK_TOPIC_SLOTS = ['overview', 'food', 'culture', 'nightlife'];
+
+export function topicSlotForSummary(s) {
+  if (!s) return 'other';
+  const type = s.type || s.artifact_type || '';
+  if (type === 'travel_plan' || s.theme === 'overview') return 'overview';
+  if (s.theme && DOCK_TOPIC_SLOTS.includes(s.theme)) return s.theme;
+  return `other:${type}`;
+}
+
+function sortDockSummaries(list) {
+  const slotOrder = (s) => {
+    const slot = topicSlotForSummary(s);
+    const i = DOCK_TOPIC_SLOTS.indexOf(slot);
+    return i >= 0 ? i : DOCK_TOPIC_SLOTS.length;
+  };
+  return [...list].sort(
+    (a, b) => slotOrder(a) - slotOrder(b) || (b.updated_at || '').localeCompare(a.updated_at || ''),
+  );
+}
+
 export function normalizeDestinationKey(value) {
   if (!value) return '';
   return String(value)
@@ -55,7 +77,7 @@ export function setActiveDestination(key) {
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
 }
 
-/** Keep only guides for the active city in the dock */
+/** Keep only guides for the active city; replace prior cards for that city with this batch. */
 export function applyDockDestinationGroup(destinationKey, artifactIds = []) {
   const key = normalizeDestinationKey(destinationKey);
   if (!key) return;
@@ -63,19 +85,24 @@ export function applyDockDestinationGroup(destinationKey, artifactIds = []) {
   localStorage.setItem(dockStorageKey(), key);
   const idSet = new Set(artifactIds);
   summaries = summaries.filter((s) => {
-    if (idSet.has(s.id)) return true;
-    return destinationKeyForSummary(s) === key;
+    const sKey = destinationKeyForSummary(s);
+    if (sKey !== key) return true;
+    return idSet.has(s.id);
   });
   summaries = dedupeSummaries(summaries);
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
 }
 
 export function getDockSummaries() {
-  if (!activeDestinationKey) {
-    return summaries.slice(0, 5);
-  }
-  const filtered = summaries.filter((s) => destinationKeyForSummary(s) === activeDestinationKey);
-  return filtered.length ? filtered : summaries.slice(0, 5);
+  const pool = activeDestinationKey
+    ? summaries.filter((s) => destinationKeyForSummary(s) === activeDestinationKey)
+    : summaries;
+  const deduped = dedupeSummaries(pool);
+  const topical = sortDockSummaries(
+    deduped.filter((s) => DOCK_TOPIC_SLOTS.includes(topicSlotForSummary(s))),
+  );
+  if (topical.length) return topical.slice(0, DOCK_TOPIC_SLOTS.length);
+  return sortDockSummaries(deduped).slice(0, 4);
 }
 
 function pickDefaultDestination(list) {
@@ -110,18 +137,17 @@ function dedupeSummaries(list) {
       byId.set(s.id, s);
     }
   }
-  const byTitle = new Map();
+  const byTopic = new Map();
   for (const s of byId.values()) {
     const dest = destinationKeyForSummary(s);
-    const key = `${dest}:${s.type || 'unknown'}:${s.theme || ''}:${(s.title || '').toLowerCase()}`;
-    const prev = byTitle.get(key);
+    const key = `${dest}:${topicSlotForSummary(s)}`;
+    const prev = byTopic.get(key);
     if (!prev || (s.updated_at || '') > (prev.updated_at || '')) {
-      byTitle.set(key, s);
+      byTopic.set(key, s);
     }
   }
-  return [...byTitle.values()]
-    .map((s) => ({ ...s, type: s.type || s.artifact_type || 'site_info' }))
-    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  return [...byTopic.values()]
+    .map((s) => ({ ...s, type: s.type || s.artifact_type || 'site_info' }));
 }
 
 export function getSummaries() {

@@ -42,7 +42,8 @@ const THEME_LABELS = {
 };
 
 const PLAN_TYPES = new Set(['travel_plan', 'tour_plan']);
-const MAX_VISIBLE = 8;
+/** One dock icon per topic slot (overview + 3 themes). */
+const MAX_VISIBLE = 4;
 
 export function iconForArtifact(item) {
   if (item?.theme && THEME_ICONS[item.theme]) {

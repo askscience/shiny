@@ -52,12 +52,13 @@
   background: var(--surface-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow: var(--shadow-float);
   pointer-events: auto;
   position: relative;
   overflow: hidden;
+  contain: layout style paint;
   animation: insightIn var(--duration-slow) var(--ease-out) both;
   transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast);
 }

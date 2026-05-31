@@ -3,6 +3,8 @@
  */
 
 import { apiFetch } from '../api.js';
+import { getOllamaModel } from '../preferences.js';
+import { setDockStep, clearDockStep } from '../dockStep.js';
 import {
   setInsightCards,
   getVisibleCards,
@@ -84,12 +86,17 @@ function render() {
 export async function loadContextInsights(destination, lat, lon) {
   if (!destination || lat == null || lon == null) return;
 
+  setDockStep('Loading local insights…');
+
   try {
     const q = new URLSearchParams({
       destination,
       lat: String(lat),
       lon: String(lon),
     });
+    const model = getOllamaModel();
+    if (model) q.set('ollama_model', model);
+    setDockStep('Researching events & places…');
     const res = await apiFetch(`/api/insights/context?${q}`);
     setInsightCards(destination, res.data || []);
   } catch (e) {
@@ -97,6 +104,8 @@ export async function loadContextInsights(destination, lat, lon) {
       console.warn('Insights fetch failed:', e);
     }
     clearInsightCards();
+  } finally {
+    clearDockStep();
   }
 }
 

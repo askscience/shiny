@@ -25,11 +25,12 @@
   background: var(--surface);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow: var(--shadow-glass);
   overflow: hidden;
   padding: 0 4px;
+  contain: layout style paint;
 }
 
 #hud-top {
@@ -251,8 +252,8 @@
     padding: 0 10px;
     border-radius: 999px;
     cursor: pointer;
-    backdrop-filter: blur(16px) saturate(1.4);
-    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     box-shadow: var(--shadow-sm);
     transition:
       background var(--duration-fast),

@@ -1,4 +1,4 @@
-import { apiFetch } from './api.js';
+import { apiFetch, getToken, ApiError } from './api.js';
 import { renderArtifact, clearArtifacts } from './artifacts.js';
 import {
   upsertArtifact,
@@ -12,6 +12,7 @@ import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
 import { getAiName, getOllamaModel } from './preferences.js';
+import { setDockStep, clearDockStep } from './dockStep.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -79,7 +80,7 @@ async function ingestAgentArtifacts(artifacts) {
   if (artifacts.length > 1) {
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: {
-        message: `${artifacts.length} guides ready — tap the icons below the orb`,
+        message: `${artifacts.length} guides ready — tap an icon below the orb`,
         type: 'info',
       },
     }));
@@ -142,10 +143,93 @@ async function handleNavigation(res, userMessage, context) {
 function buildAgentBody(message, mode, context) {
   const lang = localStorage.getItem('voice.lang') ||
     (navigator.language || 'en').split('-')[0];
-  const body = { message, mode, lang, context, ai_name: getAiName() };
+  const body = { message, mode, lang, context, ai_name: getAiName(), stream: true };
   const model = getOllamaModel();
   if (model) body.ollama_model = model;
   return body;
+}
+
+async function readAgentStream(res, onStep) {
+  if (!res.body) {
+    throw new ApiError('Agent stream unavailable', 500);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() || '';
+
+    for (const chunk of chunks) {
+      const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'));
+      if (!dataLine) continue;
+
+      let event;
+      try {
+        event = JSON.parse(dataLine.replace(/^data:\s*/, ''));
+      } catch {
+        continue;
+      }
+
+      if (event.type === 'step' && event.message) {
+        onStep?.(event.message);
+      } else if (event.type === 'done') {
+        return event.data;
+      } else if (event.type === 'error') {
+        throw new ApiError(event.message || 'Agent failed', 500);
+      }
+    }
+  }
+
+  throw new ApiError('Agent stream ended unexpectedly', 500);
+}
+
+async function requestAgent(body, onStep) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch('/api/agent', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (res.status === 401) {
+    throw new ApiError('Session expired — please sign in again', 401);
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('text/event-stream')) {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ApiError(text || res.statusText, res.status);
+    }
+    return readAgentStream(res, onStep);
+  }
+
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok) {
+    throw new ApiError(data?.error || text || res.statusText, res.status);
+  }
+  return data;
+}
+
+function handleAgentStep(message) {
+  setDockStep(message);
 }
 
 function setAgentAwaiting(on) {
@@ -155,12 +239,13 @@ function setAgentAwaiting(on) {
 export async function sendToAgent(message, mode, context) {
   setAgentAwaiting(true);
   setSphereState('processing');
+  handleAgentStep('Thinking…');
 
   try {
-    const res = await apiFetch('/api/agent', {
-      method: 'POST',
-      body: JSON.stringify(buildAgentBody(message, mode, context)),
-    });
+    const res = await requestAgent(
+      buildAgentBody(message, mode, context),
+      handleAgentStep,
+    );
 
     await ingestAgentArtifacts(res.artifacts);
 
@@ -198,6 +283,7 @@ export async function sendToAgent(message, mode, context) {
     }, 3000);
     throw e;
   } finally {
+    clearDockStep();
     setAgentAwaiting(false);
   }
 }
@@ -207,12 +293,13 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
   onStream?.('');
   setAgentAwaiting(true);
   setSphereState('processing');
+  handleAgentStep('Thinking…');
 
   try {
-    const res = await apiFetch('/api/agent', {
-      method: 'POST',
-      body: JSON.stringify(buildAgentBody(message, 'single', context)),
-    });
+    const res = await requestAgent(
+      buildAgentBody(message, 'single', context),
+      handleAgentStep,
+    );
 
     await streamText(res.reply || '', onStream, 12);
 
@@ -231,6 +318,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     onError?.(msg);
     return null;
   } finally {
+    clearDockStep();
     setAgentAwaiting(false);
   }
 }

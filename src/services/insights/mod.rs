@@ -15,6 +15,7 @@ mod weather;
 pub use types::InsightCard;
 
 use crate::errors::AppError;
+use crate::services::ollama::OllamaClient;
 use crate::services::web_search::SearchService;
 
 const MAX_CARDS: usize = 5;
@@ -23,24 +24,25 @@ const MAX_CARDS: usize = 5;
 pub async fn build_context_cards(
     http: &reqwest::Client,
     search: &SearchService,
+    ollama: &OllamaClient,
     destination: &str,
     lat: f64,
     lon: f64,
+    model: Option<&str>,
 ) -> Result<Vec<InsightCard>, AppError> {
     let mut cards: Vec<InsightCard> = Vec::new();
 
-    // 1) Weather (one card)
     if let Ok(Some(w)) = weather::fetch_forecast(http, destination, lat, lon).await {
         cards.push(w);
     }
 
-    // 2) Event-style headlines from web search
-    cards.extend(events::cards_from_search(search, destination).await);
+    cards.extend(events::cards_from_search(search, ollama, destination, model).await);
 
-    // 3) Cultural places from Overpass (fills remaining slots, up to MAX_CARDS total)
     if cards.len() < MAX_CARDS {
         let room = MAX_CARDS - cards.len();
-        if let Ok(mut places) = events::cards_from_overpass(http, lat, lon, destination, room).await {
+        if let Ok(mut places) =
+            events::cards_from_overpass(http, ollama, lat, lon, destination, room, model).await
+        {
             cards.append(&mut places);
         }
     }

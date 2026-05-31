@@ -1698,6 +1698,7 @@ dependencies = [
  "sha2",
  "sqlx",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tower 0.4.13",
  "tower-http 0.5.2",

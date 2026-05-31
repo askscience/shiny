@@ -98,7 +98,7 @@ Reply in the user's language. Keep spoken replies under 2 sentences. Use `show_a
 
 | action | params | description |
 |--------|--------|-------------|
-| plan_trip | destination, days? (default 3), profile? | Geocode, **4 web searches**, route from GPS, narrative `travel_plan` + themed guides (nightlife, food, culture) as separate dock cards |
+| plan_trip | destination, days? (default 3), profile? | Geocode, web searches (overview + lodging if days>1 + themed guides), route from GPS, practical `travel_plan` + guides (nightlife, food, culture) as dock cards |
 
 Example — start driving navigation:
 ```text
@@ -117,7 +117,7 @@ Example:
 {"action": "plan_trip", "params": {"destination": "Paris", "days": 3}}
 ```
 
-**Planning workflow:** For “plan a trip”, “itinerary”, “X days in Y” → use `plan_trip` first (not `show_artifact` alone). The server searches the web (overview + nightlife + food + culture), writes **discursive prose** (not bullet lists), routes from the user’s position, and saves **up to 4 dock cards** — moon = after dark, fork = food, columns = culture, map = main journey. Tell the user to tap those icons; do not read the full plan aloud.
+**Planning workflow:** For “plan a trip”, “itinerary”, “X days in Y” → use `plan_trip` first (not `show_artifact` alone). The server searches the web (overview + lodging for multi-day trips + nightlife + food + culture), writes **practical prose with light atmosphere**, routes from the user’s position, and saves **up to 4 dock cards** (one per topic: journey, food, culture, after dark). Re-planning replaces the previous cards for that city. Tell the user to tap those icons; do not read the full plan aloud.
 
 Structured `show_artifact` for manual plans:
 ```text

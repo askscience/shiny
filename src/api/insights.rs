@@ -11,6 +11,7 @@ pub struct ContextInsightsParams {
     pub destination: String,
     pub lat: f64,
     pub lon: f64,
+    pub ollama_model: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -30,12 +31,20 @@ pub async fn context(
         return Err(AppError::BadRequest("destination required".into()));
     }
 
+    let model = params
+        .ollama_model
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
     let cards = insights::build_context_cards(
         state.osm.client(),
         &state.search,
+        &state.ollama,
         destination,
         params.lat,
         params.lon,
+        model,
     )
     .await?;
 

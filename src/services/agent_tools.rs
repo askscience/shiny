@@ -10,6 +10,10 @@ use crate::services::artifacts::{self, Artifact, PlanDay, RouteMeta};
 use crate::services::navigation::build_navigation_session;
 use crate::services::web_search::SearchResult;
 
+/// Shared tone for artifact prose — practical first, lightly descriptive.
+const ARTIFACT_WRITER_TONE: &str = "Write in a warm but practical tone. Name real places, neighborhoods, times, and logistics. \
+    A little atmosphere is fine; avoid flowery or overly poetic language.";
+
 #[derive(Debug, Clone)]
 pub struct AgentContext {
     pub lat: Option<f64>,
@@ -286,15 +290,13 @@ pub async fn execute_action(
             let query = param_str(params, "query").ok_or_else(|| AppError::BadRequest("query required".into()))?;
             let results = state.search.search(&query).await?;
             let summary = if state.ollama.is_available().await {
-                let prompt = format!(
-                    "Summarize these search results in 2-3 sentences in language '{}': {:?}",
-                    ctx.lang, results
-                );
-                state
-                    .ollama
-                    .generate(&prompt, None, ctx.ollama_model.as_deref())
-                    .await
-                    .ok()
+                summarize_search_stepwise(
+                    state,
+                    &results,
+                    &ctx.lang,
+                    ctx.ollama_model.as_deref(),
+                )
+                .await
             } else {
                 None
             };
@@ -363,12 +365,23 @@ pub async fn execute_action(
                 ))
                 .await?;
 
+            let lodging_facts = gather_lodging_facts(
+                state,
+                &destination,
+                num_days,
+                route_meta.as_ref(),
+                &ctx.lang,
+                ctx.ollama_model.as_deref(),
+            )
+            .await;
+
             let (narrative, day_sections) = build_overview_story(
                 state,
                 &destination,
                 num_days,
                 &ctx.lang,
                 &overview_search,
+                &lodging_facts,
                 ctx.ollama_model.as_deref(),
             )
             .await;
@@ -456,9 +469,17 @@ pub async fn execute_action(
             outcome_with_artifacts(
                 &action_key,
                 json!({
-                    "destination": place,
+                    "destination": {
+                        "name": place.display_name,
+                        "lat": place.lat,
+                        "lon": place.lon,
+                    },
                     "guides_created": guides.len() + 1,
-                    "route": route_opt,
+                    "route": route_opt.as_ref().map(|r| json!({
+                        "distance_km": r.total_distance_meters / 1000.0,
+                        "duration_min": r.total_duration_seconds / 60.0,
+                        "geometry_points": r.geometry.len(),
+                    })),
                 }),
                 Some(main),
                 guides,
@@ -511,78 +532,262 @@ pub async fn execute_action(
     Ok(outcome)
 }
 
+async fn summarize_search_stepwise(
+    state: &AppState,
+    results: &[SearchResult],
+    lang: &str,
+    model: Option<&str>,
+) -> Option<String> {
+    let mut lines = Vec::new();
+    for row in results.iter().take(4) {
+        let prompt = format!(
+            "Summarize this search hit in one short sentence for language '{}': {} — {}",
+            lang, row.title, row.snippet
+        );
+        if let Ok(line) = state.ollama.generate(&prompt, None, model).await {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                lines.push(trimmed.to_string());
+            }
+        }
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    if lines.len() == 1 {
+        return Some(lines.pop()?);
+    }
+    let merge_prompt = format!(
+        "Combine these search notes into 2-3 sentences for language '{}':\n{}",
+        lang,
+        lines.join("\n")
+    );
+    state.ollama.generate(&merge_prompt, None, model).await.ok()
+}
+
+async fn extract_travel_facts(
+    state: &AppState,
+    destination: &str,
+    lang: &str,
+    results: &[SearchResult],
+    model: Option<&str>,
+) -> Vec<String> {
+    let mut facts = Vec::new();
+    for row in results.iter().take(5) {
+        let prompt = format!(
+            "Extract one practical travel fact about {destination} for language '{lang}' from:\n- {}: {}\n\
+             Focus on what to do, where, when, or how — not poetry. Reply with one sentence only.",
+            row.title, row.snippet
+        );
+        if let Ok(line) = state.ollama.generate(&prompt, None, model).await {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                facts.push(trimmed.to_string());
+            }
+        }
+    }
+    facts
+}
+
+async fn extract_lodging_facts(
+    state: &AppState,
+    destination: &str,
+    lang: &str,
+    results: &[SearchResult],
+    model: Option<&str>,
+) -> Vec<String> {
+    let mut facts = Vec::new();
+    for row in results.iter().take(5) {
+        let prompt = format!(
+            "Extract one practical lodging fact for {destination} (language '{lang}') from:\n- {}: {}\n\
+             Hotels, neighborhoods to stay, B&Bs, or overnight road stops — be specific when possible. \
+             One sentence only.",
+            row.title, row.snippet
+        );
+        if let Ok(line) = state.ollama.generate(&prompt, None, model).await {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                facts.push(trimmed.to_string());
+            }
+        }
+    }
+    facts
+}
+
+async fn gather_lodging_facts(
+    state: &AppState,
+    destination: &str,
+    num_days: u32,
+    route_meta: Option<&RouteMeta>,
+    lang: &str,
+    model: Option<&str>,
+) -> Vec<String> {
+    let needs_stay = num_days > 1;
+    let long_drive = route_meta.map(|r| r.distance_km > 400.0).unwrap_or(false);
+    if !needs_stay && !long_drive {
+        return vec![];
+    }
+
+    let mut rows = Vec::new();
+    if needs_stay {
+        if let Ok(found) = state
+            .search
+            .search(&format!(
+                "{destination} hotels where to stay best neighborhoods"
+            ))
+            .await
+        {
+            rows.extend(found);
+        }
+    }
+    if long_drive {
+        if let Ok(found) = state
+            .search
+            .search(&format!(
+                "drive to {destination} overnight stop hotels motels"
+            ))
+            .await
+        {
+            rows.extend(found);
+        }
+    }
+
+    if rows.is_empty() || !state.ollama.is_available().await {
+        return vec![];
+    }
+
+    extract_lodging_facts(state, destination, lang, &rows, model).await
+}
+
 async fn build_overview_story(
     state: &AppState,
     destination: &str,
     num_days: u32,
     lang: &str,
     results: &[SearchResult],
+    lodging_facts: &[String],
     model: Option<&str>,
 ) -> (String, Vec<artifacts::ArtifactSection>) {
-    let snippets: Vec<String> = results
-        .iter()
-        .take(8)
-        .map(|r| format!("- {}: {}", r.title, r.snippet))
-        .collect();
-
     if state.ollama.is_available().await {
-        let prompt = format!(
-            "You are a passionate travel writer. Write for language '{}' about visiting {} for {} days.\n\
-             Use these web search findings:\n{}\n\n\
-             Reply with ONLY valid JSON (no markdown):\n\
-             {{\"intro\":\"2-3 evocative paragraphs as one string with line breaks\",\"days\":[{{\"title\":\"Day 1 theme\",\"story\":\"One rich paragraph: what to feel, where to wander, practical rhythm — no bullet lists\"}}]}}\n\
-             Include exactly {} day objects in days array.",
-            lang, destination, num_days, snippets.join("\n"), num_days
-        );
-        if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
-            if let Ok(v) = serde_json::from_str::<Value>(&extract_json_object(&raw)) {
-                let intro = v
-                    .get("intro")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let sections: Vec<artifacts::ArtifactSection> = v
-                    .get("days")
-                    .and_then(|d| d.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .enumerate()
-                            .filter_map(|(i, item)| {
-                                Some(artifacts::ArtifactSection {
-                                    label: item
+        let facts = extract_travel_facts(state, destination, lang, results, model).await;
+        if !facts.is_empty() {
+            let facts_text = facts.join("\n");
+            let lodging_block = if lodging_facts.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "\n\nLodging notes (use for nightly stays):\n{}",
+                    lodging_facts.join("\n")
+                )
+            };
+            let day_schema = if num_days > 1 {
+                r#"{"title":"Day 1 — short theme","story":"One paragraph: morning/afternoon plan with named places and rough times","stay":"Where to sleep that night — neighborhood or hotel from lodging notes"}"#
+            } else {
+                r#"{"title":"Day 1 — short theme","story":"One paragraph: what to see and do with named places and rough times"}"#
+            };
+            let stay_rule = if num_days > 1 {
+                "\n- Each day MUST include \"stay\" with a concrete place or neighborhood to sleep.\n\
+                 - Use the same base hotel across nights when that makes sense."
+            } else {
+                ""
+            };
+            let prompt = format!(
+                "{ARTIFACT_WRITER_TONE}\n\
+                 Write for language '{lang}' about visiting {destination} for {num_days} days.\n\
+                 Research notes (one fact per line):\n{facts_text}{lodging_block}\n\n\
+                 Reply with ONLY valid JSON (no markdown):\n\
+                 {{\"intro\":\"1-2 short paragraphs: trip overview with practical tips\",\"days\":[{day_schema}]}}\n\
+                 Include exactly {num_days} day objects.{stay_rule}\n\
+                 No bullet lists inside story text.",
+                facts_text = facts_text,
+                lodging_block = lodging_block,
+                lang = lang,
+                destination = destination,
+                num_days = num_days,
+                day_schema = day_schema,
+                stay_rule = stay_rule
+            );
+            if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
+                if let Ok(v) = serde_json::from_str::<Value>(&extract_json_object(&raw)) {
+                    let intro = v
+                        .get("intro")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let sections: Vec<artifacts::ArtifactSection> = v
+                        .get("days")
+                        .and_then(|d| d.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|item| {
+                                    let title = item
                                         .get("title")
                                         .and_then(|t| t.as_str())
                                         .unwrap_or("Day")
-                                        .to_string(),
-                                    value: item
+                                        .to_string();
+                                    let story = item
                                         .get("story")
                                         .and_then(|s| s.as_str())
                                         .unwrap_or("")
-                                        .to_string(),
+                                        .trim();
+                                    let stay = item
+                                        .get("stay")
+                                        .and_then(|s| s.as_str())
+                                        .unwrap_or("")
+                                        .trim();
+                                    let value = if stay.is_empty() {
+                                        story.to_string()
+                                    } else {
+                                        format!("{story}\n\nWhere to sleep: {stay}")
+                                    };
+                                    if value.is_empty() {
+                                        return None;
+                                    }
+                                    Some(artifacts::ArtifactSection { label: title, value })
                                 })
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if !intro.is_empty() {
-                    return (intro, sections);
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if !intro.is_empty() {
+                        return (intro, sections);
+                    }
                 }
             }
         }
     }
 
+    let snippets: Vec<String> = results
+        .iter()
+        .take(8)
+        .map(|r| format!("- {}: {}", r.title, r.snippet))
+        .collect();
     let intro = format!(
-        "{destination} unfolds over {num_days} days — a city best met on foot, between café stops and golden-hour streets.\n\n\
-         Start from what the web turned up: {}",
+        "{destination} over {num_days} days — a practical base for exploring. \
+         Key pointers from research: {}",
         snippets.join(" ")
     );
     let sections = (1..=num_days)
-        .map(|d| artifacts::ArtifactSection {
-            label: format!("Day {}", d),
-            value: format!(
-                "Let the {} day lead you through {} — follow curiosity, leave room for a long lunch and an unplanned detour.",
-                d, destination
-            ),
+        .map(|d| {
+            let stay = if num_days > 1 {
+                let hint = lodging_facts
+                    .first()
+                    .map(|s| format!("\n\nWhere to sleep: {s}"))
+                    .unwrap_or_else(|| {
+                        "\n\nWhere to sleep: look for hotels in the city centre or main tourist district."
+                            .to_string()
+                    });
+                format!(
+                    "Day {d}: pick 2–3 sights, allow time for lunch, and keep the evening open.{hint}"
+                )
+            } else {
+                format!(
+                    "Day {d}: pick 2–3 sights and allow time for lunch — no need to rush."
+                )
+            };
+            artifacts::ArtifactSection {
+                label: format!("Day {}", d),
+                value: stay,
+            }
         })
         .collect();
     (intro, sections)
@@ -599,46 +804,63 @@ async fn build_theme_guide(
     lon: f64,
     model: Option<&str>,
 ) -> Artifact {
-    let snippets: Vec<String> = results
-        .iter()
-        .take(6)
-        .map(|r| format!("- {}: {}", r.title, r.snippet))
-        .collect();
+    let theme_label = match theme {
+        "nightlife" => "after dark",
+        "food" => "food & drink",
+        "culture" => "culture & art",
+        _ => theme,
+    };
 
     let (title, narrative) = if state.ollama.is_available().await {
-        let theme_label = match theme {
-            "nightlife" => "after dark",
-            "food" => "food & drink",
-            "culture" => "culture & art",
-            _ => theme,
-        };
-        let prompt = format!(
-            "Write a vivid tourist guide about {} in {} for language '{}'. Theme: {}.\n\
-             Web research:\n{}\n\n\
-             Reply with ONLY JSON: {{\"title\":\"short catchy title\",\"narrative\":\"2-3 paragraphs, sensory and practical, no bullet lists\"}}",
-            theme_label, destination, lang, theme_label, snippets.join("\n")
-        );
-        if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
-            if let Ok(v) = serde_json::from_str::<Value>(&extract_json_object(&raw)) {
-                let t = v.get("title").and_then(|x| x.as_str()).unwrap_or(theme).to_string();
-                let n = v
-                    .get("narrative")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                if !n.is_empty() {
-                    (t, n)
+        let facts = extract_travel_facts(state, destination, lang, results, model).await;
+        if !facts.is_empty() {
+            let prompt = format!(
+                "{ARTIFACT_WRITER_TONE}\n\
+                 Write a practical tourist guide about {theme_label} in {destination} for language '{lang}'.\n\
+                 Research notes:\n{notes}\n\n\
+                 Reply with ONLY JSON: {{\"title\":\"short clear title\",\"narrative\":\"2 short paragraphs: specific places, times, and tips — light color ok, no purple prose\"}}",
+                notes = facts.join("\n")
+            );
+            if let Ok(raw) = state.ollama.generate(&prompt, None, model).await {
+                if let Ok(v) = serde_json::from_str::<Value>(&extract_json_object(&raw)) {
+                    let t = v.get("title").and_then(|x| x.as_str()).unwrap_or(theme).to_string();
+                    let n = v
+                        .get("narrative")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !n.is_empty() {
+                        (t, n)
+                    } else {
+                        (theme.to_string(), facts.join(" "))
+                    }
                 } else {
-                    default_theme_copy(theme, destination, &snippets)
+                    (theme.to_string(), facts.join(" "))
                 }
             } else {
-                default_theme_copy(theme, destination, &snippets)
+                (theme.to_string(), facts.join(" "))
             }
         } else {
-            default_theme_copy(theme, destination, &snippets)
+            let snippets: Vec<String> = results
+                .iter()
+                .take(6)
+                .map(|r| format!("- {}: {}", r.title, r.snippet))
+                .collect();
+            (
+                theme.to_string(),
+                format!("Explore {theme_label} in {destination}. {}", snippets.join(" ")),
+            )
         }
     } else {
-        default_theme_copy(theme, destination, &snippets)
+        let snippets: Vec<String> = results
+            .iter()
+            .take(6)
+            .map(|r| format!("- {}: {}", r.title, r.snippet))
+            .collect();
+        (
+            theme.to_string(),
+            format!("Explore {theme_label} in {destination}. {}", snippets.join(" ")),
+        )
     };
 
     Artifact {
@@ -661,19 +883,31 @@ async fn build_theme_guide(
 fn default_theme_copy(theme: &str, destination: &str, snippets: &[String]) -> (String, String) {
     let title = match theme {
         "nightlife" => format!("{} after dark", destination),
-        "food" => format!("Eat like a local in {}", destination),
-        "culture" => format!("Culture & soul of {}", destination),
+        "food" => format!("Food in {}", destination),
+        "culture" => format!("Culture in {}", destination),
         _ => format!("{} — {}", destination, theme),
     };
     let body = if snippets.is_empty() {
-        format!("Explore {} through {} — take your time, ask locals, follow the mood.", destination, theme)
+        format!(
+            "Practical tips for {} ({}) — check opening hours and book ahead when you can.",
+            destination, theme
+        )
     } else {
         format!(
-            "{}\n\nWhat travelers mention: {}",
+            "{}\n\nFrom research: {}",
             match theme {
-                "nightlife" => format!("When the sun sets, {} changes pace — wine bars, live music, and late walks reward those who stay out.", destination),
-                "food" => format!("{} is a city tasted slowly — markets in the morning, long lunches, and neighborhood trattorias worth the detour.", destination),
-                "culture" => format!("{} wears its history openly — museums, churches, and street corners each tell a layer of the story.", destination),
+                "nightlife" => format!(
+                    "Evenings in {} — start around 20:00, stick to well-lit central areas, and ask your hotel for current bar picks.",
+                    destination
+                ),
+                "food" => format!(
+                    "{} — markets and lunch spots fill up midday; reserve dinner on weekends.",
+                    destination
+                ),
+                "culture" => format!(
+                    "Museums and sights in {} — buy tickets online when you can and go early to skip queues.",
+                    destination
+                ),
                 _ => String::new(),
             },
             snippets.join(" ")

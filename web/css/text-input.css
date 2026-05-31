@@ -17,8 +17,12 @@ body.compose-active:not(.compose-awaiting) #artifact-dock-icons {
   display: none !important;
 }
 
+body.agent-awaiting #artifact-dock {
+  display: flex !important;
+}
+
 body.compose-active.compose-awaiting #artifact-dock-icons {
-  display: contents !important;
+  display: flex !important;
 }
 
 body.compose-active #artifact-dock {

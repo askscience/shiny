@@ -1,18 +1,19 @@
 use axum::extract::{Extension, State};
+use axum::response::{IntoResponse, Sse};
+use axum::response::sse::{Event, KeepAlive};
 use axum::Json;
+use futures::stream;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use std::convert::Infallible;
+use tokio_stream::StreamExt as _;
 
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
-use crate::services::agent_tools::{
-    execute_action, fetch_active_trip, parse_actions, strip_action_blocks, AgentContext,
-};
+use crate::services::agent_runner::{run_agent, AgentRunInput, AgentRunResult};
+use crate::services::agent_tools::{fetch_active_trip, AgentContext};
 use crate::services::artifacts::Artifact;
 use crate::services::navigation::NavigationSession;
-
-const MAX_ITERATIONS: usize = 4;
 
 #[derive(Deserialize)]
 pub struct AgentRequest {
@@ -21,6 +22,7 @@ pub struct AgentRequest {
     pub lang: Option<String>,
     pub ai_name: Option<String>,
     pub ollama_model: Option<String>,
+    pub stream: Option<bool>,
     pub context: Option<AgentContextBody>,
 }
 
@@ -38,6 +40,7 @@ pub struct AgentResponse {
     pub mode: String,
     pub artifacts: Vec<Artifact>,
     pub actions_taken: Vec<ActionTaken>,
+    pub steps: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub navigation: Option<NavigationSession>,
 }
@@ -46,6 +49,14 @@ pub struct AgentResponse {
 pub struct ActionTaken {
     pub action: String,
     pub result: String,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum AgentStreamEvent {
+    Step { message: String },
+    Done { data: AgentResponse },
+    Error { message: String },
 }
 
 fn load_skill_reference() -> String {
@@ -60,11 +71,16 @@ fn first_name(full: &str) -> String {
         .to_string()
 }
 
-pub async fn handle_agent(
-    State(state): State<AppState>,
-    Extension(traveler): Extension<Traveler>,
-    Json(body): Json<AgentRequest>,
-) -> Result<Json<AgentResponse>, AppError> {
+struct PreparedAgent {
+    input: AgentRunInput,
+    trip_id: Option<String>,
+}
+
+async fn prepare_agent(
+    state: &AppState,
+    traveler: &Traveler,
+    body: AgentRequest,
+) -> Result<PreparedAgent, AppError> {
     let mode = body.mode.unwrap_or_else(|| "single".into());
     let lang = body.lang.unwrap_or_else(|| "en".into());
     let ctx_body = body.context.unwrap_or(AgentContextBody {
@@ -87,8 +103,8 @@ pub async fn handle_agent(
     };
 
     let active_trip = fetch_active_trip(&state.pool, &traveler.id).await?;
-    let recent_diary = sqlx::query_as::<_, crate::models::DiaryEntry>(
-        "SELECT * FROM diary_entries WHERE traveler_id = ?1 ORDER BY date DESC LIMIT 3",
+    let recent_diary = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT date, summary FROM diary_entries WHERE traveler_id = ?1 ORDER BY date DESC LIMIT 3",
     )
     .bind(&traveler.id)
     .fetch_all(&state.pool)
@@ -108,7 +124,7 @@ pub async fn handle_agent(
     } else {
         recent_diary
             .iter()
-            .map(|e| format!("{}: {}", e.date, e.summary.as_deref().unwrap_or("")))
+            .map(|(date, summary)| format!("{}: {}", date, summary.as_deref().unwrap_or("")))
             .collect::<Vec<_>>()
             .join("; ")
     };
@@ -128,126 +144,127 @@ pub async fn handle_agent(
          Address the user as {} when it feels natural.\n\
          \n\
          ## Tool protocol (strict)\n\
-         - To call a tool, output ONLY raw JSON on its own line — no markdown fences, no ```json blocks, no prose.\n\
+         - Call exactly ONE tool per turn.\n\
+         - Output ONLY raw JSON on its own line — no markdown fences.\n\
          - Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
          - Always include \"params\". Use {{}} when a tool has no parameters.\n\
-         - Wait for tool results, then reply in natural language. Never show JSON to the user.\n\
-         - Never claim a trip was created/started unless the tool succeeded.\n\
-         - Wrong: ```json {{\"action\":\"list_trips\"}} ``` or {{\"action\":\"list_trips\"}}\n\
-         - Right: {{\"action\":\"list_trips\",\"params\":{{}}}}\n\
-         - For trip/itinerary requests use plan_trip (web research + route + narrative journey card plus nightlife/food/culture guides in the dock).\n\
-         - For \"take me to\", \"navigate to\", \"directions to\", \"drive to\" → use navigate_to (starts turn-by-turn navigator; no artifact panel).\n\
+         - For trip/itinerary requests use plan_trip.\n\
+         - For navigation requests use navigate_to.\n\
          \n\
          ## Tools\n{}\n\n\
          ## Context\nUser name: {}\n{}\n{}\nDiary: {}\n\
-         Mode: {} — plan_trip may save several dock guides at once; keep the spoken reply short and point users to the icons below the orb.\n\
-         To modify an existing saved card (hours, tips, sections), use update_artifact with artifact_id — not show_artifact.",
+         Mode: {} — keep the spoken reply short.",
         ai_name, lang, ai_name.to_lowercase(), user_first, skill, user_first, location_line, trip_line, diary_line, mode
     );
 
-    let mut messages = vec![
-        ("system".to_string(), system),
-        ("user".to_string(), body.message.clone()),
-    ];
+    Ok(PreparedAgent {
+        trip_id: active_trip.as_ref().map(|t| t.id.clone()),
+        input: AgentRunInput {
+            message: body.message,
+            mode,
+            lang,
+            ai_name,
+            system,
+            ctx,
+        },
+    })
+}
 
-    let mut artifacts: Vec<Artifact> = Vec::new();
-    let mut actions_taken: Vec<ActionTaken> = Vec::new();
-    let mut navigation: Option<NavigationSession> = None;
-    let mut final_reply = String::new();
-
-    for _ in 0..MAX_ITERATIONS {
-        let response = state
-            .ollama
-            .chat(messages.clone(), ctx.ollama_model.as_deref())
-            .await?;
-        let actions = parse_actions(&response);
-
-        if actions.is_empty() {
-            final_reply = strip_action_blocks(&response);
-            if final_reply.is_empty() {
-                final_reply = response.trim().to_string();
-            }
-            break;
-        }
-
-        let mut results = Vec::new();
-        for (action, params) in actions {
-            match execute_action(&state, &traveler, &ctx, &action, &params).await {
-                Ok(outcome) => {
-                    actions_taken.push(ActionTaken {
-                        action: outcome.action.clone(),
-                        result: outcome.result.clone(),
-                    });
-                    if outcome.action == "navigate_to" && outcome.result == "ok" {
-                        if let Ok(nav) = serde_json::from_value::<NavigationSession>(
-                            outcome.data.get("navigator").cloned().unwrap_or(json!({})),
-                        ) {
-                            navigation = Some(nav);
-                        }
-                    }
-                    let trip_id = active_trip.as_ref().map(|t| t.id.as_str());
-                    let mut produced: Vec<Artifact> = Vec::new();
-                    if let Some(art) = outcome.artifact {
-                        produced.push(art);
-                    }
-                    produced.extend(outcome.extra_artifacts);
-                    for art in produced {
-                        if let Err(e) = crate::services::artifacts::save_artifact(
-                            &state.pool,
-                            &traveler.id,
-                            trip_id,
-                            &art,
-                        )
-                        .await
-                        {
-                            tracing::warn!("Failed to autosave artifact: {}", e);
-                        }
-                        artifacts.push(art);
-                    }
-                    results.push(json!({
-                        "action": outcome.action,
-                        "result": outcome.result,
-                        "data": outcome.data,
-                    }));
-                }
-                Err(e) => {
-                    results.push(json!({
-                        "action": action,
-                        "result": "error",
-                        "error": e.to_string(),
-                    }));
-                }
-            }
-        }
-
-        messages.push(("assistant".to_string(), response));
-        messages.push((
-            "user".to_string(),
-            format!(
-                "Tool results: {}. Now reply briefly in '{}' for the user.",
-                serde_json::to_string(&results).unwrap_or_default(),
-                lang
-            ),
-        ));
+fn to_response(result: AgentRunResult) -> AgentResponse {
+    AgentResponse {
+        success: result.success,
+        reply: result.reply,
+        mode: result.mode,
+        artifacts: result.artifacts,
+        actions_taken: result
+            .actions_taken
+            .into_iter()
+            .map(|a| ActionTaken {
+                action: a.action,
+                result: a.result,
+            })
+            .collect(),
+        steps: result.steps,
+        navigation: result.navigation,
     }
+}
 
-    if final_reply.is_empty() {
-        if let Some(last) = messages.last() {
-            if last.0 == "assistant" {
-                final_reply = strip_action_blocks(&last.1);
+pub async fn handle_agent(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<AgentRequest>,
+) -> Result<Json<AgentResponse>, AppError> {
+    let prepared = prepare_agent(&state, &traveler, body).await?;
+    let trip_id = prepared.trip_id.clone();
+
+    let result = run_agent(
+        &state,
+        &traveler,
+        trip_id.as_deref(),
+        prepared.input,
+        |_| {},
+    )
+    .await?;
+
+    Ok(Json(to_response(result)))
+}
+
+pub async fn handle_agent_stream(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<AgentRequest>,
+) -> Result<Sse<impl stream::Stream<Item = Result<Event, Infallible>>>, AppError> {
+    let prepared = prepare_agent(&state, &traveler, body).await?;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+    let state = state.clone();
+    let traveler = traveler.clone();
+    let trip_id = prepared.trip_id.clone();
+    let input = prepared.input;
+
+    tokio::spawn(async move {
+        let emit = |event: AgentStreamEvent| {
+            if let Ok(json) = serde_json::to_string(&event) {
+                let _ = tx.send(json);
             }
-        }
-    }
-    if final_reply.is_empty() {
-        final_reply = "Done.".into();
-    }
+        };
 
-    Ok(Json(AgentResponse {
-        success: true,
-        reply: final_reply,
-        mode,
-        artifacts,
-        actions_taken,
-        navigation,
-    }))
+        match run_agent(
+            &state,
+            &traveler,
+            trip_id.as_deref(),
+            input,
+            |msg| emit(AgentStreamEvent::Step {
+                message: msg.to_string(),
+            }),
+        )
+        .await
+        {
+            Ok(result) => emit(AgentStreamEvent::Done {
+                data: to_response(result),
+            }),
+            Err(e) => emit(AgentStreamEvent::Error {
+                message: e.to_string(),
+            }),
+        }
+    });
+
+    let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+        .map(|payload| Ok(Event::default().data(payload)));
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
+
+pub async fn handle_agent_dispatch(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<AgentRequest>,
+) -> Result<axum::response::Response, AppError> {
+    if body.stream.unwrap_or(false) {
+        let sse = handle_agent_stream(State(state), Extension(traveler), Json(body)).await?;
+        Ok(sse.into_response())
+    } else {
+        let json = handle_agent(State(state), Extension(traveler), Json(body)).await?;
+        Ok(json.into_response())
+    }
 }

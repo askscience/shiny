@@ -1,16 +1,18 @@
-//! Events & places — no single free global events API without keys.
-//! We combine:
-//! 1. DuckDuckGo Lite (already used app-wide, no registration) for event headlines
-//! 2. OpenStreetMap Overpass (free) for cultural venues / attractions near the destination
+//! Events & places — web research + Ollama summarization.
+//!
+//! Events: DuckDuckGo (instant + HTML) → Ollama extracts dated summaries.
+//! Places: OpenStreetMap Overpass → Ollama writes short visitor tips (fallback: templates).
 
+use chrono::Local;
 use crate::errors::AppError;
 use crate::services::insights::types::InsightCard;
-use crate::services::web_search::SearchService;
+use crate::services::ollama::OllamaClient;
+use crate::services::web_search::{SearchResult, SearchService, is_aggregator_row, is_junk_search_row, text_chunks};
 use serde::Deserialize;
+use serde_json::Value;
 use uuid::Uuid;
 
 const MAX_EVENT_SEARCH: usize = 2;
-/// Fills remaining card slots when DuckDuckGo has no event headlines.
 pub(crate) const MAX_OVERPASS_PLACES: usize = 4;
 
 #[derive(Debug, Deserialize)]
@@ -23,7 +25,7 @@ struct OverpassElement {
     tags: Option<OverpassTags>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct OverpassTags {
     name: Option<String>,
     tourism: Option<String>,
@@ -36,65 +38,320 @@ struct OverpassTags {
     opening_hours: Option<String>,
 }
 
-/// Headlines from web search (festivals, concerts, fairs).
-pub async fn cards_from_search(
-    search: &SearchService,
-    destination: &str,
-) -> Vec<InsightCard> {
-    let query = format!(
-        "{} events festivals concerts things to do",
-        destination
-    );
-    let Ok(results) = search.search(&query).await else {
-        return vec![];
-    };
-
-    results
-        .into_iter()
-        .filter(|r| !is_junk_search_row(r))
-        .take(MAX_EVENT_SEARCH)
-        .map(|r| {
-            let title = if r.title.is_empty() {
-                format!("Happening in {}", destination)
-            } else {
-                truncate(&r.title, 64)
-            };
-            let body = truncate(&r.snippet, 140);
-            InsightCard {
-                id: Uuid::new_v4().to_string(),
-                kind: "event".into(),
-                title,
-                body,
-                icon: "event".into(),
-            }
-        })
-        .collect()
+struct PlaceDraft {
+    name: String,
+    tags: OverpassTags,
 }
 
-/// Museums, theatres, attractions from Overpass (stable “what to see” cards).
+/// Event headlines from web research, summarized with Ollama when available.
+pub async fn cards_from_search(
+    search: &SearchService,
+    ollama: &OllamaClient,
+    destination: &str,
+    model: Option<&str>,
+) -> Vec<InsightCard> {
+    let sources = gather_event_sources(search, destination).await;
+    if sources.is_empty() {
+        return vec![];
+    }
+
+    if !ollama.is_available().await {
+        return vec![];
+    }
+
+    match summarize_events(ollama, destination, &sources, model).await {
+        Ok(cards) => cards
+            .into_iter()
+            .filter(|c| !is_junk_event_card(c))
+            .take(MAX_EVENT_SEARCH)
+            .collect(),
+        Err(e) => {
+            tracing::warn!("Event summarization failed for {}: {}", destination, e);
+            vec![]
+        }
+    }
+}
+
+async fn gather_event_sources(search: &SearchService, destination: &str) -> Vec<SearchResult> {
+    let now = Local::now();
+    let month_year = now.format("%B %Y").to_string();
+    let today = now.format("%Y-%m-%d").to_string();
+
+    let queries = [
+        format!("{destination} concert festival schedule {month_year}"),
+        format!("{destination} exhibition opening {month_year}"),
+        format!("{destination} opera theatre program {today}"),
+    ];
+
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+
+    for query in &queries {
+        if let Ok(rows) = search.search_html(query, 6).await {
+            for row in rows {
+                if is_junk_search_row(&row) || is_aggregator_row(&row) {
+                    continue;
+                }
+                let key = row.title.to_lowercase();
+                if seen.insert(key) {
+                    out.push(row);
+                }
+            }
+        }
+        if out.len() >= 10 {
+            break;
+        }
+    }
+
+    if out.len() < 4 {
+        if let Ok(rows) = search.search(&queries[0]).await {
+            for row in rows {
+                if is_junk_search_row(&row) || is_aggregator_row(&row) {
+                    continue;
+                }
+                let key = row.title.to_lowercase();
+                if seen.insert(key) {
+                    out.push(row);
+                }
+            }
+        }
+    }
+
+    out
+}
+
+async fn summarize_events(
+    ollama: &OllamaClient,
+    destination: &str,
+    sources: &[SearchResult],
+    model: Option<&str>,
+) -> Result<Vec<InsightCard>, AppError> {
+    let mut cards: Vec<InsightCard> = Vec::new();
+
+    for source in sources {
+        if cards.len() >= MAX_EVENT_SEARCH {
+            break;
+        }
+        let Some(card) = extract_event_from_source(ollama, destination, source, model).await? else {
+            continue;
+        };
+        if is_junk_event_card(&card) {
+            continue;
+        }
+        if cards.iter().any(|c| c.title.eq_ignore_ascii_case(&card.title)) {
+            continue;
+        }
+        cards.push(card);
+    }
+
+    Ok(cards)
+}
+
+async fn extract_event_from_source(
+    ollama: &OllamaClient,
+    destination: &str,
+    source: &SearchResult,
+    model: Option<&str>,
+) -> Result<Option<InsightCard>, AppError> {
+    let snippet = if source.snippet.trim().is_empty() {
+        "(no snippet)".to_string()
+    } else {
+        source.snippet.trim().to_string()
+    };
+
+    let chunks = text_chunks(&snippet, 1200);
+    let chunks = if chunks.is_empty() {
+        vec![snippet]
+    } else {
+        chunks
+    };
+
+    for chunk in chunks {
+        if let Some(card) =
+            extract_event_from_chunk(ollama, destination, source, &chunk, model).await?
+        {
+            return Ok(Some(card));
+        }
+    }
+
+    Ok(None)
+}
+
+async fn extract_event_from_chunk(
+    ollama: &OllamaClient,
+    destination: &str,
+    source: &SearchResult,
+    snippet: &str,
+    model: Option<&str>,
+) -> Result<Option<InsightCard>, AppError> {
+    let today = Local::now().format("%A %d %B %Y").to_string();
+
+    let system = "You extract one real-world event from a single search result. \
+        Never output ticket sellers or booking pages. \
+        Reply with ONLY JSON: {\"title\":\"...\",\"body\":\"...\"} or null.";
+
+    let prompt = format!(
+        "Today is {today}. Destination: {destination}.\n\
+         Look at this ONE source only.\n\
+         If it describes a specific upcoming event (concert, festival, exhibition, opera, theatre, sport), \
+         reply with JSON:\n\
+         {{\"title\":\"Event name\",\"body\":\"Sat 14 Jun, 20:30 — short detail\"}}\n\
+         Rules for body:\n\
+         - start with date or \"Date TBC —\"\n\
+         - include start time when known\n\
+         - max 120 chars\n\
+         If it is a generic listing page, ticket shop, or travel promo, reply: null\n\n\
+         Source:\n- {}: {}",
+        source.title.trim(),
+        snippet
+    );
+
+    let raw = ollama
+        .chat(
+            vec![
+                ("system".to_string(), system.to_string()),
+                ("user".to_string(), prompt),
+            ],
+            model,
+        )
+        .await?;
+
+    parse_single_event_card(&raw)
+}
+
+fn parse_single_event_card(raw: &str) -> Result<Option<InsightCard>, AppError> {
+    let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("null") || trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let json_str = extract_json_object_or_array(trimmed);
+    if json_str == "null" {
+        return Ok(None);
+    }
+
+    let value: Value = serde_json::from_str(&json_str).map_err(|e| {
+        AppError::Internal(format!("Failed to parse event summary: {}", e))
+    })?;
+
+    if value.is_null() {
+        return Ok(None);
+    }
+
+    let obj = if let Some(arr) = value.as_array() {
+        arr.first().cloned().unwrap_or(Value::Null)
+    } else {
+        value
+    };
+
+    if obj.is_null() {
+        return Ok(None);
+    }
+
+    let title = obj.get("title").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("").trim();
+    if title.is_empty() || body.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(InsightCard {
+        id: Uuid::new_v4().to_string(),
+        kind: "event".into(),
+        title: truncate(title, 64),
+        body: truncate(body, 140),
+        icon: "event".into(),
+    }))
+}
+
+fn parse_event_cards(raw: &str) -> Result<Vec<InsightCard>, AppError> {
+    let json_str = extract_json_array(raw);
+    let value: Value = serde_json::from_str(&json_str).map_err(|e| {
+        AppError::Internal(format!("Failed to parse event summaries: {}", e))
+    })?;
+
+    let arr = value.as_array().ok_or_else(|| {
+        AppError::Internal("Event summary response was not a JSON array".into())
+    })?;
+
+    let cards = arr
+        .iter()
+        .filter_map(|item| {
+            let title = item.get("title")?.as_str()?.trim();
+            let body = item.get("body")?.as_str()?.trim();
+            if title.is_empty() || body.is_empty() {
+                return None;
+            }
+            Some(InsightCard {
+                id: Uuid::new_v4().to_string(),
+                kind: "event".into(),
+                title: truncate(title, 64),
+                body: truncate(body, 140),
+                icon: "event".into(),
+            })
+        })
+        .take(MAX_EVENT_SEARCH)
+        .collect();
+
+    Ok(cards)
+}
+
+/// Museums, theatres, attractions from Overpass, summarized with Ollama when available.
 pub async fn cards_from_overpass(
     client: &reqwest::Client,
+    ollama: &OllamaClient,
     lat: f64,
     lon: f64,
     destination: &str,
     max_cards: usize,
+    model: Option<&str>,
 ) -> Result<Vec<InsightCard>, AppError> {
     let limit = max_cards.min(MAX_OVERPASS_PLACES);
     if limit == 0 {
         return Ok(vec![]);
     }
+
+    let drafts = fetch_place_drafts(client, lat, lon, limit).await?;
+    if drafts.is_empty() {
+        return Ok(vec![]);
+    }
+
+    if ollama.is_available().await {
+        let mut cards = Vec::new();
+        for draft in &drafts {
+            let mut card = draft_to_card(draft, destination);
+            if let Ok(Some(body)) =
+                summarize_one_place(ollama, destination, draft, model).await
+            {
+                card.body = body;
+            }
+            cards.push(card);
+        }
+        return Ok(cards);
+    }
+
+    Ok(drafts
+        .into_iter()
+        .map(|d| draft_to_card(&d, destination))
+        .collect())
+}
+
+async fn fetch_place_drafts(
+    client: &reqwest::Client,
+    lat: f64,
+    lon: f64,
+    limit: usize,
+) -> Result<Vec<PlaceDraft>, AppError> {
     let query = format!(
         "[out:json][timeout:12];\
-         (node[\"tourism\"~\"attraction|museum\"](around:6000,{lat},{lon});\
-          way[\"tourism\"~\"attraction|museum\"](around:6000,{lat},{lon});\
+         (node[\"tourism\"~\"attraction|museum|gallery\"](around:6000,{lat},{lon});\
+          way[\"tourism\"~\"attraction|museum|gallery\"](around:6000,{lat},{lon});\
           node[\"amenity\"~\"theatre|arts_centre\"](around:6000,{lat},{lon});\
          );\
-         out body 10;",
+         out body 12;",
         lat = lat,
         lon = lon
     );
 
-    // Overpass expects `data=` form body; raw POST without Content-Type returns 406.
     let resp = client
         .post("https://overpass-api.de/api/interpreter")
         .form(&[("data", query.as_str())])
@@ -109,7 +366,7 @@ pub async fn cards_from_overpass(
         AppError::Internal(format!("Overpass parse error: {}", e))
     })?;
 
-    let mut cards = Vec::new();
+    let mut drafts = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
     for el in data.elements {
@@ -125,30 +382,107 @@ pub async fn cards_from_overpass(
         if !seen.insert(key) {
             continue;
         }
-
-        let (body, icon) = place_card_copy(&tags, destination, &name);
-
-        cards.push(InsightCard {
-            id: Uuid::new_v4().to_string(),
-            kind: "place".into(),
-            title: truncate(&name, 56),
-            body,
-            icon: icon.into(),
-        });
-
-        if cards.len() >= limit {
+        drafts.push(PlaceDraft { name, tags });
+        if drafts.len() >= limit {
             break;
         }
     }
 
-    Ok(cards)
+    Ok(drafts)
 }
 
-/// Human-readable blurb + icon stem from OSM tags (no generic GPS pin).
-fn place_card_copy(tags: &OverpassTags, destination: &str, name: &str) -> (String, &'static str) {
-    let tourism = tags.tourism.as_deref().unwrap_or("").to_lowercase();
-    let amenity = tags.amenity.as_deref().unwrap_or("").to_lowercase();
-    let icon = place_icon_stem(&tourism, &amenity);
+async fn summarize_one_place(
+    ollama: &OllamaClient,
+    destination: &str,
+    draft: &PlaceDraft,
+    model: Option<&str>,
+) -> Result<Option<String>, AppError> {
+    let system = "You write one concise tourist tip. Reply with ONLY JSON: {\"body\":\"...\"} or null.";
+
+    let prompt = format!(
+        "Place in {destination}: {}\n\
+         Facts: {}\n\
+         Write one practical visitor sentence (max 110 chars). Include opening hours if given.\n\
+         If you cannot say anything useful, reply null.\n\
+         JSON: {{\"body\":\"Thu–Sun 10:00–18:00 — …\"}}",
+        draft.name,
+        place_source_line(draft)
+    );
+
+    let raw = ollama
+        .chat(
+            vec![
+                ("system".to_string(), system.to_string()),
+                ("user".to_string(), prompt),
+            ],
+            model,
+        )
+        .await?;
+
+    let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("null") {
+        return Ok(None);
+    }
+
+    let json_str = extract_json_object_or_array(trimmed);
+    let value: Value = serde_json::from_str(&json_str).map_err(|e| {
+        AppError::Internal(format!("Failed to parse place summary: {}", e))
+    })?;
+
+    if value.is_null() {
+        return Ok(None);
+    }
+
+    let body = value
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if body.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(truncate(body, 140)))
+}
+
+fn place_source_line(d: &PlaceDraft) -> String {
+    let tourism = d.tags.tourism.as_deref().unwrap_or("");
+    let amenity = d.tags.amenity.as_deref().unwrap_or("");
+    let street = d.tags.addr_street.as_deref().unwrap_or("");
+    let hours = d.tags.opening_hours.as_deref().unwrap_or("");
+    let desc = d.tags.description.as_deref().unwrap_or("");
+    format!(
+        "- {} (type: {} {}, street: {}, hours: {}, note: {})",
+        d.name,
+        tourism,
+        amenity,
+        street,
+        hours,
+        truncate(desc, 80)
+    )
+}
+
+fn draft_to_card(d: &PlaceDraft, destination: &str) -> InsightCard {
+    let tourism = d.tags.tourism.as_deref().unwrap_or("").to_lowercase();
+    let amenity = d.tags.amenity.as_deref().unwrap_or("").to_lowercase();
+    let (body, icon) = place_card_copy(&d.tags, destination, &d.name, &tourism, &amenity);
+    InsightCard {
+        id: Uuid::new_v4().to_string(),
+        kind: "place".into(),
+        title: truncate(&d.name, 56),
+        body,
+        icon: icon.into(),
+    }
+}
+
+fn place_card_copy(
+    tags: &OverpassTags,
+    destination: &str,
+    name: &str,
+    tourism: &str,
+    amenity: &str,
+) -> (String, &'static str) {
+    let icon = place_icon_stem(tourism, amenity);
 
     if let Some(desc) = tags
         .description
@@ -167,50 +501,30 @@ fn place_card_copy(tags: &OverpassTags, destination: &str, name: &str) -> (Strin
 
     let hours_hint = tags.opening_hours.as_ref().map(|h| {
         let h = h.trim();
-        if h.eq_ignore_ascii_case("24/7") {
-            " Open around the clock.".to_string()
-        } else if h.len() > 6 {
-            " Check opening hours before you go.".to_string()
+        if h.len() > 6 {
+            format!(" Hours: {}.", h)
         } else {
             String::new()
         }
     }).unwrap_or_default();
 
-    let body = match amenity.as_str() {
+    let body = match amenity {
         "theatre" | "arts_centre" => format!(
-            "Performing arts venue in {}{} — look for opera, drama, or concerts on the bill.{}",
+            "Performing arts in {}{}.{}",
             destination, street, hours_hint
         ),
-        _ => match tourism.as_str() {
-            "museum" => format!(
-                "Museum in {}{} — plan an hour or two for permanent collections and temporary shows.{}",
-                destination, street, hours_hint
-            ),
-            "gallery" => format!(
-                "Art gallery in {}{} — exhibitions change often; good for a slow afternoon.{}",
-                destination, street, hours_hint
-            ),
+        _ => match tourism {
+            "museum" => format!("Museum in {}{}.{}", destination, street, hours_hint),
+            "gallery" => format!("Gallery in {}{}.{}", destination, street, hours_hint),
             "attraction" | "viewpoint" => format!(
-                "Popular sight in {}{} — arrive earlier to skip the biggest crowds.{}",
+                "Sight in {}{}.{}",
                 destination, street, hours_hint
             ),
             _ if tags.historic.is_some() => format!(
-                "Historic landmark in {}{} — best explored on foot with a camera.{}",
+                "Historic site in {}{}.{}",
                 destination, street, hours_hint
             ),
-            _ => {
-                let kind = if name.to_lowercase().contains("teatro") {
-                    "Theatre"
-                } else if name.to_lowercase().contains("museo") {
-                    "Museum"
-                } else {
-                    "Cultural stop"
-                };
-                format!(
-                    "{} in {}{} — a local favourite between your main plans.{}",
-                    kind, destination, street, hours_hint
-                )
-            }
+            _ => format!("{} — {}{}", name, destination, hours_hint),
         },
     };
 
@@ -229,17 +543,71 @@ fn place_icon_stem(tourism: &str, amenity: &str) -> &'static str {
     }
 }
 
-/// DuckDuckGo instant API returns this placeholder when RelatedTopics is empty.
-fn is_junk_search_row(r: &crate::services::web_search::SearchResult) -> bool {
-    let title = r.title.trim().to_lowercase();
-    let snippet = r.snippet.trim().to_lowercase();
-    title.contains("no result") || snippet.contains("no information found")
+fn extract_json_object_or_array(raw: &str) -> String {
+    let trimmed = raw
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+    if trimmed.eq_ignore_ascii_case("null") {
+        return "null".to_string();
+    }
+    if trimmed.starts_with('{') {
+        if let Some(end) = trimmed.rfind('}') {
+            return trimmed[..=end].to_string();
+        }
+    }
+    extract_json_array(trimmed)
+}
+
+fn extract_json_array(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let unfenced = trimmed
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+    if let Some(start) = unfenced.find('[') {
+        if let Some(end) = unfenced.rfind(']') {
+            return unfenced[start..=end].to_string();
+        }
+    }
+    "[]".to_string()
+}
+
+fn is_junk_event_card(card: &InsightCard) -> bool {
+    if is_aggregator_row(&SearchResult {
+        title: card.title.clone(),
+        snippet: card.body.clone(),
+    }) {
+        return true;
+    }
+    let body = card.body.trim();
+    if body.len() < 12 {
+        return true;
+    }
+    !has_date_hint(body) && !body.to_lowercase().starts_with("date tbc")
+}
+
+fn has_date_hint(body: &str) -> bool {
+    let b = body.to_lowercase();
+    const MONTHS: &[&str] = &[
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+    ];
+    const DAYS: &[&str] = &["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    MONTHS.iter().any(|m| b.contains(m))
+        || DAYS.iter().any(|d| b.contains(d))
+        || b.chars().filter(|c| *c == '/').count() >= 2
+        || b.contains(':')
+            && b
+                .split_whitespace()
+                .any(|w| w.len() == 5 && w.chars().nth(2) == Some(':'))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::web_search::SearchResult;
 
     #[test]
     fn junk_placeholder_is_skipped() {
@@ -251,7 +619,16 @@ mod tests {
     }
 
     #[test]
-    fn theatre_gets_theatre_copy_and_icon() {
+    fn parses_event_json_array() {
+        let raw = r#"Here you go:
+        [{"title":"Jazz Night","body":"Sat 14 Jun, 20:30 — live quartet at Blue Note"}]"#;
+        let cards = parse_event_cards(raw).unwrap();
+        assert_eq!(cards.len(), 1);
+        assert!(cards[0].body.contains("20:30"));
+    }
+
+    #[test]
+    fn theatre_gets_theatre_icon() {
         let tags = OverpassTags {
             name: Some("Teatro Manzoni".into()),
             tourism: None,
@@ -259,12 +636,15 @@ mod tests {
             historic: None,
             description: None,
             addr_street: Some("Via Alessandro Manzoni".into()),
-            opening_hours: None,
+            opening_hours: Some("Tu-Su 10:00-19:00".into()),
         };
-        let (body, icon) = place_card_copy(&tags, "Milan", "Teatro Manzoni");
-        assert_eq!(icon, "place-theatre");
-        assert!(body.contains("Performing arts"));
-        assert!(!body.contains("Worth a visit"));
+        let draft = PlaceDraft {
+            name: "Teatro Manzoni".into(),
+            tags,
+        };
+        let card = draft_to_card(&draft, "Milan");
+        assert_eq!(card.icon, "place-theatre");
+        assert!(card.body.contains("10:00"));
     }
 }
 

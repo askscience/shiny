@@ -2,13 +2,19 @@
   /* Core palette — deep noir with violet undertone */
   --bg: #08090d;
   --bg-elevated: #0f1117;
-  --surface: rgba(15, 17, 24, 0.72);
-  --surface-strong: rgba(18, 20, 28, 0.92);
-  --glass: rgba(255, 255, 255, 0.04);
-  --glass-strong: rgba(255, 255, 255, 0.08);
+  --surface: rgba(15, 17, 24, 0.84);
+  --surface-strong: rgba(18, 20, 28, 0.94);
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-strong: rgba(255, 255, 255, 0.09);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.06);
   --glass-hover: rgba(255, 255, 255, 0.1);
+
+  /* Frosted glass — lighter blur + higher opacity = same look, less GPU work */
+  --glass-blur: 10px;
+  --glass-blur-panel: 12px;
+  --glass-blur-light: 6px;
+  --glass-saturate: 1.12;
 
   /* Text */
   --text: #f8f9fb;
@@ -67,8 +73,8 @@
 [data-theme="light"] {
   --bg: #f4f5f7;
   --bg-elevated: #ffffff;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-strong: rgba(255, 255, 255, 0.94);
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-strong: rgba(255, 255, 255, 0.96);
   --glass: rgba(255, 255, 255, 0.65);
   --glass-strong: rgba(255, 255, 255, 0.88);
   --glass-border: rgba(15, 23, 42, 0.08);

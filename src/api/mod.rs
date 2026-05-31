@@ -75,7 +75,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chat", post(chat::send_message))
         .route("/api/chat/history", get(chat::history))
         .route("/api/search", post(search::search_web))
-        .route("/api/agent", post(agent::handle_agent))
+        .route("/api/agent", post(agent::handle_agent_dispatch))
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))

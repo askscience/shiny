@@ -9,8 +9,8 @@
   justify-content: center;
   padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background: rgba(8, 9, 13, 0.82);
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   transition: opacity var(--duration-normal) var(--ease-out);
   animation: overlayIn var(--duration-slow) var(--ease-out) both;
 }
@@ -40,8 +40,8 @@
   width: min(420px, 100%);
   text-align: center;
   box-shadow: var(--shadow-float);
-  backdrop-filter: blur(32px) saturate(1.5);
-  -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
   animation: cardIn var(--duration-slow) var(--ease-out) 0.08s both;
   overflow: hidden;
 }

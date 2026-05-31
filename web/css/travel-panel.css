@@ -11,8 +11,8 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--duration-slow) var(--ease-out);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
 }
 
 #travel-panel-backdrop.visible {
@@ -32,10 +32,11 @@
   flex-direction: column;
   background: var(--surface-strong);
   border-right: 1px solid var(--glass-border);
-  backdrop-filter: blur(32px) saturate(1.5);
-  -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
   transform: translateX(-105%);
   opacity: 0;
+  contain: layout style paint;
   transition:
     transform var(--duration-slow) var(--ease-out),
     opacity var(--duration-normal) var(--ease-out);
@@ -103,8 +104,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
   transition:
     background var(--duration-fast),
     color var(--duration-fast),
