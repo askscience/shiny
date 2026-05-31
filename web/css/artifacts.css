@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 10px;
   background: var(--surface);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
@@ -15,6 +15,10 @@
   max-width: min(calc(100vw - 32px), 340px);
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+#artifact-dock-icons {
+  display: contents;
 }
 
 #artifact-dock::-webkit-scrollbar { display: none; }

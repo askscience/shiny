@@ -1,18 +1,36 @@
-import { apiFetch, getVoiceLang, setVoiceLang } from './api.js';
+import { apiFetch, getVoiceLang, setVoiceLang, getTraveler } from './api.js';
+import { logout } from './auth.js';
 import { changeLanguage } from './voice.js';
-import { applyAccent, getStoredAccent, DEFAULT_ACCENT } from './accent.js';
+import { applyAccent, getStoredAccent } from './accent.js';
 import { getAiName, setAiName, setAccent } from './preferences.js';
+import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 
 const panel = document.getElementById('settings-panel');
 const select = document.getElementById('lang-select');
 const openBtn = document.getElementById('settings-btn');
 const closeBtn = document.getElementById('settings-close');
+const logoutBtn = document.getElementById('settings-logout');
 const accentPicker = document.getElementById('accent-picker');
 const aiNameInput = document.getElementById('ai-name-input');
 const aiNameHint = document.getElementById('ai-name-hint');
+const profileNameInput = document.getElementById('profile-name-input');
+const profileAvatarInput = document.getElementById('profile-avatar-input');
+const profileAvatarPreview = document.getElementById('profile-avatar-preview');
+
+let pendingAvatar = undefined;
 
 function updateAiNameHint() {
   if (aiNameHint) aiNameHint.textContent = getAiName();
+}
+
+function loadProfileFields() {
+  const traveler = getTraveler();
+  if (profileNameInput) profileNameInput.value = traveler?.name || '';
+  pendingAvatar = undefined;
+  renderAvatarEl(profileAvatarPreview, {
+    name: traveler?.name || traveler?.username || '',
+    avatar: traveler?.avatar || null,
+  });
 }
 
 export async function initSettings() {
@@ -48,11 +66,34 @@ export async function initSettings() {
     });
   }
 
+  profileAvatarInput?.addEventListener('change', async () => {
+    const file = profileAvatarInput.files?.[0];
+    if (!file) return;
+    try {
+      pendingAvatar = await readAvatarFile(file);
+      renderAvatarEl(profileAvatarPreview, {
+        name: profileNameInput?.value || getTraveler()?.name || '',
+        avatar: pendingAvatar,
+      });
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: e.message, type: 'error' },
+      }));
+      profileAvatarInput.value = '';
+    }
+  });
+
   openBtn?.addEventListener('click', () => {
     if (accentPicker) accentPicker.value = getStoredAccent();
     if (aiNameInput) aiNameInput.value = getAiName();
     updateAiNameHint();
+    loadProfileFields();
     panel?.classList.remove('hidden');
+  });
+
+  logoutBtn?.addEventListener('click', () => {
+    panel?.classList.add('hidden');
+    logout();
   });
 
   closeBtn?.addEventListener('click', async () => {
@@ -63,6 +104,31 @@ export async function initSettings() {
     }
     setAiName(aiNameInput?.value || '');
     updateAiNameHint();
+
+    const name = profileNameInput?.value.trim();
+    const traveler = getTraveler();
+    const body = {};
+    if (name && name !== traveler?.name) body.name = name;
+    if (pendingAvatar !== undefined) body.avatar = pendingAvatar;
+
+    if (Object.keys(body).length) {
+      try {
+        const res = await apiFetch('/api/travelers/me', {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        });
+        if (res?.data) {
+          localStorage.setItem('traveler', JSON.stringify(res.data));
+          saveKnownUser(res.data);
+        }
+      } catch (e) {
+        window.dispatchEvent(new CustomEvent('app:toast', {
+          detail: { message: e.message || 'Could not save profile', type: 'error' },
+        }));
+      }
+    }
+
+    pendingAvatar = undefined;
     panel?.classList.add('hidden');
   });
 

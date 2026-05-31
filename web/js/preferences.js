@@ -1,7 +1,7 @@
 import { DEFAULT_ACCENT } from './accent.js';
 
 const AI_NAME_KEY = 'ai.name';
-const DEFAULT_AI_NAME = 'Atlas';
+const DEFAULT_AI_NAME = 'Shiny';
 
 export function getAiName() {
   return localStorage.getItem(AI_NAME_KEY) || DEFAULT_AI_NAME;

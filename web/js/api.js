@@ -60,13 +60,20 @@ export async function apiFetch(path, options = {}) {
     return res.blob();
   }
 
-  const data = await res.json().catch(() => null);
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+
   if (res.status === 401) {
     if (options.authRedirect !== false) handleUnauthorized();
     throw new ApiError(data?.error || 'Unauthorized', 401);
   }
   if (!res.ok) {
-    throw new ApiError(data?.error || res.statusText, res.status);
+    throw new ApiError(data?.error || text || res.statusText, res.status);
   }
   return data;
 }
@@ -74,7 +81,10 @@ export async function apiFetch(path, options = {}) {
 export async function validateSession() {
   if (!getToken()) return false;
   try {
-    await apiFetch('/api/travelers/me', { authRedirect: false });
+    const res = await apiFetch('/api/travelers/me', { authRedirect: false });
+    if (res?.data) {
+      localStorage.setItem('traveler', JSON.stringify(res.data));
+    }
     return true;
   } catch (e) {
     if (e.status === 401) {

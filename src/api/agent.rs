@@ -111,7 +111,7 @@ pub async fn handle_agent(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or("Atlas")
+        .unwrap_or("Shiny")
         .to_string();
     let user_first = first_name(&traveler.name);
 

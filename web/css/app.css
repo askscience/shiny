@@ -90,44 +90,6 @@ body.nav-active #map-vignette {
     linear-gradient(to bottom, rgba(8, 9, 13, 0.25) 0%, transparent 18%, transparent 76%, rgba(8, 9, 13, 0.4) 100%);
 }
 
-body.nav-active #map-vignette {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: var(--surface);
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  box-shadow: var(--shadow-glass);
-  min-width: 0;
-  flex: 1;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.dot.on {
-  background: var(--accent-live);
-  box-shadow: 0 0 10px var(--accent-live);
-  animation: dotPulse 2s ease-in-out infinite;
-}
-.dot.off { background: var(--muted); }
-
-#trip-name {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-}
-
 .icon-btn {
   display: flex;
   align-items: center;

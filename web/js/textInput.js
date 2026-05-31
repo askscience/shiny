@@ -1,48 +1,66 @@
 import { setSphereState } from './sphere.js';
+import { getDockSummaries } from './artifactStore.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
-const closeBtn = document.getElementById('compose-close');
 const replyEl = document.getElementById('compose-reply');
 const thinkingEl = document.getElementById('compose-thinking');
-const inputWrap = document.querySelector('.compose-input-wrap');
+const dock = document.getElementById('artifact-dock');
+const dockIcons = document.getElementById('artifact-dock-icons');
+const dockInput = document.getElementById('compose-dock-input');
 
 let onSubmitCallback = null;
 let isOpen = false;
 let isSending = false;
+let ignoreOutsideClick = false;
 
-function updateComposeLayout() {
-  if (!inputWrap) return;
-  const h = inputWrap.classList.contains('hidden') ? 0 : inputWrap.offsetHeight;
-  document.documentElement.style.setProperty('--compose-input-height', `${h}px`);
+function isInsideComposeInput(target) {
+  if (!target) return false;
+  if (target.closest('#text-input-field, #compose-dock-input')) return true;
+  if (!document.body.classList.contains('compose-awaiting') && target.closest('#artifact-dock')) {
+    return true;
+  }
+  return false;
+}
+
+function isInsideComposeContent(target) {
+  return isInsideComposeInput(target) || !!target?.closest('.compose-stream');
 }
 
 function setAwaiting(on) {
   document.body.classList.toggle('compose-awaiting', on);
-  requestAnimationFrame(updateComposeLayout);
 }
 
 function showComposeInput() {
-  inputWrap?.classList.remove('hidden');
+  dock?.classList.remove('hidden');
+  dockIcons?.classList.add('hidden');
+  dockInput?.classList.remove('hidden');
+  dockInput?.setAttribute('aria-hidden', 'false');
   setAwaiting(false);
-  updateComposeLayout();
+  requestAnimationFrame(() => field?.focus());
 }
 
 function hideComposeInput() {
-  inputWrap?.classList.add('hidden');
+  dockInput?.classList.add('hidden');
+  dockInput?.setAttribute('aria-hidden', 'true');
   field?.blur();
   setAwaiting(true);
-  updateComposeLayout();
+}
+
+function restoreDock() {
+  dockInput?.classList.add('hidden');
+  dockInput?.setAttribute('aria-hidden', 'true');
+  dockIcons?.classList.remove('hidden');
+  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
 }
 
 export function initTextInput(onSubmit) {
   onSubmitCallback = onSubmit;
 
-  closeBtn?.addEventListener('click', closeTextInput);
-
   field?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      e.stopPropagation();
       submitTextInput();
     }
     if (e.key === 'Escape') {
@@ -64,7 +82,10 @@ export function initTextInput(onSubmit) {
     if (e.key === 'Escape' && isOpen && !isSending) closeTextInput();
   });
 
-  window.addEventListener('resize', updateComposeLayout);
+  document.addEventListener('pointerdown', (e) => {
+    if (!isOpen || ignoreOutsideClick || isInsideComposeContent(e.target)) return;
+    closeTextInput();
+  });
 }
 
 export function openTextInput() {
@@ -80,10 +101,13 @@ export function openTextInput() {
   showComposeInput();
   autoResizeField();
   setSphereState('idle');
+  ignoreOutsideClick = true;
   requestAnimationFrame(() => {
     compose.classList.add('visible');
-    updateComposeLayout();
     field.focus();
+    requestAnimationFrame(() => {
+      ignoreOutsideClick = false;
+    });
   });
 }
 
@@ -95,8 +119,7 @@ export function closeTextInput() {
   compose.classList.remove('visible');
   compose.setAttribute('aria-hidden', 'true');
   field.blur();
-  showComposeInput();
-  document.documentElement.style.removeProperty('--compose-input-height');
+  restoreDock();
   setSphereState('idle');
   setTimeout(() => {
     if (!isOpen) compose.classList.add('hidden');
@@ -113,7 +136,10 @@ export function setComposeThinking(on) {
 }
 
 export function streamComposeReply(text) {
-  if (replyEl) replyEl.textContent = text;
+  if (replyEl) {
+    replyEl.classList.remove('is-waiting');
+    replyEl.textContent = text;
+  }
   scrollStreamToEnd();
   if (isOpen && isSending) setSphereState('processing');
 }
@@ -123,11 +149,25 @@ export function clearComposeReply() {
 }
 
 function clearReply() {
-  if (replyEl) replyEl.textContent = '';
+  if (replyEl) {
+    replyEl.textContent = '';
+    replyEl.classList.remove('is-waiting');
+  }
+}
+
+function setWaitingReply(on) {
+  if (!replyEl) return;
+  if (on) {
+    replyEl.textContent = 'Thinking…';
+    replyEl.classList.add('is-waiting');
+  } else {
+    replyEl.classList.remove('is-waiting');
+  }
 }
 
 function setThinking(on) {
-  thinkingEl?.classList.toggle('hidden', !on);
+  thinkingEl?.classList.add('hidden');
+  if (on) setWaitingReply(true);
 }
 
 function scrollStreamToEnd() {
@@ -137,9 +177,9 @@ function scrollStreamToEnd() {
 
 function autoResizeField() {
   if (!field) return;
-  field.style.height = 'auto';
-  field.style.height = `${Math.min(field.scrollHeight, window.innerHeight * 0.22)}px`;
-  updateComposeLayout();
+  field.style.height = '38px';
+  const next = Math.max(38, Math.min(field.scrollHeight, 80));
+  field.style.height = `${next}px`;
 }
 
 async function submitTextInput() {
@@ -151,6 +191,7 @@ async function submitTextInput() {
   setThinking(true);
   hideComposeInput();
   setSphereState('processing');
+  scrollStreamToEnd();
 
   try {
     await onSubmitCallback?.(text, {

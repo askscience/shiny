@@ -11,7 +11,6 @@ import { startGpsTracking, refreshActiveTrip } from './gps.js';
 import { initTheme } from './theme.js';
 import { initAccent } from './accent.js';
 import { initSettings } from './settings.js';
-import { initTrips } from './trips.js';
 import { loadArtifacts } from './artifactStore.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
@@ -65,7 +64,6 @@ async function boot() {
   initNavigator();
   initInsightCards();
   initSettings();
-  initTrips();
   initTextInput(submitTextToAgent);
   startGpsTracking();
   wireSphere();

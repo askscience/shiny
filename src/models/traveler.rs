@@ -11,10 +11,13 @@ pub struct Traveler {
     pub auth_token: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    pub username: Option<String>,
+    pub avatar: Option<String>,
 }
 
 impl Traveler {
-    pub fn new(name: String, email: String, password_hash: String) -> Self {
+    pub fn new(name: String, username: String, password_hash: String) -> Self {
+        let email = format!("{username}@shiny.local");
         Self {
             id: Uuid::new_v4().to_string(),
             name,
@@ -23,6 +26,8 @@ impl Traveler {
             auth_token: None,
             created_at: None,
             updated_at: None,
+            username: Some(username),
+            avatar: None,
         }
     }
 
@@ -30,7 +35,8 @@ impl Traveler {
         TravelerPublic {
             id: self.id.clone(),
             name: self.name.clone(),
-            email: self.email.clone(),
+            username: self.username.clone().unwrap_or_default(),
+            avatar: self.avatar.clone(),
             created_at: self.created_at.clone(),
         }
     }
@@ -40,20 +46,23 @@ impl Traveler {
 pub struct TravelerPublic {
     pub id: String,
     pub name: String,
-    pub email: String,
+    pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
     pub created_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
-    pub name: String,
-    pub email: String,
+    pub username: String,
     pub password: String,
+    #[serde(default)]
+    pub avatar: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
-    pub email: String,
+    pub username: String,
     pub password: String,
 }
 
@@ -66,5 +75,6 @@ pub struct AuthResponse {
 #[derive(Debug, Deserialize)]
 pub struct UpdateTravelerRequest {
     pub name: Option<String>,
-    pub email: Option<String>,
+    pub username: Option<String>,
+    pub avatar: Option<String>,
 }

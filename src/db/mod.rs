@@ -32,6 +32,19 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
     sqlx::raw_sql(migration).execute(pool).await?;
     let migration2 = include_str!("../../migrations/002_artifacts.sql");
     sqlx::raw_sql(migration2).execute(pool).await?;
+
+    let has_username: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('travelers') WHERE name = 'username'",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    if has_username == 0 {
+        let migration3 = include_str!("../../migrations/003_username_avatar.sql");
+        sqlx::raw_sql(migration3).execute(pool).await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

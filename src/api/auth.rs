@@ -1,6 +1,6 @@
 use axum::extract::State;
 use axum::Json;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::api::AppState;
@@ -13,45 +13,84 @@ fn hash_password(password: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+fn normalize_username(username: &str) -> String {
+    username.trim().to_lowercase()
+}
+
+fn validate_username(username: &str) -> Result<(), AppError> {
+    if username.len() < 2 {
+        return Err(AppError::BadRequest("Username must be at least 2 characters".into()));
+    }
+    if username.len() > 32 {
+        return Err(AppError::BadRequest("Username must be 32 characters or fewer".into()));
+    }
+    if !username
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(AppError::BadRequest(
+            "Username may only contain letters, numbers, underscores, and hyphens".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_avatar(avatar: &Option<String>) -> Result<(), AppError> {
+    if let Some(data) = avatar {
+        if data.len() > 512_000 {
+            return Err(AppError::BadRequest("Profile picture is too large".into()));
+        }
+        if !data.starts_with("data:image/") {
+            return Err(AppError::BadRequest("Invalid profile picture format".into()));
+        }
+    }
+    Ok(())
+}
+
 pub async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
+    let username = normalize_username(&req.username);
+    validate_username(&username)?;
+    validate_avatar(&req.avatar)?;
+
     let existing = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM travelers WHERE email = ?1",
+        "SELECT COUNT(*) FROM travelers WHERE username = ?1",
     )
-    .bind(&req.email)
+    .bind(&username)
     .fetch_one(&state.pool)
     .await
     .map_err(AppError::Database)?;
 
     if existing > 0 {
-        return Err(AppError::BadRequest("Email already registered".into()));
+        return Err(AppError::BadRequest("Username already taken".into()));
     }
 
     let token = Uuid::new_v4().to_string();
-    let traveler = Traveler::new(
-        req.name,
-        req.email,
-        hash_password(&req.password),
-    );
+    let traveler = Traveler::new(username.clone(), username.clone(), hash_password(&req.password));
 
     sqlx::query(
-        "INSERT INTO travelers (id, name, email, password_hash, auth_token, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
+        "INSERT INTO travelers (id, name, email, password_hash, auth_token, username, avatar, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'), datetime('now'))",
     )
     .bind(&traveler.id)
     .bind(&traveler.name)
     .bind(&traveler.email)
     .bind(&traveler.password_hash)
     .bind(&token)
+    .bind(&username)
+    .bind(&req.avatar)
     .execute(&state.pool)
     .await
     .map_err(AppError::Database)?;
 
+    let mut public = traveler.to_public();
+    public.avatar = req.avatar;
+
     Ok(Json(AuthResponse {
         token,
-        traveler: traveler.to_public(),
+        traveler: public,
     }))
 }
 
@@ -59,17 +98,19 @@ pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
+    let username = normalize_username(&req.username);
+
     let traveler = sqlx::query_as::<_, Traveler>(
-        "SELECT * FROM travelers WHERE email = ?1",
+        "SELECT * FROM travelers WHERE username = ?1",
     )
-    .bind(&req.email)
+    .bind(&username)
     .fetch_optional(&state.pool)
     .await
     .map_err(AppError::Database)?
-    .ok_or_else(|| AppError::Unauthorized("Invalid email or password".into()))?;
+    .ok_or_else(|| AppError::Unauthorized("Invalid username or password".into()))?;
 
     if traveler.password_hash != hash_password(&req.password) {
-        return Err(AppError::Unauthorized("Invalid email or password".into()));
+        return Err(AppError::Unauthorized("Invalid username or password".into()));
     }
 
     let token = Uuid::new_v4().to_string();

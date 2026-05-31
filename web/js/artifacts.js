@@ -14,6 +14,7 @@ import { loadContextInsights } from './insights/insightCards.js';
 const panel = document.getElementById('travel-panel');
 const backdrop = document.getElementById('travel-panel-backdrop');
 const dock = document.getElementById('artifact-dock');
+const dockIcons = document.getElementById('artifact-dock-icons');
 let currentArtifact = null;
 let activeArtifactId = null;
 
@@ -378,6 +379,7 @@ export function renderArtifact(artifact, { focus = true } = {}) {
 async function handleNavigate(artifact) {
   const result = await navigateToDestination(artifact);
   if (result?.ok) {
+    closePanel();
     const msg = result.mode === 'direct'
       ? 'Straight line from your location — full driving route could not be loaded'
       : 'Driving route from your location — pinch or drag the map to explore';
@@ -446,16 +448,22 @@ export async function openSavedArtifact(id) {
 }
 
 export function renderArtifactDock(artifacts) {
-  if (!dock) return;
-  dock.innerHTML = '';
+  if (!dock || !dockIcons) return;
+  dockIcons.innerHTML = '';
 
   const list = artifacts || [];
-  if (!list.length) {
+  const composeOpen = document.body.classList.contains('compose-active');
+
+  if (!list.length && !composeOpen) {
     dock.classList.add('hidden');
     return;
   }
 
-  dock.classList.remove('hidden');
+  if (!composeOpen) {
+    dock.classList.remove('hidden');
+  }
+
+  if (!list.length) return;
   const visible = list.slice(0, MAX_VISIBLE);
   const overflow = list.length - visible.length;
 
@@ -477,7 +485,7 @@ export function renderArtifactDock(artifacts) {
     btn.appendChild(img);
 
     btn.addEventListener('click', () => openSavedArtifact(item.id));
-    dock.appendChild(btn);
+    dockIcons.appendChild(btn);
   });
 
   if (overflow > 0) {
@@ -488,7 +496,7 @@ export function renderArtifactDock(artifacts) {
     more.addEventListener('click', () => {
       openSavedArtifact(list[MAX_VISIBLE].id);
     });
-    dock.appendChild(more);
+    dockIcons.appendChild(more);
   }
 }
 

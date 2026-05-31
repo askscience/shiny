@@ -504,7 +504,7 @@ export async function drawRoute(toLat, toLon, { navigate = false, artifactRef = 
   const dest = { lat: toLat, lon: toLon };
   const route = await fetchRouteData(currentPos.lat, currentPos.lon, toLat, toLon, 'car');
   if (route?.geometry?.length > 1) {
-    return drawRouteGeometry(route.geometry, { navigate, fit: navigate, dest });
+    return drawRouteGeometry(route.geometry, { navigate, fit: true, dest });
   }
 
   if (artifactRef) {
@@ -535,7 +535,7 @@ function drawDirectPath(dest) {
     [currentPos.lat, currentPos.lon],
     [dest.lat, dest.lon],
   ];
-  return drawRouteGeometry(points, { navigate: true, dest, dashed: true });
+  return drawRouteGeometry(points, { fit: true, dest, dashed: true });
 }
 
 export async function navigateToDestination(artifact) {
@@ -551,7 +551,7 @@ export async function navigateToDestination(artifact) {
   await refreshGpsPosition();
   showDestinationMarker(dest);
 
-  const live = await drawRoute(dest.lat, dest.lon, { navigate: true, artifactRef: artifact });
+  const live = await drawRoute(dest.lat, dest.lon, { artifactRef: artifact });
   if (live) return { ok: true, mode: 'driving' };
 
   const direct = drawDirectPath(dest);

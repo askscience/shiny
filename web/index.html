@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#08090d">
-  <title>Atlas — Travel Navigator</title>
+  <title>Shiny — Travel Navigator</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/auth.css">
@@ -22,7 +22,7 @@
 
   <!-- Login overlay -->
   <div id="login-overlay" class="overlay hidden">
-    <div class="overlay-card">
+    <div class="overlay-card login-card">
       <div class="brand-mark">
         <div class="brand-logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -31,16 +31,38 @@
             <path d="M3 12h18"/>
           </svg>
         </div>
-        <h1>Atlas</h1>
+        <h1>Shiny</h1>
       </div>
       <p class="brand-tagline">Your map-first AI travel companion — explore, navigate, discover.</p>
-      <div id="login-form">
-        <input type="email" id="login-email" placeholder="Email address" autocomplete="email">
-        <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
-        <input type="text" id="register-name" placeholder="Full name" class="hidden">
-        <button id="login-btn" class="btn-primary">Sign In</button>
-        <button id="register-btn" class="btn-secondary">Create Account</button>
+
+      <div id="login-step-pick">
+        <p class="login-step-label">Who&rsquo;s traveling?</p>
+        <div id="profile-picker" class="profile-picker" role="list" aria-label="Saved profiles"></div>
       </div>
+
+      <div id="login-step-password" class="hidden">
+        <button type="button" id="login-back-pick" class="login-back">← Back</button>
+        <div class="profile-selected">
+          <div id="login-selected-avatar" class="profile-avatar"></div>
+          <span id="login-selected-name" class="profile-selected-name"></span>
+        </div>
+        <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+        <button id="login-btn" class="btn-primary">Sign In</button>
+      </div>
+
+      <div id="login-step-register" class="hidden">
+        <button type="button" id="login-back-from-register" class="login-back">← Back</button>
+        <p class="login-step-label">Create your profile</p>
+        <label class="profile-avatar-upload">
+          <input type="file" id="register-avatar" accept="image/*" hidden>
+          <div id="register-avatar-preview" class="profile-avatar profile-avatar--placeholder profile-avatar--large">+</div>
+          <span class="profile-avatar-label">Add photo</span>
+        </label>
+        <input type="text" id="register-username" placeholder="Username" autocomplete="username" autocapitalize="off">
+        <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+        <button id="register-btn" class="btn-primary">Create Account</button>
+      </div>
+
       <p id="login-error" class="error-text hidden"></p>
     </div>
   </div>
@@ -82,13 +104,6 @@
             <path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>
           </svg>
         </button>
-        <button type="button" id="trips-btn" class="icon-btn" title="Trips" aria-label="Your trips">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 8h12l-1.5 12H7.5L6 8z"/>
-            <path d="M9 8V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            <path d="M10 13h4M10 17h4"/>
-          </svg>
-        </button>
         <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
@@ -120,17 +135,18 @@
       <button type="button" id="sphere-container" aria-label="Voice assistant">
         <canvas id="orb-canvas" aria-hidden="true"></canvas>
       </button>
-      <div id="artifact-dock" class="hidden" aria-label="Saved cards"></div>
+      <div id="artifact-dock" class="hidden" aria-label="Saved cards">
+        <div id="artifact-dock-icons"></div>
+        <div id="compose-dock-input" class="compose-dock-input hidden" aria-hidden="true">
+          <textarea id="text-input-field" class="compose-dock-field" rows="1" placeholder="Ask anything…" autocomplete="off" enterkeyhint="send"></textarea>
+        </div>
+      </div>
     </div>
 
     <div id="compose-mode" class="compose-mode hidden" aria-hidden="true">
-      <button type="button" id="compose-close" class="compose-close">Done</button>
       <div class="compose-stream">
         <div id="compose-reply" class="compose-reply"></div>
         <div id="compose-thinking" class="compose-thinking hidden">Thinking</div>
-      </div>
-      <div class="compose-input-wrap">
-        <textarea id="text-input-field" class="compose-field" rows="1" placeholder="Ask anything…" autocomplete="off" enterkeyhint="send"></textarea>
       </div>
     </div>
 
@@ -147,6 +163,16 @@
     <div class="overlay-card">
       <h2>Settings</h2>
       <div class="settings-section">
+        <h3>Profile</h3>
+        <label class="profile-avatar-upload settings-avatar-upload">
+          <input type="file" id="profile-avatar-input" accept="image/*" hidden>
+          <div id="profile-avatar-preview" class="profile-avatar profile-avatar--large"></div>
+          <span class="profile-avatar-label">Change photo</span>
+        </label>
+        <label for="profile-name-input">Display name</label>
+        <input type="text" id="profile-name-input" maxlength="64" autocomplete="name">
+      </div>
+      <div class="settings-section">
         <h3>Appearance</h3>
         <label for="accent-picker">Accent color</label>
         <input type="color" id="accent-picker" value="#4a7fd4">
@@ -154,24 +180,16 @@
       <div class="settings-section">
         <h3>Assistant</h3>
         <label for="ai-name-input">Assistant name</label>
-        <input type="text" id="ai-name-input" placeholder="Atlas" maxlength="32" autocomplete="off">
-        <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Atlas</span>&rdquo; to activate voice on long press.</p>
+        <input type="text" id="ai-name-input" placeholder="Shiny" maxlength="32" autocomplete="off">
+        <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Shiny</span>&rdquo; to activate voice on long press.</p>
       </div>
       <div class="settings-section">
         <h3>Voice</h3>
         <label for="lang-select">Language</label>
         <select id="lang-select"></select>
       </div>
+      <button id="settings-logout" class="btn-secondary settings-logout" type="button">Log Out</button>
       <button id="settings-close" class="btn-primary">Done</button>
-    </div>
-  </div>
-
-  <!-- Trips panel -->
-  <div id="trips-panel" class="overlay hidden">
-    <div class="overlay-card">
-      <h2>Your Trips</h2>
-      <ul id="trips-list" class="trips-list"></ul>
-      <button id="trips-close" class="btn-primary">Done</button>
     </div>
   </div>
 
