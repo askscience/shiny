@@ -23,6 +23,9 @@ let gpsAccurate = false;
 
 const NAV_ZOOM = 18;
 const NAV_PUCK_FRAC = 0.62;
+const NAV_ZOOM_MIN = 13;
+const NAV_ZOOM_STOP = 17.5;
+let displayNavZoom = NAV_ZOOM_STOP;
 
 export function initMap() {
   map = L.map('map', {
@@ -125,7 +128,8 @@ export function setNavigatorFollow(on, routeGeometry = null) {
     lastMapPan = { lat: null, lon: null };
     bearingInitialized = false;
     displayBearing = currentHeading || 0;
-    map.setZoom(NAV_ZOOM);
+    displayNavZoom = NAV_ZOOM_STOP;
+    map.setZoom(displayNavZoom);
     updateNavigatorCamera({
       lat: currentPos.lat,
       lon: currentPos.lon,
@@ -202,6 +206,23 @@ function navMapScale(bearing) {
   return Math.max(1.4, corner * 1.08);
 }
 
+/** Google Maps–style: closer when slow, wider when fast. speed in m/s. */
+function targetZoomForSpeed(speedMs) {
+  const kmh = Math.max(0, (speedMs ?? 0) * 3.6);
+  if (kmh < 4) return NAV_ZOOM_STOP;
+  if (kmh < 20) return 17;
+  if (kmh < 40) return 16;
+  if (kmh < 65) return 15;
+  if (kmh < 90) return 14;
+  return NAV_ZOOM_MIN;
+}
+
+function smoothNavZoom(target) {
+  if (!Number.isFinite(target)) return displayNavZoom;
+  displayNavZoom += (target - displayNavZoom) * 0.1;
+  return displayNavZoom;
+}
+
 function setMapBearing(bearing) {
   const stage = getMapStage();
   if (!stage) return;
@@ -218,13 +239,21 @@ function clearMapBearing() {
   stage.style.transformOrigin = '';
 }
 
-function centerMapOnNavPuck(lat, lon) {
-  map.setView([lat, lon], map.getZoom(), { animate: false });
+function centerMapOnNavPuck(lat, lon, zoom) {
+  const z = zoom ?? map.getZoom();
+  map.setView([lat, lon], z, { animate: false });
   map.panBy([0, -puckOffsetPx()], { animate: false });
 }
 
-/** Heading-up camera: center GPS under puck, then rotate map stage. */
-export function updateNavigatorCamera({ lat, lon, heading, routeGeometry, routeIdx = 0 }) {
+/** Heading-up camera: center GPS under puck, rotate map, zoom by speed. */
+export function updateNavigatorCamera({
+  lat,
+  lon,
+  heading,
+  routeGeometry,
+  routeIdx = 0,
+  speed = null,
+}) {
   if (!navigatorFollow || !map) return;
 
   const geom = routeGeometry || navRouteGeometry;
@@ -236,11 +265,16 @@ export function updateNavigatorCamera({ lat, lon, heading, routeGeometry, routeI
     targetBearing = bearingBetween(lastMapPan.lat, lastMapPan.lon, lat, lon);
   }
 
+  const zoom = smoothNavZoom(targetZoomForSpeed(speed ?? 0));
+
   const moved = lastMapPan.lat == null
     || metersBetween(lastMapPan.lat, lastMapPan.lon, lat, lon) >= 0.3;
   if (moved) {
     lastMapPan = { lat, lon };
-    centerMapOnNavPuck(lat, lon);
+    centerMapOnNavPuck(lat, lon, zoom);
+  } else if (Math.abs(map.getZoom() - zoom) > 0.04) {
+    map.setZoom(zoom, { animate: false });
+    map.panBy([0, -puckOffsetPx()], { animate: false });
   }
 
   if (targetBearing != null) {

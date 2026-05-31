@@ -77,7 +77,29 @@ body.navigator-active #map-stage {
   line-height: 1.35;
   color: var(--text);
   padding-right: 36px;
+  margin-bottom: 8px;
+}
+
+.nav-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 6px;
+}
+
+.nav-stat {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-mint);
+  font-variant-numeric: tabular-nums;
+}
+
+#nav-heading {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 #nav-meta {
