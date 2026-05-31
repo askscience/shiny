@@ -140,6 +140,11 @@ export function getActiveTripId() {
   return activeTripId;
 }
 
+export function resetActiveTrip() {
+  activeTripId = null;
+  lastSubmit = 0;
+}
+
 export function stopGpsTracking() {
   if (watchId != null) {
     navigator.geolocation.clearWatch(watchId);

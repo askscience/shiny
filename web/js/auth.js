@@ -5,6 +5,7 @@ import {
   renderAvatarEl,
   readAvatarFile,
 } from './userProfiles.js';
+import { resetUserSession } from './session.js';
 
 const overlay = document.getElementById('login-overlay');
 const appEl = document.getElementById('app');
@@ -211,6 +212,7 @@ registerBtn?.addEventListener('click', async () => {
 });
 
 export function logout() {
+  resetUserSession();
   clearAuth();
   appEl?.classList.add('hidden');
   showLogin();
@@ -233,6 +235,7 @@ export async function requireAuth() {
 }
 
 window.addEventListener('auth:expired', () => {
+  resetUserSession();
   clearAuth();
   showLogin();
   window.dispatchEvent(new CustomEvent('app:toast', {

@@ -302,13 +302,9 @@ function setNavigationMode(active) {
     map.dragging.disable();
     map.touchZoom.disable();
     map.scrollWheelZoom.disable();
-  } else if (active) {
+  } else {
     map.dragging.enable();
     map.touchZoom.enable();
-    map.scrollWheelZoom.enable();
-  } else {
-    map.dragging.disable();
-    map.touchZoom.disable();
     map.scrollWheelZoom.disable();
   }
 }

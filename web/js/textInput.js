@@ -118,8 +118,8 @@ export function openTextInput() {
   });
 }
 
-export function closeTextInput() {
-  if (!compose || !isOpen || isSending) return;
+export function closeTextInput(force = false) {
+  if (!compose || !isOpen || (isSending && !force)) return;
   isOpen = false;
   isSending = false;
   document.body.classList.remove('compose-active', 'compose-awaiting');

@@ -1,6 +1,6 @@
 /** Siri-style fluid orb — canvas only, circular clip */
 
-import { DEFAULT_ACCENT } from './accent.js';
+import { DEFAULT_ACCENT, getStoredAccent } from './accent.js';
 
 const PALETTES_DARK = {
   idle: ['#4a7fd4', '#5eead4', '#a78bfa', '#6b9de8'],
@@ -271,7 +271,7 @@ function refreshAccentPalette() {
 export function initOrbCanvas(canvas) {
   if (renderer) renderer.destroy();
   themeMode = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-  accentColor = localStorage.getItem('ui.accent') || DEFAULT_ACCENT;
+  accentColor = getStoredAccent();
   renderer = new OrbRenderer(canvas);
   renderer.setTheme(themeMode);
   window.addEventListener('accent:change', (e) => {

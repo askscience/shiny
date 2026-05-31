@@ -2,6 +2,8 @@
  * Insight card state: in-memory cards + dismissed IDs per destination (localStorage).
  */
 
+import { getTraveler } from '../api.js';
+
 const STORAGE_KEY = 'insights.dismissed';
 const MAX_CARDS = 5;
 
@@ -11,16 +13,21 @@ let activeDestination = '';
 /** @type {InsightCard[]} */
 let cards = [];
 
+function storageKey() {
+  const id = getTraveler()?.id;
+  return id ? `${STORAGE_KEY}.${id}` : STORAGE_KEY;
+}
+
 function loadDismissedMap() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(storageKey()) || '{}');
   } catch {
     return {};
   }
 }
 
 function saveDismissedMap(map) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+  localStorage.setItem(storageKey(), JSON.stringify(map));
 }
 
 function dismissedForDestination(destKey) {

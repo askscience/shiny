@@ -1,22 +1,24 @@
 import { getVoiceLang, setVoiceLang } from './api.js';
 import { requireAuth } from './auth.js';
-import { initMap, getCurrentPosition, loadActiveRoute, refreshGpsPosition } from './map.js';
+import { initMap, getCurrentPosition } from './map.js';
 import {
   initSphere, setSphereState, onShortTap, onLongPressStart, onLongPressEnd,
   onDoubleTap, isConversationMode, setConversationMode, setMicLevel, resetMicLevel,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
 import { sendToAgent, sendToAgentCompose } from './agent.js';
-import { startGpsTracking, refreshActiveTrip } from './gps.js';
+import { startGpsTracking } from './gps.js';
 import { initTheme } from './theme.js';
 import { initAccent } from './accent.js';
 import { initSettings } from './settings.js';
-import { loadArtifacts } from './artifactStore.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudLeft } from './hudLeft.js';
 import { initNavigator } from './navigator.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
+import { reloadUserSession } from './session.js';
+
+let appInitialized = false;
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -48,16 +50,31 @@ async function boot() {
     showToast(e.detail.message, e.detail.type);
   });
 
-  if (!(await requireAuth())) {
-    window.addEventListener('auth:success', boot, { once: true });
+  window.addEventListener('auth:success', async () => {
+    document.getElementById('app')?.classList.remove('hidden');
+    if (appInitialized) {
+      await reloadUserSession();
+      return;
+    }
+    await initApp();
+  });
+
+  if (!(await requireAuth())) return;
+
+  document.getElementById('app').classList.remove('hidden');
+  await initApp();
+}
+
+async function initApp() {
+  if (appInitialized) {
+    await reloadUserSession();
     return;
   }
+  appInitialized = true;
 
   initTheme();
   initAccent();
-  document.getElementById('app').classList.remove('hidden');
   initMap();
-  await refreshGpsPosition();
   initSphere();
   initArtifactDock();
   initHudLeft();
@@ -68,14 +85,9 @@ async function boot() {
   startGpsTracking();
   wireSphere();
 
-  const trip = await refreshActiveTrip();
-  if (trip) await loadActiveRoute(trip.id);
-  setInterval(async () => {
-    const t = await refreshActiveTrip();
-    if (t) await loadActiveRoute(t.id);
-  }, 60000);
+  setInterval(() => reloadUserSession(), 60000);
 
-  await loadArtifacts();
+  await reloadUserSession();
 
   prepareVoice();
   wireVoiceResults();

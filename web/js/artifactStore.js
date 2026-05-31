@@ -1,8 +1,18 @@
-import { apiFetch } from './api.js';
+import { apiFetch, getTraveler } from './api.js';
 
 const cache = new Map();
 let summaries = [];
-let activeDestinationKey = localStorage.getItem('dock.destination') || '';
+
+function dockStorageKey() {
+  const id = getTraveler()?.id;
+  return id ? `dock.destination.${id}` : 'dock.destination';
+}
+
+function readActiveDestination() {
+  return localStorage.getItem(dockStorageKey()) || '';
+}
+
+let activeDestinationKey = readActiveDestination();
 
 export function normalizeDestinationKey(value) {
   if (!value) return '';
@@ -36,10 +46,11 @@ export function getActiveDestination() {
 
 export function setActiveDestination(key) {
   activeDestinationKey = normalizeDestinationKey(key);
+  const storageKey = dockStorageKey();
   if (activeDestinationKey) {
-    localStorage.setItem('dock.destination', activeDestinationKey);
+    localStorage.setItem(storageKey, activeDestinationKey);
   } else {
-    localStorage.removeItem('dock.destination');
+    localStorage.removeItem(storageKey);
   }
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
 }
@@ -49,7 +60,7 @@ export function applyDockDestinationGroup(destinationKey, artifactIds = []) {
   const key = normalizeDestinationKey(destinationKey);
   if (!key) return;
   activeDestinationKey = key;
-  localStorage.setItem('dock.destination', key);
+  localStorage.setItem(dockStorageKey(), key);
   const idSet = new Set(artifactIds);
   summaries = summaries.filter((s) => {
     if (idSet.has(s.id)) return true;
@@ -188,6 +199,7 @@ export function removeSummary(id) {
 }
 
 export async function loadArtifacts() {
+  activeDestinationKey = readActiveDestination();
   try {
     const res = await apiFetch('/api/artifacts');
     summaries = dedupeSummaries(res.data || []);
@@ -267,6 +279,14 @@ export async function upsertArtifact(artifact, tripId = null) {
     }
     return normalized;
   }
+}
+
+export function resetArtifactStore() {
+  cache.clear();
+  summaries = [];
+  activeDestinationKey = '';
+  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: [] }));
+  window.dispatchEvent(new CustomEvent('artifact:clear'));
 }
 
 export async function getArtifact(id) {

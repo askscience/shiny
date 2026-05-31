@@ -1,3 +1,5 @@
+import { getAccent } from './preferences.js';
+
 export const DEFAULT_ACCENT = '#4a7fd4';
 
 function hexToRgb(hex) {
@@ -28,7 +30,7 @@ export function applyAccent(hex) {
 }
 
 export function getStoredAccent() {
-  return localStorage.getItem('ui.accent') || DEFAULT_ACCENT;
+  return getAccent();
 }
 
 export function initAccent() {

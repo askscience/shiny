@@ -136,3 +136,11 @@ export async function initSettings() {
     if (e.target === panel) panel.classList.add('hidden');
   });
 }
+
+export function refreshSettingsUI() {
+  if (accentPicker) accentPicker.value = getStoredAccent();
+  if (aiNameInput) aiNameInput.value = getAiName();
+  updateAiNameHint();
+  loadProfileFields();
+  if (select) select.value = getVoiceLang();
+}
