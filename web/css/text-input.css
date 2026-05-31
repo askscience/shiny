@@ -12,8 +12,13 @@ body.compose-active.compose-awaiting {
   --compose-stack-height: calc(var(--compose-orb-size) + max(32px, env(safe-area-inset-bottom)) + 28px);
 }
 
-body.compose-active #artifact-dock-icons {
+/* Hide dock icons only while typing, not while awaiting AI */
+body.compose-active:not(.compose-awaiting) #artifact-dock-icons {
   display: none !important;
+}
+
+body.compose-active.compose-awaiting #artifact-dock-icons {
+  display: contents !important;
 }
 
 body.compose-active #artifact-dock {
@@ -29,19 +34,29 @@ body.compose-active.compose-awaiting #compose-dock-input {
   display: none !important;
 }
 
-body.compose-active #chrome-bottom {
+body.compose-active #chrome-bottom,
+body.agent-awaiting #chrome-bottom {
   z-index: 50;
 }
 
-body.compose-active #sphere-container {
+body.compose-active #sphere-container,
+body.agent-awaiting #sphere-container {
   pointer-events: none;
+}
+
+/* While awaiting AI, restore HUD so the map feels usable */
+body.compose-active.compose-awaiting #hud-header,
+body.compose-active.compose-awaiting #hud-saved-trips-mobile,
+body.compose-active.compose-awaiting #insight-cards {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 body.compose-active #travel-panel,
 body.compose-active #travel-panel-backdrop,
-body.compose-active #hud-header,
-body.compose-active #hud-saved-trips-mobile,
-body.compose-active #insight-cards {
+body.compose-active:not(.compose-awaiting) #hud-header,
+body.compose-active:not(.compose-awaiting) #hud-saved-trips-mobile,
+body.compose-active:not(.compose-awaiting) #insight-cards {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--duration-normal) var(--ease-out);
@@ -184,6 +199,14 @@ body.compose-active #artifact-dock {
   min-height: 52px;
 }
 
+body.compose-active.compose-awaiting #artifact-dock {
+  min-width: 0;
+  width: auto;
+  max-width: min(calc(100vw - 32px), 340px);
+  padding: 6px 10px;
+  min-height: 0;
+}
+
 @keyframes composePulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
@@ -199,7 +222,7 @@ body.compose-active #artifact-dock {
     font-size: clamp(1.5rem, 6.5vw, 2rem);
   }
 
-  body.compose-active #artifact-dock {
+  body.compose-active:not(.compose-awaiting) #artifact-dock {
     min-width: min(260px, calc(100vw - 80px));
     max-width: calc(100vw - 48px);
     width: calc(100vw - 48px);

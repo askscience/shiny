@@ -45,13 +45,19 @@ function hideComposeInput() {
   dockInput?.setAttribute('aria-hidden', 'true');
   field?.blur();
   setAwaiting(true);
+  showDockIcons();
+}
+
+function showDockIcons() {
+  dockIcons?.classList.remove('hidden');
+  dock?.classList.remove('hidden');
+  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
 }
 
 function restoreDock() {
   dockInput?.classList.add('hidden');
   dockInput?.setAttribute('aria-hidden', 'true');
-  dockIcons?.classList.remove('hidden');
-  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
+  showDockIcons();
 }
 
 export function initTextInput(onSubmit) {
@@ -83,7 +89,8 @@ export function initTextInput(onSubmit) {
   });
 
   document.addEventListener('pointerdown', (e) => {
-    if (!isOpen || ignoreOutsideClick || isInsideComposeContent(e.target)) return;
+    if (!isOpen || ignoreOutsideClick || isSending) return;
+    if (isInsideComposeContent(e.target)) return;
     closeTextInput();
   });
 }
@@ -112,7 +119,7 @@ export function openTextInput() {
 }
 
 export function closeTextInput() {
-  if (!compose || !isOpen) return;
+  if (!compose || !isOpen || isSending) return;
   isOpen = false;
   isSending = false;
   document.body.classList.remove('compose-active', 'compose-awaiting');
@@ -124,6 +131,10 @@ export function closeTextInput() {
   setTimeout(() => {
     if (!isOpen) compose.classList.add('hidden');
   }, 300);
+}
+
+export function isComposeAwaiting() {
+  return isSending;
 }
 
 export function isTextInputOpen() {

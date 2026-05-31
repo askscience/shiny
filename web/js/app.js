@@ -16,7 +16,7 @@ import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudLeft } from './hudLeft.js';
 import { initNavigator } from './navigator.js';
-import { initTextInput, openTextInput, isTextInputOpen } from './textInput.js';
+import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -83,7 +83,7 @@ async function boot() {
 
 function wireSphere() {
   onShortTap(async () => {
-    if (!voiceReady() || isTextInputOpen()) return;
+    if (!voiceReady() || isTextInputOpen() || isComposeAwaiting()) return;
 
     if (isListening()) {
       cancelVoiceInput();
@@ -100,7 +100,7 @@ function wireSphere() {
   });
 
   onLongPressStart(async () => {
-    if (!voiceReady() || isListening()) return;
+    if (!voiceReady() || isListening() || isComposeAwaiting()) return;
     try {
       await startListening('wake');
     } catch (e) {
@@ -120,7 +120,7 @@ function wireSphere() {
   });
 
   onDoubleTap(() => {
-    if (!voiceReady()) return;
+    if (!voiceReady() || isComposeAwaiting()) return;
     if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
     openTextInput();
   });
@@ -151,7 +151,7 @@ function wireVoiceResults() {
       await sendToAgent(text, agentMode, ctx);
     } catch (_) {}
 
-    if (!isTextInputOpen()) setSphereState('idle');
+    if (!isTextInputOpen() && !isComposeAwaiting()) setSphereState('idle');
   });
 
   window.addEventListener('voice:level', (e) => {

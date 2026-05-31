@@ -145,7 +145,12 @@ function buildAgentBody(message, mode, context) {
   return { message, mode, lang, context, ai_name: getAiName() };
 }
 
+function setAgentAwaiting(on) {
+  document.body.classList.toggle('agent-awaiting', on);
+}
+
 export async function sendToAgent(message, mode, context) {
+  setAgentAwaiting(true);
   setSphereState('processing');
 
   try {
@@ -189,12 +194,15 @@ export async function sendToAgent(message, mode, context) {
       replyEl?.classList.add('hidden');
     }, 3000);
     throw e;
+  } finally {
+    setAgentAwaiting(false);
   }
 }
 
 /** Text compose mode: streams reply into compose panel */
 export async function sendToAgentCompose(message, context, { onStream, onDone, onError }) {
   onStream?.('');
+  setAgentAwaiting(true);
   setSphereState('processing');
 
   try {
@@ -216,9 +224,11 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
   } catch (e) {
     const msg = e.message || 'Agent unavailable';
     setSphereState('error');
-    setTimeout(() => setSphereState('compose'), 2000);
+    setTimeout(() => setSphereState('idle'), 2000);
     onError?.(msg);
     return null;
+  } finally {
+    setAgentAwaiting(false);
   }
 }
 
