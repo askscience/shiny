@@ -16,12 +16,10 @@ import { setHighFrequencyGps } from './gps.js';
 import { clearArtifacts } from './artifacts.js';
 import { clearInsightCards } from './insights/insightStore.js';
 
-const banner = document.getElementById('nav-banner');
+const navHud = document.getElementById('nav-hud');
 const instructionEl = document.getElementById('nav-instruction');
 const metaEl = document.getElementById('nav-meta');
-const destEl = document.getElementById('nav-dest');
-const speedEl = document.getElementById('nav-speed');
-const headingEl = document.getElementById('nav-heading');
+const speedEl = document.getElementById('nav-speed-value');
 const exitBtn = document.getElementById('nav-exit');
 
 let active = false;
@@ -55,15 +53,8 @@ function resetRouteProgress() {
 }
 
 function formatSpeedKmh(speedMs) {
-  if (speedMs == null || speedMs < 0.5) return '0 km/h';
-  return `${Math.round(speedMs * 3.6)} km/h`;
-}
-
-function formatHeading(deg) {
-  if (deg == null || Number.isNaN(deg)) return '—';
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  const idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
-  return `${Math.round(deg)}° ${dirs[idx]}`;
+  if (speedMs == null || speedMs < 0.5) return 0;
+  return Math.round(speedMs * 3.6);
 }
 
 /** GPS speed (m/s) with fallback from recent movement. */
@@ -84,9 +75,8 @@ function resolveSpeedMs(speed, lat, lon) {
   return liveSpeedMs;
 }
 
-function updateNavStats(heading) {
-  if (speedEl) speedEl.textContent = formatSpeedKmh(liveSpeedMs);
-  if (headingEl) headingEl.textContent = formatHeading(heading);
+function updateNavStats() {
+  if (speedEl) speedEl.textContent = String(formatSpeedKmh(liveSpeedMs));
 }
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -150,11 +140,12 @@ function formatDuration(sec) {
 }
 
 function updateBanner() {
-  if (!banner || !session) return;
+  if (!navHud || !session) return;
 
   const remainingM = Math.max(0, totalDistanceM - traveledM);
   const ratio = totalDistanceM > 0 ? remainingM / totalDistanceM : 1;
   const remainingS = totalDurationS * ratio;
+  const dest = session.destination;
 
   const step = steps[currentStepIdx];
   const instruction = step?.instruction?.trim()
@@ -162,25 +153,26 @@ function updateBanner() {
 
   if (instructionEl) instructionEl.textContent = instruction;
   if (metaEl) {
-    metaEl.textContent = remainingM < ARRIVAL_RADIUS_M
-      ? 'Navigation complete'
-      : `${formatDistance(remainingM)} · ${formatDuration(remainingS)} remaining`;
+    if (remainingM < ARRIVAL_RADIUS_M) {
+      metaEl.textContent = dest;
+    } else {
+      metaEl.textContent = `${formatDistance(remainingM)} · ${formatDuration(remainingS)} → ${dest}`;
+    }
   }
-  if (destEl) destEl.textContent = session.destination;
 }
 
-function showBanner() {
-  banner?.classList.remove('hidden');
+function showNavHud() {
+  navHud?.classList.remove('hidden');
 }
 
-function hideBanner() {
-  banner?.classList.add('hidden');
+function hideNavHud() {
+  navHud?.classList.add('hidden');
 }
 
 function setUiActive(on) {
   document.body.classList.toggle('navigator-active', on);
-  if (on) showBanner();
-  else hideBanner();
+  if (on) showNavHud();
+  else hideNavHud();
 }
 
 async function rerouteFrom(lat, lon) {
@@ -211,7 +203,7 @@ function onGpsUpdate({ lat, lon, heading, speed }) {
   if (!active || !session?.geometry?.length) return;
 
   liveSpeedMs = resolveSpeedMs(speed, lat, lon);
-  updateNavStats(heading);
+  updateNavStats();
 
   const destDist = haversineM(lat, lon, session.to_lat, session.to_lon);
   if (destDist <= ARRIVAL_RADIUS_M) {

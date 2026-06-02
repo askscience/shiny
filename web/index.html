@@ -121,15 +121,18 @@
       </svg>
     </div>
 
-    <div id="nav-banner" class="hidden" aria-live="polite" aria-label="Navigation">
-      <button type="button" id="nav-exit" aria-label="End navigation">&times;</button>
-      <div id="nav-instruction">Continue on route</div>
-      <div id="nav-stats" class="nav-stats">
-        <span id="nav-speed" class="nav-stat">— km/h</span>
-        <span id="nav-heading" class="nav-stat">—</span>
+    <div id="nav-hud" class="hidden" aria-live="polite" aria-label="Navigation">
+      <div id="nav-strip" class="nav-strip">
+        <div class="nav-strip-body">
+          <p id="nav-instruction" class="nav-strip-instruction">Continue on route</p>
+          <p id="nav-meta" class="nav-strip-meta">—</p>
+        </div>
+        <button type="button" id="nav-exit" class="nav-exit-btn" aria-label="End navigation">&times;</button>
       </div>
-      <div id="nav-meta">—</div>
-      <div id="nav-dest"></div>
+      <div id="nav-speed-chip" class="nav-speed-chip" aria-label="Current speed">
+        <span id="nav-speed-value" class="nav-speed-value">0</span>
+        <span class="nav-speed-unit">km/h</span>
+      </div>
     </div>
 
     <div id="travel-panel-backdrop" class="hidden" aria-hidden="true"></div>

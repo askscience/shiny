@@ -39,7 +39,9 @@ html, body {
   #travel-panel,
   #reply-text,
   .toast,
-  .icon-btn {
+  .icon-btn,
+  #nav-strip,
+  .nav-speed-chip {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
