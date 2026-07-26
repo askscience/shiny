@@ -15,11 +15,13 @@ use axum::Router;
 use axum::routing::{get, post};
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use std::path::PathBuf;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::auth::auth_middleware;
 use crate::config::Config;
+use crate::plugins::PluginManager;
 use crate::services::diary_gen::DiaryGenerator;
 use crate::services::gpsd::GpsdService;
 use crate::services::ollama::OllamaClient;
@@ -37,11 +39,46 @@ pub struct AppState {
     pub gpsd: GpsdService,
     pub diary_gen: Arc<DiaryGenerator>,
     pub supertonic: SupertonicClient,
+    /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
+    pub plugins: PluginManager,
+    /// Admin-supplied router-rebuild trigger (set by `main.rs` once the live
+    /// router swap is wired up).
+    pub router_rebuild: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl AppState {
+    /// Build an `Arc<PluginCtx>` for handing to plugins at install/on_load time.
+    pub fn plugin_ctx(&self) -> Arc<shiny_plugin_sdk::services::PluginCtx> {
+        // A neutral manifest is used when constructing the base ctx; the loader
+        // replaces it with the plugin's real manifest at install time.
+        static EMPTY: std::sync::OnceLock<shiny_plugin_sdk::manifest::Manifest> = std::sync::OnceLock::new();
+        let empty = EMPTY.get_or_init(|| shiny_plugin_sdk::manifest::Manifest {
+            name: String::new(),
+            version: semver::Version::new(0, 0, 0),
+            api_level: shiny_plugin_sdk::CORE_API_LEVEL,
+            entry_symbol: String::new(),
+            target_triple: None,
+            description: None,
+            author: None,
+            summary: None,
+            migrations_dir: "migrations".into(),
+            skills_dir: "skills".into(),
+            web_dir: "web".into(),
+            signature: None,
+        });
+        Arc::new(shiny_plugin_sdk::services::PluginCtx {
+            pool: self.pool.clone(),
+            ollama: self.ollama.clone(),
+            search: self.search.clone(),
+            supertonic: self.supertonic.clone(),
+            config: self.config.snapshot(),
+            manifest: empty.clone(),
+        })
+    }
 }
 
 pub fn build_router(state: AppState) -> Router {
     let web_dir = state.config.web_dir.clone();
-
     let vosk_models_dir = state.config.vosk_models_dir.clone();
 
     let public_routes = Router::new()
@@ -54,6 +91,13 @@ pub fn build_router(state: AppState) -> Router {
         );
 
     let protected_routes = Router::new()
+        .route("/api/plugins", get(crate::plugins::admin_api::list))
+        .route("/api/plugins/active", get(crate::plugins::admin_api::active))
+        .route("/api/plugins/install", post(crate::plugins::admin_api::install))
+        .route("/api/plugins/uninstall", post(crate::plugins::admin_api::uninstall))
+        .route("/api/plugins/activate", post(crate::plugins::admin_api::activate))
+        .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
+        .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/trips", get(trips::list).post(trips::create))
         .route("/api/trips/active", get(trips::get_active))
@@ -88,9 +132,15 @@ pub fn build_router(state: AppState) -> Router {
     let static_files = ServeDir::new(&web_dir)
         .not_found_service(ServeFile::new(format!("{}/index.html", web_dir)));
 
+    // Explicit HTML route for the plugins page. ServeDir's fallback would
+    // otherwise return index.html for /plugins, which we don't want — the
+    // standalone page is a separate document.
+    let plugins_page = ServeFile::new(format!("{}/plugins.html", web_dir));
+
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
+        .route_service("/plugins", plugins_page)
         .fallback_service(static_files)
         .layer(CorsLayer::permissive())
         .with_state(state)

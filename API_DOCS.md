@@ -10,7 +10,7 @@ All protected endpoints require: `Authorization: Bearer <token>`
 
 ### `POST /api/auth/register`
 
-Create a new traveler account.
+Create a new user account.
 
 **Request:**
 ```json
@@ -73,7 +73,7 @@ Authenticate and receive a Bearer token.
 
 ### `GET /api/travelers/me`
 
-Get current traveler profile.
+Get current profile.
 
 **Response `200`**
 ```json

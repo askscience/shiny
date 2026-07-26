@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    tracing::info!("Starting Traveler REST API server...");
+    tracing::info!("Starting Shiny AI sphere…");
 
     std::fs::create_dir_all("data").ok();
 
@@ -88,7 +88,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         gpsd,
         diary_gen: diary_gen.clone(),
         supertonic,
+        plugins: shiny::plugins::PluginManager::new(std::path::PathBuf::from(&config.plugins_dir), pool.clone()),
+        router_rebuild: None,
     };
+
+    // Scan plugins directory and load installed cdylib plugins (hot-reload
+    // registration on startup; subsequent installs use the admin API).
+    std::fs::create_dir_all(&config.plugins_dir).ok();
+    let base_ctx = state.plugin_ctx();
+    let installed = state.plugins.discover_and_install(base_ctx).await;
+    if !installed.is_empty() {
+        tracing::info!("Loaded plugins: {}", installed.join(", "));
+    } else {
+        tracing::info!("No plugins installed. Core runs as pure AI sphere.");
+    }
 
     if config.diary_auto_generate {
         spawn_diary_cron(diary_gen, config.diary_generate_time.clone());

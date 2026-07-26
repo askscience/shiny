@@ -1,0 +1,9 @@
+name = "traveler"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Trip tracking, GPS, diary, map and navigation tools for the AI sphere"
+summary = "Trip tracking, GPS, diary, map tools, navigation"
+migrations_dir = "migrations"
+skills_dir = "skills"
+web_dir = "web"

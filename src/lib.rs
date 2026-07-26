@@ -5,3 +5,4 @@ pub mod models;
 pub mod auth;
 pub mod services;
 pub mod api;
+pub mod plugins;

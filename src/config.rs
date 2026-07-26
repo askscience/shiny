@@ -17,6 +17,13 @@ pub struct Config {
     pub vosk_models_dir: String,
     pub auto_start_supertonic: bool,
     pub web_dir: String,
+    /// Directory containing installed plugins.
+    pub plugins_dir: String,
+    pub admin_token: Option<String>,
+    /// When true, the built-in (compiled-in) traveler tools are registered
+    /// even if the traveler cdylib plugin is also installed. Set
+    /// `CORE_TRAVELER_BUILTIN=false` to make the app truly sphere-only.
+    pub traveler_builtin: bool,
 }
 
 impl Config {
@@ -55,6 +62,31 @@ impl Config {
                 .parse()
                 .unwrap_or(false),
             web_dir: env::var("WEB_DIR").unwrap_or_else(|_| "web".into()),
+            plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
+            admin_token: env::var("ADMIN_TOKEN").ok().filter(|v| !v.trim().is_empty()),
+            traveler_builtin: env::var("CORE_TRAVELER_BUILTIN")
+                .unwrap_or_else(|_| "true".into())
+                .parse()
+                .unwrap_or(true),
+        }
+    }
+
+    /// Build a `ConfigSnapshot` for plugin `PluginCtx` construction.
+    pub fn snapshot(&self) -> shiny_plugin_sdk::services::ConfigSnapshot {
+        shiny_plugin_sdk::services::ConfigSnapshot {
+            server_host: self.server_host.clone(),
+            server_port: self.server_port,
+            database_url: self.database_url.clone(),
+            ollama_url: self.ollama_url.clone(),
+            ollama_model: self.ollama_model.clone(),
+            supertonic_url: self.supertonic_url.clone(),
+            supertonic_voice: self.supertonic_voice.clone(),
+            web_dir: self.web_dir.clone(),
+            vosk_models_dir: self.vosk_models_dir.clone(),
+            auto_start_supertonic: self.auto_start_supertonic,
+            log_level: self.log_level.clone(),
+            plugins_dir: self.plugins_dir.clone(),
+            admin_token: self.admin_token.clone(),
         }
     }
 }

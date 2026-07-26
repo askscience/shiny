@@ -1,0 +1,9 @@
+name = "hello"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Demo plugin registering a single 'hello' tool"
+summary = "Demo plugin: hello tool"
+migrations_dir = "migrations"
+skills_dir = "skills"
+web_dir = "web"

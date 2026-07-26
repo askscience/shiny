@@ -85,8 +85,28 @@ pub async fn register(
     .await
     .map_err(AppError::Database)?;
 
+    // First registered traveler becomes admin automatically. This makes the
+    // Plugins UI usable out of the box without setting ADMIN_TOKEN env.
+    let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM travelers")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(0);
+    let is_first_user = user_count == 1;
+    if is_first_user {
+        sqlx::query("UPDATE travelers SET is_admin = 1 WHERE id = ?1")
+            .bind(&traveler.id)
+            .execute(&state.pool)
+            .await
+            .ok();
+        let _ = sqlx::query("UPDATE travelers SET is_admin = 1 WHERE id = ?1")
+            .bind(&traveler.id)
+            .execute(&state.pool)
+            .await;
+    }
+
     let mut public = traveler.to_public();
     public.avatar = req.avatar;
+    public.is_admin = is_first_user;
 
     Ok(Json(AuthResponse {
         token,

@@ -102,15 +102,60 @@ async fn prepare_agent(
             .map(String::from),
     };
 
-    let active_trip = fetch_active_trip(&state.pool, &traveler.id).await?;
-    let recent_diary = sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT date, summary FROM diary_entries WHERE traveler_id = ?1 ORDER BY date DESC LIMIT 3",
-    )
-    .bind(&traveler.id)
-    .fetch_all(&state.pool)
-    .await?;
+    let active_trip = if state.plugins.is_enabled_for(&traveler.id, "traveler").await {
+        fetch_active_trip(&state.pool, &traveler.id).await?
+    } else {
+        None
+    };
+    let recent_diary = if state.plugins.is_enabled_for(&traveler.id, "traveler").await {
+        sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT date, summary FROM diary_entries WHERE traveler_id = ?1 ORDER BY date DESC LIMIT 3",
+        )
+        .bind(&traveler.id)
+        .fetch_all(&state.pool)
+        .await?
+    } else {
+        Vec::new()
+    };
 
-    let skill = load_skill_reference();
+    // Per-user active plugin set — drives which plugins' skills / persona /
+    // context lines enter the system prompt.
+    let active_set = state.plugins.disabled_for(&traveler.id).await;
+    let installed: std::collections::BTreeSet<String> = state
+        .plugins
+        .list()
+        .into_iter()
+        .map(|m| m.name)
+        .filter(|n| !active_set.contains(n))
+        .collect();
+
+    // Skill markdown = legacy file (back-compat) PLUS whatever plugins the
+    // user has activated advertise. Without an activated traveler plugin the
+    // missing travel verbs won't appear, leaving the sphere as pure-assistant.
+    let legacy_skill = load_skill_reference();
+    let plugin_skill = state.plugins.skills_markdown_for(&installed);
+    let traveler_active = installed.contains("traveler");
+    let skill = if !traveler_active {
+        // Without traveler activated, don't surface the legacy skill file
+        // (it unconditionally documents trip/map/diary verbs).
+        plugin_skill
+    } else if plugin_skill.trim().is_empty() {
+        legacy_skill
+    } else if legacy_skill.contains("Use JSON action blocks.") || legacy_skill.is_empty() {
+        plugin_skill
+    } else {
+        format!("{legacy_skill}\n\n---\n\n{plugin_skill}")
+    };
+
+    // Persona concat for the active set; fallback to a neutral helpful
+    // assistant persona when no plugin is active.
+    let plugin_persona = state.plugins.persona_concat_for(&installed);
+    let persona = if plugin_persona.trim().is_empty() {
+        "a helpful AI assistant".to_string()
+    } else {
+        plugin_persona
+    };
+
     let location_line = match (ctx.lat, ctx.lon) {
         (Some(lat), Some(lon)) => format!("User is at {:.5}, {:.5}", lat, lon),
         _ => "User location unknown".into(),
@@ -138,23 +183,38 @@ async fn prepare_agent(
         .to_string();
     let user_first = first_name(&traveler.name);
 
+    let context_lines = state.plugins.context_lines_for(&installed);
+    let context_block = if context_lines.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}\n", context_lines.join("\n"))
+    };
+
     let system = format!(
-        "You are {}, a travel navigator AI. Reply in language code '{}'. Keep spoken replies to 1-2 short sentences.\n\
-         The user may wake you by saying \"hey {}\".\n\
-         Address the user as {} when it feels natural.\n\
+        "You are {ai_name}, {persona}. Reply in language code '{lang}'. Keep spoken replies to 1-2 short sentences.\n\
+         The user may wake you by saying \"hey {ai_lower}\".\n\
+         Address the user as {user_first} when it feels natural.\n\
          \n\
          ## Tool protocol (strict)\n\
          - Call exactly ONE tool per turn.\n\
          - Output ONLY raw JSON on its own line — no markdown fences.\n\
          - Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
          - Always include \"params\". Use {{}} when a tool has no parameters.\n\
-         - For trip/itinerary requests use plan_trip.\n\
-         - For navigation requests use navigate_to.\n\
          \n\
-         ## Tools\n{}\n\n\
-         ## Context\nUser name: {}\n{}\n{}\nDiary: {}\n\
-         Mode: {} — keep the spoken reply short.",
-        ai_name, lang, ai_name.to_lowercase(), user_first, skill, user_first, location_line, trip_line, diary_line, mode
+         ## Tools\n{skill}\n\n\
+         ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
+         Mode: {mode} — keep the spoken reply short.",
+        ai_name = ai_name,
+        persona = persona,
+        lang = lang,
+        ai_lower = ai_name.to_lowercase(),
+        user_first = user_first,
+        skill = skill,
+        location_line = location_line,
+        trip_line = trip_line,
+        diary_line = diary_line,
+        context_block = context_block,
+        mode = mode,
     );
 
     Ok(PreparedAgent {

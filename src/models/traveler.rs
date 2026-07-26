@@ -13,6 +13,8 @@ pub struct Traveler {
     pub updated_at: Option<String>,
     pub username: Option<String>,
     pub avatar: Option<String>,
+    #[sqlx(default)]
+    pub is_admin: Option<i64>,
 }
 
 impl Traveler {
@@ -28,6 +30,7 @@ impl Traveler {
             updated_at: None,
             username: Some(username),
             avatar: None,
+            is_admin: Some(0),
         }
     }
 
@@ -38,6 +41,7 @@ impl Traveler {
             username: self.username.clone().unwrap_or_default(),
             avatar: self.avatar.clone(),
             created_at: self.created_at.clone(),
+            is_admin: self.is_admin.unwrap_or(0) == 1,
         }
     }
 }
@@ -50,6 +54,8 @@ pub struct TravelerPublic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar: Option<String>,
     pub created_at: Option<String>,
+    #[serde(default)]
+    pub is_admin: bool,
 }
 
 #[derive(Debug, Deserialize)]

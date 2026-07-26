@@ -11,6 +11,7 @@ import { startGpsTracking } from './gps.js';
 import { initTheme } from './theme.js';
 import { initAccent } from './accent.js';
 import { initSettings } from './settings.js';
+import { refreshActivePlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudLeft } from './hudLeft.js';
@@ -19,6 +20,7 @@ import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from
 import { reloadUserSession } from './session.js';
 
 let appInitialized = false;
+let travelerActive = false;
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -54,9 +56,16 @@ async function boot() {
     document.getElementById('app')?.classList.remove('hidden');
     if (appInitialized) {
       await reloadUserSession();
+      await applyTravelerActivation();
       return;
     }
     await initApp();
+  });
+
+  // Plugins panel may toggle the traveler plugin — re-evaluate and re-render
+  // the map / navigator / saved-trips HUD when that happens.
+  window.addEventListener('plugins:changed', async () => {
+    await applyTravelerActivation();
   });
 
   if (!(await requireAuth())) return;
@@ -74,23 +83,65 @@ async function initApp() {
 
   initTheme();
   initAccent();
-  initMap();
   initSphere();
   initArtifactDock();
-  initHudLeft();
-  initNavigator();
-  initInsightCards();
   initSettings();
   initTextInput(submitTextToAgent);
-  startGpsTracking();
-  wireSphere();
+
+  await applyTravelerActivation();
 
   setInterval(() => reloadUserSession(), 60000);
-
   await reloadUserSession();
 
   prepareVoice();
+  wireSphere();
   wireVoiceResults();
+}
+
+/// Decide whether the OSM map / navigator / saved-trips HUD should render
+/// based on whether the current user has the `traveler` plugin activated.
+async function applyTravelerActivation() {
+  const active = await refreshActivePlugins();
+  const newTravelerActive = active.has('traveler');
+  if (newTravelerActive === travelerActive) return;
+  travelerActive = newTravelerActive;
+
+  const mapStage = document.getElementById('map-stage');
+  const mapVignette = document.getElementById('map-vignette');
+  const navPuck = document.getElementById('nav-puck');
+  const navBanner = document.getElementById('nav-banner');
+  const hudSavedTrips = document.getElementById('hud-saved-trips');
+  const hudSavedTripsMobile = document.getElementById('hud-saved-trips-mobile');
+  const travelPanel = document.getElementById('travel-panel');
+  const travelPanelBackdrop = document.getElementById('travel-panel-backdrop');
+  const insightCards = document.getElementById('insight-cards');
+
+  const hide = (el) => el?.classList.add('hidden');
+  const show = (el) => el?.classList.remove('hidden');
+
+  if (travelerActive) {
+    if (!document.getElementById('map')?.childElementCount) {
+      initMap();
+    }
+    show(mapStage);
+    show(mapVignette);
+    initHudLeft();
+    initNavigator();
+    initInsightCards();
+    startGpsTracking();
+  } else {
+    hide(mapStage);
+    hide(mapVignette);
+    hide(navPuck);
+    hide(navBanner);
+    hide(hudSavedTrips);
+    hudSavedTrips?.classList.add('empty');
+    hide(hudSavedTripsMobile);
+    hudSavedTripsMobile?.classList.add('empty');
+    hide(travelPanel);
+    hide(travelPanelBackdrop);
+    hide(insightCards);
+  }
 }
 
 function wireSphere() {
@@ -139,7 +190,7 @@ function wireSphere() {
 }
 
 async function submitTextToAgent(text, handlers) {
-  const ctx = getCurrentPosition();
+  const ctx = travelerActive ? getCurrentPosition() : null;
   try {
     await sendToAgentCompose(text, ctx, handlers);
   } catch (_) {}
@@ -153,7 +204,7 @@ function voiceReady() {
 function wireVoiceResults() {
   window.addEventListener('voice:result', async (e) => {
     const { text, mode } = e.detail;
-    const ctx = getCurrentPosition();
+    const ctx = travelerActive ? getCurrentPosition() : null;
     const agentMode = mode === 'continuous' ? 'continuous' : 'single';
 
     setConversationMode(false);

@@ -1,6 +1,8 @@
-# Traveler REST API
+# Shiny — AI Sphere
 
-A Rust-based travel companion backend that tracks trips, logs GPS positions, auto-generates AI travel diaries, and provides a conversational agent with full diary context.
+A Rust-based AI sphere backend with a plugin system. The core binary is the orb: a conversational agent driven by Ollama, with voice (Vosk STT + Supertonic TTS), web search, and an artifact dock. Everything domain-specific (trips, GPS, diaries, navigation) ships as **plugins** — installable via `.zip` or `.tar.gz` upload through the admin API.
+
+See [`PLUGINS.md`](./PLUGINS.md) for the full plugin authoring guide.
 
 ## Features
 

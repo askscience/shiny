@@ -10,18 +10,17 @@ use crate::services::artifacts::{self, Artifact, PlanDay, RouteMeta};
 use crate::services::navigation::build_navigation_session;
 use crate::services::web_search::SearchResult;
 
+use shiny_plugin_sdk::tools::normalize_action_name as sdk_normalize_action_name;
+use shiny_plugin_sdk::outcome::ActionOutcome as SdkActionOutcome;
+
 /// Shared tone for artifact prose — practical first, lightly descriptive.
 const ARTIFACT_WRITER_TONE: &str = "Write in a warm but practical tone. Name real places, neighborhoods, times, and logistics. \
     A little atmosphere is fine; avoid flowery or overly poetic language.";
 
-#[derive(Debug, Clone)]
-pub struct AgentContext {
-    pub lat: Option<f64>,
-    pub lon: Option<f64>,
-    pub heading: Option<f64>,
-    pub lang: String,
-    pub ollama_model: Option<String>,
-}
+// `AgentContext` now lives in the SDK so plugins can receive the same type.
+// Re-export keeps existing call sites (`crate::services::agent_tools::AgentContext`)
+// in the binary working.
+pub use shiny_plugin_sdk::context::AgentContext;
 
 #[derive(Debug, Clone)]
 pub struct ActionOutcome {
@@ -40,6 +39,48 @@ pub async fn execute_action(
     params: &Value,
 ) -> Result<ActionOutcome, AppError> {
     let action_key = normalize_action_name(action);
+
+    // Plugin registry takes priority — if a plugin claimed this action key,
+    // dispatch to its `Tool::invoke`. The registry itself consults the per-user
+    // activation set, so deactivated plugins refuse here.
+    if state.plugins.tools().has(&action_key) {
+        let plugin_ctx = state.plugin_ctx();
+        let outcome = state
+            .plugins
+            .tools()
+            .invoke(&action_key, &plugin_ctx, &traveler.id, &traveler.id, params, ctx)
+            .await?;
+        return Ok(ActionOutcome {
+            action: outcome.action,
+            result: outcome.result,
+            data: outcome.data,
+            artifact: outcome.artifact,
+            extra_artifacts: outcome.extra_artifacts,
+        });
+    }
+
+    // The action key falls through to the legacy built-in match — these arms
+    // implement the traveler-domain verbs that haven't been ported into the
+    // cargo-cdylib traveler plugin yet. Per-user gating: if the user has
+    // deactivated the `traveler` plugin, the built-in traveler verbs refuse.
+    let traveler_active = state.plugins.is_enabled_for(&traveler.id, "traveler").await;
+    let is_traveler_verb = matches!(action_key.as_str(),
+        "create_trip" | "list_trips" | "get_trip" | "get_active_trip" | "start_trip"
+        | "end_trip" | "trip_stats" | "submit_location" | "list_locations"
+        | "trip_route" | "map_search" | "map_reverse" | "map_route"
+        | "navigate_to" | "map_poi" | "list_diary" | "get_diary"
+        | "search_diary" | "generate_diary" | "plan_trip"
+    );
+    if is_traveler_verb && !traveler_active {
+        return Ok(ActionOutcome {
+            action: action_key.clone(),
+            result: "error".into(),
+            data: json!({ "error": format!("plugin 'traveler' is deactivated for this user") }),
+            artifact: None,
+            extra_artifacts: vec![],
+        });
+    }
+
     let outcome = match action_key.as_str() {
         "create_trip" => {
             let name = param_str(params, "name").ok_or_else(|| AppError::BadRequest("name required".into()))?;

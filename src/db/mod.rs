@@ -45,6 +45,28 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
         sqlx::raw_sql(migration3).execute(pool).await?;
     }
 
+    let has_is_admin: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('travelers') WHERE name = 'is_admin'",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    if has_is_admin == 0 {
+        let migration4 = include_str!("../../migrations/004_admin.sql");
+        sqlx::raw_sql(migration4).execute(pool).await?;
+    }
+    // Re-apply the first-user promotion (idempotent).
+    sqlx::raw_sql(
+        "UPDATE travelers SET is_admin = 1 WHERE id = \
+         (SELECT id FROM travelers ORDER BY created_at ASC LIMIT 1)",
+    )
+    .execute(pool)
+    .await?;
+
+    let migration5 = include_str!("../../migrations/005_user_plugin_states.sql");
+    sqlx::raw_sql(migration5).execute(pool).await?;
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

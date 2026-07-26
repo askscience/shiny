@@ -1,10 +1,18 @@
+[workspace]
+members = [".", "crates/shiny-plugin-sdk", "plugins/traveler", "plugins/hello"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
 [package]
 name = "shiny"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -27,3 +35,13 @@ tokio-stream = "0.1"
 async-trait = "0.1"
 bytes = "1.11.1"
 tokio-util = { version = "0.7", features = ["io"] }
+shiny-plugin-sdk = { path = "crates/shiny-plugin-sdk" }
+libloading = "0.8"
+toml = "0.8"
+arc-swap = "1.7"
+semver = "1"
+zip = "0.6"
+flate2 = "1"
+tar = "0.4"
+walkdir = "2"
+parking_lot = "0.12"
