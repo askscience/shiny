@@ -1,5 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-@import url('tokens.css');
+/* ─────────────────────────────────────────────────────────────
+   Shiny app shell — layout that is NOT part of the UI library.
+   Components: /ui/ui.css · Skin: /themes/<name>/components.css
+   ───────────────────────────────────────────────────────────── */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,21 +26,11 @@ html, body {
 
 .hidden { display: none !important; }
 
-/* Shared frosted glass — smaller blur radius, higher surface opacity */
-.glass-blur {
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  contain: layout style paint;
-}
-
 @media (prefers-reduced-transparency: reduce) {
-  .glass-blur,
   #artifact-dock,
   #hud-header .hud-header-main,
-  #insight-cards .insight-card,
   #travel-panel,
   #reply-text,
-  .toast,
   .icon-btn,
   #nav-strip,
   .nav-speed-chip {
@@ -51,7 +43,7 @@ html, body {
 #grain {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-grain);
   pointer-events: none;
   opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -59,37 +51,15 @@ html, body {
   background-size: 128px 128px;
 }
 
-[data-theme="light"] #grain { opacity: 0.025; }
+#app { position: relative; width: 100%; height: 100%; }
 
-#app {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
+#map-stage { position: absolute; inset: 0; z-index: var(--z-map); overflow: hidden; }
+#map { position: absolute; inset: 0; z-index: 0; }
+#map-vignette { display: none; }
+#map-stage, #map, .leaflet-container { touch-action: none; }
+.leaflet-control-container { display: none; }
 
-#map-stage {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-}
-
-#map {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-}
-
-#map-vignette {
-  display: none;
-}
-
-#map-stage,
-#map,
-.leaflet-container {
-  touch-action: none;
-}
-
+/* ── HUD circular buttons ──────────────────────────────────── */
 .icon-btn {
   display: flex;
   align-items: center;
@@ -109,48 +79,172 @@ html, body {
     background var(--duration-fast),
     border-color var(--duration-fast),
     color var(--duration-fast),
-    transform var(--duration-fast) var(--ease-spring);
+    transform var(--duration-fast) var(--ease-out);
+}
+.icon-btn:hover { background: var(--glass-hover); border-color: var(--glass-highlight); color: var(--text); }
+.icon-btn:active { transform: scale(0.95); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* ── Top HUD — unified glass island ────────────────────────── */
+#hud-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: var(--hud-header-pad) 14px 12px 14px;
+  pointer-events: none;
+  animation: hudFadeIn 0.7s var(--ease-out) both;
 }
 
-.icon-btn:hover {
-  background: var(--glass-hover);
-  border-color: rgba(255, 255, 255, 0.14);
+.hud-header-main {
+  flex: 1;
+  min-width: 0;
+  height: var(--hud-bar-height);
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-glass);
+  overflow: hidden;
+  padding: 0 4px;
+  contain: layout style paint;
+}
+
+#hud-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
+
+.hud-clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: calc(var(--hud-bar-height) - 8px);
+  flex-shrink: 0;
+}
+.hud-clock-icon { width: 15px; height: 15px; color: var(--accent); flex-shrink: 0; }
+.hud-clock-text { display: flex; align-items: baseline; gap: 8px; line-height: 1; white-space: nowrap; }
+#hud-clock-time {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--text);
-  transform: scale(1.05);
+  font-variant-numeric: tabular-nums;
+}
+#hud-clock-date { font-size: 11px; font-weight: 500; color: var(--muted); }
+
+.hud-meteo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: calc(var(--hud-bar-height) - 8px);
+  flex-shrink: 0;
+  transition: opacity var(--duration-fast);
+}
+.hud-meteo.loading { opacity: 0.5; }
+#hud-meteo-icon { width: 17px; height: 17px; color: var(--accent); flex-shrink: 0; }
+#hud-meteo-temp {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+#hud-meteo-label { font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+
+/* Saved places scroll (desktop, inside the pill) */
+.hud-trips-scroll, #hud-saved-trips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 8px 0 4px;
+  mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 16px), transparent);
+}
+.hud-trips-scroll::-webkit-scrollbar, #hud-saved-trips::-webkit-scrollbar { display: none; }
+
+.hud-trips-empty {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
-.icon-btn:active {
-  transform: scale(0.95);
+/* Desktop chips are flat (they sit inside the glass pill) */
+#hud-saved-trips .ui-hud-chip {
+  background: transparent;
+  border-color: transparent;
+  height: calc(var(--hud-bar-height) - 12px);
+}
+#hud-saved-trips .ui-hud-chip:hover { background: var(--glass-hover); }
+#hud-saved-trips .ui-hud-chip.is-active { background: var(--accent-soft); color: var(--accent); }
+
+@media (max-width: 767px) {
+  :root { --hud-mobile-trips-height: 36px; }
+
+  #hud-saved-trips { display: none !important; }
+
+  .hud-trips-mobile-scroll, #hud-saved-trips-mobile {
+    display: flex;
+    position: fixed;
+    top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 8px);
+    left: 14px; right: 14px;
+    z-index: calc(var(--z-hud) - 1);
+    height: 32px;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    pointer-events: auto;
+    padding: 0 2px;
+    mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 12px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 12px), transparent);
+  }
+  #hud-saved-trips-mobile::-webkit-scrollbar { display: none; }
+
+  #hud-saved-trips-mobile .ui-hud-chip { height: 26px; padding: 0 10px; font-size: 10px; }
+
+  #hud-clock-date, #hud-meteo-label { display: none; }
+  .hud-header-main { padding: 0 2px; }
+  .hud-clock, .hud-meteo { padding: 0 10px; }
 }
 
-[data-theme="light"] .icon-btn:hover {
-  border-color: rgba(15, 23, 42, 0.12);
+@media (min-width: 768px) {
+  #hud-saved-trips-mobile { display: none !important; }
 }
 
-.icon-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-#theme-toggle-btn {
-  position: relative;
-}
-
-#theme-toggle-btn .icon-sun,
-#theme-toggle-btn .icon-moon {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  transition: opacity var(--duration-fast), transform var(--duration-normal) var(--ease-spring);
-}
-
+/* ── Voice reply transcript ────────────────────────────────── */
 #hud-transcript {
   position: fixed;
   bottom: max(156px, calc(env(safe-area-inset-bottom) + 140px));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 25;
+  z-index: var(--z-transcript);
   pointer-events: none;
   width: min(480px, calc(100vw - 32px));
 }
@@ -175,60 +269,280 @@ html, body {
     opacity var(--duration-normal) var(--ease-out),
     transform var(--duration-normal) var(--ease-out);
 }
+#reply-text:not(.hidden) { opacity: 1; transform: translateY(0) scale(1); }
 
-#reply-text:not(.hidden) {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-#toast-container {
+/* ── Travel panel shell (content = .ui-artifact composite) ─── */
+#travel-panel-backdrop {
   position: fixed;
-  top: calc(var(--hud-header-total) + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
+  top: var(--hud-header-total);
+  left: 0; right: 0; bottom: 0;
+  z-index: 18;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-slow) var(--ease-out);
+  backdrop-filter: blur(var(--glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light));
+}
+#travel-panel-backdrop.visible { opacity: 1; pointer-events: auto; }
+
+#travel-panel {
+  position: fixed;
+  top: var(--hud-header-total);
+  left: 0; bottom: 0;
+  z-index: var(--z-hud);
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  pointer-events: none;
-  width: min(380px, calc(100vw - 32px));
+  background: var(--surface-strong);
+  border-right: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  transform: translateX(-105%);
+  opacity: 0;
+  contain: layout style paint;
+  transition:
+    transform var(--duration-slow) var(--ease-out),
+    opacity var(--duration-normal) var(--ease-out);
+  overflow: hidden;
+}
+#travel-panel.visible { transform: translateX(0); opacity: 1; }
+
+#travel-panel .ui-artifact-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
 }
 
-.toast {
-  padding: 14px 20px;
-  background: var(--surface-strong);
+@media (min-width: 768px) {
+  #travel-panel {
+    width: min(440px, 44vw);
+    max-width: min(440px, 44vw);
+    box-shadow: 16px 0 64px rgba(0, 0, 0, 0.45);
+  }
+  #travel-panel-backdrop { left: min(440px, 44vw); }
+}
+
+/* ── Insight cards container (cards = .ui-insight composite) ─ */
+#insight-cards {
+  position: fixed;
+  top: var(--hud-header-total);
+  right: 16px;
+  z-index: calc(var(--z-transcript) + 1);
+  max-height: calc(100vh - var(--hud-header-total) - 180px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+#insight-cards:empty { display: none; }
+#insight-cards::-webkit-scrollbar { display: none; }
+#insight-cards > * { pointer-events: auto; width: 100%; }
+
+@media (min-width: 768px) {
+  #app.panel-open #insight-cards {
+    max-width: min(340px, calc(100vw - min(420px, 42vw) - 32px));
+  }
+}
+@media (max-width: 767px) {
+  #app.panel-open #insight-cards {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  #insight-cards { right: 12px; max-width: min(320px, calc(100vw - 24px)); }
+}
+
+/* Voice download progress inside an insight card */
+.voice-download-bar {
+  height: 3px;
+  background: var(--glass);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+.voice-download-bar-fill {
+  height: 100%;
+  background: var(--gradient-accent);
+  border-radius: 2px;
+  transition: width var(--duration-normal) var(--ease-out);
+}
+.voice-download-text { font-size: 11px; line-height: 1.4; color: var(--muted); }
+
+/* ── Artifact dock container (buttons = .ui-dock-btn) ──────── */
+#artifact-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  font-size: 13px;
-  font-weight: 500;
+  box-shadow: var(--shadow-float);
+  max-width: min(calc(100vw - 32px), 340px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  contain: layout style paint;
+}
+#artifact-dock::-webkit-scrollbar { display: none; }
+#artifact-dock-icons { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap; }
+
+#artifact-dock-step {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: min(calc(100vw - 48px), 300px);
+  margin-top: -6px;
+  padding: 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  animation: dockStepIn var(--duration-fast) var(--ease-out) both;
+}
+
+/* ── Login ─────────────────────────────────────────────────── */
+#login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background: var(--gradient-mesh), rgba(0, 0, 0, 0.9);
+  animation: overlayIn var(--duration-slow) var(--ease-out) both;
+}
+
+.login-card {
+  position: relative;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px 32px;
+  width: min(460px, 100%);
   text-align: center;
   box-shadow: var(--shadow-float);
-  contain: layout style paint;
-  animation: toastIn var(--duration-normal) var(--ease-out) both;
+  animation: cardIn var(--duration-slow) var(--ease-out) 0.08s both;
+  overflow: hidden;
+}
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 60%; height: 1px;
+  background: var(--gradient-accent);
+  opacity: 0.6;
 }
 
-.toast.error {
-  border-color: rgba(248, 113, 113, 0.3);
-  color: var(--accent-error);
+.brand-mark { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 24px; }
+.brand-logo {
+  width: 48px; height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-accent);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-glow);
+}
+.brand-logo svg { width: 26px; height: 26px; color: var(--accent-contrast); }
+.brand-mark h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 5vw, 1.75rem);
+  letter-spacing: -0.03em;
+}
+.brand-tagline { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 26px; }
+
+.login-step-label { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+.login-back { margin-bottom: 14px; }
+.login-card .ui-input { margin-bottom: 10px; text-align: center; }
+.login-card .ui-btn--block { margin-top: 4px; }
+
+.app-error {
+  color: var(--error);
+  font-size: 13px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
-.leaflet-control-container { display: none; }
+.profile-picker { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px 20px; margin-bottom: 8px; }
+.profile-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 88px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.profile-tile:hover { transform: translateY(-2px); }
+.profile-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }
+.profile-tile-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
+.profile-avatar {
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.profile-avatar--large { width: 88px; height: 88px; border-radius: 22px; font-size: 1.5rem; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profile-avatar--empty { background: linear-gradient(135deg, var(--accent-soft), var(--glass)); color: var(--accent); }
+.profile-avatar--placeholder { color: var(--muted); font-size: 2rem; font-weight: 400; border-style: dashed; }
+.profile-avatar-add { border-radius: 999px; border-style: dashed; color: var(--muted); background: transparent; }
+.profile-avatar-add svg { width: 28px; height: 28px; }
+.profile-tile-add .profile-tile-name { color: var(--muted); }
+
+.profile-selected { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 18px; }
+.profile-selected-name { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; }
+.profile-avatar-upload { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; cursor: pointer; }
+.profile-avatar-label { font-size: 12px; color: var(--muted); }
+
+/* ── Keyframes ─────────────────────────────────────────────── */
 @keyframes hudFadeIn {
   from { opacity: 0; transform: translateY(-12px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
-@keyframes toastIn {
-  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
-@keyframes dotPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+@keyframes dockStepIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {

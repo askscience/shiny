@@ -39,18 +39,13 @@ impl Plugin for TravelerPlugin {
     }
 
     fn register(&self, _ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        // The traveler plugin's role is to advertise its persona, skill
-        // markdown, and context lines so the AI sphere knows about travel verbs
-        // when this plugin is active. The actual tool implementations still
-        // live in the core binary's `execute_action` built-in arms (back-compat)
-        // — they are gated by the per-user activation set here. As the tool
-        // implementations get ported into the cdylib, the corresponding `tools()`
-        // entries will replace the built-in arms.
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/traveler-api-tools.md"))
             .context_line("Map: enabled — OpenStreetMap background is active.");
-        // Note: no `builder.tool(...)` calls here yet — see comment above.
+        for tool in crate::tools::all_tools() {
+            builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
+        }
     }
 }
 

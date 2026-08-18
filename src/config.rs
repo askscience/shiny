@@ -20,10 +20,6 @@ pub struct Config {
     /// Directory containing installed plugins.
     pub plugins_dir: String,
     pub admin_token: Option<String>,
-    /// When true, the built-in (compiled-in) traveler tools are registered
-    /// even if the traveler cdylib plugin is also installed. Set
-    /// `CORE_TRAVELER_BUILTIN=false` to make the app truly sphere-only.
-    pub traveler_builtin: bool,
 }
 
 impl Config {
@@ -64,10 +60,6 @@ impl Config {
             web_dir: env::var("WEB_DIR").unwrap_or_else(|_| "web".into()),
             plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
             admin_token: env::var("ADMIN_TOKEN").ok().filter(|v| !v.trim().is_empty()),
-            traveler_builtin: env::var("CORE_TRAVELER_BUILTIN")
-                .unwrap_or_else(|_| "true".into())
-                .parse()
-                .unwrap_or(true),
         }
     }
 

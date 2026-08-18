@@ -1,17 +1,29 @@
 # Shiny — AI Sphere
 
-A Rust-based AI sphere backend with a plugin system. The core binary is the orb: a conversational agent driven by Ollama, with voice (Vosk STT + Supertonic TTS), web search, and an artifact dock. Everything domain-specific (trips, GPS, diaries, navigation) ships as **plugins** — installable via `.zip` or `.tar.gz` upload through the admin API.
+A Rust-based AI sphere backend with a plugin system. **The core binary is a simple AI assistant**: a conversational agent driven by Ollama, with voice (Vosk STT + Supertonic TTS), orb gestures (tap to talk, long-press for wake, double-tap to type), and one built-in tool — web search. Everything domain-specific (trips, GPS, diaries, maps, navigation, artifact cards) ships as **plugins** — installable via `.zip` or `.tar.gz` upload through the admin API.
 
 See [`PLUGINS.md`](./PLUGINS.md) for the full plugin authoring guide.
 
+## Core vs plugins
+
+| | Core (always on) | Traveler plugin |
+|---|---|---|
+| Agent + voice | Ollama agent loop, Vosk STT, Supertonic TTS, orb, text chat | — |
+| Tools | `web_search` | 22 tools: trips, GPS, maps, navigation, diary, planning, artifact cards |
+| UI | Sphere, settings, unified UI library + themeable noir skin | Map, GPS HUD, artifact dock & panels, turn-by-turn navigator |
+
+Deactivate the traveler plugin (per user, on the `/plugins` page) and the app reverts to the bare assistant — no map chrome, just conversation. Reactivate and the full navigator returns. The `hello` plugin is a minimal authoring example.
+
 ## Features
 
-- **Trip Management** — Create, track, start, and end trips
-- **GPS Tracking** — Real-time position logging via GPSD daemon with mock fallback
-- **OpenStreetMap Integration** — Geocoding, reverse geocoding, routing, and POI search
-- **AI-Powered Diary** — Auto-generates Markdown travel diaries using Ollama (gemma4:31b-cloud)
-- **Web Search** — DuckDuckGo search with optional AI summarization
+- **Simple AI assistant core** — voice-first agent with web search, works with zero plugins installed
+- **Trip Management** — Create, track, start, and end trips *(traveler plugin)*
+- **GPS Tracking** — Real-time position logging via GPSD daemon with mock fallback *(traveler plugin)*
+- **OpenStreetMap Integration** — Geocoding, reverse geocoding, routing, and POI search *(traveler plugin)*
+- **AI-Powered Diary** — Auto-generates Markdown travel diaries using Ollama (gemma4:31b-cloud) *(traveler plugin)*
+- **Web Search** — DuckDuckGo search with optional AI summarization *(core)*
 - **AI Chat** — Conversational agent aware of your travel history and diary entries
+- **Unified UI library** — monochrome noir theme, user-selectable accent/gradient, swappable themes under `web/themes/`
 - **Silent Diary Cron** — Daily auto-generation at a configurable time
 - **Bearer Token Auth** — Simple but effective authentication
 - **Web Navigator UI** — Map-first driving interface with voice AI companion

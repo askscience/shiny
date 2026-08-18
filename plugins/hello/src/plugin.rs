@@ -33,7 +33,7 @@ impl Plugin for HelloPlugin {
         builder
             .persona("") // hello plugin adds no persona fragment.
             .skills("- `hello` — Say hello to someone. params: `{ name?: string }`")
-            .tool(crate::tool::HelloTool);
+            .tool_arc(shiny_plugin_sdk::tools::bridged(std::sync::Arc::new(crate::tool::HelloTool)));
     }
 }
 

@@ -11,6 +11,7 @@ import {
 } from './artifactStore.js';
 import { openSavedArtifact } from './artifacts.js';
 import { getCurrentPosition } from './map.js';
+import { setIcon } from '../ui/index.js';
 
 const clockTimeEl = document.getElementById('hud-clock-time');
 const clockDateEl = document.getElementById('hud-clock-date');
@@ -125,7 +126,7 @@ async function refreshLocalWeather(lat, lon) {
     const code = cur.weather_code ?? 0;
     const temp = Math.round(cur.temperature_2m ?? 0);
     if (meteoIconEl) {
-      meteoIconEl.src = `/icons/insights/${weatherIconStem(code)}.svg`;
+      void setIcon(meteoIconEl, `insights/${weatherIconStem(code)}`);
     }
     if (meteoTempEl) meteoTempEl.textContent = `${temp}°`;
     if (meteoLabelEl) meteoLabelEl.textContent = weatherLabel(code);
@@ -144,8 +145,8 @@ async function refreshLocalWeather(lat, lon) {
 function buildTripChip(dest, active) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = mobileQuery.matches ? 'hud-trip-bubble' : 'hud-trip-chip';
-  if (dest.key === active) btn.classList.add('active');
+  btn.className = 'ui-hud-chip';
+  if (dest.key === active) btn.classList.add('is-active');
   btn.textContent = dest.label;
   btn.title = `Open ${dest.label}`;
   btn.setAttribute('aria-label', dest.label);

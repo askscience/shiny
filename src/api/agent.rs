@@ -59,8 +59,8 @@ enum AgentStreamEvent {
     Error { message: String },
 }
 
-fn load_skill_reference() -> String {
-    std::fs::read_to_string("web/skills/traveler-api-tools.md")
+fn load_core_skill() -> String {
+    std::fs::read_to_string("web/skills/core-assistant.md")
         .unwrap_or_else(|_| "Use JSON action blocks.".into())
 }
 
@@ -129,22 +129,15 @@ async fn prepare_agent(
         .filter(|n| !active_set.contains(n))
         .collect();
 
-    // Skill markdown = legacy file (back-compat) PLUS whatever plugins the
-    // user has activated advertise. Without an activated traveler plugin the
-    // missing travel verbs won't appear, leaving the sphere as pure-assistant.
-    let legacy_skill = load_skill_reference();
+    // Skill markdown = the core assistant reference (always-on tools only)
+    // PLUS whatever skills the user's active plugins advertise. Plugin-owned
+    // domains (e.g. traveler) document their own tools via their skills.
+    let core_skill = load_core_skill();
     let plugin_skill = state.plugins.skills_markdown_for(&installed);
-    let traveler_active = installed.contains("traveler");
-    let skill = if !traveler_active {
-        // Without traveler activated, don't surface the legacy skill file
-        // (it unconditionally documents trip/map/diary verbs).
-        plugin_skill
-    } else if plugin_skill.trim().is_empty() {
-        legacy_skill
-    } else if legacy_skill.contains("Use JSON action blocks.") || legacy_skill.is_empty() {
-        plugin_skill
+    let skill = if plugin_skill.trim().is_empty() {
+        core_skill
     } else {
-        format!("{legacy_skill}\n\n---\n\n{plugin_skill}")
+        format!("{core_skill}\n\n---\n\n{plugin_skill}")
     };
 
     // Persona concat for the active set; fallback to a neutral helpful

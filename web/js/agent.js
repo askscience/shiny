@@ -254,16 +254,24 @@ export async function sendToAgent(message, mode, context) {
     await syncTripsAfterAgent(res);
 
     setSphereState('speaking');
-    await speak(res.reply, localStorage.getItem('voice.lang') ||
-      (navigator.language || 'en').split('-')[0]);
-    setSphereState('idle');
 
+    // The reply is the primary surface — show it even if voice playback fails.
     const replyEl = document.getElementById('reply-text');
     if (replyEl) {
       replyEl.textContent = res.reply;
       replyEl.classList.remove('hidden');
       setTimeout(() => replyEl.classList.add('hidden'), 8000);
     }
+
+    try {
+      await speak(res.reply, localStorage.getItem('voice.lang') ||
+        (navigator.language || 'en').split('-')[0]);
+    } catch (ttsErr) {
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: ttsErr?.message || 'Voice playback unavailable', type: 'error' },
+      }));
+    }
+    setSphereState('idle');
 
     return res;
   } catch (e) {

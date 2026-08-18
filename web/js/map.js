@@ -1,3 +1,5 @@
+import { cssVar, getThemeManifest } from '../ui/index.js';
+
 let map = null;
 let baseTileLayer = null;
 let userMarker = null;
@@ -6,6 +8,21 @@ const MAP_TILES = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
   light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
 };
+
+/** Map surfaces follow the active theme + accent. */
+function mapColors() {
+  return {
+    accent: cssVar('--accent') || '#ffffff',
+    accent2: cssVar('--accent-2') || '#8a8a8a',
+    traveled: 'rgba(250, 250, 250, 0.32)',
+    casing: 'rgba(0, 0, 0, 0.55)',
+    white: '#ffffff',
+  };
+}
+
+function tileMode() {
+  return getThemeManifest()?.modes?.[0] === 'light' ? 'light' : 'dark';
+}
 let routeLayer = null;
 let routeCasingLayer = null;
 let routeTraveledLayer = null;
@@ -13,6 +30,7 @@ let destinationMarker = null;
 let artifactMarker = null;
 let navigationActive = false;
 let navigatorFollow = false;
+let routeDashed = false;
 let lastMapPan = { lat: null, lon: null };
 let displayBearing = 0;
 let bearingInitialized = false;
@@ -41,25 +59,32 @@ export function initMap() {
 
   bindMapZoomGuards();
 
-  const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-  baseTileLayer = L.tileLayer(MAP_TILES[theme], {
+  baseTileLayer = L.tileLayer(MAP_TILES[tileMode()], {
     maxZoom: 19,
     crossOrigin: 'anonymous',
     subdomains: 'abcd',
   }).addTo(map);
 
-  window.addEventListener('theme:change', (e) => {
-    setMapTheme(e.detail?.theme);
+  window.addEventListener('theme:change', () => {
+    setMapTheme(tileMode());
   });
 
   userMarker = L.circleMarker([currentPos.lat, currentPos.lon], {
     radius: 7,
-    fillColor: '#5eead4',
+    fillColor: mapColors().accent,
     fillOpacity: 0.95,
     color: '#fff',
     weight: 2.5,
     className: 'user-marker',
   }).addTo(map);
+
+  window.addEventListener('appearance:change', () => {
+    const c = mapColors();
+    userMarker?.setStyle({ fillColor: c.accent });
+    destinationMarker?.setStyle({ fillColor: c.accent });
+    routeLayer?.setStyle({ color: routeDashed ? c.accent2 : c.accent });
+    routeTraveledLayer?.setStyle({ color: c.traveled });
+  });
 
   window.addEventListener('gps:update', (e) => {
     updatePosition(e.detail);
@@ -107,7 +132,7 @@ export function setMapTheme(theme) {
   if (!map) return;
   const key = theme === 'light' ? 'light' : 'dark';
   if (baseTileLayer) map.removeLayer(baseTileLayer);
-  baseTileLayer = L.tileLayer(MAP_TILES[key], {
+  baseTileLayer = L.tileLayer(MAP_TILES[key] || MAP_TILES.dark, {
     maxZoom: 19,
     crossOrigin: 'anonymous',
     subdomains: 'abcd',
@@ -298,6 +323,9 @@ export function updatePosition({ lat, lon, heading }) {
   if (heading != null && !isNaN(heading)) {
     currentHeading = heading;
   }
+  // Chat-only mode (traveler plugin inactive): the map is never initialized,
+  // so there is no marker/view to move — just track the fix for agent context.
+  if (!map || !userMarker) return;
   userMarker.setLatLng([lat, lon]);
 
   if (!navigatorFollow && !navigationActive) {
@@ -378,10 +406,11 @@ export function clearNavigation() {
 }
 
 function showDestinationMarker(coords) {
+  if (!map) return;
   if (destinationMarker) map.removeLayer(destinationMarker);
   destinationMarker = L.circleMarker([coords.lat, coords.lon], {
     radius: 10,
-    fillColor: '#ff6b4a',
+    fillColor: mapColors().accent,
     fillOpacity: 1,
     color: '#fff',
     weight: 2.5,
@@ -411,6 +440,8 @@ function normalizeGeometry(geometry) {
 }
 
 function drawRouteLines(points, { dashed = false, progressIdx = null, anchor = null } = {}) {
+  routeDashed = dashed;
+  const colors = mapColors();
   const lineOpts = {
     lineCap: 'round',
     lineJoin: 'round',
@@ -443,7 +474,7 @@ function drawRouteLines(points, { dashed = false, progressIdx = null, anchor = n
 
   if (traveled.length > 1) {
     routeTraveledLayer = L.polyline(traveled, {
-      color: 'rgba(148, 163, 184, 0.45)',
+      color: colors.traveled,
       weight: 6,
       opacity: 0.6,
       ...lineOpts,
@@ -452,7 +483,7 @@ function drawRouteLines(points, { dashed = false, progressIdx = null, anchor = n
 
   if (!dashed) {
     routeCasingLayer = L.polyline(remaining, {
-      color: '#0f172a',
+      color: colors.casing,
       weight: 11,
       opacity: 0.55,
       ...lineOpts,
@@ -460,7 +491,7 @@ function drawRouteLines(points, { dashed = false, progressIdx = null, anchor = n
   }
 
   routeLayer = L.polyline(remaining, {
-    color: dashed ? '#fbbf24' : '#5eead4',
+    color: dashed ? colors.accent2 : colors.accent,
     weight: dashed ? 4 : 6,
     opacity: dashed ? 0.85 : 0.95,
     ...lineOpts,
@@ -553,11 +584,15 @@ export function refreshGpsPosition() {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        updatePosition({
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          heading: pos.coords.heading ?? currentHeading,
-        });
+        // Boot depends on this promise settling — never let a UI error
+        // inside updatePosition leave it pending.
+        try {
+          updatePosition({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            heading: pos.coords.heading ?? currentHeading,
+          });
+        } catch (_) {}
         resolve({ ...currentPos, accurate: true });
       },
       () => resolve({ ...currentPos, accurate: gpsAccurate }),
@@ -580,6 +615,7 @@ export async function drawRoute(toLat, toLon, { navigate = false, artifactRef = 
 }
 
 export function previewDestination(artifact) {
+  if (!map) return;
   const dest = resolveDestination(artifact);
   if (dest) showDestinationMarker(dest);
 }
@@ -651,7 +687,7 @@ export async function loadActiveRoute(tripId) {
     setNavigationMode(false);
     const points = res.data.map((p) => [p.lat, p.lon]);
     if (points.length > 1) {
-      routeLayer = L.polyline(points, { color: '#5eead4', weight: 3, opacity: 0.5 }).addTo(map);
+      routeLayer = L.polyline(points, { color: mapColors().accent, weight: 3, opacity: 0.5 }).addTo(map);
     }
   } catch (_) {}
 }

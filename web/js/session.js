@@ -6,8 +6,7 @@ import { resetActiveTrip, refreshActiveTrip } from './gps.js';
 import { clearNavigation, loadActiveRoute, refreshGpsPosition } from './map.js';
 import { stopNavigator } from './navigator.js';
 import { loadArtifacts } from './artifactStore.js';
-import { refreshSettingsUI } from './settings.js';
-import { applyAccent, getStoredAccent } from './accent.js';
+import { refreshAppearance } from '../ui/index.js';
 import { closeTextInput } from './textInput.js';
 import { setSphereState } from './sphere.js';
 
@@ -20,7 +19,6 @@ export function resetUserSession() {
   clearInsightCards();
   resetActiveTrip();
   setSphereState('idle');
-  document.getElementById('settings-panel')?.classList.add('hidden');
   document.getElementById('travel-panel')?.classList.add('hidden');
   document.getElementById('travel-panel-backdrop')?.classList.add('hidden');
   document.getElementById('app')?.classList.remove('panel-open');
@@ -28,8 +26,7 @@ export function resetUserSession() {
 
 export async function reloadUserSession() {
   await validateSession();
-  applyAccent(getStoredAccent());
-  refreshSettingsUI();
+  refreshAppearance();
   await refreshGpsPosition();
   const trip = await refreshActiveTrip();
   if (trip?.id) {

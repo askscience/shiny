@@ -1,4 +1,3 @@
-import { DEFAULT_ACCENT } from './accent.js';
 import { getTraveler } from './api.js';
 
 const AI_NAME_KEY = 'ai.name';
@@ -19,14 +18,6 @@ export function setAiName(name) {
   const key = scopedKey(AI_NAME_KEY);
   if (trimmed) localStorage.setItem(key, trimmed);
   else localStorage.removeItem(key);
-}
-
-export function getAccent() {
-  return localStorage.getItem(scopedKey('ui.accent')) || DEFAULT_ACCENT;
-}
-
-export function setAccent(hex) {
-  localStorage.setItem(scopedKey('ui.accent'), hex);
 }
 
 export function getOllamaModel() {

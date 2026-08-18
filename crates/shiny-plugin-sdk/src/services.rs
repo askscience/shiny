@@ -34,33 +34,81 @@ pub struct ConfigSnapshot {
 
 /// The handle a plugin receives at `on_load` and at every tool invocation.
 /// Cheap to clone (every field is an `Arc` or shared-handle internally).
+///
+/// NOTE: nothing that binds to a runtime is shared across the dlopen
+/// boundary. A `SqlitePool` carries live libsqlite3 objects (each side
+/// links its own libsqlite3 — cross-free segfaults), and a pre-built
+/// reqwest client captures the host's reactor (cross-reactor panics).
+/// Every plugin therefore opens its OWN pool and HTTP clients, lazily,
+/// on its own runtime — via the async accessors below.
 #[derive(Clone)]
 pub struct PluginCtx {
-    pub pool: SqlitePool,
-    pub ollama: OllamaClient,
-    pub search: SearchService,
-    pub supertonic: SupertonicClient,
+    pool: Arc<tokio::sync::OnceCell<SqlitePool>>,
+    ollama: Arc<tokio::sync::OnceCell<OllamaClient>>,
+    search: Arc<tokio::sync::OnceCell<SearchService>>,
+    supertonic: Arc<tokio::sync::OnceCell<SupertonicClient>>,
     pub config: ConfigSnapshot,
     pub manifest: Manifest,
 }
 
 impl PluginCtx {
-    pub fn new(
-        pool: SqlitePool,
-        ollama: OllamaClient,
-        search: SearchService,
-        supertonic: SupertonicClient,
-        config: ConfigSnapshot,
-        manifest: Manifest,
-    ) -> Arc<Self> {
+    pub fn new(config: ConfigSnapshot, manifest: Manifest) -> Arc<Self> {
         Arc::new(Self {
-            pool,
-            ollama,
-            search,
-            supertonic,
+            pool: Arc::new(tokio::sync::OnceCell::new()),
+            ollama: Arc::new(tokio::sync::OnceCell::new()),
+            search: Arc::new(tokio::sync::OnceCell::new()),
+            supertonic: Arc::new(tokio::sync::OnceCell::new()),
             config,
             manifest,
         })
+    }
+
+    /// Clone with a different manifest (the host loader uses this to build
+    /// the per-plugin ctx). All lazy cells start fresh, so each plugin
+    /// opens its own connections on first use.
+    pub fn with_manifest(&self, manifest: Manifest) -> Arc<Self> {
+        Self::new(self.config.clone(), manifest)
+    }
+
+    /// The plugin's own SQLite pool — opened lazily on first use, inside the
+    /// plugin's process and runtime. All DB work in plugin code must go
+    /// through this accessor, never through a pool passed from the host.
+    pub async fn pool(&self) -> &SqlitePool {
+        self.pool
+            .get_or_init(|| async {
+                SqlitePool::connect(&self.config.database_url)
+                    .await
+                    .expect("plugin failed to open SQLite database")
+            })
+            .await
+    }
+
+    /// Plugin-owned Ollama client, built from the config snapshot.
+    pub async fn ollama(&self) -> &OllamaClient {
+        self.ollama
+            .get_or_init(|| async {
+                OllamaClient::new(self.config.ollama_url.clone(), self.config.ollama_model.clone())
+            })
+            .await
+    }
+
+    /// Plugin-owned web search client.
+    pub async fn search(&self) -> &SearchService {
+        self.search
+            .get_or_init(|| async { SearchService::new() })
+            .await
+    }
+
+    /// Plugin-owned Supertonic TTS client, built from the config snapshot.
+    pub async fn supertonic(&self) -> &SupertonicClient {
+        self.supertonic
+            .get_or_init(|| async {
+                SupertonicClient::new(
+                    self.config.supertonic_url.clone(),
+                    self.config.supertonic_voice.clone(),
+                )
+            })
+            .await
     }
 }
 

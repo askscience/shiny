@@ -1,0 +1,272 @@
+/* ─────────────────────────────────────────────────────────────
+   Noir — visual skin for the Shiny UI components
+   Monochrome glass. One accent. Quiet, cinematic restraint:
+   single soft entrances, no looping motion, no bounce.
+   ───────────────────────────────────────────────────────────── */
+
+.ui-icon { color: inherit; }
+.ui-icon--missing { background: var(--glass-strong); }
+
+/* ── Button ────────────────────────────────────────────────── */
+.ui-btn { font-family: var(--font-body); letter-spacing: 0.01em; }
+
+.ui-btn--primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: transparent;
+}
+.ui-btn--primary:hover { filter: brightness(1.08); }
+.ui-btn--primary .ui-spinner { border-color: rgba(0, 0, 0, 0.2); border-top-color: var(--accent-contrast); }
+
+.ui-btn--ghost {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+.ui-btn--ghost:hover { background: var(--glass-hover); border-color: var(--glass-highlight); }
+
+.ui-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.ui-btn--quiet:hover { color: var(--text); background: var(--glass); }
+
+.ui-btn--danger {
+  background: transparent;
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--error);
+}
+.ui-btn--danger:hover { background: rgba(248, 113, 113, 0.1); }
+
+.ui-btn:disabled, .ui-btn.is-disabled { opacity: 0.45; }
+.ui-btn .ui-icon { color: currentColor; }
+
+.ui-btn--icon {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-btn--icon:hover { background: var(--glass-hover); color: var(--text); }
+
+/* Focus — a whisper of accent */
+.ui-btn:focus-visible,
+.ui-input:focus-visible,
+.ui-textarea:focus-visible,
+.ui-select:focus-visible,
+.ui-toggle:focus-visible,
+.ui-chip:focus-visible,
+.ui-dock-btn:focus-visible,
+.ui-list-item:focus-visible,
+.ui-hud-chip:focus-visible,
+.ui-checkbox:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ── Fields ────────────────────────────────────────────────── */
+.ui-label { color: var(--text-secondary); }
+.ui-hint { color: var(--muted); }
+
+.ui-input, .ui-textarea, .ui-select {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+.ui-input::placeholder, .ui-textarea::placeholder { color: var(--muted); }
+.ui-input:hover, .ui-textarea:hover, .ui-select:hover { border-color: var(--glass-highlight); }
+.ui-input:focus, .ui-textarea:focus, .ui-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ui-select-wrap .ui-icon { color: var(--muted); }
+.ui-select option { background: var(--bg-elevated); color: var(--text); }
+
+.ui-search > .ui-icon { color: var(--muted); }
+
+.ui-toggle { background: var(--glass-strong); border-color: var(--glass-border); }
+.ui-toggle::after { background: var(--text-secondary); }
+.ui-toggle[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.ui-toggle[aria-checked="true"]::after { background: var(--accent-contrast); }
+
+.ui-slider { background: var(--glass-strong); }
+.ui-slider::-webkit-slider-thumb { background: var(--accent); }
+.ui-slider::-moz-range-thumb { background: var(--accent); }
+
+.ui-checkbox { color: var(--text); }
+.ui-checkbox-box { background: var(--glass); border-color: var(--glass-border); color: var(--accent-contrast); }
+.ui-checkbox.is-checked .ui-checkbox-box { background: var(--accent); border-color: var(--accent); }
+
+/* ── Card / Panel / Section ────────────────────────────────── */
+.ui-card { background: var(--glass); border-color: var(--glass-border); }
+.ui-card--flat { background: transparent; }
+.ui-card-foot { border-top: 1px solid var(--glass-border); }
+
+.ui-panel {
+  background: var(--surface);
+  border-color: var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.ui-eyebrow { color: var(--accent); }
+.ui-title { color: var(--text); }
+.ui-subtitle { color: var(--muted); }
+.ui-divider { background: var(--glass-border); }
+
+/* ── Overlay ───────────────────────────────────────────────── */
+.ui-modal, .ui-sheet { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.ui-modal-card, .ui-sheet-card {
+  background: var(--surface-strong);
+  border-color: var(--glass-border);
+  box-shadow: var(--shadow-float);
+}
+.ui-sheet-grip {
+  width: 36px; height: 4px; border-radius: 999px;
+  background: var(--glass-strong); margin: 0 auto 16px;
+}
+
+[data-tooltip]::after {
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Feedback ──────────────────────────────────────────────── */
+.ui-toast {
+  background: var(--surface-strong);
+  border-color: var(--glass-border);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+}
+.ui-toast--error { border-color: rgba(248, 113, 113, 0.3); color: var(--error); }
+.ui-toast--ok { border-color: rgba(110, 231, 168, 0.3); color: var(--ok); }
+
+.ui-spinner { border-color: var(--glass-strong); border-top-color: var(--accent); }
+
+.ui-skeleton { background: var(--glass); }
+.ui-skeleton::after {
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+}
+
+.ui-progress { background: var(--glass-strong); }
+.ui-progress-bar { background: var(--gradient-accent); }
+
+.ui-empty { color: var(--muted); }
+.ui-empty .ui-icon { color: var(--muted); }
+
+.ui-badge { background: var(--glass); border-color: var(--glass-border); color: var(--text-secondary); }
+.ui-badge--accent { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.ui-badge--ok { background: rgba(110, 231, 168, 0.1); border-color: rgba(110, 231, 168, 0.3); color: var(--ok); }
+.ui-badge--warn { background: rgba(252, 211, 77, 0.1); border-color: rgba(252, 211, 77, 0.3); color: var(--warn); }
+.ui-badge--error { background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.3); color: var(--error); }
+
+/* ── Data ──────────────────────────────────────────────────── */
+.ui-list-item { color: var(--text); }
+.ui-list-item:hover { background: var(--glass); border-color: var(--glass-border); }
+.ui-list-item-sub { color: var(--muted); }
+.ui-list-item .ui-icon { color: var(--text-secondary); }
+
+.ui-stat-value { color: var(--text); }
+.ui-stat-unit { color: var(--muted); }
+.ui-stat-label { color: var(--muted); }
+
+.ui-chip {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-chip:hover { background: var(--glass-hover); color: var(--text); }
+.ui-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ui-avatar { background: var(--glass-strong); color: var(--text-secondary); border: 1px solid var(--glass-border); }
+
+.ui-kv-row + .ui-kv-row { border-top-color: var(--glass-border); }
+.ui-kv-key { color: var(--muted); }
+.ui-kv-val { color: var(--text); }
+
+/* ── Dock ──────────────────────────────────────────────────── */
+.ui-dock-btn {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-dock-btn:hover { background: var(--glass-hover); color: var(--text); }
+.ui-dock-btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+.ui-dock-btn--text { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+/* ── Artifact panel (plugin content) ───────────────────────── */
+.ui-artifact-hero {
+  background: var(--gradient-mesh);
+  border-bottom: 1px solid var(--glass-border);
+}
+.ui-artifact-eyebrow { color: var(--accent); }
+.ui-artifact-title { color: var(--text); }
+.ui-artifact-sub { color: var(--text-secondary); }
+.ui-artifact-close {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-artifact-close:hover { color: var(--text); background: var(--glass-hover); }
+.ui-artifact-prose { color: var(--text-secondary); }
+.ui-artifact-section-head { margin-top: 4px; }
+.ui-artifact-day-num {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.ui-artifact-day-title { color: var(--text); }
+.ui-artifact-day-items { color: var(--text-secondary); }
+ul.ui-artifact-day-items { padding-left: 18px; }
+ul.ui-artifact-day-items li { margin: 2px 0; }
+ul.ui-artifact-day-items li::marker { color: var(--accent); }
+.ui-artifact-section-label { color: var(--muted); font-size: 12px; font-weight: 500; }
+.ui-artifact-section-value { color: var(--text); font-size: 13px; margin-top: 2px; }
+
+/* ── Insight card ──────────────────────────────────────────── */
+.ui-insight {
+  background: var(--surface);
+  border-color: var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+.ui-insight > .ui-icon { color: var(--accent); }
+.ui-insight-title { color: var(--text); }
+.ui-insight-body { color: var(--text-secondary); }
+.ui-insight-close { color: var(--muted); }
+.ui-insight-close:hover { color: var(--text); }
+
+/* ── Navigation banner ─────────────────────────────────────── */
+.ui-nav-banner {
+  background: var(--surface-strong);
+  border-color: var(--glass-border);
+  box-shadow: var(--shadow-float);
+}
+.ui-nav-instruction { color: var(--text); }
+.ui-nav-meta { color: var(--muted); }
+.ui-nav-exit { background: transparent; color: var(--muted); border-left: 1px solid var(--glass-border); }
+.ui-nav-exit:hover { color: var(--text); background: var(--glass); }
+.ui-nav-speed {
+  background: var(--surface-strong);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+.ui-nav-speed-unit { color: var(--muted); }
+
+/* ── HUD chip ──────────────────────────────────────────────── */
+.ui-hud-chip {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-hud-chip:hover { background: var(--glass-hover); color: var(--text); }
+.ui-hud-chip .ui-icon { color: var(--accent); }

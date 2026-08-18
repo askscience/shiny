@@ -1977,6 +1977,7 @@ dependencies = [
  "axum",
  "bytes",
  "chrono",
+ "futures",
  "http",
  "reqwest",
  "semver",

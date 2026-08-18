@@ -1,0 +1,212 @@
+/* Settings page layout — components come from /ui + the active theme. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection { background: var(--accent-soft); color: var(--text); }
+.hidden { display: none !important; }
+
+body {
+  background: var(--gradient-mesh), var(--bg);
+  background-attachment: fixed;
+}
+
+.settings-page {
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: 0 22px calc(64px + env(safe-area-inset-bottom));
+}
+
+/* ── Header (shared page pattern with the plugins page) ────── */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 2px;
+  background: linear-gradient(180deg, var(--bg) 55%, transparent);
+}
+.page-header-left { display: flex; align-items: center; gap: 18px; }
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color var(--duration-fast);
+}
+.page-back:hover { color: var(--text); }
+.page-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); }
+.page-brand-mark {
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  background: var(--gradient-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-brand-mark svg { width: 15px; height: 15px; color: var(--accent-contrast); }
+.page-brand-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.page-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 5px 12px 5px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass);
+}
+.page-user-avatar.profile-avatar { width: 26px; height: 26px; border-radius: 50%; font-size: 10px; border-width: 1px; }
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.settings-hero { padding: 42px 2px 30px; display: flex; flex-direction: column; gap: 10px; }
+.settings-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 6vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.settings-subtitle { max-width: 46ch; font-size: 14px; }
+
+/* ── Sections ──────────────────────────────────────────────── */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 0;
+  border-top: 1px solid var(--glass-border);
+}
+.settings-section h3 {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  color: var(--muted);
+}
+.settings-section > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin: 12px 0 7px;
+  color: var(--text-secondary);
+}
+.settings-hint { font-size: 12px; color: var(--muted); margin-top: 7px; line-height: 1.45; }
+.settings-control { margin-bottom: 2px; }
+
+.settings-footer { display: flex; gap: 10px; margin-top: 26px; }
+.settings-footer .ui-btn { flex: 1; }
+
+/* ── Profile avatar ────────────────────────────────────────── */
+.profile-avatar {
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.profile-avatar--large { width: 88px; height: 88px; border-radius: 22px; font-size: 1.5rem; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profile-avatar--empty { background: linear-gradient(135deg, var(--accent-soft), var(--glass)); color: var(--accent); }
+.profile-avatar--placeholder { color: var(--muted); font-size: 2rem; font-weight: 400; border-style: dashed; }
+.profile-avatar-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  width: fit-content;
+}
+.profile-avatar-upload .profile-avatar:hover { border-color: var(--accent); }
+.profile-avatar-label { font-size: 12px; color: var(--muted); }
+
+/* ── Appearance swatches ───────────────────────────────────── */
+.swatch-row { display: flex; flex-wrap: wrap; gap: 9px; margin: 2px 0 4px; }
+.swatch {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.swatch:hover { transform: scale(1.08); }
+.swatch.is-active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.swatch--gradient { width: 52px; border-radius: var(--radius-xs); }
+.swatch--custom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 16px;
+  overflow: hidden;
+}
+.swatch--custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.gradient-custom { margin-top: 10px; }
+.gradient-custom summary {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gradient-custom summary::before { content: '+'; font-size: 14px; }
+.gradient-custom[open] summary::before { content: '−'; }
+.gradient-custom summary:hover { color: var(--text); }
+.gradient-custom-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.gradient-custom-controls input[type="color"] {
+  width: 40px; height: 30px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xs);
+  background: var(--glass);
+  cursor: pointer;
+  padding: 2px;
+}
+.gradient-custom-controls .ui-slider { flex: 1; }
+
+@media (max-width: 640px) {
+  .settings-hero { padding-top: 28px; }
+  .page-brand-name { display: none; }
+}

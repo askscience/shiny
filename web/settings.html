@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="noir">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <title>Shiny — Settings</title>
+  <link id="theme-tokens" rel="stylesheet" href="/themes/noir/tokens.css">
+  <link rel="stylesheet" href="/ui/ui.css">
+  <link id="theme-components" rel="stylesheet" href="/themes/noir/components.css">
+  <link rel="stylesheet" href="/css/settings.css">
+</head>
+<body>
+  <div class="settings-page" data-controller="settings">
+
+    <header class="page-header">
+      <div class="page-header-left">
+        <a class="page-back" href="/" aria-label="Back to the AI sphere">
+          <span class="ui-icon" data-icon="ui/arrow-left" data-icon-size="17" aria-hidden="true"></span>
+          <span>Sphere</span>
+        </a>
+        <a class="page-brand" href="/" aria-label="Shiny home">
+          <span class="page-brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 3c-2.5 3-4 6.5-4 9a4 4 0 0 0 8 0c0-2.5-1.5-6-4-9z"/>
+            </svg>
+          </span>
+          <span class="page-brand-name">Shiny</span>
+        </a>
+      </div>
+      <div class="page-header-right">
+        <div class="page-user" aria-label="Current user">
+          <span class="page-user-avatar profile-avatar" id="settings-user-avatar"></span>
+          <span id="settings-user-name">—</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="settings-body">
+
+      <section class="settings-hero">
+        <span class="ui-eyebrow">Workspace</span>
+        <h1 class="settings-title"><span class="ui-gradient-text">Settings</span></h1>
+        <p class="ui-subtitle settings-subtitle">Profile, appearance and assistant preferences — stored per user, on this device.</p>
+      </section>
+
+      <section class="settings-section">
+        <h3>Profile</h3>
+        <label class="profile-avatar-upload">
+          <input type="file" id="profile-avatar-input" accept="image/*" hidden>
+          <div id="profile-avatar-preview" class="profile-avatar profile-avatar--large"></div>
+          <span class="profile-avatar-label">Change photo</span>
+        </label>
+        <label for="profile-name-input">Display name</label>
+        <input type="text" id="profile-name-input" class="ui-input" maxlength="64" autocomplete="name">
+      </section>
+
+      <section class="settings-section">
+        <h3>Appearance</h3>
+        <label for="theme-select">Theme</label>
+        <div class="ui-select-wrap settings-control">
+          <select id="theme-select" class="ui-select"></select>
+          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+        </div>
+        <label id="accent-label">Accent</label>
+        <div id="accent-swatches" class="swatch-row" role="radiogroup" aria-labelledby="accent-label"></div>
+        <label id="gradient-label">Gradient</label>
+        <div id="gradient-swatches" class="swatch-row swatch-row--gradient" role="radiogroup" aria-labelledby="gradient-label"></div>
+        <details class="gradient-custom">
+          <summary>Custom gradient</summary>
+          <div class="gradient-custom-controls">
+            <input type="color" id="gradient-stop-a" value="#ffffff" aria-label="Gradient start color">
+            <input type="color" id="gradient-stop-b" value="#8a8a8a" aria-label="Gradient end color">
+            <input type="range" id="gradient-angle" class="ui-slider" min="0" max="360" step="5" value="135" aria-label="Gradient angle">
+          </div>
+        </details>
+      </section>
+
+      <section class="settings-section">
+        <h3>Assistant</h3>
+        <label for="ai-name-input">Assistant name</label>
+        <input type="text" id="ai-name-input" class="ui-input" placeholder="Shiny" maxlength="32" autocomplete="off">
+        <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Shiny</span>&rdquo; to activate voice on long press.</p>
+        <label for="ollama-model-select">AI model</label>
+        <div class="ui-select-wrap settings-control">
+          <select id="ollama-model-select" class="ui-select"></select>
+          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+        </div>
+        <p id="ollama-model-hint" class="settings-hint">Models from your local Ollama server.</p>
+      </section>
+
+      <section class="settings-section">
+        <h3>Voice</h3>
+        <label for="lang-select">Language</label>
+        <div class="ui-select-wrap settings-control">
+          <select id="lang-select" class="ui-select"></select>
+          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+        </div>
+        <p class="settings-hint">Speech recognition downloads a model per language (~50&nbsp;MB, cached in the browser).</p>
+      </section>
+
+      <div class="settings-footer">
+        <button id="settings-logout" class="ui-btn ui-btn--danger" type="button">Log Out</button>
+        <button id="settings-done" class="ui-btn ui-btn--primary" type="button">Done</button>
+      </div>
+
+    </main>
+  </div>
+
+  <script type="module" src="/js/settings-page.js"></script>
+</body>
+</html>

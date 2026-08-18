@@ -1,10 +1,12 @@
 /**
  * Renders persistent notification-style insight cards (weather, events, places).
+ * Cards are built with the ui.insightCard composite — always in the active theme.
  */
 
 import { apiFetch } from '../api.js';
 import { getOllamaModel } from '../preferences.js';
 import { setDockStep, clearDockStep } from '../dockStep.js';
+import { insightCard, reveal } from '../../ui/index.js';
 import {
   setInsightCards,
   getVisibleCards,
@@ -14,17 +16,17 @@ import {
 
 const container = document.getElementById('insight-cards');
 
-/** Default icon stems when the API omits `icon`. */
+/** Default icon names when the API omits `icon`. */
 const ICON_FALLBACK = {
-  weather: 'weather-cloud',
-  event: 'event',
-  place: 'place-landmark',
+  weather: 'insights/weather-cloud',
+  event: 'insights/event',
+  place: 'insights/place-landmark',
 };
 
-/** Resolve `/icons/insights/{stem}.svg` from API `icon` field or kind. */
-function iconSrc(card) {
-  const stem = card.icon || ICON_FALLBACK[card.kind] || 'place-landmark';
-  return `/icons/insights/${stem}.svg`;
+/** Resolve a theme icon name from the API `icon` field or kind. */
+function iconName(card) {
+  const stem = card.icon || ICON_FALLBACK[card.kind]?.replace('insights/', '') || 'place-landmark';
+  return stem.startsWith('insights/') ? stem : `insights/${stem}`;
 }
 
 function render() {
@@ -40,41 +42,18 @@ function render() {
   container.classList.remove('hidden');
 
   list.forEach((card, i) => {
-    const el = document.createElement('article');
-    el.className = `insight-card kind-${card.kind || 'place'}`;
-    el.style.animationDelay = `${i * 0.07}s`;
+    const el = insightCard({
+      icon: iconName(card),
+      kind: card.kind || 'place',
+      title: card.title,
+      body: card.body,
+      onDismiss: () => dismissInsightCard(card.id),
+    });
     el.dataset.id = card.id;
-
-    const iconWrap = document.createElement('div');
-    iconWrap.className = 'insight-card-icon';
-    const img = document.createElement('img');
-    img.src = iconSrc(card);
-    img.alt = '';
-    iconWrap.appendChild(img);
-
-    const body = document.createElement('div');
-    body.className = 'insight-card-body';
-    const title = document.createElement('div');
-    title.className = 'insight-card-title';
-    title.textContent = card.title;
-    const text = document.createElement('div');
-    text.className = 'insight-card-text';
-    text.textContent = card.body;
-    body.appendChild(title);
-    body.appendChild(text);
-
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'insight-card-close';
-    close.setAttribute('aria-label', 'Dismiss');
-    close.innerHTML = '&times;';
-    close.addEventListener('click', () => dismissInsightCard(card.id));
-
-    el.appendChild(iconWrap);
-    el.appendChild(body);
-    el.appendChild(close);
+    el.dataset.reveal = String(Math.min(i * 70, 350));
     container.appendChild(el);
   });
+  reveal(container);
 }
 
 /**

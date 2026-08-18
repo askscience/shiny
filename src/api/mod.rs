@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
+use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::auth::auth_middleware;
 use crate::config::Config;
@@ -66,14 +67,10 @@ impl AppState {
             web_dir: "web".into(),
             signature: None,
         });
-        Arc::new(shiny_plugin_sdk::services::PluginCtx {
-            pool: self.pool.clone(),
-            ollama: self.ollama.clone(),
-            search: self.search.clone(),
-            supertonic: self.supertonic.clone(),
-            config: self.config.snapshot(),
-            manifest: empty.clone(),
-        })
+        shiny_plugin_sdk::services::PluginCtx::new(
+            self.config.snapshot(),
+            empty.clone(),
+        )
     }
 }
 
@@ -132,16 +129,24 @@ pub fn build_router(state: AppState) -> Router {
     let static_files = ServeDir::new(&web_dir)
         .not_found_service(ServeFile::new(format!("{}/index.html", web_dir)));
 
-    // Explicit HTML route for the plugins page. ServeDir's fallback would
-    // otherwise return index.html for /plugins, which we don't want — the
-    // standalone page is a separate document.
+    // Explicit HTML routes for the standalone pages. ServeDir's fallback would
+    // otherwise return index.html for them, which we don't want — these pages
+    // are separate documents.
     let plugins_page = ServeFile::new(format!("{}/plugins.html", web_dir));
+    let settings_page = ServeFile::new(format!("{}/settings.html", web_dir));
 
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .route_service("/plugins", plugins_page)
+        .route_service("/settings", settings_page)
         .fallback_service(static_files)
         .layer(CorsLayer::permissive())
+        // No heuristic caching for HTML/JS/CSS — browsers must revalidate
+        // (304 via Last-Modified) so a server restart never serves stale UI.
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-cache"),
+        ))
         .with_state(state)
 }

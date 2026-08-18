@@ -1,28 +1,26 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="noir">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#08090d">
+  <meta name="theme-color" content="#050505">
   <title>Shiny — AI Sphere</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link id="theme-tokens" rel="stylesheet" href="/themes/noir/tokens.css">
+  <link rel="stylesheet" href="/ui/ui.css">
+  <link id="theme-components" rel="stylesheet" href="/themes/noir/components.css">
   <link rel="stylesheet" href="/css/app.css">
-  <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/sphere.css">
   <link rel="stylesheet" href="/css/text-input.css">
-  <link rel="stylesheet" href="/css/artifacts.css">
-  <link rel="stylesheet" href="/css/travel-panel.css">
-  <link rel="stylesheet" href="/css/insight-cards.css">
-  <link rel="stylesheet" href="/css/hud-left.css">
   <link rel="stylesheet" href="/css/navigator.css">
 </head>
 <body>
   <div id="grain" aria-hidden="true"></div>
 
   <!-- Login overlay -->
-  <div id="login-overlay" class="overlay hidden">
-    <div class="overlay-card login-card">
+  <div id="login-overlay" class="hidden">
+    <div class="login-card glass-blur">
       <div class="brand-mark">
         <div class="brand-logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -41,29 +39,29 @@
       </div>
 
       <div id="login-step-password" class="hidden">
-        <button type="button" id="login-back-pick" class="login-back">← Back</button>
+        <button type="button" id="login-back-pick" class="login-back ui-btn ui-btn--quiet ui-btn--sm">← Back</button>
         <div class="profile-selected">
           <div id="login-selected-avatar" class="profile-avatar"></div>
           <span id="login-selected-name" class="profile-selected-name"></span>
         </div>
-        <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
-        <button id="login-btn" class="btn-primary">Sign In</button>
+        <input type="password" id="login-password" class="ui-input" placeholder="Password" autocomplete="current-password">
+        <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block">Sign In</button>
       </div>
 
       <div id="login-step-register" class="hidden">
-        <button type="button" id="login-back-from-register" class="login-back">← Back</button>
+        <button type="button" id="login-back-from-register" class="login-back ui-btn ui-btn--quiet ui-btn--sm">← Back</button>
         <p class="login-step-label">Create your profile</p>
         <label class="profile-avatar-upload">
           <input type="file" id="register-avatar" accept="image/*" hidden>
           <div id="register-avatar-preview" class="profile-avatar profile-avatar--placeholder profile-avatar--large">+</div>
           <span class="profile-avatar-label">Add photo</span>
         </label>
-        <input type="text" id="register-username" placeholder="Username" autocomplete="username" autocapitalize="off">
-        <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
-        <button id="register-btn" class="btn-primary">Create Account</button>
+        <input type="text" id="register-username" class="ui-input" placeholder="Username" autocomplete="username" autocapitalize="off">
+        <input type="password" id="register-password" class="ui-input" placeholder="Password" autocomplete="new-password">
+        <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block">Create Account</button>
       </div>
 
-      <p id="login-error" class="error-text hidden"></p>
+      <p id="login-error" class="app-error hidden"></p>
     </div>
   </div>
 
@@ -79,7 +77,7 @@
     <header id="hud-header" aria-label="Status and controls">
       <div class="hud-header-main">
         <div class="hud-clock" aria-live="polite">
-          <img class="hud-clock-icon" src="/icons/hud/clock.svg" alt="" width="15" height="15">
+          <span class="hud-clock-icon" data-icon="hud/clock" aria-hidden="true"></span>
           <div class="hud-clock-text">
             <span id="hud-clock-time">--:--</span>
             <span id="hud-clock-date"></span>
@@ -87,7 +85,7 @@
         </div>
         <div class="hud-divider" aria-hidden="true"></div>
         <div class="hud-meteo" id="hud-meteo" title="Weather at your position">
-          <img id="hud-meteo-icon" src="/icons/insights/weather-cloud.svg" alt="" width="17" height="17">
+          <span id="hud-meteo-icon" data-icon="insights/weather-cloud" aria-hidden="true"></span>
           <span id="hud-meteo-temp">—°</span>
           <span id="hud-meteo-label">…</span>
         </div>
@@ -95,21 +93,12 @@
         <div id="hud-saved-trips" class="hud-trips-scroll empty" role="list" aria-label="Saved places"></div>
       </div>
       <div id="hud-top">
-        <button type="button" id="theme-toggle-btn" class="icon-btn" title="Light mode" aria-label="Toggle light or dark theme">
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="4"/>
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-          </svg>
-          <svg class="icon-moon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>
-          </svg>
-        </button>
-        <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+        <a href="/settings" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
-        </button>
+        </a>
         <a href="/plugins" id="plugins-btn" class="icon-btn" title="Plugins" aria-label="Plugins">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M11.5 21a1.5 1.5 0 0 0 3 0v-3.5a1.5 1.5 0 0 1 1.5-1.5h3a1.5 1.5 0 0 0 0-3h-3a1.5 1.5 0 0 1-1.5-1.5V8a1.5 1.5 0 0 0-3 0v3.5A1.5 1.5 0 0 1 8.5 13h-3a1.5 1.5 0 0 0 0 3h3a1.5 1.5 0 0 1 1.5 1.5V21z"/>
@@ -168,46 +157,6 @@
       <div id="reply-text" class="hidden"></div>
     </div>
 
-  </div>
-
-  <div id="toast-container" aria-live="polite"></div>
-
-  <!-- Settings panel -->
-  <div id="settings-panel" class="overlay hidden">
-    <div class="overlay-card">
-      <h2>Settings</h2>
-      <div class="settings-section">
-        <h3>Profile</h3>
-        <label class="profile-avatar-upload settings-avatar-upload">
-          <input type="file" id="profile-avatar-input" accept="image/*" hidden>
-          <div id="profile-avatar-preview" class="profile-avatar profile-avatar--large"></div>
-          <span class="profile-avatar-label">Change photo</span>
-        </label>
-        <label for="profile-name-input">Display name</label>
-        <input type="text" id="profile-name-input" maxlength="64" autocomplete="name">
-      </div>
-      <div class="settings-section">
-        <h3>Appearance</h3>
-        <label for="accent-picker">Accent color</label>
-        <input type="color" id="accent-picker" value="#4a7fd4">
-      </div>
-      <div class="settings-section">
-        <h3>Assistant</h3>
-        <label for="ai-name-input">Assistant name</label>
-        <input type="text" id="ai-name-input" placeholder="Shiny" maxlength="32" autocomplete="off">
-        <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Shiny</span>&rdquo; to activate voice on long press.</p>
-        <label for="ollama-model-select">AI model</label>
-        <select id="ollama-model-select"></select>
-        <p id="ollama-model-hint" class="settings-hint">Models from your local Ollama server.</p>
-      </div>
-      <div class="settings-section">
-        <h3>Voice</h3>
-        <label for="lang-select">Language</label>
-        <select id="lang-select"></select>
-      </div>
-      <button id="settings-logout" class="btn-secondary settings-logout" type="button">Log Out</button>
-      <button id="settings-close" class="btn-primary">Done</button>
-    </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

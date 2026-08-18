@@ -1,10 +1,13 @@
-// Plugins page controller. Standalone page — no modal, no admin role, no emojis.
-//
+// Plugins page controller — built on the Shiny UI library.
 // Every logged-in user can install/uninstall server-side (shared) and
 // activate/deactivate per-user (own workspace).
 
 import { apiFetch, getTraveler, getToken, validateSession } from './api.js';
 import { renderAvatarEl } from './userProfiles.js';
+import {
+  initThemeLoader, initAppearance, hydrateIcons,
+  toast, button, badge, card, icon, emptyState, spinner,
+} from '../ui/index.js';
 
 const dropzone = document.getElementById('plugins-dropzone');
 const dropzoneTitle = document.getElementById('plugins-dropzone-title');
@@ -20,35 +23,14 @@ const userNameEl = document.getElementById('plugins-user-name');
 
 let busy = false;
 
-const PLUGIN_ICON_SVG = `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <rect x="3" y="3" width="8" height="8" rx="2"/>
-    <rect x="13" y="3" width="8" height="8" rx="2"/>
-    <rect x="3" y="13" width="8" height="8" rx="2"/>
-    <rect x="13" y="13" width="8" height="8" rx="2" opacity="0.45"/>
-  </svg>`;
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[c]);
-}
-
 function niceName(plugin) {
   return plugin.name.charAt(0).toUpperCase() + plugin.name.slice(1);
 }
 
-function toast(message, type = 'info') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const el = document.createElement('div');
-  el.className = `toast${type === 'error' ? ' error' : ''}`;
-  el.textContent = message;
-  container.appendChild(el);
-  setTimeout(() => {
-    el.style.opacity = '0';
-    setTimeout(() => el.remove(), 300);
-  }, 4000);
+/** Cross-page signal: the sphere re-evaluates active plugins when it regains focus. */
+function notifyPluginsChanged() {
+  localStorage.setItem('plugins.changed', String(Date.now()));
+  window.dispatchEvent(new CustomEvent('plugins:changed'));
 }
 
 function renderUser() {
@@ -64,73 +46,89 @@ async function loadPlugins() {
     const plugins = (res?.data) || [];
     renderPlugins(plugins);
   } catch (e) {
-    gridEl.innerHTML = '';
+    gridEl.textContent = '';
     emptyEl.classList.remove('hidden');
-    emptyEl.innerHTML = `<p class="plugins-empty-title">Couldn't load plugins</p><p>${escapeHtml(e.message || 'Unknown error')}</p>`;
+    emptyEl.textContent = '';
+    emptyEl.appendChild(emptyState({
+      icon: 'ui/warning',
+      title: "Couldn't load plugins",
+      body: e.message || 'Unknown error',
+    }));
   }
 }
 
+function pluginCard(p) {
+  const top = document.createElement('div');
+  top.className = 'plugin-card-top';
+
+  const id = document.createElement('div');
+  id.className = 'plugin-card-id';
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'plugin-icon';
+  iconWrap.appendChild(icon('ui/puzzle', { size: 19 }));
+  const nameBlock = document.createElement('div');
+  nameBlock.className = 'plugin-name-block';
+  const h3 = document.createElement('h3');
+  h3.className = 'plugin-name';
+  h3.textContent = niceName(p);
+  const meta = document.createElement('div');
+  meta.className = 'plugin-meta';
+  const ver = document.createElement('span');
+  ver.textContent = `v${p.version}`;
+  const api = document.createElement('span');
+  api.textContent = `API ${p.api_level}`;
+  meta.append(ver, api);
+  nameBlock.append(h3, meta);
+  id.append(iconWrap, nameBlock);
+
+  top.append(id, badge(p.enabled ? 'Active' : 'Inactive', { tone: p.enabled ? 'accent' : 'neutral' }));
+
+  const desc = document.createElement('p');
+  desc.className = 'plugin-description';
+  desc.textContent = p.description || p.summary || '';
+
+  const toggleBtn = p.enabled
+    ? button({ label: 'Deactivate', variant: 'ghost', size: 'sm', onClick: () => onPluginAction('deactivate', p.name) })
+    : button({ label: 'Activate', variant: 'primary', size: 'sm', onClick: () => onPluginAction('activate', p.name) });
+  toggleBtn.dataset.action = p.enabled ? 'deactivate' : 'activate';
+  const removeBtn = button({
+    label: 'Remove', variant: 'danger', size: 'sm',
+    onClick: () => onPluginAction('uninstall', p.name),
+  });
+  removeBtn.dataset.action = 'uninstall';
+
+  const el = card({ body: [top, desc], actions: [toggleBtn, removeBtn] });
+  el.classList.add('plugin-card');
+  el.classList.toggle('is-inactive', !p.enabled);
+  return el;
+}
+
 function renderPlugins(plugins) {
-  gridEl.innerHTML = '';
+  gridEl.textContent = '';
   if (!plugins.length) {
     emptyEl.classList.remove('hidden');
+    emptyEl.textContent = '';
+    emptyEl.appendChild(emptyState({
+      icon: 'ui/puzzle',
+      title: 'No plugins installed',
+      body: 'The AI sphere is running in its bare form. Install a plugin above to add tools, routes, and skills.',
+    }));
     metaEl.textContent = '';
     return;
   }
   emptyEl.classList.add('hidden');
   metaEl.textContent = `${plugins.length} installed`;
-
-  for (const p of plugins) {
-    const card = document.createElement('article');
-    card.className = `plugin-card ${p.enabled ? '' : 'inactive'}`;
-    const toggleBtn = p.enabled
-      ? `<button class="plugin-btn plugin-btn-outline" data-action="deactivate" data-name="${escapeHtml(p.name)}">Deactivate</button>`
-      : `<button class="plugin-btn plugin-btn-primary" data-action="activate" data-name="${escapeHtml(p.name)}">Activate</button>`;
-    card.innerHTML = `
-      <div class="plugin-card-top">
-        <div class="plugin-card-id">
-          <span class="plugin-icon">${PLUGIN_ICON_SVG}</span>
-          <div class="plugin-name-block">
-            <h3 class="plugin-name">${escapeHtml(niceName(p))}</h3>
-            <div class="plugin-meta">
-              <span class="plugin-version">v${escapeHtml(p.version)}</span>
-              <span>API ${p.api_level}</span>
-            </div>
-          </div>
-        </div>
-        <span class="plugin-status ${p.enabled ? 'active' : 'inactive'}">
-          <span class="plugin-status-dot"></span>
-          ${p.enabled ? 'Active' : 'Inactive'}
-        </span>
-      </div>
-      <p class="plugin-description">${escapeHtml(p.description || p.summary || '')}</p>
-      <div class="plugin-actions">
-        ${toggleBtn}
-        <button class="plugin-btn plugin-btn-danger" data-action="uninstall" data-name="${escapeHtml(p.name)}">Remove</button>
-      </div>
-    `;
-    gridEl.appendChild(card);
-  }
-
-  gridEl.querySelectorAll('button[data-action]').forEach((btn) => {
-    btn.addEventListener('click', onPluginButton);
-  });
+  for (const p of plugins) gridEl.appendChild(pluginCard(p));
 }
 
-async function onPluginButton(e) {
-  const t = e.currentTarget;
-  const action = t.dataset.action;
-  const name = t.dataset.name;
-  if (!action || !name || busy) return;
-
-  if (action === 'uninstall' && !confirm(`Remove plugin "${niceName({ name })}"? Its database tables will remain.`)) {
+async function onPluginAction(action, name) {
+  if (busy) return;
+  if (action === 'uninstall' && !confirm(`Remove plugin "${name}"? Its database tables will remain.`)) {
     return;
   }
 
   busy = true;
-  const originalLabel = t.textContent;
   setButtonsDisabled(true);
-  t.textContent = 'Working…';
 
   const endpoint = action === 'uninstall' ? '/api/plugins/uninstall'
     : action === 'activate' ? '/api/plugins/activate'
@@ -141,28 +139,22 @@ async function onPluginButton(e) {
       method: 'POST',
       body: JSON.stringify({ name }),
     });
-    if (action === 'uninstall') {
-      toast(`Removed ${name}`, 'info');
-    } else if (action === 'activate') {
-      toast(`Activated ${name}`, 'info');
-    } else {
-      toast(`Deactivated ${name}`, 'info');
-    }
+    if (action === 'uninstall') toast(`Removed ${name}`);
+    else if (action === 'activate') toast(`Activated ${name}`);
+    else toast(`Deactivated ${name}`);
+    notifyPluginsChanged();
   } catch (err) {
-    toast(err.message || 'Action failed', 'error');
+    toast(err.message || 'Action failed', { type: 'error' });
   } finally {
     busy = false;
     setButtonsDisabled(false);
-    t.textContent = originalLabel;
     await loadPlugins();
     await refreshActivity();
   }
 }
 
 function setButtonsDisabled(disabled) {
-  gridEl.querySelectorAll('button[data-action]').forEach((b) => {
-    b.disabled = disabled;
-  });
+  gridEl.querySelectorAll('button').forEach((b) => { b.disabled = disabled; });
 }
 
 async function refreshActivity() {
@@ -180,12 +172,16 @@ async function refreshActivity() {
       return;
     }
     const lines = text.split('\n').slice(-60);
-    activityEl.innerHTML = lines.map(line => {
+    activityEl.textContent = '';
+    for (const line of lines) {
+      const div = document.createElement('div');
       let cls = 'ok';
       if (/reject|failed|missing/i.test(line)) cls = 'error';
       else if (/deactivate|uninstall/i.test(line)) cls = 'warn';
-      return `<div class="plugins-activity-line ${cls}">${escapeHtml(line)}</div>`;
-    }).join('');
+      div.className = `plugins-activity-line ${cls}`;
+      div.textContent = line;
+      activityEl.appendChild(div);
+    }
   } catch (_) {
     activityEl.innerHTML = '<div class="plugins-activity-empty">Activity unavailable.</div>';
   }
@@ -194,13 +190,14 @@ async function refreshActivity() {
 async function uploadArchive(file) {
   if (busy || !file) return;
   if (!/\.(zip|tar\.gz|tgz)$/i.test(file.name)) {
-    toast('File must be .zip or .tar.gz', 'error');
+    toast('File must be .zip or .tar.gz', { type: 'error' });
     return;
   }
   busy = true;
   const originalTitle = dropzoneTitle.textContent;
   const originalHint = dropzoneHint.textContent;
-  dropzoneTitle.innerHTML = '<span class="plugins-spinner"></span>Uploading';
+  dropzoneTitle.textContent = '';
+  dropzoneTitle.append(spinner({ size: 15 }), document.createTextNode('Uploading'));
   dropzoneHint.textContent = `${file.name} — installing…`;
 
   try {
@@ -211,9 +208,10 @@ async function uploadArchive(file) {
       body: form,
     });
     const installed = res?.data?.installed || 'plugin';
-    toast(`Installed: ${installed}`, 'info');
+    toast(`Installed: ${installed}`);
+    notifyPluginsChanged();
   } catch (e) {
-    toast(e.message || 'Install failed', 'error');
+    toast(e.message || 'Install failed', { type: 'error' });
   } finally {
     busy = false;
     dropzoneTitle.textContent = originalTitle;
@@ -225,6 +223,10 @@ async function uploadArchive(file) {
 }
 
 async function boot() {
+  await initThemeLoader();
+  initAppearance({ getScope: () => getTraveler()?.id });
+  hydrateIcons();
+
   if (!getToken()) {
     window.location.href = '/';
     return;

@@ -1,23 +1,9 @@
-/** Siri-style fluid orb — canvas only, circular clip */
+/** Siri-style fluid orb — canvas only, circular clip.
+ *  Palettes are derived live from the user's accent + gradient (noir tokens). */
 
-import { DEFAULT_ACCENT, getStoredAccent } from './accent.js';
-
-const PALETTES_DARK = {
-  idle: ['#4a7fd4', '#5eead4', '#a78bfa', '#6b9de8'],
-  listening: ['#fcd34d', '#4a7fd4', '#60a5fa', '#fbbf24'],
-  conversation: ['#5eead4', '#4a7fd4', '#2dd4bf', '#6b9de8'],
-  compose: ['#4a7fd4', '#6b9de8', '#5eead4', '#93c5fd'],
-  processing: ['#4a7fd4', '#6b9de8', '#5eead4', '#93c5fd'],
-  speaking: ['#6b9de8', '#4a7fd4', '#5eead4', '#67e8f9'],
-  error: ['#fca5a5', '#f87171', '#fb7185', '#ef4444'],
-  downloading: ['#93c5fd', '#60a5fa', '#818cf8', '#3b82f6'],
-  disabled: ['#64748b', '#475569', '#94a3b8', '#334155'],
-};
+import { getAccent, getGradient } from '../ui/index.js';
 
 const SQUARE_STATES = new Set(['listening', 'conversation', 'processing', 'speaking']);
-
-let themeMode = 'dark';
-let accentColor = DEFAULT_ACCENT;
 
 function hexToRgba(hex, a) {
   const h = hex.replace('#', '');
@@ -38,13 +24,30 @@ function lighten(hex, amount) {
   return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 }
 
+/** Per-state orb palettes, derived from the current accent + gradient. */
+function derivedPalettes() {
+  const accent = getAccent();
+  const g = getGradient();
+  const stops = g?.stops?.length >= 2 ? g.stops : ['#ffffff', '#8a8a8a'];
+  const tail = stops[stops.length - 1];
+  const light = lighten(accent, 0.22);
+  const pale = lighten(accent, 0.45);
+  return {
+    idle: [accent, tail, light, stops[0]],
+    listening: [light, accent, pale, tail],
+    conversation: [accent, tail, light, stops[0]],
+    compose: [accent, light, tail, pale],
+    processing: [accent, light, tail, pale],
+    speaking: [light, accent, tail, pale],
+    error: ['#fca5a5', '#f87171', '#fb7185', '#ef4444'],
+    downloading: [light, accent, pale, tail],
+    disabled: ['#6b6b6b', '#4a4a4a', '#8a8a8a', '#333333'],
+  };
+}
+
 function paletteForState(state) {
-  const base = [...(PALETTES_DARK[state] || PALETTES_DARK.idle)];
-  if (state === 'idle' || state === 'listening' || state === 'compose' || state === 'conversation' || state === 'processing') {
-    base[0] = accentColor;
-    base[1] = lighten(accentColor, 0.2);
-  }
-  return base;
+  const palettes = derivedPalettes();
+  return [...(palettes[state] || palettes.idle)];
 }
 
 let renderer = null;
@@ -57,7 +60,6 @@ class OrbRenderer {
     this.palette = paletteForState('idle');
     this.stateKey = 'idle';
     this.animationMode = 'orbit';
-    this.themeMode = themeMode;
     this.intensity = 0;
     this.t = 0;
     this.running = true;
@@ -92,11 +94,6 @@ class OrbRenderer {
     this.animationMode = SQUARE_STATES.has(state) ? 'square' : 'orbit';
   }
 
-  setTheme(mode) {
-    this.themeMode = mode === 'light' ? 'light' : 'dark';
-    this.setPalette(this.stateKey);
-  }
-
   setIntensity(v) {
     this.intensity = Math.min(1, Math.max(0, v));
   }
@@ -113,12 +110,8 @@ class OrbRenderer {
   }
 
   _drawBlob(ctx, w, x, y, r, color, { sharp = false } = {}) {
-    const midA = sharp
-      ? (this.themeMode === 'light' ? 0.92 : 0.88)
-      : (this.themeMode === 'light' ? 0.78 : 0.65);
-    const outerA = sharp
-      ? (this.themeMode === 'light' ? 0.35 : 0.28)
-      : (this.themeMode === 'light' ? 0.22 : 0.15);
+    const midA = sharp ? 0.88 : 0.65;
+    const outerA = sharp ? 0.28 : 0.15;
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     g.addColorStop(0, color);
     if (sharp) {
@@ -154,11 +147,9 @@ class OrbRenderer {
     ctx.clearRect(0, 0, w, w);
 
     ctx.save();
-    const glowA = this.themeMode === 'light'
-      ? 0.72 + glowI * 0.28
-      : 0.55 + glowI * 0.25;
+    const glowA = 0.55 + glowI * 0.25;
     ctx.shadowColor = hexToRgba(this.palette[0], glowA);
-    ctx.shadowBlur = (squareAnim ? 6 + glowI * 6 : (this.themeMode === 'light' ? 22 + glowI * 26 : 14 + glowI * 18)) * this.dpr;
+    ctx.shadowBlur = (squareAnim ? 6 + glowI * 6 : 14 + glowI * 18) * this.dpr;
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.004)';
@@ -211,7 +202,7 @@ class OrbRenderer {
     ctx.globalAlpha = 1;
 
     if (!squareAnim) {
-      ctx.globalAlpha = this.themeMode === 'light' ? 0.65 : 0.55;
+      ctx.globalAlpha = 0.55;
       const swirl = ctx.createRadialGradient(
         cx + Math.cos(this.t * 0.4) * R * 0.35,
         cy + Math.sin(this.t * 0.35) * R * 0.35,
@@ -252,7 +243,7 @@ class OrbRenderer {
         const p = (rippleT + i * 0.5) % 1;
         const rr = R + p * R * 0.28;
         const g = ctx.createRadialGradient(cx, cy, rr * 0.85, cx, cy, rr);
-        const rippleA = this.themeMode === 'light' ? 0.28 : 0.12;
+        const rippleA = 0.12;
         g.addColorStop(0, hexToRgba(this.palette[0], (1 - p) * rippleA));
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
@@ -270,20 +261,9 @@ function refreshAccentPalette() {
 
 export function initOrbCanvas(canvas) {
   if (renderer) renderer.destroy();
-  themeMode = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-  accentColor = getStoredAccent();
   renderer = new OrbRenderer(canvas);
-  renderer.setTheme(themeMode);
-  window.addEventListener('accent:change', (e) => {
-    accentColor = e.detail?.accent || DEFAULT_ACCENT;
-    refreshAccentPalette();
-  });
+  window.addEventListener('appearance:change', refreshAccentPalette);
   return renderer;
-}
-
-export function setOrbTheme(theme) {
-  themeMode = theme === 'light' ? 'light' : 'dark';
-  renderer?.setTheme(themeMode);
 }
 
 export function setOrbPalette(state) {

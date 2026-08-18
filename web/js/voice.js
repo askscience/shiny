@@ -1,6 +1,7 @@
 import { apiFetch, getVoiceLang, setVoiceLang } from './api.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
 import { getAiName } from './preferences.js';
+import { insightCard } from '../ui/index.js';
 
 const SILENCE_TIMEOUT_MS = 8000;
 const WAKE_WAIT_TIMEOUT_MS = 15000;
@@ -26,25 +27,25 @@ function createDownloadCard(lang) {
   const container = document.getElementById('insight-cards');
   if (!container) return null;
 
-  const card = document.createElement('div');
+  const details = document.createElement('div');
+  const bar = document.createElement('div');
+  bar.className = 'voice-download-bar';
+  const fill = document.createElement('div');
+  fill.className = 'voice-download-bar-fill';
+  fill.style.width = '10%';
+  bar.appendChild(fill);
+  const text = document.createElement('div');
+  text.className = 'voice-download-text';
+  text.textContent = 'Checking models…';
+  details.append(bar, text);
+
+  const card = insightCard({
+    icon: 'ui/info',
+    title: `Preparing voice (${lang.toUpperCase()})`,
+    body: details,
+  });
   card.id = 'voice-download-card';
-  card.className = 'insight-card';
-  card.innerHTML = `
-    <div class="insight-card-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-    </div>
-    <div class="insight-card-body">
-      <div class="insight-card-title">Preparing voice (${lang.toUpperCase()})</div>
-      <div class="voice-download-bar">
-        <div class="voice-download-bar-fill" style="width: 10%"></div>
-      </div>
-      <div class="voice-download-text">Checking models…</div>
-    </div>
-  `;
+  card.removeAttribute('data-reveal');
   container.appendChild(card);
   return card;
 }

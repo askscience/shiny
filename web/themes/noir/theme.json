@@ -1,0 +1,27 @@
+{
+  "name": "noir",
+  "label": "Noir",
+  "version": "1.0.0",
+  "author": "Shiny",
+  "modes": ["dark"],
+  "defaultAccent": "#ffffff",
+  "defaultGradient": "mono",
+  "accents": [
+    { "id": "white",   "label": "White",   "value": "#ffffff" },
+    { "id": "silver",  "label": "Silver",  "value": "#9ca3af" },
+    { "id": "gold",    "label": "Gold",    "value": "#d4af37" },
+    { "id": "amber",   "label": "Amber",   "value": "#f59e0b" },
+    { "id": "crimson", "label": "Crimson", "value": "#e11d48" },
+    { "id": "violet",  "label": "Violet",  "value": "#8b5cf6" },
+    { "id": "azure",   "label": "Azure",   "value": "#3b82f6" },
+    { "id": "mint",    "label": "Mint",    "value": "#34d399" }
+  ],
+  "gradients": [
+    { "id": "mono",        "label": "Mono",        "angle": 135, "stops": ["#ffffff", "#8a8a8a"] },
+    { "id": "aurora",      "label": "Aurora",      "angle": 135, "stops": ["#34d399", "#3b82f6", "#8b5cf6"] },
+    { "id": "ember",       "label": "Ember",       "angle": 135, "stops": ["#f59e0b", "#ef4444"] },
+    { "id": "ice",         "label": "Ice",         "angle": 135, "stops": ["#67e8f9", "#3b82f6"] },
+    { "id": "ultraviolet", "label": "Ultraviolet", "angle": 135, "stops": ["#8b5cf6", "#d946ef"] },
+    { "id": "rose",        "label": "Rose",        "angle": 135, "stops": ["#fb7185", "#f59e0b"] }
+  ]
+}

@@ -47,6 +47,7 @@ impl Loader {
     pub async fn install_dir(
         &self,
         install_dir: &Path,
+        pool: &sqlx::SqlitePool,
         base_ctx: Arc<PluginCtx>,
     ) -> Result<(Manifest, RegistryBuilder<'static>, Arc<PluginCtx>), AppError> {
         let manifest_path = install_dir.join("plugin.toml");
@@ -118,25 +119,20 @@ impl Loader {
             )));
         }
 
-        // Run plugin migrations.
+        // Run plugin migrations — with the HOST pool, in the host process
+        // (migrations run core-side by design).
         let migrations_dir = install_dir.join(&manifest.migrations_dir);
         if migrations_dir.exists() {
-            shiny_plugin_sdk::migrations::run_plugin_migrations(&base_ctx.pool, &manifest.name, &migrations_dir).await?;
+            shiny_plugin_sdk::migrations::run_plugin_migrations(pool, &manifest.name, &migrations_dir).await?;
         }
 
         // Register tools / routes / crons into a fresh builder.
         let mut builder = RegistryBuilder::new();
         plugin.register(base_ctx.clone(), &mut builder);
 
-        // Build per-plugin ctx with the manifest's snapshot.
-        let ctx = Arc::new(PluginCtx {
-            pool: base_ctx.pool.clone(),
-            ollama: base_ctx.ollama.clone(),
-            search: base_ctx.search.clone(),
-            supertonic: base_ctx.supertonic.clone(),
-            config: base_ctx.config.clone(),
-            manifest: manifest.clone(),
-        });
+        // Build per-plugin ctx with the manifest's snapshot. The plugin opens
+        // its own SQLite pool lazily via `ctx.pool()` — never share ours.
+        let ctx = base_ctx.with_manifest(manifest.clone());
 
         // Stash the loaded plugin (this keeps the library open).
         let loaded = LoadedPlugin {

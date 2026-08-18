@@ -65,7 +65,8 @@ shiny/
 │           ├── tools.rs               # `Tool` trait + `RegistryBuilder`
 │           ├── outcome.rs            # `ActionOutcome`
 │           ├── context.rs            # `AgentContext` (per-request agent state)
-│           ├── services.rs           # `PluginCtx` + `OllamaClient`, `SearchService`, `SupertonicClient`
+│           ├── services.rs           # `PluginCtx` + lazy `OllamaClient`, `SearchService`, `SupertonicClient`, pool
+│           ├── rt.rs                 # `bridge()` — plugin-owned Tokio runtime (§15)
 │           ├── artifacts.rs          # `Artifact` value type + `build_from_params`
 │           ├── navigation.rs        # `NavigationSession` (optional navigator payload)
 │           ├── manifest.rs           # `Manifest` struct
@@ -132,7 +133,8 @@ impl Plugin for MyPlugin {
         builder
             .persona("a travel navigator AI")
             .skills("## Tools\n- `hello` — say hello. params: `{}`")
-            .tool(MyTool);
+            .tool_arc(shiny_plugin_sdk::tools::bridged(Arc::new(MyTool)));
+        // NOTE: always wrap tools with `bridged(...)` — see §15.
     }
 
     // Optional hooks:
@@ -739,13 +741,20 @@ The separation between **deactivate** (keep install dir + tables, just turn tool
 
 ---
 
-## 15. ABI stability
+## 15. ABI stability & the runtime bridge
 
 `api_level` is the version of the SDK's public trait surface. Plugins declare the level they were built against. The runtime accepts plugins where `api_level ≤ CORE_API_LEVEL`. The current level is **1**.
 
 When the SDK adds fields or methods without breaking existing trait impls, `CORE_API_LEVEL` increments but **existing plugins keep working** because `default` trait impls are used.
 
 When a method signature changes or a required method is added without a default, `CORE_API_LEVEL` increments a major step and **existing plugins must be rebuilt**. We commit to never silently breaking plugins within an `api_level`.
+
+### Two load-bearing rules (learned from production crashes)
+
+A plugin cdylib statically links **its own copies** of Tokio, sqlx/libsqlite3, and reqwest/hyper. Nothing bound to a runtime or a C allocator may cross the dlopen boundary:
+
+1. **Always wrap tools with `bridged(...)` at registration.** The adapter runs `invoke` on a runtime the *plugin* owns (`shiny_plugin_sdk::rt::bridge`) and returns the result over an executor-agnostic channel. Without it, the first sqlx/reqwest/tokio-time call inside a tool aborts the host with *"this functionality requires a Tokio context"*.
+2. **Only use the async accessors on `PluginCtx`** — `ctx.pool()`, `ctx.ollama()`, `ctx.search()`, `ctx.supertonic()`. Each lazily opens a **plugin-owned** connection/client inside the plugin's runtime. Never accept a live `SqlitePool` or pre-built reqwest client from the host: values allocated by the host's libsqlite3 segfault when freed by the plugin's copy, and host-built HTTP clients panic when driven from the plugin's reactor. Migrations are the exception by design — they run host-side, with the host pool, at load time.
 
 ---
 
@@ -760,8 +769,11 @@ When a method signature changes or a required method is added without a default,
 | `No cdylib found` | You forgot to ship `.so/.dylib/.dll` in the zip | `ls` the archive; ensure layout includes the cdylib |
 | `Missing symbol shiny_plugin_entry` | The `#[no_mangle] extern "C" fn shiny_plugin_entry()` is missing or wrapped differently | Add it exactly as shown in §7 |
 | 401 on install | Wrong `ADMIN_TOKEN` or no `is_admin=1` user | `curl -H "Authorization: Bearer $ADMIN_TOKEN"` with the right env value |
-| Tool not registered | `register()` didn't call `builder.tool(MyTool)` | Re-trigger `register` and verify it's added to the builder |
+| Tool not registered | `register()` didn't call `builder.tool_arc(bridged(tool))` | Re-trigger `register` and verify it's added to the builder |
 | LLM doesn't call the tool | `doc_fragment()` returns `None` | Set a doc fragment so the tool is advertised in the system prompt |
+| Host aborts: `this functionality requires a Tokio context` | Tool `invoke` ran on the host runtime (sqlx/reqwest/tokio-time inside plugin code) | Wrap the tool with `bridged(...)` (§15) |
+| Host SIGSEGV in `sqlite3_value_free` / `ValueHandle::drop` | A `SqlitePool` crossed the dlopen boundary | Use `ctx.pool().await` — the plugin-owned pool (§15) |
+| Host aborts in `hyper-util … dns.rs`: `there is no reactor running` | A host-built reqwest client was driven from the plugin runtime | Use `ctx.ollama()/ctx.search()/ctx.supertonic()` accessors (§15) |
 
 Always inspect **`PLUGINS_DIR/install.log`** first — every step is timestamped there.
 
@@ -775,7 +787,8 @@ Before publishing a plugin:
 - [ ] `api_level` equals the SDK you compiled against
 - [ ] `shiny_plugin_entry` is exported via `#[no_mangle] pub extern "C"`
 - [ ] Every tool has a `name()`, `step_label()`, `doc_fragment()`, and `invoke()`
-- [ ] Every advertised tool registers via `builder.tool(...)`
+- [ ] Every advertised tool registers via `builder.tool_arc(bridged(tool))` (§15)
+- [ ] All DB/HTTP work goes through the async accessors `ctx.pool()/ollama()/search()/supertonic()` — never a host-passed pool or client (§15)
 - [ ] Every migration file is idempotent (`CREATE TABLE IF NOT EXISTS`)
 - [ ] `skills_md` and `persona` are set if the plugin contributes persona/skills
 - [ ] zip / tar.gz test build is reproducible
@@ -790,19 +803,56 @@ Before publishing a plugin:
 |---|---|
 | `crates/shiny-plugin-sdk/` | SDK crate — depends on this only. |
 | `plugins/hello/` | Demo plugin from this doc, fully runnable. |
-| `plugins/traveler/` | Skeleton for the future "extract the traveler domain out of core" plugin. Tools stubbed. |
+| `plugins/traveler/` | The traveler domain plugin — 22 tools (trips, GPS, maps, navigation, diary, planning, artifact cards), its own OSM client, navigation builder, diary writer, and prose pipeline. |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
 | `src/plugins/manager.rs` | `PluginManager` — aggregates contributions, persona, skills. |
 | `src/plugins/installer.rs` | zip/tar.gz unpacker, manifest validation, log writer. |
 | `src/plugins/admin_api.rs` | HTTP endpoints for install/uninstall/list. |
-| `src/api/agent.rs` | System prompt now reads `state.plugins.skills_markdown()` + `persona_concat()`. |
-| `src/services/agent_tools.rs` | `execute_action` checks the registry first; falls through to legacy match arms. |
+| `src/api/agent.rs` | System prompt = `web/skills/core-assistant.md` + active plugins' skills/persona. |
+| `src/services/agent_tools.rs` | `execute_action`: registry first; core built-in = `web_search` only; traveler verbs refuse cleanly without the plugin. |
 | `data/plugins/install.log` | Audit trail — written on every install/uninstall/error. |
 
 ---
 
-## 19. Roadmap
+## 19. UI & theming
+
+Plugins never ship CSS, and they cannot inject HTML into the frontend. Every
+visual surface a plugin can reach is rendered by core through the **Shiny UI
+library**, so plugin output always matches the user's theme and accent.
+
+The same split applies to tools: **core is a simple AI assistant** — its only
+built-in tool is `web_search` (`web/skills/core-assistant.md`). Artifact cards
+(`show_artifact`/`update_artifact`), trips, GPS, maps, navigation and diary
+all belong to the traveler plugin; without it the frontend hides the map,
+dock and panels, leaving the voice/text chat over the orb.
+
+| Layer | Location | Role |
+|---|---|---|
+| Component library | `web/ui/` | Theme-agnostic engine: `theme-loader`, `appearance` (accent/gradient), `icon`, `reveal`, and all `.ui-*` components (`button`, `field`, `card`, `overlay`, `feedback`, `data`, `composites`). |
+| Themes | `web/themes/<name>/` | Skins: `theme.json` manifest, `tokens.css`, `components.css`, and `icons/` (SVG, `currentColor`). Installed themes are listed in `web/themes/themes.json`. See `web/themes/README.md`. |
+
+How plugin content reaches the eye:
+
+- **Artifacts** (the `artifact` field of `ActionOutcome`) are JSON. The
+  frontend renders them with the `artifactPanel` composite
+  (`web/ui/components/composites.js`) inside `#travel-panel` — hero, stats,
+  day blocks, sections, action buttons — always in the active theme. A
+  plugin's styling levers are structural only: `type` / `theme` (icon +
+  eyebrow + dock slot), `narrative` vs `sections`, `days[]`, `route`,
+  `coordinates` / `geometry`.
+- **Dock icons** come from the fixed `TYPE_ICONS` / `THEME_ICONS` maps in
+  `composites.js` and resolve to the active theme's `icons/artifacts/*.svg`.
+- **Accent & gradient** are chosen per user in *Settings → Appearance* and
+  apply everywhere, including the Leaflet map colors and the orb canvas
+  (via the `appearance:change` window event).
+- **When plugin web assets land** (roadmap item), plugin pages must load
+  `/ui/ui.css` + `/ui/index.js` and build with those components instead of
+  bundling their own styles — the theme keeps working for them for free.
+
+---
+
+## 20. Roadmap
 
 The v1 plugin system delivered here implements everything described above plus the `hello` demo end-to-end. The remaining items, scheduled for follow-up work:
 
@@ -811,7 +861,7 @@ The v1 plugin system delivered here implements everything described above plus t
 3. **Cron hook activation** — read `CronSpec` from `RegistryBuilder` and spawn a per-plugin scheduler that calls a pluggable `cron_handler(tag, ctx)`.
 4. **Plugin web asset serving** — mount `data/plugins/<name>/web/` at `/plugins/<name>/` automatically.
 5. **Signature verification** — turn on ed25519 signature enforcement behind the `signed-plugins` feature flag.
-6. **Traveler plugin extraction** — finish moving every traveler tool + REST handler + gpsd + diary_gen into the `plugins/traveler/` cdylib (the skeleton lives at `plugins/traveler/`).
+6. ~~**Traveler plugin extraction**~~ — **done**: all 22 traveler verbs (plus `show_artifact`/`update_artifact`) live in `plugins/traveler/`; core keeps only `web_search`. Traveler REST handlers + gpsd + core's `DiaryGenerator` cron remain in core until items 2/3 land.
 7. **Plugin uninstall path with DB rollback** — drop plugin-owned tables when an admin request explicitly asks for it.
 
 Nothing here changes the v1 contract — plugins written against `api_level=1` keep working across the roadmap.

@@ -260,6 +260,48 @@ pub fn normalize_action_name(action: &str) -> String {
     }
 }
 
+// ---------- Runtime bridge adapter -----------------------------------------
+
+/// Adapter that runs a tool's `invoke` on the plugin-owned runtime
+/// (`crate::rt::bridge`). A plugin cdylib links its own Tokio copy — invoking
+/// sqlx/reqwest/tokio-time while the host polls the future would abort the
+/// process. Wrap every registered tool with `bridged(...)` at `register()`.
+pub struct BridgedTool(pub Arc<dyn Tool>);
+
+#[async_trait]
+impl Tool for BridgedTool {
+    fn name(&self) -> &str { self.0.name() }
+    fn aliases(&self) -> &[&str] { self.0.aliases() }
+    fn step_label(&self) -> &str { self.0.step_label() }
+    fn humanize(&self, result: &str, data: &Value) -> String { self.0.humanize(result, data) }
+    fn doc_fragment(&self) -> Option<&str> { self.0.doc_fragment() }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let inner = self.0.clone();
+        let ctx = ctx.clone();
+        let user_id = req.user_id.to_string();
+        let traveler_id = req.traveler_id.to_string();
+        let params = req.params.clone();
+        let agent_ctx = req.ctx.clone();
+        crate::rt::bridge(async move {
+            let req = ToolRequest {
+                user_id: &user_id,
+                traveler_id: &traveler_id,
+                params: &params,
+                ctx: &agent_ctx,
+            };
+            inner.invoke(&ctx, req).await
+        })
+        .await
+    }
+}
+
+/// Wrap a tool in the runtime-bridging adapter. Use at registration time:
+/// `builder.tool_arc(bridged(tool))`.
+pub fn bridged(t: Arc<dyn Tool>) -> Arc<dyn Tool> {
+    Arc::new(BridgedTool(t))
+}
+
 // ---------- Parameter helpers ------------------------------------------------
 
 pub trait ParamHelpers {

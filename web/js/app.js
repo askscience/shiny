@@ -1,16 +1,18 @@
-import { getVoiceLang, setVoiceLang } from './api.js';
+import { getVoiceLang, setVoiceLang, getTraveler } from './api.js';
 import { requireAuth } from './auth.js';
 import { initMap, getCurrentPosition } from './map.js';
 import {
   initSphere, setSphereState, onShortTap, onLongPressStart, onLongPressEnd,
   onDoubleTap, isConversationMode, setConversationMode, setMicLevel, resetMicLevel,
+  getSphereState,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
 import { sendToAgent, sendToAgentCompose } from './agent.js';
 import { startGpsTracking } from './gps.js';
-import { initTheme } from './theme.js';
-import { initAccent } from './accent.js';
-import { initSettings } from './settings.js';
+import {
+  initThemeLoader, initAppearance, refreshAppearance,
+  wireToastEvents, toast, hydrateIcons, reveal,
+} from '../ui/index.js';
 import { refreshActivePlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
@@ -20,20 +22,9 @@ import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from
 import { reloadUserSession } from './session.js';
 
 let appInitialized = false;
-let travelerActive = false;
-
-function showToast(message, type = 'info') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const toast = document.createElement('div');
-  toast.className = `toast${type === 'error' ? ' error' : ''}`;
-  toast.textContent = message;
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
-}
+// null = not yet evaluated — the first check must always apply show/hide,
+// otherwise a fresh load in bare mode leaves the map stack visible.
+let travelerActive = null;
 
 function cancelVoiceInput() {
   if (isWakeAwaitingCommand()) return;
@@ -48,14 +39,17 @@ async function boot() {
     setVoiceLang((navigator.language || 'en-US').split('-')[0]);
   }
 
-  window.addEventListener('app:toast', (e) => {
-    showToast(e.detail.message, e.detail.type);
-  });
+  // Theme + appearance first: everything renders through these tokens.
+  await initThemeLoader();
+  initAppearance({ getScope: () => getTraveler()?.id });
+  wireToastEvents();
+  hydrateIcons();
 
   window.addEventListener('auth:success', async () => {
     document.getElementById('app')?.classList.remove('hidden');
     if (appInitialized) {
       await reloadUserSession();
+      refreshAppearance();
       await applyTravelerActivation();
       return;
     }
@@ -63,9 +57,13 @@ async function boot() {
   });
 
   // Plugins panel may toggle the traveler plugin — re-evaluate and re-render
-  // the map / navigator / saved-trips HUD when that happens.
+  // the map / navigator / saved-trips HUD when that happens. The plugins page
+  // is separate, so the signal travels via localStorage.
   window.addEventListener('plugins:changed', async () => {
     await applyTravelerActivation();
+  });
+  window.addEventListener('storage', async (e) => {
+    if (e.key === 'plugins.changed') await applyTravelerActivation();
   });
 
   if (!(await requireAuth())) return;
@@ -77,25 +75,25 @@ async function boot() {
 async function initApp() {
   if (appInitialized) {
     await reloadUserSession();
+    refreshAppearance();
     return;
   }
   appInitialized = true;
 
-  initTheme();
-  initAccent();
   initSphere();
   initArtifactDock();
-  initSettings();
   initTextInput(submitTextToAgent);
 
   await applyTravelerActivation();
 
   setInterval(() => reloadUserSession(), 60000);
   await reloadUserSession();
+  refreshAppearance();
 
   prepareVoice();
   wireSphere();
   wireVoiceResults();
+  reveal();
 }
 
 /// Decide whether the OSM map / navigator / saved-trips HUD should render
@@ -141,12 +139,34 @@ async function applyTravelerActivation() {
     hide(travelPanel);
     hide(travelPanelBackdrop);
     hide(insightCards);
+    // Chat-only mode: no artifact chrome.
+    hide(document.getElementById('artifact-dock'));
   }
+}
+
+function voiceReady() {
+  return document.getElementById('sphere-container') &&
+    !document.getElementById('sphere-container').classList.contains('disabled');
+}
+
+/** Voice gestures while the speech model prepares: feedback, not silence. */
+function voiceNotReady() {
+  const preparing = getSphereState() === 'downloading';
+  toast(
+    preparing
+      ? 'Voice is preparing — try again in a moment'
+      : 'Voice unavailable — you can still double-tap to type',
+    { type: 'info' },
+  );
 }
 
 function wireSphere() {
   onShortTap(async () => {
-    if (!voiceReady() || isTextInputOpen() || isComposeAwaiting()) return;
+    if (isTextInputOpen() || isComposeAwaiting()) return;
+    if (!voiceReady()) {
+      voiceNotReady();
+      return;
+    }
 
     if (isListening()) {
       cancelVoiceInput();
@@ -157,19 +177,23 @@ function wireSphere() {
       await startListening('single');
     } catch (e) {
       setSphereState('error');
-      showToast(e.message || 'Microphone unavailable', 'error');
+      toast(e.message || 'Microphone unavailable', { type: 'error' });
       setTimeout(() => setSphereState('idle'), 2000);
     }
   });
 
   onLongPressStart(async () => {
-    if (!voiceReady() || isListening() || isComposeAwaiting()) return;
+    if (isListening() || isComposeAwaiting()) return;
+    if (!voiceReady()) {
+      voiceNotReady();
+      return;
+    }
     try {
       await startListening('wake');
     } catch (e) {
       setConversationMode(false);
       setSphereState('error');
-      showToast(e.message || 'Microphone unavailable', 'error');
+      toast(e.message || 'Microphone unavailable', { type: 'error' });
     }
   });
 
@@ -182,8 +206,10 @@ function wireSphere() {
     }
   });
 
+  // Double-tap = type to the assistant. Text needs no speech model, so this
+  // works even while voice is still preparing (or unavailable).
   onDoubleTap(() => {
-    if (!voiceReady() || isComposeAwaiting()) return;
+    if (isComposeAwaiting()) return;
     if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
     openTextInput();
   });
@@ -194,11 +220,6 @@ async function submitTextToAgent(text, handlers) {
   try {
     await sendToAgentCompose(text, ctx, handlers);
   } catch (_) {}
-}
-
-function voiceReady() {
-  return document.getElementById('sphere-container') &&
-    !document.getElementById('sphere-container').classList.contains('disabled');
 }
 
 function wireVoiceResults() {

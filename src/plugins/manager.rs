@@ -164,7 +164,7 @@ impl PluginManager {
         install_dir: &std::path::Path,
         base_ctx: Arc<PluginCtx>,
     ) -> Result<String, AppError> {
-        let (manifest, builder, _ctx) = self.inner.loader.install_dir(install_dir, base_ctx).await?;
+        let (manifest, builder, _ctx) = self.inner.loader.install_dir(install_dir, &self.inner.pool, base_ctx).await?;
         let plugin_name = manifest.name.clone();
         {
             let mut contribs = self.inner.contribs.write();

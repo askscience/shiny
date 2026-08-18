@@ -11,9 +11,19 @@ let conversationMode = false;
 let voiceReady = false;
 let pointerId = null;
 
-const DOUBLE_TAP_MS = 320;
+// Human double-clicks vary a lot (macOS default allows ~500ms between taps).
+// Too tight a window lets the first tap's single-tap action fire mid-gesture.
+const DOUBLE_TAP_MS = 500;
+// If the single-tap action already fired and the second tap lands right after,
+// we still convert the pair into a double-tap (the action is cancelled by the
+// double-tap handler). Covers slow double-clicks up to ~800ms total.
+const LATE_DOUBLE_TAP_MS = 300;
 let lastTapAt = 0;
 let singleTapTimer = null;
+let lastSingleTapFiredAt = 0;
+// Set when a second pointerdown arrives while a single-tap action is pending —
+// the gesture resolves as a double-tap on pointerup, no matter how slow.
+let pendingDoubleTap = false;
 
 const callbacks = {
   onShortTap: null,
@@ -76,6 +86,7 @@ function scheduleSingleTap() {
   if (singleTapTimer) clearTimeout(singleTapTimer);
   singleTapTimer = setTimeout(() => {
     if (lastTapAt === tapId) {
+      lastSingleTapFiredAt = Date.now();
       callbacks.onShortTap?.();
       lastTapAt = 0;
     }
@@ -85,6 +96,14 @@ function scheduleSingleTap() {
 
 function handleShortTapGesture() {
   const now = Date.now();
+  // Slow double-click: the single-tap action just fired, but the second tap
+  // is already here — convert the pair into a double-tap.
+  if (lastSingleTapFiredAt && now - lastSingleTapFiredAt < LATE_DOUBLE_TAP_MS) {
+    lastSingleTapFiredAt = 0;
+    lastTapAt = 0;
+    callbacks.onDoubleTap?.();
+    return;
+  }
   if (lastTapAt && now - lastTapAt < DOUBLE_TAP_MS) {
     if (singleTapTimer) {
       clearTimeout(singleTapTimer);
@@ -98,9 +117,18 @@ function handleShortTapGesture() {
 }
 
 function handleStart(e) {
-  if (!voiceReady) return;
+  // Never gate gestures on voice readiness here — the action callbacks decide
+  // (typing must always work; voice gestures show their own feedback).
   e.preventDefault();
   container.classList.add('pressed');
+  // A second pointerdown while a single-tap is pending = double-tap in
+  // progress. Cancel the pending action before it can fire mid-gesture.
+  if (singleTapTimer) {
+    clearTimeout(singleTapTimer);
+    singleTapTimer = null;
+    pendingDoubleTap = true;
+    lastTapAt = 0;
+  }
   if (container.setPointerCapture && e.pointerId != null) {
     try {
       container.setPointerCapture(e.pointerId);
@@ -134,6 +162,10 @@ function handleEnd(e) {
         conversationMode = false;
         setSphereState('idle');
         callbacks.onLongPressEnd?.();
+      } else if (pendingDoubleTap) {
+        pendingDoubleTap = false;
+        lastTapAt = 0;
+        callbacks.onDoubleTap?.();
       } else {
         handleShortTapGesture();
       }

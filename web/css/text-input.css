@@ -1,12 +1,5 @@
-/* Compose mode — reply stream + dock pill input */
-
-:root {
-  --compose-orb-size: 84px;
-  --compose-dock-height: 52px;
-  --compose-stack-height: calc(
-    var(--compose-orb-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
-  );
-}
+/* Compose mode — reply stream + dock pill input
+   Geometry tokens (--compose-*) live in the theme's tokens.css. */
 
 body.compose-active.compose-awaiting {
   --compose-stack-height: calc(var(--compose-orb-size) + max(32px, env(safe-area-inset-bottom)) + 28px);
@@ -123,10 +116,6 @@ body.compose-active #hud-transcript {
   text-align: left;
   min-height: 1.25em;
   text-shadow: 0 1px 24px rgba(0, 0, 0, 0.45);
-}
-
-[data-theme="light"] .compose-reply {
-  text-shadow: 0 1px 16px rgba(255, 255, 255, 0.65);
 }
 
 .compose-reply:empty {
