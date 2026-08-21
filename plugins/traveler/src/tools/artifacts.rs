@@ -70,7 +70,7 @@ impl Tool for UpdateArtifact {
             artifact.coordinates = Some(coords);
         }
 
-        let artifact = artifact_store::save_artifact(ctx.pool().await, req.traveler_id, &artifact).await?;
+        let artifact = artifact_store::save_artifact(ctx.pool().await, req.traveler_id, &artifact, &ctx.manifest.name).await?;
         Ok(ActionOutcome::ok("update_artifact", json!({ "artifact": artifact }))
             .with_artifact(artifact))
     }

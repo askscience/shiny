@@ -26,6 +26,16 @@ Search the web for current facts, places, events, news, or recommendations.
 {"action": "web_search", "params": {"query": "what to search for"}}
 ```
 
-Use it whenever the answer depends on current, local, or specific information you don't reliably know. The result includes a short summary plus the top sources — answer from it in your own words.
+Use it whenever the answer depends on current, local, or specific information you don't reliably know. The result includes the top sources — answer from them in your own words.
+
+### show_plugin
+
+Bring a plugin's window to the front (its tile, or full screen if the user configured it that way).
+
+```text
+{"action": "show_plugin", "params": {"name": "plugin-name"}}
+```
+
+Use it when the user's request clearly belongs to one plugin's domain — read the plugin descriptions in the "Plugin windows" section of your system prompt. Call it **after** the domain tool (e.g. plan first, then `show_plugin`). Skip it when the request is generic.
 
 Everything else you answer directly from conversation — no tool needed.

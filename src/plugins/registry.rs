@@ -74,6 +74,15 @@ impl ToolRegistry {
         map.contains_key(&normalize_action_name(name))
     }
 
+    /// Owning plugin of an action key ("" = core built-in).
+    pub fn owner_of(&self, name: &str) -> String {
+        let owner_map = self.owner.read();
+        owner_map
+            .get(&normalize_action_name(name))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub async fn invoke(
         &self,
         action: &str,

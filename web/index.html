@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/css/sphere.css">
   <link rel="stylesheet" href="/css/text-input.css">
   <link rel="stylesheet" href="/css/navigator.css">
+  <link rel="stylesheet" href="/css/tiles.css">
 </head>
 <body>
   <div id="grain" aria-hidden="true"></div>
@@ -67,9 +68,10 @@
 
   <!-- Main navigator -->
   <div id="app" class="hidden">
-    <div id="map-stage">
-      <div id="map"></div>
-    </div>
+    <!-- Plugin window grid: every plugin with an interface lives in a tile
+         (traveler's map = the "traveler" tile). -->
+    <div id="tile-grid"></div>
+
     <div id="map-vignette" aria-hidden="true"></div>
 
     <div id="insight-cards" class="hidden" aria-live="polite" aria-label="Destination insights"></div>
@@ -132,6 +134,16 @@
 
     <div id="travel-panel-backdrop" class="hidden" aria-hidden="true"></div>
     <div id="travel-panel" class="hidden" aria-label="Travel details"></div>
+
+    <div id="tile-overlay" class="tile-overlay hidden" aria-label="Plugin window">
+      <div class="tile-overlay-head">
+        <button type="button" id="tile-overlay-back" class="tile-overlay-back" aria-label="Back">
+          <span data-icon="ui/arrow-left" aria-hidden="true"></span>
+        </button>
+        <span id="tile-overlay-title" class="tile-overlay-title"></span>
+      </div>
+      <div id="tile-overlay-body" class="tile-overlay-body"></div>
+    </div>
 
     <div id="chrome-bottom">
       <button type="button" id="sphere-container" aria-label="Voice assistant">

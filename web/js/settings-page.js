@@ -8,7 +8,7 @@ import {
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
 } from '../ui/index.js';
-import { getAiName, setAiName, getOllamaModel, setOllamaModel } from './preferences.js';
+import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout } from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 
 const langSelect = document.getElementById('lang-select');
@@ -253,6 +253,64 @@ async function loadLanguages() {
   }
 }
 
+/* ── Plugin windows (tile vs full screen) ───────────────────── */
+
+async function loadPluginLayouts() {
+  const list = document.getElementById('plugin-layout-list');
+  if (!list) return;
+  try {
+    const [all, activeRes] = await Promise.all([
+      apiFetch('/api/plugins'),
+      apiFetch('/api/plugins/active'),
+    ]);
+    const active = new Set(activeRes?.data || []);
+    const plugins = (all?.data || []).filter((p) => active.has(p.name));
+    list.innerHTML = '';
+    if (!plugins.length) {
+      const hint = document.createElement('p');
+      hint.className = 'settings-hint';
+      hint.textContent = 'No plugins active — activate one on the Plugins page.';
+      list.appendChild(hint);
+      return;
+    }
+    for (const p of plugins) {
+      const row = document.createElement('div');
+      row.className = 'plugin-layout-row';
+
+      const name = document.createElement('span');
+      name.className = 'plugin-layout-name';
+      name.textContent = p.name.charAt(0).toUpperCase() + p.name.slice(1);
+      name.title = p.description || p.summary || '';
+
+      const wrap = document.createElement('div');
+      wrap.className = 'ui-select-wrap';
+      const sel = document.createElement('select');
+      sel.className = 'ui-select';
+      for (const [value, text] of [['tile', 'Tile'], ['full', 'Full screen']]) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        sel.appendChild(opt);
+      }
+      sel.value = getPluginLayout(p.name);
+      sel.addEventListener('change', () => {
+        setPluginLayout(p.name, sel.value);
+        toast(`${name.textContent}: opens as ${sel.value === 'full' ? 'full screen' : 'tile'}`, { type: 'info' });
+      });
+      wrap.appendChild(sel);
+
+      row.append(name, wrap);
+      list.appendChild(row);
+    }
+  } catch (_) {
+    list.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'settings-hint';
+    hint.textContent = 'Could not load plugins.';
+    list.appendChild(hint);
+  }
+}
+
 /* ── Actions ────────────────────────────────────────────────── */
 
 async function saveAndLeave() {
@@ -312,7 +370,7 @@ async function boot() {
   updateAiNameHint();
   if (aiNameInput) aiNameInput.value = getAiName();
 
-  await Promise.all([loadLanguages(), loadOllamaModels()]);
+  await Promise.all([loadLanguages(), loadOllamaModels(), loadPluginLayouts()]);
 
   aiNameInput?.addEventListener('input', () => {
     setAiName(aiNameInput.value);

@@ -53,8 +53,10 @@ html, body {
 
 #app { position: relative; width: 100%; height: 100%; }
 
-#map-stage { position: absolute; inset: 0; z-index: var(--z-map); overflow: hidden; }
-#map { position: absolute; inset: 0; z-index: 0; }
+/* The map DOM lives inside the traveler plugin's tile (see tiles.css); these
+ * geometry rules only apply if it is ever rendered at the page root. */
+#app > #map-stage { position: absolute; inset: 0; z-index: var(--z-map); overflow: hidden; }
+#app > #map { position: absolute; inset: 0; z-index: 0; }
 #map-vignette { display: none; }
 #map-stage, #map, .leaflet-container { touch-action: none; }
 .leaflet-control-container { display: none; }

@@ -112,6 +112,12 @@ body {
 .settings-hint { font-size: 12px; color: var(--muted); margin-top: 7px; line-height: 1.45; }
 .settings-control { margin-bottom: 2px; }
 
+/* ── Plugin windows (tile vs full screen) ──────────────────── */
+.plugin-layout-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.plugin-layout-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.plugin-layout-name { font-weight: 500; color: var(--text); }
+.plugin-layout-row .ui-select-wrap { min-width: 150px; }
+
 .settings-footer { display: flex; gap: 10px; margin-top: 26px; }
 .settings-footer .ui-btn { flex: 1; }
 

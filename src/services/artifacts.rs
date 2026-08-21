@@ -63,6 +63,9 @@ pub struct ArtifactSummary {
     pub theme: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub destination: Option<String>,
+    /// Owning plugin ("core" for built-ins). Legacy rows have no key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin: Option<String>,
     pub updated_at: String,
 }
 
@@ -84,9 +87,9 @@ pub async fn list_summaries(
     pool: &SqlitePool,
     traveler_id: &str,
 ) -> Result<Vec<ArtifactSummary>, AppError> {
-    let rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, String)>(
+    let rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, Option<String>, String)>(
         "SELECT id, artifact_type, title, json_extract(payload_json, '$.theme'), \
-         json_extract(payload_json, '$.destination'), updated_at \
+         json_extract(payload_json, '$.destination'), json_extract(payload_json, '$.plugin'), updated_at \
          FROM saved_artifacts WHERE traveler_id = ?1 ORDER BY updated_at DESC",
     )
     .bind(traveler_id)
@@ -95,12 +98,13 @@ pub async fn list_summaries(
 
     Ok(rows
         .into_iter()
-        .map(|(id, artifact_type, title, theme, destination, updated_at)| ArtifactSummary {
+        .map(|(id, artifact_type, title, theme, destination, plugin, updated_at)| ArtifactSummary {
             id,
             artifact_type,
             title,
             theme,
             destination,
+            plugin,
             updated_at,
         })
         .collect())
@@ -181,13 +185,44 @@ fn sections_to_days(sections: &[ArtifactSection]) -> Vec<PlanDay> {
     days
 }
 
+/// Read the stored `plugin` attribution key for an artifact (if any).
+async fn existing_plugin_key(
+    pool: &SqlitePool,
+    traveler_id: &str,
+    id: &str,
+) -> Result<Option<String>, AppError> {
+    let row = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT json_extract(payload_json, '$.plugin') FROM saved_artifacts \
+         WHERE id = ?1 AND traveler_id = ?2",
+    )
+    .bind(id)
+    .bind(traveler_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.flatten())
+}
+
+/// Persist an artifact. `plugin` is the owning plugin's name ("core" for
+/// built-in tools). When `None` (frontend upserts / merges), the existing
+/// attribution is preserved so re-saves never strip the owner.
 pub async fn save_artifact(
     pool: &SqlitePool,
     traveler_id: &str,
     trip_id: Option<&str>,
     artifact: &Artifact,
+    plugin: Option<&str>,
 ) -> Result<Artifact, AppError> {
-    let payload = serde_json::to_string(artifact)
+    let plugin_key: Option<String> = match plugin {
+        Some(p) => Some(p.to_string()),
+        None => existing_plugin_key(pool, traveler_id, &artifact.id).await?,
+    };
+
+    let mut payload = serde_json::to_value(artifact)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize artifact: {}", e)))?;
+    if let (Some(p), Value::Object(map)) = (&plugin_key, &mut payload) {
+        map.insert("plugin".into(), Value::String(p.clone()));
+    }
+    let payload = serde_json::to_string(&payload)
         .map_err(|e| AppError::Internal(format!("Failed to serialize artifact: {}", e)))?;
 
     sqlx::query(
@@ -236,7 +271,7 @@ pub async fn merge_update(
         artifact.coordinates = update.coordinates;
     }
 
-    save_artifact(pool, traveler_id, None, &artifact).await
+    save_artifact(pool, traveler_id, None, &artifact, None).await
 }
 
 pub fn poi_list(places: &[crate::services::osm::GeoPlace]) -> Artifact {

@@ -1,5 +1,7 @@
 /**
- * Top HUD bar: clock, local weather at GPS, horizontal saved destinations.
+ * Top HUD bar.
+ * - Clock + local weather: CORE chrome — always on, plugin-free.
+ * - Saved destination chips: traveler plugin content — only with the plugin.
  */
 
 import {
@@ -214,16 +216,48 @@ function onPositionUpdate() {
   }
 }
 
-export function initHudLeft() {
+/** One geolocation fix straight from the browser — no map/plugin needed. */
+function refreshWeatherAtCurrentPosition() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => void refreshLocalWeather(pos.coords.latitude, pos.coords.longitude),
+    () => {},
+    { maximumAge: WEATHER_TTL_MS, timeout: 12000 },
+  );
+}
+
+let clockInited = false;
+let tripsInited = false;
+
+/** Core chrome: clock + weather. Works with zero plugins installed. */
+export function initHudClock() {
+  if (clockInited) return;
+  clockInited = true;
+
   formatClock();
   clockTimer = setInterval(formatClock, 1000);
 
-  onPositionUpdate();
+  refreshWeatherAtCurrentPosition();
+  // Traveler's GPS tracker refines the fix via gps:update; without it the
+  // periodic browser fix keeps the weather fresh on its own.
   window.addEventListener('gps:update', onPositionUpdate);
+  setInterval(refreshWeatherAtCurrentPosition, WEATHER_TTL_MS);
+}
+
+/** Traveler plugin content: saved-destination chips in the HUD. */
+export function initHudTrips() {
+  if (tripsInited) return;
+  tripsInited = true;
 
   renderSavedTrips();
   mobileQuery.addEventListener('change', renderSavedTrips);
   window.addEventListener('artifact:dock', renderSavedTrips);
   window.addEventListener('artifact:saved', renderSavedTrips);
   window.addEventListener('artifact:updated', renderSavedTrips);
+}
+
+/** Back-compat: both halves (used where traveler is known active). */
+export function initHudLeft() {
+  initHudClock();
+  initHudTrips();
 }

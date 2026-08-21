@@ -1,0 +1,180 @@
+/* Plugin window tiling (Android Auto-style).
+   The HUD header and the AI sphere/dock are fixed chrome; every plugin with
+   an interface lives in a tile window between them. */
+
+#tile-grid {
+  position: fixed;
+  top: calc(var(--hud-header-total) + 8px);
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: var(--z-map);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+  pointer-events: none; /* tiles re-enable their own hit targets */
+}
+
+#tile-grid.hidden { display: none; }
+
+#tile-grid:not(.tile-grid--single) {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--shadow-glass);
+  overflow: hidden;
+  pointer-events: auto;
+  transition: border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+}
+
+/* A plugin window fills its grid cell; with a single plugin it takes the
+   whole area but keeps the rounded frame (border + radius + shadow above). */
+
+.tile--focused {
+  border-color: var(--accent-glow);
+  box-shadow: var(--shadow-glow), var(--shadow-glass);
+  animation: tileFocusPulse 1.8s var(--ease-out);
+}
+
+@keyframes tileFocusPulse {
+  0% { transform: scale(0.99); }
+  40% { transform: scale(1.005); }
+  100% { transform: scale(1); }
+}
+
+/* No title bar — the window is all content. */
+.tile-header { display: none; }
+
+/* In-tile artifact sheet: a plugin's cards open over its own UI, contained
+ * inside its window. */
+.tile-sheet {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-float);
+  overflow-y: auto;
+  scrollbar-width: none;
+  animation: tileSheetIn var(--duration-normal) var(--ease-out);
+}
+
+.tile-sheet::-webkit-scrollbar { display: none; }
+
+@keyframes tileSheetIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The map tile: the plugin's interface fills the window. */
+.tile--map #map-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+  inset: auto;
+}
+
+.tile--map #map { position: absolute; inset: 0; }
+
+/* Full-screen window: the tile takes the whole grid area. */
+.tile--full { grid-column: 1 / -1; }
+
+/* ── Full-screen overlay (artifact detail inside a window) ─── */
+
+.tile-overlay {
+  position: fixed;
+  top: var(--hud-header-total);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-panel);
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+  pointer-events: auto;
+}
+
+.tile-overlay.visible { opacity: 1; transform: none; }
+.tile-overlay.hidden { display: none; }
+
+.tile-overlay-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px 10px;
+}
+
+.tile-overlay-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--glass);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.tile-overlay-back:hover { background: var(--glass-hover); }
+
+.tile-overlay-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.tile-overlay-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 20px 120px;
+}
+
+.tile-overlay-body .ui-artifact { max-width: 640px; margin: 0 auto; }
+
+.tile-empty {
+  margin: 4px 0 2px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Mode suppression: compose covers everything; navigator reuses the map tile
+ * itself, so only the generic overlay is suppressed there. */
+body.compose-active #tile-overlay {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile--focused { animation: none; }
+  .tile-overlay { transition: none; }
+}

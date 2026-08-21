@@ -16,8 +16,9 @@ import {
 import { refreshActivePlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
-import { initHudLeft } from './hudLeft.js';
+import { initHudClock, initHudTrips } from './hudLeft.js';
 import { initNavigator } from './navigator.js';
+import { initTileManager, refreshTiles } from './tiles.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { reloadUserSession } from './session.js';
 
@@ -83,6 +84,7 @@ async function initApp() {
   initSphere();
   initArtifactDock();
   initTextInput(submitTextToAgent);
+  initHudClock(); // core chrome — works with zero plugins
 
   await applyTravelerActivation();
 
@@ -104,7 +106,12 @@ async function applyTravelerActivation() {
   if (newTravelerActive === travelerActive) return;
   travelerActive = newTravelerActive;
 
-  const mapStage = document.getElementById('map-stage');
+  // The tiling window manager owns plugin windows — mount the tile shell
+  // FIRST so initMap() finds its container (#map) when the traveler window
+  // is about to appear.
+  initTileManager();
+  refreshTiles();
+
   const mapVignette = document.getElementById('map-vignette');
   const navPuck = document.getElementById('nav-puck');
   const navBanner = document.getElementById('nav-banner');
@@ -121,14 +128,12 @@ async function applyTravelerActivation() {
     if (!document.getElementById('map')?.childElementCount) {
       initMap();
     }
-    show(mapStage);
     show(mapVignette);
-    initHudLeft();
+    initHudTrips();
     initNavigator();
     initInsightCards();
     startGpsTracking();
   } else {
-    hide(mapStage);
     hide(mapVignette);
     hide(navPuck);
     hide(navBanner);

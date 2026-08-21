@@ -271,6 +271,7 @@ export async function upsertArtifact(artifact, tripId = null) {
       theme: saved.theme || null,
       destination: saved.destination || null,
       subtitle: saved.subtitle || null,
+      plugin: normalized.plugin || null,
       updated_at: new Date().toISOString(),
     };
     const idx = summaries.findIndex((s) => s.id === saved.id);
@@ -296,6 +297,7 @@ export async function upsertArtifact(artifact, tripId = null) {
       theme: normalized.theme || null,
       destination: normalized.destination || null,
       subtitle: normalized.subtitle || null,
+      plugin: normalized.plugin || null,
       updated_at: new Date().toISOString(),
     };
     if (!summaries.some((s) => s.id === normalized.id)) {

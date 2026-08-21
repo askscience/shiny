@@ -232,6 +232,13 @@ function handleAgentStep(message) {
   setDockStep(message);
 }
 
+/** The AI chose a plugin window to surface (show_plugin tool). */
+function handleFocusPlugin(res) {
+  if (res?.focus_plugin) {
+    window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: res.focus_plugin } }));
+  }
+}
+
 function setAgentAwaiting(on) {
   document.body.classList.toggle('agent-awaiting', on);
 }
@@ -250,6 +257,8 @@ export async function sendToAgent(message, mode, context) {
     await ingestAgentArtifacts(res.artifacts);
 
     await handleNavigation(res, message, context);
+
+    handleFocusPlugin(res);
 
     await syncTripsAfterAgent(res);
 
@@ -314,6 +323,8 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     await ingestAgentArtifacts(res.artifacts);
 
     await handleNavigation(res, message, context);
+
+    handleFocusPlugin(res);
 
     await syncTripsAfterAgent(res);
 

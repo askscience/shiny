@@ -6,7 +6,6 @@ use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::{Traveler, Trip};
 use crate::services::artifacts::{self, Artifact};
-use crate::services::web_search::SearchResult;
 
 use shiny_plugin_sdk::outcome::ActionOutcome as SdkActionOutcome;
 
@@ -22,6 +21,9 @@ pub struct ActionOutcome {
     pub data: Value,
     pub artifact: Option<Artifact>,
     pub extra_artifacts: Vec<Artifact>,
+    /// Plugin that produced this outcome ("" / None = core). Used to tag
+    /// saved artifacts so the UI can group surfaces by plugin.
+    pub owner: Option<String>,
 }
 
 /// Dispatch an LLM-emitted action. Core is a simple AI assistant: the only
@@ -41,6 +43,7 @@ pub async fn execute_action(
     // dispatch to its `Tool::invoke`. The registry itself consults the per-user
     // activation set, so deactivated plugins refuse here.
     if state.plugins.tools().has(&action_key) {
+        let owner = state.plugins.tools().owner_of(&action_key);
         let plugin_ctx = state.plugin_ctx();
         let outcome = state
             .plugins
@@ -53,6 +56,7 @@ pub async fn execute_action(
             data: outcome.data,
             artifact: outcome.artifact,
             extra_artifacts: outcome.extra_artifacts,
+            owner: if owner.is_empty() { None } else { Some(owner) },
         });
     }
 
@@ -73,26 +77,48 @@ pub async fn execute_action(
             data: json!({ "error": "plugin 'traveler' is deactivated for this user" }),
             artifact: None,
             extra_artifacts: vec![],
+            owner: None,
         });
     }
 
     let traveler_active = state.plugins.is_enabled_for(&traveler.id, "traveler").await;
 
     let outcome = match action_key.as_str() {
+        // Surface a plugin's window (tile or full screen, per user preference).
+        // The frontend receives `focus_plugin` in the agent response.
+        "show_plugin" => {
+            let name = param_str(params, "name")
+                .or_else(|| param_str(params, "plugin"))
+                .ok_or_else(|| AppError::BadRequest("name required".into()))?;
+            let installed = state.plugins.list().iter().any(|m| m.name == name);
+            if installed && state.plugins.is_enabled_for(&traveler.id, &name).await {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "ok".into(),
+                    data: json!({ "plugin": name }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            } else {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({ "error": format!("plugin '{name}' is not installed or not active") }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            }
+        }
         "web_search" => {
             let query = param_str(params, "query").ok_or_else(|| AppError::BadRequest("query required".into()))?;
-            let results = state.search.search(&query).await?;
-            let summary = if state.ollama.is_available().await {
-                summarize_search_stepwise(
-                    state,
-                    &results,
-                    &ctx.lang,
-                    ctx.ollama_model.as_deref(),
-                )
-                .await
-            } else {
-                None
-            };
+            // The Instant Answer API is empty for most queries — use the HTML
+            // results endpoint first and fall back to it for instant answers.
+            let mut results = state.search.search_html(&query, 5).await?;
+            if results.is_empty() {
+                results = state.search.search(&query).await?;
+            }
             // Chat-only mode: without the traveler plugin there is no card
             // surface — the answer travels in `data` and spoken prose only.
             let artifact = if traveler_active {
@@ -100,7 +126,7 @@ pub async fn execute_action(
                     id: Uuid::new_v4().to_string(),
                     artifact_type: "site_info".into(),
                     title: query.clone(),
-                    subtitle: summary.clone(),
+                    subtitle: results.first().map(|r| r.snippet.clone()),
                     coordinates: None,
                     sections: results.iter().take(4).map(|r| artifacts::ArtifactSection {
                         label: r.title.clone(),
@@ -120,9 +146,10 @@ pub async fn execute_action(
             ActionOutcome {
                 action: action_key.clone(),
                 result: "ok".into(),
-                data: json!({ "results": results, "summary": summary }),
+                data: json!({ "results": results }),
                 artifact,
                 extra_artifacts: vec![],
+                owner: Some("core".into()),
             }
         }
         other => {
@@ -132,39 +159,6 @@ pub async fn execute_action(
     };
 
     Ok(outcome)
-}
-
-async fn summarize_search_stepwise(
-    state: &AppState,
-    results: &[SearchResult],
-    lang: &str,
-    model: Option<&str>,
-) -> Option<String> {
-    let mut lines = Vec::new();
-    for row in results.iter().take(4) {
-        let prompt = format!(
-            "Summarize this search hit in one short sentence for language '{}': {} — {}",
-            lang, row.title, row.snippet
-        );
-        if let Ok(line) = state.ollama.generate(&prompt, None, model).await {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() {
-                lines.push(trimmed.to_string());
-            }
-        }
-    }
-    if lines.is_empty() {
-        return None;
-    }
-    if lines.len() == 1 {
-        return Some(lines.pop()?);
-    }
-    let merge_prompt = format!(
-        "Combine these search notes into 2-3 sentences for language '{}':\n{}",
-        lang,
-        lines.join("\n")
-    );
-    state.ollama.generate(&merge_prompt, None, model).await.ok()
 }
 
 fn param_str(params: &Value, key: &str) -> Option<String> {

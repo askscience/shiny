@@ -8,10 +8,11 @@ import {
   destinationKeyForArtifact,
   setActiveDestination,
 } from './artifactStore.js';
-import { navigateToDestination, previewDestination } from './map.js';
+import { previewDestination } from './map.js';
 import { loadContextInsights } from './insights/insightCards.js';
 import { isPluginActive } from './activePlugins.js';
-import { artifactPanel, dockButton, iconForArtifact, labelForArtifact, reveal } from '../ui/index.js';
+import { openArtifactInTile } from './tiles.js';
+import { dockButton, iconForArtifact, labelForArtifact } from '../ui/index.js';
 
 const panel = document.getElementById('travel-panel');
 const backdrop = document.getElementById('travel-panel-backdrop');
@@ -52,62 +53,27 @@ function applyMapForArtifact(artifact) {
 }
 
 export function renderArtifact(artifact, { focus = true } = {}) {
-  if (!panel) return;
-
   const normalized = normalizeArtifact(artifact);
   currentArtifact = normalized;
   activeArtifactId = normalized.id;
   cacheArtifactLocal(normalized);
-  panel.innerHTML = '';
-
-  const content = artifactPanel(normalized, {
-    onClose: clearArtifacts,
-    onNavigate: handleNavigate,
-    onAction: handleAction,
-  });
-  panel.appendChild(content);
-  reveal(panel);
 
   if (focus) {
-    openPanel();
+    // Plugin output is contained inside its own window — the tile sheet.
+    const plugin = normalized.plugin || 'traveler';
+    void openArtifactInTile(plugin, normalized);
     applyMapForArtifact(normalized);
   }
 
   renderArtifactDock(getDockSummaries());
 }
 
-async function handleNavigate(artifact) {
-  const result = await navigateToDestination(artifact);
-  if (result?.ok) {
-    closePanel();
-    const msg = result.mode === 'direct'
-      ? 'Straight line from your location — full driving route could not be loaded'
-      : 'Driving route from your location — pinch or drag the map to explore';
-    window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: msg, type: 'info' },
-    }));
-  } else if (artifact.coordinates || artifact.actions?.some((a) => a.tool === 'map_route')) {
-    const msg = artifact._routeError || 'Could not load driving route — try again in a moment';
-    window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: msg, type: 'error' },
-    }));
-  } else {
-    window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: 'No destination coordinates for this plan', type: 'error' },
-    }));
-  }
-}
-
-async function handleAction(action, artifact) {
-  if (action.tool === 'map_route') {
-    await handleNavigate(artifact);
-  }
-}
-
 export function clearArtifacts() {
   closePanel();
   currentArtifact = null;
   activeArtifactId = null;
+  // Close any artifact sheet open inside a plugin window.
+  document.querySelectorAll('.tile-sheet').forEach((el) => el.remove());
   renderArtifactDock(getDockSummaries());
   window.dispatchEvent(new CustomEvent('artifact:clear'));
 }

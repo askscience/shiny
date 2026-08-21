@@ -54,7 +54,7 @@ pub async fn create(
     Json(body): Json<UpsertArtifactRequest>,
 ) -> Result<Json<ArtifactResponse>, AppError> {
     let artifact =
-        artifacts::save_artifact(&state.pool, &traveler.id, body.trip_id.as_deref(), &body.artifact)
+        artifacts::save_artifact(&state.pool, &traveler.id, body.trip_id.as_deref(), &body.artifact, None)
             .await?;
     Ok(Json(ArtifactResponse {
         success: true,

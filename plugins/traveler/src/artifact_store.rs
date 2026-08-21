@@ -34,8 +34,27 @@ pub async fn save_artifact(
     pool: &SqlitePool,
     traveler_id: &str,
     artifact: &Artifact,
+    plugin: &str,
 ) -> Result<Artifact, AppError> {
-    let payload = serde_json::to_string(artifact)
+    // Preserve core's plugin attribution across updates: keep the stored
+    // `plugin` key when present, self-tag otherwise.
+    let existing: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT json_extract(payload_json, '$.plugin') FROM saved_artifacts \
+         WHERE id = ?1 AND traveler_id = ?2",
+    )
+    .bind(&artifact.id)
+    .bind(traveler_id)
+    .fetch_optional(pool)
+    .await?
+    .flatten();
+    let owner = existing.unwrap_or_else(|| plugin.to_string());
+
+    let mut payload = serde_json::to_value(artifact)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize artifact: {}", e)))?;
+    if let serde_json::Value::Object(map) = &mut payload {
+        map.insert("plugin".into(), serde_json::Value::String(owner));
+    }
+    let payload = serde_json::to_string(&payload)
         .map_err(|e| AppError::Internal(format!("Failed to serialize artifact: {}", e)))?;
 
     sqlx::query(

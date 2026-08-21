@@ -834,13 +834,25 @@ dock and panels, leaving the voice/text chat over the orb.
 
 How plugin content reaches the eye:
 
-- **Artifacts** (the `artifact` field of `ActionOutcome`) are JSON. The
-  frontend renders them with the `artifactPanel` composite
-  (`web/ui/components/composites.js`) inside `#travel-panel` — hero, stats,
-  day blocks, sections, action buttons — always in the active theme. A
-  plugin's styling levers are structural only: `type` / `theme` (icon +
-  eyebrow + dock slot), `narrative` vs `sections`, `days[]`, `route`,
-  `coordinates` / `geometry`.
+- **Plugin windows** — every plugin with an interface lives inside its own
+  **window** in the app's tiling shell (`web/js/tiles.js`, `#tile-grid`),
+  Android Auto-style: the HUD header and the AI sphere/dock are fixed chrome,
+  and each plugin is an app with its own window container between them. The
+  traveler plugin's window hosts the map. Windows have **no title bar**; a
+  single visible window auto-fills the grid area but keeps the rounded frame.
+  *Settings → Plugin Windows* picks Tile or Full screen per plugin
+  (localStorage `plugin.layout.<name>.<userId>`, default `tile`), and the AI
+  can surface a window with the core `show_plugin` tool (system prompt
+  carries a compact catalog of active plugins — name + manifest description —
+  and the response field `focus_plugin` focuses that window).
+- **Artifacts** (the `artifact` field of `ActionOutcome`) are JSON rendered
+  by the `artifactPanel` composite (`web/ui/components/composites.js`) as a
+  **sheet inside their plugin's own window** (`.tile-sheet` over the plugin's
+  UI), so a plugin's output is contained in its container. Core tags each
+  saved artifact payload with the owning plugin's name (`plugin` key in
+  `payload_json`) so output stays attributable. A plugin's styling levers are
+  structural only: `type` / `theme` (icon + eyebrow + dock slot), `narrative`
+  vs `sections`, `days[]`, `route`, `coordinates` / `geometry`.
 - **Dock icons** come from the fixed `TYPE_ICONS` / `THEME_ICONS` maps in
   `composites.js` and resolve to the active theme's `icons/artifacts/*.svg`.
 - **Accent & gradient** are chosen per user in *Settings → Appearance* and

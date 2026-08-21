@@ -38,11 +38,15 @@ pub struct AgentResponse {
     pub success: bool,
     pub reply: String,
     pub mode: String,
-    pub artifacts: Vec<Artifact>,
+    /// Tagged artifact payloads (include the owning `plugin` key).
+    pub artifacts: Vec<serde_json::Value>,
     pub actions_taken: Vec<ActionTaken>,
     pub steps: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub navigation: Option<NavigationSession>,
+    /// Plugin the AI chose to surface in a window (via show_plugin).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus_plugin: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -183,6 +187,38 @@ async fn prepare_agent(
         format!("\n{}\n", context_lines.join("\n"))
     };
 
+    // Compact plugin catalog: the model picks a plugin by reading these
+    // descriptions (plus the skill docs above) and can surface its window
+    // with the show_plugin tool.
+    let catalog_lines: Vec<String> = state
+        .plugins
+        .list()
+        .into_iter()
+        .filter(|m| installed.contains(&m.name))
+        .map(|m| {
+            let desc = m
+                .description
+                .clone()
+                .or_else(|| m.summary.clone())
+                .unwrap_or_default();
+            format!("- {}: {}", m.name, desc)
+        })
+        .collect();
+    let plugin_windows_block = if catalog_lines.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n## Plugin windows\n\
+             Each active plugin has its own window (a tile or full screen, user's choice).\n\
+             Active plugins:\n{}\n\
+             When the request clearly belongs to a plugin's domain, call \
+             {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
+             this opens its window for the user.\n",
+            catalog_lines.join("\n")
+        )
+    };
+    let plugins_hint = catalog_lines.join("; ");
+
     let system = format!(
         "You are {ai_name}, {persona}. Reply in language code '{lang}'. Keep spoken replies to 1-2 short sentences.\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
@@ -196,7 +232,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — keep the spoken reply short.",
+         Mode: {mode} — keep the spoken reply short.{plugin_windows_block}",
         ai_name = ai_name,
         persona = persona,
         lang = lang,
@@ -208,6 +244,7 @@ async fn prepare_agent(
         diary_line = diary_line,
         context_block = context_block,
         mode = mode,
+        plugin_windows_block = plugin_windows_block,
     );
 
     Ok(PreparedAgent {
@@ -218,6 +255,7 @@ async fn prepare_agent(
             lang,
             ai_name,
             system,
+            plugins_hint,
             ctx,
         },
     })
@@ -239,6 +277,7 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
             .collect(),
         steps: result.steps,
         navigation: result.navigation,
+        focus_plugin: result.focus_plugin,
     }
 }
 

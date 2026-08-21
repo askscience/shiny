@@ -15,16 +15,29 @@ pub fn build_planning_messages(
 }
 
 /// After the first tool: tiny system + user request + recent step notes only.
+/// `plugins_hint` keeps the plugin windows catalog visible so the model can
+/// still call `show_plugin` on later turns.
 pub fn build_continuation_messages(
     ai_name: &str,
     lang: &str,
+    mode: &str,
     user_message: &str,
     completed_steps: &[String],
+    plugins_hint: &str,
 ) -> Vec<(String, String)> {
+    let plugins_line = if plugins_hint.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "Plugin windows: {plugins_hint}. If the request belongs to one of them and you \
+             haven't shown its window yet, call show_plugin with its name before your final reply.\n"
+        )
+    };
     let system = format!(
-        "You are {ai_name}, a travel navigator. Language: {lang}.\n\
+        "You are {ai_name}. Language: {lang}. Mode: {mode} — keep spoken replies to 1-2 short sentences.\n\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
-         Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}"
+         Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
+         {plugins_line}"
     );
 
     let mut messages = vec![
@@ -37,27 +50,6 @@ pub fn build_continuation_messages(
     }
 
     messages
-}
-
-/// Final spoken reply — no tool docs, only step outcomes.
-pub fn build_final_reply_messages(
-    ai_name: &str,
-    lang: &str,
-    user_message: &str,
-    completed_steps: &[String],
-) -> Vec<(String, String)> {
-    let steps = recent_steps(completed_steps).join("\n");
-    let system = format!(
-        "You are {ai_name}. Reply in language '{lang}' with 1-2 short spoken sentences.\n\
-         Summarize what was accomplished for the user. Do not call tools. Do not mention JSON."
-    );
-    let user = format!(
-        "User asked: {user_message}\n\nSteps completed:\n{steps}\n\nReply to the user now."
-    );
-    vec![
-        ("system".to_string(), system),
-        ("user".to_string(), user),
-    ]
 }
 
 fn recent_steps(steps: &[String]) -> Vec<String> {
@@ -130,7 +122,29 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                 .unwrap_or(0);
             format!("Listed {n} trip(s)")
         }
-        "web_search" => "Saved search results".into(),
+        "web_search" => {
+            // The final reply is generated from these step notes — carry the
+            // actual summary + top hits or the model has nothing to answer with.
+            let mut note = String::from("Web search completed");
+            if let Some(summary) = data
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+            {
+                note.push_str(&format!(": {summary}"));
+            }
+            if let Some(results) = data.get("results").and_then(|v| v.as_array()) {
+                for r in results.iter().take(4) {
+                    let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                    let snippet = r.get("snippet").and_then(|v| v.as_str()).unwrap_or("");
+                    if title.is_empty() && snippet.is_empty() {
+                        continue;
+                    }
+                    note.push_str(&format!("\n- {title}: {snippet}"));
+                }
+            }
+            note
+        }
         "show_artifact" | "update_artifact" => {
             let title = data
                 .pointer("/artifact/title")
@@ -139,6 +153,13 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             format!("Updated {title}")
         }
         "generate_diary" => "Diary entry saved".into(),
+        "show_plugin" => {
+            let name = data
+                .get("plugin")
+                .and_then(|v| v.as_str())
+                .unwrap_or("plugin");
+            format!("Showing {name}")
+        }
         _ => format!("{action} complete"),
     }
 }
@@ -154,6 +175,7 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "list_trips" => "Loading trips…",
         "generate_diary" => "Writing diary…",
         "show_artifact" | "update_artifact" => "Updating guide…",
+        "show_plugin" => "Opening plugin…",
         _ => "Working…",
     }
 }
@@ -172,11 +194,19 @@ mod tests {
         let msgs = build_continuation_messages(
             "Shiny",
             "en",
+            "single",
             "Plan Rome",
             &["Step 1".into()],
+            "traveler: Trip tracking",
         );
-        assert!(msgs[0].1.len() < 500);
+        assert!(msgs[0].1.len() < 700);
         assert!(msgs.iter().any(|(_, c)| c.contains("[Done]")));
+    }
+
+    #[test]
+    fn continuation_without_plugins_omits_hint() {
+        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "");
+        assert!(!msgs[0].1.contains("Plugin windows"));
     }
 
     #[test]
@@ -189,5 +219,22 @@ mod tests {
         let step = describe_tool_step("plan_trip", "ok", &data);
         assert!(step.contains("4 guides"));
         assert!(!step.contains("9000"));
+    }
+
+    #[test]
+    fn web_search_step_carries_summary_and_top_hits() {
+        let data = json!({
+            "summary": "Paris is the capital of France.",
+            "results": [
+                { "title": "Paris - Wikipedia", "snippet": "The capital and largest city of France." },
+                { "title": "Britannica", "snippet": "Capital city of France." },
+                { "title": "Mappr", "snippet": "What is the capital of France?" }
+            ]
+        });
+        let step = describe_tool_step("web_search", "ok", &data);
+        assert!(step.contains("Paris is the capital of France."), "summary missing: {step}");
+        assert!(step.contains("Paris - Wikipedia"), "top hit missing: {step}");
+        assert!(step.contains("Britannica"), "second hit missing: {step}");
+        assert!(step.contains("What is the capital of France?"), "third hit missing: {step}");
     }
 }
