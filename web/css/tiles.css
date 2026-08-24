@@ -123,12 +123,18 @@
 #map-tile-dock-icons { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 
 /* When the dock lives in the tile, suppress the old under-sphere dock
-   (except compose mode, which uses #artifact-dock for the input pill). */
+   entirely outside compose mode. While composing, #artifact-dock stays for
+   the text-input pill, but its icons row never shows — the tile dock owns
+   the saved cards, including while the AI is thinking. */
 body.tile-dock-active:not(.compose-active) #artifact-dock {
   display: none !important;
 }
 
-body.compose-active #map-tile-dock { display: none; }
+body.tile-dock-active.compose-active #artifact-dock-icons,
+body.tile-dock-active.compose-active.compose-awaiting #artifact-dock-icons,
+body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
+  display: none !important;
+}
 
 /* Radio plugin window — flat square surface, artwork-driven.
    Ambient artwork glow behind everything; hero with square art + huge track

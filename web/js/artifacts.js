@@ -125,14 +125,13 @@ export async function openSavedArtifact(id) {
 
 export function renderArtifactDock(artifacts) {
   const list = artifacts || [];
-  const composeOpen = document.body.classList.contains('compose-active');
 
-  // The traveler plugin window hosts its own dock (top-right of the tile);
-  // fall back to the chrome-bottom dock when the tile isn't mounted (chat-only
-  // mode) or while composing (the compose input pill lives in #artifact-dock).
+  // The dock lives INSIDE the traveler window whenever its tile is mounted;
+  // the chrome-bottom dock is only the chat-only fallback. Composing or
+  // agent-awaiting never moves it back under the AI sphere.
   const tileDock = document.getElementById('map-tile-dock');
   const tileDockIcons = document.getElementById('map-tile-dock-icons');
-  const inTile = !!tileDock && tileDock.isConnected && isPluginActive('traveler') && !composeOpen;
+  const inTile = !!tileDock && tileDock.isConnected && isPluginActive('traveler');
   document.body.classList.toggle('tile-dock-active', inTile);
   if (tileDock) tileDock.classList.toggle('hidden', !inTile || !list.length);
 
@@ -141,20 +140,22 @@ export function renderArtifactDock(artifacts) {
   if (!container || !iconsEl) return;
   iconsEl.innerHTML = '';
 
-  // Chat-only mode (traveler deactivated): the chrome dock stays hidden —
-  // the compose input re-shows it via the compose-active CSS when needed.
-  if (!inTile && !isPluginActive('traveler')) {
-    if (!composeOpen) dock.classList.add('hidden');
-    return;
-  }
+  const composeOpen = document.body.classList.contains('compose-active');
 
-  if (!list.length) {
-    if (!inTile && !composeOpen) dock.classList.add('hidden');
-    return;
-  }
-
-  if (!inTile && !composeOpen) {
-    dock.classList.remove('hidden');
+  if (!inTile) {
+    // Chat-only mode (traveler deactivated): the chrome dock stays hidden —
+    // the compose input re-shows it via the compose-active CSS when needed.
+    if (!isPluginActive('traveler')) {
+      if (!composeOpen) dock.classList.add('hidden');
+      return;
+    }
+    if (!list.length) {
+      if (!composeOpen) dock.classList.add('hidden');
+      return;
+    }
+    if (!composeOpen) {
+      dock.classList.remove('hidden');
+    }
   }
 
   const visible = list.slice(0, MAX_VISIBLE);
