@@ -1,7 +1,7 @@
 /**
  * Top HUD bar.
  * - Clock + local weather: CORE chrome — always on, plugin-free.
- * - Saved destination chips: traveler plugin content — only with the plugin.
+ * - Saved places menu: traveler plugin content — only with the plugin.
  */
 
 import {
@@ -144,35 +144,132 @@ async function refreshLocalWeather(lat, lon) {
   }
 }
 
-function buildTripChip(dest, active) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'ui-hud-chip';
-  if (dest.key === active) btn.classList.add('is-active');
-  btn.textContent = dest.label;
-  btn.title = `Open ${dest.label}`;
-  btn.setAttribute('aria-label', dest.label);
-  btn.addEventListener('click', () => selectDestination(dest));
-  return btn;
+/* ── Saved-places menu (replaces the chip row) ─────────────── */
+
+let menuTrigger = null;
+let menuPopup = null;
+let menuOpen = false;
+
+function ensureMenuPopup() {
+  if (menuPopup) return;
+  menuPopup = document.createElement('div');
+  menuPopup.className = 'ui-hud-menu-popup hidden';
+  menuPopup.setAttribute('role', 'menu');
+  menuPopup.setAttribute('aria-label', 'Saved places');
+  document.body.appendChild(menuPopup);
+}
+
+function closeTripMenu() {
+  if (!menuOpen) return;
+  menuOpen = false;
+  if (menuTrigger) menuTrigger.setAttribute('aria-expanded', 'false');
+  menuPopup?.classList.add('hidden');
+  document.removeEventListener('pointerdown', onMenuOutside, true);
+  document.removeEventListener('keydown', onMenuKey, true);
+  window.removeEventListener('resize', closeTripMenu);
+}
+
+function onMenuOutside(e) {
+  if (menuPopup && !menuPopup.contains(e.target) && menuTrigger && !menuTrigger.contains(e.target)) {
+    closeTripMenu();
+  }
+}
+
+function onMenuKey(e) {
+  if (e.key === 'Escape') closeTripMenu();
+}
+
+function openTripMenu() {
+  ensureMenuPopup();
+  renderMenuItems();
+  menuPopup.classList.remove('hidden');
+  const r = menuTrigger.getBoundingClientRect();
+  const left = Math.max(12, Math.min(r.left, window.innerWidth - menuPopup.offsetWidth - 12));
+  menuPopup.style.left = `${left}px`;
+  menuPopup.style.top = `${r.bottom + 8}px`;
+  menuOpen = true;
+  menuTrigger.setAttribute('aria-expanded', 'true');
+  document.addEventListener('pointerdown', onMenuOutside, true);
+  document.addEventListener('keydown', onMenuKey, true);
+  window.addEventListener('resize', closeTripMenu);
+}
+
+function toggleTripMenu() {
+  if (menuOpen) closeTripMenu();
+  else if (menuTrigger) openTripMenu();
+}
+
+function renderMenuItems() {
+  if (!menuPopup) return;
+  menuPopup.innerHTML = '';
+  const destinations = getSavedDestinations();
+  const active = getActiveDestination();
+
+  if (!destinations.length) {
+    const empty = document.createElement('div');
+    empty.className = 'ui-hud-menu-empty';
+    empty.textContent = 'No saved places yet';
+    menuPopup.appendChild(empty);
+    return;
+  }
+
+  destinations.forEach((dest) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ui-hud-menu-item';
+    if (dest.key === active) item.classList.add('is-active');
+    item.setAttribute('role', 'menuitem');
+
+    const label = document.createElement('span');
+    label.className = 'ui-hud-menu-item-label';
+    label.textContent = dest.label;
+    item.appendChild(label);
+
+    const check = document.createElement('span');
+    check.className = 'ui-hud-menu-check';
+    item.appendChild(check);
+    void setIcon(check, 'ui/check', { size: 14 });
+
+    item.addEventListener('click', () => {
+      closeTripMenu();
+      void selectDestination(dest);
+    });
+    menuPopup.appendChild(item);
+  });
+}
+
+function buildTripMenuTrigger(destinations, active) {
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'ui-hud-menu-trigger';
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+
+  const label = document.createElement('span');
+  label.className = 'ui-hud-menu-label';
+  const activeDest = destinations.find((d) => d.key === active);
+  label.textContent = activeDest?.label || 'Trips';
+  trigger.appendChild(label);
+
+  const chevron = document.createElement('span');
+  chevron.className = 'ui-hud-menu-chevron';
+  trigger.appendChild(chevron);
+  void setIcon(chevron, 'ui/chevron-down', { size: 13 });
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleTripMenu();
+  });
+  return trigger;
 }
 
 function renderInto(container, destinations, active) {
   if (!container) return;
+  closeTripMenu();
   container.innerHTML = '';
-
-  if (!destinations.length) {
-    container.classList.add('empty');
-    const hint = document.createElement('span');
-    hint.className = 'hud-trips-empty';
-    hint.textContent = 'No saved places yet';
-    container.appendChild(hint);
-    return;
-  }
-
-  container.classList.remove('empty');
-  destinations.forEach((dest) => {
-    container.appendChild(buildTripChip(dest, active));
-  });
+  container.classList.toggle('empty', !destinations.length);
+  menuTrigger = buildTripMenuTrigger(destinations, active);
+  container.appendChild(menuTrigger);
 }
 
 function renderSavedTrips() {
