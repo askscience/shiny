@@ -15,6 +15,7 @@ import { getPluginLayout } from './preferences.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import { artifactPanel } from '../ui/index.js';
+import { getDockSummaries } from './artifactStore.js';
 import {
   RADIO_PLUGIN as RADIO_TILE_PLUGIN,
   mountRadioTile, unmountRadioTile, getRadioTileElement, wireRadioEvents,
@@ -73,6 +74,18 @@ function mountMapTile() {
   mapTileEl.className = 'tile tile--map';
   mapTileEl.dataset.plugin = MAP_TILE_PLUGIN;
   mapTileEl.appendChild(stage);
+
+  // Saved-cards dock lives INSIDE the traveler window (top-right, over the
+  // map) instead of under the AI sphere. artifacts.js renders the buttons
+  // into #map-tile-dock-icons and hides the old chrome-bottom dock.
+  const tileDock = document.createElement('div');
+  tileDock.id = 'map-tile-dock';
+  tileDock.className = 'map-tile-dock hidden';
+  tileDock.setAttribute('aria-label', 'Saved cards');
+  const tileDockIcons = document.createElement('div');
+  tileDockIcons.id = 'map-tile-dock-icons';
+  tileDock.appendChild(tileDockIcons);
+  mapTileEl.appendChild(tileDock);
 }
 
 /** Remove the map tile from the grid (traveler deactivated). */
@@ -123,6 +136,9 @@ function renderTiles() {
   grid.classList.toggle('hidden', names.length === 0);
   grid.classList.toggle('tile-grid--single', names.length === 1);
   document.body.classList.toggle('tiles-active', names.length > 0);
+  // The dock moved into the traveler window — re-render it whenever tiles
+  // change so it follows the tile (activation toggles, layout switches).
+  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
   resizeMapSoon();
 }
 

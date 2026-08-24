@@ -89,9 +89,46 @@
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   overflow: hidden;
   inset: auto;
+  /* Contain Leaflet's z-indexed panes (400+) so sibling UI — the in-tile
+     dock and artifact sheet — can layer above the map. */
+  isolation: isolate;
 }
 
 .tile--map #map { position: absolute; inset: 0; }
+
+/* ── Saved-cards dock inside the traveler window ────────────
+   Top-right over the map, replacing the old under-sphere dock. */
+.map-tile-dock {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-float);
+  max-width: min(calc(100% - 24px), 340px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.map-tile-dock::-webkit-scrollbar { display: none; }
+
+#map-tile-dock-icons { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+
+/* When the dock lives in the tile, suppress the old under-sphere dock
+   (except compose mode, which uses #artifact-dock for the input pill). */
+body.tile-dock-active:not(.compose-active) #artifact-dock {
+  display: none !important;
+}
+
+body.compose-active #map-tile-dock { display: none; }
 
 /* Radio plugin window — flat square surface, artwork-driven.
    Ambient artwork glow behind everything; hero with square art + huge track

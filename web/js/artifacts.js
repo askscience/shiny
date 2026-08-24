@@ -124,34 +124,44 @@ export async function openSavedArtifact(id) {
 }
 
 export function renderArtifactDock(artifacts) {
-  if (!dock || !dockIcons) return;
-  dockIcons.innerHTML = '';
-
   const list = artifacts || [];
   const composeOpen = document.body.classList.contains('compose-active');
 
-  // Chat-only mode (traveler deactivated): the dock stays hidden — the
-  // compose input re-shows it via the compose-active CSS when needed.
-  if (!isPluginActive('traveler')) {
+  // The traveler plugin window hosts its own dock (top-right of the tile);
+  // fall back to the chrome-bottom dock when the tile isn't mounted (chat-only
+  // mode) or while composing (the compose input pill lives in #artifact-dock).
+  const tileDock = document.getElementById('map-tile-dock');
+  const tileDockIcons = document.getElementById('map-tile-dock-icons');
+  const inTile = !!tileDock && tileDock.isConnected && isPluginActive('traveler') && !composeOpen;
+  document.body.classList.toggle('tile-dock-active', inTile);
+  if (tileDock) tileDock.classList.toggle('hidden', !inTile || !list.length);
+
+  const container = inTile ? tileDock : dock;
+  const iconsEl = inTile ? tileDockIcons : dockIcons;
+  if (!container || !iconsEl) return;
+  iconsEl.innerHTML = '';
+
+  // Chat-only mode (traveler deactivated): the chrome dock stays hidden —
+  // the compose input re-shows it via the compose-active CSS when needed.
+  if (!inTile && !isPluginActive('traveler')) {
     if (!composeOpen) dock.classList.add('hidden');
     return;
   }
 
-  if (!list.length && !composeOpen) {
-    dock.classList.add('hidden');
+  if (!list.length) {
+    if (!inTile && !composeOpen) dock.classList.add('hidden');
     return;
   }
 
-  if (!composeOpen) {
+  if (!inTile && !composeOpen) {
     dock.classList.remove('hidden');
   }
 
-  if (!list.length) return;
   const visible = list.slice(0, MAX_VISIBLE);
   const overflow = list.length - visible.length;
 
   visible.forEach((item) => {
-    dockIcons.appendChild(dockButton({
+    iconsEl.appendChild(dockButton({
       icon: iconForArtifact(item),
       label: labelForArtifact(item),
       active: item.id === activeArtifactId,
@@ -160,7 +170,7 @@ export function renderArtifactDock(artifacts) {
   });
 
   if (overflow > 0) {
-    dockIcons.appendChild(dockButton({
+    iconsEl.appendChild(dockButton({
       text: `+${overflow}`,
       label: `${overflow} more saved cards`,
       onClick: () => openSavedArtifact(list[MAX_VISIBLE].id),
