@@ -243,6 +243,11 @@ function setAgentAwaiting(on) {
   document.body.classList.toggle('agent-awaiting', on);
 }
 
+/** Plugin windows react to tool outcomes here (e.g. radio stops playback). */
+function dispatchAgentActions(res) {
+  window.dispatchEvent(new CustomEvent('agent:actions', { detail: res?.actions_taken || [] }));
+}
+
 export async function sendToAgent(message, mode, context) {
   setAgentAwaiting(true);
   setSphereState('processing');
@@ -259,6 +264,7 @@ export async function sendToAgent(message, mode, context) {
     await handleNavigation(res, message, context);
 
     handleFocusPlugin(res);
+    dispatchAgentActions(res);
 
     await syncTripsAfterAgent(res);
 
@@ -325,6 +331,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     await handleNavigation(res, message, context);
 
     handleFocusPlugin(res);
+    dispatchAgentActions(res);
 
     await syncTripsAfterAgent(res);
 

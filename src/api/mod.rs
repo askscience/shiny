@@ -10,6 +10,7 @@ pub mod agent;
 pub mod voice;
 pub mod insights;
 pub mod ollama;
+pub mod radio;
 
 use axum::Router;
 use axum::routing::{get, post};
@@ -90,7 +91,10 @@ pub fn build_router(state: AppState) -> Router {
     let protected_routes = Router::new()
         .route("/api/plugins", get(crate::plugins::admin_api::list))
         .route("/api/plugins/active", get(crate::plugins::admin_api::active))
-        .route("/api/plugins/install", post(crate::plugins::admin_api::install))
+        // Plugin archives are multi-MB zip/tar.gz uploads (cdylib inside) —
+        // lift axum's 2MB default body limit on this route only.
+        .route("/api/plugins/install", post(crate::plugins::admin_api::install)
+            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
         .route("/api/plugins/uninstall", post(crate::plugins::admin_api::uninstall))
         .route("/api/plugins/activate", post(crate::plugins::admin_api::activate))
         .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
@@ -119,6 +123,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/agent", post(agent::handle_agent_dispatch))
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
+        .route("/api/radio/nowplaying", get(radio::now_playing))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))
         .route("/api/artifacts/:id", get(artifacts::get_one).put(artifacts::update))
         .route("/api/tts", post(voice::tts))

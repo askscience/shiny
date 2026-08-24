@@ -80,15 +80,20 @@ shiny/
 │   │   ├── migrations/001_init.sql
 │   │   ├── skills/hello.md
 │   │   └── src/{lib.rs, plugin.rs, tool.rs}
-│   └── traveler/                     # extracted traveler-domain plugin (skeleton)
+│   ├── traveler/                     # extracted traveler-domain plugin (skeleton)
+│   │   ├── Cargo.toml
+│   │   ├── plugin.toml
+│   │   ├── migrations/001_init.sql
+│   │   ├── skills/traveler-api-tools.md
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── plugin.rs
+│   │       ├── tools/{create_trip.rs, list_trips.rs, …}
+│   └── radio/                        # internet radio (Radio Browser) + player window
 │       ├── Cargo.toml
 │       ├── plugin.toml
-│       ├── migrations/001_init.sql
-│       ├── skills/traveler-api-tools.md
-│       └── src/
-│           ├── lib.rs
-│           ├── plugin.rs
-│           ├── tools/{create_trip.rs, list_trips.rs, …}
+│       ├── skills/radio.md
+│       └── src/{lib.rs, plugin.rs, radio_browser.rs, tools/mod.rs}
 └── src/
     ├── plugins/                       # the loader/registry/installer inside the binary
     │   ├── mod.rs
@@ -804,6 +809,7 @@ Before publishing a plugin:
 | `crates/shiny-plugin-sdk/` | SDK crate — depends on this only. |
 | `plugins/hello/` | Demo plugin from this doc, fully runnable. |
 | `plugins/traveler/` | The traveler domain plugin — 22 tools (trips, GPS, maps, navigation, diary, planning, artifact cards), its own OSM client, navigation builder, diary writer, and prose pipeline. |
+| `plugins/radio/` | Internet radio via Radio Browser — `radio_search`/`radio_play`/`radio_stop` tools plus the Radio window (`web/js/radio.js`) with a singleton `<audio>` player; AI playback arrives as `radio_station` artifacts, stops via the `agent:actions` event. |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
 | `src/plugins/manager.rs` | `PluginManager` — aggregates contributions, persona, skills. |

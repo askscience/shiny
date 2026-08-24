@@ -85,6 +85,7 @@ async function initApp() {
   initArtifactDock();
   initTextInput(submitTextToAgent);
   initHudClock(); // core chrome — works with zero plugins
+  initTileManager(); // plugin window shell — mounts tiles for any active plugin
 
   await applyTravelerActivation();
 
@@ -106,9 +107,8 @@ async function applyTravelerActivation() {
   if (newTravelerActive === travelerActive) return;
   travelerActive = newTravelerActive;
 
-  // The tiling window manager owns plugin windows — mount the tile shell
-  // FIRST so initMap() finds its container (#map) when the traveler window
-  // is about to appear.
+  // The tiling window manager owns plugin windows — refresh BEFORE initMap()
+  // so the map tile exists in the DOM when the traveler window appears.
   initTileManager();
   refreshTiles();
 

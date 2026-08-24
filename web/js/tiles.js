@@ -15,6 +15,10 @@ import { getPluginLayout } from './preferences.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import { artifactPanel } from '../ui/index.js';
+import {
+  RADIO_PLUGIN as RADIO_TILE_PLUGIN,
+  mountRadioTile, unmountRadioTile, getRadioTileElement, wireRadioEvents,
+} from './radio.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
 
@@ -40,6 +44,7 @@ function pluginIconName(name) {
 function surfacePlugins() {
   const out = [];
   if (isPluginActive(MAP_TILE_PLUGIN)) out.push(MAP_TILE_PLUGIN);
+  if (isPluginActive(RADIO_TILE_PLUGIN)) out.push(RADIO_TILE_PLUGIN);
   return out;
 }
 
@@ -83,13 +88,21 @@ function resizeMapSoon() {
 
 /* ── Layout ─────────────────────────────────────────────────── */
 
+/** Get (lazily mounting) the tile element for a plugin's window. */
+function elementForTile(name) {
+  if (name === MAP_TILE_PLUGIN) {
+    // Mount the map tile the first time the traveler window appears (it must
+    // exist in the DOM before initMap() looks for #map).
+    if (!mapTileEl) mountMapTile();
+    return mapTileEl;
+  }
+  if (name === RADIO_TILE_PLUGIN) return mountRadioTile();
+  return null;
+}
+
 function renderTiles() {
   if (!grid) return;
   const names = surfacePlugins();
-
-  // Mount the map tile the first time the traveler window appears (it must
-  // exist in the DOM before initMap() looks for #map).
-  if (names.includes(MAP_TILE_PLUGIN) && !mapTileEl) mountMapTile();
 
   // Full-screen plugin takes over the grid area exclusively.
   if (focusedPlugin && !names.includes(focusedPlugin)) focusedPlugin = null;
@@ -97,17 +110,15 @@ function renderTiles() {
 
   grid.innerHTML = '';
   for (const name of names) {
-    if (name === MAP_TILE_PLUGIN && mapTileEl) {
-      // Full when focused, when the user picked Full screen, or when it is
-      // the ONLY plugin window on screen — the rounded frame stays either way.
-      const isFull = focused === name
-        || names.length === 1
-        || (!focused && getPluginLayout(name) === 'full');
-      mapTileEl.classList.toggle('tile--full', isFull);
-      grid.appendChild(mapTileEl);
-      continue;
-    }
-    // Plugins without a surface yet don't get a window.
+    const el = elementForTile(name);
+    if (!el) continue;
+    // Full when focused, when the user picked Full screen, or when it is
+    // the ONLY plugin window on screen — the rounded frame stays either way.
+    const isFull = focused === name
+      || names.length === 1
+      || (!focused && getPluginLayout(name) === 'full');
+    el.classList.toggle('tile--full', isFull);
+    grid.appendChild(el);
   }
   grid.classList.toggle('hidden', names.length === 0);
   grid.classList.toggle('tile-grid--single', names.length === 1);
@@ -204,6 +215,7 @@ function closeOverlay() {
 
 function tileForPlugin(name) {
   if (name === MAP_TILE_PLUGIN) return mapTileEl;
+  if (name === RADIO_TILE_PLUGIN) return getRadioTileElement();
   return grid?.querySelector(`[data-plugin="${CSS.escape(name)}"]`) || null;
 }
 
@@ -243,6 +255,7 @@ export function initTileManager() {
   });
 
   mountMapTile();
+  wireRadioEvents();
   void refreshCatalog().then(renderTiles);
   renderTiles();
 
@@ -255,6 +268,7 @@ export function initTileManager() {
     await refreshCatalog();
     if (focusedPlugin && !surfacePlugins().includes(focusedPlugin)) focusedPlugin = null;
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
+    if (!isPluginActive(RADIO_TILE_PLUGIN)) unmountRadioTile();
     renderTiles();
   });
 }

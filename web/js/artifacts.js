@@ -59,9 +59,15 @@ export function renderArtifact(artifact, { focus = true } = {}) {
   cacheArtifactLocal(normalized);
 
   if (focus) {
-    // Plugin output is contained inside its own window — the tile sheet.
-    const plugin = normalized.plugin || 'traveler';
-    void openArtifactInTile(plugin, normalized);
+    // Radio is the card: its tile hero already shows everything an artifact
+    // would (art, title, transport) — skip the sheet, just focus the window.
+    if (normalized.plugin === 'radio' || normalized.type === 'radio_station') {
+      window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'radio' } }));
+    } else {
+      // Plugin output is contained inside its own window — the tile sheet.
+      const plugin = normalized.plugin || 'traveler';
+      void openArtifactInTile(plugin, normalized);
+    }
     applyMapForArtifact(normalized);
   }
 
@@ -92,6 +98,10 @@ export async function openSavedArtifact(id) {
 
   try {
     const artifact = await getArtifact(id);
+    if (artifact.type === 'radio_station' || artifact.plugin === 'radio') {
+      window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'radio' } }));
+      return;
+    }
     const destKey = destinationKeyForArtifact(artifact);
     if (destKey) setActiveDestination(destKey);
     if (artifact.coordinates?.lat != null && artifact.coordinates?.lon != null) {

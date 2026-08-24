@@ -6,7 +6,7 @@ import { apiFetch, getTraveler, getToken, validateSession } from './api.js';
 import { renderAvatarEl } from './userProfiles.js';
 import {
   initThemeLoader, initAppearance, hydrateIcons,
-  toast, button, badge, card, icon, emptyState, spinner,
+  toast, button, icon, emptyState, spinner,
 } from '../ui/index.js';
 
 const dropzone = document.getElementById('plugins-dropzone');
@@ -57,49 +57,63 @@ async function loadPlugins() {
   }
 }
 
-function pluginCard(p) {
-  const top = document.createElement('div');
-  top.className = 'plugin-card-top';
+function pluginCard(p, idx) {
+  const el = document.createElement('article');
+  el.className = 'plugin-row';
+  el.classList.toggle('is-inactive', !p.enabled);
+
+  // Index number — editorial touch.
+  const num = document.createElement('span');
+  num.className = 'plugin-row-num';
+  num.textContent = String(idx + 1).padStart(2, '0');
 
   const id = document.createElement('div');
-  id.className = 'plugin-card-id';
+  id.className = 'plugin-row-id';
   const iconWrap = document.createElement('span');
-  iconWrap.className = 'plugin-icon';
-  iconWrap.appendChild(icon('ui/puzzle', { size: 19 }));
+  iconWrap.className = 'plugin-row-icon';
+  iconWrap.appendChild(icon('ui/puzzle', { size: 18 }));
   const nameBlock = document.createElement('div');
-  nameBlock.className = 'plugin-name-block';
+  nameBlock.className = 'plugin-row-name-block';
   const h3 = document.createElement('h3');
-  h3.className = 'plugin-name';
+  h3.className = 'plugin-row-name';
   h3.textContent = niceName(p);
+  const desc = document.createElement('p');
+  desc.className = 'plugin-row-desc';
+  desc.textContent = p.description || p.summary || '';
+  nameBlock.append(h3, desc);
+  id.append(iconWrap, nameBlock);
+
   const meta = document.createElement('div');
-  meta.className = 'plugin-meta';
+  meta.className = 'plugin-row-meta';
   const ver = document.createElement('span');
   ver.textContent = `v${p.version}`;
   const api = document.createElement('span');
   api.textContent = `API ${p.api_level}`;
   meta.append(ver, api);
-  nameBlock.append(h3, meta);
-  id.append(iconWrap, nameBlock);
 
-  top.append(id, badge(p.enabled ? 'Active' : 'Inactive', { tone: p.enabled ? 'accent' : 'neutral' }));
+  const status = document.createElement('div');
+  status.className = 'plugin-row-status';
+  const dot = document.createElement('span');
+  dot.className = `plugin-dot ${p.enabled ? 'plugin-dot--on' : ''}`;
+  status.append(dot, document.createTextNode(p.enabled ? 'Active' : 'Off'));
 
-  const desc = document.createElement('p');
-  desc.className = 'plugin-description';
-  desc.textContent = p.description || p.summary || '';
-
-  const toggleBtn = p.enabled
-    ? button({ label: 'Deactivate', variant: 'ghost', size: 'sm', onClick: () => onPluginAction('deactivate', p.name) })
-    : button({ label: 'Activate', variant: 'primary', size: 'sm', onClick: () => onPluginAction('activate', p.name) });
+  const actions = document.createElement('div');
+  actions.className = 'plugin-row-actions';
+  const toggleBtn = button({
+    label: p.enabled ? 'Deactivate' : 'Activate',
+    variant: 'ghost', size: 'sm',
+    onClick: () => onPluginAction(p.enabled ? 'deactivate' : 'activate', p.name),
+  });
   toggleBtn.dataset.action = p.enabled ? 'deactivate' : 'activate';
   const removeBtn = button({
-    label: 'Remove', variant: 'danger', size: 'sm',
+    label: 'Remove', variant: 'ghost', size: 'sm',
     onClick: () => onPluginAction('uninstall', p.name),
   });
+  removeBtn.classList.add('plugin-remove');
   removeBtn.dataset.action = 'uninstall';
+  actions.append(toggleBtn, removeBtn);
 
-  const el = card({ body: [top, desc], actions: [toggleBtn, removeBtn] });
-  el.classList.add('plugin-card');
-  el.classList.toggle('is-inactive', !p.enabled);
+  el.append(num, id, meta, status, actions);
   return el;
 }
 
@@ -118,7 +132,7 @@ function renderPlugins(plugins) {
   }
   emptyEl.classList.add('hidden');
   metaEl.textContent = `${plugins.length} installed`;
-  for (const p of plugins) gridEl.appendChild(pluginCard(p));
+  plugins.forEach((p, i) => gridEl.appendChild(pluginCard(p, i)));
 }
 
 async function onPluginAction(action, name) {
