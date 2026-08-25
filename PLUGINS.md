@@ -94,6 +94,11 @@ shiny/
 │       ├── plugin.toml
 │       ├── skills/radio.md
 │       └── src/{lib.rs, plugin.rs, radio_browser.rs, tools/mod.rs}
+│   └── word/                         # simple word processor (.odt documents) + editor window
+│       ├── Cargo.toml
+│       ├── plugin.toml
+│       ├── skills/word.md
+│       └── src/{lib.rs, plugin.rs, tools/mod.rs}
 └── src/
     ├── plugins/                       # the loader/registry/installer inside the binary
     │   ├── mod.rs
@@ -810,6 +815,7 @@ Before publishing a plugin:
 | `plugins/hello/` | Demo plugin from this doc, fully runnable. |
 | `plugins/traveler/` | The traveler domain plugin — 22 tools (trips, GPS, maps, navigation, diary, planning, artifact cards), its own OSM client, navigation builder, diary writer, and prose pipeline. |
 | `plugins/radio/` | Internet radio via Radio Browser — `radio_search`/`radio_play`/`radio_stop` tools plus the Radio window (`web/js/radio.js`) with a singleton `<audio>` player; AI playback arrives as `radio_station` artifacts, stops via the `agent:actions` event. |
+| `plugins/word/` | Simple word processor — `doc_create`/`doc_write`/`doc_append`/`doc_read`/`doc_list`/`doc_delete` tools plus the Word window (`web/js/word.js`). Documents are real OpenDocument Text (`.odt`) bytes in the core-owned `documents` table; the ODT↔HTML codec lives in `crates/shiny-plugin-sdk/src/odt.rs`, and core serves `/api/documents` (list/create/get/save/delete/import/export) — the same interim pattern as `/api/radio/nowplaying` until plugin routes land (roadmap #2). |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
 | `src/plugins/manager.rs` | `PluginManager` — aggregates contributions, persona, skills. |

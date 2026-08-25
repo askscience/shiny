@@ -11,9 +11,10 @@ pub mod voice;
 pub mod insights;
 pub mod ollama;
 pub mod radio;
+pub mod documents;
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::path::PathBuf;
@@ -124,6 +125,15 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
         .route("/api/radio/nowplaying", get(radio::now_playing))
+        .route("/api/documents", get(documents::list).post(documents::create))
+        // .odt imports are multi-MB uploads — lift the body limit on this route.
+        .route("/api/documents/import", post(documents::import_odt)
+            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
+        .route(
+            "/api/documents/:id",
+            get(documents::get_one).put(documents::save).delete(documents::delete),
+        )
+        .route("/api/documents/:id/export", get(documents::export_odt))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))
         .route("/api/artifacts/:id", get(artifacts::get_one).put(artifacts::update))
         .route("/api/tts", post(voice::tts))

@@ -160,7 +160,17 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                 .unwrap_or("plugin");
             format!("Showing {name}")
         }
-        _ => format!("{action} complete"),
+        _ => {
+            // Unknown/plugin tools: the outcome DATA is the result — hand it
+            // to the model (truncated), or it has nothing to answer with.
+            let ser = serde_json::to_string(data).unwrap_or_default();
+            let trimmed: String = ser.chars().take(2000).collect();
+            if trimmed.is_empty() || trimmed == "{}" {
+                format!("{action} complete")
+            } else {
+                format!("{action} complete: {trimmed}")
+            }
+        }
     }
 }
 

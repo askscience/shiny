@@ -37,7 +37,19 @@ pub async fn execute_action(
     action: &str,
     params: &Value,
 ) -> Result<ActionOutcome, AppError> {
-    let action_key = normalize_action_name(action);
+    let mut action_key = normalize_action_name(action);
+
+    // The model occasionally namespaces tool names ("word.doc_write",
+    // "radio.radio_stop"): when the raw key isn't registered, retry with the
+    // segment after the first dot — it usually matches a real tool name.
+    if !state.plugins.tools().has(&action_key) {
+        if let Some((_, rest)) = action_key.split_once('.') {
+            let candidate = normalize_action_name(rest);
+            if state.plugins.tools().has(&candidate) {
+                action_key = candidate;
+            }
+        }
+    }
 
     // Plugin registry takes priority — if a plugin claimed this action key,
     // dispatch to its `Tool::invoke`. The registry itself consults the per-user

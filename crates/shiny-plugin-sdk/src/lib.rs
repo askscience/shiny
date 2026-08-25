@@ -20,6 +20,7 @@ pub mod routes;
 pub mod crons;
 pub mod migrations;
 pub mod plugin;
+pub mod odt;
 
 pub use errors::AppError;
 pub use services::{OllamaClient, SearchService, SupertonicClient};

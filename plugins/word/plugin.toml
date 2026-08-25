@@ -1,0 +1,9 @@
+name = "word"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Simple word processor — documents stored as open .odt files"
+summary = "Word processor: create, edit and read OpenDocument (.odt) documents"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"

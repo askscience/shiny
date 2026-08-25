@@ -67,6 +67,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
     let migration5 = include_str!("../../migrations/005_user_plugin_states.sql");
     sqlx::raw_sql(migration5).execute(pool).await?;
 
+    let migration6 = include_str!("../../migrations/006_documents.sql");
+    sqlx::raw_sql(migration6).execute(pool).await?;
+
     tracing::info!("Database migrations applied");
     Ok(())
 }
