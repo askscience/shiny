@@ -1,0 +1,126 @@
+/* Keyboard plugin — virtual keyboard bar at the bottom of the screen.
+   While open, plugin windows (#tile-grid) and the chrome-bottom stack are
+   raised above it, so the keyboard never covers them. */
+
+:root {
+  --keyboard-height: 210px;
+}
+
+#keyboard-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 34;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  background: var(--surface-strong);
+  border-top: 1px solid var(--glass-border);
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  transform: translateY(105%);
+  transition: transform var(--duration-normal) var(--ease-out);
+  pointer-events: none;
+}
+
+#keyboard-bar.visible {
+  transform: none;
+  pointer-events: auto;
+}
+
+.keyboard-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keyboard-row {
+  display: flex;
+  gap: 5px;
+}
+
+.keyboard-key {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--glass);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.keyboard-key:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: scale(0.96);
+}
+
+.keyboard-key.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.keyboard-key--fn {
+  flex-grow: 1.5;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.keyboard-key--space { flex-grow: 5; }
+
+.keyboard-key--accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.keyboard-key--accent:active {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+.keyboard-row[dir='rtl'] .keyboard-key { font-size: 19px; }
+
+/* ── Clearance while the keyboard is open ───────────────────── */
+
+/* Plugin windows stop above the keyboard — never covered. */
+body.keyboard-open #tile-grid {
+  bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 12px);
+}
+
+/* The dock pill (chat input) rides directly above the keyboard. */
+body.keyboard-open #chrome-bottom {
+  bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 10px);
+}
+
+/* The orb gives way to the keyboard while typing. */
+body.keyboard-open #sphere-container,
+body.keyboard-open #artifact-dock-step {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  :root { --keyboard-height: 240px; }
+
+  .keyboard-key { height: 48px; font-size: 17px; }
+
+  /* Extra room on phones so the dock pill never overlaps the windows. */
+  body.keyboard-open #tile-grid {
+    bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 64px);
+  }
+}

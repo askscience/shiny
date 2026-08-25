@@ -264,7 +264,8 @@ async function loadPluginLayouts() {
       apiFetch('/api/plugins/active'),
     ]);
     const active = new Set(activeRes?.data || []);
-    const plugins = (all?.data || []).filter((p) => active.has(p.name));
+    // The keyboard plugin is bottom chrome, not a window — no layout mode.
+    const plugins = (all?.data || []).filter((p) => active.has(p.name) && p.name !== 'keyboard');
     list.innerHTML = '';
     if (!plugins.length) {
       const hint = document.createElement('p');

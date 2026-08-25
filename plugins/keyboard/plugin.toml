@@ -1,0 +1,7 @@
+name = "keyboard"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Virtual multi-language keyboard at the bottom of the screen — types into any focused input"
+summary = "Virtual keyboard: types into any text input (8 language layouts)"
+author = "shiny"

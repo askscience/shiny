@@ -1,0 +1,13 @@
+[package]
+name = "shiny-keyboard-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "shiny_keyboard_plugin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+async-trait = "0.1"
+semver = { version = "1", features = ["serde"] }

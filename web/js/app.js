@@ -19,6 +19,7 @@ import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles } from './tiles.js';
+import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { reloadUserSession } from './session.js';
 
@@ -52,6 +53,7 @@ async function boot() {
       await reloadUserSession();
       refreshAppearance();
       await applyTravelerActivation();
+      await refreshKeyboard();
       return;
     }
     await initApp();
@@ -86,8 +88,10 @@ async function initApp() {
   initTextInput(submitTextToAgent);
   initHudClock(); // core chrome — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
+  initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
 
   await applyTravelerActivation();
+  await refreshKeyboard();
 
   setInterval(() => reloadUserSession(), 60000);
   await reloadUserSession();

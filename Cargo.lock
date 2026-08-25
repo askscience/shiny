@@ -1979,6 +1979,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-keyboard-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "semver",
+ "shiny-plugin-sdk",
+]
+
+[[package]]
 name = "shiny-plugin-sdk"
 version = "0.1.0"
 dependencies = [
