@@ -96,6 +96,28 @@
 
 .keyboard-row[dir='rtl'] .keyboard-key { font-size: 19px; }
 
+/* ── AI sphere docked inside the keyboard (visible only while open) ── */
+
+.keyboard-orb-slot {
+  flex: none;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#keyboard-bar #sphere-container {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  position: relative;
+}
+
+#keyboard-bar #orb-canvas {
+  width: 44px !important;
+  height: 44px !important;
+}
+
 /* ── Clearance while the keyboard is open ───────────────────── */
 
 /* Plugin windows stop above the keyboard — never covered. */
@@ -103,13 +125,12 @@ body.keyboard-open #tile-grid {
   bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 12px);
 }
 
-/* The dock pill (chat input) rides directly above the keyboard. */
+/* The dock pill (chat input) rides directly above the keyboard; the AI
+   sphere moves INSIDE the keyboard bar (see #keyboard-orb-slot). */
 body.keyboard-open #chrome-bottom {
   bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 10px);
 }
 
-/* The orb gives way to the keyboard while typing. */
-body.keyboard-open #sphere-container,
 body.keyboard-open #artifact-dock-step {
   display: none;
 }
@@ -122,5 +143,34 @@ body.keyboard-open #artifact-dock-step {
   /* Extra room on phones so the dock pill never overlaps the windows. */
   body.keyboard-open #tile-grid {
     bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 64px);
+  }
+}
+
+/* ── Big screens: a compact, centered keyboard with padding ── */
+@media (min-width: 641px) {
+  :root { --keyboard-height: 198px; }
+
+  #keyboard-bar {
+    left: 50%;
+    right: auto;
+    width: min(720px, calc(100vw - 40px));
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+    border: 1px solid var(--glass-border);
+    border-bottom: none;
+    border-radius: 18px 18px 0 0;
+    transform: translateX(-50%) translateY(105%);
+  }
+
+  #keyboard-bar.visible {
+    transform: translateX(-50%);
+  }
+
+  .keyboard-key { height: 38px; font-size: 15px; }
+
+  .keyboard-orb-slot { width: 40px; }
+  #keyboard-bar #sphere-container { width: 40px; height: 40px; }
+  #keyboard-bar #orb-canvas {
+    width: 40px !important;
+    height: 40px !important;
   }
 }

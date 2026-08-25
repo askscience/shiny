@@ -333,65 +333,114 @@ function keyButton(k, label, cls = '') {
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     pressKey(k);
+    if (k === 'backspace') startRepeat();
   });
+  if (k === 'backspace') {
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => {
+      b.addEventListener(ev, stopRepeat);
+    });
+  }
   return b;
+}
+
+/* Hold backspace to keep deleting. */
+let repeatTimer = null;
+const REPEAT_DELAY_MS = 400;
+const REPEAT_INTERVAL_MS = 60;
+
+function startRepeat() {
+  stopRepeat();
+  repeatTimer = window.setTimeout(() => {
+    repeatTimer = window.setInterval(() => pressKey('backspace'), REPEAT_INTERVAL_MS);
+  }, REPEAT_DELAY_MS);
+}
+
+function stopRepeat() {
+  if (repeatTimer) {
+    window.clearTimeout(repeatTimer);
+    window.clearInterval(repeatTimer);
+    repeatTimer = null;
+  }
 }
 
 function render() {
   if (!rowsEl) return;
+  // Rebuilding wipes the orb slot — rescue the docked AI sphere first.
+  const dockedOrb = document.getElementById('keyboard-orb-slot')?.firstElementChild || null;
   rowsEl.textContent = '';
   const l = layout();
 
-  if (symbols) {
-    for (const row of SYMBOL_ROWS) {
-      const r = document.createElement('div');
-      r.className = 'keyboard-row';
-      for (const ch of row) r.appendChild(keyButton(ch, shift ? ch.toUpperCase() : ch));
-      rowsEl.appendChild(r);
-    }
-  } else {
-    const rows = shift && l.shiftRows ? l.shiftRows : l.rows;
-    for (const row of rows) {
-      const r = document.createElement('div');
-      r.className = 'keyboard-row';
-      if (l.dir === 'rtl') r.setAttribute('dir', 'rtl');
-      for (const ch of row) {
-        const label = shift ? ch.toUpperCase() : ch;
-        r.appendChild(keyButton(ch, label));
-      }
-      rowsEl.appendChild(r);
-    }
-  }
+  const rows = symbols
+    ? SYMBOL_ROWS
+    : (shift && l.shiftRows ? l.shiftRows : l.rows);
 
-  /* Bottom row: language, symbols toggle, space, dot, enter. */
+  rows.forEach((row, i) => {
+    const r = document.createElement('div');
+    r.className = 'keyboard-row';
+    if (!symbols && l.dir === 'rtl') r.setAttribute('dir', 'rtl');
+
+    // Shift leads the third letter row (standard position).
+    if (!symbols && i === 2 && !l.noShift) {
+      const sh = keyButton('shift', '⇧', 'keyboard-key--fn');
+      if (shift) sh.classList.add('is-active');
+      r.appendChild(sh);
+    }
+
+    for (const ch of row) {
+      const label = !symbols && shift ? ch.toUpperCase() : ch;
+      r.appendChild(keyButton(ch, label));
+    }
+
+    // Backspace ends the FIRST row (standard top-right position).
+    if (i === 0) r.appendChild(keyButton('backspace', '⌫', 'keyboard-key--fn'));
+    rowsEl.appendChild(r);
+  });
+
+  /* Bottom row: language, symbols toggle, space split around the AI sphere,
+     enter. */
   const bot = document.createElement('div');
   bot.className = 'keyboard-row';
   bot.appendChild(keyButton('lang', l.label, 'keyboard-key--fn'));
   bot.appendChild(keyButton('sym', symbols ? 'ABC' : '123', 'keyboard-key--fn'));
-
-  if (!symbols && !l.noShift) {
-    const sh = keyButton('shift', '⇧', 'keyboard-key--fn');
-    if (shift) sh.classList.add('is-active');
-    bot.appendChild(sh);
-  }
-
-  const back = keyButton('backspace', '⌫', 'keyboard-key--fn');
-  bot.appendChild(back);
-
   bot.appendChild(keyButton('space', ' ', 'keyboard-key--space'));
-  if (!symbols) bot.appendChild(keyButton('.', '.'));
+  const slot = document.createElement('div');
+  slot.id = 'keyboard-orb-slot';
+  slot.className = 'keyboard-orb-slot';
+  bot.appendChild(slot);
+  bot.appendChild(keyButton('space', ' ', 'keyboard-key--space'));
   bot.appendChild(keyButton('enter', '↵', 'keyboard-key--accent keyboard-key--fn'));
-  bot.appendChild(keyButton('close', '⌄', 'keyboard-key--fn'));
   rowsEl.appendChild(bot);
+
+  // Re-dock the sphere into the fresh slot.
+  if (dockedOrb) moveOrbIntoKeyboard(dockedOrb);
 }
 
 /* ── Open / close ───────────────────────────────────────────── */
+
+/** The AI sphere lives INSIDE the keyboard while it is visible — docked
+ * between the two space halves. Returns to the chrome-bottom stack on close.
+ * `orbEl` is passed when the orb may be detached mid-re-render (getElementById
+ * cannot find detached nodes). */
+function moveOrbIntoKeyboard(orbEl) {
+  const orb = orbEl || document.getElementById('sphere-container');
+  const slot = document.getElementById('keyboard-orb-slot');
+  if (!orb || !slot || orb.parentElement === slot) return;
+  slot.appendChild(orb);
+}
+
+function moveOrbBack() {
+  const orb = document.getElementById('sphere-container');
+  const chrome = document.getElementById('chrome-bottom');
+  if (!orb || !chrome || orb.parentElement === chrome) return;
+  chrome.insertBefore(orb, chrome.firstChild);
+}
 
 function open() {
   if (!bar) return;
   visible = true;
   bar.classList.add('visible');
   document.body.classList.add('keyboard-open');
+  moveOrbIntoKeyboard();
   hudBtn?.setAttribute('aria-pressed', 'true');
 }
 
@@ -399,8 +448,10 @@ function close() {
   if (!bar) return;
   visible = false;
   pinned = false;
+  stopRepeat();
   bar.classList.remove('visible');
   document.body.classList.remove('keyboard-open');
+  moveOrbBack();
   hudBtn?.setAttribute('aria-pressed', 'false');
 }
 
@@ -468,13 +519,18 @@ function wireEvents() {
     if (sel && sel.rangeCount > 0) activeRange = sel.getRangeAt(0).cloneRange();
   });
 
+  // Capture phase: keys that re-render (lang/sym/shift) replace their own
+  // DOM node mid-dispatch — by the time a bubble handler runs, e.target can
+  // be detached and closest() would fail, closing the keyboard by mistake.
   document.addEventListener('pointerdown', (e) => {
     if (!visible || pinned) return;
-    if (e.target?.closest?.('#keyboard-bar, #hud-keyboard-btn')) return;
-    if (isEditable(e.target)) return;
+    const t = e.target;
+    if (!t || t.nodeType !== 1) return;
+    if (t.closest('#keyboard-bar, #hud-keyboard-btn')) return;
+    if (isEditable(t)) return;
     unbind();
     close();
-  });
+  }, true);
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && visible) {
