@@ -92,8 +92,7 @@
   /* HUD layout */
   --hud-bar-height: 44px;
   --hud-header-pad: max(10px, env(safe-area-inset-top));
-  --hud-mobile-trips-height: 0px;
-  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px + var(--hud-mobile-trips-height));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
 
   /* Layering */
   --z-map: 0;

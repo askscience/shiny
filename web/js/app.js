@@ -116,7 +116,6 @@ async function applyTravelerActivation() {
   const navPuck = document.getElementById('nav-puck');
   const navBanner = document.getElementById('nav-banner');
   const hudSavedTrips = document.getElementById('hud-saved-trips');
-  const hudSavedTripsMobile = document.getElementById('hud-saved-trips-mobile');
   const travelPanel = document.getElementById('travel-panel');
   const travelPanelBackdrop = document.getElementById('travel-panel-backdrop');
   const insightCards = document.getElementById('insight-cards');
@@ -139,8 +138,6 @@ async function applyTravelerActivation() {
     hide(navBanner);
     hide(hudSavedTrips);
     hudSavedTrips?.classList.add('empty');
-    hide(hudSavedTripsMobile);
-    hudSavedTripsMobile?.classList.add('empty');
     hide(travelPanel);
     hide(travelPanelBackdrop);
     hide(insightCards);

@@ -126,12 +126,13 @@ export async function openSavedArtifact(id) {
 export function renderArtifactDock(artifacts) {
   const list = artifacts || [];
 
-  // The dock lives INSIDE the traveler window whenever its tile is mounted;
-  // the chrome-bottom dock is only the chat-only fallback. Composing or
-  // agent-awaiting never moves it back under the AI sphere.
+  // The dock lives INSIDE the traveler window whenever the traveler plugin
+  // is active — even on phones where another window is currently shown (the
+  // dock stays with its window instead of jumping under the AI sphere).
+  // The chrome-bottom dock is only the chat-only fallback.
   const tileDock = document.getElementById('map-tile-dock');
   const tileDockIcons = document.getElementById('map-tile-dock-icons');
-  const inTile = !!tileDock && tileDock.isConnected && isPluginActive('traveler');
+  const inTile = !!tileDock && isPluginActive('traveler');
   document.body.classList.toggle('tile-dock-active', inTile);
   if (tileDock) tileDock.classList.toggle('hidden', !inTile || !list.length);
 

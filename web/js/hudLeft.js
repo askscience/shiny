@@ -22,9 +22,6 @@ const meteoIconEl = document.getElementById('hud-meteo-icon');
 const meteoTempEl = document.getElementById('hud-meteo-temp');
 const meteoLabelEl = document.getElementById('hud-meteo-label');
 const tripsEl = document.getElementById('hud-saved-trips');
-const tripsMobileEl = document.getElementById('hud-saved-trips-mobile');
-
-const mobileQuery = window.matchMedia('(max-width: 767px)');
 
 let clockTimer = null;
 let lastWeatherKey = '';
@@ -275,21 +272,7 @@ function renderInto(container, destinations, active) {
 function renderSavedTrips() {
   const destinations = getSavedDestinations();
   const active = getActiveDestination();
-  const isMobile = mobileQuery.matches;
-
-  if (isMobile) {
-    renderInto(tripsMobileEl, destinations, active);
-    if (tripsEl) {
-      tripsEl.innerHTML = '';
-      tripsEl.classList.add('empty');
-    }
-  } else {
-    renderInto(tripsEl, destinations, active);
-    if (tripsMobileEl) {
-      tripsMobileEl.innerHTML = '';
-      tripsMobileEl.classList.add('empty');
-    }
-  }
+  renderInto(tripsEl, destinations, active);
 }
 
 async function selectDestination(dest) {
@@ -341,13 +324,12 @@ export function initHudClock() {
   setInterval(refreshWeatherAtCurrentPosition, WEATHER_TTL_MS);
 }
 
-/** Traveler plugin content: saved-destination chips in the HUD. */
+/** Traveler plugin content: saved-destination menu in the HUD top bar. */
 export function initHudTrips() {
   if (tripsInited) return;
   tripsInited = true;
 
   renderSavedTrips();
-  mobileQuery.addEventListener('change', renderSavedTrips);
   window.addEventListener('artifact:dock', renderSavedTrips);
   window.addEventListener('artifact:saved', renderSavedTrips);
   window.addEventListener('artifact:updated', renderSavedTrips);

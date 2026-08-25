@@ -43,7 +43,6 @@ body.agent-awaiting #sphere-container {
 
 /* While awaiting AI, restore HUD so the map feels usable */
 body.compose-active.compose-awaiting #hud-header,
-body.compose-active.compose-awaiting #hud-saved-trips-mobile,
 body.compose-active.compose-awaiting #insight-cards {
   opacity: 1;
   pointer-events: auto;
@@ -52,7 +51,6 @@ body.compose-active.compose-awaiting #insight-cards {
 body.compose-active #travel-panel,
 body.compose-active #travel-panel-backdrop,
 body.compose-active:not(.compose-awaiting) #hud-header,
-body.compose-active:not(.compose-awaiting) #hud-saved-trips-mobile,
 body.compose-active:not(.compose-awaiting) #insight-cards {
   opacity: 0;
   pointer-events: none;

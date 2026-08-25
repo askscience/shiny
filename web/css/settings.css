@@ -260,6 +260,39 @@ body {
 .gradient-custom-controls .ui-slider { flex: 1; }
 
 @media (max-width: 640px) {
-  .settings-hero { padding: 40px 2px 32px; }
+  .settings-page {
+    padding: 0 18px calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .settings-hero { padding: 36px 2px 28px; }
+  .settings-title { font-size: clamp(2.4rem, 11vw, 3.4rem); }
+  .settings-section { padding: 26px 2px; }
+
+  /* Bigger touch targets for the primary controls. */
+  .settings-section .ui-input,
+  .settings-section .ui-select { min-height: 42px; }
+  .settings-footer { padding-bottom: env(safe-area-inset-bottom); }
+  .settings-footer .ui-btn { min-height: 46px; }
+
+  /* Profile: full-width row. */
+  .profile-avatar-upload {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+
+  /* Plugin window rows stack when very narrow. */
+  .plugin-layout-row { flex-wrap: wrap; }
+  .plugin-layout-row .ui-select-wrap { flex: 1; min-width: 140px; }
+
+  .gradient-custom-controls { flex-wrap: wrap; }
+
   .page-brand-name { display: none; }
+}
+
+@media (max-width: 480px) {
+  #settings-user-name { display: none; }
+  .page-back span:not(.ui-icon) { display: none; }
+  .page-back { padding: 6px; }
+  .profile-avatar--large { width: 84px; height: 84px; }
 }

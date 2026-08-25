@@ -17,8 +17,22 @@
 
 #tile-grid.hidden { display: none; }
 
-#tile-grid:not(.tile-grid--single) {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+/* Multiple windows: wrapping flex rows. A window that ends up alone in its
+   row (e.g. the third of three when only two fit) stretches to use the
+   entire remaining horizontal space. */
+#tile-grid:not(.tile-grid--single):not(.tile-grid--phone) {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: stretch;
+}
+
+#tile-grid:not(.tile-grid--single):not(.tile-grid--phone) .tile {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+#tile-grid:not(.tile-grid--single):not(.tile-grid--phone) .tile--full {
+  flex: 1 1 100%;
 }
 
 .tile {
@@ -34,6 +48,9 @@
   pointer-events: auto;
   transition: border-color var(--duration-normal) var(--ease-out),
     box-shadow var(--duration-normal) var(--ease-out);
+  /* Size container: plugin windows switch to a compact layout when the
+     WINDOW itself gets narrow (multiple tiles side by side, or a phone). */
+  container-type: inline-size;
 }
 
 /* A plugin window fills its grid cell; with a single plugin it takes the
@@ -136,7 +153,290 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   display: none !important;
 }
 
-/* Radio plugin window — flat square surface, artwork-driven.
+/* ─────────────────────────────────────────────────────────────
+   Radio plugin window — flat square surface, artwork-driven.
+   Ambient artwork glow behind everything; hero with square art + huge track
+   title + equalizer + square transport; square station grid below.
+   ───────────────────────────────────────────────────────────── */
+.radio-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Word plugin window — flat editorial word processor.
+   Hairline toolbar rows, display-font title, editorial editor typography.
+   ───────────────────────────────────────────────────────────── */
+.word-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.word-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.word-doc-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.word-doc-btn:hover { background: var(--glass-hover); border-color: var(--text); }
+.word-doc-btn[aria-expanded='true'] { background: var(--glass-hover); }
+
+.word-doc-btn-icon { display: inline-flex; color: var(--accent); }
+.word-doc-btn-icon .ui-icon { width: 15px; height: 15px; }
+.word-doc-btn-chevron { display: inline-flex; color: var(--muted); }
+.word-doc-btn-chevron .ui-icon { width: 12px; height: 12px; }
+
+.word-title {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.word-title::placeholder { color: var(--muted); }
+
+.word-save-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background var(--duration-normal) var(--ease-out);
+}
+
+.word-save-dot.is-active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Toolbar — square flat buttons. */
+.word-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.word-tools-spacer { flex: 1; }
+
+.word-tool {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.word-tool:hover { background: var(--glass-hover); color: var(--text); }
+
+.word-tool.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.word-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+/* Editor — editorial typography. */
+.word-editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 22px 28px 60px;
+  font-family: var(--font-editorial);
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--text);
+  outline: none;
+  caret-color: var(--accent);
+  word-wrap: break-word;
+}
+
+.word-editor::-webkit-scrollbar { display: none; }
+
+.word-editor:empty::before {
+  content: 'Write something…';
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.word-editor p { margin: 0 0 1em; }
+.word-editor h1 {
+  font-family: var(--font-display);
+  font-size: 1.9em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0.6em 0 0.35em;
+}
+.word-editor h2 {
+  font-family: var(--font-display);
+  font-size: 1.45em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0.8em 0 0.3em;
+}
+.word-editor h3 {
+  font-family: var(--font-display);
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.7em 0 0.25em;
+}
+.word-editor ul, .word-editor ol { margin: 0 0 1em; padding-left: 1.4em; }
+.word-editor li { margin: 0.2em 0; }
+.word-editor a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.word-editor b, .word-editor strong { font-weight: 700; }
+.word-editor ::selection { background: var(--accent-soft); }
+
+/* Status line */
+.word-status {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 7px 14px 8px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: linear-gradient(180deg, transparent, var(--bg) 70%);
+  pointer-events: none;
+}
+
+/* Doc menu popup (body-level). */
+.word-doc-menu {
+  position: fixed;
+  z-index: calc(var(--z-hud) + 2);
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 28px));
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  animation: hudMenuIn var(--duration-fast) var(--ease-out);
+}
+
+.word-doc-menu::-webkit-scrollbar { display: none; }
+
+.word-doc-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.word-doc-menu-item:hover { background: var(--glass-hover); }
+.word-doc-menu-item.is-active { color: var(--accent); }
+
+.word-doc-menu-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.word-doc-menu-time { font-size: 10px; color: var(--muted); flex: none; }
+
+.word-doc-menu-check {
+  display: inline-flex;
+  flex: none;
+  color: var(--accent);
+  opacity: 0;
+}
+.word-doc-menu-check .ui-icon { width: 13px; height: 13px; }
+.word-doc-menu-item.is-active .word-doc-menu-check { opacity: 1; }
+
+.word-doc-menu-foot-icon { display: inline-flex; flex: none; color: var(--muted); }
+.word-doc-menu-foot-icon .ui-icon { width: 14px; height: 14px; }
+.word-doc-menu-item--danger,
+.word-doc-menu-item--danger .word-doc-menu-foot-icon { color: var(--error); }
+
+.word-doc-menu-empty { padding: 12px; font-size: 11.5px; color: var(--muted); }
+
+/* Doc menu actions footer (secondary toolbar actions live here too). */
+.word-doc-menu-foot {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Word compact variant (narrow window) ────────────────────
+   When the Word WINDOW is small, the toolbar keeps only the formatting
+   commands; secondary actions (save/import/export/new/delete) live in the
+   document menu. */
+@container (max-width: 480px) {
+  .word-tool--secondary { display: none; }
+
+  .word-bar { padding: 8px 12px; }
+  .word-title { font-size: 14px; }
+  .word-tools { padding: 5px 12px; gap: 2px; }
+  .word-tool { width: 30px; height: 30px; }
+
+  .word-editor { padding: 16px 16px 52px; font-size: 16px; }
+  .word-status { padding: 6px 12px 7px; }
+}
    Ambient artwork glow behind everything; hero with square art + huge track
    title + equalizer + square transport; square station grid below. */
 .radio-tile {
@@ -408,8 +708,98 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   overflow: hidden;
 }
 
+/* ── Radio compact variant (narrow window) ───────────────────
+   Kicks in when the radio WINDOW itself is small — multiple tiles on
+   desktop or a phone — independent of screen size. */
+@container (max-width: 460px) {
+  .radio-hero {
+    gap: 12px;
+    padding: 14px 16px 12px;
+  }
+
+  .radio-hero-art {
+    width: 64px;
+    height: 64px;
+  }
+
+  .radio-hero-title {
+    font-size: clamp(16px, 5vw, 20px);
+  }
+
+  .radio-hero-sub { font-size: 11.5px; }
+
+  .radio-eq { height: 12px; margin-top: 4px; }
+  .radio-eq span { width: 3px; }
+
+  .radio-t-btn {
+    width: 42px;
+    height: 42px;
+  }
+
+  .radio-tile .ui-search { margin: 10px 16px 0; }
+
+  .radio-grid {
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: 8px;
+    padding: 10px 16px 16px;
+  }
+
+  .radio-cell-name { padding: 6px 7px; font-size: 10.5px; -webkit-line-clamp: 2; }
+  .radio-cell-num { top: 6px; left: 7px; font-size: 9px; }
+}
+
+/* Extra-narrow: hero stacks — artwork row above title + transport. */
+@container (max-width: 320px) {
+  .radio-hero {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .radio-hero-text { flex-basis: calc(100% - 84px); }
+
+  .radio-transport { margin-left: auto; }
+}
+
 /* Full-screen window: the tile takes the whole grid area. */
 .tile--full { grid-column: 1 / -1; }
+
+/* ── Phone: one window at a time ──────────────────────────────
+   Small screens show a single plugin window that fills the grid; window
+   switching lives in the top HUD bar (see #hud-windows in app.css). */
+#tile-grid.tile-grid--phone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#tile-grid.tile-grid--phone .tile {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Phone window chrome — minimal interface independent of container width. */
+.tile-grid--phone .radio-hero {
+  gap: 12px;
+  padding: 16px 18px 12px;
+}
+
+.tile-grid--phone .radio-hero-art { width: 72px; height: 72px; }
+.tile-grid--phone .radio-hero-title { font-size: clamp(17px, 5vw, 22px); }
+.tile-grid--phone .radio-hero-sub { font-size: 11.5px; }
+.tile-grid--phone .radio-eq { height: 12px; margin-top: 4px; }
+.tile-grid--phone .radio-t-btn { width: 46px; height: 46px; }
+.tile-grid--phone .radio-tile .ui-search { margin: 12px 18px 0; }
+
+.tile-grid--phone .radio-grid {
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  padding: 12px 18px 18px;
+}
+
+.tile-grid--phone .word-bar { padding: 9px 12px; }
+.tile-grid--phone .word-tools { padding: 5px 12px; }
+.tile-grid--phone .word-editor { padding: 18px 18px 56px; font-size: 16px; }
 
 /* ── Full-screen overlay (artifact detail inside a window) ─── */
 
@@ -487,6 +877,21 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
  * itself, so only the generic overlay is suppressed there. */
 body.compose-active #tile-overlay {
   display: none !important;
+}
+
+/* ── Phones: plugin windows stop above the orb/dock ──────────
+   The AI sphere and dock are fixed chrome; on small screens the windows get
+   bottom clearance so editors and lists are never covered by the orb. */
+@media (max-width: 640px) {
+  #tile-grid {
+    top: calc(var(--hud-header-total) + 6px);
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    /* Clear the whole fixed chrome zone (orb 84px + its bottom offset) so
+       plugin windows never hide behind it; stable whether the dock shows. */
+    bottom: calc(env(safe-area-inset-bottom) + 126px);
+    gap: 10px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

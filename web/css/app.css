@@ -127,6 +127,28 @@ html, body {
   pointer-events: auto;
 }
 
+/* Phone window switcher — icon buttons inside the top HUD bar. */
+#hud-windows {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.hud-window-btn .ui-icon { display: inline-flex; }
+.hud-window-btn svg { width: 16px; height: 16px; }
+
+.hud-window-btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  #hud-windows { display: flex; }
+  .hud-window-btn { width: 34px; height: 34px; }
+}
+
 .hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
 
 .hud-clock {
@@ -274,38 +296,12 @@ html, body {
 .ui-hud-menu-empty { padding: 12px; font-size: 11.5px; color: var(--muted); }
 
 @media (max-width: 767px) {
-  :root { --hud-mobile-trips-height: 36px; }
-
-  #hud-saved-trips { display: none !important; }
-
-  #hud-saved-trips-mobile {
-    display: flex;
-    position: fixed;
-    top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 8px);
-    left: 14px; right: 14px;
-    z-index: calc(var(--z-hud) - 1);
-    height: 32px;
-    align-items: center;
-    pointer-events: auto;
-    padding: 0;
-  }
-
-  #hud-saved-trips-mobile .ui-hud-menu-trigger {
-    flex: 1;
-    height: 100%;
-    justify-content: space-between;
-    background: var(--surface);
-    border-color: var(--glass-border);
-    box-shadow: var(--shadow-glass);
-  }
+  #hud-saved-trips { padding: 0 2px; }
+  #hud-saved-trips .ui-hud-menu-trigger { padding: 0 10px; }
 
   #hud-clock-date, #hud-meteo-label { display: none; }
   .hud-header-main { padding: 0 2px; }
   .hud-clock, .hud-meteo { padding: 0 10px; }
-}
-
-@media (min-width: 768px) {
-  #hud-saved-trips-mobile { display: none !important; }
 }
 
 /* ── Voice reply transcript ────────────────────────────────── */
