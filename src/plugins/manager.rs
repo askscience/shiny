@@ -121,6 +121,15 @@ impl PluginManager {
         out
     }
 
+    /// One plugin's skills markdown (or empty). Used to inject a freshly
+    /// activated plugin's tool docs into the running conversation.
+    pub fn skills_for(&self, name: &str) -> String {
+        self.inner.contribs.read().iter()
+            .find(|c| c.manifest.name == name)
+            .map(|c| c.skills_md.clone())
+            .unwrap_or_default()
+    }
+
     pub fn context_lines_for(&self, active: &BTreeSet<String>) -> Vec<String> {
         self.inner.contribs.read().iter()
             .filter(|c| active.contains(&c.manifest.name))

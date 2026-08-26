@@ -165,7 +165,26 @@ where
                     artifacts.push(v);
                 }
 
-                let note = describe_tool_step(&outcome.action, &outcome.result, &outcome.data);
+                let mut note = describe_tool_step(&outcome.action, &outcome.result, &outcome.data);
+
+                // A freshly activated plugin is usable right away — hand the
+                // model its skills docs so it can call the plugin's tools in
+                // this same conversation.
+                if outcome.action == "plugin_activate" && outcome.result == "ok" {
+                    let already = outcome.data.get("already").and_then(|v| v.as_bool()).unwrap_or(false);
+                    if !already {
+                        if let Some(name) = outcome.data.get("plugin").and_then(|v| v.as_str()) {
+                            let skills = state.plugins.skills_for(name);
+                            if !skills.trim().is_empty() {
+                                let capped: String = skills.chars().take(6000).collect();
+                                note.push_str(&format!(
+                                    "\n\nPlugin '{name}' tools (available from now on):\n{capped}"
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 completed_steps.push(note.clone());
                 on_step(&note);
             }

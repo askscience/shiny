@@ -30,7 +30,9 @@ pub fn build_continuation_messages(
     } else {
         format!(
             "Plugin windows: {plugins_hint}. If the request belongs to one of them and you \
-             haven't shown its window yet, call show_plugin with its name before your final reply.\n"
+             haven't shown its window yet, call show_plugin with its name before your final reply. \
+             An (inactive) plugin needs {{\"action\":\"plugin_activate\",\"params\":{{\"name\":\"<plugin>\"}}}} \
+             before you can use its tools.\n"
         )
     };
     let system = format!(
@@ -160,6 +162,47 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                 .unwrap_or("plugin");
             format!("Showing {name}")
         }
+        "plugin_activate" => {
+            let name = data.get("plugin").and_then(|v| v.as_str()).unwrap_or("plugin");
+            if data.get("already").and_then(|v| v.as_bool()).unwrap_or(false) {
+                format!("Plugin {name} was already active")
+            } else if let Some(err) = data.get("error").and_then(|v| v.as_str()) {
+                format!("Could not activate plugin {name}: {err}")
+            } else {
+                format!("Activated plugin {name}")
+            }
+        }
+        "plugin_deactivate" => {
+            let name = data.get("plugin").and_then(|v| v.as_str()).unwrap_or("plugin");
+            if data.get("already").and_then(|v| v.as_bool()).unwrap_or(false) {
+                format!("Plugin {name} was already inactive")
+            } else if let Some(err) = data.get("error").and_then(|v| v.as_str()) {
+                format!("Could not deactivate plugin {name}: {err}")
+            } else {
+                format!("Deactivated plugin {name}")
+            }
+        }
+        "list_plugins" => {
+            let lines: Vec<String> = data
+                .get("plugins")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .map(|p| {
+                            let n = p.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                            let d = p.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                            let a = p.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
+                            format!("{n} ({}) — {d}", if a { "active" } else { "inactive" })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if lines.is_empty() {
+                "No plugins installed".into()
+            } else {
+                format!("Plugins:\n{}", lines.join("\n"))
+            }
+        }
         _ => {
             // Unknown/plugin tools: the outcome DATA is the result — hand it
             // to the model (truncated), or it has nothing to answer with.
@@ -186,6 +229,9 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "generate_diary" => "Writing diary…",
         "show_artifact" | "update_artifact" => "Updating guide…",
         "show_plugin" => "Opening plugin…",
+        "plugin_activate" => "Activating plugin…",
+        "plugin_deactivate" => "Deactivating plugin…",
+        "list_plugins" => "Checking plugins…",
         _ => "Working…",
     }
 }
@@ -246,5 +292,47 @@ mod tests {
         assert!(step.contains("Paris - Wikipedia"), "top hit missing: {step}");
         assert!(step.contains("Britannica"), "second hit missing: {step}");
         assert!(step.contains("What is the capital of France?"), "third hit missing: {step}");
+    }
+
+    #[test]
+    fn plugin_activate_step_mentions_plugin_name() {
+        let step = describe_tool_step("plugin_activate", "ok", &json!({ "plugin": "radio", "enabled": true, "already": false }));
+        assert!(step.contains("Activated plugin radio"), "activate note: {step}");
+
+        let step = describe_tool_step("plugin_activate", "ok", &json!({ "plugin": "radio", "already": true }));
+        assert!(step.contains("already active"), "already-active note: {step}");
+
+        let step = describe_tool_step("plugin_activate", "error", &json!({ "error": "plugin 'nope' is not installed" }));
+        assert!(step.contains("not installed"), "error note: {step}");
+    }
+
+    #[test]
+    fn plugin_deactivate_and_list_steps() {
+        let step = describe_tool_step("plugin_deactivate", "ok", &json!({ "plugin": "word", "enabled": false, "already": false }));
+        assert!(step.contains("Deactivated plugin word"), "deactivate note: {step}");
+
+        let step = describe_tool_step(
+            "list_plugins",
+            "ok",
+            &json!({ "plugins": [
+                { "name": "radio", "active": true, "description": "Internet radio" },
+                { "name": "hello", "active": false, "description": "Demo plugin" }
+            ]}),
+        );
+        assert!(step.contains("radio (active)"), "list note: {step}");
+        assert!(step.contains("hello (inactive)"), "list note: {step}");
+    }
+
+    #[test]
+    fn continuation_hint_teaches_activation() {
+        let msgs = build_continuation_messages(
+            "Shiny",
+            "en",
+            "single",
+            "Play radio",
+            &[],
+            "radio: Internet radio (inactive)",
+        );
+        assert!(msgs[0].1.contains("plugin_activate"), "hint should teach activation: {}", msgs[0].1);
     }
 }

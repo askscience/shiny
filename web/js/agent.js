@@ -246,6 +246,14 @@ function setAgentAwaiting(on) {
 /** Plugin windows react to tool outcomes here (e.g. radio stops playback). */
 function dispatchAgentActions(res) {
   window.dispatchEvent(new CustomEvent('agent:actions', { detail: res?.actions_taken || [] }));
+  // The AI turned a plugin on/off — re-evaluate plugin windows, keyboard,
+  // HUD chrome and traveler surfaces immediately.
+  const touchedPlugins = (res?.actions_taken || []).some(
+    (a) => a?.action === 'plugin_activate' || a?.action === 'plugin_deactivate',
+  );
+  if (touchedPlugins) {
+    window.dispatchEvent(new CustomEvent('plugins:changed'));
+  }
 }
 
 export async function sendToAgent(message, mode, context) {

@@ -187,24 +187,36 @@ async fn prepare_agent(
         format!("\n{}\n", context_lines.join("\n"))
     };
 
-    // Compact plugin catalog: the model picks a plugin by reading these
-    // descriptions (plus the skill docs above) and can surface its window
-    // with the show_plugin tool.
-    let catalog_lines: Vec<String> = state
+    // Full plugin catalog — active AND inactive. The model reads every
+    // description so it can activate an inactive plugin (plugin_activate)
+    // when the request needs it, and knows which are currently usable.
+    let catalog: Vec<(String, String, bool)> = state
         .plugins
         .list()
         .into_iter()
-        .filter(|m| installed.contains(&m.name))
         .map(|m| {
+            let active = installed.contains(&m.name);
             let desc = m
                 .description
                 .clone()
                 .or_else(|| m.summary.clone())
                 .unwrap_or_default();
-            format!("- {}: {}", m.name, desc)
+            (m.name, desc, active)
         })
         .collect();
-    let plugin_windows_block = if catalog_lines.is_empty() {
+
+    let active_lines: Vec<String> = catalog
+        .iter()
+        .filter(|(_, _, a)| *a)
+        .map(|(n, d, _)| format!("- {}: {}", n, d))
+        .collect();
+    let inactive_lines: Vec<String> = catalog
+        .iter()
+        .filter(|(_, _, a)| !*a)
+        .map(|(n, d, _)| format!("- {}: {}", n, d))
+        .collect();
+
+    let plugin_windows_block = if active_lines.is_empty() {
         String::new()
     } else {
         format!(
@@ -214,10 +226,37 @@ async fn prepare_agent(
              When the request clearly belongs to a plugin's domain, call \
              {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
              this opens its window for the user.\n",
-            catalog_lines.join("\n")
+            active_lines.join("\n")
         )
     };
-    let plugins_hint = catalog_lines.join("; ");
+
+    let plugin_catalog_block = if catalog.is_empty() {
+        "\n## Plugins\nNo plugins installed.".to_string()
+    } else {
+        format!(
+            "\n## Plugins\n\
+             Active plugins (tools available):\n{}\n\
+             Available (inactive) plugins — activate with \
+             {{\"action\":\"plugin_activate\",\"params\":{{\"name\":\"<plugin>\"}}}} if the request \
+             needs one; deactivate with plugin_deactivate when the user asks to turn one off:\n{}",
+            if active_lines.is_empty() { "- none".to_string() } else { active_lines.join("\n") },
+            if inactive_lines.is_empty() { "- none".to_string() } else { inactive_lines.join("\n") },
+        )
+    };
+
+    // Compact hint for continuation turns: every installed plugin with its
+    // status so the model can still activate/deactivate mid-conversation.
+    let plugins_hint = catalog
+        .iter()
+        .map(|(n, d, a)| {
+            if *a {
+                format!("{n}: {d}")
+            } else {
+                format!("{n}: {d} (inactive)")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
 
     let system = format!(
         "You are {ai_name}, {persona}. Reply in language code '{lang}'. Keep spoken replies to 1-2 short sentences.\n\
@@ -232,7 +271,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — keep the spoken reply short.{plugin_windows_block}",
+         Mode: {mode} — keep the spoken reply short.{plugin_windows_block}{plugin_catalog_block}",
         ai_name = ai_name,
         persona = persona,
         lang = lang,
@@ -245,6 +284,7 @@ async fn prepare_agent(
         context_block = context_block,
         mode = mode,
         plugin_windows_block = plugin_windows_block,
+        plugin_catalog_block = plugin_catalog_block,
     );
 
     Ok(PreparedAgent {

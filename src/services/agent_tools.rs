@@ -112,15 +112,104 @@ pub async fn execute_action(
                     extra_artifacts: vec![],
                     owner: None,
                 }
-            } else {
+            } else if !installed {
                 ActionOutcome {
                     action: action_key.clone(),
                     result: "error".into(),
-                    data: json!({ "error": format!("plugin '{name}' is not installed or not active") }),
+                    data: json!({ "error": format!("plugin '{name}' is not installed") }),
                     artifact: None,
                     extra_artifacts: vec![],
                     owner: None,
                 }
+            } else {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({ "error": format!("plugin '{name}' is inactive — activate it with plugin_activate first") }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            }
+        }
+        // Activate a plugin for this user so its tools become available.
+        "plugin_activate" => {
+            let name = param_str(params, "name")
+                .or_else(|| param_str(params, "plugin"))
+                .ok_or_else(|| AppError::BadRequest("name required".into()))?;
+            let installed = state.plugins.list().iter().any(|m| m.name == name);
+            if !installed {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({ "error": format!("plugin '{name}' is not installed") }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            } else {
+                let already = state.plugins.is_enabled_for(&traveler.id, &name).await;
+                state.plugins.set_enabled_for(&traveler.id, &name, true).await?;
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "ok".into(),
+                    data: json!({ "plugin": name, "enabled": true, "already": already }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            }
+        }
+        // Deactivate a plugin for this user — its tools stop working.
+        "plugin_deactivate" => {
+            let name = param_str(params, "name")
+                .or_else(|| param_str(params, "plugin"))
+                .ok_or_else(|| AppError::BadRequest("name required".into()))?;
+            let installed = state.plugins.list().iter().any(|m| m.name == name);
+            if !installed {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({ "error": format!("plugin '{name}' is not installed") }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            } else {
+                let already = !state.plugins.is_enabled_for(&traveler.id, &name).await;
+                state.plugins.set_enabled_for(&traveler.id, &name, false).await?;
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "ok".into(),
+                    data: json!({ "plugin": name, "enabled": false, "already": already }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
+            }
+        }
+        // Every installed plugin with its activation status — lets the model
+        // re-check the catalog mid-conversation (e.g. after activating).
+        "list_plugins" => {
+            let plugins: Vec<Value> = {
+                let mut out = Vec::new();
+                for m in state.plugins.list() {
+                    let active = state.plugins.is_enabled_for(&traveler.id, &m.name).await;
+                    out.push(json!({
+                        "name": m.name,
+                        "active": active,
+                        "description": m.description.clone().or_else(|| m.summary.clone()).unwrap_or_default(),
+                    }));
+                }
+                out
+            };
+            ActionOutcome {
+                action: action_key.clone(),
+                result: "ok".into(),
+                data: json!({ "plugins": plugins }),
+                artifact: None,
+                extra_artifacts: vec![],
+                owner: None,
             }
         }
         "web_search" => {
@@ -191,6 +280,9 @@ fn normalize_action_name(raw: &str) -> String {
     match a.as_str() {
         "navigate" | "start_navigation" | "start_navigator" | "navigation"
         | "directions" | "drive_to" | "navigate-to" | "go_to" => "navigate_to".into(),
+        "activate_plugin" | "enable_plugin" => "plugin_activate".into(),
+        "deactivate_plugin" | "disable_plugin" => "plugin_deactivate".into(),
+        "plugins" | "list_available_plugins" | "available_plugins" => "list_plugins".into(),
         _ => a,
     }
 }
