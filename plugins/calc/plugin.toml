@@ -1,0 +1,9 @@
+name = "calc"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Spreadsheet calculator — sheets stored as open cell grids, editable in the Calc window"
+summary = "Calc: create, edit and compute with spreadsheets"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"

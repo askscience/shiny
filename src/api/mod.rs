@@ -13,6 +13,7 @@ pub mod ollama;
 pub mod radio;
 pub mod youtube;
 pub mod documents;
+pub mod spreadsheets;
 
 use axum::Router;
 use axum::routing::{delete, get, post, put};
@@ -136,6 +137,11 @@ pub fn build_router(state: AppState) -> Router {
             get(documents::get_one).put(documents::save).delete(documents::delete),
         )
         .route("/api/documents/:id/export", get(documents::export_odt))
+        .route("/api/spreadsheets", get(spreadsheets::list).post(spreadsheets::create))
+        .route(
+            "/api/spreadsheets/:id",
+            get(spreadsheets::get_one).put(spreadsheets::save).delete(spreadsheets::delete),
+        )
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))
         .route("/api/artifacts/:id", get(artifacts::get_one).put(artifacts::update))
         .route("/api/tts", post(voice::tts))

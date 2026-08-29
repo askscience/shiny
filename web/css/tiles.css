@@ -1191,3 +1191,318 @@ body.compose-active #tile-overlay {
   .tile--focused { animation: none; }
   .tile-overlay { transition: none; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Calc plugin window — simple spreadsheet.
+   Hairline toolbar, formula bar (ref + value), A1-style cell grid with
+   sticky headers, overlay cell editor, status line, sheet menu popup.
+   ───────────────────────────────────────────────────────────── */
+.calc-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.calc-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.calc-sheet-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.calc-sheet-btn:hover { background: var(--glass-hover); border-color: var(--text); }
+.calc-sheet-btn[aria-expanded='true'] { background: var(--glass-hover); }
+
+.calc-sheet-btn-icon { display: inline-flex; color: var(--accent); }
+.calc-sheet-btn-icon .ui-icon { width: 15px; height: 15px; }
+.calc-sheet-btn-chevron { display: inline-flex; color: var(--muted); }
+.calc-sheet-btn-chevron .ui-icon { width: 12px; height: 12px; }
+
+.calc-title {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.calc-title::placeholder { color: var(--muted); }
+
+.calc-save-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background var(--duration-normal) var(--ease-out);
+}
+
+.calc-save-dot.is-active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Formula bar */
+.calc-formula-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.calc-formula-ref {
+  flex: none;
+  min-width: 44px;
+  padding: 0 8px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-strong);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--accent);
+}
+
+.calc-formula-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  background: var(--surface-strong);
+  color: var(--text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.calc-formula-input:focus { border-color: var(--accent); }
+.calc-formula-input::placeholder { color: var(--muted); }
+
+/* Cell grid — CSS grid, sticky headers, overlay editor. */
+.calc-grid {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 44px repeat(52, 110px);
+  grid-auto-rows: 28px;
+  background: var(--bg);
+  scrollbar-width: thin;
+}
+
+.calc-grid::-webkit-scrollbar { width: 6px; height: 6px; }
+.calc-grid::-webkit-scrollbar-thumb { background: var(--glass-border); }
+
+.calc-cell {
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calc-cell--head,
+.calc-cell--rowhead,
+.calc-cell--corner {
+  position: sticky;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  justify-content: center;
+  padding: 0;
+  z-index: 2;
+}
+
+.calc-cell--head {
+  top: 0;
+  z-index: 3;
+}
+
+.calc-cell--rowhead {
+  left: 0;
+}
+
+.calc-cell--corner {
+  top: 0;
+  left: 0;
+  z-index: 4;
+}
+
+.calc-cell--data {
+  cursor: cell;
+  background: var(--bg);
+  user-select: none;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.calc-cell--data:hover { background: var(--glass-hover); }
+
+.calc-cell--data.is-selected {
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
+  background: var(--accent-soft);
+  z-index: 1;
+}
+
+.calc-cell--data.is-formula { color: var(--accent); }
+
+/* Overlay cell editor — positioned over the selected cell by JS. */
+.calc-cell-editor {
+  position: absolute;
+  z-index: 5;
+  display: none;
+  margin: 0;
+  padding: 0 6px;
+  border: 1.5px solid var(--accent);
+  border-radius: 0;
+  background: var(--surface-strong);
+  color: var(--text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Status line */
+.calc-status {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 7px 14px 8px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: linear-gradient(180deg, transparent, var(--bg) 70%);
+  pointer-events: none;
+}
+
+/* Sheet menu popup (body-level). */
+.calc-sheet-menu {
+  position: fixed;
+  z-index: calc(var(--z-hud) + 2);
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 28px));
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  animation: hudMenuIn var(--duration-fast) var(--ease-out);
+}
+
+.calc-sheet-menu::-webkit-scrollbar { display: none; }
+
+.calc-sheet-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.calc-sheet-menu-item:hover { background: var(--glass-hover); }
+.calc-sheet-menu-item.is-active { color: var(--accent); }
+
+.calc-sheet-menu-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.calc-sheet-menu-time { font-size: 10px; color: var(--muted); flex: none; }
+
+.calc-sheet-menu-check {
+  display: inline-flex;
+  flex: none;
+  opacity: 0;
+}
+
+.calc-sheet-menu-item.is-active .calc-sheet-menu-check { opacity: 1; }
+
+.calc-sheet-menu-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.calc-sheet-menu-foot-icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.calc-sheet-menu-item--danger { color: var(--error); }
+.calc-sheet-menu-item--danger:hover { background: var(--error-soft, var(--glass-hover)); }
+.calc-sheet-menu-empty {
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}

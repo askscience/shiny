@@ -11,3 +11,4 @@ pub mod navigation;
 pub mod agent_steps;
 pub mod agent_runner;
 pub mod documents;
+pub mod spreadsheets;

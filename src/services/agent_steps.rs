@@ -222,6 +222,36 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("video");
             format!("Playing {title} on YouTube")
         }
+        "calc_read" => {
+            // Carry the cell values into the conversation as readable lines so
+            // the model can compute from them without re-serializing JSON.
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("spreadsheet");
+            let mut note = format!("Spreadsheet \"{title}\"");
+            if let Some(cells) = data.get("cells").and_then(|v| v.as_object()) {
+                let mut entries: Vec<(String, String)> = cells
+                    .iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect();
+                entries.sort_by(|a, b| cell_ref_order(&a.0).cmp(&cell_ref_order(&b.0)));
+                for (cell, value) in entries.iter().take(150) {
+                    note.push_str(&format!("\n{cell}: {value}"));
+                }
+                if entries.len() > 150 {
+                    note.push_str(&format!("\n… and {} more cells", entries.len() - 150));
+                }
+            }
+            note
+        }
+        "calc_write" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("spreadsheet");
+            let n = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+            format!("Wrote {n} cells to \"{title}\"")
+        }
+        "calc_create" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+            format!("Created spreadsheet \"{title}\"")
+        }
+        "calc_delete" => "Spreadsheet deleted".into(),
         _ => {
             // Unknown/plugin tools: the outcome DATA is the result — hand it
             // to the model (truncated), or it has nothing to answer with.
@@ -234,6 +264,19 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             }
         }
     }
+}
+
+/// Sort key for A1-style cell refs: row-major (A1, B1, … A2, B2, …).
+fn cell_ref_order(cell_ref: &str) -> (u32, u32) {
+    let bytes = cell_ref.as_bytes();
+    let mut i = 0;
+    let mut col: u32 = 0;
+    while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+        col = col * 26 + (bytes[i].to_ascii_uppercase() - b'A' + 1) as u32;
+        i += 1;
+    }
+    let row: u32 = cell_ref[i..].parse().unwrap_or(0);
+    (row, col)
 }
 
 pub fn step_label_for_action(action: &str) -> &'static str {
@@ -253,6 +296,11 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "list_plugins" => "Checking plugins…",
         "youtube_search" => "Searching YouTube…",
         "youtube_play" => "Playing on YouTube…",
+        "calc_create" => "Creating spreadsheet…",
+        "calc_write" => "Writing cells…",
+        "calc_read" => "Reading spreadsheet…",
+        "calc_list" => "Listing spreadsheets…",
+        "calc_delete" => "Deleting spreadsheet…",
         _ => "Working…",
     }
 }
