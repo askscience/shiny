@@ -252,6 +252,37 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             format!("Created spreadsheet \"{title}\"")
         }
         "calc_delete" => "Spreadsheet deleted".into(),
+        "desktop_fullscreen" => {
+            let name = data.get("plugin").and_then(|v| v.as_str()).unwrap_or("window");
+            if data.get("fullscreen").and_then(|v| v.as_bool()).unwrap_or(true) {
+                format!("Fullscreened {name}")
+            } else {
+                format!("Restored {name} from fullscreen")
+            }
+        }
+        "desktop_focus" => {
+            let name = data.get("plugin").and_then(|v| v.as_str()).unwrap_or("window");
+            format!("Focused {name}")
+        }
+        "workspace_create" => "Created a new workspace".into(),
+        "workspace_remove" => "Removed the current workspace".into(),
+        "workspace_switch" => {
+            let to = data.get("workspace").and_then(|v| v.as_str()).unwrap_or("next");
+            if to == "next" || to == "prev" {
+                format!("Switched to the {to} workspace")
+            } else {
+                format!("Switched to workspace {}", workspace_display_number(to))
+            }
+        }
+        "workspace_move" => {
+            let name = data.get("plugin").and_then(|v| v.as_str()).unwrap_or("window");
+            let to = data.get("workspace").and_then(|v| v.as_str()).unwrap_or("new");
+            if to == "new" {
+                format!("Moved {name} to a new workspace")
+            } else {
+                format!("Moved {name} to workspace {}", workspace_display_number(to))
+            }
+        }
         _ => {
             // Unknown/plugin tools: the outcome DATA is the result — hand it
             // to the model (truncated), or it has nothing to answer with.
@@ -264,6 +295,11 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             }
         }
     }
+}
+
+/// Workspace indices travel 0-based in tool data; show them 1-based to the user.
+fn workspace_display_number(raw: &str) -> u32 {
+    raw.parse::<u32>().map(|n| n + 1).unwrap_or(1)
 }
 
 /// Sort key for A1-style cell refs: row-major (A1, B1, … A2, B2, …).
@@ -294,6 +330,12 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "plugin_activate" => "Activating plugin…",
         "plugin_deactivate" => "Deactivating plugin…",
         "list_plugins" => "Checking plugins…",
+        "desktop_fullscreen" => "Fullscreening…",
+        "desktop_focus" => "Focusing window…",
+        "workspace_create" => "New workspace…",
+        "workspace_remove" => "Removing workspace…",
+        "workspace_switch" => "Switching workspace…",
+        "workspace_move" => "Moving window…",
         "youtube_search" => "Searching YouTube…",
         "youtube_play" => "Playing on YouTube…",
         "calc_create" => "Creating spreadsheet…",
@@ -424,5 +466,22 @@ mod tests {
         let step = describe_tool_step("youtube_play", "ok", &json!({ "video_id": "abc", "title": "Rick Astley - Never Gonna Give You Up" }));
         assert!(step.contains("Playing Rick Astley"), "play note: {step}");
         assert_eq!(step_label_for_action("youtube_play"), "Playing on YouTube…");
+    }
+
+    #[test]
+    fn desktop_workspace_steps_are_human_and_1_based() {
+        // Move-to-new is the "organize the desktop" path.
+        let step = describe_tool_step("workspace_move", "ok", &json!({ "plugin": "radio", "workspace": "new" }));
+        assert!(step.contains("Moved radio to a new workspace"), "new-workspace note: {step}");
+
+        // Numeric workspace ids are 0-based in data but shown 1-based.
+        let step = describe_tool_step("workspace_move", "ok", &json!({ "plugin": "calc", "workspace": "0" }));
+        assert!(step.contains("workspace 1"), "1-based note: {step}");
+
+        let step = describe_tool_step("workspace_switch", "ok", &json!({ "workspace": "1" }));
+        assert!(step.contains("workspace 2"), "switch note: {step}");
+
+        let step = describe_tool_step("workspace_switch", "ok", &json!({ "workspace": "next" }));
+        assert!(step.contains("next workspace"), "next note: {step}");
     }
 }

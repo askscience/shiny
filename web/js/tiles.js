@@ -1,17 +1,28 @@
 /**
- * tiles.js — plugin window manager (Android Auto-style tiling).
+ * tiles.js — plugin window surfaces (Hyprland-style desktop).
  *
  * Every plugin that has an interface lives inside its own tile window in
  * #tile-grid. The traveler plugin's interface is the map. The HUD header and
  * the AI sphere/dock are fixed chrome — always visible, never tiled.
  *
- * - Settings → Plugin windows chooses Tile (grid) or Full screen (focused
- *   takeover between HUD and chrome-bottom) per plugin.
- * - The AI surfaces a window with the show_plugin tool (→ `plugin:focus`).
+ * The layout engine (workspaces, master/stack tiling, focus, fullscreen)
+ * lives in desktop.js; this module owns the plugin-window DOM: mounting the
+ * map/radio/word/youtube/calc tiles, the phone window switcher, and the
+ * in-tile artifact sheets/overlay.
+ *
+ * - Settings → Desktop sets the tiling layout; Settings → Plugin windows
+ *   still chooses Tile vs Full screen per plugin.
+ * - The AI surfaces a window with show_plugin (→ `plugin:focus`) and controls
+ *   the desktop with desktop_fullscreen / workspace_* tools (→ `agent:actions`).
  * - Artifact cards are NOT tiles — they use the dock + travel panel as before.
  */
 import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
 import { getPluginLayout } from './preferences.js';
+import {
+  initDesktop, ensureWindows, activeWindowNames, applyLayout, renderWorkspaceBar,
+  focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
+  setSurfaceNamesProvider,
+} from './desktop.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import { artifactPanel, hydrateIcons, icon } from '../ui/index.js';
@@ -42,7 +53,6 @@ let overlayBody = null;
 let overlayTitle = null;
 
 let pluginCatalog = new Map(); // name -> { description }
-let focusedPlugin = null;      // plugin currently in full screen
 let mapTileEl = null;          // the tile hosting the map DOM
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
 let hudWindowsEl = null;       // phone window switcher in the top HUD bar
@@ -180,49 +190,50 @@ function renderHudWindows(names, phone) {
 function renderTiles() {
   if (!grid) return;
   const names = surfacePlugins();
-
-  // Full-screen plugin takes over the grid area exclusively.
-  if (focusedPlugin && !names.includes(focusedPlugin)) focusedPlugin = null;
-  const focused = focusedPlugin;
+  ensureWindows(names);
 
   const phone = PHONE_QUERY.matches && names.length > 0;
+  const visible = activeWindowNames(names);
 
   grid.innerHTML = '';
   grid.classList.toggle('tile-grid--phone', phone);
-  grid.classList.toggle('tile-grid--single', !phone && names.length === 1);
+  grid.classList.toggle('tile-grid--single', !phone && visible.length === 1);
 
   if (phone) {
     // Navigation always lives on the map — surface it if a route is live.
     if (document.body.classList.contains('navigator-active')) activePhonePlugin = MAP_TILE_PLUGIN;
-    if (!names.includes(activePhonePlugin)) activePhonePlugin = names[0];
+    if (!visible.includes(activePhonePlugin)) activePhonePlugin = visible[0] || null;
 
     // Keep every window mounted (hidden, not detached) so their chrome — the
     // traveler dock, tile sheets — stays inside its own window.
     for (const name of names) {
       const el = elementForTile(name);
       if (!el) continue;
-      el.classList.remove('tile--full');
-      el.classList.toggle('hidden', name !== activePhonePlugin);
+      const inActiveWs = visible.includes(name);
+      const shown = inActiveWs && name === activePhonePlugin;
+      el.classList.remove('tile--full', 'tile--master', 'tile--stack');
+      el.style.gridColumn = '';
+      el.style.gridRow = '';
+      el.classList.toggle('hidden', !shown);
       grid.appendChild(el);
     }
   } else {
+    const items = [];
     for (const name of names) {
       const el = elementForTile(name);
       if (!el) continue;
-      el.classList.remove('hidden');
-      // Full when focused, when the user picked Full screen, or when it is
-      // the ONLY plugin window on screen — the rounded frame stays either way.
-      const isFull = focused === name
-        || names.length === 1
-        || (!focused && getPluginLayout(name) === 'full');
-      el.classList.toggle('tile--full', isFull);
+      const inActiveWs = visible.includes(name);
+      el.classList.toggle('hidden', !inActiveWs);
       grid.appendChild(el);
+      if (inActiveWs) items.push({ name, el });
     }
+    applyLayout(grid, items);
   }
 
   grid.classList.toggle('hidden', names.length === 0);
   document.body.classList.toggle('tiles-active', names.length > 0);
-  renderHudWindows(names, phone);
+  renderHudWindows(visible, phone);
+  renderWorkspaceBar(names.length > 0);
   // The dock moved into the traveler window — re-render it whenever tiles
   // change so it follows the tile (activation toggles, layout switches).
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
@@ -242,23 +253,20 @@ function focusPlugin(name) {
     return;
   }
 
-  if (getPluginLayout(name) === 'full' || focusedPlugin) {
-    focusedPlugin = name;
-    renderTiles();
-    return;
-  }
-  // Tile mode: pulse the window so the user sees where the plugin lives.
-  const tile = grid?.querySelector(`[data-plugin="${CSS.escape(name)}"]`);
-  if (tile) {
-    tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    tile.classList.add('tile--focused');
-    setTimeout(() => tile.classList.remove('tile--focused'), 1800);
+  focusWindow(name);
+
+  // The per-plugin "Full screen" preference still means "open fullscreen".
+  // Otherwise clear any fullscreen so we return to the tiled layout.
+  if (getPluginLayout(name) === 'full') {
+    toggleFullscreen(name, true);
+  } else if (getFullscreen()) {
+    clearFullscreen();
   }
 }
 
 function unfocus() {
-  focusedPlugin = null;
-  renderTiles();
+  clearFullscreen();
+  clearFocus();
 }
 
 /* ── Full-screen overlay (generic plugin content) ──────────── */
@@ -295,7 +303,7 @@ function onTileAction(action, artifact) {
 export async function openArtifactOverlay(pluginName, artifactId) {
   if (!overlay) return;
   const { getArtifact } = await import('./artifactStore.js');
-  focusedPlugin = pluginName;
+  focusWindow(pluginName);
   overlayTitle.textContent = pluginLabel(pluginName);
   overlayBody.innerHTML = '';
   try {
@@ -374,6 +382,9 @@ export function initTileManager() {
     unfocus();
   });
 
+  initDesktop();
+  setSurfaceNamesProvider(() => surfacePlugins());
+
   mountMapTile();
   wireRadioEvents();
   wireWordEvents();
@@ -381,6 +392,9 @@ export function initTileManager() {
   wireCalcEvents();
   void refreshCatalog().then(renderTiles);
   renderTiles();
+
+  // Desktop state changes (workspace/focus/fullscreen) re-tile the windows.
+  window.addEventListener('desktop:changed', () => renderTiles());
 
   // Crossing the phone breakpoint re-tiles the windows.
   PHONE_QUERY.addEventListener('change', () => renderTiles());
@@ -403,7 +417,6 @@ export function initTileManager() {
   window.addEventListener('plugins:changed', async () => {
     await refreshActivePlugins();
     await refreshCatalog();
-    if (focusedPlugin && !surfacePlugins().includes(focusedPlugin)) focusedPlugin = null;
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
     if (!isPluginActive(RADIO_TILE_PLUGIN)) unmountRadioTile();
     if (!isPluginActive(WORD_TILE_PLUGIN)) unmountWordTile();

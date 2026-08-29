@@ -212,6 +212,97 @@ pub async fn execute_action(
                 owner: None,
             }
         }
+        // ── Desktop control (Hyprland-style window/workspace management) ──
+        // These are relay tools: the desktop state lives in the browser per
+        // traveler. The server validates the plugin name and passes the intent
+        // back through `actions_taken` so the frontend desktop manager applies
+        // it — the same path `show_plugin` uses for `focus_plugin`.
+        "desktop_fullscreen" => {
+            let name = param_str(params, "name")
+                .or_else(|| param_str(params, "plugin"))
+                .ok_or_else(|| AppError::BadRequest("name required".into()))?;
+            if let Some(err) = active_plugin_error(state, &traveler.id, &name, &action_key).await {
+                return Ok(err);
+            }
+            let on = params.get("on").and_then(|v| v.as_bool()).unwrap_or(true);
+            ActionOutcome {
+                action: action_key.clone(),
+                result: "ok".into(),
+                data: json!({ "plugin": name, "fullscreen": on }),
+                artifact: None,
+                extra_artifacts: vec![],
+                owner: None,
+            }
+        }
+        "desktop_focus" => {
+            let name = param_str(params, "name")
+                .or_else(|| param_str(params, "plugin"))
+                .ok_or_else(|| AppError::BadRequest("name required".into()))?;
+            if let Some(err) = active_plugin_error(state, &traveler.id, &name, &action_key).await {
+                return Ok(err);
+            }
+            ActionOutcome {
+                action: action_key.clone(),
+                result: "ok".into(),
+                data: json!({ "plugin": name }),
+                artifact: None,
+                extra_artifacts: vec![],
+                owner: None,
+            }
+        }
+        "workspace_create" => ActionOutcome {
+            action: action_key.clone(),
+            result: "ok".into(),
+            data: json!({ "created": true }),
+            artifact: None,
+            extra_artifacts: vec![],
+            owner: None,
+        },
+        "workspace_remove" => ActionOutcome {
+            action: action_key.clone(),
+            result: "ok".into(),
+            data: json!({ "removed": true }),
+            artifact: None,
+            extra_artifacts: vec![],
+            owner: None,
+        },
+        "workspace_switch" => {
+            let to = params
+                .get("to")
+                .map(|v| workspace_target(v, "next"))
+                .unwrap_or_else(|| "next".to_string());
+            ActionOutcome {
+                action: action_key.clone(),
+                result: "ok".into(),
+                data: json!({ "workspace": to }),
+                artifact: None,
+                extra_artifacts: vec![],
+                owner: None,
+            }
+        }
+        "workspace_move" => {
+            let name = param_str(params, "name")
+                .or_else(|| param_str(params, "plugin"))
+                .ok_or_else(|| AppError::BadRequest("name required".into()))?;
+            if let Some(err) = active_plugin_error(state, &traveler.id, &name, &action_key).await {
+                return Ok(err);
+            }
+            // `to` accepts a 1-based number, a numeric string, or "new" to
+            // spin up a fresh workspace. Missing/unknown targets default to
+            // "new" so "move X to a new workspace" works in a single call.
+            let to = params
+                .get("to")
+                .map(|v| workspace_target(v, "new"))
+                .unwrap_or_else(|| "new".to_string());
+            ActionOutcome {
+                action: action_key.clone(),
+                result: "ok".into(),
+                data: json!({ "plugin": name, "workspace": to }),
+                artifact: None,
+                extra_artifacts: vec![],
+                owner: None,
+            }
+        }
         "web_search" => {
             let query = param_str(params, "query").ok_or_else(|| AppError::BadRequest("query required".into()))?;
             // The Instant Answer API is empty for most queries — use the HTML
@@ -266,6 +357,56 @@ fn param_str(params: &Value, key: &str) -> Option<String> {
     params.get(key).and_then(|v| v.as_str()).map(String::from)
 }
 
+/// Normalize a workspace target: 1-based number or numeric string → 0-based
+/// index string; "new" passes through; anything else falls back to `default`.
+fn workspace_target(v: &Value, default: &str) -> String {
+    if let Some(n) = v.as_u64() {
+        return n.saturating_sub(1).to_string();
+    }
+    if let Some(s) = v.as_str() {
+        if s == "new" {
+            return "new".to_string();
+        }
+        if let Ok(n) = s.parse::<u64>() {
+            return n.saturating_sub(1).to_string();
+        }
+        return s.to_string();
+    }
+    default.to_string()
+}
+
+/// Error outcome for a desktop-control tool whose plugin isn't installed or
+/// isn't active for this user. Returns `None` when the plugin is usable.
+async fn active_plugin_error(
+    state: &AppState,
+    traveler_id: &str,
+    name: &str,
+    action: &str,
+) -> Option<ActionOutcome> {
+    let installed = state.plugins.list().iter().any(|m| m.name == name);
+    if !installed {
+        return Some(ActionOutcome {
+            action: action.into(),
+            result: "error".into(),
+            data: json!({ "error": format!("plugin '{name}' is not installed") }),
+            artifact: None,
+            extra_artifacts: vec![],
+            owner: None,
+        });
+    }
+    if !state.plugins.is_enabled_for(traveler_id, name).await {
+        return Some(ActionOutcome {
+            action: action.into(),
+            result: "error".into(),
+            data: json!({ "error": format!("plugin '{name}' is inactive — activate it with plugin_activate first") }),
+            artifact: None,
+            extra_artifacts: vec![],
+            owner: None,
+        });
+    }
+    None
+}
+
 pub async fn fetch_active_trip(pool: &SqlitePool, traveler_id: &str) -> Result<Option<Trip>, AppError> {
     Ok(sqlx::query_as::<_, Trip>(
         "SELECT * FROM trips WHERE traveler_id = ?1 AND status = 'active' LIMIT 1",
@@ -283,6 +424,16 @@ fn normalize_action_name(raw: &str) -> String {
         "activate_plugin" | "enable_plugin" => "plugin_activate".into(),
         "deactivate_plugin" | "disable_plugin" => "plugin_deactivate".into(),
         "plugins" | "list_available_plugins" | "available_plugins" => "list_plugins".into(),
+        // Desktop control — the model phrases these loosely; normalize them so
+        // "move the radio to a new workspace" never fails as an unknown action.
+        "move_to_workspace" | "move_window" | "move_plugin"
+        | "move_window_to_workspace" | "move_plugin_to_workspace" => "workspace_move".into(),
+        "new_workspace" | "add_workspace" | "create_workspace" => "workspace_create".into(),
+        "delete_workspace" | "close_workspace" | "remove_workspace" => "workspace_remove".into(),
+        "switch_workspace" | "goto_workspace" | "go_to_workspace" => "workspace_switch".into(),
+        "fullscreen" | "make_fullscreen" | "fullscreen_plugin"
+        | "toggle_fullscreen" => "desktop_fullscreen".into(),
+        "focus_window" | "focus_plugin" | "switch_focus" => "desktop_focus".into(),
         _ => a,
     }
 }

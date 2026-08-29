@@ -1,3 +1,5 @@
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -20,14 +22,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::from_env();
 
+    // Full logs: the tracer tees to stdout AND a file (data/shiny.log by
+    // default; override with LOG_FILE). Parent dirs are created eagerly.
+    if let Some(parent) = std::path::Path::new(&config.log_file).parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&config.log_file)?;
+
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| EnvFilter::new(&config.log_level)),
         )
+        .with_writer(TeeMakeWriter { file: log_file })
         .init();
 
     tracing::info!("Starting Shiny AI sphere…");
+    tracing::info!("Logging to {}", config.log_file);
 
     std::fs::create_dir_all("data").ok();
 
@@ -117,6 +131,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// Writes each log record to both stdout and the log file.
+struct TeeWriter {
+    file: std::fs::File,
+}
+
+impl Write for TeeWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let _ = io::stdout().write_all(buf);
+        self.file.write_all(buf)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let _ = io::stdout().flush();
+        self.file.flush()
+    }
+}
+
+/// `MakeWriter` that hands each log line an independent file handle (opened
+/// with O_APPEND, so concurrent writes land at the end without interleaving).
+struct TeeMakeWriter {
+    file: std::fs::File,
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TeeMakeWriter {
+    type Writer = TeeWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        TeeWriter {
+            file: self
+                .file
+                .try_clone()
+                .expect("failed to clone log file handle"),
+        }
+    }
 }
 
 fn spawn_supertonic_sidecar(supertonic_url: &str) {

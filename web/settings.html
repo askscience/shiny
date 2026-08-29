@@ -97,6 +97,39 @@
         <div id="plugin-layout-list" class="plugin-layout-list"></div>
       </section>
 
+      <section class="settings-section" id="desktop-section">
+        <h3>Desktop</h3>
+        <p class="settings-hint">Hyprland-style tiling: windows are grouped on workspaces (desktops) you and the AI can create, remove, and switch.</p>
+
+        <label for="desktop-layout-mode">Layout</label>
+        <div class="ui-select-wrap settings-control">
+          <select id="desktop-layout-mode" class="ui-select">
+            <option value="master">Master &amp; stack</option>
+            <option value="columns">Columns</option>
+          </select>
+          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+        </div>
+
+        <label for="desktop-orientation">Master side</label>
+        <div class="ui-select-wrap settings-control">
+          <select id="desktop-orientation" class="ui-select">
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+          </select>
+          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+        </div>
+
+        <label for="desktop-master-ratio">Master size <span id="desktop-ratio-value"></span></label>
+        <input type="range" id="desktop-master-ratio" class="ui-slider" min="25" max="85" step="5" value="60" aria-label="Master size">
+
+        <label for="desktop-gap">Gap <span id="desktop-gap-value"></span></label>
+        <input type="range" id="desktop-gap" class="ui-slider" min="0" max="40" step="2" value="12" aria-label="Window gap">
+
+        <p class="settings-hint">Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.</p>
+      </section>
+
       <section class="settings-section">
         <h3>Voice</h3>
         <label for="lang-select">Language</label>

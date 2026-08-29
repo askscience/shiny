@@ -127,6 +127,74 @@ html, body {
   pointer-events: auto;
 }
 
+/* ── Workspace bar (Hyprland-style desktop switcher) ────────── */
+#workspace-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--hud-bar-height);
+  padding: 0 6px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-glass);
+  pointer-events: auto;
+}
+
+.workspace-bar-dots { display: flex; align-items: center; gap: 4px; }
+
+.workspace-bar-dot {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+.workspace-bar-dot:hover { background: var(--glass-hover); color: var(--text); }
+.workspace-bar-dot.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.workspace-bar-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass);
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.workspace-bar-btn:hover {
+  background: var(--glass-hover);
+  border-color: var(--glass-highlight);
+  color: var(--text);
+}
+.workspace-bar-btn:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 640px) {
+  #workspace-bar { display: none; }
+}
+
 /* Phone window switcher — icon buttons inside the top HUD bar. */
 #hud-windows {
   display: none;

@@ -11,6 +11,10 @@
  */
 import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
 import { getTraveler } from './api.js';
+import {
+  cycleFocusActive, toggleFullscreenActive, createWorkspace,
+  removeWorkspace, switchWorkspace,
+} from './desktop.js';
 import { setIcon } from '../ui/index.js';
 
 export const KEYBOARD_PLUGIN = 'keyboard';
@@ -363,11 +367,38 @@ function stopRepeat() {
   }
 }
 
+/** Desktop control row — Hyprland-style window/workspace buttons. */
+function renderDesktopRow() {
+  const row = document.createElement('div');
+  row.className = 'keyboard-row keyboard-row--desktop';
+  const btn = (label, title, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'keyboard-key keyboard-key--fn keyboard-key--desktop';
+    b.textContent = label;
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      fn();
+    });
+    row.appendChild(b);
+  };
+  btn('\u2922', 'Fullscreen (Alt+Enter)', () => toggleFullscreenActive());
+  btn('\u25C0', 'Previous workspace (Alt+,)', () => switchWorkspace('prev'));
+  btn('\u25B6', 'Next workspace (Alt+.)', () => switchWorkspace('next'));
+  btn('+', 'New workspace (Alt+N)', () => createWorkspace());
+  btn('\u2212', 'Remove workspace (Alt+Shift+N)', () => removeWorkspace());
+  btn('\u25C7', 'Focus next window (Alt+L)', () => cycleFocusActive(1));
+  return row;
+}
+
 function render() {
   if (!rowsEl) return;
   // Rebuilding wipes the orb slot — rescue the docked AI sphere first.
   const dockedOrb = document.getElementById('keyboard-orb-slot')?.firstElementChild || null;
   rowsEl.textContent = '';
+  rowsEl.appendChild(renderDesktopRow());
   const l = layout();
 
   const rows = symbols

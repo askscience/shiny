@@ -68,4 +68,72 @@ Get the current state of every installed plugin (name, description, active/inact
 
 Use it when you are unsure whether a plugin is installed or active before activating or using it.
 
+### Desktop control
+
+The screen is a Hyprland-style desktop: plugin windows tile into a master/stack
+layout, live on numbered **workspaces** (desktops), and can be focused or
+fullscreened. You and the user both control the desktop with these tools.
+
+Your system prompt includes a **"Desktop (current layout)"** section listing
+every workspace and the windows currently in it. Read it before reorganizing:
+group windows into the *existing* workspaces by app type (e.g. media vs
+productivity), and avoid `workspace_create` unless the user explicitly wants an
+empty workspace — moving a window with `"to": "new"` already makes a fresh
+workspace when one is truly needed.
+
+#### desktop_fullscreen
+
+Make a plugin's window take the whole screen (`on: true`) or return it to the
+tiled layout (`on: false`).
+
+```text
+{"action": "desktop_fullscreen", "params": {"name": "radio", "on": true}}
+```
+
+#### desktop_focus
+
+Focus a plugin's window (switch to the workspace that holds it) without
+fullscreening it.
+
+```text
+{"action": "desktop_focus", "params": {"name": "traveler"}}
+```
+
+#### workspace_create
+
+Create a new, empty workspace and switch to it. Prefer `workspace_move` with
+`"to": "new"` when you want to put a window on a brand-new workspace in one step.
+
+```text
+{"action": "workspace_create", "params": {}}
+```
+
+#### workspace_remove
+
+Remove the current workspace (its windows move to a neighbour).
+
+```text
+{"action": "workspace_remove", "params": {}}
+```
+
+#### workspace_switch
+
+Switch workspace: `"to"` is a 1-based number, or `"next"` / `"prev"`.
+
+```text
+{"action": "workspace_switch", "params": {"to": 2}}
+```
+
+#### workspace_move
+
+Move a plugin's window to another workspace. `"to"` is a 1-based number, or
+`"new"` to create a fresh workspace and move the window there. Use `"to": "new"`
+whenever the user asks to move/put a window on a *new* workspace or to tidy the
+desktop — do not call `workspace_create` first for this.
+
+```text
+{"action": "workspace_move", "params": {"name": "calc", "to": 2}}
+{"action": "workspace_move", "params": {"name": "radio", "to": "new"}}
+```
+
 Everything else you answer directly from conversation — no tool needed.

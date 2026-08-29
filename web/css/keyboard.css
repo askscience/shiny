@@ -81,6 +81,15 @@
   color: var(--text-secondary);
 }
 
+/* Desktop control row (Hyprland-style window/workspace buttons). */
+.keyboard-row--desktop { margin-bottom: 2px; }
+
+.keyboard-key--desktop {
+  flex-grow: 1;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
 .keyboard-key--space { flex-grow: 5; }
 
 .keyboard-key--accent {
@@ -136,7 +145,7 @@ body.keyboard-open #artifact-dock-step {
 }
 
 @media (max-width: 640px) {
-  :root { --keyboard-height: 240px; }
+  :root { --keyboard-height: 296px; }
 
   .keyboard-key { height: 48px; font-size: 17px; }
 
@@ -148,7 +157,7 @@ body.keyboard-open #artifact-dock-step {
 
 /* ── Big screens: a compact, centered keyboard with padding ── */
 @media (min-width: 641px) {
-  :root { --keyboard-height: 198px; }
+  :root { --keyboard-height: 252px; }
 
   #keyboard-bar {
     left: 50%;

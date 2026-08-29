@@ -12,6 +12,7 @@ import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
 import { getAiName, getOllamaModel } from './preferences.js';
+import { getDesktopSnapshot } from './desktop.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
 import {
   fetchNavigationSession,
@@ -143,7 +144,12 @@ async function handleNavigation(res, userMessage, context) {
 function buildAgentBody(message, mode, context) {
   const lang = localStorage.getItem('voice.lang') ||
     (navigator.language || 'en').split('-')[0];
-  const body = { message, mode, lang, context, ai_name: getAiName(), stream: true };
+  const body = {
+    message, mode, lang, context,
+    ai_name: getAiName(),
+    desktop: getDesktopSnapshot(),
+    stream: true,
+  };
   const model = getOllamaModel();
   if (model) body.ollama_model = model;
   return body;

@@ -8,7 +8,7 @@ import {
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
 } from '../ui/index.js';
-import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout } from './preferences.js';
+import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout } from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 
 const langSelect = document.getElementById('lang-select');
@@ -312,6 +312,45 @@ async function loadPluginLayouts() {
   }
 }
 
+/* ── Desktop / tiling ───────────────────────────────────────── */
+
+function wireDesktopSection() {
+  const modeSel = document.getElementById('desktop-layout-mode');
+  const oriSel = document.getElementById('desktop-orientation');
+  const ratio = document.getElementById('desktop-master-ratio');
+  const ratioVal = document.getElementById('desktop-ratio-value');
+  const gap = document.getElementById('desktop-gap');
+  const gapVal = document.getElementById('desktop-gap-value');
+
+  const layout = getDesktopLayout();
+  if (modeSel) modeSel.value = layout.mode;
+  if (oriSel) oriSel.value = layout.orientation;
+  if (ratio) {
+    const pct = Math.round(layout.master_ratio * 100);
+    ratio.value = String(pct);
+    if (ratioVal) ratioVal.textContent = `${pct}%`;
+  }
+  if (gap) {
+    gap.value = String(layout.gap);
+    if (gapVal) gapVal.textContent = `${layout.gap}px`;
+  }
+
+  modeSel?.addEventListener('change', () =>
+    setDesktopLayout({ ...getDesktopLayout(), mode: modeSel.value }));
+  oriSel?.addEventListener('change', () =>
+    setDesktopLayout({ ...getDesktopLayout(), orientation: oriSel.value }));
+  ratio?.addEventListener('input', () => {
+    const pct = Number(ratio.value);
+    if (ratioVal) ratioVal.textContent = `${pct}%`;
+    setDesktopLayout({ ...getDesktopLayout(), master_ratio: pct / 100 });
+  });
+  gap?.addEventListener('input', () => {
+    const px = Number(gap.value);
+    if (gapVal) gapVal.textContent = `${px}px`;
+    setDesktopLayout({ ...getDesktopLayout(), gap: px });
+  });
+}
+
 /* ── Actions ────────────────────────────────────────────────── */
 
 async function saveAndLeave() {
@@ -372,6 +411,7 @@ async function boot() {
   if (aiNameInput) aiNameInput.value = getAiName();
 
   await Promise.all([loadLanguages(), loadOllamaModels(), loadPluginLayouts()]);
+  wireDesktopSection();
 
   aiNameInput?.addEventListener('input', () => {
     setAiName(aiNameInput.value);

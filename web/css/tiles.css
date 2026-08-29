@@ -35,6 +35,33 @@
   flex: 1 1 100%;
 }
 
+/* Master/stack tiling (Hyprland-style). The desktop manager drives geometry
+   with inline grid-template-* and per-tile grid-column/row; these rules only
+   guarantee the tiles never collapse/overflow inside their grid cells. */
+#tile-grid.tile-grid--master {
+  display: grid;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+#tile-grid.tile-grid--master .tile {
+  min-width: 0;
+  min-height: 0;
+  flex: none;
+}
+
+/* Legacy columns layout (settings → Layout: Columns). */
+#tile-grid.tile-grid--columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: stretch;
+}
+
+#tile-grid.tile-grid--columns .tile {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
 .tile {
   position: relative;
   display: flex;
@@ -190,16 +217,15 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--glass-border);
+  border: none;
   border-radius: 0;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
-.word-doc-btn:hover { background: var(--glass-hover); border-color: var(--text); }
+.word-doc-btn:hover { background: var(--glass-hover); }
 .word-doc-btn[aria-expanded='true'] { background: var(--glass-hover); }
 
 .word-doc-btn-icon { display: inline-flex; color: var(--accent); }
@@ -464,16 +490,17 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: flex-end;
-  gap: 18px;
-  padding: 26px 24px 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
 }
 
 .radio-hero-art {
   flex: none;
-  width: 132px;
-  height: 132px;
+  width: 30px;
+  height: 30px;
   background: var(--glass);
   border: 1px solid var(--glass-border);
   overflow: hidden;
@@ -497,16 +524,16 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding-bottom: 2px;
+  gap: 2px;
+  justify-content: center;
 }
 
 .radio-hero-title {
   font-family: var(--font-display);
-  font-size: clamp(20px, 2.4vw, 30px);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -530,7 +557,7 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 .radio-hero-sub {
   font-family: var(--font-body);
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -539,13 +566,9 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 .radio-tile:not(.radio-tile--active) .radio-hero-title { color: var(--text-secondary); }
 
-/* Equalizer — 5 bars, animate only while live. */
+/* Equalizer — hidden in the compact top bar (kept in DOM for live state). */
 .radio-eq {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 16px;
-  margin-top: 7px;
+  display: none;
 }
 
 .radio-eq span {
@@ -569,26 +592,23 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 .radio-transport {
   flex: none;
   display: flex;
-  gap: 10px;
-  padding-bottom: 2px;
+  gap: 8px;
 }
 
 .radio-t-btn {
-  width: 52px;
-  height: 52px;
+  width: 30px;
+  height: 30px;
   border-radius: 0;
-  border: 1px solid var(--glass-border);
+  border: none;
   background: var(--glass);
   color: var(--text);
   transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
     opacity var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
 }
 
 .radio-t-btn:hover:not(:disabled) {
   background: var(--glass-hover);
-  border-color: var(--text);
   transform: translateY(-1px);
 }
 
@@ -596,13 +616,11 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 .radio-t-btn--primary {
   background: var(--accent);
-  border-color: var(--accent);
   color: var(--accent-contrast);
 }
 
 .radio-t-btn--primary:hover:not(:disabled) {
   background: var(--accent);
-  border-color: var(--accent);
   filter: brightness(1.1);
 }
 
@@ -722,30 +740,6 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
    Kicks in when the radio WINDOW itself is small — multiple tiles on
    desktop or a phone — independent of screen size. */
 @container (max-width: 460px) {
-  .radio-hero {
-    gap: 12px;
-    padding: 14px 16px 12px;
-  }
-
-  .radio-hero-art {
-    width: 64px;
-    height: 64px;
-  }
-
-  .radio-hero-title {
-    font-size: clamp(16px, 5vw, 20px);
-  }
-
-  .radio-hero-sub { font-size: 11.5px; }
-
-  .radio-eq { height: 12px; margin-top: 4px; }
-  .radio-eq span { width: 3px; }
-
-  .radio-t-btn {
-    width: 42px;
-    height: 42px;
-  }
-
   .radio-tile .ui-search { margin: 10px 16px 0; }
 
   .radio-grid {
@@ -765,7 +759,7 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
     align-items: center;
   }
 
-  .radio-hero-text { flex-basis: calc(100% - 84px); }
+  .radio-hero-text { flex-basis: calc(100% - 40px); }
 
   .radio-transport { margin-left: auto; }
 }
@@ -801,23 +795,24 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px 14px;
+  gap: 10px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
 }
 
 .yt-hero-idle {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .yt-hero-mark {
   flex: none;
-  width: 108px;
-  height: 64px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass);
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -829,15 +824,15 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .yt-hero-title {
   font-family: var(--font-display);
-  font-size: clamp(20px, 2.4vw, 30px);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -846,7 +841,7 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 .yt-hero-sub {
   font-family: var(--font-body);
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -891,18 +886,17 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--glass-border);
+  width: 30px;
+  height: 30px;
+  border: none;
   border-radius: 0;
   background: var(--glass);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
-.yt-hero-back:hover { background: var(--glass-hover); border-color: var(--text); }
+.yt-hero-back:hover { background: var(--glass-hover); }
 
 /* ── Search ────────────────────────────────────────────────── */
 .yt-tile .ui-search {
@@ -1039,10 +1033,6 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 /* ── YouTube compact variant (narrow window) ───────────────── */
 @container (max-width: 460px) {
-  .yt-hero { gap: 10px; padding: 12px 14px 10px; }
-  .yt-hero-mark { width: 84px; height: 50px; }
-  .yt-hero-title { font-size: clamp(16px, 5vw, 20px); }
-  .yt-hero-sub { font-size: 11.5px; }
   .yt-tile .ui-search { margin: 10px 14px 0; }
   .yt-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -1073,15 +1063,13 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 /* Phone window chrome — minimal interface independent of container width. */
 .tile-grid--phone .radio-hero {
-  gap: 12px;
-  padding: 16px 18px 12px;
+  gap: 10px;
+  padding: 8px 12px;
 }
 
-.tile-grid--phone .radio-hero-art { width: 72px; height: 72px; }
-.tile-grid--phone .radio-hero-title { font-size: clamp(17px, 5vw, 22px); }
-.tile-grid--phone .radio-hero-sub { font-size: 11.5px; }
-.tile-grid--phone .radio-eq { height: 12px; margin-top: 4px; }
-.tile-grid--phone .radio-t-btn { width: 46px; height: 46px; }
+.tile-grid--phone .radio-hero-art { width: 30px; height: 30px; }
+.tile-grid--phone .radio-hero-title { font-size: 15px; }
+.tile-grid--phone .radio-t-btn { width: 34px; height: 34px; }
 .tile-grid--phone .radio-tile .ui-search { margin: 12px 18px 0; }
 
 .tile-grid--phone .radio-grid {
@@ -1219,16 +1207,15 @@ body.compose-active #tile-overlay {
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--glass-border);
+  border: none;
   border-radius: 0;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
-.calc-sheet-btn:hover { background: var(--glass-hover); border-color: var(--text); }
+.calc-sheet-btn:hover { background: var(--glass-hover); }
 .calc-sheet-btn[aria-expanded='true'] { background: var(--glass-hover); }
 
 .calc-sheet-btn-icon { display: inline-flex; color: var(--accent); }

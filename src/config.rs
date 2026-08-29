@@ -12,6 +12,8 @@ pub struct Config {
     pub diary_auto_generate: bool,
     pub diary_generate_time: String,
     pub log_level: String,
+    /// File the tracer also writes to (tee'd alongside stdout).
+    pub log_file: String,
     pub supertonic_url: String,
     pub supertonic_voice: String,
     pub vosk_models_dir: String,
@@ -48,6 +50,7 @@ impl Config {
                 .unwrap_or(true),
             diary_generate_time: env::var("DIARY_GENERATE_TIME").unwrap_or_else(|_| "21:00".into()),
             log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".into()),
+            log_file: env::var("LOG_FILE").unwrap_or_else(|_| "data/shiny.log".into()),
             supertonic_url: env::var("SUPERTONIC_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:7788".into()),
             supertonic_voice: env::var("SUPERTONIC_VOICE").unwrap_or_else(|_| "M1".into()),

@@ -24,6 +24,9 @@ pub struct AgentRequest {
     pub ollama_model: Option<String>,
     pub stream: Option<bool>,
     pub context: Option<AgentContextBody>,
+    /// Client-side desktop layout (workspaces + which window is where), so the
+    /// model can reorganize without creating empty workspaces.
+    pub desktop: Option<DesktopState>,
 }
 
 #[derive(Deserialize)]
@@ -31,6 +34,20 @@ pub struct AgentContextBody {
     pub lat: Option<f64>,
     pub lon: Option<f64>,
     pub heading: Option<f64>,
+}
+
+#[derive(Deserialize)]
+pub struct DesktopState {
+    pub active: Option<u32>,
+    #[serde(default)]
+    pub workspaces: Vec<WorkspaceSnapshot>,
+}
+
+#[derive(Deserialize)]
+pub struct WorkspaceSnapshot {
+    pub index: u32,
+    #[serde(default)]
+    pub windows: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -75,6 +92,36 @@ fn first_name(full: &str) -> String {
         .next()
         .unwrap_or(full)
         .to_string()
+}
+
+/// "## Desktop" block describing the current workspace layout, so the model
+/// knows where each window lives and can reorganize without creating empty
+/// workspaces.
+fn desktop_state_block(desktop: Option<&DesktopState>) -> String {
+    let Some(d) = desktop else {
+        return String::new();
+    };
+    if d.workspaces.is_empty() {
+        return String::new();
+    }
+    let mut lines = Vec::new();
+    for ws in &d.workspaces {
+        let label = if ws.windows.is_empty() {
+            "empty".to_string()
+        } else {
+            ws.windows.join(", ")
+        };
+        lines.push(format!("  workspace {}: {label}", ws.index));
+    }
+    let active = d.active.map(|a| a.to_string()).unwrap_or_else(|| "1".into());
+    format!(
+        "\n## Desktop (current layout)\n\
+         Windows are grouped on numbered workspaces; the active workspace is {active}.\n\
+         {}\n\
+         To reorganize, move windows with workspace_move to an existing workspace number or \"new\". \
+         Prefer moving into existing workspaces over creating empty ones.\n",
+        lines.join("\n")
+    )
 }
 
 struct PreparedAgent {
@@ -223,11 +270,13 @@ async fn prepare_agent(
     } else {
         format!(
             "\n## Plugin windows\n\
-             Each active plugin has its own window (a tile or full screen, user's choice).\n\
-             Active plugins:\n{}\n\
+             Each active plugin has its own window, tiled Hyprland-style and grouped on \
+             numbered workspaces (desktops). Active plugins:\n{}\n\
              When the request clearly belongs to a plugin's domain, call \
              {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
-             this opens its window for the user.\n",
+             this focuses and opens its window. Use desktop_fullscreen to make it full screen, \
+             and workspace_create / workspace_remove / workspace_switch / workspace_move to \
+             manage desktops.\n",
             active_lines.join("\n")
         )
     };
@@ -260,6 +309,8 @@ async fn prepare_agent(
         .collect::<Vec<_>>()
         .join("; ");
 
+    let desktop_block = desktop_state_block(body.desktop.as_ref());
+
     let system = format!(
         "You are {ai_name}, {persona}. Reply in language code '{lang}'. Keep spoken replies to 1-2 short sentences.\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
@@ -273,7 +324,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — keep the spoken reply short.{plugin_windows_block}{plugin_catalog_block}",
+         Mode: {mode} — keep the spoken reply short.{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
         lang = lang,
@@ -287,6 +338,7 @@ async fn prepare_agent(
         mode = mode,
         plugin_windows_block = plugin_windows_block,
         plugin_catalog_block = plugin_catalog_block,
+        desktop_block = desktop_block,
     );
 
     Ok(PreparedAgent {
