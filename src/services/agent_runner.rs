@@ -66,6 +66,7 @@ where
     let mut navigation: Option<NavigationSession> = None;
     let mut focus_plugin: Option<String> = None;
     let mut produced_owners: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut injected_skills: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut completed_steps: Vec<String> = Vec::new();
     let mut final_reply = String::new();
 
@@ -95,6 +96,12 @@ where
             .ollama
             .chat(messages, input.ctx.ollama_model.as_deref())
             .await?;
+        // Full transparency: log what the model actually emitted so failures
+        // (e.g. "the AI isn't writing to calc") are visible in data/shiny.log.
+        tracing::info!(
+            "Agent response #{iteration}: {}",
+            response.chars().take(1200).collect::<String>()
+        );
         let actions = parse_actions(&response);
 
         if actions.is_empty() {
@@ -111,6 +118,11 @@ where
             .into_iter()
             .next()
             .ok_or_else(|| AppError::Internal("Empty tool action list".into()))?;
+
+        tracing::info!(
+            "Agent tool call: {action} {}",
+            serde_json::to_string(&params).unwrap_or_default()
+        );
 
         on_step(step_label_for_action(&action));
 
@@ -176,6 +188,20 @@ where
                 }
 
                 let mut note = describe_tool_step(&outcome.action, &outcome.result, &outcome.data);
+
+                // Keep a plugin's tool docs in the conversation after its tools
+                // are used: the continuation prompt is slim, so without this the
+                // model "forgets" calc_write after calc_create and replies
+                // without filling the sheet. Injected once per plugin per run.
+                if let Some(owner) = &outcome.owner {
+                    if owner != "core" && injected_skills.insert(owner.clone()) {
+                        let skills = state.plugins.skills_for(owner);
+                        if !skills.trim().is_empty() {
+                            let capped: String = skills.chars().take(6000).collect();
+                            note.push_str(&format!("\n\nPlugin '{owner}' tools:\n{capped}"));
+                        }
+                    }
+                }
 
                 // A freshly activated plugin is usable right away — hand the
                 // model its skills docs so it can call the plugin's tools in

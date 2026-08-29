@@ -247,6 +247,11 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             let n = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
             format!("Wrote {n} cells to \"{title}\"")
         }
+        "calc_clear" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("spreadsheet");
+            let n = data.get("cleared").and_then(|v| v.as_u64()).unwrap_or(0);
+            format!("Cleared {n} cells from \"{title}\"")
+        }
         "calc_create" => {
             let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
             format!("Created spreadsheet \"{title}\"")
@@ -340,6 +345,7 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "youtube_play" => "Playing on YouTube…",
         "calc_create" => "Creating spreadsheet…",
         "calc_write" => "Writing cells…",
+        "calc_clear" => "Clearing spreadsheet…",
         "calc_read" => "Reading spreadsheet…",
         "calc_list" => "Listing spreadsheets…",
         "calc_delete" => "Deleting spreadsheet…",

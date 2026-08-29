@@ -111,8 +111,57 @@ fn merge_cells(
     Ok(cells)
 }
 
-fn cells_param<'a>(req: &'a ToolRequest<'a>) -> Option<&'a Map<String, Value>> {
-    req.params.get("cells").and_then(|v| v.as_object())
+/// Accept cell input in whatever JSON shape the model naturally emits, and
+/// normalize it to a `{ "A1": value }` map:
+///  - `{ cells: {A1: "v", ...} }`
+///  - `{ cells: [["A1","v"], ...] }` (array of [ref, value] pairs)
+///  - `{ cells: [{"A1":"v"}, ...] }` (array of single-cell objects)
+///  - `{ cell: {A1: "v"} }` or `{ ref: "A1", value: "v" }` (one cell)
+///  - top-level `{ A1: "v", ... }` next to `sheet_id`/`title`
+fn incoming_cells(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError> {
+    if let Some(obj) = req.params.get("cells").and_then(|v| v.as_object()) {
+        return Ok(obj.clone());
+    }
+    if let Some(arr) = req.params.get("cells").and_then(|v| v.as_array()) {
+        let mut map = Map::new();
+        for item in arr {
+            if let Some(pair) = item.as_array() {
+                if pair.len() == 2 {
+                    if let Some(k) = pair[0].as_str() {
+                        map.insert(k.to_string(), pair[1].clone());
+                    }
+                }
+            } else if let Some(obj) = item.as_object() {
+                for (k, v) in obj {
+                    map.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        return Ok(map);
+    }
+    if let Some(cell) = req.params.get("cell").and_then(|v| v.as_object()) {
+        return Ok(cell.clone());
+    }
+    if let (Some(r), Some(v)) = (req.params.param_str("ref"), req.params.get("value")) {
+        let mut map = Map::new();
+        map.insert(r, v.clone());
+        return Ok(map);
+    }
+    if let Some(obj) = req.params.as_object() {
+        const KNOWN: &[&str] = &["sheet_id", "title", "cells", "cell", "ref", "value"];
+        let mut map = Map::new();
+        for (k, v) in obj {
+            if !KNOWN.contains(&k.as_str()) {
+                map.insert(k.clone(), v.clone());
+            }
+        }
+        if !map.is_empty() {
+            return Ok(map);
+        }
+    }
+    Err(AppError::BadRequest(
+        "cells required — pass an object like {\"A1\":\"100\",\"B1\":\"=SUM(A1:A5)\"} under \"cells\"".into(),
+    ))
 }
 
 /* ── calc_create ────────────────────────────────────────────── */
@@ -125,11 +174,16 @@ impl Tool for CalcCreate {
     fn aliases(&self) -> &[&str] { &["create_spreadsheet", "new_sheet", "new_spreadsheet"] }
     fn step_label(&self) -> &str { "Creating spreadsheet…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `calc_create` — Create a new spreadsheet. params: `{ title?: string, rows?: number, cols?: number }` — returns the new `sheet_id`.")
+        Some("- `calc_create` — Create a new spreadsheet. params: `{ title?: string, cells?: { A1: \"value\", ... }, rows?: number, cols?: number }` — `cells` optionally seeds the sheet so one call creates AND fills it; returns the new `sheet_id`.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
-        format!("Created spreadsheet \"{title}\"")
+        let n = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        if n > 0 {
+            format!("Created spreadsheet \"{title}\" with {n} cells")
+        } else {
+            format!("Created spreadsheet \"{title}\"")
+        }
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
@@ -142,13 +196,20 @@ impl Tool for CalcCreate {
         let cols = req.params.param_u32("cols").unwrap_or(26).clamp(1, 52) as i64;
         let id = uuid::Uuid::new_v4().to_string();
 
+        // Optional initial cells: one call creates AND fills the sheet, so the
+        // model can't leave an empty document behind.
+        let cells_map = incoming_cells(&req).unwrap_or_default();
+        let count = cells_map.len();
+        let cells_json = serde_json::to_string(&cells_map)?;
+
         sqlx::query(
             "INSERT INTO spreadsheets (id, user_id, title, cells, rows, cols, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, '{}', ?4, ?5, datetime('now'), datetime('now'))",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
         )
         .bind(&id)
         .bind(req.traveler_id)
         .bind(&title)
+        .bind(&cells_json)
         .bind(rows)
         .bind(cols)
         .execute(ctx.pool().await)
@@ -156,7 +217,7 @@ impl Tool for CalcCreate {
 
         Ok(ActionOutcome::ok(
             "calc_create",
-            json!({ "sheet_id": id, "title": title, "rows": rows, "cols": cols }),
+            json!({ "sheet_id": id, "title": title, "rows": rows, "cols": cols, "count": count }),
         ))
     }
 }
@@ -182,9 +243,7 @@ impl Tool for CalcWrite {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let incoming = cells_param(&req).ok_or_else(|| {
-            AppError::BadRequest("cells required — an object like {\"A1\":\"100\",\"B1\":\"=SUM(A1:A5)\"}".into())
-        })?;
+        let incoming = incoming_cells(&req)?;
 
         let sheet_id = match req.params.param_str("sheet_id") {
             Some(id) if !id.trim().is_empty() => id,
@@ -205,7 +264,27 @@ impl Tool for CalcWrite {
         .ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
         let (title, stored_json) = row;
 
-        let merged = merge_cells(&stored_json, incoming)?;
+        // Guard against accidental mass-clear: emptying most of the sheet in a
+        // single write is almost always the model echoing back "cleaned" cells.
+        // Point it at calc_clear (whole sheet) or explicit small clears instead.
+        let stored_cells = parse_cells(&stored_json);
+        let clearing: usize = incoming
+            .iter()
+            .filter(|(k, v)| {
+                let cell_ref = k.trim().to_uppercase();
+                value_to_string(v).trim().is_empty() && stored_cells.contains_key(&cell_ref)
+            })
+            .count();
+        if clearing >= 10 && clearing * 2 >= stored_cells.len() {
+            return Err(AppError::BadRequest(format!(
+                "This write would clear {clearing} of {} cells in one call — if you mean to empty \
+                 the whole sheet use calc_clear; if you only mean to clear a few cells, pass just \
+                 those cells with an empty-string value.",
+                stored_cells.len()
+            )));
+        }
+
+        let merged = merge_cells(&stored_json, &incoming)?;
         let new_title = match req.params.param_str("title") {
             Some(t) if !t.trim().is_empty() => t.trim().chars().take(120).collect::<String>(),
             _ => title.clone(),
@@ -230,6 +309,63 @@ impl Tool for CalcWrite {
                 "title": new_title,
                 "count": incoming.len(),
             }),
+        ))
+    }
+}
+
+/* ── calc_clear ─────────────────────────────────────────────── */
+
+pub struct CalcClear;
+
+#[async_trait]
+impl Tool for CalcClear {
+    fn name(&self) -> &str { "calc_clear" }
+    fn aliases(&self) -> &[&str] {
+        &["clear_sheet", "clear_spreadsheet", "empty_sheet", "wipe_sheet"]
+    }
+    fn step_label(&self) -> &str { "Clearing spreadsheet…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `calc_clear` — Clear ALL cell values from a spreadsheet (keeps the sheet). params: `{ sheet_id?: string }` — use this for \"clear/empty/reset the content\", never calc_delete.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("spreadsheet");
+        let n = data.get("cleared").and_then(|v| v.as_u64()).unwrap_or(0);
+        format!("Cleared {n} cells from \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let sheet_id = match req.params.param_str("sheet_id") {
+            Some(id) if !id.trim().is_empty() => id,
+            _ => last_sheet_id(ctx.pool().await, req.traveler_id)
+                .await?
+                .ok_or_else(|| {
+                    AppError::BadRequest("No spreadsheet yet — call calc_create first".into())
+                })?,
+        };
+
+        let row = sqlx::query_as::<_, (String, String)>(
+            "SELECT title, cells FROM spreadsheets WHERE id = ?1 AND user_id = ?2",
+        )
+        .bind(&sheet_id)
+        .bind(req.traveler_id)
+        .fetch_optional(ctx.pool().await)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
+        let (title, stored_json) = row;
+        let cleared = parse_cells(&stored_json).len();
+
+        sqlx::query(
+            "UPDATE spreadsheets SET cells = '{}', updated_at = datetime('now') \
+             WHERE id = ?1 AND user_id = ?2",
+        )
+        .bind(&sheet_id)
+        .bind(req.traveler_id)
+        .execute(ctx.pool().await)
+        .await?;
+
+        Ok(ActionOutcome::ok(
+            "calc_clear",
+            json!({ "sheet_id": sheet_id, "title": title, "cleared": cleared }),
         ))
     }
 }
@@ -346,6 +482,20 @@ impl Tool for CalcDelete {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let sheet_id = req.params.require_str("sheet_id")?;
+
+        // Deleting a spreadsheet is permanent and irreversible. The model must
+        // pass confirm:true — accidental "delete the content" requests should
+        // be served by calc_clear (clear cells, keep the sheet) instead.
+        if !req.params.param_bool("confirm").unwrap_or(false) {
+            return Ok(ActionOutcome::error(
+                "calc_delete",
+                "refusing: deleting a spreadsheet is permanent and cannot be undone. If the user \
+                 wants to clear the content but keep the sheet, use calc_clear instead. Only call \
+                 calc_delete with {\"confirm\":true} when the user explicitly asks to delete the \
+                 whole spreadsheet/document.",
+            ));
+        }
+
         let result = sqlx::query("DELETE FROM spreadsheets WHERE id = ?1 AND user_id = ?2")
             .bind(&sheet_id)
             .bind(req.traveler_id)

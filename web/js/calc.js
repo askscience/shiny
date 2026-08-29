@@ -986,6 +986,7 @@ function onAgentActions(e) {
 
   const created = calcActions.some((a) => a.action === 'calc_create' && a.result === 'ok');
   const wrote = calcActions.some((a) => a.action === 'calc_write' && a.result === 'ok');
+  const cleared = calcActions.some((a) => a.action === 'calc_clear' && a.result === 'ok');
   const deleted = calcActions.some((a) => a.action === 'calc_delete' && a.result === 'ok');
   const read = calcActions.some((a) => a.action === 'calc_read' && a.result === 'ok');
 
@@ -1004,19 +1005,22 @@ function onAgentActions(e) {
         void openNewest();
       }
     }, 250));
-  } else if (wrote || read || deleted) {
-    void refreshSheets().then(() => {
-      if (dirty) return; // never clobber the user's unsaved edits
+  } else if (wrote || read || cleared || deleted) {
+    void (async () => {
+      // Flush any pending local edits first so they aren't lost, then reload
+      // so the AI's write is always visible (never skip the reload silently).
+      if (dirty) await persist();
+      await refreshSheets();
       if (touchedId && current?.id !== touchedId) {
         const found = sheets.find((s) => s.id === touchedId);
         if (found) void openSheet(found);
-      } else if (wrote && current) {
+      } else if ((wrote || cleared) && current) {
         const full = sheets.find((s) => s.id === current.id);
         if (full) void openSheet(full);
       } else if (deleted) {
         void openNewest();
       }
-    });
+    })();
   }
 }
 

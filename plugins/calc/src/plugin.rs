@@ -45,6 +45,7 @@ impl Plugin for CalcPlugin {
         for tool in [
             Arc::new(crate::tools::CalcCreate) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::CalcWrite) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::CalcClear) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::CalcRead) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::CalcList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::CalcDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
