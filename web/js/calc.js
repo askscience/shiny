@@ -338,12 +338,26 @@ async function persist() {
   }
 }
 
-function setCellValue(ref, value) {
+function setCellValue(ref, value, { refresh = false } = {}) {
   const v = String(value ?? '').trim();
   if (v === '') current.cells.delete(ref);
   else current.cells.set(ref, v);
   markDirty();
-  renderGrid();
+  if (refresh) {
+    // Full rebuild also refreshes any formulas that reference this cell.
+    renderGrid();
+  } else {
+    // In-place update of just this cell — keeps the DOM stable so a click
+    // that caused the edit to commit still lands on the correct cell.
+    const p = parseRef(ref);
+    const cell = p ? cellElFor(p.row, p.col) : null;
+    if (cell) {
+      cell.textContent = displayValue(current.cells.get(ref));
+      cell.classList.toggle('is-formula', String(current.cells.get(ref) ?? '').startsWith('='));
+    } else {
+      renderGrid();
+    }
+  }
 }
 
 /* ── Open / create / delete ─────────────────────────────────── */
@@ -642,12 +656,6 @@ async function importCsv(file) {
 function renderGrid() {
   if (!gridEl || !current) return;
 
-  const selRef = cellRef(sel.row, sel.col);
-
-  // Keep editing state: the editor input is repositioned after re-render.
-  const wasEditing = editing;
-  const editValue = wasEditing && editorInputEl ? editorInputEl.value : null;
-
   gridEl.innerHTML = '';
 
   const corner = document.createElement('div');
@@ -684,34 +692,22 @@ function renderGrid() {
       if (String(current.cells.get(ref) ?? '').startsWith('=')) {
         cell.classList.add('is-formula');
       }
-      cell.addEventListener('click', () => {
-        sel = { row: r, col: c };
-        editing = false;
-        hideEditor();
-        renderGrid();
-        // Re-render replaced the node — focus the fresh selected cell so
-        // typing and arrows work immediately (the grid listens on itself).
-        cellElFor(r, c)?.focus();
-      });
+      // Selection only moves a class — never rebuilds the grid, so the node
+      // under the pointer stays the same cell across click/dblclick.
+      cell.addEventListener('click', () => selectCell(r, c));
       cell.addEventListener('dblclick', () => {
-        sel = { row: r, col: c };
-        renderGrid();
+        selectCell(r, c);
         startEditing();
       });
       gridEl.appendChild(cell);
     }
   }
-
-  // Re-attach the overlay editor if we were editing.
-  if (wasEditing) {
-    editing = true;
-    showEditor(editValue);
-  }
 }
 
 /** Overlay input positioned over the selected cell. */
 function ensureEditor() {
-  if (editorInputEl) return;
+  // The grid re-render (innerHTML = '') detaches the editor — recreate it.
+  if (editorInputEl && editorInputEl.isConnected) return;
   editorInputEl = document.createElement('input');
   editorInputEl.className = 'calc-cell-editor';
   editorInputEl.autocomplete = 'off';
@@ -722,13 +718,37 @@ function ensureEditor() {
     else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
   });
   editorInputEl.addEventListener('blur', () => {
-    if (editing) commitEdit(false);
+    if (!editing) return;
+    const value = editorInputEl.value;
+    const ref = cellRef(sel.row, sel.col);
+    hideEditor();
+    // Commit in-place (no rebuild) so a click-away lands on the right cell;
+    // then refresh any dependent formulas after the event has settled.
+    setCellValue(ref, value);
+    window.setTimeout(() => {
+      if (!editing) {
+        renderGrid();
+        cellElFor(sel.row, sel.col)?.focus();
+      }
+    }, 0);
   });
   gridEl.appendChild(editorInputEl);
 }
 
 function cellElFor(row, col) {
   return gridEl?.querySelector(`.calc-cell--data[data-row="${row}"][data-col="${col}"]`);
+}
+
+/** Move the selection without rebuilding the grid DOM. */
+function selectCell(row, col, { focus = true, scroll = false } = {}) {
+  sel = { row, col };
+  gridEl?.querySelectorAll('.calc-cell--data.is-selected')
+    .forEach((el) => el.classList.remove('is-selected'));
+  const cell = cellElFor(row, col);
+  cell?.classList.add('is-selected');
+  syncFormulaBar();
+  if (scroll) cell?.scrollIntoView({ block: 'nearest' });
+  if (focus) cell?.focus();
 }
 
 function showEditor(prefill = null) {
@@ -758,24 +778,20 @@ function hideEditor() {
 function commitEdit(move) {
   if (!editing || !current) return;
   const value = editorInputEl?.value ?? '';
-  setCellValue(cellRef(sel.row, sel.col), value);
+  const editedRef = cellRef(sel.row, sel.col);
   hideEditor();
   if (move) {
-    sel = { row: sel.row + 1, col: sel.col };
-    if (sel.row > current.rows) sel.row = current.rows;
-    renderGrid();
-    const next = cellElFor(sel.row, sel.col);
-    next?.scrollIntoView({ block: 'nearest' });
-    next?.focus();
-  } else {
-    renderGrid();
-    cellElFor(sel.row, sel.col)?.focus();
+    sel = { row: Math.min(sel.row + 1, current.rows), col: sel.col };
   }
+  // Full refresh also updates any formulas that reference the edited cell.
+  setCellValue(editedRef, value, { refresh: true });
+  const next = cellElFor(sel.row, sel.col);
+  next?.scrollIntoView({ block: 'nearest' });
+  next?.focus();
 }
 
 function cancelEdit() {
   hideEditor();
-  renderGrid();
   cellElFor(sel.row, sel.col)?.focus();
 }
 
@@ -886,7 +902,7 @@ export function mountCalcTile() {
     const ref = cellRef(sel.row, sel.col);
     const value = formulaInputEl.value;
     if ((current.cells.get(ref) ?? '') !== value) {
-      setCellValue(ref, value);
+      setCellValue(ref, value, { refresh: true });
     }
     syncFormulaBar();
   }
@@ -917,19 +933,12 @@ export function mountCalcTile() {
   tileEl.appendChild(status);
 
   function moveSel(dr, dc) {
-    sel = {
-      row: Math.max(1, Math.min(current?.rows || DEFAULT_ROWS, sel.row + dr)),
-      col: Math.max(0, Math.min((current?.cols || DEFAULT_COLS) - 1, sel.col + dc)),
-    };
-    renderGrid();
-    syncFormulaBar();
-    const next = cellElFor(sel.row, sel.col);
-    next?.scrollIntoView({ block: 'nearest' });
-    next?.focus();
+    const row = Math.max(1, Math.min(current?.rows || DEFAULT_ROWS, sel.row + dr));
+    const col = Math.max(0, Math.min((current?.cols || DEFAULT_COLS) - 1, sel.col + dc));
+    selectCell(row, col, { scroll: true });
   }
 
   function startEditing(prefill = null) {
-    renderGrid();
     showEditor(prefill);
   }
 
