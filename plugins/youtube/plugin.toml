@@ -1,0 +1,7 @@
+name = "youtube"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Watch YouTube videos in the YouTube window — the AI can search YouTube and play videos"
+summary = "YouTube: AI search and playback in the YouTube window"
+author = "shiny"

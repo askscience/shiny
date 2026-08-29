@@ -53,6 +53,8 @@ pub struct AgentResponse {
 pub struct ActionTaken {
     pub action: String,
     pub result: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
@@ -313,6 +315,7 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
             .map(|a| ActionTaken {
                 action: a.action,
                 result: a.result,
+                data: a.data,
             })
             .collect(),
         steps: result.steps,

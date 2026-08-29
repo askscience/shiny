@@ -32,6 +32,9 @@ pub struct AgentRunInput {
 pub struct ActionTaken {
     pub action: String,
     pub result: String,
+    /// Small outcome payload (e.g. `{video_id}` for youtube_play) — included
+    /// only when compact, so the frontend can act on it.
+    pub data: Option<Value>,
 }
 
 pub struct AgentRunResult {
@@ -113,9 +116,16 @@ where
 
         match execute_action(state, traveler, &input.ctx, &action, &params).await {
             Ok(outcome) => {
+                // Include the payload only when compact — search results etc.
+                // stay server-side, small ids (video_id, plugin names) travel.
+                let payload = serde_json::to_string(&outcome.data)
+                    .ok()
+                    .filter(|s| s.len() < 1024)
+                    .map(|_| outcome.data.clone());
                 actions_taken.push(ActionTaken {
                     action: outcome.action.clone(),
                     result: outcome.result.clone(),
+                    data: payload,
                 });
 
                 if outcome.action == "navigate_to" && outcome.result == "ok" {
@@ -192,6 +202,7 @@ where
                 actions_taken.push(ActionTaken {
                     action: action.clone(),
                     result: "error".into(),
+                    data: None,
                 });
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
                 completed_steps.push(note.clone());

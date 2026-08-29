@@ -635,15 +635,13 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 .radio-cell {
   position: relative;
-  aspect-ratio: 1;
+  display: block;
   border: 1px solid var(--glass-border);
   background: var(--glass);
   cursor: pointer;
   padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  /* NO overflow:hidden here — an overflowing grid item reports a collapsed
+     intrinsic height and the track shrinks under the art. The art box clips. */
   text-align: left;
   transition: border-color var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out),
@@ -673,14 +671,23 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   mix-blend-mode: difference;
 }
 
+/* The art is IN FLOW with a fixed ratio — the padding hack (not aspect-ratio)
+   so the ratio height always contributes to the grid's track sizing, even in
+   height-constrained scroll containers. */
 .radio-cell-art {
-  position: absolute;
-  inset: 0;
+  display: block;
+  position: relative;
+  height: 0;
+  padding-bottom: 100%; /* 1:1 */
+  overflow: hidden;
+  background: var(--glass);
   filter: grayscale(0.85) brightness(0.55);
   transition: filter var(--duration-normal) var(--ease-out);
 }
 
 .radio-cell-art img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -693,7 +700,10 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 }
 
 .radio-cell-name {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 2;
   padding: 8px 9px;
   font-family: var(--font-body);
@@ -758,6 +768,289 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   .radio-hero-text { flex-basis: calc(100% - 84px); }
 
   .radio-transport { margin-left: auto; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   YouTube plugin window — flat square surface, thumbnail-driven.
+   Ambient thumbnail glow behind everything; hero (idle brand mark or the
+   embedded player) + search bar + 16:9 thumbnail grid below.
+   ───────────────────────────────────────────────────────────── */
+.yt-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* Ambient glow — blurred thumbnail mirror behind the surface. */
+.yt-glow {
+  position: absolute;
+  inset: -10%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(90px) saturate(1.3) brightness(0.5);
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-out);
+  pointer-events: none;
+  z-index: 0;
+}
+.yt-glow--on { opacity: 0.5; }
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.yt-hero {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.yt-hero-idle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.yt-hero-mark {
+  flex: none;
+  width: 108px;
+  height: 64px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.yt-hero-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.yt-hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.4vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yt-hero-sub {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Player — 16:9 embed frame. */
+.yt-player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+}
+
+.yt-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.yt-hero-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.yt-hero-info-title {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yt-hero-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  background: var(--glass);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.yt-hero-back:hover { background: var(--glass-hover); border-color: var(--text); }
+
+/* ── Search ────────────────────────────────────────────────── */
+.yt-tile .ui-search {
+  position: relative;
+  z-index: 1;
+  margin: 12px 20px 0;
+  border-radius: 0;
+}
+
+/* ── Video grid ────────────────────────────────────────────── */
+.yt-grid {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 12px 20px 20px;
+  align-content: start;
+}
+
+.yt-grid::-webkit-scrollbar { display: none; }
+
+.yt-grid-status { grid-column: 1 / -1; padding: 24px 0; }
+
+.yt-cell {
+  position: relative;
+  display: block;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  cursor: pointer;
+  padding: 0;
+  /* NO overflow:hidden here — an overflowing grid item reports a collapsed
+     intrinsic height and the track shrinks under the art. The art box clips. */
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.yt-cell:hover {
+  border-color: var(--text);
+  transform: translateY(-2px);
+}
+
+.yt-cell--current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* The art is IN FLOW with a fixed ratio — the padding hack (not aspect-ratio)
+   so the ratio height always contributes to the grid's track sizing, even in
+   height-constrained scroll containers. */
+.yt-cell-art {
+  display: block;
+  position: relative;
+  height: 0;
+  padding-bottom: 56.25%; /* 16:9 */
+  overflow: hidden;
+  background: var(--glass);
+}
+
+.yt-cell-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.yt-cell-num {
+  position: absolute;
+  top: 8px;
+  left: 9px;
+  z-index: 2;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  mix-blend-mode: difference;
+}
+
+.yt-cell-dur {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  z-index: 2;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+}
+
+.yt-cell-meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 9px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.78));
+}
+
+.yt-cell-name {
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.yt-cell-channel {
+  font-family: var(--font-body);
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── YouTube compact variant (narrow window) ───────────────── */
+@container (max-width: 460px) {
+  .yt-hero { gap: 10px; padding: 12px 14px 10px; }
+  .yt-hero-mark { width: 84px; height: 50px; }
+  .yt-hero-title { font-size: clamp(16px, 5vw, 20px); }
+  .yt-hero-sub { font-size: 11.5px; }
+  .yt-tile .ui-search { margin: 10px 14px 0; }
+  .yt-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+    padding: 10px 14px 14px;
+  }
+  .yt-cell-name { font-size: 10.5px; }
+  .yt-cell-num { top: 6px; left: 7px; font-size: 9px; }
 }
 
 /* Full-screen window: the tile takes the whole grid area. */

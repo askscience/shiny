@@ -63,6 +63,10 @@ export function renderArtifact(artifact, { focus = true } = {}) {
     // would (art, title, transport) — skip the sheet, just focus the window.
     if (normalized.plugin === 'radio' || normalized.type === 'radio_station') {
       window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'radio' } }));
+    } else if (normalized.plugin === 'youtube' || normalized.type === 'youtube_video') {
+      // YouTube is the card too: results live in the window's own grid and
+      // the player is the hero — no card sheet, just focus the window.
+      window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'youtube' } }));
     } else {
       // Plugin output is contained inside its own window — the tile sheet.
       const plugin = normalized.plugin || 'traveler';
@@ -100,6 +104,16 @@ export async function openSavedArtifact(id) {
     const artifact = await getArtifact(id);
     if (artifact.type === 'radio_station' || artifact.plugin === 'radio') {
       window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'radio' } }));
+      return;
+    }
+    if (artifact.type === 'youtube_video' || artifact.plugin === 'youtube') {
+      // Tapping a saved video card plays it in the YouTube window.
+      const play = artifact.actions?.find((a) => a.tool === 'youtube_play');
+      if (play) {
+        window.dispatchEvent(new CustomEvent('artifact:action', { detail: { action: play, artifact } }));
+      } else {
+        window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'youtube' } }));
+      }
       return;
     }
     const destKey = destinationKeyForArtifact(artifact);

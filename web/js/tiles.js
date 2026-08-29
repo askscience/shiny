@@ -24,6 +24,10 @@ import {
   WORD_PLUGIN as WORD_TILE_PLUGIN,
   mountWordTile, unmountWordTile, getWordTileElement, wireWordEvents,
 } from './word.js';
+import {
+  YOUTUBE_PLUGIN as YOUTUBE_TILE_PLUGIN,
+  mountYoutubeTile, unmountYoutubeTile, getYoutubeTileElement, wireYoutubeEvents,
+} from './youtube.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
 const PHONE_QUERY = window.matchMedia('(max-width: 640px)');
@@ -47,6 +51,7 @@ function pluginIconName(name) {
   if (name === MAP_TILE_PLUGIN) return 'artifacts/plan';
   if (name === RADIO_TILE_PLUGIN) return 'ui/play';
   if (name === WORD_TILE_PLUGIN) return 'ui/doc';
+  if (name === YOUTUBE_TILE_PLUGIN) return 'ui/youtube';
   return 'ui/puzzle';
 }
 
@@ -56,6 +61,7 @@ function surfacePlugins() {
   if (isPluginActive(MAP_TILE_PLUGIN)) out.push(MAP_TILE_PLUGIN);
   if (isPluginActive(RADIO_TILE_PLUGIN)) out.push(RADIO_TILE_PLUGIN);
   if (isPluginActive(WORD_TILE_PLUGIN)) out.push(WORD_TILE_PLUGIN);
+  if (isPluginActive(YOUTUBE_TILE_PLUGIN)) out.push(YOUTUBE_TILE_PLUGIN);
   return out;
 }
 
@@ -121,6 +127,7 @@ function elementForTile(name) {
   }
   if (name === RADIO_TILE_PLUGIN) return mountRadioTile();
   if (name === WORD_TILE_PLUGIN) return mountWordTile();
+  if (name === YOUTUBE_TILE_PLUGIN) return mountYoutubeTile();
   return null;
 }
 
@@ -313,6 +320,7 @@ function tileForPlugin(name) {
   if (name === MAP_TILE_PLUGIN) return mapTileEl;
   if (name === RADIO_TILE_PLUGIN) return getRadioTileElement();
   if (name === WORD_TILE_PLUGIN) return getWordTileElement();
+  if (name === YOUTUBE_TILE_PLUGIN) return getYoutubeTileElement();
   return grid?.querySelector(`[data-plugin="${CSS.escape(name)}"]`) || null;
 }
 
@@ -361,6 +369,7 @@ export function initTileManager() {
   mountMapTile();
   wireRadioEvents();
   wireWordEvents();
+  wireYoutubeEvents();
   void refreshCatalog().then(renderTiles);
   renderTiles();
 
@@ -389,6 +398,7 @@ export function initTileManager() {
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
     if (!isPluginActive(RADIO_TILE_PLUGIN)) unmountRadioTile();
     if (!isPluginActive(WORD_TILE_PLUGIN)) unmountWordTile();
+    if (!isPluginActive(YOUTUBE_TILE_PLUGIN)) unmountYoutubeTile();
     if (!surfacePlugins().includes(activePhonePlugin)) activePhonePlugin = null;
     renderTiles();
   });

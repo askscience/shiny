@@ -499,7 +499,25 @@ function wireEvents() {
     if (!active) return;
     const t = e.target;
     if (!t || t.nodeType !== 1 || t.closest('#keyboard-bar')) return;
+    // Focus entered an embedded iframe (e.g. the YouTube player) — the app
+    // inside it handles its own input; close our keyboard so it can't cover it.
+    if (t.tagName === 'IFRAME') {
+      if (visible && !pinned) {
+        unbind();
+        close();
+      }
+      return;
+    }
     if (isEditable(t)) bindTarget(t);
+  });
+
+  // Fallback: tapping inside a same-tab iframe blurs the parent window.
+  window.addEventListener('blur', () => {
+    if (!visible || pinned) return;
+    if (document.activeElement?.tagName === 'IFRAME') {
+      unbind();
+      close();
+    }
   });
 
   document.addEventListener('focusout', (e) => {

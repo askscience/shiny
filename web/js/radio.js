@@ -343,10 +343,13 @@ function renderGridCurrent() {
 }
 
 function stationCell(s, idx) {
-  const cell = document.createElement('button');
-  cell.type = 'button';
+  // div[role=button], not <button>: button elements collapse their content
+  // contribution when the grid scrolls, shrinking cells under the art.
+  const cell = document.createElement('div');
   cell.className = 'radio-cell';
   cell.dataset.stationuuid = s.stationuuid || '';
+  cell.setAttribute('role', 'button');
+  cell.tabIndex = 0;
   if (current?.stationuuid === s.stationuuid && playing) cell.classList.add('radio-cell--current');
 
   const num = document.createElement('span');
@@ -370,6 +373,12 @@ function stationCell(s, idx) {
 
   cell.append(num, art, name);
   cell.addEventListener('click', () => playStation(s));
+  cell.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      playStation(s);
+    }
+  });
   return cell;
 }
 

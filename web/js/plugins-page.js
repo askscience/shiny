@@ -125,7 +125,7 @@ function renderPlugins(plugins) {
     emptyEl.appendChild(emptyState({
       icon: 'ui/puzzle',
       title: 'No plugins installed',
-      body: 'The AI sphere is running in its bare form. Install a plugin above to add tools, routes, and skills.',
+      body: 'Shiny is running in its bare form. Install a plugin above to add tools, routes, and skills.',
     }));
     metaEl.textContent = '';
     return;

@@ -203,6 +203,25 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                 format!("Plugins:\n{}", lines.join("\n"))
             }
         }
+        "youtube_search" => {
+            // Carry the top hits into the conversation like web_search does.
+            let mut note = String::from("YouTube results");
+            if let Some(results) = data.get("results").and_then(|v| v.as_array()) {
+                for r in results.iter().take(4) {
+                    let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                    let channel = r.get("channel").and_then(|v| v.as_str()).unwrap_or("");
+                    if title.is_empty() {
+                        continue;
+                    }
+                    note.push_str(&format!("\n- {title} — {channel}"));
+                }
+            }
+            note
+        }
+        "youtube_play" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("video");
+            format!("Playing {title} on YouTube")
+        }
         _ => {
             // Unknown/plugin tools: the outcome DATA is the result — hand it
             // to the model (truncated), or it has nothing to answer with.
@@ -232,6 +251,8 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "plugin_activate" => "Activating plugin…",
         "plugin_deactivate" => "Deactivating plugin…",
         "list_plugins" => "Checking plugins…",
+        "youtube_search" => "Searching YouTube…",
+        "youtube_play" => "Playing on YouTube…",
         _ => "Working…",
     }
 }
@@ -334,5 +355,26 @@ mod tests {
             "radio: Internet radio (inactive)",
         );
         assert!(msgs[0].1.contains("plugin_activate"), "hint should teach activation: {}", msgs[0].1);
+    }
+
+    #[test]
+    fn youtube_search_step_carries_top_hits() {
+        let data = json!({
+            "results": [
+                { "title": "Never Gonna Give You Up", "channel": "Rick Astley" },
+                { "title": "Rick Astley live", "channel": "Rick Astley Official" }
+            ]
+        });
+        let step = describe_tool_step("youtube_search", "ok", &data);
+        assert!(step.contains("YouTube results"), "missing header: {step}");
+        assert!(step.contains("Never Gonna Give You Up"), "missing hit: {step}");
+        assert!(step.contains("Rick Astley"), "missing channel: {step}");
+    }
+
+    #[test]
+    fn youtube_play_step_mentions_title() {
+        let step = describe_tool_step("youtube_play", "ok", &json!({ "video_id": "abc", "title": "Rick Astley - Never Gonna Give You Up" }));
+        assert!(step.contains("Playing Rick Astley"), "play note: {step}");
+        assert_eq!(step_label_for_action("youtube_play"), "Playing on YouTube…");
     }
 }

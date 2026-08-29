@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/shiny-plugin-sdk", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard"]
+members = [".", "crates/shiny-plugin-sdk", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube"]
 resolver = "2"
 
 [workspace.package]
