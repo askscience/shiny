@@ -497,7 +497,6 @@ function renderSheetMenuItems() {
   footItem('ui/upload', 'Import .ods', false, pickOdsFile);
   footItem('ui/upload', 'Import CSV', false, pickCsvFile);
   footItem('ui/save', 'Export .ods', false, () => void exportOds());
-  footItem('ui/doc', 'Export CSV', false, () => void exportCsv());
   footItem('ui/trash', 'Delete spreadsheet', true, () => void removeCurrent());
   sheetMenuPopup.appendChild(foot);
 }
@@ -574,41 +573,6 @@ async function exportOds() {
   } catch (e) {
     toast(e.message || 'Export failed', { type: 'error' });
   }
-}
-
-function csvEscape(v) {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-async function exportCsv() {
-  if (!current) return;
-  const rows = [];
-  const byRow = new Map();
-  for (const [ref, value] of current.cells) {
-    const p = parseRef(ref);
-    if (!p) continue;
-    if (!byRow.has(p.row)) byRow.set(p.row, new Map());
-    byRow.get(p.row).set(p.col, value);
-  }
-  const maxRow = Math.max(1, ...byRow.keys());
-  const maxCol = Math.max(0, ...[...byRow.values()].flatMap((m) => [...m.keys()]));
-  for (let r = 1; r <= maxRow; r++) {
-    const line = [];
-    for (let c = 0; c <= maxCol; c++) {
-      line.push(csvEscape(byRow.get(r)?.get(c) ?? ''));
-    }
-    rows.push(line.join(','));
-  }
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${current.title || 'spreadsheet'}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 function pickCsvFile() {
@@ -713,6 +677,7 @@ function renderGrid() {
       cell.dataset.ref = ref;
       cell.dataset.row = String(r);
       cell.dataset.col = String(c);
+      cell.tabIndex = 0;
       cell.textContent = displayValue(current.cells.get(ref));
       cell.title = ref;
       if (r === sel.row && c === sel.col) cell.classList.add('is-selected');
@@ -724,6 +689,9 @@ function renderGrid() {
         editing = false;
         hideEditor();
         renderGrid();
+        // Re-render replaced the node — focus the fresh selected cell so
+        // typing and arrows work immediately (the grid listens on itself).
+        cellElFor(r, c)?.focus();
       });
       cell.addEventListener('dblclick', () => {
         sel = { row: r, col: c };
@@ -796,16 +764,19 @@ function commitEdit(move) {
     sel = { row: sel.row + 1, col: sel.col };
     if (sel.row > current.rows) sel.row = current.rows;
     renderGrid();
-    gridEl.querySelector(`.calc-cell--data[data-row="${sel.row}"][data-col="${sel.col}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
+    const next = cellElFor(sel.row, sel.col);
+    next?.scrollIntoView({ block: 'nearest' });
+    next?.focus();
   } else {
     renderGrid();
+    cellElFor(sel.row, sel.col)?.focus();
   }
 }
 
 function cancelEdit() {
   hideEditor();
   renderGrid();
+  cellElFor(sel.row, sel.col)?.focus();
 }
 
 /* ── Formula bar ────────────────────────────────────────────── */
@@ -881,7 +852,6 @@ export function mountCalcTile() {
     toolBtn('ui/plus', 'New spreadsheet', () => void newSheet()),
     toolBtn('ui/upload', 'Import .ods', pickOdsFile),
     toolBtn('ui/save', 'Export .ods', () => void exportOds()),
-    toolBtn('ui/doc', 'Export CSV', () => void exportCsv()),
     toolBtn('ui/trash', 'Delete spreadsheet', () => void removeCurrent(), true),
   );
   tileEl.appendChild(tools);
@@ -953,6 +923,9 @@ export function mountCalcTile() {
     };
     renderGrid();
     syncFormulaBar();
+    const next = cellElFor(sel.row, sel.col);
+    next?.scrollIntoView({ block: 'nearest' });
+    next?.focus();
   }
 
   function startEditing(prefill = null) {
@@ -1007,6 +980,7 @@ function onAgentActions(e) {
 
   if (created) {
     void refreshSheets().then(() => window.setTimeout(() => {
+      if (dirty) return; // never clobber the user's unsaved edits
       if (touchedId) {
         const found = sheets.find((s) => s.id === touchedId);
         if (found) void openSheet(found);
@@ -1016,6 +990,7 @@ function onAgentActions(e) {
     }, 250));
   } else if (wrote || read || deleted) {
     void refreshSheets().then(() => {
+      if (dirty) return; // never clobber the user's unsaved edits
       if (touchedId && current?.id !== touchedId) {
         const found = sheets.find((s) => s.id === touchedId);
         if (found) void openSheet(found);

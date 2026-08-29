@@ -1530,3 +1530,7 @@ body.compose-active #tile-overlay {
 
 .calc-tool:hover { background: var(--glass-hover); color: var(--text); }
 .calc-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+/* Focusable cells: selection outline is the focus indicator — drop the
+   default browser ring. */
+.calc-cell--data:focus { outline: none; }
