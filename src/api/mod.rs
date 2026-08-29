@@ -142,6 +142,10 @@ pub fn build_router(state: AppState) -> Router {
             "/api/spreadsheets/:id",
             get(spreadsheets::get_one).put(spreadsheets::save).delete(spreadsheets::delete),
         )
+        // .ods imports are multi-MB uploads — lift the body limit on this route.
+        .route("/api/spreadsheets/import", post(spreadsheets::import_ods)
+            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
+        .route("/api/spreadsheets/:id/export", get(spreadsheets::export_ods))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))
         .route("/api/artifacts/:id", get(artifacts::get_one).put(artifacts::update))
         .route("/api/tts", post(voice::tts))

@@ -1506,3 +1506,27 @@ body.compose-active #tile-overlay {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* Toolbar — square flat buttons, always visible. */
+.calc-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.calc-tool {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.calc-tool:hover { background: var(--glass-hover); color: var(--text); }
+.calc-tool--danger:hover { color: var(--error); border-color: var(--error); }

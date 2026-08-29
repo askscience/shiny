@@ -5,7 +5,9 @@
 //! is served by core routes while its AI tools live in the plugin. Storage is
 //! core-owned (`spreadsheets` table); cells travel as a JSON map "A1" -> value.
 
-use axum::extract::{Extension, Path, State};
+use axum::extract::{Extension, Multipart, Path, Query, State};
+use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
+use axum::response::Response;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -111,4 +113,67 @@ pub async fn delete(
         return Err(AppError::NotFound("Spreadsheet not found".into()));
     }
     Ok(Json(json!({ "success": true })))
+}
+
+/// GET /api/spreadsheets/:id/export — download a real `.ods` file.
+pub async fn export_ods(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Path(id): Path<String>,
+) -> Result<Response, AppError> {
+    let (title, bytes) = spreadsheets::load_spreadsheet_ods(&state.pool, &traveler.id, &id).await?;
+    let filename = spreadsheets::filename_for_title(&title);
+
+    Response::builder()
+        .header(CONTENT_TYPE, "application/vnd.oasis.opendocument.spreadsheet")
+        .header(
+            CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename.replace('"', "")),
+        )
+        .body(axum::body::Body::from(bytes))
+        .map_err(|e| AppError::Internal(format!("Export failed: {}", e)))
+}
+
+#[derive(Deserialize)]
+pub struct ImportQuery {
+    #[serde(default)]
+    name: Option<String>,
+}
+
+/// POST /api/spreadsheets/import — multipart `.ods` upload (raised body limit).
+pub async fn import_ods(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Query(q): Query<ImportQuery>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mut bytes: Option<Vec<u8>> = None;
+    let mut original_name: Option<String> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("multipart error: {}", e)))?
+    {
+        if field.name() == Some("file") {
+            original_name = field
+                .file_name()
+                .map(|f| f.to_string())
+                .or_else(|| original_name);
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| AppError::BadRequest(format!("read error: {}", e)))?;
+            bytes = Some(data.to_vec());
+        }
+    }
+    let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+
+    let stem = original_name
+        .as_deref()
+        .map(|n| n.rsplit('.').nth(1).unwrap_or(n))
+        .unwrap_or("Imported spreadsheet");
+    let title = q.name.clone().unwrap_or_else(|| stem.to_string());
+
+    let stored = spreadsheets::import_spreadsheet_ods(&state.pool, &traveler.id, &title, &data).await?;
+    Ok(Json(json!({ "success": true, "data": { "title": stored } })))
 }

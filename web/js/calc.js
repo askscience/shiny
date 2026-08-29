@@ -494,8 +494,10 @@ function renderSheetMenuItems() {
     foot.appendChild(item);
   };
   footItem('ui/plus', 'New spreadsheet', false, () => void newSheet());
+  footItem('ui/upload', 'Import .ods', false, pickOdsFile);
   footItem('ui/upload', 'Import CSV', false, pickCsvFile);
-  footItem('ui/save', 'Export CSV', false, () => void exportCsv());
+  footItem('ui/save', 'Export .ods', false, () => void exportOds());
+  footItem('ui/doc', 'Export CSV', false, () => void exportCsv());
   footItem('ui/trash', 'Delete spreadsheet', true, () => void removeCurrent());
   sheetMenuPopup.appendChild(foot);
 }
@@ -528,7 +530,51 @@ function toggleSheetMenu() {
   else openSheetMenu();
 }
 
-/* ── CSV import / export (client-side) ──────────────────────── */
+/* ── Import / export ────────────────────────────────────────── */
+
+function pickOdsFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.ods,application/vnd.oasis.opendocument.spreadsheet';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (file) void importOds(file);
+  });
+  input.click();
+}
+
+async function importOds(file) {
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    await apiFetch('/api/spreadsheets/import', { method: 'POST', body: form });
+    toast(`Imported ${file.name}`, { type: 'info' });
+    await refreshSheets();
+    await openNewest();
+  } catch (e) {
+    toast(e.message || 'Import failed — is this a valid .ods file?', { type: 'error' });
+  }
+}
+
+async function exportOds() {
+  if (!current) return;
+  try {
+    const blob = await apiFetch(
+      `/api/spreadsheets/${encodeURIComponent(current.id)}/export`,
+      { responseType: 'blob' },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${current.title || 'spreadsheet'}.ods`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    toast(e.message || 'Export failed', { type: 'error' });
+  }
+}
 
 function csvEscape(v) {
   const s = String(v ?? '');
@@ -819,6 +865,26 @@ export function mountCalcTile() {
 
   bar.append(sheetMenuBtn, titleInput, saveDot);
   tileEl.appendChild(bar);
+
+  /* Toolbar — square flat buttons, always visible (like the Word window). */
+  const tools = document.createElement('div');
+  tools.className = 'calc-tools';
+  const toolBtn = (iconName, label, onClick, danger) => {
+    const btn = button({ icon: iconName, variant: 'ghost', onClick });
+    btn.classList.add('ui-btn--icon', 'calc-tool');
+    if (danger) btn.classList.add('calc-tool--danger');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    return btn;
+  };
+  tools.append(
+    toolBtn('ui/plus', 'New spreadsheet', () => void newSheet()),
+    toolBtn('ui/upload', 'Import .ods', pickOdsFile),
+    toolBtn('ui/save', 'Export .ods', () => void exportOds()),
+    toolBtn('ui/doc', 'Export CSV', () => void exportCsv()),
+    toolBtn('ui/trash', 'Delete spreadsheet', () => void removeCurrent(), true),
+  );
+  tileEl.appendChild(tools);
 
   /* Formula bar */
   const formulaBar = document.createElement('div');

@@ -174,6 +174,102 @@ pub async fn delete_spreadsheet(
     Ok(result.rows_affected() > 0)
 }
 
+/// Load a spreadsheet's cells as real `.ods` (OpenDocument Spreadsheet) bytes.
+pub async fn load_spreadsheet_ods(
+    pool: &SqlitePool,
+    user_id: &str,
+    id: &str,
+) -> Result<(String, Vec<u8>), AppError> {
+    let row = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, cells FROM spreadsheets WHERE id = ?1 AND user_id = ?2",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
+
+    let (title, cells_json) = row;
+    let cells = parse_cells(&cells_json)?;
+    let ods_bytes = shiny_plugin_sdk::ods::cells_to_ods(&cells)?;
+    Ok((title, ods_bytes))
+}
+
+/// Store a real `.ods` file as a new spreadsheet. Validates the file first so
+/// garbage never lands in the table. Returns the stored title.
+pub async fn import_spreadsheet_ods(
+    pool: &SqlitePool,
+    user_id: &str,
+    title: &str,
+    ods_bytes: &[u8],
+) -> Result<String, AppError> {
+    let cells = shiny_plugin_sdk::ods::ods_to_cells(ods_bytes)?;
+    let id = uuid::Uuid::new_v4().to_string();
+    let title = clean_title(title);
+    let cells_json = serde_json::to_string(&cells)?;
+
+    // Size the grid from the imported content.
+    let mut max_row = 1i64;
+    let mut max_col = 1i64;
+    for ref_ in cells.keys() {
+        if let Some((row, col)) = ref_row_col(ref_) {
+            max_row = max_row.max(row);
+            max_col = max_col.max(col);
+        }
+    }
+
+    sqlx::query(
+        "INSERT INTO spreadsheets (id, user_id, title, cells, rows, cols, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
+    )
+    .bind(&id)
+    .bind(user_id)
+    .bind(&title)
+    .bind(&cells_json)
+    .bind(max_row.min(500))
+    .bind(max_col.min(52))
+    .execute(pool)
+    .await?;
+
+    Ok(title)
+}
+
+/// "BC42" → (42, 55) — 1-based row, 1-based column.
+fn ref_row_col(ref_: &str) -> Option<(i64, i64)> {
+    let bytes = ref_.as_bytes();
+    let mut i = 0;
+    let mut col: i64 = 0;
+    while i < bytes.len() && bytes[i].is_ascii_uppercase() {
+        col = col * 26 + (bytes[i] - b'A' + 1) as i64;
+        i += 1;
+    }
+    if i == 0 || i >= bytes.len() {
+        return None;
+    }
+    let row: i64 = ref_[i..].parse().ok()?;
+    if row == 0 {
+        return None;
+    }
+    Some((row, col))
+}
+
+/// Sanitize a title for use in a Content-Disposition filename (.ods).
+pub fn filename_for_title(title: &str) -> String {
+    let clean: String = title
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let clean = clean.trim().trim_matches('.').to_string();
+    let clean = if clean.is_empty() { "spreadsheet".to_string() } else { clean };
+    format!("{}.ods", clean)
+}
+
 /* ── helpers ────────────────────────────────────────────────── */
 
 /// Parse the stored cells JSON into a map. Malformed JSON is treated as empty
