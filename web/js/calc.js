@@ -658,13 +658,20 @@ function renderGrid() {
 
   gridEl.innerHTML = '';
 
+  const totalCols = Math.max(1, Math.min(current.cols, 52));
+  const totalRows = Math.min(current.rows, 200);
+
+  // Size the grid columns to the actual sheet width. The CSS default is a
+  // fallback only; if this stays fixed while totalCols varies, CSS auto-flow
+  // wraps the row headers/data cells into the wrong columns and the whole
+  // grid (especially the left number column) misaligns.
+  gridEl.style.gridTemplateColumns = `44px repeat(${totalCols}, 110px)`;
+
   const corner = document.createElement('div');
   corner.className = 'calc-cell calc-cell--corner';
   corner.textContent = '';
   gridEl.appendChild(corner);
 
-  const totalCols = Math.min(current.cols, 52);
-  const totalRows = Math.min(current.rows, 200);
   for (let c = 0; c < totalCols; c++) {
     const head = document.createElement('div');
     head.className = 'calc-cell calc-cell--head';

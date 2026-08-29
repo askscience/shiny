@@ -1309,14 +1309,16 @@ body.compose-active #tile-overlay {
 .calc-formula-input:focus { border-color: var(--accent); }
 .calc-formula-input::placeholder { color: var(--muted); }
 
-/* Cell grid — CSS grid, sticky headers, overlay editor. */
+/* Cell grid — CSS grid, sticky headers, overlay editor.
+   Column count is set inline by calc.js to the sheet's real width; this is
+   just the fallback (a default 26-column sheet). */
 .calc-grid {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: 44px repeat(52, 110px);
+  grid-template-columns: 44px repeat(26, 110px);
   grid-auto-rows: 28px;
   background: var(--bg);
   scrollbar-width: thin;
