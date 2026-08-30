@@ -14,7 +14,7 @@ Rules:
 - Always include `"params"`. Use `{}` when a tool has no parameters.
 - One tool call per turn. Wait for the result before replying.
 - After results arrive, answer in plain language — never repeat or show the JSON.
-- Keep spoken replies short (1–2 sentences) unless the user asks for detail.
+- Answer fully and clearly: concise for simple questions, but give detail, steps, or lists whenever the user would benefit from them.
 
 ## Tools
 

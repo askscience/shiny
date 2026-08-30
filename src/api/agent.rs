@@ -312,7 +312,7 @@ async fn prepare_agent(
     let desktop_block = desktop_state_block(body.desktop.as_ref());
 
     let system = format!(
-        "You are {ai_name}, {persona}. Reply in language code '{lang}'. Keep spoken replies to 1-2 short sentences.\n\
+        "You are {ai_name}, {persona}. Reply in language code '{lang}'. Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them.\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
          Address the user as {user_first} when it feels natural.\n\
          \n\
@@ -324,7 +324,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — keep the spoken reply short.{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
+         Mode: {mode} — answer fully and clearly.{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
         lang = lang,

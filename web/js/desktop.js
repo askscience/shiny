@@ -7,7 +7,7 @@
  * how to lay the windows out.
  *
  * State is scoped per traveler (see preferences.js) and lives in localStorage.
- * Focus + fullscreen are session-only (in-memory).
+ * Workspaces, focus, fullscreen and layout are all remembered across reloads.
  *
  * Public control surface (used by the workspace bar, the Keyboard plugin's
  * control row, physical keybindings, and the AI's desktop tools):
@@ -22,10 +22,10 @@ import {
 } from './preferences.js';
 import { toast } from '../ui/index.js';
 
-let workspaces = [];      // [{ id, windows: [pluginName] }]
+let workspaces = [];      // [{ id, windows: [pluginName], focus, fullscreen }]
 let activeWs = null;      // active workspace id
-let focus = null;         // focused plugin name (session)
-let fullscreen = null;    // fullscreen plugin name (session)
+let focus = null;         // focused plugin name (cache of active workspace's)
+let fullscreen = null;    // fullscreen plugin name (cache of active workspace's)
 
 let wsSeq = 0;
 
@@ -36,6 +36,22 @@ function freshId() {
 
 function activeWsObj() {
   return workspaces.find((w) => w.id === activeWs) || workspaces[0] || null;
+}
+
+/** Write the cached focus/fullscreen into the active workspace object. */
+function syncActiveFocus() {
+  const ws = activeWsObj();
+  if (ws) {
+    ws.focus = focus || null;
+    ws.fullscreen = fullscreen || null;
+  }
+}
+
+/** Read the active workspace's focus/fullscreen into the cache. */
+function loadActiveFocus() {
+  const ws = activeWsObj();
+  focus = ws?.focus || null;
+  fullscreen = ws?.fullscreen || null;
 }
 
 function persist() {
@@ -54,6 +70,7 @@ export function initDesktop() {
   if (!workspaces.length || !workspaces.some((w) => w.id === activeWs)) {
     activeWs = workspaces.length ? workspaces[0].id : null;
   }
+  loadActiveFocus();
   wireShortcuts();
   wireAgentActions();
 }
@@ -107,16 +124,23 @@ function wireAgentActions() {
  */
 export function ensureWindows(names) {
   if (!workspaces.length) {
-    workspaces = [{ id: freshId(), windows: [...names] }];
-    activeWs = workspaces[0].id;
-    persist();
+    if (names.length) {
+      workspaces = [{ id: freshId(), windows: [...names] }];
+      activeWs = workspaces[0].id;
+      persist();
+    }
     return;
   }
+  // On the very first render the active-plugin set isn't loaded yet (names is
+  // empty). Do NOT prune/add then — filtering against an empty list wipes every
+  // saved workspace and re-adds all windows to the active one after a refresh.
+  if (!names.length) return;
   for (const ws of workspaces) {
     ws.windows = ws.windows.filter((w) => names.includes(w));
+    if (ws.focus && !names.includes(ws.focus)) ws.focus = null;
+    if (ws.fullscreen && !names.includes(ws.fullscreen)) ws.fullscreen = null;
   }
-  if (focus && !names.includes(focus)) focus = null;
-  if (fullscreen && !names.includes(fullscreen)) fullscreen = null;
+  loadActiveFocus();
   const assigned = new Set(workspaces.flatMap((ws) => ws.windows));
   const aws = activeWsObj();
   for (const n of names) {
@@ -169,26 +193,35 @@ export function getFullscreen() { return fullscreen; }
 export function focusWindow(name) {
   if (!name) return;
   const ws = workspaces.find((w) => w.windows.includes(name));
-  if (ws) activeWs = ws.id;
+  if (ws && ws.id !== activeWs) {
+    syncActiveFocus();
+    activeWs = ws.id;
+    loadActiveFocus();
+  }
   focus = name;
+  syncActiveFocus();
   persist();
   notify();
 }
 
 export function cycleFocus(names, dir = 1) {
   const list = activeWindowNames(names);
-  if (!list.length) { focus = null; notify(); return; }
+  if (!list.length) { focus = null; syncActiveFocus(); persist(); notify(); return; }
   if (!focus || !list.includes(focus)) {
     focus = list[0];
   } else {
     const i = list.indexOf(focus);
     focus = list[(i + dir + list.length) % list.length];
   }
+  syncActiveFocus();
+  persist();
   notify();
 }
 
 export function clearFocus() {
   focus = null;
+  syncActiveFocus();
+  persist();
   notify();
 }
 
@@ -199,12 +232,16 @@ export function toggleFullscreen(name, force) {
   const next = force === undefined ? fullscreen !== name : !!force;
   fullscreen = next ? name : null;
   if (next) focus = name;
+  syncActiveFocus();
+  persist();
   notify();
   return next;
 }
 
 export function clearFullscreen() {
   fullscreen = null;
+  syncActiveFocus();
+  persist();
   notify();
 }
 
@@ -217,9 +254,10 @@ function pushWorkspace() {
 }
 
 export function createWorkspace() {
+  syncActiveFocus();
   const ws = pushWorkspace();
   activeWs = ws.id;
-  focus = null;
+  loadActiveFocus();
   persist();
   toast(`Workspace ${activeWorkspaceIndex() + 1}`, { type: 'info' });
   notify();
@@ -237,8 +275,8 @@ export function removeWorkspace() {
   target.windows = [...target.windows, ...ws.windows];
   workspaces.splice(idx, 1);
   activeWs = target.id;
-  if (focus && !workspaceHasWindow(focus)) focus = null;
-  if (fullscreen && !workspaceHasWindow(fullscreen)) fullscreen = null;
+  loadActiveFocus();
+  syncActiveFocus();
   persist();
   toast('Workspace removed', { type: 'info' });
   notify();
@@ -261,8 +299,9 @@ export function switchWorkspace(dirOrIndex) {
   if (!Number.isFinite(idx) || idx < 0) idx = workspaces.length - 1;
   if (idx >= workspaces.length) idx = 0;
   if (idx === activeWorkspaceIndex()) return false;
+  syncActiveFocus();
   activeWs = workspaces[idx].id;
-  focus = null;
+  loadActiveFocus();
   persist();
   toast(`Workspace ${idx + 1}`, { type: 'info' });
   notify();
@@ -275,10 +314,15 @@ export function moveWindow(name, toId) {
   if (!to) return false;
   for (const ws of workspaces) {
     ws.windows = ws.windows.filter((w) => w !== name);
+    if (ws.focus === name) ws.focus = null;
+    if (ws.fullscreen === name) ws.fullscreen = null;
   }
   if (!to.windows.includes(name)) to.windows.push(name);
+  syncActiveFocus();
   activeWs = to.id;
+  loadActiveFocus();
   focus = name;
+  syncActiveFocus();
   persist();
   toast(`Moved ${label(name)} to workspace ${activeWorkspaceIndex() + 1}`, { type: 'info' });
   notify();
@@ -292,7 +336,6 @@ export function moveWindow(name, toId) {
 export function moveWindowByIndex(name, idx) {
   if (idx === 'new') {
     const ws = pushWorkspace();
-    activeWs = ws.id;
     return moveWindow(name, ws.id);
   }
   const n = Number(idx);

@@ -36,7 +36,7 @@ pub fn build_continuation_messages(
         )
     };
     let system = format!(
-        "You are {ai_name}. Language: {lang}. Mode: {mode} — keep spoken replies to 1-2 short sentences.\n\
+        "You are {ai_name}. Language: {lang}. Mode: {mode} — answer fully and clearly; be concise for simple questions but give detail when helpful.\n\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
          Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
          {plugins_line}"

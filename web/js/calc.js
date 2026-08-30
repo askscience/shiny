@@ -699,9 +699,9 @@ function renderGrid() {
       if (String(current.cells.get(ref) ?? '').startsWith('=')) {
         cell.classList.add('is-formula');
       }
-      // Selection only moves a class — never rebuilds the grid, so the node
-      // under the pointer stays the same cell across click/dblclick.
-      cell.addEventListener('click', () => selectCell(r, c));
+      // Select on pointerdown (before any blur-triggered work) so a click
+      // always lands on the cell under the pointer.
+      cell.addEventListener('pointerdown', () => selectCell(r, c));
       cell.addEventListener('dblclick', () => {
         selectCell(r, c);
         startEditing();
@@ -909,7 +909,13 @@ export function mountCalcTile() {
     const ref = cellRef(sel.row, sel.col);
     const value = formulaInputEl.value;
     if ((current.cells.get(ref) ?? '') !== value) {
-      setCellValue(ref, value, { refresh: true });
+      // In-place update (no synchronous grid rebuild) — a rebuild inside the
+      // blur handler detaches the node under the pointer and makes the click
+      // land on the wrong cell. Refresh dependent formulas right after.
+      setCellValue(ref, value);
+      window.setTimeout(() => {
+        if (!editing) renderGrid();
+      }, 0);
     }
     syncFormulaBar();
   }
