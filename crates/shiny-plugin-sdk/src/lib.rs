@@ -22,6 +22,8 @@ pub mod migrations;
 pub mod plugin;
 pub mod odt;
 pub mod ods;
+pub mod odp;
+pub mod db;
 
 pub use errors::AppError;
 pub use services::{OllamaClient, SearchService, SupertonicClient};
@@ -31,9 +33,11 @@ pub use context::AgentContext;
 pub use outcome::ActionOutcome;
 pub use manifest::Manifest;
 pub use tools::{bridged, BridgedTool, Tool, ToolRequest, RegistryBuilder, ParamHelpers, parse_actions, strip_action_blocks, normalize_action_name};
-pub use routes::{RouteSpec, HttpMethod};
+pub use routes::{RouteSpec, HttpMethod, RouteHandler, bridged_route, UserId, TravelerId};
 pub use crons::{CronSpec, CronEntry};
 pub use plugin::{Plugin, PluginEntry, PLUGIN_ENTRY_SYMBOL};
+pub use odp::Slide;
+pub use db::{Db, Value as DbValue};
 
 /// The core API level. Plugins declare `api_level` in `plugin.toml`; the loader
 /// refuses to load a plugin built against a newer API than the running core.

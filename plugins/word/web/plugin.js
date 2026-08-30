@@ -12,9 +12,9 @@
 
 import {
   icon, button, emptyState, toast,
-} from '../ui/index.js';
-import { setIcon } from '../ui/index.js';
-import { apiFetch } from './api.js';
+} from '/ui/index.js';
+import { setIcon } from '/ui/index.js';
+import { apiFetch } from '/js/api.js';
 
 export const WORD_PLUGIN = 'word';
 
@@ -544,3 +544,11 @@ export function wireWordEvents() {
     }
   });
 }
+export default {
+  name: 'word',
+  icon: 'ui/doc',
+  mount: mountWordTile,
+  unmount: unmountWordTile,
+  getElement: getWordTileElement,
+  wireEvents: wireWordEvents,
+};

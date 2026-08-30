@@ -1,4 +1,4 @@
-import { getTraveler } from './api.js';
+import { apiFetch, getTraveler } from './api.js';
 
 const AI_NAME_KEY = 'ai.name';
 const OLLAMA_MODEL_KEY = 'ai.ollama_model';
@@ -13,6 +13,53 @@ function scopedKey(base) {
   return id ? `${base}.${id}` : base;
 }
 
+/* ── Server persistence ────────────────────────────────────────
+ * Preferences are the user's own space in the DATABASE. localStorage is only
+ * a synchronous cache; every write is also flushed (debounced) to
+ * /api/preferences, which stores rows keyed by (user_id, key).
+ * ─────────────────────────────────────────────────────────────── */
+
+let dirty = new Map();
+let flushTimer = null;
+
+function persist(base, rawValue) {
+  dirty.set(base, rawValue);
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushPreferences, 400);
+}
+
+async function flushPreferences() {
+  flushTimer = null;
+  if (!dirty.size) return;
+  const payload = {};
+  for (const [k, v] of dirty) payload[k] = v;
+  dirty = new Map();
+  try {
+    await apiFetch('/api/preferences', {
+      method: 'PUT',
+      authRedirect: false,
+      body: JSON.stringify(payload),
+    });
+  } catch (_) {
+    // Ignore transient failures; the next change re-flushes.
+  }
+}
+
+/** Load this user's saved preferences from the database into the local cache. */
+export async function loadUserPreferences() {
+  const id = getTraveler()?.id;
+  if (!id) return;
+  try {
+    const res = await apiFetch('/api/preferences', { authRedirect: false });
+    const data = res?.data || {};
+    for (const [base, value] of Object.entries(data)) {
+      localStorage.setItem(`${base}.${id}`, value);
+    }
+  } catch (_) {
+    // Keep the existing local cache when the server is unreachable.
+  }
+}
+
 export function getAiName() {
   return localStorage.getItem(scopedKey(AI_NAME_KEY)) || DEFAULT_AI_NAME;
 }
@@ -22,6 +69,7 @@ export function setAiName(name) {
   const key = scopedKey(AI_NAME_KEY);
   if (trimmed) localStorage.setItem(key, trimmed);
   else localStorage.removeItem(key);
+  persist(AI_NAME_KEY, trimmed);
 }
 
 export function getOllamaModel() {
@@ -33,6 +81,7 @@ export function setOllamaModel(model) {
   const key = scopedKey(OLLAMA_MODEL_KEY);
   if (trimmed) localStorage.setItem(key, trimmed);
   else localStorage.removeItem(key);
+  persist(OLLAMA_MODEL_KEY, trimmed);
 }
 
 /**
@@ -47,6 +96,7 @@ export function setPluginLayout(name, mode) {
   const key = scopedKey(`${PLUGIN_LAYOUT_KEY}.${name}`);
   if (mode === 'full') localStorage.setItem(key, 'full');
   else localStorage.removeItem(key);
+  persist(`${PLUGIN_LAYOUT_KEY}.${name}`, mode === 'full' ? 'full' : '');
 }
 
 /* ── Desktop manager (workspaces + tiling layout) ───────────── */
@@ -75,7 +125,9 @@ export function getWorkspaces() {
 }
 
 export function setWorkspaces(workspaces) {
-  localStorage.setItem(scopedKey(DESKTOP_WORKSPACES_KEY), JSON.stringify(workspaces));
+  const raw = JSON.stringify(workspaces);
+  localStorage.setItem(scopedKey(DESKTOP_WORKSPACES_KEY), raw);
+  persist(DESKTOP_WORKSPACES_KEY, raw);
 }
 
 export function getActiveWorkspaceId() {
@@ -83,7 +135,10 @@ export function getActiveWorkspaceId() {
 }
 
 export function setActiveWorkspaceId(id) {
-  localStorage.setItem(scopedKey(DESKTOP_ACTIVE_KEY), id);
+  const key = scopedKey(DESKTOP_ACTIVE_KEY);
+  if (id) localStorage.setItem(key, id);
+  else localStorage.removeItem(key);
+  persist(DESKTOP_ACTIVE_KEY, id || '');
 }
 
 /** Tiling layout config, merged over defaults. */
@@ -99,7 +154,9 @@ export function getDesktopLayout() {
 }
 
 export function setDesktopLayout(layout) {
-  localStorage.setItem(scopedKey(DESKTOP_LAYOUT_KEY), JSON.stringify(layout));
+  const raw = JSON.stringify(layout);
+  localStorage.setItem(scopedKey(DESKTOP_LAYOUT_KEY), raw);
+  persist(DESKTOP_LAYOUT_KEY, raw);
 }
 
 function clamp(n, min, max) {

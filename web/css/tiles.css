@@ -1523,3 +1523,568 @@ body.compose-active #tile-overlay {
 /* Focusable cells: selection outline is the focus indicator — drop the
    default browser ring. */
 .calc-cell--data:focus { outline: none; }
+
+/* ─────────────────────────────────────────────────────────────
+   Impress plugin window — slide deck builder.
+   Hairline toolbar, slide thumbnail strip, a 16:9 stage (rendered by JS at
+   a fixed 640×360 logical size, scaled to fit), an inspector for the
+   current slide's fields, a Present overlay, and a deck menu popup.
+   ───────────────────────────────────────────────────────────── */
+.impress-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.impress-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.impress-deck-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.impress-deck-btn:hover { background: var(--glass-hover); }
+.impress-deck-btn[aria-expanded='true'] { background: var(--glass-hover); }
+
+.impress-deck-btn-icon { display: inline-flex; color: var(--accent); }
+.impress-deck-btn-icon .ui-icon { width: 15px; height: 15px; }
+.impress-deck-btn-chevron { display: inline-flex; color: var(--muted); }
+.impress-deck-btn-chevron .ui-icon { width: 12px; height: 12px; }
+
+.impress-title {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.impress-title::placeholder { color: var(--muted); }
+
+.impress-theme {
+  flex: none;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  outline: none;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.impress-theme:focus { border-color: var(--accent); }
+
+.impress-save-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background var(--duration-normal) var(--ease-out);
+}
+
+.impress-save-dot.is-active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Toolbar */
+.impress-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.impress-tool {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.impress-tool:hover { background: var(--glass-hover); color: var(--text); }
+.impress-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+/* Body: strip + stage/inspector */
+.impress-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.impress-strip {
+  flex: none;
+  width: 136px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 10px;
+  border-right: 1px solid var(--glass-border);
+  background: var(--bg);
+}
+
+.impress-strip::-webkit-scrollbar { width: 6px; }
+.impress-strip::-webkit-scrollbar-thumb { background: var(--glass-border); }
+
+.impress-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.impress-thumb:hover { border-color: var(--muted); }
+.impress-thumb.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.impress-thumb-num {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  z-index: 2;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* Stage + inspector column */
+.impress-stage-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.impress-stage {
+  position: relative;
+  flex: none;
+  width: calc(100% - 24px);
+  max-width: 720px;
+  margin: 12px auto 0;
+  aspect-ratio: 16 / 9;
+  background: var(--bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-float);
+}
+
+.impress-inspector {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+
+.impress-inspector::-webkit-scrollbar { width: 6px; }
+.impress-inspector::-webkit-scrollbar-thumb { background: var(--glass-border); }
+
+.impress-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.impress-field-label {
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.impress-field-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  outline: none;
+  resize: vertical;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.impress-field-input:focus { border-color: var(--accent); }
+.impress-field-input::placeholder { color: var(--muted); }
+
+textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
+
+.impress-ops {
+  display: flex;
+  gap: 4px;
+  padding-top: 2px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.impress-op {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.impress-op:hover { background: var(--glass-hover); color: var(--text); }
+.impress-op--danger:hover { color: var(--error); }
+
+/* Status line */
+.impress-status {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 7px 14px 8px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: linear-gradient(180deg, transparent, var(--bg) 70%);
+  pointer-events: none;
+}
+
+/* Deck menu popup (body-level). */
+.impress-deck-menu {
+  position: fixed;
+  z-index: calc(var(--z-hud) + 2);
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 28px));
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  animation: hudMenuIn var(--duration-fast) var(--ease-out);
+}
+
+.impress-deck-menu::-webkit-scrollbar { display: none; }
+
+.impress-deck-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.impress-deck-menu-item:hover { background: var(--glass-hover); }
+.impress-deck-menu-item.is-active { color: var(--accent); }
+
+.impress-deck-menu-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.impress-deck-menu-time { font-size: 10px; color: var(--muted); flex: none; }
+
+.impress-deck-menu-check {
+  display: inline-flex;
+  flex: none;
+  opacity: 0;
+}
+
+.impress-deck-menu-item.is-active .impress-deck-menu-check { opacity: 1; }
+
+.impress-deck-menu-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.impress-deck-menu-foot-icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.impress-deck-menu-item--danger { color: var(--error); }
+.impress-deck-menu-item--danger:hover { background: var(--error-soft, var(--glass-hover)); }
+.impress-deck-menu-empty {
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── The slide canvas (640×360 logical, scaled by JS) ─────────── */
+.impress-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 640px;
+  height: 360px;
+  box-sizing: border-box;
+  transform-origin: top left;
+  transform: scale(1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-display);
+  --im-accent: #6366f1;
+  --im-dark-a: #1a1a2e;
+  --im-dark-b: #2b2b52;
+  --im-light: #ffffff;
+}
+
+.impress-slide[data-theme='aurora'] { --im-accent: #6366f1; --im-dark-a: #1a1a2e; --im-dark-b: #2b2b52; --im-light: #ffffff; }
+.impress-slide[data-theme='slate']  { --im-accent: #475569; --im-dark-a: #0f172a; --im-dark-b: #1e293b; --im-light: #f8fafc; }
+.impress-slide[data-theme='ocean']  { --im-accent: #0ea5e9; --im-dark-a: #082f49; --im-dark-b: #0c4a6e; --im-light: #f0f9ff; }
+.impress-slide[data-theme='mono']   { --im-accent: #18181b; --im-dark-a: #111111; --im-dark-b: #1c1c1c; --im-light: #ffffff; }
+.impress-slide[data-theme='ember']  { --im-accent: #f97316; --im-dark-a: #1c1917; --im-dark-b: #2d1f14; --im-light: #fff7ed; }
+
+/* title */
+.impress-slide--title {
+  justify-content: center;
+  padding: 52px 64px;
+  background: linear-gradient(150deg, var(--im-dark-a), var(--im-dark-b));
+  color: #ffffff;
+}
+.impress-slide--title .impress-slide-title {
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.impress-slide--title .impress-slide-title::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 6px;
+  margin-top: 18px;
+  border-radius: 3px;
+  background: var(--im-accent);
+}
+.impress-slide--title .impress-slide-subtitle {
+  margin-top: 24px;
+  font-size: 22px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* section */
+.impress-slide--section {
+  justify-content: center;
+  padding: 0 64px;
+  background: linear-gradient(140deg, var(--im-accent), color-mix(in srgb, var(--im-accent) 55%, #000 45%));
+  color: #ffffff;
+}
+.impress-slide--section .impress-slide-title {
+  font-size: 54px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* content + two-column + blank share a light canvas */
+.impress-slide--content,
+.impress-slide--two-column,
+.impress-slide--blank {
+  background: var(--im-light);
+  color: #0f172a;
+  padding: 36px 52px;
+}
+.impress-slide--content .impress-slide-title,
+.impress-slide--two-column .impress-slide-title {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.impress-slide--content .impress-slide-title::after,
+.impress-slide--two-column .impress-slide-title::after {
+  content: '';
+  display: block;
+  width: 46px;
+  height: 5px;
+  margin-top: 12px;
+  border-radius: 3px;
+  background: var(--im-accent);
+}
+
+.impress-slide-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 22px;
+}
+.impress-slide-bullet {
+  position: relative;
+  padding-left: 24px;
+  font-size: 19px;
+  line-height: 1.35;
+  color: #334155;
+}
+.impress-slide-bullet::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--im-accent);
+}
+
+.impress-slide-columns {
+  display: flex;
+  gap: 36px;
+  flex: 1;
+  margin-top: 18px;
+}
+.impress-slide-columns .impress-slide-bullets {
+  flex: 1;
+  margin-top: 0;
+}
+
+/* quote */
+.impress-slide--quote {
+  justify-content: center;
+  padding: 0 64px;
+  background: linear-gradient(150deg, var(--im-dark-a), var(--im-dark-b));
+  color: #ffffff;
+}
+.impress-slide--quote .impress-slide-quote {
+  font-size: 30px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.impress-slide--quote .impress-slide-quote::before {
+  content: '\201C';
+  display: block;
+  font-size: 54px;
+  line-height: 1;
+  margin-bottom: 8px;
+  color: var(--im-accent);
+}
+.impress-slide--quote .impress-slide-attribution {
+  margin-top: 18px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* blank */
+.impress-slide--blank { justify-content: center; align-items: center; }
+.impress-slide--blank .impress-slide-body {
+  font-size: 24px;
+  color: #334155;
+}
+
+/* Present overlay — covers the tile, click / arrows advance. */
+.impress-present {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #050505;
+  cursor: pointer;
+}
+
+.impress-present .impress-slide {
+  position: static;
+  flex: none;
+}
+
+.impress-present-count {
+  position: absolute;
+  bottom: 18px;
+  right: 20px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Phone: narrower strip, more room for the stage. */
+.tile-grid--phone .impress-strip { width: 96px; }
+.tile-grid--phone .impress-bar { padding: 9px 12px; }
+.tile-grid--phone .impress-tools { padding: 5px 12px; }

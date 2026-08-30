@@ -19,8 +19,8 @@
 
 import {
   icon, button, searchBar, spinner, emptyState, toast,
-} from '../ui/index.js';
-import { getToken } from './api.js';
+} from '/ui/index.js';
+import { getToken } from '/js/api.js';
 
 export const RADIO_PLUGIN = 'radio';
 
@@ -547,3 +547,12 @@ export function wireRadioEvents() {
   window.addEventListener('artifact:updated', onArtifactSaved);
   window.addEventListener('agent:actions', onAgentActions);
 }
+
+export default {
+  name: 'radio',
+  icon: 'ui/play',
+  mount: mountRadioTile,
+  unmount: unmountRadioTile,
+  getElement: getRadioTileElement,
+  wireEvents: wireRadioEvents,
+};

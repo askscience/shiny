@@ -16,9 +16,9 @@
 
 import {
   icon, button, emptyState, toast,
-} from '../ui/index.js';
-import { setIcon } from '../ui/index.js';
-import { apiFetch } from './api.js';
+} from '/ui/index.js';
+import { setIcon } from '/ui/index.js';
+import { apiFetch } from '/js/api.js';
 
 export const CALC_PLUGIN = 'calc';
 
@@ -1042,3 +1042,12 @@ export function wireCalcEvents() {
     }
   });
 }
+
+export default {
+  name: 'calc',
+  icon: 'ui/calc',
+  mount: mountCalcTile,
+  unmount: unmountCalcTile,
+  getElement: getCalcTileElement,
+  wireEvents: wireCalcEvents,
+};

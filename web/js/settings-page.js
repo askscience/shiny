@@ -8,7 +8,7 @@ import {
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
 } from '../ui/index.js';
-import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout } from './preferences.js';
+import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout, loadUserPreferences } from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 
 const langSelect = document.getElementById('lang-select');
@@ -398,11 +398,12 @@ async function boot() {
   initAppearance({ getScope: () => getTraveler()?.id });
   hydrateIcons();
 
-  if (!getToken() || !(await validateSession())) {
+  if (!(await validateSession())) {
     window.location.href = '/';
     return;
   }
 
+  await loadUserPreferences();
   renderUser();
   wireAppearance();
   syncAppearanceUI();

@@ -1,13 +1,16 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
     plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    routes::{HttpMethod, RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
 
-pub struct YoutubePlugin;
+pub struct YoutubePlugin {
+    ctx: OnceLock<Arc<PluginCtx>>,
+}
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str = "a video assistant; find and play YouTube videos";
@@ -34,11 +37,18 @@ impl Plugin for YoutubePlugin {
         })
     }
 
-    fn register(&self, _ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+    fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+        let _ = self.ctx.set(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/youtube.md"))
             .context_line("YouTube: enabled — the YouTube window plays videos the AI searches for.");
+        builder.route(RouteSpec {
+            method: HttpMethod::Get,
+            path: "/api/youtube/search".into(),
+            auth: "auth".into(),
+            handler_tag: "yt_search".into(),
+        });
         for tool in [
             Arc::new(crate::tools::YoutubeSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::YoutubePlay) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
@@ -46,10 +56,15 @@ impl Plugin for YoutubePlugin {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
         }
     }
+
+    fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
+        let ctx = self.ctx.get()?;
+        crate::routes::handle(ctx, tag)
+    }
 }
 
 /// The C entry symbol the loader transmutes and calls.
 #[no_mangle]
 pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(YoutubePlugin))
+    Box::into_raw(Box::new(YoutubePlugin { ctx: OnceLock::new() }))
 }

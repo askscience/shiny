@@ -1,5 +1,4 @@
--- Core-owned document storage for the word plugin (same pattern as
--- saved_artifacts: core owns the table, plugins own the domain logic).
+-- Word plugin owns the `documents` table (self-contained schema).
 -- Documents are stored as real .odt (OpenDocument Text) file bytes.
 
 CREATE TABLE IF NOT EXISTS documents (

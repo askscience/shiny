@@ -173,9 +173,12 @@ function setButtonsDisabled(disabled) {
 
 async function refreshActivity() {
   try {
-    const res = await fetch('/api/plugins/install.log', {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    // Only attach the Bearer header when we actually have a token; otherwise
+    // rely on the session cookie (never send "Bearer null").
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch('/api/plugins/install.log', { headers });
     if (!res.ok) {
       activityEl.innerHTML = '<div class="plugins-activity-empty">Activity unavailable.</div>';
       return;
@@ -241,12 +244,7 @@ async function boot() {
   initAppearance({ getScope: () => getTraveler()?.id });
   hydrateIcons();
 
-  if (!getToken()) {
-    window.location.href = '/';
-    return;
-  }
-  const ok = await validateSession();
-  if (!ok) {
+  if (!(await validateSession())) {
     window.location.href = '/';
     return;
   }

@@ -1,16 +1,36 @@
 use axum::extract::State;
+use axum::http::header::SET_COOKIE;
+use axum::http::HeaderValue;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::errors::AppError;
-use crate::models::{AuthResponse, LoginRequest, RegisterRequest, Traveler};
+use crate::models::{AuthResponse, LoginRequest, RegisterRequest, Traveler, TravelerPublic};
 
 fn hash_password(password: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
     hex::encode(hasher.finalize())
+}
+
+/// Build the auth response and attach the `shiny_token` session cookie. The
+/// cookie is what lets the browser re-authenticate automatically on the next
+/// page load — no reliance on localStorage surviving a reload.
+fn session_response(
+    token: String,
+    traveler: TravelerPublic,
+) -> Result<Response, AppError> {
+    let cookie = format!("shiny_token={token}; Path=/; SameSite=Lax; Max-Age=31536000");
+    let mut response = Json(AuthResponse { token, traveler }).into_response();
+    response.headers_mut().insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&cookie)
+            .map_err(|_| AppError::Internal("failed to build session cookie".into()))?,
+    );
+    Ok(response)
 }
 
 fn normalize_username(username: &str) -> String {
@@ -50,7 +70,7 @@ fn validate_avatar(avatar: &Option<String>) -> Result<(), AppError> {
 pub async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<Response, AppError> {
     let username = normalize_username(&req.username);
     validate_username(&username)?;
     validate_avatar(&req.avatar)?;
@@ -108,16 +128,13 @@ pub async fn register(
     public.avatar = req.avatar;
     public.is_admin = is_first_user;
 
-    Ok(Json(AuthResponse {
-        token,
-        traveler: public,
-    }))
+    session_response(token, public)
 }
 
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<Response, AppError> {
     let username = normalize_username(&req.username);
 
     let traveler = sqlx::query_as::<_, Traveler>(
@@ -133,7 +150,16 @@ pub async fn login(
         return Err(AppError::Unauthorized("Invalid username or password".into()));
     }
 
-    let token = Uuid::new_v4().to_string();
+    // Reuse the account's existing token when one is present so that logging
+    // in from a second tab/device does NOT invalidate already-active sessions.
+    // Previously every login minted a fresh token and overwrote this single
+    // column, which silently kicked every other session back to the login
+    // screen. The token is only minted on the very first login.
+    let token = traveler
+        .auth_token
+        .clone()
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     sqlx::query("UPDATE travelers SET auth_token = ?1, updated_at = datetime('now') WHERE id = ?2")
         .bind(&token)
@@ -142,8 +168,5 @@ pub async fn login(
         .await
         .map_err(AppError::Database)?;
 
-    Ok(Json(AuthResponse {
-        token,
-        traveler: traveler.to_public(),
-    }))
+    session_response(token, traveler.to_public())
 }

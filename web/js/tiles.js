@@ -27,22 +27,6 @@ import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import { artifactPanel, hydrateIcons, icon } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
-import {
-  RADIO_PLUGIN as RADIO_TILE_PLUGIN,
-  mountRadioTile, unmountRadioTile, getRadioTileElement, wireRadioEvents,
-} from './radio.js';
-import {
-  WORD_PLUGIN as WORD_TILE_PLUGIN,
-  mountWordTile, unmountWordTile, getWordTileElement, wireWordEvents,
-} from './word.js';
-import {
-  YOUTUBE_PLUGIN as YOUTUBE_TILE_PLUGIN,
-  mountYoutubeTile, unmountYoutubeTile, getYoutubeTileElement, wireYoutubeEvents,
-} from './youtube.js';
-import {
-  CALC_PLUGIN as CALC_TILE_PLUGIN,
-  mountCalcTile, unmountCalcTile, getCalcTileElement, wireCalcEvents,
-} from './calc.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
 const PHONE_QUERY = window.matchMedia('(max-width: 640px)');
@@ -53,6 +37,7 @@ let overlayBody = null;
 let overlayTitle = null;
 
 let pluginCatalog = new Map(); // name -> { description }
+let surfaceModules = new Map(); // name -> plugin.js surface module
 let mapTileEl = null;          // the tile hosting the map DOM
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
 let hudWindowsEl = null;       // phone window switcher in the top HUD bar
@@ -63,31 +48,51 @@ function pluginLabel(name) {
 
 function pluginIconName(name) {
   if (name === MAP_TILE_PLUGIN) return 'artifacts/plan';
-  if (name === RADIO_TILE_PLUGIN) return 'ui/play';
-  if (name === WORD_TILE_PLUGIN) return 'ui/doc';
-  if (name === YOUTUBE_TILE_PLUGIN) return 'ui/youtube';
-  if (name === CALC_TILE_PLUGIN) return 'ui/calc';
-  return 'ui/puzzle';
+  return surfaceModules.get(name)?.icon || 'ui/puzzle';
 }
 
 /** Which plugins currently have a window surface? */
 function surfacePlugins() {
   const out = [];
   if (isPluginActive(MAP_TILE_PLUGIN)) out.push(MAP_TILE_PLUGIN);
-  if (isPluginActive(RADIO_TILE_PLUGIN)) out.push(RADIO_TILE_PLUGIN);
-  if (isPluginActive(WORD_TILE_PLUGIN)) out.push(WORD_TILE_PLUGIN);
-  if (isPluginActive(YOUTUBE_TILE_PLUGIN)) out.push(YOUTUBE_TILE_PLUGIN);
-  if (isPluginActive(CALC_TILE_PLUGIN)) out.push(CALC_TILE_PLUGIN);
+  for (const name of surfaceModules.keys()) out.push(name);
   return out;
 }
 
+/**
+ * Refresh the plugin catalog AND dynamically load/unload each enabled
+ * plugin's window surface (its `web/plugin.js`, served at /plugins/<name>/).
+ */
 async function refreshCatalog() {
+  let plugins = [];
   try {
     const res = await apiFetch('/api/plugins');
+    plugins = res?.data || [];
     pluginCatalog = new Map(
-      (res?.data || []).map((p) => [p.name, { description: p.description || p.summary || '' }]),
+      plugins.map((p) => [p.name, { description: p.description || p.summary || '' }]),
     );
   } catch (_) { /* keep last catalog */ }
+
+  const wanted = new Set(
+    plugins.filter((p) => p.enabled && p.surface).map((p) => p.name),
+  );
+  for (const p of plugins) {
+    if (p.enabled && p.surface && !surfaceModules.has(p.name)) {
+      try {
+        const mod = await import(`/plugins/${p.name}/plugin.js`);
+        surfaceModules.set(p.name, mod.default || mod);
+        surfaceModules.get(p.name)?.wireEvents?.();
+      } catch (err) {
+        console.warn(`plugin surface '${p.name}' failed to load`, err);
+      }
+    }
+  }
+  for (const name of [...surfaceModules.keys()]) {
+    if (!wanted.has(name)) {
+      surfaceModules.get(name)?.unmount?.();
+      surfaceModules.delete(name);
+    }
+  }
 }
 
 /* ── Map tile (traveler plugin window) ─────────────────────── */
@@ -141,11 +146,7 @@ function elementForTile(name) {
     if (!mapTileEl) mountMapTile();
     return mapTileEl;
   }
-  if (name === RADIO_TILE_PLUGIN) return mountRadioTile();
-  if (name === WORD_TILE_PLUGIN) return mountWordTile();
-  if (name === YOUTUBE_TILE_PLUGIN) return mountYoutubeTile();
-  if (name === CALC_TILE_PLUGIN) return mountCalcTile();
-  return null;
+  return surfaceModules.get(name)?.mount?.() || null;
 }
 
 /** Phone window switcher — one icon button per open window, in the top
@@ -333,11 +334,9 @@ function closeOverlay() {
 
 function tileForPlugin(name) {
   if (name === MAP_TILE_PLUGIN) return mapTileEl;
-  if (name === RADIO_TILE_PLUGIN) return getRadioTileElement();
-  if (name === WORD_TILE_PLUGIN) return getWordTileElement();
-  if (name === YOUTUBE_TILE_PLUGIN) return getYoutubeTileElement();
-  if (name === CALC_TILE_PLUGIN) return getCalcTileElement();
-  return grid?.querySelector(`[data-plugin="${CSS.escape(name)}"]`) || null;
+  return surfaceModules.get(name)?.getElement?.()
+    || grid?.querySelector(`[data-plugin="${CSS.escape(name)}"]`)
+    || null;
 }
 
 /**
@@ -386,10 +385,6 @@ export function initTileManager() {
   setSurfaceNamesProvider(() => surfacePlugins());
 
   mountMapTile();
-  wireRadioEvents();
-  wireWordEvents();
-  wireYoutubeEvents();
-  wireCalcEvents();
   void refreshCatalog().then(renderTiles);
   renderTiles();
 
@@ -418,10 +413,6 @@ export function initTileManager() {
     await refreshActivePlugins();
     await refreshCatalog();
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
-    if (!isPluginActive(RADIO_TILE_PLUGIN)) unmountRadioTile();
-    if (!isPluginActive(WORD_TILE_PLUGIN)) unmountWordTile();
-    if (!isPluginActive(YOUTUBE_TILE_PLUGIN)) unmountYoutubeTile();
-    if (!isPluginActive(CALC_TILE_PLUGIN)) unmountCalcTile();
     if (!surfacePlugins().includes(activePhonePlugin)) activePhonePlugin = null;
     renderTiles();
   });

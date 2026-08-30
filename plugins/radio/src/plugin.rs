@@ -1,13 +1,16 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
     plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    routes::{HttpMethod, RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
 
-pub struct RadioPlugin;
+pub struct RadioPlugin {
+    ctx: OnceLock<Arc<PluginCtx>>,
+}
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str = "a radio tuner AI; offer stations by name or genre";
@@ -34,11 +37,18 @@ impl Plugin for RadioPlugin {
         })
     }
 
-    fn register(&self, _ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+    fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+        let _ = self.ctx.set(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/radio.md"))
             .context_line("Radio: enabled — the Radio window can tune internet radio stations.");
+        builder.route(RouteSpec {
+            method: HttpMethod::Get,
+            path: "/api/radio/nowplaying".into(),
+            auth: "auth".into(),
+            handler_tag: "nowplaying".into(),
+        });
         for tool in [
             Arc::new(crate::tools::RadioSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::RadioPlay) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
@@ -47,10 +57,15 @@ impl Plugin for RadioPlugin {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
         }
     }
+
+    fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
+        let ctx = self.ctx.get()?;
+        crate::routes::handle(ctx, tag)
+    }
 }
 
 /// The C entry symbol the loader transmutes and calls.
 #[no_mangle]
 pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(RadioPlugin))
+    Box::into_raw(Box::new(RadioPlugin { ctx: OnceLock::new() }))
 }

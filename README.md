@@ -1,6 +1,6 @@
 # Shiny — AI Sphere
 
-A Rust-based AI sphere backend with a plugin system. **The core binary is a simple AI assistant**: a conversational agent driven by Ollama, with voice (Vosk STT + Supertonic TTS), orb gestures (tap to talk, long-press for wake, double-tap to type), and one built-in tool — web search. Everything domain-specific (trips, GPS, diaries, maps, navigation, artifact cards) ships as **plugins** — installable via `.zip` or `.tar.gz` upload through the admin API.
+A Rust-based AI sphere backend with a plugin system. **The core binary is a simple AI assistant**: a conversational agent driven by Ollama, with voice (Vosk STT + Supertonic TTS), orb gestures (tap to talk, long-press for wake, double-tap to type), and one built-in tool — web search. Everything domain-specific (trips, GPS, diaries, maps, navigation, artifact cards) ships as **plugins** — installable via `.zip` or `.tar.gz` upload through the plugin API.
 
 See [`PLUGINS.md`](./PLUGINS.md) for the full plugin authoring guide.
 
@@ -14,6 +14,28 @@ See [`PLUGINS.md`](./PLUGINS.md) for the full plugin authoring guide.
 
 Deactivate the traveler plugin (per user, on the `/plugins` page) and the app reverts to the bare assistant — no map chrome, just conversation. Reactivate and the full navigator returns. The `hello` plugin is a minimal authoring example.
 
+### Self-contained plugins
+
+Plugins are now **self-contained**: a developer writes a plugin folder with `plugin.toml` + a `cdylib` + `skills/` + `migrations/` + `web/plugin.js` (+ `RouteSpec` REST routes) and installs it — the core app needs **zero edits**. The shipped office + media plugins already follow this model:
+
+| Plugin | Ships (all inside its own folder) |
+|---|---|
+| `word` | `doc_*` tools, `documents` table, `/api/documents` routes, Word window — real `.odt` |
+| `calc` | `calc_*` tools, `spreadsheets` table, `/api/spreadsheets` routes, Calc window — real `.ods` |
+| `impress` | `slide_*` tools, `presentations` table, `/api/presentations` routes, Impress window — real `.odp` |
+| `radio` | radio tools, `/api/radio/nowplaying` route, Radio window |
+| `youtube` | YouTube tools, `/api/youtube/search` route, YouTube window |
+
+The frontend auto-discovers windows from each plugin's `web/plugin.js`; the SDK (`crates/shiny-plugin-sdk`) supplies the `RouteSpec`/`RouteHandler` surface and the ODT/ODS/ODP codecs. See [`PLUGINS.md`](./PLUGINS.md) §1–§8 and §20.
+
+## Multi-user
+
+Shiny has **no admin role** — every account is a peer. Each user gets their own workspace:
+
+- **Per-user plugin activation** — stored in the database (`user_plugin_states`); activating or deactivating a plugin affects only that user.
+- **Per-user files** — the office plugins (`word` / `calc` / `impress`) store documents, spreadsheets, and presentations scoped to the owning user in the database.
+- **Per-user preferences** — appearance, assistant, desktop layout, and voice settings are stored per user on the device.
+
 ## Features
 
 - **Simple AI assistant core** — voice-first agent with web search, works with zero plugins installed
@@ -21,6 +43,8 @@ Deactivate the traveler plugin (per user, on the `/plugins` page) and the app re
 - **GPS Tracking** — Real-time position logging via GPSD daemon with mock fallback *(traveler plugin)*
 - **OpenStreetMap Integration** — Geocoding, reverse geocoding, routing, and POI search *(traveler plugin)*
 - **AI-Powered Diary** — Auto-generates Markdown travel diaries using Ollama (gemma4:31b-cloud) *(traveler plugin)*
+- **Office suite** — word processor (.odt), spreadsheet (.ods) and presentation (.odp) plugins, all self-contained *(word/calc/impress plugins)*
+- **Media** — internet radio and YouTube windows *(radio/youtube plugins)*
 - **Web Search** — DuckDuckGo search with optional AI summarization *(core)*
 - **AI Chat** — Conversational agent aware of your travel history and diary entries
 - **Unified UI library** — monochrome noir theme, user-selectable accent/gradient, swappable themes under `web/themes/`
@@ -33,7 +57,7 @@ Deactivate the traveler plugin (per user, on the `/plugins` page) and the app re
 ### Prerequisites
 
 - Rust 1.75+ (edition 2021)
-- SQLite (bundled automatically)
+- SQLite (system library — `libsqlite3`)
 - Python 3.9+ with `pip install 'supertonic[serve]'` (for TTS)
 - [Ollama](https://ollama.com) with `gemma4:31b-cloud` (optional — AI features degrade gracefully)
 - [GPSD](https://gpsd.io) running on `localhost:2947` (optional — falls back to mock data)

@@ -10,6 +10,7 @@ use parking_lot::RwLock;
 
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::manifest::Manifest;
+use shiny_plugin_sdk::routes::{RouteHandler, RouteSpec};
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::RegistryBuilder;
 
@@ -22,6 +23,7 @@ pub struct PluginContrib {
     pub skills_md: String,
     pub persona: String,
     pub context_lines: Vec<String>,
+    pub routes: Vec<(RouteSpec, RouteHandler)>,
 }
 
 /// Top-level plugin state, cloned cheaply (everything is `Arc`).
@@ -142,6 +144,17 @@ impl PluginManager {
         self.inner.loader.snapshot()
     }
 
+    /// All installed plugins' routes: `(plugin_name, spec, handler)`.
+    pub fn routes(&self) -> Vec<(String, RouteSpec, RouteHandler)> {
+        let mut out = Vec::new();
+        for contrib in self.inner.contribs.read().iter() {
+            for (spec, handler) in &contrib.routes {
+                out.push((contrib.manifest.name.clone(), spec.clone(), handler.clone()));
+            }
+        }
+        out
+    }
+
     /// Scan `plugins_dir` and install every directory containing `plugin.toml`.
     pub async fn discover_and_install(
         &self,
@@ -175,6 +188,15 @@ impl PluginManager {
     ) -> Result<String, AppError> {
         let (manifest, builder, _ctx) = self.inner.loader.install_dir(install_dir, &self.inner.pool, base_ctx).await?;
         let plugin_name = manifest.name.clone();
+
+        // Resolve every declared RouteSpec tag to a handler via the plugin.
+        let mut routes: Vec<(RouteSpec, RouteHandler)> = Vec::new();
+        for spec in &builder.routes {
+            if let Some(h) = self.inner.loader.route_handler(&plugin_name, &spec.handler_tag) {
+                routes.push((spec.clone(), h));
+            }
+        }
+
         {
             let mut contribs = self.inner.contribs.write();
             contribs.retain(|c| c.manifest.name != manifest.name);
@@ -183,6 +205,7 @@ impl PluginManager {
                 skills_md: builder.skills_md.clone(),
                 persona: builder.persona.clone(),
                 context_lines: builder.context_lines.clone(),
+                routes,
             });
         }
         for tool in builder.tools {

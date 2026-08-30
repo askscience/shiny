@@ -44,6 +44,7 @@ pub struct ConfigSnapshot {
 #[derive(Clone)]
 pub struct PluginCtx {
     pool: Arc<tokio::sync::OnceCell<SqlitePool>>,
+    db: Arc<std::sync::OnceLock<crate::db::Db>>,
     ollama: Arc<tokio::sync::OnceCell<OllamaClient>>,
     search: Arc<tokio::sync::OnceCell<SearchService>>,
     supertonic: Arc<tokio::sync::OnceCell<SupertonicClient>>,
@@ -55,6 +56,7 @@ impl PluginCtx {
     pub fn new(config: ConfigSnapshot, manifest: Manifest) -> Arc<Self> {
         Arc::new(Self {
             pool: Arc::new(tokio::sync::OnceCell::new()),
+            db: Arc::new(std::sync::OnceLock::new()),
             ollama: Arc::new(tokio::sync::OnceCell::new()),
             search: Arc::new(tokio::sync::OnceCell::new()),
             supertonic: Arc::new(tokio::sync::OnceCell::new()),
@@ -81,6 +83,18 @@ impl PluginCtx {
                     .expect("plugin failed to open SQLite database")
             })
             .await
+    }
+
+    /// The plugin's own **synchronous** SQLite connection (preferred over
+    /// `pool()` — no async worker threads, so no `sqlite3_value_free` across
+    /// threads). Opened lazily on first use; safe because `rt::bridge` runs all
+    /// plugin code on one thread.
+    pub fn db(&self) -> &crate::db::Db {
+        self.db
+            .get_or_init(|| {
+                crate::db::Db::open(&self.config.database_url)
+                    .expect("plugin failed to open SQLite database")
+            })
     }
 
     /// Plugin-owned Ollama client, built from the config snapshot.

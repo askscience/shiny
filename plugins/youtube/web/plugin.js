@@ -8,8 +8,8 @@
  * Playback is driven by the AI (`youtube_play` tool, or tapping a result
  * card) and by the in-tile search (`/api/youtube/search`).
  */
-import { apiFetch } from './api.js';
-import { setIcon, searchBar, emptyState, spinner } from '../ui/index.js';
+import { apiFetch } from '/js/api.js';
+import { setIcon, searchBar, emptyState, spinner } from '/ui/index.js';
 
 export const YOUTUBE_PLUGIN = 'youtube';
 
@@ -348,3 +348,12 @@ export function unmountYoutubeTile() {
 export function getYoutubeTileElement() {
   return tileEl;
 }
+
+export default {
+  name: 'youtube',
+  icon: 'ui/youtube',
+  mount: mountYoutubeTile,
+  unmount: unmountYoutubeTile,
+  getElement: getYoutubeTileElement,
+  wireEvents: wireYoutubeEvents,
+};

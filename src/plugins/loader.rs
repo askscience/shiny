@@ -40,6 +40,13 @@ impl Loader {
         self.loaded.read().iter().any(|p| p.manifest.name == name)
     }
 
+    /// Resolve a plugin's `handler_tag` to a route handler.
+    pub fn route_handler(&self, name: &str, tag: &str) -> Option<shiny_plugin_sdk::routes::RouteHandler> {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .and_then(|p| p.plugin.route_handler(tag))
+    }
+
     /// Load a plugin directory: parse `plugin.toml`, dlopen `<install_dir>/lib<name>.so`
     /// (or `.dylib` / `.dll`), call its entry, build the `PluginCtx`, call
     /// `register()` into a fresh `RegistryBuilder`, run migrations, and return

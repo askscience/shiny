@@ -34,6 +34,13 @@ pub trait Plugin: Send + Sync {
     /// Optional hook fired when a new user registers in core identity.
     /// Plugins can use this to provision a profile row. Default no-op.
     async fn on_user_registered(&self, _ctx: Arc<PluginCtx>, _user_id: &str) {}
+
+    /// Resolve a `handler_tag` (declared via `builder.route(..)` in `register`)
+    /// to its handler. Called by the installer when building the live router.
+    /// Default: no routes. Override to serve `RouteSpec`s.
+    fn route_handler(&self, _tag: &str) -> Option<crate::routes::RouteHandler> {
+        None
+    }
 }
 
 /// C entry symbol shape. The loader transmutes the loaded symbol pointer to

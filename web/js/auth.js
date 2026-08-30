@@ -161,8 +161,12 @@ loginBtn?.addEventListener('click', async () => {
   if (!selectedUser) return;
   hideError();
   try {
+    // `authRedirect: false` — a 401 here means "bad credentials", not an
+    // expired session. Without this, apiFetch's global 401 handler fires the
+    // misleading "Session expired — sign in again" toast on every wrong password.
     const data = await apiFetch('/api/auth/login', {
       method: 'POST',
+      authRedirect: false,
       body: JSON.stringify({
         username: selectedUser.username,
         password: passwordInput.value,
@@ -198,6 +202,7 @@ registerBtn?.addEventListener('click', async () => {
   try {
     const data = await apiFetch('/api/auth/register', {
       method: 'POST',
+      authRedirect: false,
       body: JSON.stringify({
         username,
         password,
@@ -219,10 +224,8 @@ export function logout() {
 }
 
 export async function requireAuth() {
-  if (!getToken()) {
-    showLogin();
-    return false;
-  }
+  // validateSession() also checks the `shiny_token` session cookie, so don't
+  // bail out early just because localStorage has no token.
   const valid = await validateSession();
   if (!valid) {
     clearAuth();

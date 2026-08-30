@@ -1,17 +1,32 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
     plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    routes::{HttpMethod, RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
 
-pub struct WordPlugin;
+pub struct WordPlugin {
+    ctx: OnceLock<Arc<PluginCtx>>,
+}
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str =
     "a writer's assistant; draft, edit and manage the user's documents";
+
+fn route_specs() -> Vec<RouteSpec> {
+    vec![
+        RouteSpec { method: HttpMethod::Get, path: "/api/documents".into(), auth: "auth".into(), handler_tag: "doc_list".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/documents".into(), auth: "auth".into(), handler_tag: "doc_create".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/documents/import".into(), auth: "auth".into(), handler_tag: "doc_import".into() },
+        RouteSpec { method: HttpMethod::Get, path: "/api/documents/:id".into(), auth: "auth".into(), handler_tag: "doc_get".into() },
+        RouteSpec { method: HttpMethod::Put, path: "/api/documents/:id".into(), auth: "auth".into(), handler_tag: "doc_save".into() },
+        RouteSpec { method: HttpMethod::Delete, path: "/api/documents/:id".into(), auth: "auth".into(), handler_tag: "doc_delete".into() },
+        RouteSpec { method: HttpMethod::Get, path: "/api/documents/:id/export".into(), auth: "auth".into(), handler_tag: "doc_export".into() },
+    ]
+}
 
 #[async_trait]
 impl Plugin for WordPlugin {
@@ -35,13 +50,17 @@ impl Plugin for WordPlugin {
         })
     }
 
-    fn register(&self, _ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+    fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+        let _ = self.ctx.set(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/word.md"))
             .context_line(
                 "Word: enabled — the Word window edits documents stored as open .odt files.",
             );
+        for spec in route_specs() {
+            builder.route(spec);
+        }
         for tool in [
             Arc::new(crate::tools::DocCreate) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::DocWrite) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
@@ -54,10 +73,15 @@ impl Plugin for WordPlugin {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
         }
     }
+
+    fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
+        let ctx = self.ctx.get()?;
+        crate::routes::handle(ctx, tag)
+    }
 }
 
 /// The C entry symbol the loader transmutes and calls.
 #[no_mangle]
 pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(WordPlugin))
+    Box::into_raw(Box::new(WordPlugin { ctx: OnceLock::new() }))
 }

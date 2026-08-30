@@ -1,4 +1,5 @@
 const API_BASE = '';
+const SESSION_COOKIE = 'shiny_token';
 
 export function getToken() {
   return localStorage.getItem('token');
@@ -14,6 +15,9 @@ export function setAuth(token, traveler) {
 export function clearAuth() {
   localStorage.removeItem('token');
   localStorage.removeItem('traveler');
+  // Drop the session cookie too, so an explicit logout doesn't get
+  // auto-restored by the cookie on the next page load.
+  document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
 export function getTraveler() {
@@ -79,7 +83,8 @@ export async function apiFetch(path, options = {}) {
 }
 
 export async function validateSession() {
-  if (!getToken()) return false;
+  // Don't short-circuit on a missing localStorage token: the `shiny_token`
+  // session cookie (sent automatically by the browser) may still be valid.
   try {
     const res = await apiFetch('/api/travelers/me', { authRedirect: false });
     if (res?.data) {
@@ -91,7 +96,8 @@ export async function validateSession() {
       clearAuth();
       return false;
     }
-    return !!getToken();
+    // Transient / server errors must not log the user out.
+    return true;
   }
 }
 

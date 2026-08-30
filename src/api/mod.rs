@@ -1,5 +1,6 @@
 pub mod artifacts;
 pub mod auth;
+pub mod preferences;
 pub mod travelers;
 pub mod trips;
 pub mod locations;
@@ -10,13 +11,10 @@ pub mod agent;
 pub mod voice;
 pub mod insights;
 pub mod ollama;
-pub mod radio;
-pub mod youtube;
-pub mod documents;
-pub mod spreadsheets;
 
 use axum::Router;
-use axum::routing::{delete, get, post, put};
+use axum::routing::{delete, get, patch, post, put};
+use shiny_plugin_sdk::routes::{HttpMethod, RouteHandler, RouteSpec};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::path::PathBuf;
@@ -78,6 +76,82 @@ impl AppState {
     }
 }
 
+/// Mount one plugin `RouteSpec` onto a fresh router, applying auth middleware
+/// unless the spec declares `public` (or `admin`, which is treated as `auth`
+/// since core has no admin role).
+fn plugin_route(state: &AppState, spec: RouteSpec, handler: RouteHandler) -> Router<AppState> {
+    let path = spec.path.clone();
+    let method_router = match spec.method {
+        HttpMethod::Get => {
+            let h = handler.clone();
+            get(move |req: axum::extract::Request| {
+                let h = h.clone();
+                async move { h(req).await }
+            })
+        }
+        HttpMethod::Post => {
+            let h = handler.clone();
+            post(move |req: axum::extract::Request| {
+                let h = h.clone();
+                async move { h(req).await }
+            })
+        }
+        HttpMethod::Put => {
+            let h = handler.clone();
+            put(move |req: axum::extract::Request| {
+                let h = h.clone();
+                async move { h(req).await }
+            })
+        }
+        HttpMethod::Delete => {
+            let h = handler.clone();
+            delete(move |req: axum::extract::Request| {
+                let h = h.clone();
+                async move { h(req).await }
+            })
+        }
+        HttpMethod::Patch => {
+            let h = handler.clone();
+            patch(move |req: axum::extract::Request| {
+                let h = h.clone();
+                async move { h(req).await }
+            })
+        }
+    };
+
+    let router = Router::new().route(&path, method_router);
+    if spec.auth == "public" {
+        router
+    } else {
+        router.layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
+    }
+}
+
+/// Build the plugin-contributed portion of the router: every installed
+/// plugin's `RouteSpec` routes plus its served `web/` assets.
+fn build_plugin_routes(state: &AppState) -> Router<AppState> {
+    let mut router: Router<AppState> = Router::new();
+    for (_name, spec, handler) in state.plugins.routes() {
+        router = router.merge(plugin_route(state, spec, handler));
+    }
+
+    // Serve each installed plugin's web assets at /plugins/<name>/ (roadmap #4).
+    let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
+    for manifest in state.plugins.list() {
+        let web_path = plugins_dir.join(&manifest.name).join(&manifest.web_dir);
+        if web_path.is_dir() {
+            router = router.nest_service(
+                &format!("/plugins/{}", manifest.name),
+                ServeDir::new(web_path),
+            );
+        }
+    }
+    router
+}
+
 pub fn build_router(state: AppState) -> Router {
     let web_dir = state.config.web_dir.clone();
     let vosk_models_dir = state.config.vosk_models_dir.clone();
@@ -103,6 +177,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
+        .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
         .route("/api/trips", get(trips::list).post(trips::create))
         .route("/api/trips/active", get(trips::get_active))
         .route("/api/trips/:id", get(trips::get_one).put(trips::update))
@@ -126,26 +201,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/agent", post(agent::handle_agent_dispatch))
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
-        .route("/api/radio/nowplaying", get(radio::now_playing))
-        .route("/api/youtube/search", get(youtube::search))
-        .route("/api/documents", get(documents::list).post(documents::create))
-        // .odt imports are multi-MB uploads — lift the body limit on this route.
-        .route("/api/documents/import", post(documents::import_odt)
-            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
-        .route(
-            "/api/documents/:id",
-            get(documents::get_one).put(documents::save).delete(documents::delete),
-        )
-        .route("/api/documents/:id/export", get(documents::export_odt))
-        .route("/api/spreadsheets", get(spreadsheets::list).post(spreadsheets::create))
-        .route(
-            "/api/spreadsheets/:id",
-            get(spreadsheets::get_one).put(spreadsheets::save).delete(spreadsheets::delete),
-        )
-        // .ods imports are multi-MB uploads — lift the body limit on this route.
-        .route("/api/spreadsheets/import", post(spreadsheets::import_ods)
-            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
-        .route("/api/spreadsheets/:id/export", get(spreadsheets::export_ods))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))
         .route("/api/artifacts/:id", get(artifacts::get_one).put(artifacts::update))
         .route("/api/tts", post(voice::tts))
@@ -165,15 +220,17 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
+        .merge(build_plugin_routes(&state))
         .route_service("/plugins", plugins_page)
         .route_service("/settings", settings_page)
         .fallback_service(static_files)
         .layer(CorsLayer::permissive())
-        // No heuristic caching for HTML/JS/CSS — browsers must revalidate
-        // (304 via Last-Modified) so a server restart never serves stale UI.
+        // Never cache HTML/JS/CSS — the frontend must always re-fetch, so a
+        // server restart or a source edit is picked up on the next reload
+        // without stale JS lingering in the browser.
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::header::CACHE_CONTROL,
-            axum::http::HeaderValue::from_static("no-cache"),
+            axum::http::HeaderValue::from_static("no-store"),
         ))
         .with_state(state)
 }

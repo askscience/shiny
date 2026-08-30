@@ -349,6 +349,12 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "calc_read" => "Reading spreadsheet…",
         "calc_list" => "Listing spreadsheets…",
         "calc_delete" => "Deleting spreadsheet…",
+        "slide_create" => "Building slides…",
+        "slide_write" => "Writing slides…",
+        "slide_edit" => "Editing slides…",
+        "slide_read" => "Reading slides…",
+        "slide_list" => "Listing presentations…",
+        "slide_delete" => "Deleting presentation…",
         _ => "Working…",
     }
 }

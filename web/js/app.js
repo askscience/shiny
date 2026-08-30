@@ -22,11 +22,13 @@ import { initTileManager, refreshTiles } from './tiles.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { reloadUserSession } from './session.js';
+import { loadUserPreferences } from './preferences.js';
 
 let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
 // otherwise a fresh load in bare mode leaves the map stack visible.
 let travelerActive = null;
+let lastUserId = null;
 
 function cancelVoiceInput() {
   if (isWakeAwaitingCommand()) return;
@@ -49,6 +51,14 @@ async function boot() {
 
   window.addEventListener('auth:success', async () => {
     document.getElementById('app')?.classList.remove('hidden');
+    const userId = getTraveler()?.id;
+    // A different account just signed in — do a clean boot so no cross-user
+    // state (desktop layout, tiling, tiles, artifacts) leaks between accounts.
+    if (appInitialized && lastUserId && userId && lastUserId !== userId) {
+      window.location.reload();
+      return;
+    }
+    lastUserId = userId;
     if (appInitialized) {
       await reloadUserSession();
       refreshAppearance();
@@ -56,6 +66,7 @@ async function boot() {
       await refreshKeyboard();
       return;
     }
+    await loadUserPreferences();
     await initApp();
   });
 
@@ -72,6 +83,7 @@ async function boot() {
   if (!(await requireAuth())) return;
 
   document.getElementById('app').classList.remove('hidden');
+  await loadUserPreferences();
   await initApp();
 }
 

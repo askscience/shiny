@@ -3,6 +3,7 @@
 //! results and start playback in the YouTube window.
 
 pub mod plugin;
+pub mod routes;
 pub mod tools;
 pub mod youtube_client;
 

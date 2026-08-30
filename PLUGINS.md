@@ -99,6 +99,11 @@ shiny/
 │       ├── plugin.toml
 │       ├── skills/word.md
 │       └── src/{lib.rs, plugin.rs, tools/mod.rs}
+│   └── impress/                       # presentation builder (.odp decks) + editor window
+│       ├── Cargo.toml
+│       ├── plugin.toml
+│       ├── skills/impress.md
+│       └── src/{lib.rs, plugin.rs, tools/mod.rs}
 └── src/
     ├── plugins/                       # the loader/registry/installer inside the binary
     │   ├── mod.rs
@@ -317,15 +322,20 @@ tar czf hello.tar.gz hello/
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/plugins` | none | List installed plugins |
-| `POST` | `/api/plugins/install` | `ADMIN_TOKEN` env or DB `is_admin=1` | Multipart upload `file=@archive` |
-| `POST` | `/api/plugins/uninstall` | admin | JSON body `{"name":"hello"}` |
+| `GET` | `/api/plugins` | Bearer (any logged-in user) | List installed plugins, with per-user `enabled` flags |
+| `POST` | `/api/plugins/install` | Bearer (any logged-in user) | Multipart upload `file=@archive` |
+| `POST` | `/api/plugins/uninstall` | Bearer (any logged-in user) | JSON body `{"name":"hello"}` |
 
-Authenticate the install:
+> There is **no admin role** in the current auth model: any logged-in user can
+> install/uninstall a plugin (the installed cdylib is shared server-wide), while
+> **activation** is per-user (stored in `user_plugin_states`). The `ADMIN_TOKEN`
+> env var and the `is_admin` column are read but not currently enforced — see §14.
+
+Authenticate with a logged-in user's bearer token (register or login first — see §7):
 
 ```bash
 curl -X POST http://localhost:8080/api/plugins/install \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Authorization: Bearer $TOKEN" \
   -F "file=@hello.zip"
 ```
 
@@ -653,7 +663,7 @@ The plugin system reads these env vars in `Config::from_env`:
 | Var | Default | Purpose |
 |---|---|---|
 | `PLUGINS_DIR` | `data/plugins` | Where plugins live + the `install.log`. |
-| `ADMIN_TOKEN` | unset | If set, this string is the admin bearer. Otherwise, install/uninstall require a user row with `is_admin=1`. |
+| `ADMIN_TOKEN` | unset | Read into `Config::admin_token` and the plugin `ConfigSnapshot`, but **not currently enforced** by the auth middleware — plugin management is gated by a logged-in user token (see §13/§14). |
 | `CORE_TRAVELER_BUILTIN` | `true` | When `true`, the embedded traveler tools (`src/services/agent_tools.rs`) still answer actions the plugin didn't claim. Set `false` to make core truly sphere-only. |
 
 All other env vars come through "as-is" to plugins via `PluginCtx::config` (`ConfigSnapshot`).
@@ -676,7 +686,7 @@ The manifest supports an optional `signature` field: a hex-encoded ed25519 signa
 
 ### `GET /api/plugins`
 
-No auth. Returns installed plugins:
+Bearer (any logged-in user). Returns installed plugins, each with the caller's own `enabled` flag:
 
 ```json
 {
@@ -689,7 +699,7 @@ No auth. Returns installed plugins:
 
 ### `POST /api/plugins/install`
 
-Multipart form upload. Auth: `Authorization: Bearer $ADMIN_TOKEN`, OR a user row with `is_admin=1`.
+Multipart form upload. Auth: any logged-in user (Bearer token). Installation is shared server-side; the newly installed plugin is enabled by default for every existing user.
 
 ```
 curl -X POST http://localhost:8080/api/plugins/install \
@@ -728,7 +738,7 @@ Keeps the plugin installed and its database tables intact, but disables its tool
 
 ### `GET /api/plugins/install.log`
 
-No auth. Returns the last 200 lines of `PLUGINS_DIR/install.log` as `text/plain`. Useful for plugin managers and for post-incident forensics.
+Bearer (any logged-in user). Returns the last 200 lines of `PLUGINS_DIR/install.log` as `text/plain`. Useful for plugin managers and for post-incident forensics.
 
 ### Activation state
 
@@ -745,7 +755,7 @@ The separation between **deactivate** (keep install dir + tables, just turn tool
 ## 14. Security model
 
 - Plugins are full Rust `cdylib`s loaded into the same process. They have full process privileges — they can read SQLite rows, make HTTP calls, spawn threads, write files. **Don't install plugins you don't trust.**
-- Admin authorization only requires a single env var (`ADMIN_TOKEN`) or an `is_admin=1` user row. Protect that token as you would an SSH key.
+- Plugin management (install/uninstall/activate/deactivate) is gated only by a **logged-in user token** — there is currently **no admin role**. The `ADMIN_TOKEN` env var and the `is_admin` column are read but not enforced. For a single-tenant server that is acceptable, but treat every account as able to load native code. Real admin gating, signature verification, and process isolation are roadmap work.
 - The `install.log` makes post-incident forensics possible but does not prevent malicious plugins.
 - For multi-tenant hosting, plan to (a) require `signature` validation, (b) sandbox long-running plugins behind an IPC process boundary. Both are roadmap items; v1 is single-tenant.
 
@@ -765,6 +775,8 @@ A plugin cdylib statically links **its own copies** of Tokio, sqlx/libsqlite3, a
 
 1. **Always wrap tools with `bridged(...)` at registration.** The adapter runs `invoke` on a runtime the *plugin* owns (`shiny_plugin_sdk::rt::bridge`) and returns the result over an executor-agnostic channel. Without it, the first sqlx/reqwest/tokio-time call inside a tool aborts the host with *"this functionality requires a Tokio context"*.
 2. **Only use the async accessors on `PluginCtx`** — `ctx.pool()`, `ctx.ollama()`, `ctx.search()`, `ctx.supertonic()`. Each lazily opens a **plugin-owned** connection/client inside the plugin's runtime. Never accept a live `SqlitePool` or pre-built reqwest client from the host: values allocated by the host's libsqlite3 segfault when freed by the plugin's copy, and host-built HTTP clients panic when driven from the plugin's reactor. Migrations are the exception by design — they run host-side, with the host pool, at load time.
+
+> **Known caveat (plugin DB access):** a plugin `cdylib` statically links its **own** `libsqlite3` (via `libsqlite3-sys`, compiled with `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`), so in the running server there are *multiple* SQLite library copies in one process. Plugin-owned DB access — both the async `ctx.pool()` (sqlx worker threads) and the newer synchronous `ctx.db()` (`libsqlite3-sys` FFI, unit-tested) — segfaults in the server (`sqlite3_value_free` / `sqlite3LockAndPrepare`). This is a deep multi-copy SQLite issue, not the runtime-bridge shape. The definitive fix is to route **all** plugin data access through the host's single SQLite copy (a host-provided DB API), or to build SQLite without `SQLITE_ENABLE_MEMORY_MANAGEMENT` — see §20 item 8.
 
 ---
 
@@ -814,11 +826,12 @@ Before publishing a plugin:
 | `crates/shiny-plugin-sdk/` | SDK crate — depends on this only. |
 | `plugins/hello/` | Demo plugin from this doc, fully runnable. |
 | `plugins/traveler/` | The traveler domain plugin — 22 tools (trips, GPS, maps, navigation, diary, planning, artifact cards), its own OSM client, navigation builder, diary writer, and prose pipeline. |
-| `plugins/radio/` | Internet radio via Radio Browser — `radio_search`/`radio_play`/`radio_stop` tools plus the Radio window (`web/js/radio.js`) with a singleton `<audio>` player; AI playback arrives as `radio_station` artifacts, stops via the `agent:actions` event. |
-| `plugins/word/` | Simple word processor — `doc_create`/`doc_write`/`doc_append`/`doc_read`/`doc_list`/`doc_delete` tools plus the Word window (`web/js/word.js`). Documents are real OpenDocument Text (`.odt`) bytes in the core-owned `documents` table; the ODT↔HTML codec lives in `crates/shiny-plugin-sdk/src/odt.rs`, and core serves `/api/documents` (list/create/get/save/delete/import/export) — the same interim pattern as `/api/radio/nowplaying` until plugin routes land (roadmap #2). |
-| `plugins/calc/` | Simple spreadsheet — `calc_create`/`calc_write`/`calc_read`/`calc_list`/`calc_delete` tools plus the Calc window (`web/js/calc.js`). Sheets are cell grids (A1-style refs) stored as a JSON map in the core-owned `spreadsheets` table; formulas (values starting with `=`, e.g. `=SUM(A1:A3)`) evaluate live in the window with SUM/AVERAGE/MIN/MAX/COUNT, ranges, `+ − * / ^`. Full user-facing editor: toolbar (new/import/export/delete), formula bar, keyboard editing, autosave, CSV import — and real **OpenDocument Spreadsheet (`.ods`) import/export** via the SDK codec (`crates/shiny-plugin-sdk/src/ods.rs`, self-contained, no office suite). Core serves `/api/spreadsheets` (list/create/get/save/delete/import/export) — the same interim pattern as `/api/documents`. |
-| `plugins/keyboard/` | Pure surface plugin — a virtual multi-language keyboard bar (`web/js/keyboard.js` + `web/css/keyboard.css`) at the bottom of the screen that types into any focused input. Deliberately registers **no skills, tools or persona** — the agent never sees it; activation only mounts the UI. 8 layouts (EN/IT/ES/FR/DE/RU/EL/AR incl. RTL), touch devices suppress the native OS keyboard while it is active. |
-| `plugins/youtube/` | YouTube window — an embedded player (`web/js/youtube.js`) plus `youtube_search`/`youtube_play` tools. Search scrapes YouTube's public `ytInitialData` results JSON (no API key); playback loads `youtube.com/embed/<id>` (the only YouTube path that allows iframing — watch/search pages send `X-Frame-Options: SAMEORIGIN`). Result cards carry a `youtube_play` action, so tapping one starts the video in the window. |
+| `plugins/radio/` | **Self-contained** — `radio_search`/`radio_play`/`radio_stop` tools, the ICY `nowplaying` route (`RouteSpec`), and the Radio window (`web/plugin.js`) all ship in the plugin folder. The window keeps a singleton `<audio>` player; AI playback arrives as `radio_station` artifacts, stops via the `agent:actions` event. |
+| `plugins/word/` | **Self-contained** — `doc_*` tools, its own `documents` table (`migrations/`), the `/api/documents` REST routes (`RouteSpec` + `route_handler`), and the Word window (`web/plugin.js`) all live in the plugin folder. Documents are real OpenDocument Text (`.odt`) bytes via the SDK codec (`crates/shiny-plugin-sdk/src/odt.rs`). Zero core footprint. |
+| `plugins/calc/` | **Self-contained** — `calc_*` tools, its own `spreadsheets` table, `/api/spreadsheets` routes, and the Calc window (`web/plugin.js`) all in the plugin folder. Cell grids (A1 refs) stored as a JSON map; formulas (`=SUM(A1:A3)`) evaluate live in the window; real **`.ods` import/export** via `crates/shiny-plugin-sdk/src/ods.rs`. |
+| `plugins/impress/` | **Self-contained** — `slide_*` tools, its own `presentations` table, `/api/presentations` routes, and the Impress window (`web/plugin.js`) all in the plugin folder. Decks are a JSON array of slides (six layouts, five themes); real **`.odp` import/export** via `crates/shiny-plugin-sdk/src/odp.rs`. |
+| `plugins/keyboard/` | Pure surface plugin — virtual multi-language keyboard bar (8 layouts). Still **chrome-integrated** (`web/js/keyboard.js` + HUD toggle live in core, not the plugin folder): it is not a tile, so it awaits the "chrome surface" contract (see §20 item 7). |
+| `plugins/youtube/` | **Self-contained** — `youtube_search`/`youtube_play` tools, the `/api/youtube/search` route (`RouteSpec`), and the YouTube window (`web/plugin.js`) all in the plugin folder. Search scrapes YouTube's public `ytInitialData` JSON (no API key); playback loads `youtube.com/embed/<id>`. |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
 | `src/plugins/manager.rs` | `PluginManager` — aggregates contributions, persona, skills. |
@@ -881,14 +894,18 @@ How plugin content reaches the eye:
 
 ## 20. Roadmap
 
-The v1 plugin system delivered here implements everything described above plus the `hello` demo end-to-end. The remaining items, scheduled for follow-up work:
+The v1 plugin system delivers a **self-contained plugin model**: a plugin ships `plugin.toml` + cdylib + `migrations/` + `skills/` + `web/` (+ `RouteSpec` routes) and the core needs zero edits to host it — tools, schema, REST routes and window UI all live in the plugin folder. `word`, `calc`, `impress`, `radio` and `youtube` are migrated to this model; `hello` needs nothing; `keyboard` and `traveler` remain chrome-integrated (item 7).
+
+Remaining follow-up work:
 
 1. **Identity refactor** — move the `users` / `auth_tokens` / `is_admin` columns out of `travelers` so a plugin-free bootstrap is fully self-contained.
-2. **Hot router swap** — wire `AppState::router_rebuild` to an `ArcSwap<Router>` so `RouteSpec`-contributed routes appear live without restart.
+2. ~~**Hot router swap**~~ — **done**: `main.rs` wraps the router in an `ArcSwap` + `RouterHandle` make-service; `RouteSpec` routes mount live on install/uninstall via `router_rebuild`, with auth middleware per `RouteSpec.auth`.
 3. **Cron hook activation** — read `CronSpec` from `RegistryBuilder` and spawn a per-plugin scheduler that calls a pluggable `cron_handler(tag, ctx)`.
-4. **Plugin web asset serving** — mount `data/plugins/<name>/web/` at `/plugins/<name>/` automatically.
+4. ~~**Plugin web asset serving**~~ — **done**: `data/plugins/<name>/web/` is served at `/plugins/<name>/`, and the frontend dynamically loads each enabled plugin's `web/plugin.js` window surface (no hardcoded tile registry).
 5. **Signature verification** — turn on ed25519 signature enforcement behind the `signed-plugins` feature flag.
-6. ~~**Traveler plugin extraction**~~ — **done**: all 22 traveler verbs (plus `show_artifact`/`update_artifact`) live in `plugins/traveler/`; core keeps only `web_search`. Traveler REST handlers + gpsd + core's `DiaryGenerator` cron remain in core until items 2/3 land.
+6. **Traveler extraction (partial)** — the 22 traveler verbs (plus `show_artifact`/`update_artifact`) live in `plugins/traveler/`; core keeps only `web_search`. Traveler's REST handlers, gpsd, `DiaryGenerator` cron, and the map/dock/HUD chrome remain in core.
+7. **Chrome surface contract** — `keyboard` (bottom bar + HUD toggle) and `traveler` (map, dock, saved-trips HUD) are *chrome*, not tiles. Define a `chrome.js` surface contract so those too can ship entirely inside their plugin folders.
+8. **Safe plugin data access** — `rt::bridge` now uses a per-plugin single-thread `current_thread` dispatcher, and a synchronous `ctx.db()` (`libsqlite3-sys` FFI) accessor is implemented and unit-tested. Both still segfault in the server because the plugin links its **own** `libsqlite3` (compiled with `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`), so multiple SQLite copies coexist in one process. Fix by (a) routing plugin DB through the host's single SQLite copy, or (b) building SQLite without `SQLITE_ENABLE_MEMORY_MANAGEMENT` (see §15 caveat).
 7. **Plugin uninstall path with DB rollback** — drop plugin-owned tables when an admin request explicitly asks for it.
 
 Nothing here changes the v1 contract — plugins written against `api_level=1` keep working across the roadmap.

@@ -1,5 +1,4 @@
--- Core-owned spreadsheet storage for the calc plugin (same pattern as
--- documents: core owns the table, the plugin owns the domain logic).
+-- Calc plugin owns the `spreadsheets` table (self-contained schema).
 -- Cells are stored as a JSON map "A1" -> "value" (formulas start with "="
 -- and are evaluated client-side in the Calc window).
 

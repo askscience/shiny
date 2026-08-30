@@ -23,6 +23,8 @@ struct PluginListEntry {
     description: Option<String>,
     enabled: bool,
     summary: Option<String>,
+    /// True when the plugin ships a `web/plugin.js` window surface.
+    surface: bool,
 }
 
 /// GET /api/plugins — every authenticated user sees the same installed list
@@ -32,12 +34,18 @@ pub async fn list(
     Extension(traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let active = active_plugin_set(&state, &traveler.id).await?;
+    let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
     let entries: Vec<PluginListEntry> = state
         .plugins
         .list()
         .into_iter()
         .map(|m| {
             let enabled = active.contains(&m.name);
+            let surface = plugins_dir
+                .join(&m.name)
+                .join(&m.web_dir)
+                .join("plugin.js")
+                .is_file();
             PluginListEntry {
                 name: m.name,
                 version: m.version.to_string(),
@@ -45,6 +53,7 @@ pub async fn list(
                 description: m.description,
                 summary: m.summary,
                 enabled,
+                surface,
             }
         })
         .collect();
