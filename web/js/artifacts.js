@@ -9,7 +9,6 @@ import {
   setActiveDestination,
 } from './artifactStore.js';
 import { previewDestination } from './map.js';
-import { loadContextInsights } from './insights/insightCards.js';
 import { isPluginActive } from './activePlugins.js';
 import { openArtifactInTile } from './tiles.js';
 import { dockButton, iconForArtifact, labelForArtifact } from '../ui/index.js';
@@ -118,10 +117,6 @@ export async function openSavedArtifact(id) {
     }
     const destKey = destinationKeyForArtifact(artifact);
     if (destKey) setActiveDestination(destKey);
-    if (artifact.coordinates?.lat != null && artifact.coordinates?.lon != null) {
-      const dest = artifact.destination || artifact.title;
-      void loadContextInsights(dest, artifact.coordinates.lat, artifact.coordinates.lon);
-    }
     renderArtifact(artifact);
   } catch (e) {
     if (e.status === 404) {
