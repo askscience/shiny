@@ -4,8 +4,9 @@
  * Decks are stored server-side as a JSON array of slides (the SDK `Slide`
  * model) and exported as real OpenDocument Presentation (.odp) files. This
  * window is the human editor: a slide strip (thumbnails + reorder/add), a
- * 16:9 stage that renders the current slide, an inspector for the slide's
- * fields (layout, title, bullets, columns, notes), and a Present overlay.
+ * 16:9 stage whose text is edited directly (contentEditable), a slim
+ * inspector (layout selector, speaker notes, slide ops), and a Present
+ * overlay.
  *
  * AI wiring: `slide_*` tool outcomes arrive via the `agent:actions` event —
  * the window refreshes its deck list and opens what the AI touched.
@@ -31,17 +32,17 @@ let statusEl = null;
 let stripEl = null;
 let stageEl = null;
 let presentEl = null;
+let stageWrapEl = null;
+let inspectorEl = null;
+let stageSlideNode = null;
+let resizeObserver = null;
 
-// Inspector field elements (created once; repopulated per selection).
+// Inspector controls (created once; repopulated per selection). Slide text is
+// edited directly on the stage via contentEditable; the inspector keeps only
+// the layout selector, speaker notes and slide operations.
 let layoutSelect = null;
-let fieldTitle = null;
-let fieldSubtitle = null;
-let fieldBullets = null;
-let fieldCol1 = null;
-let fieldCol2 = null;
-let fieldBody = null;
-let fieldAttribution = null;
 let fieldNotes = null;
+let thumbRefreshTimer = null;
 
 let decks = [];
 let current = null;   // { id, title, theme, aspect, slides: [], updated_at }
@@ -129,65 +130,150 @@ function h(tag, className, text) {
   return el;
 }
 
-/** Render one slide as a DOM node (used by the stage and thumbnails). */
-function slideEl(slide, theme) {
+/** Render one slide as a DOM node (used by the stage and thumbnails).
+ *  `editable` makes the stage slide's text contentEditable so it can be
+ *  edited in place; thumbnails and the Present overlay render read-only. */
+function slideEl(slide, theme, editable = false) {
   const el = h('div', `impress-slide impress-slide--${slide.layout}`);
   el.dataset.theme = theme;
 
+  const addText = (field, className, content, multiline = false) => {
+    if (!editable && String(content || '').trim() === '') return;
+    const node = h('div', className, content);
+    if (editable) {
+      node.contentEditable = 'true';
+      node.spellcheck = false;
+      node.dataset.field = field;
+      if (multiline) node.dataset.multiline = '1';
+      node.setAttribute('role', 'textbox');
+      const placeholder = field === 'body'
+        ? (slide.layout === 'blank' ? 'Add text' : '')
+        : ({ title: 'Add a title', subtitle: 'Add a subtitle', attribution: 'Attribution' }[field] || '');
+      if (placeholder) node.dataset.placeholder = placeholder;
+      wireTextField(node);
+    }
+    el.appendChild(node);
+  };
+
   if (slide.layout === 'title') {
-    if (slide.title) el.appendChild(h('div', 'impress-slide-title', slide.title));
-    if (slide.subtitle) el.appendChild(h('div', 'impress-slide-subtitle', slide.subtitle));
+    addText('title', 'impress-slide-title', slide.title);
+    addText('subtitle', 'impress-slide-subtitle', slide.subtitle);
     return el;
   }
 
   if (slide.layout === 'section') {
-    if (slide.title) el.appendChild(h('div', 'impress-slide-title', slide.title));
+    addText('title', 'impress-slide-title', slide.title);
     return el;
   }
 
   if (slide.layout === 'quote') {
-    if (slide.body) el.appendChild(h('div', 'impress-slide-quote', slide.body));
-    if (slide.attribution) el.appendChild(h('div', 'impress-slide-attribution', slide.attribution));
+    addText('body', 'impress-slide-quote', slide.body, true);
+    addText('attribution', 'impress-slide-attribution', slide.attribution);
     return el;
   }
 
   if (slide.layout === 'blank') {
-    if (slide.body) el.appendChild(h('div', 'impress-slide-body', slide.body));
+    addText('body', 'impress-slide-body', slide.body, true);
     return el;
   }
 
   // content + two-column share a title block.
-  if (slide.title) el.appendChild(h('div', 'impress-slide-title', slide.title));
+  addText('title', 'impress-slide-title', slide.title);
 
   if (slide.layout === 'two-column') {
     const cols = h('div', 'impress-slide-columns');
-    const [left = [], right = []] = slide.columns;
-    cols.appendChild(bulletList(left));
-    cols.appendChild(bulletList(right));
+    const [left = [], right = []] = slide.columns || [[], []];
+    cols.appendChild(bulletList(left, 'columns', 0, editable));
+    cols.appendChild(bulletList(right, 'columns', 1, editable));
     el.appendChild(cols);
   } else {
-    el.appendChild(bulletList(slide.bullets));
+    el.appendChild(bulletList(slide.bullets, 'bullets', 0, editable));
   }
   return el;
 }
 
-function bulletList(items) {
+function bulletList(items, field, colIdx, editable) {
   const ul = h('div', 'impress-slide-bullets');
-  for (const b of items || []) {
-    if (String(b).trim() === '') continue;
-    ul.appendChild(h('div', 'impress-slide-bullet', String(b)));
-  }
+  ul.dataset.field = field;
+  if (field === 'columns') ul.dataset.col = String(colIdx);
+  let list = (items || []).filter((b) => editable || String(b).trim() !== '');
+  if (editable && list.length === 0) list = [''];
+  for (const b of list) ul.appendChild(makeBullet(String(b), ul, editable));
   return ul;
+}
+
+function makeBullet(text, containerEl, editable) {
+  const d = document.createElement('div');
+  d.className = 'impress-slide-bullet';
+  d.textContent = text;
+  if (!editable) return d;
+
+  d.contentEditable = 'true';
+  d.spellcheck = true;
+  d.addEventListener('input', () => syncBullets(containerEl));
+  d.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const next = makeBullet('', containerEl, true);
+      d.after(next);
+      next.focus();
+      syncBullets(containerEl);
+    } else if (e.key === 'Backspace' && d.textContent === '') {
+      const siblings = [...containerEl.querySelectorAll('.impress-slide-bullet')];
+      if (siblings.length > 1) {
+        e.preventDefault();
+        const idx = siblings.indexOf(d);
+        d.remove();
+        (siblings[idx - 1] || siblings[idx + 1])?.focus();
+        syncBullets(containerEl);
+      }
+    }
+  });
+  return d;
+}
+
+function syncBullets(containerEl) {
+  const slide = currentSlide();
+  if (!slide) return;
+  const items = [...containerEl.querySelectorAll('.impress-slide-bullet')]
+    .map((b) => b.textContent);
+  if (containerEl.dataset.field === 'columns') {
+    const col = Number(containerEl.dataset.col || 0);
+    while (slide.columns.length <= col) slide.columns.push([]);
+    slide.columns[col] = items;
+  } else {
+    slide.bullets = items;
+  }
+  markDirty();
+  scheduleThumbRefresh();
+}
+
+function wireTextField(node) {
+  node.addEventListener('input', () => {
+    const slide = currentSlide();
+    if (!slide) return;
+    slide[node.dataset.field] = node.innerText;
+    markDirty();
+    scheduleThumbRefresh();
+  });
+  if (!node.dataset.multiline) {
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+    });
+  }
 }
 
 function renderStage() {
   if (!stageEl || !current) return;
+  resizeStage();
   stageEl.innerHTML = '';
   const slide = current.slides[selIndex];
   if (slide) {
-    const node = slideEl(slide, current.theme);
-    stageEl.appendChild(node);
-    fitSlide(stageEl, node);
+    stageSlideNode = slideEl(slide, current.theme, true);
+    stageEl.appendChild(stageSlideNode);
+    fitSlide(stageEl, stageSlideNode);
+  } else {
+    stageSlideNode = null;
   }
 }
 
@@ -222,36 +308,51 @@ function fitSlide(container, node) {
   node.style.transform = `scale(${container.clientWidth / 640})`;
 }
 
+/** Size the stage container to the largest 16:9 box that fits above the
+ *  inspector (width- and height-constrained). The slide inside is then scaled
+ *  by fitSlide to fill it exactly. */
+function resizeStage() {
+  if (!stageEl || !stageWrapEl) return;
+  const gutter = 24;           // 12px horizontal inset on each side
+  const vgap = 12;             // vertical breathing room around the stage
+  const inspectorH = inspectorEl ? inspectorEl.offsetHeight : 0;
+  const availW = stageWrapEl.clientWidth - gutter;
+  const availH = stageWrapEl.clientHeight - inspectorH - vgap * 2;
+  if (availW <= 0 || availH <= 0) return;
+  const scale = Math.min(availW / 640, availH / 360);
+  stageEl.style.width = `${Math.floor(640 * scale)}px`;
+  stageEl.style.height = `${Math.floor(360 * scale)}px`;
+}
+
+function observeStageSize() {
+  if (typeof ResizeObserver === 'undefined' || resizeObserver || !stageWrapEl) return;
+  resizeObserver = new ResizeObserver(() => {
+    resizeStage();
+    if (stageSlideNode && stageEl) fitSlide(stageEl, stageSlideNode);
+  });
+  resizeObserver.observe(stageWrapEl);
+  if (inspectorEl) resizeObserver.observe(inspectorEl);
+}
+
+function currentSlide() {
+  return current?.slides?.[selIndex] || null;
+}
+
 function renderInspector() {
   if (!current) return;
   const slide = current.slides[selIndex] || newSlide();
-
   layoutSelect.value = slide.layout;
-  fieldTitle.value = slide.title;
-  fieldSubtitle.value = slide.subtitle;
-  fieldBody.value = slide.body;
-  fieldAttribution.value = slide.attribution;
   fieldNotes.value = slide.notes;
-  fieldBullets.value = (slide.bullets || []).join('\n');
-  const cols = slide.columns || [];
-  fieldCol1.value = (cols[0] || []).join('\n');
-  fieldCol2.value = (cols[1] || []).join('\n');
-
-  syncFieldVisibility();
 }
 
-function syncFieldVisibility() {
-  const layout = current?.slides[selIndex]?.layout || 'content';
-  const show = (el, on) => el.closest('.impress-field').classList.toggle('hidden', !on);
-  show(fieldTitle, ['title', 'section', 'content', 'two-column'].includes(layout));
-  show(fieldSubtitle, layout === 'title');
-  show(fieldBullets, layout === 'content');
-  show(fieldCol1, layout === 'two-column');
-  show(fieldCol2, layout === 'two-column');
-  show(fieldBody, layout === 'quote' || layout === 'blank');
-  show(fieldAttribution, layout === 'quote');
-  // Notes are always visible (their field has no hide rule, but keep it shown).
-  fieldNotes.closest('.impress-field')?.classList.remove('hidden');
+/** Debounce thumbnail redraws while the user types on the stage — the stage
+ *  itself must NOT be re-rendered mid-edit or the caret/focus is lost. */
+function scheduleThumbRefresh() {
+  window.clearTimeout(thumbRefreshTimer);
+  thumbRefreshTimer = window.setTimeout(() => {
+    thumbRefreshTimer = null;
+    if (current) renderStrip();
+  }, 300);
 }
 
 /* ── State / persistence ────────────────────────────────────── */
@@ -454,8 +555,8 @@ function renderDeckMenuItems() {
     foot.appendChild(item);
   };
   footItem('ui/plus', 'New presentation', false, () => void newDeck());
-  footItem('ui/upload', 'Import .odp', false, pickOdpFile);
-  footItem('ui/save', 'Export .odp', false, () => void exportOdp());
+  footItem('ui/download', 'Import .odp', false, pickOdpFile);
+  footItem('ui/upload', 'Export .odp', false, () => void exportOdp());
   footItem('ui/trash', 'Delete presentation', true, () => void removeCurrent());
   deckMenuPopup.appendChild(foot);
 }
@@ -654,10 +755,11 @@ export function mountImpressTile() {
   const tools = h('div', 'impress-tools');
   tools.append(
     toolbarButton('ui/plus', 'New presentation', () => void newDeck()),
-    toolbarButton('ui/upload', 'Import .odp', pickOdpFile),
-    toolbarButton('ui/save', 'Export .odp', () => void exportOdp()),
-    toolbarButton('ui/play', 'Present', startPresent),
+    toolbarButton('ui/download', 'Import .odp', pickOdpFile),
+    toolbarButton('ui/upload', 'Export .odp', () => void exportOdp()),
+    toolbarButton('ui/save', 'Save now', () => void persist()),
     toolbarButton('ui/trash', 'Delete presentation', () => void removeCurrent(), true),
+    toolbarButton('ui/play', 'Present', startPresent),
   );
   tileEl.appendChild(tools);
 
@@ -667,13 +769,14 @@ export function mountImpressTile() {
   stripEl = h('div', 'impress-strip');
 
   const stageWrap = h('div', 'impress-stage-wrap');
+  stageWrapEl = stageWrap;
   stageEl = h('div', 'impress-stage');
   stageEl.appendChild(emptyState({ title: 'No presentation', body: 'Create one, or ask the AI to build a deck' }));
   stageWrap.appendChild(stageEl);
 
   const inspector = buildInspector();
+  inspectorEl = inspector;
   stageWrap.appendChild(inspector);
-  bindFields();
 
   body.append(stripEl, stageWrap);
   tileEl.appendChild(body);
@@ -692,12 +795,14 @@ export function mountImpressTile() {
       else if (e.key === 'Escape') { e.preventDefault(); stopPresent(); }
       return;
     }
-    const tag = (document.activeElement?.tagName || '').toLowerCase();
-    if (['input', 'textarea', 'select'].includes(tag)) return;
+    const active = document.activeElement;
+    const tag = (active?.tagName || '').toLowerCase();
+    if (['input', 'textarea', 'select'].includes(tag) || active?.isContentEditable) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); selectSlide(selIndex + 1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); selectSlide(selIndex - 1); }
   });
 
+  observeStageSize();
   void openNewest();
   return tileEl;
 }
@@ -720,27 +825,26 @@ function buildInspector() {
       markDirty();
       renderStage();
       renderStrip();
-      syncFieldVisibility();
     });
     return layoutSelect;
   });
   panel.appendChild(layoutField);
 
-  fieldTitle = buildField('Title', 'input');
-  fieldSubtitle = buildField('Subtitle', 'input');
-  fieldBullets = buildField('Bullets (one per line)', 'textarea');
-  fieldCol1 = buildField('Left column', 'textarea');
-  fieldCol2 = buildField('Right column', 'textarea');
-  fieldBody = buildField('Text', 'textarea');
-  fieldAttribution = buildField('Attribution', 'input');
+  // Speaker notes are the one field that has no on-slide home.
   fieldNotes = buildField('Speaker notes', 'textarea');
+  const notesInput = fieldNotes.querySelector('textarea');
+  notesInput.rows = 3;
+  notesInput.style.resize = 'none';
+  notesInput.addEventListener('input', () => {
+    if (!current) return;
+    current.slides[selIndex].notes = notesInput.value;
+    markDirty();
+  });
+  panel.appendChild(fieldNotes);
 
-  panel.append(
-    fieldTitle, fieldSubtitle, fieldBullets,
-    fieldCol1, fieldCol2, fieldBody, fieldAttribution, fieldNotes,
-  );
+  // Hint + slide operations.
+  panel.appendChild(h('p', 'impress-hint', 'Click any text on the slide to edit it directly.'));
 
-  // Slide operations: add / move / delete.
   const ops = h('div', 'impress-ops');
   const opBtn = (iconName, label, onClick, danger = false) => {
     const btn = button({ icon: iconName, variant: 'ghost', onClick });
@@ -761,7 +865,7 @@ function buildInspector() {
   return panel;
 }
 
-/** Build a labelled field whose input is bound to a slide property. */
+/** Build a labelled form field (used for the layout selector + notes). */
 function buildField(label, kind) {
   const wrap = h('div', 'impress-field');
   const lbl = h('label', 'impress-field-label', label);
@@ -779,52 +883,6 @@ function field(label, make) {
   const lbl = h('label', 'impress-field-label', label);
   wrap.append(lbl, make());
   return wrap;
-}
-
-/* Field → model binding (attached once; the elements are repopulated per
- * selection but never recreated, so focus survives editing). */
-let fieldsBound = false;
-function bindFields() {
-  if (fieldsBound) return;
-  fieldsBound = true;
-  const text = (el, key) => {
-    el.addEventListener('input', () => {
-      if (!current) return;
-      current.slides[selIndex][key] = el.value;
-      markDirty();
-      renderStage();
-      renderStrip();
-    });
-  };
-  const lines = (el, key) => {
-    el.addEventListener('input', () => {
-      if (!current) return;
-      current.slides[selIndex][key] = el.value.split('\n').map((s) => s.replace(/\s+$/, ''));
-      markDirty();
-      renderStage();
-      renderStrip();
-    });
-  };
-  const colLines = (el, idx) => {
-    el.addEventListener('input', () => {
-      if (!current) return;
-      const cols = current.slides[selIndex].columns;
-      while (cols.length <= idx) cols.push([]);
-      cols[idx] = el.value.split('\n').map((s) => s.replace(/\s+$/, ''));
-      markDirty();
-      renderStage();
-      renderStrip();
-    });
-  };
-
-  text(fieldTitle.querySelector('input'), 'title');
-  text(fieldSubtitle.querySelector('input'), 'subtitle');
-  text(fieldAttribution.querySelector('input'), 'attribution');
-  text(fieldBody.querySelector('textarea'), 'body');
-  text(fieldNotes.querySelector('textarea'), 'notes');
-  lines(fieldBullets.querySelector('textarea'), 'bullets');
-  colLines(fieldCol1.querySelector('textarea'), 0);
-  colLines(fieldCol2.querySelector('textarea'), 1);
 }
 
 function addSlide() {
@@ -866,16 +924,25 @@ function moveSlide(delta) {
 export function unmountImpressTile() {
   if (current && dirty) void persist();
   stopPresent();
+  window.clearTimeout(thumbRefreshTimer);
+  resizeObserver?.disconnect();
   tileEl?.remove();
   tileEl = null;
   stripEl = null;
   stageEl = null;
   presentEl = null;
+  stageWrapEl = null;
+  inspectorEl = null;
+  stageSlideNode = null;
+  resizeObserver = null;
   deckMenuBtn = null;
   titleInput = null;
   themeSelect = null;
   saveDot = null;
   statusEl = null;
+  layoutSelect = null;
+  fieldNotes = null;
+  thumbRefreshTimer = null;
 }
 
 /** The tile element (or null when the Impress window is not mounted). */

@@ -508,9 +508,9 @@ function renderSheetMenuItems() {
     foot.appendChild(item);
   };
   footItem('ui/plus', 'New spreadsheet', false, () => void newSheet());
-  footItem('ui/upload', 'Import .ods', false, pickOdsFile);
-  footItem('ui/upload', 'Import CSV', false, pickCsvFile);
-  footItem('ui/save', 'Export .ods', false, () => void exportOds());
+  footItem('ui/download', 'Import .ods', false, pickOdsFile);
+  footItem('ui/download', 'Import CSV', false, pickCsvFile);
+  footItem('ui/upload', 'Export .ods', false, () => void exportOds());
   footItem('ui/trash', 'Delete spreadsheet', true, () => void removeCurrent());
   sheetMenuPopup.appendChild(foot);
 }
@@ -873,8 +873,9 @@ export function mountCalcTile() {
   };
   tools.append(
     toolBtn('ui/plus', 'New spreadsheet', () => void newSheet()),
-    toolBtn('ui/upload', 'Import .ods', pickOdsFile),
-    toolBtn('ui/save', 'Export .ods', () => void exportOds()),
+    toolBtn('ui/download', 'Import .ods', pickOdsFile),
+    toolBtn('ui/upload', 'Export .ods', () => void exportOds()),
+    toolBtn('ui/save', 'Save now', () => void persist()),
     toolBtn('ui/trash', 'Delete spreadsheet', () => void removeCurrent(), true),
   );
   tileEl.appendChild(tools);

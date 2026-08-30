@@ -261,8 +261,8 @@ function renderDocMenuItems() {
     foot.appendChild(item);
   };
   footItem('ui/plus', 'New document', false, () => void newDocument());
-  footItem('ui/upload', 'Import .odt', false, pickOdtFile);
-  footItem('ui/doc', 'Export .odt', false, () => void exportCurrent());
+  footItem('ui/download', 'Import .odt', false, pickOdtFile);
+  footItem('ui/upload', 'Export .odt', false, () => void exportCurrent());
   footItem('ui/trash', 'Delete document', true, () => void removeCurrent());
   docMenuPopup.appendChild(foot);
 }
@@ -443,28 +443,28 @@ export function mountWordTile() {
   const spacer = document.createElement('span');
   spacer.className = 'word-tools-spacer';
   tools.appendChild(spacer);
-  const saveBtn = toolbarButton('save', 'ui/save', 'Save now', () => void persist());
-  saveBtn.classList.add('word-tool--secondary');
-  tools.appendChild(saveBtn);
-  // Import / export / new / delete — hidden by the compact window layout,
-  // always available in the document menu.
-  const importBtn = button({ icon: 'ui/upload', variant: 'ghost', onClick: pickOdtFile });
-  importBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  importBtn.title = 'Import .odt';
-  importBtn.setAttribute('aria-label', 'Import .odt');
-  const exportBtn = button({ icon: 'ui/doc', variant: 'ghost', onClick: () => void exportCurrent() });
-  exportBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  exportBtn.title = 'Export .odt';
-  exportBtn.setAttribute('aria-label', 'Export .odt');
+  // File actions — unified order across word/calc/impress: new, import,
+  // export, (save), delete. Hidden by the compact window layout, always
+  // available in the document menu.
   const newBtn = button({ icon: 'ui/plus', variant: 'ghost', onClick: () => void newDocument() });
   newBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
   newBtn.title = 'New document';
   newBtn.setAttribute('aria-label', 'New document');
+  const importBtn = button({ icon: 'ui/download', variant: 'ghost', onClick: pickOdtFile });
+  importBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
+  importBtn.title = 'Import .odt';
+  importBtn.setAttribute('aria-label', 'Import .odt');
+  const exportBtn = button({ icon: 'ui/upload', variant: 'ghost', onClick: () => void exportCurrent() });
+  exportBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
+  exportBtn.title = 'Export .odt';
+  exportBtn.setAttribute('aria-label', 'Export .odt');
+  const saveBtn = toolbarButton('save', 'ui/save', 'Save now', () => void persist());
+  saveBtn.classList.add('word-tool--secondary');
   const delBtn = button({ icon: 'ui/trash', variant: 'ghost', onClick: () => void removeCurrent() });
   delBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--danger', 'word-tool--secondary');
   delBtn.title = 'Delete document';
   delBtn.setAttribute('aria-label', 'Delete document');
-  tools.append(importBtn, exportBtn, newBtn, delBtn);
+  tools.append(newBtn, importBtn, exportBtn, saveBtn, delBtn);
   tileEl.appendChild(tools);
 
   /* Editor */

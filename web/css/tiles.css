@@ -1711,9 +1711,9 @@ body.compose-active #tile-overlay {
   position: relative;
   flex: none;
   width: calc(100% - 24px);
-  max-width: 720px;
+  max-width: 100%;
   margin: 12px auto 0;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 9; /* fallback; JS sizes the box to fill the space */
   background: var(--bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
@@ -1722,7 +1722,7 @@ body.compose-active #tile-overlay {
 }
 
 .impress-inspector {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -2055,6 +2055,37 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .impress-slide--blank .impress-slide-body {
   font-size: 24px;
   color: #334155;
+}
+
+/* Direct on-slide editing: text blocks are contentEditable on the stage. */
+.impress-slide [contenteditable] {
+  outline: none;
+  min-height: 1em;
+  cursor: text;
+  border-radius: 2px;
+  transition: background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+.impress-slide [contenteditable]:hover {
+  background: color-mix(in srgb, var(--im-accent) 10%, transparent);
+}
+.impress-slide [contenteditable]:focus {
+  background: color-mix(in srgb, var(--im-accent) 14%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--im-accent) 70%, transparent);
+}
+.impress-slide [contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(127, 127, 127, 0.55);
+  pointer-events: none;
+}
+
+/* Inspector hint text. */
+.impress-hint {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* Present overlay — covers the tile, click / arrows advance. */
