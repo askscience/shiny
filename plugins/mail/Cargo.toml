@@ -1,0 +1,26 @@
+[package]
+name = "shiny-mail-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "shiny_mail_plugin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = { version = "1", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["json", "query", "multipart"] }
+io-email = { version = "0.1", default-features = false, features = ["client", "imap", "smtp", "rustls-ring", "serde"] }
+pimalaya-stream = "0.0.1"
+io-smtp = "0.1"
+mail-builder = "0.5"
+mail-parser = "0.11"
+url = "2"
+secrecy = "0.10"
+chrono = { version = "0.4", features = ["serde"] }

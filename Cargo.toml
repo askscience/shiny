@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/shiny-plugin-sdk", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress"]
+members = [".", "crates/shiny-plugin-sdk", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail"]
 resolver = "2"
 
 # Vendored libsqlite3-sys, patched to link the SYSTEM SQLite (one shared

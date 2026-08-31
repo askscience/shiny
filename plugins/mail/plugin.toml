@@ -1,0 +1,9 @@
+name = "mail"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Mail client — IMAP inbox + SMTP compose, backed by io-email"
+summary = "Mail client: configure mail accounts, read the inbox and send email"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"
