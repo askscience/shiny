@@ -137,12 +137,13 @@ function ensurePanel() {
   if (panel) return;
   panel = modal({ title: null, wide: true });
   panel.el.classList.add('chat-history-panel');
-  panel.el.addEventListener('open', () => void refreshList());
+  panel.body.style.gap = '0'; // title bar + padded content, like a plugin window
 }
 
 export function openChatHistory() {
   ensurePanel();
   panel.open();
+  void refreshList();
 }
 
 export function initChatHistory() {

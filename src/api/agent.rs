@@ -429,6 +429,7 @@ pub async fn handle_agent(
 
     let _ = crate::services::chat_memory::save_turn(
         &state.pool,
+        &state.ollama,
         &traveler.id,
         &conversation_id,
         &user_message,
@@ -477,6 +478,7 @@ pub async fn handle_agent_stream(
             Ok(result) => {
                 let _ = crate::services::chat_memory::save_turn(
                     &state.pool,
+                    &state.ollama,
                     &traveler.id,
                     &conversation_id,
                     &user_message,
