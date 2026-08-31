@@ -962,7 +962,12 @@ function onAgentActions(e) {
 
   const sent = mailActions.some((a) => a.action === 'mail_send' && a.result === 'ok');
   const listed = mailActions.some((a) => a.action === 'mail_list' && a.result === 'ok');
-  if (sent || listed) {
+  if (sent) {
+    toast('Message sent', { type: 'info' });
+    void refreshStatus({ keepFolder: true });
+    // Re-check shortly after: the delivered copy can take a moment to land.
+    window.setTimeout(() => void refreshStatus({ keepFolder: true }), 2500);
+  } else if (listed) {
     void refreshStatus({ keepFolder: true });
   }
 }

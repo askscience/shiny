@@ -99,7 +99,11 @@ impl Tool for MailSend {
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let to = data.get("to").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default();
-        format!("Sent email to {to}")
+        if data.get("sent").and_then(|v| v.as_bool()) == Some(false) {
+            format!("Email to {to} was already sent (skipped duplicate)")
+        } else {
+            format!("Sent email to {to}")
+        }
     }
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let account = req.params.param_str("account");
@@ -112,7 +116,7 @@ impl Tool for MailSend {
         let subject = req.params.param_str("subject").unwrap_or_default();
         let body = req.params.param_str("body").unwrap_or_default();
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
-        mail::send(a, to.clone(), cc, bcc, subject, body, None).await?;
-        Ok(ActionOutcome::ok("mail_send", json!({ "to": to })))
+        let sent = mail::send(a, to.clone(), cc, bcc, subject, body, None).await?;
+        Ok(ActionOutcome::ok("mail_send", json!({ "to": to, "sent": sent })))
     }
 }

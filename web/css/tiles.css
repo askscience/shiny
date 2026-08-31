@@ -2228,7 +2228,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 
 .mail-folders {
   flex: none;
-  width: 168px;
+  width: 140px;
   overflow-y: auto;
   scrollbar-width: thin;
   display: flex;
@@ -2262,8 +2262,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .mail-folder-count { font-size: 10px; color: var(--muted); flex: none; }
 
 .mail-list {
-  flex: 1 1 42%;
-  min-width: 220px;
+  flex: 1 1 36%;
+  min-width: 240px;
   overflow-y: auto;
   scrollbar-width: thin;
   display: flex;
@@ -2319,17 +2319,17 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 
 .mail-reader {
-  flex: 1 1 58%;
-  min-width: 260px;
+  flex: 1 1 64%;
+  min-width: 300px;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: 18px 20px 40px;
+  padding: 20px 24px 48px;
   background: var(--surface);
 }
 
 .mail-reader-subject {
   font-family: var(--font-display);
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -2350,13 +2350,13 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 .mail-reader-body {
   font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.7;
   color: var(--text);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
-.mail-reader-html { font-family: var(--font-body); font-size: 14px; line-height: 1.65; color: var(--text); word-wrap: break-word; }
+.mail-reader-html { font-family: var(--font-body); font-size: 15px; line-height: 1.7; color: var(--text); word-wrap: break-word; }
 .mail-reader-html img { max-width: 100%; }
 .mail-reader-html a { color: var(--accent); }
 .mail-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }

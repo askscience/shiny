@@ -416,7 +416,7 @@ fn mail_send(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::BadRequest("at least one recipient required".into()));
             }
             let a = mail::resolve_account(ctx.db(), &uid, body.account_id.as_deref())?;
-            mail::send(
+            let sent = mail::send(
                 a,
                 body.to,
                 body.cc.unwrap_or_default(),
@@ -426,7 +426,7 @@ fn mail_send(ctx: Arc<PluginCtx>) -> RouteHandler {
                 body.html,
             )
             .await?;
-            Ok(ok(json!({ "sent": true })))
+            Ok(ok(json!({ "sent": sent })))
         }
     })
 }

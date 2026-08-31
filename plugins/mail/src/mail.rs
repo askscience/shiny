@@ -2,6 +2,9 @@
 //! folder/envelope listing, message fetch + parse, compose + send.
 
 use std::borrow::Cow;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Mutex;
 
 use io_email::client::{EmailClientStd, EmailClientStdError};
 use io_email::envelope::types::Envelope;
@@ -439,6 +442,28 @@ fn mp_addr_str(name: Option<&str>, address: Option<&str>) -> String {
     }
 }
 
+/// In-memory send dedup: the agent occasionally emits `mail_send` twice in a
+/// row (e.g. once as `mail.mail_send`, once as `mail_send`). Skip a repeat of
+/// an identical message within a short window so it isn't delivered twice.
+static RECENT_SENDS: Mutex<Vec<(i64, u64)>> = Mutex::new(Vec::new());
+const DEDUP_WINDOW_MS: i64 = 10_000;
+
+fn send_fingerprint(
+    to: &[String],
+    cc: &[String],
+    bcc: &[String],
+    subject: &str,
+    body: &str,
+) -> u64 {
+    let mut h = DefaultHasher::new();
+    for v in to { v.hash(&mut h); }
+    for v in cc { v.hash(&mut h); }
+    for v in bcc { v.hash(&mut h); }
+    subject.hash(&mut h);
+    body.hash(&mut h);
+    h.finish()
+}
+
 pub async fn send(
     a: Account,
     to: Vec<String>,
@@ -447,8 +472,19 @@ pub async fn send(
     subject: String,
     body: String,
     html: Option<String>,
-) -> Result<(), AppError> {
-    blocking(move || {
+) -> Result<bool, AppError> {
+    let fp = send_fingerprint(&to, &cc, &bcc, &subject, &body);
+    let now = chrono::Utc::now().timestamp_millis();
+    {
+        let mut recents = RECENT_SENDS.lock().unwrap();
+        recents.retain(|(t, _)| now - t <= DEDUP_WINDOW_MS);
+        if recents.iter().any(|(_, f)| *f == fp) {
+            return Ok(false); // duplicate within the window — already sent
+        }
+        recents.push((now, fp));
+    }
+
+    let result = blocking(move || {
         let mut builder = mail_builder::MessageBuilder::new()
             .from(a.email.clone())
             .to(to)
@@ -474,7 +510,14 @@ pub async fn send(
             .map_err(|e| AppError::BadRequest(format!("send failed: {e}")))?;
         Ok(())
     })
-    .await
+    .await;
+
+    // If the send failed, drop the fingerprint so a retry is allowed.
+    if result.is_err() {
+        let mut recents = RECENT_SENDS.lock().unwrap();
+        recents.retain(|(_, f)| *f != fp);
+    }
+    result.map(|_| true)
 }
 
 /// Mark a set of message ids seen/unseen (read/unread).
