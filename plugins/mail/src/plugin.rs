@@ -28,6 +28,7 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec { method: HttpMethod::Get, path: "/api/mail/message".into(), auth: "auth".into(), handler_tag: "mail_message".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/mail/send".into(), auth: "auth".into(), handler_tag: "mail_send".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/mail/flag".into(), auth: "auth".into(), handler_tag: "mail_flag".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/mail/delete".into(), auth: "auth".into(), handler_tag: "mail_delete".into() },
     ]
 }
 

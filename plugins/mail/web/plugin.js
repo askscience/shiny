@@ -86,6 +86,7 @@ let folders = [];
 let currentFolder = 'INBOX';
 let messages = [];
 let selectedMessageId = null;
+let currentMessage = null;
 let busy = false;
 
 /* Account picker popup (body-level). */
@@ -95,6 +96,14 @@ let accountPopupOpen = false;
 /* Compose + settings modals. */
 let composeModal = null;
 let settingsModal = null;
+
+// Compose field elements (built once; prefilled on reply/forward).
+let composeFrom = null;
+let composeTo = null;
+let composeCc = null;
+let composeBcc = null;
+let composeSubject = null;
+let composeBody = null;
 
 /* ── API ────────────────────────────────────────────────────── */
 
@@ -136,6 +145,13 @@ function sendMail(payload) {
   return api('/api/mail/send', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+function deleteMessage(accountId, folder, id) {
+  return api('/api/mail/delete', {
+    method: 'POST',
+    body: JSON.stringify({ account_id: accountId, folder, id }),
   });
 }
 
@@ -256,11 +272,13 @@ async function openMessage(id) {
   if (!account) return;
   const msg = messages.find((m) => m.id === id);
   selectedMessageId = id;
+  currentMessage = null;
   renderMessages();
   readerEl.textContent = '';
   readerEl.appendChild(emptyState({ title: 'Loading…' }));
   try {
     const full = await fetchMessage(account.id, currentFolder, id);
+    currentMessage = full;
     renderMessage(full);
     if (msg && !msg.seen) {
       void markSeen(account.id, currentFolder, [id], true).catch(() => {});
@@ -371,15 +389,9 @@ function openAccountMenu() {
 /* ── Rendering: main body ───────────────────────────────────── */
 
 function render() {
-  const showOnboarding = !configured && !accounts.length;
-  const showAccountSetup = !configured && accounts.length > 0;
   bodyEl.innerHTML = '';
-  if (showOnboarding) {
-    renderOnboarding(bodyEl);
-    return;
-  }
-  if (showAccountSetup) {
-    renderAccountSetup(bodyEl);
+  if (!configured) {
+    renderSetup(bodyEl);
     return;
   }
 
@@ -395,62 +407,19 @@ function render() {
   renderMessages();
 }
 
-function renderOnboarding(root) {
+function renderSetup(root) {
   const wrap = h('div', 'mail-onboarding');
-  const help = h('div', 'mail-help');
-  help.appendChild(h('h3', null, 'Connect your mail account'));
-  help.appendChild(h('p', null, 'Pick your provider to see exactly what to enable, then add the account below. The provider help disappears once your account is verified.'));
-  const grid = h('div', 'mail-provider-grid');
-  const providers = (presets.length ? presets : defaultPresets());
-  for (const p of providers) {
-    const btn = h('button', 'mail-provider-btn');
-    btn.type = 'button';
-    const ic = h('span', 'mail-folder-icon');
-    btn.appendChild(ic);
-    void setIcon(ic, 'ui/mail', { size: 14 });
-    btn.appendChild(h('span', null, p.label));
-    btn.addEventListener('click', () => selectProvider(p.provider));
-    grid.appendChild(btn);
+  const intro = h('div', 'mail-help');
+  if (!accounts.length) {
+    intro.appendChild(h('h3', null, 'Connect your mail account'));
+    intro.appendChild(h('p', null, 'Choose your provider and add your account. Provider instructions appear at the bottom of the form and disappear once the account is verified.'));
+  } else {
+    intro.appendChild(h('h3', null, 'Verify your mail account'));
+    intro.appendChild(h('p', null, 'Your account is saved but the connection test hasn’t succeeded yet. Press Test connection below, or read the provider instructions at the bottom.'));
   }
-  help.appendChild(grid);
-  const ph = h('div', 'mail-provider-help hidden');
-  ph.id = 'mail-provider-help';
-  help.appendChild(ph);
-  wrap.appendChild(help);
-  wrap.appendChild(buildAccountForm({ onboarding: true }));
+  wrap.appendChild(intro);
+  wrap.appendChild(buildAccountForm({ onboarding: !accounts.length }));
   root.appendChild(wrap);
-}
-
-function renderAccountSetup(root) {
-  const wrap = h('div', 'mail-onboarding');
-  const help = h('div', 'mail-help');
-  help.appendChild(h('h3', null, 'Verify your mail account'));
-  help.appendChild(h('p', null, 'Your account was saved but the connection test hasn’t succeeded yet. Press Test connection below, or check the provider help to fix the settings.'));
-  const ph = h('div', 'mail-provider-help hidden');
-  ph.id = 'mail-provider-help';
-  help.appendChild(ph);
-  wrap.appendChild(help);
-  wrap.appendChild(buildAccountForm({ onboarding: false }));
-  root.appendChild(wrap);
-}
-
-function selectProvider(provider) {
-  const ph = document.getElementById('mail-provider-help');
-  if (!ph) return;
-  const p = presets.find((x) => x.provider === provider) || defaultPresets().find((x) => x.provider === provider);
-  const helpText = PROVIDER_HELP[provider] || PROVIDER_HELP.custom;
-  ph.classList.toggle('hidden', provider === 'custom' && !helpText.text);
-  ph.textContent = '';
-  ph.appendChild(h('strong', null, (p?.label || provider) + ': '));
-  ph.appendChild(document.createTextNode(helpText.text + ' '));
-  for (const link of helpText.links || []) {
-    const a = h('a', null, link.label);
-    a.href = link.href;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    ph.appendChild(a);
-    ph.appendChild(document.createTextNode(' '));
-  }
 }
 
 function defaultPresets() {
@@ -486,7 +455,7 @@ function buildAccountForm({ onboarding }) {
       smtpPort.value = String(p.smtp_port);
       smtpSec.select.value = p.smtp_security;
     }
-    selectProvider(providerSel.select.value);
+    updateHelp(providerSel.select.value);
   });
   form.appendChild(field({ label: 'Provider', control: providerSel }));
 
@@ -526,6 +495,27 @@ function buildAccountForm({ onboarding }) {
   addBtn.setAttribute('aria-label', 'Add account');
   actions.append(statusLine, testBtn, addBtn);
   form.appendChild(actions);
+
+  // Provider instructions live at the bottom and change with the selection.
+  const helpEl = h('div', 'mail-provider-help');
+  form.appendChild(helpEl);
+  function updateHelp(provider) {
+    const p = presets.find((x) => x.provider === provider) || defaultPresets().find((x) => x.provider === provider);
+    const helpText = PROVIDER_HELP[provider] || PROVIDER_HELP.custom;
+    helpEl.textContent = '';
+    const label = h('strong', null, (p?.label || provider) + ': ');
+    helpEl.appendChild(label);
+    helpEl.appendChild(document.createTextNode(helpText.text + ' '));
+    for (const link of helpText.links || []) {
+      const a = h('a', null, link.label);
+      a.href = link.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      helpEl.appendChild(a);
+      helpEl.appendChild(document.createTextNode(' '));
+    }
+  }
+  updateHelp(providerSel.select.value);
 
   const collect = () => ({
     email: emailInput.value.trim(),
@@ -656,7 +646,14 @@ function renderMessage(msg) {
   const from = (msg.from || []).join(', ');
   const to = (msg.to || []).join(', ');
   const meta = h('p', 'mail-reader-meta', `From: ${from || '—'}${to ? `\nTo: ${to}` : ''}${msg.date ? `\n${fmtWhen(msg.date)}` : ''}`);
-  readerEl.append(subject, meta);
+
+  const actions = h('div', 'mail-reader-actions');
+  const replyBtn = button({ icon: 'ui/reply', label: 'Reply', variant: 'ghost', size: 'sm', onClick: () => openReply(msg) });
+  const fwdBtn = button({ icon: 'ui/forward', label: 'Forward', variant: 'ghost', size: 'sm', onClick: () => openForward(msg) });
+  const delBtn = button({ icon: 'ui/trash', label: 'Delete', variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
+  actions.append(replyBtn, fwdBtn, delBtn);
+
+  readerEl.append(subject, meta, actions);
 
   const hasHtml = !!msg.html && msg.html.trim();
   if (hasHtml) {
@@ -685,19 +682,19 @@ function renderMessage(msg) {
 
 /* ── Compose ────────────────────────────────────────────────── */
 
-function openCompose() {
+function openCompose(prefill = {}) {
   if (!pickAccount()) {
     toast('Add and verify a mail account first', { type: 'error' });
     return;
   }
   if (!composeModal) {
-    const toInput = input({ placeholder: 'recipient@example.com' });
-    const ccInput = input({ placeholder: 'cc@example.com' });
-    const bccInput = input({ placeholder: 'bcc@example.com' });
-    const subjectInput = input({ placeholder: 'Subject' });
-    const bodyArea = textarea({ placeholder: 'Write your message…', rows: 12 });
-    bodyArea.classList.add('mail-compose-body');
-    const fromLine = h('p', 'mail-account-row-email', 'From: ');
+    composeTo = input({ placeholder: 'recipient@example.com' });
+    composeCc = input({ placeholder: 'cc@example.com' });
+    composeBcc = input({ placeholder: 'bcc@example.com' });
+    composeSubject = input({ placeholder: 'Subject' });
+    composeBody = textarea({ placeholder: 'Write your message…', rows: 12 });
+    composeBody.classList.add('mail-compose-body');
+    composeFrom = h('p', 'mail-account-row-email', 'From: ');
     const actions = h('div', 'mail-compose-actions');
     const sendBtn = button({ icon: 'ui/send', label: 'Send', variant: 'primary', size: 'sm' });
     const closeBtn = button({ label: 'Discard', variant: 'ghost', size: 'sm' });
@@ -706,12 +703,12 @@ function openCompose() {
     composeModal = modal({
       title: 'New message',
       wide: true,
-      body: [fromLine, field({ label: 'To', control: toInput }), field({ label: 'Cc', control: ccInput }), field({ label: 'Bcc', control: bccInput }), field({ label: 'Subject', control: subjectInput }), field({ label: 'Message', control: bodyArea }), actions],
+      body: [composeFrom, field({ label: 'To', control: composeTo }), field({ label: 'Cc', control: composeCc }), field({ label: 'Bcc', control: composeBcc }), field({ label: 'Subject', control: composeSubject }), field({ label: 'Message', control: composeBody }), actions],
     });
     closeBtn.addEventListener('click', () => composeModal.close());
 
     sendBtn.addEventListener('click', async () => {
-      const to = parseAddresses(toInput.value);
+      const to = parseAddresses(composeTo.value);
       if (!to.length) {
         toast('At least one recipient required', { type: 'error' });
         return;
@@ -721,26 +718,69 @@ function openCompose() {
         await sendMail({
           account_id: pickAccount().id,
           to,
-          cc: parseAddresses(ccInput.value),
-          bcc: parseAddresses(bccInput.value),
-          subject: subjectInput.value.trim(),
-          body: bodyArea.value,
+          cc: parseAddresses(composeCc.value),
+          bcc: parseAddresses(composeBcc.value),
+          subject: composeSubject.value.trim(),
+          body: composeBody.value,
         });
         toast('Message sent', { type: 'info' });
         composeModal.close();
-        toInput.value = ''; ccInput.value = ''; bccInput.value = ''; subjectInput.value = ''; bodyArea.value = '';
       } catch (e) {
         toast(e.message || 'Send failed', { type: 'error' });
       } finally {
         sendBtn.disabled = false;
       }
     });
-
-    composeModal.el.addEventListener('open', () => {
-      fromLine.textContent = `From: ${pickAccount().email}`;
-    });
   }
+
+  composeTo.value = prefill.to || '';
+  composeCc.value = prefill.cc || '';
+  composeBcc.value = prefill.bcc || '';
+  composeSubject.value = prefill.subject || '';
+  composeBody.value = prefill.body || '';
+  composeFrom.textContent = `From: ${pickAccount().email}`;
   composeModal.open();
+}
+
+function openReply(msg) {
+  const toEmail = (msg.from_addresses && msg.from_addresses[0] && msg.from_addresses[0].email) || '';
+  openCompose({
+    to: toEmail,
+    subject: `Re: ${msg.subject || ''}`,
+    body: quotedBody(msg),
+  });
+}
+
+function openForward(msg) {
+  openCompose({
+    subject: `Fwd: ${msg.subject || ''}`,
+    body: quotedBody(msg),
+  });
+}
+
+async function deleteCurrent(msg) {
+  const account = pickAccount();
+  if (!account) return;
+  if (!window.confirm(`Delete this message from ${currentFolder}?`)) return;
+  try {
+    await deleteMessage(account.id, currentFolder, msg.id);
+    toast('Message deleted', { type: 'info' });
+    currentMessage = null;
+    selectedMessageId = null;
+    readerEl.textContent = '';
+    readerEl.appendChild(emptyState({ title: 'Select a message', body: 'Pick a message to read it here.' }));
+    await loadMessages();
+  } catch (e) {
+    toast(e.message || 'Delete failed', { type: 'error' });
+  }
+}
+
+function quotedBody(msg) {
+  const from = (msg.from || []).join(', ');
+  const date = msg.date ? fmtWhen(msg.date) : '';
+  const text = (msg.text && msg.text.trim()) ? msg.text.trim() : '';
+  const body = text || '(no body)';
+  return `\n\n----------\nFrom: ${from}\nDate: ${date}\n\n${body}`;
 }
 
 /* ── Settings ───────────────────────────────────────────────── */

@@ -2338,8 +2338,15 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .mail-reader-meta {
   font-size: 11.5px;
   color: var(--muted);
-  margin: 0 0 16px;
+  margin: 0 0 12px;
   line-height: 1.6;
+}
+.mail-reader-actions {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-border);
 }
 .mail-reader-body {
   font-family: var(--font-body);

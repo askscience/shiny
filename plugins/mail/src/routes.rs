@@ -31,6 +31,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "mail_message" => mail_message(ctx),
         "mail_send" => mail_send(ctx),
         "mail_flag" => mail_flag(ctx),
+        "mail_delete" => mail_delete(ctx),
         _ => return None,
     })
 }
@@ -450,6 +451,29 @@ fn mail_flag(ctx: Arc<PluginCtx>) -> RouteHandler {
             let folder = body.folder.unwrap_or_else(|| "INBOX".into());
             mail::set_seen(a, folder, body.ids, body.seen).await?;
             Ok(ok(json!({ "flagged": true })))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct DeleteBody {
+    account_id: Option<String>,
+    folder: Option<String>,
+    id: String,
+}
+
+fn mail_delete(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let axum::Json(body) = axum::Json::<DeleteBody>::from_request(req, &())
+                .await
+                .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+            let a = mail::resolve_account(ctx.db(), &uid, body.account_id.as_deref())?;
+            let folder = body.folder.unwrap_or_else(|| "INBOX".into());
+            mail::delete_message(a, folder, body.id).await?;
+            Ok(ok(json!({ "deleted": true })))
         }
     })
 }

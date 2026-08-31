@@ -392,6 +392,16 @@ fn parse_message(id: &str, raw: &[u8]) -> Result<Json, AppError> {
         }
     };
 
+    let addr_objs = |addr: Option<&mail_parser::Address<'_>>| -> Vec<Json> {
+        match addr {
+            Some(a) => a
+                .iter()
+                .map(|x| json!({ "name": x.name().unwrap_or(""), "email": x.address().unwrap_or("") }))
+                .collect(),
+            None => Vec::new(),
+        }
+    };
+
     let attachments: Vec<Json> = msg
         .attachments()
         .map(|att| {
@@ -409,6 +419,9 @@ fn parse_message(id: &str, raw: &[u8]) -> Result<Json, AppError> {
         "from": addr_list(msg.from()),
         "to": addr_list(msg.to()),
         "cc": addr_list(msg.cc()),
+        "from_addresses": addr_objs(msg.from()),
+        "to_addresses": addr_objs(msg.to()),
+        "cc_addresses": addr_objs(msg.cc()),
         "date": msg.date().map(|d| d.to_rfc3339()),
         "message_id": msg.message_id(),
         "text": msg.body_text(0).map(|c| c.into_owned()).unwrap_or_default(),
@@ -473,6 +486,18 @@ pub async fn set_seen(a: Account, folder: String, ids: Vec<String>, seen: bool) 
         client
             .store_flags(&folder, &refs, &[Flag::from_raw("\\Seen")], op)
             .map_err(|e| AppError::BadRequest(format!("flag update failed: {e}")))?;
+        Ok(())
+    })
+    .await
+}
+
+/// Delete a single message (moves it to the server's Trash).
+pub async fn delete_message(a: Account, folder: String, id: String) -> Result<(), AppError> {
+    blocking(move || {
+        let mut client = connect_imap(&a)?;
+        client
+            .delete_message(&folder, &id)
+            .map_err(|e| AppError::BadRequest(format!("delete failed: {e}")))?;
         Ok(())
     })
     .await
