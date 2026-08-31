@@ -36,7 +36,22 @@ export class ApiError extends Error {
   }
 }
 
-function handleUnauthorized() {
+async function handleUnauthorized() {
+  // A 401 can be a stale localStorage bearer token while the `shiny_token`
+  // session cookie is still valid. Re-check against the cookie first so a
+  // transient 401 never logs the user out.
+  try {
+    const res = await fetch('/api/travelers/me', { headers: {} });
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data?.data) {
+        localStorage.setItem('traveler', JSON.stringify(data.data));
+      }
+      return; // still authenticated via the session cookie
+    }
+  } catch (_) {
+    /* network error — fall through to logout */
+  }
   clearAuth();
   window.dispatchEvent(new CustomEvent('auth:expired'));
 }
@@ -92,10 +107,10 @@ export async function validateSession() {
     }
     return true;
   } catch (e) {
-    if (e.status === 401) {
-      clearAuth();
-      return false;
-    }
+    // Report the 401 but DON'T wipe the session here — a transient failure
+    // must not log the user out. The caller (requireAuth) decides whether to
+    // clear auth and show the login screen.
+    if (e.status === 401) return false;
     // Transient / server errors must not log the user out.
     return true;
   }
