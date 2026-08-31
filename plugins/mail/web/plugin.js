@@ -655,20 +655,17 @@ function renderMessage(msg) {
 
   readerEl.append(subject, meta, actions);
 
+  const content = h('div', 'mail-reader-content');
   const hasHtml = !!msg.html && msg.html.trim();
   if (hasHtml) {
     const frame = document.createElement('iframe');
-    frame.className = 'mail-reader-html';
     frame.sandbox = '';
     frame.srcdoc = msg.html;
-    frame.style.width = '100%';
-    frame.style.border = 'none';
-    frame.style.minHeight = '320px';
-    readerEl.appendChild(frame);
+    content.appendChild(frame);
   } else {
-    const body = h('div', 'mail-reader-body', msg.text || '(empty message)');
-    readerEl.appendChild(body);
+    content.appendChild(h('div', 'mail-reader-body', msg.text || '(empty message)'));
   }
+  readerEl.appendChild(content);
 
   if (msg.attachments && msg.attachments.length) {
     const atts = h('div', 'mail-attachments');
