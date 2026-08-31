@@ -17,3 +17,7 @@ Rules (CRITICAL — never leave an empty sheet, never wipe the user's data):
 - **NEVER clear the whole sheet with `calc_write`** (empty strings for most cells) — the tool refuses; use `calc_clear` instead.
 - To change one cell, pass only that cell — do not echo back cells you aren't changing.
 - To **compute** ("sum column B", "what's the total?"): `calc_read` first, then do the math yourself and `calc_write` the result, or write a formula like `=SUM(B1:B10)` and tell the user it evaluates live.
+
+**Formula + id gotchas (read this before writing formulas):**
+- Formula values are plain strings: write `"D2": "=B2-C2"`. NEVER add a `BigDecimal:` prefix or extra quotes around the formula — that produces malformed JSON and the whole tool call is dropped, so the sheet is never touched.
+- `sheet_id` accepts either the UUID returned by `calc_read`/`calc_list`/`calc_create`, OR the sheet's exact title (case-insensitive). Prefer the UUID when you have it.

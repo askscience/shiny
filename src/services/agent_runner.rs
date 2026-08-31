@@ -109,7 +109,14 @@ where
             // (tool results already reached it via the [Done] step notes).
             final_reply = strip_action_blocks(&response);
             if final_reply.is_empty() {
-                final_reply = response.trim().to_string();
+                let trimmed = response.trim();
+                // If the whole response was (malformed) JSON, don't leak the
+                // raw tool call into the chat — fall back to a neutral ack.
+                final_reply = if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                    "Done.".into()
+                } else {
+                    trimmed.to_string()
+                };
             }
             break;
         }

@@ -490,6 +490,8 @@ fn find_json_end(s: &str) -> Option<usize> {
 
 pub fn strip_action_blocks(text: &str) -> String {
     let mut result = text.to_string();
+
+    // Remove well-formed action blocks (compact + pretty JSON) exactly.
     for (action, params) in parse_actions(text) {
         let compact = json!({ "action": action, "params": params }).to_string();
         result = result.replace(&compact, "");
@@ -499,16 +501,37 @@ pub fn strip_action_blocks(text: &str) -> String {
         result = result.replace(&pretty, "");
     }
 
+    // The model sometimes emits MALFORMED JSON (a stray `\"` inside a cell
+    // formula, an unquoted key, …) that serde_json rejects, so `parse_actions`
+    // misses it and the raw tool call would leak into the visible reply. Strip
+    // any remaining brace-balanced `{…}` block regardless of whether it parses.
+    result = strip_balanced_braces(&result);
+
     result = result
         .replace("```json", "")
         .replace("```JSON", "")
         .replace("```", "");
 
-    result
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string()
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Remove every `{…}` region (nesting aware) from `s`, keeping everything else.
+fn strip_balanced_braces(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth = 0usize;
+    for c in s.chars() {
+        if c == '{' {
+            depth += 1;
+            continue;
+        }
+        if c == '}' && depth > 0 {
+            depth -= 1;
+            continue;
+        }
+        if depth > 0 {
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }

@@ -27,6 +27,41 @@ async fn last_sheet_id(pool: &SqlitePool, user_id: &str) -> Result<Option<String
     .await?)
 }
 
+/// Resolve a `sheet_id` param to a real spreadsheet id. Accepts the UUID id,
+/// or — because the model often passes the human title instead — a title
+/// matched case-insensitively. Empty/missing uses the most recently used sheet.
+async fn resolve_sheet_id(
+    pool: &SqlitePool,
+    user_id: &str,
+    sheet_id: Option<String>,
+) -> Result<Option<String>, AppError> {
+    let Some(sheet_id) = sheet_id.filter(|s| !s.trim().is_empty()) else {
+        return last_sheet_id(pool, user_id).await;
+    };
+    let sheet_id = sheet_id.trim();
+
+    let by_id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM spreadsheets WHERE id = ?1 AND user_id = ?2",
+    )
+    .bind(sheet_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    if by_id.is_some() {
+        return Ok(by_id);
+    }
+
+    let by_title: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM spreadsheets WHERE lower(title) = lower(?1) AND user_id = ?2 \
+         ORDER BY updated_at DESC LIMIT 1",
+    )
+    .bind(sheet_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(by_title)
+}
+
 fn sheet_summary_json(row: &(String, String, i64, i64, String)) -> Value {
     json!({
         "sheet_id": row.0,
@@ -245,14 +280,9 @@ impl Tool for CalcWrite {
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let incoming = incoming_cells(&req)?;
 
-        let sheet_id = match req.params.param_str("sheet_id") {
-            Some(id) if !id.trim().is_empty() => id,
-            _ => last_sheet_id(ctx.pool().await, req.traveler_id)
-                .await?
-                .ok_or_else(|| {
-                    AppError::BadRequest("No spreadsheet yet — call calc_create first".into())
-                })?,
-        };
+        let sheet_id = resolve_sheet_id(ctx.pool().await, req.traveler_id, req.params.param_str("sheet_id"))
+            .await?
+            .ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
 
         let row = sqlx::query_as::<_, (String, String)>(
             "SELECT title, cells FROM spreadsheets WHERE id = ?1 AND user_id = ?2",
@@ -334,14 +364,9 @@ impl Tool for CalcClear {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let sheet_id = match req.params.param_str("sheet_id") {
-            Some(id) if !id.trim().is_empty() => id,
-            _ => last_sheet_id(ctx.pool().await, req.traveler_id)
-                .await?
-                .ok_or_else(|| {
-                    AppError::BadRequest("No spreadsheet yet — call calc_create first".into())
-                })?,
-        };
+        let sheet_id = resolve_sheet_id(ctx.pool().await, req.traveler_id, req.params.param_str("sheet_id"))
+            .await?
+            .ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
 
         let row = sqlx::query_as::<_, (String, String)>(
             "SELECT title, cells FROM spreadsheets WHERE id = ?1 AND user_id = ?2",
@@ -389,14 +414,9 @@ impl Tool for CalcRead {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let sheet_id = match req.params.param_str("sheet_id") {
-            Some(id) if !id.trim().is_empty() => id,
-            _ => last_sheet_id(ctx.pool().await, req.traveler_id)
-                .await?
-                .ok_or_else(|| {
-                    AppError::BadRequest("No spreadsheet yet — call calc_create first".into())
-                })?,
-        };
+        let sheet_id = resolve_sheet_id(ctx.pool().await, req.traveler_id, req.params.param_str("sheet_id"))
+            .await?
+            .ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
 
         let row = sqlx::query_as::<_, (String, String, i64, i64, String)>(
             "SELECT title, cells, rows, cols, updated_at FROM spreadsheets \
