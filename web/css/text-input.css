@@ -83,55 +83,114 @@ body.compose-active #hud-transcript {
   pointer-events: none;
 }
 
-.compose-stream {
+.compose-conversation {
   pointer-events: auto;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  max-width: min(560px, 100%);
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 0;
+  width: min(380px, 100%);
+  margin: 0;
+  background: #0d0d0e;
+  border-radius: 0 20px 20px 0;
   padding:
-    max(60px, calc(env(safe-area-inset-top) + 48px))
-    max(24px, env(safe-area-inset-right))
-    16px
-    max(24px, env(safe-area-inset-left));
+    max(24px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    calc(var(--compose-stack-height) + 20px)
+    18px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.compose-stream::-webkit-scrollbar {
+.compose-conversation::-webkit-scrollbar {
   display: none;
 }
 
-.compose-reply {
-  font-family: var(--font-editorial);
-  font-size: clamp(1.75rem, 6vw, 2.75rem);
-  font-weight: 400;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
+.compose-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+  animation: composeBubbleIn 0.2s var(--ease-out);
+}
+
+.compose-bubble--user { align-self: flex-end; align-items: flex-end; }
+.compose-bubble--assistant { align-self: flex-start; align-items: flex-start; }
+
+.compose-bubble-text {
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.compose-bubble--user .compose-bubble-text {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  white-space: pre-wrap;
+}
+
+.compose-bubble--assistant .compose-bubble-text {
+  background: #1c1c1e;
   color: var(--text);
-  text-align: left;
-  min-height: 1.25em;
-  text-shadow: 0 1px 24px rgba(0, 0, 0, 0.45);
 }
 
-.compose-reply:empty {
-  display: none;
+/* Markdown inside assistant bubbles — full gfm support, compact */
+.compose-bubble-text p { margin: 0 0 6px; }
+.compose-bubble-text p:last-child { margin-bottom: 0; }
+.compose-bubble-text h1,
+.compose-bubble-text h2,
+.compose-bubble-text h3,
+.compose-bubble-text h4,
+.compose-bubble-text h5,
+.compose-bubble-text h6 {
+  margin: 8px 0 4px;
+  font-size: 1em;
+  font-weight: 600;
+  line-height: 1.3;
 }
+.compose-bubble-text ul,
+.compose-bubble-text ol { margin: 4px 0; padding-left: 20px; }
+.compose-bubble-text li { margin: 2px 0; }
+.compose-bubble-text code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.compose-bubble-text pre {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.compose-bubble-text pre code { background: none; padding: 0; }
+.compose-bubble-text blockquote {
+  border-left: 2px solid var(--glass-border);
+  margin: 6px 0;
+  padding-left: 10px;
+  color: var(--text-secondary);
+}
+.compose-bubble-text a { color: var(--accent); text-decoration: underline; }
+.compose-bubble-text hr { border: none; border-top: 1px solid var(--glass-border); margin: 8px 0; }
+.compose-bubble-text table { border-collapse: collapse; margin: 6px 0; font-size: 0.95em; }
+.compose-bubble-text th,
+.compose-bubble-text td { border: 1px solid var(--glass-border); padding: 4px 8px; }
+.compose-bubble-text img { max-width: 100%; border-radius: 8px; }
 
-.compose-reply.is-waiting {
-  display: block;
-  font-family: var(--font-display);
-  font-size: clamp(1.125rem, 4vw, 1.375rem);
-  font-weight: 500;
-  letter-spacing: 0.04em;
+.compose-bubble.is-thinking .compose-bubble-text {
   color: var(--muted);
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
   animation: composePulse 1.4s ease-in-out infinite;
-}
-
-.compose-thinking {
-  display: none;
 }
 
 .compose-dock-input {
@@ -203,14 +262,16 @@ body.compose-active.compose-awaiting #artifact-dock {
   50% { opacity: 1; }
 }
 
-@media (max-width: 640px) {
-  .compose-stream {
-    max-width: 100%;
-    padding-top: max(56px, calc(env(safe-area-inset-top) + 44px));
-  }
+@keyframes composeBubbleIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 
-  .compose-reply {
-    font-size: clamp(1.5rem, 6.5vw, 2rem);
+@media (max-width: 640px) {
+  .compose-conversation {
+    width: 100%;
+    border-radius: 0 16px 16px 0;
+    padding-top: max(56px, calc(env(safe-area-inset-top) + 44px));
   }
 
   body.compose-active:not(.compose-awaiting) #artifact-dock {
@@ -226,7 +287,7 @@ body.compose-active.compose-awaiting #artifact-dock {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .compose-reply.is-waiting {
+  .compose-bubble.is-thinking .compose-bubble-text {
     animation: none;
     opacity: 0.7;
   }

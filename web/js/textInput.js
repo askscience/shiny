@@ -1,10 +1,10 @@
 import { setSphereState } from './sphere.js';
 import { getDockSummaries } from './artifactStore.js';
+import { currentConversationId, loadConversationMessages } from './agent.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
-const replyEl = document.getElementById('compose-reply');
-const thinkingEl = document.getElementById('compose-thinking');
+const conversationEl = document.getElementById('compose-conversation');
 const dock = document.getElementById('artifact-dock');
 const dockIcons = document.getElementById('artifact-dock-icons');
 const dockInput = document.getElementById('compose-dock-input');
@@ -13,6 +13,7 @@ let onSubmitCallback = null;
 let isOpen = false;
 let isSending = false;
 let ignoreOutsideClick = false;
+let assistantBubble = null;
 
 function isInsideComposeInput(target) {
   if (!target) return false;
@@ -24,7 +25,7 @@ function isInsideComposeInput(target) {
 }
 
 function isInsideComposeContent(target) {
-  return isInsideComposeInput(target) || !!target?.closest('.compose-stream');
+  return isInsideComposeInput(target) || !!target?.closest('.compose-conversation');
 }
 
 function setAwaiting(on) {
@@ -58,6 +59,77 @@ function restoreDock() {
   dockInput?.classList.add('hidden');
   dockInput?.setAttribute('aria-hidden', 'true');
   showDockIcons();
+}
+
+/* ── Bubble conversation (text mode only) ─────────────────── */
+
+function scrollConversation() {
+  if (conversationEl) conversationEl.scrollTop = conversationEl.scrollHeight;
+}
+
+function escapeText(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML.replace(/\n/g, '<br>');
+}
+
+function renderMarkdown(text) {
+  const m = window.marked;
+  if (m) {
+    try {
+      if (typeof m.parse === 'function') return m.parse(text, { gfm: true, breaks: true });
+      if (typeof m === 'function') return m(text);
+    } catch (_) { /* fall through to escaped text */ }
+  }
+  return escapeText(text);
+}
+
+function renderBubble(role, text) {
+  if (!conversationEl) return null;
+  const bubble = document.createElement('div');
+  bubble.className = `compose-bubble compose-bubble--${role}`;
+  const bubbleText = document.createElement('div');
+  bubbleText.className = 'compose-bubble-text';
+  if (role === 'assistant') {
+    bubbleText.innerHTML = renderMarkdown(text || '');
+  } else {
+    bubbleText.textContent = text || '';
+  }
+  bubble.appendChild(bubbleText);
+  conversationEl.appendChild(bubble);
+  scrollConversation();
+  return bubble;
+}
+
+function clearConversation() {
+  if (conversationEl) conversationEl.textContent = '';
+  assistantBubble = null;
+}
+
+function startAssistantBubble() {
+  assistantBubble = renderBubble('assistant', '…');
+  assistantBubble?.classList.add('is-thinking');
+}
+
+function streamAssistantBubble(text) {
+  if (!assistantBubble) startAssistantBubble();
+  if (!text) return; // keep the "…" indicator until real text arrives
+  assistantBubble?.classList.remove('is-thinking');
+  const t = assistantBubble?.querySelector('.compose-bubble-text');
+  if (t) t.innerHTML = renderMarkdown(text);
+  scrollConversation();
+}
+
+/** Load the current conversation thread (incl. audio turns, which are saved
+ *  as text server-side) so text mode resumes where the user left off. */
+async function loadConversation() {
+  const id = currentConversationId();
+  if (!id) return;
+  const entries = await loadConversationMessages(id).catch(() => []);
+  for (const m of entries) {
+    renderBubble(m.role === 'user' ? 'user' : 'assistant', m.content);
+  }
+  scrollConversation();
 }
 
 export function initTextInput(onSubmit) {
@@ -95,19 +167,22 @@ export function initTextInput(onSubmit) {
   });
 }
 
-export function openTextInput() {
+export async function openTextInput() {
   if (!compose || isOpen) return;
   isOpen = true;
   document.body.classList.add('compose-active');
   compose.classList.remove('hidden');
   compose.setAttribute('aria-hidden', 'false');
-  clearReply();
-  setThinking(false);
+  clearConversation();
   field.value = '';
   field.disabled = false;
+  setSphereState('idle');
+
+  // Resume the thread before the user starts typing.
+  await loadConversation();
+
   showComposeInput();
   autoResizeField();
-  setSphereState('idle');
   ignoreOutsideClick = true;
   requestAnimationFrame(() => {
     compose.classList.add('visible');
@@ -141,51 +216,6 @@ export function isTextInputOpen() {
   return isOpen;
 }
 
-export function setComposeThinking(on) {
-  setThinking(on);
-  if (isOpen) setSphereState(on ? 'processing' : 'idle');
-}
-
-export function streamComposeReply(text) {
-  if (replyEl) {
-    replyEl.classList.remove('is-waiting');
-    replyEl.textContent = text;
-  }
-  scrollStreamToEnd();
-  if (isOpen && isSending) setSphereState('processing');
-}
-
-export function clearComposeReply() {
-  clearReply();
-}
-
-function clearReply() {
-  if (replyEl) {
-    replyEl.textContent = '';
-    replyEl.classList.remove('is-waiting');
-  }
-}
-
-function setWaitingReply(on) {
-  if (!replyEl) return;
-  if (on) {
-    replyEl.textContent = 'Thinking…';
-    replyEl.classList.add('is-waiting');
-  } else {
-    replyEl.classList.remove('is-waiting');
-  }
-}
-
-function setThinking(on) {
-  thinkingEl?.classList.add('hidden');
-  if (on) setWaitingReply(true);
-}
-
-function scrollStreamToEnd() {
-  const stream = document.querySelector('.compose-stream');
-  if (stream) stream.scrollTop = stream.scrollHeight;
-}
-
 function autoResizeField() {
   if (!field) return;
   field.style.height = '38px';
@@ -198,20 +228,19 @@ async function submitTextInput() {
   if (!text || isSending) return;
 
   isSending = true;
-  clearReply();
-  setThinking(true);
+  assistantBubble = null;
+  renderBubble('user', text);
+  startAssistantBubble();
   hideComposeInput();
   setSphereState('processing');
-  scrollStreamToEnd();
+  scrollConversation();
 
   try {
     await onSubmitCallback?.(text, {
       onStream: (partial) => {
-        setThinking(false);
-        streamComposeReply(partial);
+        streamAssistantBubble(partial);
       },
       onDone: () => {
-        setThinking(false);
         field.value = '';
         field.disabled = false;
         autoResizeField();
@@ -221,8 +250,7 @@ async function submitTextInput() {
         field.focus();
       },
       onError: (msg) => {
-        setThinking(false);
-        streamComposeReply(msg);
+        streamAssistantBubble(msg);
         field.disabled = false;
         isSending = false;
         showComposeInput();
@@ -231,8 +259,7 @@ async function submitTextInput() {
       },
     });
   } catch (e) {
-    setThinking(false);
-    streamComposeReply(e.message || 'Something went wrong');
+    streamAssistantBubble(e.message || 'Something went wrong');
     field.disabled = false;
     isSending = false;
     showComposeInput();
