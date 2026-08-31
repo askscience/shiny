@@ -21,6 +21,7 @@ import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles } from './tiles.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
+import { initChatHistory } from './chatHistory.js';
 import { reloadUserSession } from './session.js';
 import { loadUserPreferences } from './preferences.js';
 
@@ -98,6 +99,7 @@ async function initApp() {
   initSphere();
   initArtifactDock();
   initTextInput(submitTextToAgent);
+  initChatHistory(); // core chat history panel (new chat / resume old chats)
   initHudClock(); // core chrome — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle

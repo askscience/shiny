@@ -152,7 +152,55 @@ function buildAgentBody(message, mode, context) {
   };
   const model = getOllamaModel();
   if (model) body.ollama_model = model;
+  const conversation = currentConversationId();
+  if (conversation) body.conversation_id = conversation;
   return body;
+}
+
+/* ── Chat history (resumable conversations) ─────────────────── */
+
+const CONVERSATION_KEY = 'chat.conversation';
+
+export function currentConversationId() {
+  return localStorage.getItem(CONVERSATION_KEY) || null;
+}
+
+export function setCurrentConversation(id) {
+  if (id) localStorage.setItem(CONVERSATION_KEY, id);
+  else localStorage.removeItem(CONVERSATION_KEY);
+}
+
+/** Start a fresh chat (the next message opens a new conversation). */
+export function newChat() {
+  setCurrentConversation(null);
+}
+
+export async function listConversations() {
+  try {
+    const res = await apiFetch('/api/chat/conversations');
+    return res?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function loadConversationMessages(id) {
+  try {
+    const res = await apiFetch(`/api/chat/conversations/${encodeURIComponent(id)}`);
+    return res?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function removeConversation(id) {
+  try {
+    await apiFetch(`/api/chat/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (currentConversationId() === id) setCurrentConversation(null);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readAgentStream(res, onStep) {
@@ -273,6 +321,8 @@ export async function sendToAgent(message, mode, context) {
       handleAgentStep,
     );
 
+    if (res?.conversation_id) setCurrentConversation(res.conversation_id);
+
     await ingestAgentArtifacts(res.artifacts);
 
     await handleNavigation(res, message, context);
@@ -337,6 +387,8 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
       buildAgentBody(message, 'single', context),
       handleAgentStep,
     );
+
+    if (res?.conversation_id) setCurrentConversation(res.conversation_id);
 
     await streamText(res.reply || '', onStream, 12);
 

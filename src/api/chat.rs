@@ -150,3 +150,130 @@ pub async fn history(
         data: history,
     }))
 }
+
+/* ── Conversations (resumable chat history) ─────────────────── */
+
+#[derive(Serialize)]
+pub struct ConversationSummary {
+    pub id: String,
+    pub title: String,
+    pub updated_at: Option<String>,
+    pub preview: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ConversationListResponse {
+    pub success: bool,
+    pub data: Vec<ConversationSummary>,
+}
+
+pub async fn list_conversations(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+) -> Result<Json<ConversationListResponse>, AppError> {
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
+        "SELECT c.id, c.title, c.updated_at, \
+                (SELECT content FROM chat_messages m \
+                 WHERE m.conversation_id = c.id ORDER BY m.timestamp DESC LIMIT 1) AS preview \
+         FROM chat_conversations c \
+         WHERE c.traveler_id = ?1 \
+         ORDER BY c.updated_at DESC",
+    )
+    .bind(&traveler.id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    let data = rows
+        .into_iter()
+        .map(|(id, title, updated_at, preview)| ConversationSummary {
+            id,
+            title,
+            updated_at,
+            preview,
+        })
+        .collect();
+
+    Ok(Json(ConversationListResponse { success: true, data }))
+}
+
+#[derive(Serialize)]
+pub struct ConversationCreated {
+    pub id: String,
+}
+
+pub async fn create_conversation(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO chat_conversations (id, traveler_id, title, created_at, updated_at) \
+         VALUES (?1, ?2, 'New chat', datetime('now'), datetime('now'))",
+    )
+    .bind(&id)
+    .bind(&traveler.id)
+    .execute(&state.pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "data": { "id": id },
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct ConversationPath {
+    pub id: String,
+}
+
+pub async fn conversation_messages(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    axum::extract::Path(path): axum::extract::Path<ConversationPath>,
+) -> Result<Json<ChatHistoryResponse>, AppError> {
+    let entries = sqlx::query_as::<_, (String, String, Option<String>)>(
+        "SELECT role, content, timestamp FROM chat_messages \
+         WHERE conversation_id = ?1 AND traveler_id = ?2 \
+         ORDER BY timestamp ASC",
+    )
+    .bind(&path.id)
+    .bind(&traveler.id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    let data: Vec<ChatHistoryEntry> = entries
+        .into_iter()
+        .map(|(role, content, timestamp)| ChatHistoryEntry {
+            role,
+            content,
+            timestamp,
+        })
+        .collect();
+
+    Ok(Json(ChatHistoryResponse { success: true, data }))
+}
+
+pub async fn delete_conversation(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    axum::extract::Path(path): axum::extract::Path<ConversationPath>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    sqlx::query("DELETE FROM chat_messages WHERE conversation_id = ?1 AND traveler_id = ?2")
+        .bind(&path.id)
+        .bind(&traveler.id)
+        .execute(&state.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+    sqlx::query("DELETE FROM chat_conversations WHERE id = ?1 AND traveler_id = ?2")
+        .bind(&path.id)
+        .bind(&traveler.id)
+        .execute(&state.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+    Ok(Json(serde_json::json!({ "success": true, "data": { "deleted": true } })))
+}

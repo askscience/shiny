@@ -70,6 +70,24 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
     let migration6 = include_str!("../../migrations/006_user_preferences.sql");
     sqlx::raw_sql(migration6).execute(pool).await?;
 
+    // Chat conversations (007): create the table, and add the
+    // `conversation_id` column to chat_messages only when it is missing (the
+    // raw ALTER is not idempotent, so guard it with pragma_table_info).
+    sqlx::raw_sql(include_str!("../../migrations/007_chat_conversations.sql"))
+        .execute(pool)
+        .await?;
+    let has_conversation_id: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('chat_messages') WHERE name = 'conversation_id'",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+    if has_conversation_id == 0 {
+        sqlx::raw_sql("ALTER TABLE chat_messages ADD COLUMN conversation_id TEXT")
+            .execute(pool)
+            .await?;
+    }
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

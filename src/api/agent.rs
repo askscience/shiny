@@ -27,6 +27,9 @@ pub struct AgentRequest {
     /// Client-side desktop layout (workspaces + which window is where), so the
     /// model can reorganize without creating empty workspaces.
     pub desktop: Option<DesktopState>,
+    /// Conversation thread id — keeps the chat history so the model remembers
+    /// earlier turns. Omit to start a new conversation.
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -64,6 +67,9 @@ pub struct AgentResponse {
     /// Plugin the AI chose to surface in a window (via show_plugin).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focus_plugin: Option<String>,
+    /// Conversation thread id for the chat history (continue this chat).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -127,6 +133,7 @@ fn desktop_state_block(desktop: Option<&DesktopState>) -> String {
 struct PreparedAgent {
     input: AgentRunInput,
     trip_id: Option<String>,
+    conversation_id: String,
 }
 
 async fn prepare_agent(
@@ -311,6 +318,28 @@ async fn prepare_agent(
 
     let desktop_block = desktop_state_block(body.desktop.as_ref());
 
+    // Conversation memory: resolve (or start) the thread and surface its recent
+    // turns so the model remembers what was said earlier.
+    let conversation_id = crate::services::chat_memory::resolve_conversation(
+        &state.pool,
+        &traveler.id,
+        body.conversation_id.as_deref(),
+    )
+    .await?;
+    let history = crate::services::chat_memory::recent_history(&state.pool, &conversation_id, 16).await?;
+    let history_block = if history.is_empty() {
+        String::new()
+    } else {
+        let lines: Vec<String> = history
+            .iter()
+            .map(|(role, content)| {
+                let trimmed = content.trim().chars().take(500).collect::<String>();
+                format!("{role}: {trimmed}")
+            })
+            .collect();
+        format!("\n## Conversation history (remember earlier turns)\n{}\n", lines.join("\n"))
+    };
+
     let system = format!(
         "You are {ai_name}, {persona}. Reply in language code '{lang}'. Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them.\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
@@ -324,7 +353,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — answer fully and clearly.{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
+         Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
         lang = lang,
@@ -336,6 +365,7 @@ async fn prepare_agent(
         diary_line = diary_line,
         context_block = context_block,
         mode = mode,
+        history_block = history_block,
         plugin_windows_block = plugin_windows_block,
         plugin_catalog_block = plugin_catalog_block,
         desktop_block = desktop_block,
@@ -343,6 +373,7 @@ async fn prepare_agent(
 
     Ok(PreparedAgent {
         trip_id: active_trip.as_ref().map(|t| t.id.clone()),
+        conversation_id,
         input: AgentRunInput {
             message: body.message,
             mode,
@@ -373,6 +404,7 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
         steps: result.steps,
         navigation: result.navigation,
         focus_plugin: result.focus_plugin,
+        conversation_id: None,
     }
 }
 
@@ -383,6 +415,8 @@ pub async fn handle_agent(
 ) -> Result<Json<AgentResponse>, AppError> {
     let prepared = prepare_agent(&state, &traveler, body).await?;
     let trip_id = prepared.trip_id.clone();
+    let conversation_id = prepared.conversation_id.clone();
+    let user_message = prepared.input.message.clone();
 
     let result = run_agent(
         &state,
@@ -393,7 +427,18 @@ pub async fn handle_agent(
     )
     .await?;
 
-    Ok(Json(to_response(result)))
+    let _ = crate::services::chat_memory::save_turn(
+        &state.pool,
+        &traveler.id,
+        &conversation_id,
+        &user_message,
+        &result.reply,
+    )
+    .await;
+
+    let mut resp = to_response(result);
+    resp.conversation_id = Some(conversation_id);
+    Ok(Json(resp))
 }
 
 pub async fn handle_agent_stream(
@@ -408,6 +453,8 @@ pub async fn handle_agent_stream(
     let traveler = traveler.clone();
     let trip_id = prepared.trip_id.clone();
     let input = prepared.input;
+    let conversation_id = prepared.conversation_id.clone();
+    let user_message = input.message.clone();
 
     tokio::spawn(async move {
         let emit = |event: AgentStreamEvent| {
@@ -427,9 +474,19 @@ pub async fn handle_agent_stream(
         )
         .await
         {
-            Ok(result) => emit(AgentStreamEvent::Done {
-                data: to_response(result),
-            }),
+            Ok(result) => {
+                let _ = crate::services::chat_memory::save_turn(
+                    &state.pool,
+                    &traveler.id,
+                    &conversation_id,
+                    &user_message,
+                    &result.reply,
+                )
+                .await;
+                let mut data = to_response(result);
+                data.conversation_id = Some(conversation_id);
+                emit(AgentStreamEvent::Done { data });
+            }
             Err(e) => emit(AgentStreamEvent::Error {
                 message: e.to_string(),
             }),

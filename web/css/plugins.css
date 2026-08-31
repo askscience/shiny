@@ -84,7 +84,7 @@ body {
   color: var(--text-secondary);
   padding: 6px 13px 6px 7px;
   border: 1px solid var(--glass-border);
-  border-radius: 0;
+  border-radius: var(--radius-md);
 }
 .plugins-user-avatar {
   width: 24px; height: 24px;
@@ -111,8 +111,17 @@ body {
 }
 .plugins-subtitle { max-width: 52ch; font-size: 14px; }
 
-/* ── Sections ──────────────────────────────────────────────── */
-.plugins-section { margin-top: 52px; }
+/* ── Sections — glass panels matching the plugin/tile windows ── */
+.plugins-section {
+  margin-top: 28px;
+  padding: 22px 24px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+}
 .plugins-section .ui-section {
   margin-bottom: 0;
   padding-bottom: 14px;
@@ -129,7 +138,7 @@ body {
   gap: 10px;
   padding: 52px 24px;
   border: 1.5px dashed var(--glass-border);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
   text-align: center;
@@ -189,6 +198,7 @@ body {
   flex: none;
   width: 40px; height: 40px;
   border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--accent);
   display: flex;
@@ -252,13 +262,13 @@ body {
 }
 
 .plugin-row-actions { flex: none; display: flex; gap: 8px; }
-.plugin-row-actions .ui-btn { border-radius: 0; }
+.plugin-row-actions .ui-btn { border-radius: var(--radius-sm); }
 .plugin-remove:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
 
 /* ── Empty state ───────────────────────────────────────────── */
 .plugins-empty {
   border: 1px dashed var(--glass-border);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 36px 24px;
   color: var(--muted);
   font-size: 13px;

@@ -197,6 +197,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/diary/generate", post(diary::generate))
         .route("/api/chat", post(chat::send_message))
         .route("/api/chat/history", get(chat::history))
+        .route("/api/chat/conversations", get(chat::list_conversations).post(chat::create_conversation))
+        .route("/api/chat/conversations/:id", get(chat::conversation_messages).delete(chat::delete_conversation))
         .route("/api/search", post(search::search_web))
         .route("/api/agent", post(agent::handle_agent_dispatch))
         .route("/api/ollama/models", get(ollama::list_models))
