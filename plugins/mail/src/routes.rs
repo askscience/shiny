@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, UserId};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request, path_params_from_request};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::mail::{self, Account};
@@ -39,9 +39,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 /* ── helpers ────────────────────────────────────────────────── */
 
 fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    req.extensions()
-        .get::<UserId>()
-        .map(|u| u.0.clone())
+    user_id_from_request(req)
         .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
 }
 
@@ -59,14 +57,13 @@ async fn take_query<T: DeserializeOwned + Send + 'static>(
     Ok((query.0, axum::extract::Request::from_parts(parts, body)))
 }
 
-async fn take_path<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let path = axum::extract::Path::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid path: {e}")))?;
-    Ok((path.0, axum::extract::Request::from_parts(parts, body)))
+fn take_path(req: &axum::extract::Request) -> Result<String, AppError> {
+    let mut params = path_params_from_request(req)
+        .ok_or_else(|| AppError::BadRequest("no path parameter found".into()))?;
+    if params.len() != 1 {
+        return Err(AppError::BadRequest("expected exactly one path parameter".into()));
+    }
+    Ok(params.remove(0).1)
 }
 
 fn now_iso() -> String {
@@ -257,13 +254,12 @@ fn accounts_update(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let (path, req) = take_path::<Json>(req).await?;
-            let id = path.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let id = take_path(&req)?;
             let axum::Json(body) = axum::Json::<UpdateAccount>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
 
-            let mut a = mail::load_account(ctx.db(), &uid, id)?;
+            let mut a = mail::load_account(ctx.db(), &uid, &id)?;
             let mut changed_creds = false;
             if let Some(v) = body.label {
                 a.label = v;
@@ -319,9 +315,8 @@ fn accounts_delete(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let (path, _req) = take_path::<Json>(req).await?;
-            let id = path.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            mail::delete_account(ctx.db(), &uid, id)?;
+            let id = take_path(&req)?;
+            mail::delete_account(ctx.db(), &uid, &id)?;
             Ok(ok(json!({ "deleted": true })))
         }
     })

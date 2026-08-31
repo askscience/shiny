@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, UserId};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request};
 use shiny_plugin_sdk::services::PluginCtx;
 
 const MAX_METADATA_READ: usize = 64 * 1024 + 4080;
@@ -25,9 +25,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    req.extensions()
-        .get::<UserId>()
-        .map(|u| u.0.clone())
+    user_id_from_request(req)
         .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
 }
 

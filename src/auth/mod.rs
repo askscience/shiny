@@ -2,7 +2,7 @@ use axum::body::{Body, HttpBody};
 use axum::extract::{State, Request};
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode};
 use bytes::Bytes;
 use http::header::AUTHORIZATION;
 
@@ -55,9 +55,19 @@ where
 
     let mut req = req.map(Body::new);
     {
-        let extensions = req.extensions_mut();
         // Portable identity for plugin route handlers (they can't reference
-        // the core `Traveler` type).
+        // the core `Traveler` type). Hand the id over as request headers:
+        // `http::Extensions` keys by `TypeId`, and each plugin statically
+        // links its own copy of the SDK, so a `UserId` inserted here has a
+        // different `TypeId` than the one the plugin looks up. Header names
+        // are matched by string comparison and cross the dlopen boundary.
+        if let Ok(value) = HeaderValue::from_str(&user_id) {
+            let headers = req.headers_mut();
+            headers.insert(shiny_plugin_sdk::routes::USER_ID_HEADER, value.clone());
+            headers.insert(shiny_plugin_sdk::routes::TRAVELER_ID_HEADER, value);
+        }
+
+        let extensions = req.extensions_mut();
         extensions.insert(shiny_plugin_sdk::routes::UserId(user_id.clone()));
         extensions.insert(shiny_plugin_sdk::routes::TravelerId(user_id));
         extensions.insert(traveler);

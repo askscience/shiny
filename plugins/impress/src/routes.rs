@@ -13,7 +13,7 @@ use serde_json::{json, Value as Json};
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::odp;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, UserId};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request, path_params_from_request};
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::Slide;
 
@@ -38,9 +38,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 /* ── helpers ────────────────────────────────────────────────── */
 
 fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    req.extensions()
-        .get::<UserId>()
-        .map(|u| u.0.clone())
+    user_id_from_request(req)
         .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
 }
 
@@ -71,14 +69,13 @@ fn as_text(v: &Value) -> String {
     }
 }
 
-async fn take_path<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let path = axum::extract::Path::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid path: {e}")))?;
-    Ok((path.0, axum::extract::Request::from_parts(parts, body)))
+fn take_path(req: &axum::extract::Request) -> Result<String, AppError> {
+    let mut params = path_params_from_request(req)
+        .ok_or_else(|| AppError::BadRequest("no path parameter found".into()))?;
+    if params.len() != 1 {
+        return Err(AppError::BadRequest("expected exactly one path parameter".into()));
+    }
+    Ok(params.remove(0).1)
 }
 
 async fn take_query<T: DeserializeOwned + Send + 'static>(
@@ -173,7 +170,7 @@ fn deck_get(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let (id, _) = take_path::<String>(req).await?;
+            let id = take_path(&req)?;
             let rows = ctx.db().query(
                 "SELECT title, slides, theme, aspect, updated_at FROM presentations \
                  WHERE id = ?1 AND user_id = ?2",
@@ -203,7 +200,7 @@ fn deck_save(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let (id, req) = take_path::<String>(req).await?;
+            let id = take_path(&req)?;
             let axum::Json(body) = axum::Json::<Save>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
@@ -243,7 +240,7 @@ fn deck_delete(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let (id, _) = take_path::<String>(req).await?;
+            let id = take_path(&req)?;
             let changed = ctx.db().execute(
                 "DELETE FROM presentations WHERE id = ?1 AND user_id = ?2",
                 &[Value::text(&id), Value::text(&uid)],
@@ -261,7 +258,7 @@ fn deck_export(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let (id, _) = take_path::<String>(req).await?;
+            let id = take_path(&req)?;
             let rows = ctx.db().query(
                 "SELECT title, slides, theme FROM presentations WHERE id = ?1 AND user_id = ?2",
                 &[Value::text(&id), Value::text(&uid)],

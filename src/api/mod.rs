@@ -76,6 +76,35 @@ impl AppState {
     }
 }
 
+/// Re-serialize a request's captured path params into a header the plugin can
+/// read. axum stores path params in request extensions as its private
+/// `UrlParams` type; a plugin's own axum copy has a different `TypeId` for that
+/// type, so a plugin's `Path` extractor can never see them. We extract them
+/// here (core-side, same axum as the router that captured them) and re-encode
+/// them as a plain header, which crosses the dlopen boundary safely.
+async fn inject_path_params(req: axum::extract::Request) -> axum::extract::Request {
+    use axum::extract::{FromRequestParts, RawPathParams};
+    let (mut parts, body) = req.into_parts();
+    let params: Vec<(String, String)> = RawPathParams::from_request_parts(&mut parts, &())
+        .await
+        .map(|p| {
+            p.iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    if !params.is_empty() {
+        if let Ok(json) = serde_json::to_string(&params) {
+            if let Ok(value) = axum::http::HeaderValue::from_bytes(json.as_bytes()) {
+                parts
+                    .headers
+                    .insert(shiny_plugin_sdk::routes::PATH_PARAMS_HEADER, value);
+            }
+        }
+    }
+    axum::extract::Request::from_parts(parts, body)
+}
+
 /// Mount one plugin `RouteSpec` onto a fresh router, applying auth middleware
 /// unless the spec declares `public` (or `admin`, which is treated as `auth`
 /// since core has no admin role).
@@ -86,35 +115,50 @@ fn plugin_route(state: &AppState, spec: RouteSpec, handler: RouteHandler) -> Rou
             let h = handler.clone();
             get(move |req: axum::extract::Request| {
                 let h = h.clone();
-                async move { h(req).await }
+                async move {
+                    let req = inject_path_params(req).await;
+                    h(req).await
+                }
             })
         }
         HttpMethod::Post => {
             let h = handler.clone();
             post(move |req: axum::extract::Request| {
                 let h = h.clone();
-                async move { h(req).await }
+                async move {
+                    let req = inject_path_params(req).await;
+                    h(req).await
+                }
             })
         }
         HttpMethod::Put => {
             let h = handler.clone();
             put(move |req: axum::extract::Request| {
                 let h = h.clone();
-                async move { h(req).await }
+                async move {
+                    let req = inject_path_params(req).await;
+                    h(req).await
+                }
             })
         }
         HttpMethod::Delete => {
             let h = handler.clone();
             delete(move |req: axum::extract::Request| {
                 let h = h.clone();
-                async move { h(req).await }
+                async move {
+                    let req = inject_path_params(req).await;
+                    h(req).await
+                }
             })
         }
         HttpMethod::Patch => {
             let h = handler.clone();
             patch(move |req: axum::extract::Request| {
                 let h = h.clone();
-                async move { h(req).await }
+                async move {
+                    let req = inject_path_params(req).await;
+                    h(req).await
+                }
             })
         }
     };
