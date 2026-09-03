@@ -37,7 +37,7 @@
     background var(--duration-fast),
     border-color var(--duration-fast),
     color var(--duration-fast),
-    transform var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-spring),
     opacity var(--duration-fast);
 }
 .ui-btn:active { transform: scale(0.97); }
@@ -118,7 +118,7 @@
 .ui-section-head { display: flex; flex-direction: column; gap: 4px; }
 .ui-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
 .ui-title { font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.2; }
-.ui-title--lg { font-size: 28px; letter-spacing: -0.02em; }
+.ui-title--lg { font-size: var(--type-display); letter-spacing: -0.02em; }
 .ui-subtitle { font-size: 13px; line-height: 1.5; }
 
 .ui-divider { height: 1px; border: none; flex-shrink: 0; }
@@ -204,10 +204,27 @@
 .ui-progress-bar { height: 100%; border-radius: 999px; transition: width var(--duration-normal) var(--ease-out); }
 
 .ui-empty {
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-  padding: 40px 24px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 48px 24px; text-align: center;
 }
-.ui-empty .ui-icon { width: 28px; height: 28px; }
+/* Icon-in-ring — a lit, tactile "empty" mark (color from the theme skin). */
+.ui-empty-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; flex-shrink: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--highlight-top);
+}
+/* Editorial headline — the empty state as a designed moment, not a stub. */
+.ui-empty-title {
+  font-family: var(--font-editorial);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.45rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
 
 .ui-badge {
   display: inline-flex; align-items: center; gap: 5px;
@@ -237,7 +254,7 @@
   display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
   padding: 8px 14px; border-radius: 999px; border: 1px solid transparent;
   font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
-  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), transform var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
 }
 .ui-chip:active { transform: scale(0.96); }
 .ui-chip .ui-icon { width: 15px; height: 15px; }
@@ -263,8 +280,9 @@
   position: relative; width: 44px; height: 44px; border-radius: 50%;
   border: 1px solid transparent; cursor: pointer; padding: 0; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
 }
+.ui-dock-btn:hover { transform: translateY(-1px); }
 .ui-dock-btn:active { transform: scale(0.94); }
 .ui-dock-btn .ui-icon { width: 19px; height: 19px; }
 

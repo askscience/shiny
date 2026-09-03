@@ -471,13 +471,6 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   .word-editor { padding: 16px 16px 52px; font-size: 16px; }
   .word-status { padding: 6px 12px 7px; }
 }
-   Ambient artwork glow behind everything; hero with square art + huge track
-   title + equalizer + square transport; square station grid below. */
-.radio-tile {
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-}
 
 /* Ambient glow — blurred artwork mirror behind the surface. */
 .radio-glow {

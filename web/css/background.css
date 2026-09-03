@@ -6,9 +6,23 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-size: cover;
-  background-position: center;
+  /* Default idle: the accent mesh breathes with a slow, subtle drift so the
+     surface never reads as flat black. User-chosen backgrounds override this
+     via inline styles / mode classes (see /js/background.js). */
+  background-image: var(--gradient-mesh);
+  background-size: 160% 160%;
+  background-position: 0% 0%;
   background-repeat: no-repeat;
+  animation: bgMeshDrift 26s ease-in-out infinite;
+}
+
+@keyframes bgMeshDrift {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #background { animation: none; }
 }
 
 /* Animated: aurora drift (a slow pan across a large, darkened gradient). */

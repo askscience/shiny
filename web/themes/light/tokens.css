@@ -16,6 +16,7 @@
   --glass-border: rgba(0, 0, 0, 0.14);
   --glass-highlight: rgba(0, 0, 0, 0.08);
   --glass-hover: rgba(0, 0, 0, 0.06);
+  --bubble: rgba(0, 0, 0, 0.06);
 
   /* Frosted glass */
   --glass-blur: 10px;
@@ -25,8 +26,8 @@
 
   /* Text — confident near-black hierarchy */
   --text: #111111;
-  --text-secondary: rgba(0, 0, 0, 0.62);
-  --muted: rgba(0, 0, 0, 0.4);
+  --text-secondary: rgba(0, 0, 0, 0.68);
+  --muted: rgba(0, 0, 0, 0.5);
 
   /* Accent — user-selectable. appearance.js rewrites these. */
   --accent: #111111;
@@ -37,10 +38,10 @@
 
   /* Gradients — derived from the user's gradient choice */
   --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-  --gradient-text: linear-gradient(120deg, #111111 0%, var(--accent) 45%, var(--accent-2) 100%);
+  --gradient-text: linear-gradient(120deg, var(--text) 0%, var(--accent) 45%, var(--accent-2) 100%);
   --gradient-mesh:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0, 0, 0, 0.04) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(0, 0, 0, 0.035) 0%, transparent 50%);
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0, 0, 0, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(0, 0, 0, 0.06) 0%, transparent 50%);
 
   /* Functional semantics */
   --ok: #059669;
@@ -54,6 +55,10 @@
   --font-body: 'DM Sans', system-ui, sans-serif;
   --font-editorial: 'Instrument Serif', Georgia, serif;
 
+  /* Display scale — "type as hero" */
+  --type-hero: clamp(2rem, 4.5vw, 2.9rem);
+  --type-display: clamp(1.5rem, 3vw, 2rem);
+
   /* Spacing & shape */
   --radius-xs: 8px;
   --radius-sm: 12px;
@@ -61,10 +66,13 @@
   --radius-lg: 28px;
   --radius-xl: 36px;
 
-  /* Elevation */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03) inset;
-  --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+  /* Light & elevation — depth from a soft drop shadow + a bright top
+     catch-light; surfaces stay crisp white on the gray canvas. */
+  --highlight-top: rgba(255, 255, 255, 0.9);
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-glass: inset 0 1px 0 var(--highlight-top), 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-float: inset 0 1px 0 var(--highlight-top), 0 18px 44px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
   --shadow-glow: 0 0 40px var(--accent-glow);
 
   /* Motion */

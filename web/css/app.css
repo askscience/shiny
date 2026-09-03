@@ -81,9 +81,14 @@ html, body {
     background var(--duration-fast),
     border-color var(--duration-fast),
     color var(--duration-fast),
-    transform var(--duration-fast) var(--ease-out);
+    transform var(--duration-fast) var(--ease-spring);
 }
-.icon-btn:hover { background: var(--glass-hover); border-color: var(--glass-highlight); color: var(--text); }
+.icon-btn:hover {
+  background: var(--glass-hover);
+  border-color: var(--glass-highlight);
+  color: var(--text);
+  transform: translateY(-1px);
+}
 .icon-btn:active { transform: scale(0.95); }
 .icon-btn svg { width: 18px; height: 18px; }
 
@@ -590,9 +595,16 @@ html, body {
 .brand-logo svg { width: 26px; height: 26px; color: var(--accent-contrast); }
 .brand-mark h1 {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(1.5rem, 5vw, 1.75rem);
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  font-size: var(--type-hero);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  /* Type as hero: a soft text→accent sweep. */
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 .brand-tagline { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 26px; }
 

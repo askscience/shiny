@@ -75,10 +75,14 @@ export function progress({ value = 0 } = {}) {
 export function emptyState(o = {}) {
   const el = document.createElement('div');
   el.className = 'ui-empty';
-  if (o.icon) el.appendChild(icon(o.icon, { size: 28 }));
+  if (o.icon) {
+    const ring = document.createElement('span');
+    ring.className = 'ui-empty-icon';
+    ring.appendChild(icon(o.icon, { size: 22 }));
+    el.appendChild(ring);
+  }
   const title = document.createElement('p');
-  title.className = 'ui-title';
-  title.style.fontSize = '16px';
+  title.className = 'ui-empty-title';
   title.textContent = o.title || 'Nothing here yet';
   el.appendChild(title);
   if (o.body) {

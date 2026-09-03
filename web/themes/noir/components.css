@@ -1,7 +1,8 @@
 /* ─────────────────────────────────────────────────────────────
    Noir — visual skin for the Shiny UI components
-   Monochrome glass. One accent. Quiet, cinematic restraint:
-   single soft entrances, no looping motion, no bounce.
+   Monochrome "lit" glass. One accent as a presence. A single
+   top-left light source lifts surfaces off the black; motion stays
+   quiet and cinematic — restrained, never bouncy.
    ───────────────────────────────────────────────────────────── */
 
 .ui-icon { color: inherit; }
@@ -14,8 +15,12 @@
   background: var(--accent);
   color: var(--accent-contrast);
   border-color: transparent;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 8px 20px var(--accent-glow);
 }
-.ui-btn--primary:hover { filter: brightness(1.08); }
+.ui-btn--primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 10px 30px var(--accent-glow);
+}
 .ui-btn--primary .ui-spinner { border-color: rgba(0, 0, 0, 0.2); border-top-color: var(--accent-contrast); }
 
 .ui-btn--ghost {
@@ -49,7 +54,7 @@
 }
 .ui-btn--icon:hover { background: var(--glass-hover); color: var(--text); }
 
-/* Focus — a whisper of accent */
+/* Focus — a whisper of accent + a faint glow bloom */
 .ui-btn:focus-visible,
 .ui-input:focus-visible,
 .ui-textarea:focus-visible,
@@ -62,7 +67,7 @@
 .ui-checkbox:focus-visible {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow);
 }
 
 /* ── Fields ────────────────────────────────────────────────── */
@@ -147,14 +152,15 @@
 
 .ui-skeleton { background: var(--glass); }
 .ui-skeleton::after {
-  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+  background: linear-gradient(90deg, transparent, var(--accent-soft), transparent);
 }
 
 .ui-progress { background: var(--glass-strong); }
 .ui-progress-bar { background: var(--gradient-accent); }
 
 .ui-empty { color: var(--muted); }
-.ui-empty .ui-icon { color: var(--muted); }
+.ui-empty-icon { color: var(--accent); }
+.ui-empty-title { color: var(--text); }
 
 .ui-badge { background: var(--glass); border-color: var(--glass-border); color: var(--text-secondary); }
 .ui-badge--accent { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
@@ -182,6 +188,7 @@
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
+  box-shadow: 0 0 14px var(--accent-glow);
 }
 
 .ui-avatar { background: var(--glass-strong); color: var(--text-secondary); border: 1px solid var(--glass-border); }

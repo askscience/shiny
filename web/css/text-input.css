@@ -91,7 +91,7 @@ body.compose-active #hud-transcript {
   left: 0;
   width: min(380px, 100%);
   margin: 0;
-  background: #0d0d0e;
+  background: var(--bg-elevated);
   border-radius: 0 20px 20px 0;
   padding:
     max(24px, env(safe-area-inset-top))
@@ -136,7 +136,8 @@ body.compose-active #hud-transcript {
 }
 
 .compose-bubble--assistant .compose-bubble-text {
-  background: #1c1c1e;
+  background: var(--bubble);
+  border: 1px solid var(--glass-border);
   color: var(--text);
 }
 

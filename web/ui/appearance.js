@@ -106,11 +106,12 @@ export function applyAppearance({ accent = getAccent(), gradient = getGradient()
   root.style.setProperty('--accent-contrast', contrastFor(accent));
   root.style.setProperty('--gradient-accent', gradientToCss(gradient));
   root.style.setProperty('--gradient-text',
-    `linear-gradient(120deg, #ffffff 0%, ${stops[0]} 45%, ${tail} 100%)`);
-  // Ambient background mesh — a whisper of the gradient, nothing more.
+    `linear-gradient(120deg, var(--text) 0%, ${stops[0]} 45%, ${tail} 100%)`);
+  // Ambient background mesh — an accent presence, still quiet, but now
+  // visible enough to give the surface a soft glow (not just a whisper).
   root.style.setProperty('--gradient-mesh',
-    `radial-gradient(ellipse 80% 60% at 20% 10%, ${rgba(stops[0], 0.07)} 0%, transparent 55%),` +
-    `radial-gradient(ellipse 70% 50% at 80% 90%, ${rgba(tail, 0.05)} 0%, transparent 50%)`);
+    `radial-gradient(ellipse 80% 60% at 20% 10%, ${rgba(stops[0], 0.13)} 0%, transparent 55%),` +
+    `radial-gradient(ellipse 70% 50% at 80% 90%, ${rgba(tail, 0.1)} 0%, transparent 50%)`);
 
   const detail = { accent, gradient };
   window.dispatchEvent(new CustomEvent('appearance:change', { detail }));

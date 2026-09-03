@@ -16,6 +16,10 @@ html, body {
 ::selection { background: var(--accent-soft); color: var(--text); }
 .hidden { display: none !important; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
 body {
   background: var(--gradient-mesh), var(--bg);
   background-attachment: fixed;

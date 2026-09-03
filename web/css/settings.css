@@ -16,6 +16,10 @@ html, body {
 ::selection { background: var(--accent-soft); color: var(--text); }
 .hidden { display: none !important; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
 body {
   background: var(--gradient-mesh), var(--bg);
   background-attachment: fixed;
@@ -91,11 +95,16 @@ body {
 .settings-hero .ui-eyebrow { color: var(--muted); }
 .settings-title {
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  color: var(--text);
+  font-size: var(--type-hero);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  /* Type as hero: a soft text→accent sweep. */
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 .settings-subtitle { max-width: 46ch; font-size: 14px; }
 
