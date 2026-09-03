@@ -8,8 +8,9 @@ import {
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
 } from '../ui/index.js';
-import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout, loadUserPreferences } from './preferences.js';
+import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout, loadUserPreferences, getRemember, setRemember, flushPreferencesNow } from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
+import { initBackground, getBackground, setBackground } from './background.js';
 
 const langSelect = document.getElementById('lang-select');
 const doneBtn = document.getElementById('settings-done');
@@ -29,6 +30,18 @@ const ollamaModelSelect = document.getElementById('ollama-model-select');
 const ollamaModelHint = document.getElementById('ollama-model-hint');
 const userAvatarEl = document.getElementById('settings-user-avatar');
 const userNameEl = document.getElementById('settings-user-name');
+
+const rememberToggle = document.getElementById('remember-toggle');
+const bgModeSelect = document.getElementById('background-mode');
+const bgGradientNote = document.getElementById('background-gradient-note');
+const bgImageControls = document.getElementById('background-image-controls');
+const bgImagePick = document.getElementById('background-image-pick');
+const bgImageRemove = document.getElementById('background-image-remove');
+const bgImageInput = document.getElementById('background-image-input');
+const bgImagePreview = document.getElementById('background-image-preview');
+const bgImageHint = document.getElementById('background-image-hint');
+const bgAnimControls = document.getElementById('background-anim-controls');
+const bgAnimSelect = document.getElementById('background-animation');
 
 let pendingAvatar = undefined;
 let serverDefaultModel = '';
@@ -351,6 +364,100 @@ function wireDesktopSection() {
   });
 }
 
+/* ── Control panel (nav + background + session) ────────────── */
+
+function wireNav() {
+  const items = [...document.querySelectorAll('.settings-nav-item')];
+  const panels = [...document.querySelectorAll('.settings-panel')];
+  const show = (id) => {
+    items.forEach((it) => it.classList.toggle('is-active', it.dataset.panelTarget === id));
+    panels.forEach((p) => p.classList.toggle('is-active', p.dataset.panel === id));
+  };
+  items.forEach((it) => it.addEventListener('click', () => show(it.dataset.panelTarget)));
+}
+
+function syncBackgroundUI() {
+  const bg = getBackground();
+  if (bgModeSelect) bgModeSelect.value = bg.mode || 'none';
+  bgGradientNote?.classList.toggle('hidden', bg.mode !== 'gradient');
+  bgImageControls?.classList.toggle('hidden', bg.mode !== 'image');
+  bgAnimControls?.classList.toggle('hidden', bg.mode !== 'animated');
+  if (bgAnimSelect) bgAnimSelect.value = bg.animation || 'aurora';
+
+  if (bgImagePreview) {
+    if (bg.mode === 'image') {
+      bgImagePreview.classList.remove('hidden');
+      bgImagePreview.style.backgroundImage = `url("/api/background?v=${Date.now()}")`;
+      if (bgImageHint) bgImageHint.textContent = 'Your photo is dimmed so the interface stays readable.';
+    } else {
+      bgImagePreview.classList.add('hidden');
+      if (bgImageHint) bgImageHint.textContent = '';
+    }
+  }
+}
+
+async function uploadBackground(file) {
+  if (!file) return;
+  if (!file.type?.startsWith('image/')) {
+    toast('Choose an image file', { type: 'error' });
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    toast('Image must be under 12 MB', { type: 'error' });
+    return;
+  }
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    await apiFetch('/api/background', { method: 'POST', body: form });
+    setBackground({ mode: 'image', url: '/api/background' });
+    syncBackgroundUI();
+    toast('Background image updated', { type: 'info' });
+  } catch (e) {
+    toast(e.message || 'Could not upload image', { type: 'error' });
+  }
+}
+
+async function removeBackgroundImage() {
+  try {
+    await apiFetch('/api/background', { method: 'DELETE' });
+  } catch (_) { /* 404 or transient — proceed */ }
+  setBackground({ mode: 'none', url: null });
+  syncBackgroundUI();
+  toast('Background image removed', { type: 'info' });
+}
+
+function wireBackground() {
+  syncBackgroundUI();
+
+  bgModeSelect?.addEventListener('change', () => {
+    setBackground({ mode: bgModeSelect.value });
+    syncBackgroundUI();
+  });
+
+  bgImagePick?.addEventListener('click', () => bgImageInput?.click());
+  bgImageInput?.addEventListener('change', () => {
+    const file = bgImageInput.files?.[0];
+    if (file) uploadBackground(file);
+    bgImageInput.value = '';
+  });
+  bgImageRemove?.addEventListener('click', removeBackgroundImage);
+
+  bgAnimSelect?.addEventListener('change', () => {
+    setBackground({ animation: bgAnimSelect.value });
+  });
+}
+
+function wireSession() {
+  if (!rememberToggle) return;
+  const sync = () => rememberToggle.setAttribute('aria-checked', String(getRemember()));
+  sync();
+  rememberToggle.addEventListener('click', () => {
+    setRemember(!getRemember());
+    sync();
+  });
+}
+
 /* ── Actions ────────────────────────────────────────────────── */
 
 async function saveAndLeave() {
@@ -383,6 +490,10 @@ async function saveAndLeave() {
     }
   }
 
+  // Flush any debounced preference writes (e.g. the "remember" toggle) to the
+  // server before leaving, so the next boot reads the fresh values.
+  await flushPreferencesNow();
+
   window.location.href = '/';
 }
 
@@ -396,6 +507,7 @@ function logout() {
 async function boot() {
   await initThemeLoader();
   initAppearance({ getScope: () => getTraveler()?.id });
+  initBackground({ getScope: () => getTraveler()?.id });
   hydrateIcons();
 
   if (!(await validateSession())) {
@@ -413,6 +525,9 @@ async function boot() {
 
   await Promise.all([loadLanguages(), loadOllamaModels(), loadPluginLayouts()]);
   wireDesktopSection();
+  wireNav();
+  wireBackground();
+  wireSession();
 
   aiNameInput?.addEventListener('input', () => {
     setAiName(aiNameInput.value);

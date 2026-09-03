@@ -93,7 +93,10 @@ pub async fn execute_action(
         });
     }
 
-    let traveler_active = state.plugins.is_enabled_for(&traveler.id, "traveler").await;
+    let traveler_active = state
+        .plugins
+        .session_active_plugin_enabled(&traveler.id, "traveler")
+        .await;
 
     let outcome = match action_key.as_str() {
         // Surface a plugin's window (tile or full screen, per user preference).
@@ -103,7 +106,7 @@ pub async fn execute_action(
                 .or_else(|| param_str(params, "plugin"))
                 .ok_or_else(|| AppError::BadRequest("name required".into()))?;
             let installed = state.plugins.list().iter().any(|m| m.name == name);
-            if installed && state.plugins.is_enabled_for(&traveler.id, &name).await {
+            if installed && state.plugins.session_active_plugin_enabled(&traveler.id, &name).await {
                 ActionOutcome {
                     action: action_key.clone(),
                     result: "ok".into(),
@@ -147,6 +150,15 @@ pub async fn execute_action(
                     extra_artifacts: vec![],
                     owner: None,
                 }
+            } else if fresh_session(state, &traveler.id).await {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({ "error": "Plugins are off this session — turn on 'Remember workspace' in Settings to use plugins" }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
             } else {
                 let already = state.plugins.is_enabled_for(&traveler.id, &name).await;
                 state.plugins.set_enabled_for(&traveler.id, &name, true).await?;
@@ -175,6 +187,15 @@ pub async fn execute_action(
                     extra_artifacts: vec![],
                     owner: None,
                 }
+            } else if fresh_session(state, &traveler.id).await {
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({ "error": "Plugins are off this session — turn on 'Remember workspace' in Settings to use plugins" }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: None,
+                }
             } else {
                 let already = !state.plugins.is_enabled_for(&traveler.id, &name).await;
                 state.plugins.set_enabled_for(&traveler.id, &name, false).await?;
@@ -194,7 +215,10 @@ pub async fn execute_action(
             let plugins: Vec<Value> = {
                 let mut out = Vec::new();
                 for m in state.plugins.list() {
-                    let active = state.plugins.is_enabled_for(&traveler.id, &m.name).await;
+                    let active = state
+                        .plugins
+                        .session_active_plugin_enabled(&traveler.id, &m.name)
+                        .await;
                     out.push(json!({
                         "name": m.name,
                         "active": active,
@@ -394,7 +418,7 @@ async fn active_plugin_error(
             owner: None,
         });
     }
-    if !state.plugins.is_enabled_for(traveler_id, name).await {
+    if !state.plugins.session_active_plugin_enabled(traveler_id, name).await {
         return Some(ActionOutcome {
             action: action.into(),
             result: "error".into(),
@@ -405,6 +429,12 @@ async fn active_plugin_error(
         });
     }
     None
+}
+
+/// True when the user is in fresh mode (`session.remember` off) — plugins are
+/// disabled for the session and cannot be managed from the agent.
+async fn fresh_session(state: &AppState, traveler_id: &str) -> bool {
+    !state.plugins.session_remember(traveler_id).await
 }
 
 pub async fn fetch_active_trip(pool: &SqlitePool, traveler_id: &str) -> Result<Option<Trip>, AppError> {

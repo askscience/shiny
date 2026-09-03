@@ -51,7 +51,7 @@ html, body {
   background-size: 128px 128px;
 }
 
-#app { position: relative; width: 100%; height: 100%; }
+#app { position: relative; z-index: 1; width: 100%; height: 100%; }
 
 /* The map DOM lives inside the traveler plugin's tile (see tiles.css); these
  * geometry rules only apply if it is ever rendered at the page root. */

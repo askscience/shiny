@@ -21,6 +21,8 @@ pub struct Config {
     pub web_dir: String,
     /// Directory containing installed plugins.
     pub plugins_dir: String,
+    /// Directory holding per-user desktop background images.
+    pub backgrounds_dir: String,
     pub admin_token: Option<String>,
 }
 
@@ -62,6 +64,7 @@ impl Config {
                 .unwrap_or(false),
             web_dir: env::var("WEB_DIR").unwrap_or_else(|_| "web".into()),
             plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
+            backgrounds_dir: env::var("BACKGROUNDS_DIR").unwrap_or_else(|_| "data/backgrounds".into()),
             admin_token: env::var("ADMIN_TOKEN").ok().filter(|v| !v.trim().is_empty()),
         }
     }

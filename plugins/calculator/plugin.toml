@@ -1,0 +1,9 @@
+name = "calculator"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Scientific calculator — evaluate arithmetic and scientific expressions in the Calculator window"
+summary = "Calculator: basic and scientific math"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"

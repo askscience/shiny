@@ -64,6 +64,11 @@ function surfacePlugins() {
  * plugin's window surface (its `web/plugin.js`, served at /plugins/<name>/).
  */
 async function refreshCatalog() {
+  // Which plugins are active THIS session (fresh mode → empty). This, not the
+  // persisted `enabled` flag from /api/plugins, decides which window surfaces
+  // get loaded — so a fresh sign-in never mounts plugin windows.
+  const activeSet = await refreshActivePlugins();
+
   let plugins = [];
   try {
     const res = await apiFetch('/api/plugins');
@@ -74,10 +79,10 @@ async function refreshCatalog() {
   } catch (_) { /* keep last catalog */ }
 
   const wanted = new Set(
-    plugins.filter((p) => p.enabled && p.surface).map((p) => p.name),
+    plugins.filter((p) => activeSet.has(p.name) && p.surface).map((p) => p.name),
   );
   for (const p of plugins) {
-    if (p.enabled && p.surface && !surfaceModules.has(p.name)) {
+    if (activeSet.has(p.name) && p.surface && !surfaceModules.has(p.name)) {
       try {
         const mod = await import(`/plugins/${p.name}/plugin.js`);
         surfaceModules.set(p.name, mod.default || mod);

@@ -9,6 +9,8 @@ import { loadArtifacts } from './artifactStore.js';
 import { refreshAppearance } from '../ui/index.js';
 import { closeTextInput } from './textInput.js';
 import { setSphereState } from './sphere.js';
+import { getRemember } from './preferences.js';
+import { refreshBackground } from './background.js';
 
 export function resetUserSession() {
   closeTextInput(true);
@@ -27,6 +29,7 @@ export function resetUserSession() {
 export async function reloadUserSession() {
   await validateSession();
   refreshAppearance();
+  refreshBackground();
   await refreshGpsPosition();
   const trip = await refreshActiveTrip();
   if (trip?.id) {
@@ -34,5 +37,9 @@ export async function reloadUserSession() {
   } else {
     clearNavigation();
   }
-  await loadArtifacts();
+  // Fresh mode: don't restore saved cards — the dock starts empty. The cards
+  // stay saved server-side and come back when "Remember workspace" is on.
+  if (getRemember()) {
+    await loadArtifacts();
+  }
 }

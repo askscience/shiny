@@ -6,6 +6,7 @@ const PLUGIN_LAYOUT_KEY = 'plugin.layout';
 const DESKTOP_WORKSPACES_KEY = 'desktop.workspaces';
 const DESKTOP_ACTIVE_KEY = 'desktop.active';
 const DESKTOP_LAYOUT_KEY = 'desktop.layout';
+const DESKTOP_REMEMBER_KEY = 'session.remember';
 const DEFAULT_AI_NAME = 'Shiny';
 
 function scopedKey(base) {
@@ -43,6 +44,15 @@ async function flushPreferences() {
   } catch (_) {
     // Ignore transient failures; the next change re-flushes.
   }
+}
+
+/** Force an immediate flush (e.g. before navigating away on "Done"). */
+export function flushPreferencesNow() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  return flushPreferences();
 }
 
 /** Load this user's saved preferences from the database into the local cache. */
@@ -85,6 +95,22 @@ export function setOllamaModel(model) {
 }
 
 /**
+ * "Remember my workspace" — when off (default) a sign-in starts fresh: no
+ * plugin windows, no saved desktop, a new chat. When on, everything the user
+ * left behind is restored (plugins, windows, layout, chats, cards).
+ */
+export function getRemember() {
+  return localStorage.getItem(scopedKey(DESKTOP_REMEMBER_KEY)) === 'true';
+}
+
+export function setRemember(on) {
+  const key = scopedKey(DESKTOP_REMEMBER_KEY);
+  if (on) localStorage.setItem(key, 'true');
+  else localStorage.removeItem(key);
+  persist(DESKTOP_REMEMBER_KEY, on ? 'true' : '');
+}
+
+/**
  * Per-plugin window mode: 'tile' (right-rail tile) or 'full' (overlay
  * takeover). Stored per traveler, default 'tile'.
  */
@@ -120,21 +146,25 @@ function readJson(key, fallback) {
 
 /** Ordered workspace list: [{ id, windows: [pluginName] }]. */
 export function getWorkspaces() {
+  if (!getRemember()) return null; // fresh mode: never restore saved windows
   const ws = readJson(scopedKey(DESKTOP_WORKSPACES_KEY), null);
   return Array.isArray(ws) ? ws : null;
 }
 
 export function setWorkspaces(workspaces) {
+  if (!getRemember()) return; // fresh mode: don't persist the desktop
   const raw = JSON.stringify(workspaces);
   localStorage.setItem(scopedKey(DESKTOP_WORKSPACES_KEY), raw);
   persist(DESKTOP_WORKSPACES_KEY, raw);
 }
 
 export function getActiveWorkspaceId() {
+  if (!getRemember()) return null;
   return localStorage.getItem(scopedKey(DESKTOP_ACTIVE_KEY)) || null;
 }
 
 export function setActiveWorkspaceId(id) {
+  if (!getRemember()) return;
   const key = scopedKey(DESKTOP_ACTIVE_KEY);
   if (id) localStorage.setItem(key, id);
   else localStorage.removeItem(key);

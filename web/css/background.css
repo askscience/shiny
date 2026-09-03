@@ -1,0 +1,39 @@
+/* Full-screen desktop background (see /js/background.js). A fixed layer behind
+   every surface (z-index 0) but above the body's base color. */
+
+#background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Animated: aurora drift (a slow pan across a large, darkened gradient). */
+#background.bg-anim-aurora {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
+    linear-gradient(120deg, #0f766e, #1d4ed8, #6d28d9, #9d174d);
+  background-size: 300% 300%;
+  animation: bgAurora 16s ease-in-out infinite !important;
+}
+@keyframes bgAurora {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Animated: shimmer sweep (a soft light band drifting across a dark base). */
+#background.bg-anim-shimmer {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.82)),
+    linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, 0.10) 50%, transparent 68%);
+  background-size: 100% 100%, 220% 100%;
+  animation: bgShimmer 8s linear infinite !important;
+}
+@keyframes bgShimmer {
+  0%   { background-position: 0 0, 200% 0; }
+  100% { background-position: 0 0, -200% 0; }
+}

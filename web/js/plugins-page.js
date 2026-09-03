@@ -4,6 +4,8 @@
 
 import { apiFetch, getTraveler, getToken, validateSession } from './api.js';
 import { renderAvatarEl } from './userProfiles.js';
+import { initBackground } from './background.js';
+import { loadUserPreferences, getRemember } from './preferences.js';
 import {
   initThemeLoader, initAppearance, hydrateIcons,
   toast, button, icon, emptyState, spinner,
@@ -242,12 +244,17 @@ async function uploadArchive(file) {
 async function boot() {
   await initThemeLoader();
   initAppearance({ getScope: () => getTraveler()?.id });
+  initBackground({ getScope: () => getTraveler()?.id });
   hydrateIcons();
 
   if (!(await validateSession())) {
     window.location.href = '/';
     return;
   }
+
+  await loadUserPreferences();
+  const banner = document.getElementById('plugins-fresh-banner');
+  if (banner) banner.classList.toggle('hidden', getRemember());
 
   renderUser();
   await loadPlugins();

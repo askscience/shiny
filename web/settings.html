@@ -41,104 +41,225 @@
     <main class="settings-body">
 
       <section class="settings-hero">
-        <span class="ui-eyebrow">Workspace</span>
+        <span class="ui-eyebrow">Control Panel</span>
         <h1 class="settings-title">Settings</h1>
-        <p class="ui-subtitle settings-subtitle">Profile, appearance and assistant preferences — stored per user, on this device.</p>
+        <p class="ui-subtitle settings-subtitle">Profile, appearance, background, assistant, plugins, desktop and voice — stored per user, on this device.</p>
       </section>
 
-      <section class="settings-section">
-        <h3>Profile</h3>
-        <label class="profile-avatar-upload">
-          <input type="file" id="profile-avatar-input" accept="image/*" hidden>
-          <div id="profile-avatar-preview" class="profile-avatar profile-avatar--large"></div>
-          <span class="profile-avatar-label">Change photo</span>
-        </label>
-        <label for="profile-name-input">Display name</label>
-        <input type="text" id="profile-name-input" class="ui-input" maxlength="64" autocomplete="name">
-      </section>
+      <div class="settings-layout">
 
-      <section class="settings-section">
-        <h3>Appearance</h3>
-        <label for="theme-select">Theme</label>
-        <div class="ui-select-wrap settings-control">
-          <select id="theme-select" class="ui-select"></select>
-          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+        <nav class="settings-nav" aria-label="Settings sections">
+          <button type="button" class="settings-nav-item is-active" data-panel-target="profile">
+            <span class="settings-nav-icon" data-icon="ui/user" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Profile</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="appearance">
+            <span class="settings-nav-icon" data-icon="ui/droplet" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Appearance</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="background">
+            <span class="settings-nav-icon" data-icon="ui/image" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Background</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="assistant">
+            <span class="settings-nav-icon" data-icon="ui/message-circle" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Assistant</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="plugins">
+            <span class="settings-nav-icon" data-icon="ui/puzzle" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Plugins &amp; Windows</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="desktop">
+            <span class="settings-nav-icon" data-icon="ui/monitor" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Desktop</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="voice">
+            <span class="settings-nav-icon" data-icon="ui/mic" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Voice</span>
+          </button>
+          <button type="button" class="settings-nav-item" data-panel-target="session">
+            <span class="settings-nav-icon" data-icon="ui/power" data-icon-size="20" aria-hidden="true"></span>
+            <span class="settings-nav-label">Session &amp; Startup</span>
+          </button>
+        </nav>
+
+        <div class="settings-panels">
+
+          <section class="settings-section settings-panel is-active" id="panel-profile" data-panel="profile">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/user" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Profile</h3>
+            </div>
+            <label class="profile-avatar-upload">
+              <input type="file" id="profile-avatar-input" accept="image/*" hidden>
+              <div id="profile-avatar-preview" class="profile-avatar profile-avatar--large"></div>
+              <span class="profile-avatar-label">Change photo</span>
+            </label>
+            <label for="profile-name-input">Display name</label>
+            <input type="text" id="profile-name-input" class="ui-input" maxlength="64" autocomplete="name">
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-appearance" data-panel="appearance">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/droplet" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Appearance</h3>
+            </div>
+            <label for="theme-select">Theme</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="theme-select" class="ui-select"></select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+            <label id="accent-label">Accent</label>
+            <div id="accent-swatches" class="swatch-row" role="radiogroup" aria-labelledby="accent-label"></div>
+            <label id="gradient-label">Gradient</label>
+            <div id="gradient-swatches" class="swatch-row swatch-row--gradient" role="radiogroup" aria-labelledby="gradient-label"></div>
+            <details class="gradient-custom">
+              <summary>Custom gradient</summary>
+              <div class="gradient-custom-controls">
+                <input type="color" id="gradient-stop-a" value="#ffffff" aria-label="Gradient start color">
+                <input type="color" id="gradient-stop-b" value="#8a8a8a" aria-label="Gradient end color">
+                <input type="range" id="gradient-angle" class="ui-slider" min="0" max="360" step="5" value="135" aria-label="Gradient angle">
+              </div>
+            </details>
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-background" data-panel="background">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/image" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Background</h3>
+            </div>
+            <p class="settings-hint">The full-screen backdrop behind the desktop — the default mesh, your gradient, a photo, or a subtle animation.</p>
+
+            <label for="background-mode">Type</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="background-mode" class="ui-select">
+                <option value="none">None (default mesh)</option>
+                <option value="gradient">Gradient</option>
+                <option value="image">Image</option>
+                <option value="animated">Animated</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+
+            <div id="background-gradient-note" class="settings-hint hidden">Gradient uses your Appearance gradient — change it under Appearance.</div>
+
+            <div id="background-image-controls" class="hidden">
+              <label for="background-image-pick">Image</label>
+              <div class="background-image-row">
+                <button type="button" id="background-image-pick" class="ui-btn ui-btn--quiet ui-btn--sm">Choose image…</button>
+                <button type="button" id="background-image-remove" class="ui-btn ui-btn--danger ui-btn--sm">Remove</button>
+              </div>
+              <input type="file" id="background-image-input" accept="image/*" hidden>
+              <div id="background-image-preview" class="background-image-preview hidden"></div>
+              <p id="background-image-hint" class="settings-hint"></p>
+            </div>
+
+            <div id="background-anim-controls" class="hidden">
+              <label for="background-animation">Animation</label>
+              <div class="ui-select-wrap settings-control">
+                <select id="background-animation" class="ui-select">
+                  <option value="aurora">Aurora drift</option>
+                  <option value="shimmer">Shimmer</option>
+                </select>
+                <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-assistant" data-panel="assistant">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/message-circle" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Assistant</h3>
+            </div>
+            <label for="ai-name-input">Assistant name</label>
+            <input type="text" id="ai-name-input" class="ui-input" placeholder="Shiny" maxlength="32" autocomplete="off">
+            <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Shiny</span>&rdquo; to activate voice on long press.</p>
+            <label for="ollama-model-select">AI model</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="ollama-model-select" class="ui-select"></select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+            <p id="ollama-model-hint" class="settings-hint">Models from your local Ollama server.</p>
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-plugins" data-panel="plugins">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/puzzle" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Plugin Windows</h3>
+            </div>
+            <p class="settings-hint">Choose how each plugin opens: a tile in the right rail, or a full-screen window. The AI respects this when it opens a plugin for you.</p>
+            <div id="plugin-layout-list" class="plugin-layout-list"></div>
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-desktop" data-panel="desktop">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/monitor" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Desktop</h3>
+            </div>
+            <p class="settings-hint">Hyprland-style tiling: windows are grouped on workspaces (desktops) you and the AI can create, remove, and switch.</p>
+
+            <label for="desktop-layout-mode">Layout</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="desktop-layout-mode" class="ui-select">
+                <option value="master">Master &amp; stack</option>
+                <option value="columns">Columns</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+
+            <label for="desktop-orientation">Master side</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="desktop-orientation" class="ui-select">
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+
+            <label for="desktop-master-ratio">Master size <span id="desktop-ratio-value"></span></label>
+            <input type="range" id="desktop-master-ratio" class="ui-slider" min="25" max="85" step="5" value="60" aria-label="Master size">
+
+            <label for="desktop-gap">Gap <span id="desktop-gap-value"></span></label>
+            <input type="range" id="desktop-gap" class="ui-slider" min="0" max="40" step="2" value="12" aria-label="Window gap">
+
+            <p class="settings-hint">Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.</p>
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-voice" data-panel="voice">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/mic" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Voice</h3>
+            </div>
+            <label for="lang-select">Language</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="lang-select" class="ui-select"></select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+            <p class="settings-hint">Speech recognition downloads a model per language (~50&nbsp;MB, cached in the browser).</p>
+          </section>
+
+          <section class="settings-section settings-panel" id="panel-session" data-panel="session">
+            <div class="settings-panel-head">
+              <span class="settings-panel-icon"><span class="ui-icon" data-icon="ui/power" data-icon-size="22" aria-hidden="true"></span></span>
+              <h3>Session &amp; Startup</h3>
+            </div>
+            <p class="settings-hint">Choose what a sign-in restores.</p>
+
+            <div class="ui-row ui-toggle-row">
+              <div class="ui-list-item-main">
+                <div class="ui-list-item-title">Remember my workspace</div>
+                <div class="ui-list-item-sub">Restore plugins, windows, chats and saved cards from last time.</div>
+              </div>
+              <button type="button" class="ui-toggle" role="switch" id="remember-toggle" aria-checked="false"></button>
+            </div>
+
+            <p class="settings-hint"><strong>Off</strong>: every sign-in starts a fresh desktop with no plugins, no windows and a new chat. <strong>On</strong>: everything is restored as you left it. Takes effect when you return to Shiny.</p>
+          </section>
+
         </div>
-        <label id="accent-label">Accent</label>
-        <div id="accent-swatches" class="swatch-row" role="radiogroup" aria-labelledby="accent-label"></div>
-        <label id="gradient-label">Gradient</label>
-        <div id="gradient-swatches" class="swatch-row swatch-row--gradient" role="radiogroup" aria-labelledby="gradient-label"></div>
-        <details class="gradient-custom">
-          <summary>Custom gradient</summary>
-          <div class="gradient-custom-controls">
-            <input type="color" id="gradient-stop-a" value="#ffffff" aria-label="Gradient start color">
-            <input type="color" id="gradient-stop-b" value="#8a8a8a" aria-label="Gradient end color">
-            <input type="range" id="gradient-angle" class="ui-slider" min="0" max="360" step="5" value="135" aria-label="Gradient angle">
-          </div>
-        </details>
-      </section>
-
-      <section class="settings-section">
-        <h3>Assistant</h3>
-        <label for="ai-name-input">Assistant name</label>
-        <input type="text" id="ai-name-input" class="ui-input" placeholder="Shiny" maxlength="32" autocomplete="off">
-        <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Shiny</span>&rdquo; to activate voice on long press.</p>
-        <label for="ollama-model-select">AI model</label>
-        <div class="ui-select-wrap settings-control">
-          <select id="ollama-model-select" class="ui-select"></select>
-          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
-        </div>
-        <p id="ollama-model-hint" class="settings-hint">Models from your local Ollama server.</p>
-      </section>
-
-      <section class="settings-section" id="plugin-windows-section">
-        <h3>Plugin Windows</h3>
-        <p class="settings-hint">Choose how each plugin opens: a tile in the right rail, or a full-screen window. The AI respects this when it opens a plugin for you.</p>
-        <div id="plugin-layout-list" class="plugin-layout-list"></div>
-      </section>
-
-      <section class="settings-section" id="desktop-section">
-        <h3>Desktop</h3>
-        <p class="settings-hint">Hyprland-style tiling: windows are grouped on workspaces (desktops) you and the AI can create, remove, and switch.</p>
-
-        <label for="desktop-layout-mode">Layout</label>
-        <div class="ui-select-wrap settings-control">
-          <select id="desktop-layout-mode" class="ui-select">
-            <option value="master">Master &amp; stack</option>
-            <option value="columns">Columns</option>
-          </select>
-          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
-        </div>
-
-        <label for="desktop-orientation">Master side</label>
-        <div class="ui-select-wrap settings-control">
-          <select id="desktop-orientation" class="ui-select">
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-          </select>
-          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
-        </div>
-
-        <label for="desktop-master-ratio">Master size <span id="desktop-ratio-value"></span></label>
-        <input type="range" id="desktop-master-ratio" class="ui-slider" min="25" max="85" step="5" value="60" aria-label="Master size">
-
-        <label for="desktop-gap">Gap <span id="desktop-gap-value"></span></label>
-        <input type="range" id="desktop-gap" class="ui-slider" min="0" max="40" step="2" value="12" aria-label="Window gap">
-
-        <p class="settings-hint">Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.</p>
-      </section>
-
-      <section class="settings-section">
-        <h3>Voice</h3>
-        <label for="lang-select">Language</label>
-        <div class="ui-select-wrap settings-control">
-          <select id="lang-select" class="ui-select"></select>
-          <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
-        </div>
-        <p class="settings-hint">Speech recognition downloads a model per language (~50&nbsp;MB, cached in the browser).</p>
-      </section>
+      </div>
 
       <div class="settings-footer">
         <button id="settings-logout" class="ui-btn ui-btn--danger" type="button">Log Out</button>

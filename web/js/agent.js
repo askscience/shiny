@@ -11,7 +11,7 @@ import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
-import { getAiName, getOllamaModel } from './preferences.js';
+import { getAiName, getOllamaModel, getRemember } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
 import {
@@ -176,6 +176,7 @@ export function newChat() {
 }
 
 export async function listConversations() {
+  if (!getRemember()) return []; // fresh mode: old chats stay saved but are hidden
   try {
     const res = await apiFetch('/api/chat/conversations');
     return res?.data || [];

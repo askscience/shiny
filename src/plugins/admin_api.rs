@@ -61,12 +61,13 @@ pub async fn list(
 }
 
 /// GET /api/plugins/active — minimal endpoint the frontend uses to decide what
-/// UI to render. Returns an array of plugin names active for this user.
+/// UI to render. Returns the plugins active for this user THIS session (empty
+/// in fresh mode, i.e. when `session.remember` is off).
 pub async fn active(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let active = active_plugin_set(&state, &traveler.id).await?;
+    let active = state.plugins.session_active_set(&traveler.id).await;
     let names: Vec<String> = active.into_iter().collect();
     Ok(Json(json!({ "success": true, "data": names })))
 }

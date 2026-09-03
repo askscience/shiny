@@ -19,21 +19,21 @@
 .ui-btn--primary .ui-spinner { border-color: rgba(0, 0, 0, 0.2); border-top-color: var(--accent-contrast); }
 
 .ui-btn--ghost {
-  background: var(--glass);
+  background: var(--surface-strong);
   border-color: var(--glass-border);
   color: var(--text);
 }
 .ui-btn--ghost:hover { background: var(--glass-hover); border-color: var(--glass-highlight); }
 
 .ui-btn--quiet {
-  background: transparent;
+  background: var(--surface-strong);
   border-color: transparent;
   color: var(--text-secondary);
 }
 .ui-btn--quiet:hover { color: var(--text); background: var(--glass); }
 
 .ui-btn--danger {
-  background: transparent;
+  background: rgba(248, 113, 113, 0.12);
   border-color: rgba(248, 113, 113, 0.35);
   color: var(--error);
 }
@@ -43,7 +43,7 @@
 .ui-btn .ui-icon { color: currentColor; }
 
 .ui-btn--icon {
-  background: var(--glass);
+  background: var(--surface-strong);
   border-color: var(--glass-border);
   color: var(--text-secondary);
 }
@@ -70,7 +70,7 @@
 .ui-hint { color: var(--muted); }
 
 .ui-input, .ui-textarea, .ui-select {
-  background: var(--glass);
+  background: var(--surface-strong);
   border-color: var(--glass-border);
   color: var(--text);
 }

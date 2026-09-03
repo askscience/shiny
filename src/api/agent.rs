@@ -162,12 +162,20 @@ async fn prepare_agent(
             .map(String::from),
     };
 
-    let active_trip = if state.plugins.is_enabled_for(&traveler.id, "traveler").await {
+    // Per-user active plugin set FOR THIS SESSION — drives which plugins'
+    // skills / persona / context lines enter the system prompt. Fresh mode
+    // (`session.remember` off) yields an empty set, so the agent sees only the
+    // core assistant.
+    let installed: std::collections::BTreeSet<String> =
+        state.plugins.session_active_set(&traveler.id).await;
+
+    let traveler_active = installed.contains("traveler");
+    let active_trip = if traveler_active {
         fetch_active_trip(&state.pool, &traveler.id).await?
     } else {
         None
     };
-    let recent_diary = if state.plugins.is_enabled_for(&traveler.id, "traveler").await {
+    let recent_diary = if traveler_active {
         sqlx::query_as::<_, (String, Option<String>)>(
             "SELECT date, summary FROM diary_entries WHERE traveler_id = ?1 ORDER BY date DESC LIMIT 3",
         )
@@ -177,17 +185,6 @@ async fn prepare_agent(
     } else {
         Vec::new()
     };
-
-    // Per-user active plugin set — drives which plugins' skills / persona /
-    // context lines enter the system prompt.
-    let active_set = state.plugins.disabled_for(&traveler.id).await;
-    let installed: std::collections::BTreeSet<String> = state
-        .plugins
-        .list()
-        .into_iter()
-        .map(|m| m.name)
-        .filter(|n| !active_set.contains(n))
-        .collect();
 
     // Skill markdown = the core assistant reference (always-on tools only)
     // PLUS whatever skills the user's active plugins advertise. Plugin-owned

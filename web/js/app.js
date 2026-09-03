@@ -7,7 +7,7 @@ import {
   getSphereState,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
-import { sendToAgent, sendToAgentCompose } from './agent.js';
+import { sendToAgent, sendToAgentCompose, newChat } from './agent.js';
 import { startGpsTracking } from './gps.js';
 import {
   initThemeLoader, initAppearance, refreshAppearance,
@@ -23,7 +23,8 @@ import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
 import { reloadUserSession } from './session.js';
-import { loadUserPreferences } from './preferences.js';
+import { loadUserPreferences, getRemember } from './preferences.js';
+import { initBackground } from './background.js';
 
 let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
@@ -47,6 +48,7 @@ async function boot() {
   // Theme + appearance first: everything renders through these tokens.
   await initThemeLoader();
   initAppearance({ getScope: () => getTraveler()?.id });
+  initBackground({ getScope: () => getTraveler()?.id });
   wireToastEvents();
   hydrateIcons();
 
@@ -95,6 +97,10 @@ async function initApp() {
     return;
   }
   appInitialized = true;
+
+  // Fresh mode starts a brand-new conversation; the old chats stay saved and
+  // come back when "Remember workspace" is on.
+  if (!getRemember()) newChat();
 
   initSphere();
   initArtifactDock();

@@ -22,10 +22,25 @@ body {
 }
 
 .plugins-page {
+  position: relative;
+  z-index: 1;
   width: min(960px, 100%);
   margin: 0 auto;
   padding: 0 26px calc(72px + env(safe-area-inset-bottom));
 }
+
+/* Fresh-session notice — shown when "Remember workspace" is off. */
+.plugins-fresh-banner {
+  margin: -6px 0 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.plugins-fresh-banner strong { color: var(--accent); }
 
 /* ── Header ────────────────────────────────────────────────── */
 .plugins-header {
@@ -118,10 +133,10 @@ body {
   padding: 22px 24px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  background: var(--glass);
+  /* Opaque surface (matches plugin tiles) so a desktop background never
+     bleeds through the plugins content. */
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
 }
 .plugins-section .ui-section {
   margin-bottom: 0;
@@ -140,7 +155,7 @@ body {
   padding: 52px 24px;
   border: 1.5px dashed var(--glass-border);
   border-radius: var(--radius-md);
-  background: transparent;
+  background: var(--glass-strong);
   cursor: pointer;
   text-align: center;
   transition: border-color var(--duration-fast), background var(--duration-fast);
@@ -200,7 +215,7 @@ body {
   width: 40px; height: 40px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  background: transparent;
+  background: var(--glass-strong);
   color: var(--accent);
   display: flex;
   align-items: center;

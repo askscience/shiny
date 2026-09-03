@@ -1,5 +1,6 @@
 pub mod artifacts;
 pub mod auth;
+pub mod background;
 pub mod preferences;
 pub mod travelers;
 pub mod trips;
@@ -222,6 +223,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
+        // Desktop background image: upload/serve/remove the caller's file.
+        .route("/api/background", get(background::serve).post(background::upload)
+            .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024))
+            .delete(background::remove))
         .route("/api/trips", get(trips::list).post(trips::create))
         .route("/api/trips/active", get(trips::get_active))
         .route("/api/trips/:id", get(trips::get_one).put(trips::update))

@@ -69,7 +69,10 @@
   min-height: 0;
   border-radius: var(--radius-lg);
   border: 1px solid var(--glass-border);
-  background: var(--glass);
+  /* Opaque window surface — a desktop background must never bleed through a
+     plugin window. `--bg-elevated` is #0a0a0a in the noir theme and would be a
+     light surface in a light theme, so it follows the active theme. */
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-glass);
   overflow: hidden;
   pointer-events: auto;
@@ -138,7 +141,12 @@
   isolation: isolate;
 }
 
-.tile--map #map { position: absolute; inset: 0; }
+.tile--map #map {
+  position: absolute;
+  inset: 0;
+  /* Match the opaque tile surface until Leaflet's dark tiles paint. */
+  background: var(--bg-elevated);
+}
 
 /* ── Saved-cards dock inside the traveler window ────────────
    Top-right over the map, replacing the old under-sphere dock. */
@@ -2487,3 +2495,725 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .tile-grid--phone .mail-folders { width: 120px; }
 .tile-grid--phone .mail-bar { padding: 9px 12px; }
 .tile-grid--phone .mail-tools { padding: 5px 12px; }
+
+/* ─────────────────────────────────────────────────────────────
+   Calculator plugin window — basic + scientific calculator.
+   Bar (title + history/scientific/clear), display, scientific pad,
+   keypad, collapsible history.
+   ───────────────────────────────────────────────────────────── */
+.calculator-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.calculator-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.calculator-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.calculator-bar-spacer { flex: 1; }
+
+.calculator-bar-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+}
+.calculator-bar-btn.is-active { background: var(--accent-soft); color: var(--accent); }
+
+.calculator-display {
+  padding: 18px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--surface);
+  min-height: 86px;
+}
+
+.calculator-display-expr {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  color: var(--muted);
+  min-height: 18px;
+  word-break: break-all;
+  text-align: right;
+  max-width: 100%;
+}
+
+.calculator-display-result {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+  text-align: right;
+  max-width: 100%;
+}
+
+.calculator-sci {
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--bg);
+  padding: 6px;
+}
+
+.calculator-key-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 0 6px;
+}
+
+.calculator-sci .calculator-key-row { grid-template-columns: repeat(4, 1fr); }
+
+.calculator-keys {
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.calculator-key {
+  height: 44px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--text);
+  font-size: 15px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.calculator-key:hover { background: var(--glass-hover); }
+.calculator-key.is-fn { color: var(--accent); font-size: 12px; letter-spacing: 0.02em; }
+.calculator-key.is-danger { color: var(--error); }
+.calculator-key.is-equals {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: transparent;
+}
+.calculator-key.is-equals:hover { opacity: 0.9; }
+
+.calculator-history {
+  border-top: 1px solid var(--glass-border);
+  background: var(--bg);
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calculator-history-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.calculator-history-item:hover { background: var(--glass-hover); }
+.calculator-history-expr {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calculator-history-res {
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Calendar plugin window — month grid + day detail.
+   Bar (prev/next/month/today/new), weekday header, 7-column grid,
+   and a detail strip for the selected day.
+   ───────────────────────────────────────────────────────────── */
+.calendar-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.calendar-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.calendar-nav-btn { width: 30px; height: 30px; border-radius: 0; }
+
+.calendar-month-label {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  min-width: 120px;
+}
+
+.calendar-bar-spacer { flex: 1; }
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--surface-strong);
+}
+
+.calendar-weekday {
+  padding: 6px 4px;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.calendar-day {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border: none;
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  min-height: 64px;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.calendar-day:hover { background: var(--glass-hover); }
+.calendar-day.is-other { background: var(--surface); opacity: 0.4; cursor: default; }
+.calendar-day.is-today .calendar-day-num {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 50%;
+}
+.calendar-day.is-selected {
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
+  background: var(--accent-soft);
+}
+
+.calendar-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.calendar-day-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.calendar-chip {
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--accent);
+  padding: 1px 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-detail {
+  flex: none;
+  border-top: 1px solid var(--glass-border);
+  background: var(--surface);
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-detail-head {
+  position: sticky;
+  top: 0;
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.calendar-detail-list {
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calendar-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+}
+.calendar-detail-time {
+  flex: none;
+  width: 74px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--muted);
+}
+.calendar-detail-main { flex: 1; min-width: 0; }
+.calendar-detail-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-detail-sub {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-detail-actions { flex: none; display: flex; gap: 6px; }
+.calendar-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+/* Phone: tighter bar and day cells. */
+.tile-grid--phone .calculator-bar { padding: 9px 12px; }
+.tile-grid--phone .calculator-display { padding: 14px 16px 10px; min-height: 72px; }
+.tile-grid--phone .calendar-bar { padding: 9px 12px; }
+.tile-grid--phone .calendar-day { min-height: 52px; padding: 4px; }
+.tile-grid--phone .calendar-detail { max-height: 150px; }
+
+/* ─────────────────────────────────────────────────────────────
+   Image plugin window — photo editor (Photon-backed).
+   Photoshop-inspired: hairline top bar, left tool rail, centered
+   canvas, right adjustments panel (brightness/contrast, Curves,
+   effects grid, preset filters), and a bottom status line.
+   ───────────────────────────────────────────────────────────── */
+.image-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.image-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.image-menu-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.image-menu-btn:hover { background: var(--glass-hover); }
+.image-menu-btn[aria-expanded='true'] { background: var(--glass-hover); }
+.image-menu-btn-icon { display: inline-flex; color: var(--accent); }
+.image-menu-btn-icon .ui-icon { width: 15px; height: 15px; }
+.image-menu-btn-chevron { display: inline-flex; color: var(--muted); }
+.image-menu-btn-chevron .ui-icon { width: 12px; height: 12px; }
+
+.image-title {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding: 2px 0;
+}
+.image-title::placeholder { color: var(--muted); }
+
+.image-save-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background var(--duration-normal) var(--ease-out);
+}
+.image-save-dot.is-active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Main: rail + canvas + panel */
+.image-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Left tool rail */
+.image-rail {
+  flex: none;
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-right: 1px solid var(--glass-border);
+  background: var(--glass);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.image-rail::-webkit-scrollbar { display: none; }
+
+.image-rail-divider {
+  width: 22px;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--glass-border);
+}
+
+.image-tool {
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.image-tool:hover { background: var(--glass-hover); color: var(--text); }
+.image-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+/* Center canvas */
+.image-canvas {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.image-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--glass-border) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.image-stage-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Right adjustments panel */
+.image-panel {
+  flex: none;
+  width: 264px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.image-eyebrow {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* Sliders */
+.image-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.image-slider-label {
+  flex: none;
+  width: 62px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.image-slider .ui-slider { flex: 1; min-width: 0; }
+.image-slider-value {
+  flex: none;
+  width: 28px;
+  text-align: right;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Curves editor */
+.image-curves {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  background: var(--bg);
+}
+.image-curves-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+  cursor: crosshair;
+  touch-action: none;
+}
+.image-curves-reset {
+  align-self: flex-start;
+  border-radius: 0;
+}
+
+/* Effects grid */
+.image-effects {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.image-effect {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--surface-strong);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.image-effect:hover { background: var(--glass-hover); color: var(--accent); border-color: var(--accent); }
+
+/* Filter preset */
+.image-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.image-filter-select { flex: 1; min-width: 0; }
+.image-filter .ui-btn { border-radius: 0; }
+
+/* Status line */
+.image-status {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 7px 14px 8px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: linear-gradient(180deg, transparent, var(--bg) 70%);
+  pointer-events: none;
+}
+
+/* Image menu popup (body-level) — mirrors the Word doc menu. */
+.image-menu {
+  position: fixed;
+  z-index: calc(var(--z-hud) + 2);
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 28px));
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  animation: hudMenuIn var(--duration-fast) var(--ease-out);
+}
+.image-menu::-webkit-scrollbar { display: none; }
+
+.image-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.image-menu-item:hover { background: var(--glass-hover); }
+.image-menu-item.is-active { color: var(--accent); }
+.image-menu-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.image-menu-time {
+  font-size: 10px;
+  color: var(--muted);
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.image-menu-check {
+  display: inline-flex;
+  flex: none;
+  color: var(--accent);
+  opacity: 0;
+}
+.image-menu-check .ui-icon { width: 13px; height: 13px; }
+.image-menu-item.is-active .image-menu-check { opacity: 1; }
+.image-menu-foot-icon { display: inline-flex; flex: none; color: var(--muted); }
+.image-menu-foot-icon .ui-icon { width: 14px; height: 14px; }
+.image-menu-item--danger,
+.image-menu-item--danger .image-menu-foot-icon { color: var(--error); }
+.image-menu-empty { padding: 12px; font-size: 11.5px; color: var(--muted); }
+.image-menu-foot {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Image compact variant (narrow window / phone) ────────────
+   Stacks the editor vertically: the rail becomes a horizontal toolbar,
+   the panel becomes a bottom strip below the canvas. */
+@container (max-width: 520px) {
+  .image-bar { padding: 8px 12px; }
+  .image-title { font-size: 14px; }
+
+  .image-main { flex-direction: column; }
+
+  .image-rail {
+    flex-direction: row;
+    width: auto;
+    height: 46px;
+    gap: 2px;
+    padding: 6px 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--glass-border);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .image-rail-divider { width: 1px; height: 22px; margin: 0 4px; }
+
+  .image-canvas { flex: 1; min-height: 0; }
+
+  .image-panel {
+    width: auto;
+    max-height: 200px;
+    border-left: none;
+    border-top: 1px solid var(--glass-border);
+    flex-direction: column;
+  }
+  .image-stage { padding: 16px 16px 52px; }
+  .image-status { padding: 6px 12px 7px; }
+}
+
+/* Phone: tighter chrome. */
+.tile-grid--phone .image-bar { padding: 9px 12px; }
+.tile-grid--phone .image-stage { padding: 14px; }

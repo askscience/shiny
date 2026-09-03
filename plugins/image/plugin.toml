@@ -1,0 +1,9 @@
+name = "image"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Image editor — apply photographic effects and transforms (Photon) in the Image window"
+summary = "Image editor: effects, filters and transforms"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"

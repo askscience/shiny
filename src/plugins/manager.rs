@@ -99,6 +99,45 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Read the user's `session.remember` preference (default false). This one
+    /// switch decides whether a sign-in resumes the saved workspace (plugins,
+    /// windows, layout) or starts fresh (core assistant only, empty desktop).
+    pub async fn session_remember(&self, user_id: &str) -> bool {
+        let value: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'session.remember'",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.inner.pool)
+        .await
+        .ok()
+        .flatten();
+        matches!(value.as_deref(), Some("true") | Some("1"))
+    }
+
+    /// Plugins active for `user_id` THIS session. Empty in fresh mode
+    /// (`session.remember` off); otherwise the persisted enabled set
+    /// (installed minus explicitly-disabled).
+    pub async fn session_active_set(&self, user_id: &str) -> BTreeSet<String> {
+        if !self.session_remember(user_id).await {
+            return BTreeSet::new();
+        }
+        let disabled = self.disabled_for(user_id).await;
+        self.list()
+            .into_iter()
+            .map(|m| m.name)
+            .filter(|n| !disabled.contains(n))
+            .collect()
+    }
+
+    /// Whether `plugin_name` is usable for `user_id` this session. Fresh mode
+    /// disables every plugin; remember mode defers to the persisted state.
+    pub async fn session_active_plugin_enabled(&self, user_id: &str, plugin_name: &str) -> bool {
+        if !self.session_remember(user_id).await {
+            return false;
+        }
+        self.is_enabled_for(user_id, plugin_name).await
+    }
+
     pub fn persona_concat_for(&self, active: &BTreeSet<String>) -> String {
         self.inner.contribs.read().iter()
             .filter(|c| active.contains(&c.manifest.name))

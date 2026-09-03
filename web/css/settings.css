@@ -22,9 +22,11 @@ body {
 }
 
 .settings-page {
-  width: min(680px, 100%);
+  position: relative;
+  z-index: 1;
+  width: min(1080px, 100%);
   margin: 0 auto;
-  padding: 0 26px calc(72px + env(safe-area-inset-bottom));
+  padding: 0 32px calc(72px + env(safe-area-inset-bottom));
 }
 
 /* ── Header (shared page pattern with the plugins page) ────── */
@@ -101,23 +103,43 @@ body {
 .settings-section {
   display: flex;
   flex-direction: column;
-  padding: 26px 24px;
+  padding: 32px 32px;
   margin-bottom: 16px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  background: var(--glass);
+  /* Opaque surface (matches plugin tiles) so a desktop background never
+     bleeds through the settings content. */
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
 }
 .settings-section h3 {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
   text-transform: none;
-  margin-bottom: 18px;
+  margin: 0;
   color: var(--text);
+}
+
+/* Panel header — icon + title, like a GNOME settings panel. */
+.settings-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.settings-panel-icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .settings-section > label {
   display: block;
@@ -271,8 +293,8 @@ body {
     padding: 0 18px calc(72px + env(safe-area-inset-bottom));
   }
 
-  .settings-hero { padding: 28px 2px 24px; }
-  .settings-section { padding: 26px 2px; }
+  .settings-hero { padding: 28px 4px 24px; }
+  .settings-section { padding: 26px 20px; }
 
   /* Bigger touch targets for the primary controls. */
   .settings-section .ui-input,
@@ -301,4 +323,104 @@ body {
   .page-back span:not(.ui-icon) { display: none; }
   .page-back { padding: 6px; }
   .profile-avatar--large { width: 84px; height: 84px; }
+}
+
+/* ── Control panel layout (nav + panels) ───────────────────── */
+.settings-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  margin-top: 8px;
+}
+
+.settings-nav {
+  position: sticky;
+  top: calc(var(--hud-header-total) + 12px);
+  flex: 0 0 264px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-glass);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--glass-strong);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.settings-nav-item:hover { background: var(--glass-hover); color: var(--text); }
+.settings-nav-item.is-active { background: var(--accent-soft); color: var(--accent); }
+
+.settings-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: color var(--duration-fast);
+}
+.settings-nav-item:hover .settings-nav-icon { color: var(--text-secondary); }
+.settings-nav-item.is-active .settings-nav-icon { color: var(--accent); }
+.settings-nav-label { flex: 1; }
+
+.settings-panels { flex: 1; min-width: 0; }
+
+/* One panel is visible at a time (the nav switches between them). */
+.settings-panel { display: none; }
+.settings-panel.is-active { display: flex; }
+
+/* Session toggle row — give the switch breathing room inside the panel. */
+.settings-panel .ui-toggle-row {
+  gap: 20px;
+  margin: 20px 0;
+  padding: 18px 20px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass);
+}
+
+/* Background controls */
+.background-image-row { display: flex; gap: 10px; }
+.background-image-preview {
+  margin-top: 16px;
+  height: 180px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-glass);
+}
+
+@media (max-width: 960px) {
+  .settings-layout { flex-direction: column; }
+  .settings-nav {
+    position: static;
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+  .settings-nav-item {
+    width: auto;
+    flex: 1;
+    min-width: 150px;
+    min-height: 48px;
+    justify-content: flex-start;
+  }
 }

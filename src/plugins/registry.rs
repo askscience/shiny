@@ -109,7 +109,7 @@ impl ToolRegistry {
         if !owner.is_empty() {
             let m = self.manager.read().clone();
             if let Some(m) = m {
-                if !m.is_enabled_for(user_id, &owner).await {
+                if !m.session_active_plugin_enabled(user_id, &owner).await {
                     return Err(AppError::BadRequest(format!(
                         "plugin '{}' is deactivated for this user", owner
                     )));

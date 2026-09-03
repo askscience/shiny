@@ -25,6 +25,9 @@ Plugins are now **self-contained**: a developer writes a plugin folder with `plu
 | `impress` | `slide_*` tools, `presentations` table, `/api/presentations` routes, Impress window — real `.odp` |
 | `radio` | radio tools, `/api/radio/nowplaying` route, Radio window |
 | `youtube` | YouTube tools, `/api/youtube/search` route, YouTube window |
+| `calendar` | `calendar_*` tools, `calendar_events` table, `/api/calendar/events` routes, Calendar window (month grid) |
+| `calculator` | `calculator_*` tools, `calculator_history` table, `/api/calculator/eval` routes, Calculator window (basic + scientific) |
+| `image` | `image_*` tools, `images` table, `/api/images` routes, Image window (effects/filters/transforms via Photon) |
 
 The frontend auto-discovers windows from each plugin's `web/plugin.js`; the SDK (`crates/shiny-plugin-sdk`) supplies the `RouteSpec`/`RouteHandler` surface and the ODT/ODS/ODP codecs. See [`PLUGINS.md`](./PLUGINS.md) §1–§8 and §20.
 
@@ -45,6 +48,9 @@ Shiny has **no admin role** — every account is a peer. Each user gets their ow
 - **AI-Powered Diary** — Auto-generates Markdown travel diaries using Ollama (gemma4:31b-cloud) *(traveler plugin)*
 - **Office suite** — word processor (.odt), spreadsheet (.ods) and presentation (.odp) plugins, all self-contained *(word/calc/impress plugins)*
 - **Media** — internet radio and YouTube windows *(radio/youtube plugins)*
+- **Calendar** — schedule, list and organize events in a month-grid window *(calendar plugin)*
+- **Calculator** — basic and scientific math with one shared evaluation engine for the AI and the window *(calculator plugin)*
+- **Image editing** — photographic effects, filters and transforms powered by Photon *(image plugin)*
 - **Web Search** — DuckDuckGo search with optional AI summarization *(core)*
 - **AI Chat** — Conversational agent aware of your travel history and diary entries
 - **Unified UI library** — monochrome noir theme, user-selectable accent/gradient, swappable themes under `web/themes/`
