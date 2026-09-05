@@ -28,6 +28,7 @@ Plugins are now **self-contained**: a developer writes a plugin folder with `plu
 | `calendar` | `calendar_*` tools, `calendar_events` table, `/api/calendar/events` routes, Calendar window (month grid) |
 | `calculator` | `calculator_*` tools, `calculator_history` table, `/api/calculator/eval` routes, Calculator window (basic + scientific) |
 | `image` | `image_*` tools, `images` table, `/api/images` routes, Image window (effects/filters/transforms via Photon) |
+| `studio` | `studio_*` tools, `studio_tracks` table, `/api/studio` routes, Studio window — an Ableton-style sequencer that renders patterns (Euclidean fills + explicit rhythms) to audio via the `trem` engine |
 
 The frontend auto-discovers windows from each plugin's `web/plugin.js`; the SDK (`crates/shiny-plugin-sdk`) supplies the `RouteSpec`/`RouteHandler` surface and the ODT/ODS/ODP codecs. See [`PLUGINS.md`](./PLUGINS.md) §1–§8 and §20.
 
@@ -51,6 +52,7 @@ Shiny has **no admin role** — every account is a peer. Each user gets their ow
 - **Calendar** — schedule, list and organize events in a month-grid window *(calendar plugin)*
 - **Calculator** — basic and scientific math with one shared evaluation engine for the AI and the window *(calculator plugin)*
 - **Image editing** — photographic effects, filters and transforms powered by Photon *(image plugin)*
+- **Music studio** — Ableton-style step sequencer (tracks as columns, steps as scenes) composing Euclidean rhythms and rendering them to WAV with the `trem` engine *(studio plugin)*
 - **Web Search** — DuckDuckGo search with optional AI summarization *(core)*
 - **AI Chat** — Conversational agent aware of your travel history and diary entries
 - **Unified UI library** — monochrome noir theme, user-selectable accent/gradient, swappable themes under `web/themes/`

@@ -1,0 +1,9 @@
+name = "studio"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Music studio — a trem-powered step sequencer and synth: compose patterns (Euclidean fills, explicit rhythms) and render them to audio in the Studio window"
+summary = "Music studio: pattern sequencer + synth renderer (trem engine)"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"

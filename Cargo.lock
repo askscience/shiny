@@ -3068,6 +3068,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-studio-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "semver",
+ "serde",
+ "serde_json",
+ "shiny-plugin-sdk",
+ "sqlx",
+ "tokio",
+ "trem",
+ "uuid",
+]
+
+[[package]]
 name = "shiny-traveler-plugin"
 version = "0.1.0"
 dependencies = [
@@ -3881,6 +3897,18 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "trem"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5097d9ed7b91e56a219ddfe42b739b07ed7ee7bafbf82c9a8651de94186fdec"
+dependencies = [
+ "bitflags 2.11.1",
+ "num-integer",
+ "num-rational",
+ "num-traits",
 ]
 
 [[package]]
