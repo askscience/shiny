@@ -81,16 +81,25 @@ async function refreshCatalog() {
   const wanted = new Set(
     plugins.filter((p) => activeSet.has(p.name) && p.surface).map((p) => p.name),
   );
+  let wiredAny = false;
   for (const p of plugins) {
     if (activeSet.has(p.name) && p.surface && !surfaceModules.has(p.name)) {
       try {
         const mod = await import(`/plugins/${p.name}/plugin.js`);
         surfaceModules.set(p.name, mod.default || mod);
         surfaceModules.get(p.name)?.wireEvents?.();
+        wiredAny = true;
       } catch (err) {
         console.warn(`plugin surface '${p.name}' failed to load`, err);
       }
     }
+  }
+  // A surface activated in the same agent response as its tool call would
+  // otherwise miss the `agent:actions` dispatch (wired after it fired) —
+  // re-deliver the last actions so e.g. a freshly-activated Studio sees the
+  // track the AI just created.
+  if (wiredAny && window.__lastAgentActions?.length) {
+    window.dispatchEvent(new CustomEvent('agent:actions', { detail: window.__lastAgentActions }));
   }
   for (const name of [...surfaceModules.keys()]) {
     if (!wanted.has(name)) {

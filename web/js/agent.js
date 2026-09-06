@@ -11,7 +11,7 @@ import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
-import { getAiName, getOllamaModel, getRemember } from './preferences.js';
+import { getAiName, getOllamaModel } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
 import {
@@ -176,7 +176,6 @@ export function newChat() {
 }
 
 export async function listConversations() {
-  if (!getRemember()) return []; // fresh mode: old chats stay saved but are hidden
   try {
     const res = await apiFetch('/api/chat/conversations');
     return res?.data || [];
@@ -300,10 +299,14 @@ function setAgentAwaiting(on) {
 
 /** Plugin windows react to tool outcomes here (e.g. radio stops playback). */
 function dispatchAgentActions(res) {
-  window.dispatchEvent(new CustomEvent('agent:actions', { detail: res?.actions_taken || [] }));
+  const actions = res?.actions_taken || [];
+  // Park a copy so freshly-loaded plugin surfaces (activated in the same
+  // response) can catch up — their wireEvents hook runs after this dispatch.
+  window.__lastAgentActions = actions;
+  window.dispatchEvent(new CustomEvent('agent:actions', { detail: actions }));
   // The AI turned a plugin on/off — re-evaluate plugin windows, keyboard,
   // HUD chrome and traveler surfaces immediately.
-  const touchedPlugins = (res?.actions_taken || []).some(
+  const touchedPlugins = actions.some(
     (a) => a?.action === 'plugin_activate' || a?.action === 'plugin_deactivate',
   );
   if (touchedPlugins) {

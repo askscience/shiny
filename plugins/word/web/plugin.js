@@ -423,29 +423,8 @@ export function mountWordTile() {
     if (currentDoc) void persist();
   });
 
-  saveDot = document.createElement('span');
-  saveDot.className = 'word-save-dot';
-  saveDot.setAttribute('aria-hidden', 'true');
-
-  bar.append(docMenuBtn, titleInput, saveDot);
-  tileEl.appendChild(bar);
-
-  /* Toolbar */
-  const tools = document.createElement('div');
-  tools.className = 'word-tools';
-  tools.append(
-    toolbarButton('bold', 'ui/bold', 'Bold', () => exec('bold')),
-    toolbarButton('italic', 'ui/italic', 'Italic', () => exec('italic')),
-    toolbarButton('underline', 'ui/underline', 'Underline', () => exec('underline')),
-    toolbarButton('heading', 'ui/heading', 'Heading', toggleHeading),
-    toolbarButton('list', 'ui/list', 'Bullet list', toggleList),
-  );
-  const spacer = document.createElement('span');
-  spacer.className = 'word-tools-spacer';
-  tools.appendChild(spacer);
   // File actions — unified order across word/calc/impress: new, import,
-  // export, (save), delete. Hidden by the compact window layout, always
-  // available in the document menu.
+  // export, (save), delete.
   const newBtn = button({ icon: 'ui/plus', variant: 'ghost', onClick: () => void newDocument() });
   newBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
   newBtn.title = 'New document';
@@ -464,8 +443,23 @@ export function mountWordTile() {
   delBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--danger', 'word-tool--secondary');
   delBtn.title = 'Delete document';
   delBtn.setAttribute('aria-label', 'Delete document');
-  tools.append(newBtn, importBtn, exportBtn, saveBtn, delBtn);
-  tileEl.appendChild(tools);
+
+  saveDot = document.createElement('span');
+  saveDot.className = 'word-save-dot';
+  saveDot.setAttribute('aria-hidden', 'true');
+
+  // Single top bar (Studio-style): doc menu + title + every action button.
+  bar.append(
+    docMenuBtn,
+    titleInput,
+    toolbarButton('bold', 'ui/bold', 'Bold', () => exec('bold')),
+    toolbarButton('italic', 'ui/italic', 'Italic', () => exec('italic')),
+    toolbarButton('underline', 'ui/underline', 'Underline', () => exec('underline')),
+    toolbarButton('heading', 'ui/heading', 'Heading', toggleHeading),
+    toolbarButton('list', 'ui/list', 'Bullet list', toggleList),
+    newBtn, importBtn, exportBtn, saveBtn, delBtn, saveDot,
+  );
+  tileEl.appendChild(bar);
 
   /* Editor */
   editorEl = document.createElement('div');

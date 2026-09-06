@@ -600,6 +600,8 @@ let prevPlaying = false;
 let prevStart = 0;
 let prevDur = 0;
 let auditionSource = null;       // looping SynthMe / WaveMe preview
+let pendingAiTrackId = null;     // AI-created track to drop in once mounted
+let lastConsumedAiTrackId = null; // de-dupe re-delivered agent:actions
 let metroOn = false;
 let metroTimer = 0;
 let clockUiTimer = 0;
@@ -624,6 +626,7 @@ let timeEl = null;
 let titleInput = null;
 let bpmInput = null;
 let statusEl = null;
+let saveDotEl = null;   // saved/unsaved indicator (dot, not text)
 let playBtn = null;
 let loopBtn = null;
 let metroBtn = null;
@@ -1155,9 +1158,19 @@ function selectLauncherClip(trackId, scene, { openEditor = false } = {}) {
 /* ── status / transport / footer ────────────────────────────── */
 
 function setStatus(s) {
+  // The save dot replaces the "saved"/"dirty" text: it glows with the accent
+  // while there are unsaved changes and stays muted once saved.
+  const busy = s === 'Rendering…' || s === 'Playing' || s === 'Queued';
+  const isDirty = dirty && s !== 'saved';
+  if (saveDotEl) {
+    saveDotEl.classList.toggle('is-active', isDirty);
+    saveDotEl.title = isDirty ? 'Unsaved changes' : 'Saved';
+  }
   if (!statusEl) return;
-  statusEl.textContent = s;
-  statusEl.dataset.state = s === 'error' ? 'error' : (s === 'Rendering…' ? 'busy' : (dirty ? 'dirty' : 'ok'));
+  const showText = busy || s === 'error';
+  statusEl.textContent = showText ? s : '';
+  statusEl.hidden = !showText;
+  statusEl.dataset.state = s === 'error' ? 'error' : (busy ? 'busy' : (isDirty ? 'dirty' : 'ok'));
 }
 function markDirty() {
   dirty = true;
@@ -3775,6 +3788,31 @@ async function addSavedAsLauncherClip(trackId) {
   if (!cfg) { toast('Pattern not found', { type: 'error' }); return; }
   addConfigAsLauncherClip(cfg);
 }
+/* Drop the AI's just-created track into the launcher (and audition it).
+   Safe to call before the tile is mounted — it parks the id until mount. */
+async function consumePendingAiTrack() {
+  const id = pendingAiTrackId;
+  if (!id) return;
+  if (!launcher) { pendingAiTrackId = id; return; }   // not mounted yet
+  pendingAiTrackId = null;
+  if (lastConsumedAiTrackId === id) return;           // already handled
+  lastConsumedAiTrackId = id;
+  const cfg = await fetchTrackConfig(id).catch(() => null);
+  if (!cfg) return;
+  addConfigAsLauncherClip(cfg);
+  if (!panels.launcher) { panels.launcher = true; syncPanels(); }
+  const blob = await apiFetch(`/api/studio/${id}/audio`, { responseType: 'blob' }).catch(() => null);
+  if (blob) {
+    const buf = await blob.arrayBuffer();
+    const ctx = audioCtxOr();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const decoded = await ctx.decodeAudioData(buf);
+    const src = ctx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(masterOut());
+    src.start();
+  }
+}
 function addConfigAsLauncherClip(cfg) {
   const tr = launcher.tracks[0];
   if (!tr) return;
@@ -3982,9 +4020,12 @@ export function mountStudioTile() {
   browserBtn.title = 'Browser (patterns, instruments, effects, presets)';
 
   statusEl = h('span', 'studio-status');
+  saveDotEl = h('span', 'studio-save-dot');
+  saveDotEl.setAttribute('aria-hidden', 'true');
+  saveDotEl.title = 'Saved';
 
   barEl.append(arrToggleBtn, lchToggleBtn, synthmeBtn, gridBtn, h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
-    beatDotEl, timeEl, bpmInput, bpmLabel, titleInput, saveBtn, exportBtn, browserBtn, statusEl);
+    beatDotEl, timeEl, bpmInput, bpmLabel, titleInput, saveBtn, exportBtn, browserBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
 
   /* ── body: arranger + launcher side by side ── */
@@ -4115,6 +4156,7 @@ export function mountStudioTile() {
   void refreshArrangements().then(renderBrowser).catch(() => {});
   void refreshPresets().then(renderBrowser).catch(() => {});
   startScope();
+  void consumePendingAiTrack().catch(() => {});
 
   return tileEl;
 }
@@ -4127,7 +4169,7 @@ export function unmountStudioTile() {
   if (clockUiTimer) { clearInterval(clockUiTimer); clockUiTimer = 0; }
   if (beatFlashTimer) { clearTimeout(beatFlashTimer); beatFlashTimer = 0; }
   if (tileEl) { tileEl.remove(); tileEl = null; }
-  barEl = timeEl = titleInput = bpmInput = statusEl = playBtn = loopBtn = metroBtn = null;
+  barEl = timeEl = titleInput = bpmInput = statusEl = saveDotEl = playBtn = loopBtn = metroBtn = null;
   arrToggleBtn = lchToggleBtn = bodyEl = arrWrapEl = arrGridEl = arrPlayheadEl = null;
   lchWrapEl = lchGridEl = detailEl = detailBodyEl = gridEl = pianoEl = devicesEl = mixerEl = null;
   synthmeWrapEl = null;
@@ -4172,26 +4214,14 @@ function onAgentActions(e) {
   const rendered = studio.find((a) => a.action === 'studio_render' && a.result === 'ok');
   const deleted = studio.some((a) => a.action === 'studio_delete' && a.result === 'ok');
   const touchedId = (created || rendered)?.data?.track_id;
+  if (touchedId) pendingAiTrackId = touchedId;
   void (async () => {
     await refreshTracks().catch(() => {});
     renderBrowser();
     if (deleted) {
       renderBrowser();
     } else if (touchedId) {
-      /* Drop the AI's track into the launcher's first free slot and audition it. */
-      await addSavedAsLauncherClip(touchedId).catch(() => {});
-      if (!panels.launcher) { panels.launcher = true; syncPanels(); }
-      const blob = await apiFetch(`/api/studio/${touchedId}/audio`, { responseType: 'blob' }).catch(() => null);
-      if (blob) {
-        const buf = await blob.arrayBuffer();
-        const ctx = audioCtxOr();
-        if (ctx.state === 'suspended') await ctx.resume();
-        const decoded = await ctx.decodeAudioData(buf);
-        const src = ctx.createBufferSource();
-        src.buffer = decoded;
-        src.connect(masterOut());
-        src.start();
-      }
+      await consumePendingAiTrack().catch(() => {});
     }
   })();
 }

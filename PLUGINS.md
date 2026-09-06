@@ -894,6 +894,57 @@ How plugin content reaches the eye:
   `/ui/ui.css` + `/ui/index.js` and build with those components instead of
   bundling their own styles — the theme keeps working for them for free.
 
+### Window surface & top bar conventions
+
+A plugin with a window ships `web/plugin.js`, whose default export is the
+window surface (the `word` plugin is the reference):
+
+```js
+export default {
+  name: 'word',           // matches plugin.toml `name`
+  icon: 'ui/doc',         // theme icon for the HUD window switcher
+  mount: mountWordTile,   // returns the window element (or null)
+  unmount: unmountWordTile,
+  getElement: getWordTileElement,
+  wireEvents: wireWordEvents,
+};
+```
+
+`mount()` returns a `section.tile <name>-tile` element carrying
+`data-plugin="<name>"`; core tiles it, applies focus/fullscreen, and calls
+`unmount()` on deactivation. Window styles live in core's `web/css/tiles.css`
+keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
+plugins build DOM only, never ship CSS.
+
+The top bar follows one convention (Studio sets the standard):
+
+- **Single top bar, buttons inline.** Every window renders exactly one top bar
+  (`*-bar`); all action buttons — file actions (new/import/export/save/delete),
+  view toggles, transport — sit directly in it. No second toolbar row below the
+  bar: the bar wraps (`flex-wrap`) on narrow widths instead.
+- **Order, left → right.** Menu button (icon + chevron, opens the documents /
+  sheets / decks / images list), title input (`flex: 1`), primary editing
+  actions, then file actions, then the save dot. File actions use one order
+  everywhere: **new, import, export, save, delete**.
+- **One height.** All bars share Studio's metrics: `padding: 6px 10px`,
+  `gap: 8px`, `32×32` icon buttons, title at 15px/600. Keep these values so
+  every window's bar is the same height.
+- **Buttons.** Square icon buttons built with `button({ icon, variant: 'ghost' })`
+  plus the plugin's own `*-tool` class (e.g. `word-tool`, `calc-tool`,
+  `studio-transport`), each with a `title` and `aria-label`. Menu buttons
+  (icon + chevron) are 32px tall.
+- **Save state is a dot, never text.** The right end of the bar holds a small
+  round dot (`*-save-dot`, e.g. `word-save-dot` / `calc-save-dot` /
+  `studio-save-dot`): muted when saved, accent + glow (`.is-active`) while there
+  are unsaved changes. Transient feedback (Studio's "Rendering…") may sit to its
+  left, but the persistent saved/unsaved indicator is the dot.
+
+> **Editing a window surface during development** — the app serves
+> `data/plugins/<name>/web/` (the installed copy), not `plugins/<name>/web/`
+> (the source). After editing `plugins/<name>/web/plugin.js`, copy it to
+> `data/plugins/<name>/web/plugin.js` (or reinstall) or the browser keeps
+> loading the stale surface.
+
 ---
 
 ## 20. Roadmap

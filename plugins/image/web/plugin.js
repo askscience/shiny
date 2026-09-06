@@ -732,7 +732,17 @@ export function mountImageTile() {
   saveDot.className = 'image-save-dot';
   saveDot.setAttribute('aria-hidden', 'true');
 
-  bar.append(imageMenuBtn, titleInput, saveDot);
+  // File actions move into the top bar (Studio-style); the transform tools
+  // stay in the left rail as an editing palette.
+  bar.append(
+    imageMenuBtn,
+    titleInput,
+    railBtn('ui/upload', 'Upload image', pickFile),
+    railBtn('ui/refresh', 'Reset to original', () => resetCurrent()),
+    railBtn('ui/download', 'Download', () => void downloadCurrent()),
+    railBtn('ui/trash', 'Delete image', () => void removeCurrent(), true),
+    saveDot,
+  );
   tileEl.appendChild(bar);
 
   /* Main: left rail + canvas + right panel */
@@ -744,15 +754,6 @@ export function mountImageTile() {
   for (const [icon, label, op] of TRANSFORMS) {
     rail.appendChild(railBtn(icon, label, () => apply(op)));
   }
-  const railDivider = document.createElement('div');
-  railDivider.className = 'image-rail-divider';
-  rail.appendChild(railDivider);
-  rail.append(
-    railBtn('ui/upload', 'Upload image', pickFile),
-    railBtn('ui/refresh', 'Reset to original', () => resetCurrent()),
-    railBtn('ui/download', 'Download', () => void downloadCurrent()),
-    railBtn('ui/trash', 'Delete image', () => void removeCurrent(), true),
-  );
 
   const canvasWrap = document.createElement('div');
   canvasWrap.className = 'image-canvas';

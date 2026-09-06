@@ -748,20 +748,20 @@ export function mountImpressTile() {
   saveDot = h('span', 'impress-save-dot');
   saveDot.setAttribute('aria-hidden', 'true');
 
-  bar.append(deckMenuBtn, titleInput, themeSelect, saveDot);
-  tileEl.appendChild(bar);
-
-  /* Toolbar */
-  const tools = h('div', 'impress-tools');
-  tools.append(
+  // Single top bar (Studio-style): deck menu + title + theme + action buttons.
+  bar.append(
+    deckMenuBtn,
+    titleInput,
+    themeSelect,
     toolbarButton('ui/plus', 'New presentation', () => void newDeck()),
     toolbarButton('ui/download', 'Import .odp', pickOdpFile),
     toolbarButton('ui/upload', 'Export .odp', () => void exportOdp()),
     toolbarButton('ui/save', 'Save now', () => void persist()),
     toolbarButton('ui/trash', 'Delete presentation', () => void removeCurrent(), true),
     toolbarButton('ui/play', 'Present', startPresent),
+    saveDot,
   );
-  tileEl.appendChild(tools);
+  tileEl.appendChild(bar);
 
   /* Body: strip + stage + inspector */
   const body = h('div', 'impress-body');

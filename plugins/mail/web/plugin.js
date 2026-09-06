@@ -907,17 +907,17 @@ export function mountMailTile() {
   const title = h('div', 'mail-title', 'Mail');
   statusDot = h('span', 'mail-status-dot');
   statusDot.setAttribute('aria-hidden', 'true');
-  bar.append(barAccountBtn, title, statusDot);
-  tileEl.appendChild(bar);
 
-  /* Toolbar — compose, refresh, settings. */
-  const tools = h('div', 'mail-tools');
-  tools.append(
+  // Single top bar (Studio-style): account menu + title + actions + status dot.
+  bar.append(
+    barAccountBtn,
+    title,
     toolbarButton('ui/plus', 'New message', openCompose),
     toolbarButton('ui/refresh', 'Refresh', () => void refreshStatus({ keepFolder: true })),
     toolbarButton('ui/settings', 'Mail accounts', openSettings),
+    statusDot,
   );
-  tileEl.appendChild(tools);
+  tileEl.appendChild(bar);
 
   /* Body */
   bodyEl = h('div', 'mail-body');

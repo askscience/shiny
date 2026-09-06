@@ -3331,6 +3331,19 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .studio-status[data-state='busy'] { color: var(--accent); }
 .studio-status[data-state='error'] { color: var(--error); }
 
+.studio-save-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background var(--duration-normal) var(--ease-out);
+}
+.studio-save-dot.is-active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
 /* ── body ── */
 .studio-body {
   flex: 1;
@@ -4781,3 +4794,27 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .studio-grid-port--in { left: -7px; }
 .studio-grid-port--out { right: -7px; }
 .studio-grid-port:hover { transform: scale(1.2); }
+
+/* ─────────────────────────────────────────────────────────────
+   Unified plugin top bars — every plugin window puts its action buttons
+   in a single top bar with Studio's compact height (32px controls + 6px
+   padding). Bars wrap to a second row on narrow widths.
+   ───────────────────────────────────────────────────────────── */
+.word-bar, .calc-bar, .impress-bar, .image-bar, .mail-bar,
+.calendar-bar, .calculator-bar {
+  padding: 6px 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* In-bar menu buttons (icon + chevron/label) match Studio's 32px height. */
+.word-doc-btn, .calc-sheet-btn, .impress-deck-btn, .image-menu-btn, .mail-account-btn {
+  height: 32px;
+}
+
+/* In-bar icon tools match Studio's 32px transport buttons. */
+.word-tool, .calc-tool, .impress-tool, .mail-tool,
+.image-tool, .calendar-nav-btn, .calculator-bar-btn {
+  width: 32px;
+  height: 32px;
+}

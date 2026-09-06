@@ -853,16 +853,6 @@ export function mountCalcTile() {
     if (current) void persist();
   });
 
-  saveDot = document.createElement('span');
-  saveDot.className = 'calc-save-dot';
-  saveDot.setAttribute('aria-hidden', 'true');
-
-  bar.append(sheetMenuBtn, titleInput, saveDot);
-  tileEl.appendChild(bar);
-
-  /* Toolbar — square flat buttons, always visible (like the Word window). */
-  const tools = document.createElement('div');
-  tools.className = 'calc-tools';
   const toolBtn = (iconName, label, onClick, danger) => {
     const btn = button({ icon: iconName, variant: 'ghost', onClick });
     btn.classList.add('ui-btn--icon', 'calc-tool');
@@ -871,14 +861,23 @@ export function mountCalcTile() {
     btn.setAttribute('aria-label', label);
     return btn;
   };
-  tools.append(
+
+  saveDot = document.createElement('span');
+  saveDot.className = 'calc-save-dot';
+  saveDot.setAttribute('aria-hidden', 'true');
+
+  // Single top bar (Studio-style): sheet menu + title + every action button.
+  bar.append(
+    sheetMenuBtn,
+    titleInput,
     toolBtn('ui/plus', 'New spreadsheet', () => void newSheet()),
     toolBtn('ui/download', 'Import .ods', pickOdsFile),
     toolBtn('ui/upload', 'Export .ods', () => void exportOds()),
     toolBtn('ui/save', 'Save now', () => void persist()),
     toolBtn('ui/trash', 'Delete spreadsheet', () => void removeCurrent(), true),
+    saveDot,
   );
-  tileEl.appendChild(tools);
+  tileEl.appendChild(bar);
 
   /* Formula bar */
   const formulaBar = document.createElement('div');
