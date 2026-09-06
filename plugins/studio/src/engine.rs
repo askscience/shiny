@@ -67,6 +67,25 @@ impl Default for EffectConfig {
     }
 }
 
+/// One MIDI (note-processing) effect applied before synthesis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MidiFxConfig {
+    #[serde(default = "default_midi_fx_kind")]
+    pub kind: String,
+    pub params: HashMap<String, f64>,
+}
+
+fn default_midi_fx_kind() -> String {
+    "transpose".into()
+}
+
+impl Default for MidiFxConfig {
+    fn default() -> Self {
+        Self { kind: "transpose".into(), params: HashMap::new() }
+    }
+}
+
 /// One pad in a `drumkit` voice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -169,6 +188,10 @@ pub struct VoiceConfig {
     pub pads: Vec<PadConfig>,
     /// Macro rack (8 knobs) — persisted for round-trip, applied on the frontend.
     pub macros: Vec<MacroConfig>,
+    /// MIDI effects (transpose/velocity/gate/ratchet) applied to note events.
+    pub midi: Vec<MidiFxConfig>,
+    /// Grid patch (modular) for `kind = "grid"` voices.
+    pub grid: Option<crate::grid::GridPatch>,
 }
 
 impl Default for VoiceConfig {
@@ -186,6 +209,8 @@ impl Default for VoiceConfig {
             fx: Vec::new(),
             pads: Vec::new(),
             macros: Vec::new(),
+            midi: Vec::new(),
+            grid: None,
         }
     }
 }
@@ -364,8 +389,42 @@ fn drumkit_pads(v: &VoiceConfig) -> Vec<PadConfig> {
     pads.into_iter().take(16).collect()
 }
 
-/// Render a single pattern to planar stereo buffers.
-fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
+/// Apply a voice's MIDI effects to one note, returning zero or more
+/// `(start_beat, end_beat, degree, octave, velocity)` events (ratchet splits).
+fn apply_midi(midi: &[MidiFxConfig], start: u32, len: u32, degree: i32, octave: i32, velocity: f64, steps: u32) -> Vec<(f64, f64, i32, i32, f64)> {
+    let mut deg = degree;
+    let mut oct = octave;
+    let mut vel = velocity;
+    let mut gate = 1.0;
+    let mut ratchet = 0u32;
+    for fx in midi {
+        match fx.kind.as_str() {
+            "transpose" => { deg += fx.params.get("steps").copied().unwrap_or(0.0) as i32; }
+            "velocity" => { vel *= fx.params.get("amount").copied().unwrap_or(1.0).clamp(0.0, 1.0); }
+            "gate" => { gate = fx.params.get("amount").copied().unwrap_or(1.0).clamp(0.1, 2.0); }
+            "ratchet" => { ratchet = fx.params.get("count").copied().unwrap_or(2.0).clamp(2.0, 8.0) as u32; }
+            _ => {}
+        }
+    }
+    let start_beat = start as f64 / 4.0;
+    let dur = (len as f64 / 4.0 * gate).clamp(0.0625, steps as f64 / 4.0);
+    let end_beat = (start_beat + dur).min(steps as f64 / 4.0);
+    let mut out = Vec::new();
+    if ratchet > 1 {
+        let seg = dur / ratchet as f64;
+        for k in 0..ratchet {
+            let s = start_beat + k as f64 * seg;
+            let e = (s + seg * 0.85).min(end_beat);
+            out.push((s, e, deg, oct, vel));
+        }
+    } else {
+        out.push((start_beat, end_beat, deg, oct, vel));
+    }
+    out
+}
+
+/// Render a single pattern to planar stereo buffers (one pass, no modulation).
+fn render_pattern_once(cfg: &TrackConfig) -> Result<PlanarRender, String> {
     let steps = cfg.steps.clamp(4, 64);
     let bpm = cfg.bpm.clamp(40.0, 240.0);
     let voices: Vec<VoiceConfig> = if cfg.voices.is_empty() {
@@ -386,6 +445,14 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
         for e in &v.fx {
             if !fx::is_effect(&e.kind) {
                 return Err(format!("unknown effect `{}` (one of {})", e.kind, fx::EFFECT_KINDS.join(", ")));
+            }
+        }
+        if v.midi.len() > 8 {
+            return Err("too many MIDI effects on one voice (max 8)".into());
+        }
+        for m in &v.midi {
+            if !voices::is_midi_fx(&m.kind) {
+                return Err(format!("unknown MIDI effect `{}` (one of {})", m.kind, voices::MIDI_FX_KINDS.join(", ")));
             }
         }
     }
@@ -409,7 +476,7 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
             let pan = v.pan.unwrap_or_else(|| voices::default_pan("drumkit"));
             for (pi, pad) in drumkit_pads(v).iter().enumerate() {
                 let sub_id = (col as u32) * 16 + pi as u32;
-                let built = build_instrument(&mut graph, &pad.kind, sub_id, None);
+                let built = build_instrument(&mut graph, &pad.kind, sub_id, None, &HashMap::new());
                 let gain = graph.add_node(Box::new(Gain::new(level)));
                 if pan != 0.0 {
                     graph.set_node_param(gain, 1, pan as f64);
@@ -422,7 +489,43 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
             continue;
         }
 
-        let built = build_instrument(&mut graph, &v.kind, col as u32, v.wave.as_deref());
+        if v.kind == "grid" {
+            let patch = v.grid.as_ref().ok_or_else(|| "grid voice missing its patch".to_string())?;
+            let compiled = crate::grid::compile_grid(&mut graph, patch, col as u32)?;
+            let mut mono_out = compiled.out;
+            for effect in &v.fx {
+                if effect.bypass || fx::is_stereo(&effect.kind) {
+                    continue;
+                }
+                let n = fx::build_effect(&mut graph, &effect.kind, &effect.params)?;
+                graph.connect(mono_out, 0, n, 0);
+                mono_out = n;
+            }
+            let level = v.level.unwrap_or_else(|| voices::default_level("grid"));
+            let pan = v.pan.unwrap_or_else(|| voices::default_pan("grid"));
+            let gain = graph.add_node(Box::new(Gain::new(level)));
+            if pan != 0.0 {
+                graph.set_node_param(gain, 1, pan as f64);
+            }
+            graph.connect(mono_out, 0, gain, 0);
+            let (mut left, mut right) = (gain, gain);
+            for effect in &v.fx {
+                if effect.bypass || !fx::is_stereo(&effect.kind) {
+                    continue;
+                }
+                let n = fx::build_effect(&mut graph, &effect.kind, &effect.params)?;
+                graph.connect(left, 0, n, 0);
+                graph.connect(right, 1, n, 1);
+                left = n;
+                right = n;
+            }
+            graph.connect(left, 0, mixer, (mixer_pair * 2) as u16);
+            graph.connect(right, 1, mixer, (mixer_pair * 2 + 1) as u16);
+            mixer_pair += 1;
+            continue;
+        }
+
+        let built = build_instrument(&mut graph, &v.kind, col as u32, v.wave.as_deref(), &v.synth);
         for (def, node, pid) in &built.params {
             if let Some(val) = v.synth.get(def.key) {
                 graph.set_node_param(*node, *pid, val.clamp(def.min, def.max));
@@ -483,6 +586,7 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
 
     // Build events per voice. Melodic voices with notes use note durations
     // (piano-roll bars); drums and melodic voices without notes use rhythm hits.
+    let spb = 60.0 / bpm;
     let mut events: Vec<TimedEvent> = Vec::new();
     for (col, v) in voices.iter().enumerate() {
         let vid = col as u32;
@@ -505,7 +609,7 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
             continue;
         }
 
-        let melodic = matches!(v.kind.as_str(), "bass" | "pluck" | "lead" | "pad" | "sub");
+        let melodic = matches!(v.kind.as_str(), "bass" | "pluck" | "lead" | "pad" | "sub" | "organ" | "ep" | "bell" | "strings" | "brass" | "synthme" | "grid");
         let mut notes: Vec<(u32, u32, i32, i32)> = Vec::new();
         if melodic && !v.notes.is_empty() {
             for n in &v.notes {
@@ -517,13 +621,13 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
             }
         }
         for (start, len, degree, octave) in notes {
-            let start_beat = Rational::new(start as i64, 4);
-            let end_beat = Rational::new((start + len).min(steps) as i64, 4);
-            let freq = resolve_frequency(degree, octave, &scale, cfg.ref_hz);
-            let on = beat_to_sample(start_beat, bpm, SAMPLE_RATE) as usize;
-            let off = beat_to_sample(end_beat, bpm, SAMPLE_RATE) as usize;
-            events.push(TimedEvent { sample_offset: on, event: GraphEvent::NoteOn { frequency: freq, velocity: 0.75, voice: vid } });
-            events.push(TimedEvent { sample_offset: off, event: GraphEvent::NoteOff { voice: vid } });
+            for (s, e, d, o, vel) in apply_midi(&v.midi, start, len, degree, octave, 0.75, steps) {
+                let freq = resolve_frequency(d, o, &scale, cfg.ref_hz);
+                let on = (s * spb * SAMPLE_RATE).round() as usize;
+                let off = (e * spb * SAMPLE_RATE).round() as usize;
+                events.push(TimedEvent { sample_offset: on, event: GraphEvent::NoteOn { frequency: freq, velocity: vel, voice: vid } });
+                events.push(TimedEvent { sample_offset: off, event: GraphEvent::NoteOff { voice: vid } });
+            }
         }
     }
     events.sort_by_key(|e| e.sample_offset);
@@ -539,6 +643,118 @@ fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
         frames: duration_samples,
         channels: audio,
     })
+}
+
+/// Note on/off times (seconds) for a voice — used for grid env modulation.
+fn voice_note_times(v: &VoiceConfig, steps: u32, bpm: f64) -> Vec<(f64, f64)> {
+    let spb = 60.0 / bpm;
+    let mut out = Vec::new();
+    let melodic = matches!(v.kind.as_str(), "bass" | "pluck" | "lead" | "pad" | "sub" | "organ" | "ep" | "bell" | "strings" | "brass" | "synthme" | "grid");
+    let mut notes: Vec<(u32, u32, i32, i32)> = Vec::new();
+    if melodic && !v.notes.is_empty() {
+        for n in &v.notes {
+            notes.push((n.step.min(steps - 1), n.length.max(1), n.degree, n.octave));
+        }
+    } else {
+        for step in rhythm_hits(&v.rhythm, steps) {
+            notes.push((step, 1, v.degree, v.octave));
+        }
+    }
+    for (start, len, _, _) in notes {
+        let on = start as f64 / 4.0 * spb;
+        let off = (start + len).min(steps) as f64 / 4.0 * spb;
+        out.push((on, off));
+    }
+    out.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    out
+}
+
+/// Render a pattern whose grid voices carry control-rate modulation
+/// (per-step segment re-rendering with short crossfades).
+fn render_planar_grid(cfg: &TrackConfig) -> Result<PlanarRender, String> {
+    let steps = cfg.steps.clamp(4, 64) as usize;
+    let bpm = cfg.bpm.clamp(40.0, 240.0);
+    let spb = 60.0 / bpm;
+    let step_secs = spb / 4.0;
+    let step_samples = (step_secs * SAMPLE_RATE).round() as usize;
+    let total = (steps as f64 * step_secs * SAMPLE_RATE).ceil() as usize;
+    let xf = 256usize;
+
+    // (voice index, grid modulations, note times)
+    let mut grid_info: Vec<(usize, Vec<crate::grid::GridMod>, Vec<(f64, f64)>)> = Vec::new();
+    for (vi, v) in cfg.voices.iter().enumerate() {
+        if v.kind != "grid" {
+            continue;
+        }
+        let Some(patch) = &v.grid else { continue };
+        let mods = crate::grid::grid_modulations(patch);
+        if mods.is_empty() {
+            continue;
+        }
+        grid_info.push((vi, mods, voice_note_times(v, steps as u32, bpm)));
+    }
+    if grid_info.is_empty() {
+        return render_pattern_once(cfg);
+    }
+
+    let mut out = vec![vec![0.0f32; total], vec![0.0f32; total]];
+    let mut prev: Option<Vec<Vec<f32>>> = None;
+    for k in 0..steps {
+        let t = k as f64 * step_secs;
+        let mut seg_cfg = cfg.clone();
+        for (vi, mods, notes) in &grid_info {
+            let Some(v) = seg_cfg.voices.get_mut(*vi) else { continue };
+            let Some(patch) = v.grid.as_mut() else { continue };
+            for m in mods {
+                let val = crate::grid::source_value(&m.source, notes, t);
+                let set = (m.base + val).clamp(m.lo, m.hi);
+                crate::grid::apply_grid_mod(patch, &m.module_id, m.param_key, set);
+            }
+        }
+        let p = render_pattern_once(&seg_cfg)?;
+        let start = k * step_samples;
+        let end = ((k + 1) * step_samples).min(total).min(p.frames);
+        if end <= start {
+            break;
+        }
+        let seg: Vec<Vec<f32>> = p.channels.iter().map(|c| c[start..end].to_vec()).collect();
+        for ch in 0..2usize {
+            let dst = &mut out[ch];
+            let src = seg.get(ch).map(|s| s.as_slice()).unwrap_or(&[]);
+            let seglen = (end - start).min(src.len());
+            if let Some(pv) = &prev {
+                let pv_ch = pv.get(ch).map(|s| s.as_slice()).unwrap_or(&[]);
+                let overlap = xf.min(seglen).min(pv_ch.len());
+                for i in 0..overlap {
+                    let t2 = i as f32 / overlap as f32;
+                    dst[start + i] = pv_ch[pv_ch.len() - overlap + i] * (1.0 - t2) + src[i] * t2;
+                }
+                for i in overlap..seglen {
+                    dst[start + i] = src[i];
+                }
+            } else {
+                for i in 0..seglen {
+                    dst[start + i] = src[i];
+                }
+            }
+        }
+        prev = Some(seg);
+    }
+    let duration_ms = (total as f64 / SAMPLE_RATE * 1000.0).round() as u32;
+    Ok(PlanarRender { sample_rate: SAMPLE_RATE as u32, duration_ms, frames: total, channels: out })
+}
+
+/// Render a pattern, dispatching to segment rendering when a grid voice has
+/// control-rate modulation.
+fn render_planar(cfg: &TrackConfig) -> Result<PlanarRender, String> {
+    let has_grid_mod = cfg.voices.iter().any(|v| {
+        v.kind == "grid" && v.grid.as_ref().map(|p| !crate::grid::grid_modulations(p).is_empty()).unwrap_or(false)
+    });
+    if has_grid_mod {
+        render_planar_grid(cfg)
+    } else {
+        render_pattern_once(cfg)
+    }
 }
 
 /// Resolve a device automation path onto a config and set its value.
@@ -966,6 +1182,69 @@ mod tests {
             .map(|s| s * s)
             .sum();
         assert!(energy > 0);
+    }
+
+    #[test]
+    fn new_preset_instruments_render_nonzero() {
+        for kind in ["organ", "ep", "bell", "strings", "brass"] {
+            let cfg = TrackConfig {
+                steps: 8,
+                voices: vec![VoiceConfig {
+                    kind: kind.into(),
+                    rhythm: "x.x.x.x.".into(),
+                    degree: 0,
+                    octave: 3,
+                    ..VoiceConfig::default()
+                }],
+                ..TrackConfig::default()
+            };
+            let out = render_track(&cfg).unwrap();
+            let energy: i64 = out.wav[44..]
+                .chunks_exact(2)
+                .map(|b| i16::from_le_bytes([b[0], b[1]]) as i64)
+                .map(|s| s * s)
+                .sum();
+            assert!(energy > 0, "{kind} should render non-zero audio");
+        }
+    }
+
+    #[test]
+    fn grid_patch_renders_with_modulation() {
+        use crate::grid::{GridCable, GridModule, GridPatch};
+        let p = |k: &str| -> HashMap<String, f64> { HashMap::new() };
+        let mut patch = GridPatch::default();
+        patch.modules = vec![
+            GridModule { id: "o".into(), kind: "osc".into(), params: p("o") },
+            GridModule { id: "f".into(), kind: "filter".into(), params: p("f") },
+            GridModule { id: "e".into(), kind: "env".into(), params: p("e") },
+            GridModule { id: "l".into(), kind: "lfo".into(), params: [("rate".to_string(), 2.0), ("depth".to_string(), 0.5)].into_iter().collect() },
+            GridModule { id: "out".into(), kind: "out".into(), params: p("out") },
+        ];
+        patch.cables = vec![
+            GridCable { from: ("o".into(), "out".into()), to: ("f".into(), "in".into()) },
+            GridCable { from: ("f".into(), "out".into()), to: ("e".into(), "in".into()) },
+            GridCable { from: ("e".into(), "out".into()), to: ("out".into(), "in".into()) },
+            GridCable { from: ("l".into(), "ctrl".into()), to: ("f".into(), "mod".into()) },
+        ];
+        let cfg = TrackConfig {
+            steps: 8,
+            voices: vec![VoiceConfig {
+                kind: "grid".into(),
+                rhythm: "x.x.x.x.".into(),
+                degree: 0,
+                octave: 3,
+                grid: Some(patch),
+                ..VoiceConfig::default()
+            }],
+            ..TrackConfig::default()
+        };
+        let out = render_track(&cfg).unwrap();
+        let energy: i64 = out.wav[44..]
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]) as i64)
+            .map(|s| s * s)
+            .sum();
+        assert!(energy > 0, "grid patch should render non-zero audio");
     }
 
     #[test]

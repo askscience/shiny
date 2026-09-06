@@ -78,6 +78,13 @@ impl Plugin for StudioPlugin {
             Arc::new(crate::tools::StudioGet) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioRender) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioPresetList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioPresetSave) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioPresetDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioArrangementList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioArrangementSave) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioArrangementGet) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioArrangementDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
         ] {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
         }

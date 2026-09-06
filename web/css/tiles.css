@@ -3242,8 +3242,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--glass-border);
-  border-radius: 50%;
+  border: 1px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   cursor: pointer;
@@ -3251,7 +3251,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
     color var(--duration-fast) var(--ease-out);
 }
 .studio-transport:hover { background: var(--glass-hover); }
-.studio-transport--play { color: var(--accent); border-color: var(--accent); }
+.studio-transport--play { color: var(--accent); }
 .studio-transport .ui-icon { width: 16px; height: 16px; }
 
 .studio-bpm {
@@ -3304,6 +3304,9 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 
 .studio-btn {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 5px 10px;
   border: 1px solid var(--glass-border);
   border-radius: 0;
@@ -3856,8 +3859,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   gap: 3px;
   width: 52px;
 }
-/* Register --val so the knob arc can ease between values (Bitwig-style ring). */
-@property --val { syntax: '<number>'; inherits: false; initial-value: 0; }
 .studio-knob-dial {
   position: relative;
   width: 34px;
@@ -3867,18 +3868,18 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border: 1px solid var(--glass-border);
   cursor: ns-resize;
   touch-action: none;
-  transition: --val 90ms linear;
 }
-/* 270° value arc, drawn as a conic ring masked to an annulus. */
+/* Value arc ring: colored by the assigned instrument (--track), drawn from
+   the neutral "0" position to the current value (bipolar-aware). */
 .studio-knob-dial::before {
   content: '';
   position: absolute;
   inset: 1px;
   border-radius: 50%;
-  background: conic-gradient(from 225deg, var(--accent) calc(var(--val) * 270deg), rgba(255, 255, 255, 0.07) 0deg);
+  background: conic-gradient(from var(--arc-start, 225deg), var(--track, var(--accent)) 0 var(--arc-sweep, 0deg), rgba(255, 255, 255, 0.07) var(--arc-sweep, 0deg));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  opacity: 0.85;
+  opacity: 0.9;
   pointer-events: none;
 }
 .studio-knob-pointer {
@@ -3888,7 +3889,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   width: 2px;
   height: 10px;
   margin-left: -1px;
-  background: var(--accent);
+  background: var(--track, var(--accent));
   border-radius: 1px;
   transform-origin: 50% 14px;
 }
@@ -4502,7 +4503,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .studio-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--glass-border); background: var(--glass); flex-wrap: wrap; }
 .studio-bar-sep { flex: none; width: 1px; align-self: stretch; background: var(--glass-border); margin: 2px 2px; }
 .studio-btn--on { background: var(--glass-hover); color: var(--accent); border-color: var(--accent); }
-.studio-transport--on { color: var(--accent); border-color: var(--accent); }
+.studio-transport--on { color: var(--accent); background: var(--glass-hover); }
 .studio-head-btn { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
 .studio-select--narrow { max-width: 62px; }
 
@@ -4646,3 +4647,137 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .studio-browser-item:hover { background: var(--glass-hover); }
 .studio-browser-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
 .studio-browser-sub { flex: none; font-size: 10px; color: var(--muted); }
+
+/* SynthMe instrument builder (body panel) */
+.studio-panel--synthme {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.studio-synthme-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+.studio-synthme-title {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.studio-synthme-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.studio-synthme-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.studio-synthme-fx {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.studio-synthme-fx-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.studio-synthme-fx .studio-knob { width: 46px; }
+.studio-synthme-foot {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--glass-border);
+}
+.studio-browser-section {
+  padding: 6px 8px 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border-top: 1px solid var(--glass-border);
+}
+
+/* The Grid — modular patch editor */
+.studio-grid-palette {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-wrap: wrap;
+}
+.studio-grid-palette-item { font-size: 11px; padding: 4px 8px; }
+.studio-grid-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0/22px 22px,
+    var(--bg);
+}
+.studio-grid-svg { position: absolute; inset: 0; pointer-events: none; }
+.studio-grid-cable { fill: none; stroke-width: 1.5; pointer-events: none; }
+.studio-grid-cable--drag { stroke-dasharray: 4 3; opacity: 0.8; }
+.studio-grid-module {
+  position: absolute;
+  min-width: 88px;
+  background: var(--surface, var(--glass));
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: grab;
+  user-select: none;
+}
+.studio-grid-module--sel { border-color: var(--accent); }
+.studio-grid-module-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--glass-border);
+}
+.studio-grid-precord { font-size: 9px; color: var(--accent); }
+.studio-grid-module-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-top: 1px solid var(--glass-border);
+  background: var(--bg);
+}
+.studio-grid-module-params .studio-knob { width: 44px; }
+.studio-grid-port {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--sig, #888);
+  cursor: crosshair;
+  z-index: 3;
+}
+.studio-grid-port--in { left: -7px; }
+.studio-grid-port--out { right: -7px; }
+.studio-grid-port:hover { transform: scale(1.2); }

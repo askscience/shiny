@@ -71,7 +71,7 @@ impl Tool for StudioCreate {
     fn aliases(&self) -> &[&str] { &["make_beat", "compose_track", "new_track"] }
     fn step_label(&self) -> &str { "Composing a studio track…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `studio_create` — Compose and render a track to audio. params: `{ title?, bpm?, steps?, tuning?, voices: [{ kind, rhythm, degree?, octave?, wave?, notes?: [{step, degree, octave}] }] }` — `kind` is one of kick/snare/hat/bass/pluck/lead; `rhythm` is `\"e<hits>,<rot>\"` (Euclidean) or an `\"x..x\"` string of length `steps`. Returns the new track's metadata (`track_id`, `duration_ms`, `has_audio`).")
+        Some("- `studio_create` — Compose and render a track to audio. params: `{ title?, bpm?, steps?, tuning?, voices: [{ kind, rhythm, degree?, octave?, wave?, notes?, synth?, midi?, fx?, grid? }] }` — `kind` is one of kick/snare/hat/clap/tom/perc/bass/pluck/lead/pad/sub/organ/ep/bell/strings/brass/synthme/grid/drumkit; `rhythm` is `\"e<hits>,<rot>\"` (Euclidean) or an `\"x..x\"` string. Use `synthme` (custom synth via `synth`+`midi`+`fx`) or `grid` (WaveMe modular patch via `grid:{modules,cables}`). Returns the new track's metadata (`track_id`, `duration_ms`, `has_audio`).")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");
@@ -216,5 +216,210 @@ impl Tool for StudioDelete {
             "studio_delete",
             json!({ "track_id": id, "title": title.unwrap_or_default() }),
         ))
+    }
+}
+
+/* ── studio_preset_list ─────────────────────────────────────── */
+
+pub struct StudioPresetList;
+
+#[async_trait]
+impl Tool for StudioPresetList {
+    fn name(&self) -> &str { "studio_preset_list" }
+    fn aliases(&self) -> &[&str] { &["list_presets", "presets"] }
+    fn step_label(&self) -> &str { "Listing studio presets…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_preset_list` — List saved presets (instruments, SynthMe synths, WaveMe patches). params: `{}` — returns `presets` (each `{ id, kind, name, params }`) and `count`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let n = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        format!("Found {n} studio presets")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let rows = store::list_presets(ctx.pool().await, req.traveler_id).await?;
+        let presets: Vec<Value> = rows.iter().map(store::preset_json).collect();
+        Ok(ActionOutcome::ok(
+            "studio_preset_list",
+            json!({ "presets": presets, "count": presets.len() }),
+        ))
+    }
+}
+
+/* ── studio_preset_save ─────────────────────────────────────── */
+
+pub struct StudioPresetSave;
+
+#[async_trait]
+impl Tool for StudioPresetSave {
+    fn name(&self) -> &str { "studio_preset_save" }
+    fn aliases(&self) -> &[&str] { &["save_preset", "save_instrument"] }
+    fn step_label(&self) -> &str { "Saving studio preset…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_preset_save` — Save a reusable preset. params: `{ kind, name, params }` — `kind` is an instrument kind, `synthme` (custom synth), or `grid` (WaveMe patch); `params` is the same object a voice uses (`synth`/`midi`/`fx` for synthme, `grid` for WaveMe). Returns `{ id, kind, name }`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let name = data.get("name").and_then(|v| v.as_str()).unwrap_or("preset");
+        format!("Saved preset \"{name}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let kind = req.params.param_str("kind").unwrap_or_default();
+        let kind = if kind.trim().is_empty() { "synthme".to_string() } else { kind.trim().to_string() };
+        let name = req.params.param_str("name").unwrap_or_default();
+        let name = if name.trim().is_empty() { "Preset".to_string() } else { name.trim().to_string() };
+        let params = req.params.get("params").cloned().unwrap_or(json!({}));
+        let params_json = serde_json::to_string(&params).map_err(AppError::from)?;
+        let id = uuid::Uuid::new_v4().to_string();
+        store::insert_preset(ctx.pool().await, &id, req.traveler_id, &kind, &name, &params_json).await?;
+        Ok(ActionOutcome::ok("studio_preset_save", json!({ "id": id, "kind": kind, "name": name })))
+    }
+}
+
+/* ── studio_preset_delete ───────────────────────────────────── */
+
+pub struct StudioPresetDelete;
+
+#[async_trait]
+impl Tool for StudioPresetDelete {
+    fn name(&self) -> &str { "studio_preset_delete" }
+    fn aliases(&self) -> &[&str] { &["delete_preset"] }
+    fn step_label(&self) -> &str { "Deleting studio preset…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_preset_delete` — Delete a saved preset. params: `{ id }` — the preset `id` from `studio_preset_list`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let name = data.get("name").and_then(|v| v.as_str()).unwrap_or("preset");
+        format!("Deleted preset \"{name}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let id = req.params.param_str("id").ok_or_else(|| AppError::BadRequest("id required".into()))?;
+        let name = store::delete_preset(ctx.pool().await, &id, req.traveler_id).await?;
+        match name {
+            Some(n) => Ok(ActionOutcome::ok("studio_preset_delete", json!({ "id": id, "name": n }))),
+            None => Err(AppError::NotFound("preset not found".into())),
+        }
+    }
+}
+
+/* ── studio_arrangement_list ────────────────────────────────── */
+
+pub struct StudioArrangementList;
+
+#[async_trait]
+impl Tool for StudioArrangementList {
+    fn name(&self) -> &str { "studio_arrangement_list" }
+    fn aliases(&self) -> &[&str] { &["list_arrangements", "arrangements"] }
+    fn step_label(&self) -> &str { "Listing studio arrangements…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_arrangement_list` — List the user's arrangements. params: `{}` — returns `arrangements` (each `{ id, title, bpm, length_beats, master, tracks, clips, updated_at }`) and `count`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let n = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        format!("Found {n} arrangements")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let rows = store::list_arrangements(ctx.pool().await, req.traveler_id).await?;
+        let arrangements: Vec<Value> = rows.iter().map(store::arr_meta_json).collect();
+        Ok(ActionOutcome::ok(
+            "studio_arrangement_list",
+            json!({ "arrangements": arrangements, "count": arrangements.len() }),
+        ))
+    }
+}
+
+/* ── studio_arrangement_save ────────────────────────────────── */
+
+pub struct StudioArrangementSave;
+
+#[async_trait]
+impl Tool for StudioArrangementSave {
+    fn name(&self) -> &str { "studio_arrangement_save" }
+    fn aliases(&self) -> &[&str] { &["save_arrangement", "create_arrangement"] }
+    fn step_label(&self) -> &str { "Saving studio arrangement…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_arrangement_save` — Create (or update, when `id` is given) an arrangement. params: `{ title?, bpm?, length_beats?, master?, tracks: [{ id, name?, color?, mute?, level?, pan?, automation? }], clips: [{ track, start, pattern }], id? }` — `pattern` is a track config (same voice shape as `studio_create`). Returns `{ id, title }`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");
+        format!("Saved arrangement \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let arr = engine::parse_arrangement(req.params).map_err(AppError::BadRequest)?;
+        let cfg_json = serde_json::to_string(&arr).map_err(AppError::from)?;
+        let title = if arr.title.trim().is_empty() { "Untitled".into() } else { arr.title.trim().to_string() };
+        let pool = ctx.pool().await;
+
+        if let Some(id) = req.params.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()) {
+            let changed = store::update_arrangement(pool, &id, req.traveler_id, &title, arr.bpm, arr.length_beats, arr.master as f64, &cfg_json).await?;
+            if !changed {
+                return Err(AppError::NotFound("arrangement not found".into()));
+            }
+            Ok(ActionOutcome::ok("studio_arrangement_save", json!({ "id": id, "title": title })))
+        } else {
+            let id = uuid::Uuid::new_v4().to_string();
+            store::insert_arrangement(pool, &id, req.traveler_id, &title, arr.bpm, arr.length_beats, arr.master as f64, &cfg_json).await?;
+            Ok(ActionOutcome::ok("studio_arrangement_save", json!({ "id": id, "title": title })))
+        }
+    }
+}
+
+/* ── studio_arrangement_get ─────────────────────────────────── */
+
+pub struct StudioArrangementGet;
+
+#[async_trait]
+impl Tool for StudioArrangementGet {
+    fn name(&self) -> &str { "studio_arrangement_get" }
+    fn aliases(&self) -> &[&str] { &["get_arrangement"] }
+    fn step_label(&self) -> &str { "Loading studio arrangement…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_arrangement_get` — Full arrangement (tracks + clips + automation) by id. params: `{ id }`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");
+        format!("Loaded arrangement \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let id = req.params.param_str("id").ok_or_else(|| AppError::BadRequest("id required".into()))?;
+        let row = store::get_arrangement(ctx.pool().await, req.traveler_id, &id).await?;
+        match row {
+            Some(r) => Ok(ActionOutcome::ok("studio_arrangement_get", store::arr_full_json(&r))),
+            None => Err(AppError::NotFound("arrangement not found".into())),
+        }
+    }
+}
+
+/* ── studio_arrangement_delete ──────────────────────────────── */
+
+pub struct StudioArrangementDelete;
+
+#[async_trait]
+impl Tool for StudioArrangementDelete {
+    fn name(&self) -> &str { "studio_arrangement_delete" }
+    fn aliases(&self) -> &[&str] { &["delete_arrangement"] }
+    fn step_label(&self) -> &str { "Deleting studio arrangement…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_arrangement_delete` — Delete an arrangement (needs `{ confirm: true }`). params: `{ id, confirm: true }`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");
+        format!("Deleted arrangement \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        if !req.params.param_bool("confirm").unwrap_or(false) {
+            return Err(AppError::BadRequest("confirm required — set `confirm: true` to delete".into()));
+        }
+        let id = req.params.param_str("id").ok_or_else(|| AppError::BadRequest("id required".into()))?;
+        let title = store::delete_arrangement(ctx.pool().await, &id, req.traveler_id).await?;
+        match title {
+            Some(t) => Ok(ActionOutcome::ok("studio_arrangement_delete", json!({ "id": id, "title": t }))),
+            None => Err(AppError::NotFound("arrangement not found".into())),
+        }
     }
 }

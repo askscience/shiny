@@ -23,16 +23,16 @@ import { apiFetch } from '/js/api.js';
 
 export const STUDIO_PLUGIN = 'studio';
 
-const KINDS = ['kick', 'snare', 'hat', 'clap', 'tom', 'perc', 'bass', 'pluck', 'lead', 'pad', 'sub', 'drumkit'];
-const KIND_LABELS = { kick: 'Kick', snare: 'Snare', hat: 'Hat', clap: 'Clap', tom: 'Tom', perc: 'Perc', bass: 'Bass', pluck: 'Pluck', lead: 'Lead', pad: 'Pad', sub: 'Sub', drumkit: 'Drum Machine' };
-const KIND_INITIALS = { kick: 'K', snare: 'S', hat: 'H', clap: 'C', tom: 'T', perc: 'P', bass: 'B', pluck: 'P', lead: 'L', pad: 'P', sub: 'S', drumkit: 'DM' };
+const KINDS = ['kick', 'snare', 'hat', 'clap', 'tom', 'perc', 'bass', 'pluck', 'lead', 'pad', 'sub', 'organ', 'ep', 'bell', 'strings', 'brass', 'synthme', 'grid', 'drumkit'];
+const KIND_LABELS = { kick: 'Kick', snare: 'Snare', hat: 'Hat', clap: 'Clap', tom: 'Tom', perc: 'Perc', bass: 'Bass', pluck: 'Pluck', lead: 'Lead', pad: 'Pad', sub: 'Sub', organ: 'Organ', ep: 'E-Piano', bell: 'Bell', strings: 'Strings', brass: 'Brass', synthme: 'SynthMe', grid: 'WaveMe', drumkit: 'Drum Machine' };
+const KIND_INITIALS = { kick: 'K', snare: 'S', hat: 'H', clap: 'C', tom: 'T', perc: 'P', bass: 'B', pluck: 'P', lead: 'L', pad: 'P', sub: 'S', organ: 'O', ep: 'EP', bell: 'B', strings: 'St', brass: 'Br', synthme: 'SY', grid: 'WM', drumkit: 'DM' };
 const TUNINGS = [['edo12', '12-TET'], ['edo19', '19-TET'], ['ji7', 'Just 7']];
 const WAVES = [['sine', 'Sine'], ['triangle', 'Triangle'], ['saw', 'Saw'], ['square', 'Square']];
 const TRACK_COLORS = ['#ff5d5d', '#ffb454', '#ffe156', '#8dff9e', '#57d9ff', '#7aa2ff', '#c792ff', '#ff8fd8'];
-const MELODIC = new Set(['bass', 'pluck', 'lead', 'pad', 'sub']);
+const MELODIC = new Set(['bass', 'pluck', 'lead', 'pad', 'sub', 'organ', 'ep', 'bell', 'strings', 'brass', 'synthme', 'grid']);
 
-const DEFAULT_LEVEL = { kick: 0.9, snare: 0.75, hat: 0.45, clap: 0.7, tom: 0.7, perc: 0.4, bass: 0.7, pluck: 0.5, lead: 0.55, pad: 0.5, sub: 0.6, drumkit: 0.85 };
-const DEFAULT_PAN = { hat: 0.35, lead: -0.25, snare: 0.05, kick: -0.05, bass: 0, pluck: 0 };
+const DEFAULT_LEVEL = { kick: 0.9, snare: 0.75, hat: 0.45, clap: 0.7, tom: 0.7, perc: 0.4, bass: 0.7, pluck: 0.5, lead: 0.55, pad: 0.5, sub: 0.6, organ: 0.5, ep: 0.5, bell: 0.5, strings: 0.6, brass: 0.6, synthme: 0.6, grid: 0.6, drumkit: 0.85 };
+const DEFAULT_PAN = { hat: 0.35, lead: -0.25, snare: 0.05, kick: -0.05, bass: 0, pluck: 0, organ: 0.1, ep: -0.1, strings: 0.15, brass: 0.1 };
 
 const PPB = 56;        // px per beat (arranger)
 const HEAD_W = 168;    // track header column width
@@ -117,6 +117,56 @@ const SYNTH = {
     { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.7 },
     { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.2 },
   ],
+  organ: [
+    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 12 },
+    { key: 'osc_mix', label: 'Drawbar', min: 0, max: 1, step: 0.05, def: 0.4 },
+    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.01 },
+    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.15 },
+  ],
+  ep: [
+    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 12 },
+    { key: 'osc_mix', label: 'Tine Mix', min: 0, max: 1, step: 0.05, def: 0.7 },
+    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 3000 },
+    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1 },
+    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.4 },
+    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
+  ],
+  bell: [
+    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 7 },
+    { key: 'osc_mix', label: 'Partial', min: 0, max: 1, step: 0.05, def: 0.5 },
+    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 1.2 },
+    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 1.5 },
+  ],
+  strings: [
+    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.12 },
+    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 1800 },
+    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.8 },
+    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.8 },
+    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 1.2 },
+  ],
+  brass: [
+    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: -0.06 },
+    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 1200 },
+    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 2 },
+    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.05 },
+    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.7 },
+    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
+  ],
+  synthme: [
+    { key: 'o1w', label: 'Osc 1', min: 0, max: 3, step: 1, def: 2 },
+    { key: 'o2w', label: 'Osc 2', min: 0, max: 3, step: 1, def: 3 },
+    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.1 },
+    { key: 'mix', label: 'Osc Mix', min: 0, max: 1, step: 0.05, def: 0.5 },
+    { key: 'noise', label: 'Noise', min: 0, max: 1, step: 0.05, def: 0 },
+    { key: 'ftype', label: 'Filter', min: 0, max: 2, step: 1, def: 0 },
+    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 2000 },
+    { key: 'res', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1 },
+    { key: 'drive', label: 'Drive', min: 0.25, max: 24, step: 0.05, def: 2 },
+    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.005 },
+    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.2 },
+    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.6 },
+    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
+  ],
 };
 
 const FX = [
@@ -130,16 +180,20 @@ const FX = [
 
 const PARAM_GROUP = {
   detune: 'Oscillator', osc_mix: 'Oscillator', wt_mix: 'Oscillator', wt_shape: 'Oscillator',
-  cutoff: 'Filter', resonance: 'Filter', lfo_rate: 'Filter', lfo_depth: 'Filter',
+  o1w: 'Oscillator', o2w: 'Oscillator', mix: 'Oscillator', noise: 'Oscillator',
+  cutoff: 'Filter', resonance: 'Filter', lfo_rate: 'Filter', lfo_depth: 'Filter', ftype: 'Filter', res: 'Filter',
   attack: 'Envelope', decay: 'Envelope', sustain: 'Envelope', release: 'Envelope',
-  pitch: 'Drum', sweep: 'Drum', tone: 'Drum', body: 'Drum', noise: 'Drum',
-  drive: 'Drum',
+  drive: 'Drive',
+  pitch: 'Drum', sweep: 'Drum', tone: 'Drum', body: 'Drum',
 };
-const GROUP_ORDER = ['Oscillator', 'Filter', 'Envelope', 'Drum'];
+const GROUP_ORDER = ['Oscillator', 'Filter', 'Drive', 'Envelope', 'Drum'];
 
 const KIND_DESC = {
   kick: 'Bass drum', snare: 'Snare', hat: 'Hi-hat', clap: 'Clap', tom: 'Tom', perc: 'Percussion',
   bass: 'Bass synth', pluck: 'Pluck', lead: 'Lead synth', pad: 'Pad', sub: 'Sub bass',
+  organ: 'Tonewheel organ', ep: 'Electric piano', bell: 'Metallic bell', strings: 'Detuned strings', brass: 'Buzzy brass',
+  synthme: 'Custom synth built in SynthMe',
+  grid: 'Modular patch (WaveMe)',
   drumkit: '16-pad drum machine',
 };
 
@@ -180,6 +234,23 @@ const EFFECTS = {
   ] },
 };
 const EFFECT_KINDS = Object.keys(EFFECTS);
+
+/* MIDI (note-processing) effects applied before synthesis. */
+const MIDI_FX = {
+  transpose: { label: 'Transpose', params: [
+    { key: 'steps', label: 'Steps', min: -24, max: 24, step: 1, def: 0 },
+  ] },
+  velocity: { label: 'Velocity', params: [
+    { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, def: 1 },
+  ] },
+  gate: { label: 'Gate', params: [
+    { key: 'amount', label: 'Amount', min: 0.1, max: 2, step: 0.01, def: 1 },
+  ] },
+  ratchet: { label: 'Ratchet', params: [
+    { key: 'count', label: 'Count', min: 2, max: 8, step: 1, def: 2 },
+  ] },
+};
+const MIDI_FX_KINDS = Object.keys(MIDI_FX);
 
 const FACTORY_PRESETS = {
   kick: [
@@ -225,6 +296,27 @@ const FACTORY_PRESETS = {
   sub: [
     { name: 'Clean Sub', params: { synth: { drive: 3, attack: 0.002, sustain: 0.7 } } },
     { name: 'Dirty Sub', params: { synth: { drive: 10, attack: 0.001, sustain: 0.6 } } },
+  ],
+  organ: [
+    { name: 'Full Drawbar', params: { synth: { detune: 12, osc_mix: 0.55, attack: 0.01, release: 0.15 } } },
+    { name: 'Soft', params: { synth: { detune: 12, osc_mix: 0.25, attack: 0.02, release: 0.2 } } },
+    { name: 'Percussive', params: { synth: { detune: 19, osc_mix: 0.4, attack: 0.002, release: 0.1 } } },
+  ],
+  ep: [
+    { name: 'Rhodes', params: { synth: { osc_mix: 0.7, cutoff: 3000, resonance: 1, decay: 0.4, release: 0.3 } } },
+    { name: 'Bell Tine', params: { synth: { osc_mix: 0.5, cutoff: 5000, resonance: 1.5, decay: 0.6, release: 0.4 } } },
+  ],
+  bell: [
+    { name: 'FM Bell', params: { synth: { detune: 7, osc_mix: 0.5, decay: 1.2, release: 1.5 } } },
+    { name: 'Glass', params: { synth: { detune: 12, osc_mix: 0.4, decay: 0.8, release: 1.0 } } },
+  ],
+  strings: [
+    { name: 'Warm Strings', params: { synth: { cutoff: 1800, attack: 0.8, sustain: 0.8, release: 1.2 } } },
+    { name: 'Bright Ensemble', params: { synth: { detune: 0.4, cutoff: 4000, attack: 0.5, sustain: 0.8, release: 1.0 } } },
+  ],
+  brass: [
+    { name: 'Stab', params: { synth: { cutoff: 1200, resonance: 2, attack: 0.02, sustain: 0.6, release: 0.2 } } },
+    { name: 'Swell', params: { synth: { cutoff: 900, resonance: 1.5, attack: 0.3, sustain: 0.8, release: 0.4 } } },
   ],
 };
 
@@ -305,7 +397,7 @@ function drumkitNoteAt(voice, pad, step) {
 }
 
 function voice(kind, rhythm, opts = {}) {
-  return { kind, rhythm, degree: 0, octave: 0, wave: 'sine', notes: [], level: null, pan: null, synth: {}, fx: [], macros: [], pads: [], ...opts };
+  return { kind, rhythm, degree: 0, octave: 0, wave: 'sine', notes: [], level: null, pan: null, synth: {}, fx: [], macros: [], pads: [], midi: [], grid: null, ...opts };
 }
 function defaultKit() {
   return [
@@ -392,7 +484,15 @@ function normalizeVoice(v) {
     })) : [],
     macros: normalizeMacros(v?.macros),
     pads: Array.isArray(v?.pads) ? v.pads.map((p) => ({ name: p.name || 'Pad', kind: KINDS.includes(p.kind) ? p.kind : 'kick' })) : [],
+    midi: normalizeMidiFx(v?.midi),
+    grid: (v?.grid && Array.isArray(v.grid.modules)) ? { modules: v.grid.modules.map((m) => ({ id: m.id, kind: m.kind, params: { ...(m.params || {}) } })), cables: Array.isArray(v.grid.cables) ? v.grid.cables.map((c) => ({ from: [c.from[0], c.from[1]], to: [c.to[0], c.to[1]] })) : [] } : null,
   };
+}
+function normalizeMidiFx(m) {
+  return Array.isArray(m) ? m.map((x) => ({
+    kind: MIDI_FX_KINDS.includes(x?.kind) ? x.kind : 'transpose',
+    params: (x?.params && typeof x.params === 'object') ? { ...x.params } : {},
+  })) : [];
 }
 /* Normalize a macro rack into { value, entries: [{path, amount, base}] }. */
 function normalizeMacros(m) {
@@ -431,6 +531,8 @@ function serializePattern(p) {
       fx: v.fx.map((f) => ({ kind: f.kind, params: f.params, bypass: f.bypass })),
       macros: v.macros,
       pads: v.pads,
+      midi: v.midi,
+      grid: v.grid,
     })),
     fx: p.fx || {},
   };
@@ -461,7 +563,7 @@ function trackAudible(tr) {
 
 let tileEl = null;
 
-let panels = { arranger: true, launcher: false };
+let panels = { arranger: true, launcher: false, synthme: false, grid: false };
 let detailPage = 'editor';       // 'editor' | 'devices' | 'mixer'
 let detailOpen = true;
 
@@ -497,6 +599,7 @@ let prevSource = null;           // editor preview
 let prevPlaying = false;
 let prevStart = 0;
 let prevDur = 0;
+let auditionSource = null;       // looping SynthMe / WaveMe preview
 let metroOn = false;
 let metroTimer = 0;
 let clockUiTimer = 0;
@@ -513,6 +616,7 @@ let mixerMeters = [];           // mixer strip meters (rebuilt each renderMixer)
 let beatDotEl = null;
 let beatFlashTimer = 0;
 let lastClockBeat = -1;
+let autoKnobs = [];             // { path, trackId, min, max, dial, set } (automation-follow)
 
 /* dom refs */
 let barEl = null;
@@ -542,6 +646,13 @@ let browserEl = null;
 let browserListEl = null;
 let browserTab = 'patterns';
 let browserMode = null;          // null | 'addTrack'
+let synthmeWrapEl = null;       // body panel for the SynthMe builder
+let synthmeDraft = null;        // { name, synth: {…}, fx: […] }
+let gridWrapEl = null;          // body panel for The Grid
+let gridCanvasEl = null;
+let gridSvgEl = null;
+let gridSel = null;             // selected module id
+let gridDraft = null;           // { name, modules:[{id,kind,x,y,params}], cables:[] }
 let footerHintEl = null;
 let footerParamEl = null;
 let pageBtns = {};
@@ -652,6 +763,7 @@ function stopPlayback() {
   try { arrSource?.stop(); } catch (_) { /* noop */ }
   arrSource = null;
   arrPlaying = false;
+  stopAudition();
   metroStop();
   clearArrPlayhead();
   clearPrevPlayhead();
@@ -694,6 +806,7 @@ async function renderArrangementAndPlay() {
       const beats = (elapsed / arrPlayDur) * totalBeats;
       if (arrPlayheadEl) { arrPlayheadEl.style.opacity = '1'; arrPlayheadEl.style.transform = `translateX(${HEAD_W + beats * PPB}px)`; }
       if (timeEl) timeEl.textContent = `${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1} · ${fmtTime(elapsed)}`;
+      updateAutoKnobs(beats);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
@@ -726,6 +839,18 @@ async function previewPattern(cfg, { loop = false, bus = null } = {}) {
   src.loop = loop;
   src.connect(bus || masterOut());
   return { src, decoded };
+}
+/* Looping audition for SynthMe / WaveMe — starts immediately and stops on re-call. */
+function stopAudition() {
+  try { auditionSource?.stop(); } catch (_) { /* noop */ }
+  auditionSource = null;
+}
+async function previewAudition(cfg) {
+  stopAudition();
+  const { src } = await previewPattern(cfg, { loop: true });
+  src.start();
+  auditionSource = src;
+  setStatus('Playing');
 }
 async function previewClipInEditor() {
   if (!current) return;
@@ -1219,7 +1344,7 @@ function numberField(placeholder, value, onchange, hint) {
   return input;
 }
 
-/* Arc knob: 270° ring driven by --val, pointer drag, dbl-click reset. */
+/* Arc knob: 270° ring from the neutral "0" to the value (bipolar-aware). */
 function knob(label, min, max, step, value, onchange, resetTo) {
   const k = h('div', 'studio-knob');
   k.dataset.param = label;
@@ -1232,13 +1357,20 @@ function knob(label, min, max, step, value, onchange, resetTo) {
   let cur = value;
   const set = (v) => {
     cur = Math.min(max, Math.max(min, v));
-    const norm = (cur - min) / (max - min || 1);
-    dial.style.setProperty('--val', norm.toFixed(4));
-    ptr.style.transform = `rotate(${-135 + norm * 270}deg)`;
+    const span = max - min || 1;
+    const norm = (cur - min) / span;
+    const zeroNorm = Math.min(1, Math.max(0, (0 - min) / span));
+    const a0 = -135 + zeroNorm * 270;   // angle of the "0" (neutral) position
+    const a1 = -135 + norm * 270;       // angle of the current value
+    dial.style.setProperty('--arc-start', `${Math.min(a0, a1).toFixed(2)}deg`);
+    dial.style.setProperty('--arc-sweep', `${Math.abs(a1 - a0).toFixed(2)}deg`);
+    ptr.style.transform = `rotate(${a1}deg)`;
     val.textContent = fmt(cur);
     k.dataset.value = fmt(cur);
   };
   set(value);
+  k._dial = dial;   // expose for automation-follow visual updates
+  k._set = set;
   let dragging = false;
   let startY = 0;
   let startV = 0;
@@ -1549,13 +1681,45 @@ function connectKnobToAutomation(path, label) {
 /* A device knob with an ⌁ button that connects it to an automation lane. */
 function automatableKnob(label, path, min, max, step, value, onchange, resetTo) {
   const wrap = h('div', 'studio-knob-wrap');
-  wrap.append(knob(label, min, max, step, value, onchange, resetTo));
+  const k = knob(label, min, max, step, value, onchange, resetTo);
+  wrap.append(k);
   const auto = h('button', 'studio-knob-auto', '⌁');
   auto.type = 'button';
   auto.title = `Automate ${label}`;
   auto.addEventListener('click', (e) => { e.stopPropagation(); connectKnobToAutomation(path, label); });
   wrap.appendChild(auto);
+  /* Register for automation-follow: during playback the dial mirrors the lane. */
+  const trackId = sel?.area === 'arr' ? arrangement.clips[sel.clipIndex]?.track : null;
+  autoKnobs.push({ path, trackId, min, max, dial: k._dial, set: k._set });
   return wrap;
+}
+
+/* Linear interpolation of an automation envelope at a beat (holds ends). */
+function sampleEnv(points, beat, fallback) {
+  if (!points.length) return fallback;
+  if (beat <= points[0].beat) return points[0].value;
+  if (beat >= points[points.length - 1].beat) return points[points.length - 1].value;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    if (beat >= a.beat && beat <= b.beat) {
+      const span = b.beat - a.beat;
+      if (span <= 0) return b.value;
+      return a.value + (b.value - a.value) * ((beat - a.beat) / span);
+    }
+  }
+  return fallback;
+}
+/* Move registered knobs to the automation value at the playhead position. */
+function updateAutoKnobs(beat) {
+  for (const ak of autoKnobs) {
+    if (!ak.trackId || !ak.dial || !ak.dial.isConnected) continue;
+    const tr = arrangement.tracks.find((t) => t.id === ak.trackId);
+    if (!tr) continue;
+    const lane = autoLanes(tr).find((l) => l.param === ak.path);
+    if (!lane || !lane.points.length) continue;
+    const v = sampleEnv(lane.points, beat, autoBaseValue(tr, ak.path));
+    ak.set(Math.min(ak.max, Math.max(ak.min, v)));
+  }
 }
 
 function renderArranger() {
@@ -2547,6 +2711,7 @@ function applyPreset(v, preset) {
 function renderDevices() {
   if (!devicesEl || detailPage !== 'devices') return;
   devicesEl.textContent = '';
+  autoKnobs = [];   // rebuild the automation-follow registry with fresh DOM
   if (!current) {
     devicesEl.appendChild(h('div', 'studio-empty', 'Select a clip to see its devices.'));
     return;
@@ -2568,6 +2733,7 @@ function renderDevices() {
   devicesEl.appendChild(strip);
 
   const chain = h('div', 'studio-chain');
+  chain.style.setProperty('--track', trackColor(selectedVoice));
 
   /* instrument device */
   const inst = h('div', 'studio-device');
@@ -2610,7 +2776,13 @@ function renderDevices() {
       instBody.appendChild(h('span', 'studio-rack-label', g));
       for (const p of params) {
         const value = v.synth[p.key] != null ? v.synth[p.key] : p.def;
-        instBody.appendChild(automatableKnob(p.label, `voice.${selectedVoice}.${p.key}`, p.min, p.max, p.step, value, (n) => { v.synth[p.key] = n; markDirty(); }, p.def));
+        if (v.kind === 'synthme' && (p.key === 'o1w' || p.key === 'o2w')) {
+          instBody.appendChild(nativeSelect([[0, 'Sine'], [1, 'Triangle'], [2, 'Saw'], [3, 'Square']].map(([w, l]) => [String(w), l]), String(Math.round(value)), (val) => { v.synth[p.key] = parseFloat(val); markDirty(); }, p.label));
+        } else if (v.kind === 'synthme' && p.key === 'ftype') {
+          instBody.appendChild(nativeSelect([['0', 'Lowpass'], ['1', 'Highpass'], ['2', 'Bandpass']], String(Math.round(value)), (val) => { v.synth[p.key] = parseFloat(val); markDirty(); }, p.label));
+        } else {
+          instBody.appendChild(automatableKnob(p.label, `voice.${selectedVoice}.${p.key}`, p.min, p.max, p.step, value, (n) => { v.synth[p.key] = n; markDirty(); }, p.def));
+        }
       }
     }
   }
@@ -2837,6 +3009,527 @@ function toggleBrowser() {
   else closeBrowser();
 }
 
+/* ── SynthMe — build & save custom instruments ───────────────── */
+
+const SYNTHME_WAVES = [[0, 'Sine'], [1, 'Triangle'], [2, 'Saw'], [3, 'Square']];
+const SYNTHME_FILTERS = [[0, 'Lowpass'], [1, 'Highpass'], [2, 'Bandpass']];
+
+function defaultSynthmeDraft() {
+  return {
+    name: 'My Synth',
+    synth: { o1w: 2, o2w: 3, detune: 0.1, mix: 0.5, noise: 0, ftype: 0, cutoff: 2000, res: 1, drive: 2, attack: 0.005, decay: 0.2, sustain: 0.6, release: 0.3 },
+    midi: [],
+    fx: [],
+  };
+}
+function synthmeFxParamDefs(kind) {
+  return EFFECTS[kind]?.params || [];
+}
+function renderSynthme() {
+  if (!synthmeWrapEl) return;
+  if (!synthmeDraft) synthmeDraft = defaultSynthmeDraft();
+  synthmeWrapEl.textContent = '';
+  const d = synthmeDraft;
+
+  const head = h('div', 'studio-synthme-head');
+  head.appendChild(h('span', 'studio-synthme-title', 'SynthMe — instrument creator'));
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'studio-title studio-title--clip';
+  name.value = d.name;
+  name.maxLength = 80;
+  name.placeholder = 'Instrument name';
+  name.addEventListener('change', () => { d.name = name.value.trim() || 'My Synth'; });
+  head.appendChild(name);
+  const preview = h('button', 'studio-btn studio-btn--play', '');
+  preview.type = 'button';
+  preview.title = auditionSource ? 'Stop preview' : 'Preview this instrument';
+  preview.appendChild(icon(auditionSource ? 'ui/stop' : 'ui/play', { size: 12 }));
+  preview.addEventListener('click', () => void previewSynthmeDraft());
+  const reset = h('button', 'studio-btn', 'Reset');
+  reset.type = 'button';
+  reset.title = 'Reset the instrument to defaults';
+  reset.addEventListener('click', () => { synthmeDraft = defaultSynthmeDraft(); renderSynthme(); });
+  const close = h('button', 'studio-head-btn', '×');
+  close.type = 'button';
+  close.title = 'Back to Arranger/Launcher';
+  close.addEventListener('click', () => togglePanel('synthme'));
+  head.append(preview, reset, close);
+  synthmeWrapEl.appendChild(head);
+
+  const body = h('div', 'studio-synthme-body');
+
+  /* oscillators + noise */
+  body.appendChild(h('span', 'studio-rack-label', 'Oscillators & Noise'));
+  const osc = h('div', 'studio-synthme-row');
+  osc.appendChild(nativeSelect(SYNTHME_WAVES.map(([w, l]) => [String(w), l]), String(d.synth.o1w), (val) => { d.synth.o1w = parseInt(val, 10); }, 'Osc 1 wave'));
+  osc.appendChild(nativeSelect(SYNTHME_WAVES.map(([w, l]) => [String(w), l]), String(d.synth.o2w), (val) => { d.synth.o2w = parseInt(val, 10); }, 'Osc 2 wave'));
+  osc.appendChild(knob('Detune', -24, 24, 0.1, d.synth.detune, (n) => { d.synth.detune = n; }, 0.1));
+  osc.appendChild(knob('Mix', 0, 1, 0.05, d.synth.mix, (n) => { d.synth.mix = n; }, 0.5));
+  osc.appendChild(knob('Noise', 0, 1, 0.05, d.synth.noise, (n) => { d.synth.noise = n; }, 0));
+  body.appendChild(osc);
+
+  /* filter + drive */
+  body.appendChild(h('span', 'studio-rack-label', 'Filter & Drive'));
+  const filt = h('div', 'studio-synthme-row');
+  filt.appendChild(nativeSelect(SYNTHME_FILTERS.map(([w, l]) => [String(w), l]), String(d.synth.ftype), (val) => { d.synth.ftype = parseInt(val, 10); }, 'Filter type'));
+  filt.appendChild(knob('Cutoff', 20, 20000, 10, d.synth.cutoff, (n) => { d.synth.cutoff = n; }, 2000));
+  filt.appendChild(knob('Res', 0.1, 20, 0.1, d.synth.res, (n) => { d.synth.res = n; }, 1));
+  filt.appendChild(knob('Drive', 0.25, 24, 0.05, d.synth.drive, (n) => { d.synth.drive = n; }, 2));
+  body.appendChild(filt);
+
+  /* envelope */
+  body.appendChild(h('span', 'studio-rack-label', 'Envelope'));
+  const env = h('div', 'studio-synthme-row');
+  env.appendChild(knob('Attack', 0.001, 5, 0.005, d.synth.attack, (n) => { d.synth.attack = n; }, 0.005));
+  env.appendChild(knob('Decay', 0.001, 5, 0.01, d.synth.decay, (n) => { d.synth.decay = n; }, 0.2));
+  env.appendChild(knob('Sustain', 0, 1, 0.05, d.synth.sustain, (n) => { d.synth.sustain = n; }, 0.6));
+  env.appendChild(knob('Release', 0.001, 5, 0.01, d.synth.release, (n) => { d.synth.release = n; }, 0.3));
+  body.appendChild(env);
+
+  /* MIDI effects */
+  body.appendChild(h('span', 'studio-rack-label', 'MIDI Effects'));
+  const midiWrap = h('div', 'studio-synthme-fx');
+  d.midi.forEach((m, i) => {
+    const row = h('div', 'studio-synthme-fx-row');
+    const sel = nativeSelect(MIDI_FX_KINDS.map((k) => [k, MIDI_FX[k].label]), m.kind, (val) => { m.kind = val; m.params = {}; renderSynthme(); }, 'MIDI effect');
+    row.appendChild(sel);
+    const rm = h('button', 'studio-head-btn', '×');
+    rm.type = 'button';
+    rm.title = 'Remove MIDI effect';
+    rm.addEventListener('click', () => { d.midi.splice(i, 1); renderSynthme(); });
+    row.appendChild(rm);
+    midiWrap.appendChild(row);
+    for (const p of (MIDI_FX[m.kind]?.params || [])) {
+      const val = m.params[p.key] != null ? m.params[p.key] : p.def;
+      midiWrap.appendChild(knob(p.label, p.min, p.max, p.step, val, (n) => { m.params[p.key] = n; }, p.def));
+    }
+  });
+  const midiAddRow = h('div', 'studio-synthme-fx-row');
+  const midiAddSel = nativeSelect(MIDI_FX_KINDS.map((k) => [k, MIDI_FX[k].label]), 'transpose', () => {});
+  const midiAddBtn = h('button', 'studio-btn', '+ MIDI FX');
+  midiAddBtn.type = 'button';
+  midiAddBtn.addEventListener('click', () => {
+    if (d.midi.length >= 6) { toast('Max 6 MIDI effects', { type: 'error' }); return; }
+    d.midi.push({ kind: midiAddSel.value, params: {} });
+    renderSynthme();
+  });
+  midiAddRow.append(midiAddSel, midiAddBtn);
+  midiWrap.appendChild(midiAddRow);
+  body.appendChild(midiWrap);
+
+  /* effects */
+  body.appendChild(h('span', 'studio-rack-label', 'Effects'));
+  const fxWrap = h('div', 'studio-synthme-fx');
+  d.fx.forEach((f, i) => {
+    const row = h('div', 'studio-synthme-fx-row');
+    row.appendChild(h('span', 'studio-device-name', EFFECTS[f.kind]?.label || f.kind));
+    const rm = h('button', 'studio-head-btn', '×');
+    rm.type = 'button';
+    rm.title = 'Remove effect';
+    rm.addEventListener('click', () => { d.fx.splice(i, 1); renderSynthme(); });
+    row.appendChild(rm);
+    fxWrap.appendChild(row);
+    for (const p of (synthmeFxParamDefs(f.kind))) {
+      const val = f.params[p.key] != null ? f.params[p.key] : p.def;
+      fxWrap.appendChild(knob(p.label, p.min, p.max, p.step, val, (n) => { f.params[p.key] = n; }, p.def));
+    }
+  });
+  const addRow = h('div', 'studio-synthme-fx-row');
+  const addSel = nativeSelect(EFFECT_KINDS.map((k) => [k, EFFECTS[k].label]), 'distortion', () => {});
+  const addBtn = h('button', 'studio-btn', '+ FX');
+  addBtn.type = 'button';
+  addBtn.addEventListener('click', () => {
+    if (d.fx.length >= 6) { toast('Max 6 effects', { type: 'error' }); return; }
+    d.fx.push({ kind: addSel.value, params: {}, bypass: false });
+    renderSynthme();
+  });
+  addRow.append(addSel, addBtn);
+  fxWrap.appendChild(addRow);
+  body.appendChild(fxWrap);
+
+  synthmeWrapEl.appendChild(body);
+
+  /* footer actions */
+  const foot = h('div', 'studio-synthme-foot');
+  const applyBtn = h('button', 'studio-btn', 'Apply to voice');
+  applyBtn.type = 'button';
+  applyBtn.title = 'Use this instrument on the selected voice';
+  applyBtn.addEventListener('click', () => applySynthmeDraft());
+  const saveBtn = h('button', 'studio-btn', 'Save instrument');
+  saveBtn.type = 'button';
+  saveBtn.title = 'Save as a reusable instrument';
+  saveBtn.addEventListener('click', () => void saveSynthmeInstrument());
+  foot.append(applyBtn, saveBtn);
+  synthmeWrapEl.appendChild(foot);
+}
+function applySynthmeDraft() {
+  const v = current?.voices[selectedVoice];
+  if (!v) { toast('Select a clip first', { type: 'error' }); return; }
+  v.kind = 'synthme';
+  v.synth = { ...synthmeDraft.synth };
+  v.fx = synthmeDraft.fx.map((f) => ({ kind: f.kind, params: { ...f.params }, bypass: !!f.bypass }));
+  v.midi = synthmeDraft.midi.map((m) => ({ kind: m.kind, params: { ...m.params } }));
+  markDirty();
+  renderEditor();
+  renderDevices();
+  toast('SynthMe instrument applied', { type: 'success' });
+}
+async function previewSynthmeDraft() {
+  if (auditionSource) { stopAudition(); setStatus(dirty ? 'dirty' : 'saved'); renderSynthme(); return; }
+  try {
+    const d = synthmeDraft;
+    const cfg = {
+      title: d.name || 'SynthMe',
+      bpm: arrangement.bpm,
+      steps: 16,
+      tuning: 'edo12',
+      voices: [{
+        kind: 'synthme', rhythm: 'x...x...x...x...', degree: 0, octave: 3,
+        synth: { ...d.synth },
+        midi: d.midi.map((m) => ({ kind: m.kind, params: m.params })),
+        fx: d.fx.map((f) => ({ kind: f.kind, params: f.params, bypass: f.bypass })),
+      }],
+      fx: {},
+    };
+    await previewAudition(cfg);
+    renderSynthme();
+  } catch (e) {
+    toast(e.message || 'Preview failed', { type: 'error' });
+  }
+}
+async function saveSynthmeInstrument() {
+  const d = synthmeDraft;
+  if (!d.name.trim()) { toast('Name the instrument first', { type: 'error' }); return; }
+  await api('/api/studio/presets', {
+    method: 'POST',
+    body: JSON.stringify({ kind: 'synthme', name: d.name.trim(), params: { synth: d.synth, midi: d.midi.map((m) => ({ kind: m.kind, params: m.params })), fx: d.fx.map((f) => ({ kind: f.kind, params: f.params, bypass: f.bypass })) } }),
+  });
+  await refreshPresets();
+  renderBrowser();
+  toast(`Saved instrument “${d.name.trim()}”`, { type: 'success' });
+}
+/* Turn a saved SynthMe preset into a full voice / pattern. */
+function synthmePresetVoice(p) {
+  const pr = p.params || {};
+  const v = voice('synthme', 'x...', {});
+  v.synth = { ...(pr.synth || {}) };
+  v.fx = (pr.fx || []).map((f) => ({ kind: f.kind, params: { ...(f.params || {}) }, bypass: !!f.bypass }));
+  v.midi = (pr.midi || []).map((m) => ({ kind: m.kind, params: { ...(m.params || {}) } }));
+  return v;
+}
+function synthmePresetPattern(p) {
+  const pat = kitPattern(16);
+  pat.title = p.name || 'SynthMe';
+  pat.voices = [synthmePresetVoice(p)];
+  return pat;
+}
+function gridPresetVoice(p) {
+  const pr = p.params || {};
+  const v = voice('grid', 'x...', {});
+  v.grid = pr.grid ? { modules: (pr.grid.modules || []).map((m) => ({ id: m.id, kind: m.kind, params: { ...(m.params || {}) } })), cables: (pr.grid.cables || []).map((c) => ({ from: [c.from[0], c.from[1]], to: [c.to[0], c.to[1]] })) } : null;
+  return v;
+}
+
+/* ── WaveMe — modular patch editor (The Grid) ────────────────── */
+
+const GRID_SIG = { audio: '#ff9f43', ctrl: '#57a0ff', pitch: '#ffe156', gate: '#8dff9e' };
+const GRID_MODULE_LABELS = { osc: 'Oscillator', noise: 'Noise', filter: 'Filter', drive: 'Drive', gain: 'Gain', mixer: 'Mixer', env: 'Envelope', lfo: 'LFO', out: 'Audio Out' };
+
+function gridPorts(kind) {
+  switch (kind) {
+    case 'osc': return { inputs: [], outputs: [{ name: 'out', type: 'audio' }], precord: 'pitch' };
+    case 'noise': return { inputs: [], outputs: [{ name: 'out', type: 'audio' }], precord: null };
+    case 'filter': return { inputs: [{ name: 'in', type: 'audio' }, { name: 'mod', type: 'ctrl' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
+    case 'drive': return { inputs: [{ name: 'in', type: 'audio' }, { name: 'mod', type: 'ctrl' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
+    case 'gain': return { inputs: [{ name: 'in', type: 'audio' }, { name: 'mod', type: 'ctrl' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
+    case 'mixer': return { inputs: [{ name: 'a', type: 'audio' }, { name: 'b', type: 'audio' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
+    case 'env': return { inputs: [{ name: 'in', type: 'audio' }], outputs: [{ name: 'out', type: 'audio' }, { name: 'ctrl', type: 'ctrl' }], precord: 'gate' };
+    case 'lfo': return { inputs: [], outputs: [{ name: 'ctrl', type: 'ctrl' }], precord: null };
+    case 'out': return { inputs: [{ name: 'in', type: 'audio' }], outputs: [], precord: null };
+    default: return { inputs: [], outputs: [], precord: null };
+  }
+}
+function gridModuleParams(kind) {
+  switch (kind) {
+    case 'osc': return [{ key: 'wave', label: 'Wave', min: 0, max: 3, step: 1, def: 2 }, { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0 }];
+    case 'filter': return [{ key: 'type', label: 'Type', min: 0, max: 2, step: 1, def: 0 }, { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 2000 }, { key: 'res', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1 }];
+    case 'drive': return [{ key: 'drive', label: 'Drive', min: 0.25, max: 24, step: 0.05, def: 2 }];
+    case 'gain': return [{ key: 'level', label: 'Level', min: 0, max: 2, step: 0.01, def: 0.8 }];
+    case 'mixer': return [{ key: 'balance', label: 'Balance', min: 0, max: 1, step: 0.05, def: 0.5 }];
+    case 'env': return [{ key: 'attack', label: 'A', min: 0.001, max: 5, step: 0.005, def: 0.005 }, { key: 'decay', label: 'D', min: 0.001, max: 5, step: 0.01, def: 0.2 }, { key: 'sustain', label: 'S', min: 0, max: 1, step: 0.05, def: 0.6 }, { key: 'release', label: 'R', min: 0.001, max: 5, step: 0.01, def: 0.3 }];
+    case 'lfo': return [{ key: 'rate', label: 'Rate', min: 0.05, max: 20, step: 0.01, def: 1 }, { key: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01, def: 0.5 }, { key: 'wave', label: 'Wave', min: 0, max: 2, step: 1, def: 0 }];
+    default: return [];
+  }
+}
+function gridDefaultDraft() {
+  return {
+    name: 'My Grid',
+    modules: [
+      { id: 'm1', kind: 'osc', x: 16, y: 60, params: {} },
+      { id: 'm2', kind: 'filter', x: 150, y: 60, params: {} },
+      { id: 'm3', kind: 'env', x: 300, y: 60, params: {} },
+      { id: 'm4', kind: 'out', x: 440, y: 60, params: {} },
+    ],
+    cables: [
+      { from: ['m1', 'out'], to: ['m2', 'in'] },
+      { from: ['m2', 'out'], to: ['m3', 'in'] },
+      { from: ['m3', 'out'], to: ['m4', 'in'] },
+    ],
+  };
+}
+function gridCableAt(portId) {
+  return gridDraft.cables.find((c) => c.from[0] + ':' + c.from[1] === portId || c.to[0] + ':' + c.to[1] === portId);
+}
+function renderGrid() {
+  if (!gridWrapEl) return;
+  if (!gridDraft) gridDraft = gridDefaultDraft();
+  gridWrapEl.textContent = '';
+  const d = gridDraft;
+
+  const head = h('div', 'studio-synthme-head');
+  head.appendChild(h('span', 'studio-synthme-title', 'WaveMe'));
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'studio-title studio-title--clip';
+  name.value = d.name;
+  name.placeholder = 'Patch name';
+  name.addEventListener('change', () => { d.name = name.value.trim() || 'My Grid'; });
+  head.appendChild(name);
+  const preview = h('button', 'studio-btn studio-btn--play', '');
+  preview.type = 'button';
+  preview.title = auditionSource ? 'Stop preview' : 'Preview patch';
+  preview.appendChild(icon(auditionSource ? 'ui/stop' : 'ui/play', { size: 12 }));
+  preview.addEventListener('click', () => void previewGridDraft());
+  const apply = h('button', 'studio-btn', 'Apply to voice');
+  apply.type = 'button';
+  apply.addEventListener('click', () => applyGridDraft());
+  const save = h('button', 'studio-btn', 'Save');
+  save.type = 'button';
+  save.addEventListener('click', () => void saveGridInstrument());
+  const close = h('button', 'studio-head-btn', '×');
+  close.type = 'button';
+  close.title = 'Back to Arranger/Launcher';
+  close.addEventListener('click', () => togglePanel('grid'));
+  head.append(preview, apply, save, close);
+  gridWrapEl.appendChild(head);
+
+  /* palette */
+  const palette = h('div', 'studio-grid-palette');
+  for (const k of ['osc', 'noise', 'filter', 'drive', 'gain', 'mixer', 'env', 'lfo', 'out']) {
+    const b = h('button', 'studio-btn studio-grid-palette-item', GRID_MODULE_LABELS[k]);
+    b.type = 'button';
+    b.title = `Add ${GRID_MODULE_LABELS[k]}`;
+    b.addEventListener('click', () => { addGridModule(k); });
+    palette.appendChild(b);
+  }
+  gridWrapEl.appendChild(palette);
+
+  /* canvas */
+  const canvas = h('div', 'studio-grid-canvas');
+  canvas.dataset.canvas = '1';
+  const svg = svgEl('svg', { 'class': 'studio-grid-svg', width: '100%', height: '100%' });
+  canvas.appendChild(svg);
+  for (const m of d.modules) {
+    canvas.appendChild(renderGridModule(m));
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.target === canvas || e.target === svg) { gridSel = null; renderGrid(); }
+  });
+  gridWrapEl.appendChild(canvas);
+  gridSvgEl = svg;
+  gridCanvasEl = canvas;
+  requestAnimationFrame(() => renderGridCables());
+}
+function renderGridModule(m) {
+  const ports = gridPorts(m.kind);
+  const el = h('div', 'studio-grid-module');
+  el.dataset.mid = m.id;
+  el.classList.toggle('studio-grid-module--sel', gridSel === m.id);
+  el.style.left = `${m.x}px`;
+  el.style.top = `${m.y}px`;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.studio-grid-port') || e.target.closest('.studio-grid-module-params')) return;
+    if (gridSel !== m.id) {
+      gridSel = m.id;
+      renderGrid();
+      const fresh = gridCanvasEl?.querySelector(`.studio-grid-module[data-mid="${m.id}"]`);
+      if (fresh) startGridModuleDrag(e, m, fresh);
+      return;
+    }
+    startGridModuleDrag(e, m, el);
+  });
+
+  const head = h('div', 'studio-grid-module-head', GRID_MODULE_LABELS[m.kind]);
+  if (ports.precord) head.appendChild(h('span', 'studio-grid-precord', ports.precord === 'pitch' ? '♪' : '▮'));
+  el.appendChild(head);
+
+  /* inputs on the left, outputs on the right */
+  ports.inputs.forEach((p, i) => el.appendChild(renderGridPort(m, p, true, i)));
+  ports.outputs.forEach((p, i) => el.appendChild(renderGridPort(m, p, false, i)));
+
+  /* params — always visible on the module face */
+  const body = h('div', 'studio-grid-module-params');
+  for (const p of gridModuleParams(m.kind)) {
+    const value = m.params[p.key] != null ? m.params[p.key] : p.def;
+    if ((m.kind === 'osc' && p.key === 'wave') || (m.kind === 'filter' && p.key === 'type') || (m.kind === 'lfo' && p.key === 'wave')) {
+      const opts = p.key === 'wave' ? [[0, 'Sine'], [1, 'Tri'], [2, 'Saw'], [3, 'Sq']].map(([v, l]) => [String(v), l]) : [[0, 'LP'], [1, 'HP'], [2, 'BP']].map(([v, l]) => [String(v), l]);
+      body.appendChild(nativeSelect(opts, String(Math.round(value)), (val) => { m.params[p.key] = parseFloat(val); renderGrid(); }, p.label));
+    } else {
+      body.appendChild(knob(p.label, p.min, p.max, p.step, value, (n) => { m.params[p.key] = n; }, p.def));
+    }
+  }
+  el.appendChild(body);
+  return el;
+}
+function renderGridPort(m, port, isInput, idx) {
+  const p = h('span', 'studio-grid-port');
+  p.classList.add(isInput ? 'studio-grid-port--in' : 'studio-grid-port--out');
+  p.style.setProperty('--sig', GRID_SIG[port.type] || '#888');
+  p.style.top = `${26 + idx * 16}px`;
+  p.title = `${m.kind} · ${port.name}`;
+  p.dataset.mid = m.id;
+  p.dataset.port = port.name;
+  p.dataset.dir = isInput ? 'in' : 'out';
+  p.addEventListener('pointerdown', (e) => startGridCable(e, p));
+  p.addEventListener('dblclick', (e) => { e.stopPropagation(); removeGridCable(m.id, port.name, isInput); });
+  return p;
+}
+function addGridModule(kind) {
+  const id = 'm' + Date.now().toString(36) + Math.floor(Math.random() * 999);
+  gridDraft.modules.push({ id, kind, x: 40 + (gridDraft.modules.length % 4) * 130, y: 60 + Math.floor(gridDraft.modules.length / 4) * 120, params: {} });
+  gridSel = id;   // open the new module's parameter panel
+  renderGrid();
+}
+function removeGridCable(mid, port, isInput) {
+  gridDraft.cables = gridDraft.cables.filter((c) => !((isInput && c.to[0] === mid && c.to[1] === port) || (!isInput && c.from[0] === mid && c.from[1] === port)));
+  renderGrid();
+}
+let gridDragCable = null; // { from: [mid, port], to: [mid, port] | null, x, y }
+function startGridCable(e, portEl) {
+  e.stopPropagation();
+  e.preventDefault();
+  const mid = portEl.dataset.mid;
+  const port = portEl.dataset.port;
+  const dir = portEl.dataset.dir;
+  const rect = portEl.getBoundingClientRect();
+  gridDragCable = { mid, port, dir, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, to: null };
+  const move = (ev) => {
+    gridDragCable.x = ev.clientX;
+    gridDragCable.y = ev.clientY;
+    renderGridCables();
+  };
+  const up = (ev) => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.studio-grid-port');
+    if (target && target.dataset.mid !== mid) {
+      const tmid = target.dataset.mid;
+      const tport = target.dataset.port;
+      const tdir = target.dataset.dir;
+      const from = dir === 'out' ? [mid, port] : [tmid, tport];
+      const to = dir === 'out' ? [tmid, tport] : [mid, port];
+      // in ports accept only one cable
+      gridDraft.cables = gridDraft.cables.filter((c) => !(c.to[0] === to[0] && c.to[1] === to[1]));
+      gridDraft.cables.push({ from, to });
+    }
+    gridDragCable = null;
+    renderGrid();
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+function renderGridCables() {
+  if (!gridSvgEl || !gridCanvasEl || !gridDraft) return;
+  const svg = gridSvgEl;
+  const rect = gridCanvasEl.getBoundingClientRect();
+  svg.textContent = '';
+  const portPos = (mid, port) => {
+    const el = gridCanvasEl.querySelector(`.studio-grid-port[data-mid="${mid}"][data-port="${port}"]`);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left - rect.left + r.width / 2, y: r.top - rect.top + r.height / 2 };
+  };
+  for (const c of gridDraft.cables) {
+    const a = portPos(c.from[0], c.from[1]);
+    const b = portPos(c.to[0], c.to[1]);
+    if (!a || !b) continue;
+    const path = svgEl('path', { d: `M ${a.x} ${a.y} C ${a.x + 40} ${a.y}, ${b.x - 40} ${b.y}, ${b.x} ${b.y}`, 'class': 'studio-grid-cable' });
+    path.style.stroke = GRID_SIG[gridPortType(c.from[0], c.from[1])] || '#888';
+    svg.appendChild(path);
+  }
+  if (gridDragCable) {
+    const a = gridDragCable.dir === 'out' ? portPos(gridDragCable.mid, gridDragCable.port) : { x: gridDragCable.x - rect.left, y: gridDragCable.y - rect.top };
+    const b = gridDragCable.dir === 'out' ? { x: gridDragCable.x - rect.left, y: gridDragCable.y - rect.top } : portPos(gridDragCable.mid, gridDragCable.port);
+    if (a && b) svg.appendChild(svgEl('path', { d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, 'class': 'studio-grid-cable studio-grid-cable--drag' }));
+  }
+}
+function gridPortType(mid, port) {
+  const m = gridDraft.modules.find((x) => x.id === mid);
+  if (!m) return 'audio';
+  const ports = gridPorts(m.kind);
+  const found = [...ports.inputs, ...ports.outputs].find((p) => p.name === port);
+  return found ? found.type : 'audio';
+}
+function startGridModuleDrag(e, m, el) {
+  e.preventDefault();
+  const startX = e.clientX, startY = e.clientY, ox = m.x, oy = m.y;
+  const move = (ev) => {
+    m.x = Math.max(0, ox + ev.clientX - startX);
+    m.y = Math.max(0, oy + ev.clientY - startY);
+    el.style.left = `${m.x}px`;
+    el.style.top = `${m.y}px`;
+    renderGridCables();
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    renderGrid();
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+function applyGridDraft() {
+  const v = current?.voices[selectedVoice];
+  if (!v) { toast('Select a clip first', { type: 'error' }); return; }
+  v.kind = 'grid';
+  v.grid = gridDraftToPatch(gridDraft);
+  v.synth = {};
+  markDirty();
+  renderEditor();
+  renderDevices();
+  toast('Grid patch applied', { type: 'success' });
+}
+async function previewGridDraft() {
+  if (auditionSource) { stopAudition(); setStatus(dirty ? 'dirty' : 'saved'); renderGrid(); return; }
+  try {
+    const cfg = {
+      title: gridDraft.name || 'Grid', bpm: arrangement.bpm, steps: 16, tuning: 'edo12',
+      voices: [{ kind: 'grid', rhythm: 'x...x...x...x...', degree: 0, octave: 3, grid: gridDraftToPatch(gridDraft) }],
+      fx: {},
+    };
+    await previewAudition(cfg);
+    renderGrid();
+  } catch (e) { toast(e.message || 'Preview failed', { type: 'error' }); }
+}
+function gridDraftToPatch(d) {
+  return {
+    modules: d.modules.map((m) => ({ id: m.id, kind: m.kind, params: { ...m.params } })),
+    cables: d.cables.map((c) => ({ from: [c.from[0], c.from[1]], to: [c.to[0], c.to[1]] })),
+  };
+}
+async function saveGridInstrument() {
+  const d = gridDraft;
+  if (!d.name.trim()) { toast('Name the patch first', { type: 'error' }); return; }
+  await api('/api/studio/presets', {
+    method: 'POST',
+    body: JSON.stringify({ kind: 'grid', name: d.name.trim(), params: { grid: gridDraftToPatch(d) } }),
+  });
+  await refreshPresets();
+  renderBrowser();
+  toast(`Saved Grid patch “${d.name.trim()}”`, { type: 'success' });
+}
+
 function browserRow({ label, sub, color, onClick, onDblClick, actions = [] }) {
   const r = h('div', 'studio-browser-item');
   r.title = label;
@@ -2945,6 +3638,70 @@ function renderBrowser() {
           if (current && current.voices.length < 12) addVoiceWithKind(k);
         },
       }));
+    }
+    /* Saved SynthMe instruments */
+    const savedSynthme = presets.filter((p) => p.kind === 'synthme');
+    if (savedSynthme.length) {
+      browserListEl.appendChild(h('div', 'studio-browser-section', 'SynthMe instruments'));
+      for (const p of savedSynthme) {
+        if (!match(p.name)) continue;
+        browserListEl.appendChild(browserRow({
+          label: p.name,
+          sub: 'custom instrument',
+          color: trackColor(KINDS.indexOf('synthme')),
+          onClick: () => {
+            if (browserMode?.type === 'addTrack') {
+              const tr = { id: `t${Date.now()}`, name: p.name, color: arrangement.tracks.length % TRACK_COLORS.length, mute: false, level: 0.6, pan: 0, automation: { lanes: [] } };
+              arrangement.tracks.push(tr);
+              arrangement.clips.push({ track: tr.id, start: 0, pattern: synthmePresetPattern(p) });
+              markDirty(); renderArranger(); closeBrowser();
+            } else if (browserMode?.type === 'addVoice' && current) {
+              current.voices.push(synthmePresetVoice(p));
+              selectedVoice = current.voices.length - 1;
+              markDirty(); renderEditor(); renderDevices(); closeBrowser();
+            } else if (v) {
+              v.kind = 'synthme';
+              v.synth = {};
+              applyPreset(v, p);
+              renderEditor(); renderDevices();
+            }
+          },
+        }));
+      }
+    }
+    /* Saved Grid patches */
+    const savedGrid = presets.filter((p) => p.kind === 'grid');
+    if (savedGrid.length) {
+      browserListEl.appendChild(h('div', 'studio-browser-section', 'WaveMe patches'));
+      for (const p of savedGrid) {
+        if (!match(p.name)) continue;
+        browserListEl.appendChild(browserRow({
+          label: p.name,
+          sub: 'modular patch',
+          color: trackColor(KINDS.indexOf('grid')),
+          onClick: () => {
+            const pr = p.params || {};
+            if (browserMode?.type === 'addTrack') {
+              const tr = { id: `t${Date.now()}`, name: p.name, color: arrangement.tracks.length % TRACK_COLORS.length, mute: false, level: 0.6, pan: 0, automation: { lanes: [] } };
+              arrangement.tracks.push(tr);
+              const pat = kitPattern(16);
+              pat.title = p.name || 'Grid';
+              pat.voices = [gridPresetVoice(p)];
+              arrangement.clips.push({ track: tr.id, start: 0, pattern: pat });
+              markDirty(); renderArranger(); closeBrowser();
+            } else if (browserMode?.type === 'addVoice' && current) {
+              current.voices.push(gridPresetVoice(p));
+              selectedVoice = current.voices.length - 1;
+              markDirty(); renderEditor(); renderDevices(); closeBrowser();
+            } else if (v) {
+              v.kind = 'grid';
+              v.grid = (pr.grid) ? { modules: (pr.grid.modules || []).map((m) => ({ id: m.id, kind: m.kind, params: { ...(m.params || {}) } })), cables: (pr.grid.cables || []).map((c) => ({ from: [c.from[0], c.from[1]], to: [c.to[0], c.to[1]] })) } : null;
+              v.synth = {};
+              renderEditor(); renderDevices();
+            }
+          },
+        }));
+      }
     }
     return;
   }
@@ -3065,25 +3822,48 @@ async function exportWav() {
 /* ── panel toggling ─────────────────────────────────────────── */
 
 function syncPanels() {
-  arrWrapEl?.classList.toggle('hidden', !panels.arranger);
-  lchWrapEl?.classList.toggle('hidden', !panels.launcher);
-  arrToggleBtn?.classList.toggle('studio-btn--on', panels.arranger);
-  lchToggleBtn?.classList.toggle('studio-btn--on', panels.launcher);
-  if (titleInput) titleInput.value = panels.arranger ? arrangement.title : launcher.title;
-  if (bpmInput) bpmInput.value = String(Math.round(panels.arranger ? arrangement.bpm : launcher.bpm));
+  const builder = panels.synthme || panels.grid;
+  arrWrapEl?.classList.toggle('hidden', builder || !panels.arranger);
+  lchWrapEl?.classList.toggle('hidden', builder || !panels.launcher);
+  synthmeWrapEl?.classList.toggle('hidden', !panels.synthme);
+  gridWrapEl?.classList.toggle('hidden', !panels.grid);
+  arrToggleBtn?.classList.toggle('studio-transport--on', !builder && panels.arranger);
+  lchToggleBtn?.classList.toggle('studio-transport--on', !builder && panels.launcher);
+  if (titleInput) titleInput.value = arrangement.title;
+  if (bpmInput) bpmInput.value = String(Math.round(arrangement.bpm));
   renderArranger();
   renderLauncher();
   if (detailPage === 'mixer') renderMixer();
 }
 function togglePanel(which) {
-  if (which === 'arranger') {
-    if (panels.arranger && !panels.launcher) return; // keep one visible
-    panels.arranger = !panels.arranger;
+  if (which === 'synthme' || which === 'grid') {
+    const open = !panels[which];
+    panels.synthme = false;
+    panels.grid = false;
+    if (open) {
+      panels[which] = true;
+      panels.arranger = false;
+      panels.launcher = false;
+    } else {
+      panels.arranger = true;
+    }
   } else {
-    if (panels.launcher && !panels.arranger) return;
-    panels.launcher = !panels.launcher;
+    if (panels.synthme || panels.grid) {
+      panels.synthme = false;
+      panels.grid = false;
+      panels.arranger = which === 'arranger';
+      panels.launcher = which === 'launcher';
+    } else if (which === 'arranger') {
+      if (panels.arranger && !panels.launcher) return;
+      panels.arranger = !panels.arranger;
+    } else {
+      if (panels.launcher && !panels.arranger) return;
+      panels.launcher = !panels.launcher;
+    }
   }
   syncPanels();
+  if (panels.synthme) renderSynthme();
+  if (panels.grid) renderGrid();
 }
 
 /* ── mount / unmount ────────────────────────────────────────── */
@@ -3098,14 +3878,24 @@ export function mountStudioTile() {
   /* ── header / transport ── */
   barEl = h('div', 'studio-bar');
 
-  arrToggleBtn = h('button', 'studio-btn studio-btn--on', 'Arranger');
+  arrToggleBtn = h('button', 'studio-transport studio-transport--on');
   arrToggleBtn.type = 'button';
   arrToggleBtn.title = 'Show/hide the Arranger (timeline)';
+  arrToggleBtn.appendChild(icon('ui/arranger', { size: 16 }));
   arrToggleBtn.addEventListener('click', () => togglePanel('arranger'));
-  lchToggleBtn = h('button', 'studio-btn', 'Launcher');
+  lchToggleBtn = h('button', 'studio-transport');
   lchToggleBtn.type = 'button';
   lchToggleBtn.title = 'Show/hide the Clip Launcher';
+  lchToggleBtn.appendChild(icon('ui/launcher', { size: 16 }));
   lchToggleBtn.addEventListener('click', () => togglePanel('launcher'));
+
+  const synthmeBtn = button({ variant: 'ghost', icon: 'ui/synthme', label: '', onClick: () => togglePanel('synthme') });
+  synthmeBtn.classList.add('studio-transport');
+  synthmeBtn.title = 'SynthMe — build and save custom instruments';
+
+  const gridBtn = button({ variant: 'ghost', icon: 'ui/grid', label: '', onClick: () => togglePanel('grid') });
+  gridBtn.classList.add('studio-transport');
+  gridBtn.title = 'WaveMe — modular patch editor';
 
   const stopBtn = button({ variant: 'ghost', icon: 'ui/stop', label: '', onClick: () => { stopPlayback(); stopAllLauncher(); } });
   stopBtn.classList.add('studio-transport');
@@ -3175,14 +3965,13 @@ export function mountStudioTile() {
     markDirty();
   });
 
-  const saveBtn = h('button', 'studio-btn studio-save', 'Save');
-  saveBtn.type = 'button';
-  saveBtn.title = 'Save arrangement';
-  saveBtn.addEventListener('click', () => {
+  const saveBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => {
     void saveArrangement()
-      .then(() => { setStatus('saved'); toast('Arrangement saved', { type: 'success' }); })
+      .then(() => { setStatus('saved'); toast('Project saved', { type: 'success' }); })
       .catch((e) => toast(e.message, { type: 'error' }));
-  });
+  } });
+  saveBtn.classList.add('studio-transport');
+  saveBtn.title = 'Save project';
 
   const exportBtn = button({ variant: 'ghost', icon: 'ui/download', label: '', onClick: () => void exportWav() });
   exportBtn.classList.add('studio-transport');
@@ -3194,7 +3983,7 @@ export function mountStudioTile() {
 
   statusEl = h('span', 'studio-status');
 
-  barEl.append(arrToggleBtn, lchToggleBtn, h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
+  barEl.append(arrToggleBtn, lchToggleBtn, synthmeBtn, gridBtn, h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
     beatDotEl, timeEl, bpmInput, bpmLabel, titleInput, saveBtn, exportBtn, browserBtn, statusEl);
   tileEl.appendChild(barEl);
 
@@ -3214,6 +4003,14 @@ export function mountStudioTile() {
   lchScroll.appendChild(lchGridEl);
   lchWrapEl.appendChild(lchScroll);
   bodyEl.appendChild(lchWrapEl);
+
+  /* SynthMe builder — a full panel in the body (replaces arranger/launcher). */
+  synthmeWrapEl = h('div', 'studio-panel studio-panel--synthme hidden');
+  bodyEl.appendChild(synthmeWrapEl);
+
+  /* The Grid — modular patch editor (full panel). */
+  gridWrapEl = h('div', 'studio-panel studio-panel--synthme hidden');
+  bodyEl.appendChild(gridWrapEl);
 
   tileEl.appendChild(bodyEl);
 
@@ -3333,11 +4130,18 @@ export function unmountStudioTile() {
   barEl = timeEl = titleInput = bpmInput = statusEl = playBtn = loopBtn = metroBtn = null;
   arrToggleBtn = lchToggleBtn = bodyEl = arrWrapEl = arrGridEl = arrPlayheadEl = null;
   lchWrapEl = lchGridEl = detailEl = detailBodyEl = gridEl = pianoEl = devicesEl = mixerEl = null;
+  synthmeWrapEl = null;
+  synthmeDraft = null;
+  gridWrapEl = gridCanvasEl = gridSvgEl = null;
+  gridSel = null;
+  gridDraft = null;
   browserEl = browserListEl = footerHintEl = footerParamEl = edToolbarEl = editorPageEl = null;
   scopeTraceEl = scopeSpecEl = beatDotEl = null;
   scopeTimeData = scopeFreqData = scopePeaks = null;
   scopeMeter = null;
   mixerMeters = [];
+  autoKnobs = [];
+  auditionSource = null;
   lastClockBeat = -1;
   pageBtns = {};
   collapseBtn = null;

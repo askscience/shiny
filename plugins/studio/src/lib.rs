@@ -6,6 +6,7 @@
 
 pub mod engine;
 pub mod fx;
+pub mod grid;
 pub mod plugin;
 pub mod routes;
 pub mod store;
