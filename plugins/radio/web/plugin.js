@@ -18,7 +18,7 @@
  */
 
 import {
-  icon, button, searchBar, spinner, emptyState, toast,
+  icon, button, searchBar, spinner, emptyState, notify, toast,
 } from '/ui/index.js';
 import { getToken } from '/js/api.js';
 
@@ -81,7 +81,16 @@ function playStation(station, { announce = true } = {}) {
     playing = true;
     renderHero();
     startPolling();
-    if (announce) toast(`Playing: ${station.name}`, { type: 'info' });
+    if (announce) {
+      notify({
+        app: 'Radio',
+        title: 'Now playing',
+        body: station.name,
+        icon: 'ui/play',
+        plugin: RADIO_PLUGIN,
+        urgency: 'low',
+      });
+    }
   }).catch(() => {
     playing = false;
     renderHero();
@@ -146,10 +155,22 @@ async function pollNowPlaying() {
     const json = await res.json();
     const title = json?.data?.title?.trim();
     if (title && title !== nowPlaying?.raw) {
+      const previous = nowPlaying?.raw || null;
       nowPlaying = { raw: title, ...splitTrackTitle(title) };
       artworkUrl = null;
       renderHero();
       void resolveArtwork();
+      // A real track change (not the first detection after starting playback).
+      if (previous) {
+        notify({
+          app: 'Radio',
+          title: 'Now playing',
+          body: nowPlaying.artist ? `${nowPlaying.artist} — ${nowPlaying.title}` : nowPlaying.title,
+          icon: 'ui/play',
+          plugin: RADIO_PLUGIN,
+          urgency: 'low',
+        });
+      }
     }
   } catch (_) { /* transient — next poll retries */ }
 }

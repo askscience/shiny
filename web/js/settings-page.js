@@ -334,6 +334,7 @@ function wireDesktopSection() {
   const ratioVal = document.getElementById('desktop-ratio-value');
   const gap = document.getElementById('desktop-gap');
   const gapVal = document.getElementById('desktop-gap-value');
+  const tilingControls = document.getElementById('desktop-tiling-controls');
 
   const layout = getDesktopLayout();
   if (modeSel) modeSel.value = layout.mode;
@@ -348,8 +349,18 @@ function wireDesktopSection() {
     if (gapVal) gapVal.textContent = `${layout.gap}px`;
   }
 
-  modeSel?.addEventListener('change', () =>
-    setDesktopLayout({ ...getDesktopLayout(), mode: modeSel.value }));
+  // The master/stack controls only apply to tiling layouts — hide them for
+  // the floating "Windows" desktop experience.
+  const syncDesktopControls = () => {
+    const isWindows = modeSel?.value === 'windows';
+    tilingControls?.classList.toggle('hidden', isWindows);
+  };
+  syncDesktopControls();
+
+  modeSel?.addEventListener('change', () => {
+    setDesktopLayout({ ...getDesktopLayout(), mode: modeSel.value });
+    syncDesktopControls();
+  });
   oriSel?.addEventListener('change', () =>
     setDesktopLayout({ ...getDesktopLayout(), orientation: oriSel.value }));
   ratio?.addEventListener('input', () => {

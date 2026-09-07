@@ -19,6 +19,7 @@ import {
   getWorkspaces, setWorkspaces,
   getActiveWorkspaceId, setActiveWorkspaceId,
   getDesktopLayout, setDesktopLayout,
+  getWindowsGeom, setWindowsGeom,
 } from './preferences.js';
 import { toast } from '../ui/index.js';
 
@@ -28,6 +29,12 @@ let focus = null;         // focused plugin name (cache of active workspace's)
 let fullscreen = null;    // fullscreen plugin name (cache of active workspace's)
 
 let wsSeq = 0;
+
+// Floating-window geometry for the "Windows" layout mode. Scoped per traveler
+// via preferences.js and only consulted when the layout mode is 'windows'.
+let windowGeom = {};  // pluginName -> { x, y, w, h, z }
+let zSeq = 0;
+let geomTimer = null;
 
 function freshId() {
   wsSeq += 1;
@@ -70,6 +77,8 @@ export function initDesktop() {
   if (!workspaces.length || !workspaces.some((w) => w.id === activeWs)) {
     activeWs = workspaces.length ? workspaces[0].id : null;
   }
+  windowGeom = getWindowsGeom();
+  zSeq = Object.values(windowGeom).reduce((m, g) => Math.max(m, Number(g?.z) || 0), 0);
   loadActiveFocus();
   wireShortcuts();
   wireAgentActions();
@@ -200,6 +209,7 @@ export function focusWindow(name) {
   }
   focus = name;
   syncActiveFocus();
+  if (getDesktopLayout().mode === 'windows') bumpZ(name);
   persist();
   notify();
 }
@@ -214,6 +224,7 @@ export function cycleFocus(names, dir = 1) {
     focus = list[(i + dir + list.length) % list.length];
   }
   syncActiveFocus();
+  if (getDesktopLayout().mode === 'windows') bumpZ(focus);
   persist();
   notify();
 }
@@ -357,12 +368,248 @@ function label(name) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
 }
 
-/* ── Layout engine (master / stack) ─────────────────────────── */
+/* ── Layout engine (master / stack / windows) ───────────────── */
+
+const WIN_MIN_W = 280;
+const WIN_MIN_H = 200;
+const WIN_TITLE_H = 36; // keep in sync with --tile-header-height in tiles.css
+
+function clampNum(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function defaultWindowGeom(index) {
+  const step = 34;
+  return {
+    x: 40 + (index % 6) * step,
+    y: 40 + (index % 6) * step,
+    w: 560,
+    h: 400,
+    z: 0,
+  };
+}
+
+function geomFor(name, index) {
+  let g = windowGeom[name];
+  if (!g || typeof g !== 'object'
+    || !Number.isFinite(Number(g.x)) || !Number.isFinite(Number(g.y))
+    || !Number.isFinite(Number(g.w)) || !Number.isFinite(Number(g.h))) {
+    g = defaultWindowGeom(index);
+    windowGeom[name] = g;
+  }
+  g.x = Number(g.x);
+  g.y = Number(g.y);
+  g.w = Number(g.w);
+  g.h = Number(g.h);
+  g.z = Number(g.z) || 0;
+  // Assign a unique stacking order to windows that never had one, so a
+  // freshly laid-out window sits deterministically above earlier ones.
+  if (g.z <= 0) {
+    zSeq += 1;
+    g.z = zSeq;
+  }
+  return g;
+}
+
+function flushGeom() {
+  if (geomTimer) { clearTimeout(geomTimer); geomTimer = null; }
+  setWindowsGeom(windowGeom);
+}
+
+function saveGeomSoon() {
+  if (geomTimer) return;
+  geomTimer = setTimeout(() => {
+    geomTimer = null;
+    setWindowsGeom(windowGeom);
+  }, 250);
+}
+
+/** Bring a window to the front (z-order) without a DOM pass; the next
+ *  layout render applies the stored z-index. */
+function bumpZ(name) {
+  if (!name) return;
+  const g = geomFor(name, 0);
+  zSeq += 1;
+  g.z = zSeq;
+  saveGeomSoon();
+}
+
+function applyWindowsLayout(grid, items, fs) {
+  grid.style.display = 'block';
+  grid.style.gridTemplateColumns = '';
+  grid.style.gridTemplateRows = '';
+
+  const W = grid.clientWidth || window.innerWidth;
+  const H = grid.clientHeight || window.innerHeight;
+
+  for (const it of items) {
+    const el = it.el;
+    el.style.gridColumn = '';
+    el.style.gridRow = '';
+    el.classList.remove('tile--master', 'tile--stack', 'hidden');
+    el.classList.add('tile--window');
+    wireWindowInteractions(el, it.name);
+  }
+
+  if (fs) {
+    for (const it of items) {
+      const shown = it.name === fs;
+      it.el.classList.toggle('hidden', !shown);
+      it.el.classList.toggle('tile--full', shown);
+      if (shown) {
+        it.el.style.left = '0px';
+        it.el.style.top = '0px';
+        it.el.style.width = '100%';
+        it.el.style.height = '100%';
+        it.el.style.zIndex = '1';
+      }
+    }
+    markFocus(items);
+    return;
+  }
+
+  for (const [i, it] of items.entries()) {
+    const el = it.el;
+    const g = geomFor(it.name, i);
+    g.w = clampNum(g.w, WIN_MIN_W, W);
+    g.h = clampNum(g.h, WIN_MIN_H, H);
+    g.x = clampNum(g.x, 0, Math.max(0, W - g.w));
+    g.y = clampNum(g.y, 0, Math.max(0, H - WIN_TITLE_H));
+    el.classList.remove('tile--full');
+    el.style.left = `${g.x}px`;
+    el.style.top = `${g.y}px`;
+    el.style.width = `${g.w}px`;
+    el.style.height = `${g.h}px`;
+    el.style.zIndex = String(g.z || 1);
+  }
+  markFocus(items);
+}
+
+/** Focus (raise) a floating window without a full re-render, so an in-flight
+ *  drag isn't torn down by the layout pass. */
+function raiseWindow(name, el) {
+  if (!name) return;
+  if (focus !== name) {
+    focus = name;
+    syncActiveFocus();
+    persist();
+  }
+  const g = geomFor(name, 0);
+  zSeq += 1;
+  g.z = zSeq;
+  saveGeomSoon();
+  if (el) {
+    el.style.zIndex = String(g.z);
+    const grid = el.parentElement;
+    if (grid) {
+      grid.querySelectorAll('.tile').forEach((t) => {
+        t.classList.toggle('tile--focused', t.dataset.plugin === name);
+      });
+    }
+  }
+}
+
+function wireWindowInteractions(el, name) {
+  if (el.__windowWired) return;
+  el.__windowWired = true;
+
+  const windowsMode = () => getDesktopLayout().mode === 'windows';
+
+  // Clicking anywhere on the window raises it to the front (windows mode only).
+  el.addEventListener('pointerdown', () => {
+    if (windowsMode()) raiseWindow(name, el);
+  }, { capture: true });
+
+  const header = el.querySelector(':scope > .tile-header');
+  const resize = el.querySelector(':scope > .tile-resize');
+
+  if (header) {
+    header.addEventListener('pointerdown', (e) => {
+      if (!windowsMode() || e.button !== 0 || e.target.closest('button')) return;
+      e.preventDefault();
+      startWindowDrag(e, el, name, header);
+    });
+  }
+  if (resize) {
+    resize.addEventListener('pointerdown', (e) => {
+      if (!windowsMode() || e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      startWindowResize(e, el, name);
+    });
+  }
+}
+
+function startWindowDrag(e, el, name, header) {
+  const g = geomFor(name, 0);
+  const grid = el.parentElement;
+  const W = grid.clientWidth || window.innerWidth;
+  const H = grid.clientHeight || window.innerHeight;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const origX = g.x;
+  const origY = g.y;
+
+  header.setPointerCapture?.(e.pointerId);
+  header.classList.add('is-dragging');
+  el.classList.add('is-dragging');
+
+  const move = (ev) => {
+    g.x = clampNum(origX + (ev.clientX - startX), 0, Math.max(0, W - g.w));
+    g.y = clampNum(origY + (ev.clientY - startY), 0, Math.max(0, H - WIN_TITLE_H));
+    el.style.left = `${g.x}px`;
+    el.style.top = `${g.y}px`;
+    saveGeomSoon();
+  };
+  const up = () => {
+    header.removeEventListener('pointermove', move);
+    header.removeEventListener('pointerup', up);
+    header.removeEventListener('pointercancel', up);
+    header.classList.remove('is-dragging');
+    el.classList.remove('is-dragging');
+    flushGeom();
+  };
+  header.addEventListener('pointermove', move);
+  header.addEventListener('pointerup', up);
+  header.addEventListener('pointercancel', up);
+}
+
+function startWindowResize(e, el, name) {
+  const g = geomFor(name, 0);
+  const grid = el.parentElement;
+  const W = grid.clientWidth || window.innerWidth;
+  const H = grid.clientHeight || window.innerHeight;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const origW = g.w;
+  const origH = g.h;
+
+  el.setPointerCapture?.(e.pointerId);
+  el.classList.add('is-resizing');
+
+  const move = (ev) => {
+    g.w = clampNum(origW + (ev.clientX - startX), WIN_MIN_W, Math.max(WIN_MIN_W, W - g.x));
+    g.h = clampNum(origH + (ev.clientY - startY), WIN_MIN_H, Math.max(WIN_MIN_H, H - g.y));
+    el.style.width = `${g.w}px`;
+    el.style.height = `${g.h}px`;
+    saveGeomSoon();
+  };
+  const up = () => {
+    el.removeEventListener('pointermove', move);
+    el.removeEventListener('pointerup', up);
+    el.removeEventListener('pointercancel', up);
+    el.classList.remove('is-resizing');
+    flushGeom();
+  };
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+}
 
 /**
  * Arrange tile elements inside `grid`. `items` = [{ name, el }] for the active
  * workspace's windows (already mounted). Handles fullscreen, single-window,
- * legacy columns, and master/stack.
+ * legacy columns, master/stack, and the floating "Windows" desktop.
  */
 export function applyLayout(grid, items) {
   const layout = getDesktopLayout();
@@ -370,17 +617,34 @@ export function applyLayout(grid, items) {
   const ori = layout.orientation;
 
   grid.style.gap = `${layout.gap}px`;
-  grid.classList.remove('tile-grid--master', 'tile-grid--columns');
-  grid.classList.add(layout.mode === 'master' ? 'tile-grid--master' : 'tile-grid--columns');
+  grid.classList.remove('tile-grid--master', 'tile-grid--columns', 'tile-grid--windows');
+  grid.classList.add(
+    layout.mode === 'master' ? 'tile-grid--master'
+      : layout.mode === 'windows' ? 'tile-grid--windows'
+      : 'tile-grid--columns'
+  );
   grid.dataset.layout = layout.mode;
 
+  const fs = fullscreen && items.some((i) => i.name === fullscreen) ? fullscreen : null;
+
+  if (layout.mode === 'windows') {
+    applyWindowsLayout(grid, items, fs);
+    return;
+  }
+
+  // Tiling modes — strip any floating-window geometry/inline styles so the
+  // grid/flex engine owns positioning again.
   for (const it of items) {
+    it.el.style.left = '';
+    it.el.style.top = '';
+    it.el.style.width = '';
+    it.el.style.height = '';
+    it.el.style.zIndex = '';
+    it.el.classList.remove('tile--window');
     it.el.style.gridColumn = '';
     it.el.style.gridRow = '';
     it.el.classList.remove('tile--master', 'tile--stack', 'tile--full', 'hidden');
   }
-
-  const fs = fullscreen && items.some((i) => i.name === fullscreen) ? fullscreen : null;
 
   if (fs) {
     for (const it of items) {

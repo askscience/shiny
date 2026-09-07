@@ -14,6 +14,10 @@ use shiny_plugin_sdk::tools::RegistryBuilder;
 
 pub struct LoadedPlugin {
     pub manifest: Manifest,
+    /// Human-readable category read from `plugin.toml` (e.g. "Office", "Media").
+    /// Kept separate from `Manifest` so adding it doesn't change the plugin
+    /// ABI (the `manifest()` trait method returns `&Manifest` across dlopen).
+    pub category: Option<String>,
     pub plugin: Box<dyn Plugin>,
     pub ctx: Arc<PluginCtx>,
     pub library: Library,
@@ -22,6 +26,14 @@ pub struct LoadedPlugin {
 
 unsafe impl Send for LoadedPlugin {}
 unsafe impl Sync for LoadedPlugin {}
+
+/// Only the `category` key of a plugin.toml — parsed independently so the
+/// category can be read from disk without touching the `Manifest` ABI.
+#[derive(serde::Deserialize)]
+struct ManifestCategory {
+    #[serde(default)]
+    category: Option<String>,
+}
 
 pub struct Loader {
     loaded: Arc<RwLock<Vec<LoadedPlugin>>>,
@@ -34,6 +46,13 @@ impl Loader {
 
     pub fn snapshot(&self) -> Vec<Manifest> {
         self.loaded.read().iter().map(|p| p.manifest.clone()).collect()
+    }
+
+    /// Category for one loaded plugin, if its `plugin.toml` declares one.
+    pub fn category_for(&self, name: &str) -> Option<String> {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .and_then(|p| p.category.clone())
     }
 
     pub fn has(&self, name: &str) -> bool {
@@ -61,6 +80,14 @@ impl Loader {
         let manifest_text = std::fs::read_to_string(&manifest_path)?;
         let mut manifest: Manifest = toml::from_str(&manifest_text)
             .map_err(|e| AppError::BadRequest(format!("Invalid plugin.toml: {}", e)))?;
+
+        // Category is a frontend grouping hint, read from the same toml but
+        // kept out of `Manifest` to preserve the plugin ABI.
+        let category = toml::from_str::<ManifestCategory>(&manifest_text)
+            .ok()
+            .and_then(|c| c.category)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
 
         if manifest.api_level > shiny_plugin_sdk::CORE_API_LEVEL {
             return Err(AppError::BadRequest(format!(
@@ -144,6 +171,7 @@ impl Loader {
         // Stash the loaded plugin (this keeps the library open).
         let loaded = LoadedPlugin {
             manifest: manifest.clone(),
+            category,
             plugin,
             ctx: ctx.clone(),
             library,

@@ -268,6 +268,7 @@ summary = "Demo plugin: hello tool"
 migrations_dir = "migrations"
 skills_dir = "skills"
 web_dir = "web"
+category = "Demo"                             # optional grouping hint — see §19
 # signature = "<hex ed25519>"                  # optional; see §12
 ```
 
@@ -283,6 +284,7 @@ Fields:
 | `description` | string | no | short human title |
 | `author` | string | no | attribution |
 | `summary` | string | no | used by admin UI to say "what this plugin adds" |
+| `category` | string | no | grouping hint for the top-bar tray (e.g. `Office`, `Media`, `Travel`, `System`) — see §19 |
 | `migrations_dir` | string | no | default `"migrations"` |
 | `skills_dir` | string | no | default `"skills"` |
 | `web_dir` | string | no | default `"web"` |
@@ -308,7 +310,8 @@ hello.zip
     ├── skills/
     │   └── hello.md
     └── web/                               # optional
-        └── plugin.js
+        ├── plugin.js                      # window surface (if the plugin has one)
+        └── icon.svg                       # plugin icon — see §19 "Plugin icon"
 ```
 
 You can produce one with any packaging tool:
@@ -813,6 +816,8 @@ Before publishing a plugin:
 - [ ] All DB/HTTP work goes through the async accessors `ctx.pool()/ollama()/search()/supertonic()` — never a host-passed pool or client (§15)
 - [ ] Every migration file is idempotent (`CREATE TABLE IF NOT EXISTS`)
 - [ ] `skills_md` and `persona` are set if the plugin contributes persona/skills
+- [ ] `web/icon.svg` ships a 24×24 `currentColor` icon (§19 "Plugin icon")
+- [ ] User-visible events use the core notification system (`notify()` / `with_notification`) — §19 "Notifications"
 - [ ] zip / tar.gz test build is reproducible
 - [ ] `cargo check` succeeds for the plugin crate
 - [ ] Build smoke test: install via `/api/plugins/install` and `GET /api/plugins` returns it
@@ -867,16 +872,16 @@ dock and panels, leaving the voice/text chat over the orb.
 How plugin content reaches the eye:
 
 - **Plugin windows** — every plugin with an interface lives inside its own
-  **window** in the app's tiling shell (`web/js/tiles.js`, `#tile-grid`),
-  Android Auto-style: the HUD header and the AI sphere/dock are fixed chrome,
-  and each plugin is an app with its own window container between them. The
-  traveler plugin's window hosts the map. Windows have **no title bar**; a
-  single visible window auto-fills the grid area but keeps the rounded frame.
-  *Settings → Plugin Windows* picks Tile or Full screen per plugin
-  (localStorage `plugin.layout.<name>.<userId>`, default `tile`), and the AI
-  can surface a window with the core `show_plugin` tool (system prompt
-  carries a compact catalog of active plugins — name + manifest description —
-  and the response field `focus_plugin` focuses that window).
+  **window** in the desktop shell (`web/js/tiles.js`, `#tile-grid`): the HUD
+  header and the AI sphere/dock are fixed chrome, and each plugin is an app
+  with its own window container between them. The traveler plugin's window
+  hosts the map. Every window has a slim **title bar** (close = deactivate,
+  fullscreen = fill the desktop without covering the HUD); *Settings → Desktop
+  → Layout* picks the desktop style — tiling (master/stack or columns) or
+  floating, draggable **Windows**. The AI can surface a window with the core
+  `show_plugin` tool (system prompt carries a compact catalog of active
+  plugins — name + manifest description — and the response field `focus_plugin`
+  focuses that window).
 - **Artifacts** (the `artifact` field of `ActionOutcome`) are JSON rendered
   by the `artifactPanel` composite (`web/ui/components/composites.js`) as a
   **sheet inside their plugin's own window** (`.tile-sheet` over the plugin's
@@ -902,7 +907,7 @@ window surface (the `word` plugin is the reference):
 ```js
 export default {
   name: 'word',           // matches plugin.toml `name`
-  icon: 'ui/doc',         // theme icon for the HUD window switcher
+  icon: 'ui/doc',         // legacy theme-icon hint; the window/tray icon now comes from web/icon.svg
   mount: mountWordTile,   // returns the window element (or null)
   unmount: unmountWordTile,
   getElement: getWordTileElement,
@@ -915,6 +920,86 @@ export default {
 `unmount()` on deactivation. Window styles live in core's `web/css/tiles.css`
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
 plugins build DOM only, never ship CSS.
+
+### Plugin icon
+
+Every plugin ships `web/icon.svg` — a single-color 24×24 SVG drawn with
+`stroke="currentColor"` (the same style as the theme icons in
+`web/themes/<name>/icons/`). Core serves it at `/plugins/<name>/icon.svg` and
+shows it in two places:
+
+- **Top-bar plugin tray** (`#hud-plugins`, to the right of the weather widget) —
+  one icon per installed plugin, active or inactive. Icons are grouped by the
+  plugin's `category` manifest field and the groups are separated by a thin
+  divider. Clicking an inactive icon activates the plugin; clicking an active
+  icon focuses its window.
+- **Plugins page** — the plugin manager shows each plugin's own icon instead of
+  the generic puzzle glyph.
+
+Plugins that don't ship an icon fall back to the `ui/puzzle` theme icon.
+Plugins that don't declare a `category` are grouped under **Other**.
+
+### Notifications
+
+The core provides a unified, GNOME-style notification banner system
+(`web/ui/components/notifications.js`). Banners stack top-center just below the
+HUD, show an icon, an app label, a title (summary), a body, and optional action
+buttons, and dismiss on click or after their urgency timeout: **low** ≈ 4s,
+**normal** ≈ 7s, **critical** stays until dismissed. Every plugin should use
+this for user-visible events (a track started, a message arrived, a file
+exported, an error needing attention) instead of ad-hoc toasts or in-window
+text.
+
+**From a plugin web surface** — import `notify` from the UI library:
+
+```js
+import { notify } from '/ui/index.js';
+
+notify({
+  app: 'Mail',               // app label shown above the title
+  title: 'New message',      // GNOME "summary"
+  body: 'Alice: "See you at 8"',
+  icon: 'ui/mail',           // theme icon path, or a plugin icon element
+  urgency: 'normal',         // 'low' | 'normal' | 'critical'
+  actions: [{ label: 'Open', action: 'open' }],
+  timeout: 0,                // ms; 0 = sticky until dismissed
+});
+```
+
+Pressing an action button dispatches `app:notification-action` with
+`{ id, action, notification }`. The same options object can be sent as the
+global `app:notify` CustomEvent.
+
+**From a plugin tool** — attach a `Notification` to the tool's `ActionOutcome`:
+
+```rust
+use shiny_plugin_sdk::{ActionOutcome, Notification};
+
+Ok(ActionOutcome::ok("radio_play", json!({ "station": "Radio Bruno" }))
+    .with_notification(
+        Notification::new("Now playing: Radio Bruno")
+            .title("Radio")
+            .urgency("normal")
+            .plugin("radio")            // banner shows the plugin's web/icon.svg
+            .action("Stop", "stop"),
+    ))
+```
+
+The notification is serialized into the outcome's `data["notification"]` and
+the core frontend renders it automatically — no `ActionOutcome` ABI change is
+needed. `Notification` builders: `.title()`, `.urgency()`, `.icon()` (theme
+icon path), `.plugin()` (plugin name), `.app()`, `.action(label, key)`,
+`.timeout(ms)`.
+
+**When to use `notify` vs `toast`.** `toast()` stays for immediate, synchronous
+feedback on an action the user just performed ("Saved", "Imported", "Could not
+open file"). `notify()` is for things that happen in the background or deserve
+the user's attention even when they are looking elsewhere: a new message, an
+event about to start, a track change. Built-in examples: **calendar** raises an
+"Event starting soon" notification ~10 minutes before a timed event; **mail**
+raises "New mail" when the unread count grows; **radio** raises "Now playing"
+on track changes. A window plugin should start its polling in `mount()` and
+stop it in `unmount()`, exactly like calendar/mail/radio do.
 
 The top bar follows one convention (Studio sets the standard):
 
@@ -941,9 +1026,9 @@ The top bar follows one convention (Studio sets the standard):
 
 > **Editing a window surface during development** — the app serves
 > `data/plugins/<name>/web/` (the installed copy), not `plugins/<name>/web/`
-> (the source). After editing `plugins/<name>/web/plugin.js`, copy it to
-> `data/plugins/<name>/web/plugin.js` (or reinstall) or the browser keeps
-> loading the stale surface.
+> (the source). After editing `plugins/<name>/web/plugin.js` or
+> `plugins/<name>/web/icon.svg`, copy it to `data/plugins/<name>/web/`
+> (or reinstall) or the browser keeps loading the stale file.
 
 ---
 

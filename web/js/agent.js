@@ -13,6 +13,7 @@ import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
 import { getAiName, getOllamaModel } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
+import { pluginIconEl } from './pluginIcon.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
 import {
   fetchNavigationSession,
@@ -314,6 +315,24 @@ function dispatchAgentActions(res) {
   }
 }
 
+/** Render any `notification` a plugin tool attached to its outcome data. */
+function surfaceNotifications(res) {
+  const actions = res?.actions_taken || [];
+  for (const a of actions) {
+    const n = a?.data?.notification;
+    if (!n || typeof n !== 'object') continue;
+    const detail = { ...n };
+    // A plugin notification shows the plugin's own icon (web/icon.svg).
+    if (n.plugin) {
+      detail.icon = pluginIconEl(n.plugin, { size: 18 });
+      if (!detail.app) {
+        detail.app = n.plugin.charAt(0).toUpperCase() + n.plugin.slice(1);
+      }
+    }
+    window.dispatchEvent(new CustomEvent('app:notify', { detail }));
+  }
+}
+
 export async function sendToAgent(message, mode, context) {
   setAgentAwaiting(true);
   setSphereState('processing');
@@ -333,6 +352,7 @@ export async function sendToAgent(message, mode, context) {
 
     handleFocusPlugin(res);
     dispatchAgentActions(res);
+    surfaceNotifications(res);
 
     await syncTripsAfterAgent(res);
 
@@ -402,6 +422,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
 
     handleFocusPlugin(res);
     dispatchAgentActions(res);
+    surfaceNotifications(res);
 
     await syncTripsAfterAgent(res);
 

@@ -184,15 +184,16 @@ fn build_plugin_routes(state: &AppState) -> Router<AppState> {
     }
 
     // Serve each installed plugin's web assets at /plugins/<name>/ (roadmap #4).
+    // Register the ServeDir for every plugin unconditionally: ServeDir reads
+    // from disk per request, so a plugin whose web/ dir (or icon.svg) is added
+    // after startup is still served — no restart needed.
     let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
     for manifest in state.plugins.list() {
         let web_path = plugins_dir.join(&manifest.name).join(&manifest.web_dir);
-        if web_path.is_dir() {
-            router = router.nest_service(
-                &format!("/plugins/{}", manifest.name),
-                ServeDir::new(web_path),
-            );
-        }
+        router = router.nest_service(
+            &format!("/plugins/{}", manifest.name),
+            ServeDir::new(web_path),
+        );
     }
     router
 }

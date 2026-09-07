@@ -6,6 +6,7 @@ const PLUGIN_LAYOUT_KEY = 'plugin.layout';
 const DESKTOP_WORKSPACES_KEY = 'desktop.workspaces';
 const DESKTOP_ACTIVE_KEY = 'desktop.active';
 const DESKTOP_LAYOUT_KEY = 'desktop.layout';
+const DESKTOP_WINDOWS_KEY = 'desktop.windows';
 const DESKTOP_REMEMBER_KEY = 'session.remember';
 const DEFAULT_AI_NAME = 'Shiny';
 
@@ -128,7 +129,7 @@ export function setPluginLayout(name, mode) {
 /* ── Desktop manager (workspaces + tiling layout) ───────────── */
 
 const DEFAULT_DESKTOP_LAYOUT = {
-  mode: 'master',        // 'master' | 'columns'
+  mode: 'master',        // 'master' | 'columns' | 'windows'
   master_ratio: 0.6,     // master fraction (0.25–0.85)
   orientation: 'left',   // 'left' | 'right' | 'top' | 'bottom'
   gap: 12,               // px between windows
@@ -175,7 +176,7 @@ export function setActiveWorkspaceId(id) {
 export function getDesktopLayout() {
   const stored = readJson(scopedKey(DESKTOP_LAYOUT_KEY), {});
   const out = { ...DEFAULT_DESKTOP_LAYOUT, ...(stored || {}) };
-  out.mode = out.mode === 'columns' ? 'columns' : 'master';
+  out.mode = ['master', 'columns', 'windows'].includes(out.mode) ? out.mode : 'master';
   out.master_ratio = clamp(Number(out.master_ratio) || 0.6, 0.25, 0.85);
   out.orientation = ['left', 'right', 'top', 'bottom'].includes(out.orientation)
     ? out.orientation : 'left';
@@ -187,6 +188,22 @@ export function setDesktopLayout(layout) {
   const raw = JSON.stringify(layout);
   localStorage.setItem(scopedKey(DESKTOP_LAYOUT_KEY), raw);
   persist(DESKTOP_LAYOUT_KEY, raw);
+}
+
+/**
+ * Floating-window geometry (Windows layout mode): pluginName -> { x, y, w, h, z }.
+ * Positions are stored in pixels relative to the tile grid and are only used
+ * when the desktop layout is 'windows'.
+ */
+export function getWindowsGeom() {
+  const stored = readJson(scopedKey(DESKTOP_WINDOWS_KEY), {});
+  return (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+}
+
+export function setWindowsGeom(geom) {
+  const raw = JSON.stringify(geom || {});
+  localStorage.setItem(scopedKey(DESKTOP_WINDOWS_KEY), raw);
+  persist(DESKTOP_WINDOWS_KEY, raw);
 }
 
 function clamp(n, min, max) {

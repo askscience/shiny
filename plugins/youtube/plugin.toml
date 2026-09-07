@@ -5,3 +5,5 @@ entry_symbol = "shiny_plugin_entry"
 description = "Watch YouTube videos in the YouTube window — the AI can search YouTube and play videos"
 summary = "YouTube: AI search and playback in the YouTube window"
 author = "shiny"
+
+category = "Media"

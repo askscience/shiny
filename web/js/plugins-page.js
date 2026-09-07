@@ -8,8 +8,9 @@ import { initBackground } from './background.js';
 import { loadUserPreferences, getRemember } from './preferences.js';
 import {
   initThemeLoader, initAppearance, hydrateIcons,
-  toast, button, icon, emptyState, spinner,
+  toast, button, emptyState, spinner,
 } from '../ui/index.js';
+import { pluginIconEl } from './pluginIcon.js';
 
 const dropzone = document.getElementById('plugins-dropzone');
 const dropzoneTitle = document.getElementById('plugins-dropzone-title');
@@ -73,7 +74,7 @@ function pluginCard(p, idx) {
   id.className = 'plugin-row-id';
   const iconWrap = document.createElement('span');
   iconWrap.className = 'plugin-row-icon';
-  iconWrap.appendChild(icon('ui/puzzle', { size: 18 }));
+  iconWrap.appendChild(pluginIconEl(p.name, { size: 20, fallback: 'ui/puzzle' }));
   const nameBlock = document.createElement('div');
   nameBlock.className = 'plugin-row-name-block';
   const h3 = document.createElement('h3');

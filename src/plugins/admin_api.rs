@@ -25,6 +25,8 @@ struct PluginListEntry {
     summary: Option<String>,
     /// True when the plugin ships a `web/plugin.js` window surface.
     surface: bool,
+    /// Grouping category declared in `plugin.toml` (e.g. "Office", "Media").
+    category: Option<String>,
 }
 
 /// GET /api/plugins — every authenticated user sees the same installed list
@@ -47,6 +49,7 @@ pub async fn list(
                 .join("plugin.js")
                 .is_file();
             PluginListEntry {
+                category: state.plugins.category_for(&m.name),
                 name: m.name,
                 version: m.version.to_string(),
                 api_level: m.api_level,

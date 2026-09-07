@@ -62,6 +62,50 @@
   min-width: 0;
 }
 
+/* Floating Windows layout (settings → Layout: Windows). The desktop manager
+   positions each window with inline left/top/width/height; the grid is just
+   the desktop area (below the top HUD, above the orb/dock). */
+#tile-grid.tile-grid--windows {
+  display: block;
+  overflow: hidden;
+}
+
+#tile-grid.tile-grid--windows .tile {
+  position: absolute;
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  box-shadow: var(--shadow-float);
+}
+
+/* Keep the focused-window accent glow visible above the stronger float
+   shadow used by floating windows. */
+#tile-grid.tile-grid--windows .tile--focused {
+  border-color: var(--accent-glow);
+  box-shadow: var(--shadow-glow), var(--shadow-float);
+}
+
+/* Dragging state — no transition so the window tracks the pointer exactly. */
+#tile-grid.tile-grid--windows .tile.is-dragging,
+#tile-grid.tile-grid--windows .tile.is-resizing {
+  transition: none;
+  pointer-events: auto;
+}
+
+#tile-grid.tile-grid--windows .tile.is-dragging .tile-header {
+  cursor: grabbing;
+}
+
+#tile-grid.tile-grid--windows .tile-header {
+  cursor: grab;
+}
+
+/* Fullscreen in Windows layout: fill the desktop area without covering the
+   top HUD (the grid itself already sits below it). */
+#tile-grid.tile-grid--windows .tile--full {
+  border-radius: var(--radius-lg);
+}
+
 .tile {
   position: relative;
   display: flex;
@@ -98,8 +142,110 @@
   100% { transform: scale(1); }
 }
 
-/* No title bar — the window is all content. */
-.tile-header { display: none; }
+/* ── Window chrome (title bar + controls) ─────────────────────
+   Every plugin window gets a slim title bar: close + fullscreen controls on
+   the left, the plugin name centered. In Windows layout the bar is also the
+   drag handle; in tiling layout it is decorative but keeps the controls. */
+.tile {
+  --tile-header-height: 36px;
+}
+
+.tile-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--tile-header-height);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+  user-select: none;
+  touch-action: none;
+}
+
+.tile-header-controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tile-header-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Right spacer keeps the centered title optically balanced with the two
+   controls on the left. */
+.tile-header-spacer {
+  flex: none;
+  width: 56px;
+}
+
+.tile-header-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.tile-header-btn:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+}
+
+.tile-header-btn--close:hover {
+  background: var(--error-soft, var(--glass-hover));
+  color: var(--error);
+}
+
+.tile-header-btn--full.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tile-header-btn .ui-icon { width: 14px; height: 14px; }
+
+/* Resize grip — only meaningful in the floating Windows layout. */
+.tile-resize {
+  display: none;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 6;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  cursor: nwse-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.tile-resize .ui-icon { width: 13px; height: 13px; }
+
+.tile-grid--windows .tile-resize { display: inline-flex; }
 
 /* In-tile artifact sheet: a plugin's cards open over its own UI, contained
  * inside its window. */
@@ -152,7 +298,8 @@
    Top-right over the map, replacing the old under-sphere dock. */
 .map-tile-dock {
   position: absolute;
-  top: 12px;
+  /* Below the window title bar, over the map. */
+  top: calc(var(--tile-header-height, 36px) + 12px);
   right: 12px;
   z-index: 4;
   display: flex;
@@ -1048,8 +1195,9 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 .tile--full { grid-column: 1 / -1; }
 
 /* ── Phone: one window at a time ──────────────────────────────
-   Small screens show a single plugin window that fills the grid; window
-   switching lives in the top HUD bar (see #hud-windows in app.css). */
+   Small screens show a single plugin window that fills the grid; tapping an
+   active plugin's icon in the top-bar tray (see #hud-plugins in app.css)
+   switches to that window. */
 #tile-grid.tile-grid--phone {
   display: flex;
   flex-direction: column;
@@ -1061,6 +1209,11 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   min-width: 0;
   min-height: 0;
 }
+
+/* On phones a window already fills the desktop, so fullscreen is a no-op —
+   keep only the close control in the title bar. */
+#tile-grid.tile-grid--phone .tile-header-btn--full,
+#tile-grid.tile-grid--phone .tile-header-spacer { display: none; }
 
 /* Phone window chrome — minimal interface independent of container width. */
 .tile-grid--phone .radio-hero {

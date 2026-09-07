@@ -12,7 +12,7 @@
  */
 
 import {
-  button, emptyState, field, icon, input, modal, select, textarea, toast,
+  button, emptyState, field, icon, input, modal, notify, select, textarea, toast,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -876,6 +876,52 @@ function fmtSize(n) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/* ── New-mail notifications ────────────────────────────────────
+   While the Mail window is open, poll the folders' unread counts and raise a
+   notification when new mail lands. */
+
+const MAIL_POLL_MS = 60 * 1000;
+
+let mailPollTimer = null;
+let lastUnreadTotal = null;
+
+function totalUnread(folderList) {
+  return (folderList || []).reduce((sum, f) => sum + (Number(f.unread) || 0), 0);
+}
+
+async function checkNewMail() {
+  const account = pickAccount();
+  if (!account || !configured) return;
+  try {
+    const r = await listFolders(account.id);
+    const unread = totalUnread(r?.folders);
+    if (lastUnreadTotal != null && unread > lastUnreadTotal) {
+      const delta = unread - lastUnreadTotal;
+      notify({
+        app: 'Mail',
+        title: 'New mail',
+        body: `${delta} new message${delta === 1 ? '' : 's'} in ${account.email || currentFolder}`,
+        icon: 'ui/mail',
+        plugin: MAIL_PLUGIN,
+        urgency: 'normal',
+      });
+    }
+    lastUnreadTotal = unread;
+  } catch (_) { /* transient — next poll retries */ }
+}
+
+function startMailPolling() {
+  stopMailPolling();
+  void checkNewMail();
+  mailPollTimer = window.setInterval(() => void checkNewMail(), MAIL_POLL_MS);
+}
+
+function stopMailPolling() {
+  if (mailPollTimer) window.clearInterval(mailPollTimer);
+  mailPollTimer = null;
+  lastUnreadTotal = null;
+}
+
 /* ── Tile lifecycle ─────────────────────────────────────────── */
 
 /** Create the Mail tile element (the plugin's window container). */
@@ -923,12 +969,14 @@ export function mountMailTile() {
   bodyEl = h('div', 'mail-body');
   tileEl.appendChild(bodyEl);
 
-  void refreshStatus();
+  void refreshStatus().finally(() => checkNewMail());
+  startMailPolling();
   return tileEl;
 }
 
 /** Deactivated: drop the window. */
 export function unmountMailTile() {
+  stopMailPolling();
   closeAccountMenu();
   composeModal?.close();
   settingsModal?.close();

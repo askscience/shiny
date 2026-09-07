@@ -5,10 +5,10 @@
  * #tile-grid. The traveler plugin's interface is the map. The HUD header and
  * the AI sphere/dock are fixed chrome — always visible, never tiled.
  *
- * The layout engine (workspaces, master/stack tiling, focus, fullscreen)
+ * The layout engine (workspaces, master/stack/windows, focus, fullscreen)
  * lives in desktop.js; this module owns the plugin-window DOM: mounting the
- * map/radio/word/youtube/calc tiles, the phone window switcher, and the
- * in-tile artifact sheets/overlay.
+ * map/radio/word/youtube/calc tiles, the per-window title bar (close/fullscreen
+ * controls), and the in-tile artifact sheets/overlay.
  *
  * - Settings → Desktop sets the tiling layout; Settings → Plugin windows
  *   still chooses Tile vs Full screen per plugin.
@@ -25,7 +25,7 @@ import {
 } from './desktop.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
-import { artifactPanel, hydrateIcons, icon } from '../ui/index.js';
+import { artifactPanel, icon } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
@@ -40,15 +40,9 @@ let pluginCatalog = new Map(); // name -> { description }
 let surfaceModules = new Map(); // name -> plugin.js surface module
 let mapTileEl = null;          // the tile hosting the map DOM
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
-let hudWindowsEl = null;       // phone window switcher in the top HUD bar
 
 function pluginLabel(name) {
   return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-function pluginIconName(name) {
-  if (name === MAP_TILE_PLUGIN) return 'artifacts/plan';
-  return surfaceModules.get(name)?.icon || 'ui/puzzle';
 }
 
 /** Which plugins currently have a window surface? */
@@ -163,43 +157,90 @@ function elementForTile(name) {
   return surfaceModules.get(name)?.mount?.() || null;
 }
 
-/** Phone window switcher — one icon button per open window, in the top
- * HUD bar (next to Settings/Plugins). Shown only on phones with 2+ windows. */
-function renderHudWindows(names, phone) {
-  const show = phone && names.length > 1;
-  if (!hudWindowsEl && show) {
-    hudWindowsEl = document.createElement('div');
-    hudWindowsEl.id = 'hud-windows';
-    hudWindowsEl.className = 'hud-windows';
-    hudWindowsEl.setAttribute('role', 'tablist');
-    hudWindowsEl.setAttribute('aria-label', 'Plugin windows');
-    const hudTop = document.getElementById('hud-top');
-    if (hudTop) hudTop.insertBefore(hudWindowsEl, hudTop.firstChild);
-  }
-  if (!hudWindowsEl) return;
-  hudWindowsEl.classList.toggle('hidden', !show);
-  if (!show) return;
-
-  hudWindowsEl.textContent = '';
-  for (const name of names) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'icon-btn hud-window-btn';
-    btn.dataset.plugin = name;
-    btn.title = pluginLabel(name);
-    btn.setAttribute('aria-label', pluginLabel(name));
-    btn.setAttribute('role', 'tab');
-    btn.setAttribute('aria-selected', String(name === activePhonePlugin));
-    btn.classList.toggle('is-active', name === activePhonePlugin);
-    btn.appendChild(icon(pluginIconName(name), { size: 18 }));
-    btn.addEventListener('click', () => {
-      if (activePhonePlugin === name) return;
-      activePhonePlugin = name;
-      renderTiles();
+/** Deactivate a plugin — the close icon on its window. Mirrors the Plugins
+ *  page so the desktop, map and surfaces all refresh together. */
+async function deactivatePlugin(name) {
+  try {
+    await apiFetch('/api/plugins/deactivate', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
     });
-    hudWindowsEl.appendChild(btn);
+  } catch (err) {
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { message: err.message || `Could not deactivate ${pluginLabel(name)}`, type: 'error' },
+    }));
+    return;
   }
-  hydrateIcons(hudWindowsEl);
+  localStorage.setItem('plugins.changed', String(Date.now()));
+  window.dispatchEvent(new CustomEvent('plugins:changed'));
+}
+
+/** Add the shared window chrome (title bar + close/fullscreen controls) to a
+ *  plugin window, once. The controls sit on the left as requested; the title
+ *  is centered and the header doubles as the drag handle in Windows layout. */
+function ensureWindowChrome(el, name) {
+  if (!el || el.querySelector(':scope > .tile-header')) return;
+
+  const header = document.createElement('header');
+  header.className = 'tile-header';
+
+  const controls = document.createElement('span');
+  controls.className = 'tile-header-controls';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'tile-header-btn tile-header-btn--close';
+  closeBtn.title = 'Deactivate plugin';
+  closeBtn.setAttribute('aria-label', `Deactivate ${pluginLabel(name)}`);
+  closeBtn.appendChild(icon('ui/close', { size: 14 }));
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    void deactivatePlugin(name);
+  });
+
+  const fullBtn = document.createElement('button');
+  fullBtn.type = 'button';
+  fullBtn.className = 'tile-header-btn tile-header-btn--full';
+  fullBtn.title = 'Full screen';
+  fullBtn.setAttribute('aria-label', `Full screen ${pluginLabel(name)}`);
+  fullBtn.appendChild(icon('ui/expand', { size: 14 }));
+  fullBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFullscreen(name);
+  });
+
+  controls.append(closeBtn, fullBtn);
+
+  const title = document.createElement('span');
+  title.className = 'tile-header-title';
+  title.textContent = pluginLabel(name);
+
+  const spacer = document.createElement('span');
+  spacer.className = 'tile-header-spacer';
+  spacer.setAttribute('aria-hidden', 'true');
+
+  header.append(controls, title, spacer);
+  el.prepend(header);
+
+  // Bottom-right resize grip (visible in Windows layout mode only).
+  const resize = document.createElement('span');
+  resize.className = 'tile-resize';
+  resize.title = 'Resize';
+  resize.setAttribute('aria-hidden', 'true');
+  resize.appendChild(icon('ui/grip', { size: 14 }));
+  el.appendChild(resize);
+}
+
+/** Reflect the current fullscreen state on a window's fullscreen button. */
+function syncWindowChrome(el, name) {
+  const full = el?.querySelector(':scope > .tile-header .tile-header-btn--full');
+  if (!full) return;
+  const isFull = getFullscreen() === name;
+  full.classList.toggle('is-active', isFull);
+  full.title = isFull ? 'Exit full screen' : 'Full screen';
+  full.setAttribute('aria-label', isFull
+    ? `Exit full screen ${pluginLabel(name)}`
+    : `Full screen ${pluginLabel(name)}`);
 }
 
 function renderTiles() {
@@ -224,11 +265,18 @@ function renderTiles() {
     for (const name of names) {
       const el = elementForTile(name);
       if (!el) continue;
+      ensureWindowChrome(el, name);
+      syncWindowChrome(el, name);
       const inActiveWs = visible.includes(name);
       const shown = inActiveWs && name === activePhonePlugin;
-      el.classList.remove('tile--full', 'tile--master', 'tile--stack');
+      el.classList.remove('tile--full', 'tile--master', 'tile--stack', 'tile--window');
       el.style.gridColumn = '';
       el.style.gridRow = '';
+      el.style.left = '';
+      el.style.top = '';
+      el.style.width = '';
+      el.style.height = '';
+      el.style.zIndex = '';
       el.classList.toggle('hidden', !shown);
       grid.appendChild(el);
     }
@@ -237,6 +285,8 @@ function renderTiles() {
     for (const name of names) {
       const el = elementForTile(name);
       if (!el) continue;
+      ensureWindowChrome(el, name);
+      syncWindowChrome(el, name);
       const inActiveWs = visible.includes(name);
       el.classList.toggle('hidden', !inActiveWs);
       grid.appendChild(el);
@@ -247,7 +297,6 @@ function renderTiles() {
 
   grid.classList.toggle('hidden', names.length === 0);
   document.body.classList.toggle('tiles-active', names.length > 0);
-  renderHudWindows(visible, phone);
   renderWorkspaceBar(names.length > 0);
   // The dock moved into the traveler window — re-render it whenever tiles
   // change so it follows the tile (activation toggles, layout switches).

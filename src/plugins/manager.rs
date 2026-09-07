@@ -183,6 +183,11 @@ impl PluginManager {
         self.inner.loader.snapshot()
     }
 
+    /// Category for one installed plugin (declared in its `plugin.toml`).
+    pub fn category_for(&self, name: &str) -> Option<String> {
+        self.inner.loader.category_for(name)
+    }
+
     /// All installed plugins' routes: `(plugin_name, spec, handler)`.
     pub fn routes(&self) -> Vec<(String, RouteSpec, RouteHandler)> {
         let mut out = Vec::new();
@@ -195,6 +200,8 @@ impl PluginManager {
     }
 
     /// Scan `plugins_dir` and install every directory containing `plugin.toml`.
+    /// Backup dirs (`<name>.bak`) and hidden dirs are skipped — they are not
+    /// live plugins.
     pub async fn discover_and_install(
         &self,
         base_ctx: Arc<PluginCtx>,
@@ -206,6 +213,10 @@ impl PluginManager {
         for entry in entries.flatten() {
             let path = entry.path();
             if !path.is_dir() {
+                continue;
+            }
+            let dir_name = entry.file_name().to_string_lossy().to_lowercase();
+            if dir_name.ends_with(".bak") || dir_name.starts_with('.') {
                 continue;
             }
             let manifest_path = path.join("plugin.toml");

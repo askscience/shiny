@@ -10,7 +10,7 @@
  * window reloads its month and selects the date the AI touched.
  */
 
-import { button, emptyState, field, input, modal, textarea, toast, toggleRow } from '/ui/index.js';
+import { button, emptyState, field, input, modal, notify, textarea, toast, toggleRow } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
 
@@ -366,6 +366,58 @@ async function removeEvent(ev) {
   }
 }
 
+/* ── Upcoming-event reminders ─────────────────────────────────
+   While the calendar window is open, poll today's events and raise a
+   notification a few minutes before a timed event starts. */
+
+const REMINDER_POLL_MS = 60 * 1000;
+const REMINDER_WINDOW_MS = 10 * 60 * 1000;
+
+let reminderTimer = null;
+let notifiedKeys = new Set();
+
+function eventStartMs(ev) {
+  if (!ev?.date || ev.all_day || !ev.start_time) return null;
+  const t = new Date(`${ev.date}T${ev.start_time}`).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+async function checkUpcomingEvents() {
+  try {
+    const now = new Date();
+    const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    const list = await apiList(month);
+    for (const ev of list) {
+      const start = eventStartMs(ev);
+      if (start == null) continue;
+      const delta = start - Date.now();
+      if (delta <= 0 || delta > REMINDER_WINDOW_MS) continue;
+      const key = String(ev.event_id || ev.id);
+      if (notifiedKeys.has(key)) continue;
+      notifiedKeys.add(key);
+      notify({
+        app: 'Calendar',
+        title: 'Event starting soon',
+        body: `${ev.title} · ${ev.start_time}${ev.location ? ` · ${ev.location}` : ''}`,
+        icon: 'ui/calendar',
+        plugin: CALENDAR_PLUGIN,
+        urgency: 'normal',
+      });
+    }
+  } catch (_) { /* transient — next poll retries */ }
+}
+
+function startReminders() {
+  stopReminders();
+  void checkUpcomingEvents();
+  reminderTimer = window.setInterval(() => void checkUpcomingEvents(), REMINDER_POLL_MS);
+}
+
+function stopReminders() {
+  if (reminderTimer) window.clearInterval(reminderTimer);
+  reminderTimer = null;
+}
+
 /* ── Tile lifecycle ─────────────────────────────────────────── */
 
 /** Create the Calendar tile element (the plugin's window container). */
@@ -426,11 +478,13 @@ export function mountCalendarTile() {
   renderGrid();
   renderDetail();
   void loadEvents();
+  startReminders();
   return tileEl;
 }
 
 /** Deactivated: drop the window. */
 export function unmountCalendarTile() {
+  stopReminders();
   eventModal?.close();
   tileEl?.remove();
   tileEl = null;

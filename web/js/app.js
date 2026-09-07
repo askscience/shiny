@@ -11,12 +11,13 @@ import { sendToAgent, sendToAgentCompose, newChat } from './agent.js';
 import { startGpsTracking } from './gps.js';
 import {
   initThemeLoader, initAppearance, refreshAppearance,
-  wireToastEvents, toast, hydrateIcons, reveal,
+  wireToastEvents, wireNotificationEvents, toast, hydrateIcons, reveal,
 } from '../ui/index.js';
 import { refreshActivePlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
+import { initHudPlugins } from './hudPlugins.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles } from './tiles.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
@@ -50,6 +51,7 @@ async function boot() {
   initAppearance({ getScope: () => getTraveler()?.id });
   initBackground({ getScope: () => getTraveler()?.id });
   wireToastEvents();
+  wireNotificationEvents();
   hydrateIcons();
 
   window.addEventListener('auth:success', async () => {
@@ -107,6 +109,7 @@ async function initApp() {
   initTextInput(submitTextToAgent);
   initChatHistory(); // core chat history panel (new chat / resume old chats)
   initHudClock(); // core chrome — works with zero plugins
+  initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
 

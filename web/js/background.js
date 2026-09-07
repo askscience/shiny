@@ -58,13 +58,21 @@ export function applyBackground() {
   el.style.backgroundImage = '';
   el.style.backgroundSize = '';
   el.style.backgroundPosition = '';
+  el.style.animation = '';
 
   switch (bg.mode) {
     case 'gradient':
       el.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), ${gradientToCss(getGradient())}`;
+      el.style.backgroundSize = '100% 100%';
+      el.style.backgroundPosition = 'center';
+      el.style.animation = 'none';
       break;
     case 'image':
+      // A static, cover-fit photo — no pan/zoom/drift, just centered.
       el.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("${bg.url || '/api/background'}?v=${Date.now()}")`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.style.animation = 'none';
       break;
     case 'animated':
       el.classList.add(bg.animation === 'shimmer' ? 'bg-anim-shimmer' : 'bg-anim-aurora');

@@ -200,29 +200,52 @@ html, body {
   #workspace-bar { display: none; }
 }
 
-/* Phone window switcher — icon buttons inside the top HUD bar. */
-#hud-windows {
-  display: none;
+.hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
+
+/* ── Plugin icon tray (top bar, right of the weather separator) ── */
+#hud-plugins {
+  flex: none;
+  display: flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(500px, 46vw);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.hud-window-btn .ui-icon { display: inline-flex; }
-.hud-window-btn svg { width: 16px; height: 16px; }
+#hud-plugins::-webkit-scrollbar { display: none; }
 
-.hud-window-btn.is-active {
+.hud-plugin-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.hud-plugin-btn:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+}
+
+.hud-plugin-btn.is-active {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-@media (max-width: 640px) {
-  #hud-windows { display: flex; }
-  .hud-window-btn { width: 34px; height: 34px; }
-}
-
-.hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
+.hud-plugin-btn .ui-icon { display: inline-flex; }
+.hud-plugin-btn svg { width: 18px; height: 18px; }
 
 .hud-clock {
   display: flex;

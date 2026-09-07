@@ -1,6 +1,7 @@
 use serde_json::Value;
 use crate::artifacts::Artifact;
 use crate::navigation::NavigationSession;
+use crate::notification::Notification;
 
 /// What a tool returns to the agent runner.
 #[derive(Debug, Clone)]
@@ -52,6 +53,18 @@ impl ActionOutcome {
 
     pub fn with_navigation(mut self, nav: NavigationSession) -> Self {
         self.navigation = Some(nav);
+        self
+    }
+
+    /// Attach a GNOME-style desktop notification. It is carried inside
+    /// `data["notification"]` so the core frontend can render it without any
+    /// change to this struct's ABI.
+    pub fn with_notification(mut self, notif: Notification) -> Self {
+        if let Ok(value) = serde_json::to_value(&notif) {
+            if let Some(map) = self.data.as_object_mut() {
+                map.insert("notification".into(), value);
+            }
+        }
         self
     }
 }

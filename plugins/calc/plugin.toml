@@ -7,3 +7,5 @@ summary = "Calc: create, edit and compute with spreadsheets"
 author = "shiny"
 skills_dir = "skills"
 web_dir = "web"
+
+category = "Office"
