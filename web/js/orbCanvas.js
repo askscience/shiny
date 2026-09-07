@@ -161,9 +161,8 @@ class OrbRenderer {
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.clip();
 
-    ctx.fillStyle = '#06080a';
-    ctx.fillRect(0, 0, w, w);
-
+    // Transparent orb — no opaque backdrop, so the desktop shows through the
+    // circle. The blobs below are composited with 'screen' over alpha.
     ctx.globalCompositeOperation = 'screen';
 
     if (squareAnim) {
@@ -230,10 +229,17 @@ class OrbRenderer {
 
     const edge = ctx.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
     edge.addColorStop(0, 'rgba(0,0,0,0)');
-    edge.addColorStop(0.85, 'rgba(0,0,0,0.12)');
-    edge.addColorStop(1, 'rgba(0,0,0,0.5)');
+    edge.addColorStop(0.85, 'rgba(0,0,0,0.08)');
+    edge.addColorStop(1, 'rgba(0,0,0,0.2)');
     ctx.fillStyle = edge;
     ctx.fillRect(0, 0, w, w);
+
+    // Accent ring so the transparent orb keeps a defined edge.
+    ctx.strokeStyle = hexToRgba(this.palette[0], 0.28);
+    ctx.lineWidth = 1 * this.dpr;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R - ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.stroke();
 
     ctx.restore();
 
