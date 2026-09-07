@@ -234,13 +234,6 @@ class OrbRenderer {
     ctx.fillStyle = edge;
     ctx.fillRect(0, 0, w, w);
 
-    // Accent ring so the transparent orb keeps a defined edge.
-    ctx.strokeStyle = hexToRgba(this.palette[0], 0.28);
-    ctx.lineWidth = 1 * this.dpr;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R - ctx.lineWidth / 2, 0, Math.PI * 2);
-    ctx.stroke();
-
     ctx.restore();
 
     if (glowI > 0.12 && !squareAnim) {
