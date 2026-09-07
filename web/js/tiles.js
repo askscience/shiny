@@ -159,7 +159,7 @@ function elementForTile(name) {
 
 /** Deactivate a plugin — the close icon on its window. Mirrors the Plugins
  *  page so the desktop, map and surfaces all refresh together. */
-async function deactivatePlugin(name) {
+export async function deactivatePlugin(name) {
   try {
     await apiFetch('/api/plugins/deactivate', {
       method: 'POST',
@@ -297,7 +297,7 @@ function renderTiles() {
 
   grid.classList.toggle('hidden', names.length === 0);
   document.body.classList.toggle('tiles-active', names.length > 0);
-  renderWorkspaceBar(names.length > 0);
+  renderWorkspaceBar();
   // The dock moved into the traveler window — re-render it whenever tiles
   // change so it follows the tile (activation toggles, layout switches).
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));

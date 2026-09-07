@@ -1,0 +1,10 @@
+name = "pdf"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "PDF viewer & editor — render pages, extract text, edit text, add highlights/notes/links/watermarks, rotate/delete/reorder/merge pages, create PDFs"
+summary = "PDF: view pages, extract text, edit & annotate (highlight, note, link, watermark), rotate/reorder/merge, create PDFs"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"
+category = "Office"

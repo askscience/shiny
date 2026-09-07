@@ -270,7 +270,6 @@ export function createWorkspace() {
   activeWs = ws.id;
   loadActiveFocus();
   persist();
-  toast(`Workspace ${activeWorkspaceIndex() + 1}`, { type: 'info' });
   notify();
   return ws;
 }
@@ -289,7 +288,6 @@ export function removeWorkspace() {
   loadActiveFocus();
   syncActiveFocus();
   persist();
-  toast('Workspace removed', { type: 'info' });
   notify();
   return true;
 }
@@ -724,11 +722,12 @@ function markFocus(items) {
 
 const WS_SHORTCUT_ENABLED = true;
 
-export function renderWorkspaceBar(hasWindows = true) {
+export function renderWorkspaceBar() {
   const bar = document.getElementById('workspace-bar');
   if (!bar) return;
-  bar.classList.toggle('hidden', !hasWindows);
-  if (!hasWindows) return;
+  // Always visible — even with no plugin windows the switcher lets you
+  // create/manage workspaces (dots render empty, +/− still work).
+  bar.classList.remove('hidden');
   bar.textContent = '';
 
   const dots = document.createElement('div');

@@ -20,6 +20,7 @@ import { initHudClock, initHudTrips } from './hudLeft.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles } from './tiles.js';
+import { initContextMenu } from './contextMenu.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
@@ -111,6 +112,7 @@ async function initApp() {
   initHudClock(); // core chrome — works with zero plugins
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
+  initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
 
   await applyTravelerActivation();

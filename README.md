@@ -13,7 +13,7 @@ Everything beyond that ships as a **self-contained plugin** — a folder with
 or `.tar.gz` archive through the plugin API: no core edits and no restart (the HTTP
 router hot-swaps on install/uninstall).
 
-- 13 plugins ship in this repo (10 self-contained window apps, a tool-only demo, a
+- 14 plugins ship in this repo (11 self-contained window apps, a tool-only demo, a
   chrome-integrated keyboard, and the traveler domain plugin).
 - See [`PLUGINS.md`](./PLUGINS.md) for the plugin architecture, trait surface and a
   worked install example.
@@ -69,6 +69,9 @@ The web UI (`web/`) is a desktop-style workspace:
 **Other plugins**
 - `word` / `calc` / `impress` — documents, spreadsheets and slide decks with real
   OpenDocument import/export
+- `pdf` — view and edit PDFs: render pages, extract text, edit text, add
+  highlights/notes/links/watermarks, rotate/reorder/delete/merge pages, create
+  from HTML+CSS (pdf_oxide)
 - `mail` — IMAP inbox + SMTP compose
 - `calendar` — events in a month-grid window
 - `calculator` — basic and scientific math
@@ -135,6 +138,7 @@ routes, runs its migrations, and — where it has a window surface — opens a w
 | `word` | Office | `doc_*` (7) | `/api/documents…` | Word (`.odt`) |
 | `calc` | Office | `calc_*` (6) | `/api/spreadsheets…` | Calc (`.ods`) |
 | `impress` | Office | `slide_*` (6) | `/api/presentations…` | Impress (`.odp`) |
+| `pdf` | Office | `pdf_*` (12) | `/api/pdfs…` | PDF viewer/editor (annotations) |
 | `mail` | Office | `mail_status/list/read/send` | `/api/mail/*` | Mail (IMAP + SMTP) |
 | `calendar` | Office | `calendar_*` (5) | `/api/calendar/events…` | Calendar |
 | `calculator` | Office | `calculator_eval/history/clear_history` | `/api/calculator/*` | Calculator |
@@ -306,7 +310,7 @@ only while their plugin is installed (and are authenticated as well).
 | GET | `/api/plugins/install.log` | Install audit log |
 
 **Plugin routes** — documents (`word`), spreadsheets (`calc`), presentations
-(`impress`), `/api/mail/*` (`mail`), `/api/calendar/events` (`calendar`),
+(`impress`), `/api/pdfs` (`pdf`), `/api/mail/*` (`mail`), `/api/calendar/events` (`calendar`),
 `/api/calculator/*` (`calculator`), `/api/images` (`image`),
 `/api/radio/nowplaying` (`radio`), `/api/youtube/search` (`youtube`),
 `/api/studio/*` (`studio`).
