@@ -21,7 +21,7 @@ import {
   getDesktopLayout, setDesktopLayout,
   getWindowsGeom, setWindowsGeom,
 } from './preferences.js';
-import { toast } from '../ui/index.js';
+import { toast, icon } from '../ui/index.js';
 
 let workspaces = [];      // [{ id, windows: [pluginName], focus, fullscreen }]
 let activeWs = null;      // active workspace id
@@ -751,18 +751,18 @@ export function renderWorkspaceBar(hasWindows = true) {
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'workspace-bar-btn';
-  add.textContent = '+';
   add.title = 'New workspace';
   add.setAttribute('aria-label', 'New workspace');
+  add.appendChild(icon('ui/plus', { size: 14 }));
   add.addEventListener('click', () => createWorkspace());
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'workspace-bar-btn';
-  del.textContent = '\u2212';
   del.title = 'Remove workspace';
   del.setAttribute('aria-label', 'Remove workspace');
   del.disabled = workspaces.length <= 1;
+  del.appendChild(icon('ui/minus', { size: 14 }));
   del.addEventListener('click', () => removeWorkspace());
 
   bar.append(add, dots, del);

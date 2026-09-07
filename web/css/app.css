@@ -126,11 +126,30 @@ html, body {
 #hud-top {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  gap: 2px;
   flex-shrink: 0;
   pointer-events: auto;
+  margin-left: auto;
+  padding-left: 6px;
+  border-left: 1px solid var(--glass-border);
 }
+
+/* Inside the top-bar pill the nav buttons are flat, muted, circular icons —
+   no glass chips of their own — matching the plugin tray buttons. */
+#hud-top .icon-btn {
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+#hud-top .icon-btn:hover {
+  background: var(--glass-hover);
+  border-color: transparent;
+  color: var(--text);
+  transform: none;
+}
+#hud-top .icon-btn svg { width: 17px; height: 17px; }
 
 /* ── Workspace bar (Hyprland-style desktop switcher) ────────── */
 #workspace-bar {
@@ -175,6 +194,9 @@ html, body {
 }
 
 .workspace-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -182,9 +204,6 @@ html, body {
   border-radius: 999px;
   background: var(--glass);
   color: var(--text-secondary);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1;
   cursor: pointer;
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
@@ -204,7 +223,7 @@ html, body {
 
 /* ── Plugin icon tray (top bar, right of the weather separator) ── */
 #hud-plugins {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -215,6 +234,20 @@ html, body {
 }
 
 #hud-plugins::-webkit-scrollbar { display: none; }
+
+/* On wide desktops, float the plugin tray to the horizontal center of the
+   top-bar pill (the pill's backdrop-filter makes it the tray's containing
+   block, so `left: 50%` = the pill's center) while the settings/plugins/chats
+   buttons stay on the right. Below this width the tray stays in-flow after
+   the weather widget so it can't overlap the clock. */
+@media (min-width: 1280px) {
+  #hud-plugins {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
 
 .hud-plugin-btn {
   flex: none;

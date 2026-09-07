@@ -279,12 +279,16 @@ export function mountCalculatorTile() {
   const spacer = document.createElement('div');
   spacer.className = 'calculator-bar-spacer';
 
-  historyToggleBtn = button({ icon: 'ui/list', label: 'History', variant: 'ghost', size: 'sm', onClick: toggleHistory });
-  historyToggleBtn.classList.add('ui-btn--icon', 'calculator-bar-btn');
-  const sciBtn = button({ icon: 'ui/puzzle', label: 'Scientific', variant: 'ghost', size: 'sm', onClick: toggleSci });
-  sciBtn.classList.add('ui-btn--icon', 'calculator-bar-btn');
-  const clearBtn = button({ icon: 'ui/trash', label: 'Clear history', variant: 'ghost', size: 'sm', onClick: () => void clearHistory() });
-  clearBtn.classList.add('ui-btn--icon', 'calculator-bar-btn');
+  const barBtn = (iconName, label, onClick) => {
+    const btn = button({ icon: iconName, variant: 'ghost', onClick });
+    btn.classList.add('ui-btn--icon', 'calculator-bar-btn');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    return btn;
+  };
+  historyToggleBtn = barBtn('ui/list', 'History', toggleHistory);
+  const sciBtn = barBtn('ui/puzzle', 'Scientific', toggleSci);
+  const clearBtn = barBtn('ui/trash', 'Clear history', () => void clearHistory());
   bar.append(title, spacer, historyToggleBtn, sciBtn, clearBtn);
   tileEl.appendChild(bar);
 

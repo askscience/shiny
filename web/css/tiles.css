@@ -75,14 +75,11 @@
   flex: none;
   min-width: 0;
   min-height: 0;
-  box-shadow: var(--shadow-float);
 }
 
-/* Keep the focused-window accent glow visible above the stronger float
-   shadow used by floating windows. */
+/* Focused floating window: accent border, no shadow. */
 #tile-grid.tile-grid--windows .tile--focused {
-  border-color: var(--accent-glow);
-  box-shadow: var(--shadow-glow), var(--shadow-float);
+  border-color: var(--accent);
 }
 
 /* Dragging state — no transition so the window tracks the pointer exactly. */
@@ -117,22 +114,19 @@
      plugin window. `--bg-elevated` is #0a0a0a in the noir theme and would be a
      light surface in a light theme, so it follows the active theme. */
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-glass);
   overflow: hidden;
   pointer-events: auto;
-  transition: border-color var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out);
+  transition: border-color var(--duration-normal) var(--ease-out);
   /* Size container: plugin windows switch to a compact layout when the
      WINDOW itself gets narrow (multiple tiles side by side, or a phone). */
   container-type: inline-size;
 }
 
 /* A plugin window fills its grid cell; with a single plugin it takes the
-   whole area but keeps the rounded frame (border + radius + shadow above). */
+   whole area but keeps the rounded frame (border + radius). */
 
 .tile--focused {
-  border-color: var(--accent-glow);
-  box-shadow: var(--shadow-glow), var(--shadow-glass);
+  border-color: var(--accent);
   animation: tileFocusPulse 1.8s var(--ease-out);
 }
 
@@ -2676,8 +2670,19 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   width: 30px;
   height: 30px;
   border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
-.calculator-bar-btn.is-active { background: var(--accent-soft); color: var(--accent); }
+.calculator-bar-btn:hover { background: var(--glass-hover); color: var(--text); }
+.calculator-bar-btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .calculator-display {
   padding: 18px 20px 12px;
