@@ -20,9 +20,10 @@
 #hud-top .icon-btn { background: transparent; border-color: transparent; box-shadow: none; }
 #hud-top .icon-btn:hover { background: var(--glass-hover); }
 
-/* Plugin windows — extruded and borderless. */
+/* Plugin windows — extruded and borderless. Focused windows in tiling
+   layouts get their accent ring from tiles.css; in the floating Windows
+   layout the focused window is raised by z-order only. */
 .tile { border-color: transparent; box-shadow: var(--shadow-raise); }
-.tile--focused { border-color: var(--accent); }
 
 /* Login overlay — the theme canvas instead of a near-black veil. */
 #login-overlay { background: var(--gradient-mesh), var(--bg); }

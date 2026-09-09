@@ -472,12 +472,16 @@ export function initTileManager() {
     const name = e.detail?.name;
     if (name) focusPlugin(name);
   });
-  window.addEventListener('plugins:changed', async () => {
+  window.addEventListener('plugins:changed', async (e) => {
     await refreshActivePlugins();
     await refreshCatalog();
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
     if (!surfacePlugins().includes(activePhonePlugin)) activePhonePlugin = null;
     renderTiles();
+    // A plugin just opened from the tray — focus it so its window comes to
+    // the front (raises it in the floating Windows layout).
+    const opened = e.detail?.opened;
+    if (opened) focusPlugin(opened);
   });
 }
 
