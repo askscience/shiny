@@ -100,9 +100,10 @@ async function onClick(p, active) {
     }));
     return;
   }
-  // Mirror the Plugins page signal so every consumer refreshes.
+  // Mirror the Plugins page signal so every consumer refreshes. The opened
+  // name rides along so the desktop can focus (raise) the new window.
   localStorage.setItem('plugins.changed', String(Date.now()));
-  window.dispatchEvent(new CustomEvent('plugins:changed'));
+  window.dispatchEvent(new CustomEvent('plugins:changed', { detail: { opened: p.name } }));
 }
 
 export function initHudPlugins() {

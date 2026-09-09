@@ -77,10 +77,8 @@
   min-height: 0;
 }
 
-/* Focused floating window: accent border, no shadow. */
-#tile-grid.tile-grid--windows .tile--focused {
-  border-color: var(--accent);
-}
+/* Focused floating window — in the Windows layout the focused window is
+   simply the topmost one (raised by z-order); it gets no accent border. */
 
 /* Dragging state — no transition so the window tracks the pointer exactly. */
 #tile-grid.tile-grid--windows .tile.is-dragging,
@@ -127,8 +125,13 @@
    whole area but keeps the rounded frame (border + radius). */
 
 .tile--focused {
-  border-color: var(--accent);
   animation: tileFocusPulse 1.8s var(--ease-out);
+}
+
+/* In tiling layouts the accent border marks the focused/master window; in
+   the floating Windows layout focus is shown by z-order, not a border. */
+#tile-grid:not(.tile-grid--windows) .tile--focused {
+  border-color: var(--accent);
 }
 
 @keyframes tileFocusPulse {
