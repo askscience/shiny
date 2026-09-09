@@ -55,7 +55,9 @@ export function cssVar(name) {
 /* ── stored state ───────────────────────────────────────────── */
 
 export function getAccent() {
-  return localStorage.getItem(scopedKey(ACCENT_KEY)) || DEFAULT_ACCENT;
+  return localStorage.getItem(scopedKey(ACCENT_KEY))
+    || getThemeManifest()?.defaultAccent
+    || DEFAULT_ACCENT;
 }
 
 export function setAccent(hex) {
@@ -70,7 +72,11 @@ export function getGradient() {
       if (parsed && Array.isArray(parsed.stops) && parsed.stops.length >= 2) return parsed;
     }
   } catch (_) { /* fall through */ }
-  return DEFAULT_GRADIENT;
+  // A theme declares its default gradient by id (theme.json → defaultGradient).
+  const manifest = getThemeManifest();
+  const id = manifest?.defaultGradient;
+  const preset = (manifest?.gradients || []).find((g) => g.id === id);
+  return preset ? { id: preset.id, angle: preset.angle, stops: preset.stops } : DEFAULT_GRADIENT;
 }
 
 export function setGradient(gradient) {

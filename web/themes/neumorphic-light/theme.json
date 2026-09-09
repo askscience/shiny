@@ -1,0 +1,28 @@
+{
+  "name": "neumorphic-light",
+  "label": "Neumorphic Light",
+  "version": "1.0.0",
+  "author": "Shiny",
+  "modes": ["light"],
+  "app": "app.css",
+  "defaultAccent": "#3a4049",
+  "defaultGradient": "mono",
+  "accents": [
+    { "id": "black",  "label": "Graphite", "value": "#3a4049" },
+    { "id": "slate",  "label": "Slate",    "value": "#5a6472" },
+    { "id": "gold",   "label": "Gold",     "value": "#a8862f" },
+    { "id": "amber",  "label": "Amber",    "value": "#c07a2e" },
+    { "id": "rose",   "label": "Rose",     "value": "#c05a72" },
+    { "id": "violet", "label": "Violet",   "value": "#6d5ac0" },
+    { "id": "azure",  "label": "Azure",    "value": "#3f6ec0" },
+    { "id": "mint",   "label": "Mint",     "value": "#2f9a72" }
+  ],
+  "gradients": [
+    { "id": "mono",        "label": "Mono",        "angle": 135, "stops": ["#3a4049", "#7a8390"] },
+    { "id": "aurora",      "label": "Aurora",      "angle": 135, "stops": ["#2f9a72", "#3f6ec0", "#6d5ac0"] },
+    { "id": "ember",       "label": "Ember",       "angle": 135, "stops": ["#c07a2e", "#c04f3f"] },
+    { "id": "ice",         "label": "Ice",         "angle": 135, "stops": ["#2f90a8", "#3f6ec0"] },
+    { "id": "ultraviolet", "label": "Ultraviolet", "angle": 135, "stops": ["#6d5ac0", "#a04ac0"] },
+    { "id": "rose",        "label": "Rose",        "angle": 135, "stops": ["#c04f6e", "#c07a2e"] }
+  ]
+}

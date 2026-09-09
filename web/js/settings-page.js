@@ -83,6 +83,44 @@ function pickGradient(gradient) {
   markActive(gradientSwatches, (el) => el.dataset.gradientId === gradient.id);
 }
 
+/* ── Neumorphic toggle ────────────────────────────────────────
+   One switch on the Appearance page. It keeps the user's dark/light
+   preference and just swaps the skin: flat themes (noir / light)
+   ↔ their neumorphic twins (neumorphic / neumorphic-light). The
+   switch state is derived from the active theme, so it also stays in
+   sync when a theme is picked directly from the Theme dropdown. */
+const NEUMORPHIC_DARK = 'neumorphic';
+const NEUMORPHIC_LIGHT = 'neumorphic-light';
+const BASE_DARK = 'noir';
+const BASE_LIGHT = 'light';
+
+function isNeumorphicTheme(name) {
+  return name === NEUMORPHIC_DARK || name === NEUMORPHIC_LIGHT;
+}
+
+function isLightTheme(name) {
+  return name === NEUMORPHIC_LIGHT || name === BASE_LIGHT;
+}
+
+function syncNeumorphicToggle() {
+  const toggle = document.getElementById('neumorphic-toggle');
+  if (toggle) toggle.setAttribute('aria-checked', String(isNeumorphicTheme(getActiveTheme())));
+}
+
+async function toggleNeumorphic() {
+  const toggle = document.getElementById('neumorphic-toggle');
+  if (!toggle) return;
+  const current = getActiveTheme();
+  const next = isNeumorphicTheme(current)
+    ? (isLightTheme(current) ? BASE_LIGHT : BASE_DARK)
+    : (isLightTheme(current) ? NEUMORPHIC_LIGHT : NEUMORPHIC_DARK);
+  const ok = await setTheme(next);
+  if (!ok) return;
+  syncNeumorphicToggle();
+  buildAccentSwatches();
+  buildGradientSwatches();
+}
+
 function buildAccentSwatches() {
   if (!accentSwatches) return;
   accentSwatches.textContent = '';
@@ -155,6 +193,7 @@ function customGradientFromInputs() {
 function syncAppearanceUI() {
   buildAccentSwatches();
   buildGradientSwatches();
+  syncNeumorphicToggle();
 
   const g = getGradient();
   if (g.id === 'custom' && g.stops?.length >= 2) {
@@ -181,9 +220,13 @@ function syncAppearanceUI() {
 function wireAppearance() {
   themeSelect?.addEventListener('change', async () => {
     await setTheme(themeSelect.value);
+    syncNeumorphicToggle();
     buildAccentSwatches();
     buildGradientSwatches();
   });
+
+  const neumorphicToggle = document.getElementById('neumorphic-toggle');
+  neumorphicToggle?.addEventListener('click', toggleNeumorphic);
 
   const applyCustomGradient = () => pickGradient(customGradientFromInputs());
   gradientStopA?.addEventListener('input', applyCustomGradient);

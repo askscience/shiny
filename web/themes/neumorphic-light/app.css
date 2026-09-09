@@ -1,0 +1,57 @@
+/* ─────────────────────────────────────────────────────────────
+   Neumorphic — app-surface override
+   Loaded after /css/*.css so it wins the cascade. The app shell
+   reads the shared design tokens, but a few chrome surfaces are
+   left flat or carry hardcoded drop-shadows; this file adds the
+   soft dual shadows (raised) and pressed/inset states that make
+   the whole interface read as one extruded-plastic object.
+   Token-driven, so dark + light share this file.
+   ───────────────────────────────────────────────────────────── */
+
+/* HUD circular buttons — the app gives them fill + border only. */
+.icon-btn {
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: var(--shadow-raise-sm);
+}
+.icon-btn:hover { background: var(--glass-hover); box-shadow: var(--shadow-raise-sm); }
+.icon-btn:active { box-shadow: var(--shadow-inset-sm); }
+/* Inside the top-bar pill the nav buttons stay flat. */
+#hud-top .icon-btn { background: transparent; border-color: transparent; box-shadow: none; }
+#hud-top .icon-btn:hover { background: var(--glass-hover); }
+
+/* Plugin windows — extruded and borderless. */
+.tile { border-color: transparent; box-shadow: var(--shadow-raise); }
+.tile--focused { border-color: var(--accent); }
+
+/* Login overlay — the theme canvas instead of a near-black veil. */
+#login-overlay { background: var(--gradient-mesh), var(--bg); }
+
+/* Chat history items — raised. */
+.chat-history-item { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+
+/* Compose bubbles + the slide-in conversation panel. */
+.compose-bubble--assistant .compose-bubble-text { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.compose-bubble--user .compose-bubble-text { box-shadow: var(--shadow-raise-sm); }
+.compose-conversation { box-shadow: var(--shadow-float); }
+
+/* Media cells (radio / youtube / impress thumbnails) — raised frames. */
+.radio-cell, .yt-cell, .impress-thumb { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.radio-cell--current, .yt-cell--current { box-shadow: var(--shadow-raise-sm), 0 0 0 2px var(--accent); }
+
+/* Keyboard — raised keys, pressed on tap. */
+#keyboard-bar { box-shadow: var(--shadow-float); }
+.keyboard-key { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.keyboard-key:active, .keyboard-key.is-active { box-shadow: var(--shadow-inset-sm); }
+
+/* Travel panel — replace the hardcoded black drop shadow. */
+#travel-panel { box-shadow: var(--shadow-float); }
+
+/* Settings + plugins pages. */
+.settings-section, .settings-nav, .plugins-section, .background-image-preview { border-color: transparent; }
+.settings-nav-item { box-shadow: var(--shadow-raise-sm); }
+.settings-nav-item.is-active { box-shadow: var(--shadow-inset-sm); }
+.settings-panel-icon, .plugin-row-icon { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.settings-panel .ui-toggle-row { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-raise-sm); }
+.plugins-dropzone { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-inset); }
+.plugins-dropzone:hover, .plugins-dropzone.dragging { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--shadow-inset); }
