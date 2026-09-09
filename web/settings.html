@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/ui/ui.css">
   <link id="theme-components" rel="stylesheet" href="/themes/noir/components.css">
   <link rel="stylesheet" href="/css/settings.css">
+  <link id="theme-app" rel="stylesheet" href="" disabled>
 </head>
 <body>
   <div class="settings-page" data-controller="settings">
@@ -110,6 +111,15 @@
               <select id="theme-select" class="ui-select"></select>
               <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
             </div>
+
+            <div class="ui-row ui-toggle-row">
+              <div class="ui-list-item-main">
+                <div class="ui-list-item-title">Neumorphic soft UI</div>
+                <div class="ui-list-item-sub">Soft extruded-plastic surfaces with subtle dual shadows, in dark and light.</div>
+              </div>
+              <button type="button" class="ui-toggle" role="switch" id="neumorphic-toggle" aria-checked="false"></button>
+            </div>
+
             <label id="accent-label">Accent</label>
             <div id="accent-swatches" class="swatch-row" role="radiogroup" aria-labelledby="accent-label"></div>
             <label id="gradient-label">Gradient</label>

@@ -48,6 +48,26 @@ function setThemeHrefs(theme) {
   if (components) components.href = `/themes/${theme}/components.css`;
 }
 
+/**
+ * A theme may ship an optional app-surface override (`app` in theme.json,
+ * e.g. "app.css") that loads AFTER the app CSS so it can restyle chrome the
+ * library doesn't own. Themes without it keep the link disabled so the
+ * existing UI renders exactly as before.
+ */
+function setAppHref(theme, manifest) {
+  const app = document.getElementById('theme-app');
+  if (!app) return;
+  const appFile = manifest && manifest.app;
+  const url = appFile ? `/themes/${theme}/${appFile === true ? 'app.css' : appFile}` : '';
+  if (url) {
+    app.href = url;
+    app.disabled = false;
+  } else {
+    app.disabled = true;
+    app.href = url; // empty while disabled → no request, no effect
+  }
+}
+
 async function loadManifest(theme) {
   try {
     const res = await fetch(`/themes/${theme}/theme.json`);
@@ -68,6 +88,7 @@ export async function initThemeLoader() {
   const stored = localStorage.getItem(THEME_KEY);
   applyTheme(themes.includes(stored) ? stored : themes[0]);
   manifest = await loadManifest(activeTheme);
+  setAppHref(activeTheme, manifest);
   return manifest;
 }
 
@@ -78,6 +99,7 @@ export async function setTheme(name) {
   localStorage.setItem(THEME_KEY, name);
   applyTheme(name);
   manifest = await loadManifest(name);
+  setAppHref(name, manifest);
   window.dispatchEvent(new CustomEvent('theme:change', { detail: { theme: name } }));
   return true;
 }

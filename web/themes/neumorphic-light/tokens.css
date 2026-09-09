@@ -1,0 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   Neumorphic Light — soft extruded-plastic design tokens
+   "Soft UI": a single cool paper canvas. Every surface shares the
+   canvas color; depth is drawn with a soft DARK drop shadow (and a
+   dark inner shadow for pressed controls) — never with fills or
+   borders. Accent slots are user-selectable, rewritten by appearance.js.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* Monochrome paper ramp. Surfaces are the SAME color as the
+     background; --glass-strong / --glass-hover are only a whisper
+     lighter so hover states still read. */
+  --black: #262b33;
+  --bg: #e4e8ef;
+  --bg-elevated: #e4e8ef;
+  --surface: #e4e8ef;
+  --surface-strong: #e9ecf2;
+  --glass: #e4e8ef;
+  --glass-strong: #e9ecf2;
+  --glass-border: rgba(20, 30, 50, 0.08);
+  --glass-highlight: rgba(20, 30, 50, 0.12);
+  --glass-hover: #eef1f6;
+  --bubble: #eef1f6;
+
+  /* Frosted glass (kept for reduced-motion fallbacks; surfaces are
+     opaque in this theme so the blur is mostly a no-op). */
+  --glass-blur: 10px;
+  --glass-blur-panel: 12px;
+  --glass-blur-light: 6px;
+  --glass-saturate: 1;
+
+  /* Text — soft graphite hierarchy */
+  --text: #3a4049;
+  --text-secondary: rgba(58, 64, 73, 0.72);
+  --muted: rgba(58, 64, 73, 0.5);
+
+  /* Accent — user-selectable. appearance.js rewrites these. */
+  --accent: #3a4049;
+  --accent-2: #7a8390;
+  --accent-soft: rgba(58, 64, 73, 0.1);
+  --accent-glow: rgba(58, 64, 73, 0.22);
+  --accent-contrast: #ffffff;
+
+  /* Gradients — derived from the user's gradient choice */
+  --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  --gradient-text: linear-gradient(120deg, var(--text) 0%, var(--accent) 45%, var(--accent-2) 100%);
+  --gradient-mesh:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(58, 64, 73, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(122, 131, 144, 0.05) 0%, transparent 50%);
+
+  /* Functional semantics */
+  --ok: #2f9a72;
+  --warn: #c07a2e;
+  --error: #c04048;
+  --error-soft: rgba(192, 64, 72, 0.12);
+  --accent-error: var(--error);
+  --accent-live: var(--ok);
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-editorial: 'Instrument Serif', Georgia, serif;
+
+  /* Display scale — "type as hero" */
+  --type-hero: clamp(2rem, 4.5vw, 2.9rem);
+  --type-display: clamp(1.5rem, 3vw, 2rem);
+
+  /* Spacing & shape — generous radii sell the extruded look */
+  --radius-xs: 10px;
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 30px;
+  --radius-xl: 38px;
+
+  /* Desktop window surface — user-configurable granular settings
+     (Settings → Appearance / Desktop). Overridden inline per user by
+     preferences.js. */
+  --window-radius: var(--radius-lg);
+  --window-opacity: 100%;
+  --window-shadow: none;
+  --tile-header-height: 36px;
+
+  /* Light & elevation — dark, not white. Raised surfaces cast a soft
+     near-black drop shadow so they clearly lift off the light canvas;
+     inset surfaces press a dark inner shadow. No white halo. */
+  --highlight-top: rgba(255, 255, 255, 0.35);
+
+  --shadow-sm: 2px 2px 7px rgba(0, 0, 0, 0.16);
+  --shadow-glass: 5px 5px 15px rgba(0, 0, 0, 0.22);
+  --shadow-float: 9px 9px 26px rgba(0, 0, 0, 0.28);
+  --shadow-glow: 0 0 26px var(--accent-glow);
+  /* Extra neumorphic tokens used by this theme's components.css/app.css. */
+  --shadow-raise: 10px 10px 28px rgba(0, 0, 0, 0.32);
+  --shadow-raise-sm: 5px 5px 13px rgba(0, 0, 0, 0.2);
+  --shadow-inset: inset 3px 3px 7px rgba(0, 0, 0, 0.16);
+  --shadow-inset-sm: inset 2px 2px 5px rgba(0, 0, 0, 0.13);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-cinematic: cubic-bezier(0.65, 0, 0.15, 1);
+  --duration-fast: 0.18s;
+  --duration-normal: 0.35s;
+  --duration-slow: 0.55s;
+  --reveal-duration: 0.7s;
+  --reveal-stagger: 60ms;
+
+  /* Compose dock */
+  --compose-orb-size: 84px;
+  --compose-dock-height: 52px;
+  --compose-stack-height: calc(
+    var(--compose-orb-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
+  );
+
+  /* HUD layout */
+  --hud-bar-height: 44px;
+  --hud-header-pad: max(10px, env(safe-area-inset-top));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
+
+  /* Layering */
+  --z-map: 0;
+  --z-hud: 20;
+  --z-transcript: 25;
+  --z-panel: 30;
+  --z-overlay: 40;
+  --z-toast: 50;
+  --z-grain: 9999;
+}
