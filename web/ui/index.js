@@ -15,7 +15,7 @@ export {
   hexToRgb, rgba, contrastFor, cssVar,
 } from './appearance.js';
 export { icon, setIcon, clearIconCache, hydrateIcons } from './icon.js';
-export { reveal, revealNow } from './reveal.js';
+export { reveal } from './reveal.js';
 
 export { button, iconButton } from './components/button.js';
 export { field, input, textarea, select, toggle, toggleRow, slider, checkbox, searchBar } from './components/field.js';

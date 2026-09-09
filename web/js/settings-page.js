@@ -1,14 +1,24 @@
 // Settings page controller — standalone page (no modal), built on the UI library.
 // Same preferences as before: profile, appearance, assistant, voice.
 
-import { apiFetch, getVoiceLang, setVoiceLang, getTraveler, getToken, clearAuth, validateSession } from './api.js';
+import { apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, clearVoiceLang, getTraveler, getToken, logoutSession, validateSession } from './api.js';
 import {
   initThemeLoader, initAppearance, hydrateIcons, toast,
   listThemes, setTheme, getActiveTheme, getThemeManifest,
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
 } from '../ui/index.js';
-import { getAiName, setAiName, getOllamaModel, setOllamaModel, getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout, loadUserPreferences, getRemember, setRemember, flushPreferencesNow } from './preferences.js';
+import {
+  getAiName, setAiName, getAiProvider, setAiProvider,
+  getOllamaModel, setOllamaModel,
+  getOpenAiBaseUrl, setOpenAiBaseUrl, getOpenAiApiKey, setOpenAiApiKey,
+  getOpenAiModel, setOpenAiModel,
+  getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout,
+  loadUserPreferences, getRemember, setRemember, flushPreferencesNow,
+  getDesktopSurface, setDesktopSurface,
+  getTtsVoice, setTtsVoice, getTtsSpeed, setTtsSpeed,
+  getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
+} from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { initBackground, getBackground, setBackground } from './background.js';
 
@@ -28,6 +38,13 @@ const profileAvatarInput = document.getElementById('profile-avatar-input');
 const profileAvatarPreview = document.getElementById('profile-avatar-preview');
 const ollamaModelSelect = document.getElementById('ollama-model-select');
 const ollamaModelHint = document.getElementById('ollama-model-hint');
+const aiProviderSelect = document.getElementById('ai-provider-select');
+const ollamaProviderFields = document.getElementById('ollama-provider-fields');
+const openaiProviderFields = document.getElementById('openai-provider-fields');
+const openaiBaseUrlInput = document.getElementById('openai-base-url-input');
+const openaiApiKeyInput = document.getElementById('openai-api-key-input');
+const openaiModelInput = document.getElementById('openai-model-input');
+const openaiModelHint = document.getElementById('openai-model-hint');
 const userAvatarEl = document.getElementById('settings-user-avatar');
 const userNameEl = document.getElementById('settings-user-name');
 
@@ -223,21 +240,31 @@ function populateOllamaModelSelect(models, selected) {
   }
 }
 
-async function loadOllamaModels() {
+async function loadAiModels() {
   if (!ollamaModelSelect) return;
   try {
-    const res = await apiFetch('/api/ollama/models');
-    const { models = [], default: defaultModel, available } = res.data || {};
+    const res = await apiFetch('/api/ai/models');
+    const { provider, models = [], default: defaultModel, available } = res.data || {};
     serverDefaultModel = defaultModel || '';
     populateOllamaModelSelect(models);
 
     if (ollamaModelHint) {
-      if (!available) {
+      if (provider === 'openai') {
+        ollamaModelHint.textContent = '';
+      } else if (!available) {
         ollamaModelHint.textContent = 'Ollama is offline — using the server default model.';
       } else if (!models.length) {
         ollamaModelHint.textContent = 'No models found in Ollama. Pull one with: ollama pull llama3.2';
       } else {
         ollamaModelHint.textContent = 'Models from your local Ollama server.';
+      }
+    }
+
+    if (openaiModelHint) {
+      if (provider === 'openai') {
+        openaiModelHint.textContent = available
+          ? (models.length ? `${models.length} model(s) found at the endpoint.` : 'Endpoint reachable.')
+          : 'Could not reach the endpoint yet — check the base URL and API key.';
       }
     }
   } catch (e) {
@@ -250,19 +277,41 @@ async function loadOllamaModels() {
   }
 }
 
+function syncProviderUI() {
+  const provider = getAiProvider();
+  const isOpenAi = provider === 'openai';
+  if (aiProviderSelect) aiProviderSelect.value = provider;
+  ollamaProviderFields?.classList.toggle('hidden', isOpenAi);
+  openaiProviderFields?.classList.toggle('hidden', !isOpenAi);
+  if (openaiBaseUrlInput) openaiBaseUrlInput.value = getOpenAiBaseUrl();
+  if (openaiApiKeyInput) openaiApiKeyInput.value = getOpenAiApiKey();
+  if (openaiModelInput) openaiModelInput.value = getOpenAiModel();
+}
+
 async function loadLanguages() {
   try {
     const res = await apiFetch('/api/voice/languages');
     langSelect.innerHTML = '';
+
+    // "Automatic" = follow the browser language (default until the user
+    // picks a specific one). Selecting a concrete language pins both voice
+    // (STT/TTS) and the assistant's reply language.
+    const autoOpt = document.createElement('option');
+    autoOpt.value = 'auto';
+    autoOpt.textContent = 'Automatic (browser)';
+    langSelect.appendChild(autoOpt);
+
     res.data.forEach((lang) => {
       const opt = document.createElement('option');
       opt.value = lang.code;
       opt.textContent = `${lang.code.toUpperCase()}${lang.vosk_available ? '' : ' (TTS only)'}`;
       langSelect.appendChild(opt);
     });
-    langSelect.value = getVoiceLang();
+
+    const explicit = getVoiceLangExplicit();
+    langSelect.value = explicit || 'auto';
   } catch (_) {
-    langSelect.innerHTML = '<option value="en">EN</option>';
+    langSelect.innerHTML = '<option value="auto">Automatic (browser)</option><option value="en">EN</option>';
   }
 }
 
@@ -373,6 +422,125 @@ function wireDesktopSection() {
     if (gapVal) gapVal.textContent = `${px}px`;
     setDesktopLayout({ ...getDesktopLayout(), gap: px });
   });
+
+  // Title bar height — applies to every layout mode (not just tiling).
+  const title = document.getElementById('desktop-title-height');
+  const titleVal = document.getElementById('desktop-title-value');
+  const titlePx = getDesktopSurface().title_height;
+  if (title) title.value = String(titlePx);
+  if (titleVal) titleVal.textContent = `${titlePx}px`;
+  title?.addEventListener('input', () => {
+    const px = Number(title.value);
+    if (titleVal) titleVal.textContent = `${px}px`;
+    setDesktopSurface({ title_height: px });
+  });
+}
+
+/* ── Granular desktop surface (appearance → window chrome) ── */
+
+function syncSurfaceUI() {
+  const s = getDesktopSurface();
+  const radius = document.getElementById('surface-radius');
+  const radiusVal = document.getElementById('surface-radius-value');
+  const opacity = document.getElementById('surface-opacity');
+  const opacityVal = document.getElementById('surface-opacity-value');
+  const blur = document.getElementById('surface-blur');
+  const blurVal = document.getElementById('surface-blur-value');
+  const shadow = document.getElementById('surface-shadow-toggle');
+
+  if (radius) {
+    radius.value = String(s.window_radius);
+    if (radiusVal) radiusVal.textContent = `${s.window_radius}px`;
+  }
+  if (opacity) {
+    opacity.value = String(s.window_opacity);
+    if (opacityVal) opacityVal.textContent = `${s.window_opacity}%`;
+  }
+  if (blur) {
+    blur.value = String(s.glass_blur);
+    if (blurVal) blurVal.textContent = `${s.glass_blur}px`;
+  }
+  if (shadow) shadow.setAttribute('aria-checked', String(s.window_shadow));
+}
+
+function wireSurfaceSection() {
+  const radius = document.getElementById('surface-radius');
+  const radiusVal = document.getElementById('surface-radius-value');
+  const opacity = document.getElementById('surface-opacity');
+  const opacityVal = document.getElementById('surface-opacity-value');
+  const blur = document.getElementById('surface-blur');
+  const blurVal = document.getElementById('surface-blur-value');
+  const shadow = document.getElementById('surface-shadow-toggle');
+
+  syncSurfaceUI();
+
+  radius?.addEventListener('input', () => {
+    const px = Number(radius.value);
+    if (radiusVal) radiusVal.textContent = `${px}px`;
+    setDesktopSurface({ window_radius: px });
+  });
+  opacity?.addEventListener('input', () => {
+    const pct = Number(opacity.value);
+    if (opacityVal) opacityVal.textContent = `${pct}%`;
+    setDesktopSurface({ window_opacity: pct });
+  });
+  blur?.addEventListener('input', () => {
+    const px = Number(blur.value);
+    if (blurVal) blurVal.textContent = `${px}px`;
+    setDesktopSurface({ glass_blur: px });
+  });
+  shadow?.addEventListener('click', () => {
+    const next = !getDesktopSurface().window_shadow;
+    setDesktopSurface({ window_shadow: next });
+    shadow.setAttribute('aria-checked', String(next));
+  });
+}
+
+/* ── Voice extras (TTS voice, speed, wake word, silence) ──── */
+
+function syncVoiceExtras() {
+  const voiceSel = document.getElementById('tts-voice-select');
+  const speed = document.getElementById('tts-speed');
+  const speedVal = document.getElementById('tts-speed-value');
+  const silenceSel = document.getElementById('silence-select');
+  const wakeToggle = document.getElementById('wake-toggle');
+
+  if (voiceSel) voiceSel.value = getTtsVoice() || '';
+  if (speed) {
+    const v = getTtsSpeed();
+    speed.value = String(v);
+    if (speedVal) speedVal.textContent = `${v.toFixed(1)}×`;
+  }
+  if (silenceSel) {
+    const ms = getSilenceTimeout();
+    if ([...silenceSel.options].some((o) => Number(o.value) === ms)) {
+      silenceSel.value = String(ms);
+    }
+  }
+  if (wakeToggle) wakeToggle.setAttribute('aria-checked', String(getWakeWord()));
+}
+
+function wireVoiceExtras() {
+  const voiceSel = document.getElementById('tts-voice-select');
+  const speed = document.getElementById('tts-speed');
+  const speedVal = document.getElementById('tts-speed-value');
+  const silenceSel = document.getElementById('silence-select');
+  const wakeToggle = document.getElementById('wake-toggle');
+
+  syncVoiceExtras();
+
+  voiceSel?.addEventListener('change', () => setTtsVoice(voiceSel.value));
+  speed?.addEventListener('input', () => {
+    const v = Number(speed.value);
+    if (speedVal) speedVal.textContent = `${v.toFixed(1)}×`;
+    setTtsSpeed(v);
+  });
+  silenceSel?.addEventListener('change', () => setSilenceTimeout(Number(silenceSel.value)));
+  wakeToggle?.addEventListener('click', () => {
+    const next = !getWakeWord();
+    setWakeWord(next);
+    wakeToggle.setAttribute('aria-checked', String(next));
+  });
 }
 
 /* ── Control panel (nav + background + session) ────────────── */
@@ -421,7 +589,9 @@ async function uploadBackground(file) {
     const form = new FormData();
     form.append('file', file);
     await apiFetch('/api/background', { method: 'POST', body: form });
-    setBackground({ mode: 'image', url: '/api/background' });
+    // One-time cache-buster lives in the stored URL so the fresh photo shows,
+    // but later background re-applies reuse this stable URL (no flicker).
+    setBackground({ mode: 'image', url: `/api/background?v=${Date.now()}` });
     syncBackgroundUI();
     toast('Background image updated', { type: 'info' });
   } catch (e) {
@@ -473,10 +643,16 @@ function wireSession() {
 
 async function saveAndLeave() {
   setAiName(aiNameInput?.value || '');
+  setAiProvider(aiProviderSelect?.value || 'ollama');
   setOllamaModel(ollamaModelSelect?.value || '');
-  if (langSelect && langSelect.value !== getVoiceLang()) {
-    // Persisted here; the sphere re-prepares voice on next load.
-    setVoiceLang(langSelect.value);
+  setOpenAiBaseUrl(openaiBaseUrlInput?.value || '');
+  setOpenAiApiKey(openaiApiKeyInput?.value || '');
+  setOpenAiModel(openaiModelInput?.value || '');
+  if (langSelect) {
+    // Persisted here; the sphere re-prepares voice on next load. "auto" keeps
+    // following the browser language, a concrete code pins it per user.
+    if (langSelect.value === 'auto') clearVoiceLang();
+    else if (langSelect.value !== getVoiceLang()) setVoiceLang(langSelect.value);
   }
 
   const name = profileNameInput?.value.trim();
@@ -508,8 +684,8 @@ async function saveAndLeave() {
   window.location.href = '/';
 }
 
-function logout() {
-  clearAuth();
+async function logout() {
+  await logoutSession();
   window.location.href = '/';
 }
 
@@ -533,9 +709,12 @@ async function boot() {
   loadProfileFields();
   updateAiNameHint();
   if (aiNameInput) aiNameInput.value = getAiName();
+  syncProviderUI();
 
-  await Promise.all([loadLanguages(), loadOllamaModels(), loadPluginLayouts()]);
+  await Promise.all([loadLanguages(), loadAiModels(), loadPluginLayouts()]);
   wireDesktopSection();
+  wireSurfaceSection();
+  wireVoiceExtras();
   wireNav();
   wireBackground();
   wireSession();
@@ -544,8 +723,21 @@ async function boot() {
     setAiName(aiNameInput.value);
     updateAiNameHint();
   });
-  ollamaModelSelect?.addEventListener('change', () => {
+  ollamaModelSelect?.addEventListener('change', async () => {
     setOllamaModel(ollamaModelSelect.value);
+    // Persist immediately so the model switch takes effect even if the user
+    // leaves the page without pressing "Done" (avoids the debounce race where
+    // the old default would still be read on the next agent request).
+    await flushPreferencesNow();
+  });
+  aiProviderSelect?.addEventListener('change', async () => {
+    setAiProvider(aiProviderSelect.value);
+    syncProviderUI();
+    // The model list is resolved server-side from the stored provider, so
+    // flush the change before fetching — otherwise a switch back to Ollama
+    // would still be read as the previous provider (debounce lag).
+    await flushPreferencesNow();
+    loadAiModels();
   });
 
   profileAvatarInput?.addEventListener('change', async () => {

@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
+use crate::services::ai::AiClient;
 use crate::services::agent_steps::{
     build_continuation_messages, build_planning_messages, describe_tool_step,
     messages_char_count, step_label_for_action,
@@ -15,7 +16,7 @@ use crate::services::agent_tools::{
 use crate::services::artifacts::Artifact;
 use crate::services::navigation::NavigationSession;
 
-const MAX_TOOL_STEPS: usize = 10;
+const MAX_TOOL_STEPS: usize = 40;
 
 pub struct AgentRunInput {
     pub message: String,
@@ -26,6 +27,9 @@ pub struct AgentRunInput {
     /// Compact plugin catalog line for continuation prompts (e.g.
     /// "traveler: Trip tracking…; hello: Demo…"). Empty when no plugins.
     pub plugins_hint: String,
+    /// Earlier turns of this conversation (`(role, content)` pairs), so the
+    /// model keeps the thread's context even mid-tool-loop.
+    pub history: Vec<(String, String)>,
     pub ctx: AgentContext,
 }
 
@@ -55,6 +59,8 @@ pub async fn run_agent<F>(
     state: &AppState,
     traveler: &Traveler,
     trip_id: Option<&str>,
+    ai: &AiClient,
+    model: Option<&str>,
     input: AgentRunInput,
     mut on_step: F,
 ) -> Result<AgentRunResult, AppError>
@@ -83,19 +89,17 @@ where
                 &input.message,
                 &completed_steps,
                 &input.plugins_hint,
+                &input.history,
             )
         };
 
         let size = messages_char_count(&messages);
-        tracing::debug!("Agent Ollama call #{iteration}: ~{size} chars");
+        tracing::debug!("Agent AI call #{iteration}: ~{size} chars");
         if size > 200_000 {
             tracing::warn!("Agent prompt very large ({size} chars), continuing with slim context");
         }
 
-        let response = state
-            .ollama
-            .chat(messages, input.ctx.ollama_model.as_deref())
-            .await?;
+        let response = ai.chat(messages, model).await?;
         // Full transparency: log what the model actually emitted so failures
         // (e.g. "the AI isn't writing to calc") are visible in data/shiny.log.
         tracing::info!(
@@ -121,30 +125,26 @@ where
             break;
         }
 
-        let (action, params) = actions
-            .into_iter()
-            .next()
-            .ok_or_else(|| AppError::Internal("Empty tool action list".into()))?;
+        // Execute EVERY tool call the model emitted this turn, in order, so
+        // multi-step intents ("close all plugins", "create then fill a doc")
+        // run sequentially instead of silently dropping everything after the
+        // first action.
+        for (action, params) in actions {
+            tracing::info!(
+                "Agent tool call: {action} {}",
+                serde_json::to_string(&params).unwrap_or_default()
+            );
 
-        tracing::info!(
-            "Agent tool call: {action} {}",
-            serde_json::to_string(&params).unwrap_or_default()
-        );
+            on_step(step_label_for_action(&action));
 
-        on_step(step_label_for_action(&action));
-
-        match execute_action(state, traveler, &input.ctx, &action, &params).await {
+            match execute_action(state, traveler, &input.ctx, &action, &params).await {
             Ok(outcome) => {
-                // Include the payload only when compact — search results etc.
-                // stay server-side, small ids (video_id, plugin names) travel.
-                let payload = serde_json::to_string(&outcome.data)
-                    .ok()
-                    .filter(|s| s.len() < 1024)
-                    .map(|_| outcome.data.clone());
+                // Always carry the full payload so the frontend can act on it
+                // (open a specific email/document, focus the touched item).
                 actions_taken.push(ActionTaken {
                     action: outcome.action.clone(),
                     result: outcome.result.clone(),
-                    data: payload,
+                    data: Some(outcome.data.clone()),
                 });
 
                 if outcome.action == "navigate_to" && outcome.result == "ok" {
@@ -204,8 +204,7 @@ where
                     if owner != "core" && injected_skills.insert(owner.clone()) {
                         let skills = state.plugins.skills_for(owner);
                         if !skills.trim().is_empty() {
-                            let capped: String = skills.chars().take(6000).collect();
-                            note.push_str(&format!("\n\nPlugin '{owner}' tools:\n{capped}"));
+                            note.push_str(&format!("\n\nPlugin '{owner}' tools:\n{skills}"));
                         }
                     }
                 }
@@ -219,9 +218,8 @@ where
                         if let Some(name) = outcome.data.get("plugin").and_then(|v| v.as_str()) {
                             let skills = state.plugins.skills_for(name);
                             if !skills.trim().is_empty() {
-                                let capped: String = skills.chars().take(6000).collect();
                                 note.push_str(&format!(
-                                    "\n\nPlugin '{name}' tools (available from now on):\n{capped}"
+                                    "\n\nPlugin '{name}' tools (available from now on):\n{skills}"
                                 ));
                             }
                         }
@@ -240,6 +238,7 @@ where
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
                 completed_steps.push(note.clone());
                 on_step(&note);
+            }
             }
         }
     }

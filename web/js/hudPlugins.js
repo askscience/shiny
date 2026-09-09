@@ -10,7 +10,6 @@
  */
 import { apiFetch } from './api.js';
 import { pluginIconEl } from './pluginIcon.js';
-import { getRemember, setRemember, flushPreferencesNow } from './preferences.js';
 
 const trayEl = document.getElementById('hud-plugins');
 
@@ -91,17 +90,6 @@ async function onClick(p, active) {
     return;
   }
   try {
-    // A fresh session ("Remember workspace" off) keeps plugins off THIS
-    // session: /api/plugins/activate persists the change but the server still
-    // reports an empty active set. Clicking an icon is an explicit request to
-    // run the plugin now, so switch the session to remembering first.
-    if (!getRemember()) {
-      setRemember(true);
-      await flushPreferencesNow();
-      window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: 'Workspace remembering turned on — plugins now stay active', type: 'info' },
-      }));
-    }
     await apiFetch('/api/plugins/activate', {
       method: 'POST',
       body: JSON.stringify({ name: p.name }),

@@ -33,8 +33,3 @@ export function reveal(root = document) {
   const io = ensureObserver();
   root.querySelectorAll?.('[data-reveal]:not(.is-revealed)').forEach((el) => io.observe(el));
 }
-
-/** Immediately reveal an element (for content already in view on load). */
-export function revealNow(el) {
-  el?.classList.add('is-revealed');
-}

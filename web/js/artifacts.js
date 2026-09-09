@@ -205,7 +205,3 @@ export function initArtifactDock() {
     }
   });
 }
-
-export function getCurrentArtifact() {
-  return currentArtifact;
-}

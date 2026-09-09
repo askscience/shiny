@@ -51,9 +51,6 @@ pub struct GridPatch {
     pub cables: Vec<GridCable>,
 }
 
-/// Module kinds the Grid understands.
-pub const GRID_MODULES: &[&str] = &["osc", "noise", "filter", "drive", "gain", "mixer", "env", "lfo", "out"];
-
 /// Parameter catalog for a module kind (palette + inspector).
 const OSC_PARAMS: &[ParamDef] = &[
     def("wave", "Wave", 0.0, 3.0, 1.0, 2.0),
@@ -112,20 +109,9 @@ pub enum ModSource {
     Env { attack: f64, decay: f64, sustain: f64, release: f64 },
 }
 
-/// A compiled modulation binding: a source driving a target param.
-pub struct ModBinding {
-    pub target_node: NodeId,
-    pub param_id: u32,
-    pub base: f64,
-    pub lo: f64,
-    pub hi: f64,
-    pub source: ModSource,
-}
-
-/// A compiled patch: the audio output node + its modulation bindings.
+/// A compiled patch: the audio output node.
 pub struct CompiledGrid {
     pub out: NodeId,
-    pub modulations: Vec<ModBinding>,
 }
 
 /// Build the audio graph for a patch (base params; modulation applied later).
@@ -134,8 +120,6 @@ pub fn compile_grid(g: &mut Graph, patch: &GridPatch, voice_id: u32) -> Result<C
         patch.modules.iter().find(|m| m.id == id).ok_or_else(|| format!("grid: unknown module `{id}`"))
     };
     let mut nodes: HashMap<String, NodeId> = HashMap::new();
-    // (module id, port name, node, param id, base, lo, hi) — "mod" targets.
-    let mut mod_targets: Vec<(String, NodeId, u32, f64, f64, f64)> = Vec::new();
 
     for m in &patch.modules {
         match m.kind.as_str() {
@@ -155,18 +139,15 @@ pub fn compile_grid(g: &mut Graph, patch: &GridPatch, voice_id: u32) -> Result<C
                 };
                 let n = g.add_node(Box::new(BiquadFilter::new(ftype, param(m, "cutoff", 2000.0), param(m, "res", 1.0))));
                 nodes.insert(m.id.clone(), n);
-                mod_targets.push((m.id.clone(), n, 0, param(m, "cutoff", 2000.0), 20.0, 20000.0));
             }
             "drive" => {
                 let n = g.add_node(Box::new(Distortion::new()));
                 g.set_node_param(n, 1, param(m, "drive", 2.0));
                 nodes.insert(m.id.clone(), n);
-                mod_targets.push((m.id.clone(), n, 1, param(m, "drive", 2.0), 0.25, 24.0));
             }
             "gain" => {
                 let n = g.add_node(Box::new(MonoGain::new(param(m, "level", 0.8) as f32)));
                 nodes.insert(m.id.clone(), n);
-                mod_targets.push((m.id.clone(), n, 0, param(m, "level", 0.8), 0.0, 2.0));
             }
             "mixer" => {
                 let n = g.add_node(Box::new(MonoCrossfade::new(param(m, "balance", 0.5).clamp(0.0, 1.0) as f32)));
@@ -218,34 +199,7 @@ pub fn compile_grid(g: &mut Graph, patch: &GridPatch, voice_id: u32) -> Result<C
     }
     let out = out_node.ok_or_else(|| "grid: patch has no output".to_string())?;
 
-    // Resolve modulation cables → ModBinding (source + target).
-    let mut modulations = Vec::new();
-    for c in &patch.cables {
-        if c.to.1 != "mod" {
-            continue;
-        }
-        let Some((_, tn, pid, base, lo, hi)) = mod_targets.iter().find(|(mid, _, _, _, _, _)| *mid == c.to.0).cloned() else {
-            continue;
-        };
-        let Some(src_mod) = patch.modules.iter().find(|m| m.id == c.from.0) else { continue };
-        let source = match src_mod.kind.as_str() {
-            "lfo" => ModSource::Lfo {
-                rate: param(src_mod, "rate", 1.0),
-                depth: param(src_mod, "depth", 0.5),
-                wave: param(src_mod, "wave", 0.0) as i64,
-            },
-            "env" => ModSource::Env {
-                attack: param(src_mod, "attack", 0.005),
-                decay: param(src_mod, "decay", 0.2),
-                sustain: param(src_mod, "sustain", 0.6),
-                release: param(src_mod, "release", 0.3),
-            },
-            _ => continue,
-        };
-        modulations.push(ModBinding { target_node: tn, param_id: pid, base, lo, hi, source });
-    }
-
-    Ok(CompiledGrid { out, modulations })
+    Ok(CompiledGrid { out })
 }
 
 /// Value of a modulation source at time `t` (seconds).

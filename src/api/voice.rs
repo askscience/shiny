@@ -56,6 +56,7 @@ pub struct TtsRequest {
     pub text: String,
     pub lang: Option<String>,
     pub voice: Option<String>,
+    pub speed: Option<f32>,
 }
 
 fn models_dir(config: &crate::config::Config) -> PathBuf {
@@ -182,7 +183,7 @@ pub async fn tts(
 
     let wav = state
         .supertonic
-        .synthesize(&body.text, &supertonic_lang, body.voice.as_deref())
+        .synthesize(&body.text, &supertonic_lang, body.voice.as_deref(), body.speed)
         .await?;
 
     Ok((

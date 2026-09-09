@@ -714,11 +714,6 @@ pub fn merge(bytes: &[u8], other: &[u8]) -> Result<Vec<u8>, AppError> {
     ed.save_to_bytes().map_err(pdf_err)
 }
 
-pub fn extract(bytes: &[u8], pages: &[usize]) -> Result<Vec<u8>, AppError> {
-    let mut ed = open_editor(bytes)?;
-    ed.extract_pages_to_bytes(pages).map_err(pdf_err)
-}
-
 /* ── Content editing & annotations ──────────────────────────── */
 
 pub fn replace_text(

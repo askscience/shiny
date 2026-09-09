@@ -18,7 +18,9 @@ pub struct LoadedPlugin {
     /// Kept separate from `Manifest` so adding it doesn't change the plugin
     /// ABI (the `manifest()` trait method returns `&Manifest` across dlopen).
     pub category: Option<String>,
-    pub plugin: Box<dyn Plugin>,
+    /// `Arc` (not `Box`) so lifecycle hooks (`on_load`/`on_unload`) can be
+    /// awaited without holding the loader lock.
+    pub plugin: Arc<dyn Plugin>,
     pub ctx: Arc<PluginCtx>,
     pub library: Library,
     pub install_dir: PathBuf,
@@ -37,6 +39,44 @@ struct ManifestCategory {
 
 pub struct Loader {
     loaded: Arc<RwLock<Vec<LoadedPlugin>>>,
+}
+
+/// Libraries of uninstalled/replaced plugins, kept for the life of the
+/// process. We intentionally never `dlclose` a plugin cdylib: `Arc<dyn Tool>`
+/// objects (and their vtables) may still be referenced by in-flight agent
+/// invocations, and unmapping the library under them is use-after-free. The
+/// leak is bounded by the number of uninstall/reinstall events.
+static LIBRARY_GRAVEYARD: parking_lot::Mutex<Vec<Library>> = parking_lot::Mutex::new(Vec::new());
+
+/// Retire a loaded plugin: keep its library mapped (see `LIBRARY_GRAVEYARD`)
+/// and drop the rest of the handle.
+fn retire(loaded: LoadedPlugin) {
+    LIBRARY_GRAVEYARD.lock().push(loaded.library);
+    // `plugin` (Box<dyn Plugin>) and `ctx` drop here.
+}
+
+/// Validate that a plugin name is a single safe path component. It comes from
+/// `plugin.toml` (attacker-controlled on upload) and is joined into the
+/// plugins directory, so it must not be able to escape it.
+pub fn validate_plugin_name(name: &str) -> Result<(), AppError> {
+    const MAX: usize = 64;
+    let valid = !name.is_empty()
+        && name.len() <= MAX
+        && name != "."
+        && name != ".."
+        && !name.starts_with('.')
+        && !name.starts_with('_')
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.contains('\0');
+    if valid {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(format!(
+            "Invalid plugin name '{name}': must be 1..={MAX} chars, a single path component, \
+             and must not start with '.' or '_'"
+        )))
+    }
 }
 
 impl Loader {
@@ -78,8 +118,9 @@ impl Loader {
     ) -> Result<(Manifest, RegistryBuilder<'static>, Arc<PluginCtx>), AppError> {
         let manifest_path = install_dir.join("plugin.toml");
         let manifest_text = std::fs::read_to_string(&manifest_path)?;
-        let mut manifest: Manifest = toml::from_str(&manifest_text)
+        let manifest: Manifest = toml::from_str(&manifest_text)
             .map_err(|e| AppError::BadRequest(format!("Invalid plugin.toml: {}", e)))?;
+        validate_plugin_name(&manifest.name)?;
 
         // Category is a frontend grouping hint, read from the same toml but
         // kept out of `Manifest` to preserve the plugin ABI.
@@ -124,19 +165,27 @@ impl Loader {
                 "Failed to dlopen {}: {}", load_path.display(), e
             )))?;
 
-        let entry: Symbol<PluginEntry> = unsafe { library.get(PLUGIN_ENTRY_SYMBOL.as_bytes()) }
+        // Honor the manifest's declared entry symbol (defaulting to the
+        // standard `shiny_plugin_entry`) so the field is actually read.
+        let entry_symbol = if manifest.entry_symbol.trim().is_empty() {
+            PLUGIN_ENTRY_SYMBOL
+        } else {
+            manifest.entry_symbol.as_str()
+        };
+        let entry: Symbol<PluginEntry> = unsafe { library.get(entry_symbol.as_bytes()) }
             .map_err(|e| AppError::Internal(format!(
-                "Missing symbol {PLUGIN_ENTRY_SYMBOL} in {}: {}", load_path.display(), e
+                "Missing symbol {entry_symbol} in {}: {}", load_path.display(), e
             )))?;
 
         // SAFETY: transmute `*mut dyn Plugin` returned by the C symbol into a
         // `Box<dyn Plugin>`. We trust the plugin author's `shiny_plugin_entry`
         // to return a value allocated via `Box::into_raw(Box::new(...))`.
         let raw = unsafe { entry() };
-        let plugin: Box<dyn Plugin> = if raw.is_null() {
+        let plugin: Arc<dyn Plugin> = if raw.is_null() {
             return Err(AppError::Internal("Plugin entry returned null".into()));
         } else {
-            unsafe { Box::from_raw(raw) }
+            let boxed: Box<dyn Plugin> = unsafe { Box::from_raw(raw) };
+            boxed.into()
         };
 
         // Sanity: the plugin's manifest matches what's on disk.
@@ -178,26 +227,78 @@ impl Loader {
             install_dir: install_dir.to_path_buf(),
         };
 
-        // Be sure to unload any prior version of the same plugin name:
-        let mut guard = self.loaded.write();
-        guard.retain(|p| p.manifest.name != manifest.name);
-        guard.push(loaded);
+        // Be sure to unload any prior version of the same plugin name. The
+        // lifecycle hook runs and the library is retired (never dlclosed,
+        // see `LIBRARY_GRAVEYARD`) without holding the lock across the await.
+        let replaced: Vec<LoadedPlugin> = {
+            let mut guard = self.loaded.write();
+            let mut removed = Vec::new();
+            let mut i = 0;
+            while i < guard.len() {
+                if guard[i].manifest.name == manifest.name {
+                    removed.push(guard.remove(i));
+                } else {
+                    i += 1;
+                }
+            }
+            removed
+        };
+        for old in replaced {
+            old.plugin.on_unload(old.ctx.clone()).await;
+            retire(old);
+        }
+        self.loaded.write().push(loaded);
 
         Ok((plugin_manifest, builder, ctx))
     }
 
-    /// Unload a plugin by name. The returned `_Guard` keeps the old Library
-    /// alive until dropped — caller is responsible for waiting until no
-    /// in-flight tool invocations reference it.
-    pub fn unload(&self, name: &str) -> bool {
-        let mut guard = self.loaded.write();
-        let before = guard.len();
-        guard.retain(|p| p.manifest.name != name);
-        guard.len() != before
+    /// Invoke the plugin's `on_load` lifecycle hook (the documented place for
+    /// plugins to start background/cron work). Runs after the plugin is
+    /// registered and its tools are live. No-op when not loaded.
+    pub async fn call_on_load(&self, name: &str) {
+        let found = {
+            let guard = self.loaded.read();
+            guard
+                .iter()
+                .find(|p| p.manifest.name == name)
+                .map(|p| (p.plugin.clone(), p.ctx.clone()))
+        };
+        if let Some((plugin, ctx)) = found {
+            plugin.on_load(ctx).await;
+        }
+    }
+
+    /// Unload a plugin by name: runs its `on_unload` hook, then retires it.
+    /// Its tools must already have been removed from the `ToolRegistry`
+    /// (`uninstall_plugin`) before this is called. The cdylib is *not*
+    /// dlclosed — it is kept in `LIBRARY_GRAVEYARD` for the rest of the
+    /// process lifetime so any late reference stays valid.
+    pub async fn unload(&self, name: &str) -> bool {
+        let removed: Vec<LoadedPlugin> = {
+            let mut guard = self.loaded.write();
+            let mut removed = Vec::new();
+            let mut i = 0;
+            while i < guard.len() {
+                if guard[i].manifest.name == name {
+                    removed.push(guard.remove(i));
+                } else {
+                    i += 1;
+                }
+            }
+            removed
+        };
+        if removed.is_empty() {
+            return false;
+        }
+        for old in removed {
+            old.plugin.on_unload(old.ctx.clone()).await;
+            retire(old);
+        }
+        true
     }
 }
 
-fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
     // Accept any `.so` / `.dylib` / `.dll` file at or below the install dir.
     // We prefer files whose stem contains `name`, but fall back to the first
     // cdylib we encounter — plugin authors can name the lib whatever they

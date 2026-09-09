@@ -5,7 +5,6 @@
 //! but activation state is per-user (stored in `user_plugin_states`).
 
 use axum::extract::{Multipart, State};
-use axum::response::IntoResponse;
 use axum::Extension;
 use axum::Json;
 use serde::Serialize;
@@ -30,12 +29,14 @@ struct PluginListEntry {
 }
 
 /// GET /api/plugins — every authenticated user sees the same installed list
-/// but with their own activation flags.
+/// but with their own activation flags. Uses the same session-aware
+/// activation semantics as `/api/plugins/active` and tool invocation, so
+/// `enabled` never disagrees with what the agent can actually call.
 pub async fn list(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let active = active_plugin_set(&state, &traveler.id).await?;
+    let active = state.plugins.session_active_set(&traveler.id).await;
     let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
     let entries: Vec<PluginListEntry> = state
         .plugins
@@ -64,8 +65,7 @@ pub async fn list(
 }
 
 /// GET /api/plugins/active — minimal endpoint the frontend uses to decide what
-/// UI to render. Returns the plugins active for this user THIS session (empty
-/// in fresh mode, i.e. when `session.remember` is off).
+/// UI to render. Returns the plugins active for this user THIS session.
 pub async fn active(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
@@ -104,9 +104,10 @@ pub async fn install(
         base_ctx,
     ).await?;
 
-    // After install, the plugin is enabled by default for every existing user
-    // (no row in user_plugin_states yet). The provided API treats absence as
-    // enabled, so nothing to do here.
+    // After install, activation follows the per-user session semantics
+    // (`session_active_set`): users with `session.remember` off opt in by
+    // activating the plugin; remembering users see it active unless they
+    // explicitly deactivated it. Nothing to do here.
 
     if let Some(rebuild) = &state.router_rebuild {
         rebuild();
@@ -125,12 +126,15 @@ pub async fn uninstall(
     let name = body.get("name").and_then(|v| v.as_str())
         .ok_or_else(|| AppError::BadRequest("name required".into()))?
         .to_string();
-    let removed = state.plugins.uninstall(&name);
+    // `name` is joined into the plugins directory and recursively deleted —
+    // only ever allow a single safe path component.
+    crate::plugins::loader::validate_plugin_name(&name)?;
+    let removed = state.plugins.uninstall(&name).await;
     let dir = std::path::Path::new(&state.config.plugins_dir).join(&name);
     if dir.exists() {
         let _ = std::fs::remove_dir_all(&dir);
     }
-    log_event(&state.config.plugins_dir, &format!("uninstall-ok name={name} removed={removed}"));
+    crate::plugins::installer::log_event(std::path::Path::new(&state.config.plugins_dir), &format!("uninstall-ok name={name} removed={removed}"));
 
     if let Some(rebuild) = &state.router_rebuild {
         rebuild();
@@ -152,7 +156,7 @@ pub async fn activate(
         return Err(AppError::BadRequest(format!("Plugin '{name}' is not installed")));
     }
     set_user_enabled(&state, &traveler.id, &name, true).await?;
-    log_event(&state.config.plugins_dir, &format!("activate user={} name={}", traveler.username.clone().unwrap_or_default(), name));
+    crate::plugins::installer::log_event(std::path::Path::new(&state.config.plugins_dir), &format!("activate user={} name={}", traveler.username.clone().unwrap_or_default(), name));
     Ok(Json(json!({ "success": true, "data": { "name": name, "enabled": true } })))
 }
 
@@ -170,7 +174,7 @@ pub async fn deactivate(
         return Err(AppError::BadRequest(format!("Plugin '{name}' is not installed")));
     }
     set_user_enabled(&state, &traveler.id, &name, false).await?;
-    log_event(&state.config.plugins_dir, &format!("deactivate user={} name={}", traveler.username.clone().unwrap_or_default(), name));
+    crate::plugins::installer::log_event(std::path::Path::new(&state.config.plugins_dir), &format!("deactivate user={} name={}", traveler.username.clone().unwrap_or_default(), name));
     Ok(Json(json!({ "success": true, "data": { "name": name, "enabled": false } })))
 }
 
@@ -199,23 +203,6 @@ pub async fn install_log(
 
 // ---------- per-user activation helpers -------------------------------------
 
-async fn active_plugin_set(state: &AppState, user_id: &str) -> Result<std::collections::BTreeSet<String>, AppError> {
-    // A plugin is ACTIVE unless there's an explicit row with enabled=0 for the
-    // current user. Installed plugins start enabled-by-default.
-    let disabled_rows: Vec<String> = sqlx::query_scalar(
-        "SELECT plugin_name FROM user_plugin_states WHERE user_id = ?1 AND enabled = 0",
-    )
-    .bind(user_id)
-    .fetch_all(&state.pool)
-    .await
-    .unwrap_or_default();
-
-    let installed: Vec<String> = state.plugins.list().into_iter().map(|m| m.name).collect();
-    let disabled: std::collections::BTreeSet<String> = disabled_rows.into_iter().collect();
-    let active: std::collections::BTreeSet<String> = installed.into_iter().filter(|n| !disabled.contains(n)).collect();
-    Ok(active)
-}
-
 async fn set_user_enabled(state: &AppState, user_id: &str, plugin: &str, enabled: bool) -> Result<(), AppError> {
     sqlx::query(
         "INSERT INTO user_plugin_states (user_id, plugin_name, enabled, updated_at) \
@@ -228,17 +215,4 @@ async fn set_user_enabled(state: &AppState, user_id: &str, plugin: &str, enabled
     .execute(&state.pool)
     .await?;
     Ok(())
-}
-
-fn log_event(plugins_dir: &str, line: &str) {
-    let path = std::path::Path::new(plugins_dir).join("install.log");
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-    let entry = format!("[{ts}] {line}\n");
-    use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = f.write_all(entry.as_bytes());
-    }
 }

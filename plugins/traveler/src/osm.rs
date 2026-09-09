@@ -57,7 +57,7 @@ impl OsmClient {
         let limit = limit.unwrap_or(5);
         let url = format!(
             "https://nominatim.openstreetmap.org/search?q={}&format=jsonv2&limit={}",
-            urlencoding(query),
+            shiny_plugin_sdk::services::percent_encode(query),
             limit
         );
 
@@ -90,7 +90,7 @@ impl OsmClient {
         let limit = limit.unwrap_or(8);
         let url = format!(
             "https://nominatim.openstreetmap.org/search?q={}&format=jsonv2&limit={}&lat={}&lon={}",
-            urlencoding(&query),
+            shiny_plugin_sdk::services::percent_encode(&query),
             limit,
             near_lat,
             near_lon,
@@ -301,15 +301,6 @@ impl OsmClient {
     }
 }
 
-fn urlencoding(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            ' ' => "%20".to_string(),
-            _ => format!("%{:02X}", c as u8),
-        })
-        .collect()
-}
 
 fn parse_geo_place(v: serde_json::Value) -> Option<GeoPlace> {
     Some(GeoPlace {

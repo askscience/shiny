@@ -348,7 +348,9 @@ export function moveWindowByIndex(name, idx) {
     return moveWindow(name, ws.id);
   }
   const n = Number(idx);
-  if (!Number.isInteger(n) || n < 0) return false;
+  // Cap at 9 workspaces — an unbounded index let the AI spin up hundreds
+  // of empty workspaces in a loop.
+  if (!Number.isInteger(n) || n < 0 || n > 9) return false;
   while (workspaces.length <= n) pushWorkspace();
   return moveWindow(name, workspaces[n].id);
 }

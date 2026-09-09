@@ -695,7 +695,3 @@ export async function refreshKeyboard() {
   if (active) mount();
   else unmount();
 }
-
-export function isKeyboardActive() {
-  return active;
-}

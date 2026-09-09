@@ -263,6 +263,7 @@ fn parse_single_event_card(raw: &str) -> Result<Option<InsightCard>, AppError> {
     }))
 }
 
+#[cfg(test)]
 fn parse_event_cards(raw: &str) -> Result<Vec<InsightCard>, AppError> {
     let json_str = extract_json_array(raw);
     let value: Value = serde_json::from_str(&json_str).map_err(|e| {

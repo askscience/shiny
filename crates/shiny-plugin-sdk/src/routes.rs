@@ -131,11 +131,20 @@ where
 {
     Arc::new(move |req| {
         let fut = f(req);
-        Box::pin(crate::rt::bridge(async move {
-            match fut.await {
+        Box::pin(async move {
+            match crate::rt::bridge(async move {
+                match fut.await {
+                    Ok(resp) => resp,
+                    Err(e) => e.into_response(),
+                }
+            })
+            .await
+            {
                 Ok(resp) => resp,
+                // Bridge-level failure (e.g. the handler panicked on the
+                // plugin runtime): surface it as a 500 instead of hanging.
                 Err(e) => e.into_response(),
             }
-        }))
+        })
     })
 }

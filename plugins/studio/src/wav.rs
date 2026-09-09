@@ -6,8 +6,8 @@
 
 /// Encode planar samples (one `Vec<f32>` per channel) as a 16-bit PCM WAV file.
 ///
-/// Mono input is duplicated to both channels; 2 channels are interleaved
-/// L/R as expected. Samples are soft-clipped to `[-1.0, 1.0]` before quantizing.
+/// One input channel encodes as a mono file; two channels are interleaved
+/// L/R. Samples are soft-clipped to `[-1.0, 1.0]` before quantizing.
 pub fn encode_wav(samples: &[Vec<f32>], sample_rate: u32) -> Vec<u8> {
     let channels = if samples.len() >= 2 { 2 } else { 1 };
     let frames = samples.iter().map(|c| c.len()).max().unwrap_or(0);
@@ -43,9 +43,13 @@ pub fn encode_wav(samples: &[Vec<f32>], sample_rate: u32) -> Vec<u8> {
 
     for i in 0..frames {
         let li = l.get(i).copied().unwrap_or(0.0).clamp(-1.0, 1.0);
-        let ri = r.get(i).copied().unwrap_or(0.0).clamp(-1.0, 1.0);
         out.extend_from_slice(&((li * 32767.0) as i16).to_le_bytes());
-        out.extend_from_slice(&((ri * 32767.0) as i16).to_le_bytes());
+        // Only stereo interleaves a second sample — a mono file must write
+        // exactly one i16 per frame or the data chunk outgrows its header.
+        if channels == 2 {
+            let ri = r.get(i).copied().unwrap_or(0.0).clamp(-1.0, 1.0);
+            out.extend_from_slice(&((ri * 32767.0) as i16).to_le_bytes());
+        }
     }
 
     out
@@ -67,6 +71,11 @@ mod tests {
         assert_eq!(u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]), 44100);
         assert_eq!(u16::from_le_bytes([bytes[34], bytes[35]]), 16);
         assert_eq!(&bytes[36..40], b"data");
+        // Mono: exactly one i16 per frame — written bytes must match the
+        // header's data length (they used to be double).
+        let data_len = u32::from_le_bytes([bytes[40], bytes[41], bytes[42], bytes[43]]) as usize;
+        assert_eq!(data_len, 3 * 2);
+        assert_eq!(bytes.len(), 44 + data_len);
     }
 
     #[test]

@@ -64,7 +64,8 @@ pub async fn save_artifact(
            artifact_type = excluded.artifact_type, \
            title = excluded.title, \
            payload_json = excluded.payload_json, \
-           updated_at = datetime('now')",
+           updated_at = datetime('now') \
+         WHERE saved_artifacts.traveler_id = excluded.traveler_id",
     )
     .bind(&artifact.id)
     .bind(traveler_id)

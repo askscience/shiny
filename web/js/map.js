@@ -677,6 +677,9 @@ export async function loadActiveRoute(tripId) {
     clearNavigation();
     return;
   }
+  // The map is created lazily (traveler mode only) — this can run in
+  // chat-only mode where `map` is null.
+  if (!map) return;
   const { isNavigatorActive } = await import('./navigator.js');
   if (isNavigatorActive()) return;
 

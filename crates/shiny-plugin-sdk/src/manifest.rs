@@ -28,6 +28,7 @@ pub struct Manifest {
     #[serde(default = "default_migrations_dir")]
     pub migrations_dir: String,
     #[serde(default = "default_skills_dir")]
+    #[allow(dead_code)] // reserved: parsed from plugin.toml, not yet consumed
     pub skills_dir: String,
     #[serde(default = "default_web_dir")]
     pub web_dir: String,
@@ -35,6 +36,7 @@ pub struct Manifest {
     /// the cdylib bytes`. If present, the installer verifies unless
     /// `--insecure` was passed.
     #[serde(default)]
+    #[allow(dead_code)] // reserved: verification hook not yet wired up
     pub signature: Option<String>,
 }
 

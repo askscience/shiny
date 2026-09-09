@@ -1,8 +1,6 @@
 //! Step-by-step agent conversation — small prompts per Ollama call.
 
-use serde_json::Value;
-
-const MAX_STEP_NOTES: usize = 6;
+use serde_json::{json, Value};
 
 pub fn build_planning_messages(
     full_system: &str,
@@ -14,9 +12,11 @@ pub fn build_planning_messages(
     ]
 }
 
-/// After the first tool: tiny system + user request + recent step notes only.
-/// `plugins_hint` keeps the plugin windows catalog visible so the model can
-/// still call `show_plugin` on later turns.
+/// After the first tool: tiny system + user request + conversation history +
+/// completed step notes. `plugins_hint` keeps the plugin windows catalog
+/// visible so the model can still call `show_plugin` on later turns.
+/// `history` carries the earlier turns of this conversation so the model never
+/// "forgets" what was being discussed while it is mid-tool-loop.
 pub fn build_continuation_messages(
     ai_name: &str,
     lang: &str,
@@ -24,6 +24,7 @@ pub fn build_continuation_messages(
     user_message: &str,
     completed_steps: &[String],
     plugins_hint: &str,
+    history: &[(String, String)],
 ) -> Vec<(String, String)> {
     let plugins_line = if plugins_hint.is_empty() {
         String::new()
@@ -35,11 +36,24 @@ pub fn build_continuation_messages(
              before you can use its tools.\n"
         )
     };
+    let history_line = if history.is_empty() {
+        String::new()
+    } else {
+        let lines: Vec<String> = history
+            .iter()
+            .map(|(role, content)| format!("{role}: {content}"))
+            .collect();
+        format!(
+            "\n## Conversation history (remember earlier turns)\n{}\n",
+            lines.join("\n")
+        )
+    };
     let system = format!(
         "You are {ai_name}. Language: {lang}. Mode: {mode} — answer fully and clearly; be concise for simple questions but give detail when helpful.\n\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
          Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
-         {plugins_line}"
+         {plugins_line}\
+         {history_line}"
     );
 
     let mut messages = vec![
@@ -47,23 +61,11 @@ pub fn build_continuation_messages(
         ("user".to_string(), user_message.to_string()),
     ];
 
-    for step in recent_steps(completed_steps) {
+    for step in completed_steps {
         messages.push(("user".to_string(), format!("[Done] {step}")));
     }
 
     messages
-}
-
-fn recent_steps(steps: &[String]) -> Vec<String> {
-    steps
-        .iter()
-        .rev()
-        .take(MAX_STEP_NOTES)
-        .cloned()
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect()
 }
 
 pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
@@ -182,6 +184,10 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                 format!("Deactivated plugin {name}")
             }
         }
+        "plugin_deactivate_all" => {
+            let n = data.get("deactivated").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+            format!("Deactivated {n} plugin(s)")
+        }
         "list_plugins" => {
             let lines: Vec<String> = data
                 .get("plugins")
@@ -233,11 +239,8 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                     .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
                     .collect();
                 entries.sort_by(|a, b| cell_ref_order(&a.0).cmp(&cell_ref_order(&b.0)));
-                for (cell, value) in entries.iter().take(150) {
+                for (cell, value) in entries.iter() {
                     note.push_str(&format!("\n{cell}: {value}"));
-                }
-                if entries.len() > 150 {
-                    note.push_str(&format!("\n… and {} more cells", entries.len() - 150));
                 }
             }
             note
@@ -288,15 +291,176 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
                 format!("Moved {name} to workspace {}", workspace_display_number(to))
             }
         }
+        // ── Mail ─────────────────────────────────────────────────────────
+        "mail_read" => {
+            let subject = data.get("subject").and_then(|v| v.as_str()).unwrap_or("(no subject)");
+            let from = data.get("from").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))
+                .unwrap_or_default();
+            let date = data.get("date").and_then(|v| v.as_str()).unwrap_or("");
+            let text = data.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            let html = data.get("html").and_then(|v| v.as_str()).unwrap_or("");
+            let attachments = data.get("attachments").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.get("filename").and_then(|f| f.as_str())).collect::<Vec<_>>().join(", "))
+                .unwrap_or_default();
+            let body = if !text.trim().is_empty() { text } else { html };
+            let mut note = format!("Email from {from} ({date}): {subject}\n\n{body}");
+            if !attachments.is_empty() {
+                note.push_str(&format!("\n\nAttachments: {attachments}"));
+            }
+            note
+        }
+        "mail_list" => {
+            let folder = data.get("folder").and_then(|v| v.as_str()).unwrap_or("INBOX");
+            let mut note = format!("Messages in {folder}:");
+            if let Some(msgs) = data.get("messages").and_then(|v| v.as_array()) {
+                for m in msgs {
+                    let id = m.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                    let subject = m.get("subject").and_then(|v| v.as_str()).unwrap_or("(no subject)");
+                    let from = m.get("from").and_then(|v| v.as_str()).unwrap_or("");
+                    let date = m.get("date").and_then(|v| v.as_str()).unwrap_or("");
+                    note.push_str(&format!("\n- id={id} | {subject} | {from} | {date}"));
+                }
+            }
+            note
+        }
+        "mail_status" => {
+            let accounts = data.get("accounts").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.get("email").and_then(|e| e.as_str())).collect::<Vec<_>>().join(", "))
+                .unwrap_or_default();
+            format!("Mail accounts: {accounts}")
+        }
+        "mail_search" => {
+            let query = data.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            let folder = data.get("folder").and_then(|v| v.as_str()).unwrap_or("INBOX");
+            let mut note = format!("Search results for \"{query}\" in {folder}:");
+            if let Some(msgs) = data.get("messages").and_then(|v| v.as_array()) {
+                for m in msgs {
+                    let id = m.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                    let subject = m.get("subject").and_then(|v| v.as_str()).unwrap_or("(no subject)");
+                    let from = m.get("from").and_then(|v| v.as_str()).unwrap_or("");
+                    let date = m.get("date").and_then(|v| v.as_str()).unwrap_or("");
+                    note.push_str(&format!("\n- id={id} | {subject} | {from} | {date}"));
+                }
+            }
+            note
+        }
+        // ── Word ─────────────────────────────────────────────────────────
+        "doc_read" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("document");
+            let doc_id = data.get("doc_id").and_then(|v| v.as_str()).unwrap_or("");
+            let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Document \"{title}\" (id={doc_id}):\n{content}")
+        }
+        "doc_list" => {
+            let mut note = String::from("Documents:");
+            if let Some(docs) = data.get("documents").and_then(|v| v.as_array()) {
+                for d in docs {
+                    let id = d.get("doc_id").and_then(|v| v.as_str()).unwrap_or("");
+                    let title = d.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                    let updated = d.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
+                    note.push_str(&format!("\n- id={id} | {title} | {updated}"));
+                }
+            }
+            note
+        }
+        "doc_create" | "doc_write" | "doc_edit" | "doc_append" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+            let doc_id = data.get("doc_id").and_then(|v| v.as_str()).unwrap_or("");
+            format!("{action} document \"{title}\" (id={doc_id})")
+        }
+        // ── Impress ──────────────────────────────────────────────────────
+        "slide_read" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("presentation");
+            let deck_id = data.get("deck_id").and_then(|v| v.as_str()).unwrap_or("");
+            let slides = data.get("slides").cloned().unwrap_or_else(|| json!({}));
+            format!("Presentation \"{title}\" (id={deck_id}):\n{slides}")
+        }
+        "slide_list" => {
+            let mut note = String::from("Presentations:");
+            if let Some(decks) = data.get("presentations").and_then(|v| v.as_array()) {
+                for d in decks {
+                    let id = d.get("deck_id").and_then(|v| v.as_str()).unwrap_or("");
+                    let title = d.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                    let count = d.get("slide_count").and_then(|v| v.as_u64()).unwrap_or(0);
+                    note.push_str(&format!("\n- id={id} | {title} | {count} slides"));
+                }
+            }
+            note
+        }
+        "slide_create" | "slide_write" | "slide_edit" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+            let deck_id = data.get("deck_id").and_then(|v| v.as_str()).unwrap_or("");
+            format!("{action} presentation \"{title}\" (id={deck_id})")
+        }
+        // ── Studio ───────────────────────────────────────────────────────
+        "studio_get" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");
+            let track_id = data.get("track_id").and_then(|v| v.as_str()).unwrap_or("");
+            let config = data.get("config").cloned().unwrap_or_else(|| json!({}));
+            format!("Track \"{title}\" (id={track_id}):\n{config}")
+        }
+        "studio_list" => {
+            let mut note = String::from("Studio tracks:");
+            if let Some(tracks) = data.get("tracks").and_then(|v| v.as_array()) {
+                for t in tracks {
+                    let id = t.get("track_id").and_then(|v| v.as_str()).unwrap_or("");
+                    let title = t.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                    let bpm = t.get("bpm").and_then(|v| v.as_u64()).unwrap_or(0);
+                    note.push_str(&format!("\n- id={id} | {title} | {bpm} BPM"));
+                }
+            }
+            note
+        }
+        "studio_create" | "studio_render" | "studio_update" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");
+            let track_id = data.get("track_id").and_then(|v| v.as_str()).unwrap_or("");
+            format!("{action} track \"{title}\" (id={track_id})")
+        }
+        "studio_arrangement_get" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");
+            let id = data.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            format!(
+                "Arrangement \"{title}\" (id={id}):\n{}",
+                serde_json::to_string(data).unwrap_or_default()
+            )
+        }
+        "studio_arrangement_list" => {
+            let mut note = String::from("Arrangements:");
+            if let Some(arrs) = data.get("arrangements").and_then(|v| v.as_array()) {
+                for a in arrs {
+                    let id = a.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                    let title = a.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                    note.push_str(&format!("\n- id={id} | {title}"));
+                }
+            }
+            note
+        }
+        "studio_arrangement_save" => {
+            let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");
+            let id = data.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Saved arrangement \"{title}\" (id={id})")
+        }
+        "studio_preset_list" => {
+            let mut note = String::from("Presets:");
+            if let Some(presets) = data.get("presets").and_then(|v| v.as_array()) {
+                for p in presets {
+                    let id = p.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                    let kind = p.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+                    let name = p.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    note.push_str(&format!("\n- id={id} | {kind} | {name}"));
+                }
+            }
+            note
+        }
         _ => {
-            // Unknown/plugin tools: the outcome DATA is the result — hand it
-            // to the model (truncated), or it has nothing to answer with.
+            // Unknown/plugin tools: the outcome DATA is the result — hand the
+            // FULL payload to the model so nothing is lost.
             let ser = serde_json::to_string(data).unwrap_or_default();
-            let trimmed: String = ser.chars().take(2000).collect();
-            if trimmed.is_empty() || trimmed == "{}" {
+            if ser.is_empty() || ser == "{}" {
                 format!("{action} complete")
             } else {
-                format!("{action} complete: {trimmed}")
+                format!("{action} complete: {ser}")
             }
         }
     }
@@ -334,6 +498,7 @@ pub fn step_label_for_action(action: &str) -> &'static str {
         "show_plugin" => "Opening plugin…",
         "plugin_activate" => "Activating plugin…",
         "plugin_deactivate" => "Deactivating plugin…",
+        "plugin_deactivate_all" => "Closing all plugins…",
         "list_plugins" => "Checking plugins…",
         "desktop_fullscreen" => "Fullscreening…",
         "desktop_focus" => "Focusing window…",
@@ -377,6 +542,7 @@ mod tests {
             "Plan Rome",
             &["Step 1".into()],
             "traveler: Trip tracking",
+            &[],
         );
         assert!(msgs[0].1.len() < 700);
         assert!(msgs.iter().any(|(_, c)| c.contains("[Done]")));
@@ -384,7 +550,7 @@ mod tests {
 
     #[test]
     fn continuation_without_plugins_omits_hint() {
-        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "");
+        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[]);
         assert!(!msgs[0].1.contains("Plugin windows"));
     }
 
@@ -455,6 +621,7 @@ mod tests {
             "Play radio",
             &[],
             "radio: Internet radio (inactive)",
+            &[],
         );
         assert!(msgs[0].1.contains("plugin_activate"), "hint should teach activation: {}", msgs[0].1);
     }

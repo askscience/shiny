@@ -77,6 +77,7 @@ impl Plugin for StudioPlugin {
             Arc::new(crate::tools::StudioCreate) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioGet) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioRender) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioUpdate) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioPresetList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioPresetSave) as Arc<dyn shiny_plugin_sdk::tools::Tool>,

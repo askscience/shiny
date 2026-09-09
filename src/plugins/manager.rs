@@ -12,7 +12,6 @@ use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::manifest::Manifest;
 use shiny_plugin_sdk::routes::{RouteHandler, RouteSpec};
 use shiny_plugin_sdk::services::PluginCtx;
-use shiny_plugin_sdk::tools::RegistryBuilder;
 
 use crate::plugins::loader::Loader;
 use crate::plugins::registry::ToolRegistry;
@@ -114,12 +113,30 @@ impl PluginManager {
         matches!(value.as_deref(), Some("true") | Some("1"))
     }
 
-    /// Plugins active for `user_id` THIS session. Empty in fresh mode
-    /// (`session.remember` off); otherwise the persisted enabled set
-    /// (installed minus explicitly-disabled).
+    /// Plugins the user has EXPLICITLY enabled (a persisted `enabled = 1`
+    /// row). Used as the active set in a fresh session, where plugins are
+    /// opt-in: nothing is auto-restored, but anything the user turns on (or
+    /// already turned on) stays active.
+    pub async fn explicitly_enabled_for(&self, user_id: &str) -> BTreeSet<String> {
+        let rows: Vec<String> = sqlx::query_scalar(
+            "SELECT plugin_name FROM user_plugin_states WHERE user_id = ?1 AND enabled = 1",
+        )
+        .bind(user_id)
+        .fetch_all(&self.inner.pool)
+        .await
+        .unwrap_or_default();
+        rows.into_iter().collect()
+    }
+
+    /// Plugins active for `user_id` THIS session. `session.remember` only
+    /// decides what gets RESTORED at sign-in; plugin activation itself is
+    /// always possible and always respected:
+    /// - remember on:  installed minus explicitly-disabled (the old default).
+    /// - remember off: only the explicitly-enabled ones (opt-in, starts empty
+    ///   and grows as the user/AI activate plugins).
     pub async fn session_active_set(&self, user_id: &str) -> BTreeSet<String> {
         if !self.session_remember(user_id).await {
-            return BTreeSet::new();
+            return self.explicitly_enabled_for(user_id).await;
         }
         let disabled = self.disabled_for(user_id).await;
         self.list()
@@ -129,11 +146,10 @@ impl PluginManager {
             .collect()
     }
 
-    /// Whether `plugin_name` is usable for `user_id` this session. Fresh mode
-    /// disables every plugin; remember mode defers to the persisted state.
+    /// Whether `plugin_name` is usable for `user_id` this session.
     pub async fn session_active_plugin_enabled(&self, user_id: &str, plugin_name: &str) -> bool {
         if !self.session_remember(user_id).await {
-            return false;
+            return self.explicitly_enabled_for(user_id).await.contains(plugin_name);
         }
         self.is_enabled_for(user_id, plugin_name).await
     }
@@ -200,8 +216,9 @@ impl PluginManager {
     }
 
     /// Scan `plugins_dir` and install every directory containing `plugin.toml`.
-    /// Backup dirs (`<name>.bak`) and hidden dirs are skipped — they are not
-    /// live plugins.
+    /// Backup dirs (`<name>.bak`), hidden dirs, and leftover install staging
+    /// dirs (`_staging-*`, e.g. after a crash mid-install) are skipped — they
+    /// are not live plugins.
     pub async fn discover_and_install(
         &self,
         base_ctx: Arc<PluginCtx>,
@@ -216,7 +233,10 @@ impl PluginManager {
                 continue;
             }
             let dir_name = entry.file_name().to_string_lossy().to_lowercase();
-            if dir_name.ends_with(".bak") || dir_name.starts_with('.') {
+            if dir_name.ends_with(".bak")
+                || dir_name.starts_with('.')
+                || dir_name.starts_with("_staging")
+            {
                 continue;
             }
             let manifest_path = path.join("plugin.toml");
@@ -236,7 +256,7 @@ impl PluginManager {
         install_dir: &std::path::Path,
         base_ctx: Arc<PluginCtx>,
     ) -> Result<String, AppError> {
-        let (manifest, builder, _ctx) = self.inner.loader.install_dir(install_dir, &self.inner.pool, base_ctx).await?;
+        let (manifest, builder, ctx) = self.inner.loader.install_dir(install_dir, &self.inner.pool, base_ctx).await?;
         let plugin_name = manifest.name.clone();
 
         // Resolve every declared RouteSpec tag to a handler via the plugin.
@@ -258,16 +278,27 @@ impl PluginManager {
                 routes,
             });
         }
+        // Drop the previous version's tools FIRST — including stale keys the
+        // new version no longer registers — so no `Arc<dyn Tool>` outlives
+        // the library that was retired during `loader.install_dir` above.
+        self.inner.tools.uninstall_plugin(&plugin_name);
         for tool in builder.tools {
             self.inner.tools.install_owned(tool, &plugin_name);
         }
         self.inner.tools.attach_manager(self.clone());
+        // Tools dispatch through the plugin's own ctx (real manifest +
+        // reused pools), then the documented `on_load` lifecycle hook runs.
+        self.inner.tools.set_plugin_ctx(&plugin_name, ctx);
+        self.inner.loader.call_on_load(&plugin_name).await;
         Ok(manifest.name)
     }
 
-    pub fn uninstall(&self, name: &str) -> bool {
+    pub async fn uninstall(&self, name: &str) -> bool {
         self.inner.contribs.write().retain(|c| c.manifest.name != name);
-        self.inner.loader.unload(name)
+        // Remove the plugin's tools before its library is retired, so a late
+        // dispatch can never reach code from an uninstalled cdylib.
+        self.inner.tools.uninstall_plugin(name);
+        self.inner.loader.unload(name).await
     }
 
     pub fn is_installed(&self, name: &str) -> bool {

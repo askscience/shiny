@@ -15,8 +15,9 @@ serde_json = "1"
 semver = { version = "1", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
 axum = { version = "0.7", features = ["json", "query", "multipart"] }
-io-email = { version = "0.1", default-features = false, features = ["client", "imap", "smtp", "rustls-ring", "serde"] }
+io-email = { version = "0.1", default-features = false, features = ["client", "imap", "smtp", "rustls-ring", "serde", "search"] }
 pimalaya-stream = "0.0.1"
 io-smtp = "0.1"
 mail-builder = "0.5"

@@ -220,7 +220,11 @@ impl Tool for TripStats {
                 window[1].latitude,
                 window[1].longitude,
             );
-            if let Some(s) = window[0].speed {
+        }
+        // Average over ALL recorded speeds — the old windows(2) sum silently
+        // dropped the final point's speed from the average.
+        for loc in &locations {
+            if let Some(s) = loc.speed {
                 total_speed += s;
                 speed_count += 1;
             }

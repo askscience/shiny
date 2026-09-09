@@ -486,9 +486,4 @@ export function refreshTiles() {
   renderTiles();
 }
 
-/** The map tile element (or null when the traveler window is not shown). */
-export function getMapTileElement() {
-  return isPluginActive(MAP_TILE_PLUGIN) ? mapTileEl : null;
-}
-
 export { mountMapTile, unmountMapTile };

@@ -961,7 +961,8 @@ function onAgentActions(e) {
   window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: IMPRESS_PLUGIN } }));
 
   const created = slideActions.some((a) => a.action === 'slide_create' && a.result === 'ok');
-  const wrote = slideActions.some((a) => /^slide_(write|edit|read)$/.test(a.action) && a.result === 'ok');
+  const wrote = slideActions.some((a) => /^slide_(write|edit)$/.test(a.action) && a.result === 'ok');
+  const read = slideActions.some((a) => a.action === 'slide_read' && a.result === 'ok');
   const deleted = slideActions.some((a) => a.action === 'slide_delete' && a.result === 'ok');
 
   const touchedId = slideActions
@@ -978,9 +979,11 @@ function onAgentActions(e) {
         void openNewest();
       }
     }, 250));
-  } else if (wrote || deleted) {
+  } else if (wrote || read || deleted) {
     void (async () => {
-      if (dirty) await persist();
+      // Do NOT persist a stale local deck over an AI write to the SAME deck —
+      // that would clobber the AI's changes with the user's old slides.
+      if (dirty && !(wrote && touchedId === current?.id)) await persist();
       await refreshDecks();
       if (touchedId && current?.id !== touchedId) {
         const found = decks.find((d) => d.id === touchedId);

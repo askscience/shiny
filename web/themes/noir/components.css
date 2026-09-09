@@ -252,23 +252,6 @@ ul.ui-artifact-day-items li::marker { color: var(--accent); }
 .ui-insight-close { color: var(--muted); }
 .ui-insight-close:hover { color: var(--text); }
 
-/* ── Navigation banner ─────────────────────────────────────── */
-.ui-nav-banner {
-  background: var(--surface-strong);
-  border-color: var(--glass-border);
-  box-shadow: var(--shadow-float);
-}
-.ui-nav-instruction { color: var(--text); }
-.ui-nav-meta { color: var(--muted); }
-.ui-nav-exit { background: transparent; color: var(--muted); border-left: 1px solid var(--glass-border); }
-.ui-nav-exit:hover { color: var(--text); background: var(--glass); }
-.ui-nav-speed {
-  background: var(--surface-strong);
-  border-color: var(--glass-border);
-  color: var(--text);
-}
-.ui-nav-speed-unit { color: var(--muted); }
-
 /* ── HUD chip ──────────────────────────────────────────────── */
 .ui-hud-chip {
   background: var(--glass);

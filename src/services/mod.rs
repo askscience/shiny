@@ -1,4 +1,6 @@
+pub mod ai;
 pub mod ollama;
+pub mod openai;
 pub mod web_search;
 pub mod gpsd;
 pub mod osm;

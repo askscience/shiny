@@ -467,26 +467,6 @@
   transition: color var(--duration-fast);
 }
 
-/* ── Navigation banner (turn-by-turn) ──────────────────────── */
-.ui-nav-banner {
-  display: flex; align-items: center; gap: 14px;
-  border-radius: var(--radius-md); border: 1px solid transparent; overflow: hidden;
-}
-.ui-nav-banner-body { flex: 1; min-width: 0; padding: 14px 0 14px 18px; }
-.ui-nav-instruction { font-family: var(--font-display); font-size: 17px; font-weight: 600; line-height: 1.25; }
-.ui-nav-meta { font-size: 12px; margin-top: 3px; }
-.ui-nav-exit {
-  align-self: stretch; width: 52px; border: none; cursor: pointer;
-  font-size: 20px; display: flex; align-items: center; justify-content: center;
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-.ui-nav-speed {
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 8px 13px; border-radius: var(--radius-sm); border: 1px solid transparent;
-}
-.ui-nav-speed-value { font-family: var(--font-display); font-size: 17px; font-weight: 700; line-height: 1; }
-.ui-nav-speed-unit { font-size: 9px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-
 /* ── HUD chip ──────────────────────────────────────────────── */
 .ui-hud-chip {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;

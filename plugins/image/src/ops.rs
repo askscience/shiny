@@ -87,7 +87,9 @@ fn apply_one(img: &mut PhotonImage, op: &Value, idx: usize) -> Result<(), AppErr
             photon_rs::effects::tint(img, r, g, b);
         }
         "rotate" => {
-            let angle = f64_param(op, "angle", 0.0) as f32;
+            // rem_euclid keeps any angle (negative, >360°, huge) in a sane
+            // f32 range so precision doesn't fall apart.
+            let angle = f64_param(op, "angle", 0.0).rem_euclid(360.0) as f32;
             *img = photon_rs::transform::rotate(img, angle);
         }
         "resize" => {
@@ -96,21 +98,36 @@ fn apply_one(img: &mut PhotonImage, op: &Value, idx: usize) -> Result<(), AppErr
             if w <= 0 || h <= 0 {
                 return Err(err("resize needs positive width and height".into()));
             }
-            *img = photon_rs::transform::resize(img, w as u32, h as u32, SamplingFilter::Lanczos3);
+            // Cap at a sane maximum — a giant `width` used to overflow into
+            // absurd allocation sizes.
+            const MAX_SIDE: i64 = 8192;
+            let w = w.min(MAX_SIDE) as u32;
+            let h = h.min(MAX_SIDE) as u32;
+            *img = photon_rs::transform::resize(img, w, h, SamplingFilter::Lanczos3);
         }
         "crop" => {
-            let x = i64_param(op, "x", 0).max(0) as u32;
-            let y = i64_param(op, "y", 0).max(0) as u32;
+            let x = i64_param(op, "x", 0);
+            let y = i64_param(op, "y", 0);
             let w = i64_param(op, "width", 0);
             let h = i64_param(op, "height", 0);
             if w <= 0 || h <= 0 {
                 return Err(err("crop needs positive width and height".into()));
             }
-            let (x2, y2) = (x + w as u32, y + h as u32);
-            if x2 > img.get_width() || y2 > img.get_height() || x >= x2 || y >= y2 {
+            // u64 math: `x + w` in u32 could overflow and wrap past the
+            // bounds check below.
+            if x < 0 || y < 0
+                || x as u64 + w as u64 > img.get_width() as u64
+                || y as u64 + h as u64 > img.get_height() as u64
+            {
                 return Err(err("crop rectangle is outside the image bounds".into()));
             }
-            *img = photon_rs::transform::crop(img, x, y, x2, y2);
+            *img = photon_rs::transform::crop(
+                img,
+                x as u32,
+                y as u32,
+                (x + w) as u32,
+                (y + h) as u32,
+            );
         }
         "flip_h" | "fliph" => photon_rs::transform::fliph(img),
         "flip_v" | "flipv" => photon_rs::transform::flipv(img),

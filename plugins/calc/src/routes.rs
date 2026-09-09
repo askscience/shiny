@@ -99,14 +99,26 @@ fn parse_cells(json: &str) -> BTreeMap<String, String> {
     if json.trim().is_empty() {
         return BTreeMap::new();
     }
-    serde_json::from_str::<BTreeMap<String, String>>(json)
+    // Rows written before intake normalization may contain JSON numbers —
+    // read as values and stringify scalars so one numeric cell no longer
+    // fails the whole deserialization (which used to blank the export).
+    serde_json::from_str::<BTreeMap<String, Json>>(json)
         .unwrap_or_default()
         .into_iter()
+        .filter_map(|(k, v)| {
+            let s = match v {
+                Json::String(s) => s,
+                Json::Number(n) => n.to_string(),
+                Json::Bool(b) => b.to_string(),
+                _ => return None,
+            };
+            Some((k, s))
+        })
         .take(MAX_CELLS)
         .collect()
 }
 
-fn is_valid_cell_ref(cell_ref: &str) -> bool {
+pub(crate) fn is_valid_cell_ref(cell_ref: &str) -> bool {
     let bytes = cell_ref.as_bytes();
     let mut i = 0;
     let mut letters = 0;

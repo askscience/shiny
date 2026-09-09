@@ -1,4 +1,4 @@
-import { apiFetch, getToken, ApiError } from './api.js';
+import { apiFetch, getToken, getVoiceLang, getTraveler, ApiError } from './api.js';
 import { renderArtifact, clearArtifacts } from './artifacts.js';
 import {
   upsertArtifact,
@@ -143,8 +143,9 @@ async function handleNavigation(res, userMessage, context) {
 }
 
 function buildAgentBody(message, mode, context) {
-  const lang = localStorage.getItem('voice.lang') ||
-    (navigator.language || 'en').split('-')[0];
+  // Same per-user resolved language as voice (explicit choice or browser
+  // default), so the AI replies in the language the user actually hears.
+  const lang = getVoiceLang();
   const body = {
     message, mode, lang, context,
     ai_name: getAiName(),
@@ -162,13 +163,20 @@ function buildAgentBody(message, mode, context) {
 
 const CONVERSATION_KEY = 'chat.conversation';
 
+/** Conversation is scoped per traveler so switching accounts never leaks a
+ *  thread, and each user keeps their own "current" chat. */
+function conversationKey() {
+  const id = getTraveler()?.id;
+  return id ? `${CONVERSATION_KEY}.${id}` : CONVERSATION_KEY;
+}
+
 export function currentConversationId() {
-  return localStorage.getItem(CONVERSATION_KEY) || null;
+  return localStorage.getItem(conversationKey()) || null;
 }
 
 export function setCurrentConversation(id) {
-  if (id) localStorage.setItem(CONVERSATION_KEY, id);
-  else localStorage.removeItem(CONVERSATION_KEY);
+  if (id) localStorage.setItem(conversationKey(), id);
+  else localStorage.removeItem(conversationKey());
 }
 
 /** Start a fresh chat (the next message opens a new conversation). */
@@ -333,6 +341,10 @@ function surfaceNotifications(res) {
   }
 }
 
+// Guards the transient reply banner: an early send's hide-timer must not
+// blank the reply of a newer send that overtook it.
+let replyToken = 0;
+
 export async function sendToAgent(message, mode, context) {
   setAgentAwaiting(true);
   setSphereState('processing');
@@ -361,14 +373,16 @@ export async function sendToAgent(message, mode, context) {
     // The reply is the primary surface — show it even if voice playback fails.
     const replyEl = document.getElementById('reply-text');
     if (replyEl) {
+      const token = ++replyToken;
       replyEl.textContent = res.reply;
       replyEl.classList.remove('hidden');
-      setTimeout(() => replyEl.classList.add('hidden'), 8000);
+      setTimeout(() => {
+        if (token === replyToken) replyEl.classList.add('hidden');
+      }, 8000);
     }
 
     try {
-      await speak(res.reply, localStorage.getItem('voice.lang') ||
-        (navigator.language || 'en').split('-')[0]);
+      await speak(res.reply, getVoiceLang());
     } catch (ttsErr) {
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: { message: ttsErr?.message || 'Voice playback unavailable', type: 'error' },
@@ -384,11 +398,14 @@ export async function sendToAgent(message, mode, context) {
       detail: { message: msg, type: 'error' },
     }));
     const replyEl = document.getElementById('reply-text');
+    const token = ++replyToken;
     if (replyEl) {
       replyEl.textContent = msg;
       replyEl.classList.remove('hidden');
     }
     setTimeout(() => {
+      // A newer send took over the banner — leave it alone.
+      if (token !== replyToken) return;
       setSphereState('idle');
       replyEl?.classList.add('hidden');
     }, 3000);
@@ -438,8 +455,4 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     clearDockStep();
     setAgentAwaiting(false);
   }
-}
-
-export function clearAgentUI() {
-  clearArtifacts();
 }

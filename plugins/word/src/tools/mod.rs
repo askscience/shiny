@@ -75,6 +75,32 @@ fn inline_html(text: &str) -> String {
     out
 }
 
+/// Byte range of the first case-insensitive occurrence of `needle` in `hay`.
+/// Byte-safe (uses `char_indices`), unlike the old `to_lowercase().find()`
+/// approach which could misalign offsets when case-folding changes byte length.
+fn find_ci(hay: &str, needle: &str) -> Option<std::ops::Range<usize>> {
+    let needle_chars: Vec<char> = needle.chars().collect();
+    if needle_chars.is_empty() {
+        return None;
+    }
+    let hay_chars: Vec<(usize, char)> = hay.char_indices().collect();
+    if hay_chars.len() < needle_chars.len() {
+        return None;
+    }
+    'outer: for i in 0..=(hay_chars.len() - needle_chars.len()) {
+        for (j, n) in needle_chars.iter().enumerate() {
+            if !hay_chars[i + j].1.eq_ignore_ascii_case(n) {
+                continue 'outer;
+            }
+        }
+        let start = hay_chars[i].0;
+        let last = &hay_chars[i + needle_chars.len() - 1];
+        let end = last.0 + last.1.len_utf8();
+        return Some(start..end);
+    }
+    None
+}
+
 async fn last_doc_id(pool: &SqlitePool, user_id: &str) -> Result<Option<String>, AppError> {
     Ok(sqlx::query_scalar(
         "SELECT id FROM documents WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1",
@@ -141,7 +167,7 @@ pub struct DocWrite;
 #[async_trait]
 impl Tool for DocWrite {
     fn name(&self) -> &str { "doc_write" }
-    fn aliases(&self) -> &[&str] { &["write_document", "edit_document", "update_document"] }
+    fn aliases(&self) -> &[&str] { &["write_document", "update_document"] }
     fn step_label(&self) -> &str { "Writing document…" }
     fn doc_fragment(&self) -> Option<&str> {
         Some("- `doc_write` — Write or replace a document's content. params: `{ doc_id?: string, content: string }` — without `doc_id` targets the most recently used document.")
@@ -153,6 +179,9 @@ impl Tool for DocWrite {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let content = req.params.param_str("content").unwrap_or_default();
+        if content.trim().is_empty() {
+            return Err(AppError::BadRequest("content required (non-empty)".into()));
+        }
         let doc_id = match req.params.param_str("doc_id") {
             Some(id) if !id.trim().is_empty() => id,
             _ => last_doc_id(ctx.pool().await, req.traveler_id)
@@ -242,24 +271,18 @@ impl Tool for DocEdit {
         let html = odt::odt_to_html(&odt_bytes)?;
         let edited = if html.contains(&old) {
             html.replacen(&old, &new, 1)
-        } else if html.to_lowercase().contains(&old.to_lowercase()) {
-            let lower = html.to_lowercase();
-            let pos = lower.find(&old.to_lowercase()).unwrap_or(0);
+        } else if let Some(range) = find_ci(&html, &old) {
             let mut s = html;
-            s.replace_range(pos..pos + old.len(), &new);
+            s.replace_range(range, &new);
             s
         } else {
-            // The model must not guess: tell it to rewrite in full.
-            let preview: String = odt::odt_to_plain_text(&odt_bytes)?
-                .chars()
-                .take(400)
-                .collect();
+            // The model must not guess: tell it to rewrite in full. Include
+            // the complete current content so it can produce a correct rewrite.
+            let preview: String = odt::odt_to_plain_text(&odt_bytes)?;
             return Ok(ActionOutcome::error(
                 "doc_edit",
                 format!(
-                    "Text \"{}\" not found in the document. Current content: {}",
-                    old.chars().take(80).collect::<String>(),
-                    preview
+                    "Text \"{old}\" not found in the document. Current content: {preview}"
                 ),
             ));
         };
@@ -301,6 +324,9 @@ impl Tool for DocAppend {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let content = req.params.param_str("content").unwrap_or_default();
+        if content.trim().is_empty() {
+            return Err(AppError::BadRequest("content required (non-empty)".into()));
+        }
         let doc_id = match req.params.param_str("doc_id") {
             Some(id) if !id.trim().is_empty() => id,
             _ => last_doc_id(ctx.pool().await, req.traveler_id)
@@ -348,7 +374,7 @@ pub struct DocRead;
 #[async_trait]
 impl Tool for DocRead {
     fn name(&self) -> &str { "doc_read" }
-    fn aliases(&self) -> &[&str] { &["read_document", "open_document"] }
+    fn aliases(&self) -> &[&str] { &["read_document", "open_document", "doc_open"] }
     fn step_label(&self) -> &str { "Reading document…" }
     fn doc_fragment(&self) -> Option<&str> {
         Some("- `doc_read` — Read a document's content. params: `{ doc_id?: string }` — without `doc_id` reads the most recently used document.")

@@ -154,6 +154,11 @@ fn merge_cells(
 ///  - `{ cell: {A1: "v"} }` or `{ ref: "A1", value: "v" }` (one cell)
 ///  - top-level `{ A1: "v", ... }` next to `sheet_id`/`title`
 fn incoming_cells(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError> {
+    normalize_cells(incoming_cells_raw(req)?)
+}
+
+/// See `incoming_cells` for the accepted param shapes.
+fn incoming_cells_raw(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError> {
     if let Some(obj) = req.params.get("cells").and_then(|v| v.as_object()) {
         return Ok(obj.clone());
     }
@@ -197,6 +202,46 @@ fn incoming_cells(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError>
     Err(AppError::BadRequest(
         "cells required — pass an object like {\"A1\":\"100\",\"B1\":\"=SUM(A1:A5)\"} under \"cells\"".into(),
     ))
+}
+
+/// Normalize model-provided cells into `{ "A1": "value" }` form:
+/// - refs are uppercased and validated (must be plain `A1`-style refs —
+///   anything else gets a clear error instead of being stored junk),
+/// - numbers/bools are stringified. The storage and export layers expect
+///   strings; a stray JSON number used to make the whole sheet vanish on
+///   ODS export.
+fn normalize_cells(map: Map<String, Value>) -> Result<Map<String, Value>, AppError> {
+    let mut out = Map::new();
+    for (k, v) in map {
+        let key = k.trim().to_uppercase();
+        if !crate::routes::is_valid_cell_ref(&key) {
+            return Err(AppError::BadRequest(format!(
+                "invalid cell ref '{k}' — use A1-style references like \"B7\""
+            )));
+        }
+        let value = match v {
+            Value::String(s) => s,
+            Value::Number(n) => n.to_string(),
+            Value::Bool(b) => b.to_string(),
+            Value::Null => String::new(),
+            other => {
+                return Err(AppError::BadRequest(format!(
+                    "cell {key}: value must be a string, number or bool, got {}",
+                   rtype(&other)
+                )))
+            }
+        };
+        out.insert(key, Value::String(value));
+    }
+    Ok(out)
+}
+
+fn rtype(v: &Value) -> &'static str {
+    match v {
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+        _ => "value",
+    }
 }
 
 /* ── calc_create ────────────────────────────────────────────── */

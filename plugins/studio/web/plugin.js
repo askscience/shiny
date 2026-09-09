@@ -31,7 +31,10 @@ const WAVES = [['sine', 'Sine'], ['triangle', 'Triangle'], ['saw', 'Saw'], ['squ
 const TRACK_COLORS = ['#ff5d5d', '#ffb454', '#ffe156', '#8dff9e', '#57d9ff', '#7aa2ff', '#c792ff', '#ff8fd8'];
 const MELODIC = new Set(['bass', 'pluck', 'lead', 'pad', 'sub', 'organ', 'ep', 'bell', 'strings', 'brass', 'synthme', 'grid']);
 
-const DEFAULT_LEVEL = { kick: 0.9, snare: 0.75, hat: 0.45, clap: 0.7, tom: 0.7, perc: 0.4, bass: 0.7, pluck: 0.5, lead: 0.55, pad: 0.5, sub: 0.6, organ: 0.5, ep: 0.5, bell: 0.5, strings: 0.6, brass: 0.6, synthme: 0.6, grid: 0.6, drumkit: 0.85 };
+// Mirrors `voices::default_level` in the Rust engine — clap 0.5, sub 0.7,
+// drumkit 0.7 (the old JS table disagreed, so the UI prefilled levels the
+// renderer never used).
+const DEFAULT_LEVEL = { kick: 0.9, snare: 0.75, hat: 0.45, clap: 0.5, tom: 0.7, perc: 0.4, bass: 0.7, pluck: 0.5, lead: 0.55, pad: 0.5, sub: 0.7, organ: 0.5, ep: 0.5, bell: 0.5, strings: 0.6, brass: 0.6, synthme: 0.6, grid: 0.6, drumkit: 0.7 };
 const DEFAULT_PAN = { hat: 0.35, lead: -0.25, snare: 0.05, kick: -0.05, bass: 0, pluck: 0, organ: 0.1, ep: -0.1, strings: 0.15, brass: 0.1 };
 
 const PPB = 56;        // px per beat (arranger)
@@ -428,22 +431,15 @@ function simplePattern(kind, steps = 16) {
 }
 
 function blankArrangement() {
+  // Start completely empty — the AI (or the user) adds every track and clip.
   return {
     id: null,
     title: 'Untitled Arrangement',
     bpm: 120,
     length_beats: 32,
     master: 0.9,
-    tracks: [
-      { id: 't0', name: 'Drums', color: 0, mute: false, level: 0.85, pan: 0, automation: { lanes: [] } },
-      { id: 't1', name: 'Bass', color: 3, mute: false, level: 0.7, pan: -0.1, automation: { lanes: [] } },
-      { id: 't2', name: 'Lead', color: 4, mute: false, level: 0.55, pan: 0.2, automation: { lanes: [] } },
-    ],
-    clips: [
-      { track: 't0', start: 0, pattern: kitPattern(16) },
-      { track: 't1', start: 0, pattern: bassPattern(16) },
-      { track: 't2', start: 0, pattern: leadPattern(16) },
-    ],
+    tracks: [],
+    clips: [],
   };
 }
 function blankLauncher() {
@@ -3788,19 +3784,52 @@ async function addSavedAsLauncherClip(trackId) {
   if (!cfg) { toast('Pattern not found', { type: 'error' }); return; }
   addConfigAsLauncherClip(cfg);
 }
-/* Drop the AI's just-created track into the launcher (and audition it).
+/* ── AI track → Arranger (not the launcher) ─────────────────── */
+
+function trackNameForCfg(cfg) {
+  const title = (cfg.title || '').trim();
+  if (title && title.toLowerCase() !== 'untitled') return title;
+  const kinds = (cfg.voices || []).map((v) => v.kind).filter(Boolean);
+  if (!kinds.length) return 'Track';
+  const drumKinds = new Set(['kick', 'snare', 'hat', 'clap', 'tom', 'perc', 'drumkit']);
+  if (kinds.every((k) => drumKinds.has(k))) return 'Drums';
+  if (kinds.length === 1) return KIND_LABELS[kinds[0]] || kinds[0];
+  return kinds.map((k) => KIND_LABELS[k] || k).join(' + ');
+}
+
+/** Add an AI-composed track as a NEW track + clip in the Arranger timeline. */
+function addConfigAsArrangementTrack(cfg) {
+  const i = arrangement.tracks.length;
+  const tr = {
+    id: `t${Date.now()}`,
+    name: trackNameForCfg(cfg),
+    color: i % TRACK_COLORS.length,
+    mute: false,
+    level: 0.8,
+    pan: 0,
+    automation: { lanes: [] },
+  };
+  arrangement.tracks.push(tr);
+  arrangement.clips.push({ track: tr.id, start: 0, pattern: normalizePattern(cfg) });
+  markDirty();
+  if (!panels.arranger) { panels.arranger = true; panels.launcher = false; }
+  sel = { area: 'arr', clipIndex: arrangement.clips.length - 1 };
+  syncSelection();
+  syncPanels();
+}
+
+/* Drop the AI's just-created track into the ARRANGER (and audition it).
    Safe to call before the tile is mounted — it parks the id until mount. */
 async function consumePendingAiTrack() {
   const id = pendingAiTrackId;
   if (!id) return;
-  if (!launcher) { pendingAiTrackId = id; return; }   // not mounted yet
+  if (!arrangement) { pendingAiTrackId = id; return; }  // not mounted yet
   pendingAiTrackId = null;
-  if (lastConsumedAiTrackId === id) return;           // already handled
+  if (lastConsumedAiTrackId === id) return;             // already handled
   lastConsumedAiTrackId = id;
   const cfg = await fetchTrackConfig(id).catch(() => null);
   if (!cfg) return;
-  addConfigAsLauncherClip(cfg);
-  if (!panels.launcher) { panels.launcher = true; syncPanels(); }
+  addConfigAsArrangementTrack(cfg);
   const blob = await apiFetch(`/api/studio/${id}/audio`, { responseType: 'blob' }).catch(() => null);
   if (blob) {
     const buf = await blob.arrayBuffer();
@@ -4210,12 +4239,23 @@ function onAgentActions(e) {
   const studio = actions.filter((a) => /^studio_/.test(a?.action || ''));
   if (!studio.length) return;
   window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: STUDIO_PLUGIN } }));
+
   const created = studio.find((a) => a.action === 'studio_create' && a.result === 'ok');
   const rendered = studio.find((a) => a.action === 'studio_render' && a.result === 'ok');
+  const savedArr = studio.find((a) => a.action === 'studio_arrangement_save' && a.result === 'ok' && a.data?.id);
   const deleted = studio.some((a) => a.action === 'studio_delete' && a.result === 'ok');
   const touchedId = (created || rendered)?.data?.track_id;
-  if (touchedId) pendingAiTrackId = touchedId;
+
   void (async () => {
+    if (savedArr) {
+      // A new/updated arrangement becomes the open project — replace the
+      // default "Untitled Arrangement" with what the AI just created.
+      await refreshArrangements().catch(() => {});
+      await loadArrangement(savedArr.data.id).catch(() => {});
+      renderBrowser();
+      return;
+    }
+    if (touchedId) pendingAiTrackId = touchedId;
     await refreshTracks().catch(() => {});
     renderBrowser();
     if (deleted) {

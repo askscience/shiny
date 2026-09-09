@@ -1,6 +1,10 @@
-//! Mail plugin tools: `mail_status`, `mail_list`, `mail_read`, `mail_send`.
-//! Every tool is registered through `bridged(...)` (§15) and does DB work via
-//! `ctx.db()` plus network work via the `mail` module's blocking helpers.
+//! Mail plugin tools: `mail_status`, `mail_list`, `mail_read`, `mail_search`,
+//! `mail_sync`, `mail_send`.
+//!
+//! List/read/search read from the LOCAL cache (`crate::cache`) so the AI never
+//! opens a fresh IMAP connection for mail that's already been downloaded;
+//! `mail_sync` (and the automatic first-use backfill) is the only thing that
+//! talks to the provider. Sending stays live via SMTP.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -9,11 +13,13 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
-use crate::mail;
+use crate::{cache, mail};
 
 pub struct MailStatus;
 pub struct MailList;
 pub struct MailRead;
+pub struct MailSearch;
+pub struct MailSync;
 pub struct MailSend;
 
 fn str_array(v: &Value) -> Vec<String> {
@@ -52,7 +58,7 @@ impl Tool for MailList {
     fn name(&self) -> &str { "mail_list" }
     fn step_label(&self) -> &str { "Listing messages…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `mail_list` — List messages in a folder (default INBOX). params: `{ account?: string, folder?: string, page?: number }`. Returns up to 60 envelopes with subject, sender, date, seen.")
+        Some("- `mail_list` — List messages in a folder (default INBOX) from the local cache. params: `{ account?: string, folder?: string, page?: number }`. Returns up to 60 envelopes with subject, sender, date, seen.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let n = data.get("messages").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
@@ -64,8 +70,16 @@ impl Tool for MailList {
         let folder = req.params.param_str("folder").unwrap_or_else(|| "INBOX".into());
         let page = req.params.param_u32("page").unwrap_or(0);
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
-        let messages = mail::list_envelopes(a, folder.clone(), page).await?;
-        Ok(ActionOutcome::ok("mail_list", json!({ "folder": folder, "messages": messages })))
+
+        // First use backfills the cache; after that it's a local read.
+        if mail::needs_backfill(ctx.db(), req.user_id, &a.id, &folder)? {
+            mail::sync_folder(ctx.db(), req.user_id, a.clone(), folder.clone()).await?;
+        }
+
+        let offset = (page as usize) * 60;
+        let messages = cache::list(ctx.db(), req.user_id, &a.id, &folder, 60, offset)?;
+        let total = cache::total(ctx.db(), req.user_id, &a.id, &folder)?;
+        Ok(ActionOutcome::ok("mail_list", json!({ "folder": folder, "messages": messages, "total": total, "page": page })))
     }
 }
 
@@ -74,7 +88,7 @@ impl Tool for MailRead {
     fn name(&self) -> &str { "mail_read" }
     fn step_label(&self) -> &str { "Reading message…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `mail_read` — Fetch one full message. params: `{ account?: string, folder?: string, id: string }` where `id` comes from `mail_list`. Returns subject, from, to, date, body.")
+        Some("- `mail_read` — Fetch one full message from the local cache. params: `{ account?: string, folder?: string, id: string }` where `id` comes from `mail_list`/`mail_search`. Returns subject, from, to, date, body.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let subject = data.get("subject").and_then(|v| v.as_str()).unwrap_or("(no subject)");
@@ -85,8 +99,76 @@ impl Tool for MailRead {
         let folder = req.params.param_str("folder").unwrap_or_else(|| "INBOX".into());
         let id = req.params.require_str("id")?;
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
-        let message = mail::get_message(a, folder, id).await?;
+        let account_email = a.email.clone();
+
+        // Prefer the cache; fall back to one live fetch (then cache it) if the
+        // message wasn't downloaded yet.
+        let mut message = match cache::get(ctx.db(), req.user_id, &a.id, &folder, &id)? {
+            Some(m) => m,
+            None => {
+                let m = mail::get_message(a.clone(), folder.clone(), id.clone()).await?;
+                cache::upsert_message(ctx.db(), req.user_id, &a.id, &folder, &id, &m)?;
+                m
+            }
+        };
+
+        // Include the source folder + account email so the frontend can open
+        // the right message in the right folder, and the AI knows its origin.
+        if let Some(obj) = message.as_object_mut() {
+            obj.insert("folder".into(), json!(folder));
+            obj.insert("account".into(), json!(account_email));
+        }
         Ok(ActionOutcome::ok("mail_read", message))
+    }
+}
+
+#[async_trait]
+impl Tool for MailSearch {
+    fn name(&self) -> &str { "mail_search" }
+    fn step_label(&self) -> &str { "Searching mail…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `mail_search` — Search cached messages by subject, sender or body text (local, no IMAP). params: `{ account?: string, folder?: string, query: string }`. Omit `folder` to search all folders. Returns up to 60 matching envelopes.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let n = data.get("messages").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+        format!("Found {n} matching message(s)")
+    }
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let account = req.params.param_str("account");
+        let folder = req.params.param_str("folder");
+        let query = req.params.require_str("query")?;
+        let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
+
+        // Backfill the default/requested folder on first use; then search local.
+        let eff_folder = folder.clone().unwrap_or_else(|| "INBOX".into());
+        if mail::needs_backfill(ctx.db(), req.user_id, &a.id, &eff_folder)? {
+            mail::sync_folder(ctx.db(), req.user_id, a.clone(), eff_folder).await?;
+        }
+
+        let messages = cache::search(ctx.db(), req.user_id, Some(&a.id), folder.as_deref(), &query, 60)?;
+        Ok(ActionOutcome::ok("mail_search", json!({ "query": query, "messages": messages })))
+    }
+}
+
+#[async_trait]
+impl Tool for MailSync {
+    fn name(&self) -> &str { "mail_sync" }
+    fn aliases(&self) -> &[&str] { &["refresh_mail", "sync_mail"] }
+    fn step_label(&self) -> &str { "Syncing mail…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `mail_sync` — Download new mail into the local cache so later list/read/search are instant and offline. params: `{ account?: string, folder?: string = \"INBOX\" }`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let n = data.get("new").and_then(|v| v.as_u64()).unwrap_or(0);
+        let total = data.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
+        format!("Mail synced: {n} new, {total} cached")
+    }
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let account = req.params.param_str("account");
+        let folder = req.params.param_str("folder").unwrap_or_else(|| "INBOX".into());
+        let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
+        let summary = mail::sync_folder(ctx.db(), req.user_id, a, folder).await?;
+        Ok(ActionOutcome::ok("mail_sync", summary))
     }
 }
 
@@ -116,7 +198,7 @@ impl Tool for MailSend {
         let subject = req.params.param_str("subject").unwrap_or_default();
         let body = req.params.param_str("body").unwrap_or_default();
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
-        let sent = mail::send(a, to.clone(), cc, bcc, subject, body, None).await?;
+        let sent = mail::send(a, req.user_id, to.clone(), cc, bcc, subject, body, None).await?;
         Ok(ActionOutcome::ok("mail_send", json!({ "to": to, "sent": sent })))
     }
 }

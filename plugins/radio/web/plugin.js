@@ -550,6 +550,17 @@ export function mountRadioTile() {
 export function unmountRadioTile() {
   stopPlayback();
   tileEl?.remove();
+  // Drop references so a later mountRadioTile() builds a fresh tile
+  // instead of returning the detached old one.
+  tileEl = null;
+  gridEl = null;
+  glowEl = null;
+  artEl = null;
+  trackTitleEl = null;
+  trackSubEl = null;
+  equalizerEl = null;
+  toggleBtn = null;
+  stopBtn = null;
 }
 
 /** The tile element (or null when the radio window is not mounted). */

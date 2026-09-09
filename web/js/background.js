@@ -58,26 +58,29 @@ export function applyBackground() {
   el.style.backgroundImage = '';
   el.style.backgroundSize = '';
   el.style.backgroundPosition = '';
-  el.style.animation = '';
+  // Static by default — only the 'animated' mode adds a CSS animation class
+  // (its `!important` animation overrides this inline `none`).
+  el.style.animation = 'none';
 
   switch (bg.mode) {
     case 'gradient':
       el.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), ${gradientToCss(getGradient())}`;
       el.style.backgroundSize = '100% 100%';
       el.style.backgroundPosition = 'center';
-      el.style.animation = 'none';
       break;
     case 'image':
-      // A static, cover-fit photo — no pan/zoom/drift, just centered.
-      el.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("${bg.url || '/api/background'}?v=${Date.now()}")`;
+      // Static, cover-fit photo. Use the stored URL verbatim — it already
+      // carries a one-time cache-buster from upload. Re-appending a fresh
+      // `Date.now()` here would change the URL on every session refresh
+      // (reloadUserSession runs every minute) and make the photo flicker.
+      el.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("${bg.url || '/api/background'}")`;
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
-      el.style.animation = 'none';
       break;
     case 'animated':
       el.classList.add(bg.animation === 'shimmer' ? 'bg-anim-shimmer' : 'bg-anim-aurora');
       break;
     default:
-      break; // none — leave the layer blank so the CSS default mesh shows
+      break; // none — static default mesh (no animation)
   }
 }

@@ -293,6 +293,7 @@ impl Tool for BridgedTool {
             inner.invoke(&ctx, req).await
         })
         .await
+        .flatten()
     }
 }
 

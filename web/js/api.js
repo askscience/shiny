@@ -15,9 +15,25 @@ export function setAuth(token, traveler) {
 export function clearAuth() {
   localStorage.removeItem('token');
   localStorage.removeItem('traveler');
-  // Drop the session cookie too, so an explicit logout doesn't get
-  // auto-restored by the cookie on the next page load.
+  // Best-effort clear of a legacy non-HttpOnly cookie. The current cookie is
+  // HttpOnly, so JS can't remove it — server logout (logoutSession) is what
+  // actually clears it via `Set-Cookie`.
   document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
+/**
+ * Server-side logout: invalidates the stored session token and clears the
+ * HttpOnly `shiny_token` cookie (JavaScript cannot clear an HttpOnly cookie
+ * directly). Then wipes the client-side copy. Safe to call even when the
+ * token is already invalid.
+ */
+export async function logoutSession() {
+  try {
+    await apiFetch('/api/auth/logout', { method: 'POST', authRedirect: false });
+  } catch (_) {
+    /* already-invalid token — clearing locally is still correct */
+  }
+  clearAuth();
 }
 
 export function getTraveler() {
@@ -116,11 +132,30 @@ export async function validateSession() {
   }
 }
 
+/** Voice/assistant language is scoped per traveler, so every user keeps their own. */
+function voiceLangKey() {
+  const id = getTraveler()?.id;
+  return id ? `voice.lang.${id}` : 'voice.lang';
+}
+
+/** Explicit per-user language choice, or `null` when following the browser. */
+export function getVoiceLangExplicit() {
+  return localStorage.getItem(voiceLangKey()) || null;
+}
+
+/** Resolved language: the user's explicit choice, else the browser language. */
 export function getVoiceLang() {
-  return localStorage.getItem('voice.lang') ||
+  return getVoiceLangExplicit() ||
     (navigator.language || 'en-US').split('-')[0];
 }
 
+/** Persist an explicit language. Pass empty/null to clear it (back to auto). */
 export function setVoiceLang(lang) {
-  localStorage.setItem('voice.lang', lang);
+  if (lang) localStorage.setItem(voiceLangKey(), lang);
+  else localStorage.removeItem(voiceLangKey());
+}
+
+/** Follow the browser language again (drop the explicit override). */
+export function clearVoiceLang() {
+  localStorage.removeItem(voiceLangKey());
 }

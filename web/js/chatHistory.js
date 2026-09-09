@@ -15,6 +15,9 @@ import {
 let panel = null;
 let view = 'list'; // 'list' | 'messages'
 let conversations = [];
+// Bumped on every view switch so a slow `loadConversationMessages` can
+// detect that the user navigated away while it was in flight.
+let renderToken = 0;
 
 function h(tag, className, text) {
   const el = document.createElement(tag);
@@ -34,6 +37,7 @@ function fmtWhen(iso) {
 }
 
 function renderList() {
+  renderToken += 1; // any in-flight message render is obsolete now
   view = 'list';
   panel.body.textContent = '';
 
@@ -92,6 +96,7 @@ function renderList() {
 }
 
 async function openMessages(c) {
+  const token = ++renderToken;
   view = 'messages';
   panel.body.textContent = '';
 
@@ -116,6 +121,9 @@ async function openMessages(c) {
 
   const msgs = h('div', 'chat-history-messages');
   const entries = await loadConversationMessages(c.id);
+  // The user hit Back (or opened another chat) while loading — appending
+  // now would stack the message view on top of the list.
+  if (token !== renderToken) return;
   if (!entries.length) {
     msgs.appendChild(emptyState({ title: 'No messages', body: 'Say something to start.' }));
   }

@@ -1,4 +1,4 @@
-import { apiFetch, setAuth, getToken, clearAuth, validateSession, getTraveler } from './api.js';
+import { apiFetch, setAuth, getToken, clearAuth, logoutSession, validateSession, getTraveler } from './api.js';
 import {
   getKnownUsers,
   saveKnownUser,
@@ -216,9 +216,10 @@ registerBtn?.addEventListener('click', async () => {
   }
 });
 
-export function logout() {
+export async function logout() {
+  // Invalidate the session server-side + clear the HttpOnly cookie first.
+  await logoutSession();
   resetUserSession();
-  clearAuth();
   appEl?.classList.add('hidden');
   showLogin();
 }

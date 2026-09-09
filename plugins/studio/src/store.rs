@@ -161,7 +161,8 @@ pub async fn update_config(
 ) -> sqlx::Result<bool> {
     let res = sqlx::query(
         "UPDATE studio_tracks SET title = ?3, bpm = ?4, steps = ?5, tuning = ?6, \
-         config_json = ?7, updated_at = datetime('now') WHERE id = ?1 AND user_id = ?2",
+         config_json = ?7, wav = NULL, duration_ms = 0, updated_at = datetime('now') \
+         WHERE id = ?1 AND user_id = ?2",
     )
     .bind(id)
     .bind(user_id)
@@ -265,6 +266,31 @@ pub async fn get_arrangement(pool: &SqlitePool, user_id: &str, id: &str) -> sqlx
          FROM studio_arrangements WHERE id = ?1 AND user_id = ?2",
     )
     .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Resolve an `id_or_title` param to a real arrangement id (UUID or exact title).
+pub async fn resolve_arrangement_id(
+    pool: &SqlitePool,
+    user_id: &str,
+    id_or_title: &str,
+) -> sqlx::Result<Option<String>> {
+    let by_id: Option<String> =
+        sqlx::query_scalar("SELECT id FROM studio_arrangements WHERE id = ?1 AND user_id = ?2")
+            .bind(id_or_title)
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await?;
+    if by_id.is_some() {
+        return Ok(by_id);
+    }
+    sqlx::query_scalar(
+        "SELECT id FROM studio_arrangements WHERE lower(title) = lower(?1) AND user_id = ?2 \
+         ORDER BY updated_at DESC LIMIT 1",
+    )
+    .bind(id_or_title)
     .bind(user_id)
     .fetch_optional(pool)
     .await

@@ -81,9 +81,11 @@ pub async fn send_message(
         diary_context
     );
 
-    let chat_history = sqlx::query_as::<_, (String, String, Option<String>)>(
+    // The user message was inserted above, so this window (most recent 20,
+    // reversed back into order) already contains it — no duplicate append.
+    let recent = sqlx::query_as::<_, (String, String, Option<String>)>(
         "SELECT role, content, timestamp FROM chat_messages WHERE traveler_id = ?1 \
-         ORDER BY timestamp ASC LIMIT 20",
+         ORDER BY timestamp DESC, rowid DESC LIMIT 20",
     )
     .bind(&traveler.id)
     .fetch_all(&state.pool)
@@ -93,13 +95,12 @@ pub async fn send_message(
     let mut messages = Vec::new();
     messages.push(("system".to_string(), system_prompt));
 
-    for (role, content, _ts) in &chat_history {
+    for (role, content, _ts) in recent.iter().rev() {
         messages.push((role.clone(), content.clone()));
     }
 
-    messages.push(("user".to_string(), body.message.clone()));
-
-    let reply = state.ollama.chat(messages, None).await?;
+    let ai = state.resolve_ai(&traveler.id).await;
+    let reply = ai.client.chat(messages, ai.model.as_deref()).await?;
 
     sqlx::query(
         "INSERT INTO chat_messages (id, traveler_id, role, content, timestamp) \
@@ -236,7 +237,7 @@ pub async fn conversation_messages(
     let entries = sqlx::query_as::<_, (String, String, Option<String>)>(
         "SELECT role, content, timestamp FROM chat_messages \
          WHERE conversation_id = ?1 AND traveler_id = ?2 \
-         ORDER BY timestamp ASC",
+         ORDER BY timestamp ASC, rowid ASC",
     )
     .bind(&path.id)
     .bind(&traveler.id)
