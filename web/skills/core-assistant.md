@@ -58,6 +58,16 @@ Turn off a plugin for the current user. Its tools stop working and its window di
 
 Use it only when the user explicitly asks to disable/turn off a plugin.
 
+### plugin_deactivate_all
+
+Close all plugins at once (turn off every currently-active plugin; all their
+windows disappear). Use this whenever the user asks to "close all plugins" or
+"close everything" — do NOT loop `plugin_deactivate` one at a time.
+
+```text
+{"action": "plugin_deactivate_all", "params": {}}
+```
+
 ### list_plugins
 
 Get the current state of every installed plugin (name, description, active/inactive).

@@ -136,10 +136,6 @@ export async function refreshActiveTrip() {
   }
 }
 
-export function getActiveTripId() {
-  return activeTripId;
-}
-
 export function resetActiveTrip() {
   activeTripId = null;
   lastSubmit = 0;

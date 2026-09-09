@@ -359,7 +359,7 @@ impl SearchService {
     pub async fn search(&self, query: &str) -> Result<Vec<SearchResult>, AppError> {
         let url = format!(
             "https://api.duckduckgo.com/?q={}&format=json&no_html=1&skip_disambig=1",
-            urlencoding(query)
+            urlencode_form(query)
         );
 
         let resp = self.client.get(&url).send().await?;
@@ -422,7 +422,7 @@ impl SearchService {
     pub async fn search_html(&self, query: &str, max: usize) -> Result<Vec<SearchResult>, AppError> {
         let url = format!(
             "https://html.duckduckgo.com/html/?q={}",
-            urlencoding(query)
+            urlencode_form(query)
         );
 
         let resp = self
@@ -463,19 +463,35 @@ struct DuckDuckGoResponse {
 }
 
 #[derive(Debug, Deserialize)]
+// Field names mirror DuckDuckGo's PascalCase JSON exactly — do NOT rename
+// them (serde relies on the exact casing).
+#[allow(non_snake_case)]
 struct RelatedTopic {
     Text: Option<String>,
     Topics: Option<Vec<RelatedTopic>>,
 }
 
-fn urlencoding(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            ' ' => "+".to_string(),
-            _ => format!("%{:02X}", c as u8),
-        })
-        .collect()
+/// Percent-encode a URI component, encoding the **UTF-8 bytes** of every
+/// character (non-ASCII must not be truncated to its low byte). Spaces
+/// become `%20`. Shared by core and plugins so every HTTP client encodes
+/// queries identically.
+pub fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Form-style variant used for `application/x-www-form-urlencoded` query
+/// values (spaces become `+`).
+fn urlencode_form(s: &str) -> String {
+    percent_encode(s).replace("%20", "+")
 }
 
 fn decode_html_entities(s: &str) -> String {
@@ -710,14 +726,17 @@ impl SupertonicClient {
         text: &str,
         lang: &str,
         voice: Option<&str>,
+        speed: Option<f32>,
     ) -> Result<Vec<u8>, AppError> {
         let voice = voice.unwrap_or(&self.default_voice);
+        let speed = speed.unwrap_or(1.0).clamp(0.7, 2.0);
         let body = serde_json::json!({
             "model": "supertonic-3",
             "input": text,
             "voice": voice,
             "response_format": "wav",
             "lang": lang,
+            "speed": speed,
         });
 
         let resp = self

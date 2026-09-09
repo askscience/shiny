@@ -968,7 +968,21 @@ export function mountPdfTile() {
 }
 
 export function unmountPdfTile() {
+  closeDocMenu();
   tileEl?.remove();
+  // Drop ALL references (incl. body-level popups) so a later
+  // mountPdfTile() builds a fresh tile instead of returning the detached
+  // old one, and no orphaned popup survives the window it belonged to.
+  tileEl = null;
+  titleInput = null;
+  docMenuBtn = null;
+  statusEl = null;
+  saveDot = null;
+  railEl = null;
+  canvasEl = null;
+  pageLabelEl = null;
+  zoomLabelEl = null;
+  menuMode = 'default';
 }
 
 export function getPdfTileElement() {

@@ -109,16 +109,16 @@ impl RadioBrowserClient {
             limit
         );
         if let Some(name) = q.name.filter(|s| !s.trim().is_empty()) {
-            path.push_str(&format!("&name={}", urlencoding(name.trim())));
+            path.push_str(&format!("&name={}", shiny_plugin_sdk::services::percent_encode(name.trim())));
         }
         if let Some(tag) = q.tag.filter(|s| !s.trim().is_empty()) {
-            path.push_str(&format!("&tag={}", urlencoding(tag.trim())));
+            path.push_str(&format!("&tag={}", shiny_plugin_sdk::services::percent_encode(tag.trim())));
         }
         if let Some(country) = q.country.filter(|s| !s.trim().is_empty()) {
-            path.push_str(&format!("&country={}", urlencoding(country.trim())));
+            path.push_str(&format!("&country={}", shiny_plugin_sdk::services::percent_encode(country.trim())));
         }
         if let Some(language) = q.language.filter(|s| !s.trim().is_empty()) {
-            path.push_str(&format!("&language={}", urlencoding(language.trim())));
+            path.push_str(&format!("&language={}", shiny_plugin_sdk::services::percent_encode(language.trim())));
         }
         self.get(&path).await
     }
@@ -126,7 +126,7 @@ impl RadioBrowserClient {
     /// Fetch a single station by its UUID.
     pub async fn by_uuid(&self, uuid: &str) -> Result<Option<Station>, AppError> {
         let stations: Vec<Station> = self
-            .get(&format!("stations/byuuid/{}", urlencoding(uuid)))
+            .get(&format!("stations/byuuid/{}", shiny_plugin_sdk::services::percent_encode(uuid)))
             .await?;
         Ok(stations.into_iter().next())
     }
@@ -135,17 +135,9 @@ impl RadioBrowserClient {
     /// (This is the endpoint Radio Browser asks players to hit on play.)
     pub async fn register_click(&self, uuid: &str) -> Result<String, AppError> {
         let resp: ClickResponse = self
-            .get(&format!("url/{}", urlencoding(uuid)))
+            .get(&format!("url/{}", shiny_plugin_sdk::services::percent_encode(uuid)))
             .await?;
         Ok(resp.url)
     }
 }
 
-fn urlencoding(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            _ => format!("%{:02X}", c as u8),
-        })
-        .collect()
-}

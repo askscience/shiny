@@ -15,6 +15,7 @@ use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request, path_params_from_request};
 use shiny_plugin_sdk::services::PluginCtx;
 
+use crate::cache;
 use crate::mail::{self, Account};
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
@@ -28,6 +29,8 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "mail_accounts_delete" => accounts_delete(ctx),
         "mail_folders" => folders(ctx),
         "mail_list" => mail_list(ctx),
+        "mail_search" => mail_search(ctx),
+        "mail_sync" => mail_sync(ctx),
         "mail_message" => mail_message(ctx),
         "mail_send" => mail_send(ctx),
         "mail_flag" => mail_flag(ctx),
@@ -365,8 +368,66 @@ fn mail_list(ctx: Arc<PluginCtx>) -> RouteHandler {
             let a = mail::resolve_account(ctx.db(), &uid, q.account.as_deref())?;
             let folder = q.folder.unwrap_or_else(|| "INBOX".into());
             let page = q.page.unwrap_or(0);
-            let messages = mail::list_envelopes(a, folder, page).await?;
-            Ok(ok(json!({ "messages": messages })))
+
+            // First use backfills the cache; later list calls are local.
+            if mail::needs_backfill(ctx.db(), &uid, &a.id, &folder)? {
+                mail::sync_folder(ctx.db(), &uid, a.clone(), folder.clone()).await?;
+            }
+            let offset = (page as usize) * 60;
+            let messages = cache::list(ctx.db(), &uid, &a.id, &folder, 60, offset)?;
+            let total = cache::total(ctx.db(), &uid, &a.id, &folder)?;
+            Ok(ok(json!({ "messages": messages, "total": total, "page": page })))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    account: Option<String>,
+    folder: Option<String>,
+    query: Option<String>,
+}
+
+fn mail_search(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let (q, _req) = take_query::<SearchQuery>(req).await?;
+            let query = q
+                .query
+                .ok_or_else(|| AppError::BadRequest("search query required".into()))?;
+            let a = mail::resolve_account(ctx.db(), &uid, q.account.as_deref())?;
+
+            let eff_folder = q.folder.clone().unwrap_or_else(|| "INBOX".into());
+            if mail::needs_backfill(ctx.db(), &uid, &a.id, &eff_folder)? {
+                mail::sync_folder(ctx.db(), &uid, a.clone(), eff_folder).await?;
+            }
+
+            let messages = cache::search(ctx.db(), &uid, Some(&a.id), q.folder.as_deref(), &query, 60)?;
+            Ok(ok(json!({ "messages": messages, "query": query })))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct SyncBody {
+    account: Option<String>,
+    folder: Option<String>,
+}
+
+fn mail_sync(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let axum::Json(body) = axum::Json::<SyncBody>::from_request(req, &())
+                .await
+                .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+            let a = mail::resolve_account(ctx.db(), &uid, body.account.as_deref())?;
+            let folder = body.folder.unwrap_or_else(|| "INBOX".into());
+            let summary = mail::sync_folder(ctx.db(), &uid, a, folder).await?;
+            Ok(ok(summary))
         }
     })
 }
@@ -382,7 +443,15 @@ fn mail_message(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .ok_or_else(|| AppError::BadRequest("message id required".into()))?;
             let a = mail::resolve_account(ctx.db(), &uid, q.account.as_deref())?;
             let folder = q.folder.unwrap_or_else(|| "INBOX".into());
-            let message = mail::get_message(a, folder, id).await?;
+
+            let message = match cache::get(ctx.db(), &uid, &a.id, &folder, &id)? {
+                Some(m) => m,
+                None => {
+                    let m = mail::get_message(a.clone(), folder.clone(), id.clone()).await?;
+                    cache::upsert_message(ctx.db(), &uid, &a.id, &folder, &id, &m)?;
+                    m
+                }
+            };
             Ok(ok(message))
         }
     })
@@ -413,6 +482,7 @@ fn mail_send(ctx: Arc<PluginCtx>) -> RouteHandler {
             let a = mail::resolve_account(ctx.db(), &uid, body.account_id.as_deref())?;
             let sent = mail::send(
                 a,
+                &uid,
                 body.to,
                 body.cc.unwrap_or_default(),
                 body.bcc.unwrap_or_default(),
@@ -444,7 +514,7 @@ fn mail_flag(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
             let a = mail::resolve_account(ctx.db(), &uid, body.account_id.as_deref())?;
             let folder = body.folder.unwrap_or_else(|| "INBOX".into());
-            mail::set_seen(a, folder, body.ids, body.seen).await?;
+            mail::set_seen(ctx.db(), &uid, a, folder, body.ids, body.seen).await?;
             Ok(ok(json!({ "flagged": true })))
         }
     })

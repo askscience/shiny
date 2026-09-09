@@ -19,7 +19,7 @@ use trem::pitch::{Pitch, Scale, Tuning};
 use trem::time::beat_to_sample;
 
 use crate::fx;
-use crate::voices::{self, build_instrument, ParamDef};
+use crate::voices::{self, build_instrument};
 use crate::wav::encode_wav;
 
 const SAMPLE_RATE: f64 = 44100.0;
@@ -282,22 +282,6 @@ pub fn default_kit() -> Vec<VoiceConfig> {
     ]
 }
 
-/// Master FX parameter catalog + defaults.
-pub fn fx_defaults() -> &'static [ParamDef] {
-    use voices::def as d;
-    static FX: std::sync::OnceLock<Vec<ParamDef>> = std::sync::OnceLock::new();
-    FX.get_or_init(|| {
-        vec![
-            d("delay_mix", "Delay Mix", 0.0, 1.0, 0.01, 0.0),
-            d("delay_time", "Delay Time", 1.0, 2000.0, 1.0, 250.0),
-            d("feedback", "Feedback", 0.0, 0.95, 0.01, 0.4),
-            d("reverb_mix", "Reverb Mix", 0.0, 1.0, 0.01, 0.0),
-            d("reverb_size", "Reverb Size", 0.0, 1.0, 0.01, 0.5),
-            d("reverb_damp", "Reverb Damp", 0.0, 1.0, 0.01, 0.5),
-        ]
-    })
-}
-
 fn fx_val(fx: &HashMap<String, f64>, key: &str, default: f64) -> f64 {
     fx.get(key).copied().unwrap_or(default).clamp(-100_000.0, 100_000.0)
 }
@@ -308,7 +292,6 @@ pub struct Rendered {
     pub sample_rate: u32,
     pub channels: u32,
     pub duration_ms: u32,
-    pub frames: usize,
     pub wav: Vec<u8>,
 }
 
@@ -393,7 +376,7 @@ fn drumkit_pads(v: &VoiceConfig) -> Vec<PadConfig> {
 /// `(start_beat, end_beat, degree, octave, velocity)` events (ratchet splits).
 fn apply_midi(midi: &[MidiFxConfig], start: u32, len: u32, degree: i32, octave: i32, velocity: f64, steps: u32) -> Vec<(f64, f64, i32, i32, f64)> {
     let mut deg = degree;
-    let mut oct = octave;
+    let oct = octave;
     let mut vel = velocity;
     let mut gate = 1.0;
     let mut ratchet = 0u32;
@@ -884,7 +867,6 @@ pub fn render_track(cfg: &TrackConfig) -> Result<Rendered, String> {
         sample_rate: p.sample_rate,
         channels: 2,
         duration_ms: p.duration_ms,
-        frames: p.frames,
         wav,
     })
 }
@@ -1036,6 +1018,14 @@ pub fn parse_arrangement(value: &serde_json::Value) -> Result<Arrangement, Strin
         serde_json::from_value(value.clone()).map_err(|e| format!("invalid arrangement: {e}"))?;
     a.bpm = a.bpm.clamp(40.0, 240.0);
     a.length_beats = a.length_beats.clamp(4.0, 256.0);
+    // `envelope_at` assumes breakpoints are ordered by beat — the model
+    // sometimes emits them out of order, which silently breaks interpolation.
+    for track in &mut a.tracks {
+        for lane in &mut track.automation.lanes {
+            lane.points
+                .sort_by(|x, y| x.beat.partial_cmp(&y.beat).unwrap_or(std::cmp::Ordering::Equal));
+        }
+    }
     Ok(a)
 }
 
@@ -1133,7 +1123,6 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
         sample_rate: SAMPLE_RATE as u32,
         channels: 2,
         duration_ms,
-        frames: total,
         wav,
     })
 }
@@ -1211,7 +1200,7 @@ mod tests {
     #[test]
     fn grid_patch_renders_with_modulation() {
         use crate::grid::{GridCable, GridModule, GridPatch};
-        let p = |k: &str| -> HashMap<String, f64> { HashMap::new() };
+        let p = |_k: &str| -> HashMap<String, f64> { HashMap::new() };
         let mut patch = GridPatch::default();
         patch.modules = vec![
             GridModule { id: "o".into(), kind: "osc".into(), params: p("o") },

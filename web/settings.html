@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
   <title>Shiny — Settings</title>
@@ -121,6 +122,26 @@
                 <input type="range" id="gradient-angle" class="ui-slider" min="0" max="360" step="5" value="135" aria-label="Gradient angle">
               </div>
             </details>
+
+            <h4 class="settings-subhead">Desktop surface</h4>
+            <p class="settings-hint">Fine-tune how every plugin window looks on the desktop.</p>
+
+            <label for="surface-radius">Window corners <span id="surface-radius-value"></span></label>
+            <input type="range" id="surface-radius" class="ui-slider" min="0" max="32" step="1" value="28" aria-label="Window corner radius">
+
+            <label for="surface-opacity">Window opacity <span id="surface-opacity-value"></span></label>
+            <input type="range" id="surface-opacity" class="ui-slider" min="60" max="100" step="1" value="100" aria-label="Window opacity">
+
+            <label for="surface-blur">Glass blur <span id="surface-blur-value"></span></label>
+            <input type="range" id="surface-blur" class="ui-slider" min="0" max="24" step="1" value="12" aria-label="Glass blur">
+
+            <div class="ui-row ui-toggle-row">
+              <div class="ui-list-item-main">
+                <div class="ui-list-item-title">Window shadows</div>
+                <div class="ui-list-item-sub">Give windows a soft drop shadow instead of a flat hairline.</div>
+              </div>
+              <button type="button" class="ui-toggle" role="switch" id="surface-shadow-toggle" aria-checked="false"></button>
+            </div>
           </section>
 
           <section class="settings-section settings-panel" id="panel-background" data-panel="background">
@@ -174,12 +195,37 @@
             <label for="ai-name-input">Assistant name</label>
             <input type="text" id="ai-name-input" class="ui-input" placeholder="Shiny" maxlength="32" autocomplete="off">
             <p class="settings-hint">Say &ldquo;Hey, <span id="ai-name-hint">Shiny</span>&rdquo; to activate voice on long press.</p>
-            <label for="ollama-model-select">AI model</label>
+
+            <label for="ai-provider-select">AI provider</label>
             <div class="ui-select-wrap settings-control">
-              <select id="ollama-model-select" class="ui-select"></select>
+              <select id="ai-provider-select" class="ui-select">
+                <option value="ollama">Ollama (local)</option>
+                <option value="openai">OpenAI-compatible endpoint</option>
+              </select>
               <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
             </div>
-            <p id="ollama-model-hint" class="settings-hint">Models from your local Ollama server.</p>
+            <p class="settings-hint">Ollama runs entirely on this device. An OpenAI-compatible endpoint works with OpenAI, OpenRouter, LM Studio, vLLM and other servers.</p>
+
+            <div id="ollama-provider-fields">
+              <label for="ollama-model-select">AI model</label>
+              <div class="ui-select-wrap settings-control">
+                <select id="ollama-model-select" class="ui-select"></select>
+                <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+              </div>
+              <p id="ollama-model-hint" class="settings-hint">Models from your local Ollama server.</p>
+            </div>
+
+            <div id="openai-provider-fields" class="hidden">
+              <label for="openai-base-url-input">Endpoint base URL</label>
+              <input type="text" id="openai-base-url-input" class="ui-input" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false">
+
+              <label for="openai-api-key-input">API key</label>
+              <input type="password" id="openai-api-key-input" class="ui-input" placeholder="sk-…" autocomplete="off">
+
+              <label for="openai-model-input">Model</label>
+              <input type="text" id="openai-model-input" class="ui-input" placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false">
+              <p id="openai-model-hint" class="settings-hint">The exact model name your endpoint expects.</p>
+            </div>
           </section>
 
           <section class="settings-section settings-panel" id="panel-plugins" data-panel="plugins">
@@ -227,6 +273,9 @@
               <input type="range" id="desktop-gap" class="ui-slider" min="0" max="40" step="2" value="12" aria-label="Window gap">
             </div>
 
+            <label for="desktop-title-height">Title bar height <span id="desktop-title-value"></span></label>
+            <input type="range" id="desktop-title-height" class="ui-slider" min="28" max="48" step="1" value="36" aria-label="Window title bar height">
+
             <p class="settings-hint" id="desktop-shortcuts-hint">Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.</p>
           </section>
 
@@ -240,7 +289,50 @@
               <select id="lang-select" class="ui-select"></select>
               <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
             </div>
-            <p class="settings-hint">Speech recognition downloads a model per language (~50&nbsp;MB, cached in the browser).</p>
+            <p class="settings-hint">Controls speech recognition, spoken replies and the language the assistant writes in. <strong>Automatic</strong> follows your browser language; pick a language to pin it for this account.</p>
+
+            <label for="tts-voice-select">Voice</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="tts-voice-select" class="ui-select">
+                <option value="">Default (server)</option>
+                <option value="M1">M1</option>
+                <option value="M2">M2</option>
+                <option value="M3">M3</option>
+                <option value="M4">M4</option>
+                <option value="M5">M5</option>
+                <option value="F1">F1</option>
+                <option value="F2">F2</option>
+                <option value="F3">F3</option>
+                <option value="F4">F4</option>
+                <option value="F5">F5</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+            <p class="settings-hint">The Supertonic voice used for spoken replies.</p>
+
+            <label for="tts-speed">Speech speed <span id="tts-speed-value"></span></label>
+            <input type="range" id="tts-speed" class="ui-slider" min="0.7" max="2" step="0.1" value="1" aria-label="Speech speed">
+
+            <label for="silence-select">Stop listening after</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="silence-select" class="ui-select">
+                <option value="4000">4 seconds</option>
+                <option value="6000">6 seconds</option>
+                <option value="8000">8 seconds</option>
+                <option value="12000">12 seconds</option>
+                <option value="20000">20 seconds</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+            <p class="settings-hint">How long to wait for speech before canceling a tap-to-talk input.</p>
+
+            <div class="ui-row ui-toggle-row">
+              <div class="ui-list-item-main">
+                <div class="ui-list-item-title">Wake word</div>
+                <div class="ui-list-item-sub">Long-press listens for &ldquo;Hey&hellip;&rdquo; before a command; when off it just listens.</div>
+              </div>
+              <button type="button" class="ui-toggle" role="switch" id="wake-toggle" aria-checked="true"></button>
+            </div>
           </section>
 
           <section class="settings-section settings-panel" id="panel-session" data-panel="session">
@@ -253,12 +345,12 @@
             <div class="ui-row ui-toggle-row">
               <div class="ui-list-item-main">
                 <div class="ui-list-item-title">Remember my workspace</div>
-                <div class="ui-list-item-sub">Restore plugins, windows, chats and saved cards from last time.</div>
+                <div class="ui-list-item-sub">Restore your windows, layout and workspaces from last time.</div>
               </div>
               <button type="button" class="ui-toggle" role="switch" id="remember-toggle" aria-checked="false"></button>
             </div>
 
-            <p class="settings-hint"><strong>Off</strong>: every sign-in starts a fresh desktop with no plugins, no windows and a new chat. <strong>On</strong>: everything is restored as you left it. Takes effect when you return to Shiny.</p>
+            <p class="settings-hint"><strong>On</strong>: your windows, layout and workspaces come back exactly as you left them. <strong>Off</strong>: each sign-in starts with a clean desktop — but your plugins and chats stay as you set them. Takes effect when you return to Shiny.</p>
           </section>
 
         </div>

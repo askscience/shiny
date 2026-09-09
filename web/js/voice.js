@@ -1,9 +1,8 @@
 import { apiFetch, getVoiceLang, setVoiceLang } from './api.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
-import { getAiName } from './preferences.js';
+import { getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout } from './preferences.js';
 import { insightCard } from '../ui/index.js';
 
-const SILENCE_TIMEOUT_MS = 8000;
 const WAKE_WAIT_TIMEOUT_MS = 15000;
 const WAKE_COMMAND_TIMEOUT_MS = 8000;
 
@@ -19,6 +18,9 @@ let sttLang = 'en';
 let silenceTimer = null;
 let wakeDetected = false;
 let awaitingCommand = false;
+// True while the voice download card is the only thing keeping the
+// (chat-mode hidden) insight strip visible.
+let unhidInsightStrip = false;
 
 function createDownloadCard(lang) {
   const existing = document.getElementById('voice-download-card');
@@ -26,6 +28,14 @@ function createDownloadCard(lang) {
 
   const container = document.getElementById('insight-cards');
   if (!container) return null;
+
+  // In chat-only mode the strip is hidden ("no artifact chrome") — the
+  // download progress is VOICE feedback, so show the strip while the card
+  // lives in it. Without this the download ran invisibly.
+  if (container.classList.contains('hidden')) {
+    container.classList.remove('hidden');
+    unhidInsightStrip = true;
+  }
 
   const details = document.createElement('div');
   const bar = document.createElement('div');
@@ -60,6 +70,13 @@ function updateDownloadCard(card, pct, status) {
 
 function removeDownloadCard(card) {
   if (card) card.remove();
+  // Re-hide the strip we unhid — but only if nothing else (insight cards)
+  // was rendered into it meanwhile.
+  const container = document.getElementById('insight-cards');
+  if (unhidInsightStrip && container && !container.childElementCount) {
+    container.classList.add('hidden');
+  }
+  unhidInsightStrip = false;
 }
 
 function clearSilenceTimer() {
@@ -115,7 +132,7 @@ function armSilenceTimer() {
       detail: { message: "Didn't catch that", type: 'info' },
     }));
     window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
-  }, SILENCE_TIMEOUT_MS);
+  }, getSilenceTimeout());
 }
 
 function armWakeWaitTimer() {
@@ -245,7 +262,10 @@ async function initVosk(lang) {
     voskModel = null;
   }
 
-  const modelUrl = `/api/voice/models/vosk/${lang}.tar.gz`;
+  // The `v` query param is a cache-buster: vosk-browser derives its
+  // IndexedDB folder name from the whole URL, so bumping it forces a fresh
+  // download of a re-packed model (e.g. after the ivector-layout fix).
+  const modelUrl = `/api/voice/models/vosk/${lang}.tar.gz?v=2`;
   voskModel = await Vosk.createModel(modelUrl);
 }
 
@@ -365,7 +385,12 @@ export async function speak(text, lang) {
   try {
     const blob = await apiFetch('/api/tts', {
       method: 'POST',
-      body: JSON.stringify({ text, lang: voiceLang, voice: 'M1' }),
+      body: JSON.stringify({
+        text,
+        lang: voiceLang,
+        voice: getTtsVoice() || 'M1',
+        speed: getTtsSpeed(),
+      }),
       responseType: 'blob',
     });
     const url = URL.createObjectURL(blob);
@@ -383,17 +408,8 @@ export async function speak(text, lang) {
   }
 }
 
-export async function changeLanguage(lang) {
-  setVoiceLang(lang);
-  await prepareVoice();
-}
-
 export function isListening() {
   return listening;
-}
-
-export function getListenMode() {
-  return listenMode;
 }
 
 export function isWakeAwaitingCommand() {

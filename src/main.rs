@@ -217,8 +217,9 @@ impl Write for TeeWriter {
     }
 }
 
-/// `MakeWriter` that hands each log line an independent file handle (opened
-/// with O_APPEND, so concurrent writes land at the end without interleaving).
+/// `MakeWriter` that hands each log line a cloned file handle. The clone
+/// shares the original's O_APPEND open-file description, so concurrent
+/// writes land at the end without interleaving (not "an independent handle").
 struct TeeMakeWriter {
     file: std::fs::File,
 }
@@ -256,14 +257,44 @@ fn spawn_supertonic_sidecar(supertonic_url: &str) {
 
 fn spawn_diary_cron(diary_gen: Arc<DiaryGenerator>, generate_time: String) {
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600));
-        loop {
-            interval.tick().await;
-            let now = chrono::Local::now().format("%H:%M").to_string();
-            if now == generate_time {
-                tracing::info!("Auto-generating daily diary entries...");
-                diary_gen.auto_generate_daily().await;
+        // Parse the configured HH:MM once. The old implementation ticked
+        // every hour *from process start*, so the "%H:%M == target" check
+        // only ever matched if the server happened to start during the
+        // target minute. Instead, sleep until the next actual occurrence.
+        let (h, m) = match generate_time.split_once(':') {
+            Some((h, m)) => match (h.trim().parse::<u32>(), m.trim().parse::<u32>()) {
+                (Ok(h), Ok(m)) if h < 24 && m < 60 => (h, m),
+                _ => {
+                    tracing::warn!(
+                        "Invalid DIARY_GENERATE_TIME '{generate_time}', falling back to 21:00"
+                    );
+                    (21, 0)
+                }
+            },
+            None => {
+                tracing::warn!(
+                    "Invalid DIARY_GENERATE_TIME '{generate_time}', falling back to 21:00"
+                );
+                (21, 0)
             }
+        };
+        loop {
+            let now = chrono::Local::now().naive_local();
+            let today_target = now
+                .date()
+                .and_hms_opt(h, m, 0)
+                .expect("h<24 and m<60 checked above");
+            let next = if now < today_target {
+                today_target
+            } else {
+                today_target + chrono::Duration::days(1)
+            };
+            let wait = (next - now)
+                .to_std()
+                .unwrap_or(std::time::Duration::from_secs(60));
+            tokio::time::sleep(wait).await;
+            tracing::info!("Auto-generating daily diary entries...");
+            diary_gen.auto_generate_daily().await;
         }
     });
 }

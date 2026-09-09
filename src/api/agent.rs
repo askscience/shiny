@@ -12,7 +12,6 @@ use crate::errors::AppError;
 use crate::models::Traveler;
 use crate::services::agent_runner::{run_agent, AgentRunInput, AgentRunResult};
 use crate::services::agent_tools::{fetch_active_trip, AgentContext};
-use crate::services::artifacts::Artifact;
 use crate::services::navigation::NavigationSession;
 
 #[derive(Deserialize)]
@@ -100,6 +99,47 @@ fn first_name(full: &str) -> String {
         .to_string()
 }
 
+/// Human-readable language name for the system prompt — a bare two-letter code
+/// ("it") is easy for a model to ignore, a name ("Italian") is not.
+fn language_name(code: &str) -> String {
+    match code.to_lowercase().as_str() {
+        "ar" => "Arabic",
+        "bg" => "Bulgarian",
+        "cs" => "Czech",
+        "da" => "Danish",
+        "de" => "German",
+        "el" => "Greek",
+        "en" => "English",
+        "es" => "Spanish",
+        "et" => "Estonian",
+        "fi" => "Finnish",
+        "fr" => "French",
+        "hi" => "Hindi",
+        "hr" => "Croatian",
+        "hu" => "Hungarian",
+        "id" => "Indonesian",
+        "it" => "Italian",
+        "ja" => "Japanese",
+        "ko" => "Korean",
+        "lt" => "Lithuanian",
+        "lv" => "Latvian",
+        "nl" => "Dutch",
+        "pl" => "Polish",
+        "pt" => "Portuguese",
+        "ro" => "Romanian",
+        "ru" => "Russian",
+        "sk" => "Slovak",
+        "sl" => "Slovenian",
+        "sv" => "Swedish",
+        "tr" => "Turkish",
+        "uk" => "Ukrainian",
+        "vi" => "Vietnamese",
+        "zh" => "Chinese",
+        other => other,
+    }
+    .to_string()
+}
+
 /// "## Desktop" block describing the current workspace layout, so the model
 /// knows where each window lives and can reorganize without creating empty
 /// workspaces.
@@ -134,6 +174,9 @@ struct PreparedAgent {
     input: AgentRunInput,
     trip_id: Option<String>,
     conversation_id: String,
+    /// Ollama model the client explicitly asked for on this request (from the
+    /// `ollama_model` body field). Honored over the persisted preference.
+    requested_model: Option<String>,
 }
 
 async fn prepare_agent(
@@ -149,23 +192,25 @@ async fn prepare_agent(
         heading: None,
     });
 
+    let requested_model: Option<String> = body
+        .ollama_model
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+
     let ctx = AgentContext {
         lat: ctx_body.lat,
         lon: ctx_body.lon,
         heading: ctx_body.heading,
         lang: lang.clone(),
-        ollama_model: body
-            .ollama_model
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from),
+        ollama_model: requested_model.clone(),
     };
 
     // Per-user active plugin set FOR THIS SESSION — drives which plugins'
     // skills / persona / context lines enter the system prompt. Fresh mode
-    // (`session.remember` off) yields an empty set, so the agent sees only the
-    // core assistant.
+    // (`session.remember` off) yields the explicitly-enabled plugins, so a
+    // fresh sign-in sees only what the user has turned on.
     let installed: std::collections::BTreeSet<String> =
         state.plugins.session_active_set(&traveler.id).await;
 
@@ -323,22 +368,19 @@ async fn prepare_agent(
         body.conversation_id.as_deref(),
     )
     .await?;
-    let history = crate::services::chat_memory::recent_history(&state.pool, &conversation_id, 16).await?;
+    let history = crate::services::chat_memory::recent_history(&state.pool, &conversation_id, 40).await?;
     let history_block = if history.is_empty() {
         String::new()
     } else {
         let lines: Vec<String> = history
             .iter()
-            .map(|(role, content)| {
-                let trimmed = content.trim().chars().take(500).collect::<String>();
-                format!("{role}: {trimmed}")
-            })
+            .map(|(role, content)| format!("{role}: {}", content.trim()))
             .collect();
         format!("\n## Conversation history (remember earlier turns)\n{}\n", lines.join("\n"))
     };
 
     let system = format!(
-        "You are {ai_name}, {persona}. Reply in language code '{lang}'. Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them.\n\
+        "You are {ai_name}, {persona}. Always reply in {lang_name}. Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them.\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
          Address the user as {user_first} when it feels natural.\n\
          \n\
@@ -353,7 +395,7 @@ async fn prepare_agent(
          Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
-        lang = lang,
+        lang_name = language_name(&lang),
         ai_lower = ai_name.to_lowercase(),
         user_first = user_first,
         skill = skill,
@@ -371,6 +413,7 @@ async fn prepare_agent(
     Ok(PreparedAgent {
         trip_id: active_trip.as_ref().map(|t| t.id.clone()),
         conversation_id,
+        requested_model,
         input: AgentRunInput {
             message: body.message,
             mode,
@@ -378,6 +421,7 @@ async fn prepare_agent(
             ai_name,
             system,
             plugins_hint,
+            history,
             ctx,
         },
     })
@@ -411,14 +455,24 @@ pub async fn handle_agent(
     Json(body): Json<AgentRequest>,
 ) -> Result<Json<AgentResponse>, AppError> {
     let prepared = prepare_agent(&state, &traveler, body).await?;
+    let ai = state.resolve_ai(&traveler.id).await;
     let trip_id = prepared.trip_id.clone();
     let conversation_id = prepared.conversation_id.clone();
     let user_message = prepared.input.message.clone();
+    // Honor the model the client asked for on this request (Ollama only); the
+    // OpenAI client bakes its configured model in.
+    let model: Option<String> = if ai.client.is_openai() {
+        None
+    } else {
+        prepared.requested_model.clone().or_else(|| ai.model.clone())
+    };
 
     let result = run_agent(
         &state,
         &traveler,
         trip_id.as_deref(),
+        &ai.client,
+        model.as_deref(),
         prepared.input,
         |_| {},
     )
@@ -426,7 +480,7 @@ pub async fn handle_agent(
 
     let _ = crate::services::chat_memory::save_turn(
         &state.pool,
-        &state.ollama,
+        &ai.client,
         &traveler.id,
         &conversation_id,
         &user_message,
@@ -445,10 +499,18 @@ pub async fn handle_agent_stream(
     Json(body): Json<AgentRequest>,
 ) -> Result<Sse<impl stream::Stream<Item = Result<Event, Infallible>>>, AppError> {
     let prepared = prepare_agent(&state, &traveler, body).await?;
+    let ai = state.resolve_ai(&traveler.id).await;
+    // Honor the model the client asked for on this request (Ollama only).
+    let model: Option<String> = if ai.client.is_openai() {
+        None
+    } else {
+        prepared.requested_model.clone().or_else(|| ai.model.clone())
+    };
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     let state = state.clone();
     let traveler = traveler.clone();
+    let ai = ai.clone();
     let trip_id = prepared.trip_id.clone();
     let input = prepared.input;
     let conversation_id = prepared.conversation_id.clone();
@@ -465,6 +527,8 @@ pub async fn handle_agent_stream(
             &state,
             &traveler,
             trip_id.as_deref(),
+            &ai.client,
+            model.as_deref(),
             input,
             |msg| emit(AgentStreamEvent::Step {
                 message: msg.to_string(),
@@ -475,7 +539,7 @@ pub async fn handle_agent_stream(
             Ok(result) => {
                 let _ = crate::services::chat_memory::save_turn(
                     &state.pool,
-                    &state.ollama,
+                    &ai.client,
                     &traveler.id,
                     &conversation_id,
                     &user_message,

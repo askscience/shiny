@@ -108,11 +108,13 @@ async function deleteSheet(id) {
 /* ── Formula evaluation ─────────────────────────────────────── */
 
 const FN = {
+  // All aggregates receive ONLY the finite numeric values from the range
+  // (empty and text cells are skipped by `rangeValues`, Excel-style).
   SUM: (vs) => vs.reduce((a, b) => a + b, 0),
   AVERAGE: (vs) => (vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0),
   MIN: (vs) => (vs.length ? Math.min(...vs) : 0),
   MAX: (vs) => (vs.length ? Math.max(...vs) : 0),
-  COUNT: (vs) => vs.filter((v) => Number.isFinite(v)).length,
+  COUNT: (vs) => vs.length,
 };
 
 function tokenizeFormula(src) {
@@ -128,9 +130,11 @@ function tokenizeFormula(src) {
       i = j;
       continue;
     }
-    if (/[A-Z]/.test(ch)) {
+    // Words accept lower case too — function names (`sum(…)`) and cell
+    // refs (`a1`) are case-insensitive.
+    if (/[A-Za-z]/.test(ch)) {
       let j = i;
-      while (j < src.length && /[A-Z0-9]/.test(src[j])) j++;
+      while (j < src.length && /[A-Za-z0-9]/.test(src[j])) j++;
       tokens.push({ type: 'word', value: src.slice(i, j) });
       i = j;
       continue;
@@ -161,7 +165,12 @@ function cellNumber(cells, ref, seen) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function rangeRefs(a, b, cells, seen) {
+/**
+ * Numeric values of a range for aggregate functions: empty cells and text
+ * cells are SKIPPED (not counted as 0), so AVERAGE/COUNT behave like a
+ * spreadsheet. Formulas are evaluated; failing formulas are skipped.
+ */
+function rangeValues(a, b, cells, seen) {
   const out = [];
   const r1 = Math.min(a.row, b.row);
   const r2 = Math.max(a.row, b.row);
@@ -169,7 +178,17 @@ function rangeRefs(a, b, cells, seen) {
   const c2 = Math.max(a.col, b.col);
   for (let r = r1; r <= r2; r++) {
     for (let c = c1; c <= c2; c++) {
-      out.push(cellNumber(cells, cellRef(r, c), seen));
+      const ref = cellRef(r, c);
+      const raw = cells.get(ref);
+      if (raw == null || raw === '') continue; // empty → skip
+      if (String(raw).startsWith('=')) {
+        // Formula cells always contribute (errors evaluate to 0, matching
+        // plain arithmetic references).
+        out.push(cellNumber(cells, ref, seen));
+        continue;
+      }
+      const n = Number(String(raw).replace(/,/g, ''));
+      if (Number.isFinite(n)) out.push(n); // text → skip
     }
   }
   return out;
@@ -186,19 +205,25 @@ export function evalFormula(src, cells, seen = new Set()) {
   function next() { return tokens[pos++]; }
 
   function parseExpr() {
+    // One loop for BOTH + and - so mixed chains stay left-associative
+    // ("10-2+3" is 11, not 8).
     let v = parseTerm();
-    while (peek() && peek().type === '+') { next(); v += parseTerm(); }
-    while (peek() && peek().type === '-') { next(); v -= parseTerm(); }
+    while (peek() && (peek().type === '+' || peek().type === '-')) {
+      const op = next().type;
+      const r = parseTerm();
+      v = op === '+' ? v + r : v - r;
+    }
     return v;
   }
 
   function parseTerm() {
+    // Same for * and / — "8/2*3" is 12, not 4.
     let v = parseFactor();
-    while (peek() && peek().type === '*') { next(); v *= parseFactor(); }
-    while (peek() && peek().type === '/') {
-      next();
+    while (peek() && (peek().type === '*' || peek().type === '/')) {
+      const op = next().type;
       const d = parseFactor();
-      v = d === 0 ? NaN : v / d;
+      if (op === '*') v *= d;
+      else v = d === 0 ? NaN : v / d;
     }
     return v;
   }
@@ -230,7 +255,7 @@ export function evalFormula(src, cells, seen = new Set()) {
           const toTok = next();
           const second = toTok ? parseRef(toTok.value) : null;
           if (second) {
-            out.push(...rangeRefs(first, second, cells, seen));
+            out.push(...rangeValues(first, second, cells, seen));
             continue;
           }
         }
@@ -253,8 +278,10 @@ export function evalFormula(src, cells, seen = new Set()) {
       // Function call: WORD(...) — SUM, AVERAGE, MIN, MAX, COUNT.
       if (peek() && peek().type === '(') {
         next();
-        const fn = FN[t.value];
-        const args = parseArgs();
+        const fn = FN[t.value.toUpperCase()];
+        // Non-numeric scalar args are skipped so COUNT/AVERAGE agree with
+        // their range behavior.
+        const args = parseArgs().filter((v) => Number.isFinite(v));
         if (peek() && peek().type === ')') next();
         return fn ? fn(args) : NaN;
       }
@@ -268,7 +295,7 @@ export function evalFormula(src, cells, seen = new Set()) {
         if (!to) return NaN;
         const ref2 = parseRef(to.value);
         if (!ref2) return NaN;
-        return rangeRefs(ref, ref2, cells, seen)
+        return rangeValues(ref, ref2, cells, seen)
           .reduce((a, b) => a + b, 0);
       }
       return cellNumber(cells, t.value, seen);

@@ -11,6 +11,7 @@ pub mod search;
 pub mod agent;
 pub mod voice;
 pub mod insights;
+pub mod ai;
 pub mod ollama;
 
 use axum::Router;
@@ -18,7 +19,6 @@ use axum::routing::{delete, get, patch, post, put};
 use shiny_plugin_sdk::routes::{HttpMethod, RouteHandler, RouteSpec};
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use std::path::PathBuf;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -51,6 +51,13 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Resolve the AI provider for one traveler: the shared Ollama client by
+    /// default, or an OpenAI-compatible client when that provider is configured
+    /// in the user's Assistant settings.
+    pub async fn resolve_ai(&self, traveler_id: &str) -> crate::services::ai::ResolvedAi {
+        crate::services::ai::resolve_for_user(&self.pool, &self.ollama, traveler_id).await
+    }
+
     /// Build an `Arc<PluginCtx>` for handing to plugins at install/on_load time.
     pub fn plugin_ctx(&self) -> Arc<shiny_plugin_sdk::services::PluginCtx> {
         // A neutral manifest is used when constructing the base ctx; the loader
@@ -223,6 +230,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
+        .route("/api/auth/logout", post(auth::logout))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
         // Desktop background image: upload/serve/remove the caller's file.
         .route("/api/background", get(background::serve).post(background::upload)
@@ -251,6 +259,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chat/conversations/:id", get(chat::conversation_messages).delete(chat::delete_conversation))
         .route("/api/search", post(search::search_web))
         .route("/api/agent", post(agent::handle_agent_dispatch))
+        .route("/api/ai/models", get(ai::list_models))
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))

@@ -59,9 +59,14 @@ def download_and_pack(lang: str) -> dict:
         shutil.move(str(src), str(extract_dir))
     zip_path.unlink(missing_ok=True)
 
+    # Pack with a top-level wrapper directory. vosk-browser's WASM model loader
+    # always extracts with `strip_first_component = true`, so entries must be
+    # "<wrapper>/<am|conf|graph|ivector>/…" for the subdirectories to survive.
+    # Without the wrapper, the `ivector/` folder is flattened to the root and
+    # Vosk can't find `ivector/final.ie` → "Ivector feature dimension mismatch".
     with tarfile.open(tar_path, "w:gz") as tar:
         for item in extract_dir.iterdir():
-            tar.add(item, arcname=item.name)
+            tar.add(item, arcname=f"{extract_dir.name}/{item.name}")
 
     size_mb = tar_path.stat().st_size / (1024 * 1024)
     return {"status": "ready", "lang": stt_lang, "size_mb": round(size_mb, 1)}

@@ -13,6 +13,13 @@ pub async fn generate_for_date(
     traveler_id: &str,
     date: &str,
 ) -> Result<DiaryEntry, AppError> {
+    // The date arrives from the LLM's tool params — accept only a real
+    // YYYY-MM-DD calendar date (it is also an SQL bind below).
+    if chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
+        return Err(AppError::BadRequest(format!(
+            "Invalid date '{date}': expected YYYY-MM-DD"
+        )));
+    }
     let locations = sqlx::query_as::<_, Location>(
         "SELECT * FROM locations WHERE traveler_id = ?1 AND date(timestamp) = ?2 ORDER BY timestamp ASC",
     )
@@ -85,7 +92,7 @@ pub async fn generate_for_date(
     .bind(&entry.date)
     .bind(&title)
     .bind(&entry.content_markdown)
-    .bind(&content[..content.len().min(200)])
+    .bind(&content.chars().take(200).collect::<String>())
     .bind(entry.auto_generated)
     .execute(ctx.pool().await)
     .await?;

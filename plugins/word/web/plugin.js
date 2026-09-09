@@ -492,7 +492,17 @@ export function mountWordTile() {
 /** Deactivated mid-edit: flush, drop the window. */
 export function unmountWordTile() {
   if (currentDoc && dirty) void persist();
+  closeDocMenu();
   tileEl?.remove();
+  // Drop ALL references so a later mountWordTile() builds a fresh tile
+  // instead of returning the detached old one.
+  tileEl = null;
+  editorEl = null;
+  titleInput = null;
+  docMenuBtn = null;
+  statusEl = null;
+  saveDot = null;
+  toolbarBtns = {};
 }
 
 /** The tile element (or null when the word window is not mounted). */
@@ -510,20 +520,27 @@ function onAgentActions(e) {
   // Always surface the Word window when the AI touches documents.
   window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: WORD_PLUGIN } }));
 
-  const created = docActions.some((a) => a.action === 'doc_create' && a.result === 'ok');
-  const wrote = docActions.some((a) => a.action === 'doc_write' && a.result === 'ok');
   const deleted = docActions.some((a) => a.action === 'doc_delete' && a.result === 'ok');
-  const read = docActions.some((a) => a.action === 'doc_read' && a.result === 'ok');
+  // The action payload carries the touched doc_id (now always present).
+  const touchedId = docActions
+    .map((a) => a.data?.doc_id)
+    .find((id) => !!id);
 
-  if (created) {
-    // New doc: open the newest after a short settle.
-    void refreshDocs().then(() => window.setTimeout(() => void openNewest(), 250));
-  } else if (wrote || read || deleted) {
-    void refreshDocs().then(() => {
-      if (wrote && currentDoc) void openDoc(currentDoc);
-      else if (deleted) void openNewest();
-    });
-  }
+  void (async () => {
+    await refreshDocs();
+    if (deleted) {
+      await openNewest();
+      return;
+    }
+    if (touchedId) {
+      // Flush the user's unsaved edits before switching away.
+      if (dirty && currentDoc) {
+        try { await persist(); } catch (_) { /* keep going */ }
+      }
+      const found = docs.find((d) => d.id === touchedId);
+      if (found) await openDoc(found);
+    }
+  })();
 }
 
 let wired = false;

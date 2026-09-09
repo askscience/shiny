@@ -204,7 +204,9 @@ async fn existing_plugin_key(
 
 /// Persist an artifact. `plugin` is the owning plugin's name ("core" for
 /// built-in tools). When `None` (frontend upserts / merges), the existing
-/// attribution is preserved so re-saves never strip the owner.
+/// attribution is preserved so re-saves never strip the owner. Likewise a
+/// `None` trip_id preserves the stored association (merge updates carry no
+/// trip context and must not orphan the artifact from its trip).
 pub async fn save_artifact(
     pool: &SqlitePool,
     traveler_id: &str,
@@ -215,6 +217,17 @@ pub async fn save_artifact(
     let plugin_key: Option<String> = match plugin {
         Some(p) => Some(p.to_string()),
         None => existing_plugin_key(pool, traveler_id, &artifact.id).await?,
+    };
+    let trip_key: Option<String> = match trip_id {
+        Some(t) => Some(t.to_string()),
+        None => sqlx::query_scalar::<_, Option<String>>(
+            "SELECT trip_id FROM saved_artifacts WHERE id = ?1 AND traveler_id = ?2",
+        )
+        .bind(&artifact.id)
+        .bind(traveler_id)
+        .fetch_optional(pool)
+        .await?
+        .flatten(),
     };
 
     let mut payload = serde_json::to_value(artifact)
@@ -233,11 +246,12 @@ pub async fn save_artifact(
            artifact_type = excluded.artifact_type, \
            title = excluded.title, \
            payload_json = excluded.payload_json, \
-           updated_at = datetime('now')",
+           updated_at = datetime('now') \
+         WHERE saved_artifacts.traveler_id = excluded.traveler_id",
     )
     .bind(&artifact.id)
     .bind(traveler_id)
-    .bind(trip_id)
+    .bind(&trip_key)
     .bind(&artifact.artifact_type)
     .bind(&artifact.title)
     .bind(&payload)

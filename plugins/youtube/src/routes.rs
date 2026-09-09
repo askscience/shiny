@@ -39,14 +39,13 @@ async fn take_query<T: DeserializeOwned + Send + 'static>(
     Ok((query.0, axum::extract::Request::from_parts(parts, body)))
 }
 
-fn yt_search(ctx: Arc<PluginCtx>) -> RouteHandler {
+fn yt_search(_ctx: Arc<PluginCtx>) -> RouteHandler {
     #[derive(Deserialize)]
     struct SearchQuery {
         q: String,
     }
 
     bridged_route(move |req: axum::extract::Request| {
-        let ctx = ctx.clone();
         async move {
             let _uid = user_id(&req)?;
             let (q, _) = take_query::<SearchQuery>(req).await?;

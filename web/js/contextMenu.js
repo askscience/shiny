@@ -156,9 +156,15 @@ function buildSubmenuItem(entry, parentEl) {
   let subEl = null;
 
   const openSub = () => {
-    if (subEl) return;
-    // Close any other open submenu of this menu first.
-    if (parentEl.__openSub) closeFrom(parentEl.__openSub);
+    // Already open (and still attached)? Nothing to do.
+    if (subEl && subEl.isConnected) return;
+    // Close any other open submenu of this menu first, and drop stale
+    // bookkeeping: after a submenu was closed elsewhere, the old `subEl`
+    // reference stayed set and silently blocked reopening it.
+    if (parentEl.__openSub) {
+      if (parentEl.__openSub.isConnected) closeFrom(parentEl.__openSub);
+      parentEl.__openSub = null;
+    }
 
     subEl = buildMenu(entry.items);
     document.body.appendChild(subEl);

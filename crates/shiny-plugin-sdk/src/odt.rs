@@ -198,6 +198,15 @@ impl P {
         if self.peek() != Some('<') {
             return None;
         }
+        // `<` only counts as markup when followed by a tag-name start
+        // (`/`, `!`, `?`, or an ASCII letter). Otherwise it is a literal
+        // `<` in prose (e.g. "5 < 6") and callers emit it as text.
+        let next = self.c.get(self.i + 1).copied();
+        let plausible = matches!(next, Some('/') | Some('!') | Some('?'))
+            || next.map_or(false, |c| c.is_ascii_alphabetic());
+        if !plausible {
+            return None;
+        }
         let mut j = self.i + 1;
         while j < self.c.len() && self.c[j] != '>' {
             j += 1;
@@ -588,15 +597,24 @@ fn escape_and_collapse(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut in_tag = false;
     let mut ws_run = false;
-    let mut prev_was_tag = false;
     let chars: Vec<char> = raw.chars().collect();
     let mut i = 0;
     while i < chars.len() {
         let ch = chars[i];
         if ch == '<' {
-            in_tag = true;
-            prev_was_tag = true;
-            out.push('<');
+            // Only the ODT markup this generator itself emits
+            // (`<text:…>` / `</text:…>`) is passed through raw. A bare `<`
+            // in prose (e.g. "5 < 6") is TEXT: escaping it here keeps it
+            // from being treated as a tag opener that swallows everything
+            // up to the next `>`.
+            let rest: String = chars[i + 1..].iter().take(6).collect();
+            if rest.trim_start_matches('/').starts_with("text:") {
+                in_tag = true;
+                out.push('<');
+            } else {
+                out.push_str("&lt;");
+                ws_run = false;
+            }
             i += 1;
             continue;
         }
@@ -617,7 +635,6 @@ fn escape_and_collapse(raw: &str) -> String {
                 out.push(' ');
                 ws_run = true;
             }
-            prev_was_tag = false;
             i += 1;
             continue;
         }
@@ -643,11 +660,10 @@ fn escape_and_collapse(raw: &str) -> String {
                 }
                 out.push_str("&amp;");
             }
-            '<' => out.push_str("&lt;"),
+            // (a bare '<' cannot reach here — it is handled, escaped, above)
             '>' => out.push_str("&gt;"),
             _ => out.push(ch),
         }
-        prev_was_tag = false;
         i += 1;
     }
     out
@@ -822,6 +838,24 @@ mod tests {
         assert!(back.contains("<i>italics</i>"), "italics lost: {back}");
         assert!(back.contains("bold</b> paragraph"), "space after span lost: {back}");
         assert!(back.contains("<ul><li>item one</li><li>item two</li></ul>"), "list lost: {back}");
+    }
+
+    #[test]
+    fn literal_angle_brackets_are_escaped() {
+        // "5 < 6" must survive as escaped text — a bare `<` must not be
+        // treated as a tag opener that dumps the rest of the document
+        // unescaped.
+        let html = "<p>5 < 6 and 7 > 4</p>";
+        let odt = html_to_odt("t", html).unwrap();
+        let xml = read_content_xml(&odt).unwrap();
+        assert!(
+            xml.contains("5 &lt; 6 and 7 &gt; 4"),
+            "angle brackets not escaped: {xml}"
+        );
+        // The produced XML stays parseable; the HTML import keeps the `<`
+        // as an entity (correct HTML — browsers render "5 < 6").
+        let back = odt_to_html(&odt).unwrap();
+        assert!(back.contains("5 &lt; 6"), "content lost on round trip: {back}");
     }
 }
 

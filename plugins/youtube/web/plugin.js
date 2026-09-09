@@ -67,7 +67,12 @@ function renderHero() {
 }
 
 function playVideo(v) {
-  if (!tileEl || !v?.video_id) return;
+  if (!v?.video_id) return;
+  // Focus FIRST: this also mounts the tile when it isn't up yet. The old
+  // order bailed on `!tileEl` before focus, so an agent "play" with the
+  // window closed silently did nothing.
+  window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: YOUTUBE_PLUGIN } }));
+  if (!tileEl || !frameEl) return; // focus mounts synchronously
   current = {
     video_id: v.video_id,
     title: v.title || 'YouTube video',
@@ -76,8 +81,6 @@ function playVideo(v) {
   };
   frameEl.src = `https://www.youtube.com/embed/${v.video_id}?autoplay=1&rel=0`;
   renderHero();
-  // Bring the window forward (desktop pulse / phone switch / full screen).
-  window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: YOUTUBE_PLUGIN } }));
 }
 
 function reset() {

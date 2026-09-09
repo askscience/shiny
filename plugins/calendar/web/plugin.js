@@ -120,6 +120,9 @@ function renderWeekdays() {
 }
 
 function renderGrid() {
+  // Calendar data loads can resolve after the tile was unmounted (gridEl
+  // torn down) — guard so a late render doesn't throw on a null node.
+  if (!gridEl) return;
   gridEl.textContent = '';
   const first = new Date(viewYear, viewMonth, 1);
   const startOffset = first.getDay();

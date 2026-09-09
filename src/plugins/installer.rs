@@ -4,7 +4,6 @@
 //! All installation attempts (success and failure) are appended to
 //! `data/plugins/install.log` so admins can audit issues offline.
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -12,10 +11,11 @@ use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::manifest::Manifest;
 use shiny_plugin_sdk::services::PluginCtx;
 
+use crate::plugins::loader::find_cdylib;
 use crate::plugins::manager::PluginManager;
 
 /// Append a single line to `<plugins_dir>/install.log`.
-fn log_event(plugins_dir: &Path, line: &str) {
+pub(crate) fn log_event(plugins_dir: &Path, line: &str) {
     let log_path = plugins_dir.join("install.log");
     if let Some(parent) = log_path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -104,6 +104,13 @@ pub async fn install_archive(
             return Err(AppError::BadRequest(format!("Invalid plugin.toml: {}", e)));
         }
     };
+    // The manifest name is joined into `plugins_dir` below — reject anything
+    // that is not a single safe path component (path traversal).
+    if let Err(e) = crate::plugins::loader::validate_plugin_name(&manifest.name) {
+        log_event(plugins_dir, &format!("reject-name name={:?}", manifest.name));
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(e);
+    }
     log_event(plugins_dir, &format!(
         "manifest-ok name={} version={} api_level={}",
         manifest.name, manifest.version, manifest.api_level
@@ -131,15 +138,18 @@ pub async fn install_archive(
         )));
     }
 
-    // Installation lock — prevents two concurrent installs racing on the same
-    // plugin name.
+    // Installation lock — serializes concurrent installs. Two layers: an
+    // in-process async mutex (same-server races) and an advisory file lock
+    // (multi-process). Held until the end of `install_archive`.
+    static INSTALL_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _process_guard = INSTALL_MUTEX.lock().await;
     let lockfile = plugins_dir.join(".install.lock");
-    let _lock = lock(&lockfile)?;
+    let _lock = acquire_lock(&lockfile).await?;
 
     let final_dir = plugins_dir.join(&manifest.name);
+    let backup = plugins_dir.join(format!("{}.bak", manifest.name));
     if final_dir.exists() {
         // Back up the previous installation as `<name>.bak` so people can roll back.
-        let backup = plugins_dir.join(format!("{}.bak", manifest.name));
         if backup.exists() {
             std::fs::remove_dir_all(&backup).ok();
         }
@@ -148,6 +158,10 @@ pub async fn install_archive(
     if let Err(e) = std::fs::rename(&install_dir, &final_dir) {
         log_event(plugins_dir, &format!("rename-failed: {e}"));
         let _ = std::fs::remove_dir_all(&staging);
+        // The previous install (if any) was moved to `.bak` — put it back.
+        if backup.exists() {
+            let _ = std::fs::rename(&backup, &final_dir);
+        }
         return Err(AppError::Internal(format!("rename failed: {e}")));
     }
     // Clean staging
@@ -158,8 +172,14 @@ pub async fn install_archive(
         Ok(n) => n,
         Err(e) => {
             log_event(plugins_dir, &format!("register-failed name={}: {e}", manifest.name));
-            // Roll back the install dir if registration failed.
+            // Roll back the new install dir, then restore the `.bak` of the
+            // previous working version so a failed upgrade doesn't leave the
+            // plugin missing entirely.
             let _ = std::fs::remove_dir_all(&final_dir);
+            if backup.exists() {
+                let _ = std::fs::rename(&backup, &final_dir);
+                log_event(plugins_dir, &format!("restored-backup name={}", manifest.name));
+            }
             return Err(e);
         }
     };
@@ -167,6 +187,29 @@ pub async fn install_archive(
         "install-ok name={}", installed_name
     ));
     Ok(installed_name)
+}
+
+/// Open `path` and take an exclusive advisory lock on it (blocking, but run
+/// on a blocking thread so the async worker isn't stalled). The lock lives as
+/// long as the returned `File`.
+async fn acquire_lock(path: &Path) -> Result<std::fs::File, AppError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+    let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File, AppError> {
+        file.lock().map_err(|e| {
+            AppError::Internal(format!("failed to acquire the plugin install lock: {e}"))
+        })?;
+        Ok(file)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("install lock task failed: {e}")))??;
+    Ok(file)
 }
 
 fn extract(bytes: &[u8], format: ArchiveFormat, dest: &Path) -> Result<(), AppError> {
@@ -223,36 +266,6 @@ fn find_install_root(staging: &Path) -> PathBuf {
     staging.to_path_buf()
 }
 
-fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
-    let mut fallback: Option<PathBuf> = None;
-    let mut stack = vec![install_dir.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                let fname = entry.file_name().to_string_lossy().to_lowercase();
-                let is_cdylib = fname.ends_with(".so")
-                    || fname.ends_with(".dylib")
-                    || fname.ends_with(".dll");
-                if !is_cdylib {
-                    continue;
-                }
-                if fname.contains(name) {
-                    return Some(path);
-                }
-                if fallback.is_none() {
-                    fallback = Some(path);
-                }
-            }
-        }
-    }
-    fallback
-}
-
 fn unique_staging_dir(plugins_dir: &Path) -> PathBuf {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -260,12 +273,4 @@ fn unique_staging_dir(plugins_dir: &Path) -> PathBuf {
         .unwrap_or(0);
     let pid = std::process::id();
     plugins_dir.join(format!("_staging-{}-{}", pid, ts))
-}
-
-fn lock(path: &Path) -> Result<Option<std::fs::File>, AppError> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let f = std::fs::OpenOptions::new().create(true).write(true).truncate(false).open(path)?;
-    Ok(Some(f))
 }

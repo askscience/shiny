@@ -334,9 +334,3 @@ export function initHudTrips() {
   window.addEventListener('artifact:saved', renderSavedTrips);
   window.addEventListener('artifact:updated', renderSavedTrips);
 }
-
-/** Back-compat: both halves (used where traveler is known active). */
-export function initHudLeft() {
-  initHudClock();
-  initHudTrips();
-}

@@ -100,7 +100,7 @@
 /* Fullscreen in Windows layout: fill the desktop area without covering the
    top HUD (the grid itself already sits below it). */
 #tile-grid.tile-grid--windows .tile--full {
-  border-radius: var(--radius-lg);
+  border-radius: var(--window-radius, var(--radius-lg));
 }
 
 .tile {
@@ -108,12 +108,13 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--window-radius, var(--radius-lg));
   border: 1px solid var(--glass-border);
-  /* Opaque window surface — a desktop background must never bleed through a
-     plugin window. `--bg-elevated` is #0a0a0a in the noir theme and would be a
-     light surface in a light theme, so it follows the active theme. */
-  background: var(--bg-elevated);
+  /* Window surface. Opaque by default (--window-opacity: 100%) so a desktop
+     background must never bleed through a plugin window unless the user
+     lowers the opacity. `--bg-elevated` follows the active theme. */
+  background: color-mix(in srgb, var(--bg-elevated) var(--window-opacity, 100%), transparent);
+  box-shadow: var(--window-shadow, none);
   overflow: hidden;
   pointer-events: auto;
   transition: border-color var(--duration-normal) var(--ease-out);
@@ -139,17 +140,14 @@
 /* ── Window chrome (title bar + controls) ─────────────────────
    Every plugin window gets a slim title bar: close + fullscreen controls on
    the left, the plugin name centered. In Windows layout the bar is also the
-   drag handle; in tiling layout it is decorative but keeps the controls. */
-.tile {
-  --tile-header-height: 36px;
-}
-
+   drag handle; in tiling layout it is decorative but keeps the controls.
+   `--tile-header-height` is user-configurable (Settings → Desktop). */
 .tile-header {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
-  height: var(--tile-header-height);
+  height: var(--tile-header-height, 36px);
   padding: 0 8px;
   border-bottom: 1px solid var(--glass-border);
   background: var(--glass);
@@ -273,7 +271,7 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: 0 0 var(--window-radius, var(--radius-lg)) var(--window-radius, var(--radius-lg));
   overflow: hidden;
   inset: auto;
   /* Contain Leaflet's z-indexed panes (400+) so sibling UI — the in-tile
@@ -2412,12 +2410,39 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .mail-list {
   flex: 0 0 300px;
   min-width: 260px;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--glass-border);
   background: var(--bg);
+}
+
+.mail-search {
+  flex: none;
+  padding: 8px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.mail-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+}
+.mail-search-input:focus { outline: none; border-color: var(--accent); }
+
+.mail-list-items {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
 }
 
 .mail-item {

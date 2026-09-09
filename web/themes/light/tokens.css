@@ -66,6 +66,14 @@
   --radius-lg: 28px;
   --radius-xl: 36px;
 
+  /* Desktop window surface — user-configurable granular settings
+     (Settings → Appearance / Desktop). Overridden inline per user by
+     preferences.js. */
+  --window-radius: var(--radius-lg);
+  --window-opacity: 100%;
+  --window-shadow: none;
+  --tile-header-height: 36px;
+
   /* Light & elevation — depth from a soft drop shadow + a bright top
      catch-light; surfaces stay crisp white on the gray canvas. */
   --highlight-top: rgba(255, 255, 255, 0.9);

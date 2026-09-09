@@ -1,14 +1,14 @@
-import { getVoiceLang, setVoiceLang, getTraveler } from './api.js';
+import { getTraveler } from './api.js';
 import { requireAuth } from './auth.js';
 import { initMap, getCurrentPosition } from './map.js';
 import {
   initSphere, setSphereState, onShortTap, onLongPressStart, onLongPressEnd,
-  onDoubleTap, isConversationMode, setConversationMode, setMicLevel, resetMicLevel,
+  onDoubleTap, setConversationMode, setMicLevel, resetMicLevel,
   getSphereState,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
-import { sendToAgent, sendToAgentCompose, newChat } from './agent.js';
-import { startGpsTracking } from './gps.js';
+import { sendToAgent, sendToAgentCompose } from './agent.js';
+import { startGpsTracking, stopGpsTracking } from './gps.js';
 import {
   initThemeLoader, initAppearance, refreshAppearance,
   wireToastEvents, wireNotificationEvents, toast, hydrateIcons, reveal,
@@ -25,7 +25,7 @@ import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
 import { reloadUserSession } from './session.js';
-import { loadUserPreferences, getRemember } from './preferences.js';
+import { loadUserPreferences, getWakeWord } from './preferences.js';
 import { initBackground } from './background.js';
 
 let appInitialized = false;
@@ -43,10 +43,6 @@ function cancelVoiceInput() {
 }
 
 async function boot() {
-  if (!localStorage.getItem('voice.lang')) {
-    setVoiceLang((navigator.language || 'en-US').split('-')[0]);
-  }
-
   // Theme + appearance first: everything renders through these tokens.
   await initThemeLoader();
   initAppearance({ getScope: () => getTraveler()?.id });
@@ -101,10 +97,6 @@ async function initApp() {
   }
   appInitialized = true;
 
-  // Fresh mode starts a brand-new conversation; the old chats stay saved and
-  // come back when "Remember workspace" is on.
-  if (!getRemember()) newChat();
-
   initSphere();
   initArtifactDock();
   initTextInput(submitTextToAgent);
@@ -143,7 +135,6 @@ async function applyTravelerActivation() {
 
   const mapVignette = document.getElementById('map-vignette');
   const navPuck = document.getElementById('nav-puck');
-  const navBanner = document.getElementById('nav-banner');
   const hudSavedTrips = document.getElementById('hud-saved-trips');
   const travelPanel = document.getElementById('travel-panel');
   const travelPanelBackdrop = document.getElementById('travel-panel-backdrop');
@@ -164,7 +155,6 @@ async function applyTravelerActivation() {
   } else {
     hide(mapVignette);
     hide(navPuck);
-    hide(navBanner);
     hide(hudSavedTrips);
     hudSavedTrips?.classList.add('empty');
     hide(travelPanel);
@@ -172,6 +162,9 @@ async function applyTravelerActivation() {
     hide(insightCards);
     // Chat-only mode: no artifact chrome.
     hide(document.getElementById('artifact-dock'));
+    // The GPS watch belongs to traveler mode — leaving it running drains
+    // battery and keeps pinging the location API with the map gone.
+    stopGpsTracking();
   }
 }
 
@@ -220,7 +213,9 @@ function wireSphere() {
       return;
     }
     try {
-      await startListening('wake');
+      // Long-press is the wake-word gesture; when the wake word is disabled it
+      // falls back to a normal single-shot listen.
+      await startListening(getWakeWord() ? 'wake' : 'single');
     } catch (e) {
       setConversationMode(false);
       setSphereState('error');

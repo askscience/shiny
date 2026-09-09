@@ -154,7 +154,7 @@ fn image_create(ctx: Arc<PluginCtx>) -> RouteHandler {
 
             let stem = original_name
                 .as_deref()
-                .map(|n| n.rsplit('.').nth(1).unwrap_or(n))
+                .map(|n| n.split('.').next().filter(|s| !s.is_empty()).unwrap_or(n))
                 .unwrap_or("Untitled");
             let title = clean_title(stem);
             let id = uuid::Uuid::new_v4().to_string();
@@ -295,9 +295,15 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
                     &s.original, s.orig_w, s.orig_h,
                     &operations,
                 )?;
-                s.raw = nr.clone();
-                s.w = nw;
-                s.h = nh;
+                // Only a COMMIT becomes the session baseline. A preview
+                // (commit=false) used to replace the in-memory pixels too,
+                // so the next operation would stack on top of the preview
+                // instead of the last committed state.
+                if commit {
+                    s.raw = nr.clone();
+                    s.w = nw;
+                    s.h = nh;
+                }
                 Ok((nr, nw, nh))
             })?;
 

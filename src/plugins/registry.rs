@@ -8,7 +8,7 @@ use shiny_plugin_sdk::context::AgentContext;
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
-use shiny_plugin_sdk::tools::{Tool, ToolRequest, normalize_action_name, ParamHelpers};
+use shiny_plugin_sdk::tools::{Tool, ToolRequest, normalize_action_name};
 use serde_json::Value;
 
 use std::collections::BTreeSet;
@@ -24,6 +24,10 @@ pub struct ToolRegistry {
     owner: Arc<RwLock<HashMap<String, String>>>,
     /// Reference to the plugin manager for activation lookups. None for tests.
     manager: Arc<RwLock<Option<PluginManager>>>,
+    /// Per-plugin `PluginCtx` (with the plugin's real manifest and its lazy
+    /// service singletons). Tool invocations run against the owner's ctx so
+    /// `ctx.manifest.name` is correct and pools/clients are reused.
+    plugin_ctx: Arc<RwLock<HashMap<String, Arc<PluginCtx>>>>,
 }
 
 impl ToolRegistry {
@@ -48,18 +52,31 @@ impl ToolRegistry {
         }
     }
 
-    pub fn install(&self, tool: Arc<dyn Tool>) {
-        self.install_owned(tool, "");
-    }
-
-    pub fn uninstall(&self, tool_name: &str) {
+    /// Remove every tool owned by `plugin_name` — primary keys **and**
+    /// aliases, including stale keys from a previous version of the plugin
+    /// that no longer registers them. Must run before the plugin's library
+    /// is unloaded so no `Arc<dyn Tool>` can outlive its cdylib.
+    pub fn uninstall_plugin(&self, plugin_name: &str) {
         let mut map = self.tools.write();
         let mut owner = self.owner.write();
-        let key = normalize_action_name(tool_name);
-        map.remove(&key);
-        owner.remove(&key);
-        map.retain(|_, v| v.name() != tool_name);
-        owner.retain(|_, v| v != tool_name);
+        let mut ctxs = self.plugin_ctx.write();
+        let stale_keys: Vec<String> = owner
+            .iter()
+            .filter(|(_, v)| v.as_str() == plugin_name)
+            .map(|(k, _)| k.clone())
+            .collect();
+        for key in stale_keys {
+            map.remove(&key);
+            owner.remove(&key);
+        }
+        ctxs.remove(plugin_name);
+    }
+
+    /// Remember the plugin's own `PluginCtx` so tool invocations run with the
+    /// real manifest (and its lazily-created service singletons) instead of a
+    /// fresh contextless one per call.
+    pub fn set_plugin_ctx(&self, plugin_name: &str, ctx: Arc<PluginCtx>) {
+        self.plugin_ctx.write().insert(plugin_name.to_string(), ctx);
     }
 
     pub fn list(&self) -> Vec<String> {
@@ -116,6 +133,16 @@ impl ToolRegistry {
                 }
             }
         }
+
+        // Prefer the plugin's own ctx (real manifest, shared lazy services)
+        // for the invocation; core-built-in tools (owner "") use the
+        // caller-provided one.
+        let owner_ctx = if owner.is_empty() {
+            None
+        } else {
+            self.plugin_ctx.read().get(&owner).cloned()
+        };
+        let ctx = owner_ctx.as_deref().unwrap_or(ctx);
 
         let req = ToolRequest {
             user_id,
@@ -177,6 +204,3 @@ impl ToolRegistry {
         }
     }
 }
-
-// Re-export helpers for internal use against `serde_json::Value`.
-pub use shiny_plugin_sdk::tools::ParamHelpers as _SdkParamHelpers;

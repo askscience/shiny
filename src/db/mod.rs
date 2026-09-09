@@ -88,6 +88,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
             .await?;
     }
 
+    let migration8 = include_str!("../../migrations/008_chat_indexes.sql");
+    sqlx::raw_sql(migration8).execute(pool).await?;
+
     tracing::info!("Database migrations applied");
     Ok(())
 }

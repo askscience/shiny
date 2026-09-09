@@ -109,7 +109,12 @@ impl Db {
         if rc != SQLITE_OK {
             return Err(AppError::Internal(format!("sqlite: {}", errmsg(db))));
         }
-        bind_all(stmt, params)?;
+        // Finalize on bind failure too — an early `?` here leaked the
+        // statement (and its DB locks) for the life of the connection.
+        if let Err(e) = bind_all(stmt, params) {
+            unsafe { libsqlite3_sys::sqlite3_finalize(stmt) };
+            return Err(e);
+        }
         let step = unsafe { libsqlite3_sys::sqlite3_step(stmt) };
         if step != SQLITE_DONE && step != SQLITE_ROW {
             let e = AppError::Internal(format!("sqlite: {}", errmsg(db)));
@@ -139,7 +144,11 @@ impl Db {
         if rc != SQLITE_OK {
             return Err(AppError::Internal(format!("sqlite: {}", errmsg(db))));
         }
-        bind_all(stmt, params)?;
+        // See `execute`: never leak the statement on a bind failure.
+        if let Err(e) = bind_all(stmt, params) {
+            unsafe { libsqlite3_sys::sqlite3_finalize(stmt) };
+            return Err(e);
+        }
 
         let mut rows = Vec::new();
         loop {
@@ -168,7 +177,13 @@ impl Db {
 
 impl Drop for Db {
     fn drop(&mut self) {
-        let raw = *self.raw.get_mut().unwrap();
+        // A poisoned mutex (some thread panicked mid-query) must not turn
+        // Drop into a second panic during unwinding — that aborts the
+        // process. The raw handle is still valid either way.
+        let raw = match self.raw.get_mut() {
+            Ok(r) => *r,
+            Err(poisoned) => *poisoned.into_inner(),
+        };
         if !raw.is_null() {
             unsafe { libsqlite3_sys::sqlite3_close(raw) };
         }

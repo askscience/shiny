@@ -77,6 +77,8 @@ let foldersEl = null;
 let listEl = null;
 let readerEl = null;
 let bodyEl = null;
+let searchInputEl = null;
+let searchTimer = null;
 
 let accounts = [];
 let presets = [];
@@ -87,6 +89,9 @@ let currentFolder = 'INBOX';
 let messages = [];
 let selectedMessageId = null;
 let currentMessage = null;
+// Bumped per openMessage so a slow fetch for message A can't overwrite the
+// reader after the user clicked message B.
+let openToken = 0;
 let busy = false;
 
 /* Account picker popup (body-level). */
@@ -126,6 +131,20 @@ function listMessages(accountId, folder, page = 0) {
   if (accountId) q.set('account', accountId);
   if (page) q.set('page', String(page));
   return api(`/api/mail/list?${q}`);
+}
+
+function searchMessages(accountId, query, folder) {
+  const q = new URLSearchParams({ query });
+  if (accountId) q.set('account', accountId);
+  if (folder) q.set('folder', folder);
+  return api(`/api/mail/search?${q}`);
+}
+
+function syncMail(accountId, folder) {
+  return api('/api/mail/sync', {
+    method: 'POST',
+    body: JSON.stringify({ account: accountId, folder }),
+  });
 }
 
 function fetchMessage(accountId, folder, id) {
@@ -225,6 +244,40 @@ async function refreshStatus({ keepFolder = false } = {}) {
   }
 }
 
+/** Pull new mail into the local cache, then reload the current folder. */
+async function syncNow() {
+  const account = pickAccount();
+  if (!account) return;
+  try {
+    const r = await syncMail(account.id, currentFolder);
+    toast(`Mail synced — ${r?.new ?? 0} new, ${r?.total ?? 0} cached`, { type: 'info' });
+  } catch (e) {
+    toast(e.message || 'Mail sync failed', { type: 'error' });
+  }
+  await refreshStatus({ keepFolder: true });
+}
+
+/** Debounced local search over the cached mail. */
+function onSearch(query) {
+  if (searchTimer) window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(async () => {
+    const q = (query || '').trim();
+    const account = pickAccount();
+    if (!account) return;
+    if (!q) {
+      await loadMessages();
+      return;
+    }
+    try {
+      const r = await searchMessages(account.id, q, currentFolder);
+      messages = r?.messages || [];
+      renderMessages();
+    } catch (e) {
+      toast(e.message || 'Search failed', { type: 'error' });
+    }
+  }, 300);
+}
+
 async function loadFolders() {
   const account = pickAccount();
   if (!account) return;
@@ -270,6 +323,7 @@ async function loadMessages() {
 async function openMessage(id) {
   const account = pickAccount();
   if (!account) return;
+  const token = ++openToken;
   const msg = messages.find((m) => m.id === id);
   selectedMessageId = id;
   currentMessage = null;
@@ -278,6 +332,7 @@ async function openMessage(id) {
   readerEl.appendChild(emptyState({ title: 'Loading…' }));
   try {
     const full = await fetchMessage(account.id, currentFolder, id);
+    if (token !== openToken) return; // a newer open won
     currentMessage = full;
     renderMessage(full);
     if (msg && !msg.seen) {
@@ -285,6 +340,7 @@ async function openMessage(id) {
       msg.seen = true;
     }
   } catch (e) {
+    if (token !== openToken) return;
     readerEl.textContent = '';
     readerEl.appendChild(emptyState({ title: 'Could not open message', body: e.message }));
   }
@@ -397,8 +453,20 @@ function render() {
 
   const foldersPane = h('div', 'mail-folders');
   foldersEl = foldersPane;
+
   const listPane = h('div', 'mail-list');
-  listEl = listPane;
+  const searchBar = h('div', 'mail-search');
+  searchInputEl = document.createElement('input');
+  searchInputEl.type = 'search';
+  searchInputEl.className = 'mail-search-input';
+  searchInputEl.placeholder = 'Search cached mail…';
+  searchInputEl.setAttribute('aria-label', 'Search mail');
+  searchInputEl.addEventListener('input', () => onSearch(searchInputEl.value));
+  searchBar.appendChild(searchInputEl);
+  listPane.appendChild(searchBar);
+  listEl = h('div', 'mail-list-items');
+  listPane.appendChild(listEl);
+
   const readerPane = h('div', 'mail-reader');
   readerEl = readerPane;
   readerEl.appendChild(emptyState({ title: 'Select a message', body: 'Pick a message to read it here.' }));
@@ -959,7 +1027,7 @@ export function mountMailTile() {
     barAccountBtn,
     title,
     toolbarButton('ui/plus', 'New message', openCompose),
-    toolbarButton('ui/refresh', 'Refresh', () => void refreshStatus({ keepFolder: true })),
+    toolbarButton('ui/refresh', 'Sync mail', () => void syncNow()),
     toolbarButton('ui/settings', 'Mail accounts', openSettings),
     statusDot,
   );
@@ -1005,14 +1073,28 @@ function onAgentActions(e) {
 
   window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: MAIL_PLUGIN } }));
 
+  const read = mailActions.find((a) => a.action === 'mail_read' && a.result === 'ok' && a.data?.id);
   const sent = mailActions.some((a) => a.action === 'mail_send' && a.result === 'ok');
   const listed = mailActions.some((a) => a.action === 'mail_list' && a.result === 'ok');
-  if (sent) {
+  const searched = mailActions.some((a) => a.action === 'mail_search' && a.result === 'ok');
+
+  if (read) {
+    // Open the exact message the AI read/selected in the reader pane.
+    void (async () => {
+      const { id, folder, account: acctEmail } = read.data || {};
+      if (acctEmail && accounts.some((a) => a.email === acctEmail)) {
+        currentAccount = accounts.find((a) => a.email === acctEmail);
+      }
+      if (folder) currentFolder = folder;
+      try { await loadMessages(); } catch (_) { /* list load is non-fatal */ }
+      await openMessage(id);
+    })();
+  } else if (sent) {
     toast('Message sent', { type: 'info' });
     void refreshStatus({ keepFolder: true });
     // Re-check shortly after: the delivered copy can take a moment to land.
     window.setTimeout(() => void refreshStatus({ keepFolder: true }), 2500);
-  } else if (listed) {
+  } else if (listed || searched) {
     void refreshStatus({ keepFolder: true });
   }
 }

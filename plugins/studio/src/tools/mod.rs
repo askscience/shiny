@@ -219,6 +219,53 @@ impl Tool for StudioDelete {
     }
 }
 
+/* ── studio_update ──────────────────────────────────────────── */
+
+pub struct StudioUpdate;
+
+#[async_trait]
+impl Tool for StudioUpdate {
+    fn name(&self) -> &str { "studio_update" }
+    fn aliases(&self) -> &[&str] { &["update_track", "edit_track"] }
+    fn step_label(&self) -> &str { "Updating studio track…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_update` — Update a stored track's config in place (no re-render). params: `{ track_id, title?, bpm?, steps?, tuning?, voices: [...] }` — `track_id` accepts the UUID or title; pass the full config (same shape as `studio_create`) you want it to become. Use after `studio_get` to edit a track.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");
+        format!("Updated \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let pool = ctx.pool().await;
+        let id = resolve_track_id(pool, req.traveler_id, req.params.param_str("track_id")).await?;
+        let Some(id) = id else {
+            return Err(AppError::NotFound("studio track not found".into()));
+        };
+        let cfg = engine::parse_config(req.params).map_err(AppError::BadRequest)?;
+        let cfg_json = serde_json::to_string(&cfg).map_err(AppError::from)?;
+        let title = if cfg.title.trim().is_empty() { "Untitled".into() } else { cfg.title.trim().to_string() };
+        let changed = store::update_config(
+            pool,
+            &id,
+            req.traveler_id,
+            &cfg_json,
+            &title,
+            cfg.bpm,
+            cfg.steps as i64,
+            &cfg.tuning,
+        )
+        .await?;
+        if !changed {
+            return Err(AppError::NotFound("studio track not found".into()));
+        }
+        Ok(ActionOutcome::ok(
+            "studio_update",
+            json!({ "track_id": id, "title": title, "bpm": cfg.bpm, "steps": cfg.steps, "tuning": cfg.tuning, "has_audio": false }),
+        ))
+    }
+}
+
 /* ── studio_preset_list ─────────────────────────────────────── */
 
 pub struct StudioPresetList;
@@ -377,7 +424,7 @@ impl Tool for StudioArrangementGet {
     fn aliases(&self) -> &[&str] { &["get_arrangement"] }
     fn step_label(&self) -> &str { "Loading studio arrangement…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `studio_arrangement_get` — Full arrangement (tracks + clips + automation) by id. params: `{ id }`.")
+        Some("- `studio_arrangement_get` — Full arrangement (tracks + clips + automation). params: `{ id }` — accepts the UUID or the exact title.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");
@@ -386,7 +433,12 @@ impl Tool for StudioArrangementGet {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let id = req.params.param_str("id").ok_or_else(|| AppError::BadRequest("id required".into()))?;
-        let row = store::get_arrangement(ctx.pool().await, req.traveler_id, &id).await?;
+        let pool = ctx.pool().await;
+        let resolved = store::resolve_arrangement_id(pool, req.traveler_id, &id).await?;
+        let Some(resolved) = resolved else {
+            return Err(AppError::NotFound("arrangement not found".into()));
+        };
+        let row = store::get_arrangement(pool, req.traveler_id, &resolved).await?;
         match row {
             Some(r) => Ok(ActionOutcome::ok("studio_arrangement_get", store::arr_full_json(&r))),
             None => Err(AppError::NotFound("arrangement not found".into())),

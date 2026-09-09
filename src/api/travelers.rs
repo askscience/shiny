@@ -2,6 +2,7 @@ use axum::extract::{Extension, State};
 use axum::Json;
 use serde::Serialize;
 
+use crate::api::auth::{validate_avatar, validate_username};
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::{Traveler, TravelerPublic, UpdateTravelerRequest};
@@ -14,36 +15,6 @@ pub struct TravelerResponse {
 
 fn normalize_username(username: &str) -> String {
     username.trim().to_lowercase()
-}
-
-fn validate_username(username: &str) -> Result<(), AppError> {
-    if username.len() < 2 {
-        return Err(AppError::BadRequest("Username must be at least 2 characters".into()));
-    }
-    if username.len() > 32 {
-        return Err(AppError::BadRequest("Username must be 32 characters or fewer".into()));
-    }
-    if !username
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    {
-        return Err(AppError::BadRequest(
-            "Username may only contain letters, numbers, underscores, and hyphens".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_avatar(avatar: &Option<String>) -> Result<(), AppError> {
-    if let Some(data) = avatar {
-        if data.len() > 512_000 {
-            return Err(AppError::BadRequest("Profile picture is too large".into()));
-        }
-        if !data.is_empty() && !data.starts_with("data:image/") {
-            return Err(AppError::BadRequest("Invalid profile picture format".into()));
-        }
-    }
-    Ok(())
 }
 
 pub async fn get_me(
@@ -60,7 +31,7 @@ pub async fn update_me(
     Extension(traveler): Extension<Traveler>,
     Json(req): Json<UpdateTravelerRequest>,
 ) -> Result<Json<TravelerResponse>, AppError> {
-    validate_avatar(&req.avatar)?;
+    validate_avatar(&req.avatar, true)?;
 
     if let Some(name) = &req.name {
         let name = name.trim();

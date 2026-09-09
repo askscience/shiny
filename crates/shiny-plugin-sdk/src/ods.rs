@@ -112,7 +112,13 @@ fn content_xml(cells: &BTreeMap<String, String>) -> String {
         // Keep at least one empty row so the table is well-formed.
         body.push_str("    <table:table-row/>\n");
     } else {
-        for (_row, cols) in &by_row {
+        // Emit EVERY row number 1..=max_row — sparse sheets must keep their
+        // empty rows, otherwise A3 collapses onto A2 on export→import.
+        for row in 1..=max_row {
+            let Some(cols) = by_row.get(&row) else {
+                body.push_str("    <table:table-row/>\n");
+                continue;
+            };
             let mut row_xml = String::from("    <table:table-row>");
             for col in 0..=max_col {
                 match cols.get(&col) {
@@ -478,6 +484,16 @@ mod tests {
         let ods = cells_to_ods(&BTreeMap::new()).expect("write");
         let back = ods_to_cells(&ods).expect("read");
         assert!(back.is_empty());
+    }
+
+    #[test]
+    fn round_trip_keeps_sparse_row_numbers() {
+        // Row 2 is empty: A3 must stay A3 after export+import (not collapse
+        // onto A2).
+        let cells = map(&[("A1", "first"), ("A3", "third")]);
+        let ods = cells_to_ods(&cells).expect("write");
+        let back = ods_to_cells(&ods).expect("read");
+        assert_eq!(back, cells, "empty rows must keep cell row numbers");
     }
 
     #[test]

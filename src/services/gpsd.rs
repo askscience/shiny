@@ -3,8 +3,6 @@ use tokio::sync::Mutex;
 use tokio::net::TcpStream;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-use crate::models::Location;
-
 #[derive(Debug, Clone)]
 pub struct GpsPosition {
     pub latitude: f64,
@@ -128,25 +126,8 @@ impl GpsdService {
         }
     }
 
-    pub async fn get_current_position(&self) -> GpsPosition {
-        self.current.lock().await.clone()
-    }
-
     pub async fn is_connected(&self) -> bool {
         *self.connected.lock().await
-    }
-
-    pub fn to_location(&self, pos: &GpsPosition, traveler_id: &str, trip_id: Option<&str>) -> Location {
-        Location::new(
-            traveler_id.to_string(),
-            trip_id.map(|s| s.to_string()),
-            pos.latitude,
-            pos.longitude,
-            pos.altitude,
-            pos.speed,
-            pos.heading,
-            "gps".into(),
-        )
     }
 }
 

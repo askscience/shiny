@@ -5,7 +5,7 @@
 use sqlx::SqlitePool;
 
 use crate::errors::AppError;
-use crate::services::ollama::OllamaClient;
+use crate::services::ai::AiClient;
 
 /// Resolve (or create) the conversation a message belongs to. Returns its id.
 pub async fn resolve_conversation(
@@ -41,6 +41,8 @@ pub async fn resolve_conversation(
 }
 
 /// Load the most recent messages of a conversation, oldest first.
+/// `rowid` breaks ties: a turn's user+assistant rows share a
+/// second-resolution `timestamp`, so without it their order can swap.
 pub async fn recent_history(
     pool: &SqlitePool,
     conversation_id: &str,
@@ -48,9 +50,9 @@ pub async fn recent_history(
 ) -> Result<Vec<(String, String)>, AppError> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT role, content FROM (\
-             SELECT role, content, timestamp FROM chat_messages \
-             WHERE conversation_id = ?1 ORDER BY timestamp DESC LIMIT ?2\
-         ) ORDER BY timestamp ASC",
+             SELECT role, content, timestamp, rowid FROM chat_messages \
+             WHERE conversation_id = ?1 ORDER BY timestamp DESC, rowid DESC LIMIT ?2\
+         ) ORDER BY timestamp ASC, rowid ASC",
     )
     .bind(conversation_id)
     .bind(limit)
@@ -64,7 +66,7 @@ pub async fn recent_history(
 /// and set its title from the first user message when still untitled.
 pub async fn save_turn(
     pool: &SqlitePool,
-    ollama: &OllamaClient,
+    ai: &AiClient,
     traveler_id: &str,
     conversation_id: &str,
     user_message: &str,
@@ -105,7 +107,7 @@ pub async fn save_turn(
 
     let is_untitled = matches!(current_title.as_deref(), None | Some("") | Some("New chat"));
     if is_untitled {
-        let title = generate_title(ollama, user_message).await;
+        let title = generate_title(ai, user_message).await;
         sqlx::query(
             "UPDATE chat_conversations SET title = ?1, updated_at = datetime('now') WHERE id = ?2",
         )
@@ -127,9 +129,9 @@ pub async fn save_turn(
 
 /// Ask the LLM for a short (three-word) title for a new conversation; falls
 /// back to a truncated copy of the message when the AI is unavailable.
-async fn generate_title(ollama: &OllamaClient, message: &str) -> String {
+async fn generate_title(ai: &AiClient, message: &str) -> String {
     let system = "You title chat conversations. Reply with exactly three words, lowercase, no punctuation, no quotes, no markdown.".to_string();
-    match ollama
+    match ai
         .chat(
             vec![
                 ("system".to_string(), system),

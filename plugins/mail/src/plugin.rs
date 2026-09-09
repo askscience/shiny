@@ -25,6 +25,8 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec { method: HttpMethod::Delete, path: "/api/mail/accounts/:id".into(), auth: "auth".into(), handler_tag: "mail_accounts_delete".into() },
         RouteSpec { method: HttpMethod::Get, path: "/api/mail/folders".into(), auth: "auth".into(), handler_tag: "mail_folders".into() },
         RouteSpec { method: HttpMethod::Get, path: "/api/mail/list".into(), auth: "auth".into(), handler_tag: "mail_list".into() },
+        RouteSpec { method: HttpMethod::Get, path: "/api/mail/search".into(), auth: "auth".into(), handler_tag: "mail_search".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/mail/sync".into(), auth: "auth".into(), handler_tag: "mail_sync".into() },
         RouteSpec { method: HttpMethod::Get, path: "/api/mail/message".into(), auth: "auth".into(), handler_tag: "mail_message".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/mail/send".into(), auth: "auth".into(), handler_tag: "mail_send".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/mail/flag".into(), auth: "auth".into(), handler_tag: "mail_flag".into() },
@@ -69,6 +71,8 @@ impl Plugin for MailPlugin {
             Arc::new(crate::tools::MailStatus) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailList) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailRead) as Arc<dyn Tool>,
+            Arc::new(crate::tools::MailSearch) as Arc<dyn Tool>,
+            Arc::new(crate::tools::MailSync) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailSend) as Arc<dyn Tool>,
         ] {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));

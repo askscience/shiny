@@ -3,6 +3,7 @@
 
 use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 
@@ -22,6 +23,8 @@ use url::Url;
 
 use shiny_plugin_sdk::db::{Db, Value};
 use shiny_plugin_sdk::errors::AppError;
+
+use crate::cache;
 
 /// A mail account as stored per user (v1: credentials in plaintext, single-tenant).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,10 +94,6 @@ static PRESETS: &[Preset] = &[
     Preset { provider: "fastmail", label: "Fastmail", imap_host: "imap.fastmail.com", imap_port: 993, imap_security: "ssl", smtp_host: "smtp.fastmail.com", smtp_port: 465, smtp_security: "ssl" },
     Preset { provider: "proton", label: "Proton Mail (via Bridge)", imap_host: "127.0.0.1", imap_port: 1143, imap_security: "none", smtp_host: "127.0.0.1", smtp_port: 1025, smtp_security: "none" },
 ];
-
-pub fn presets() -> &'static [Preset] {
-    PRESETS
-}
 
 pub fn preset_for(provider: &str) -> Option<&'static Preset> {
     PRESETS.iter().find(|p| p.provider == provider)
@@ -236,6 +235,17 @@ pub fn load_account(db: &Db, uid: &str, id: &str) -> Result<Account, AppError> {
     account_from_row(row)
 }
 
+pub fn load_account_by_email(db: &Db, uid: &str, email: &str) -> Result<Account, AppError> {
+    let rows = db.query(
+        &format!("SELECT {COLUMNS} FROM mail_accounts WHERE lower(email) = lower(?1) AND user_id = ?2"),
+        &[Value::text(email), Value::text(uid)],
+    )?;
+    let row = rows
+        .first()
+        .ok_or_else(|| AppError::NotFound("mail account not found".into()))?;
+    account_from_row(row)
+}
+
 pub fn save_account(db: &Db, uid: &str, a: &Account) -> Result<(), AppError> {
     db.execute(
         "INSERT OR REPLACE INTO mail_accounts \
@@ -279,7 +289,11 @@ pub fn delete_account(db: &Db, uid: &str, id: &str) -> Result<(), AppError> {
 /// account (the default used by the AI tools).
 pub fn resolve_account(db: &Db, uid: &str, id: Option<&str>) -> Result<Account, AppError> {
     if let Some(id) = id {
-        return load_account(db, uid, id);
+        if let Ok(a) = load_account(db, uid, id) {
+            return Ok(a);
+        }
+        // The docs/skills say "account id or email" — accept either.
+        return load_account_by_email(db, uid, id);
     }
     let mut accounts = list_accounts(db, uid)?;
     accounts.retain(|a| a.verified);
@@ -332,37 +346,6 @@ pub async fn list_folders(a: Account) -> Result<Vec<Json>, AppError> {
 
 fn mailbox_json(m: &Mailbox) -> Json {
     json!({ "id": m.id, "name": m.name, "total": m.total, "unread": m.unread })
-}
-
-pub async fn list_envelopes(a: Account, folder: String, page: u32) -> Result<Vec<Json>, AppError> {
-    blocking(move || {
-        let mut client = connect_imap(&a)?;
-        let envelopes = client
-            .list_envelopes(&folder, Some(page), Some(60), false)
-            .map_err(|e| AppError::BadRequest(format!("list messages failed: {e}")))?;
-        Ok(envelopes.iter().map(envelope_json).collect())
-    })
-    .await
-}
-
-fn envelope_json(e: &Envelope) -> Json {
-    let from = e
-        .from
-        .iter()
-        .map(|a| io_addr_str(a.name.as_ref(), &a.email))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let seen = e.flags.iter().any(|f| f.iana() == Some(IanaFlag::Seen));
-    json!({
-        "id": e.id,
-        "subject": e.subject,
-        "from": from,
-        "from_addresses": e.from.iter().map(|a| json!({"name": a.name, "email": a.email})).collect::<Vec<_>>(),
-        "date": e.date.map(|d| d.to_rfc3339()),
-        "size": e.size,
-        "seen": seen,
-        "has_attachment": e.has_attachment,
-    })
 }
 
 fn io_addr_str(name: Option<&String>, email: &str) -> String {
@@ -442,6 +425,205 @@ fn mp_addr_str(name: Option<&str>, address: Option<&str>) -> String {
     }
 }
 
+// ── local cache sync ──────────────────────────────────────────
+
+const SYNC_PAGE_SIZE: u32 = 100;
+
+/// Minimum gap between automatic (backfill) syncs of the same empty folder.
+/// Without it, a synced-but-empty folder hit IMAP on every list/search.
+pub const EMPTY_RECHECK_SECS: i64 = 120;
+
+/// Backfill gate shared by list/search: auto-sync only when the folder has
+/// nothing cached AND was not just synced. Folders with cached messages are
+/// served locally (manual sync / `mail_sync` refreshes them).
+pub fn needs_backfill(
+    db: &Db,
+    user_id: &str,
+    account_id: &str,
+    folder: &str,
+) -> Result<bool, AppError> {
+    Ok(cache::total(db, user_id, account_id, folder)? == 0
+        && !cache::synced_recently(db, user_id, account_id, folder, EMPTY_RECHECK_SECS)?)
+}
+
+/// Fetch every envelope in a folder (paged), capped by `cache::MAX_SYNC`.
+fn fetch_all_envelopes(a: &Account, folder: &str) -> Result<Vec<Envelope>, AppError> {
+    let mut client = connect_imap(a)?;
+    let mut all: Vec<Envelope> = Vec::new();
+    // io-email pages are 1-based (page 1 = most recent). Starting at 0 used
+    // to fetch page 1 twice and never reach the oldest messages.
+    let mut page = 1u32;
+    loop {
+        let batch = client
+            .list_envelopes(folder, Some(page), Some(SYNC_PAGE_SIZE), false)
+            .map_err(|e| AppError::BadRequest(format!("list messages failed: {e}")))?;
+        if batch.is_empty() {
+            break;
+        }
+        let n = batch.len();
+        all.extend(batch);
+        if n < SYNC_PAGE_SIZE as usize || all.len() >= cache::MAX_SYNC {
+            break;
+        }
+        page += 1;
+    }
+    Ok(all)
+}
+
+/// Fetch + parse raw bodies for the given UIDs over a single IMAP connection.
+/// A single malformed or just-expunged message must not abort the whole sync:
+/// it is skipped (with a log) so the rest of the folder still caches.
+fn fetch_bodies(a: &Account, folder: &str, uids: &[String]) -> Result<Vec<(String, Json)>, AppError> {
+    let mut client = connect_imap(a)?;
+    let mut out = Vec::with_capacity(uids.len());
+    for uid in uids {
+        let raw = match client.get_message(folder, uid) {
+            Ok(raw) => raw,
+            Err(e) => {
+                tracing::warn!("mail sync: skipping {}: fetch failed: {e}", uid);
+                continue;
+            }
+        };
+        match parse_message(uid, &raw) {
+            Ok(parsed) => out.push((uid.clone(), parsed)),
+            Err(e) => {
+                tracing::warn!("mail sync: skipping {}: parse failed: {e}", uid);
+                continue;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Sync one folder into the local cache (envelopes + bodies for new messages).
+/// Returns a summary; the AI/window then read from the cache without IMAP.
+pub async fn sync_folder(
+    db: &Db,
+    user_id: &str,
+    a: Account,
+    folder: String,
+) -> Result<Json, AppError> {
+    let a_list = a.clone();
+    let folder_list = folder.clone();
+    let envelopes = blocking(move || fetch_all_envelopes(&a_list, &folder_list)).await?;
+
+    let cached: HashSet<String> = cache::cached_uids(db, user_id, &a.id, &folder)?;
+    let new_uids: Vec<String> = envelopes
+        .iter()
+        .map(|e| e.id.clone())
+        .filter(|id| !id.is_empty() && !cached.contains(id))
+        .collect();
+    let new_count = new_uids.len();
+
+    let a_body = a.clone();
+    let folder_body = folder.clone();
+    let bodies: Vec<(String, Json)> = if new_uids.is_empty() {
+        Vec::new()
+    } else {
+        blocking(move || fetch_bodies(&a_body, &folder_body, &new_uids)).await?
+    };
+
+    let body_map: std::collections::HashMap<&str, &Json> =
+        bodies.iter().map(|(u, j)| (u.as_str(), j)).collect();
+
+    for env in &envelopes {
+        let uid = env.id.clone();
+        if uid.is_empty() {
+            continue;
+        }
+        let seen = env.flags.iter().any(|f| f.iana() == Some(IanaFlag::Seen));
+        let has_attachment = env.has_attachment.unwrap_or(false);
+
+        // Already cached (with its downloaded body): refresh only the flags.
+        // A full re-upsert would overwrite body_text/body_html with "" —
+        // bodies are fetched exclusively for NEW uids.
+        if cached.contains(&uid) {
+            cache::update_flags(db, user_id, &a.id, &folder, &uid, seen, has_attachment)?;
+            continue;
+        }
+
+        let from_addr = env
+            .from
+            .iter()
+            .map(|a| io_addr_str(a.name.as_ref(), &a.email))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let from_json: Json = env
+            .from
+            .iter()
+            .map(|a| json!({ "name": a.name.clone(), "email": a.email.clone() }))
+            .collect();
+
+        let msg = body_map.get(uid.as_str()).copied();
+        let subject = msg
+            .and_then(|m| m.get("subject").and_then(|v| v.as_str()))
+            .unwrap_or(env.subject.as_str())
+            .to_string();
+        let to_addr = msg
+            .and_then(|m| m.get("to").and_then(|v| v.as_array()))
+            .map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))
+            .unwrap_or_default();
+        let cc_addr = msg
+            .and_then(|m| m.get("cc").and_then(|v| v.as_array()))
+            .map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))
+            .unwrap_or_default();
+        let to_json = msg
+            .and_then(|m| m.get("to_addresses").cloned())
+            .unwrap_or_else(|| json!([]));
+        let cc_json = msg
+            .and_then(|m| m.get("cc_addresses").cloned())
+            .unwrap_or_else(|| json!([]));
+        let message_id = msg
+            .and_then(|m| m.get("message_id").and_then(|v| v.as_str()).map(String::from))
+            .or_else(|| env.message_id.clone());
+        let sent_at = msg
+            .and_then(|m| m.get("date").and_then(|v| v.as_str()).map(String::from))
+            .or_else(|| env.date.map(|d| d.to_rfc3339()));
+        let body_text = msg
+            .and_then(|m| m.get("text").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let body_html = msg
+            .and_then(|m| m.get("html").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let attachments = msg
+            .and_then(|m| m.get("attachments").cloned())
+            .unwrap_or_else(|| json!([]));
+
+        let row = json!({
+            "uid": uid,
+            "message_id": message_id,
+            "subject": subject,
+            "from_addr": from_addr,
+            "to_addr": to_addr,
+            "cc_addr": cc_addr,
+            "from_json": from_json,
+            "to_json": to_json,
+            "cc_json": cc_json,
+            "sent_at": sent_at,
+            "text": body_text,
+            "html": body_html,
+            "attachments": attachments,
+            "seen": seen,
+            "has_attachment": env.has_attachment.unwrap_or(false),
+            "size": env.size as i64,
+        });
+        cache::upsert(db, user_id, &a.id, &folder, &row)?;
+    }
+
+    let total = cache::total(db, user_id, &a.id, &folder)?;
+    cache::set_sync_state(db, user_id, &a.id, &folder, total)?;
+
+    Ok(json!({
+        "account": a.email,
+        "folder": folder,
+        "synced": envelopes.len(),
+        "new": new_count,
+        "total": total,
+    }))
+}
+
 /// In-memory send dedup: the agent occasionally emits `mail_send` twice in a
 /// row (e.g. once as `mail.mail_send`, once as `mail_send`). Skip a repeat of
 /// an identical message within a short window so it isn't delivered twice.
@@ -449,23 +631,33 @@ static RECENT_SENDS: Mutex<Vec<(i64, u64)>> = Mutex::new(Vec::new());
 const DEDUP_WINDOW_MS: i64 = 10_000;
 
 fn send_fingerprint(
+    account_id: &str,
+    user_id: &str,
     to: &[String],
     cc: &[String],
     bcc: &[String],
     subject: &str,
     body: &str,
+    html: Option<&str>,
 ) -> u64 {
     let mut h = DefaultHasher::new();
+    // Scope the fingerprint per account and user: it is a process-global
+    // table, and without these two users/accounts sending the same message
+    // would silently drop the second send.
+    account_id.hash(&mut h);
+    user_id.hash(&mut h);
     for v in to { v.hash(&mut h); }
     for v in cc { v.hash(&mut h); }
     for v in bcc { v.hash(&mut h); }
     subject.hash(&mut h);
     body.hash(&mut h);
+    html.hash(&mut h);
     h.finish()
 }
 
 pub async fn send(
     a: Account,
+    user_id: &str,
     to: Vec<String>,
     cc: Vec<String>,
     bcc: Vec<String>,
@@ -473,7 +665,7 @@ pub async fn send(
     body: String,
     html: Option<String>,
 ) -> Result<bool, AppError> {
-    let fp = send_fingerprint(&to, &cc, &bcc, &subject, &body);
+    let fp = send_fingerprint(&a.id, user_id, &to, &cc, &bcc, &subject, &body, html.as_deref());
     let now = chrono::Utc::now().timestamp_millis();
     {
         let mut recents = RECENT_SENDS.lock().unwrap();
@@ -520,18 +712,32 @@ pub async fn send(
     result.map(|_| true)
 }
 
-/// Mark a set of message ids seen/unseen (read/unread).
-pub async fn set_seen(a: Account, folder: String, ids: Vec<String>, seen: bool) -> Result<(), AppError> {
-    blocking(move || {
-        let mut client = connect_imap(&a)?;
-        let refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
-        let op = if seen { FlagOp::Add } else { FlagOp::Remove };
-        client
-            .store_flags(&folder, &refs, &[Flag::from_raw("\\Seen")], op)
-            .map_err(|e| AppError::BadRequest(format!("flag update failed: {e}")))?;
-        Ok(())
-    })
-    .await
+/// Mark a set of message ids seen/unseen (read/unread) on the server and in
+/// the local cache, so list/read reflect the change before the next sync.
+pub async fn set_seen(
+    db: &Db,
+    user_id: &str,
+    a: Account,
+    folder: String,
+    ids: Vec<String>,
+    seen: bool,
+) -> Result<(), AppError> {
+    {
+        let a_flag = a.clone();
+        let folder_flag = folder.clone();
+        let ids_flag = ids.clone();
+        blocking(move || {
+            let mut client = connect_imap(&a_flag)?;
+            let refs: Vec<&str> = ids_flag.iter().map(|s| s.as_str()).collect();
+            let op = if seen { FlagOp::Add } else { FlagOp::Remove };
+            client
+                .store_flags(&folder_flag, &refs, &[Flag::from_raw("\\Seen")], op)
+                .map_err(|e| AppError::BadRequest(format!("flag update failed: {e}")))?;
+            Ok(())
+        })
+        .await?;
+    }
+    cache::mark_seen(db, user_id, &a.id, &folder, &ids, seen)
 }
 
 /// Delete a single message (moves it to the server's Trash).

@@ -8,6 +8,9 @@ let currentState = 'idle';
 let pressTimer = null;
 let pressStart = 0;
 let conversationMode = false;
+// True once the long-press timer has actually fired for the current gesture.
+// `pressTimer` is null by then, so release handling needs this flag.
+let longPressFired = false;
 let voiceReady = false;
 let pointerId = null;
 
@@ -44,16 +47,8 @@ export function setSphereState(state) {
   setOrbPalette(paletteState);
 }
 
-export function setOrbCaption(_text) {
-  /* caption removed from chrome */
-}
-
 export function getSphereState() {
   return currentState;
-}
-
-export function isConversationMode() {
-  return conversationMode;
 }
 
 export function setConversationMode(on) {
@@ -136,10 +131,12 @@ function handleStart(e) {
     } catch (_) {}
   }
   pressStart = Date.now();
+  longPressFired = false;
   pressTimer = setTimeout(() => {
     pressTimer = null;
     if (!conversationMode) {
       conversationMode = true;
+      longPressFired = true;
       setSphereState('conversation');
       callbacks.onLongPressStart?.();
     }
@@ -154,15 +151,20 @@ function handleEnd(e) {
     pointerId = null;
   }
   const duration = Date.now() - pressStart;
+  // The long press fired during this gesture: releasing always ends it (the
+  // old duration-based branch could never run once the timer had fired).
+  if (longPressFired) {
+    longPressFired = false;
+    conversationMode = false;
+    setSphereState('idle');
+    callbacks.onLongPressEnd?.();
+    return;
+  }
   if (pressTimer) {
     clearTimeout(pressTimer);
     pressTimer = null;
     if (duration < LONG_PRESS_MS) {
-      if (conversationMode) {
-        conversationMode = false;
-        setSphereState('idle');
-        callbacks.onLongPressEnd?.();
-      } else if (pendingDoubleTap) {
+      if (pendingDoubleTap) {
         pendingDoubleTap = false;
         lastTapAt = 0;
         callbacks.onDoubleTap?.();
@@ -170,10 +172,6 @@ function handleEnd(e) {
         handleShortTapGesture();
       }
     }
-  } else if (conversationMode && duration < LONG_PRESS_MS) {
-    conversationMode = false;
-    setSphereState('idle');
-    callbacks.onLongPressEnd?.();
   }
 }
 

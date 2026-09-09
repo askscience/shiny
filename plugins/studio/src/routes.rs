@@ -222,9 +222,8 @@ fn studio_render(ctx: Arc<PluginCtx>) -> RouteHandler {
 
 /* ── POST /api/studio/arrangement/render ────────────────────── */
 
-fn studio_arrangement_render(ctx: Arc<PluginCtx>) -> RouteHandler {
+fn studio_arrangement_render(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: Request| {
-        let ctx = ctx.clone();
         async move {
             let _uid = user_id(&req)?;
             let value = read_json(req).await?;
@@ -242,9 +241,8 @@ fn studio_arrangement_render(ctx: Arc<PluginCtx>) -> RouteHandler {
 
 /* ── POST /api/studio/preview (render a pattern without storing) ── */
 
-fn studio_preview(ctx: Arc<PluginCtx>) -> RouteHandler {
+fn studio_preview(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: Request| {
-        let ctx = ctx.clone();
         async move {
             let _uid = user_id(&req)?;
             let value = read_json(req).await?;
@@ -262,9 +260,8 @@ fn studio_preview(ctx: Arc<PluginCtx>) -> RouteHandler {
 
 /* ── POST /api/studio/waveform (peak envelope for a pattern) ── */
 
-fn studio_waveform(ctx: Arc<PluginCtx>) -> RouteHandler {
+fn studio_waveform(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: Request| {
-        let ctx = ctx.clone();
         async move {
             let _uid = user_id(&req)?;
             let value = read_json(req).await?;

@@ -5,7 +5,7 @@
 import { apiFetch, getTraveler, getToken, validateSession } from './api.js';
 import { renderAvatarEl } from './userProfiles.js';
 import { initBackground } from './background.js';
-import { loadUserPreferences, getRemember } from './preferences.js';
+import { loadUserPreferences } from './preferences.js';
 import {
   initThemeLoader, initAppearance, hydrateIcons,
   toast, button, emptyState, spinner,
@@ -254,8 +254,6 @@ async function boot() {
   }
 
   await loadUserPreferences();
-  const banner = document.getElementById('plugins-fresh-banner');
-  if (banner) banner.classList.toggle('hidden', getRemember());
 
   renderUser();
   await loadPlugins();

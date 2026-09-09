@@ -44,13 +44,3 @@ pub use db::{Db, Value as DbValue};
 /// The core API level. Plugins declare `api_level` in `plugin.toml`; the loader
 /// refuses to load a plugin built against a newer API than the running core.
 pub const CORE_API_LEVEL: u32 = 1;
-
-/// Format string for the C entry symbol. Plugins export a function that takes
-/// no arguments and returns a heap-allocated `*mut dyn Plugin`.
-pub fn entry_symbol(name: &str) -> String {
-    // Plugins built as cdylibs expose `shiny_plugin_entry`. We don't actually
-    // need a per-plugin symbol because each plugin is its own .so/.dylib/.dll —
-    // one symbol per library is enough.
-    let _ = name;
-    PLUGIN_ENTRY_SYMBOL.to_string()
-}
