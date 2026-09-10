@@ -691,6 +691,12 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
       transparent 86%);
 }
 
+/* Fallback for image sources the browser cannot read (no CORS): a modest live
+   blur, far cheaper than the old 90px one and only used by those windows. */
+.tile-glow--soft {
+  filter: blur(12px) saturate(1.3) brightness(var(--glow-brightness, 0.5));
+}
+
 /* Rim variant — an on-top glow for windows whose content is opaque and
    full-bleed (the Leaflet map), where a behind-content layer is invisible.
    Masked to the window edges so the centre stays readable. */

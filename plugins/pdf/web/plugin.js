@@ -12,7 +12,7 @@
 
 import {
   icon, button, emptyState, toast,
-  setTileGlow, glowUrl,
+  setTileGlow, setTileGlowFromUrl,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -219,7 +219,9 @@ async function renderMain() {
   try {
     const url = await pageUrl(currentPdf.pdf_id, currentPage, ZOOMS[zoomIndex]);
     const thumb = await pageUrl(currentPdf.pdf_id, currentPage, THUMB_DPI).catch(() => null);
-    setTileGlow(tileEl, glowUrl(thumb || url));
+    // The window background mirrors the page, lightly blurred (pre-blurred at
+    // thumbnail size, so it stays cheap to repaint while resizing).
+    void setTileGlowFromUrl(tileEl, thumb || url, { size: 320, blur: 7 });
     const page = document.createElement('div');
     page.className = 'pdf-page';
     const img = document.createElement('img');

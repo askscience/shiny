@@ -19,7 +19,7 @@
 
 import {
   icon, button, searchBar, spinner, emptyState, notify, toast,
-  setTileGlow, glowUrl,
+  setTileGlow, setTileGlowFromUrl,
 } from '/ui/index.js';
 import { getToken } from '/js/api.js';
 
@@ -52,6 +52,7 @@ let current = null;         // station { name, streamUrl, favicon, stationuuid, 
 let playing = false;
 let nowPlaying = null;      // { title, artist }
 let artworkUrl = null;      // resolved image URL for the current track/station
+let glowSrc = null;         // artwork currently used for the window background
 let pollTimer = null;
 
 const artworkCache = new Map(); // "artist|title" -> image URL | null
@@ -329,9 +330,13 @@ function renderHero() {
     artEl.appendChild(icon('ui/play', { size: 30 }));
   }
 
-  // Ambient glow mirrors the artwork (Tier 1); with no artwork it falls back
-  // to the window's Tier 0 colour glow.
-  setTileGlow(tileEl, glowUrl(art));
+  // Ambient glow mirrors the artwork (Tier 1), lightly blurred; with no
+  // artwork it falls back to the window's Tier 0 colour glow. Only reload when
+  // the artwork actually changes — renderHero runs on every play/pause.
+  if (art !== glowSrc) {
+    glowSrc = art;
+    void setTileGlowFromUrl(tileEl, art, { size: 320, blur: 7 });
+  }
 
   toggleBtn.disabled = !hasStation;
   toggleBtn.textContent = '';
@@ -542,6 +547,7 @@ export function unmountRadioTile() {
   // instead of returning the detached old one.
   tileEl = null;
   gridEl = null;
+  glowSrc = null;
   artEl = null;
   trackTitleEl = null;
   trackSubEl = null;

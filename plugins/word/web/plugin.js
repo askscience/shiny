@@ -11,7 +11,7 @@
  */
 
 import {
-  icon, button, emptyState, toast, setTileGlow, glowGradient, glowUrl,
+  icon, button, emptyState, toast, setTileGlow, setTileGlowFromUrl, glowGradient,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -121,8 +121,13 @@ function titleGlow(title) {
 /** Glow mirrors the document's first embedded image, else the title. */
 function updateGlow() {
   if (!currentDoc) { setTileGlow(tileEl, null); return; }
-  const img = editorEl?.querySelector('img');
-  setTileGlow(tileEl, img?.getAttribute('src') ? glowUrl(img.getAttribute('src')) : titleGlow(currentDoc.title));
+  const src = editorEl?.querySelector('img')?.getAttribute('src');
+  if (src) {
+    // An embedded picture: mirror it, lightly blurred.
+    void setTileGlowFromUrl(tileEl, src, { size: 320, blur: 7 });
+  } else {
+    setTileGlow(tileEl, titleGlow(currentDoc.title));
+  }
 }
 
 async function persist() {
