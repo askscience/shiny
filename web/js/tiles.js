@@ -306,10 +306,33 @@ function renderTiles() {
   const phone = PHONE_QUERY.matches && names.length > 0;
   const visible = activeWindowNames(names);
 
-  grid.innerHTML = '';
   grid.classList.toggle('tile-grid--phone', phone);
   grid.classList.toggle('tile-grid--single', !phone && visible.length === 1);
 
+  // Build the window list. NOTE: do not wipe and re-append these elements —
+  // detaching and re-attaching a tile reloads any <iframe> inside it, which
+  // restarts the YouTube player. The DOM is reconciled in place below.
+  const ordered = [];
+  for (const name of names) {
+    const el = elementForTile(name);
+    if (!el) continue;
+    ensureWindowChrome(el, name);
+    syncWindowChrome(el, name);
+    ordered.push({ name, el });
+  }
+
+  const want = ordered.map((o) => o.el);
+  const have = [...grid.children].filter((c) => c.classList.contains('tile'));
+  const sameOrder = have.length === want.length && want.every((el, i) => have[i] === el);
+  if (!sameOrder) {
+    for (const el of have) if (!want.includes(el)) el.remove();
+    want.forEach((el, i) => {
+      const at = grid.children[i] || null;
+      if (at !== el) grid.insertBefore(el, at);
+    });
+  }
+
+  const items = [];
   if (phone) {
     // Navigation always lives on the map — surface it if a route is live.
     if (document.body.classList.contains('navigator-active')) activePhonePlugin = MAP_TILE_PLUGIN;
@@ -317,11 +340,7 @@ function renderTiles() {
 
     // Keep every window mounted (hidden, not detached) so their chrome — the
     // traveler dock, tile sheets — stays inside its own window.
-    for (const name of names) {
-      const el = elementForTile(name);
-      if (!el) continue;
-      ensureWindowChrome(el, name);
-      syncWindowChrome(el, name);
+    for (const { name, el } of ordered) {
       const inActiveWs = visible.includes(name);
       const shown = inActiveWs && name === activePhonePlugin;
       el.classList.remove('tile--full', 'tile--master', 'tile--stack', 'tile--window');
@@ -333,18 +352,11 @@ function renderTiles() {
       el.style.height = '';
       el.style.zIndex = '';
       el.classList.toggle('hidden', !shown);
-      grid.appendChild(el);
     }
   } else {
-    const items = [];
-    for (const name of names) {
-      const el = elementForTile(name);
-      if (!el) continue;
-      ensureWindowChrome(el, name);
-      syncWindowChrome(el, name);
+    for (const { name, el } of ordered) {
       const inActiveWs = visible.includes(name);
       el.classList.toggle('hidden', !inActiveWs);
-      grid.appendChild(el);
       if (inActiveWs) items.push({ name, el });
     }
     applyLayout(grid, items);
