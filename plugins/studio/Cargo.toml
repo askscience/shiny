@@ -9,7 +9,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
-trem = "0.1.0"
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

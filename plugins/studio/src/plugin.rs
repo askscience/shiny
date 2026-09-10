@@ -29,6 +29,8 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec { method: HttpMethod::Post, path: "/api/studio/arrangement/render".into(), auth: "auth".into(), handler_tag: "studio_arrangement_render".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/studio/preview".into(), auth: "auth".into(), handler_tag: "studio_preview".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/studio/waveform".into(), auth: "auth".into(), handler_tag: "studio_waveform".into() },
+        RouteSpec { method: HttpMethod::Get, path: "/api/studio/catalog".into(), auth: "auth".into(), handler_tag: "studio_catalog".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/studio/analyze".into(), auth: "auth".into(), handler_tag: "studio_analyze".into() },
         RouteSpec { method: HttpMethod::Get, path: "/api/studio/arrangement".into(), auth: "auth".into(), handler_tag: "studio_arrangement_list".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/studio/arrangement".into(), auth: "auth".into(), handler_tag: "studio_arrangement_save".into() },
         RouteSpec { method: HttpMethod::Get, path: "/api/studio/arrangement/:id".into(), auth: "auth".into(), handler_tag: "studio_arrangement_get".into() },
@@ -52,10 +54,10 @@ impl Plugin for StudioPlugin {
             entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
             target_triple: None,
             description: Some(
-                "Music studio — a trem-powered step sequencer and synth: compose patterns (Euclidean fills, explicit rhythms) and render them to audio in the Studio window".into(),
+                "Music studio — a DAW-grade step sequencer, polyphonic synth, drum machine and modular Grid: compose patterns and arrangements and render them to audio in the Studio window".into(),
             ),
             author: Some("shiny".into()),
-            summary: Some("Music studio: pattern sequencer + synth renderer (trem engine)".into()),
+            summary: Some("Music studio: synth + drums + Grid, offline-rendered by a self-contained DSP engine".into()),
             migrations_dir: "migrations".into(),
             skills_dir: "skills".into(),
             web_dir: "web".into(),
@@ -68,7 +70,7 @@ impl Plugin for StudioPlugin {
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/studio.md"))
-            .context_line("Studio: enabled — compose and render patterns (Euclidean rhythms, multiple instruments) to audio in the Studio window.");
+            .context_line("Studio: enabled — compose and render patterns and arrangements (polyphonic synth, drum machine, modular Grid) to audio in the Studio window.");
         for spec in route_specs() {
             builder.route(spec);
         }
@@ -86,6 +88,8 @@ impl Plugin for StudioPlugin {
             Arc::new(crate::tools::StudioArrangementSave) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioArrangementGet) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioArrangementDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioCatalog) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioAnalyze) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
         ] {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
         }
