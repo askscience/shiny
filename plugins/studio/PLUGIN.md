@@ -112,7 +112,14 @@ storing), `POST /api/studio/waveform` (peak envelope), `GET /api/studio/catalog`
 
 ## The window
 
-`web/plugin.js` mounts a Bitwig-style window:
+`web/plugin.js` mounts a DAW window that follows the **core design system**
+(PLUGINS.md §19): the plugin ships DOM only — every style lives in core's
+`web/css/tiles.css` under the `studio-*` prefix and is expressed with the theme
+tokens (`--surface`, `--glass*`, `--text`, `--muted`, `--accent`, `--radius-*`,
+`--duration-*`). Nothing here hard-codes a palette, so the window matches every
+theme and the user's chosen accent, exactly like the other plugin surfaces.
+
+The window provides:
 
 - **Transport bar** — stop/play/loop/metronome, position, BPM, project title, save,
   export, browser, status.
@@ -124,6 +131,18 @@ storing), `POST /api/studio/waveform` (peak envelope), `GET /api/studio/catalog`
 - **SynthMe / WaveMe (Grid)** — build a custom synth or a modular patch and save it as a
   preset.
 - **Footer** — live oscilloscope/spectrum/meters and parameter readout.
+
+## Hearing it
+
+```sh
+cargo run -p shiny-studio-plugin --example demo -- /tmp/studio-demo.wav
+```
+
+renders an eight-bar demo (drums, bass, supersaw lead, pad, master glue +
+reverb + −14 LUFS normalisation) through the same
+`parse_arrangement`/`render_arrangement` path the REST routes and tools use,
+and prints the render time, loudness and peak. It is the quickest way to
+verify a change to the DSP.
 
 ## Building and installing
 
