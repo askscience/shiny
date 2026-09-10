@@ -18,7 +18,7 @@
  * is WebAudio. Launcher clips loop and launch quantized to the next bar.
  */
 
-import { toast, icon, setIcon, button, searchBar } from '/ui/index.js';
+import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
 
 export const STUDIO_PLUGIN = 'studio';
@@ -369,6 +369,14 @@ function cellsToRhythm(cells) {
 }
 function trackColor(i) {
   return TRACK_COLORS[(i ?? 0) % TRACK_COLORS.length];
+}
+/* Tier 1 ambient glow: the arrangement's first few track colours (falls back
+   to TRACK_COLORS[0] / TRACK_COLORS[4] when there are no tracks). */
+function updateStudioGlow() {
+  const tracks = arrangement?.tracks || [];
+  const a = trackColor(tracks[0]?.color ?? 0);
+  const b = trackColor(tracks[2]?.color ?? 4);
+  setTileGlow(tileEl, glowGradient(a, b, { x: 18, y: 0, x2: 85, y2: 100 }));
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -767,6 +775,7 @@ function stopPlayback() {
   clearArrPlayhead();
   clearPrevPlayhead();
   updateTransport();
+  updateStudioGlow();
 }
 
 async function renderArrangementAndPlay() {
@@ -795,6 +804,7 @@ async function renderArrangementAndPlay() {
     arrPlayDur = decoded.duration;
     metroStart(startAt, arrangement.bpm);
     setStatus('Playing');
+    updateStudioGlow();
     const totalBeats = arrangement.length_beats;
     const tick = () => {
       if (!arrPlaying || !audioCtx) return;
@@ -903,6 +913,7 @@ async function playSaved(id) {
     src.buffer = decoded;
     src.connect(masterOut());
     src.start();
+    updateStudioGlow();
   } catch (e) {
     toast(e.message || 'Play failed', { type: 'error' });
   }
@@ -1137,6 +1148,7 @@ function syncSelection() {
     if (selectedVoice < 0) selectedVoice = 0;
   }
   renderDetail();
+  updateStudioGlow();
 }
 function selectArrClip(clipIndex, { openEditor = false } = {}) {
   sel = { area: 'arr', clipIndex };
@@ -4187,6 +4199,7 @@ export function mountStudioTile() {
   startScope();
   void consumePendingAiTrack().catch(() => {});
 
+  updateStudioGlow();
   return tileEl;
 }
 

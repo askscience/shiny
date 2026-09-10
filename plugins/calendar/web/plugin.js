@@ -10,7 +10,10 @@
  * window reloads its month and selects the date the AI touched.
  */
 
-import { button, emptyState, field, input, modal, notify, textarea, toast, toggleRow } from '/ui/index.js';
+import {
+  button, emptyState, field, input, modal, notify, textarea, toast, toggleRow,
+  setTileGlow, glowGradient,
+} from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
 
@@ -74,6 +77,17 @@ function fmtTime(ev) {
   if (ev.start_time && ev.end_time) return `${ev.start_time}–${ev.end_time}`;
   if (ev.start_time) return ev.start_time;
   return '—';
+}
+
+/** Ambient colour from the selected date, brightened by that day's load.
+ *  The calendar always has a subject, so this never clears the glow. */
+function updateCalendarGlow() {
+  const d = parseIso(selectedDate);
+  const hue = (d.month * 30 + d.day * 6) % 360;
+  const load = Math.min(eventsOn(selectedDate).length / 4, 1);
+  const a = `hsl(${hue} 68% ${52 + load * 8}%)`;
+  const b = `hsl(${(hue + 40) % 360} 60% ${24 + load * 10}%)`;
+  setTileGlow(tileEl, glowGradient(a, b, { x: 25, y: 0, x2: 85, y2: 100 }));
 }
 
 /* ── API ────────────────────────────────────────────────────── */
@@ -171,6 +185,7 @@ function renderGrid() {
       gridEl.appendChild(cell);
     }
   }
+  updateCalendarGlow();
 }
 
 function renderDetail() {
@@ -224,6 +239,7 @@ function renderDetail() {
 
 function selectDate(date) {
   selectedDate = date;
+  updateCalendarGlow();
   renderGrid();
   renderDetail();
 }

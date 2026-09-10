@@ -25,7 +25,9 @@ import {
 } from './desktop.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
-import { artifactPanel, icon } from '../ui/index.js';
+import {
+  artifactPanel, icon, installGlow, refreshGlow, createRim, setGlow, glowFromDrawable,
+} from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
@@ -39,6 +41,8 @@ let overlayTitle = null;
 let pluginCatalog = new Map(); // name -> { description }
 let surfaceModules = new Map(); // name -> plugin.js surface module
 let mapTileEl = null;          // the tile hosting the map DOM
+let mapRimEl = null;           // the map's on-top ambient rim glow
+let mapGlowTimer = null;       // debounce for the map glow sample
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
 
 function pluginLabel(name) {
@@ -120,6 +124,11 @@ function mountMapTile() {
   mapTileEl.dataset.plugin = MAP_TILE_PLUGIN;
   mapTileEl.appendChild(stage);
 
+  // The map is opaque and full-bleed, so a behind-content glow would never
+  // show. The map window uses the on-top rim variant instead; it inherits the
+  // Tier 0 colours from the tile and is upgraded with a sampled map tile.
+  mapRimEl = createRim(mapTileEl);
+
   // Saved-cards dock lives INSIDE the traveler window (top-right, over the
   // map) instead of under the AI sphere. artifacts.js renders the buttons
   // into #map-tile-dock-icons and hides the old chrome-bottom dock.
@@ -133,9 +142,46 @@ function mountMapTile() {
   mapTileEl.appendChild(tileDock);
 }
 
+/* Map → ambient rim: sample the centre Carto tile and mirror it, falling back
+   to the Tier 0 colour rim whenever the fetch/decode fails (offline, tainted
+   canvas, blocked host). */
+function lonLatToTile(lon, lat, z) {
+  const n = 2 ** z;
+  const latRad = (lat * Math.PI) / 180;
+  return {
+    x: Math.floor(((lon + 180) / 360) * n),
+    y: Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n),
+  };
+}
+
+async function sampleMapGlow(view) {
+  if (!mapRimEl || !view) return;
+  const z = Math.max(3, Math.min(10, Math.round(view.zoom || 8)));
+  const { x, y } = lonLatToTile(view.lon, view.lat, z);
+  const sub = 'abc'[Math.abs(x + y) % 3];
+  const mode = view.mode === 'light' ? 'light' : 'dark';
+  const url = `https://${sub}.basemaps.cartocdn.com/${mode}_all/${z}/${x}/${y}.png`;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  await new Promise((resolve) => {
+    img.onload = resolve;
+    img.onerror = resolve;
+    img.src = url;
+  });
+  const css = glowFromDrawable(img, 96);
+  if (css) setGlow(mapRimEl, css);
+}
+
+function scheduleMapGlow(view) {
+  window.clearTimeout(mapGlowTimer);
+  mapGlowTimer = window.setTimeout(() => void sampleMapGlow(view), 250);
+}
+
 /** Remove the map tile from the grid (traveler deactivated). */
 function unmountMapTile() {
   mapTileEl?.remove();
+  mapTileEl = null;
+  mapRimEl = null;
 }
 
 function resizeMapSoon() {
@@ -179,7 +225,14 @@ export async function deactivatePlugin(name) {
  *  plugin window, once. The controls sit on the left as requested; the title
  *  is centered and the header doubles as the drag handle in Windows layout. */
 function ensureWindowChrome(el, name) {
-  if (!el || el.querySelector(':scope > .tile-header')) return;
+  if (!el) return;
+
+  // Ambient glow — Tier 0 colour layer, universal for every window (including
+  // the map). Idempotent, so it also survives re-tiling. The map keeps the
+  // behind-content glow (it shows in the window chrome above the opaque map).
+  installGlow(el, name);
+
+  if (el.querySelector(':scope > .tile-header')) return;
 
   const header = document.createElement('header');
   header.className = 'tile-header';
@@ -456,6 +509,19 @@ export function initTileManager() {
 
   // Crossing the phone breakpoint re-tiles the windows.
   PHONE_QUERY.addEventListener('change', () => renderTiles());
+
+  // The map broadcasts its view so the traveler window's rim can mirror it.
+  window.addEventListener('map:view', (e) => scheduleMapGlow(e.detail));
+
+  // Tier 0 glow colours are seeded from the accent + a per-window partner hue;
+  // repaint them when the theme or accent changes.
+  for (const evt of ['theme:change', 'appearance:change']) {
+    window.addEventListener(evt, () => {
+      grid?.querySelectorAll(':scope > .tile').forEach((el) => {
+        refreshGlow(el, el.dataset.plugin || '');
+      });
+    });
+  }
 
   // Starting a route on a phone must surface the map window.
   const bodyObserver = new MutationObserver(() => {

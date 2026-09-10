@@ -19,6 +19,7 @@
 
 import {
   icon, button, searchBar, spinner, emptyState, notify, toast,
+  setTileGlow, glowUrl,
 } from '/ui/index.js';
 import { getToken } from '/js/api.js';
 
@@ -37,7 +38,6 @@ let tileEl = null;
 let gridEl = null;
 
 /* Hero pieces */
-let glowEl = null;
 let artEl = null;
 let trackTitleEl = null;
 let trackSubEl = null;
@@ -329,16 +329,9 @@ function renderHero() {
     artEl.appendChild(icon('ui/play', { size: 30 }));
   }
 
-  // Ambient glow mirrors the artwork, blurred and dimmed.
-  if (glowEl) {
-    if (art) {
-      glowEl.style.backgroundImage = `url("${art}")`;
-      glowEl.classList.add('radio-glow--on');
-    } else {
-      glowEl.style.backgroundImage = '';
-      glowEl.classList.remove('radio-glow--on');
-    }
-  }
+  // Ambient glow mirrors the artwork (Tier 1); with no artwork it falls back
+  // to the window's Tier 0 colour glow.
+  setTileGlow(tileEl, glowUrl(art));
 
   toggleBtn.disabled = !hasStation;
   toggleBtn.textContent = '';
@@ -492,11 +485,6 @@ export function mountRadioTile() {
   tileEl.className = 'tile radio-tile';
   tileEl.dataset.plugin = RADIO_PLUGIN;
 
-  glowEl = document.createElement('div');
-  glowEl.className = 'radio-glow';
-  glowEl.setAttribute('aria-hidden', 'true');
-  tileEl.appendChild(glowEl);
-
   /* Hero */
   const hero = document.createElement('div');
   hero.className = 'radio-hero';
@@ -554,7 +542,6 @@ export function unmountRadioTile() {
   // instead of returning the detached old one.
   tileEl = null;
   gridEl = null;
-  glowEl = null;
   artEl = null;
   trackTitleEl = null;
   trackSubEl = null;
