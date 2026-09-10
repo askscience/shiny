@@ -20,7 +20,7 @@ import {
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
 } from './preferences.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
-import { initBackground, getBackground, setBackground } from './background.js';
+import { initBackground, getBackground, setBackground, renderBackgroundPresets } from './background.js';
 
 const langSelect = document.getElementById('lang-select');
 const doneBtn = document.getElementById('settings-done');
@@ -52,10 +52,10 @@ const rememberToggle = document.getElementById('remember-toggle');
 const bgModeSelect = document.getElementById('background-mode');
 const bgGradientNote = document.getElementById('background-gradient-note');
 const bgImageControls = document.getElementById('background-image-controls');
+const bgPresetGrid = document.getElementById('background-preset-grid');
 const bgImagePick = document.getElementById('background-image-pick');
 const bgImageRemove = document.getElementById('background-image-remove');
 const bgImageInput = document.getElementById('background-image-input');
-const bgImagePreview = document.getElementById('background-image-preview');
 const bgImageHint = document.getElementById('background-image-hint');
 const bgAnimControls = document.getElementById('background-anim-controls');
 const bgAnimSelect = document.getElementById('background-animation');
@@ -606,14 +606,26 @@ function syncBackgroundUI() {
   bgAnimControls?.classList.toggle('hidden', bg.mode !== 'animated');
   if (bgAnimSelect) bgAnimSelect.value = bg.animation || 'aurora';
 
-  if (bgImagePreview) {
+  if (bgPresetGrid) {
+    renderBackgroundPresets(bgPresetGrid, {
+      onSelect: (preset) => {
+        setBackground({ mode: 'image', preset: preset.id, url: null });
+        syncBackgroundUI();
+      },
+      onUpload: () => bgImageInput?.click(),
+    });
+  }
+
+  // "Remove photo" only makes sense once a photo has been uploaded.
+  bgImageRemove?.classList.toggle('hidden', !bg.url);
+
+  if (bgImageHint) {
     if (bg.mode === 'image') {
-      bgImagePreview.classList.remove('hidden');
-      bgImagePreview.style.backgroundImage = `url("/api/background?v=${Date.now()}")`;
-      if (bgImageHint) bgImageHint.textContent = 'Your photo is dimmed so the interface stays readable.';
+      bgImageHint.textContent = bg.url
+        ? 'Your photo is dimmed so the interface stays readable.'
+        : 'Built-in wallpapers. Pick one, or upload your own image — it is dimmed so the interface stays readable.';
     } else {
-      bgImagePreview.classList.add('hidden');
-      if (bgImageHint) bgImageHint.textContent = '';
+      bgImageHint.textContent = '';
     }
   }
 }
@@ -634,7 +646,7 @@ async function uploadBackground(file) {
     await apiFetch('/api/background', { method: 'POST', body: form });
     // One-time cache-buster lives in the stored URL so the fresh photo shows,
     // but later background re-applies reuse this stable URL (no flicker).
-    setBackground({ mode: 'image', url: `/api/background?v=${Date.now()}` });
+    setBackground({ mode: 'image', url: `/api/background?v=${Date.now()}`, preset: null });
     syncBackgroundUI();
     toast('Background image updated', { type: 'info' });
   } catch (e) {
@@ -646,7 +658,9 @@ async function removeBackgroundImage() {
   try {
     await apiFetch('/api/background', { method: 'DELETE' });
   } catch (_) { /* 404 or transient — proceed */ }
-  setBackground({ mode: 'none', url: null });
+  // Falling back to the theme's default wallpaper beats dumping the user on a
+  // bare mesh after they remove a photo.
+  setBackground({ mode: 'image', url: null, preset: null });
   syncBackgroundUI();
   toast('Background image removed', { type: 'info' });
 }

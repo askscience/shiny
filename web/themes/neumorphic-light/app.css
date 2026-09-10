@@ -49,7 +49,9 @@
 #travel-panel { box-shadow: var(--shadow-float); }
 
 /* Settings + plugins pages. */
-.settings-section, .settings-nav, .plugins-section, .background-image-preview { border-color: transparent; }
+.settings-section, .settings-nav, .plugins-section { border-color: transparent; }
+.bg-preset { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.bg-preset.is-active { box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 26px var(--accent-glow); }
 .settings-nav-item { box-shadow: var(--shadow-raise-sm); }
 .settings-nav-item.is-active { box-shadow: var(--shadow-inset-sm); }
 .settings-panel-icon, .plugin-row-icon { border-color: transparent; box-shadow: var(--shadow-raise-sm); }

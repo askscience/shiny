@@ -42,33 +42,31 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 2px;
-  border-bottom: 1px solid var(--glass-border);
-  background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  padding: 12px 2px;
+  /* No plate: the header stays clear and only blurs whatever slides under it. */
+  background: none;
+  border-bottom: 0;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
-.page-header-left { display: flex; align-items: center; gap: 18px; }
+.page-header-left { display: flex; align-items: center; gap: 12px; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .page-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
 .page-back {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  width: 42px; height: 42px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: color var(--duration-fast);
+  border-radius: var(--radius-md);
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
-.page-back:hover { color: var(--text); }
-.page-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); }
-.page-brand-mark {
-  width: 26px; height: 26px;
-  background: var(--gradient-accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.page-brand-mark svg { width: 15px; height: 15px; color: var(--accent-contrast); }
+.page-back:hover { color: var(--text); background: var(--accent-soft); }
+.page-brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--text); }
+.page-brand-mark { width: 38px; height: 38px; }
 .page-brand-name {
   font-family: var(--font-display);
   font-weight: 600;
@@ -342,8 +340,6 @@ body {
 
 @media (max-width: 480px) {
   #settings-user-name { display: none; }
-  .page-back span:not(.ui-icon) { display: none; }
-  .page-back { padding: 6px; }
   .profile-avatar--large { width: 84px; height: 84px; }
 }
 
@@ -417,16 +413,82 @@ body {
 }
 
 /* Background controls */
-.background-image-row { display: flex; gap: 10px; }
-.background-image-preview {
-  margin-top: 16px;
-  height: 180px;
+.background-image-row { display: flex; gap: 10px; margin-top: 14px; }
+
+/* Wallpaper picker — a grid of built-in artwork plus an "upload your own" tile. */
+.bg-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.bg-preset {
+  position: relative;
+  display: block;
+  width: 100%;
+  /* 16:9 to match the artwork, so `cover` thumbnails show the real framing. */
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
+  background-color: var(--bg-elevated);
   background-size: cover;
   background-position: center;
-  box-shadow: var(--shadow-glass);
+  background-repeat: no-repeat;
+  font: inherit;
+  color: var(--text);
+  transition:
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast),
+    transform var(--duration-fast) var(--ease-spring);
 }
+.bg-preset:hover { border-color: var(--text-secondary); transform: translateY(-2px); }
+.bg-preset.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 26px var(--accent-glow);
+}
+.bg-preset-label {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 16px 9px 6px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 100%);
+}
+/* The empty upload tile has no artwork to sit on, so the label is plain. */
+.bg-preset--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  background-color: var(--glass);
+}
+.bg-preset--empty::before {
+  content: '+';
+  position: absolute;
+  top: calc(50% - 14px);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--muted);
+}
+.bg-preset--empty .bg-preset-label {
+  position: static;
+  padding: 0;
+  margin-top: 34px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: none;
+}
+.bg-preset--empty:hover { background-color: var(--accent-soft); }
 
 @media (max-width: 960px) {
   .settings-layout { flex-direction: column; }

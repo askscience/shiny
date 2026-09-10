@@ -12,26 +12,21 @@
   <link rel="stylesheet" href="/ui/ui.css">
   <link id="theme-components" rel="stylesheet" href="/themes/noir/components.css">
   <link rel="stylesheet" href="/css/settings.css">
+  <link rel="stylesheet" href="/css/background.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
 </head>
 <body>
+  <div id="background" aria-hidden="true"></div>
+
   <div class="settings-page" data-controller="settings">
 
     <header class="page-header">
       <div class="page-header-left">
         <a class="page-back" href="/" aria-label="Back to PEAK'D!">
-          <span class="ui-icon" data-icon="ui/arrow-left" data-icon-size="17" aria-hidden="true"></span>
-          <span>PEAK'D!</span>
+          <span class="ui-icon" data-icon="ui/arrow-left" data-icon-size="20" aria-hidden="true"></span>
         </a>
         <a class="page-brand" href="/" aria-label="PEAK'D! home">
-          <span class="page-brand-mark">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2.6C16.6 2.6 18.8 5.6 18.8 8.6C18.8 12 17.7 14.6 16.4 16.2C15.8 17 15.4 17.6 14.9 18.1L14.4 19.6C14 20.3 13 20.6 12 20.6C11 20.6 10 20.3 9.6 19.6L9.1 18.1C8.6 17.6 8.2 17 7.6 16.2C6.3 14.6 5.2 12 5.2 8.6C5.2 5.6 7.4 2.6 12 2.6Z"/>
-              <path fill="currentColor" stroke="none" d="M13 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0Z"/>
-              <path fill="currentColor" stroke="none" d="M8.4 7.5H9.6V9H11V10.2H9.6V11.7H8.4V10.2H7V9H8.4Z"/>
-              <path fill="currentColor" stroke="none" d="M10.7 17.2H11.7V19.4H10.7ZM12.3 17.2H13.3V19.4H12.3Z"/>
-            </svg>
-          </span>
+          <span class="app-icon page-brand-mark" aria-hidden="true"></span>
           <span class="page-brand-name">PEAK'D!</span>
         </a>
       </div>
@@ -178,13 +173,13 @@
             <div id="background-gradient-note" class="settings-hint hidden">Gradient uses your Appearance gradient — change it under Appearance.</div>
 
             <div id="background-image-controls" class="hidden">
-              <label for="background-image-pick">Image</label>
-              <div class="background-image-row">
-                <button type="button" id="background-image-pick" class="ui-btn ui-btn--quiet ui-btn--sm">Choose image…</button>
-                <button type="button" id="background-image-remove" class="ui-btn ui-btn--danger ui-btn--sm">Remove</button>
-              </div>
+              <label id="background-wallpaper-label">Wallpaper</label>
+              <div id="background-preset-grid" class="bg-preset-grid" role="radiogroup" aria-labelledby="background-wallpaper-label"></div>
               <input type="file" id="background-image-input" accept="image/*" hidden>
-              <div id="background-image-preview" class="background-image-preview hidden"></div>
+              <div class="background-image-row">
+                <button type="button" id="background-image-pick" class="ui-btn ui-btn--quiet ui-btn--sm">Upload your own…</button>
+                <button type="button" id="background-image-remove" class="ui-btn ui-btn--danger ui-btn--sm hidden">Remove photo</button>
+              </div>
               <p id="background-image-hint" class="settings-hint"></p>
             </div>
 
