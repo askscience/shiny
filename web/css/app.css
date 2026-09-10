@@ -735,14 +735,8 @@ html, body {
 }
 
 .brand-mark { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 24px; }
-.brand-logo {
-  width: 48px; height: 48px;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-accent);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-glow);
-}
-.brand-logo svg { width: 26px; height: 26px; color: var(--accent-contrast); }
+/* Bare brand glyph — no plate behind it, just the mark itself. */
+.brand-logo { width: 72px; height: 72px; color: var(--text); }
 .brand-mark h1 {
   font-family: var(--font-display);
   font-weight: 700;

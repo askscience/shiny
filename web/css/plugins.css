@@ -55,36 +55,34 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 2px;
-  border-bottom: 1px solid var(--glass-border);
-  background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  padding: 12px 2px;
+  /* No plate: the header stays clear and only blurs whatever slides under it. */
+  background: none;
+  border-bottom: 0;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
-.plugins-header-left { display: flex; align-items: center; gap: 18px; }
+.plugins-header-left { display: flex; align-items: center; gap: 12px; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .plugins-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
 
 .plugins-back {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  width: 42px; height: 42px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: color var(--duration-fast);
+  border-radius: var(--radius-md);
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
-.plugins-back:hover { color: var(--text); }
+.plugins-back:hover { color: var(--text); background: var(--accent-soft); }
 
-.plugins-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); }
-.plugins-brand-mark {
-  width: 26px; height: 26px;
-  background: var(--gradient-accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.plugins-brand-mark svg { width: 15px; height: 15px; color: var(--accent-contrast); }
+.plugins-brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--text); }
+.plugins-brand-mark { width: 38px; height: 38px; }
 .plugins-brand-name {
   font-family: var(--font-display);
   font-weight: 600;
@@ -355,7 +353,5 @@ body {
 
 @media (max-width: 480px) {
   .plugins-brand-name, #plugins-user-name { display: none; }
-  .plugins-back span:not(.ui-icon) { display: none; }
-  .plugins-back { padding: 6px; }
   .plugin-row-actions .ui-btn { flex: 1; }
 }
