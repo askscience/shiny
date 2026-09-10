@@ -1,6 +1,10 @@
 //! Minimal YouTube search scraper — parses the public search results page
 //! (`ytInitialData` JSON embedded in the HTML). No API key required.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
 use shiny_plugin_sdk::errors::AppError;
 use serde_json::Value;
 
@@ -16,7 +20,29 @@ pub struct VideoResult {
 const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 \
                   (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
+/// Search results are cached briefly: the homepage asks for one query per
+/// category, so without this every window mount would hammer YouTube (and be
+/// slow). Ten minutes keeps the window snappy without going stale.
+const CACHE_TTL: Duration = Duration::from_secs(600);
+const CACHE_CAP: usize = 512;
+
+type SearchCache = Mutex<HashMap<String, (Instant, Vec<VideoResult>)>>;
+
+fn cache() -> &'static SearchCache {
+    static C: OnceLock<SearchCache> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 pub async fn search(query: &str, limit: usize) -> Result<Vec<VideoResult>, AppError> {
+    let key = format!("{limit}\u{1}{query}");
+    if let Ok(c) = cache().lock() {
+        if let Some((at, hits)) = c.get(&key) {
+            if at.elapsed() < CACHE_TTL {
+                return Ok(hits.clone());
+            }
+        }
+    }
+
     let mut url = url::Url::parse("https://www.youtube.com/results")
         .map_err(|e| AppError::Internal(format!("bad url: {e}")))?;
     url.query_pairs_mut().append_pair("search_query", query);
@@ -50,6 +76,13 @@ pub async fn search(query: &str, limit: usize) -> Result<Vec<VideoResult>, AppEr
 
     if out.is_empty() {
         return Err(AppError::NotFound("No videos matched — try a different query".into()));
+    }
+
+    if let Ok(mut c) = cache().lock() {
+        if c.len() >= CACHE_CAP {
+            c.clear();
+        }
+        c.insert(key, (Instant::now(), out.clone()));
     }
     Ok(out)
 }

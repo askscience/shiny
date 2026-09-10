@@ -13,7 +13,7 @@
 //! rail. The scoring and tokenising halves are pure functions so they can be
 //! unit-tested without the network.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -57,13 +57,23 @@ const STOPWORDS: &[&str] = &[
     "be", "are", "was", "were", "will", "can", "just", "official", "video", "full", "hd", "4k",
     "lyrics", "lyric", "audio", "live", "feat", "ft", "new", "song", "songs", "music", "remix",
     "version", "edit", "mix", "vs", "ep", "album", "track", "best", "top", "how",
+    // Generic video furniture that otherwise shows up as category chips.
+    "episode", "episodes", "season", "seasons", "trailer", "trailers", "preview", "previews",
+    "clip", "clips", "short", "shorts", "part", "parts", "scene", "scenes", "compilation",
+    "reaction", "reactions", "moment", "moments", "movie", "movies", "series", "show", "shows",
+    "watch", "entire", "every", "all", "more", "most", "gets", "get", "got", "make", "makes",
+    "made", "one", "two", "three", "first", "last", "back", "out", "up", "down", "over",
+    // Short function words from other languages, so 2-letter terms like "ai",
+    // "3d" or "vr" can survive the length filter.
+    "ed", "el", "la", "le", "de", "da", "di", "al", "un", "il", "lo", "en", "et", "du", "au",
+    "und", "der", "die", "das", "les", "des",
 ];
 
 /* ── per-user model: watches + category signals ─────────────── */
 
 /// A topic signal: the terms a watch or a search contributed.
 struct Signal {
-    terms: Vec<String>,
+    terms: Vec<(String, bool)>,
 }
 
 /// Everything remembered about one user.
@@ -82,33 +92,45 @@ fn store() -> &'static Store {
 
 const SIGNAL_CAP: usize = 200;
 
+/// Add a term, keeping the strongest trust we've seen for it. `trusted` marks
+/// terms that are meaningful on their own (a query phrase, a channel name);
+/// title keywords are untrusted and must recur before they become a chip.
+fn push_term(out: &mut Vec<(String, bool)>, term: String, trusted: bool) {
+    if term.is_empty() {
+        return;
+    }
+    if let Some(slot) = out.iter_mut().find(|(t, _)| *t == term) {
+        slot.1 |= trusted;
+    } else {
+        out.push((term, trusted));
+    }
+}
+
 /// Terms one event contributes. A whole short query is kept as a phrase so
 /// "harry potter" stays one category instead of splitting into two words; a
 /// channel is its own topic; a watch (or a long query) contributes the
 /// strongest title keywords instead.
-fn signal_terms(text: &str, channel: &str, keep_phrase: bool) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+fn signal_terms(text: &str, channel: &str, keep_phrase: bool) -> Vec<(String, bool)> {
+    let mut out: Vec<(String, bool)> = Vec::new();
     let phrase = text.trim().to_lowercase();
     let short_phrase = keep_phrase && !phrase.is_empty() && phrase.split_whitespace().count() <= 5;
     if short_phrase {
-        out.push(phrase);
+        push_term(&mut out, phrase, true);
     }
     let chan = channel.trim().to_lowercase();
-    if !chan.is_empty() && !out.contains(&chan) {
-        out.push(chan);
+    if !chan.is_empty() {
+        push_term(&mut out, chan, true);
     }
     if !short_phrase {
         // ≥4 chars keeps filler like "hip"/"hop" out of the chips.
         for term in keywords(text).into_iter().filter(|t| t.len() >= 4).take(4) {
-            if !out.contains(&term) {
-                out.push(term);
-            }
+            push_term(&mut out, term, false);
         }
     }
     out
 }
 
-fn push_signal(model: &mut UserModel, terms: Vec<String>) {
+fn push_signal(model: &mut UserModel, terms: Vec<(String, bool)>) {
     if terms.is_empty() {
         return;
     }
@@ -169,24 +191,98 @@ pub fn categories(user: &str, limit: usize) -> Vec<Category> {
     let Ok(all) = store().lock() else { return Vec::new() };
     let Some(model) = all.get(user) else { return Vec::new() };
 
-    let mut agg: HashMap<&str, (f64, u32)> = HashMap::new();
+    #[derive(Clone, Copy, Default)]
+    struct Agg {
+        score: f64,
+        count: u32,
+        trusted: bool,
+    }
+
+    let mut agg: HashMap<&str, Agg> = HashMap::new();
     for (age, signal) in model.signals.iter().enumerate() {
         let weight = 1.0 / (1.0 + age as f64 * 0.10); // recency decay
-        for term in &signal.terms {
-            let entry = agg.entry(term.as_str()).or_insert((0.0, 0));
-            entry.0 += weight;
-            entry.1 += 1;
+        for (term, trusted) in &signal.terms {
+            let entry = agg.entry(term.as_str()).or_default();
+            entry.score += weight;
+            entry.count += 1;
+            entry.trusted |= *trusted;
         }
     }
 
-    let mut out: Vec<Category> = agg
+    // Candidates: a title keyword has to recur before it becomes a chip —
+    // one-off odd words are what made the list look random.
+    let mut candidates: Vec<(String, f64, u32)> = agg
         .into_iter()
-        .filter(|(name, _)| name.len() >= 3)
-        .map(|(name, (score, count))| Category {
-            name: name.to_string(),
-            score: (score * 100.0).round() / 100.0,
-            count,
+        .filter(|(name, a)| name.chars().count() >= 3 && (a.trusted || a.count >= 2))
+        .map(|(name, a)| (name.to_string(), a.score, a.count))
+        .collect();
+    candidates.sort_by(|a, b| {
+        // Multi-word topics first, so fragments have a parent to fold into.
+        b.0.split_whitespace()
+            .count()
+            .cmp(&a.0.split_whitespace().count())
+            .then(b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal))
+            .then(b.0.len().cmp(&a.0.len()))
+            .then(a.0.cmp(&b.0))
+    });
+
+    // Fold fragments into the topic they belong to: "rick" and "mort" land in
+    // "rick and morty", "salvatore san" in "salvatore sanfilippo". Topics that
+    // merely overlap (adult swim vs rick and morty) stay separate.
+    let mut clusters: Vec<(BTreeSet<String>, Vec<(String, f64, u32)>)> = Vec::new();
+    for (name, score, count) in candidates {
+        let tokens = name_tokens(&name);
+        let mut best: Option<(usize, f64)> = None;
+        for (i, (cluster_tokens, _)) in clusters.iter().enumerate() {
+            let j = cluster_similarity(cluster_tokens, &tokens);
+            let score = if j >= 0.6 {
+                j + 1.0
+            } else if (cluster_tokens.len() == 1 || tokens.len() == 1) && j > 0.0 {
+                j // fragment rule
+            } else {
+                continue;
+            };
+            if best.map_or(true, |(_, bs)| score > bs) {
+                best = Some((i, score));
+            }
+        }
+        match best {
+            Some((i, _)) => {
+                let (cluster_tokens, members) = &mut clusters[i];
+                for t in tokens {
+                    cluster_tokens.insert(t);
+                }
+                members.push((name, score, count));
+            }
+            None => clusters.push((tokens, vec![(name, score, count)])),
+        }
+    }
+
+    let mut out: Vec<Category> = clusters
+        .into_iter()
+        .map(|(_, members)| {
+            let score: f64 = members.iter().map(|m| m.1).sum();
+            let count: u32 = members.iter().map(|m| m.2).sum();
+            // The representative is the most descriptive member — most words,
+            // then best score, then longest name — so never a bare fragment.
+            let name = members
+                .into_iter()
+                .max_by(|a, b| {
+                    a.0.split_whitespace()
+                        .count()
+                        .cmp(&b.0.split_whitespace().count())
+                        .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                        .then(a.0.len().cmp(&b.0.len()))
+                })
+                .map(|m| m.0)
+                .unwrap_or_default();
+            Category {
+                name,
+                score: (score * 100.0).round() / 100.0,
+                count,
+            }
         })
+        .filter(|c| !c.name.is_empty())
         .collect();
 
     out.sort_by(|a, b| {
@@ -200,16 +296,58 @@ pub fn categories(user: &str, limit: usize) -> Vec<Category> {
     out
 }
 
+/// A category name's content tokens (stopwords dropped).
+fn name_tokens(name: &str) -> BTreeSet<String> {
+    keywords(name).into_iter().collect()
+}
+
+/// Do two words refer to the same thing? Either the same word, or a short
+/// fragment of a longer one ("mort" ~ "morty", "san" ~ "sanfilippo").
+fn tokens_match(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    short.len() >= 3 && long.len() >= 5 && long.starts_with(short)
+}
+
+/// How much two category token sets overlap (0..1), counting words that match
+/// exactly or as a short fragment of a longer one ("mort" ~ "morty").
+fn cluster_similarity(a: &BTreeSet<String>, b: &BTreeSet<String>) -> f64 {
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    let bv: Vec<&String> = b.iter().collect();
+    let mut used = vec![false; bv.len()];
+    let mut matched = 0usize;
+    for x in a {
+        for (i, y) in bv.iter().enumerate() {
+            if !used[i] && tokens_match(x, y) {
+                used[i] = true;
+                matched += 1;
+                break;
+            }
+        }
+    }
+    let union = a.len() + b.len() - matched;
+    if union == 0 {
+        0.0
+    } else {
+        matched as f64 / union as f64
+    }
+}
+
 /* ── pure helpers (unit-tested) ─────────────────────────────── */
 
-/// Content words from a title/channel: lowercased, stopworded, ≥3 chars,
-/// deduped in first-seen order.
+/// Content words from a title/channel: lowercased, stopworded, ≥2 chars,
+/// deduped in first-seen order. Two-char terms matter ("ai", "3d", "vr"); the
+/// category chips apply their own ≥4-char rule for title keywords.
 pub fn keywords(text: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for raw in text.split(|c: char| !c.is_alphanumeric()) {
         let token = raw.to_lowercase();
-        if token.chars().count() < 3 || STOPWORDS.contains(&token.as_str()) {
+        if token.chars().count() < 2 || STOPWORDS.contains(&token.as_str()) {
             continue;
         }
         if seen.insert(token.clone()) {
@@ -332,6 +470,32 @@ pub fn queries_for(seed: &Seed) -> Vec<String> {
 }
 
 /* ── network-backed entry point ─────────────────────────────── */
+
+/// Videos for one topic (a category chip): search the topic, then rank what
+/// comes back. Unlike [`suggest`] this records nothing — browsing a category
+/// must not look like watching it.
+pub async fn videos_for(user: &str, topic: &str, limit: usize) -> Result<Vec<VideoResult>, AppError> {
+    let seed = Seed {
+        video_id: String::new(),
+        title: topic.to_string(),
+        channel: String::new(),
+    };
+    if !seed.is_usable() {
+        return Err(AppError::BadRequest("topic required".into()));
+    }
+
+    let history = recent(user, HISTORY_AFFINITY);
+    let mut candidates: Vec<VideoResult> = Vec::new();
+    for query in queries_for(&seed) {
+        if let Ok(mut hits) = youtube_client::search(&query, 12).await {
+            candidates.append(&mut hits);
+        }
+    }
+    if candidates.is_empty() {
+        return Err(AppError::NotFound(format!("Nothing found for “{topic}”")));
+    }
+    Ok(rank(&seed, &history, candidates, limit.clamp(1, 24)))
+}
 
 /// Recommend videos for `user`. With no usable seed this falls back to the
 /// most recent watch. The seed is remembered as a watch on the way through,
@@ -516,5 +680,56 @@ mod tests {
         let names: Vec<&str> = cats.iter().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"ambientlab"), "{names:?}");
         assert!(names.contains(&"piano") || names.contains(&"focus"), "{names:?}");
+    }
+
+    #[test]
+    fn fragments_fold_into_their_topic() {
+        let user = "test-category-fragments";
+        remember_query(user, "rick and morty");
+        for _ in 0..3 {
+            // Title keywords (untrusted) that recur, plus the channel.
+            remember(
+                user,
+                &Seed {
+                    video_id: "v1".into(),
+                    title: "Rick Morty Compilation".into(),
+                    channel: String::new(),
+                },
+            );
+        }
+        let names: Vec<String> = categories(user, 20).into_iter().map(|c| c.name).collect();
+        assert!(names.contains(&"rick and morty".to_string()), "{names:?}");
+        assert!(!names.contains(&"rick".to_string()), "fragment should fold in: {names:?}");
+        assert!(!names.contains(&"morty".to_string()), "fragment should fold in: {names:?}");
+    }
+
+    #[test]
+    fn one_off_title_words_are_dropped() {
+        let user = "test-category-oneoff";
+        // A trusted query survives on its own...
+        remember_query(user, "harry potter");
+        // ...but a single odd title word does not.
+        remember(
+            user,
+            &Seed {
+                video_id: "v1".into(),
+                title: "Earty Jewels Moma".into(),
+                channel: String::new(),
+            },
+        );
+        let names: Vec<String> = categories(user, 20).into_iter().map(|c| c.name).collect();
+        assert_eq!(names, vec!["harry potter".to_string()], "{names:?}");
+    }
+
+    #[test]
+    fn distinct_topics_that_merely_overlap_stay_separate() {
+        let user = "test-category-distinct";
+        remember_query(user, "adult swim");
+        remember_query(user, "adult swim rick morty");
+        let names: Vec<String> = categories(user, 20).into_iter().map(|c| c.name).collect();
+        // Only single-word fragments fold; two real phrases that merely share
+        // a word stay as separate chips.
+        assert!(names.contains(&"adult swim".to_string()), "{names:?}");
+        assert!(names.contains(&"adult swim rick morty".to_string()), "{names:?}");
     }
 }

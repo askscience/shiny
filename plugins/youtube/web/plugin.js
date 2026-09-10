@@ -229,6 +229,7 @@ function setGridLabel(label) {
 function renderGrid(results, term, { label = '' } = {}) {
   if (!gridEl) return;
   setGridLabel(label);
+  gridEl.classList.remove('yt-grid--shelves');
   gridEl.innerHTML = '';
   if (!results) {
     const wrap = document.createElement('div');
@@ -279,8 +280,22 @@ async function runSearch(text) {
 
 /* ── Idle homepage: category chips + "For you" ──────────────── */
 
+const SMALL_WORDS = new Set([
+  'a', 'an', 'and', 'the', 'of', 'in', 'on', 'for', 'to', 'vs', 'or',
+  'e', 'y', 'de', 'la', 'el', 'di', 'da',
+]);
+const ACRONYMS = new Set(['ai', 'vr', 'ar', '3d', '2d', '4k', '8k', 'os', 'tv', 'uk', 'us', 'diy', 'rpg', 'pc', 'gpu', 'cpu', 'api', 'ml']);
+
 function titleCase(s) {
-  return String(s || '').replace(/\b\w/g, (c) => c.toUpperCase());
+  const words = String(s || '').trim().split(/\s+/).filter(Boolean);
+  return words
+    .map((w, i) => {
+      const lower = w.toLowerCase();
+      if (ACRONYMS.has(lower)) return lower.toUpperCase();
+      if (i > 0 && i < words.length - 1 && SMALL_WORDS.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
 }
 
 function setCategoriesVisible(on) {
@@ -306,18 +321,51 @@ function renderCategories(cats) {
   }
 }
 
-/** The idle homepage: category chips ordered by usage, plus a "For you" row
- *  (history-based recommendations, or trending for a brand-new user). */
+/** The idle homepage: a shelf of videos per category, most-watched first. */
 async function loadHomepage() {
   if (!tileEl || current) return;
-  const [cats, forYou] = await Promise.all([
+  renderGrid(null, null, { label: 'For you' }); // spinner while shelves load
+  const [cats, home] = await Promise.all([
     apiFetch('/api/youtube/categories?limit=20').catch(() => null),
-    apiFetch('/api/youtube/suggest?limit=12').catch(() => null),
+    apiFetch('/api/youtube/home?per_category=12&max_categories=20').catch(() => null),
   ]);
   if (!tileEl || current) return;
   renderCategories(cats?.data?.categories || []);
-  const list = resultList(forYou);
-  renderGrid(list, null, list.length ? { label: 'For you' } : {});
+  const sections = home?.data?.sections || [];
+  if (sections.length) {
+    renderHome(sections);
+  } else {
+    const list = resultList(home);
+    renderGrid(list, null, { label: 'For you' });
+  }
+}
+
+/** Category shelves — a clickable label plus one row of videos per category. */
+function renderHome(sections) {
+  if (!gridEl) return;
+  setGridLabel('For you');
+  gridEl.classList.add('yt-grid--shelves');
+  gridEl.innerHTML = '';
+  for (const section of sections) {
+    const videos = Array.isArray(section?.videos) ? section.videos : [];
+    if (!videos.length) continue;
+    const sec = document.createElement('section');
+    sec.className = 'yt-section';
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'yt-section-title';
+    head.textContent = `${titleCase(section.category)} · ${videos.length}`;
+    head.title = `Show all ${titleCase(section.category)}`;
+    head.addEventListener('click', () => void openCategory(section.category));
+
+    const row = document.createElement('div');
+    row.className = 'yt-shelf';
+    videos.forEach((v, i) => row.appendChild(videoCell(v, i)));
+
+    sec.append(head, row);
+    gridEl.appendChild(sec);
+  }
 }
 
 /** A category chip: rank videos for that topic and show them in the grid. */

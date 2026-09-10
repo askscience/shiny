@@ -18,6 +18,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "yt_search" => Some(yt_search(ctx)),
         "yt_suggest" => Some(yt_suggest(ctx)),
         "yt_categories" => Some(yt_categories(ctx)),
+        "yt_home" => Some(yt_home(ctx)),
         _ => None,
     }
 }
@@ -82,6 +83,68 @@ fn yt_categories(_ctx: Arc<PluginCtx>) -> RouteHandler {
             let categories = crate::suggest::categories(&uid, q.limit.unwrap_or(20));
             let count = categories.len();
             Ok(ok(json!({ "categories": categories, "count": count })))
+        }
+    })
+}
+
+/// The idle homepage: a shelf of videos per category, most-watched first.
+/// Categories are fetched concurrently (bounded) and search results are
+/// cached, so re-opening the window is quick.
+fn yt_home(_ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize)]
+    struct HomeQuery {
+        per_category: Option<usize>,
+        max_categories: Option<usize>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        async move {
+            use futures::StreamExt;
+
+            let uid = user_id(&req)?;
+            let (q, _) = take_query::<HomeQuery>(req).await?;
+            let per = q.per_category.unwrap_or(12).clamp(1, 24);
+            let max = q.max_categories.unwrap_or(20).clamp(1, 20);
+
+            let cats = crate::suggest::categories(&uid, max);
+            let names: Vec<String> = cats.into_iter().map(|c| c.name).collect();
+            let uid_ref = uid.as_str();
+            let fetches = names.into_iter().enumerate().map(|(i, name)| async move {
+                let videos = crate::suggest::videos_for(uid_ref, &name, per)
+                    .await
+                    .unwrap_or_default();
+                (i, name, videos)
+            });
+            let mut got: Vec<(usize, String, Vec<crate::youtube_client::VideoResult>)> =
+                futures::stream::iter(fetches)
+                    .buffer_unordered(5)
+                    .collect()
+                    .await;
+            got.sort_by_key(|(i, _, _)| *i); // keep the category ranking
+
+            let mut sections: Vec<Value> = got
+                .into_iter()
+                .filter(|(_, _, videos)| !videos.is_empty())
+                .map(|(_, category, videos)| {
+                    json!({ "category": category, "count": videos.len(), "videos": videos })
+                })
+                .collect();
+
+            // Brand-new user: no categories yet, so show what's trending.
+            if sections.is_empty() {
+                if let Ok((videos, seed)) = crate::suggest::suggest(&uid, None, per).await {
+                    if !videos.is_empty() {
+                        sections.push(json!({
+                            "category": seed.title,
+                            "count": videos.len(),
+                            "videos": videos,
+                        }));
+                    }
+                }
+            }
+
+            let count = sections.len();
+            Ok(ok(json!({ "sections": sections, "count": count })))
         }
     })
 }
