@@ -5574,611 +5574,145 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background-color: color-mix(in srgb, var(--bg) var(--glow-permeability, 88%), transparent);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Studio 2.0 — Bitwig-grammar look and feel.
+/* ─────────────────────────────────────────────────────────────
+   Studio — component refinements.
 
-   Appended last on purpose: this block re-skins the Studio window without
-   touching the rest of the plugin stylesheets. Design rules borrowed from
-   Bitwig's own theme language:
+   Everything here is expressed with the core design tokens, so the
+   window follows every theme and the user's accent like any other
+   plugin surface. This block only adds structure the DAW needs:
+   consistent control states, clip grammar, the handful of classes
+   the window builds but the stylesheet never defined, and the
+   accessibility/narrow-window rules.
+   ───────────────────────────────────────────────────────────── */
 
-     • structural contrast is tiny (1.2–1.8:1) — separation comes from 1px
-       strokes and a 1px inner bevel, never from big luminance jumps;
-     • all state changes are small: hover is a flat 6% white wash, pressed
-       buttons get *darker*, and the accent is one hue at three alphas;
-     • text carries the legibility (bright on chrome, muted for labels);
-     • near-square corners (3px) and compact control heights.
+/* Missing classes the Studio window builds. */
 
-   The Studio is a DAW, so it keeps its own dark palette in every app theme.
-   ═══════════════════════════════════════════════════════════════════════ */
+.studio-panel--arr { border-right: 1px solid var(--glass-border); }
 
-.studio-tile {
-  /* chrome / structure */
-  --st-chrome: #2e2e2e;
-  --st-panel: #333333;
-  --st-panel-2: #383838;
-  --st-stroke: #4a4a4a;
-  --st-stroke-soft: #3a3a3a;
-  --st-hole: #191919;
-  --st-hole-2: #141414;
-  --st-display: #1d1d1d;
-  --st-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
-  --st-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-
-  /* timeline (dark variant, as in the reference screenshot) */
-  --st-lane: #2b2b2b;
-  --st-lane-alt: #272727;
-  --st-lane-muted: #232323;
-  --st-grid-1: #3d3d3d;
-  --st-grid-2: #333333;
-  --st-ruler: #303030;
-
-  /* text */
-  --st-text: #ececec;
-  --st-text-2: #a0a0a0;
-  --st-text-3: #787878;
-
-  /* state */
-  --st-hover: rgba(255, 255, 255, 0.06);
-  --st-press: rgba(0, 0, 0, 0.28);
-  --st-on: #ff8713;
-  --st-on-soft: rgba(255, 135, 19, 0.35);
-  --st-on-faint: rgba(255, 135, 19, 0.16);
-  --st-sel: #ffffff;
-  --st-rec: #ec0808;
-  --st-mod: #3dd9ff;
-
-  /* metering */
-  --st-meter: #8ccb2a;
-  --st-meter-hot: #ffde42;
-  --st-meter-clip: #ff5a4d;
-
-  /* geometry */
-  --st-r: 3px;
-  --st-ctl: 22px;
-
-  background: var(--st-chrome) !important;
-  color: var(--st-text);
-  font-variant-numeric: tabular-nums;
+.studio-browser-tab {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
 }
+.studio-browser-tab:hover { background: var(--glass-hover); color: var(--text); }
+.studio-browser-tab--on { background: var(--glass-strong); border-color: var(--glass-border); color: var(--text); }
 
-/* ── transport bar ───────────────────────────────────────────────────── */
-
-.studio-tile .studio-bar {
-  background: linear-gradient(#424242, #343434);
-  border-bottom: 1px solid var(--st-hole);
-  padding: 5px 8px;
-  gap: 5px;
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-bar-sep {
-  width: 1px;
-  height: 18px;
-  background: var(--st-hole);
-  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.06);
-  margin: 0 3px;
-}
-.studio-tile .studio-transport,
-.studio-tile .studio-head-btn,
-.studio-tile .studio-btn,
-.studio-tile .studio-detail-page,
-.studio-tile .studio-detail-collapse,
-.studio-tile .studio-browser-tab,
-.studio-tile .studio-ms,
-.studio-tile .studio-device-bypass {
-  border-radius: var(--st-r);
-  border: 1px solid var(--st-stroke);
-  background: #4a4a4a;
-  color: var(--st-text);
-  transition: background var(--duration-fast, 120ms) var(--ease-out, ease), color 120ms ease;
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-transport:hover,
-.studio-tile .studio-head-btn:hover,
-.studio-tile .studio-btn:hover,
-.studio-tile .studio-detail-page:hover,
-.studio-tile .studio-browser-tab:hover,
-.studio-tile .studio-ms:hover {
-  background: #555555;
-}
-.studio-tile .studio-transport:active,
-.studio-tile .studio-head-btn:active,
-.studio-tile .studio-btn:active,
-.studio-tile .studio-detail-page:active,
-.studio-tile .studio-ms:active {
-  background: #303030;          /* pressed reads darker, like hardware */
-}
-.studio-tile .studio-transport--on,
-.studio-tile .studio-detail-page--on,
-.studio-tile .studio-browser-tab--on,
-.studio-tile .studio-ms--on,
-.studio-tile .studio-device-bypass--on {
-  background: var(--st-on-faint);
-  border-color: var(--st-on-soft);
-  color: var(--st-on);
-}
-.studio-tile .studio-transport--play { color: var(--st-on); }
-.studio-tile .studio-transport--play:hover { color: #ffa23f; }
-.studio-tile .studio-ms--solo { font-weight: 700; color: var(--st-text-2); }
-.studio-tile .studio-ms--solo.studio-ms--on { color: var(--st-meter-hot); border-color: rgba(255, 222, 66, 0.4); background: rgba(255, 222, 66, 0.12); }
-
-.studio-tile .studio-bpm,
-.studio-tile .studio-number,
-.studio-tile .studio-select,
-.studio-tile .studio-title {
-  background: var(--st-display);
-  border: 1px solid var(--st-hole);
-  border-radius: var(--st-r);
-  color: var(--st-text);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-.studio-tile .studio-bpm:focus,
-.studio-tile .studio-number:focus,
-.studio-tile .studio-title:focus { border-color: var(--st-on-soft); outline: none; }
-.studio-tile .studio-title { min-width: 0; max-width: 200px; font-size: 12px; font-weight: 600; }
-.studio-tile .studio-title--clip { max-width: 170px; flex: none; font-size: 11px; font-weight: 600; }
-.studio-tile .studio-bpm-label { color: var(--st-text-3); font-size: 9px; letter-spacing: 0.08em; }
-.studio-tile .studio-status { min-width: 72px; color: var(--st-text-3); font-size: 10px; }
-.studio-tile .studio-status[data-state='dirty'] { color: var(--warn, var(--st-on)); }
-.studio-tile .studio-status[data-state='busy'] { color: var(--st-on); }
-.studio-tile .studio-status[data-state='error'] { color: var(--st-meter-clip); }
-.studio-tile .studio-save-dot { background: var(--st-text-3); }
-.studio-tile .studio-save-dot.is-active { background: var(--st-on); box-shadow: 0 0 6px var(--st-on-soft); }
-
-/* ── body layout ─────────────────────────────────────────────────────── */
-
-.studio-tile .studio-body { background: var(--st-chrome); gap: 0; }
-.studio-tile .studio-panel { border-right: 1px solid var(--st-hole); background: var(--st-lane); }
-
-/* ── arranger ────────────────────────────────────────────────────────── */
-
-.studio-tile .studio-arr-scroll { background: var(--st-lane); }
-.studio-tile .studio-arr-grid { background: var(--st-lane); }
-.studio-tile .studio-arr-corner {
-  background: var(--st-ruler);
-  border-right: 1px solid var(--st-hole);
-  border-bottom: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-arr-ruler-cell {
-  background: var(--st-ruler);
-  border-right: 1px solid var(--st-grid-2);
-  border-bottom: 1px solid var(--st-hole);
-  color: var(--st-text-2);
-  font-size: 9px;
+.studio-detail-page,
+.studio-detail-collapse {
+  width: 100%;
+  justify-content: center;
+  font-size: 11px;
   letter-spacing: 0.04em;
-  box-shadow: var(--st-bevel);
+  text-transform: uppercase;
 }
-.studio-tile .studio-arr-ruler-cell--bar { border-left: 1px solid var(--st-grid-1); color: var(--st-text); }
-.studio-tile .studio-arr-ruler-cell--loop { box-shadow: inset 0 -2px 0 var(--st-on-soft); }
-.studio-tile .studio-arr-ruler-cell--start { box-shadow: inset 0 -2px 0 var(--st-mod); }
-.studio-tile .studio-arr-head {
-  background: var(--st-panel);
-  border-right: 1px solid var(--st-hole);
-  border-bottom: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-arr-head--active { background: var(--st-panel-2); outline: 1px solid var(--st-stroke); outline-offset: -1px; }
-.studio-tile .studio-track-stripe { width: 3px; background: var(--track, var(--st-on)); }
-.studio-tile .studio-arr-name { color: var(--st-text); font-size: 10px; font-weight: 600; }
-.studio-tile .studio-arr-lane {
-  background: var(--st-lane);
-  border-bottom: 1px solid var(--st-grid-2);
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--st-grid-2) 0 1px, transparent 1px 100%
-  );
-}
-.studio-tile .studio-arr-lane:nth-of-type(even) { background-color: var(--st-lane-alt); }
-.studio-tile .studio-arr-lane--muted { background-color: var(--st-lane-muted); opacity: 0.7; }
 
-/* clips: title band over a darker body, waveform drawn on the body */
-.studio-tile .studio-arr-clip,
-.studio-tile .studio-launch-clip {
-  background: color-mix(in srgb, var(--track, var(--st-on)) 34%, #1c1c1c);
-  border: 1px solid color-mix(in srgb, var(--track, var(--st-on)) 55%, #101010);
-  border-radius: var(--st-r);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  overflow: hidden;
+.studio-title--clip { flex: none; max-width: 180px; font-size: 12px; font-weight: 600; }
+
+.studio-btn--play { color: var(--accent); }
+.studio-btn--play:hover { background: var(--accent-soft); }
+
+.studio-ms--solo.studio-ms--on { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+
+.studio-mixer-ms { display: inline-flex; gap: 2px; }
+.studio-mixer-strip--master {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--glass-border));
+  background: var(--glass);
 }
-.studio-tile .studio-arr-clip::before,
-.studio-tile .studio-launch-clip::before {
+.studio-device--master {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-border));
+  background: linear-gradient(var(--glass), color-mix(in srgb, var(--accent) 6%, transparent));
+}
+
+/* Control states — one language: hover is a flat wash, pressed is
+   recessed, "on" uses the accent. */
+
+.studio-body .studio-head-btn:active,
+.studio-bar .studio-head-btn:active,
+.studio-device-bypass:active,
+.studio-arr-clip-x:active,
+.studio-launch-play:active {
+  transform: none;
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Clip launcher + arranger clips share one grammar: an accent-tinted
+   body (mixed with the surface token, so every theme works) with a
+   brighter title band. */
+
+.studio-arr-clip,
+.studio-launch-clip {
+  background: color-mix(in srgb, var(--track, var(--accent)) 32%, var(--surface-strong));
+}
+.studio-arr-clip::before,
+.studio-launch-clip::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
   height: 9px;
-  background: color-mix(in srgb, var(--track, var(--st-on)) 78%, #ffffff 6%);
-  opacity: 0.85;
+  background: color-mix(in srgb, var(--track, var(--accent)) 70%, var(--surface));
   pointer-events: none;
 }
-.studio-tile .studio-arr-clip:hover { border-color: #ffffff; }
-.studio-tile .studio-arr-clip--sel { outline: 1px solid var(--st-sel); outline-offset: -1px; }
-.studio-tile .studio-arr-clip-name {
-  color: #0d0d0d;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding-top: 8px;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-.studio-tile .studio-arr-clip-wave,
-.studio-tile .studio-arr-clip-midi { opacity: 0.9; }
-.studio-tile .studio-arr-clip-x {
-  opacity: 0.45;                    /* always discoverable, quiet until hover */
-  background: var(--st-hole);
-  border: 1px solid var(--st-stroke);
-  border-radius: 2px;
-  color: var(--st-text);
-}
-.studio-tile .studio-arr-clip:hover .studio-arr-clip-x,
-.studio-tile .studio-launch-clip:hover .studio-arr-clip-x,
-.studio-tile .studio-arr-clip-x:focus-visible { opacity: 1; }
-.studio-tile .studio-arr-playhead { background: var(--st-on); box-shadow: 0 0 6px var(--st-on-soft); width: 1px; }
-.studio-tile .studio-arr-startmarker { border-left: 1px dashed var(--st-mod); }
-.studio-tile .studio-arr-addtrack {
-  background: transparent;
-  border: 1px dashed var(--st-stroke);
-  border-radius: var(--st-r);
-  color: var(--st-text-3);
-  font-size: 10px;
-}
-.studio-tile .studio-arr-addtrack:hover { color: var(--st-on); border-color: var(--st-on-soft); }
+.studio-arr-clip-name { padding-top: 8px; font-weight: 600; }
 
-/* automation */
-.studio-tile .studio-auto-head { background: var(--st-panel); border-bottom: 1px solid var(--st-hole); font-size: 9px; }
-.studio-tile .studio-auto-lane { background: var(--st-lane-alt); border-bottom: 1px solid var(--st-grid-2); }
-.studio-tile .studio-auto-base { stroke: var(--st-grid-1); }
-.studio-tile .studio-auto-line { stroke: var(--st-on); stroke-width: 1.5; fill: none; }
-.studio-tile .studio-auto-handle { fill: var(--st-on); stroke: #1a1a1a; }
+/* The per-clip buttons must be discoverable without hover (touch). */
+.studio-arr-clip-x { opacity: 0.5; }
+.studio-arr-clip-x:hover,
+.studio-arr-clip:hover .studio-arr-clip-x,
+.studio-launch-clip:hover .studio-arr-clip-x { opacity: 1; }
 
-/* ── clip launcher ───────────────────────────────────────────────────── */
-
-.studio-tile .studio-launch-scene {
-  background: var(--st-ruler);
-  border: 1px solid var(--st-hole);
-  border-radius: var(--st-r);
-  color: var(--st-text-2);
-  box-shadow: var(--st-bevel);
-  font-size: 10px;
-}
-.studio-tile .studio-launch-scene:hover { background: #3a3a3a; color: var(--st-text); }
-.studio-tile .studio-launch-slot {
-  background: var(--st-hole);
-  border: 1px solid var(--st-hole-2);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55);
-}
-.studio-tile .studio-launch-slot:hover { box-shadow: inset 0 0 0 1px var(--st-stroke); }
-.studio-tile .studio-launch-empty { color: var(--st-text-3); }
-.studio-tile .studio-launch-empty:hover { color: var(--st-on); }
-.studio-tile .studio-launch-clip--sel { outline: 1px solid var(--st-sel); outline-offset: -1px; }
-.studio-tile .studio-launch-clip--queued { animation: studio-queue 900ms ease-in-out infinite; }
-.studio-tile .studio-launch-clip--playing { box-shadow: inset 0 0 0 1px var(--st-on), 0 0 8px var(--st-on-faint); }
-.studio-tile .studio-launch-play {
-  background: var(--st-hole);
-  border: 1px solid var(--st-stroke);
-  border-radius: 2px;
-  color: var(--st-meter);
+/* Launcher play badge is a real control now. */
+.studio-launch-play {
   padding: 0;
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 3px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  color: var(--ok);
   cursor: pointer;
 }
-.studio-tile .studio-launch-play:hover { color: var(--st-on); border-color: var(--st-on-soft); }
-.studio-tile .studio-launch-clip--playing .studio-launch-play { color: var(--st-on); }
+.studio-launch-play:hover { color: var(--accent); border-color: var(--accent-glow); }
+.studio-launch-clip--playing .studio-launch-play { color: var(--accent); }
 
-/* ── detail panel (editor / devices / mixer) ─────────────────────────── */
+/* Meters + analysers use the semantic tokens rather than fixed hues. */
+.studio-meter-fill {
+  background: linear-gradient(to top, var(--ok), var(--warn) 78%, var(--error));
+}
+.studio-scope canvas { opacity: 0.95; }
 
-.studio-tile .studio-detail {
-  background: var(--st-panel);
-  border-top: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-detail-rail {
-  background: var(--st-chrome);
-  border-right: 1px solid var(--st-hole);
-  gap: 4px;
-  padding: 6px 4px;
-}
-.studio-tile .studio-detail-page,
-.studio-tile .studio-detail-collapse {
-  width: 100%;
-  min-width: 0;
-  height: 24px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.studio-tile .studio-detail-body { background: var(--st-panel); }
-.studio-tile .studio-editor-page { background: var(--st-panel); }
-.studio-tile .studio-editor-toolbar {
-  background: var(--st-chrome);
-  border-bottom: 1px solid var(--st-hole);
-  padding: 4px 8px;
-  gap: 6px;
-}
-.studio-tile .studio-editor-toolbar .studio-title--clip { max-width: 160px; }
+/* Grid module delete button + cable affordances. */
+.studio-grid-module-x { margin-left: auto; padding: 0 4px; }
+.studio-grid-canvas { background-image: radial-gradient(var(--glass-border) 1px, transparent 1px); }
 
-/* step grid + drum machine */
-.studio-tile .studio-grid { background: var(--st-hole); }
-.studio-tile .studio-corner {
-  background: var(--st-chrome);
-  border-right: 1px solid var(--st-hole);
-  border-bottom: 1px solid var(--st-hole);
-  color: var(--st-text-3);
-  font-size: 9px;
-}
-.studio-tile .studio-scene {
-  background: var(--st-chrome);
-  border-right: 1px solid var(--st-hole);
-  border-bottom: 1px solid var(--st-hole);
-  color: var(--st-text-2);
-  font-size: 9px;
-}
-.studio-tile .studio-scene--bar { color: var(--st-text); }
-.studio-tile .studio-scene--playing { color: var(--st-on); }
-.studio-tile .studio-track-head {
-  background: var(--st-panel);
-  border-right: 1px solid var(--st-hole);
-  border-bottom: 1px solid var(--st-hole);
-  color: var(--st-text-2);
-  font-size: 10px;
-}
-.studio-tile .studio-track-head--active { background: var(--st-panel-2); color: var(--st-text); outline: 1px solid var(--st-stroke); outline-offset: -1px; }
-.studio-tile .studio-track-dot { background: var(--track, var(--st-on)); }
-.studio-tile .studio-cell {
-  background: #232323;
-  border: 1px solid var(--st-hole-2);
-  border-radius: 2px;
-}
-.studio-tile .studio-cell--bar { background: #282828; }
-.studio-tile .studio-cell:hover { border-color: var(--st-stroke); }
-.studio-tile .studio-cell--on {
-  background: color-mix(in srgb, var(--track, var(--st-on)) 78%, #101010);
-  border-color: color-mix(in srgb, var(--track, var(--st-on)) 90%, #000000);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-.studio-tile .studio-cell--on.studio-cell--bar { background: color-mix(in srgb, var(--track, var(--st-on)) 92%, #ffffff 8%); }
-
-/* piano roll */
-.studio-tile .studio-pr-grid { background: var(--st-hole); }
-.studio-tile .studio-pr-key { background: #3a3a3a; border-bottom: 1px solid var(--st-hole); color: var(--st-text-2); font-size: 8px; }
-.studio-tile .studio-pr-key--black { background: #262626; color: var(--st-text-3); }
-.studio-tile .studio-pr-key--pressed { background: var(--st-on-faint); color: var(--st-on); }
-.studio-tile .studio-pr-step { background: var(--st-chrome); color: var(--st-text-2); font-size: 8px; }
-.studio-tile .studio-pr-step--playing { color: var(--st-on); }
-.studio-tile .studio-pr-note {
-  background: color-mix(in srgb, var(--track, var(--st-on)) 80%, #101010);
-  border: 1px solid rgba(0, 0, 0, 0.5);
-  border-radius: 2px;
-}
-.studio-tile .studio-pr-note:hover { border-color: #ffffff; }
-
-/* ── devices ─────────────────────────────────────────────────────────── */
-
-.studio-tile .studio-devices-page { background: var(--st-panel); padding: 6px; gap: 6px; }
-.studio-tile .studio-chain { gap: 6px; }
-.studio-tile .studio-device {
-  background: var(--st-panel-2);
-  border: 1px solid var(--st-stroke-soft);
-  border-radius: var(--st-r);
-  box-shadow: var(--st-bevel);
-  min-width: 190px;
-}
-.studio-tile .studio-device::after {           /* chain connector */
-  content: '';
-  position: absolute;
-  right: -6px;
-  top: 50%;
-  width: 6px;
-  height: 1px;
-  background: var(--st-stroke);
-}
-.studio-tile .studio-device:last-of-type::after { display: none; }
-.studio-tile .studio-device--master {
-  border-color: var(--st-on-soft);
-  background: linear-gradient(var(--st-panel-2), color-mix(in srgb, var(--st-on) 6%, var(--st-panel-2)));
-}
-.studio-tile .studio-device--add { background: transparent; border-style: dashed; }
-.studio-tile .studio-device-head {
-  background: linear-gradient(#464646, #3a3a3a);
-  border-bottom: 1px solid var(--st-hole);
-  border-radius: var(--st-r) var(--st-r) 0 0;
-  padding: 3px 6px;
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-device-name { color: var(--st-text); font-size: 10px; font-weight: 700; letter-spacing: 0.03em; }
-.studio-tile .studio-device-body { padding: 6px; gap: 8px; }
-.studio-tile .studio-device-bypass { font-size: 8px; padding: 1px 5px; min-height: 0; }
-.studio-tile .studio-device-voices { gap: 3px; padding: 4px 6px; background: var(--st-chrome); border-bottom: 1px solid var(--st-hole); }
-.studio-tile .studio-device-voice {
-  border: 1px solid var(--st-stroke);
-  border-radius: 2px;
-  background: #3d3d3d;
-  color: var(--st-text-2);
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-left: 3px solid var(--track, var(--st-on));
-}
-.studio-tile .studio-device-voice--on { background: var(--st-panel-2); color: var(--st-text); outline: 1px solid var(--st-stroke); }
-.studio-tile .studio-rack-label {
-  color: var(--st-text-3);
-  font-size: 8px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  width: 100%;
-  margin-top: 2px;
-}
-.studio-tile .studio-rack { background: var(--st-chrome); border-top: 1px solid var(--st-hole); padding: 6px; gap: 6px; }
-.studio-tile .studio-macro {
-  background: var(--st-panel-2);
-  border: 1px solid var(--st-stroke-soft);
-  border-radius: var(--st-r);
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-macro-name { color: var(--st-text-2); font-size: 9px; font-weight: 700; }
-
-/* knobs: circular body, thin light indicator, accent value arc */
-.studio-tile .studio-knob-label { color: var(--st-text-2); font-size: 8px; letter-spacing: 0.03em; }
-.studio-tile .studio-knob-value { color: var(--st-text); font-size: 9px; }
-.studio-tile .studio-knob-dial {
-  background: radial-gradient(circle at 50% 35%, #4e4e4e, #333333 70%);
-  border: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel), var(--st-shadow);
-}
-.studio-tile .studio-knob-pointer { background: #f2f2f2; }
-.studio-tile .studio-knob-auto { color: var(--st-text-3); }
-.studio-tile .studio-knob-auto:hover { color: var(--st-on); }
-
-/* pads */
-.studio-tile .studio-pads { gap: 4px; }
-.studio-tile .studio-pad {
-  background: #3a3a3a;
-  border: 1px solid var(--st-stroke);
-  border-radius: var(--st-r);
-  color: var(--st-text-2);
-  box-shadow: var(--st-bevel);
-  font-size: 9px;
-}
-.studio-tile .studio-pad:hover { background: #454545; color: var(--st-text); }
-.studio-tile .studio-pad--active { background: var(--st-on-faint); border-color: var(--st-on-soft); color: var(--st-on); }
-
-/* ── mixer ───────────────────────────────────────────────────────────── */
-
-.studio-tile .studio-mixer-page { background: var(--st-panel); }
-.studio-tile .studio-mixer-group { background: var(--st-panel); border-left: 1px solid var(--st-hole); }
-.studio-tile .studio-mixer-strip {
-  background: var(--st-display);
-  border: 1px solid var(--st-stroke-soft);
-  border-radius: var(--st-r);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-.studio-tile .studio-mixer-strip--sel { outline: 1px solid var(--st-sel); outline-offset: -1px; }
-.studio-tile .studio-mixer-strip--master { background: var(--st-panel-2); border-color: var(--st-on-soft); min-width: 84px; }
-.studio-tile .studio-mixer-name { color: var(--st-text); font-size: 9px; font-weight: 600; }
-.studio-tile .studio-mixer-ms { display: inline-flex; gap: 2px; }
-.studio-tile .studio-mixer-fader-label { color: var(--st-text-3); font-size: 8px; }
-.studio-tile .studio-mixer-fader-val { color: var(--st-text-2); font-size: 9px; }
-.studio-tile .studio-fader-input { accent-color: var(--st-on); }
-
-/* meters */
-.studio-tile .studio-meter {
-  background: var(--st-hole-2);
-  border: 1px solid var(--st-hole);
-  border-radius: 2px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-.studio-tile .studio-meter-fill {
-  background: linear-gradient(to top, var(--st-meter), var(--st-meter-hot) 78%, var(--st-meter-clip));
-  transform-origin: left center;
-}
-.studio-tile .studio-meter-peak { background: #ffffff; box-shadow: 0 0 3px rgba(255, 255, 255, 0.6); }
-
-/* ── footer / scope ──────────────────────────────────────────────────── */
-
-.studio-tile .studio-footer {
-  background: var(--st-chrome);
-  border-top: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel);
-  color: var(--st-text-3);
-  font-size: 9px;
-}
-.studio-tile .studio-footer-param { color: var(--st-text); font-size: 10px; }
-.studio-tile .studio-scope {
-  background: var(--st-hole-2);
-  border: 1px solid var(--st-hole);
-  border-radius: 2px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-/* ── browser ─────────────────────────────────────────────────────────── */
-
-.studio-tile .studio-browser {
-  background: var(--st-panel);
-  border: 1px solid var(--st-stroke);
-  border-radius: var(--st-r);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-  min-height: 0;
-}
-.studio-tile .studio-browser-head {
-  background: linear-gradient(#464646, #3a3a3a);
-  border-bottom: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-browser-title { color: var(--st-text); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.studio-tile .studio-browser-tabs { gap: 2px; flex-wrap: nowrap; overflow-x: auto; }
-.studio-tile .studio-browser-tab { flex: none; font-size: 9px; padding: 2px 7px; white-space: nowrap; }
-.studio-tile .studio-browser-list { background: var(--st-hole); }
-.studio-tile .studio-browser-item { border-bottom: 1px solid #222222; color: var(--st-text); font-size: 10px; }
-.studio-tile .studio-browser-item:hover { background: var(--st-hover); }
-.studio-tile .studio-browser-label { color: var(--st-text); }
-.studio-tile .studio-browser-sub { color: var(--st-text-3); font-size: 9px; }
-.studio-tile .studio-browser-section {
-  background: var(--st-panel-2);
-  color: var(--st-text-3);
-  font-size: 8px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 3px 8px;
-}
-.studio-tile .studio-empty { color: var(--st-text-3); font-size: 10px; }
-
-/* ── SynthMe / WaveMe (the Grid) ─────────────────────────────────────── */
-
-.studio-tile .studio-synthme-head,
-.studio-tile .studio-grid-palette {
-  background: var(--st-chrome);
-  border-bottom: 1px solid var(--st-hole);
-  box-shadow: var(--st-bevel);
-}
-.studio-tile .studio-synthme-title { color: var(--st-text); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.studio-tile .studio-synthme-body { background: var(--st-panel); }
-.studio-tile .studio-grid-palette-item { font-size: 9px; }
-.studio-tile .studio-grid-canvas {
-  background-color: var(--st-hole);
-  background-image: radial-gradient(var(--st-grid-2) 1px, transparent 1px);
-  background-size: 16px 16px;
-}
-.studio-tile .studio-grid-module {
-  background: var(--st-panel-2);
-  border: 1px solid var(--st-stroke);
-  border-radius: var(--st-r);
-  box-shadow: var(--st-shadow), var(--st-bevel);
-}
-.studio-tile .studio-grid-module--sel { border-color: var(--st-on); box-shadow: 0 0 0 1px var(--st-on-soft), var(--st-shadow); }
-.studio-tile .studio-grid-module-head {
-  background: linear-gradient(#464646, #3a3a3a);
-  border-bottom: 1px solid var(--st-hole);
-  border-radius: var(--st-r) var(--st-r) 0 0;
-  color: var(--st-text);
-  font-size: 9px;
-  font-weight: 700;
-}
-.studio-tile .studio-grid-module-x { margin-left: auto; padding: 0 4px; min-height: 0; font-size: 10px; }
-.studio-tile .studio-grid-port { background: var(--sig, var(--st-text-2)); box-shadow: 0 0 0 1px var(--st-hole); }
-.studio-tile .studio-grid-cable { stroke: var(--sig, var(--st-text-2)); stroke-width: 2; }
-.studio-tile .studio-grid-cable--drag { stroke: var(--st-on); stroke-dasharray: 4 3; }
-
-/* ── accessibility ───────────────────────────────────────────────────── */
-
-.studio-tile .studio-transport:focus-visible,
-.studio-tile .studio-btn:focus-visible,
-.studio-tile .studio-head-btn:focus-visible,
-.studio-tile .studio-ms:focus-visible,
-.studio-tile .studio-cell:focus-visible,
-.studio-tile .studio-track-head:focus-visible,
-.studio-tile .studio-arr-clip:focus-visible,
-.studio-tile .studio-launch-slot:focus-visible,
-.studio-tile .studio-launch-play:focus-visible,
-.studio-tile .studio-grid-port:focus-visible,
-.studio-tile .studio-scene:focus-visible,
-.studio-tile .studio-device-voice:focus-visible,
-.studio-tile .studio-pad:focus-visible,
-.studio-tile .studio-detail-page:focus-visible,
-.studio-tile .studio-browser-tab:focus-visible {
-  outline: 2px solid var(--st-on);
+/* Accessibility: the Studio predates the shared focus ring, so give its
+   controls the same visible focus treatment as the `.ui-*` components. */
+.studio-transport:focus-visible,
+.studio-btn:focus-visible,
+.studio-head-btn:focus-visible,
+.studio-ms:focus-visible,
+.studio-cell:focus-visible,
+.studio-track-head:focus-visible,
+.studio-arr-clip:focus-visible,
+.studio-launch-slot:focus-visible,
+.studio-launch-play:focus-visible,
+.studio-launch-scene:focus-visible,
+.studio-grid-port:focus-visible,
+.studio-scene:focus-visible,
+.studio-device-voice:focus-visible,
+.studio-pad:focus-visible,
+.studio-detail-page:focus-visible,
+.studio-browser-tab:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -6192,17 +5726,13 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   }
 }
 
-/* ── narrow windows / phones ─────────────────────────────────────────── */
-
+/* Narrow windows: keep the DAW usable instead of letting the scope and
+   the detail panel squeeze the timeline. */
 @media (max-width: 900px) {
-  .studio-tile .studio-detail { max-height: 40%; }
-  .studio-tile .studio-scope { display: none; }
-  .studio-tile .studio-arr-head { --st-head-w: 128px; }
+  .studio-scope { display: none; }
+  .studio-device { min-width: 170px; }
 }
 @media (max-width: 640px) {
-  .studio-tile .studio-body { flex-direction: column; }
-  .studio-tile .studio-bar { flex-wrap: wrap; row-gap: 4px; }
-  .studio-tile .studio-title { max-width: 120px; }
-  .studio-tile .studio-device { min-width: 160px; }
-  .studio-tile .studio-browser { width: 100% !important; max-width: none; }
+  .studio-title { max-width: 130px; }
+  .studio-browser { width: 100% !important; max-width: none; }
 }

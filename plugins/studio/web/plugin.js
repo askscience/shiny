@@ -651,6 +651,8 @@ let loopBtn = null;
 let metroBtn = null;
 let arrToggleBtn = null;
 let lchToggleBtn = null;
+let synthmeToggleBtn = null;
+let gridToggleBtn = null;
 let bodyEl = null;
 let arrWrapEl = null;
 let arrGridEl = null;
@@ -1313,9 +1315,18 @@ function markDirty() {
   setStatus('dirty');
 }
 function updateTransport() {
-  if (playBtn) playBtn.classList.toggle('studio-transport--on', arrPlaying);
-  if (loopBtn) loopBtn.classList.toggle('studio-btn--on', arrLoop);
-  if (metroBtn) metroBtn.classList.toggle('studio-btn--on', metroOn);
+  if (playBtn) {
+    playBtn.classList.toggle('studio-transport--on', arrPlaying);
+    playBtn.setAttribute('aria-pressed', String(!!arrPlaying));
+  }
+  if (loopBtn) {
+    loopBtn.classList.toggle('studio-btn--on', arrLoop);
+    loopBtn.setAttribute('aria-pressed', String(!!arrLoop));
+  }
+  if (metroBtn) {
+    metroBtn.classList.toggle('studio-btn--on', metroOn);
+    metroBtn.setAttribute('aria-pressed', String(!!metroOn));
+  }
 }
 function setReadout(text) {
   if (footerParamEl) footerParamEl.textContent = text || '';
@@ -1646,7 +1657,8 @@ function trackParamCatalog(tr) {
       for (const p of (SYNTH[v.kind] || [])) out.push({ path: `voice.${vi}.${p.key}`, label: `${kl} ${p.label}`, min: p.min, max: p.max });
       out.push({ path: `voice.${vi}.level`, label: `${kl} Level`, min: 0, max: 2 });
       out.push({ path: `voice.${vi}.pan`, label: `${kl} Pan`, min: -1, max: 1 });
-      out.push({ path: `voice.${vi}.accent`, label: `${kl} Accent`, min: 0, max: 0.6 });
+      // `accent` shapes note velocities when the pattern is scheduled, so it
+      // is not a live automation target — it stays a device knob only.
       v.fx.forEach((f, fi) => {
         for (const p of (EFFECTS[f.kind]?.params || [])) out.push({ path: `voice.${vi}.fx.${fi}.${p.key}`, label: `${kl} FX${fi + 1} ${p.label}`, min: p.min, max: p.max });
       });
@@ -1671,7 +1683,7 @@ function autoBaseValue(tr, param) {
         if (f) { const def = (EFFECTS[f.kind]?.params || []).find((p) => p.key === m[3]); return f.params[m[3]] != null ? f.params[m[3]] : (def?.def ?? 0.5); }
       } else if (m[3] === 'level') return v.level != null ? v.level : (DEFAULT_LEVEL[v.kind] ?? 0.5);
       else if (m[3] === 'pan') return v.pan != null ? v.pan : (DEFAULT_PAN[v.kind] ?? 0);
-      else if (m[3] === 'accent') return v.accent ?? 0;
+      else if (m[3] === 'accent') return v.accent ?? 0;   // display-only
       else { const def = (SYNTH[v.kind] || []).find((p) => p.key === m[3]); return v.synth[m[3]] != null ? v.synth[m[3]] : (def?.def ?? 0.5); }
     }
   }
@@ -2272,11 +2284,13 @@ function renderLauncher() {
     mute.type = 'button';
     mute.title = 'Mute';
     mute.classList.toggle('studio-ms--on', !!tr.mute);
+    mute.setAttribute('aria-pressed', String(!!tr.mute));
     mute.addEventListener('click', (e) => { e.stopPropagation(); tr.mute = !tr.mute; ensureTrackAudio(tr); renderLauncher(); });
     const solo = h('button', 'studio-ms studio-ms--solo', 'S');
     solo.type = 'button';
     solo.title = 'Solo';
     solo.classList.toggle('studio-ms--on', soloTracks.has(tr.id));
+    solo.setAttribute('aria-pressed', String(soloTracks.has(tr.id)));
     solo.addEventListener('click', (e) => { e.stopPropagation(); toggleSolo(tr.id); renderLauncher(); });
     const stopBtn = h('button', 'studio-head-btn', '■');
     stopBtn.type = 'button';
@@ -3805,7 +3819,9 @@ function renderBrowser() {
   if (!browserListEl || browserEl.classList.contains('hidden')) return;
   /* tab buttons */
   browserEl.querySelectorAll('.studio-browser-tab').forEach((b) => {
-    b.classList.toggle('studio-btn--on', b.dataset.tab === browserTab);
+    const on = b.dataset.tab === browserTab;
+    b.classList.toggle('studio-btn--on', on);
+    b.setAttribute('aria-selected', String(on));
   });
   browserListEl.textContent = '';
   const q = browserQuery.trim().toLowerCase();
@@ -4181,6 +4197,10 @@ function syncPanels() {
   gridWrapEl?.classList.toggle('hidden', !panels.grid);
   arrToggleBtn?.classList.toggle('studio-transport--on', !builder && panels.arranger);
   lchToggleBtn?.classList.toggle('studio-transport--on', !builder && panels.launcher);
+  arrToggleBtn?.setAttribute('aria-pressed', String(!builder && !!panels.arranger));
+  lchToggleBtn?.setAttribute('aria-pressed', String(!builder && !!panels.launcher));
+  synthmeToggleBtn?.setAttribute('aria-pressed', String(!!panels.synthme));
+  gridToggleBtn?.setAttribute('aria-pressed', String(!!panels.grid));
   if (titleInput) titleInput.value = arrangement.title;
   if (bpmInput) bpmInput.value = String(Math.round(arrangement.bpm));
   renderArranger();
@@ -4233,21 +4253,29 @@ export function mountStudioTile() {
   arrToggleBtn = h('button', 'studio-transport studio-transport--on');
   arrToggleBtn.type = 'button';
   arrToggleBtn.title = 'Show/hide the Arranger (timeline)';
+  arrToggleBtn.setAttribute('aria-label', 'Arranger timeline');
+  arrToggleBtn.setAttribute('aria-pressed', 'true');
   arrToggleBtn.appendChild(icon('ui/arranger', { size: 16 }));
   arrToggleBtn.addEventListener('click', () => togglePanel('arranger'));
   lchToggleBtn = h('button', 'studio-transport');
   lchToggleBtn.type = 'button';
   lchToggleBtn.title = 'Show/hide the Clip Launcher';
+  lchToggleBtn.setAttribute('aria-label', 'Clip Launcher');
+  lchToggleBtn.setAttribute('aria-pressed', 'false');
   lchToggleBtn.appendChild(icon('ui/launcher', { size: 16 }));
   lchToggleBtn.addEventListener('click', () => togglePanel('launcher'));
 
   const synthmeBtn = button({ variant: 'ghost', icon: 'ui/synthme', label: '', onClick: () => togglePanel('synthme') });
   synthmeBtn.classList.add('studio-transport');
   synthmeBtn.title = 'SynthMe — build and save custom instruments';
+  synthmeBtn.setAttribute('aria-label', 'SynthMe instrument builder');
+  synthmeToggleBtn = synthmeBtn;
 
   const gridBtn = button({ variant: 'ghost', icon: 'ui/grid', label: '', onClick: () => togglePanel('grid') });
   gridBtn.classList.add('studio-transport');
   gridBtn.title = 'WaveMe — modular patch editor';
+  gridBtn.setAttribute('aria-label', 'WaveMe modular patch editor');
+  gridToggleBtn = gridBtn;
 
   const stopBtn = button({ variant: 'ghost', icon: 'ui/stop', label: '', onClick: () => { stopPlayback(); stopAllLauncher(); } });
   stopBtn.classList.add('studio-transport');
@@ -4435,10 +4463,14 @@ export function mountStudioTile() {
   const search = searchBar({ placeholder: 'Search…', onInput: (v) => { browserQuery = v; renderBrowser(); } });
   browserEl.appendChild(search);
   const tabsRow = h('div', 'studio-browser-tabs');
+  tabsRow.setAttribute('role', 'tablist');
+  tabsRow.setAttribute('aria-label', 'Browser sections');
   for (const [tab, label] of BROWSER_TABS) {
     const b = h('button', 'studio-btn studio-browser-tab', label);
     b.type = 'button';
     b.dataset.tab = tab;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(tab === browserTab));
     b.addEventListener('click', () => { browserTab = tab; renderBrowser(); });
     tabsRow.appendChild(b);
   }

@@ -11,6 +11,7 @@ use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
+use shiny_plugin_sdk::Notification;
 
 use crate::catalog;
 use crate::engine::{self, TrackConfig};
@@ -115,7 +116,12 @@ impl Tool for StudioCreate {
         if let Some(obj) = data.as_object_mut() {
             obj.insert("voices".into(), cfg_fields(&cfg));
         }
-        Ok(ActionOutcome::ok("studio_create", data))
+        // The AI composes in the background, so surface it as a banner rather
+        // than an in-window toast (see PLUGINS.md §19 — Notifications).
+        let body = format!("\"{title}\" · {} BPM · {} steps · {:.1} LUFS", cfg.bpm, cfg.steps, rendered.lufs);
+        Ok(ActionOutcome::ok("studio_create", data).with_notification(
+            Notification::new(body).title("Studio — track composed").plugin("studio"),
+        ))
     }
 }
 
@@ -419,7 +425,14 @@ impl Tool for StudioArrangementSave {
         } else {
             let id = uuid::Uuid::new_v4().to_string();
             store::insert_arrangement(pool, &id, req.traveler_id, &title, arr.bpm, arr.length_beats, arr.master as f64, &cfg_json).await?;
-            Ok(ActionOutcome::ok("studio_arrangement_save", json!({ "id": id, "title": title })))
+            let body = format!(
+                "\"{title}\" · {} beats · {} tracks · {} clips",
+                arr.length_beats.round() as i64,
+                arr.tracks.len(),
+                arr.clips.len()
+            );
+            Ok(ActionOutcome::ok("studio_arrangement_save", json!({ "id": id, "title": title }))
+                .with_notification(Notification::new(body).title("Studio — arrangement saved").plugin("studio")))
         }
     }
 }
