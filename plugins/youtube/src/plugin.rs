@@ -49,9 +49,22 @@ impl Plugin for YoutubePlugin {
             auth: "auth".into(),
             handler_tag: "yt_search".into(),
         });
+        builder.route(RouteSpec {
+            method: HttpMethod::Get,
+            path: "/api/youtube/suggest".into(),
+            auth: "auth".into(),
+            handler_tag: "yt_suggest".into(),
+        });
+        builder.route(RouteSpec {
+            method: HttpMethod::Get,
+            path: "/api/youtube/categories".into(),
+            auth: "auth".into(),
+            handler_tag: "yt_categories".into(),
+        });
         for tool in [
             Arc::new(crate::tools::YoutubeSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::YoutubePlay) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::YoutubeSuggest) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
         ] {
             builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
         }

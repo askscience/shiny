@@ -220,3 +220,46 @@ export function glowFromDrawable(source, size = 64) {
     return null; // tainted canvas (cross-origin without CORS)
   }
 }
+
+/** Cached lightly-blurred backgrounds built from an image URL. */
+const imageGlowCache = new Map();
+
+/** Load an image URL, pre-blur it once at a modest size and return a glow CSS
+ *  value. Unlike glowFromDrawable this keeps the picture recognisable ("not
+ *  too much" blur) while still baking the blur in, so the window pays nothing
+ *  per frame. Resolves null when the image can't be used — callers can then
+ *  fall back to the raw URL. */
+export async function glowFromImageUrl(url, { size = 320, blur = 7 } = {}) {
+  if (!url) return null;
+  const key = `${url}|${size}|${blur}`;
+  if (imageGlowCache.has(key)) return imageGlowCache.get(key);
+
+  const css = await new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = img.naturalWidth || 0;
+      const h = img.naturalHeight || 0;
+      if (!w || !h) return resolve(null);
+      const scale = size / Math.max(w, h);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * scale));
+      c.height = Math.max(1, Math.round(h * scale));
+      const ctx = c.getContext('2d');
+      if (!ctx) return resolve(null);
+      try {
+        const pad = 12; // crop the blur's soft edges
+        if (typeof ctx.filter === 'string') ctx.filter = `blur(${blur}px)`;
+        ctx.drawImage(img, -pad, -pad, c.width + pad * 2, c.height + pad * 2);
+        resolve(`url("${c.toDataURL('image/jpeg', 0.7)}")`);
+      } catch (_) {
+        resolve(null); // tainted canvas (image without CORS)
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+
+  imageGlowCache.set(key, css);
+  return css;
+}
