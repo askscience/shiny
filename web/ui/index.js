@@ -30,5 +30,5 @@ export {
 } from './components/composites.js';
 export {
   installGlow, refreshGlow, glowFor, createRim, setGlow, setTileGlow,
-  glowUrl, glowGradient, glowFromDrawable, glowFromImageUrl, partnerColor,
+  setTileGlowFromUrl, glowUrl, glowGradient, glowFromDrawable, glowFromImageUrl, partnerColor,
 } from './components/glow.js';

@@ -174,7 +174,34 @@ export function setGlow(glowEl, imageCss) {
  *  `tileEl` is the plugin's `.tile` element; `imageCss` any CSS image. */
 export function setTileGlow(tileEl, imageCss) {
   if (!tileEl) return;
-  setGlow(glowFor(tileEl), imageCss);
+  const glow = glowFor(tileEl);
+  glow?.classList.remove('tile-glow--soft');
+  setGlow(glow, imageCss);
+}
+
+/** Set a window's glow from an image URL, pre-blurred once at thumbnail size
+ *  so the window keeps a soft, recognisable background for free.
+ *
+ *  Sources the browser cannot read (no CORS) fall back to the raw image plus a
+ *  modest live blur (`tile-glow--soft`) rather than showing it sharp. Out-of-
+ *  order loads are ignored, so flipping quickly through pages/artwork is safe.
+ */
+export async function setTileGlowFromUrl(tileEl, url, opts) {
+  if (!tileEl) return;
+  const glow = glowFor(tileEl);
+  if (!glow) return;
+  const seq = (tileEl.__glowSeq || 0) + 1;
+  tileEl.__glowSeq = seq;
+
+  if (!url) {
+    glow.classList.remove('tile-glow--soft');
+    setGlow(glow, null);
+    return;
+  }
+  const css = await glowFromImageUrl(url, opts);
+  if (tileEl.__glowSeq !== seq) return; // a newer image won
+  setGlow(glow, css || glowUrl(url));
+  glow.classList.toggle('tile-glow--soft', !css);
 }
 
 /* ── source helpers ─────────────────────────────────────────── */
