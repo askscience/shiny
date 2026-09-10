@@ -65,6 +65,9 @@ export function initMap() {
     subdomains: 'abcd',
   }).addTo(map);
 
+  // Keep the window's ambient rim in sync with the map view.
+  map.on('moveend zoomend', emitMapView);
+
   window.addEventListener('theme:change', () => {
     setMapTheme(tileMode());
   });
@@ -124,6 +127,7 @@ export function initMap() {
 
   requestAnimationFrame(() => map.invalidateSize());
   setTimeout(() => map.invalidateSize(), 200);
+  emitMapView();
 
   return map;
 }
@@ -137,6 +141,17 @@ export function setMapTheme(theme) {
     crossOrigin: 'anonymous',
     subdomains: 'abcd',
   }).addTo(map);
+  emitMapView();
+}
+
+/** Broadcast the current view so the map window's ambient rim can mirror the
+ *  map's colours (tiles.js listens for `map:view`). */
+function emitMapView() {
+  if (!map) return;
+  const c = map.getCenter();
+  window.dispatchEvent(new CustomEvent('map:view', {
+    detail: { lat: c.lat, lon: c.lng, zoom: map.getZoom(), mode: tileMode() },
+  }));
 }
 
 export function setNavigatorFollow(on, routeGeometry = null) {

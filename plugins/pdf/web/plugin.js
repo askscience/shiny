@@ -12,6 +12,7 @@
 
 import {
   icon, button, emptyState, toast,
+  setTileGlow, glowUrl,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -204,15 +205,21 @@ function clampPage(p) {
 }
 
 async function renderMain() {
-  if (!currentPdf || !canvasEl) return;
+  if (!currentPdf || !canvasEl) {
+    if (!currentPdf) setTileGlow(tileEl, null);
+    return;
+  }
   canvasEl.innerHTML = '';
   if (currentPdf.page_count === 0) {
+    setTileGlow(tileEl, null);
     canvasEl.appendChild(emptyState({ icon: 'ui/doc', title: 'Empty PDF', body: 'This document has no pages.' }));
     return;
   }
   setBusy(true);
   try {
     const url = await pageUrl(currentPdf.pdf_id, currentPage, ZOOMS[zoomIndex]);
+    const thumb = await pageUrl(currentPdf.pdf_id, currentPage, THUMB_DPI).catch(() => null);
+    setTileGlow(tileEl, glowUrl(thumb || url));
     const page = document.createElement('div');
     page.className = 'pdf-page';
     const img = document.createElement('img');
@@ -355,6 +362,7 @@ async function openNewest() {
   else {
     currentPdf = null;
     currentPage = 0;
+    setTileGlow(tileEl, null);
     if (titleInput) titleInput.value = '';
     if (railEl) railEl.innerHTML = '';
     if (canvasEl) {

@@ -11,7 +11,7 @@
  * window shows the last `calculator_eval` result and refreshes its history.
  */
 
-import { button, emptyState, toast } from '/ui/index.js';
+import { button, emptyState, toast, setTileGlow, glowGradient } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
 
@@ -51,10 +51,30 @@ async function apiClearHistory() {
 
 /* ── Display / expression state ─────────────────────────────── */
 
+/**
+ * Ambient glow mirrors the calculator's state (Tier 1): a warm red/orange
+ * pair on error, a hue derived from the result's magnitude, otherwise the
+ * theme's accent gradient.
+ */
+function updateGlow({ error = false } = {}) {
+  if (error) {
+    setTileGlow(tileEl, glowGradient('hsl(6 75% 52%)', 'hsl(28 70% 30%)'));
+    return;
+  }
+  const n = Number(lastResult);
+  if (lastResult != null && Number.isFinite(n)) {
+    const m = Math.min(Math.abs(n) % 360, 360);
+    setTileGlow(tileEl, glowGradient(`hsl(${m} 70% 55%)`, `hsl(${(m + 45) % 360} 65% 28%)`));
+    return;
+  }
+  setTileGlow(tileEl, glowGradient('var(--accent)', 'var(--accent-2)'));
+}
+
 function renderDisplay() {
   if (!exprEl || !resultEl) return;
   exprEl.textContent = expression || '\u200b';
   resultEl.textContent = lastResult == null ? '' : String(lastResult);
+  updateGlow();
 }
 
 function append(text) {
@@ -96,6 +116,8 @@ async function equals() {
     await refreshHistory();
   } catch (e) {
     resultEl.textContent = 'Error';
+    // Sticky until the next successful renderDisplay() repaints the glow.
+    updateGlow({ error: true });
     toast(e.message || 'Could not evaluate', { type: 'error' });
   }
 }

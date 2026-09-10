@@ -56,3 +56,24 @@
 .settings-panel .ui-toggle-row { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-raise-sm); }
 .plugins-dropzone { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-inset); }
 .plugins-dropzone:hover, .plugins-dropzone.dragging { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--shadow-inset); }
+
+/* ── Ambient glow ────────────────────────────────────────────
+   Soft-UI surfaces are opaque and all one colour, which would hide the
+   plugin-window glow entirely. Inside plugin windows only, let the canvas
+   carry light: the chrome (--glass) and panels (--surface) go translucent
+   and the glow is brightened so accents read against graphite/paper. The
+   rest of the app keeps its opaque extruded look. Token-driven, so the
+   dark and light variants share this block. */
+.tile {
+  --glass: color-mix(in srgb, var(--bg-elevated) 52%, transparent);
+  --surface: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  --glow-permeability: 72%;
+  --glow-brightness: 0.82;
+  --glow-opacity: 0.55;
+}
+/* Light variant: brighten instead of darken, and keep the wash gentle. */
+.tile[data-glow-light] {
+  --glow-brightness: 0.95;
+  --glow-opacity: 0.4;
+}
+

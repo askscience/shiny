@@ -28,3 +28,7 @@ export {
   dockButton, insightCard, artifactPanel,
   iconForArtifact, labelForArtifact,
 } from './components/composites.js';
+export {
+  installGlow, refreshGlow, glowFor, createRim, setGlow, setTileGlow,
+  glowUrl, glowGradient, glowFromDrawable, partnerColor,
+} from './components/glow.js';

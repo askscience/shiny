@@ -16,7 +16,7 @@
  * refreshes its list and re-opens the image the AI touched.
  */
 
-import { button, emptyState, select, slider, toast } from '/ui/index.js';
+import { button, emptyState, glowFromDrawable, select, setTileGlow, slider, toast } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch, getToken } from '/js/api.js';
 
@@ -56,6 +56,9 @@ let saveDot = null;
 let stageEl = null;
 let canvasEl = null;
 let canvasCtx = null;
+
+/* Debounces the ambient-glow refresh while a slider/curve streams frames. */
+let glowTimer = null;
 
 let images = [];
 let current = null;   // { image_id, title, width, height }
@@ -148,6 +151,15 @@ function setStatus(mode) {
 
 /* ── Canvas rendering ───────────────────────────────────────── */
 
+/** Mirror the edited photo into the window's ambient glow, debounced. */
+function refreshGlowSoon() {
+  window.clearTimeout(glowTimer);
+  glowTimer = window.setTimeout(() => {
+    if (!current || !canvasEl) { setTileGlow(tileEl, null); return; }
+    setTileGlow(tileEl, glowFromDrawable(canvasEl));
+  }, 120);
+}
+
 function renderStage() {
   if (!stageEl) return;
   stageEl.textContent = '';
@@ -155,6 +167,8 @@ function renderStage() {
     stageEl.appendChild(emptyState({ title: 'No image open', body: 'Upload an image to start editing.' }));
     canvasEl = null;
     canvasCtx = null;
+    setTileGlow(tileEl, null);
+    refreshGlowSoon();
     return;
   }
   canvasEl = document.createElement('canvas');
@@ -169,6 +183,7 @@ function renderRaw(w, h, buf) {
   canvasEl.height = h;
   const data = new Uint8ClampedArray(buf);
   canvasCtx.putImageData(new ImageData(data, w, h), 0, 0);
+  refreshGlowSoon();
 }
 
 async function loadPixels() {
@@ -187,6 +202,7 @@ async function loadPixels() {
   canvasEl.width = img.naturalWidth;
   canvasEl.height = img.naturalHeight;
   canvasCtx.drawImage(img, 0, 0);
+  refreshGlowSoon();
   URL.revokeObjectURL(url);
   current.width = img.naturalWidth;
   current.height = img.naturalHeight;

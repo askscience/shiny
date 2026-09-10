@@ -14,6 +14,7 @@
 
 import {
   icon, button, emptyState, toast,
+  setTileGlow, glowGradient,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -21,6 +22,14 @@ import { apiFetch } from '/js/api.js';
 export const IMPRESS_PLUGIN = 'impress';
 
 const THEMES = ['aurora', 'slate', 'ocean', 'mono', 'ember'];
+// Glow colours per theme — must stay in sync with web/css/tiles.css.
+const THEME_GLOW = {
+  aurora: { accent: '#6366f1', darkB: '#2b2b52' },
+  slate: { accent: '#475569', darkB: '#1e293b' },
+  ocean: { accent: '#0ea5e9', darkB: '#0c4a6e' },
+  mono: { accent: '#18181b', darkB: '#1c1c1c' },
+  ember: { accent: '#f97316', darkB: '#2d1f14' },
+};
 const LAYOUTS = ['title', 'section', 'content', 'two-column', 'quote', 'blank'];
 
 let tileEl = null;
@@ -402,11 +411,20 @@ async function persist() {
 
 /* ── Open / create / delete ─────────────────────────────────── */
 
+/** Repaint the deck's ambient glow from its slide theme (null = no deck). */
+function updateGlow() {
+  const theme = THEME_GLOW[current?.theme] || THEME_GLOW.aurora;
+  setTileGlow(tileEl, current
+    ? glowGradient(theme.accent, theme.darkB, { x: 22, y: 0, x2: 82, y2: 100 })
+    : null);
+}
+
 function selectSlide(i) {
   selIndex = Math.max(0, Math.min(i, slideCount() - 1));
   renderStrip();
   renderStage();
   renderInspector();
+  updateGlow();
 }
 
 async function openDeck(deck) {
@@ -431,6 +449,7 @@ async function openDeck(deck) {
     renderStage();
     renderInspector();
     setStatus('saved');
+    updateGlow();
   } catch (e) {
     toast(e.message || 'Could not open presentation', { type: 'error' });
   }
@@ -458,6 +477,7 @@ async function removeCurrent() {
   try {
     await deleteDeck(current.id);
     current = null;
+    updateGlow();
     await refreshDecks();
     await openNewest();
   } catch (e) {
@@ -743,6 +763,7 @@ export function mountImpressTile() {
     markDirty();
     renderStage();
     renderStrip();
+    updateGlow();
   });
 
   saveDot = h('span', 'impress-save-dot');
@@ -804,6 +825,7 @@ export function mountImpressTile() {
 
   observeStageSize();
   void openNewest();
+  updateGlow();
   return tileEl;
 }
 

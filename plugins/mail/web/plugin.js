@@ -13,6 +13,7 @@
 
 import {
   button, emptyState, field, icon, input, modal, notify, select, textarea, toast,
+  setTileGlow, glowGradient,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -334,6 +335,9 @@ async function openMessage(id) {
     const full = await fetchMessage(account.id, currentFolder, id);
     if (token !== openToken) return; // a newer open won
     currentMessage = full;
+    // Mail carries no images: glow with a colour pair derived from the sender.
+    const from = currentMessage.from;
+    setTileGlow(tileEl, senderGlow(Array.isArray(from) ? from[0] : from));
     renderMessage(full);
     if (msg && !msg.seen) {
       void markSeen(account.id, currentFolder, [id], true).catch(() => {});
@@ -832,6 +836,7 @@ async function deleteCurrent(msg) {
     toast('Message deleted', { type: 'info' });
     currentMessage = null;
     selectedMessageId = null;
+    setTileGlow(tileEl, null);
     readerEl.textContent = '';
     readerEl.appendChild(emptyState({ title: 'Select a message', body: 'Pick a message to read it here.' }));
     await loadMessages();
@@ -918,6 +923,17 @@ function openSettings() {
 }
 
 /* ── misc helpers ───────────────────────────────────────────── */
+
+/** Stable ambient colour pair for a sender address (mail has no images):
+ *  the same person always glows the same way, like Gmail letter avatars. */
+function senderGlow(addr) {
+  const s = String(addr || '').toLowerCase();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  const a = `hsl(${Math.abs(h) % 360} 70% 55%)`;
+  const b = `hsl(${(Math.abs(h) * 7) % 360} 65% 32%)`;
+  return glowGradient(a, b, { x: 15, y: 0, x2: 80, y2: 100 });
+}
 
 function parseAddresses(value) {
   return value

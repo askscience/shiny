@@ -15,7 +15,7 @@
  */
 
 import {
-  icon, button, emptyState, toast,
+  icon, button, emptyState, toast, setTileGlow, glowFromDrawable,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -322,6 +322,53 @@ function displayValue(raw) {
   return s;
 }
 
+/* ── Ambient glow ───────────────────────────────────────────── */
+
+/**
+ * A sheet has no image, so the glow is a small heatmap of its numeric
+ * cells: value magnitude → hue/lightness, cell position → pixel.
+ */
+function updateGlow() {
+  if (!current) { setTileGlow(tileEl, null); return; }
+
+  const W = 64;
+  const H = 32;
+  const SCALE = 2; // a 2×2 block per cell so the map survives the blur
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) { setTileGlow(tileEl, null); return; }
+
+  ctx.fillStyle = 'rgb(8 10 16)'; // very dark base — transparent reads as black
+  ctx.fillRect(0, 0, W, H);
+
+  const seen = new Set();
+  const points = [];
+  for (const [ref, raw] of current.cells) {
+    if (raw == null || raw === '') continue;
+    const pos = parseRef(ref);
+    if (!pos) continue;
+    let v;
+    try { v = cellNumber(current.cells, ref, seen); } catch (_) { continue; }
+    if (!Number.isFinite(v)) continue;
+    points.push({ row: pos.row, col: pos.col, v });
+  }
+  if (!points.length) { setTileGlow(tileEl, null); return; }
+
+  const values = points.map((p) => p.v);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  for (const p of points) {
+    const t = (p.v - min) / span;
+    ctx.fillStyle = `hsl(${200 - t * 160} 70% ${35 + t * 30}%)`;
+    ctx.fillRect(p.col % W, p.row % H, SCALE, SCALE);
+  }
+
+  setTileGlow(tileEl, glowFromDrawable(canvas));
+}
+
 /* ── Status / persistence ───────────────────────────────────── */
 
 function setStatus(mode) {
@@ -358,6 +405,7 @@ async function persist() {
     current.title = titleInput.value.trim();
     current.updated_at = new Date().toISOString();
     setStatus('saved');
+    updateGlow();
   } catch (e) {
     dirty = true;
     setStatus('dirty');
@@ -407,6 +455,7 @@ async function openSheet(sheet) {
     sel = { row: 1, col: 0 };
     renderGrid();
     setStatus('saved');
+    updateGlow();
   } catch (e) {
     toast(e.message || 'Could not open spreadsheet', { type: 'error' });
   }
@@ -436,6 +485,7 @@ async function removeCurrent() {
     current = null;
     await refreshSheets();
     await openNewest();
+    updateGlow();
   } catch (e) {
     toast(e.message || 'Could not delete spreadsheet', { type: 'error' });
   }

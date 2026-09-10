@@ -11,7 +11,7 @@
  */
 
 import {
-  icon, button, emptyState, toast,
+  icon, button, emptyState, toast, setTileGlow, glowGradient, glowUrl,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
@@ -107,6 +107,24 @@ function markDirty() {
   saveTimer = window.setTimeout(() => void persist(), 1200);
 }
 
+/* ── Ambient glow ───────────────────────────────────────────── */
+
+/** Warm 28–54° pair seeded from the document title (the no-image case). */
+function titleGlow(title) {
+  const s = String(title || 'Untitled');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  const hue = 28 + (Math.abs(h) % 26);        // warm 28–54°
+  return glowGradient(`hsl(${hue} 62% 62%)`, `hsl(${(hue + 210) % 360} 45% 26%)`);
+}
+
+/** Glow mirrors the document's first embedded image, else the title. */
+function updateGlow() {
+  if (!currentDoc) { setTileGlow(tileEl, null); return; }
+  const img = editorEl?.querySelector('img');
+  setTileGlow(tileEl, img?.getAttribute('src') ? glowUrl(img.getAttribute('src')) : titleGlow(currentDoc.title));
+}
+
 async function persist() {
   if (!currentDoc || !dirty) return;
   dirty = false;
@@ -132,6 +150,7 @@ async function openDoc(doc) {
     titleInput.value = full.title;
     editorEl.innerHTML = full.html || '<p></p>';
     setStatus('saved');
+    updateGlow();
   } catch (e) {
     toast(e.message || 'Could not open document', { type: 'error' });
   }
@@ -161,6 +180,7 @@ async function removeCurrent() {
     currentDoc = null;
     await refreshDocs();
     await openNewest();
+    updateGlow();
   } catch (e) {
     toast(e.message || 'Could not delete document', { type: 'error' });
   }
@@ -486,6 +506,7 @@ export function mountWordTile() {
   });
 
   void openNewest();
+  updateGlow();
   return tileEl;
 }
 

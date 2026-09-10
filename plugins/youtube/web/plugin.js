@@ -9,12 +9,11 @@
  * card) and by the in-tile search (`/api/youtube/search`).
  */
 import { apiFetch } from '/js/api.js';
-import { setIcon, searchBar, emptyState, spinner } from '/ui/index.js';
+import { setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl } from '/ui/index.js';
 
 export const YOUTUBE_PLUGIN = 'youtube';
 
 let tileEl = null;
-let glowEl = null;
 let heroEl = null;       // hero container (idle view or player + info)
 let playerWrapEl = null; // embed player wrapper (16:9)
 let frameEl = null;      // embed iframe
@@ -52,16 +51,9 @@ function renderHero() {
     if (infoSubEl) infoSubEl.textContent = current.channel || 'YouTube';
   }
 
-  // Ambient glow mirrors the thumbnail, blurred and dimmed.
-  if (glowEl) {
-    if (playing && current.thumbnail) {
-      glowEl.style.backgroundImage = `url("${current.thumbnail}")`;
-      glowEl.classList.add('yt-glow--on');
-    } else {
-      glowEl.style.backgroundImage = '';
-      glowEl.classList.remove('yt-glow--on');
-    }
-  }
+  // Ambient glow mirrors the thumbnail (Tier 1); idle falls back to the
+  // window's Tier 0 colour glow.
+  setTileGlow(tileEl, playing && current.thumbnail ? glowUrl(current.thumbnail) : null);
 
   renderGridCurrent();
 }
@@ -253,11 +245,6 @@ export function mountYoutubeTile() {
   tileEl.className = 'tile yt-tile';
   tileEl.dataset.plugin = YOUTUBE_PLUGIN;
 
-  glowEl = document.createElement('div');
-  glowEl.className = 'yt-glow';
-  glowEl.setAttribute('aria-hidden', 'true');
-  tileEl.appendChild(glowEl);
-
   /* Hero */
   heroEl = document.createElement('div');
   heroEl.className = 'yt-hero';
@@ -335,7 +322,6 @@ export function unmountYoutubeTile() {
   reset();
   tileEl?.remove();
   tileEl = null;
-  glowEl = null;
   heroEl = null;
   playerWrapEl = null;
   frameEl = null;
