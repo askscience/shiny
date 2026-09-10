@@ -61,6 +61,12 @@ impl Plugin for YoutubePlugin {
             auth: "auth".into(),
             handler_tag: "yt_categories".into(),
         });
+        builder.route(RouteSpec {
+            method: HttpMethod::Get,
+            path: "/api/youtube/home".into(),
+            auth: "auth".into(),
+            handler_tag: "yt_home".into(),
+        });
         for tool in [
             Arc::new(crate::tools::YoutubeSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::YoutubePlay) as Arc<dyn shiny_plugin_sdk::tools::Tool>,

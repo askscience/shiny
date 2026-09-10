@@ -48,5 +48,5 @@ Rules:
 - Prefer `youtube_play` over `youtube_search` when the user clearly wants to hear/watch something specific ("play …"). Use `youtube_search` when they want to browse or pick.
 - Use `youtube_suggest` for "what should I watch", "more like this", "something similar" — or after playing a video when the user wants more of the same.
 - Every search (yours and the user's) and every watch feeds the YouTube window's
-  homepage: its category chips rank the topics the user returns to most, and the
-  "For you" row is seeded from their top category (or trending for a new user).
+  homepage. It shows one chip per topic the user returns to (most-used first, at
+  most 20), and a "For you" shelf of 12 videos under each category.

@@ -1200,6 +1200,42 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
 
 .yt-grid-status { grid-column: 1 / -1; padding: 24px 0; }
 
+/* ── Homepage shelves ──────────────────────────────────────── */
+/* One labelled, horizontally scrollable row of videos per category. */
+.yt-grid--shelves { display: block; }
+
+.yt-section { margin-bottom: 16px; }
+.yt-section:last-child { margin-bottom: 0; }
+
+.yt-section-title {
+  display: block;
+  width: 100%;
+  padding: 0 0 6px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yt-section-title:hover { color: var(--text); }
+
+.yt-shelf {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.yt-shelf::-webkit-scrollbar { display: none; }
+.yt-shelf .yt-cell { flex: none; width: 172px; }
+
 .yt-cell {
   position: relative;
   display: block;
