@@ -17,6 +17,7 @@ use shiny_plugin_sdk::routes::{
 };
 use shiny_plugin_sdk::services::PluginCtx;
 
+use crate::catalog;
 use crate::engine;
 use crate::store;
 
@@ -43,6 +44,8 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "studio_preset_list" => studio_preset_list(ctx),
         "studio_preset_save" => studio_preset_save(ctx),
         "studio_preset_delete" => studio_preset_delete(ctx),
+        "studio_catalog" => studio_catalog(ctx),
+        "studio_analyze" => studio_analyze(ctx),
         _ => return None,
     })
 }
@@ -122,6 +125,8 @@ fn studio_create(ctx: Arc<PluginCtx>) -> RouteHandler {
                 "duration_ms": rendered.duration_ms,
                 "has_audio": true,
                 "sample_rate": rendered.sample_rate,
+                "lufs": rendered.lufs,
+                "peak": rendered.peak,
             })))
         }
     })
@@ -215,7 +220,14 @@ fn studio_render(ctx: Arc<PluginCtx>) -> RouteHandler {
             let cfg = serde_json::from_str::<engine::TrackConfig>(&row.7).map_err(AppError::from)?;
             let rendered = engine::render_track(&cfg).map_err(AppError::BadRequest)?;
             store::update_render(ctx.pool().await, &id, &uid, rendered.duration_ms as i64, &rendered.wav).await?;
-            Ok(ok(json!({ "track_id": id, "title": row.1, "duration_ms": rendered.duration_ms, "has_audio": true })))
+            Ok(ok(json!({
+                "track_id": id,
+                "title": row.1,
+                "duration_ms": rendered.duration_ms,
+                "has_audio": true,
+                "lufs": rendered.lufs,
+                "peak": rendered.peak,
+            })))
         }
     })
 }
@@ -396,6 +408,28 @@ fn studio_preset_delete(ctx: Arc<PluginCtx>) -> RouteHandler {
                 None => Err(AppError::NotFound("preset not found".into())),
             }
         }
+    })
+}
+
+/* ── GET /api/studio/catalog ────────────────────────────────── */
+
+fn studio_catalog(_ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| async move {
+        let _uid = user_id(&req)?;
+        Ok(ok(catalog::catalog_json()))
+    })
+}
+
+/* ── POST /api/studio/analyze ───────────────────────────────── */
+
+fn studio_analyze(_ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| async move {
+        let _uid = user_id(&req)?;
+        let value = read_json(req).await?;
+        let cfg = engine::parse_config(&value).map_err(AppError::BadRequest)?;
+        let analysis = engine::analyze(&cfg).map_err(AppError::BadRequest)?;
+        let data = serde_json::to_value(analysis).map_err(AppError::from)?;
+        Ok(ok(data))
     })
 }
 

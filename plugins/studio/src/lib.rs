@@ -1,9 +1,12 @@
-//! `studio` — a trem-powered music studio plugin for Shiny.
+//! `studio` — a music studio plugin for Shiny.
 //!
-//! Compose rhythmic patterns (explicit `x..x` rhythms and Euclidean fills),
-//! render them through trem audio graphs to WAV, and expose them to the AI
-//! sphere via tools + REST routes and to the user via the Studio window.
+//! Compose rhythmic patterns (explicit `x..x` rhythms and Euclidean fills) and
+//! arrangements, render them through the plugin's own DSP engine (see
+//! [`dsp`]) to WAV, and expose them to the AI sphere via tools + REST routes
+//! and to the user via the Studio window.
 
+pub mod catalog;
+pub mod dsp;
 pub mod engine;
 pub mod fx;
 pub mod grid;

@@ -1,8 +1,8 @@
 //! Minimal WAV encoder: planar f32 buffers → interleaved 16-bit PCM RIFF/WAVE.
 //!
-//! trem-mio (the trem crate's WAV/FLAC I/O) is not published on crates.io, so
-//! the plugin owns a tiny, dependency-free encoder. We render stereo from
-//! trem's planar output (`Vec<Vec<f32>>`, channel-major).
+//! The engine renders into planar channel buffers (`Vec<Vec<f32>>`,
+//! channel-major); this tiny dependency-free encoder writes them as a valid
+//! 16-bit PCM file.
 
 /// Encode planar samples (one `Vec<f32>` per channel) as a 16-bit PCM WAV file.
 ///

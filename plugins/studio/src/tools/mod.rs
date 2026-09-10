@@ -12,6 +12,7 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
+use crate::catalog;
 use crate::engine::{self, TrackConfig};
 use crate::store;
 
@@ -71,7 +72,7 @@ impl Tool for StudioCreate {
     fn aliases(&self) -> &[&str] { &["make_beat", "compose_track", "new_track"] }
     fn step_label(&self) -> &str { "Composing a studio track…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `studio_create` — Compose and render a track to audio. params: `{ title?, bpm?, steps?, swing?, tuning?, voices: [{ kind, rhythm, degree?, octave?, wave?, notes?, synth?, midi?, fx?, grid?, accent? }] }` — `kind` is one of kick/snare/hat/clap/tom/perc/bass/pluck/lead/pad/sub/organ/ep/bell/strings/brass/synthme/grid/drumkit; `rhythm` is `\"e<hits>,<rot>\"` (Euclidean) or an `\"x..x\"` string; `swing` (0–1) delays every other 16th for groove; `accent` (0–0.6) boosts quarter-note velocity. Use `synthme` (custom synth via `synth`+`midi`+`fx`) or `grid` (WaveMe modular patch via `grid:{modules,cables}`). Returns the new track's metadata (`track_id`, `duration_ms`, `has_audio`).")
+        Some("- `studio_create` — Compose and render a track to audio. params: `{ title?, bpm?, steps?, swing?, tuning?, voices: [{ kind, rhythm, degree?, octave?, wave?, notes?, synth?, midi?, fx?, pads?, macros?, grid?, accent? }], fx? }` — `kind` is a drum (kick/snare/hat/clap/tom/perc/rim/cowbell/shaker/crash/ride), a synth (bass/sub/pluck/lead/pad/organ/ep/bell/strings/brass/synthme/fm), or a collection (`drumkit` 16 pads, `grid` modular patch). `rhythm` is `\"e<hits>,<rot>\"` (Euclidean) or an `\"x..x\"` string; `swing` (0–1) grooves every other 16th; `accent` (0–0.6) boosts quarter-note velocity; `notes` build chords (several at the same `step`). Synths are polyphonic — see `studio_catalog` for every parameter. Returns the new track's metadata (`track_id`, `duration_ms`, `lufs`, `peak`, `has_audio`).")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");
@@ -108,6 +109,8 @@ impl Tool for StudioCreate {
             "duration_ms": rendered.duration_ms,
             "has_audio": true,
             "sample_rate": rendered.sample_rate,
+            "lufs": rendered.lufs,
+            "peak": rendered.peak,
         });
         if let Some(obj) = data.as_object_mut() {
             obj.insert("voices".into(), cfg_fields(&cfg));
@@ -180,7 +183,14 @@ impl Tool for StudioRender {
 
         Ok(ActionOutcome::ok(
             "studio_render",
-            json!({ "track_id": id, "title": row.1, "duration_ms": rendered.duration_ms, "has_audio": true }),
+            json!({
+                "track_id": id,
+                "title": row.1,
+                "duration_ms": rendered.duration_ms,
+                "has_audio": true,
+                "lufs": rendered.lufs,
+                "peak": rendered.peak,
+            }),
         ))
     }
 }
@@ -229,7 +239,7 @@ impl Tool for StudioUpdate {
     fn aliases(&self) -> &[&str] { &["update_track", "edit_track"] }
     fn step_label(&self) -> &str { "Updating studio track…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `studio_update` — Update a stored track's config in place (no re-render). params: `{ track_id, title?, bpm?, steps?, tuning?, voices: [...] }` — `track_id` accepts the UUID or title; pass the full config (same shape as `studio_create`) you want it to become. Use after `studio_get` to edit a track.")
+        Some("- `studio_update` — Update a stored track's config in place (no re-render). params: `{ track_id, ...full config... }` — `track_id` accepts the UUID or title; pass the full config (same shape as `studio_create`) you want it to become. Use after `studio_get` to edit a track, then `studio_render` to re-render it.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");
@@ -473,5 +483,52 @@ impl Tool for StudioArrangementDelete {
             Some(t) => Ok(ActionOutcome::ok("studio_arrangement_delete", json!({ "id": id, "title": t }))),
             None => Err(AppError::NotFound("arrangement not found".into())),
         }
+    }
+}
+
+/* ── studio_catalog ─────────────────────────────────────────── */
+
+pub struct StudioCatalog;
+
+#[async_trait]
+impl Tool for StudioCatalog {
+    fn name(&self) -> &str { "studio_catalog" }
+    fn aliases(&self) -> &[&str] { &["studio_instruments", "studio_params"] }
+    fn step_label(&self) -> &str { "Reading the studio catalog…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_catalog` — The engine's self-describing catalog: every instrument kind (with its parameter ranges, defaults and groups), every effect, every Grid module with its ports, MIDI effects, tunings and master-FX keys. params: `{}` — call this **before** composing when you need exact parameter names/ranges, then pass them in `voice.synth` / `fx.params` / `grid.modules[].params`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let n = data.get("kinds").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+        format!("Loaded the studio catalog ({n} instruments)")
+    }
+
+    async fn invoke(&self, _ctx: &PluginCtx, _req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        Ok(ActionOutcome::ok("studio_catalog", catalog::catalog_json()))
+    }
+}
+
+/* ── studio_analyze ─────────────────────────────────────────── */
+
+pub struct StudioAnalyze;
+
+#[async_trait]
+impl Tool for StudioAnalyze {
+    fn name(&self) -> &str { "studio_analyze" }
+    fn aliases(&self) -> &[&str] { &["analyze_track", "measure_track", "check_mix"] }
+    fn step_label(&self) -> &str { "Analysing the mix…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `studio_analyze` — Render a config (same shape as `studio_create`) and measure it instead of only writing audio. params: `{...track config...}` → `{ lufs, peak, rms_db, crest_db, clipped, range_lu, bands:[sub,low,mid,highmid,air], duration_ms }`. Use it to check a mix before delivering: `lufs` should land near −14 for streaming, `clipped` should be ~0, `crest_db` 8–14 keeps transients alive, and `bands` tells you if it is too sub-heavy or too bright.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let lufs = data.get("lufs").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        format!("Measured {lufs:.1} LUFS")
+    }
+
+    async fn invoke(&self, _ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let cfg = engine::parse_config(req.params).map_err(AppError::BadRequest)?;
+        let analysis = engine::analyze(&cfg).map_err(AppError::BadRequest)?;
+        let data = serde_json::to_value(analysis).map_err(AppError::from)?;
+        Ok(ActionOutcome::ok("studio_analyze", data))
     }
 }
