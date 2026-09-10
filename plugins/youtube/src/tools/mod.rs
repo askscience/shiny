@@ -9,6 +9,7 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
+use crate::suggest::{self, Seed};
 use crate::youtube_client::{self, VideoResult};
 
 const DEFAULT_LIMIT: u32 = 8;
@@ -79,6 +80,8 @@ impl Tool for YoutubeSearch {
             .ok_or_else(|| AppError::BadRequest("query required".into()))?;
         let limit = req.params.param_u32("limit").unwrap_or(DEFAULT_LIMIT) as usize;
 
+        // The AI's searches are category signals too, same as the user's.
+        suggest::remember_query(req.user_id, &query);
         let results = youtube_client::search(&query, limit).await?;
         let list: Vec<Value> = results.iter().map(video_json).collect();
         let cards: Vec<Artifact> = results.iter().map(video_artifact).collect();
@@ -114,9 +117,21 @@ impl Tool for YoutubePlay {
                 .params
                 .param_str("title")
                 .unwrap_or_else(|| "YouTube video".into());
+            let channel = req.params.param_str("channel").unwrap_or_default();
+            let thumbnail = req.params.param_str("thumbnail").unwrap_or_default();
+            // Remember the watch so `youtube_suggest` can personalise later.
+            suggest::remember(
+                req.user_id,
+                &Seed { video_id: video_id.clone(), title: title.clone(), channel: channel.clone() },
+            );
             return Ok(ActionOutcome::ok(
                 "youtube_play",
-                json!({ "video_id": video_id, "title": title }),
+                json!({
+                    "video_id": video_id,
+                    "title": title,
+                    "channel": channel,
+                    "thumbnail": thumbnail,
+                }),
             ));
         }
 
@@ -126,6 +141,7 @@ impl Tool for YoutubePlay {
             .or_else(|| req.params.param_str("q"))
             .ok_or_else(|| AppError::BadRequest("video_id or query required".into()))?;
 
+        suggest::remember_query(req.user_id, &query);
         let mut hits = youtube_client::search(&query, 1).await?;
         if hits.is_empty() {
             return Ok(ActionOutcome::error(
@@ -134,9 +150,81 @@ impl Tool for YoutubePlay {
             ));
         }
         let first = hits.remove(0);
+        suggest::remember(
+            req.user_id,
+            &Seed {
+                video_id: first.video_id.clone(),
+                title: first.title.clone(),
+                channel: first.channel.clone(),
+            },
+        );
         Ok(ActionOutcome::ok(
             "youtube_play",
-            json!({ "video_id": first.video_id, "title": first.title, "query": query }),
+            json!({
+                "video_id": first.video_id,
+                "title": first.title,
+                "channel": first.channel,
+                "thumbnail": first.thumbnail,
+                "query": query,
+            }),
         ))
+    }
+}
+
+/* ── youtube_suggest ────────────────────────────────────────── */
+
+pub struct YoutubeSuggest;
+
+#[async_trait]
+impl Tool for YoutubeSuggest {
+    fn name(&self) -> &str { "youtube_suggest" }
+    fn aliases(&self) -> &[&str] { &["suggest_videos", "recommend_youtube", "youtube_recommend"] }
+    fn step_label(&self) -> &str { "Finding videos you might like…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `youtube_suggest` — Recommend videos to watch next, using a simple keyword/channel similarity ranker over YouTube search results. params: `{ video_id?: string, title?: string, channel?: string, query?: string, limit?: number }` — seed it with the video in question, or with a `query` for a topic; with no seed it falls back to what the user watched most recently (and to trending videos for a brand-new user). Returns title, channel, duration and `video_id` per result (also one tappable card per video).")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let n = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let based_on = data
+            .get("based_on")
+            .and_then(|b| b.get("title"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("");
+        if based_on.is_empty() {
+            format!("Suggested {n} videos")
+        } else {
+            format!("Suggested {n} videos based on “{based_on}”")
+        }
+    }
+
+    async fn invoke(&self, _ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let limit = req.params.param_u32("limit").unwrap_or(DEFAULT_LIMIT) as usize;
+        let seed = Seed {
+            video_id: req.params.param_str("video_id").unwrap_or_default(),
+            title: req
+                .params
+                .param_str("title")
+                .or_else(|| req.params.param_str("query"))
+                .unwrap_or_default(),
+            channel: req.params.param_str("channel").unwrap_or_default(),
+        };
+
+        let (results, seed) = suggest::suggest(req.user_id, Some(seed), limit).await?;
+        let list: Vec<Value> = results.iter().map(video_json).collect();
+        let cards: Vec<Artifact> = results.iter().map(video_artifact).collect();
+
+        Ok(ActionOutcome::ok(
+            "youtube_suggest",
+            json!({
+                "results": list,
+                "count": list.len(),
+                "based_on": {
+                    "video_id": seed.video_id,
+                    "title": seed.title,
+                    "channel": seed.channel,
+                },
+            }),
+        )
+        .with_extra_artifacts(cards))
     }
 }

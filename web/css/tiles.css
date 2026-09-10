@@ -1063,13 +1063,20 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   text-overflow: ellipsis;
 }
 
-/* Player — 16:9 embed frame. */
+/* Player — 16:9 embed frame. Capped so it can never eat the whole window:
+   `--yt-player-max` is the max height in px, measured from the tile by the
+   window's ResizeObserver, and the width is derived from it to keep 16:9. */
 .yt-player {
   position: relative;
+  align-self: center;
   aspect-ratio: 16 / 9;
+  width: min(100%, calc(var(--yt-player-max, 46vh) * 16 / 9));
+  max-width: 100%;
   background: #000;
   border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--shadow-glass);
 }
 
 .yt-frame {
@@ -1078,6 +1085,7 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   width: 100%;
   height: 100%;
   border: 0;
+  border-radius: inherit;
 }
 
 .yt-hero-info {
@@ -1121,7 +1129,59 @@ body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
   border-radius: 0;
 }
 
+/* ── Category chips (idle homepage) ────────────────────────── */
+.yt-categories {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 10px 20px 0;
+}
+
+.yt-categories::-webkit-scrollbar { display: none; }
+
+.yt-category {
+  flex: none;
+  padding: 5px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.yt-category:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 /* ── Video grid ────────────────────────────────────────────── */
+/* Caption above the grid — "Up next · because you watched …". */
+.yt-grid-label {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  margin: 10px 20px -2px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .yt-grid {
   position: relative;
   z-index: 1;

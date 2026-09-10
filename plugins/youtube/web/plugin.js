@@ -5,13 +5,21 @@
  * (idle brand mark, or the embedded player while a video plays), a search bar
  * (in-tile, works with the keyboard plugin) and a 16:9 thumbnail grid below.
  *
- * Playback is driven by the AI (`youtube_play` tool, or tapping a result
- * card) and by the in-tile search (`/api/youtube/search`).
+ * The grid has three sources, all rendered the same way:
+ *   • the in-tile search      → GET  /api/youtube/search
+ *   • AI search results       → `artifact:saved` cards
+ *   • "Up next" suggestions   → GET  /api/youtube/suggest   (Rust ranker)
+ *
+ * Playing a video swaps the grid to its suggestions; the back button restores
+ * whatever the grid showed before (`lastResults`).
  */
 import { apiFetch } from '/js/api.js';
-import { setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl } from '/ui/index.js';
+import {
+  setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl, glowFromImageUrl,
+} from '/ui/index.js';
 
 export const YOUTUBE_PLUGIN = 'youtube';
+const BG_KEY = 'youtube.background';
 
 let tileEl = null;
 let heroEl = null;       // hero container (idle view or player + info)
@@ -22,14 +30,30 @@ let infoTitleEl = null;
 let infoSubEl = null;
 let idleEl = null;       // idle hero view
 let gridEl = null;
+let gridLabelEl = null;  // "Up next" / results caption above the grid
+let categoriesEl = null; // idle-homepage category chips
 let searchEl = null;
 
 let current = null;      // { video_id, title, channel, thumbnail }
 let aiResults = [];      // results pushed by the AI (artifact:saved)
+let lastResults = [];    // last search/AI list, restored by the back button
+let suggestSeq = 0;      // guards against out-of-order suggestion responses
+let tileObserver = null; // keeps the player from overflowing the window
+let bgCss = null;        // remembered, lightly-blurred window background
+let bgToken = 0;         // guards against out-of-order background loads
 let wired = false;
 
 function thumbFor(videoId) {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+}
+
+/** Accept `{ data: { results: [...] } }`, `{ data: [...] }` and `[...]`.
+ *  (The search route used to return a bare array while the UI read
+ *  `data.results` — the cause of the "no videos found" bug.) */
+function resultList(res) {
+  const d = res?.data ?? res;
+  if (Array.isArray(d)) return d;
+  return Array.isArray(d?.results) ? d.results : [];
 }
 
 /* ── Hero ─────────────────────────────────────────────────────── */
@@ -51,11 +75,30 @@ function renderHero() {
     if (infoSubEl) infoSubEl.textContent = current.channel || 'YouTube';
   }
 
-  // Ambient glow mirrors the thumbnail (Tier 1); idle falls back to the
-  // window's Tier 0 colour glow.
-  setTileGlow(tileEl, playing && current.thumbnail ? glowUrl(current.thumbnail) : null);
+  // The window keeps the last video's lightly-blurred image as its ambient
+  // background (remembered across playback and reloads); before any video it
+  // falls back to the window's Tier 0 colour glow.
+  applyBackground();
 
   renderGridCurrent();
+}
+
+/** Paint the remembered background — null clears to the Tier 0 colour glow. */
+function applyBackground() {
+  setTileGlow(tileEl, bgCss);
+}
+
+/** Build and remember a lightly-blurred background from a video's thumbnail.
+ *  The blur is baked once at thumbnail size (glowFromImageUrl), so painting
+ *  the window costs nothing per frame and the picture stays recognisable. */
+async function setBackground(v) {
+  if (!v?.thumbnail) return;
+  const token = ++bgToken;
+  const css = await glowFromImageUrl(v.thumbnail, { size: 320, blur: 7 });
+  if (token !== bgToken) return; // a newer video won
+  bgCss = css || glowUrl(v.thumbnail); // fall back to the raw thumbnail
+  try { localStorage.setItem(BG_KEY, bgCss); } catch (_) { /* full / blocked */ }
+  applyBackground();
 }
 
 function playVideo(v) {
@@ -72,13 +115,44 @@ function playVideo(v) {
     thumbnail: v.thumbnail || thumbFor(v.video_id),
   };
   frameEl.src = `https://www.youtube.com/embed/${v.video_id}?autoplay=1&rel=0`;
+  setCategoriesVisible(false);
   renderHero();
+  void setBackground(current);
+  void loadSuggestions(current);
+}
+
+/** Swap the grid to "Up next" suggestions for the video now playing.
+ *  The Rust ranker keys off keywords + channel + watch history; asking also
+ *  records the watch. Failures (older server, offline) leave the grid alone. */
+async function loadSuggestions(v) {
+  if (!v?.video_id) return;
+  const seq = ++suggestSeq;
+  const params = new URLSearchParams({
+    video_id: v.video_id,
+    title: v.title || '',
+    channel: v.channel || '',
+    limit: '12',
+  });
+  try {
+    const res = await apiFetch(`/api/youtube/suggest?${params}`);
+    if (seq !== suggestSeq || !gridEl) return; // a newer action won
+    const list = resultList(res);
+    if (!list.length) return;
+    const based = res?.data?.based_on?.title;
+    renderGrid(list, null, {
+      label: based && based !== v.title ? `Up next · because you watched “${based}”` : 'Up next',
+    });
+  } catch (_) { /* suggestions are optional — keep the current grid */ }
 }
 
 function reset() {
   current = null;
+  suggestSeq++; // drop any in-flight suggestions render
   if (frameEl) frameEl.src = 'about:blank';
   renderHero();
+  // Back to whatever the grid held before playback, or the homepage.
+  if (lastResults.length) renderGrid(lastResults, null);
+  else void loadHomepage();
 }
 
 /* ── Result grid ──────────────────────────────────────────────── */
@@ -144,8 +218,17 @@ function videoCell(v, idx) {
   return cell;
 }
 
-function renderGrid(results, term) {
+/** Caption above the grid ("Up next", …); hidden when empty. */
+function setGridLabel(label) {
+  if (!gridLabelEl) return;
+  gridLabelEl.textContent = label || '';
+  gridLabelEl.title = label || '';
+  gridLabelEl.classList.toggle('hidden', !label);
+}
+
+function renderGrid(results, term, { label = '' } = {}) {
   if (!gridEl) return;
+  setGridLabel(label);
   gridEl.innerHTML = '';
   if (!results) {
     const wrap = document.createElement('div');
@@ -169,13 +252,17 @@ function renderGrid(results, term) {
 async function runSearch(text) {
   const term = (text || '').trim();
   if (!term) {
-    renderGrid([], null);
+    lastResults = [];
+    void loadHomepage(); // back to categories + "For you"
     return;
   }
+  setCategoriesVisible(false);
   renderGrid(null, null);
   try {
     const res = await apiFetch(`/api/youtube/search?q=${encodeURIComponent(term)}`);
-    renderGrid(res?.data?.results || [], term);
+    const list = resultList(res);
+    lastResults = list;
+    renderGrid(list, term);
   } catch (e) {
     if (!gridEl) return;
     gridEl.innerHTML = '';
@@ -190,13 +277,81 @@ async function runSearch(text) {
   }
 }
 
+/* ── Idle homepage: category chips + "For you" ──────────────── */
+
+function titleCase(s) {
+  return String(s || '').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function setCategoriesVisible(on) {
+  categoriesEl?.classList.toggle('hidden', !on);
+}
+
+/** Chips for the categories the user watches most, most-watched first. */
+function renderCategories(cats) {
+  if (!categoriesEl) return;
+  categoriesEl.innerHTML = '';
+  const list = Array.isArray(cats) ? cats.slice(0, 20) : [];
+  setCategoriesVisible(list.length > 0 && !current && !searchEl?.input?.value?.trim());
+  for (const c of list) {
+    const name = typeof c === 'string' ? c : c?.name;
+    if (!name) continue;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'yt-category';
+    chip.textContent = titleCase(name);
+    chip.title = c?.count ? `Watched ${c.count}×` : 'Category';
+    chip.addEventListener('click', () => void openCategory(name));
+    categoriesEl.appendChild(chip);
+  }
+}
+
+/** The idle homepage: category chips ordered by usage, plus a "For you" row
+ *  (history-based recommendations, or trending for a brand-new user). */
+async function loadHomepage() {
+  if (!tileEl || current) return;
+  const [cats, forYou] = await Promise.all([
+    apiFetch('/api/youtube/categories?limit=20').catch(() => null),
+    apiFetch('/api/youtube/suggest?limit=12').catch(() => null),
+  ]);
+  if (!tileEl || current) return;
+  renderCategories(cats?.data?.categories || []);
+  const list = resultList(forYou);
+  renderGrid(list, null, list.length ? { label: 'For you' } : {});
+}
+
+/** A category chip: rank videos for that topic and show them in the grid. */
+async function openCategory(name) {
+  if (!name) return;
+  if (searchEl?.input) searchEl.input.value = name;
+  setCategoriesVisible(false);
+  renderGrid(null, null);
+  try {
+    const res = await apiFetch(
+      `/api/youtube/suggest?${new URLSearchParams({ query: name, limit: '16' })}`,
+    );
+    const list = resultList(res);
+    lastResults = list;
+    renderGrid(list, null, { label: titleCase(name) });
+  } catch (_) {
+    void runSearch(name); // older server: fall back to a plain search
+  }
+}
+
 /* ── AI wiring ────────────────────────────────────────────────── */
 
 function onAgentActions(e) {
   for (const action of e.detail || []) {
     if (action?.action === 'youtube_play' && action?.result === 'ok') {
       const id = action?.data?.video_id;
-      if (id) playVideo({ video_id: id, title: action?.data?.title });
+      if (id) {
+        playVideo({
+          video_id: id,
+          title: action?.data?.title,
+          channel: action?.data?.channel,
+          thumbnail: action?.data?.thumbnail,
+        });
+      }
     }
   }
 }
@@ -224,6 +379,8 @@ function onArtifactSaved(e) {
   };
   // Merge, newest first, deduped — then re-render the grid.
   aiResults = [video, ...aiResults.filter((v) => v.video_id !== id)].slice(0, 24);
+  lastResults = aiResults;
+  setCategoriesVisible(false);
   renderGrid(aiResults, null);
 }
 
@@ -303,23 +460,55 @@ export function mountYoutubeTile() {
   let searchTimer = null;
   searchEl.input.addEventListener('input', (e) => {
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(() => void runSearch(e.target.value), 350);
+    const v = e.target.value;
+    setCategoriesVisible(v.trim() === '' && !current);
+    searchTimer = window.setTimeout(() => void runSearch(v), 350);
   });
   tileEl.appendChild(searchEl);
 
+  /* Category chips (idle homepage) */
+  categoriesEl = document.createElement('div');
+  categoriesEl.className = 'yt-categories hidden';
+  tileEl.appendChild(categoriesEl);
+
   /* Grid */
+  gridLabelEl = document.createElement('div');
+  gridLabelEl.className = 'yt-grid-label hidden';
+  tileEl.appendChild(gridLabelEl);
   gridEl = document.createElement('div');
   gridEl.className = 'yt-grid';
   tileEl.appendChild(gridEl);
 
+  // Cap the 16:9 player at ~half the window height, otherwise a wide window
+  // makes it taller than the tile and pushes the search bar and the results /
+  // "Up next" grid out of view. Recomputed whenever the window resizes.
+  const fitPlayer = () => {
+    const h = tileEl?.clientHeight || 0;
+    if (h) {
+      tileEl.style.setProperty('--yt-player-max', `${Math.max(160, Math.round(h * 0.6))}px`);
+    }
+  };
+  tileObserver = new ResizeObserver(fitPlayer);
+  tileObserver.observe(tileEl);
+  fitPlayer();
+
+  // Restore the remembered background from the last session.
+  try {
+    const saved = localStorage.getItem(BG_KEY);
+    if (saved) bgCss = saved;
+  } catch (_) { /* ignore */ }
+
   renderHero();
   renderGrid([], null);
+  void loadHomepage();
   return tileEl;
 }
 
 /** Deactivated mid-playback: stop the video, drop the window. */
 export function unmountYoutubeTile() {
   reset();
+  tileObserver?.disconnect();
+  tileObserver = null;
   tileEl?.remove();
   tileEl = null;
   heroEl = null;
@@ -330,6 +519,8 @@ export function unmountYoutubeTile() {
   infoSubEl = null;
   idleEl = null;
   gridEl = null;
+  gridLabelEl = null;
+  categoriesEl = null;
   searchEl = null;
 }
 
