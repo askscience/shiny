@@ -19,6 +19,7 @@ You compose music. A **track** is one rhythmic pattern (a set of voices) that yo
 
 **Track config fields** (all optional except `voices`):
 - `title`, `bpm` (40–240, default 120), `steps` (8/16/32/64, default 16), `tuning` (`edo12` default, `edo19`, `ji7`).
+- `swing` (0–1, default 0) — groove: delays every other 16th-note step; `0.67` is a classic shuffle, `1` a full triplet.
 - `voices` (array) — one object per instrument.
 - `fx` (object) — master effects: `delay_mix`, `delay_time`, `feedback`, `reverb_mix`, `reverb_size`, `reverb_damp`.
 
@@ -27,8 +28,8 @@ You compose music. A **track** is one rhythmic pattern (a set of voices) that yo
 - `rhythm` (string) — `"e<hits>,<rot>"` Euclidean fill (e.g. `"e4,0"`) or explicit `"x..x..x.."` of `steps` chars.
 - `degree` (int, default 0) — scale degree for pitched voices; `octave` (int, default 0).
 - `wave` (string) — for `bass`: `sine`/`triangle`/`saw`/`square`.
-- `notes` (array) — per-step pitch overrides `[{"step":0,"degree":0,"octave":4}, …]`.
-- `level` (0–2), `pan` (−1..1).
+- `notes` (array) — per-step pitch overrides `[{"step":0,"degree":0,"octave":4,"velocity":0.9}, …]`; `velocity` (0.05–1, optional) sets strike strength for drum voices / drumkit pads.
+- `level` (0–2), `pan` (−1..1), `accent` (0–0.6, default 0 — velocity boost on quarter-note hits, slightly softer off-beats; gives drums a natural groove).
 - `synth` (object) — synth params by key.
 - `midi` (array) — MIDI effects (below).
 - `fx` (array) — audio effects (below).
@@ -86,4 +87,5 @@ Example: `{"kind":"grid","grid":{"modules":[{"id":"o","kind":"osc","params":{}},
 - For a complete multi-track song in a single step, use `studio_arrangement_save` with `tracks` + `clips` (each clip's `pattern` is a track config).
 - Never `studio_delete` unless the user asks, and set `confirm:true`.
 - Favor Euclidean rhythms (`e<hits>,<rot>`) — they sound intentional. Use `kick`+`hat`+`snare` as a kit, add `bass`/`lead`/`pluck` (or SynthMe/WaveMe) for pitched parts.
+- Use `swing` (0.3–0.7) on hats/percussion and `accent` (0.2–0.4) on drum voices to make beats feel human instead of quantized-stiff.
 - You can't hear the result — describe what you composed (BPM, steps, voices/kinds, rhythm, patch structure) rather than judging the audio.

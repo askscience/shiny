@@ -27,6 +27,7 @@ const KINDS = ['kick', 'snare', 'hat', 'clap', 'tom', 'perc', 'bass', 'pluck', '
 const KIND_LABELS = { kick: 'Kick', snare: 'Snare', hat: 'Hat', clap: 'Clap', tom: 'Tom', perc: 'Perc', bass: 'Bass', pluck: 'Pluck', lead: 'Lead', pad: 'Pad', sub: 'Sub', organ: 'Organ', ep: 'E-Piano', bell: 'Bell', strings: 'Strings', brass: 'Brass', synthme: 'SynthMe', grid: 'WaveMe', drumkit: 'Drum Machine' };
 const KIND_INITIALS = { kick: 'K', snare: 'S', hat: 'H', clap: 'C', tom: 'T', perc: 'P', bass: 'B', pluck: 'P', lead: 'L', pad: 'P', sub: 'S', organ: 'O', ep: 'EP', bell: 'B', strings: 'St', brass: 'Br', synthme: 'SY', grid: 'WM', drumkit: 'DM' };
 const TUNINGS = [['edo12', '12-TET'], ['edo19', '19-TET'], ['ji7', 'Just 7']];
+const SWING_OPTS = [['0', 'Straight'], ['0.34', 'Light swing'], ['0.67', 'Medium swing'], ['1', 'Triplet swing']];
 const WAVES = [['sine', 'Sine'], ['triangle', 'Triangle'], ['saw', 'Saw'], ['square', 'Square']];
 const TRACK_COLORS = ['#ff5d5d', '#ffb454', '#ffe156', '#8dff9e', '#57d9ff', '#7aa2ff', '#c792ff', '#ff8fd8'];
 const MELODIC = new Set(['bass', 'pluck', 'lead', 'pad', 'sub', 'organ', 'ep', 'bell', 'strings', 'brass', 'synthme', 'grid']);
@@ -408,7 +409,12 @@ function drumkitNoteAt(voice, pad, step) {
 }
 
 function voice(kind, rhythm, opts = {}) {
-  return { kind, rhythm, degree: 0, octave: 0, wave: 'sine', notes: [], level: null, pan: null, synth: {}, fx: [], macros: [], pads: [], midi: [], grid: null, ...opts };
+  return { kind, rhythm, degree: 0, octave: 0, wave: 'sine', notes: [], level: null, pan: null, accent: 0, synth: {}, fx: [], macros: [], pads: [], midi: [], grid: null, ...opts };
+}
+/* Subtle "produced" master bus for new patterns — a touch of plate reverb so
+   fresh clips don't sound bone-dry. Users can dial it back in Devices. */
+function defaultFx() {
+  return { reverb_mix: 0.1, reverb_size: 0.55, reverb_damp: 0.6 };
 }
 function defaultKit() {
   return [
@@ -418,24 +424,24 @@ function defaultKit() {
   ];
 }
 function kitPattern(steps = 16) {
-  return { title: 'Kit', bpm: 120, steps, tuning: 'edo12', voices: defaultKit(), fx: {} };
+  return { title: 'Kit', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: defaultKit(), fx: defaultFx() };
 }
 function bassPattern(steps = 16) {
-  return { title: 'Bass', bpm: 120, steps, tuning: 'edo12', voices: [voice('bass', 'x...x...x...x...', { octave: 2, wave: 'triangle' })], fx: {} };
+  return { title: 'Bass', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('bass', 'x...x...x...x...', { octave: 2, wave: 'triangle' })], fx: defaultFx() };
 }
 function leadPattern(steps = 16) {
-  return { title: 'Lead', bpm: 120, steps, tuning: 'edo12', voices: [voice('lead', 'x.x.x.x.x.x.x.x.', { degree: 4, octave: 3, wave: 'saw' })], fx: {} };
+  return { title: 'Lead', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('lead', 'x.x.x.x.x.x.x.x.', { degree: 4, octave: 3, wave: 'saw' })], fx: defaultFx() };
 }
 function padPattern(steps = 16) {
-  return { title: 'Pad', bpm: 120, steps, tuning: 'edo12', voices: [voice('pad', 'x...x...x...x...', { degree: 0, octave: 3 })], fx: {} };
+  return { title: 'Pad', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('pad', 'x...x...x...x...', { degree: 0, octave: 3 })], fx: defaultFx() };
 }
 function simplePattern(kind, steps = 16) {
   if (kind === 'drumkit') {
-    const notes = [0, 4, 8, 12].map((s) => ({ step: s, length: 1, degree: 0, octave: 0 }));
-    return { title: KIND_LABELS[kind], bpm: 120, steps, tuning: 'edo12', voices: [voice('drumkit', '', { pads: defaultPads(), notes })], fx: {} };
+    const notes = [0, 4, 8, 12].map((s) => ({ step: s, length: 1, degree: 0, octave: 0, velocity: null }));
+    return { title: KIND_LABELS[kind], bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('drumkit', '', { pads: defaultPads(), notes })], fx: defaultFx() };
   }
   const oct = (kind === 'bass' || kind === 'sub') ? 2 : 3;
-  return { title: KIND_LABELS[kind], bpm: 120, steps, tuning: 'edo12', voices: [voice(kind, 'x.x.x.x.x.x.x.x.', { degree: 0, octave: oct })], fx: {} };
+  return { title: KIND_LABELS[kind], bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice(kind, 'x.x.x.x.x.x.x.x.', { degree: 0, octave: oct })], fx: defaultFx() };
 }
 
 function blankArrangement() {
@@ -477,9 +483,10 @@ function normalizeVoice(v) {
     degree: Number.isFinite(v?.degree) ? v.degree : 0,
     octave: Number.isFinite(v?.octave) ? v.octave : 0,
     wave: WAVES.some(([w]) => w === v?.wave) ? v.wave : 'sine',
-    notes: Array.isArray(v?.notes) ? v.notes.map((n) => ({ step: n.step, length: n.length || 1, degree: n.degree, octave: n.octave })) : [],
+    notes: Array.isArray(v?.notes) ? v.notes.map((n) => ({ step: n.step, length: n.length || 1, degree: n.degree, octave: n.octave, velocity: Number.isFinite(n?.velocity) ? clamp(n.velocity, 0.05, 1) : null })) : [],
     level: typeof v?.level === 'number' ? v.level : null,
     pan: typeof v?.pan === 'number' ? v.pan : null,
+    accent: Number.isFinite(v?.accent) ? clamp(v.accent, 0, 0.6) : 0,
     synth: (v?.synth && typeof v.synth === 'object') ? { ...v.synth } : {},
     fx: Array.isArray(v?.fx) ? v.fx.map((f) => ({
       kind: EFFECT_KINDS.includes(f?.kind) ? f.kind : 'distortion',
@@ -517,6 +524,7 @@ function normalizePattern(p) {
     title: p?.title || 'Clip',
     bpm: p?.bpm ?? 120,
     steps: p?.steps ?? 16,
+    swing: Number.isFinite(p?.swing) ? clamp(p.swing, 0, 1) : 0,
     tuning: p?.tuning || 'edo12',
     voices: (Array.isArray(p?.voices) && p.voices.length ? p.voices.map(normalizeVoice) : defaultKit()),
     fx: (p?.fx && typeof p.fx === 'object') ? { ...p.fx } : {},
@@ -528,10 +536,11 @@ function serializePattern(p) {
     title: p.title || 'Untitled',
     bpm: p.bpm,
     steps: p.steps,
+    swing: p.swing ?? 0,
     tuning: p.tuning,
     voices: p.voices.map((v) => ({
       kind: v.kind, rhythm: v.rhythm, degree: v.degree, octave: v.octave,
-      wave: v.wave, notes: v.notes, level: v.level, pan: v.pan, synth: v.synth,
+      wave: v.wave, notes: v.notes, level: v.level, pan: v.pan, accent: v.accent ?? 0, synth: v.synth,
       fx: v.fx.map((f) => ({ kind: f.kind, params: f.params, bypass: f.bypass })),
       macros: v.macros,
       pads: v.pads,
@@ -593,7 +602,9 @@ let arrSource = null;            // arrangement buffer source
 let arrPlaying = false;
 let arrPlayStart = 0;
 let arrPlayDur = 0;
+let arrPlayOffset = 0;           // seconds into the buffer playback began at
 let arrLoop = false;
+let arrStartBeat = 0;            // ruler-clicked playback start (beats)
 let rafId = 0;
 let trackLoops = {};             // launcher trackId -> { source, slotKey, when, state }
 let trackAudio = {};             // launcher trackId -> { gain, panner }
@@ -740,12 +751,12 @@ function metroClick(when, accent) {
   osc.stop(when + 0.08);
   flashBeat(accent);
 }
-function metroStart(startTime, bpm) {
+function metroStart(startTime, bpm, startBeat = 0) {
   metroStop();
   if (!metroOn) return;
   const beat = 60 / bpm;
   let nextBeat = startTime;
-  let beatIdx = 0;
+  let beatIdx = Math.max(0, Math.round(startBeat));
   metroTimer = setInterval(() => {
     if (!audioCtx) return;
     while (nextBeat < audioCtx.currentTime + 0.12) {
@@ -797,12 +808,15 @@ async function renderArrangementAndPlay() {
     src.connect(masterOut());
     src.onended = () => { if (!arrLoop) { arrPlaying = false; clearArrPlayhead(); metroStop(); updateTransport(); } };
     const startAt = ctx.currentTime + 0.05;
-    src.start(startAt);
+    /* Start from the ruler-clicked beat (Ableton-style scrub). */
+    const spb = 60 / arrangement.bpm;
+    arrPlayOffset = Math.max(0, Math.min(arrStartBeat * spb, Math.max(0, decoded.duration - 0.02)));
+    src.start(startAt, arrPlayOffset);
     arrSource = src;
     arrPlaying = true;
     arrPlayStart = startAt;
     arrPlayDur = decoded.duration;
-    metroStart(startAt, arrangement.bpm);
+    metroStart(startAt, arrangement.bpm, arrStartBeat);
     setStatus('Playing');
     updateStudioGlow();
     const totalBeats = arrangement.length_beats;
@@ -810,11 +824,12 @@ async function renderArrangementAndPlay() {
       if (!arrPlaying || !audioCtx) return;
       const raw = audioCtx.currentTime - arrPlayStart;
       if (raw < 0) { rafId = requestAnimationFrame(tick); return; }
-      const elapsed = arrLoop ? (raw % arrPlayDur) : raw;
-      if (!arrLoop && raw >= arrPlayDur) { stopPlayback(); return; }
-      const beats = (elapsed / arrPlayDur) * totalBeats;
+      let pos = arrPlayOffset + raw;                  // position within the buffer
+      if (arrLoop) pos = pos % arrPlayDur;
+      else if (pos >= arrPlayDur) { stopPlayback(); return; }
+      const beats = (pos / arrPlayDur) * totalBeats;
       if (arrPlayheadEl) { arrPlayheadEl.style.opacity = '1'; arrPlayheadEl.style.transform = `translateX(${HEAD_W + beats * PPB}px)`; }
-      if (timeEl) timeEl.textContent = `${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1} · ${fmtTime(elapsed)}`;
+      if (timeEl) timeEl.textContent = `${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1} · ${fmtTime(pos)}`;
       updateAutoKnobs(beats);
       rafId = requestAnimationFrame(tick);
     };
@@ -1105,11 +1120,12 @@ async function deleteArrangement(id) {
   renderBrowser();
 }
 
-/* Save the pattern being edited into the pattern library. */
+/* Save the pattern being edited into the pattern library.
+   Non-blocking: the name comes from the clip's title field (editable in the
+   Editor toolbar) instead of a native prompt(). */
 async function savePatternToLibrary() {
   if (!current) { toast('Select a clip first', { type: 'error' }); return; }
-  const title = prompt('Pattern name:', current.title || 'Pattern');
-  if (!title) return;
+  const title = (current.title || '').trim() || 'Pattern';
   current.title = title;
   const data = await api('/api/studio', { method: 'POST', body: JSON.stringify(serializePattern(current)) });
   await refreshTracks();
@@ -1117,19 +1133,21 @@ async function savePatternToLibrary() {
   toast(`Saved pattern "${data?.title || title}"`, { type: 'success' });
 }
 async function savePreset(v) {
-  const name = prompt('Preset name:', `${KIND_LABELS[v.kind]} ${new Date().toLocaleTimeString()}`);
-  if (!name) return;
+  const sameKind = presets.filter((p) => p.kind === v.kind).length;
+  const name = `${KIND_LABELS[v.kind] || v.kind} ${sameKind + 1}`;
   const params = {
     wave: v.wave,
     synth: { ...v.synth },
     fx: v.fx.map((f) => ({ kind: f.kind, params: f.params, bypass: f.bypass })),
     level: v.level,
     pan: v.pan,
+    accent: v.accent ?? 0,
   };
   await api('/api/studio/presets', { method: 'POST', body: JSON.stringify({ kind: v.kind, name, params }) });
   await refreshPresets();
   renderDevices();
   renderBrowser();
+  toast(`Saved preset "${name}"`, { type: 'success' });
 }
 
 /* ── selection ──────────────────────────────────────────────── */
@@ -1518,6 +1536,7 @@ function trackParamCatalog(tr) {
       for (const p of (SYNTH[v.kind] || [])) out.push({ path: `voice.${vi}.${p.key}`, label: `${kl} ${p.label}`, min: p.min, max: p.max });
       out.push({ path: `voice.${vi}.level`, label: `${kl} Level`, min: 0, max: 2 });
       out.push({ path: `voice.${vi}.pan`, label: `${kl} Pan`, min: -1, max: 1 });
+      out.push({ path: `voice.${vi}.accent`, label: `${kl} Accent`, min: 0, max: 0.6 });
       v.fx.forEach((f, fi) => {
         for (const p of (EFFECTS[f.kind]?.params || [])) out.push({ path: `voice.${vi}.fx.${fi}.${p.key}`, label: `${kl} FX${fi + 1} ${p.label}`, min: p.min, max: p.max });
       });
@@ -1542,6 +1561,7 @@ function autoBaseValue(tr, param) {
         if (f) { const def = (EFFECTS[f.kind]?.params || []).find((p) => p.key === m[3]); return f.params[m[3]] != null ? f.params[m[3]] : (def?.def ?? 0.5); }
       } else if (m[3] === 'level') return v.level != null ? v.level : (DEFAULT_LEVEL[v.kind] ?? 0.5);
       else if (m[3] === 'pan') return v.pan != null ? v.pan : (DEFAULT_PAN[v.kind] ?? 0);
+      else if (m[3] === 'accent') return v.accent ?? 0;
       else { const def = (SYNTH[v.kind] || []).find((p) => p.key === m[3]); return v.synth[m[3]] != null ? v.synth[m[3]] : (def?.def ?? 0.5); }
     }
   }
@@ -1771,13 +1791,16 @@ function renderArranger() {
 
   arrGridEl.appendChild(h('div', 'studio-arr-corner'));
 
-  /* ruler — bar numbers + loop region */
+  /* ruler — bar numbers + loop region; click sets the playback start */
   for (let b = 0; b < beats; b++) {
     const cell = h('div', 'studio-arr-ruler-cell');
     if (b % 4 === 0) { cell.classList.add('studio-arr-ruler-bar'); cell.textContent = String(b / 4 + 1); }
     if (arrLoop) cell.classList.add('studio-arr-ruler-cell--loop');
+    if (b === arrStartBeat) cell.classList.add('studio-arr-ruler-cell--start');
     cell.style.gridColumn = String(b + 2);
     cell.style.gridRow = '1';
+    cell.title = 'Play from here';
+    cell.addEventListener('click', () => { arrStartBeat = b; renderArranger(); });
     arrGridEl.appendChild(cell);
   }
 
@@ -1886,10 +1909,14 @@ function renderArranger() {
     else void loadWave(i);
   }
 
-  /* playhead */
+  /* playhead + start marker */
   arrPlayheadEl = h('div', 'studio-arr-playhead');
   arrPlayheadEl.style.opacity = '0';
   arrGridEl.appendChild(arrPlayheadEl);
+  const startMarkerEl = h('div', 'studio-arr-startmarker');
+  startMarkerEl.style.transform = `translateX(${HEAD_W + Math.min(arrStartBeat, beats - 1) * PPB}px)`;
+  startMarkerEl.title = 'Play start (click the ruler to move)';
+  arrGridEl.appendChild(startMarkerEl);
 }
 
 function inlineRename(span, value, done) {
@@ -2270,16 +2297,18 @@ function renderDetail() {
   else renderMixer();
   if (detailPage === 'editor') {
     const kind = current?.voices?.[selectedVoice]?.kind;
-    setHint(!current ? 'Select a clip in the Arranger or Launcher to edit it'
+    const base = !current ? 'Select a clip in the Arranger or Launcher to edit it'
       : MELODIC.has(kind) ? 'Click the grid to add notes · drag to move · drag the right edge to resize'
         : kind === 'drumkit' ? 'Click a pad row to place hits · Fill = euclidean rhythm'
-          : 'Click cells to toggle hits · Fill = euclidean rhythm');
+          : 'Click cells to toggle hits · Fill = euclidean rhythm';
+    setHint(`${base}${KEYS_HINT}`);
   } else {
-    setHint(detailPage === 'devices'
+    setHint((detailPage === 'devices'
       ? 'Drag knobs up/down · double-click a knob resets it'
-      : 'Click a strip to select its track · M/S mute & solo');
+      : 'Click a strip to select its track · M/S mute & solo') + KEYS_HINT);
   }
 }
+const KEYS_HINT = ' — Space: play · ⌘S: save · ⌘E: export · Del: remove clip';
 
 /* ── editor page ────────────────────────────────────────────── */
 
@@ -2327,6 +2356,14 @@ function renderEditorToolbar() {
   }, 'Pattern length'));
 
   edToolbarEl.appendChild(nativeSelect(TUNINGS, current.tuning, (val) => { current.tuning = val; markDirty(); renderEditor(); }, 'Tuning'));
+
+  /* Swing — groove that delays every other 16th-note step (1 = triplet) */
+  const swingSel = nativeSelect(SWING_OPTS.map(([v, l]) => [v, l]), String(current.swing ?? 0), (val) => {
+    current.swing = parseFloat(val) || 0;
+    markDirty();
+    renderEditor();
+  }, 'Swing — delays every other 16th (groove)');
+  edToolbarEl.appendChild(swingSel);
 
   const v = current.voices[selectedVoice];
   if (v) {
@@ -2560,6 +2597,33 @@ function prRowOf(degree) {
   return PR_DEG_HI - degree;
 }
 
+/* ── click-to-audition (piano keys) ─────────────────────────── */
+
+let keyAuditionOsc = null;
+/* Short WebAudio pluck at a scale degree — instant feedback when clicking
+   piano-roll keys, no server round-trip. */
+function auditionKeyDegree(degree, tuning) {
+  const ctx = audioCtxOr();
+  if (ctx.state === 'suspended') void ctx.resume();
+  try { keyAuditionOsc?.stop(); } catch (_) { /* noop */ }
+  let hz;
+  if (tuning === 'edo19') hz = 440 * Math.pow(2, degree / 19);
+  else hz = 440 * Math.pow(2, degree / 12);   // edo12 (and an approximation for ji7)
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = hz;
+  const t = ctx.currentTime;
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.25, t + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  osc.connect(gain).connect(masterOut());
+  osc.start(t);
+  osc.stop(t + 0.55);
+  keyAuditionOsc = osc;
+  setReadout(`Note — ${degreeLabel(degree, tuning)} (${Math.round(hz)} Hz)`);
+}
+
 function renderPianoRoll() {
   if (!pianoEl) return;
   pianoEl.textContent = '';
@@ -2585,6 +2649,12 @@ function renderPianoRoll() {
     k.classList.toggle('studio-pr-key--black', isBlack(d, current.tuning));
     k.style.gridColumn = '1';
     k.style.gridRow = String(prRowOf(d) + 2);
+    k.title = 'Click to audition';
+    k.addEventListener('pointerdown', () => {
+      auditionKeyDegree(d, current.tuning);
+      k.classList.add('studio-pr-key--pressed');
+      setTimeout(() => k.classList.remove('studio-pr-key--pressed'), 160);
+    });
     grid.appendChild(k);
   }
 
@@ -2690,6 +2760,8 @@ function flattenVoiceParams(v) {
     get: () => (v.level != null ? v.level : (DEFAULT_LEVEL[v.kind] ?? 0.5)), set: (n) => { v.level = n; } });
   out.push({ path: 'pan', label: 'Pan', min: -1, max: 1, step: 0.01, def: 0,
     get: () => (v.pan != null ? v.pan : 0), set: (n) => { v.pan = n; } });
+  out.push({ path: 'accent', label: 'Accent', min: 0, max: 0.6, step: 0.01, def: 0,
+    get: () => (v.accent ?? 0), set: (n) => { v.accent = n; } });
   v.fx.forEach((f, i) => {
     for (const p of (EFFECTS[f.kind]?.params || [])) {
       out.push({ path: `fx${i}.${p.key}`, label: `FX${i + 1} ${p.label}`, min: p.min, max: p.max, step: p.step, def: p.def,
@@ -2725,6 +2797,7 @@ function applyPreset(v, preset) {
   if (Array.isArray(p.fx)) v.fx = p.fx.map((f) => ({ kind: f.kind, params: { ...(f.params || {}) }, bypass: !!f.bypass }));
   if (typeof p.level === 'number') v.level = p.level;
   if (typeof p.pan === 'number') v.pan = p.pan;
+  if (Number.isFinite(p.accent)) v.accent = clamp(p.accent, 0, 0.6);
   markDirty();
   renderDevices();
 }
@@ -2860,6 +2933,7 @@ function renderDevices() {
   const outBody = h('div', 'studio-device-body');
   outBody.appendChild(automatableKnob('Level', `voice.${selectedVoice}.level`, 0, 2, 0.01, v.level != null ? v.level : (DEFAULT_LEVEL[v.kind] ?? 0.5), (n) => { v.level = n; markDirty(); }, DEFAULT_LEVEL[v.kind] ?? 0.5));
   outBody.appendChild(automatableKnob('Pan', `voice.${selectedVoice}.pan`, -1, 1, 0.01, v.pan != null ? v.pan : (DEFAULT_PAN[v.kind] ?? 0), (n) => { v.pan = n; markDirty(); }, DEFAULT_PAN[v.kind] ?? 0));
+  outBody.appendChild(automatableKnob('Accent', `voice.${selectedVoice}.accent`, 0, 0.6, 0.01, v.accent ?? 0, (n) => { v.accent = n; markDirty(); }, 0));
   out.appendChild(outBody);
   chain.appendChild(out);
 
@@ -3898,6 +3972,52 @@ async function exportWav() {
   }
 }
 
+/* ── keyboard shortcuts (Ableton/Bitwig-style) ─────────────── */
+
+function isTypingTarget(t) {
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+}
+function saveProjectNow() {
+  void saveArrangement()
+    .then(() => { setStatus('saved'); toast('Project saved', { type: 'success' }); })
+    .catch((e) => toast(e.message, { type: 'error' }));
+}
+function onStudioKeydown(e) {
+  if (!tileEl || !tileEl.isConnected) return;
+  /* Shortcuts belong to the Studio window: skip when typing anywhere. */
+  if (isTypingTarget(e.target)) return;
+  const ae = document.activeElement;
+  if (ae && ae !== document.body && !tileEl.contains(ae)) return;
+  const meta = e.metaKey || e.ctrlKey;
+  if (e.code === 'Space' && !meta) {
+    e.preventDefault();
+    if (arrPlaying) stopPlayback();
+    else if (anyLauncherPlaying()) stopAllLauncher();
+    else if (panels.launcher && !panels.arranger) launchScene(0);
+    else void renderArrangementAndPlay();
+  } else if (meta && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault();
+    saveProjectNow();
+  } else if (meta && (e.key === 'e' || e.key === 'E')) {
+    e.preventDefault();
+    void exportWav();
+  } else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+    e.preventDefault();
+    if (sel.area === 'arr') {
+      removeArrClip(sel.clipIndex);
+    } else if (sel.area === 'lch') {
+      const key = `${sel.trackId}:${sel.scene}`;
+      if (launcher.clips[key]) {
+        if (trackLoops[sel.trackId]?.slotKey === key) stopLauncherTrack(sel.trackId, false);
+        delete launcher.clips[key];
+        sel = null;
+        syncSelection();
+        renderLauncher();
+      }
+    }
+  }
+}
+
 /* ── panel toggling ─────────────────────────────────────────── */
 
 function syncPanels() {
@@ -4000,7 +4120,7 @@ export function mountStudioTile() {
   metroBtn = button({ variant: 'ghost', icon: 'ui/metronome', label: '', onClick: () => {
     metroOn = !metroOn;
     if (!metroOn) metroStop();
-    else if (arrPlaying) metroStart(arrPlayStart, arrangement.bpm);
+    else if (arrPlaying) metroStart(arrPlayStart, arrangement.bpm, arrStartBeat);
     else if (clockRunning) metroStart(clockT0, launcher.bpm);
     updateTransport();
   } });
@@ -4044,11 +4164,7 @@ export function mountStudioTile() {
     markDirty();
   });
 
-  const saveBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => {
-    void saveArrangement()
-      .then(() => { setStatus('saved'); toast('Project saved', { type: 'success' }); })
-      .catch((e) => toast(e.message, { type: 'error' }));
-  } });
+  const saveBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => saveProjectNow() });
   saveBtn.classList.add('studio-transport');
   saveBtn.title = 'Save project';
 
@@ -4198,12 +4314,14 @@ export function mountStudioTile() {
   void refreshPresets().then(renderBrowser).catch(() => {});
   startScope();
   void consumePendingAiTrack().catch(() => {});
+  window.addEventListener('keydown', onStudioKeydown);
 
   updateStudioGlow();
   return tileEl;
 }
 
 export function unmountStudioTile() {
+  window.removeEventListener('keydown', onStudioKeydown);
   stopPlayback();
   stopAllLauncher();
   metroStop();
@@ -4227,6 +4345,8 @@ export function unmountStudioTile() {
   autoKnobs = [];
   auditionSource = null;
   lastClockBeat = -1;
+  arrStartBeat = 0;
+  arrPlayOffset = 0;
   pageBtns = {};
   collapseBtn = null;
   soloTracks = new Set();

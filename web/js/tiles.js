@@ -19,7 +19,8 @@
 import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
 import { getPluginLayout } from './preferences.js';
 import {
-  initDesktop, ensureWindows, activeWindowNames, applyLayout, renderWorkspaceBar,
+  initDesktop, ensureWindows, activeWindowNames, activeWorkspaceIndex,
+  applyLayout, renderWorkspaceBar,
   focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
   setSurfaceNamesProvider,
 } from './desktop.js';
@@ -44,6 +45,7 @@ let mapTileEl = null;          // the tile hosting the map DOM
 let mapRimEl = null;           // the map's on-top ambient rim glow
 let mapGlowTimer = null;       // debounce for the map glow sample
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
+let lastWsIndex = null;        // last workspace index seen (for slide direction)
 
 function pluginLabel(name) {
   return name.charAt(0).toUpperCase() + name.slice(1);
@@ -357,6 +359,25 @@ function renderTiles() {
   resizeMapSoon();
 }
 
+/** Slide the visible windows into place after a workspace switch, coming from
+ *  the side the switch moved away from (next → from the right, prev → from the
+ *  left). Uses the Web Animations API so it never fights the focus pulse. */
+function animateWorkspaceSlide(dir) {
+  if (!grid || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const tiles = [...grid.querySelectorAll('.tile')].filter((t) => !t.classList.contains('hidden'));
+  if (!tiles.length) return;
+  const offset = (dir >= 0 ? 1 : -1) * 64;
+  tiles.forEach((t, i) => {
+    t.animate(
+      [
+        { transform: `translateX(${offset}px)`, opacity: 0.25 },
+        { transform: 'translateX(0px)', opacity: 1 },
+      ],
+      { duration: 340, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', delay: Math.min(i * 24, 160) },
+    );
+  });
+}
+
 /* ── Full-screen focus ─────────────────────────────────────── */
 
 function focusPlugin(name) {
@@ -505,7 +526,19 @@ export function initTileManager() {
   renderTiles();
 
   // Desktop state changes (workspace/focus/fullscreen) re-tile the windows.
-  window.addEventListener('desktop:changed', () => renderTiles());
+  window.addEventListener('desktop:changed', (e) => {
+    const idx = activeWorkspaceIndex();
+    renderTiles();
+    // A workspace switch slides the incoming windows into place (desktop.js
+    // hints the true direction for wrap-around; otherwise infer from the
+    // index delta). Focus/fullscreen changes don't animate.
+    if (lastWsIndex !== null && idx !== lastWsIndex) {
+      const hinted = Number(e.detail?.slide);
+      const dir = (Number.isFinite(hinted) && hinted !== 0) ? hinted : (idx > lastWsIndex ? 1 : -1);
+      animateWorkspaceSlide(dir);
+    }
+    lastWsIndex = idx;
+  });
 
   // Crossing the phone breakpoint re-tiles the windows.
   PHONE_QUERY.addEventListener('change', () => renderTiles());

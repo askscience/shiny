@@ -34,6 +34,9 @@ pub struct NoteOverride {
     pub length: u32,
     pub degree: i32,
     pub octave: i32,
+    /// Per-note strike velocity in 0.05–1.0; `None` uses the pattern default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub velocity: Option<f64>,
 }
 
 fn default_note_length() -> u32 {
@@ -42,7 +45,7 @@ fn default_note_length() -> u32 {
 
 impl Default for NoteOverride {
     fn default() -> Self {
-        Self { step: 0, length: 1, degree: 0, octave: 0 }
+        Self { step: 0, length: 1, degree: 0, octave: 0, velocity: None }
     }
 }
 
@@ -180,6 +183,10 @@ pub struct VoiceConfig {
     pub level: Option<f32>,
     /// Stereo pan; `None` uses the per-kind default.
     pub pan: Option<f32>,
+    /// Velocity accent (0–0.6): quarter-note hits get `+accent`, off-beat
+    /// hits get a little softer — 0 keeps every hit at the base velocity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent: Option<f64>,
     /// Synth parameter overrides, keyed by the kind's param names.
     pub synth: HashMap<String, f64>,
     /// Insert effect chain (mono FX → level/pan → stereo FX).
@@ -205,6 +212,7 @@ impl Default for VoiceConfig {
             notes: Vec::new(),
             level: None,
             pan: None,
+            accent: None,
             synth: HashMap::new(),
             fx: Vec::new(),
             pads: Vec::new(),
@@ -226,6 +234,10 @@ pub struct TrackConfig {
     /// Number of 16th-note steps (rows) in the pattern.
     #[serde(default = "default_steps")]
     pub steps: u32,
+    /// Groove swing in 0–1: delays every other 16th-note step, where 1 is a
+    /// full triplet swing (0 = straight/quantized).
+    #[serde(default = "default_swing")]
+    pub swing: f64,
     /// Tuning system: `edo12`, `edo19`, or `ji7`.
     #[serde(default = "default_tuning")]
     pub tuning: String,
@@ -243,6 +255,7 @@ impl Default for TrackConfig {
             title: "Untitled".into(),
             bpm: 120.0,
             steps: 16,
+            swing: 0.0,
             tuning: "edo12".into(),
             ref_hz: 440.0,
             voices: default_kit(),
@@ -259,6 +272,9 @@ fn default_bpm() -> f64 {
 }
 fn default_steps() -> u32 {
     16
+}
+fn default_swing() -> f64 {
+    0.0
 }
 fn default_tuning() -> String {
     "edo12".into()
@@ -310,6 +326,7 @@ pub fn parse_config(value: &serde_json::Value) -> Result<TrackConfig, String> {
         serde_json::from_value(value.clone()).map_err(|e| format!("invalid config: {e}"))?;
     cfg.steps = cfg.steps.clamp(4, 64);
     cfg.bpm = cfg.bpm.clamp(40.0, 240.0);
+    cfg.swing = cfg.swing.clamp(0.0, 1.0);
     Ok(cfg)
 }
 
@@ -370,6 +387,23 @@ fn rhythm_hits(rhythm: &str, steps: u32) -> Vec<u32> {
 fn drumkit_pads(v: &VoiceConfig) -> Vec<PadConfig> {
     let pads = if v.pads.is_empty() { default_pads() } else { v.pads.clone() };
     pads.into_iter().take(16).collect()
+}
+
+/// Swing onset offset in beats for a step index: odd 16th-note steps are
+/// delayed by up to 1/12 beat (a full triplet shuffle) as `swing` goes 0→1.
+fn swing_offset_beats(step: u32, swing: f64) -> f64 {
+    if step % 2 == 1 { swing / 12.0 } else { 0.0 }
+}
+
+/// Strike velocity for one hit. A per-note `velocity` override wins outright;
+/// otherwise the kind's base is accented on quarter notes and slightly
+/// softened on off-beats by the voice's `accent` (0–0.6).
+fn hit_velocity(note_vel: Option<f64>, step: u32, accent: f64, base: f64) -> f64 {
+    if let Some(v) = note_vel {
+        return v.clamp(0.05, 1.0);
+    }
+    let v = if step % 4 == 0 { base + accent } else { base - accent * 0.4 };
+    v.clamp(0.05, 1.0)
 }
 
 /// Apply a voice's MIDI effects to one note, returning zero or more
@@ -573,6 +607,7 @@ fn render_pattern_once(cfg: &TrackConfig) -> Result<PlanarRender, String> {
     let mut events: Vec<TimedEvent> = Vec::new();
     for (col, v) in voices.iter().enumerate() {
         let vid = col as u32;
+        let accent = v.accent.unwrap_or(0.0).clamp(0.0, 0.6);
 
         if v.kind == "drumkit" {
             // Drum machine: each note's degree selects a pad (sub-voice).
@@ -584,32 +619,36 @@ fn render_pattern_once(cfg: &TrackConfig) -> Result<PlanarRender, String> {
                 }
                 let sub = (col as u32) * 16 + pad as u32;
                 let start = n.step.min(steps - 1);
-                let on = beat_to_sample(Rational::new(start as i64, 4), bpm, SAMPLE_RATE) as usize;
-                let off = beat_to_sample(Rational::new((start + 1) as i64, 4), bpm, SAMPLE_RATE) as usize;
-                events.push(TimedEvent { sample_offset: on, event: GraphEvent::NoteOn { frequency: 0.0, velocity: 0.8, voice: sub } });
-                events.push(TimedEvent { sample_offset: off, event: GraphEvent::NoteOff { voice: sub } });
+                let off = swing_offset_beats(start, cfg.swing) * spb;
+                let on = beat_to_sample(Rational::new(start as i64, 4), bpm, SAMPLE_RATE) as f64
+                    + off * SAMPLE_RATE;
+                let off_time = beat_to_sample(Rational::new((start + 1) as i64, 4), bpm, SAMPLE_RATE) as f64
+                    + off * SAMPLE_RATE;
+                events.push(TimedEvent { sample_offset: on.round() as usize, event: GraphEvent::NoteOn { frequency: 0.0, velocity: hit_velocity(n.velocity, start, accent, 0.8), voice: sub } });
+                events.push(TimedEvent { sample_offset: off_time.round() as usize, event: GraphEvent::NoteOff { voice: sub } });
             }
             continue;
         }
 
         let melodic = matches!(v.kind.as_str(), "bass" | "pluck" | "lead" | "pad" | "sub" | "organ" | "ep" | "bell" | "strings" | "brass" | "synthme" | "grid");
-        let mut notes: Vec<(u32, u32, i32, i32)> = Vec::new();
+        let mut notes: Vec<(u32, u32, i32, i32, Option<f64>)> = Vec::new();
         if melodic && !v.notes.is_empty() {
             for n in &v.notes {
-                notes.push((n.step.min(steps - 1), n.length.max(1), n.degree, n.octave));
+                notes.push((n.step.min(steps - 1), n.length.max(1), n.degree, n.octave, n.velocity));
             }
         } else {
             for step in rhythm_hits(&v.rhythm, steps) {
-                notes.push((step, 1, v.degree, v.octave));
+                notes.push((step, 1, v.degree, v.octave, None));
             }
         }
-        for (start, len, degree, octave) in notes {
-            for (s, e, d, o, vel) in apply_midi(&v.midi, start, len, degree, octave, 0.75, steps) {
+        for (start, len, degree, octave, note_vel) in notes {
+            let swing_off = swing_offset_beats(start, cfg.swing);
+            for (s, e, d, o, vel) in apply_midi(&v.midi, start, len, degree, octave, hit_velocity(note_vel, start, accent, 0.75), steps) {
                 let freq = resolve_frequency(d, o, &scale, cfg.ref_hz);
-                let on = (s * spb * SAMPLE_RATE).round() as usize;
-                let off = (e * spb * SAMPLE_RATE).round() as usize;
+                let on = ((s + swing_off) * spb * SAMPLE_RATE).round() as usize;
+                let off_at = ((e + swing_off) * spb * SAMPLE_RATE).round() as usize;
                 events.push(TimedEvent { sample_offset: on, event: GraphEvent::NoteOn { frequency: freq, velocity: vel, voice: vid } });
-                events.push(TimedEvent { sample_offset: off, event: GraphEvent::NoteOff { voice: vid } });
+                events.push(TimedEvent { sample_offset: off_at, event: GraphEvent::NoteOff { voice: vid } });
             }
         }
     }
@@ -629,7 +668,8 @@ fn render_pattern_once(cfg: &TrackConfig) -> Result<PlanarRender, String> {
 }
 
 /// Note on/off times (seconds) for a voice — used for grid env modulation.
-fn voice_note_times(v: &VoiceConfig, steps: u32, bpm: f64) -> Vec<(f64, f64)> {
+/// Onsets carry the pattern's swing so modulation follows the groove.
+fn voice_note_times(v: &VoiceConfig, steps: u32, bpm: f64, swing: f64) -> Vec<(f64, f64)> {
     let spb = 60.0 / bpm;
     let mut out = Vec::new();
     let melodic = matches!(v.kind.as_str(), "bass" | "pluck" | "lead" | "pad" | "sub" | "organ" | "ep" | "bell" | "strings" | "brass" | "synthme" | "grid");
@@ -644,9 +684,10 @@ fn voice_note_times(v: &VoiceConfig, steps: u32, bpm: f64) -> Vec<(f64, f64)> {
         }
     }
     for (start, len, _, _) in notes {
-        let on = start as f64 / 4.0 * spb;
-        let off = (start + len).min(steps) as f64 / 4.0 * spb;
-        out.push((on, off));
+        let off = swing_offset_beats(start, swing) * spb;
+        let on = start as f64 / 4.0 * spb + off;
+        let off_time = (start + len).min(steps) as f64 / 4.0 * spb + off;
+        out.push((on, off_time));
     }
     out.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     out
@@ -674,7 +715,7 @@ fn render_planar_grid(cfg: &TrackConfig) -> Result<PlanarRender, String> {
         if mods.is_empty() {
             continue;
         }
-        grid_info.push((vi, mods, voice_note_times(v, steps as u32, bpm)));
+        grid_info.push((vi, mods, voice_note_times(v, steps as u32, bpm, cfg.swing)));
     }
     if grid_info.is_empty() {
         return render_pattern_once(cfg);
@@ -751,6 +792,8 @@ fn apply_override(cfg: &mut TrackConfig, path: &str, value: f64) {
             v.level = Some(value as f32);
         } else if keypath == "pan" {
             v.pan = Some(value as f32);
+        } else if keypath == "accent" {
+            v.accent = Some(value.clamp(0.0, 0.6));
         } else if let Some(fxpath) = keypath.strip_prefix("fx.") {
             let mut fp = fxpath.splitn(2, '.');
             let Some(fi) = fp.next().and_then(|s| s.parse::<usize>().ok()) else { return };
@@ -1378,7 +1421,7 @@ mod tests {
             voices: vec![VoiceConfig {
                 kind: "lead".into(),
                 rhythm: "".into(),
-                notes: vec![NoteOverride { step: 0, length: 8, degree: 4, octave: 3 }],
+                notes: vec![NoteOverride { step: 0, length: 8, degree: 4, octave: 3, velocity: None }],
                 ..VoiceConfig::default()
             }],
             ..TrackConfig::default()
@@ -1444,5 +1487,80 @@ mod tests {
             ..TrackConfig::default()
         };
         assert!(render_track(&cfg).is_err());
+    }
+
+    #[test]
+    fn swing_helpers() {
+        assert_eq!(swing_offset_beats(0, 1.0), 0.0);
+        assert_eq!(swing_offset_beats(2, 1.0), 0.0);
+        assert!((swing_offset_beats(1, 1.0) - 1.0 / 12.0).abs() < 1e-9);
+        assert!((swing_offset_beats(3, 0.5) - 1.0 / 24.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn swing_shifts_odd_steps_only() {
+        // One hat on an odd step (the second 16th): swinging must move its
+        // energy later, while an even-step hit stays put.
+        let mk = |rhythm: &str, swing: f64| TrackConfig {
+            steps: 4,
+            swing,
+            voices: vec![VoiceConfig { kind: "hat".into(), rhythm: rhythm.into(), ..VoiceConfig::default() }],
+            ..TrackConfig::default()
+        };
+        let straight_odd = render_track(&mk(".x..", 0.0)).unwrap();
+        let swung_odd = render_track(&mk(".x..", 1.0)).unwrap();
+        assert_ne!(straight_odd.wav, swung_odd.wav, "odd-step hit must shift with swing");
+        let straight_even = render_track(&mk("x...", 0.0)).unwrap();
+        let swung_even = render_track(&mk("x...", 1.0)).unwrap();
+        assert_eq!(straight_even.wav, swung_even.wav, "even-step hit must not move");
+    }
+
+    #[test]
+    fn accent_changes_velocity_loudness() {
+        let mk = |accent: Option<f64>| TrackConfig {
+            steps: 8,
+            voices: vec![VoiceConfig {
+                kind: "hat".into(),
+                rhythm: "x.x.x.x.".into(),
+                accent,
+                ..VoiceConfig::default()
+            }],
+            ..TrackConfig::default()
+        };
+        let flat = render_track(&mk(None)).unwrap();
+        let accented = render_track(&mk(Some(0.5))).unwrap();
+        assert_ne!(flat.wav, accented.wav, "accent must change the render");
+        assert_eq!(flat.wav, render_track(&mk(Some(0.0))).unwrap().wav, "accent 0 = default");
+    }
+
+    #[test]
+    fn note_velocity_overrides_base() {
+        // Drum-machine pads respond to per-note velocity (trem's melodic
+        // ADSR nodes ignore it, so the drumkit is the velocity path).
+        let mk = |vel: Option<f64>| TrackConfig {
+            steps: 4,
+            voices: vec![VoiceConfig {
+                kind: "drumkit".into(),
+                rhythm: "".into(),
+                notes: vec![NoteOverride { step: 0, length: 1, degree: 0, octave: 0, velocity: vel }],
+                ..VoiceConfig::default()
+            }],
+            ..TrackConfig::default()
+        };
+        let s = render_track(&mk(Some(0.1))).unwrap();
+        let l = render_track(&mk(Some(1.0))).unwrap();
+        assert_ne!(s.wav, l.wav, "note velocity must change the render");
+        let peak = |r: &Rendered| -> f64 {
+            r.wav[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).map(f64::abs).fold(0.0, f64::max)
+        };
+        assert!(peak(&l) > peak(&s), "velocity 1.0 must peak louder than 0.1");
+    }
+
+    #[test]
+    fn swing_parses_from_json() {
+        let cfg = parse_config(&json!({ "steps": 8, "swing": 2.0 })).unwrap();
+        assert_eq!(cfg.swing, 1.0, "swing clamps to 1");
+        let cfg = parse_config(&json!({ "steps": 8 })).unwrap();
+        assert_eq!(cfg.swing, 0.0, "swing defaults to straight");
     }
 }

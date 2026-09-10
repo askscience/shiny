@@ -71,7 +71,7 @@ impl Tool for StudioCreate {
     fn aliases(&self) -> &[&str] { &["make_beat", "compose_track", "new_track"] }
     fn step_label(&self) -> &str { "Composing a studio track…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `studio_create` — Compose and render a track to audio. params: `{ title?, bpm?, steps?, tuning?, voices: [{ kind, rhythm, degree?, octave?, wave?, notes?, synth?, midi?, fx?, grid? }] }` — `kind` is one of kick/snare/hat/clap/tom/perc/bass/pluck/lead/pad/sub/organ/ep/bell/strings/brass/synthme/grid/drumkit; `rhythm` is `\"e<hits>,<rot>\"` (Euclidean) or an `\"x..x\"` string. Use `synthme` (custom synth via `synth`+`midi`+`fx`) or `grid` (WaveMe modular patch via `grid:{modules,cables}`). Returns the new track's metadata (`track_id`, `duration_ms`, `has_audio`).")
+        Some("- `studio_create` — Compose and render a track to audio. params: `{ title?, bpm?, steps?, swing?, tuning?, voices: [{ kind, rhythm, degree?, octave?, wave?, notes?, synth?, midi?, fx?, grid?, accent? }] }` — `kind` is one of kick/snare/hat/clap/tom/perc/bass/pluck/lead/pad/sub/organ/ep/bell/strings/brass/synthme/grid/drumkit; `rhythm` is `\"e<hits>,<rot>\"` (Euclidean) or an `\"x..x\"` string; `swing` (0–1) delays every other 16th for groove; `accent` (0–0.6) boosts quarter-note velocity. Use `synthme` (custom synth via `synth`+`midi`+`fx`) or `grid` (WaveMe modular patch via `grid:{modules,cables}`). Returns the new track's metadata (`track_id`, `duration_ms`, `has_audio`).")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("track");

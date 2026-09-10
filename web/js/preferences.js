@@ -17,7 +17,7 @@ const VOICE_TTS_VOICE_KEY = 'voice.tts_voice';
 const VOICE_TTS_SPEED_KEY = 'voice.tts_speed';
 const VOICE_SILENCE_KEY = 'voice.silence_timeout';
 const VOICE_WAKE_KEY = 'voice.wake_word';
-const DEFAULT_AI_NAME = 'Shiny';
+const DEFAULT_AI_NAME = "PEAK'D!";
 
 function scopedKey(base) {
   const id = getTraveler()?.id;
