@@ -128,7 +128,7 @@ function renderPlugins(plugins) {
     emptyEl.appendChild(emptyState({
       icon: 'ui/puzzle',
       title: 'No plugins installed',
-      body: 'Shiny is running in its bare form. Install a plugin above to add tools, routes, and skills.',
+      body: "PEAK'D! is running in its bare form. Install a plugin above to add tools, routes, and skills.",
     }));
     metaEl.textContent = '';
     return;

@@ -66,9 +66,11 @@ function persist() {
   setActiveWorkspaceId(activeWs);
 }
 
-/** Notify tiles.js to re-render after any state change. */
-function notify() {
-  window.dispatchEvent(new Event('desktop:changed'));
+/** Notify tiles.js to re-render after any state change. `detail.slide` is an
+ *  optional direction (+1/-1) hint so a workspace switch can animate which
+ *  way the incoming windows slide. */
+function notify(detail) {
+  window.dispatchEvent(new CustomEvent('desktop:changed', { detail }));
 }
 
 export function initDesktop() {
@@ -295,25 +297,30 @@ export function removeWorkspace() {
 /** Switch workspace: 'next' | 'prev' | a 0-based index. */
 export function switchWorkspace(dirOrIndex) {
   if (workspaces.length <= 1) return false;
+  const from = activeWorkspaceIndex();
   let idx;
+  let dir = 0;
   if (typeof dirOrIndex === 'number') {
     idx = dirOrIndex;
+    dir = idx > from ? 1 : -1;
   } else if (dirOrIndex === 'next') {
-    idx = activeWorkspaceIndex() + 1;
+    idx = from + 1;
+    dir = 1;
   } else if (dirOrIndex === 'prev') {
-    idx = activeWorkspaceIndex() - 1;
+    idx = from - 1;
+    dir = -1;
   } else {
     return false;
   }
   if (!Number.isFinite(idx) || idx < 0) idx = workspaces.length - 1;
   if (idx >= workspaces.length) idx = 0;
-  if (idx === activeWorkspaceIndex()) return false;
+  if (idx === from) return false;
   syncActiveFocus();
   activeWs = workspaces[idx].id;
   loadActiveFocus();
   persist();
-  toast(`Workspace ${idx + 1}`, { type: 'info' });
-  notify();
+  // No toast — the active-workspace dot and the window slide are the feedback.
+  notify({ slide: dir });
   return true;
 }
 

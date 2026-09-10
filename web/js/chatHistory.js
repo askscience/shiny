@@ -54,7 +54,7 @@ function renderList() {
 
   const list = h('div', 'chat-history-list');
   if (!conversations.length) {
-    list.appendChild(emptyState({ title: 'No chats yet', body: 'Your conversations with Shiny will appear here.' }));
+    list.appendChild(emptyState({ title: 'No chats yet', body: "Your conversations with PEAK'D! will appear here." }));
     panel.body.appendChild(list);
     return;
   }
@@ -129,7 +129,7 @@ async function openMessages(c) {
   }
   for (const m of entries) {
     const bubble = h('div', `chat-history-bubble chat-history-bubble--${m.role}`);
-    bubble.appendChild(h('div', 'chat-history-bubble-role', m.role === 'user' ? 'You' : 'Shiny'));
+    bubble.appendChild(h('div', 'chat-history-bubble-role', m.role === 'user' ? 'You' : "PEAK'D!"));
     bubble.appendChild(h('div', 'chat-history-bubble-text', m.content));
     msgs.appendChild(bubble);
   }

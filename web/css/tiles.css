@@ -4088,6 +4088,26 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   z-index: 5;
 }
 
+/* Ruler-clicked playback start (Ableton-style scrub marker) */
+.studio-arr-ruler-cell { cursor: pointer; }
+.studio-arr-ruler-cell:hover { color: var(--accent); }
+.studio-arr-ruler-cell--start {
+  background: var(--glass-hover);
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.studio-arr-startmarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  border-left: 2px dashed var(--accent);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 5;
+}
+
 .studio-arr-hint { margin-left: auto; color: var(--muted); font-size: 11px; }
 
 .studio-time {
@@ -4675,6 +4695,12 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   box-sizing: border-box;
 }
 .studio-pr-key--black { background: var(--glass-hover); }
+.studio-pr-key { cursor: pointer; }
+.studio-pr-key--pressed {
+  background: var(--accent);
+  color: #0b0b0c;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .studio-pr-notes {
   position: absolute;
   z-index: 1;
