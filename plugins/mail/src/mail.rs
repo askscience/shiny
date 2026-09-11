@@ -508,19 +508,29 @@ pub async fn sync_folder(
     let envelopes = blocking(move || fetch_all_envelopes(&a_list, &folder_list)).await?;
 
     let cached: HashSet<String> = cache::cached_uids(db, user_id, &a.id, &folder)?;
+    // Rows cached before bodies were downloaded (or whose body fetch failed)
+    // are repaired here too. Without this a cache hit with an empty body is
+    // served forever — that was the "(empty message)" the reader showed.
+    let missing_body: HashSet<String> = cache::uids_missing_body(db, user_id, &a.id, &folder)?;
     let new_uids: Vec<String> = envelopes
         .iter()
         .map(|e| e.id.clone())
         .filter(|id| !id.is_empty() && !cached.contains(id))
         .collect();
+    let to_fetch: Vec<String> = envelopes
+        .iter()
+        .map(|e| e.id.clone())
+        .filter(|id| !id.is_empty() && (!cached.contains(id) || missing_body.contains(id)))
+        .collect();
     let new_count = new_uids.len();
+    let repair_count = to_fetch.len().saturating_sub(new_count);
 
     let a_body = a.clone();
     let folder_body = folder.clone();
-    let bodies: Vec<(String, Json)> = if new_uids.is_empty() {
+    let bodies: Vec<(String, Json)> = if to_fetch.is_empty() {
         Vec::new()
     } else {
-        blocking(move || fetch_bodies(&a_body, &folder_body, &new_uids)).await?
+        blocking(move || fetch_bodies(&a_body, &folder_body, &to_fetch)).await?
     };
 
     let body_map: std::collections::HashMap<&str, &Json> =
@@ -534,10 +544,11 @@ pub async fn sync_folder(
         let seen = env.flags.iter().any(|f| f.iana() == Some(IanaFlag::Seen));
         let has_attachment = env.has_attachment.unwrap_or(false);
 
-        // Already cached (with its downloaded body): refresh only the flags.
-        // A full re-upsert would overwrite body_text/body_html with "" —
-        // bodies are fetched exclusively for NEW uids.
-        if cached.contains(&uid) {
+        // Already cached AND we got no fresh body for it: refresh only the
+        // flags. A full re-upsert without a body would wipe the stored body.
+        // (Cached rows that WERE missing a body are re-upserted below.)
+        let fresh_body = body_map.contains_key(uid.as_str());
+        if cached.contains(&uid) && !fresh_body {
             cache::update_flags(db, user_id, &a.id, &folder, &uid, seen, has_attachment)?;
             continue;
         }
@@ -620,6 +631,7 @@ pub async fn sync_folder(
         "folder": folder,
         "synced": envelopes.len(),
         "new": new_count,
+        "repaired": repair_count,
         "total": total,
     }))
 }
