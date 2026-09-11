@@ -1,5 +1,7 @@
 //! Step-by-step agent conversation — small prompts per Ollama call.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use serde_json::{json, Value};
 
 pub fn build_planning_messages(
@@ -582,6 +584,103 @@ pub fn step_label_for_action(action: &str) -> &'static str {
     }
 }
 
+/// Stable-per-action pick from a small phrase list, so a given tool keeps the
+/// same personality across runs instead of flickering between quips.
+fn stable_pick(action: &str, labels: &'static [&'static str]) -> &'static str {
+    let mut h: u32 = 2166136261;
+    for b in action.as_bytes() {
+        h ^= *b as u32;
+        h = h.wrapping_mul(16777619);
+    }
+    labels[(h as usize) % labels.len()]
+}
+
+/// Rotating opener shown the instant a request starts. The UI is voice-first,
+/// so it stays short, human and a little playful — never a status code.
+pub fn thinking_label() -> &'static str {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    const LABELS: &[&str] = &[
+        "Thinking…",
+        "On it…",
+        "Brewing…",
+        "Digging in…",
+        "Working on it…",
+        "Hold that thought…",
+        "Cooking…",
+        "Let me see…",
+    ];
+    LABELS[NEXT.fetch_add(1, Ordering::Relaxed) % LABELS.len()]
+}
+
+/// Human "finished" line for the UI bubble. The model still receives the FULL
+/// tool note (`describe_tool_step`) — this is only what the user reads, so it
+/// must never be raw JSON. Plugin tools answer with their own `Tool::humanize`;
+/// this map covers the core actions and the fallback.
+pub fn done_label_for_action(action: &str) -> &'static str {
+    match action {
+        "plan_trip" => "Trip's ready",
+        "navigate_to" => "On our way",
+        "web_search" => "Found it",
+        "create_trip" => "Trip created",
+        "start_trip" => "Trip started",
+        "end_trip" => "Trip wrapped",
+        "list_trips" => "Trips listed",
+        "generate_diary" => "Diary written",
+        "show_artifact" | "update_artifact" => "Card ready",
+        "show_plugin" => "Window open",
+        "plugin_activate" => "Plugin on",
+        "plugin_deactivate" => "Plugin off",
+        "plugin_deactivate_all" => "All closed",
+        "list_plugins" => "Plugins listed",
+        "desktop_fullscreen" => "Full screen",
+        "desktop_focus" => "Focused",
+        "workspace_create" => "Workspace made",
+        "workspace_remove" => "Workspace gone",
+        "workspace_switch" => "Switched",
+        "workspace_move" => "Window moved",
+        "youtube_search" => "Found videos",
+        "youtube_play" => "Now playing",
+        "calc_create" => "Sheet ready",
+        "calc_write" => "Cells written",
+        "calc_clear" => "Sheet cleared",
+        "calc_read" => "Sheet read",
+        "calc_list" => "Sheets listed",
+        "calc_delete" => "Sheet gone",
+        "slide_create" => "Deck ready",
+        "slide_write" => "Slides written",
+        "slide_edit" => "Slides edited",
+        "slide_read" => "Deck read",
+        "slide_list" => "Decks listed",
+        "slide_delete" => "Deck gone",
+        _ => stable_pick(
+            action,
+            &[
+                "All set",
+                "Done and dusted",
+                "Easy peasy",
+                "Consider it done",
+                "Sorted",
+                "Ta-da",
+                "No sweat",
+                "And… done",
+            ],
+        ),
+    }
+}
+
+/// Short, friendly failure line for the UI bubble.
+pub fn failed_label_for_action(action: &str) -> &'static str {
+    stable_pick(
+        action,
+        &[
+            "That didn't work",
+            "Hit a snag",
+            "That one slipped",
+            "Couldn't pull that off",
+        ],
+    )
+}
+
 pub fn messages_char_count(messages: &[(String, String)]) -> usize {
     messages.iter().map(|(_, c)| c.len()).sum()
 }
@@ -636,6 +735,28 @@ mod tests {
         assert!(block.contains("No markdown"));
         assert!(LONG_FORM_BLOCK.contains("COMPLETE, detailed content"));
         assert!(LONG_FORM_BLOCK.contains("NEVER restate"));
+    }
+
+    #[test]
+    fn ui_step_labels_are_human_and_never_json() {
+        assert_eq!(done_label_for_action("web_search"), "Found it");
+        assert_eq!(done_label_for_action("plugin_activate"), "Plugin on");
+        // Unknown/plugin actions get a short, STABLE quip — no JSON, no
+        // machine identifiers leaking into the speech bubble.
+        let quip = done_label_for_action("studio_catalog");
+        assert!(!quip.contains('{') && !quip.contains('_'), "raw action leaked: {quip}");
+        assert_eq!(quip, done_label_for_action("studio_catalog"));
+        assert!(!failed_label_for_action("studio_catalog").contains('_'));
+    }
+
+    #[test]
+    fn thinking_label_rotates_and_stays_short() {
+        let first = thinking_label();
+        let second = thinking_label();
+        assert_ne!(first, second, "the opener should rotate between runs");
+        for label in [first, second] {
+            assert!(label.chars().count() <= 24, "too long for the bubble: {label}");
+        }
     }
 
     #[test]
