@@ -1,13 +1,18 @@
 /** Voice orb — canvas only, circular body.
  *
- *  Five selectable looks (`ORB_STYLES` in preferences.js) share one renderer:
- *  palettes derive live from the user's accent + gradient, and every style
- *  reacts to the microphone. When the input is stereo the body is *pushed and
- *  squashed from the loud side*, so the orb visibly leans away from whoever is
- *  talking. All styles reuse the same signal model:
+ *  Five selectable looks (`ORB_STYLES` in preferences.js) share one renderer.
+ *  The language is deliberately restrained: few large forms, soft falloffs,
+ *  slow motion, near-monochrome light taken from the user's accent + gradient.
+ *  Palettes re-derive live on `appearance:change`.
  *
- *    intensity  0..1   how loud the mic is right now (smoothed)
+ *  Every style reacts to sound through one signal model:
+ *
+ *    intensity  0..1   how loud the audio is right now (smoothed)
  *    pan       -1..1   -1 hard left … +1 hard right
+ *
+ *  With a stereo source the body is squashed and pushed away from the loud
+ *  side, so the orb leans away from whoever is talking — the microphone while
+ *  listening, the assistant's own voice while it answers.
  *
  *  The class owns the clip circle, the outer glow and the glass highlight; a
  *  style only paints inside the body.
@@ -49,12 +54,12 @@ function derivedPalettes() {
   const light = lighten(accent, 0.22);
   const pale = lighten(accent, 0.45);
   return {
-    idle: [accent, tail, light, stops[0]],
-    listening: [light, accent, pale, tail],
-    conversation: [accent, tail, light, stops[0]],
+    idle: [light, accent, tail, stops[0]],
+    listening: [lighten(accent, 0.34), light, accent, tail],
+    conversation: [light, accent, tail, stops[0]],
     compose: [accent, light, tail, pale],
     processing: [accent, light, tail, pale],
-    speaking: [light, accent, tail, pale],
+    speaking: [lighten(accent, 0.3), light, accent, tail],
     error: ['#fca5a5', '#f87171', '#fb7185', '#ef4444'],
     downloading: [light, accent, pale, tail],
     disabled: ['#6b6b6b', '#4a4a4a', '#8a8a8a', '#333333'],
@@ -66,216 +71,183 @@ function paletteForState(state) {
   return [...(palettes[state] || palettes.idle)];
 }
 
-/** One soft radial blob. `sharp` tightens the falloff for faceted styles. */
-function blob(ctx, w, x, y, r, color, sharp = false) {
-  const midA = sharp ? 0.88 : 0.65;
-  const outerA = sharp ? 0.28 : 0.15;
+/** A soft radial light. `alpha` scales the whole falloff so big shapes stay
+ *  translucent and never blow out to white under the screen blend. */
+function blob(ctx, w, x, y, r, color, { sharp = false, alpha = 1 } = {}) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, color);
+  g.addColorStop(0, hexToRgba(color, alpha));
   if (sharp) {
-    g.addColorStop(0.45, hexToRgba(color, midA));
-    g.addColorStop(0.78, hexToRgba(color, outerA));
+    g.addColorStop(0.42, hexToRgba(color, 0.72 * alpha));
+    g.addColorStop(0.76, hexToRgba(color, 0.22 * alpha));
   } else {
-    g.addColorStop(0.35, hexToRgba(color, midA));
-    g.addColorStop(0.7, hexToRgba(color, outerA));
+    g.addColorStop(0.38, hexToRgba(color, 0.55 * alpha));
+    g.addColorStop(0.72, hexToRgba(color, 0.14 * alpha));
   }
   g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, w);
 }
 
+/** A vertical, rotated veil of light — the building block of Nebula. */
+function veil(ctx, w, cx, cy, r, color, angle, squash, alpha) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.scale(1, squash);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+  g.addColorStop(0, hexToRgba(color, alpha * 0.9));
+  g.addColorStop(0.5, hexToRgba(color, alpha * 0.45));
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
 /* ── Styles ─────────────────────────────────────────────────────
-   Each style paints inside the clipped body. `p` carries:
+   Each paints inside the clipped body. `p` carries:
    { ctx, w, cx, cy, R, dpr, t, palette, intensity, pan, squareAnim,
-     speedMul, scale, glowI, blobs }
+     speedMul, scale, glowI }
    ─────────────────────────────────────────────────────────────── */
 
 const STYLES = {
-  /** The classic: four orbiting blobs of light. */
+  /** Fluid — one liquid mass of light. Three oversized soft bodies drift
+   *  slowly through each other, so the silhouette breathes rather than spins. */
   fluid: {
     draw(p) {
-      const { ctx, w, cx, cy, palette, t, blobs, squareAnim, speedMul, scale } = p;
-      if (squareAnim) {
-        const d = p.R * 0.24 * scale;
-        const rot = t * 0.65 * speedMul;
-        const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-        for (let i = 0; i < blobs.length; i++) {
-          const [sx, sy] = corners[i];
-          const cos = Math.cos(rot);
-          const sin = Math.sin(rot);
-          const x = cx + (sx * cos - sy * sin) * d;
-          const y = cy + (sx * sin + sy * cos) * d;
-          const r = blobs[i].radius * w * scale * 0.42;
-          blob(ctx, w, x, y, r, palette[i % palette.length], true);
-        }
-        return;
+      const { ctx, w, cx, cy, R, palette, t, intensity, squareAnim } = p;
+      const energy = Math.min(1, intensity);
+      const count = squareAnim ? 4 : 3;
+      for (let i = 0; i < count; i++) {
+        const phase = (i / count) * TAU;
+        const drift = t * (0.14 + i * 0.035);
+        const orbit = R * (0.15 + 0.05 * Math.sin(t * 0.35 + i)) * (1 + 0.3 * energy);
+        const x = cx + Math.cos(drift + phase) * orbit;
+        const y = cy + Math.sin(drift * 1.15 + phase) * orbit;
+        const r = R * (0.82 + 0.06 * Math.sin(t * 0.45 + i * 2.1)) * (1 + 0.16 * energy);
+        blob(ctx, w, x, y, r, palette[i % palette.length], { alpha: 0.42 });
       }
-      for (let i = 0; i < blobs.length; i++) {
-        const b = blobs[i];
-        const angle = t * b.speed * speedMul + b.phase;
-        const wobble = Math.sin(t * 1.7 + b.phase * 2) * 0.06 * w;
-        const orbit = b.orbit * w * scale;
-        const x = cx + Math.cos(angle) * orbit + wobble;
-        const y = cy + Math.sin(angle * 1.25 + b.phase) * orbit - wobble * 0.5;
-        const r = b.radius * w * scale * (0.92 + Math.sin(t * 2 + i) * 0.08);
-        blob(ctx, w, x, y, r, palette[i % palette.length]);
-      }
-      // Warm swirl that ties the blobs into one body.
-      ctx.globalAlpha = 0.55;
-      const swirl = ctx.createRadialGradient(
-        cx + Math.cos(t * 0.4) * p.R * 0.35,
-        cy + Math.sin(t * 0.35) * p.R * 0.35,
-        0,
-        cx,
-        cy,
-        p.R * 1.1,
-      );
-      swirl.addColorStop(0, hexToRgba(palette[2], 0.5));
-      swirl.addColorStop(0.5, hexToRgba(palette[1], 0.2));
-      swirl.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = swirl;
-      ctx.fillRect(0, 0, w, w);
-      ctx.globalAlpha = 1;
+      // A quiet inner light keeps the centre from going hollow.
+      blob(ctx, w, cx, cy, R * (0.7 + 0.08 * energy), palette[0], { alpha: 0.2 + 0.18 * energy });
     },
   },
 
-  /** Concentric waves that leave the body as the voice rises. */
+  /** Ripple — light passing through water. Three soft halos leave the centre
+   *  and dissolve; no hard strokes, so it stays glassy at any size. */
   ripple: {
     draw(p) {
-      const { ctx, cx, cy, R, palette, t, intensity, squareAnim, dpr } = p;
+      const { ctx, w, cx, cy, R, palette, t, intensity } = p;
       const energy = Math.min(1, intensity);
-      const rings = squareAnim ? 4 : 6;
-      const emit = t * (0.28 + 0.55 * energy);
+      const rings = 3;
+      const travel = t * (0.15 + 0.16 * energy);
       for (let i = 0; i < rings; i++) {
-        const phase = (emit + i / rings) % 1;
-        const r = R * (0.16 + phase * (0.95 + 0.35 * energy));
-        const fade = (1 - phase) * (0.16 + 0.5 * energy);
+        const phase = (travel + i / rings) % 1;
+        const r = R * (0.3 + phase * (0.92 + 0.3 * energy));
+        const a = (1 - phase) ** 1.5 * (0.1 + 0.3 * energy);
         const color = palette[i % palette.length];
-        ctx.strokeStyle = hexToRgba(color, Math.min(0.85, fade));
-        ctx.lineWidth = (1 + 2.6 * energy) * dpr;
+        const g = ctx.createRadialGradient(cx, cy, r * 0.66, cx, cy, r);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(0.7, hexToRgba(color, a * 0.5));
+        g.addColorStop(0.9, hexToRgba(color, a));
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, TAU);
-        ctx.stroke();
+        ctx.fill();
       }
-      // Bright core that swells with the voice.
-      const coreR = R * (0.34 + 0.22 * energy);
-      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 1.9);
-      g.addColorStop(0, hexToRgba(palette[0], 0.95));
-      g.addColorStop(0.35, hexToRgba(palette[1], 0.45 + 0.35 * energy));
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, p.w, p.w);
+      blob(ctx, w, cx, cy, R * (0.62 + 0.12 * energy), palette[0], { alpha: 0.34 + 0.22 * energy });
     },
   },
 
-  /** Slow drifting clouds of colour, like a nebula seen through glass. */
+  /** Nebula — polar veils of colour, like an aurora behind frosted glass.
+   *  Broad, slow and almost monochrome at rest; the voice widens them. */
   nebula: {
     draw(p) {
       const { ctx, w, cx, cy, R, palette, t, intensity, squareAnim } = p;
       const energy = Math.min(1, intensity);
-      const clouds = 6;
-      for (let i = 0; i < clouds; i++) {
-        const a = t * (0.1 + i * 0.028) * (1 + 0.8 * energy) + i * 1.7;
-        const orbit = R * (0.3 + 0.22 * Math.sin(t * 0.3 + i)) * (1 + 0.35 * energy);
-        const x = cx + Math.cos(a) * orbit;
-        const y = cy + Math.sin(a * 0.8 + i) * orbit * (squareAnim ? 0.9 : 1);
-        const r = R * (0.55 + 0.16 * Math.sin(t * 0.5 + i * 2)) * (1 + 0.4 * energy);
-        blob(ctx, w, x, y, r, palette[i % palette.length], true);
+      const arms = 3;
+      for (let i = 0; i < arms; i++) {
+        const angle = t * (0.045 + i * 0.018) * (1 + 0.6 * energy) + (i * TAU) / arms;
+        const r = R * (1.16 + 0.06 * Math.sin(t * 0.25 + i));
+        const squash = squareAnim ? 0.7 : 0.42 + 0.06 * Math.sin(t * 0.3 + i);
+        veil(ctx, w, cx, cy, r, palette[(i + 1) % palette.length], angle, squash, 0.16 + 0.18 * energy);
       }
-      // Dust: a handful of tiny bright motes drifting the other way.
-      for (let i = 0; i < 10; i++) {
-        const a = -t * (0.2 + i * 0.01) + i * 2.4;
-        const orbit = R * (0.35 + 0.4 * ((i * 37) % 100) / 100);
-        const x = cx + Math.cos(a) * orbit;
-        const y = cy + Math.sin(a * 1.3 + i) * orbit;
-        const s = (0.6 + 1.4 * energy) * p.dpr;
-        ctx.fillStyle = hexToRgba(palette[(i + 1) % palette.length], 0.25 + 0.4 * energy);
-        ctx.beginPath();
-        ctx.arc(x, y, s, 0, TAU);
-        ctx.fill();
-      }
+      blob(ctx, w, cx, cy, R * (0.66 + 0.1 * energy), palette[0], { alpha: 0.28 + 0.22 * energy });
     },
   },
 
-  /** A heartbeat core with satellites — doubles up when you speak. */
+  /** Pulse — a breathing core inside two tilted orbits with one satellite.
+   *  Calm at rest, and the orbit tightens as the voice rises. */
   pulse: {
     draw(p) {
-      const { ctx, w, cx, cy, R, palette, t, intensity, squareAnim, dpr } = p;
+      const { ctx, w, cx, cy, R, palette, t, intensity, dpr } = p;
       const energy = Math.min(1, intensity);
-      const period = 1.15;
-      const ph = (t % period) / period;
-      const thump =
-        Math.exp(-(((ph - 0.06) / 0.05) ** 2)) + 0.55 * Math.exp(-(((ph - 0.2) / 0.07) ** 2));
-      const beat = thump * (0.3 + 0.7 * energy);
-      const coreR = R * (0.36 + 0.2 * beat + 0.12 * energy);
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.05);
 
-      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 2.4);
-      g.addColorStop(0, hexToRgba(palette[0], 0.95));
-      g.addColorStop(0.3, hexToRgba(palette[1], 0.45 + 0.35 * beat));
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, w);
+      blob(ctx, w, cx, cy, R * (0.78 + 0.1 * breath + 0.14 * energy), palette[0], {
+        alpha: 0.34 + 0.2 * energy,
+      });
 
-      const n = squareAnim ? 4 : 3;
-      for (let i = 0; i < n; i++) {
-        const a = t * (0.9 + 0.7 * energy) + (i * TAU) / n;
-        const orbit = R * (0.6 + 0.12 * Math.sin(t * 1.3 + i)) * (1 + 0.3 * energy);
-        const x = cx + Math.cos(a) * orbit;
-        const y = cy + Math.sin(a) * orbit * (squareAnim ? 0.75 : 0.62);
-        blob(ctx, w, x, y, R * 0.2, palette[(i + 2) % palette.length], true);
+      for (let i = 0; i < 2; i++) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(t * (0.16 + i * 0.1) * (1 + 0.5 * energy) + i * 1.15);
+        ctx.scale(1, 0.36 + i * 0.14);
+        ctx.strokeStyle = hexToRgba(palette[(i + 2) % palette.length], 0.16 + 0.3 * energy);
+        ctx.lineWidth = (0.9 + 1.3 * energy) * dpr;
+        ctx.beginPath();
+        ctx.arc(0, 0, R * (0.7 + 0.06 * breath), 0, TAU);
+        ctx.stroke();
+        ctx.restore();
       }
-      // ECG-ish tick that sharpens with the voice.
-      ctx.strokeStyle = hexToRgba(palette[0], 0.18 + 0.4 * energy);
-      ctx.lineWidth = 1.2 * dpr;
-      ctx.beginPath();
-      const span = R * 1.5;
-      const trace = (u) => cy + Math.sin(u * TAU * 3 + t * 2) * R * 0.06 * (0.4 + energy);
-      for (let i = 0; i <= 48; i++) {
-        const u = i / 48;
-        const x = cx - span / 2 + u * span;
-        if (i === 0) ctx.moveTo(x, trace(u));
-        else ctx.lineTo(x, trace(u));
-      }
-      ctx.stroke();
+
+      const a = t * (0.42 + 0.5 * energy);
+      const orbit = R * (0.7 + 0.05 * breath);
+      blob(ctx, w, cx + Math.cos(a) * orbit, cy + Math.sin(a) * orbit * 0.44, R * 0.19, palette[1], {
+        sharp: true,
+        alpha: 0.8,
+      });
     },
   },
 
-  /** Rotating facets — light bends through the orb in shards. */
+  /** Prism — a cut stone. Six broad facets with hairline edges and a light
+   *  trapped in the middle; it turns slowly and refracts more when loud. */
   prism: {
     draw(p) {
-      const { ctx, cx, cy, R, palette, t, intensity, squareAnim, dpr } = p;
+      const { ctx, cx, cy, R, palette, t, intensity, dpr } = p;
       const energy = Math.min(1, intensity);
-      const facets = squareAnim ? 4 : 7;
+      const facets = 6;
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(t * 0.22 * (1 + 0.7 * energy));
+      ctx.rotate(t * 0.07 * (1 + 0.7 * energy));
+      const spread = R * (0.82 + 0.14 * energy);
       for (let i = 0; i < facets; i++) {
         const a0 = (i / facets) * TAU;
         const a1 = ((i + 1) / facets) * TAU;
-        const spread = R * (0.42 + 0.34 * energy + 0.06 * Math.sin(t * 2 + i));
-        const color = palette[i % palette.length];
-        const g = ctx.createLinearGradient(0, 0, Math.cos(a0) * spread, Math.sin(a0) * spread);
-        g.addColorStop(0, hexToRgba(color, 0.04));
-        g.addColorStop(0.6, hexToRgba(color, 0.3 + 0.3 * energy));
-        g.addColorStop(1, hexToRgba(color, 0.62 + 0.28 * energy));
         const mid = (a0 + a1) / 2;
+        const color = palette[i % palette.length];
+        const g = ctx.createLinearGradient(0, 0, Math.cos(mid) * spread, Math.sin(mid) * spread);
+        g.addColorStop(0, hexToRgba(color, 0.03));
+        g.addColorStop(1, hexToRgba(color, 0.16 + 0.24 * energy));
         ctx.beginPath();
         ctx.moveTo(Math.cos(a0) * spread, Math.sin(a0) * spread);
         ctx.lineTo(Math.cos(a1) * spread, Math.sin(a1) * spread);
-        ctx.lineTo(Math.cos(mid) * spread * 0.14, Math.sin(mid) * spread * 0.14);
+        ctx.lineTo(Math.cos(mid) * spread * 0.2, Math.sin(mid) * spread * 0.2);
         ctx.closePath();
         ctx.fillStyle = g;
         ctx.fill();
-        ctx.strokeStyle = hexToRgba(color, 0.2 + 0.25 * energy);
-        ctx.lineWidth = 1 * dpr;
+        ctx.strokeStyle = hexToRgba(color, 0.1 + 0.2 * energy);
+        ctx.lineWidth = 0.7 * dpr;
         ctx.stroke();
       }
-      // Hot centre where the facets meet.
-      const core = ctx.createRadialGradient(0, 0, 0, 0, 0, R * (0.3 + 0.25 * energy));
-      core.addColorStop(0, hexToRgba(palette[0], 0.85));
+      const core = ctx.createRadialGradient(0, 0, 0, 0, 0, R * (0.5 + 0.14 * energy));
+      core.addColorStop(0, hexToRgba(palette[0], 0.45 + 0.3 * energy));
       core.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = core;
-      ctx.fillRect(-R * 2, -R * 2, R * 4, R * 4);
+      ctx.beginPath();
+      ctx.arc(0, 0, R * (0.5 + 0.14 * energy), 0, TAU);
+      ctx.fill();
       ctx.restore();
     },
   },
@@ -294,7 +266,7 @@ class OrbRenderer {
     this.animationMode = 'orbit';
     this.styleId = STYLES[style] ? style : DEFAULT_STYLE;
 
-    // Signal — smoothed toward the microphone targets every frame.
+    // Signal — smoothed toward the audio targets every frame.
     this.intensity = 0;
     this.pan = 0;
     this.targetLevel = 0;
@@ -303,15 +275,8 @@ class OrbRenderer {
     this.t = 0;
     this.running = true;
     this.lastDrawAt = 0;
-    // Previews are decoration; the main orb runs at full frame rate.
+    // Previews are decoration; the real orb runs at full frame rate.
     this.minFrameMs = preview ? 1000 / 24 : 0;
-
-    this.blobs = [
-      { phase: 0, speed: 0.9, orbit: 0.22, radius: 0.55 },
-      { phase: 2.1, speed: 1.15, orbit: 0.18, radius: 0.48 },
-      { phase: 4.2, speed: 0.75, orbit: 0.26, radius: 0.52 },
-      { phase: 1.3, speed: 1.05, orbit: 0.2, radius: 0.44 },
-    ];
 
     this.resize();
     this._onResize = () => this.resize();
@@ -379,8 +344,8 @@ class OrbRenderer {
 
     if (this.preview) {
       // Synthesize a voice so every style shows off in the settings grid.
-      this.targetLevel = 0.42 + 0.38 * Math.sin(this.t * 1.35);
-      this.targetPan = Math.sin(this.t * 0.5);
+      this.targetLevel = 0.4 + 0.36 * Math.sin(this.t * 1.15);
+      this.targetPan = Math.sin(this.t * 0.42);
     }
     // Fast attack, slow release: the orb leaps on a syllable and settles.
     const k = this.targetLevel > this.intensity ? 0.45 : 0.1;
@@ -411,16 +376,16 @@ class OrbRenderer {
     const R = w * 0.44;
     const state = this.stateKey;
     const stateBoost =
-      state === 'listening' || state === 'conversation' ? 0.22
-        : state === 'processing' || state === 'speaking' || state === 'compose' ? 0.18
+      state === 'listening' || state === 'conversation' ? 0.18
+        : state === 'processing' || state === 'speaking' || state === 'compose' ? 0.14
           : 0;
-    const scale = 1 + Math.min(1, this.intensity + stateBoost) * 0.45;
+    const scale = 1 + Math.min(1, this.intensity + stateBoost) * 0.4;
     const glowI = Math.min(1, this.intensity + stateBoost);
     const squareAnim = this.animationMode === 'square';
     const speedMul =
-      state === 'processing' ? 1.35
-        : state === 'listening' || state === 'conversation' || state === 'compose' ? 1.2
-          : state === 'speaking' ? 1.15
+      state === 'processing' ? 1.25
+        : state === 'listening' || state === 'conversation' || state === 'compose' ? 1.12
+          : state === 'speaking' ? 1.08
             : 1;
 
     ctx.clearRect(0, 0, w, w);
@@ -429,15 +394,15 @@ class OrbRenderer {
 
     // Outer glow — a soft halo that brightens with the voice.
     ctx.save();
-    ctx.shadowColor = hexToRgba(this.palette[0], 0.55 + glowI * 0.25);
-    ctx.shadowBlur = (squareAnim ? 6 + glowI * 6 : 14 + glowI * 18) * this.dpr;
+    ctx.shadowColor = hexToRgba(this.palette[0], 0.4 + glowI * 0.22);
+    ctx.shadowBlur = (squareAnim ? 6 + glowI * 5 : 12 + glowI * 16) * this.dpr;
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, TAU);
     ctx.fillStyle = 'rgba(0,0,0,0.004)';
     ctx.fill();
     ctx.restore();
 
-    // Body — transparent (the desktop shows through), blobs screen-blended.
+    // Body — transparent (the desktop shows through), light screen-blended.
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, TAU);
@@ -456,36 +421,36 @@ class OrbRenderer {
       speedMul,
       scale,
       glowI,
-      blobs: this.blobs,
     };
     (STYLES[this.styleId] || STYLES[DEFAULT_STYLE]).draw(params);
 
     ctx.globalCompositeOperation = 'source-over';
 
     // Shared glass: top-left sheen + a dark rim so the body reads as a sphere.
-    const highlight = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, 0, cx, cy, R * 0.95);
-    highlight.addColorStop(0, 'rgba(255,255,255,0.22)');
-    highlight.addColorStop(0.35, 'rgba(255,255,255,0.04)');
+    const highlight = ctx.createRadialGradient(cx - R * 0.28, cy - R * 0.32, 0, cx, cy, R * 0.98);
+    highlight.addColorStop(0, 'rgba(255,255,255,0.2)');
+    highlight.addColorStop(0.38, 'rgba(255,255,255,0.035)');
     highlight.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = highlight;
     ctx.fillRect(0, 0, w, w);
 
-    const edge = ctx.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
+    const edge = ctx.createRadialGradient(cx, cy, R * 0.58, cx, cy, R);
     edge.addColorStop(0, 'rgba(0,0,0,0)');
-    edge.addColorStop(0.85, 'rgba(0,0,0,0.08)');
-    edge.addColorStop(1, 'rgba(0,0,0,0.2)');
+    edge.addColorStop(0.86, 'rgba(0,0,0,0.07)');
+    edge.addColorStop(1, 'rgba(0,0,0,0.18)');
     ctx.fillStyle = edge;
     ctx.fillRect(0, 0, w, w);
     ctx.restore();
 
-    // Escaping ripples when the voice is loud.
-    if (glowI > 0.12 && !squareAnim) {
-      const rippleT = (this.t * 1.8) % 1;
+    // Escaping ripples when the voice is loud — kept faint so they read as
+    // pressure in the air, not as a second animation.
+    if (glowI > 0.14 && !squareAnim) {
+      const rippleT = (this.t * 1.5) % 1;
       for (let i = 0; i < 2; i++) {
         const p = (rippleT + i * 0.5) % 1;
-        const rr = R + p * R * 0.28;
-        const g = ctx.createRadialGradient(cx, cy, rr * 0.85, cx, cy, rr);
-        g.addColorStop(0, hexToRgba(this.palette[0], (1 - p) * 0.12));
+        const rr = R + p * R * 0.24;
+        const g = ctx.createRadialGradient(cx, cy, rr * 0.88, cx, cy, rr);
+        g.addColorStop(0, hexToRgba(this.palette[0], (1 - p) * 0.08));
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
         ctx.beginPath();

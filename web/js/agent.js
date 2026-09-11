@@ -374,17 +374,8 @@ export async function sendToAgent(message, mode, context) {
 
     setSphereState('speaking');
 
-    // The reply is the primary surface — show it even if voice playback fails.
-    const replyEl = document.getElementById('reply-text');
-    if (replyEl) {
-      const token = ++replyToken;
-      replyEl.textContent = res.reply;
-      replyEl.classList.remove('hidden');
-      setTimeout(() => {
-        if (token === replyToken) replyEl.classList.add('hidden');
-      }, 8000);
-    }
-
+    // Voice modes: the answer is spoken and saved to the chat — it is NOT
+    // echoed in a bubble. The orb reacting to the playback IS the feedback.
     try {
       await speak(res.reply, getVoiceLang());
     } catch (ttsErr) {
