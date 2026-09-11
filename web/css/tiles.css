@@ -2092,6 +2092,24 @@ body.compose-active #tile-overlay {
 
 textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 
+/* Transition + bullet build, side by side, with an "apply to all" button. */
+.impress-anim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.impress-anim-apply {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.impress-anim-apply:hover { color: var(--text); }
+
 .impress-ops {
   display: flex;
   gap: 4px;
@@ -2411,7 +2429,9 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   color: var(--muted);
 }
 
-/* Present overlay — covers the tile, click / arrows advance. */
+/* Present overlay — a preview that fills the plugin window (it lives in the
+   tile). Click / arrows advance; the controls go back to the editor or hand the
+   show to the browser's real full screen. */
 .impress-present {
   position: absolute;
   inset: 0;
@@ -2423,15 +2443,92 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   cursor: pointer;
 }
 
+.impress-present-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+}
+
+.impress-present-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.impress-present-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.impress-present-btn.is-active { color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.impress-present-btn .ui-icon { width: 16px; height: 16px; }
+
+/* Full screen: fill the screen edge to edge (the slide re-fits on resize). */
+.impress-present:fullscreen { cursor: default; }
+
 .impress-present .impress-slide {
   position: static;
   flex: none;
 }
 
+/* Slide entrance. The slide carries its fit-to-screen scale as an inline
+   transform, so the transition must animate this wrapper — animating the slide
+   itself would override `scale()` and blow the layout up to a 640×360 box. */
+.impress-present-stage { display: block; }
+
+.impress-present[data-transition='fade'] .impress-present-stage {
+  animation: impress-fade-in 420ms var(--ease-out) both;
+}
+.impress-present[data-transition='slide'] .impress-present-stage {
+  animation: impress-slide-in 460ms var(--ease-out) both;
+}
+.impress-present[data-transition='push'] .impress-present-stage {
+  animation: impress-push-in 460ms var(--ease-out) both;
+}
+.impress-present[data-transition='zoom'] .impress-present-stage {
+  animation: impress-zoom-in 460ms var(--ease-out) both;
+}
+
+@keyframes impress-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes impress-slide-in {
+  from { opacity: 0.25; transform: translateX(7%); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes impress-push-in {
+  from { transform: translateX(14%); }
+  to { transform: none; }
+}
+
+@keyframes impress-zoom-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Progressive bullet build (Slide.reveal === 'bullets'): each bullet keeps its
+   space — only opacity changes, so the slide never reflows as it builds. */
+.impress-present .impress-slide-bullet {
+  transition: opacity 240ms var(--ease-out);
+}
+.impress-present .impress-slide-bullet.is-hidden { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .impress-present .impress-present-stage { animation: none !important; }
+  .impress-present .impress-slide-bullet { transition: none; }
+}
+
 .impress-present-count {
   position: absolute;
-  bottom: 18px;
-  right: 20px;
+  bottom: 20px;
+  left: 20px;
   font-family: var(--font-body);
   font-size: 12px;
   letter-spacing: 0.08em;
