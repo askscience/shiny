@@ -211,7 +211,9 @@ export async function startListening(mode) {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        channelCount: 1,
+        // Ask for stereo: the orb leans away from the loud side. Mono mics
+        // simply report pan 0 (both channels identical).
+        channelCount: { ideal: 2 },
         sampleRate: 16000,
       },
     });
@@ -231,16 +233,49 @@ export async function startListening(mode) {
     });
 
     const source = audioContext.createMediaStreamSource(mediaStream);
-    processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processor = audioContext.createScriptProcessor(4096, 2, 1);
+    let monoBuffer = null;
     processor.onaudioprocess = (e) => {
       if (!listening) return;
       try {
-        recognizer.acceptWaveform(e.inputBuffer);
-        const data = e.inputBuffer.getChannelData(0);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-        const level = Math.min(1, Math.sqrt(sum / data.length) * 10);
-        window.dispatchEvent(new CustomEvent('voice:level', { detail: level }));
+        const input = e.inputBuffer;
+        const n = input.length;
+        const left = input.getChannelData(0);
+        const right = input.numberOfChannels > 1 ? input.getChannelData(1) : left;
+
+        // Vosk wants a mono 16 kHz buffer; downmix once and reuse it.
+        if (!monoBuffer || monoBuffer.length !== n) {
+          monoBuffer = audioContext.createBuffer(1, n, 16000);
+        }
+        const mono = monoBuffer.getChannelData(0);
+        let sumL = 0;
+        let sumR = 0;
+        let sumM = 0;
+        for (let i = 0; i < n; i++) {
+          const l = left[i];
+          const r = right[i];
+          sumL += l * l;
+          sumR += r * r;
+          const m = (l + r) * 0.5;
+          sumM += m * m;
+          mono[i] = m;
+        }
+        recognizer.acceptWaveform(monoBuffer);
+
+        const rms = (sum) => Math.sqrt(sum / n);
+        const lvl = (v) => Math.min(1, v * 10);
+        const rl = rms(sumL);
+        const rr = rms(sumR);
+        const total = rl + rr + 1e-6;
+        window.dispatchEvent(new CustomEvent('voice:level', {
+          detail: {
+            level: lvl(rms(sumM)),
+            left: lvl(rl),
+            right: lvl(rr),
+            // -1 hard left … +1 hard right.
+            pan: Math.max(-1, Math.min(1, (rr - rl) / total)),
+          },
+        }));
       } catch (_) {}
     };
     source.connect(processor);
