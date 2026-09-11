@@ -373,26 +373,37 @@ export function setWakeWord(on) {
 
 /** The five orb looks. The ids are the contract with orbCanvas.js. */
 export const ORB_STYLES = [
-  { id: 'fluid', label: 'Fluid', hint: 'One liquid mass of light' },
-  { id: 'ripple', label: 'Ripple', hint: 'Soft halos, like water light' },
-  { id: 'nebula', label: 'Nebula', hint: 'Aurora veils behind glass' },
-  { id: 'pulse', label: 'Pulse', hint: 'A breathing core in orbit' },
-  { id: 'prism', label: 'Prism', hint: 'A cut stone of light' },
+  { id: 'filament', label: 'Filament', hint: 'Threads of light around a sphere' },
+  { id: 'bubble', label: 'Bubble', hint: 'A glowing glass shell' },
+  { id: 'marble', label: 'Marble', hint: 'Swirls caught inside glass' },
+  { id: 'orbit', label: 'Orbit', hint: 'Rings circling a bright core' },
+  { id: 'grid', label: 'Grid', hint: 'A wireframe of light' },
 ];
 
 const ORB_STYLE_IDS = new Set(ORB_STYLES.map((s) => s.id));
 
+/** Older stored ids (first generation of styles) still resolve. */
+const ORB_STYLE_LEGACY = {
+  fluid: 'filament',
+  ripple: 'bubble',
+  nebula: 'marble',
+  pulse: 'orbit',
+  prism: 'grid',
+};
+
 export function getOrbStyle() {
-  const id = localStorage.getItem(scopedKey(ORB_STYLE_KEY));
-  return ORB_STYLE_IDS.has(id) ? id : 'fluid';
+  const stored = localStorage.getItem(scopedKey(ORB_STYLE_KEY));
+  if (ORB_STYLE_IDS.has(stored)) return stored;
+  if (ORB_STYLE_LEGACY[stored]) return ORB_STYLE_LEGACY[stored];
+  return 'filament';
 }
 
 export function setOrbStyle(id) {
-  const style = ORB_STYLE_IDS.has(id) ? id : 'fluid';
+  const style = ORB_STYLE_IDS.has(id) ? id : 'filament';
   const key = scopedKey(ORB_STYLE_KEY);
-  if (style === 'fluid') localStorage.removeItem(key); // fluid is the default
+  if (style === 'filament') localStorage.removeItem(key); // filament is the default
   else localStorage.setItem(key, style);
-  persist(ORB_STYLE_KEY, style === 'fluid' ? '' : style);
+  persist(ORB_STYLE_KEY, style === 'filament' ? '' : style);
 }
 
 function clamp(n, min, max) {
