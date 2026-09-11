@@ -101,15 +101,22 @@ impl Tool for MailRead {
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
         let account_email = a.email.clone();
 
-        // Prefer the cache; fall back to one live fetch (then cache it) if the
-        // message wasn't downloaded yet.
-        let mut message = match cache::get(ctx.db(), req.user_id, &a.id, &folder, &id)? {
-            Some(m) => m,
-            None => {
-                let m = mail::get_message(a.clone(), folder.clone(), id.clone()).await?;
-                cache::upsert_message(ctx.db(), req.user_id, &a.id, &folder, &id, &m)?;
-                m
-            }
+        // Prefer the cache; refetch (then re-cache) when the row is missing OR
+        // is envelope-only. A cache hit without a body used to be returned as
+        //-is, so the model (and the window) saw an empty message.
+        let cached = cache::get(ctx.db(), req.user_id, &a.id, &folder, &id)?;
+        let mut message = match cached {
+            Some(m) if cache::has_body(&m) => m,
+            stale => match mail::get_message(a.clone(), folder.clone(), id.clone()).await {
+                Ok(m) => {
+                    cache::upsert_message(ctx.db(), req.user_id, &a.id, &folder, &id, &m)?;
+                    m
+                }
+                Err(e) => match stale {
+                    Some(m) => m,
+                    None => return Err(e),
+                },
+            },
         };
 
         // Include the source folder + account email so the frontend can open

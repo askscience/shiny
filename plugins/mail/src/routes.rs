@@ -444,13 +444,26 @@ fn mail_message(ctx: Arc<PluginCtx>) -> RouteHandler {
             let a = mail::resolve_account(ctx.db(), &uid, q.account.as_deref())?;
             let folder = q.folder.unwrap_or_else(|| "INBOX".into());
 
-            let message = match cache::get(ctx.db(), &uid, &a.id, &folder, &id)? {
-                Some(m) => m,
-                None => {
-                    let m = mail::get_message(a.clone(), folder.clone(), id.clone()).await?;
-                    cache::upsert_message(ctx.db(), &uid, &a.id, &folder, &id, &m)?;
-                    m
-                }
+            // A cache hit is only usable when it carries a body: rows cached
+            // before bodies were downloaded (or whose body fetch failed) are
+            // envelope-only and used to render as "(empty message)". Refetch
+            // those once, then serve the cached headers if the provider is down.
+            let cached = cache::get(ctx.db(), &uid, &a.id, &folder, &id)?;
+            let message = match cached {
+                Some(m) if cache::has_body(&m) => m,
+                stale => match mail::get_message(a.clone(), folder.clone(), id.clone()).await {
+                    Ok(m) => {
+                        cache::upsert_message(ctx.db(), &uid, &a.id, &folder, &id, &m)?;
+                        m
+                    }
+                    Err(e) => match stale {
+                        Some(m) => {
+                            tracing::warn!("mail: live fetch of message {} failed: {e}", id);
+                            m
+                        }
+                        None => return Err(e),
+                    },
+                },
             };
             Ok(ok(message))
         }

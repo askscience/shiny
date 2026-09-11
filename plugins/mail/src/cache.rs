@@ -66,6 +66,33 @@ fn msg_id(account_id: &str, folder: &str, uid: &str) -> String {
     format!("{account_id}:{folder}:{uid}")
 }
 
+/// INBOX is case-insensitive per RFC 3501, but the cache keys messages by the
+/// exact folder string (it is part of the primary key). "Inbox" and "INBOX"
+/// used to become two rows for the same mailbox — with the downloaded bodies
+/// landing in whichever spelling a given sync happened to use — so the other
+/// spelling kept serving envelope-only rows. Fold every inbox spelling to the
+/// canonical form before touching the cache.
+pub fn canon_folder(folder: &str) -> String {
+    if folder.eq_ignore_ascii_case("inbox") {
+        "INBOX".into()
+    } else {
+        folder.to_string()
+    }
+}
+
+/// True when a reconstructed cached message actually carries a body. An
+/// envelope-only row (cached before bodies were stored, or one whose body fetch
+/// failed) has neither `text` nor `html` and must be refetched instead of being
+/// rendered as "(empty message)".
+pub fn has_body(msg: &Json) -> bool {
+    ["text", "html"].iter().any(|k| {
+        msg.get(*k)
+            .and_then(|v| v.as_str())
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+    })
+}
+
 /// Insert or replace one cached message. `row` carries the merged fields:
 /// uid, message_id, subject, from_addr, to_addr, cc_addr, from_json, to_json,
 /// cc_json, sent_at, body_text, body_html, attachments_json, seen,
@@ -81,7 +108,8 @@ pub fn upsert(
     if uid.is_empty() {
         return Ok(());
     }
-    let id = msg_id(account_id, folder, uid);
+    let folder = canon_folder(folder);
+    let id = msg_id(account_id, &folder, uid);
     let message_id = row.get("message_id").and_then(|v| v.as_str()).map(String::from);
     let subject = row.get("subject").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let from_addr = row.get("from_addr").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -108,7 +136,7 @@ pub fn upsert(
             Value::text(&id),
             Value::text(user_id),
             Value::text(account_id),
-            Value::text(folder),
+            Value::text(&folder),
             Value::text(uid),
             Value::text(message_id.unwrap_or_default()),
             Value::text(&subject),
@@ -181,9 +209,30 @@ pub fn cached_uids(
     account_id: &str,
     folder: &str,
 ) -> Result<HashSet<String>, AppError> {
+    let folder = canon_folder(folder);
     let rows = db.query(
         "SELECT uid FROM mail_messages WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3",
-        &[Value::text(user_id), Value::text(account_id), Value::text(folder)],
+        &[Value::text(user_id), Value::text(account_id), Value::text(&folder)],
+    )?;
+    Ok(rows.into_iter().filter_map(|r| r.into_iter().next().map(|v| as_text(&v))).collect())
+}
+
+/// UIDs already cached for one account + folder whose row has NO body at all.
+/// These are the stale envelope-only rows a sync must repair: the cache hit
+/// used to satisfy `get()`, so the message rendered as "(empty message)" and
+/// was never refetched.
+pub fn uids_missing_body(
+    db: &Db,
+    user_id: &str,
+    account_id: &str,
+    folder: &str,
+) -> Result<HashSet<String>, AppError> {
+    let folder = canon_folder(folder);
+    let rows = db.query(
+        "SELECT uid FROM mail_messages \
+         WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3 \
+           AND IFNULL(body_text, '') = '' AND IFNULL(body_html, '') = ''",
+        &[Value::text(user_id), Value::text(account_id), Value::text(&folder)],
     )?;
     Ok(rows.into_iter().filter_map(|r| r.into_iter().next().map(|v| as_text(&v))).collect())
 }
@@ -200,13 +249,14 @@ pub fn update_flags(
     seen: bool,
     has_attachment: bool,
 ) -> Result<(), AppError> {
+    let folder = canon_folder(folder);
     db.execute(
         "UPDATE mail_messages SET seen = ?4, has_attachment = ?5 \
          WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3 AND uid = ?6",
         &[
             Value::text(user_id),
             Value::text(account_id),
-            Value::text(folder),
+            Value::text(&folder),
             Value::Int(seen as i64),
             Value::Int(has_attachment as i64),
             Value::text(uid),
@@ -225,6 +275,7 @@ pub fn mark_seen(
     ids: &[String],
     seen: bool,
 ) -> Result<(), AppError> {
+    let folder = canon_folder(folder);
     for id in ids {
         db.execute(
             "UPDATE mail_messages SET seen = ?4 \
@@ -232,7 +283,7 @@ pub fn mark_seen(
             &[
                 Value::text(user_id),
                 Value::text(account_id),
-                Value::text(folder),
+                Value::text(&folder),
                 Value::Int(seen as i64),
                 Value::text(id),
             ],
@@ -263,6 +314,7 @@ pub fn list(
     limit: usize,
     offset: usize,
 ) -> Result<Vec<Json>, AppError> {
+    let folder = canon_folder(folder);
     let rows = db.query(
         "SELECT uid, subject, from_addr, from_json, sent_at, size, seen, has_attachment \
          FROM mail_messages \
@@ -271,7 +323,7 @@ pub fn list(
         &[
             Value::text(user_id),
             Value::text(account_id),
-            Value::text(folder),
+            Value::text(&folder),
             Value::Int(limit as i64),
             Value::Int(offset as i64),
         ],
@@ -301,6 +353,7 @@ pub fn get(
     folder: &str,
     uid: &str,
 ) -> Result<Option<Json>, AppError> {
+    let folder = canon_folder(folder);
     let rows = db.query(
         "SELECT uid, message_id, subject, from_json, to_json, cc_json, \
                 sent_at, body_text, body_html, attachments_json \
@@ -308,7 +361,7 @@ pub fn get(
         &[
             Value::text(user_id),
             Value::text(account_id),
-            Value::text(folder),
+            Value::text(&folder),
             Value::text(uid),
         ],
     )?;
@@ -354,8 +407,9 @@ pub fn search(
     limit: usize,
 ) -> Result<Vec<Json>, AppError> {
     let like = format!("%{}%", query.to_lowercase());
+    let folder = folder.map(canon_folder);
     let (sql, params): (String, Vec<Value>) = if let Some(acc) = account_id {
-        if let Some(f) = folder {
+        if let Some(f) = folder.as_deref() {
             (
                 "SELECT uid, subject, from_addr, from_json, sent_at, size, seen, has_attachment \
                  FROM mail_messages \
@@ -409,10 +463,11 @@ pub fn sync_state(
     account_id: &str,
     folder: &str,
 ) -> Result<Option<(String, i64)>, AppError> {
+    let folder = canon_folder(folder);
     let rows = db.query(
         "SELECT last_synced_at, total FROM mail_sync_state \
          WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3",
-        &[Value::text(user_id), Value::text(account_id), Value::text(folder)],
+        &[Value::text(user_id), Value::text(account_id), Value::text(&folder)],
     )?;
     Ok(rows.first().map(|r| (as_text(&r[0]), as_i64(&r[1]))))
 }
@@ -427,6 +482,7 @@ pub fn synced_recently(
     folder: &str,
     max_age_secs: i64,
 ) -> Result<bool, AppError> {
+    let folder = canon_folder(folder);
     let rows = db.query(
         "SELECT COUNT(*) FROM mail_sync_state \
          WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3 \
@@ -434,7 +490,7 @@ pub fn synced_recently(
         &[
             Value::text(user_id),
             Value::text(account_id),
-            Value::text(folder),
+            Value::text(&folder),
             Value::text(format!("-{max_age_secs} seconds")),
         ],
     )?;
@@ -443,9 +499,10 @@ pub fn synced_recently(
 
 /// How many messages are cached for one account + folder.
 pub fn total(db: &Db, user_id: &str, account_id: &str, folder: &str) -> Result<i64, AppError> {
+    let folder = canon_folder(folder);
     let rows = db.query(
         "SELECT COUNT(*) FROM mail_messages WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3",
-        &[Value::text(user_id), Value::text(account_id), Value::text(folder)],
+        &[Value::text(user_id), Value::text(account_id), Value::text(&folder)],
     )?;
     Ok(rows.first().map(|r| as_i64(&r[0])).unwrap_or(0))
 }
@@ -458,10 +515,38 @@ pub fn set_sync_state(
     folder: &str,
     total: i64,
 ) -> Result<(), AppError> {
+    let folder = canon_folder(folder);
     db.execute(
         "INSERT OR REPLACE INTO mail_sync_state (account_id, folder, user_id, last_synced_at, total) \
          VALUES (?1, ?2, ?3, datetime('now'), ?4)",
-        &[Value::text(account_id), Value::text(folder), Value::text(user_id), Value::Int(total)],
+        &[Value::text(account_id), Value::text(&folder), Value::text(user_id), Value::Int(total)],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn inbox_spellings_share_one_cache_key() {
+        for spelling in ["INBOX", "Inbox", "inbox", "iNbOx"] {
+            assert_eq!(canon_folder(spelling), "INBOX", "{spelling} must fold");
+        }
+        // Every other folder keeps its exact (case-sensitive) name.
+        assert_eq!(canon_folder("[Gmail]/Bozze"), "[Gmail]/Bozze");
+        assert_eq!(canon_folder("Archive"), "Archive");
+    }
+
+    #[test]
+    fn envelope_only_rows_are_not_a_body_hit() {
+        assert!(has_body(&json!({ "text": "hello" })));
+        assert!(has_body(&json!({ "html": "<p>hi</p>" })));
+        assert!(has_body(&json!({ "text": "", "html": "<p>hi</p>" })));
+        // The regression: an empty cached body must be treated as "not cached".
+        assert!(!has_body(&json!({ "text": "", "html": "" })));
+        assert!(!has_body(&json!({ "text": "   ", "html": "\n" })));
+        assert!(!has_body(&json!({})));
+    }
 }
