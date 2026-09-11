@@ -50,13 +50,17 @@
 .ui-btn:disabled, .ui-btn.is-disabled { opacity: 0.45; }
 .ui-btn .ui-icon { color: currentColor; }
 
+/* Icon-only buttons (plugin toolbars, HUD actions) are FLAT at rest — no
+   shadow to paint — and take the soft neumorphic inset only while pressed.
+   Keeps dozens of small icons cheap while preserving the tactile feel. */
 .ui-btn--icon {
-  background: var(--surface);
+  background: transparent;
   border-color: transparent;
   color: var(--text-secondary);
-  box-shadow: var(--shadow-raise-sm);
+  box-shadow: none;
 }
 .ui-btn--icon:hover { background: var(--glass-hover); color: var(--text); }
+.ui-btn--icon:active { background: var(--surface); box-shadow: var(--shadow-inset-sm); }
 
 /* Pressed affordance on every raised (non-primary) button. */
 .ui-btn:active:not(.ui-btn--primary):not(.ui-btn--danger) { box-shadow: var(--shadow-inset-sm); }
