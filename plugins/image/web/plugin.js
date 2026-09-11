@@ -883,6 +883,21 @@ export function wireImageEvents() {
   window.addEventListener('agent:actions', onAgentActions);
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function imageContextMenu() {
+  const hasImage = !!current;
+  return [
+    { type: 'item', label: 'Upload image', icon: 'ui/upload', onClick: pickFile },
+    { type: 'separator' },
+    { type: 'item', label: 'Grayscale', icon: 'ui/grayscale', disabled: !hasImage, onClick: () => apply({ op: 'grayscale' }) },
+    { type: 'item', label: 'Sepia', icon: 'ui/sepia', disabled: !hasImage, onClick: () => apply({ op: 'sepia' }) },
+    { type: 'separator' },
+    { type: 'item', label: 'Reset to original', icon: 'ui/refresh', disabled: !hasImage, onClick: () => resetCurrent() },
+    { type: 'item', label: 'Delete image', icon: 'ui/trash', danger: true, disabled: !hasImage, onClick: () => void removeCurrent() },
+  ];
+}
+
 export default {
   name: 'image',
   icon: 'ui/image',
@@ -890,4 +905,5 @@ export default {
   unmount: unmountImageTile,
   getElement: getImageTileElement,
   wireEvents: wireImageEvents,
+  contextMenu: imageContextMenu,
 };

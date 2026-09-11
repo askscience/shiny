@@ -581,6 +581,25 @@ export function wireWordEvents() {
     }
   });
 }
+
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function wordContextMenu() {
+  const hasDoc = !!currentDoc;
+  return [
+    { type: 'item', label: 'New document', icon: 'ui/plus', onClick: () => void newDocument() },
+    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasDoc, onClick: () => void persist() },
+    { type: 'item', label: 'Export .odt', icon: 'ui/upload', disabled: !hasDoc, onClick: () => void exportCurrent() },
+    { type: 'separator' },
+    { type: 'item', label: 'Bold', icon: 'ui/bold', disabled: !hasDoc, onClick: () => exec('bold') },
+    { type: 'item', label: 'Italic', icon: 'ui/italic', disabled: !hasDoc, onClick: () => exec('italic') },
+    { type: 'item', label: 'Heading', icon: 'ui/heading', disabled: !hasDoc, onClick: () => toggleHeading() },
+    { type: 'item', label: 'List', icon: 'ui/list', disabled: !hasDoc, onClick: () => toggleList() },
+    { type: 'separator' },
+    { type: 'item', label: 'Delete document', icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void removeCurrent() },
+  ];
+}
+
 export default {
   name: 'word',
   icon: 'ui/doc',
@@ -588,4 +607,5 @@ export default {
   unmount: unmountWordTile,
   getElement: getWordTileElement,
   wireEvents: wireWordEvents,
+  contextMenu: wordContextMenu,
 };

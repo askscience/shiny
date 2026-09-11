@@ -922,6 +922,73 @@ export default {
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
 plugins build DOM only, never ship CSS.
 
+### Context menus (right-click)
+
+Core owns one right-click menu engine (`web/js/contextMenu.js`). A right-click
+inside the app resolves to a menu by context:
+
+| Right-click target | Menu |
+|---|---|
+| A plugin window — **title bar or content** | Window menu: Focus, Full screen, Move to workspace, **the app's own entries**, Deactivate |
+| A plugin icon in the top-bar tray | Plugin menu: Focus window / Full screen, then Activate or Deactivate |
+| The top bar itself (HUD pill / workspace bar background) | Desktop menu (new/remove workspace, switch workspace, layout) |
+| A workspace dot | Workspace menu (new / remove) |
+| The empty desktop | Desktop menu |
+| A text field (`input` / `textarea` / `contenteditable`) | Left alone — the browser's native cut/copy/paste menu |
+
+**An app contributes its own entries.** A plugin's window surface may export a
+`contextMenu(ctx)` function. Core calls it when the window menu opens and
+splices the returned entries between "Move to workspace" and "Deactivate":
+
+```js
+// plugins/word/web/plugin.js — the reference implementation
+export function wordContextMenu() {
+  const hasDoc = !!currentDoc;
+  return [
+    { type: 'item', label: 'New document', icon: 'ui/plus', onClick: () => void newDocument() },
+    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasDoc, onClick: () => void persist() },
+    { type: 'separator' },
+    { type: 'item', label: 'Delete document', icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void removeCurrent() },
+  ];
+}
+
+export default {
+  name: 'word',
+  mount: mountWordTile,
+  unmount: unmountWordTile,
+  getElement: getWordTileElement,
+  wireEvents: wireWordEvents,
+  contextMenu: wordContextMenu,   // ← core picks this up for right-click
+};
+```
+
+Entry shapes — the same ones the desktop menus use:
+
+| Shape | Fields |
+|---|---|
+| `{ type: 'item' }` | `label`, `onClick`, optional `icon`, `checked`, `disabled`, `danger` |
+| `{ type: 'separator' }` | — |
+| `{ type: 'heading' }` | `label` |
+| `{ type: 'submenu' }` | `label`, `items`, optional `icon` |
+
+Rules:
+
+- `contextMenu(ctx)` receives `{ plugin, tile, target, source }`, where `target`
+  is the element that was right-clicked. It may be called at any time — guard on
+  the plugin's own state (mark items `disabled`, or omit them) instead of
+  assuming a document is open.
+- Return `[]` when nothing applies. Core wraps the call in `try/catch`, so a
+  throw can never break right-click — but a `[]` keeps the console quiet.
+- Core already brackets your entries with separators: don't add leading or
+  trailing ones.
+- `icon` is a theme icon name from `web/themes/<theme>/icons/ui/` (e.g.
+  `'ui/plus'`, `'ui/save'`, `'ui/play'`); omit it if unsure.
+- A plugin that needs a fully custom popup (not the window menu) can call the
+  exported `openContextMenu(entries, x, y)` from `web/js/contextMenu.js`.
+- The **traveler** window is core-hosted (it is the Leaflet map and ships no
+  `web/plugin.js`), so core supplies its app entry — *Center on my position*
+  (`refreshGpsPosition()`).
+
 ### Plugin icon
 
 Every plugin ships `web/icon.svg` — a single-color 24×24 SVG drawn with
@@ -939,6 +1006,67 @@ shows it in two places:
 
 Plugins that don't ship an icon fall back to the `ui/puzzle` theme icon.
 Plugins that don't declare a `category` are grouped under **Other**.
+
+### Window background: the ambient blurred mirror
+
+Every plugin window carries a **soft ambient glow** behind its content — a
+blurred mirror of the window's subject. Core installs and paints it
+(`web/ui/components/glow.js` + the `.tile-glow` block in `web/css/tiles.css`),
+so plugins ship no CSS and do no blur work. Two tiers:
+
+- **Tier 0 — free for every window.** When the window chrome is created,
+  `tiles.js → ensureWindowChrome()` calls `installGlow(el, name)`, which paints a
+  seeded two-blob radial gradient from the user's **accent** plus a per-window
+  **partner hue** (the accent hue rotated by a name-seeded angle, so each window
+  keeps its colour personality across reloads). No image, no blur pass.
+- **Tier 1 — the plugin's real subject.** A window overrides the gradient with
+  its actual content (album artwork, PDF page, photo, map view, track colour)
+  from its `web/plugin.js`:
+
+  ```js
+  import {
+    setTileGlow, setTileGlowFromUrl, glowGradient, glowFromDrawable,
+  } from '/ui/index.js';
+
+  setTileGlow(tileEl, glowGradient(colorA, colorB));   // sampled colours
+  setTileGlow(tileEl, glowFromDrawable(canvasOrImg));  // canvas / photo frame
+  await setTileGlowFromUrl(tileEl, artworkUrl);        // remote artwork / page
+  setTileGlow(tileEl, null);                           // back to the Tier 0 colour glow
+  ```
+
+**Why the blur is cheap.** The layer deliberately has **no CSS spatial blur** —
+a `blur()` at window size re-rasterizes on every resize frame, which was the
+entire cost of this effect. Instead the blur is *baked once at thumbnail size*:
+`glowFromImageUrl()` downscales to ~320px and bakes `blur(7px)`;
+`glowFromDrawable()` uses 64px + `blur(2.5px)`. Scaled up to a window that reads
+as a strong blur while costing nothing per frame. Tier 0 gradients are inherently
+soft (a multi-stop falloff approximating a Gaussian), so they need no blur at all.
+
+**Fallback when the content can't be sampled.** Cross-origin images without CORS
+(and tainted canvases) must not break a window:
+
+- `glowFromDrawable()` / `glowFromImageUrl()` return `null` on a tainted canvas
+  or a failed load.
+- `setTileGlowFromUrl()` then falls back to the **raw image URL plus a modest
+  live `blur(12px)`** (the `.tile-glow--soft` class) instead of showing the image
+  sharp. This is the *only* live-blur path, and only for that window.
+- Passing `null` (or an empty URL) restores the Tier 0 colour glow. **The glow is
+  never fully off** — every window always has some ambient light.
+- Out-of-order loads are ignored (`tileEl.__glowSeq`), so flipping quickly
+  through artwork/pages is safe.
+
+**Placement, rim variant, theming.** `.tile` is an isolated stacking context and
+`.tile-glow` sits at `z-index: -1` — above the window surface, below every child
+— so it works in every plugin untouched. The map is opaque and full-bleed, so it
+uses the **rim** variant (`createRim()` → `.tile-glow--rim`): the same glow drawn
+*on top* at `z-index: 3` and masked to the window edges so the centre stays
+readable. Light themes brighten instead of darken
+(`glow.js` sets `data-glow-light` on the tile), because a dark blur turns white
+pages gray. A theme tunes the effect from its `app.css` through the `.tile`
+tokens `--glow-brightness`, `--glow-opacity`, `--glow-permeability` and
+`--glow-veil`; the neumorphic themes additionally make the window chrome
+translucent inside `.tile` so the light reads through it. Colours repaint
+automatically on `theme:change` / `appearance:change` (`refreshGlow()`).
 
 ### Notifications
 

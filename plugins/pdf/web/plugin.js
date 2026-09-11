@@ -1035,6 +1035,33 @@ export function wirePdfEvents() {
   });
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function pdfContextMenu(ctx) {
+  const hasPdf = !!currentPdf;
+  const pages = currentPdf?.page_count ?? 0;
+  return [
+    { type: 'item', label: 'New PDF', icon: 'ui/plus', onClick: () => void newPdf() },
+    { type: 'item', label: 'Import .pdf', icon: 'ui/download', onClick: pickPdfFile },
+    { type: 'item', label: 'Export .pdf', icon: 'ui/upload', disabled: !hasPdf, onClick: () => void exportCurrent() },
+    { type: 'separator' },
+    {
+      type: 'submenu',
+      label: 'Page',
+      icon: 'ui/doc',
+      items: [
+        { type: 'item', label: 'Previous page', icon: 'ui/chevron-left', disabled: !hasPdf || currentPage <= 0, onClick: () => gotoPage(-1) },
+        { type: 'item', label: 'Next page', icon: 'ui/chevron-right', disabled: !hasPdf || currentPage >= pages - 1, onClick: () => gotoPage(1) },
+        { type: 'separator' },
+        { type: 'item', label: 'Rotate left', icon: 'ui/rotate-left', disabled: !hasPdf, onClick: () => void rotateCurrent(-90) },
+        { type: 'item', label: 'Rotate right', icon: 'ui/rotate-right', disabled: !hasPdf, onClick: () => void rotateCurrent(90) },
+      ],
+    },
+    { type: 'separator' },
+    { type: 'item', label: 'Delete PDF', icon: 'ui/trash', danger: true, disabled: !hasPdf, onClick: () => void removeCurrent() },
+  ];
+}
+
 export default {
   name: 'pdf',
   icon: 'ui/doc',
@@ -1042,4 +1069,5 @@ export default {
   unmount: unmountPdfTile,
   getElement: getPdfTileElement,
   wireEvents: wirePdfEvents,
+  contextMenu: pdfContextMenu,
 };

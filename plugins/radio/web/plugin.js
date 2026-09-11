@@ -573,6 +573,24 @@ export function wireRadioEvents() {
   window.addEventListener('agent:actions', onAgentActions);
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function radioContextMenu() {
+  const hasStation = !!current;
+  return [
+    {
+      type: 'item',
+      label: playing ? 'Pause' : 'Play',
+      icon: playing ? 'ui/pause' : 'ui/play',
+      disabled: !hasStation,
+      onClick: () => togglePlayback(),
+    },
+    { type: 'item', label: 'Stop', icon: 'ui/stop', disabled: !hasStation, onClick: () => stopPlayback() },
+    { type: 'separator' },
+    { type: 'item', label: 'Refresh stations', icon: 'ui/refresh', onClick: () => void runSearch('') },
+  ];
+}
+
 export default {
   name: 'radio',
   icon: 'ui/play',
@@ -580,4 +598,5 @@ export default {
   unmount: unmountRadioTile,
   getElement: getRadioTileElement,
   wireEvents: wireRadioEvents,
+  contextMenu: radioContextMenu,
 };

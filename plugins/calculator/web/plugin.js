@@ -387,6 +387,20 @@ export function wireCalculatorEvents() {
   window.addEventListener('agent:actions', onAgentActions);
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function calculatorContextMenu() {
+  const hasExpr = !!expression.trim();
+  return [
+    { type: 'item', label: 'Equals', icon: 'ui/check', disabled: !hasExpr, onClick: () => void equals() },
+    { type: 'item', label: 'Clear all', icon: 'ui/close', onClick: clearAll },
+    { type: 'separator' },
+    { type: 'item', label: 'Scientific', icon: 'ui/puzzle', checked: sciMode, onClick: toggleSci },
+    { type: 'item', label: 'History', icon: 'ui/list', checked: historyOpen, onClick: toggleHistory },
+    { type: 'item', label: 'Clear history', icon: 'ui/trash', danger: true, onClick: () => void clearHistory() },
+  ];
+}
+
 export default {
   name: 'calculator',
   icon: 'ui/calculator',
@@ -394,4 +408,5 @@ export default {
   unmount: unmountCalculatorTile,
   getElement: getCalculatorTileElement,
   wireEvents: wireCalculatorEvents,
+  contextMenu: calculatorContextMenu,
 };

@@ -577,6 +577,19 @@ export function getYoutubeTileElement() {
   return tileEl;
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function youtubeContextMenu() {
+  const playing = !!current;
+  return [
+    { type: 'item', label: 'Search', icon: 'ui/search', disabled: !searchEl, onClick: () => searchEl?.input?.focus() },
+    { type: 'item', label: 'Home', icon: 'ui/youtube', disabled: !tileEl || playing, onClick: () => void loadHomepage() },
+    { type: 'item', label: 'Refresh results', icon: 'ui/refresh', disabled: !tileEl, onClick: () => void runSearch(searchEl?.input?.value || '') },
+    { type: 'separator' },
+    { type: 'item', label: 'Back', icon: 'ui/close', disabled: !playing, onClick: () => reset() },
+  ];
+}
+
 export default {
   name: 'youtube',
   icon: 'ui/youtube',
@@ -584,4 +597,5 @@ export default {
   unmount: unmountYoutubeTile,
   getElement: getYoutubeTileElement,
   wireEvents: wireYoutubeEvents,
+  contextMenu: youtubeContextMenu,
 };

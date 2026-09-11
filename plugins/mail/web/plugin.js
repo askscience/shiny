@@ -1122,6 +1122,34 @@ export function wireMailEvents() {
   window.addEventListener('agent:actions', onAgentActions);
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function mailContextMenu() {
+  const account = pickAccount();
+  const message = currentMessage;
+  const unread = messages.filter((m) => !m.seen);
+  return [
+    { type: 'item', label: 'New message', icon: 'ui/plus', disabled: !account, onClick: () => openCompose() },
+    { type: 'item', label: 'Sync mail', icon: 'ui/refresh', disabled: !account, onClick: () => void syncNow() },
+    {
+      type: 'item',
+      label: 'Mark all read',
+      icon: 'ui/check',
+      disabled: !account || !unread.length,
+      onClick: () => {
+        const ids = unread.map((m) => m.id);
+        void markSeen(account.id, currentFolder, ids, true).then(() => {
+          unread.forEach((m) => { m.seen = true; });
+          renderMessages();
+        }).catch(() => { /* transient — the next refresh reconciles */ });
+      },
+    },
+    { type: 'separator' },
+    { type: 'item', label: 'Reply', icon: 'ui/reply', disabled: !message, onClick: () => openReply(message) },
+    { type: 'item', label: 'Delete message', icon: 'ui/trash', danger: true, disabled: !message, onClick: () => void deleteCurrent(message) },
+  ];
+}
+
 export default {
   name: 'mail',
   icon: 'ui/mail',
@@ -1129,4 +1157,5 @@ export default {
   unmount: unmountMailTile,
   getElement: getMailTileElement,
   wireEvents: wireMailEvents,
+  contextMenu: mailContextMenu,
 };

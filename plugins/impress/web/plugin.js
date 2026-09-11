@@ -1291,6 +1291,28 @@ export function wireImpressEvents() {
   });
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function impressContextMenu(ctx) {
+  const hasDeck = !!current;
+  const presenting = presentIndex >= 0;
+  return [
+    { type: 'item', label: 'New presentation', icon: 'ui/plus', onClick: () => void newDeck() },
+    { type: 'item', label: 'Add slide', icon: 'ui/plus', disabled: !hasDeck, onClick: () => addSlide() },
+    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasDeck || !dirty, onClick: () => void persist() },
+    { type: 'separator' },
+    {
+      type: 'item',
+      label: presenting ? 'Stop presenting' : 'Present',
+      icon: 'ui/present',
+      disabled: !hasDeck,
+      onClick: () => (presenting ? stopPresent() : startPresent()),
+    },
+    { type: 'separator' },
+    { type: 'item', label: 'Delete presentation', icon: 'ui/trash', danger: true, disabled: !hasDeck, onClick: () => void removeCurrent() },
+  ];
+}
+
 export default {
   name: 'impress',
   icon: 'ui/present',
@@ -1298,4 +1320,5 @@ export default {
   unmount: unmountImpressTile,
   getElement: getImpressTileElement,
   wireEvents: wireImpressEvents,
+  contextMenu: impressContextMenu,
 };

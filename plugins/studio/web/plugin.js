@@ -4584,6 +4584,23 @@ function onAgentActions(e) {
   })();
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function studioContextMenu() {
+  const ready = !!arrangement;
+  const browserOpen = !!browserEl && !browserEl.classList.contains('hidden');
+  return [
+    { type: 'item', label: 'Play', icon: 'ui/play', disabled: !ready, onClick: () => {
+      if (panels.arranger) void renderArrangementAndPlay();
+      else launchScene(0);
+    } },
+    { type: 'item', label: 'Stop', icon: 'ui/stop', onClick: () => { stopPlayback(); stopAllLauncher(); } },
+    { type: 'separator' },
+    { type: 'item', label: 'Save project', icon: 'ui/save', disabled: !ready, onClick: () => saveProjectNow() },
+    { type: 'item', label: browserOpen ? 'Close browser' : 'Open browser', icon: 'ui/search', checked: browserOpen, onClick: toggleBrowser },
+  ];
+}
+
 export default {
   name: STUDIO_PLUGIN,
   icon: 'ui/play',
@@ -4591,4 +4608,5 @@ export default {
   unmount: unmountStudioTile,
   getElement: getStudioTileElement,
   wireEvents: wireStudioEvents,
+  contextMenu: studioContextMenu,
 };
