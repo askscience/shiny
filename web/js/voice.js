@@ -1,7 +1,6 @@
 import { apiFetch, getVoiceLang, setVoiceLang } from './api.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
 import { getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout } from './preferences.js';
-import { insightCard } from '../ui/index.js';
 
 const WAKE_WAIT_TIMEOUT_MS = 15000;
 const WAKE_COMMAND_TIMEOUT_MS = 8000;
@@ -18,66 +17,6 @@ let sttLang = 'en';
 let silenceTimer = null;
 let wakeDetected = false;
 let awaitingCommand = false;
-// True while the voice download card is the only thing keeping the
-// (chat-mode hidden) insight strip visible.
-let unhidInsightStrip = false;
-
-function createDownloadCard(lang) {
-  const existing = document.getElementById('voice-download-card');
-  if (existing) existing.remove();
-
-  const container = document.getElementById('insight-cards');
-  if (!container) return null;
-
-  // In chat-only mode the strip is hidden ("no artifact chrome") — the
-  // download progress is VOICE feedback, so show the strip while the card
-  // lives in it. Without this the download ran invisibly.
-  if (container.classList.contains('hidden')) {
-    container.classList.remove('hidden');
-    unhidInsightStrip = true;
-  }
-
-  const details = document.createElement('div');
-  const bar = document.createElement('div');
-  bar.className = 'voice-download-bar';
-  const fill = document.createElement('div');
-  fill.className = 'voice-download-bar-fill';
-  fill.style.width = '10%';
-  bar.appendChild(fill);
-  const text = document.createElement('div');
-  text.className = 'voice-download-text';
-  text.textContent = 'Checking models…';
-  details.append(bar, text);
-
-  const card = insightCard({
-    icon: 'ui/info',
-    title: `Preparing voice (${lang.toUpperCase()})`,
-    body: details,
-  });
-  card.id = 'voice-download-card';
-  card.removeAttribute('data-reveal');
-  container.appendChild(card);
-  return card;
-}
-
-function updateDownloadCard(card, pct, status) {
-  if (!card) return;
-  const fill = card.querySelector('.voice-download-bar-fill');
-  const text = card.querySelector('.voice-download-text');
-  if (fill) fill.style.width = `${Math.round(pct)}%`;
-  if (text && status) text.textContent = status;
-}
-
-function removeDownloadCard(card) {
-  if (card) card.remove();
-  // Re-hide the strip we unhid — but only if nothing else (insight cards)
-  // was rendered into it meanwhile.
-  const container = document.getElementById('insight-cards');
-  if (unhidInsightStrip && container && !container.childElementCount) {
-    container.classList.add('hidden');
-  }
-  unhidInsightStrip = false;
-}
 
 function clearSilenceTimer() {
   if (silenceTimer) {
@@ -200,10 +139,11 @@ function handleTranscript(text, isFinal) {
 
 export async function prepareVoice() {
   const lang = getVoiceLang();
+  // Voice loads silently in the background — no progress card, no
+  // notification. The orb just stays dimmed (setVoiceReady(false)) until the
+  // recognizer is usable; tapping early already gives its own feedback.
   setVoiceReady(false);
   setSphereState('downloading');
-
-  const card = createDownloadCard(lang);
 
   let status;
   try {
@@ -215,43 +155,32 @@ export async function prepareVoice() {
   sttLang = status.stt_lang || lang;
 
   if (status.vosk === 'missing') {
-    updateDownloadCard(card, 30, 'Downloading Vosk speech model…');
     try {
       await apiFetch('/api/voice/download', {
         method: 'POST',
         body: JSON.stringify({ lang }),
       });
     } catch (e) {
-      updateDownloadCard(card, 0, 'Download failed');
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: { message: 'Voice model download failed', type: 'error' },
       }));
-      await sleep(2000);
-      removeDownloadCard(card);
       setVoiceReady(true);
       setSphereState('error');
       return;
     }
   }
 
-  updateDownloadCard(card, 70, 'Loading speech recognizer…');
   try {
     await initVosk(sttLang);
   } catch (e) {
-    updateDownloadCard(card, 0, 'Model load failed');
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: { message: 'Speech model failed to load', type: 'error' },
     }));
-    await sleep(2000);
-    removeDownloadCard(card);
     setVoiceReady(true);
     setSphereState('error');
     return;
   }
 
-  updateDownloadCard(card, 100, 'Ready');
-  await sleep(600);
-  removeDownloadCard(card);
   setVoiceReady(true);
   setSphereState('idle');
 }
@@ -267,10 +196,6 @@ async function initVosk(lang) {
   // download of a re-packed model (e.g. after the ivector-layout fix).
   const modelUrl = `/api/voice/models/vosk/${lang}.tar.gz?v=2`;
   voskModel = await Vosk.createModel(modelUrl);
-}
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 export async function startListening(mode) {
