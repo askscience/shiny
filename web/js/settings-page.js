@@ -18,7 +18,9 @@ import {
   getDesktopSurface, setDesktopSurface,
   getTtsVoice, setTtsVoice, getTtsSpeed, setTtsSpeed,
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
+  ORB_STYLES, getOrbStyle, setOrbStyle,
 } from './preferences.js';
+import { createOrbPreview } from './orbCanvas.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { initBackground, getBackground, setBackground, renderBackgroundPresets } from './background.js';
 
@@ -28,6 +30,7 @@ const logoutBtn = document.getElementById('settings-logout');
 const themeSelect = document.getElementById('theme-select');
 const accentSwatches = document.getElementById('accent-swatches');
 const gradientSwatches = document.getElementById('gradient-swatches');
+const orbStylesEl = document.getElementById('orb-styles');
 const gradientStopA = document.getElementById('gradient-stop-a');
 const gradientStopB = document.getElementById('gradient-stop-b');
 const gradientAngle = document.getElementById('gradient-angle');
@@ -193,6 +196,7 @@ function customGradientFromInputs() {
 function syncAppearanceUI() {
   buildAccentSwatches();
   buildGradientSwatches();
+  buildOrbStyles();
   syncNeumorphicToggle();
 
   const g = getGradient();
@@ -225,6 +229,11 @@ function wireAppearance() {
     buildGradientSwatches();
   });
 
+  // The live previews follow the accent/gradient, like the real orb does.
+  window.addEventListener('appearance:change', () => {
+    orbPreviews.forEach((p) => p.refreshPalette());
+  });
+
   const neumorphicToggle = document.getElementById('neumorphic-toggle');
   neumorphicToggle?.addEventListener('click', toggleNeumorphic);
 
@@ -232,6 +241,66 @@ function wireAppearance() {
   gradientStopA?.addEventListener('input', applyCustomGradient);
   gradientStopB?.addEventListener('input', applyCustomGradient);
   gradientAngle?.addEventListener('input', applyCustomGradient);
+}
+
+/* ── Voice orb styles ───────────────────────────────────────── */
+
+let orbPreviews = [];
+
+function markActiveOrb() {
+  const current = getOrbStyle();
+  orbStylesEl?.querySelectorAll('.orb-style').forEach((el) => {
+    const on = el.dataset.orbStyle === current;
+    el.classList.toggle('is-active', on);
+    el.setAttribute('aria-checked', String(on));
+  });
+}
+
+function pickOrbStyle(id) {
+  setOrbStyle(id);
+  markActiveOrb();
+  const style = ORB_STYLES.find((s) => s.id === id);
+  if (style) toast(`Orb style: ${style.label}`, { type: 'info' });
+}
+
+/** One live, self-animating preview card per style. Built once. */
+function buildOrbStyles() {
+  if (!orbStylesEl) return;
+  if (!orbPreviews.length) {
+    orbStylesEl.textContent = '';
+    for (const style of ORB_STYLES) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'orb-style';
+      card.dataset.orbStyle = style.id;
+      card.setAttribute('role', 'radio');
+      card.setAttribute('aria-label', `${style.label} — ${style.hint}`);
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'orb-style-canvas';
+      canvas.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'orb-style-label';
+      label.textContent = style.label;
+
+      const hint = document.createElement('span');
+      hint.className = 'orb-style-hint';
+      hint.textContent = style.hint;
+
+      card.append(canvas, label, hint);
+      card.addEventListener('click', () => pickOrbStyle(style.id));
+      orbStylesEl.appendChild(card);
+    }
+    // Start the previews after layout so each canvas has its size.
+    requestAnimationFrame(() => {
+      const canvases = [...orbStylesEl.querySelectorAll('.orb-style-canvas')];
+      orbPreviews = canvases
+        .map((c, i) => (ORB_STYLES[i] ? createOrbPreview(c, ORB_STYLES[i].id, 52) : null))
+        .filter(Boolean);
+    });
+  }
+  markActiveOrb();
 }
 
 /* ── Profile / Assistant / Voice ────────────────────────────── */

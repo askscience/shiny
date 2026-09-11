@@ -17,6 +17,7 @@ const VOICE_TTS_VOICE_KEY = 'voice.tts_voice';
 const VOICE_TTS_SPEED_KEY = 'voice.tts_speed';
 const VOICE_SILENCE_KEY = 'voice.silence_timeout';
 const VOICE_WAKE_KEY = 'voice.wake_word';
+const ORB_STYLE_KEY = 'orb.style';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
 function scopedKey(base) {
@@ -366,6 +367,32 @@ export function setWakeWord(on) {
   if (on) localStorage.removeItem(key); // default true
   else localStorage.setItem(key, 'false');
   persist(VOICE_WAKE_KEY, on ? 'true' : 'false');
+}
+
+/* ── Voice orb style (per-user, server-backed) ─────────────── */
+
+/** The five orb looks. The ids are the contract with orbCanvas.js. */
+export const ORB_STYLES = [
+  { id: 'fluid', label: 'Fluid', hint: 'Soft liquid blobs' },
+  { id: 'ripple', label: 'Ripple', hint: 'Concentric sound waves' },
+  { id: 'nebula', label: 'Nebula', hint: 'Drifting colour clouds' },
+  { id: 'pulse', label: 'Pulse', hint: 'Heartbeat with satellites' },
+  { id: 'prism', label: 'Prism', hint: 'Faceted shards of light' },
+];
+
+const ORB_STYLE_IDS = new Set(ORB_STYLES.map((s) => s.id));
+
+export function getOrbStyle() {
+  const id = localStorage.getItem(scopedKey(ORB_STYLE_KEY));
+  return ORB_STYLE_IDS.has(id) ? id : 'fluid';
+}
+
+export function setOrbStyle(id) {
+  const style = ORB_STYLE_IDS.has(id) ? id : 'fluid';
+  const key = scopedKey(ORB_STYLE_KEY);
+  if (style === 'fluid') localStorage.removeItem(key); // fluid is the default
+  else localStorage.setItem(key, style);
+  persist(ORB_STYLE_KEY, style === 'fluid' ? '' : style);
 }
 
 function clamp(n, min, max) {
