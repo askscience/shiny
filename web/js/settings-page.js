@@ -296,7 +296,7 @@ function buildOrbStyles() {
     requestAnimationFrame(() => {
       const canvases = [...orbStylesEl.querySelectorAll('.orb-style-canvas')];
       orbPreviews = canvases
-        .map((c, i) => (ORB_STYLES[i] ? createOrbPreview(c, ORB_STYLES[i].id, 52) : null))
+        .map((c, i) => (ORB_STYLES[i] ? createOrbPreview(c, ORB_STYLES[i].id, 64) : null))
         .filter(Boolean);
     });
   }

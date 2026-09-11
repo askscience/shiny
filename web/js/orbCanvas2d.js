@@ -502,9 +502,10 @@ class OrbRenderer {
     this.t = ts * 0.001;
 
     if (this.preview) {
-      // Synthesize a voice so every style shows off in the settings grid.
-      this.targetLevel = 0.4 + 0.36 * Math.sin(this.t * 1.15);
-      this.targetPan = Math.sin(this.t * 0.42);
+      // A gentle synthetic voice, always centred — oscillating pan made the
+      // settings cards look like they were being squeezed.
+      this.targetLevel = 0.36 + 0.22 * Math.sin(this.t * 0.9);
+      this.targetPan = 0;
     }
     // Fast attack, slow release: the orb leaps on a syllable and settles.
     const k = this.targetLevel > this.intensity ? 0.45 : 0.1;
