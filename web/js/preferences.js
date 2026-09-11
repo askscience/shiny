@@ -373,11 +373,11 @@ export function setWakeWord(on) {
 
 /** The five orb looks. The ids are the contract with orbCanvas.js. */
 export const ORB_STYLES = [
-  { id: 'fluid', label: 'Fluid', hint: 'Soft liquid blobs' },
-  { id: 'ripple', label: 'Ripple', hint: 'Concentric sound waves' },
-  { id: 'nebula', label: 'Nebula', hint: 'Drifting colour clouds' },
-  { id: 'pulse', label: 'Pulse', hint: 'Heartbeat with satellites' },
-  { id: 'prism', label: 'Prism', hint: 'Faceted shards of light' },
+  { id: 'fluid', label: 'Fluid', hint: 'One liquid mass of light' },
+  { id: 'ripple', label: 'Ripple', hint: 'Soft halos, like water light' },
+  { id: 'nebula', label: 'Nebula', hint: 'Aurora veils behind glass' },
+  { id: 'pulse', label: 'Pulse', hint: 'A breathing core in orbit' },
+  { id: 'prism', label: 'Prism', hint: 'A cut stone of light' },
 ];
 
 const ORB_STYLE_IDS = new Set(ORB_STYLES.map((s) => s.id));
