@@ -12,11 +12,55 @@ pub fn build_planning_messages(
     ]
 }
 
+/// Reply-style rules for the *planning* system prompt. When `voice` is true the
+/// request came from speech and the reply is read aloud by text-to-speech, so
+/// it must read as natural speech — no markdown, no lists. In text mode the
+/// model may format freely and this is empty.
+pub fn voice_style_block(voice: bool) -> String {
+    if !voice {
+        return String::new();
+    }
+    "\n## Reply style (voice)\n\
+     This request came from speech and your reply is read aloud by text-to-speech, \
+     so answer the way you would say it out loud:\n\
+     - Plain conversational prose. No markdown at all: no bullet or numbered lists, \
+     no headings, no bold or italics, no tables, no code blocks, no emoji, no asterisks.\n\
+     - Short, natural sentences. Write numbers, dates and units the way they are spoken.\n\
+     - If you would normally list things, name them inside a sentence instead — two or \
+     three at most, so it stays easy to follow by ear.\n\
+     - Give the whole answer the user needs, then stop: no padding, no repetition, no \
+     \"in summary\" recap of what you just said.\n"
+        .to_string()
+}
+
+/// Rules for long-form deliverables (documents, reports, letters, guides…).
+/// Kept for both voice and text requests: the *content* written into the
+/// document must be complete and detailed, while the *chat reply* about it must
+/// stay a short confirmation instead of a second copy of the document.
+pub const LONG_FORM_BLOCK: &str = "\n## Documents and long-form content\n\
+     - When the user asks you to create or write a document, report, letter, article, \
+     guide or any similar long-form deliverable, put the COMPLETE, detailed content in \
+     the tool call itself: full paragraphs, sections and headings that genuinely answer \
+     the request. Never create a stub, an outline, a placeholder or a one-line document, \
+     and never tell the user it is done while the document is still empty.\n\
+     - If the user did not give enough detail, choose a sensible, specific structure and \
+     real content yourself instead of asking them questions.\n\
+     - When you write a document, write it for the reader: coherent prose, concrete \
+     information, enough depth to be useful on its own.\n\
+     - Never shorten the content to fit one tool call: if the document is long, write the \
+     first sections now and keep adding the remaining sections in the following tool calls.\n\
+     - After a document is created or updated, your reply must be at most one or two \
+     short sentences — what you made and its title, plus anything the user must decide. \
+     NEVER restate, summarize, list or explain again what you wrote inside the document: \
+     the user reads it in its own window.\n";
+
 /// After the first tool: tiny system + user request + conversation history +
 /// completed step notes. `plugins_hint` keeps the plugin windows catalog
 /// visible so the model can still call `show_plugin` on later turns.
 /// `history` carries the earlier turns of this conversation so the model never
 /// "forgets" what was being discussed while it is mid-tool-loop.
+/// `voice` re-applies the spoken-reply constraints here because the final reply
+/// after tool calls is generated from THIS prompt, not the planning one.
 pub fn build_continuation_messages(
     ai_name: &str,
     lang: &str,
@@ -25,6 +69,7 @@ pub fn build_continuation_messages(
     completed_steps: &[String],
     plugins_hint: &str,
     history: &[(String, String)],
+    voice: bool,
 ) -> Vec<(String, String)> {
     let plugins_line = if plugins_hint.is_empty() {
         String::new()
@@ -48,8 +93,21 @@ pub fn build_continuation_messages(
             lines.join("\n")
         )
     };
+    // The final reply after the tools is generated from this prompt, so the
+    // spoken-reply and document-confirmation rules must be repeated here — the
+    // planning system prompt is no longer in the message list.
+    let voice_line = if voice {
+        "Your reply is read aloud by text-to-speech: plain conversational prose only — \
+         no markdown, no bullet or numbered lists, no headings, no emoji. Short natural sentences.\n"
+    } else {
+        ""
+    };
+    let doc_line = "If a document, report or other long-form deliverable was created or updated in the \
+                    steps above, confirm it in one or two short sentences (what it is and its title). \
+                    Do NOT restate, summarize or list its contents — the user reads it in its window.\n";
     let system = format!(
         "You are {ai_name}. Language: {lang}. Mode: {mode} — answer fully and clearly; be concise for simple questions but give detail when helpful.\n\
+         {voice_line}{doc_line}\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
          Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
          {plugins_line}\
@@ -543,15 +601,41 @@ mod tests {
             &["Step 1".into()],
             "traveler: Trip tracking",
             &[],
+            false,
         );
-        assert!(msgs[0].1.len() < 700);
+        // Slim prompt: the full tool reference must NOT be repeated.
+        assert!(!msgs[0].1.contains("## Tool call format"));
+        assert!(msgs[0].1.len() < 1000);
         assert!(msgs.iter().any(|(_, c)| c.contains("[Done]")));
     }
 
     #[test]
     fn continuation_without_plugins_omits_hint() {
-        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[]);
+        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false);
         assert!(!msgs[0].1.contains("Plugin windows"));
+    }
+
+    #[test]
+    fn continuation_voice_reply_is_spoken_prose() {
+        let voice = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], true);
+        assert!(voice[0].1.contains("read aloud"), "voice rule missing: {}", voice[0].1);
+        let text = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false);
+        assert!(!text[0].1.contains("read aloud"), "voice rule leaked into text mode");
+    }
+
+    #[test]
+    fn continuation_always_carries_document_confirmation_rule() {
+        let text = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false);
+        assert!(text[0].1.contains("Do NOT restate"), "doc rule missing: {}", text[0].1);
+    }
+
+    #[test]
+    fn voice_style_block_only_applies_to_voice() {
+        assert!(voice_style_block(false).is_empty());
+        let block = voice_style_block(true);
+        assert!(block.contains("No markdown"));
+        assert!(LONG_FORM_BLOCK.contains("COMPLETE, detailed content"));
+        assert!(LONG_FORM_BLOCK.contains("NEVER restate"));
     }
 
     #[test]
@@ -622,6 +706,7 @@ mod tests {
             &[],
             "radio: Internet radio (inactive)",
             &[],
+            false,
         );
         assert!(msgs[0].1.contains("plugin_activate"), "hint should teach activation: {}", msgs[0].1);
     }

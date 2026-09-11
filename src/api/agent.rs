@@ -11,6 +11,7 @@ use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
 use crate::services::agent_runner::{run_agent, AgentRunInput, AgentRunResult};
+use crate::services::agent_steps::{voice_style_block, LONG_FORM_BLOCK};
 use crate::services::agent_tools::{fetch_active_trip, AgentContext};
 use crate::services::navigation::NavigationSession;
 
@@ -29,6 +30,10 @@ pub struct AgentRequest {
     /// Conversation thread id — keeps the chat history so the model remembers
     /// earlier turns. Omit to start a new conversation.
     pub conversation_id: Option<String>,
+    /// True when the user spoke (STT) and the answer will be read aloud (TTS):
+    /// the reply must be conversational spoken prose, not lists/markdown.
+    #[serde(default)]
+    pub voice: bool,
 }
 
 #[derive(Deserialize)]
@@ -186,6 +191,7 @@ async fn prepare_agent(
 ) -> Result<PreparedAgent, AppError> {
     let mode = body.mode.unwrap_or_else(|| "single".into());
     let lang = body.lang.unwrap_or_else(|| "en".into());
+    let voice = body.voice;
     let ctx_body = body.context.unwrap_or(AgentContextBody {
         lat: None,
         lon: None,
@@ -379,11 +385,22 @@ async fn prepare_agent(
         format!("\n## Conversation history (remember earlier turns)\n{}\n", lines.join("\n"))
     };
 
+    // How the reply is delivered shapes how it must be written. Voice: the
+    // answer is spoken, so it has to be conversational prose with no markdown
+    // or lists. The long-form rules apply to both: write the document in full,
+    // then confirm it in the chat in one or two sentences.
+    let style_lead = if voice {
+        "You are talking with the user by voice: answer conversationally, in plain spoken prose."
+    } else {
+        "Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them."
+    };
+    let voice_style = voice_style_block(voice);
+
     let system = format!(
-        "You are {ai_name}, {persona}. Always reply in {lang_name}. Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them.\n\
+        "You are {ai_name}, {persona}. Always reply in {lang_name}. {style_lead}\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
          Address the user as {user_first} when it feels natural.\n\
-         \n\
+         {voice_style}{long_form}\n\
          ## Tool protocol (strict)\n\
          - Call exactly ONE tool per turn.\n\
          - Output ONLY raw JSON on its own line — no markdown fences.\n\
@@ -396,8 +413,11 @@ async fn prepare_agent(
         ai_name = ai_name,
         persona = persona,
         lang_name = language_name(&lang),
+        style_lead = style_lead,
         ai_lower = ai_name.to_lowercase(),
         user_first = user_first,
+        voice_style = voice_style,
+        long_form = LONG_FORM_BLOCK,
         skill = skill,
         location_line = location_line,
         trip_line = trip_line,
@@ -422,6 +442,7 @@ async fn prepare_agent(
             system,
             plugins_hint,
             history,
+            voice,
             ctx,
         },
     })

@@ -30,6 +30,9 @@ pub struct AgentRunInput {
     /// Earlier turns of this conversation (`(role, content)` pairs), so the
     /// model keeps the thread's context even mid-tool-loop.
     pub history: Vec<(String, String)>,
+    /// True when the request came from speech (STT) and the reply is spoken
+    /// back (TTS) — the reply must then be conversational prose, not markdown.
+    pub voice: bool,
     pub ctx: AgentContext,
 }
 
@@ -90,6 +93,7 @@ where
                 &completed_steps,
                 &input.plugins_hint,
                 &input.history,
+                input.voice,
             )
         };
 

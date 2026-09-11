@@ -142,7 +142,7 @@ async function handleNavigation(res, userMessage, context) {
   }
 }
 
-function buildAgentBody(message, mode, context) {
+function buildAgentBody(message, mode, context, voice = false) {
   // Same per-user resolved language as voice (explicit choice or browser
   // default), so the AI replies in the language the user actually hears.
   const lang = getVoiceLang();
@@ -151,6 +151,10 @@ function buildAgentBody(message, mode, context) {
     ai_name: getAiName(),
     desktop: getDesktopSnapshot(),
     stream: true,
+    // Voice requests (STT in, TTS out) must come back as conversational prose
+    // — the model is told to skip markdown and lists so the answer reads well
+    // aloud. Typed requests keep normal formatting.
+    voice: !!voice,
   };
   const model = getOllamaModel();
   if (model) body.ollama_model = model;
@@ -352,7 +356,7 @@ export async function sendToAgent(message, mode, context) {
 
   try {
     const res = await requestAgent(
-      buildAgentBody(message, mode, context),
+      buildAgentBody(message, mode, context, true),
       handleAgentStep,
     );
 
@@ -425,7 +429,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
 
   try {
     const res = await requestAgent(
-      buildAgentBody(message, 'single', context),
+      buildAgentBody(message, 'single', context, false),
       handleAgentStep,
     );
 
