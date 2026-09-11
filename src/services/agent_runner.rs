@@ -8,7 +8,8 @@ use crate::models::Traveler;
 use crate::services::ai::AiClient;
 use crate::services::agent_steps::{
     build_continuation_messages, build_planning_messages, describe_tool_step,
-    messages_char_count, step_label_for_action,
+    done_label_for_action, failed_label_for_action, messages_char_count, step_label_for_action,
+    thinking_label,
 };
 use crate::services::agent_tools::{
     execute_action, parse_actions, strip_action_blocks, AgentContext,
@@ -17,6 +18,45 @@ use crate::services::artifacts::Artifact;
 use crate::services::navigation::NavigationSession;
 
 const MAX_TOOL_STEPS: usize = 40;
+
+/// Keep the speech bubble to one short line: collapse whitespace, cap length.
+/// The model gets the full note — the UI never should.
+fn shorten_for_ui(msg: &str) -> String {
+    let one_line = msg.split_whitespace().collect::<Vec<_>>().join(" ");
+    if one_line.chars().count() <= 72 {
+        return one_line;
+    }
+    let cut: String = one_line.chars().take(71).collect();
+    format!("{}…", cut.trim_end())
+}
+
+/// Human, UI-facing label for a tool about to run: the plugin's own
+/// `Tool::step_label` when it has one, else core's action map.
+fn ui_step_label(state: &AppState, action: &str) -> String {
+    let label = if state.plugins.tools().has(action) {
+        state.plugins.tools().step_label(action)
+    } else {
+        step_label_for_action(action).to_string()
+    };
+    shorten_for_ui(&label)
+}
+
+/// Human, UI-facing "done" line for a finished tool. Plugin tools answer with
+/// their own `Tool::humanize` (short by convention); core actions fall back to
+/// the built-in phrases. A JSON-looking result is rejected rather than shown.
+fn ui_done_label(state: &AppState, action: &str, result: &str, data: &Value) -> String {
+    if result != "ok" {
+        return failed_label_for_action(action).to_string();
+    }
+    if state.plugins.tools().has(action) {
+        let human = state.plugins.tools().humanize(action, result, data);
+        let human = human.trim();
+        if !human.is_empty() && !human.contains('{') {
+            return shorten_for_ui(human);
+        }
+    }
+    done_label_for_action(action).to_string()
+}
 
 pub struct AgentRunInput {
     pub message: String,
@@ -79,7 +119,7 @@ where
     let mut completed_steps: Vec<String> = Vec::new();
     let mut final_reply = String::new();
 
-    on_step("Thinking…");
+    on_step(thinking_label());
 
     for iteration in 0..MAX_TOOL_STEPS {
         let messages = if completed_steps.is_empty() && iteration == 0 {
@@ -139,7 +179,7 @@ where
                 serde_json::to_string(&params).unwrap_or_default()
             );
 
-            on_step(step_label_for_action(&action));
+            on_step(&ui_step_label(state, &action));
 
             match execute_action(state, traveler, &input.ctx, &action, &params).await {
             Ok(outcome) => {
@@ -231,7 +271,9 @@ where
                 }
 
                 completed_steps.push(note.clone());
-                on_step(&note);
+                // The model gets the full note above; the bubble gets a short
+                // human line (never the raw payload).
+                on_step(&ui_done_label(state, &outcome.action, &outcome.result, &outcome.data));
             }
             Err(e) => {
                 actions_taken.push(ActionTaken {
@@ -241,7 +283,7 @@ where
                 });
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
                 completed_steps.push(note.clone());
-                on_step(&note);
+                on_step(failed_label_for_action(&action));
             }
             }
         }

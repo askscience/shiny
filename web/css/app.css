@@ -667,20 +667,25 @@ html, body {
 #artifact-dock::-webkit-scrollbar { display: none; }
 #artifact-dock-icons { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap; }
 
+/* The in-progress status lives INSIDE the dock pill (the bubble), so the thin
+   floating line below it is gone. When the dock has no saved-card icons the
+   pill shows just this line — a little speech bubble under the orb. */
 #artifact-dock-step {
-  font-size: 11px;
-  line-height: 1.3;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(60vw, 240px);
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.25;
   color: var(--text-secondary);
   text-align: center;
-  max-width: min(calc(100vw - 48px), 300px);
-  margin-top: -6px;
-  padding: 0 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
   animation: dockStepIn var(--duration-fast) var(--ease-out) both;
 }
+#artifact-dock-icons:empty { display: none; }
 
 /* ── Login ─────────────────────────────────────────────────── */
 #login-overlay {
