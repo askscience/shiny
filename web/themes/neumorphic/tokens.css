@@ -10,18 +10,19 @@
 :root {
   /* Monochrome graphite ramp. Surfaces are the SAME color as the
      background; --glass-strong / --glass-hover are only a whisper
-     lighter so hover states still read. */
-  --black: #17191d;
-  --bg: #26292f;
-  --bg-elevated: #26292f;
-  --surface: #26292f;
-  --surface-strong: #2a2d34;
-  --glass: #26292f;
-  --glass-strong: #2b2e35;
-  --glass-border: rgba(255, 255, 255, 0.055);
-  --glass-highlight: rgba(255, 255, 255, 0.09);
-  --glass-hover: #2c2f37;
-  --bubble: #2e3139;
+     lighter so hover states still read. Deep graphite: the canvas sits
+     just above black so the dual shadows carry all the depth. */
+  --black: #0f1114;
+  --bg: #1e2127;
+  --bg-elevated: #1e2127;
+  --surface: #1e2127;
+  --surface-strong: #23262d;
+  --glass: #1e2127;
+  --glass-strong: #24272e;
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-hover: #252830;
+  --bubble: #272a32;
 
   /* Frosted glass (kept for reduced-motion fallbacks; surfaces are
      opaque in this theme so the blur is mostly a no-op). */
@@ -46,8 +47,8 @@
   --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
   --gradient-text: linear-gradient(120deg, var(--text) 0%, var(--accent) 45%, var(--accent-2) 100%);
   --gradient-mesh:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(232, 234, 238, 0.08) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(138, 143, 154, 0.07) 0%, transparent 50%);
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(232, 234, 238, 0.055) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(138, 143, 154, 0.05) 0%, transparent 50%);
 
   /* Functional semantics — intentionally not accent-driven */
   --ok: #5fd6a2;
@@ -86,15 +87,15 @@
      sheen; inset surfaces reverse the pair for a pressed look. */
   --highlight-top: rgba(255, 255, 255, 0.05);
 
-  --shadow-sm: 3px 3px 8px rgba(0, 0, 0, 0.42), -3px -3px 8px rgba(255, 255, 255, 0.05);
-  --shadow-glass: 5px 5px 14px rgba(0, 0, 0, 0.46), -5px -5px 14px rgba(255, 255, 255, 0.055);
-  --shadow-float: 9px 9px 24px rgba(0, 0, 0, 0.5), -9px -9px 24px rgba(255, 255, 255, 0.05);
+  --shadow-sm: 3px 3px 8px rgba(0, 0, 0, 0.45), -3px -3px 8px rgba(255, 255, 255, 0.06);
+  --shadow-glass: 5px 5px 14px rgba(0, 0, 0, 0.48), -5px -5px 14px rgba(255, 255, 255, 0.065);
+  --shadow-float: 9px 9px 24px rgba(0, 0, 0, 0.52), -9px -9px 24px rgba(255, 255, 255, 0.06);
   --shadow-glow: 0 0 26px var(--accent-glow);
   /* Extra neumorphic tokens used by this theme's components.css/app.css. */
-  --shadow-raise: 6px 6px 16px rgba(0, 0, 0, 0.48), -6px -6px 16px rgba(255, 255, 255, 0.05);
-  --shadow-raise-sm: 4px 4px 10px rgba(0, 0, 0, 0.44), -4px -4px 10px rgba(255, 255, 255, 0.05);
-  --shadow-inset: inset 3px 3px 7px rgba(0, 0, 0, 0.5), inset -3px -3px 7px rgba(255, 255, 255, 0.045);
-  --shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.5), inset -2px -2px 4px rgba(255, 255, 255, 0.04);
+  --shadow-raise: 6px 6px 16px rgba(0, 0, 0, 0.5), -6px -6px 16px rgba(255, 255, 255, 0.06);
+  --shadow-raise-sm: 4px 4px 10px rgba(0, 0, 0, 0.46), -4px -4px 10px rgba(255, 255, 255, 0.06);
+  --shadow-inset: inset 3px 3px 7px rgba(0, 0, 0, 0.52), inset -3px -3px 7px rgba(255, 255, 255, 0.055);
+  --shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.52), inset -2px -2px 4px rgba(255, 255, 255, 0.05);
 
   /* Motion — restrained by design */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
