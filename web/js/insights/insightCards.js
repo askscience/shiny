@@ -31,19 +31,15 @@ function iconName(card) {
 
 function render() {
   if (!container) return;
-  // The voice model download card (managed by voice.js) lives in this
-  // strip too — keep it across re-renders instead of wiping it.
-  const voiceCard = document.getElementById('voice-download-card');
   container.innerHTML = '';
 
   const list = getVisibleCards();
-  if (!list.length && !voiceCard) {
+  if (!list.length) {
     container.classList.add('hidden');
     return;
   }
 
   container.classList.remove('hidden');
-  if (voiceCard) container.appendChild(voiceCard);
 
   list.forEach((card, i) => {
     const el = insightCard({
