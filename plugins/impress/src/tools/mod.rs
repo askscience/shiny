@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use sqlx::SqlitePool;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::odp::{normalize_layout, normalize_theme, Slide};
+use shiny_plugin_sdk::odp::{normalize_layout, normalize_reveal, normalize_theme, normalize_transition, Slide};
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
@@ -96,6 +96,8 @@ fn coerce_slide(v: &Value) -> Slide {
         body: str_field(&get("body")),
         attribution: str_field(&get("attribution")),
         notes: str_field(&get("notes")),
+        transition: normalize_transition(get("transition").as_str().unwrap_or("none")),
+        reveal: normalize_reveal(get("reveal").as_str().unwrap_or("all")),
     }
 }
 
@@ -145,7 +147,7 @@ impl Tool for SlideCreate {
     fn aliases(&self) -> &[&str] { &["create_presentation", "new_presentation", "new_deck"] }
     fn step_label(&self) -> &str { "Building slides…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `slide_create` — Create a new presentation. params: `{ title?: string, theme?: string, slides?: [slide, …] }` — `slides` optionally seeds the deck so one call creates AND fills it; returns the new `deck_id`. Themes: aurora|slate|ocean|mono|ember. Slide layouts: title|section|content|two-column|quote|blank.")
+        Some("- `slide_create` — Create a new presentation. params: `{ title?: string, theme?: string, slides?: [slide, …] }` — `slides` optionally seeds the deck so one call creates AND fills it; returns the new `deck_id`. Themes: aurora|slate|ocean|mono|ember. Slide layouts: title|section|content|two-column|quote|blank. A slide may also set `transition` (none|fade|slide|push|zoom — how it animates in) and `reveal` (all|bullets — bullet-by-bullet build). DEFAULT TO MOTION: give every slide `transition` and every content/two-column slide `reveal: \"bullets\"` without being asked — a deck with no animation is unfinished.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
@@ -198,7 +200,7 @@ impl Tool for SlideWrite {
     fn aliases(&self) -> &[&str] { &["write_presentation", "set_slides", "rewrite_deck"] }
     fn step_label(&self) -> &str { "Writing slides…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `slide_write` — Replace the ENTIRE slide list of a presentation (and optionally its title/theme). params: `{ deck_id?: string, title?: string, theme?: string, slides: [slide, …] }` — without `deck_id` targets the most recently used presentation. Only use for full rewrites; always pass the complete slide list.")
+        Some("- `slide_write` — Replace the ENTIRE slide list of a presentation (and optionally its title/theme). params: `{ deck_id?: string, title?: string, theme?: string, slides: [slide, …] }` — without `deck_id` targets the most recently used presentation. Only use for full rewrites; always pass the complete slide list. Slides carry `transition` (none|fade|slide|push|zoom) and `reveal` (all|bullets) too — copy them from `slide_read` when rewriting, since the list you pass replaces everything.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("presentation");
@@ -270,7 +272,7 @@ impl Tool for SlideEdit {
     }
     fn step_label(&self) -> &str { "Editing slides…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `slide_edit` — Change ONE slide in a presentation. params: `{ deck_id?: string, slide: slide, index?: number }` — replaces the slide at `index` (0-based); if `index` is omitted or out of range, the slide is appended at the end. Use for \"change slide 2\", \"add a closing slide\", etc. For a full rewrite use `slide_write`.")
+        Some("- `slide_edit` — Change ONE slide in a presentation. params: `{ deck_id?: string, slide: slide, index?: number }` — replaces the slide at `index` (0-based); if `index` is omitted or out of range, the slide is appended at the end. Use for \"change slide 2\", \"add a closing slide\", etc. For a full rewrite use `slide_write`. NOTE: `slide` replaces the whole slide, so read it first and pass its existing `transition`/`reveal` back if you want to keep the animation (omitting them resets the slide to no transition and no bullet build).")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("presentation");
@@ -483,5 +485,27 @@ impl Tool for SlideDelete {
             return Ok(ActionOutcome::error("slide_delete", "Presentation not found"));
         }
         Ok(ActionOutcome::ok("slide_delete", json!({ "deck_id": deck_id })))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The agent's slide JSON must carry animation through, and any value it
+    /// invents has to land on the canonical `none`/`all` defaults.
+    #[test]
+    fn coerce_slide_carries_and_normalizes_animation() {
+        let s = coerce_slide(&json!({ "title": "T", "transition": "Fade", "reveal": "Bullets" }));
+        assert_eq!(s.transition, "fade");
+        assert_eq!(s.reveal, "bullets");
+
+        let missing = coerce_slide(&json!({ "title": "T" }));
+        assert_eq!(missing.transition, "none");
+        assert_eq!(missing.reveal, "all");
+
+        let junk = coerce_slide(&json!({ "transition": "spin", "reveal": "later" }));
+        assert_eq!(junk.transition, "none");
+        assert_eq!(junk.reveal, "all");
     }
 }

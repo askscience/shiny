@@ -88,6 +88,17 @@ async fn take_query<T: DeserializeOwned + Send + 'static>(
     Ok((query.0, axum::extract::Request::from_parts(parts, body)))
 }
 
+/// Force the app-only animation fields to their canonical values, so a deck
+/// saved by an older client (or an API caller that omits them) never stores
+/// `""` where the model means `none`/`all`.
+fn canonical_slide(s: Slide) -> Slide {
+    Slide {
+        transition: odp::normalize_transition(&s.transition),
+        reveal: odp::normalize_reveal(&s.reveal),
+        ..s
+    }
+}
+
 fn parse_slides(json: &str) -> Vec<Slide> {
     if json.trim().is_empty() {
         return Vec::new();
@@ -96,6 +107,7 @@ fn parse_slides(json: &str) -> Vec<Slide> {
         .unwrap_or_default()
         .into_iter()
         .take(MAX_SLIDES)
+        .map(canonical_slide)
         .collect()
 }
 
@@ -204,7 +216,12 @@ fn deck_save(ctx: Arc<PluginCtx>) -> RouteHandler {
             let axum::Json(body) = axum::Json::<Save>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
-            let slides = body.slides.unwrap_or_default();
+            let slides: Vec<Slide> = body
+                .slides
+                .unwrap_or_default()
+                .into_iter()
+                .map(canonical_slide)
+                .collect();
             validate_slides(&slides)?;
 
             let current = ctx.db().query(

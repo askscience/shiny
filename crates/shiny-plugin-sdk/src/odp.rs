@@ -18,9 +18,11 @@
 //! structure, and text roles are recovered from the paragraph style names we
 //! emit (`PTitle*` / `PSub*` / `PBody*` / `PAttrib*`).
 //!
-//! **Known v1 limitation:** speaker notes (`Slide::notes`) are app-side only —
-//! they are not written into the `.odp` (proper notes pages are a follow-up),
-//! so exporting and re-importing drops them.
+//! **Known v1 limitations:** speaker notes (`Slide::notes`) and the bullet
+//! reveal mode (`Slide::reveal`) are app-side only — they are not written into
+//! the `.odp`, so exporting and re-importing drops them. Slide transitions
+//! *are* written (and read back) as ODF `presentation:transition-style` on the
+//! page's drawing-page style.
 //!
 //! Both the core binary (REST import/export for the impress plugin) and plugin
 //! code link this module — no runtime state crosses the dlopen boundary
@@ -40,6 +42,7 @@ const NS_OFFICE: &str = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
 const NS_DRAW: &str = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0";
 const NS_TEXT: &str = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
 const NS_PRESENTATION: &str = "urn:oasis:names:tc:opendocument:xmlns:presentation:1.0";
+const NS_STYLE: &str = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
 
 /// Page geometry (16:9, in centimetres — the standard Impress widescreen size).
 const PAGE_W: &str = "28cm";
@@ -73,10 +76,53 @@ pub struct Slide {
     pub attribution: String,
     #[serde(default)]
     pub notes: String,
+    /// Transition played when this slide enters: see `TRANSITIONS`.
+    /// `"none"` (the default) means the slide just cuts in.
+    #[serde(default = "default_transition")]
+    pub transition: String,
+    /// How the bullets arrive: `"all"` (default, together with the slide) or
+    /// `"bullets"` (one more bullet per advance). App-side only — see the
+    /// module docs.
+    #[serde(default = "default_reveal")]
+    pub reveal: String,
 }
 
 fn default_layout() -> String {
     "content".into()
+}
+
+fn default_transition() -> String {
+    "none".into()
+}
+
+fn default_reveal() -> String {
+    "all".into()
+}
+
+/// Known slide transitions. `none` (a hard cut) is the default.
+pub const TRANSITIONS: &[&str] = &["none", "fade", "slide", "push", "zoom"];
+
+/// Normalise a transition name to a known value ("none" when unknown).
+pub fn normalize_transition(transition: &str) -> String {
+    let t = transition.trim().to_ascii_lowercase();
+    if TRANSITIONS.contains(&t.as_str()) {
+        t
+    } else {
+        "none".into()
+    }
+}
+
+/// Known bullet-reveal modes. `all` (bullets arrive with the slide) is default.
+pub const REVEALS: &[&str] = &["all", "bullets"];
+
+/// Normalise a reveal mode to a known value ("all" when unknown).
+pub fn normalize_reveal(reveal: &str) -> String {
+    let r = reveal.trim().to_ascii_lowercase();
+    if REVEALS.contains(&r.as_str()) {
+        r
+    } else {
+        "all".into()
+    }
 }
 
 /// Known layout names. Unknown values are normalised to "content".
@@ -134,7 +180,7 @@ pub fn slides_to_odp(theme: &str, slides: &[Slide]) -> Result<Vec<u8>, AppError>
     let content = format!(
         "{CONTENT_HEADER}{automatic_styles}{master_styles}<office:body><office:presentation>{}</office:presentation></office:body></office:document-content>",
         body_xml(&colors, slides),
-        automatic_styles = automatic_styles(&colors),
+        automatic_styles = automatic_styles(&colors, slides),
         master_styles = master_styles(),
     );
 
@@ -190,14 +236,21 @@ const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 /// Fixed text styles (role → font/colour). Colours are role-based, not
 /// theme-based, so the paragraph styles are constant; only the graphic fills
 /// (backgrounds / accent bars) change with the theme.
-fn automatic_styles(colors: &ThemeColors) -> String {
+fn automatic_styles(colors: &ThemeColors, slides: &[Slide]) -> String {
     let mut s = String::from("<office:automatic-styles>");
 
-    // Page layout + drawing-page style.
+    // Page layout + one drawing-page style per transition this deck actually
+    // uses — ODF 1.2 carries the slide transition on the drawing-page style
+    // (`style:drawing-page-properties`) that each page references through
+    // `draw:style-name`.
     s.push_str(&format!(
         "<style:page-layout style:name=\"pm1\"><style:page-layout-properties svg:width=\"{PAGE_W}\" svg:height=\"{PAGE_H}\"/></style:page-layout>"
     ));
-    s.push_str("<style:style style:name=\"dp1\" style:family=\"drawing-page\"/>");
+    for transition in TRANSITIONS {
+        if slides.iter().any(|slide| normalize_transition(&slide.transition) == *transition) {
+            s.push_str(&drawing_page_style(page_style_name(transition), transition));
+        }
+    }
 
     // Graphic fills (theme-driven).
     s.push_str(&graphic_style("grFrame", "none", "none"));
@@ -218,6 +271,62 @@ fn automatic_styles(colors: &ThemeColors) -> String {
 
     s.push_str("</office:automatic-styles>");
     s
+}
+
+/// A drawing-page style: the slide's transition lives here (ODF 1.2), and
+/// `"none"` emits the bare style so a cut needs no properties element.
+fn drawing_page_style(name: &str, transition: &str) -> String {
+    match odf_transition_style(transition) {
+        Some(style) => format!(
+            "<style:style style:name=\"{name}\" style:family=\"drawing-page\"><style:drawing-page-properties \
+             presentation:transition-type=\"manual\" presentation:transition-style=\"{style}\" \
+             presentation:transition-speed=\"medium\"/></style:style>"
+        ),
+        None => format!("<style:style style:name=\"{name}\" style:family=\"drawing-page\"/>"),
+    }
+}
+
+/// The drawing-page style a slide with this transition references.
+fn page_style_name(transition: &str) -> &'static str {
+    match normalize_transition(transition).as_str() {
+        "fade" => "dpFade",
+        "slide" => "dpSlide",
+        "push" => "dpPush",
+        "zoom" => "dpZoom",
+        _ => "dp1",
+    }
+}
+
+/// Map an app transition to an ODF 1.2 `presentation:transition-style` value.
+/// ODF has no cross-fade, no "push" and no true zoom, so those fall back to
+/// their nearest standard effect (`dissolve`, `move-from-right`,
+/// `fade-from-center`). `none` maps to `None` (no properties element).
+fn odf_transition_style(transition: &str) -> Option<&'static str> {
+    match normalize_transition(transition).as_str() {
+        "fade" => Some("dissolve"),
+        "slide" | "push" => Some("move-from-right"),
+        "zoom" => Some("fade-from-center"),
+        _ => None,
+    }
+}
+
+/// Map an ODF `presentation:transition-style` back to an app transition.
+/// Foreign effects land on the closest app equivalent (`fade` when we simply
+/// don't know it); a plain `none`/missing style yields `None` so the caller
+/// keeps the `"none"` default.
+fn app_transition(style: &str) -> Option<&'static str> {
+    let s = style.trim().to_ascii_lowercase();
+    if s.is_empty() || s == "none" {
+        None
+    } else if s == "dissolve" || s.starts_with("fade-over") {
+        Some("fade")
+    } else if s.starts_with("fade-from-center") || s.starts_with("fade-to-center") {
+        Some("zoom")
+    } else if s.starts_with("move-from") || s.starts_with("uncover-to") {
+        Some("slide")
+    } else {
+        Some("fade")
+    }
 }
 
 fn graphic_style(name: &str, fill: &str, color: &str) -> String {
@@ -271,8 +380,9 @@ fn page_xml(colors: &ThemeColors, slide: &Slide, index: usize) -> String {
     };
 
     let mut page = format!(
-        "<draw:page draw:name=\"{}\" draw:style-name=\"dp1\" draw:master-page-name=\"Default\" presentation:presentation-page-layout-name=\"pm1\" presentation:class=\"{}\">",
+        "<draw:page draw:name=\"{}\" draw:style-name=\"{}\" draw:master-page-name=\"Default\" presentation:presentation-page-layout-name=\"pm1\" presentation:class=\"{}\">",
         xml_escape_attr(&name),
+        page_style_name(&slide.transition),
         class
     );
 
@@ -450,8 +560,8 @@ fn blank_slide_xml(colors: &ThemeColors, slide: &Slide) -> String {
 // ─────────────────────────────────────────────────────────────
 
 /// Read slides back out of a `.odp` file. Handles our own writer losslessly
-/// (layout + title/subtitle/bullets/columns/body/attribution) and makes a
-/// best-effort attempt at foreign LibreOffice files (title + bullets).
+/// (layout + title/subtitle/bullets/columns/body/attribution + transition) and
+/// makes a best-effort attempt at foreign LibreOffice files (title + bullets).
 pub fn odp_to_slides(odp: &[u8]) -> Result<Vec<Slide>, AppError> {
     let xml = read_content_xml(odp)?;
     let doc = roxmltree::Document::parse(&xml)
@@ -466,6 +576,10 @@ pub fn odp_to_slides(odp: &[u8]) -> Result<Vec<Slide>, AppError> {
         return Ok(slides); // empty deck
     };
 
+    // `draw:style-name` on a page points at a drawing-page style that holds the
+    // transition (ODF 1.2). Collect them once up front.
+    let transitions = drawing_page_transitions(&doc);
+
     for page in presentation.children() {
         if !page.has_tag_name((NS_DRAW, "page")) {
             continue;
@@ -474,10 +588,42 @@ pub fn odp_to_slides(odp: &[u8]) -> Result<Vec<Slide>, AppError> {
         if page.attribute((NS_PRESENTATION, "class")) == Some("notes") {
             continue;
         }
-        slides.push(page_to_slide(&page));
+        // Prefer the transition on the referenced drawing-page style; older
+        // files (and some LibreOffice exports) put it straight on the page.
+        let style = page
+            .attribute((NS_DRAW, "style-name"))
+            .and_then(|name| transitions.get(name).cloned())
+            .or_else(|| page.attribute((NS_PRESENTATION, "transition-style")).map(str::to_string))
+            .unwrap_or_default();
+        let mut slide = page_to_slide(&page);
+        if let Some(app) = app_transition(&style) {
+            slide.transition = app.to_string();
+        }
+        slides.push(slide);
     }
 
     Ok(slides)
+}
+
+/// Map every `style:style[family=drawing-page]` name to its
+/// `presentation:transition-style` value.
+fn drawing_page_transitions(doc: &roxmltree::Document) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for node in doc.descendants() {
+        if !node.has_tag_name((NS_STYLE, "style"))
+            || node.attribute((NS_STYLE, "family")) != Some("drawing-page")
+        {
+            continue;
+        }
+        let Some(name) = node.attribute((NS_STYLE, "name")) else { continue };
+        let style = node
+            .children()
+            .find(|c| c.has_tag_name((NS_STYLE, "drawing-page-properties")))
+            .and_then(|p| p.attribute((NS_PRESENTATION, "transition-style")))
+            .unwrap_or("none");
+        map.insert(name.to_string(), style.to_string());
+    }
+    map
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -722,6 +868,8 @@ impl Slide {
             body: String::new(),
             attribution: String::new(),
             notes: String::new(),
+            transition: "none".into(),
+            reveal: "all".into(),
         }
     }
 }
@@ -786,13 +934,17 @@ mod tests {
             body: body.into(),
             attribution: attribution.into(),
             notes: String::new(),
+            transition: "none".into(),
+            reveal: "all".into(),
         }
     }
 
-    /// Round-trip must preserve every field except `notes` (not in ODP).
-    fn strip_notes(mut s: Vec<Slide>) -> Vec<Slide> {
+    /// Round-trip must preserve every field except the app-only ones (`notes`
+    /// and `reveal`), which the ODP format does not carry.
+    fn strip_app_only(mut s: Vec<Slide>) -> Vec<Slide> {
         for sl in &mut s {
             sl.notes.clear();
+            sl.reveal = "all".into();
         }
         s
     }
@@ -809,7 +961,58 @@ mod tests {
         ];
         let odt = slides_to_odp("aurora", &slides).expect("write");
         let back = odp_to_slides(&odt).expect("read");
-        assert_eq!(strip_notes(back), slides, "round trip must preserve slides");
+        assert_eq!(strip_app_only(back), slides, "round trip must preserve slides");
+    }
+
+    #[test]
+    fn transitions_survive_round_trip() {
+        let mut slides = vec![
+            slide("content", "One", "", &["a"], "", ""),
+            slide("content", "Two", "", &["b"], "", ""),
+            slide("content", "Three", "", &["c"], "", ""),
+            slide("content", "Four", "", &["d"], "", ""),
+        ];
+        for (s, t) in slides.iter_mut().zip(["fade", "slide", "push", "zoom"]) {
+            s.transition = t.into();
+        }
+        let odt = slides_to_odp("ocean", &slides).expect("write");
+        let content = read_content_xml(&odt).expect("content.xml");
+
+        // Each transition gets a drawing-page style with a standard ODF effect.
+        assert!(content.contains("presentation:transition-style=\"dissolve\""), "fade → dissolve");
+        assert!(content.contains("presentation:transition-style=\"move-from-right\""), "slide/push → move-from-right");
+        assert!(content.contains("presentation:transition-style=\"fade-from-center\""), "zoom → fade-from-center");
+        assert!(content.contains("presentation:transition-type=\"manual\""), "click-advanced");
+
+        let back = odp_to_slides(&odt).expect("read");
+        let got: Vec<&str> = back.iter().map(|s| s.transition.as_str()).collect();
+        // `push` degrades to `slide`: ODF has no push effect.
+        assert_eq!(got, ["fade", "slide", "slide", "zoom"]);
+    }
+
+    #[test]
+    fn only_used_transition_styles_are_emitted() {
+        // A deck with no animation must stay free of transition metadata.
+        let slides = vec![slide("content", "One", "", &["a"], "", "")];
+        let odt = slides_to_odp("aurora", &slides).expect("write");
+        let content = read_content_xml(&odt).expect("content.xml");
+        assert!(content.contains("style:name=\"dp1\""), "plain deck uses dp1");
+        assert!(!content.contains("dpFade"), "unused fade style must not be emitted");
+        assert!(!content.contains("presentation:transition-style"), "no transitions in a plain deck");
+    }
+
+    #[test]
+    fn foreign_transition_styles_map_to_app_effects() {
+        assert_eq!(app_transition("none"), None);
+        assert_eq!(app_transition(""), None);
+        assert_eq!(app_transition("dissolve"), Some("fade"));
+        assert_eq!(app_transition("fade-over-black"), Some("fade"));
+        assert_eq!(app_transition("wipe-right"), Some("fade"));
+        assert_eq!(app_transition("fade-from-center"), Some("zoom"));
+        assert_eq!(app_transition("move-from-bottom"), Some("slide"));
+        assert_eq!(app_transition("uncover-to-left"), Some("slide"));
+        assert_eq!(odf_transition_style("none"), None);
+        assert_eq!(odf_transition_style("bogus"), None);
     }
 
     #[test]
@@ -856,5 +1059,9 @@ mod tests {
         assert_eq!(normalize_layout("Two-Column"), "two-column");
         assert_eq!(normalize_theme("nope"), "aurora");
         assert_eq!(normalize_theme("EMBER"), "ember");
+        assert_eq!(normalize_transition("Slide"), "slide");
+        assert_eq!(normalize_transition("nope"), "none");
+        assert_eq!(normalize_reveal("Bullets"), "bullets");
+        assert_eq!(normalize_reveal("later"), "all");
     }
 }

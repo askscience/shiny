@@ -11,11 +11,15 @@ Presentations are just JSON to you. A presentation is a deck of **slides**; each
 - `body` — free text (`quote`/`blank` layouts).
 - `attribution` — byline (`quote` layout).
 - `notes` — speaker notes (shown in the editor; not written to .odp yet).
+- `transition` — how the slide animates in during Present mode: `none` (default), `fade`, `slide`, `push`, `zoom`.
+- `reveal` — `all` (default: bullets arrive with the slide) or `bullets` (one bullet per advance — a build). Editor/Present-mode only; not written to .odp.
+
+**Motion:** a slide's `transition` is written to the exported `.odp` as a standard ODF transition effect (LibreOffice plays it); `reveal` is app-side only. Keep a deck calm: one transition for the whole deck (often `fade`) and `reveal: "bullets"` only on slides that really are lists. `slide_edit`/`slide_write` replace a whole slide/list, so pass the existing `transition`/`reveal` back when you only mean to change the text.
 
 **Themes:** `aurora` (indigo, default) · `slate` · `ocean` · `mono` · `ember`.
 
 **Tools:**
-- `slide_create` — new deck, one call creates AND fills it: `{"action":"slide_create","params":{"title":"Pitch","theme":"aurora","slides":[{"layout":"title","title":"Pitch","subtitle":"2026"},{"layout":"content","title":"Why us","bullets":["…","…"]}]}}` → returns `deck_id`.
+- `slide_create` — new deck, one call creates AND fills it: `{"action":"slide_create","params":{"title":"Pitch","theme":"aurora","slides":[{"layout":"title","title":"Pitch","subtitle":"2026","transition":"fade"},{"layout":"content","title":"Why us","bullets":["…","…"],"transition":"fade","reveal":"bullets"}]}}` → returns `deck_id`.
 - `slide_read` — read the whole deck back: `{"action":"slide_read","params":{"deck_id":"…"}}` → returns `{ deck_id, title, theme, slides }`. The `slides` array IS the shape you write back.
 - `slide_write` — replace the ENTIRE slide list (and optionally `title`/`theme`): `{"action":"slide_write","params":{"deck_id":"…","slides":[…]}}`. Only for full rewrites — always pass the complete list.
 - `slide_edit` — change ONE slide: `{"action":"slide_edit","params":{"deck_id":"…","index":2,"slide":{…}}}` (0-based index; omit `index` to append a new slide at the end).
@@ -24,6 +28,7 @@ Presentations are just JSON to you. A presentation is a deck of **slides**; each
 
 **Rules (CRITICAL — never leave an empty deck, never wipe the user's work):**
 - **When the user asks for a presentation, you MUST put real slides in it before replying.** Either pass `slides` inside `slide_create`, or call `slide_write`/`slide_edit` immediately after. If the user didn't give the outline, invent a sensible structure (a strong `title` slide first, then one slide per topic with 3–5 concise bullets). NEVER reply "I created the deck" with an empty deck.
+- **ALWAYS animate the deck — do not wait to be asked.** Every slide you write gets `"transition":"fade"` (or `slide`/`push`/`zoom` when it fits the tone) and every `content`/`two-column` slide gets `"reveal":"bullets"`. A deck you built with no `transition`/`reveal` is an unfinished deck: the user has to ask for motion that should be the default. Set them in the same `slide_create`/`slide_write`/`slide_edit` call that writes the text.
 - **ALWAYS pass the `deck_id`** you got from `slide_read`/`slide_list`/`slide_create` — never write without knowing which deck.
 - **NEVER call `slide_delete`** unless the user explicitly asks to delete the whole presentation.
 - To change ONE slide, use `slide_edit` with its `index` — never rewrite the whole deck for a small change.

@@ -31,9 +31,19 @@ const THEME_GLOW = {
   ember: { accent: '#f97316', darkB: '#2d1f14' },
 };
 const LAYOUTS = ['title', 'section', 'content', 'two-column', 'quote', 'blank'];
+// Per-slide animation. TRANSITIONS must stay in sync with the SDK
+// `odp::TRANSITIONS` (the ODF export maps each one to a standard effect);
+// REVEALS matches `odp::REVEALS`.
+const TRANSITIONS = ['none', 'fade', 'slide', 'push', 'zoom'];
+const REVEALS = ['all', 'bullets'];
+const TRANSITION_LABELS = {
+  none: 'None', fade: 'Fade', slide: 'Slide', push: 'Push', zoom: 'Zoom',
+};
+const REVEAL_LABELS = { all: 'All at once', bullets: 'One by one' };
 
 let tileEl = null;
 let deckMenuBtn = null;
+let presentBtn = null;
 let titleInput = null;
 let themeSelect = null;
 let saveDot = null;
@@ -50,6 +60,8 @@ let resizeObserver = null;
 // edited directly on the stage via contentEditable; the inspector keeps only
 // the layout selector, speaker notes and slide operations.
 let layoutSelect = null;
+let transitionSelect = null;
+let revealSelect = null;
 let fieldNotes = null;
 let thumbRefreshTimer = null;
 
@@ -57,6 +69,9 @@ let decks = [];
 let current = null;   // { id, title, theme, aspect, slides: [], updated_at }
 let selIndex = 0;
 let presentIndex = -1; // -1 = not presenting
+let presentStep = 0;   // bullets revealed on the current slide (reveal: 'bullets')
+let presentFrags = []; // the current slide's bullet nodes ([] unless building)
+let presentFullBtn = null;
 let dirty = false;
 let saveTimer = null;
 let saveSeq = 0;
@@ -110,12 +125,16 @@ function newSlide(layout = 'content') {
     body: '',
     attribution: '',
     notes: '',
+    transition: 'none',
+    reveal: 'all',
   };
 }
 
 function normalizeSlide(s) {
   const slide = { ...newSlide(), ...(s || {}) };
   if (!LAYOUTS.includes(slide.layout)) slide.layout = 'content';
+  if (!TRANSITIONS.includes(slide.transition)) slide.transition = 'none';
+  if (!REVEALS.includes(slide.reveal)) slide.reveal = 'all';
   slide.bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
   slide.columns = Array.isArray(slide.columns) ? slide.columns : [[], []];
   slide.title = String(slide.title || '');
@@ -351,7 +370,20 @@ function renderInspector() {
   if (!current) return;
   const slide = current.slides[selIndex] || newSlide();
   layoutSelect.value = slide.layout;
+  if (transitionSelect) transitionSelect.value = slide.transition;
+  if (revealSelect) revealSelect.value = slide.reveal;
   fieldNotes.value = slide.notes;
+}
+
+/** Copy the selected slide's transition + bullet build onto every slide. */
+function applyAnimationToAll() {
+  if (!current) return;
+  const source = current.slides[selIndex] || newSlide();
+  for (const slide of current.slides) {
+    slide.transition = source.transition;
+    slide.reveal = source.reveal;
+  }
+  markDirty();
 }
 
 /** Debounce thumbnail redraws while the user types on the stage — the stage
@@ -648,42 +680,205 @@ async function exportOdp() {
 
 /* ── Present mode ───────────────────────────────────────────── */
 
+/* Input guards for the show. The overlay covers the whole screen (including the
+ * toolbar button that started it), so "advance" must only fire for a press that
+ * began on the overlay — and never for the click that started the show. A short
+ * arm delay after the start additionally swallows the second click of an
+ * impatient double-click and any stray Enter/Space, so the starting gesture can
+ * never be read as "next slide". */
+const PRESENT_ARM_MS = 500;
+let presentPressFromOverlay = false;
+let presentArmedAt = 0;
+
+/** True during the brief window right after the show starts. */
+function presentInputLocked() {
+  return performance.now() - presentArmedAt < PRESENT_ARM_MS;
+}
+
 function ensurePresentEl() {
   if (presentEl) return;
   presentEl = h('div', 'impress-present hidden');
-  presentEl.addEventListener('click', () => nextSlide());
+  // Focusable so the show owns the keyboard: without this, the toolbar's
+  // Present button keeps focus and Space/Enter re-trigger it (restarting the
+  // deck) instead of advancing.
+  presentEl.tabIndex = -1;
+  presentEl.addEventListener('pointerdown', (e) => {
+    presentPressFromOverlay = presentEl.contains(e.target) && !inPresentControls(e.target);
+  });
+  presentEl.addEventListener('pointercancel', () => { presentPressFromOverlay = false; });
+  presentEl.addEventListener('keydown', onPresentKey);
+  presentEl.addEventListener('click', (e) => {
+    const fromOverlay = presentPressFromOverlay && presentEl.contains(e.target);
+    presentPressFromOverlay = false;
+    if (!fromOverlay || inPresentControls(e.target)) return;
+    if (e.detail > 1) return;      // 2nd click of a double-click on Present
+    if (presentInputLocked()) return;
+    nextSlide();
+  });
+
+  // Keep the full-screen button (and the slide's fit) in sync when the user
+  // enters/leaves full screen with the button, Esc/F11, or resizes the window.
+  document.addEventListener('fullscreenchange', onPresentViewportChange);
+  window.addEventListener('resize', onPresentViewportChange);
+  // The show is a window-sized preview inside the tile; only the full-screen
+  // control promotes it to the browser's top layer.
   tileEl.appendChild(presentEl);
+}
+
+/** Re-fit the show after a viewport change (window resize, full screen). */
+function onPresentViewportChange() {
+  syncPresentFullBtn();
+  fitPresentSlide();
+  // Leaving/entering full screen relayouts a frame later in some browsers.
+  requestAnimationFrame(fitPresentSlide);
+}
+
+/** Scale the current slide to fill the overlay. The 640×360 slide is the
+ *  logical canvas; the transform is inline so it must be re-applied on every
+ *  size change (and never while the overlay is hidden, where it measures 0). */
+function fitPresentSlide() {
+  const node = presentEl?.querySelector('.impress-present-stage > .impress-slide');
+  if (!node) return;
+  const w = presentEl.clientWidth;
+  const h = presentEl.clientHeight;
+  if (!w || !h) return;   // hidden — the stylesheet's scale(1) stands in
+  node.style.transformOrigin = 'center center';
+  node.style.transform = `scale(${Math.min(w / 640, h / 360)})`;
+}
+
+/** The overlay's control bar: back to the editor + real (browser) full screen. */
+function buildPresentControls() {
+  const controls = h('div', 'impress-present-controls');
+  const control = (iconName, label, onClick) => {
+    const btn = button({ icon: iconName, variant: 'ghost', onClick });
+    btn.classList.add('ui-btn--icon', 'impress-present-btn');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    // A control press is not a "next slide" press.
+    btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    btn.addEventListener('click', (e) => e.stopPropagation());
+    controls.appendChild(btn);
+    return btn;
+  };
+  control('ui/arrow-left', 'Back to the editor', stopPresent);
+  presentFullBtn = control('ui/expand', 'Full screen', togglePresentFullscreen);
+  syncPresentFullBtn();
+  return controls;
+}
+
+/** True when `target` is one of the overlay's own controls. */
+function inPresentControls(target) {
+  const controls = presentEl?.querySelector('.impress-present-controls');
+  return !!(controls && target && controls.contains(target));
 }
 
 function startPresent() {
   if (!current || !slideCount()) return;
   ensurePresentEl();
+  presentPressFromOverlay = false;
+  presentArmedAt = performance.now();
   presentIndex = 0;
-  renderPresent();
+  presentStep = 0;
+  presentFrags = [];
+  // Show the overlay *before* rendering: the slide is scaled from the
+  // overlay's measured size, and a `display: none` overlay measures 0 — which
+  // rendered slide 1 at scale(0), i.e. an apparently blank first slide.
   presentEl.classList.remove('hidden');
+  renderPresent();
+  presentEl.focus({ preventScroll: true });
 }
 
 function stopPresent() {
+  if (presentIndex < 0) return;
   presentIndex = -1;
+  presentStep = 0;
+  presentFrags = [];
+  presentPressFromOverlay = false;
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
   presentEl?.classList.add('hidden');
+  syncPresentFullBtn();
+  presentBtn?.focus({ preventScroll: true });
+}
+
+/** Keyboard while presenting. Bound to the overlay (which holds focus), so the
+ *  rest of the app keeps its own keys while the preview is up. */
+function onPresentKey(e) {
+  if (presentIndex < 0) return;
+  const k = e.key;
+  if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' ' || k === 'Enter') {
+    e.preventDefault();
+    if (!presentInputLocked()) nextSlide();
+  } else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') {
+    e.preventDefault();
+    if (!presentInputLocked()) prevSlide();
+  } else if (k === 'Escape') {
+    // In full screen the browser consumes the first Esc to leave it.
+    e.preventDefault();
+    stopPresent();
+  }
+}
+
+/** Toggle real browser full screen for the show. */
+async function togglePresentFullscreen() {
+  if (!presentEl) return;
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await presentEl.requestFullscreen({ navigationUI: 'hide' });
+  } catch (_) {
+    toast('Full screen was blocked by the browser', { type: 'info' });
+  }
+  syncPresentFullBtn();
+}
+
+function syncPresentFullBtn() {
+  if (!presentFullBtn) return;
+  const full = !!document.fullscreenElement;
+  presentFullBtn.classList.toggle('is-active', full);
+  presentFullBtn.title = full ? 'Exit full screen' : 'Full screen';
+  presentFullBtn.setAttribute('aria-label', full ? 'Exit full screen' : 'Full screen');
 }
 
 function renderPresent() {
   if (!presentEl || presentIndex < 0) return;
   presentEl.innerHTML = '';
   const slide = current.slides[presentIndex];
+  presentFrags = [];
+  presentStep = 0;
   if (slide) {
     const node = slideEl(slide, current.theme);
-    presentEl.appendChild(node);
-    const scale = Math.min(presentEl.clientWidth / 640, presentEl.clientHeight / 360);
-    node.style.transformOrigin = 'center center';
-    node.style.transform = `scale(${scale})`;
+    // The slide carries the fit-to-screen scale as an inline transform, so the
+    // entrance animation must run on a wrapper — a CSS animation on the slide
+    // itself would override `scale()` and blow the layout up to 640×360.
+    const stage = h('div', 'impress-present-stage');
+    presentEl.dataset.transition = TRANSITIONS.includes(slide.transition) ? slide.transition : 'none';
+    stage.appendChild(node);
+    presentEl.appendChild(stage);
+    fitPresentSlide();
+
+    // Progressive bullet build: bullets start hidden and arrive one advance at
+    // a time (`reveal: 'bullets'`). Hidden keeps layout stable (opacity only).
+    presentFrags = slide.reveal === 'bullets'
+      ? [...node.querySelectorAll('.impress-slide-bullet')]
+      : [];
+    revealFragments(0);
   }
   const count = h('div', 'impress-present-count', `${presentIndex + 1} / ${slideCount()}`);
   presentEl.appendChild(count);
+  presentEl.appendChild(buildPresentControls());
+}
+
+/** Show the first `n` bullet fragments of the current slide. */
+function revealFragments(n) {
+  presentStep = Math.max(0, Math.min(n, presentFrags.length));
+  presentFrags.forEach((frag, i) => frag.classList.toggle('is-hidden', i >= presentStep));
 }
 
 function nextSlide() {
+  // A slide with a bullet build spends one advance per bullet first.
+  if (presentStep < presentFrags.length) {
+    revealFragments(presentStep + 1);
+    return;
+  }
   if (presentIndex < slideCount() - 1) {
     presentIndex++;
     renderPresent();
@@ -693,9 +888,16 @@ function nextSlide() {
 }
 
 function prevSlide() {
+  // Step back through a bullet build before leaving the slide.
+  if (presentStep > 0) {
+    revealFragments(presentStep - 1);
+    return;
+  }
   if (presentIndex > 0) {
     presentIndex--;
     renderPresent();
+    // Arriving from the right, the previous slide shows in full.
+    revealFragments(presentFrags.length);
   }
 }
 
@@ -769,6 +971,8 @@ export function mountImpressTile() {
   saveDot = h('span', 'impress-save-dot');
   saveDot.setAttribute('aria-hidden', 'true');
 
+  presentBtn = toolbarButton('ui/play', 'Present', startPresent);
+
   // Single top bar (Studio-style): deck menu + title + theme + action buttons.
   bar.append(
     deckMenuBtn,
@@ -779,7 +983,7 @@ export function mountImpressTile() {
     toolbarButton('ui/upload', 'Export .odp', () => void exportOdp()),
     toolbarButton('ui/save', 'Save now', () => void persist()),
     toolbarButton('ui/trash', 'Delete presentation', () => void removeCurrent(), true),
-    toolbarButton('ui/play', 'Present', startPresent),
+    presentBtn,
     saveDot,
   );
   tileEl.appendChild(bar);
@@ -808,14 +1012,10 @@ export function mountImpressTile() {
   status.appendChild(statusEl);
   tileEl.appendChild(status);
 
-  // Keyboard: left/right move slides (ignore when typing in a field).
+  // Keyboard: left/right move slides (ignore when typing in a field). While
+  // presenting, the overlay owns the keyboard (it lives on <body>).
   tileEl.addEventListener('keydown', (e) => {
-    if (presentIndex >= 0) {
-      if (e.key === 'ArrowRight') { e.preventDefault(); nextSlide(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
-      else if (e.key === 'Escape') { e.preventDefault(); stopPresent(); }
-      return;
-    }
+    if (presentIndex >= 0) return;
     const active = document.activeElement;
     const tag = (active?.tagName || '').toLowerCase();
     if (['input', 'textarea', 'select'].includes(tag) || active?.isContentEditable) return;
@@ -851,6 +1051,54 @@ function buildInspector() {
     return layoutSelect;
   });
   panel.appendChild(layoutField);
+
+  // Animation: transition on entry + bullet build, both per slide.
+  const animation = h('div', 'impress-anim');
+  const animField = (label, options, labels, onChange) => {
+    const wrap = h('div', 'impress-field');
+    wrap.appendChild(h('label', 'impress-field-label', label));
+    const select = document.createElement('select');
+    select.className = 'impress-field-input';
+    for (const value of options) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = labels[value] || value;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => onChange(select.value));
+    wrap.appendChild(select);
+    return { wrap, select };
+  };
+
+  const transitionField = animField('Transition', TRANSITIONS, TRANSITION_LABELS, (value) => {
+    if (!current) return;
+    current.slides[selIndex].transition = value;
+    markDirty();
+  });
+  transitionSelect = transitionField.select;
+  animation.appendChild(transitionField.wrap);
+
+  const revealField = animField('Bullets', REVEALS, REVEAL_LABELS, (value) => {
+    if (!current) return;
+    current.slides[selIndex].reveal = value;
+    markDirty();
+  });
+  revealSelect = revealField.select;
+  animation.appendChild(revealField.wrap);
+
+  // Applying the current slide's animation to the whole deck is the common
+  // case — a per-slide-only editor would mean 20 edits for a 20-slide deck.
+  const applyAll = button({
+    icon: 'ui/loop',
+    variant: 'ghost',
+    onClick: () => applyAnimationToAll(),
+  });
+  applyAll.classList.add('ui-btn--icon', 'impress-anim-apply');
+  applyAll.title = 'Apply this transition and bullet build to every slide';
+  applyAll.setAttribute('aria-label', 'Apply to all slides');
+  animation.appendChild(applyAll);
+
+  panel.appendChild(animation);
 
   // Speaker notes are the one field that has no on-slide home.
   fieldNotes = buildField('Speaker notes', 'textarea');
@@ -946,6 +1194,9 @@ function moveSlide(delta) {
 export function unmountImpressTile() {
   if (current && dirty) void persist();
   stopPresent();
+  presentEl?.remove();
+  document.removeEventListener('fullscreenchange', onPresentViewportChange);
+  window.removeEventListener('resize', onPresentViewportChange);
   window.clearTimeout(thumbRefreshTimer);
   resizeObserver?.disconnect();
   tileEl?.remove();
@@ -958,12 +1209,19 @@ export function unmountImpressTile() {
   stageSlideNode = null;
   resizeObserver = null;
   deckMenuBtn = null;
+  presentBtn = null;
+  presentPressFromOverlay = false;
   titleInput = null;
   themeSelect = null;
   saveDot = null;
   statusEl = null;
   layoutSelect = null;
+  transitionSelect = null;
+  revealSelect = null;
   fieldNotes = null;
+  presentStep = 0;
+  presentFrags = [];
+  presentFullBtn = null;
   thumbRefreshTimer = null;
 }
 
