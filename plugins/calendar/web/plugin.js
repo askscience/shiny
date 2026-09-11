@@ -548,6 +548,19 @@ export function wireCalendarEvents() {
   window.addEventListener('agent:actions', onAgentActions);
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function calendarContextMenu() {
+  return [
+    { type: 'item', label: 'New event', icon: 'ui/plus', onClick: () => openNew() },
+    { type: 'item', label: 'Today', icon: 'ui/calendar', onClick: () => gotoToday() },
+    { type: 'item', label: 'Refresh', icon: 'ui/refresh', onClick: () => void loadEvents() },
+    { type: 'separator' },
+    { type: 'item', label: 'Previous month', icon: 'ui/chevron-left', onClick: () => changeMonth(-1) },
+    { type: 'item', label: 'Next month', icon: 'ui/chevron-right', onClick: () => changeMonth(1) },
+  ];
+}
+
 export default {
   name: 'calendar',
   icon: 'ui/calendar',
@@ -555,4 +568,5 @@ export default {
   unmount: unmountCalendarTile,
   getElement: getCalendarTileElement,
   wireEvents: wireCalendarEvents,
+  contextMenu: calendarContextMenu,
 };

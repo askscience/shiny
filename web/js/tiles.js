@@ -223,6 +223,37 @@ export async function deactivatePlugin(name) {
   window.dispatchEvent(new CustomEvent('plugins:changed'));
 }
 
+/** Activate a plugin for this session — mirrors the tray / Plugins page. The
+ *  `opened` hint makes the desktop focus (raise) the new window. */
+export async function activatePlugin(name) {
+  try {
+    await apiFetch('/api/plugins/activate', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  } catch (err) {
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { message: err.message || `Could not activate ${pluginLabel(name)}`, type: 'error' },
+    }));
+    return;
+  }
+  localStorage.setItem('plugins.changed', String(Date.now()));
+  window.dispatchEvent(new CustomEvent('plugins:changed', { detail: { opened: name } }));
+}
+
+/** The loaded window-surface module for a plugin (or undefined). Used by the
+ *  context menu to collect the app's own `contextMenu()` entries. */
+export function getPluginSurface(name) {
+  return surfaceModules.get(name);
+}
+
+/** The mounted window element for a plugin (the map counts as traveler's), or
+ *  null when the plugin has no window / is not mounted yet. */
+export function getPluginTile(name) {
+  if (name === MAP_TILE_PLUGIN) return mapTileEl;
+  return surfaceModules.get(name)?.getElement?.() || null;
+}
+
 /** Add the shared window chrome (title bar + close/fullscreen controls) to a
  *  plugin window, once. The controls sit on the left as requested; the title
  *  is centered and the header doubles as the drag handle in Windows layout. */

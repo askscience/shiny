@@ -1120,6 +1120,19 @@ export function wireCalcEvents() {
   });
 }
 
+/** Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ *  Core supplies the surrounding separators + window management. */
+export function calcContextMenu(ctx) {
+  const hasSheet = !!current;
+  return [
+    { type: 'item', label: 'New spreadsheet', icon: 'ui/plus', onClick: () => void newSheet() },
+    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasSheet || !dirty, onClick: () => void persist() },
+    { type: 'item', label: 'Export .ods', icon: 'ui/upload', disabled: !hasSheet, onClick: () => void exportOds() },
+    { type: 'separator' },
+    { type: 'item', label: 'Delete spreadsheet', icon: 'ui/trash', danger: true, disabled: !hasSheet, onClick: () => void removeCurrent() },
+  ];
+}
+
 export default {
   name: 'calc',
   icon: 'ui/calc',
@@ -1127,4 +1140,5 @@ export default {
   unmount: unmountCalcTile,
   getElement: getCalcTileElement,
   wireEvents: wireCalcEvents,
+  contextMenu: calcContextMenu,
 };

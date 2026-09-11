@@ -4,11 +4,20 @@
  * The desktop is a Hyprland-style window manager (desktop.js + tiles.js), so
  * right-click follows the same conventions as a real WM:
  *
- *   • Right-click a window title bar  → window menu (focus / fullscreen /
- *     move-to-workspace / deactivate).
- *   • Right-click the empty desktop   → desktop menu (new / remove workspace,
- *     switch workspace, layout mode).
- *   • Right-click a workspace dot     → workspace menu (new / remove).
+ *   • Right-click anywhere in a plugin window (title bar OR content) → window
+ *     menu (focus / fullscreen / move-to-workspace / the app's own actions /
+ *     deactivate). Right-clicks inside text fields keep the native menu.
+ *   • Right-click a plugin tray icon in the top bar → plugin menu (focus,
+ *     fullscreen, activate / deactivate).
+ *   • Right-click the top bar itself        → desktop menu.
+ *   • Right-click the empty desktop         → desktop menu (new / remove
+ *     workspace, switch workspace, layout mode).
+ *   • Right-click a workspace dot           → workspace menu (new / remove).
+ *
+ * Apps extend their own window menu by exporting `contextMenu(ctx)` from their
+ * `web/plugin.js` surface (see PLUGINS.md §19); anything they return is spliced
+ * into the window menu. A plugin may also call `openContextMenu()` for fully
+ * custom popups.
  *
  * The menu itself is a small, self-contained popup engine: `openMenu` takes a
  * list of entries (items, separators, headings, and one level of submenus) and
@@ -20,7 +29,10 @@ import {
   toggleFullscreen, moveWindow, moveWindowByIndex, getWorkspacesList,
   activeWorkspaceIndex, getLayout, setLayout, getFocus, getFullscreen,
 } from './desktop.js';
-import { deactivatePlugin } from './tiles.js';
+import {
+  deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
+} from './tiles.js';
+import { refreshGpsPosition } from './map.js';
 import { setIcon } from '../ui/index.js';
 
 /* ── Popup engine ─────────────────────────────────────────────── */
@@ -104,6 +116,45 @@ function openMenu(entries, x, y) {
   place(el, x, y);
   pushMenu(el);
   return el;
+}
+
+/**
+ * Public entry point for plugin surfaces: open a core-styled context menu at
+ * (x, y) with the same entry shape the desktop menus use.
+ *
+ *   openContextMenu([
+ *     { type: 'heading', label: 'Cell' },
+ *     { type: 'item', label: 'Clear', icon: 'ui/close', onClick: () => … },
+ *   ], e.clientX, e.clientY);
+ */
+export function openContextMenu(entries, x, y) {
+  closeAllMenus();
+  return openMenu(entries, x, y);
+}
+
+/** True for text-entry targets, where the browser's native menu (cut/copy/
+ *  paste/undo) is more useful than ours. `isContentEditable` already accounts
+ *  for an editable ancestor. */
+function isEditableTarget(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return el.isContentEditable === true;
+}
+
+/** Entries an app contributes to its own window menu. A plugin's surface
+ *  module may export `contextMenu(ctx)` returning core menu entries; a throw
+ *  becomes "no extra items" so a buggy plugin can never break right-click. */
+function pluginMenuItems(name, ctx) {
+  const surface = getPluginSurface(name);
+  if (typeof surface?.contextMenu !== 'function') return [];
+  try {
+    const items = surface.contextMenu(ctx);
+    return Array.isArray(items) ? items.filter(Boolean) : [];
+  } catch (err) {
+    console.warn(`contextMenu() for '${name}' failed`, err);
+    return [];
+  }
 }
 
 /** Shared row scaffold: [check] [icon] [label] (+ chevron for submenus). */
@@ -244,7 +295,22 @@ function moveToWorkspaceItems(name) {
   return items;
 }
 
-function windowMenu(name) {
+/** The traveler window is core-hosted (the map), not a plugin surface, so its
+ *  app entries are supplied here rather than by `contextMenu()`. */
+function travelerMenuItems() {
+  return [
+    {
+      type: 'item',
+      label: 'Center on my position',
+      icon: 'ui/pin',
+      onClick: () => void refreshGpsPosition(),
+    },
+  ];
+}
+
+/** Window menu: window management + whatever the app contributes. */
+function windowMenu(name, ctx = {}) {
+  const app = name === 'traveler' ? travelerMenuItems() : pluginMenuItems(name, ctx);
   return [
     { type: 'heading', label: label(name) },
     {
@@ -268,6 +334,7 @@ function windowMenu(name) {
       icon: 'ui/grid',
       items: moveToWorkspaceItems(name),
     },
+    ...(app.length ? [{ type: 'separator' }, ...app] : []),
     { type: 'separator' },
     {
       type: 'item',
@@ -277,6 +344,50 @@ function windowMenu(name) {
       onClick: () => void deactivatePlugin(name),
     },
   ];
+}
+
+/** Top-bar plugin tray icon → plugin menu. Lifecycle only: the app's own
+ *  actions live in its window menu. */
+function trayMenu(btn) {
+  const name = btn?.dataset?.plugin;
+  if (!name) return null;
+  const active = btn.classList.contains('is-active');
+  const hasWindow = !!getPluginTile(name);
+
+  const items = [{ type: 'heading', label: label(name) }];
+  if (active) {
+    if (hasWindow) {
+      items.push({
+        type: 'item',
+        label: 'Focus window',
+        icon: 'ui/monitor',
+        onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name } })),
+      });
+      items.push({
+        type: 'item',
+        label: 'Full screen',
+        icon: 'ui/expand',
+        checked: getFullscreen() === name,
+        onClick: () => toggleFullscreen(name),
+      });
+    }
+    items.push({ type: 'separator' });
+    items.push({
+      type: 'item',
+      label: 'Deactivate',
+      icon: 'ui/close',
+      danger: true,
+      onClick: () => void deactivatePlugin(name),
+    });
+  } else {
+    items.push({
+      type: 'item',
+      label: 'Activate',
+      icon: 'ui/plus',
+      onClick: () => void activatePlugin(name),
+    });
+  }
+  return items;
 }
 
 function switchWorkspaceItems() {
@@ -345,15 +456,31 @@ export function initContextMenu() {
   app.addEventListener('contextmenu', (e) => {
     const target = e.target;
 
-    // Window title bar → window menu.
-    const header = target.closest?.('.tile-header');
-    if (header) {
-      const tile = header.closest('.tile');
-      const name = tile?.dataset.plugin;
-      if (!name) return;
+    // Plugin tray icon (top bar) → plugin lifecycle menu.
+    const tray = target.closest?.('.hud-plugin-btn');
+    if (tray) {
+      const entries = trayMenu(tray);
+      if (!entries) return;
       e.preventDefault();
       closeAllMenus();
-      openMenu(windowMenu(name), e.clientX, e.clientY);
+      openMenu(entries, e.clientX, e.clientY);
+      return;
+    }
+
+    // Anywhere in a plugin window — title bar OR content — → window menu,
+    // extended with the app's own entries (surface `contextMenu()`).
+    // Text fields keep the native menu so cut/copy/paste still work.
+    const tile = target.closest?.('.tile');
+    if (tile) {
+      const name = tile.dataset.plugin;
+      if (!name || isEditableTarget(target)) return;
+      e.preventDefault();
+      closeAllMenus();
+      openMenu(
+        windowMenu(name, { plugin: name, tile, target, source: 'window' }),
+        e.clientX,
+        e.clientY,
+      );
       return;
     }
 
@@ -365,6 +492,14 @@ export function initContextMenu() {
       e.preventDefault();
       closeAllMenus();
       openMenu(workspaceDotMenu(index), e.clientX, e.clientY);
+      return;
+    }
+
+    // Top bar background (the HUD pill / workspace bar) → desktop menu.
+    if (target.closest?.('.hud-header-main') || target.closest?.('#workspace-bar')) {
+      e.preventDefault();
+      closeAllMenus();
+      openMenu(desktopMenu(), e.clientX, e.clientY);
       return;
     }
 
