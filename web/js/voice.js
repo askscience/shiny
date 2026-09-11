@@ -355,10 +355,17 @@ export async function speak(text, lang) {
     });
     const url = URL.createObjectURL(blob);
     currentAudio = new Audio(url);
+
+    // Keep the orb alive with the ASSISTANT's voice: the mic is already
+    // stopped by now, so without this the animation would freeze exactly
+    // when the answer arrives. Same signal shape as the microphone, but the
+    // assistant speaks from the centre (pan 0).
+    const stopPulse = attachTtsPulse(currentAudio);
+
     await new Promise((resolve, reject) => {
-      currentAudio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-      currentAudio.onerror = reject;
-      currentAudio.play().catch(reject);
+      currentAudio.onended = () => { stopPulse(); URL.revokeObjectURL(url); resolve(); };
+      currentAudio.onerror = () => { stopPulse(); reject(new Error('playback failed')); };
+      currentAudio.play().catch((e) => { stopPulse(); reject(e); });
     });
   } catch (e) {
     console.warn('TTS failed:', e);
@@ -366,6 +373,90 @@ export async function speak(text, lang) {
       detail: { message: 'Voice playback unavailable', type: 'error' },
     }));
   }
+}
+
+/** WebAudio context for analysing the assistant's playback (lazily created). */
+let ttsContext = null;
+
+function analyserContext() {
+  if (!ttsContext || ttsContext.state === 'closed') {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    ttsContext = new Ctx();
+  }
+  return ttsContext;
+}
+
+/** Unlock the analysis context on the first gesture, so it is already
+ *  running by the time the assistant answers (creating one later would be
+ *  suspended by the autoplay policy and we would lose the pulse). */
+function unlockAnalyserContext() {
+  const ctx = analyserContext();
+  if (!ctx) {
+    window.removeEventListener('pointerdown', unlockAnalyserContext);
+    return;
+  }
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx.state === 'running') window.removeEventListener('pointerdown', unlockAnalyserContext);
+}
+window.addEventListener('pointerdown', unlockAnalyserContext);
+
+/**
+ * Drive `voice:level` from an <audio> element's own output, so the orb keeps
+ * reacting while the assistant talks. Returns a stop() that releases the
+ * analyser and lets the orb settle. Falls back to a no-op when WebAudio can't
+ * analyse (a suspended context would mute playback, so we never risk that).
+ */
+function attachTtsPulse(audio) {
+  const ctx = analyserContext();
+  if (!ctx || ctx.state !== 'running') {
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return () => {};
+  }
+
+  let source = null;
+  let analyser = null;
+  try {
+    source = ctx.createMediaElementSource(audio);
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.55;
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+  } catch (_) {
+    try { source?.disconnect(); } catch (_) {}
+    try { analyser?.disconnect(); } catch (_) {}
+    return () => {};
+  }
+
+  const data = new Float32Array(analyser.fftSize);
+  let raf = 0;
+  let stopped = false;
+
+  const tick = () => {
+    if (stopped || audio.ended || audio.paused) return;
+    analyser.getFloatTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+    const level = Math.min(1, Math.sqrt(sum / data.length) * 3.4);
+    window.dispatchEvent(new CustomEvent('voice:level', {
+      detail: { level, pan: 0, source: 'tts' },
+    }));
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    if (raf) cancelAnimationFrame(raf);
+    try { source.disconnect(); } catch (_) {}
+    try { analyser.disconnect(); } catch (_) {}
+    // Let the orb fall back to rest instead of freezing on the last frame.
+    window.dispatchEvent(new CustomEvent('voice:level', {
+      detail: { level: 0, pan: 0, source: 'tts' },
+    }));
+  };
 }
 
 export function isListening() {
