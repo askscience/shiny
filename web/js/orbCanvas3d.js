@@ -65,18 +65,23 @@ function basisFor(n) {
   return { u, v: cross(n, u) };
 }
 
-/** Points of a great circle (or a smaller circle) around `normal`. */
-function circlePoints(normal, count = 64, radius = 1) {
+/** Points of a circle around `normal`. `wobble` makes the loop non-planar
+ *  (yarn-like) while keeping it periodic, so the curve still closes. */
+function circlePoints(normal, count = 64, radius = 1, wobble = 0, seed = 0) {
   const { u, v } = basisFor(normal);
   const pts = [];
   for (let i = 0; i < count; i++) {
     const th = (i / count) * TAU;
     const c = Math.cos(th);
     const s = Math.sin(th);
+    const w = wobble
+      ? 1 + wobble * Math.sin(th * 2.7 + seed) * Math.sin(th * 1.3 - seed * 0.7)
+      : 1;
+    const r = radius * w;
     pts.push([
-      (u[0] * c + v[0] * s) * radius,
-      (u[1] * c + v[1] * s) * radius,
-      (u[2] * c + v[2] * s) * radius,
+      (u[0] * c + v[0] * s) * r,
+      (u[1] * c + v[1] * s) * r,
+      (u[2] * c + v[2] * s) * r,
     ]);
   }
   return pts;
@@ -146,6 +151,9 @@ void main() {
   vec3 c = mix(uColor, uRim, clamp(f * 1.5, 0.0, 1.0));
   float a = clamp(f * uIntensity + uBias, 0.0, 1.0);
   gl_FragColor = vec4(c, a);
+  // A raw ShaderMaterial must apply the renderer's output conversion itself;
+  // without it linear values land in the framebuffer and read much too dark.
+  #include <colorspace_fragment>
 }
 `;
 
@@ -178,7 +186,9 @@ export class Orb3DRenderer {
     this.renderer.setClearColor(0x000000, 0);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
-    this.camera.position.set(0, 0, 3.3);
+    // Close enough that a radius-1 sphere nearly fills the canvas, like the
+    // reference renders (the halo bleeds past the edges).
+    this.camera.position.set(0, 0, 3.0);
     this.root = new THREE.Group();
     this.scene.add(this.root);
 
@@ -381,9 +391,11 @@ export class Orb3DRenderer {
     this.t = ts * 0.001;
 
     if (this.preview) {
-      // Synthesize a voice so every style shows off in the settings grid.
-      this.targetLevel = 0.42 + 0.34 * Math.sin(this.t * 1.15);
-      this.targetPan = Math.sin(this.t * 0.42);
+      // Settings previews breathe with a synthetic voice — but deliberately
+      // stay centred. Oscillating `pan` made every card look like it was
+      // being squeezed, which is not what a silent preview should show.
+      this.targetLevel = 0.38 + 0.24 * Math.sin(this.t * 0.9);
+      this.targetPan = 0;
     }
     const k = this.targetLevel > this.intensity ? 0.45 : 0.1;
     this.intensity += (this.targetLevel - this.intensity) * k;
@@ -410,9 +422,11 @@ export class Orb3DRenderer {
     }
 
     for (const p of this.parts) {
+      // Keep a high floor: the references are bright at rest, so the voice
+      // only pushes them further instead of dimming them when quiet.
       const factor = p.kind === 'sprite'
-        ? 0.45 + 1.0 * energy
-        : 0.72 + 0.6 * energy;
+        ? 0.7 + 0.8 * energy
+        : 0.92 + 0.35 * energy;
       if (p.kind === 'shell') {
         p.obj.material.uniforms.uIntensity.value = p.baseOpacity * factor;
       } else {
@@ -428,66 +442,76 @@ export class Orb3DRenderer {
 /* ── per-style scenes ────────────────────────────────────────── */
 
 const STYLES = {
-  /** A ball of light trails inside glass, with one bright ribbon. */
+  /** A ball of light trails inside glass, with one bright ribbon.
+   *  Reference 1: dozens of thin loops of varying size — not a tidy set of
+   *  great circles — so the sphere reads as wound yarn of light. */
   filament() {
-    const norms = strandNormals(16);
-    for (let i = 0; i < norms.length; i++) {
-      this._addTube(circlePoints(norms[i], 64), {
-        radius: 0.0045,
-        opacity: 0.42,
+    const count = 44;
+    const norms = strandNormals(count);
+    for (let i = 0; i < count; i++) {
+      const radius = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(i * 1.7));
+      this._addTube(circlePoints(norms[i], 64, radius, 0.05, i * 0.9), {
+        radius: 0.0028,
+        opacity: 0.78,
         colorIndex: i % 3,
-        tubular: 90,
+        tubular: 72,
       });
     }
-    // The ribbon: a wide soft pass and a bright thin core.
-    const ribbon = circlePoints(norms[4], 96);
-    this._addTube(ribbon, { radius: 0.05, opacity: 0.16, colorIndex: 2, tubular: 120 });
-    this._addTube(ribbon, { radius: 0.012, opacity: 0.6, colorIndex: 3, tubular: 120 });
-    this._addShell(1.02, { power: 1.5, intensity: 0.12, colorIndex: 0, rimIndex: 2 });
-    this._addHalo(3.0, 0.22, 0);
+    // The ribbon: a wide soft pass, a bright core and a white specular line.
+    const ribbon = circlePoints(norms[5], 96);
+    this._addTube(ribbon, { radius: 0.06, opacity: 0.26, colorIndex: 2, tubular: 130 });
+    this._addTube(ribbon, { radius: 0.015, opacity: 0.95, colorIndex: 2, tubular: 130 });
+    this._addTube(ribbon, { radius: 0.005, opacity: 0.9, colorIndex: 3, tubular: 130 });
+    // Glass body so the ball is not only lines.
+    this._addShell(1.0, { power: 1.2, intensity: 0.22, colorIndex: 0, rimIndex: 2 });
+    this._addHalo(3.0, 0.34, 0);
   },
 
-  /** A hollow glass shell: light lives in the rim. */
+  /** A hollow glass shell whose light lives in a thick, blazing rim.
+   *  Reference 2. */
   bubble() {
-    this._addShell(0.94, { power: 3.2, intensity: 0.95, colorIndex: 0, rimIndex: 1 });
-    this._addShell(0.9, { power: 1.6, intensity: 0.26, colorIndex: 1, rimIndex: 2 });
-    this._addHalo(2.7, 0.15, 0);
-    this._addHalo(0.9, 0.5, 0, [-0.42, 0.44, 0.3], '#ffffff');
-    this._addHalo(1.1, 0.22, 2, [-0.3, -0.5, 0.4]);
+    // Outer bloom, the bright rim itself, and a thinner inner ring.
+    this._addShell(1.06, { power: 1.5, intensity: 0.55, colorIndex: 0, rimIndex: 2 });
+    this._addShell(0.94, { power: 2.5, intensity: 1.9, colorIndex: 0, rimIndex: 1 });
+    this._addShell(0.9, { power: 3.6, intensity: 0.4, colorIndex: 1, rimIndex: 2 });
+    this._addHalo(3.0, 0.4, 0);
+    // Sharp white specular (top-left) and the warm inner reflection.
+    this._addHalo(0.75, 1.0, 0, [-0.42, 0.44, 0.35], '#ffffff');
+    this._addHalo(1.25, 0.5, 2, [-0.32, -0.5, 0.4]);
   },
 
-  /** Glass with luminous ribbons and filaments caught inside. */
+  /** Glass with luminous ribbons and filaments caught inside. Reference 3. */
   marble() {
-    this._addShell(0.98, { power: 2.4, intensity: 0.65, colorIndex: 0, rimIndex: 2 });
+    this._addShell(0.98, { power: 2.2, intensity: 1.3, colorIndex: 0, rimIndex: 2 });
     const norms = strandNormals(3);
     for (let i = 0; i < norms.length; i++) {
-      const pts = circlePoints(norms[i], 64, 0.62 + i * 0.08);
-      this._addTube(pts, { radius: 0.022, opacity: 0.34, colorIndex: i + 1, tubular: 90 });
-      this._addTube(pts, { radius: 0.006, opacity: 0.5, colorIndex: i, tubular: 90 });
+      const pts = circlePoints(norms[i], 64, 0.62 + i * 0.09, 0.06, i * 2.1);
+      this._addTube(pts, { radius: 0.03, opacity: 0.5, colorIndex: i + 1, tubular: 100 });
+      this._addTube(pts, { radius: 0.009, opacity: 0.95, colorIndex: i, tubular: 100 });
     }
-    // A few fine filaments through the glass.
-    for (let lat = -50; lat <= 50; lat += 50) {
+    // Fine filaments across the glass.
+    for (let lat = -55; lat <= 55; lat += 55) {
       const rad = (lat * Math.PI) / 180;
-      const r = Math.cos(rad) * 0.92;
-      const y = Math.sin(rad) * 0.92;
+      const r = Math.cos(rad) * 0.93;
+      const y = Math.sin(rad) * 0.93;
       const pts = [];
       for (let i = 0; i < 64; i++) {
         const th = (i / 64) * TAU;
         pts.push([Math.cos(th) * r, y, Math.sin(th) * r]);
       }
-      this._addTube(pts, { radius: 0.0035, opacity: 0.22, colorIndex: 0, tubular: 80 });
+      this._addTube(pts, { radius: 0.004, opacity: 0.4, colorIndex: 0, tubular: 80 });
     }
-    this._addHalo(2.4, 0.14, 2);
-    this._addHalo(1.3, 0.22, 1, [0, -0.5, 0.35]);
+    this._addHalo(2.7, 0.2, 2);
+    this._addHalo(1.35, 0.45, 1, [0, -0.5, 0.35]);
   },
 
-  /** Tilted luminous rings around a bright core, each with a bead. */
+  /** Tilted luminous rings around a bright core, each carrying a bead. */
   orbit() {
-    this._addHalo(1.9, 0.3, 0);
-    this._addShell(0.34, { power: 1.2, intensity: 0.9, colorIndex: 3, rimIndex: 0 });
-    this._addRing(0.78, 0.006, [Math.PI / 2.3, 0, 0.3], { opacity: 0.5, colorIndex: 1, bead: 0.052 });
-    this._addRing(0.9, 0.005, [Math.PI / 1.7, 0.45, -0.2], { opacity: 0.42, colorIndex: 2, bead: 0.046 });
-    this._addRing(0.64, 0.005, [Math.PI / 3.0, -0.3, 0.6], { opacity: 0.46, colorIndex: 0, bead: 0.04 });
+    this._addHalo(2.0, 0.55, 0);
+    this._addShell(0.3, { power: 1.0, intensity: 1.7, colorIndex: 3, rimIndex: 0 });
+    this._addRing(0.78, 0.008, [Math.PI / 2.3, 0, 0.3], { opacity: 0.85, colorIndex: 1, bead: 0.062 });
+    this._addRing(0.9, 0.007, [Math.PI / 1.7, 0.45, -0.2], { opacity: 0.75, colorIndex: 2, bead: 0.055 });
+    this._addRing(0.64, 0.007, [Math.PI / 3.0, -0.3, 0.6], { opacity: 0.8, colorIndex: 0, bead: 0.048 });
   },
 
   /** A lat/long wireframe of light with a bright equator. */
@@ -502,21 +526,21 @@ const STYLES = {
         const th = (i / 64) * TAU;
         pts.push([Math.cos(th) * r, y, Math.sin(th) * r]);
       }
-      this._addTube(pts, { radius: 0.004, opacity: 0.3, colorIndex: 0, tubular: 80 });
+      this._addTube(pts, { radius: 0.0045, opacity: 0.55, colorIndex: 0, tubular: 80 });
     }
     // Longitudes (great circles through the poles).
     for (let lon = 0; lon < 180; lon += 30) {
       this._addTube(circlePoints([Math.cos((lon * Math.PI) / 180), 0, Math.sin((lon * Math.PI) / 180)], 64), {
-        radius: 0.0035,
-        opacity: 0.26,
+        radius: 0.004,
+        opacity: 0.5,
         colorIndex: 1,
         tubular: 80,
       });
     }
     // Bright equator seam.
-    this._addTube(circlePoints([0, 1, 0], 96), { radius: 0.012, opacity: 0.6, colorIndex: 3, tubular: 120 });
-    this._addShell(1.0, { power: 2.0, intensity: 0.16, colorIndex: 0, rimIndex: 2 });
-    this._addHalo(2.3, 0.13, 2);
+    this._addTube(circlePoints([0, 1, 0], 96), { radius: 0.014, opacity: 1.0, colorIndex: 2, tubular: 130 });
+    this._addShell(1.0, { power: 1.8, intensity: 0.3, colorIndex: 0, rimIndex: 2 });
+    this._addHalo(2.6, 0.2, 2);
   },
 };
 
