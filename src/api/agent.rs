@@ -48,6 +48,10 @@ pub struct DesktopState {
     pub active: Option<u32>,
     #[serde(default)]
     pub workspaces: Vec<WorkspaceSnapshot>,
+    /// False when the client is on a vertical, phone-like screen and has
+    /// switched the workspace system off. Missing (older clients) means on.
+    #[serde(default)]
+    pub workspaces_enabled: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -155,6 +159,28 @@ fn desktop_state_block(desktop: Option<&DesktopState>) -> String {
     if d.workspaces.is_empty() {
         return String::new();
     }
+    if d.workspaces_enabled == Some(false) {
+        // A vertical, phone-like screen: one column, no workspaces at all.
+        let windows = d
+            .workspaces
+            .iter()
+            .flat_map(|ws| ws.windows.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        let list = if windows.is_empty() {
+            "none".to_string()
+        } else {
+            windows.join(", ")
+        };
+        return format!(
+            "\n## Desktop (current layout)\n\
+             This screen is vertical, so the desktop is a SINGLE column of windows ({list}).\n\
+             There are no workspaces here: workspace_create, workspace_remove, workspace_switch \n\
+             and workspace_move do nothing. Do not call them, and never tell the user you \n\
+             created, removed or switched a workspace. Use desktop_fullscreen or show_plugin \n\
+             to change what is on screen.\n"
+        );
+    }
     let mut lines = Vec::new();
     for ws in &d.workspaces {
         let label = if ws.windows.is_empty() {
@@ -211,6 +237,11 @@ async fn prepare_agent(
         heading: ctx_body.heading,
         lang: lang.clone(),
         ollama_model: requested_model.clone(),
+        workspaces_enabled: body
+            .desktop
+            .as_ref()
+            .and_then(|d| d.workspaces_enabled)
+            .unwrap_or(true),
     };
 
     // Per-user active plugin set FOR THIS SESSION — drives which plugins'
@@ -320,9 +351,10 @@ async fn prepare_agent(
         .map(|(n, d, _)| format!("- {}: {}", n, d))
         .collect();
 
+    let workspaces_enabled = ctx.workspaces_enabled;
     let plugin_windows_block = if active_lines.is_empty() {
         String::new()
-    } else {
+    } else if workspaces_enabled {
         format!(
             "\n## Plugin windows\n\
              Each active plugin has its own window, tiled Hyprland-style and grouped on \
@@ -332,6 +364,18 @@ async fn prepare_agent(
              this focuses and opens its window. Use desktop_fullscreen to make it full screen, \
              and workspace_create / workspace_remove / workspace_switch / workspace_move to \
              manage desktops.\n",
+            active_lines.join("\n")
+        )
+    } else {
+        format!(
+            "\n## Plugin windows\n\
+             Each active plugin has its own window. Active plugins:\n{}\n\
+             When the request clearly belongs to a plugin's domain, call \
+             {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
+             this focuses and opens its window. Use desktop_fullscreen to make it full screen. \
+             This screen is vertical, so there is ONE column and no workspaces: the \
+             workspace_create / workspace_remove / workspace_switch / workspace_move tools do \
+             nothing here — never call them, and never tell the user you did.\n",
             active_lines.join("\n")
         )
     };
