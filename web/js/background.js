@@ -30,11 +30,12 @@ export const BACKGROUND_PRESETS = [
 ];
 
 /**
- * Which wallpaper a user gets before they choose one, per theme mode. The
- * default has to suit the theme it lands in: the dark pieces would swallow
- * dark UI text, so light themes start on Paper instead.
+ * The wallpaper a user gets before they choose one. Grid is the app default.
+ * It is a dark piece, so on a light theme it paints a dark canvas behind dark
+ * UI text — light themes are readable either because the user picked Paper or
+ * because their own photo is light.
  */
-const DEFAULT_BG_PRESETS = { dark: 'split', light: 'paper' };
+const DEFAULT_BG_PRESET = 'grid';
 
 const UPLOAD_DIM = 0.5;
 // `preset` stays null here on purpose: a user who never touched this setting
@@ -73,7 +74,7 @@ function uploadScrim() {
 
 /** The built-in wallpaper that stands in when the user has chosen nothing. */
 export function defaultPreset() {
-  return presetById(DEFAULT_BG_PRESETS[canvasMode()]) || BACKGROUND_PRESETS[0];
+  return presetById(DEFAULT_BG_PRESET) || BACKGROUND_PRESETS[0];
 }
 
 /**
