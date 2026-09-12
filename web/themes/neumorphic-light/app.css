@@ -65,6 +65,11 @@
 .keyboard-key { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
 .keyboard-key:active, .keyboard-key.is-active { box-shadow: var(--shadow-inset-sm); }
 
+/* Calculator — the keypad follows the keyboard's grammar: raised at rest,
+   pressed on tap. Only the keys; the bar buttons and the display stay flat. */
+.calculator-key { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.calculator-key:active { box-shadow: var(--shadow-inset-sm); }
+
 /* Travel panel — replace the hardcoded black drop shadow. */
 #travel-panel { box-shadow: var(--shadow-float); }
 
