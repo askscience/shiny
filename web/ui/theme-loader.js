@@ -13,7 +13,13 @@
 
 const THEME_KEY = 'ui.theme.name';
 const THEMES_KEY = 'ui.theme.list';
-const FALLBACK_THEME = 'noir';
+/**
+ * The theme a fresh install starts on. It is also hardcoded in the pre-paint
+ * bootstrap each page runs (see the inline script in index/settings/plugins
+ * .html), which cannot import this module — keep the two in step.
+ */
+const DEFAULT_THEME = 'neumorphic';
+const FALLBACK_THEME = DEFAULT_THEME;
 
 let activeTheme = FALLBACK_THEME;
 let manifest = null;
@@ -107,7 +113,10 @@ function applyTheme(theme) {
 export async function initThemeLoader() {
   const themes = await listThemes();
   const stored = localStorage.getItem(THEME_KEY);
-  applyTheme(themes.includes(stored) ? stored : themes[0]);
+  // A fresh install starts on DEFAULT_THEME, not on whichever theme happens to
+  // be first in the index.
+  const fallback = themes.includes(DEFAULT_THEME) ? DEFAULT_THEME : themes[0];
+  applyTheme(themes.includes(stored) ? stored : fallback);
   manifest = await loadManifest(activeTheme);
   setAppHref(activeTheme, manifest);
   return manifest;
