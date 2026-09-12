@@ -179,6 +179,15 @@ where
                 serde_json::to_string(&params).unwrap_or_default()
             );
 
+            // Workspaces do not exist on a vertical, phone-like screen: the
+            // tool is refused before it runs, with a step that says so rather
+            // than claiming a workspace was created.
+            if action.starts_with("workspace_") && !input.ctx.workspaces_enabled {
+                tracing::info!("Refusing {action}: workspaces are off on this screen");
+                on_step("Workspaces are unavailable on this screen");
+                continue;
+            }
+
             on_step(&ui_step_label(state, &action));
 
             match execute_action(state, traveler, &input.ctx, &action, &params).await {

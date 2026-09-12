@@ -273,6 +273,15 @@ pub async fn execute_action(
                 owner: None,
             }
         }
+        // Refused on a vertical, phone-like screen (see AgentContext).
+        "workspace_create" if !ctx.workspaces_enabled => ActionOutcome {
+            action: action_key.clone(),
+            result: "unavailable".into(),
+            data: json!({ "reason": "workspaces are off on this screen" }),
+            artifact: None,
+            extra_artifacts: vec![],
+            owner: None,
+        },
         "workspace_create" => ActionOutcome {
             action: action_key.clone(),
             result: "ok".into(),
