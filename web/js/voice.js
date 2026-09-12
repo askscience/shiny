@@ -352,6 +352,11 @@ export async function speak(text, lang) {
     currentAudio = null;
   }
 
+  // Nothing sits under the orb while the answer is fetched and read aloud.
+  // This is a class rather than a direct hide so the CSS can keep the dock's
+  // space — collapsing it would drop the orb and start it moving again.
+  document.body.classList.add('orb-speaking');
+
   const voiceLang = lang || getVoiceLang();
   try {
     const blob = await apiFetch('/api/tts', {
@@ -383,6 +388,8 @@ export async function speak(text, lang) {
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: { message: 'Voice playback unavailable', type: 'error' },
     }));
+  } finally {
+    document.body.classList.remove('orb-speaking');
   }
 }
 

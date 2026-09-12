@@ -2,7 +2,9 @@
 
 #chrome-bottom {
   position: fixed;
-  bottom: max(32px, calc(env(safe-area-inset-bottom) + 28px));
+  /* Clears the status line that hangs below the orb (see #artifact-dock in
+     app.css) so that bubble never has to push the orb up to fit. */
+  bottom: max(44px, calc(env(safe-area-inset-bottom) + 40px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 35;
