@@ -816,7 +816,7 @@ Before publishing a plugin:
 - [ ] All DB/HTTP work goes through the async accessors `ctx.pool()/ollama()/search()/supertonic()` — never a host-passed pool or client (§15)
 - [ ] Every migration file is idempotent (`CREATE TABLE IF NOT EXISTS`)
 - [ ] `skills_md` and `persona` are set if the plugin contributes persona/skills
-- [ ] `web/icon.svg` ships a 24×24 `currentColor` icon (§19 "Plugin icon")
+- [ ] `web/icon.svg` ships a 24×24 `currentColor` icon in the plugin icon style — bold `stroke-width="2"`, round caps/joins, tight framing (§19 "Plugin icon" → "Icon style")
 - [ ] User-visible events use the core notification system (`notify()` / `with_notification`) — §19 "Notifications"
 - [ ] zip / tar.gz test build is reproducible
 - [ ] `cargo check` succeeds for the plugin crate
@@ -992,9 +992,8 @@ Rules:
 ### Plugin icon
 
 Every plugin ships `web/icon.svg` — a single-color 24×24 SVG drawn with
-`stroke="currentColor"` (the same style as the theme icons in
-`web/themes/<name>/icons/`). Core serves it at `/plugins/<name>/icon.svg` and
-shows it in two places:
+`stroke="currentColor"`. Core serves it at `/plugins/<name>/icon.svg` and shows
+it in two places:
 
 - **Top-bar plugin tray** (`#hud-plugins`, to the right of the weather widget) —
   one icon per installed plugin, active or inactive. Icons are grouped by the
@@ -1006,6 +1005,36 @@ shows it in two places:
 
 Plugins that don't ship an icon fall back to the `ui/puzzle` theme icon.
 Plugins that don't declare a `category` are grouped under **Other**.
+
+#### Icon style
+
+Plugin icons share the visual language of the app mark (`web/favicon.svg`, the
+skull on the **PEAK'D!** logo) rather than the thinner line style of the theme
+icons, because these two surfaces paint them small — 18px in the HUD tray, 20px
+on the Plugins page. Follow these rules when adding or restyling one:
+
+- **Bold strokes.** `stroke-width="2"` on a 24×24 grid — the app mark's weight,
+  sized so the strokes still read at 18px.
+- **Rounded everything.** `stroke-linecap="round"` and `stroke-linejoin="round"`,
+  with the same attributes on the root `<svg>` so glyph geometry stays soft.
+- **Soft corners.** Prefer `rx="3"`–`"4"` on plates and frames; avoid sharp
+  rectangles.
+- **Fill small accents.** Draw dots, dials and play triangles with
+  `fill="currentColor" stroke="none"` (like the mark's solid eye socket) so each
+  icon carries one solid anchor. Everything else stays `fill="none"`.
+- **Tight framing.** Push geometry out to roughly the `2.5 … 21.5` range so the
+  glyph fills the box; do not leave the loose `2 … 22` padding of a thin-stroke
+  icon.
+
+Keep the icon single-color and script-free: core inlines the file into the DOM,
+so `pluginIcon.js` rejects any SVG containing `<script>`, an `on*=` handler or a
+`javascript:` URL, and hardcoded `fill`/`stroke` colors would break theme
+inheritance. One recognizable glyph per plugin, not a wordmark or lettering.
+
+> **Scope.** This style applies to `web/icon.svg` only — the HUD tray
+> (`#hud-plugins`) and the Plugins page. Icons *inside* a plugin window are the
+> regular theme icons from `web/themes/<name>/icons/` and keep their existing
+> `stroke-width="1.5"` style; this restyle does not change them.
 
 ### Window background: the ambient blurred mirror
 
