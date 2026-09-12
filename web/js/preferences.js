@@ -371,39 +371,59 @@ export function setWakeWord(on) {
 
 /* ── Voice orb style (per-user, server-backed) ─────────────── */
 
-/** The five orb looks. The ids are the contract with orbCanvas.js. */
+/**
+ * The five orb looks. The ids are the contract with orbCanvas.js; every one is
+ * a variant of the reference ring kept in `web/orbs/` (see that folder's
+ * README).
+ */
 export const ORB_STYLES = [
-  { id: 'filament', label: 'Filament', hint: 'Threads of light around a sphere' },
-  { id: 'bubble', label: 'Bubble', hint: 'A glowing glass shell' },
-  { id: 'marble', label: 'Marble', hint: 'Swirls caught inside glass' },
-  { id: 'orbit', label: 'Orbit', hint: 'Rings circling a bright core' },
-  { id: 'grid', label: 'Grid', hint: 'A wireframe of light' },
+  { id: 'ripple', label: 'Ripple', hint: 'Echoes spreading outward' },
+  { id: 'corona', label: 'Corona', hint: 'A hairline ring with fine sparks' },
+  { id: 'halo', label: 'Halo', hint: 'A ring that ripples with your voice' },
+  { id: 'flare', label: 'Flare', hint: 'A crown of long spectral rays' },
+  { id: 'aura', label: 'Aura', hint: 'Two rings twisting in and out' },
 ];
+
+export const DEFAULT_ORB_STYLE = 'ripple';
 
 const ORB_STYLE_IDS = new Set(ORB_STYLES.map((s) => s.id));
 
-/** Older stored ids (first generation of styles) still resolve. */
+/**
+ * Older stored ids still resolve. Everything that is gone was derived from the
+ * ring, so it falls back to the plain ring rather than to a surprise.
+ * (`ripple` is a current id now, so an old first-generation `ripple` resolves
+ * to today's ripple.)
+ */
 const ORB_STYLE_LEGACY = {
-  fluid: 'filament',
-  ripple: 'bubble',
-  nebula: 'marble',
-  pulse: 'orbit',
-  prism: 'grid',
+  // Previous generation.
+  nucleus: 'corona',
+  nebula: 'corona',
+  torus: 'corona',
+  prism: 'corona',
+  eclipse: 'corona',
+  // Earlier generations.
+  filament: 'corona',
+  bubble: 'corona',
+  marble: 'corona',
+  orbit: 'corona',
+  grid: 'corona',
+  fluid: 'corona',
+  pulse: 'corona',
 };
 
 export function getOrbStyle() {
   const stored = localStorage.getItem(scopedKey(ORB_STYLE_KEY));
   if (ORB_STYLE_IDS.has(stored)) return stored;
   if (ORB_STYLE_LEGACY[stored]) return ORB_STYLE_LEGACY[stored];
-  return 'filament';
+  return DEFAULT_ORB_STYLE;
 }
 
 export function setOrbStyle(id) {
-  const style = ORB_STYLE_IDS.has(id) ? id : 'filament';
+  const style = ORB_STYLE_IDS.has(id) ? id : DEFAULT_ORB_STYLE;
   const key = scopedKey(ORB_STYLE_KEY);
-  if (style === 'filament') localStorage.removeItem(key); // filament is the default
+  if (style === DEFAULT_ORB_STYLE) localStorage.removeItem(key); // default is implicit
   else localStorage.setItem(key, style);
-  persist(ORB_STYLE_KEY, style === 'filament' ? '' : style);
+  persist(ORB_STYLE_KEY, style === DEFAULT_ORB_STYLE ? '' : style);
 }
 
 function clamp(n, min, max) {

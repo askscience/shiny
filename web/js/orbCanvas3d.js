@@ -1,25 +1,27 @@
 /**
  * orbCanvas3d — the voice orb rendered with three.js (WebGL).
  *
- * Built to match the reference renders: luminous structures suspended inside a
- * glass sphere, glowing additively over whatever is behind the window.
+ * Every look is a variant of one idea, taken from the reference render in
+ * `web/orbs/eclipse.jpg`: a thin ring of spectral light on black.
  *
- *   filament — a ball of light trails (tubes around the sphere) + one ribbon
- *   bubble   — a hollow glass shell whose light lives in a Fresnel rim
- *   marble   — a glass sphere with luminous ribbons caught inside
- *   orbit    — tilted tori around a bright core, each carrying a bead
- *   grid     — a lat/long wireframe of light
+ *   corona — the hairline ring throwing fine sparks outward     (default)
+ *   halo   — the ring itself rippling as a smooth radial wave
+ *   ripple — echoes that spread outward from the ring
+ *   flare  — a crown of long rays growing out of the ring
+ *   aura   — two rings riding a wave in and out of the screen
  *
- * No post-processing pass: additive materials plus soft sprite halos give the
- * bloom, and keep the canvas genuinely transparent so the desktop shows
- * through (a composer would flatten the alpha to black).
+ * Nothing rotates and the ring always faces you: the voice is what moves the
+ * light. `intensity` (0..1) grows the waves and the spikes, `pan` (-1..1)
+ * squashes the whole group away from the loud side.
  *
- * Reactivity is shared with the 2D fallback: `intensity` (0..1) and `pan`
- * (-1..1). Pan squashes the whole group away from the loud side; intensity
- * drives brightness, rotation speed and halo strength.
+ * No post-processing pass: additive materials keep the canvas genuinely
+ * transparent so the desktop shows through (a composer would flatten the alpha
+ * to black). Ring colours come from `spectrumForState()`, so the fan follows
+ * the user's accent (and falls back to red / grey on error and disabled).
  */
 
-import { paletteForState } from './orbPalette.js';
+import { spectrumForState, isLightCanvas } from './orbPalette.js';
+import { DEFAULT_ORB_STYLE } from './preferences.js';
 
 let THREE = null;
 let threePromise = null;
@@ -42,120 +44,46 @@ function loadThree() {
 }
 
 const TAU = Math.PI * 2;
-const DEFAULT_STYLE = 'filament';
+const DEFAULT_STYLE = DEFAULT_ORB_STYLE;
 
-/* ── geometry helpers (plain maths, no THREE needed) ─────────── */
+/* ── ring helpers (plain maths + geometry, no THREE at module scope) ── */
 
-function normalize(v) {
-  const m = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / m, v[1] / m, v[2] / m];
-}
-
-function cross(a, b) {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
-}
-
-function basisFor(n) {
-  const helper = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
-  const u = normalize(cross(n, helper));
-  return { u, v: cross(n, u) };
-}
-
-/** Points of a circle around `normal`. `wobble` makes the loop non-planar
- *  (yarn-like) while keeping it periodic, so the curve still closes. */
-function circlePoints(normal, count = 64, radius = 1, wobble = 0, seed = 0) {
-  const { u, v } = basisFor(normal);
-  const pts = [];
-  for (let i = 0; i < count; i++) {
-    const th = (i / count) * TAU;
-    const c = Math.cos(th);
-    const s = Math.sin(th);
-    const w = wobble
-      ? 1 + wobble * Math.sin(th * 2.7 + seed) * Math.sin(th * 1.3 - seed * 0.7)
-      : 1;
-    const r = radius * w;
-    pts.push([
-      (u[0] * c + v[0] * s) * r,
-      (u[1] * c + v[1] * s) * r,
-      (u[2] * c + v[2] * s) * r,
-    ]);
+/**
+ * Paint a torus so its colour sweeps once around the ring. Torus vertices
+ * carry the angle of their own centreline point in x/y, so the sweep needs no
+ * extra bookkeeping — and the colours live in the geometry's local space, so
+ * the ring can still be deformed later without repainting.
+ */
+function paintGradientRing(geo, colors) {
+  const pos = geo.attributes.position;
+  const arr = new Float32Array(pos.count * 3);
+  const c = new THREE.Color();
+  const next = new THREE.Color();
+  const n = colors.length;
+  for (let i = 0; i < pos.count; i++) {
+    const ang = Math.atan2(pos.getY(i), pos.getX(i));
+    const u = ((ang / TAU) % 1 + 1) % 1;
+    const f = u * n;
+    const i0 = Math.floor(f) % n;
+    const i1 = (i0 + 1) % n;
+    c.set(colors[i0]).lerp(next.set(colors[i1]), f - Math.floor(f));
+    arr[i * 3] = c.r;
+    arr[i * 3 + 1] = c.g;
+    arr[i * 3 + 2] = c.b;
   }
-  return pts;
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  geo.attributes.color.needsUpdate = true;
 }
 
-/** Golden-angle normals — an evenly spread ball of strands. */
-function strandNormals(n) {
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (i / Math.max(1, n - 1)) * 2;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const phi = i * 2.399963229728653;
-    out.push([Math.cos(phi) * r, y, Math.sin(phi) * r]);
-  }
-  return out;
+/** Lay a spike out along its own direction: `len` running outward from the
+ *  ring it sits on. The cone's own geometry is a unit length, so the scale is
+ *  the length and the position keeps its base on the ring. */
+function placeSpike(part, len) {
+  const l = Math.max(0.0005, len);
+  const d = part.spike.radius + l * 0.5;
+  part.obj.scale.set(1, l, 1);
+  part.obj.position.set(part.spike.dir[0] * d, part.spike.dir[1] * d, 0);
 }
-
-/* ── sprite halo texture ─────────────────────────────────────── */
-
-let HALO_TEX = null;
-
-function haloTexture() {
-  if (HALO_TEX) return HALO_TEX;
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 128;
-  const g = c.getContext('2d');
-  const rg = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  rg.addColorStop(0, 'rgba(255,255,255,1)');
-  rg.addColorStop(0.22, 'rgba(255,255,255,0.5)');
-  rg.addColorStop(0.5, 'rgba(255,255,255,0.16)');
-  rg.addColorStop(0.78, 'rgba(255,255,255,0.04)');
-  rg.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = rg;
-  g.fillRect(0, 0, 128, 128);
-  HALO_TEX = new THREE.CanvasTexture(c);
-  return HALO_TEX;
-}
-
-/* ── materials ───────────────────────────────────────────────── */
-
-const FRESNEL_VERT = `
-varying vec3 vNormalV;
-varying vec3 vViewDir;
-void main() {
-  // View-space normal + view direction: no mat3(mat4) cast (illegal in
-  // GLSL ES 1.00) and normalMatrix is injected by three for us.
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vNormalV = normalize(normalMatrix * normal);
-  vViewDir = normalize(-mv.xyz);
-  gl_Position = projectionMatrix * mv;
-}
-`;
-
-const FRESNEL_FRAG = `
-uniform vec3 uColor;
-uniform vec3 uRim;
-uniform float uPower;
-uniform float uIntensity;
-uniform float uBias;
-varying vec3 vNormalV;
-varying vec3 vViewDir;
-void main() {
-  // Fresnel: dark through the middle, blazing at the silhouette.
-  float rim = clamp(1.0 - abs(dot(normalize(vNormalV), normalize(vViewDir))), 0.0, 1.0);
-  float f = pow(rim, uPower);
-  vec3 c = mix(uColor, uRim, clamp(f * 1.5, 0.0, 1.0));
-  float a = clamp(f * uIntensity + uBias, 0.0, 1.0);
-  gl_FragColor = vec4(c, a);
-  // A raw ShaderMaterial must apply the renderer's output conversion itself;
-  // without it linear values land in the framebuffer and read much too dark.
-  #include <colorspace_fragment>
-}
-`;
 
 export class Orb3DRenderer {
   constructor(canvas, { size = 84, preview = false, style = null, renderer = null } = {}) {
@@ -163,8 +91,9 @@ export class Orb3DRenderer {
     this.displaySize = size;
     this.preview = preview;
     this.styleId = STYLES[style] ? style : DEFAULT_STYLE;
-    this.palette = paletteForState('idle');
     this.stateKey = 'idle';
+    // Light themes get ink on paper rather than light on black.
+    this.additive = !isLightCanvas();
 
     this.intensity = 0;
     this.pan = 0;
@@ -173,8 +102,9 @@ export class Orb3DRenderer {
     this.t = 0;
     this.running = true;
 
-    this.parts = [];   // { obj, kind, baseOpacity, colorIndex, rimIndex }
-    this.spinners = []; // { group, speed }
+    this.parts = [];     // { obj, kind, baseOpacity, spectrumIndex, pulse }
+    this.pulses = [];    // the shared "thinking" rings (rebuilt per style)
+    this.animate = null; // per-style per-frame hook: (energy, t, thinking) => void
 
     // `renderer` is injectable so the scene graph can be exercised headlessly.
     this.renderer = renderer || new THREE.WebGLRenderer({
@@ -186,8 +116,8 @@ export class Orb3DRenderer {
     this.renderer.setClearColor(0x000000, 0);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
-    // Close enough that a radius-1 sphere nearly fills the canvas, like the
-    // reference renders (the halo bleeds past the edges).
+    // Close enough that a radius-1 ring nearly fills the canvas, like the
+    // reference render.
     this.camera.position.set(0, 0, 3.0);
     this.root = new THREE.Group();
     this.scene.add(this.root);
@@ -218,7 +148,10 @@ export class Orb3DRenderer {
       color: 0xffffff,
       transparent: true,
       opacity,
-      blending: THREE.AdditiveBlending,
+      // Additive light is right on black, where overlapping passes read as
+      // glow. On paper it would sum the ink back up towards white, so a light
+      // canvas composites normally instead.
+      blending: this.additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       depthWrite: false,
       depthTest: false,
       side: THREE.DoubleSide,
@@ -226,89 +159,90 @@ export class Orb3DRenderer {
     });
   }
 
-  _track(obj, kind, baseOpacity, colorIndex, rimIndex) {
+  _track(obj, kind, baseOpacity) {
     this.root.add(obj);
-    const part = { obj, kind, baseOpacity, colorIndex, rimIndex };
+    const part = { obj, kind, baseOpacity };
     this.parts.push(part);
     return part;
   }
 
-  /** A glowing tube through `points` (a closed loop by default). */
-  _addTube(points, { radius = 0.006, opacity = 0.5, colorIndex = 0, closed = true, tubular = 72 } = {}) {
-    const curve = new THREE.CatmullRomCurve3(
-      points.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
-      closed,
-      'catmullrom',
-      0.5,
-    );
-    const geo = new THREE.TubeGeometry(curve, tubular, radius, 6, closed);
-    const mesh = new THREE.Mesh(geo, this._basicMaterial(opacity));
-    return this._track(mesh, 'basic', opacity, colorIndex);
-  }
-
-  /** A Fresnel shell: transparent in the middle, blazing at the silhouette. */
-  _addShell(radius, { power = 2.6, intensity = 0.8, bias = 0, colorIndex = 0, rimIndex = 1 } = {}) {
-    const geo = new THREE.SphereGeometry(radius, 48, 32);
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        uColor: { value: new THREE.Color('#ffffff') },
-        uRim: { value: new THREE.Color('#ffffff') },
-        uPower: { value: power },
-        uIntensity: { value: intensity },
-        uBias: { value: bias },
-      },
-      vertexShader: FRESNEL_VERT,
-      fragmentShader: FRESNEL_FRAG,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      depthTest: false,
-      side: THREE.DoubleSide,
-    });
+  /** A torus whose colour runs once around the ring. */
+  _addRing(radius, tube, { opacity = 0.5, radial = 8, tubular = 220 } = {}) {
+    const geo = new THREE.TorusGeometry(radius, tube, radial, tubular);
+    const mat = this._basicMaterial(opacity);
+    mat.vertexColors = true;
     const mesh = new THREE.Mesh(geo, mat);
-    return this._track(mesh, 'shell', intensity, colorIndex, rimIndex);
-  }
-
-  /** A soft additive halo (bloom). `hex` overrides the palette colour. */
-  _addHalo(scale, opacity, colorIndex = 0, position = [0, 0, 0], hex = null) {
-    const mat = new THREE.SpriteMaterial({
-      map: haloTexture(),
-      color: new THREE.Color(hex || this.palette[colorIndex % this.palette.length]),
-      transparent: true,
-      opacity,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      depthTest: false,
-      toneMapped: false,
-    });
-    const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(scale, scale, 1);
-    sprite.position.set(position[0], position[1], position[2]);
-    const part = this._track(sprite, 'sprite', opacity, colorIndex);
-    if (hex) part.lockedColor = hex;
+    const part = this._track(mesh, 'ring', opacity);
+    paintGradientRing(geo, spectrumForState(this.stateKey));
     return part;
   }
 
-  /** A tilted torus that can spin a bead around itself. */
-  _addRing(radius, tube, rotation, { opacity = 0.5, colorIndex = 0, bead = 0 } = {}) {
-    const group = new THREE.Group();
-    group.rotation.set(rotation[0], rotation[1], rotation[2]);
-    this.root.add(group);
+  /** The ring itself: a soft halo pass behind a bright hairline, both at the
+   *  same radius so they read as one ring. */
+  _addRingBody(radius, { soft = 0.045, softOpacity = 0.22, core = 0.014, coreOpacity = 0.95 } = {}) {
+    const parts = [];
+    if (soft > 0) parts.push(this._addRing(radius, soft, { opacity: softOpacity, tubular: 180 }));
+    parts.push(this._addRing(radius, core, { opacity: coreOpacity, tubular: 280 }));
+    return parts;
+  }
 
-    const geo = new THREE.TorusGeometry(radius, tube, 8, 128);
-    const mesh = new THREE.Mesh(geo, this._basicMaterial(opacity));
-    group.add(mesh);
-    this.parts.push({ obj: mesh, kind: 'basic', baseOpacity: opacity, colorIndex });
-
-    if (bead > 0) {
-      const beadGeo = new THREE.SphereGeometry(bead, 16, 12);
-      const beadMesh = new THREE.Mesh(beadGeo, this._basicMaterial(0.95));
-      beadMesh.position.set(radius, 0, 0);
-      group.add(beadMesh);
-      this.parts.push({ obj: beadMesh, kind: 'basic', baseOpacity: 0.95, colorIndex: colorIndex + 1 });
-      this.spinners.push({ group, speed: 0.35 + colorIndex * 0.12 });
+  /** Spikes radiating outward from the ring, evenly spaced. */
+  _addSpikes(count, { radius, width = 0.012, opacity = 0.6, offset = 0, spectrum = 8 } = {}) {
+    const up = new THREE.Vector3(0, 1, 0);
+    const parts = [];
+    for (let i = 0; i < count; i++) {
+      const th = offset + (i / count) * TAU;
+      const dir = [Math.cos(th), Math.sin(th), 0];
+      const geo = new THREE.ConeGeometry(width, 1, 6, 1, true);
+      const mesh = new THREE.Mesh(geo, this._basicMaterial(opacity));
+      mesh.quaternion.setFromUnitVectors(up, new THREE.Vector3(dir[0], dir[1], dir[2]));
+      const part = this._track(mesh, 'spike', opacity);
+      part.spectrumIndex = i % spectrum;
+      part.spike = { dir, radius };
+      placeSpike(part, 0);
+      parts.push(part);
     }
-    return group;
+    return parts;
+  }
+
+  /** A per-frame wave that travels around a ring, in its own plane. */
+  _waveRing(part, { waves = 6, amp = 0.08, speed = 1.5 } = {}) {
+    const pos = part.obj.geometry.attributes.position;
+    const base = Float32Array.from(pos.array);
+    return (energy, t) => {
+      const a = amp * energy;
+      const phase = t * speed;
+      const arr = pos.array;
+      for (let i = 0; i < pos.count; i++) {
+        const ix = i * 3;
+        const x = base[ix];
+        const y = base[ix + 1];
+        const k = 1 + a * Math.sin(waves * Math.atan2(y, x) + phase);
+        arr[ix] = x * k;
+        arr[ix + 1] = y * k;
+      }
+      pos.needsUpdate = true;
+    };
+  }
+
+  /** A per-frame wave that pushes a ring in and out of the screen. */
+  _ribbonRing(part, { waves = 4, amp = 0.2, speed = 1.2, phase = 0 } = {}) {
+    const pos = part.obj.geometry.attributes.position;
+    const base = Float32Array.from(pos.array);
+    return (energy, t) => {
+      const a = amp * energy;
+      const p = phase + t * speed;
+      const arr = pos.array;
+      for (let i = 0; i < pos.count; i++) {
+        const ix = i * 3;
+        const x = base[ix];
+        const y = base[ix + 1];
+        arr[ix] = x;
+        arr[ix + 1] = y;
+        arr[ix + 2] = base[ix + 2] + a * Math.sin(waves * Math.atan2(y, x) + p);
+      }
+      pos.needsUpdate = true;
+    };
   }
 
   /* ── styles ────────────────────────────────────────────────── */
@@ -318,12 +252,18 @@ export class Orb3DRenderer {
       p.obj.geometry?.dispose?.();
       p.obj.material?.dispose?.();
     }
-    // Detach everything (ring groups included) before rebuilding.
     this.root.clear();
     this.parts = [];
-    this.spinners = [];
     const build = STYLES[this.styleId] || STYLES[DEFAULT_STYLE];
-    build.call(this);
+    this.animate = build.call(this) || null;
+    // The shared "thinking" pulses: small rings that grow through the orb and
+    // fade, on top of whatever the style does. Every look gets them.
+    this.pulses = [0, 1].map(() => {
+      const part = this._addRing(0.55, 0.006, { opacity: 0, tubular: 180 });
+      part.pulse = true;
+      part.obj.visible = false;
+      return part;
+    });
   }
 
   setStyle(id) {
@@ -340,7 +280,6 @@ export class Orb3DRenderer {
 
   setPalette(state) {
     this.stateKey = state;
-    this.palette = paletteForState(state);
     this.applyColors();
   }
 
@@ -349,15 +288,12 @@ export class Orb3DRenderer {
   }
 
   applyColors() {
+    const spectrum = spectrumForState(this.stateKey);
     for (const p of this.parts) {
-      if (p.lockedColor) continue;
-      const color = this.palette[p.colorIndex % this.palette.length];
-      if (p.kind === 'shell') {
-        p.obj.material.uniforms.uColor.value.set(color);
-        const rim = this.palette[(p.rimIndex ?? p.colorIndex + 1) % this.palette.length];
-        p.obj.material.uniforms.uRim.value.set(rim);
-      } else {
-        p.obj.material.color.set(color);
+      if (p.kind === 'ring') {
+        paintGradientRing(p.obj.geometry, spectrum);
+      } else if (p.spectrumIndex != null) {
+        p.obj.material.color.set(spectrum[p.spectrumIndex % spectrum.length]);
       }
     }
   }
@@ -391,9 +327,7 @@ export class Orb3DRenderer {
     this.t = ts * 0.001;
 
     if (this.preview) {
-      // Settings previews breathe with a synthetic voice — but deliberately
-      // stay centred. Oscillating `pan` made every card look like it was
-      // being squeezed, which is not what a silent preview should show.
+      // Settings previews breathe with a synthetic voice, always centred.
       this.targetLevel = 0.38 + 0.24 * Math.sin(this.t * 0.9);
       this.targetPan = 0;
     }
@@ -404,143 +338,127 @@ export class Orb3DRenderer {
     const e = this.intensity;
     const active = this.stateKey === 'listening' || this.stateKey === 'conversation'
       || this.stateKey === 'processing' || this.stateKey === 'speaking';
-    const boost = active ? 0.2 : 0;
-    const energy = Math.min(1, e + boost);
+    const energy = Math.min(1, e + (active ? 0.2 : 0));
 
-    // Slow tumble; the voice makes it a touch more alive.
-    this.root.rotation.y = this.t * (0.14 + 0.3 * energy);
-    this.root.rotation.x = Math.sin(this.t * 0.17) * 0.16;
+    // Waiting for the assistant: there is no voice to react to, so the orb runs
+    // its own slow rhythm (the ring breathes and the style's own gesture keeps
+    // moving) and pulses keep leaving it. Shared by every look.
+    const thinking = this.stateKey === 'processing';
+    const rhythm = Math.sin(this.t * 2.4);
+    const drive = thinking ? Math.max(energy, 0.34 + 0.16 * rhythm) : energy;
+    const breathe = thinking ? 1 + 0.16 * rhythm : 1;
 
-    // Stereo: squash the body and lean away from the loud side.
+    // No rotation — the ring always faces you. Stereo still squashes the body
+    // and leans it away from the loud side.
     const side = Math.abs(this.pan);
     const squish = Math.min(0.42, side * (0.22 + 0.5 * e));
     this.root.scale.set(1 - squish, 1 + squish * 0.45, 1);
     this.root.position.x = -this.pan * (0.08 + 0.18 * e);
 
-    for (const s of this.spinners) {
-      s.group.rotation.z += 0.006 * s.speed * (1 + energy);
+    for (const p of this.parts) {
+      if (p.pulse) continue; // driven by _updatePulses instead
+      p.obj.material.opacity = Math.min(1, p.baseOpacity * (0.9 + 0.3 * energy) * breathe);
     }
 
-    for (const p of this.parts) {
-      // Keep a high floor: the references are bright at rest, so the voice
-      // only pushes them further instead of dimming them when quiet.
-      const factor = p.kind === 'sprite'
-        ? 0.7 + 0.8 * energy
-        : 0.92 + 0.35 * energy;
-      if (p.kind === 'shell') {
-        p.obj.material.uniforms.uIntensity.value = p.baseOpacity * factor;
-      } else {
-        p.obj.material.opacity = Math.min(1, p.baseOpacity * factor);
-      }
-    }
+    // The voice moves the light: waves and spikes, never rotation.
+    this.animate?.(drive, this.t, thinking);
+    this._updatePulses(thinking);
 
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this._loop);
+  }
+
+  /** The "thinking" pulses: soft rings that leave the orb and fade, so the orb
+   *  reads as busy while the assistant works. Silent at every other state. */
+  _updatePulses(thinking) {
+    for (let i = 0; i < this.pulses.length; i++) {
+      const p = this.pulses[i];
+      if (!thinking) {
+        if (p.obj.visible) {
+          p.obj.visible = false;
+          p.obj.material.opacity = 0;
+        }
+        continue;
+      }
+      const f = (this.t * 0.5 + i / this.pulses.length) % 1;
+      const s = 1 + f * 0.85;
+      p.obj.visible = true;
+      p.obj.scale.set(s, s, 1);
+      p.obj.material.opacity = (1 - f) * (1 - f) * 0.6;
+    }
   }
 }
 
 /* ── per-style scenes ────────────────────────────────────────── */
 
 const STYLES = {
-  /** A ball of light trails inside glass, with one bright ribbon.
-   *  Reference 1: dozens of thin loops of varying size — not a tidy set of
-   *  great circles — so the sphere reads as wound yarn of light. */
-  filament() {
-    const count = 44;
-    const norms = strandNormals(count);
-    for (let i = 0; i < count; i++) {
-      const radius = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(i * 1.7));
-      this._addTube(circlePoints(norms[i], 64, radius, 0.05, i * 0.9), {
-        radius: 0.0028,
-        opacity: 0.78,
-        colorIndex: i % 3,
-        tubular: 72,
-      });
-    }
-    // The ribbon: a wide soft pass, a bright core and a white specular line.
-    const ribbon = circlePoints(norms[5], 96);
-    this._addTube(ribbon, { radius: 0.06, opacity: 0.26, colorIndex: 2, tubular: 130 });
-    this._addTube(ribbon, { radius: 0.015, opacity: 0.95, colorIndex: 2, tubular: 130 });
-    this._addTube(ribbon, { radius: 0.005, opacity: 0.9, colorIndex: 3, tubular: 130 });
-    // Glass body so the ball is not only lines.
-    this._addShell(1.0, { power: 1.2, intensity: 0.22, colorIndex: 0, rimIndex: 2 });
-    this._addHalo(3.0, 0.34, 0);
-  },
-
-  /** A hollow glass shell whose light lives in a thick, blazing rim.
-   *  Reference 2. */
-  bubble() {
-    // Outer bloom, the bright rim itself, and a thinner inner ring.
-    this._addShell(1.06, { power: 1.5, intensity: 0.55, colorIndex: 0, rimIndex: 2 });
-    this._addShell(0.94, { power: 2.5, intensity: 1.9, colorIndex: 0, rimIndex: 1 });
-    this._addShell(0.9, { power: 3.6, intensity: 0.4, colorIndex: 1, rimIndex: 2 });
-    this._addHalo(3.0, 0.4, 0);
-    // Sharp white specular (top-left) and the warm inner reflection.
-    this._addHalo(0.75, 1.0, 0, [-0.42, 0.44, 0.35], '#ffffff');
-    this._addHalo(1.25, 0.5, 2, [-0.32, -0.5, 0.4]);
-  },
-
-  /** Glass with luminous ribbons and filaments caught inside. Reference 3. */
-  marble() {
-    this._addShell(0.98, { power: 2.2, intensity: 1.3, colorIndex: 0, rimIndex: 2 });
-    const norms = strandNormals(3);
-    for (let i = 0; i < norms.length; i++) {
-      const pts = circlePoints(norms[i], 64, 0.62 + i * 0.09, 0.06, i * 2.1);
-      this._addTube(pts, { radius: 0.03, opacity: 0.5, colorIndex: i + 1, tubular: 100 });
-      this._addTube(pts, { radius: 0.009, opacity: 0.95, colorIndex: i, tubular: 100 });
-    }
-    // Fine filaments across the glass.
-    for (let lat = -55; lat <= 55; lat += 55) {
-      const rad = (lat * Math.PI) / 180;
-      const r = Math.cos(rad) * 0.93;
-      const y = Math.sin(rad) * 0.93;
-      const pts = [];
-      for (let i = 0; i < 64; i++) {
-        const th = (i / 64) * TAU;
-        pts.push([Math.cos(th) * r, y, Math.sin(th) * r]);
+  /** Corona — the reference ring, throwing fine sparks outward on sound. */
+  corona() {
+    const radius = 0.84;
+    this._addRingBody(radius);
+    const sparks = this._addSpikes(64, { radius, width: 0.014, opacity: 0.6 });
+    return (energy, t) => {
+      for (let i = 0; i < sparks.length; i++) {
+        const p = sparks[i];
+        const flicker = 0.5 + 0.5 * Math.sin(t * 2.6 + i * 1.9);
+        placeSpike(p, 0.22 * energy * flicker);
+        p.obj.material.opacity = Math.min(1, energy * 1.6 * flicker);
       }
-      this._addTube(pts, { radius: 0.004, opacity: 0.4, colorIndex: 0, tubular: 80 });
-    }
-    this._addHalo(2.7, 0.2, 2);
-    this._addHalo(1.35, 0.45, 1, [0, -0.5, 0.35]);
+    };
   },
 
-  /** Tilted luminous rings around a bright core, each carrying a bead. */
-  orbit() {
-    this._addHalo(2.0, 0.55, 0);
-    this._addShell(0.3, { power: 1.0, intensity: 1.7, colorIndex: 3, rimIndex: 0 });
-    this._addRing(0.78, 0.008, [Math.PI / 2.3, 0, 0.3], { opacity: 0.85, colorIndex: 1, bead: 0.062 });
-    this._addRing(0.9, 0.007, [Math.PI / 1.7, 0.45, -0.2], { opacity: 0.75, colorIndex: 2, bead: 0.055 });
-    this._addRing(0.64, 0.007, [Math.PI / 3.0, -0.3, 0.6], { opacity: 0.8, colorIndex: 0, bead: 0.048 });
+  /** Halo — the ring itself rippling as a smooth radial wave. */
+  halo() {
+    const radius = 0.82;
+    const ring = this._addRingBody(radius, { soft: 0.06, softOpacity: 0.2, core: 0.015 });
+    const waves = ring.map((p) => this._waveRing(p, { waves: 9, amp: 0.07, speed: 1.7 }));
+    return (energy, t) => {
+      for (const wave of waves) wave(energy, t);
+    };
   },
 
-  /** A lat/long wireframe of light with a bright equator. */
-  grid() {
-    // Latitudes.
-    for (let lat = -60; lat <= 60; lat += 30) {
-      const rad = (lat * Math.PI) / 180;
-      const r = Math.cos(rad);
-      const y = Math.sin(rad);
-      const pts = [];
-      for (let i = 0; i < 64; i++) {
-        const th = (i / 64) * TAU;
-        pts.push([Math.cos(th) * r, y, Math.sin(th) * r]);
+  /** Ripple — echoes that spread outward from the ring while you speak. */
+  ripple() {
+    const radius = 0.82;
+    this._addRingBody(radius);
+    const echoes = [0, 1, 2].map(
+      () => this._addRing(radius, 0.009, { opacity: 0, radial: 5, tubular: 200 }),
+    );
+    return (energy, t) => {
+      for (let i = 0; i < echoes.length; i++) {
+        const p = echoes[i];
+        const f = (t * 0.5 + i / echoes.length) % 1;
+        const grow = 1 + f * 0.45;
+        p.obj.scale.set(grow, grow, 1);
+        p.obj.material.opacity = Math.min(1, energy * 1.3) * (1 - f) * 0.9;
       }
-      this._addTube(pts, { radius: 0.0045, opacity: 0.55, colorIndex: 0, tubular: 80 });
-    }
-    // Longitudes (great circles through the poles).
-    for (let lon = 0; lon < 180; lon += 30) {
-      this._addTube(circlePoints([Math.cos((lon * Math.PI) / 180), 0, Math.sin((lon * Math.PI) / 180)], 64), {
-        radius: 0.004,
-        opacity: 0.5,
-        colorIndex: 1,
-        tubular: 80,
-      });
-    }
-    // Bright equator seam.
-    this._addTube(circlePoints([0, 1, 0], 96), { radius: 0.014, opacity: 1.0, colorIndex: 2, tubular: 130 });
-    this._addShell(1.0, { power: 1.8, intensity: 0.3, colorIndex: 0, rimIndex: 2 });
-    this._addHalo(2.6, 0.2, 2);
+    };
+  },
+
+  /** Flare — a crown of long rays growing out of the ring. */
+  flare() {
+    const radius = 0.8;
+    this._addRingBody(radius, { soft: 0.06, softOpacity: 0.22, core: 0.015 });
+    const rays = this._addSpikes(14, { radius: radius - 0.02, width: 0.05, opacity: 0.5 });
+    return (energy) => {
+      for (const p of rays) {
+        placeSpike(p, 0.5 * energy);
+        p.obj.material.opacity = Math.min(1, energy * 1.15);
+      }
+    };
+  },
+
+  /** Aura — two rings riding a wave in and out of the screen, counter-phase. */
+  aura() {
+    const inner = this._addRingBody(0.72, { soft: 0.04, softOpacity: 0.18, core: 0.013 });
+    const outer = this._addRingBody(0.93, { soft: 0.04, softOpacity: 0.18, core: 0.013 });
+    const waves = [
+      ...inner.map((p) => this._ribbonRing(p, { waves: 3, amp: 0.11, speed: 1.2, phase: 0 })),
+      ...outer.map((p) => this._ribbonRing(p, { waves: 3, amp: 0.11, speed: 1.2, phase: Math.PI })),
+    ];
+    return (energy, t) => {
+      for (const wave of waves) wave(energy, t);
+    };
   },
 };
 
