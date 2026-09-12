@@ -8,15 +8,41 @@
   <meta name="theme-color" content="#000000">
   <title>PEAK'D! — Settings</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link id="theme-tokens" rel="stylesheet" href="/themes/noir/tokens.css">
+  <!-- The theme links get their href from the bootstrap below, so the correct
+       theme is already loading before the first paint. -->
+  <link id="theme-tokens" rel="stylesheet">
   <link rel="stylesheet" href="/ui/ui.css">
-  <link id="theme-components" rel="stylesheet" href="/themes/noir/components.css">
+  <link id="theme-components" rel="stylesheet">
   <link rel="stylesheet" href="/css/settings.css">
   <link rel="stylesheet" href="/css/background.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
+  <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
+       after boot, which would flash the fallback (dark) theme first. The
+       installed-theme index is cached by listThemes() for the check here. -->
+  <script>
+    (function () {
+      var theme = 'noir';
+      try {
+        var stored = localStorage.getItem('ui.theme.name');
+        var list = JSON.parse(localStorage.getItem('ui.theme.list') || 'null');
+        if (Array.isArray(list) && list.length) theme = list.indexOf(stored) >= 0 ? stored : list[0];
+        else if (stored) theme = stored;
+      } catch (e) { /* keep the fallback */ }
+      document.documentElement.setAttribute('data-theme', theme);
+      var set = function (id, href) {
+        var el = document.getElementById(id);
+        if (el) el.setAttribute('href', href);
+      };
+      set('theme-tokens', '/themes/' + theme + '/tokens.css');
+      set('theme-components', '/themes/' + theme + '/components.css');
+    })();
+  </script>
 </head>
 <body>
-  <div id="background" aria-hidden="true"></div>
+  <!-- No wallpaper layer here on purpose. The settings page is translucent
+       (glass panels, `--surface` at ~86%), so the user's wallpaper would show
+       through and a dark one would make a light theme read as dark. The page
+       paints the theme's own gradient instead — see `body` in settings.css. -->
 
   <div class="settings-page" data-controller="settings">
 
@@ -132,7 +158,7 @@
             </details>
 
             <h4 class="settings-subhead">Voice orb</h4>
-            <p class="settings-hint">How the sphere looks and moves. Every style reacts to your voice — louder opens it up, and with a stereo mic the body is squashed away from the loud side.</p>
+            <p class="settings-hint">How the orb looks and moves. Every style reacts to your voice — louder grows the ring's waves and sparks, and with a stereo mic the body is squashed away from the loud side.</p>
             <div id="orb-styles" class="orb-style-row" role="radiogroup" aria-label="Orb style"></div>
 
             <h4 class="settings-subhead">Desktop surface</h4>

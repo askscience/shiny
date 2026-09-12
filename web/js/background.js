@@ -9,26 +9,24 @@
  *   animated  — a CSS-animated preset ("aurora" drift or "shimmer" sweep)
  */
 
-import { getGradient, gradientToCss, getThemeManifest } from '../ui/index.js';
+import { getGradient, gradientToCss, themeMode } from '../ui/index.js';
 
 const BG_KEY = 'ui.background';
 
 /**
  * Built-in wallpapers, shipped in /backgrounds.
  *
- * `dim`   — strength of the black scrim painted over the artwork on a DARK
- *           theme: the dark pieces need almost none, the light "Paper" piece
- *           needs a heavy one to keep white UI text legible.
- * `tone`  — how bright the artwork is. On a LIGHT theme the scrim flips to
- *           white, and only the dark pieces need it, so the bright one is left
- *           alone rather than being greyed out.
+ * `dim` — strength of the black scrim painted over the artwork. It only ever
+ *         applies on a DARK theme (a light theme never veils a wallpaper):
+ *         the dark pieces need almost none, the light "Paper" piece needs a
+ *         heavy one to keep white UI text legible.
  */
 export const BACKGROUND_PRESETS = [
-  { id: 'split',  label: 'Split',  src: '/backgrounds/split.svg',  dim: 0.12, tone: 'dark' },
-  { id: 'grid',   label: 'Grid',   src: '/backgrounds/grid.svg',   dim: 0.12, tone: 'dark' },
-  { id: 'halo',   label: 'Halo',   src: '/backgrounds/halo.svg',   dim: 0.05, tone: 'dark' },
-  { id: 'offset', label: 'Offset', src: '/backgrounds/offset.svg', dim: 0.18, tone: 'dark' },
-  { id: 'paper',  label: 'Paper',  src: '/backgrounds/paper.svg',  dim: 0.55, tone: 'light' },
+  { id: 'split',  label: 'Split',  src: '/backgrounds/split.svg',  dim: 0.12 },
+  { id: 'grid',   label: 'Grid',   src: '/backgrounds/grid.svg',   dim: 0.12 },
+  { id: 'halo',   label: 'Halo',   src: '/backgrounds/halo.svg',   dim: 0.05 },
+  { id: 'offset', label: 'Offset', src: '/backgrounds/offset.svg', dim: 0.18 },
+  { id: 'paper',  label: 'Paper',  src: '/backgrounds/paper.svg',  dim: 0.55 },
 ];
 
 /**
@@ -39,7 +37,6 @@ export const BACKGROUND_PRESETS = [
 const DEFAULT_BG_PRESETS = { dark: 'split', light: 'paper' };
 
 const UPLOAD_DIM = 0.5;
-const LIGHT_TONE_SCRIM = 0.82;
 // `preset` stays null here on purpose: a user who never touched this setting
 // (or who predates wallpapers, with only an uploaded photo stored) must not
 // have the default injected over their choice. The default is resolved at
@@ -50,23 +47,33 @@ export function presetById(id) {
   return BACKGROUND_PRESETS.find((p) => p.id === id) || null;
 }
 
-function themeMode() {
-  const modes = getThemeManifest()?.modes;
-  const light = Array.isArray(modes) && modes.includes('light') && !modes.includes('dark');
-  return light ? 'light' : 'dark';
+/** The canvas the wallpaper has to sit on. Before the theme manifest loads we
+ *  assume the fallback (dark) theme, which is also the safer scrim. */
+function canvasMode() {
+  return themeMode() || 'dark';
 }
 
-/** The scrim that keeps UI text readable over a wallpaper, by theme mode. */
+/**
+ * The scrim that keeps UI text readable over a wallpaper.
+ *
+ * A light theme never gets one: a dark veil turns the light canvas into a
+ * dirty grey wash, and the user's own picture should not be tinted. Dark
+ * themes keep the tuned scrims, where a bright wallpaper really would swallow
+ * the dark UI.
+ */
 function scrimFor(preset) {
-  if (themeMode() === 'light') {
-    return preset.tone === 'light' ? null : `rgba(255, 255, 255, ${LIGHT_TONE_SCRIM})`;
-  }
+  if (canvasMode() === 'light') return null;
   return preset.dim > 0 ? `rgba(0, 0, 0, ${preset.dim})` : null;
+}
+
+/** The veil over the user's own uploaded photo (never on a light theme). */
+function uploadScrim() {
+  return canvasMode() === 'light' ? null : `rgba(0, 0, 0, ${UPLOAD_DIM})`;
 }
 
 /** The built-in wallpaper that stands in when the user has chosen nothing. */
 export function defaultPreset() {
-  return presetById(DEFAULT_BG_PRESETS[themeMode()]) || BACKGROUND_PRESETS[0];
+  return presetById(DEFAULT_BG_PRESETS[canvasMode()]) || BACKGROUND_PRESETS[0];
 }
 
 /**
@@ -138,11 +145,13 @@ export function applyBackground() {
   el.style.animation = 'none';
 
   switch (bg.mode) {
-    case 'gradient':
-      el.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), ${gradientToCss(getGradient())}`;
+    case 'gradient': {
+      // The user's own gradient is shown as chosen — no veil, on any theme.
+      el.style.backgroundImage = gradientToCss(getGradient());
       el.style.backgroundSize = '100% 100%';
       el.style.backgroundPosition = 'center';
       break;
+    }
     case 'image': {
       // A built-in wallpaper wins when one is selected; otherwise fall back to
       // the uploaded photo. Use the stored URL verbatim — it already carries a
@@ -151,7 +160,7 @@ export function applyBackground() {
       // runs every minute) and make the photo flicker.
       const preset = activePreset(bg);
       const src = preset ? preset.src : (bg.url || '/api/background');
-      const scrim = preset ? scrimFor(preset) : `rgba(0, 0, 0, ${UPLOAD_DIM})`;
+      const scrim = preset ? scrimFor(preset) : uploadScrim();
       el.style.backgroundImage = scrim
         ? `linear-gradient(${scrim}, ${scrim}), url("${src}")`
         : `url("${src}")`;

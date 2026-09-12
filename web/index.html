@@ -9,9 +9,11 @@
   <title>PEAK'D!</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link id="theme-tokens" rel="stylesheet" href="/themes/noir/tokens.css">
+  <!-- The theme links get their href from the bootstrap below, so the correct
+       theme is already loading before the first paint. -->
+  <link id="theme-tokens" rel="stylesheet">
   <link rel="stylesheet" href="/ui/ui.css">
-  <link id="theme-components" rel="stylesheet" href="/themes/noir/components.css">
+  <link id="theme-components" rel="stylesheet">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/sphere.css">
   <link rel="stylesheet" href="/css/text-input.css">
@@ -20,6 +22,27 @@
   <link rel="stylesheet" href="/css/keyboard.css">
   <link rel="stylesheet" href="/css/background.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
+  <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
+       after boot, which would flash the fallback (dark) theme first. The
+       installed-theme index is cached by listThemes() for the check here. -->
+  <script>
+    (function () {
+      var theme = 'noir';
+      try {
+        var stored = localStorage.getItem('ui.theme.name');
+        var list = JSON.parse(localStorage.getItem('ui.theme.list') || 'null');
+        if (Array.isArray(list) && list.length) theme = list.indexOf(stored) >= 0 ? stored : list[0];
+        else if (stored) theme = stored;
+      } catch (e) { /* keep the fallback */ }
+      document.documentElement.setAttribute('data-theme', theme);
+      var set = function (id, href) {
+        var el = document.getElementById(id);
+        if (el) el.setAttribute('href', href);
+      };
+      set('theme-tokens', '/themes/' + theme + '/tokens.css');
+      set('theme-components', '/themes/' + theme + '/components.css');
+    })();
+  </script>
 </head>
 <body>
   <div id="background" aria-hidden="true"></div>

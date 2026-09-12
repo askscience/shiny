@@ -7,7 +7,7 @@
  * so plugins always match the user's theme and accent.
  */
 
-export { initThemeLoader, listThemes, setTheme, getActiveTheme, getThemeManifest, themeUrl } from './theme-loader.js';
+export { initThemeLoader, listThemes, setTheme, getActiveTheme, getThemeManifest, themeMode, themeUrl } from './theme-loader.js';
 export {
   initAppearance, refreshAppearance, applyAppearance,
   getAccent, setAccent, getGradient, setGradient,
