@@ -108,7 +108,10 @@ function dispatchVoiceResult(text) {
 
 function handleWakeTranscript(text, isFinal) {
   if (awaitingCommand) {
-    if (isFinal && text) dispatchVoiceResult(text);
+    if (!isFinal || !text) return;
+    // If the wake phrase gets repeated along with the request ("hey <name>,
+    // turn on the lights"), hand the agent only the request.
+    dispatchVoiceResult(extractAfterWake(text) || text);
     return;
   }
 
@@ -326,13 +329,21 @@ export function cancelListening() {
   window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'user' } }));
 }
 
-/** Long-press release: cancel wake wait if phrase not heard yet. */
+/**
+ * Long-press release.
+ *
+ * Holding the orb only *arms* wake recognition — the hold is the trigger for
+ * "hey <name>", not the thing that keeps the microphone open. Releasing must
+ * therefore leave the recogniser running so the phrase (and then the request)
+ * can be spoken after the finger lifts. Letting go also restarts the wake
+ * window, so a long hold does not eat into the time left to talk.
+ *
+ * Returns true while a wake session is still listening.
+ */
 export function releaseWakeHold() {
-  if (listenMode !== 'wake' || !listening) return;
-  if (!wakeDetected && !awaitingCommand) {
-    cancelListening();
-    setSphereState('idle');
-  }
+  if (listenMode !== 'wake' || !listening) return false;
+  if (!wakeDetected && !awaitingCommand) armWakeWaitTimer();
+  return true;
 }
 
 export async function speak(text, lang) {

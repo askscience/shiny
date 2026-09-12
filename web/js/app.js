@@ -223,13 +223,20 @@ function wireSphere() {
     }
   });
 
+  // Releasing the orb never closes the microphone: the hold only *arms* the
+  // wake listener ("hey <name>"), or a single-shot listen when the wake word
+  // is off. sphere.js has just flipped the orb to idle on release, so put the
+  // reactive conversation look back and let the wake window, the silence
+  // timeout or a short tap end the session.
   onLongPressEnd(() => {
     releaseWakeHold();
-    if (!isListening()) {
-      setConversationMode(false);
-      resetMicLevel();
-      if (!isTextInputOpen()) setSphereState('idle');
+    if (isListening()) {
+      setSphereState('conversation');
+      return;
     }
+    setConversationMode(false);
+    resetMicLevel();
+    if (!isTextInputOpen()) setSphereState('idle');
   });
 
   // Double-tap = type to the assistant. Text needs no speech model, so this
