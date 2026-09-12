@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orb styles — live check</title>
+<!--
+  Side-by-side check for the five orb looks: three.js (WebGL) on top, the
+  canvas-2D fallback in the middle, the reference render underneath.
+
+  `?theme=light` (or any installed theme name) renders the orb for that theme's
+  canvas, so the light-theme ink colours can be checked against paper and the
+  dark-theme glow against black.
+
+  ES modules need a real origin, so serve the repo root and open
+  http://127.0.0.1:8765/web/orbs/preview.html?theme=light
+  (e.g. `python3 -m http.server 8765 --bind 127.0.0.1`).
+-->
+<style>
+  body { margin: 0; padding: 0 0 24px; background: #05060a; color: #cfd6e4;
+         font: 12px -apple-system, system-ui, sans-serif; }
+  body.on-light { background: #f4f4f5; color: #3a4049; }
+  h2 { font-size: 11px; margin: 16px 18px 0; color: #7f8798; font-weight: 700;
+       letter-spacing: .1em; text-transform: uppercase; }
+  body.on-light h2 { color: #6b7280; }
+  .row { display: flex; gap: 16px; padding: 10px 18px; align-items: flex-start; }
+  .cell { text-align: center; }
+  .cell canvas, .cell img { display: block; width: 160px; height: 160px;
+       border-radius: 14px; object-fit: cover; }
+  .cell canvas { background: transparent; }
+  .label { margin-top: 6px; font-weight: 600; color: #9aa3b5; }
+  body.on-light .label { color: #3a4049; }
+  .error { color: #f87171; max-width: 160px; margin-top: 6px; }
+  .theme-note { margin: 14px 18px 0; color: #7f8798; }
+</style>
+</head>
+<body>
+  <p class="theme-note" id="note"></p>
+  <h2>three.js (WebGL)</h2>
+  <div class="row" id="row3d"></div>
+  <h2>canvas 2D fallback</h2>
+  <div class="row" id="row2d"></div>
+  <h2>reference</h2>
+  <div class="row" id="rowref"></div>
+<script type="module">
+import { ORB_STYLES } from '../js/preferences.js';
+import { createRenderer as create3d } from '../js/orbCanvas3d.js';
+import { createRenderer as create2d } from '../js/orbCanvas2d.js';
+import { initThemeLoader, themeMode } from '../ui/index.js';
+
+window.__orb3d = [];
+window.__orb2d = [];
+
+// Pick the theme (hence the canvas) the orbs should be drawn for. The theme
+// loader is what exposes the manifest to the palette, so it has to run first.
+const wanted = new URLSearchParams(location.search).get('theme');
+if (wanted) localStorage.setItem('ui.theme.name', wanted);
+await initThemeLoader();
+const mode = themeMode() || 'dark';
+document.body.classList.toggle('on-light', mode === 'light');
+document.getElementById('note').textContent =
+  `theme: ${localStorage.getItem('ui.theme.name') || '(default)'} — ${mode} canvas`;
+
+function cell(rowId, node, label) {
+  const box = document.createElement('div');
+  box.className = 'cell';
+  const cap = document.createElement('div');
+  cap.className = 'label';
+  cap.textContent = label;
+  box.append(node, cap);
+  document.getElementById(rowId).append(box);
+  return box;
+}
+
+function failed(box, err) {
+  const msg = document.createElement('div');
+  msg.className = 'error';
+  msg.textContent = `failed: ${err.message || err}`;
+  box.append(msg);
+}
+
+ORB_STYLES.forEach((style) => {
+  const c3 = document.createElement('canvas');
+  const box3 = cell('row3d', c3, style.label);
+  Promise.resolve(create3d(c3, { size: 160, preview: true, style: style.id }))
+    .then((r) => window.__orb3d.push(r.getStyle()))
+    .catch((e) => failed(box3, e));
+
+  const c2 = document.createElement('canvas');
+  const box2 = cell('row2d', c2, style.label);
+  try {
+    window.__orb2d.push(create2d(c2, { size: 160, preview: true, style: style.id }).getStyle());
+  } catch (e) {
+    failed(box2, e);
+  }
+});
+
+const img = document.createElement('img');
+img.src = 'eclipse.jpg';
+img.alt = 'reference ring';
+cell('rowref', img, 'eclipse.jpg');
+</script>
+</body>
+</html>

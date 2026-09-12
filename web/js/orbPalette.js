@@ -8,7 +8,27 @@
  * partners). The accent still drives lightness, so the orb stays "yours".
  */
 
-import { getAccent, getGradient } from '../ui/index.js';
+import { getAccent, getGradient, themeMode } from '../ui/index.js';
+
+/** True when the orb sits on paper rather than on night. */
+export function isLightCanvas() {
+  return themeMode() === 'light';
+}
+
+/**
+ * Deepen one colour for a light canvas.
+ *
+ * On black the orb is light — additive, luminous, bright. On paper that same
+ * fan washes out to nothing, so the light canvas gets the ink version of it:
+ * same hue, more saturation, a fraction of the lightness. Dark themes keep the
+ * bright colour untouched.
+ */
+export function inkFor(hex) {
+  if (!isLightCanvas()) return hex;
+  const [r, g, b] = hexToRgb(hex);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  return hslToHex(h, Math.min(0.95, s + 0.12), Math.min(0.4, l * 0.6));
+}
 
 function hexToRgb(hex) {
   const h = (hex || '#ffffff').replace('#', '');
@@ -88,6 +108,50 @@ function chromaticPartners(accent) {
   };
 }
 
+/**
+ * The spectral fan used by the two "rainbow" looks — the prism flare's spikes
+ * and the eclipse corona. Hue order runs cyan → blue → violet → magenta →
+ * pink → amber → green and wraps, so sampling it around a ring never seams.
+ * It is anchored on the accent's hue (a colourful accent rotates the whole
+ * fan) and falls back to the reference chromatic spread for a neutral accent.
+ */
+const SPECTRUM_HUES = [196, 232, 268, 300, 336, 20, 64];
+
+/** Shortest-path hue interpolation, so 336° → 20° travels through 0°. */
+function hueLerp(a, b, t) {
+  const d = ((((b - a) % 360) + 540) % 360) - 180;
+  return a + d * t;
+}
+
+/** `count` colours sampled evenly (and cyclically) from the accent's fan. */
+export function spectrumForState(state, count = SPECTRUM_HUES.length) {
+  const palette = paletteForState(state);
+  // Error and disabled carry their own (red / grey) signal, so the two
+  // spectral looks keep that signal instead of painting a rainbow.
+  if (state === 'error' || state === 'disabled') {
+    return Array.from({ length: count }, (_, i) => palette[i % 3]);
+  }
+  const accent = getAccent();
+  const [r, g, b] = hexToRgb(accent);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const neutral = s < 0.2;
+  const base = neutral ? 0 : h - SPECTRUM_HUES[0];
+  const sat = neutral ? 0.9 : Math.min(0.92, s + 0.15);
+  const bright = neutral ? 0.62 : Math.min(0.72, Math.max(0.5, l));
+  // Light canvas: the same fan, mixed as ink instead of as light.
+  const light = isLightCanvas() ? Math.min(0.4, bright * 0.6) : bright;
+  const n = SPECTRUM_HUES.length;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const pos = (i / count) * n;
+    const i0 = Math.floor(pos) % n;
+    const i1 = (i0 + 1) % n;
+    const hue = hueLerp(SPECTRUM_HUES[i0], SPECTRUM_HUES[i1], pos - Math.floor(pos));
+    out.push(hslToHex(base + hue, sat, light));
+  }
+  return out;
+}
+
 /** Palette for one orb state, as [cool, deep, warm, light] by convention. */
 export function paletteForState(state) {
   const accent = getAccent();
@@ -111,5 +175,7 @@ export function paletteForState(state) {
   // `stops` is only read to keep the gradient part of the palette family when
   // a theme supplies one; the chromatic partners carry the look.
   void stops;
-  return [...palette];
+  // Every entry is ink on a light canvas — including the error reds, which are
+  // deliberately pale and would otherwise vanish on paper.
+  return palette.map(inkFor);
 }
