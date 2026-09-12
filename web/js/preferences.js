@@ -1,4 +1,5 @@
 import { apiFetch, getTraveler } from './api.js';
+import { isMobilePortrait } from './viewport.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
@@ -246,6 +247,10 @@ export function getDesktopLayout() {
   out.orientation = ['left', 'right', 'top', 'bottom'].includes(out.orientation)
     ? out.orientation : 'left';
   out.gap = Math.round(clamp(Number(out.gap) ?? 12, 0, 40));
+  // A vertical, phone-like screen has no room for a master/stack split or for
+  // floating windows, so it always reads as a column — the stored choice is
+  // left alone and comes back with the screen.
+  if (isMobilePortrait()) out.mode = 'columns';
   return out;
 }
 

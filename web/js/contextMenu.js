@@ -28,6 +28,7 @@ import {
   createWorkspace, removeWorkspace, switchWorkspace, focusWindow,
   toggleFullscreen, moveWindow, moveWindowByIndex, getWorkspacesList,
   activeWorkspaceIndex, getLayout, setLayout, getFocus, getFullscreen,
+  workspacesEnabled,
 } from './desktop.js';
 import {
   deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
@@ -279,6 +280,7 @@ function label(name) {
 }
 
 function moveToWorkspaceItems(name) {
+  if (!workspacesEnabled()) return [];
   const items = getWorkspacesList().map((ws, i) => ({
     type: 'item',
     label: `Workspace ${i + 1}`,
@@ -409,6 +411,12 @@ function layoutItems() {
 }
 
 function desktopMenu() {
+  const layout = { type: 'submenu', label: 'Layout', icon: 'ui/arranger', items: layoutItems() };
+  // A vertical screen is one column and one workspace, so the switcher has
+  // nothing to offer — the layout menu is all that is left.
+  if (!workspacesEnabled()) {
+    return [{ type: 'heading', label: 'Desktop' }, layout];
+  }
   const wss = getWorkspacesList();
   return [
     { type: 'heading', label: 'Desktop' },
@@ -422,7 +430,7 @@ function desktopMenu() {
     },
     { type: 'separator' },
     { type: 'submenu', label: 'Switch to workspace', icon: 'ui/grid', items: switchWorkspaceItems() },
-    { type: 'submenu', label: 'Layout', icon: 'ui/arranger', items: layoutItems() },
+    layout,
   ];
 }
 
