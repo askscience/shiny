@@ -22,6 +22,7 @@ import {
   getWindowsGeom, setWindowsGeom,
 } from './preferences.js';
 import { toast, icon } from '../ui/index.js';
+import { isMobilePortrait, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 
 let workspaces = [];      // [{ id, windows: [pluginName], focus, fullscreen }]
 let activeWs = null;      // active workspace id
@@ -35,6 +36,22 @@ let wsSeq = 0;
 let windowGeom = {};  // pluginName -> { x, y, w, h, z }
 let zSeq = 0;
 let geomTimer = null;
+
+/**
+ * Workspaces are a wide-screen idea. On a vertical, phone-like screen the
+ * desktop is one column of windows, so the switcher, its shortcuts, the menus
+ * and the AI's workspace tools all stand down. This is a view over the stored
+ * arrangement, not a rewrite — nothing is persisted differently, so the
+ * workspaces are exactly as they were when a wide screen comes back.
+ */
+export function workspacesEnabled() {
+  return !isMobilePortrait();
+}
+
+/** Every window the stored workspaces hold, in order and de-duplicated. */
+function everyWindow() {
+  return [...new Set(workspaces.flatMap((ws) => ws.windows))];
+}
 
 function freshId() {
   wsSeq += 1;
@@ -74,6 +91,7 @@ function notify(detail) {
 }
 
 export function initDesktop() {
+  wasMobilePortrait = isMobilePortrait();
   workspaces = getWorkspaces() || [];
   activeWs = getActiveWorkspaceId();
   if (!workspaces.length || !workspaces.some((w) => w.id === activeWs)) {
@@ -84,6 +102,22 @@ export function initDesktop() {
   loadActiveFocus();
   wireShortcuts();
   wireAgentActions();
+  // Turning the screen switches the workspace system off or on. The media
+  // query is the precise signal; `resize` is the fallback, because a few
+  // browsers (and embedded webviews) only deliver that one. Both funnel into
+  // the same transition check so a resize that changes nothing is free.
+  MOBILE_PORTRAIT_QUERY.addEventListener('change', onScreenTurn);
+  window.addEventListener('resize', onScreenTurn);
+}
+
+let wasMobilePortrait = null;
+
+function onScreenTurn() {
+  const now = isMobilePortrait();
+  if (now === wasMobilePortrait) return;
+  const first = wasMobilePortrait === null;
+  wasMobilePortrait = now;
+  if (!first) notify();
 }
 
 /** The AI's desktop tools arrive as `agent:actions` entries — apply them here
@@ -96,6 +130,9 @@ function wireAgentActions() {
     const actions = e.detail || [];
     for (const a of actions) {
       if (a?.result !== 'ok' || !a.data) continue;
+      // The AI's workspace tools are inert on a vertical screen; the server is
+      // told the same thing in getDesktopSnapshot() so it does not offer them.
+      if (String(a.action || '').startsWith('workspace_') && !workspacesEnabled()) continue;
       const d = a.data;
       switch (a.action) {
         case 'desktop_fullscreen':
@@ -166,18 +203,22 @@ export function ensureWindows(names) {
 
 /** Windows of the active workspace that still exist, in workspace order. */
 export function activeWindowNames(allNames) {
+  if (!workspacesEnabled()) return [...allNames];
   const ws = activeWsObj();
   if (!ws) return [...allNames];
   return ws.windows.filter((w) => allNames.includes(w));
 }
 
-export function workspaceCount() { return workspaces.length; }
+export function workspaceCount() { return workspacesEnabled() ? workspaces.length : 1; }
 
 export function activeWorkspaceIndex() {
+  if (!workspacesEnabled()) return 0;
   return Math.max(0, workspaces.findIndex((w) => w.id === activeWs));
 }
 
-export function getWorkspacesList() { return workspaces; }
+export function getWorkspacesList() {
+  return workspacesEnabled() ? workspaces : [{ id: 'single', windows: everyWindow() }];
+}
 
 export function workspaceHasWindow(name) {
   return workspaces.some((w) => w.windows.includes(name));
@@ -186,12 +227,20 @@ export function workspaceHasWindow(name) {
 /** Snapshot of the desktop sent to the AI on every request (1-based indices),
  *  so it knows which windows live in which workspace before reorganizing. */
 export function getDesktopSnapshot() {
+  if (!workspacesEnabled()) {
+    return {
+      active: 1,
+      workspaces: [{ index: 1, windows: everyWindow() }],
+      workspaces_enabled: false,
+    };
+  }
   return {
     active: workspaces.length ? activeWorkspaceIndex() + 1 : 1,
     workspaces: workspaces.map((ws, i) => ({
       index: i + 1,
       windows: [...ws.windows],
     })),
+    workspaces_enabled: true,
   };
 }
 
@@ -267,6 +316,7 @@ function pushWorkspace() {
 }
 
 export function createWorkspace() {
+  if (!workspacesEnabled()) return null;
   syncActiveFocus();
   const ws = pushWorkspace();
   activeWs = ws.id;
@@ -277,6 +327,7 @@ export function createWorkspace() {
 }
 
 export function removeWorkspace() {
+  if (!workspacesEnabled()) return false;
   if (workspaces.length <= 1) {
     toast('Can\u2019t remove the last workspace', { type: 'error' });
     return false;
@@ -296,6 +347,7 @@ export function removeWorkspace() {
 
 /** Switch workspace: 'next' | 'prev' | a 0-based index. */
 export function switchWorkspace(dirOrIndex) {
+  if (!workspacesEnabled()) return false;
   if (workspaces.length <= 1) return false;
   const from = activeWorkspaceIndex();
   let idx;
@@ -350,6 +402,7 @@ export function moveWindow(name, toId) {
  *  out-of-range index auto-creates the missing workspaces so "move to
  *  workspace 3" works even when only one workspace exists. */
 export function moveWindowByIndex(name, idx) {
+  if (!workspacesEnabled()) return false;
   if (idx === 'new') {
     const ws = pushWorkspace();
     return moveWindow(name, ws.id);
@@ -734,6 +787,12 @@ const WS_SHORTCUT_ENABLED = true;
 export function renderWorkspaceBar() {
   const bar = document.getElementById('workspace-bar');
   if (!bar) return;
+  if (!workspacesEnabled()) {
+    // One column, one workspace: the switcher has nothing to switch.
+    bar.classList.add('hidden');
+    bar.textContent = '';
+    return;
+  }
   // Always visible — even with no plugin windows the switcher lets you
   // create/manage workspaces (dots render empty, +/− still work).
   bar.classList.remove('hidden');
@@ -803,6 +862,7 @@ function wireShortcuts() {
     }
     // Workspace jump: Alt+1..9
     if (/^[1-9]$/.test(k)) {
+      if (!workspacesEnabled()) return;
       e.preventDefault();
       const idx = Number(k) - 1;
       if (idx !== activeWorkspaceIndex()) switchWorkspace(idx);
@@ -811,9 +871,10 @@ function wireShortcuts() {
     switch (k) {
       case 'h': e.preventDefault(); cycleFocus(namesForShortcuts(), -1); break;
       case 'l': e.preventDefault(); cycleFocus(namesForShortcuts(), 1); break;
-      case ',': e.preventDefault(); switchWorkspace('prev'); break;
-      case '.': e.preventDefault(); switchWorkspace('next'); break;
+      case ',': if (!workspacesEnabled()) return; e.preventDefault(); switchWorkspace('prev'); break;
+      case '.': if (!workspacesEnabled()) return; e.preventDefault(); switchWorkspace('next'); break;
       case 'n':
+        if (!workspacesEnabled()) return;
         e.preventDefault();
         if (e.shiftKey) removeWorkspace();
         else createWorkspace();

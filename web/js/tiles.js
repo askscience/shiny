@@ -31,8 +31,9 @@ import {
 } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
 
+import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
+
 const MAP_TILE_PLUGIN = 'traveler';
-const PHONE_QUERY = window.matchMedia('(max-width: 640px)');
 
 let grid = null;
 let overlay = null;
@@ -585,6 +586,8 @@ export function initTileManager() {
 
   // Crossing the phone breakpoint re-tiles the windows.
   PHONE_QUERY.addEventListener('change', () => renderTiles());
+  // So does turning the screen (which switches the workspace system off/on).
+  MOBILE_PORTRAIT_QUERY.addEventListener('change', () => renderTiles());
 
   // The map broadcasts its view so the traveler window's rim can mirror it.
   window.addEventListener('map:view', (e) => scheduleMapGlow(e.detail));
