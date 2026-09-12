@@ -24,6 +24,7 @@ let keysEl = null;
 let sciEl = null;
 let historyEl = null;
 let historyToggleBtn = null;
+let sciToggleBtn = null;
 
 let expression = '';
 let lastResult = null; // number|null — "Ans" for chained calculations
@@ -220,7 +221,7 @@ function buildSciPad() {
 function toggleSci() {
   sciMode = !sciMode;
   sciEl.classList.toggle('hidden', !sciMode);
-  historyToggleBtn?.classList.toggle('is-active', sciMode);
+  sciToggleBtn?.classList.toggle('is-active', sciMode);
 }
 
 /* ── History panel ──────────────────────────────────────────── */
@@ -309,9 +310,9 @@ export function mountCalculatorTile() {
     return btn;
   };
   historyToggleBtn = barBtn('ui/list', 'History', toggleHistory);
-  const sciBtn = barBtn('ui/puzzle', 'Scientific', toggleSci);
+  sciToggleBtn = barBtn('ui/scientific', 'Scientific', toggleSci);
   const clearBtn = barBtn('ui/trash', 'Clear history', () => void clearHistory());
-  bar.append(title, spacer, historyToggleBtn, sciBtn, clearBtn);
+  bar.append(title, spacer, historyToggleBtn, sciToggleBtn, clearBtn);
   tileEl.appendChild(bar);
 
   /* Display */
@@ -355,6 +356,7 @@ export function unmountCalculatorTile() {
   sciEl = null;
   historyEl = null;
   historyToggleBtn = null;
+  sciToggleBtn = null;
 }
 
 /** The tile element (or null when the Calculator window is not mounted). */
@@ -395,7 +397,7 @@ export function calculatorContextMenu() {
     { type: 'item', label: 'Equals', icon: 'ui/check', disabled: !hasExpr, onClick: () => void equals() },
     { type: 'item', label: 'Clear all', icon: 'ui/close', onClick: clearAll },
     { type: 'separator' },
-    { type: 'item', label: 'Scientific', icon: 'ui/puzzle', checked: sciMode, onClick: toggleSci },
+    { type: 'item', label: 'Scientific', icon: 'ui/scientific', checked: sciMode, onClick: toggleSci },
     { type: 'item', label: 'History', icon: 'ui/list', checked: historyOpen, onClick: toggleHistory },
     { type: 'item', label: 'Clear history', icon: 'ui/trash', danger: true, onClick: () => void clearHistory() },
   ];
