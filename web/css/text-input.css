@@ -31,6 +31,14 @@ body.compose-active.compose-awaiting #compose-dock-input {
   display: none !important;
 }
 
+/* Awaiting the answer the compose pill is away, so the dock is only there for
+   the status line — and when that line is gone too, the pill goes with it
+   rather than sitting under the orb empty. This has to live here, after the
+   `display: flex !important` above, to win against it. */
+body.compose-active.compose-awaiting #artifact-dock:has(> #artifact-dock-icons:empty):has(> #artifact-dock-step.hidden) {
+  display: none !important;
+}
+
 body.compose-active #chrome-bottom,
 body.agent-awaiting #chrome-bottom {
   z-index: 50;

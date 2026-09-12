@@ -372,6 +372,9 @@ export async function sendToAgent(message, mode, context) {
 
     await syncTripsAfterAgent(res);
 
+    // The answer has arrived: retire the status line before it is spoken, so
+    // nothing sits under the orb while the assistant talks.
+    clearDockStep();
     setSphereState('speaking');
 
     // Voice modes: the answer is spoken and saved to the chat — it is NOT

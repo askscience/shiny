@@ -675,7 +675,7 @@ html, body {
   min-width: 0;
   max-width: min(60vw, 240px);
   padding: 0 6px;
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1.25;
   color: var(--text-secondary);
   text-align: center;
@@ -686,6 +686,46 @@ html, body {
   animation: dockStepIn var(--duration-fast) var(--ease-out) both;
 }
 #artifact-dock-icons:empty { display: none; }
+
+/* Status only — no saved cards, and the compose pill is not up: the line hangs
+   under the orb instead of joining the bottom stack. Being out of flow, it
+   neither lifts the orb on its way in nor drops it on the way out.
+
+   The compose pill is up only while `body.compose-active` and not awaiting, so
+   that is the one case left in the stack — it is a real text field and needs
+   the room rather than an overlay. */
+body:not(.compose-active) #artifact-dock:has(> #artifact-dock-icons:empty),
+body.compose-awaiting #artifact-dock:has(> #artifact-dock-icons:empty) {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* …and once the line is gone there is nothing left in that pill, so the bubble
+   goes with it instead of sitting under the orb empty. Cards keep it up on
+   their own. (The awaiting case is finished off in text-input.css, which owns
+   the `display: flex !important` that keeps the compose pill up.) */
+body:not(.compose-active) #artifact-dock:has(> #artifact-dock-icons:empty):has(> #artifact-dock-step.hidden) {
+  display: none;
+}
+
+/* While the assistant is reading its answer out, nothing sits under the orb at
+   all — whatever the pill happens to hold. It keeps its space (visibility, not
+   display) so the orb stays exactly where it is: with saved cards the pill is
+   taller, and collapsing it would drop the orb and start it moving again. */
+body.orb-speaking #artifact-dock {
+  visibility: hidden;
+}
+
+/* With the keyboard up the whole stack is lifted clear of it, so the dock has
+   to stay in the stack — hanging below would drop the line into the keyboard. */
+body.keyboard-open #artifact-dock {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+}
 
 /* ── Login ─────────────────────────────────────────────────── */
 #login-overlay {
