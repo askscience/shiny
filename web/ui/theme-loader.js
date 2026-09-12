@@ -12,17 +12,27 @@
  */
 
 const THEME_KEY = 'ui.theme.name';
+const THEMES_KEY = 'ui.theme.list';
 const FALLBACK_THEME = 'noir';
 
 let activeTheme = FALLBACK_THEME;
 let manifest = null;
 
+/**
+ * The installed-theme index, cached in localStorage so the inline bootstrap in
+ * each page can validate the stored theme *synchronously*, before the first
+ * paint. Without that the pages would have to start on the fallback theme and
+ * swap once this fetch resolved — a visible flash of the wrong theme.
+ */
 export async function listThemes() {
   try {
     const res = await fetch('/themes/themes.json');
     if (res.ok) {
       const list = await res.json();
-      if (Array.isArray(list) && list.length) return list;
+      if (Array.isArray(list) && list.length) {
+        try { localStorage.setItem(THEMES_KEY, JSON.stringify(list)); } catch (_) { /* cache is best-effort */ }
+        return list;
+      }
     }
   } catch (_) { /* fall through */ }
   return [FALLBACK_THEME];
@@ -34,6 +44,17 @@ export function getActiveTheme() {
 
 export function getThemeManifest() {
   return manifest;
+}
+
+/**
+ * Which canvas the active theme paints — 'light', 'dark', or null before the
+ * manifest has loaded. Every canvas-dependent decision goes through here: the
+ * accent's readability as ink, the wallpaper scrim, and the orb's colours.
+ */
+export function themeMode() {
+  const modes = manifest?.modes;
+  if (!Array.isArray(modes) || !modes.length) return null;
+  return modes.includes('light') && !modes.includes('dark') ? 'light' : 'dark';
 }
 
 /** URL of an asset inside the active theme (icons, images, …). */

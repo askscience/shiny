@@ -11,7 +11,7 @@
  *   initAppearance({ getScope: () => getTraveler()?.id })
  */
 
-import { getThemeManifest } from './theme-loader.js';
+import { getThemeManifest, themeMode } from './theme-loader.js';
 
 const ACCENT_KEY = 'ui.accent';
 const GRADIENT_KEY = 'ui.gradient';
@@ -47,6 +47,32 @@ export function contrastFor(hex) {
   return luminance > 0.6 ? '#0a0a0a' : '#fafafa';
 }
 
+/** Perceived brightness of a hex colour, 0 (black) … 1 (white). */
+function luminance(hex) {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/* The accent is stored per user, not per theme, and it is used as INK
+ * (`color: var(--accent)` labels, icons, active states) as well as fill. A
+ * colour picked on the other side of the light/dark divide — near-white chosen
+ * in a dark theme, then a light theme activated — would render that ink
+ * invisible on the canvas, so it falls back to the theme's own default. The
+ * stored choice is kept, so returning to the other theme restores it. */
+const LIGHT_CANVAS_MAX_INK = 0.75;
+const DARK_CANVAS_MIN_INK = 0.18;
+
+function usableAccent(accent) {
+  const mode = themeMode();
+  if (!mode) return accent; // theme not resolved yet — keep the colour as-is
+  const lum = luminance(accent);
+  const invisible = mode === 'light'
+    ? lum > LIGHT_CANVAS_MAX_INK
+    : lum < DARK_CANVAS_MIN_INK;
+  if (!invisible) return accent;
+  return getThemeManifest()?.defaultAccent || DEFAULT_ACCENT;
+}
+
 /** Current computed value of a CSS variable on :root (for canvas/JS rendering). */
 export function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -54,10 +80,12 @@ export function cssVar(name) {
 
 /* ── stored state ───────────────────────────────────────────── */
 
+/** The accent in effect: the stored choice when it can be seen on this theme's
+ *  canvas, otherwise the theme's own default. */
 export function getAccent() {
-  return localStorage.getItem(scopedKey(ACCENT_KEY))
-    || getThemeManifest()?.defaultAccent
-    || DEFAULT_ACCENT;
+  const stored = localStorage.getItem(scopedKey(ACCENT_KEY));
+  const base = stored || getThemeManifest()?.defaultAccent || DEFAULT_ACCENT;
+  return usableAccent(base);
 }
 
 export function setAccent(hex) {
