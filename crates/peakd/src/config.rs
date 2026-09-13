@@ -30,6 +30,9 @@ pub struct PeakdConfig {
     pub data_dir: String,
     /// Skip downloading filter lists; use only the cache and pinned rules.
     pub offline: bool,
+    /// Drag a plugin window during the benchmark instead of asking the user to
+    /// move the OS window.
+    pub benchmark_drag_tile: bool,
     /// Run the in-app frame benchmark instead of a normal session.
     ///
     /// Off by default and compiled into an `Option`, so a normal launch carries
@@ -81,6 +84,7 @@ impl PeakdConfig {
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or_else(default_data_dir),
             offline: env_flag("PEAKD_OFFLINE"),
+            benchmark_drag_tile: false,
             benchmark: None,
         };
 
@@ -95,6 +99,11 @@ impl PeakdConfig {
                     }
                 }
                 "--app-mode" | "--app" => cfg.app_mode = true,
+                "--benchmark-drag-tile" => {
+                    // Implies --benchmark: there is nothing to drag without it.
+                    cfg.benchmark_drag_tile = true;
+                    cfg.benchmark.get_or_insert_with(default_benchmark);
+                }
                 "--benchmark" => {
                     // The benchmark makes the app measure *itself*, in the
                     // window that is actually on screen. That is the whole

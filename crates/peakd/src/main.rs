@@ -188,7 +188,13 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
     // The benchmark takes over the process: it measures, prints and exits.
     if let Some(bench_config) = cfg.benchmark.clone() {
         bench::announce(&bench_config);
-        bench::run(webview, bench::BenchState::new(bench_config), proxy, event_loop);
+        let drag_tile = cfg.benchmark_drag_tile;
+        bench::run(
+            webview,
+            bench::BenchState::new(bench_config, drag_tile),
+            proxy,
+            event_loop,
+        );
     }
 
     let shell = Shell { _cfg: cfg, filtering };
@@ -210,7 +216,6 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
             }
             _ => {}
         }
-        let _ = &webview;
     });
 }
 

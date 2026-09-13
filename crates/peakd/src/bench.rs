@@ -36,6 +36,9 @@ use crate::config::Benchmark;
 /// at runtime.
 const BENCH_JS: &str = include_str!("../js/bench.js");
 
+/// Synthetic drag of a floating plugin window, used by `--benchmark-drag-tile`.
+const DRAG_TILE_JS: &str = include_str!("../js/bench-drag-tile.js");
+
 /// Events the benchmark schedules onto the event loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BenchStep {
@@ -59,14 +62,18 @@ struct Observations {
 
 pub struct BenchState {
     config: Benchmark,
+    /// Drag a plugin window for the duration, instead of relying on the user to
+    /// move the OS window.
+    drag_tile: bool,
     started: Option<Instant>,
     observed: Arc<Mutex<Observations>>,
 }
 
 impl BenchState {
-    pub fn new(config: Benchmark) -> Self {
+    pub fn new(config: Benchmark, drag_tile: bool) -> Self {
         Self {
             config,
+            drag_tile,
             started: None,
             observed: Arc::new(Mutex::new(Observations::default())),
         }
@@ -141,6 +148,13 @@ pub fn run(
                     return;
                 }
                 state.started = Some(Instant::now());
+                if state.drag_tile {
+                    // Started after the frame counter so both run together.
+                    match webview.evaluate_script(DRAG_TILE_JS) {
+                        Ok(()) => eprintln!("benchmark: dragging a plugin window"),
+                        Err(err) => eprintln!("benchmark: tile drag failed: {err}"),
+                    }
+                }
                 eprintln!("benchmark: measuring...");
 
                 let proxy = proxy.clone();
@@ -154,6 +168,11 @@ pub fn run(
             }
 
             Event::UserEvent(BenchStep::Collect) => {
+                if state.drag_tile {
+                    let _ = webview.evaluate_script(
+                        "window.__peakdTileDragStop && window.__peakdTileDragStop()",
+                    );
+                }
                 let proxy = proxy.clone();
                 let observed = state.observed.clone();
                 let output = output.clone();

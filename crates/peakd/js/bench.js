@@ -177,6 +177,9 @@
       stalls: b.stalls,
       resizes: b.resizes,
       longTasks: b.longTasks,
+      tileDrag: window.__peakdTileDrag
+        ? { moves: window.__peakdTileDrag.moves, done: window.__peakdTileDrag.done }
+        : null,
       visibilityChanges: b.visibilityChanges,
       hiddenAtStart: b.hiddenAtStart,
       timerTicks: b.timerTicks,
