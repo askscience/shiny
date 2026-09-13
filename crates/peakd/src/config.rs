@@ -51,7 +51,7 @@ impl PeakdConfig {
             data_dir: env::var("PEAKD_DATA_DIR")
                 .ok()
                 .filter(|v| !v.trim().is_empty())
-                .unwrap_or_else(|| "data/peakd".to_string()),
+                .unwrap_or_else(default_data_dir),
             offline: env_flag("PEAKD_OFFLINE"),
         };
 
@@ -128,6 +128,29 @@ impl PeakdConfig {
             None => Some((raw.to_string(), "80".to_string())),
         }
     }
+}
+
+/// Where the filter cache lives when `PEAKD_DATA_DIR` is unset.
+///
+/// Anchored to the executable rather than the working directory, because a
+/// macOS `.app` launches with `/` as its cwd — a relative default would try to
+/// write `data/peakd` at the filesystem root (and fail), and would also hide
+/// the cache the terminal build already warmed. Resolving against the binary
+/// works the same on Linux.
+fn default_data_dir() -> String {
+    if let Ok(exe) = std::env::current_exe() {
+        // target/<profile>/peakd -> the repo root is two levels up.
+        if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+            let candidate = root.join("data").join("peakd");
+            // Only adopt it when it is plausibly the project root: a bundled
+            // app should still read the repo's cache during development, but a
+            // relocated binary must not create directories beside itself.
+            if root.join("Cargo.toml").is_file() {
+                return candidate.to_string_lossy().into_owned();
+            }
+        }
+    }
+    "data/peakd".to_string()
 }
 
 /// Give a bare host the scheme it obviously meant.

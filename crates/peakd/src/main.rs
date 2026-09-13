@@ -156,7 +156,24 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
         ))
         // Keep navigation inside the shell: rather than handing `target=_blank`
         // to the OS browser, load in place. A real tab layer replaces this.
-        .with_navigation_handler(|_url| true);
+        .with_navigation_handler(|_url| true)
+        // Grant microphone/camera to the app's own pages. wry already defaults
+        // to Grant, but relying on a default for something the user experiences
+        // as "the mic does not work" is not good enough — and stating it means
+        // a future wry default change cannot silently break voice input.
+        //
+        // This is only the *webview's* decision. macOS separately requires the
+        // host app to be a bundle declaring NSMicrophoneUsageDescription;
+        // `scripts/bundle-app.sh` builds that. Without it the request is
+        // refused by the OS with no prompt. On Linux the same grant is what the
+        // WebKitGTK permission request needs.
+        .with_permission_handler(|kind| match kind {
+            wry::PermissionKind::Microphone | wry::PermissionKind::Camera => {
+                wry::PermissionResponse::Allow
+            }
+            // Everything else keeps the engine's normal prompting behaviour.
+            _ => wry::PermissionResponse::Default,
+        });
 
     let builder = apply_proxy(builder, &cfg, filtering.as_ref());
 

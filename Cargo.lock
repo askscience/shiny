@@ -3777,6 +3777,8 @@ dependencies = [
  "anyhow",
  "objc2",
  "objc2-app-kit",
+ "parking_lot",
+ "serde_json",
  "shiny-filter",
  "tao",
  "tokio",
