@@ -1,10 +1,28 @@
+# Build output
 /target
+
+# Secrets and local configuration
 .env
+.env.*
+!.env.example
+
+# Runtime data: SQLite databases, logs, downloaded models, diaries
 data/
 diaries/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+
+# Editor / OS noise
 *.swp
 *.swo
 *~
 .DS_Store
+
+# Large bundled archives
 vosk-browser-*.tgz
 backpack/
