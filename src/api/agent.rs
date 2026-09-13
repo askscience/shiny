@@ -34,6 +34,19 @@ pub struct AgentRequest {
     /// the reply must be conversational spoken prose, not lists/markdown.
     #[serde(default)]
     pub voice: bool,
+    /// Client-generated id for this turn. Lets the user stop it mid-answer
+    /// (`POST /api/agent/stop`) and lets the core tell "stopped" apart from
+    /// "finished" when it saves the turn.
+    pub turn_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct AgentStopRequest {
+    pub turn_id: String,
+    /// Conversation the turn belongs to, so a stop that arrives after the
+    /// answer was saved can still leave the invisible "user stopped this"
+    /// note on the right thread.
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -78,6 +91,9 @@ pub struct AgentResponse {
     /// Conversation thread id for the chat history (continue this chat).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<String>,
+    /// True when the user stopped this turn before it finished.
+    #[serde(default)]
+    pub interrupted: bool,
 }
 
 #[derive(Serialize)]
@@ -208,6 +224,8 @@ struct PreparedAgent {
     /// Ollama model the client explicitly asked for on this request (from the
     /// `ollama_model` body field). Honored over the persisted preference.
     requested_model: Option<String>,
+    /// Client-generated id for this turn, used for stop/cancel.
+    turn_id: Option<String>,
 }
 
 async fn prepare_agent(
@@ -478,6 +496,7 @@ async fn prepare_agent(
         trip_id: active_trip.as_ref().map(|t| t.id.clone()),
         conversation_id,
         requested_model,
+        turn_id: body.turn_id.filter(|id| !id.trim().is_empty()),
         input: AgentRunInput {
             message: body.message,
             mode,
@@ -511,6 +530,7 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
         navigation: result.navigation,
         focus_plugin: result.focus_plugin,
         conversation_id: None,
+        interrupted: result.interrupted,
     }
 }
 
@@ -524,6 +544,7 @@ pub async fn handle_agent(
     let trip_id = prepared.trip_id.clone();
     let conversation_id = prepared.conversation_id.clone();
     let user_message = prepared.input.message.clone();
+    let turn_id = prepared.turn_id.clone();
     // Honor the model the client asked for on this request (Ollama only); the
     // OpenAI client bakes its configured model in.
     let model: Option<String> = if ai.client.is_openai() {
@@ -532,6 +553,10 @@ pub async fn handle_agent(
         prepared.requested_model.clone().or_else(|| ai.model.clone())
     };
 
+    let cancel = turn_id
+        .as_deref()
+        .map(|id| state.agent_turns.register(id));
+
     let result = run_agent(
         &state,
         &traveler,
@@ -539,23 +564,103 @@ pub async fn handle_agent(
         &ai.client,
         model.as_deref(),
         prepared.input,
+        cancel.clone(),
         |_| {},
     )
     .await?;
 
-    let _ = crate::services::chat_memory::save_turn(
-        &state.pool,
+    let stop_note = finish_turn(
+        &state,
         &ai.client,
         &traveler.id,
         &conversation_id,
         &user_message,
-        &result.reply,
+        &result,
+        cancel.as_ref(),
+        turn_id.as_deref(),
     )
     .await;
 
     let mut resp = to_response(result);
     resp.conversation_id = Some(conversation_id);
+    resp.interrupted = stop_note;
     Ok(Json(resp))
+}
+
+/// Persist a finished turn — with the invisible "the user stopped this" note
+/// when it was stopped — and retire its cancellation entry.
+///
+/// Returns whether the turn is recorded as interrupted. The note is written
+/// exactly once, whichever moment the stop arrives in: the runner handles the
+/// mid-run case (and the stop landing while the answer is being saved), and
+/// `/api/agent/stop` handles the turn that had already finished.
+#[allow(clippy::too_many_arguments)]
+async fn finish_turn(
+    state: &AppState,
+    ai: &crate::services::ai::AiClient,
+    traveler_id: &str,
+    conversation_id: &str,
+    user_message: &str,
+    result: &AgentRunResult,
+    cancel: Option<&crate::services::agent_cancel::CancelHandle>,
+    turn_id: Option<&str>,
+) -> bool {
+    use crate::services::chat_memory;
+
+    let stopped = result.interrupted || cancel.is_some_and(|c| c.is_cancelled());
+    let note = stopped.then_some(chat_memory::INTERRUPTED_NOTE);
+
+    let _ = chat_memory::save_turn_with_note(
+        &state.pool,
+        ai,
+        traveler_id,
+        conversation_id,
+        user_message,
+        &result.reply,
+        note,
+    )
+    .await;
+
+    if let Some(id) = turn_id {
+        state.agent_turns.finish(id);
+    }
+    stopped
+}
+
+/// Stop an in-flight turn, or annotate one that already finished.
+pub async fn handle_agent_stop(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<AgentStopRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    use crate::services::agent_cancel::StopOutcome;
+
+    let outcome = state.agent_turns.cancel(&body.turn_id);
+    let annotate = outcome == StopOutcome::Annotate;
+
+    // The turn already finished: its answer was generated and saved, and the
+    // user stopped it while reading or listening. Record that, so the next
+    // request knows the reply was not taken in full. A stop for an unknown —
+    // or already annotated — turn changes nothing.
+    if annotate {
+        if let Some(conversation_id) = body.conversation_id.as_deref() {
+            let _ = crate::services::chat_memory::append_note(
+                &state.pool,
+                &traveler.id,
+                conversation_id,
+                crate::services::chat_memory::INTERRUPTED_NOTE,
+            )
+            .await;
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "data": {
+            "cancelled": outcome == StopOutcome::Cancelled,
+            "annotated": annotate,
+        },
+    })))
 }
 
 pub async fn handle_agent_stream(
@@ -580,6 +685,10 @@ pub async fn handle_agent_stream(
     let input = prepared.input;
     let conversation_id = prepared.conversation_id.clone();
     let user_message = input.message.clone();
+    let turn_id = prepared.turn_id.clone();
+    let cancel = turn_id
+        .as_deref()
+        .map(|id| state.agent_turns.register(id));
 
     tokio::spawn(async move {
         let emit = |event: AgentStreamEvent| {
@@ -595,6 +704,7 @@ pub async fn handle_agent_stream(
             &ai.client,
             model.as_deref(),
             input,
+            cancel.clone(),
             |msg| emit(AgentStreamEvent::Step {
                 message: msg.to_string(),
             }),
@@ -602,22 +712,30 @@ pub async fn handle_agent_stream(
         .await
         {
             Ok(result) => {
-                let _ = crate::services::chat_memory::save_turn(
-                    &state.pool,
+                let interrupted = finish_turn(
+                    &state,
                     &ai.client,
                     &traveler.id,
                     &conversation_id,
                     &user_message,
-                    &result.reply,
+                    &result,
+                    cancel.as_ref(),
+                    turn_id.as_deref(),
                 )
                 .await;
                 let mut data = to_response(result);
                 data.conversation_id = Some(conversation_id);
+                data.interrupted = interrupted;
                 emit(AgentStreamEvent::Done { data });
             }
-            Err(e) => emit(AgentStreamEvent::Error {
-                message: e.to_string(),
-            }),
+            Err(e) => {
+                if let Some(id) = turn_id.as_deref() {
+                    state.agent_turns.finish(id);
+                }
+                emit(AgentStreamEvent::Error {
+                    message: e.to_string(),
+                })
+            }
         }
     });
 

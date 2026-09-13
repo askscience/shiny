@@ -11,17 +11,44 @@
  */
 
 import {
-  icon, button, emptyState, toast,
-  setTileGlow, setTileGlowFromUrl,
+  icon, button, emptyState, toast, spinner,
+  setTileGlow, glowFromDrawable,
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
 
 export const PDF_PLUGIN = 'pdf';
 
-const THUMB_DPI = 48;
+/* ── pdf.js engine ──────────────────────────────────────────── */
+/*
+ * The window renders the real document in the browser rather than showing a
+ * server-rendered bitmap: pages are painted to a canvas and a text layer is
+ * laid over them, so text is selectable and zoom stays crisp at any level
+ * without a round-trip per zoom step.
+ *
+ * The engine is a vendored dependency (web/vendor/pdfjs), loaded on first use
+ * so the rest of the app never pays for it.
+ */
+let pdfjsLib = null;
+let pdfjsLoading = null;
+
+function loadPdfJs() {
+  if (pdfjsLib) return Promise.resolve(pdfjsLib);
+  if (!pdfjsLoading) {
+    pdfjsLoading = import('/vendor/pdfjs/pdf.min.mjs').then((mod) => {
+      mod.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+      pdfjsLib = mod;
+      return mod;
+    }).catch((e) => {
+      pdfjsLoading = null;
+      throw new Error(`pdf.js failed to load: ${e.message || e}`);
+    });
+  }
+  return pdfjsLoading;
+}
+
 const ZOOMS = [75, 100, 120, 150, 200, 300];
-const DEFAULT_ZOOM = 2; // 120 dpi
+const DEFAULT_ZOOM = 2; // 120%
 
 let tileEl = null;
 let titleInput = null;
@@ -32,26 +59,34 @@ let railEl = null;
 let canvasEl = null;
 let pageLabelEl = null;
 let zoomLabelEl = null;
+let editToggleBtn = null;
 
 let docs = [];
 let currentPdf = null; // { pdf_id, title, page_count, updated_at }
 let currentPage = 0;
 let zoomIndex = DEFAULT_ZOOM;
-let busy = false;
 
 /* Popup (body-level, the tile clips overflow) */
 let docMenuPopup = null;
 let docMenuOpen = false;
 let menuMode = 'default'; // 'default' | 'merge'
 
-/* Rendered-page cache: key `${id}:${page}:${dpi}` -> object URL */
-const renderCache = new Map();
+/* Loaded pdf.js document for `currentPdf` (null until opened). */
+let pdfDoc = null;
+/** Bumped on every main render so a stale async paint can be discarded. */
+let renderSeq = 0;
+let renderTask = null;
+/** The rendered page's PDF-space size in points (bottom-left origin). */
+let pageSizePt = null;
+/** The element the rendered page lives in; selection maths measures this. */
+let pageEl = null;
+let textLayerEl = null;
+
 let dragIndex = null;
 
 /* Region selection + annotation state */
-let pageImgEl = null;
 let selOverlay = null;
-let selStart = null;         // {x,y} in displayed px relative to the page image
+let selStart = null;         // {x,y} in displayed px relative to the page element
 let selDisplayRect = null;   // viewport rect used to position the action bar
 let annotBar = null;
 let annotRect = null;        // [x, y, w, h] in PDF points (bottom-left origin)
@@ -126,10 +161,19 @@ async function mergeOther(otherId) {
   return res?.data;
 }
 
-async function annotatePdf(kind, rect, text) {
+async function annotatePdf(kind, rect, text, format = null) {
+  const body = { page: currentPage, kind, rect, text };
+  // Formatting only means anything for text we add: inserted text carries its
+  // own font operator, so size/weight/colour apply to it and to nothing else.
+  if (format) {
+    body.size = format.size;
+    body.bold = format.bold;
+    body.italic = format.italic;
+    if (format.color) body.text_color = format.color;
+  }
   const res = await apiFetch(`/api/pdfs/${encodeURIComponent(currentPdf.pdf_id)}/annotate`, {
     method: 'POST',
-    body: JSON.stringify({ page: currentPage, kind, rect, text }),
+    body: JSON.stringify(body),
   });
   return res?.data;
 }
@@ -150,31 +194,447 @@ async function watermarkApi(text) {
   return res?.data;
 }
 
-/* ── Page rendering ─────────────────────────────────────────── */
-
-function pageKey(id, page, dpi) {
-  return `${id}:${page}:${dpi}`;
+/** Every editable text run on a page, with geometry + real font styling. */
+async function fetchTextRuns(page) {
+  const res = await apiFetch(
+    `/api/pdfs/${encodeURIComponent(currentPdf.pdf_id)}/runs/${page}`,
+  );
+  return res?.data?.runs || [];
 }
 
-function clearDocCache(id) {
-  for (const key of [...renderCache.keys()]) {
-    if (key.startsWith(`${id}:`)) {
-      URL.revokeObjectURL(renderCache.get(key));
-      renderCache.delete(key);
-    }
+/** Apply in-place text edits to the current page. */
+async function editTextRuns(edits) {
+  const res = await apiFetch(`/api/pdfs/${encodeURIComponent(currentPdf.pdf_id)}/edit-text`, {
+    method: 'POST',
+    body: JSON.stringify({ page: currentPage, edits }),
+  });
+  return res?.data;
+}
+
+/* ── Inline text editing ────────────────────────────────────── */
+/*
+ * The professional-editor flow: the page is rendered normally, and in edit mode
+ * every text run becomes a clickable box drawn exactly over the text it
+ * represents. Clicking one selects that line and raises a floating toolbar.
+ * Editing happens in place, and "Apply changes" writes the new text back to the
+ * PDF in one transaction.
+ *
+ * The overlay is deliberately its own layer rather than reusing pdf.js's text
+ * layer: the text layer's spans are sized for glyph metrics, not for letting a
+ * user click a whole line and retype it.
+ */
+
+let editMode = false;
+/** Place-a-text-box mode: click the page to drop editable text at that spot. */
+let addTextMode = false;
+let addTextBox = null;
+let addTextPos = null;   // PDF points {x, y} of the box's top-left
+let addTextFmt = { size: 12, bold: false, italic: false, color: '#000000' };
+let addTextBtn = null;
+let editLayer = null;
+let editRuns = [];          // runs as last fetched (the match anchors)
+let selectedRun = null;     // the run being edited
+let selectedEl = null;
+let editBar = null;
+
+/** PDF point -> CSS px for the current zoom (identity of the viewport scale). */
+const ptToPx = () => ZOOMS[zoomIndex] / 100;
+
+async function toggleEditMode() {
+  editMode = !editMode;
+  editToggleBtn?.classList.toggle('is-active', editMode);
+  editToggleBtn?.setAttribute('aria-pressed', String(editMode));
+  canvasEl?.classList.toggle('is-editing', editMode);
+  if (!editMode) closeRunEditor();
+  await renderMain();
+}
+
+/** Build the overlay boxes for the runs currently on the page. */
+async function paintEditOverlay(pageElNow) {
+  if (editLayer) { editLayer.remove(); editLayer = null; }
+  editRuns = [];
+  selectedRun = null;
+  selectedEl = null;
+  closeEditBar();
+  if (!editMode || !currentPdf) return;
+
+  let runs = [];
+  try {
+    runs = await fetchTextRuns(currentPage);
+  } catch (e) {
+    toast(e.message || 'Could not read the page text', { type: 'error' });
+    return;
+  }
+  editRuns = runs;
+
+  const layer = document.createElement('div');
+  layer.className = 'pdf-edit-layer';
+  const k = ptToPx();
+  const pageH = pageSizePt?.h ?? 0;
+
+  for (const run of runs) {
+    const [x, y, w, h] = run.rect;
+    const box = document.createElement('div');
+    box.className = 'pdf-run';
+    // PDF origin is bottom-left; the overlay is top-left.
+    box.style.left = `${x * k}px`;
+    box.style.top = `${(pageH - (y + h)) * k}px`;
+    box.style.width = `${w * k}px`;
+    box.style.height = `${h * k}px`;
+    box.style.fontSize = `${run.size * k}px`;
+    box.style.color = run.color || '#000';
+    box.dataset.idx = String(editRuns.indexOf(run));
+    box.setAttribute('role', 'button');
+    box.setAttribute('tabindex', '0');
+    box.title = run.text;
+    const label = document.createElement('span');
+    label.className = 'pdf-run-text';
+    label.textContent = run.text;
+    box.appendChild(label);
+    box.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectRun(run, box);
+    });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRun(run, box); }
+    });
+    layer.appendChild(box);
+  }
+  pageElNow.appendChild(layer);
+  editLayer = layer;
+}
+
+function selectRun(run, box) {
+  if (selectedEl) selectedEl.classList.remove('is-selected');
+  selectedRun = run;
+  selectedEl = box;
+  box.classList.add('is-selected');
+  box.setAttribute('contenteditable', 'true');
+  box.focus();
+  // Put the caret in the text without selecting every character, so typing
+  // replaces nothing until the user asks it to.
+  const range = document.createRange();
+  range.selectNodeContents(box);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  showEditBar(run, box);
+}
+
+function closeRunEditor() {
+  if (selectedEl) {
+    selectedEl.removeAttribute('contenteditable');
+    selectedEl.classList.remove('is-selected');
+  }
+  selectedRun = null;
+  selectedEl = null;
+  closeEditBar();
+}
+
+function closeEditBar() {
+  editBar?.remove();
+  editBar = null;
+}
+
+/**
+ * The floating toolbar for the selected run.
+ *
+ * It offers what the engine actually implements: retype the line in place, then
+ * Apply or Cancel. Formatting controls (bold / size / colour) are deliberately
+ * NOT here. The engine can only replace text; restyling a run would mean
+ * rewriting the PDF's inherited graphics state (its `Tf`/`rg` apply to every
+ * following text object), which is not implemented. Buttons that reported
+ * success while changing nothing, or that restyled the rest of the page, would
+ * be worse than no buttons at all.
+ */
+function showEditBar(run, box) {
+  closeEditBar();
+  const bar = document.createElement('div');
+  bar.className = 'pdf-edit-bar';
+
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'pdf-edit-apply';
+  apply.textContent = 'Apply changes';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'pdf-edit-cancel';
+  cancel.textContent = 'Cancel';
+  bar.append(apply, cancel);
+
+  cancel.addEventListener('click', () => {
+    // Undo any typing by re-painting the page from the PDF.
+    void renderMain();
+  });
+
+  apply.addEventListener('click', () => void applyRunEdit({ run, box }));
+
+  document.body.appendChild(bar);
+  const r = box.getBoundingClientRect();
+  bar.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - bar.offsetWidth - 8))}px`;
+  bar.style.top = `${Math.max(8, r.top - bar.offsetHeight - 8)}px`;
+  editBar = bar;
+}
+
+async function applyRunEdit({ run, box }) {
+  const newText = box.textContent;
+  if (newText === run.text) {
+    toast('No changes to apply', { type: 'info' });
+    closeRunEditor();
+    return;
+  }
+  const edit = {
+    match_text: run.text,
+    match_rect: run.rect,
+    text: newText,
+  };
+
+  setBusy(true);
+  try {
+    await editTextRuns([edit]);
+    dropPdfDoc();              // bytes changed: reload the document
+    closeRunEditor();
+    await renderThumbs();
+    await renderMain();
+    showSaved();
+    toast('Page text updated', { type: 'info' });
+  } catch (e) {
+    toast(e.message || 'Could not apply the edit', { type: 'error' });
+    setBusy(false);
   }
 }
 
-async function pageUrl(id, page, dpi) {
-  const key = pageKey(id, page, dpi);
-  if (renderCache.has(key)) return renderCache.get(key);
-  const blob = await apiFetch(
-    `/api/pdfs/${encodeURIComponent(id)}/pages/${page}?dpi=${dpi}`,
-    { responseType: 'blob' },
-  );
-  const url = URL.createObjectURL(blob);
-  renderCache.set(key, url);
-  return url;
+/* ── Adding text ─────────────────────────────────────────────── */
+/*
+ * Text the user *adds* is a different proposition from retyping an existing run.
+ * A PDF content stream carries no per-run styling — `Tf` is inherited state that
+ * applies to everything after it — so restyling existing text means rewriting a
+ * shared operator and is fragile. Inserted text is new, carries its own font
+ * operator, and therefore takes size, weight and colour cleanly. That is why
+ * formatting lives here and not in the line editor.
+ */
+
+async function toggleAddText() {
+  addTextMode = !addTextMode;
+  if (addTextMode) {
+    // The two modes are exclusive: their click targets overlap.
+    editMode = false;
+    editToggleBtn?.classList.remove('is-active');
+    canvasEl?.classList.remove('is-editing');
+    closeRunEditor();
+    await renderMain();
+  }
+  addTextBtn?.classList.toggle('is-active', addTextMode);
+  addTextBtn?.setAttribute('aria-pressed', String(addTextMode));
+  canvasEl?.classList.toggle('is-placing', addTextMode);
+  if (!addTextMode) cancelAddText();
+}
+
+function cancelAddText() {
+  addTextBox?.remove();
+  addTextBox = null;
+  addTextPos = null;
+  closeEditBar();
+}
+
+/** Turn a click on the page into a fresh editable text box at that point. */
+function placeTextBox(pageElNow, ev) {
+  cancelAddText();
+  const r = pageElNow.getBoundingClientRect();
+  const k = ptToPx();
+  const localX = ev.clientX - r.left;
+  const localY = ev.clientY - r.top;
+  const box = document.createElement('div');
+  box.className = 'pdf-addtext';
+  box.contentEditable = 'true';
+  box.style.left = `${localX}px`;
+  box.style.top = `${localY}px`;
+  box.dataset.placeholder = 'Type here…';
+  pageElNow.appendChild(box);
+
+  // PDF origin is bottom-left, and the room we have below the click point is
+  // what the server needs as a height for the text run.
+  const pageH = pageSizePt?.h ?? 0;
+  addTextPos = { x: localX / k, y: pageH - localY / k, w: 0, h: 0 };
+  addTextBox = box;
+  box.focus();
+  showAddTextBar(box);
+}
+
+/** Formatting toolbar for the pending text box. */
+function showAddTextBar(box) {
+  closeEditBar();
+  const bar = document.createElement('div');
+  bar.className = 'pdf-edit-bar';
+
+  const pill = (label, title, on, onClick) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pdf-edit-pill';
+    b.title = title;
+    b.textContent = label;
+    b.classList.toggle('is-on', !!on);
+    b.addEventListener('click', (e) => { e.preventDefault(); onClick(b); });
+    bar.appendChild(b);
+    return b;
+  };
+  const sep = () => {
+    const el = document.createElement('span');
+    el.className = 'pdf-edit-sep';
+    bar.appendChild(el);
+  };
+  const sync = () => {
+    box.style.fontSize = `${addTextFmt.size * ptToPx()}px`;
+    box.style.fontWeight = addTextFmt.bold ? '700' : '400';
+    box.style.fontStyle = addTextFmt.italic ? 'italic' : 'normal';
+    box.style.color = addTextFmt.color;
+    sizeLabel.textContent = `${addTextFmt.size} pt`;
+  };
+
+  const boldBtn = pill('B', 'Bold', addTextFmt.bold, (b) => {
+    addTextFmt.bold = !addTextFmt.bold; b.classList.toggle('is-on', addTextFmt.bold); sync();
+  });
+  const italBtn = pill('I', 'Italic', addTextFmt.italic, (b) => {
+    addTextFmt.italic = !addTextFmt.italic; b.classList.toggle('is-on', addTextFmt.italic); sync();
+  });
+  sep();
+
+  const sizeLabel = document.createElement('span');
+  sizeLabel.className = 'pdf-edit-label';
+  const minus = pill('A−', 'Smaller', false, () => {
+    addTextFmt.size = Math.max(4, Math.round((addTextFmt.size - 1) * 10) / 10); sync();
+  });
+  const plus = pill('A+', 'Larger', false, () => {
+    addTextFmt.size = Math.min(144, Math.round((addTextFmt.size + 1) * 10) / 10); sync();
+  });
+  bar.append(sizeLabel, minus, plus);
+  sep();
+
+  const colorInput = document.createElement('input');
+  colorInput.type = 'color';
+  colorInput.className = 'pdf-edit-color';
+  colorInput.title = 'Text colour';
+  colorInput.value = addTextFmt.color;
+  colorInput.addEventListener('input', () => { addTextFmt.color = colorInput.value; sync(); });
+  bar.appendChild(colorInput);
+  sep();
+
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'pdf-edit-apply';
+  apply.textContent = 'Add text';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'pdf-edit-cancel';
+  cancel.textContent = 'Cancel';
+  bar.append(apply, cancel);
+  cancel.addEventListener('click', () => void renderMain());
+  apply.addEventListener('click', () => void commitAddText(box));
+
+  document.body.appendChild(bar);
+  const r = box.getBoundingClientRect();
+  bar.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - bar.offsetWidth - 8))}px`;
+  bar.style.top = `${Math.max(8, r.top - bar.offsetHeight - 8)}px`;
+  editBar = bar;
+  boldBtn.classList.toggle('is-on', addTextFmt.bold);
+  italBtn.classList.toggle('is-on', addTextFmt.italic);
+  sync();
+}
+
+/** Send the pending text box to the server as a formatted `free_text` run. */
+async function commitAddText(box) {
+  const text = (box.textContent || '').trim();
+  if (!text) {
+    toast('Type some text first', { type: 'info' });
+    return;
+  }
+  if (!addTextPos || !currentPdf) return;
+  // Size the text run from its own metrics so the server has a sensible box:
+  // the box is placed at the click point and grows down-right from there.
+  const rect = [addTextPos.x, addTextPos.y - addTextFmt.size, addTextPos.w, addTextFmt.size * 1.4];
+  setBusy(true);
+  try {
+    await annotatePdf('free_text', rect, text, addTextFmt);
+    dropPdfDoc();
+    closeEditBar();
+    addTextBox = null;
+    addTextPos = null;
+    await renderThumbs();
+    await renderMain();
+    showSaved();
+    toast('Text added', { type: 'info' });
+  } catch (e) {
+    toast(e.message || 'Could not add the text', { type: 'error' });
+    setBusy(false);
+  }
+}
+
+/* ── Page rendering (pdf.js) ────────────────────────────────── */
+
+/** The pdf.js worker is single-threaded per document; one paint at a time. */
+let renderChain = Promise.resolve();
+
+/** Render serialization: paints never overlap and never outlive a page change. */
+function queueRender(fn) {
+  const run = renderChain.then(fn, fn);
+  renderChain = run.catch(() => {});
+  return run;
+}
+
+/** Drop the loaded document (after an edit, or when switching documents). */
+function dropPdfDoc() {
+  renderSeq++;
+  try { renderTask?.cancel(); } catch (_) { /* already finished */ }
+  renderTask = null;
+  if (pdfDoc) {
+    const doc = pdfDoc;
+    pdfDoc = null;
+    void doc.destroy().catch(() => {});
+  }
+}
+
+/** The loaded pdf.js document for `currentPdf`, opening it on first use. */
+async function getPdfDoc() {
+  if (!currentPdf) throw new Error('No PDF open');
+  if (pdfDoc) return pdfDoc;
+  const pdfjs = await loadPdfJs();
+  const doc = await pdfjs.getDocument({
+    // Served by the plugin's own route: the stored bytes, inline.
+    url: `/api/pdfs/${encodeURIComponent(currentPdf.pdf_id)}/file`,
+    cMapUrl: '/vendor/pdfjs/cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
+  }).promise;
+  pdfDoc = doc;
+  return doc;
+}
+
+async function getPageView(index, zoom) {
+  const doc = await getPdfDoc();
+  const page = await doc.getPage(index + 1);
+  return { page, viewport: page.getViewport({ scale: zoom, rotation: page.rotate }) };
+}
+
+/**
+ * Paint page `index` into an `<img>` for the thumbnail rail.
+ *
+ * `pass` scales the work: a fast first pass fills the rail, a second sharper
+ * pass replaces it. Both come from the loaded document, so there is no server
+ * render (and no per-page network cost) at all.
+ */
+async function renderThumbInto(img, index, boxWidth, pass) {
+  if (!currentPdf || !img.isConnected) return;
+  const { page } = await getPageView(index, 1);
+  const base = page.getViewport({ scale: 1, rotation: page.rotate });
+  const scale = (boxWidth / base.width) * pass;
+  const viewport = page.getViewport({ scale, rotation: page.rotate });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.floor(viewport.width));
+  canvas.height = Math.max(1, Math.floor(viewport.height));
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  if (!img.isConnected) return;
+  img.src = canvas.toDataURL('image/jpeg', 0.8);
 }
 
 /* ── Status ─────────────────────────────────────────────────── */
@@ -184,7 +644,6 @@ function setStatus(text) {
 }
 
 function setBusy(on) {
-  busy = on;
   saveDot?.classList.toggle('is-active', on);
 }
 
@@ -204,39 +663,156 @@ function clampPage(p) {
   return Math.max(0, Math.min(p, max - 1));
 }
 
-async function renderMain() {
-  if (!currentPdf || !canvasEl) {
-    if (!currentPdf) setTileGlow(tileEl, null);
-    return;
+/**
+ * Paint the current page into `canvasEl` with pdf.js, plus its text layer.
+ *
+ * The page is drawn at `zoom * devicePixelRatio` device pixels but laid out at
+ * `zoom` CSS pixels, so it stays sharp on hi-dpi screens and at high zoom
+ * without asking the server for anything.
+ */
+async function paintCurrentPage() {
+  const seq = ++renderSeq;
+  if (renderTask) {
+    try { renderTask.cancel(); } catch (_) { /* already finished */ }
+    renderTask = null;
   }
+  if (!currentPdf || !canvasEl) return;
+
   canvasEl.innerHTML = '';
   if (currentPdf.page_count === 0) {
     setTileGlow(tileEl, null);
     canvasEl.appendChild(emptyState({ icon: 'ui/doc', title: 'Empty PDF', body: 'This document has no pages.' }));
     return;
   }
+
   setBusy(true);
+  const loading = document.createElement('div');
+  loading.className = 'pdf-loading';
+  loading.appendChild(spinner({ size: 20 }));
+  canvasEl.appendChild(loading);
+
+  let page = null;
+  let viewport = null;
+  const zoom = ZOOMS[zoomIndex] / 100;
   try {
-    const url = await pageUrl(currentPdf.pdf_id, currentPage, ZOOMS[zoomIndex]);
-    const thumb = await pageUrl(currentPdf.pdf_id, currentPage, THUMB_DPI).catch(() => null);
-    // The window background mirrors the page, lightly blurred (pre-blurred at
-    // thumbnail size, so it stays cheap to repaint while resizing).
-    void setTileGlowFromUrl(tileEl, thumb || url, { size: 320, blur: 7 });
-    const page = document.createElement('div');
-    page.className = 'pdf-page';
-    const img = document.createElement('img');
-    img.className = 'pdf-page-img';
-    img.src = url;
-    img.alt = `Page ${currentPage + 1}`;
-    page.appendChild(img);
-    attachSelection(page, img);
-    canvasEl.appendChild(page);
-    canvasEl.scrollTop = 0;
+    ({ page, viewport } = await getPageView(currentPage, zoom));
   } catch (e) {
-    canvasEl.appendChild(emptyState({ icon: 'ui/warning', title: 'Could not render page', body: e.message || '' }));
+    if (seq !== renderSeq) return;
+    canvasEl.innerHTML = '';
+    canvasEl.appendChild(emptyState({
+      icon: 'ui/warning',
+      title: 'Could not render page',
+      body: e.message || '',
+    }));
+    setBusy(false);
+    return;
   }
+
+  pageSizePt = { w: viewport.width / (ZOOMS[zoomIndex] / 100), h: viewport.height / (ZOOMS[zoomIndex] / 100) };
+
+  const el = document.createElement('div');
+  el.className = 'pdf-page';
+  el.style.width = `${viewport.width}px`;
+  el.style.height = `${viewport.height}px`;
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', `Page ${currentPage + 1}`);
+
+  const canvas = document.createElement('canvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+  canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+  canvas.style.width = `${viewport.width}px`;
+  canvas.style.height = `${viewport.height}px`;
+  canvas.className = 'pdf-page-canvas';
+  el.appendChild(canvas);
+
+  const textLayerElNew = document.createElement('div');
+  textLayerElNew.className = 'pdf-text-layer';
+  el.appendChild(textLayerElNew);
+
+  // The text layer positions spans with `--scale-factor`; `--total-scale-factor`
+  // covers builds that read the composed factor.
+  el.style.setProperty('--scale-factor', String(zoom));
+  el.style.setProperty('--total-scale-factor', String(zoom));
+
+  canvasEl.innerHTML = '';
+  canvasEl.appendChild(el);
+  pageEl = el;
+  textLayerEl = textLayerElNew;
+  attachSelection(el);
+
+  try {
+    const task = page.render({
+      canvasContext: canvas.getContext('2d'),
+      viewport,
+      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+    });
+    renderTask = task;
+    await task.promise;
+    renderTask = null;
+  } catch (e) {
+    if (e?.name === 'RenderingCancelledException' || seq !== renderSeq) return;
+    setBusy(false);
+    return;
+  }
+  if (seq !== renderSeq) return;
+
+  // Text layer: real selectable text over the painted page.
+  try {
+    const pdfjs = await loadPdfJs();
+    const textContent = await page.getTextContent();
+    if (seq !== renderSeq) return;
+    const layer = new pdfjs.TextLayer({
+      textContentSource: textContent,
+      container: textLayerElNew,
+      viewport,
+    });
+    await layer.render();
+  } catch (_) {
+    // The page is still perfectly readable without a text layer; selection is
+    // the only thing lost.
+  }
+
+  if (seq !== renderSeq) return;
+  canvasEl.scrollTop = 0;
+  applyPageGlow(canvas);
+  // Edit mode draws the clickable text-run overlay on top of the page.
+  await paintEditOverlay(el);
   setBusy(false);
   updateNav();
+}
+
+/**
+ * Mirror the painted page into the window's ambient glow.
+ *
+ * The blur must be *baked*, not applied live: `glowFromDrawable()` downsamples
+ * and pre-blurs once (PLUGINS.md §19 "Window background"), so the window keeps a
+ * soft recognisable background for free instead of paying a `blur()` per resize
+ * frame. Only the top slice of the page is sampled — that is the part visible
+ * behind the window chrome, and the whole sheet is far more than a 64px glow
+ * needs.
+ */
+function applyPageGlow(canvas) {
+  if (!tileEl || !canvas.width || !canvas.height) return;
+  let css = null;
+  try {
+    const sample = document.createElement('canvas');
+    sample.width = canvas.width;
+    sample.height = Math.max(1, Math.round(canvas.height * 0.4));
+    sample.getContext('2d').drawImage(
+      canvas, 0, 0, canvas.width, sample.height, 0, 0, sample.width, sample.height,
+    );
+    css = glowFromDrawable(sample, 96);
+  } catch (_) {
+    css = null;   // tainted canvas — fall through to the colour glow
+  }
+  // Passing null restores the Tier 0 colour glow rather than leaving the window
+  // with no ambient light at all.
+  setTileGlow(tileEl, css);
+}
+
+function renderMain() {
+  return queueRender(paintCurrentPage);
 }
 
 function updateNav() {
@@ -278,10 +854,12 @@ async function renderThumbs() {
     img.loading = 'lazy';
     img.alt = `Page ${i + 1}`;
     img.draggable = false;
-    // Lazy-load the thumbnail image.
-    pageUrl(currentPdf.pdf_id, i, THUMB_DPI)
-      .then((u) => { img.src = u; })
-      .catch(() => { img.remove(); });
+    // Two passes: a low-res pass so the rail fills immediately, then a sharper
+    // one — all served from the already-loaded document, no server round-trip.
+    const width = railEl.clientWidth || 120;
+    queueRender(() => renderThumbInto(img, i, width, 0.45))
+      .catch(() => {})
+      .finally(() => { queueRender(() => renderThumbInto(img, i, width, 1.2)).catch(() => {}); });
 
     thumb.append(num, img, del);
     thumb.addEventListener('click', () => {
@@ -342,7 +920,11 @@ async function openDoc(doc) {
     };
     currentPage = 0;
     titleInput.value = currentPdf.title;
-    clearDocCache(currentPdf.pdf_id);
+    editMode = false;
+    editToggleBtn?.classList.remove('is-active');
+    canvasEl?.classList.remove('is-editing');
+    closeRunEditor();
+    dropPdfDoc();
     await renderThumbs();
     await renderMain();
     showSaved();
@@ -440,7 +1022,7 @@ async function removeCurrent() {
   if (!window.confirm(`Delete "${currentPdf.title}"?`)) return;
   try {
     await deletePdf(currentPdf.pdf_id);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     currentPdf = null;
     await refreshDocs();
     await openNewest();
@@ -454,7 +1036,7 @@ async function rotateCurrent(delta) {
   setBusy(true);
   try {
     await rotatePage([currentPage], delta);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     currentPdf = { ...currentPdf };
     await renderThumbs();
     await renderMain();
@@ -469,7 +1051,7 @@ async function applyReorder(order, focusPage) {
   setBusy(true);
   try {
     await reorderPages(order);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     currentPdf.page_count = order.length;
     currentPage = clampPage(focusPage);
     await renderThumbs();
@@ -492,7 +1074,7 @@ async function removePage(page) {
   setBusy(true);
   try {
     await deletePages([page]);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     currentPdf.page_count -= 1;
     currentPage = clampPage(page);
     await renderThumbs();
@@ -508,7 +1090,7 @@ async function doMerge(otherId) {
   setBusy(true);
   try {
     const res = await mergeOther(otherId);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     currentPdf.page_count = res.page_count ?? currentPdf.page_count;
     currentPage = clampPage(currentPage);
     await renderThumbs();
@@ -524,22 +1106,18 @@ async function doMerge(otherId) {
 /* ── Region selection + annotations ─────────────────────────── */
 
 function dispPos(e) {
-  const r = pageImgEl.getBoundingClientRect();
+  const r = pageEl.getBoundingClientRect();
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 
 /** Convert a displayed-pixel selection into PDF points (bottom-left origin). */
 function dispToPdfRect(a, b) {
-  const r = pageImgEl.getBoundingClientRect();
-  const sx = pageImgEl.naturalWidth / Math.max(1, r.width);
-  const sy = pageImgEl.naturalHeight / Math.max(1, r.height);
-  const ptsPerPx = 72 / ZOOMS[zoomIndex];
-  const x0 = Math.min(a.x, b.x) * sx * ptsPerPx;
-  const y0 = Math.min(a.y, b.y) * sy * ptsPerPx;
-  const w = Math.abs(a.x - b.x) * sx * ptsPerPx;
-  const h = Math.abs(a.y - b.y) * sy * ptsPerPx;
-  const pageH = pageImgEl.naturalHeight * ptsPerPx;
-  return { x: x0, y: pageH - (y0 + h), w, h };
+  const pxToPt = 100 / ZOOMS[zoomIndex];
+  const x0 = Math.min(a.x, b.x) * pxToPt;
+  const y0 = Math.min(a.y, b.y) * pxToPt;
+  const w = Math.abs(a.x - b.x) * pxToPt;
+  const h = Math.abs(a.y - b.y) * pxToPt;
+  return { x: x0, y: pageSizePt.h - (y0 + h), w, h };
 }
 
 function layoutSel(a, b) {
@@ -565,28 +1143,55 @@ function onSelUp(e) {
   const dx = Math.abs(end.x - start.x);
   const dy = Math.abs(end.y - start.y);
   if (dx < 6 || dy < 6) return;
-  const r = pageImgEl.getBoundingClientRect();
+  const r = pageEl.getBoundingClientRect();
   selDisplayRect = {
     left: r.left + Math.min(start.x, end.x),
     top: r.top + Math.min(start.y, end.y),
   };
   showAnnotBar(dispToPdfRect(start, end));
+  // The bar has taken what it needs from the selection; drop the highlight so
+  // the pending annotation region is the only thing visually marked.
+  window.getSelection()?.removeAllRanges();
 }
 
-function attachSelection(page, img) {
-  pageImgEl = img;
+/**
+ * Region selection for annotations.
+ *
+ * With a real text layer in play, a plain drag belongs to text selection, so
+ * the annotation gesture is Shift+drag — that keeps "select to copy" native
+ * while leaving highlights and friends reachable.
+ */
+function attachSelection(el) {
   selStart = null;
   selOverlay = document.createElement('div');
   selOverlay.className = 'pdf-select-box hidden';
-  page.appendChild(selOverlay);
+  selOverlay.setAttribute('aria-hidden', 'true');
+  el.appendChild(selOverlay);
 
-  img.addEventListener('mousedown', (e) => {
-    if (!currentPdf) return;
+  el.addEventListener('mousedown', (e) => {
+    // Add-text mode claims a plain click; the annotation gesture keeps Shift.
+    if (addTextMode && !e.shiftKey && e.button === 0) {
+      e.preventDefault();
+      placeTextBox(el, e);
+      return;
+    }
+    if (!currentPdf || !e.shiftKey || e.button !== 0) return;
     hideAnnotBar();
     e.preventDefault();
+    // Do NOT clear the text selection here: `showAnnotBar` reads it to prefill
+    // the note / text-box / find-and-replace prompts, then clears it itself.
     selStart = dispPos(e);
     selOverlay.classList.remove('hidden');
     layoutSel(selStart, selStart);
+
+    const move = (ev) => onSelMove(ev);
+    const up = (ev) => {
+      window.removeEventListener('mousemove', move, true);
+      window.removeEventListener('mouseup', up, true);
+      onSelUp(ev);
+    };
+    window.addEventListener('mousemove', move, true);
+    window.addEventListener('mouseup', up, true);
   });
 }
 
@@ -613,9 +1218,19 @@ function hideAnnotBar() {
   annotRect = null;
 }
 
+/** The text currently selected in the PDF's text layer, collapsed to one line. */
+function selectedPdfText() {
+  const text = window.getSelection?.()?.toString() || '';
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 function showAnnotBar(rect) {
   ensureAnnotBar();
   annotRect = rect;
+  // Capture any text selection now: clicking a button clears it, and both the
+  // note and text-box prompts are much more useful pre-filled with the words
+  // the user actually pointed at.
+  const picked = selectedPdfText();
   annotBar.innerHTML = '';
   const mk = (label, fn) => {
     const b = document.createElement('button');
@@ -625,22 +1240,31 @@ function showAnnotBar(rect) {
     b.addEventListener('click', fn);
     annotBar.appendChild(b);
   };
+  const mkText = (label, message, kind, prefill) => {
+    mk(label, () => {
+      const t = window.prompt(message, prefill || '');
+      if (t != null && t.trim()) void doAnnotate(kind, t.trim());
+    });
+  };
   mk('Highlight', () => void doAnnotate('highlight', ''));
   mk('Underline', () => void doAnnotate('underline', ''));
   mk('Strikeout', () => void doAnnotate('strikeout', ''));
   mk('Squiggly', () => void doAnnotate('squiggly', ''));
-  mk('Note', () => {
-    const t = window.prompt('Note text:');
-    if (t != null && t.trim()) void doAnnotate('note', t.trim());
-  });
-  mk('Text box', () => {
-    const t = window.prompt('Text to place on the page:');
-    if (t != null && t.trim()) void doAnnotate('free_text', t.trim());
-  });
+  mkText('Note', 'Note text:', 'note', picked);
+  mkText('Text box', 'Text to place on the page:', 'free_text', picked);
   mk('Link', () => {
     const t = window.prompt('Link URL:');
     if (t != null && t.trim()) void doAnnotate('link', t.trim());
   });
+  if (picked) {
+    mk('Find & replace…', () => {
+      const old = window.prompt('Find text:', picked);
+      if (old == null || !old.trim()) return;
+      const nw = window.prompt(`Replace "${old.trim()}" with:`, '');
+      if (nw == null) return;
+      void doReplaceText(old.trim(), nw);
+    });
+  }
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'pdf-annot-btn pdf-annot-btn--close';
@@ -655,13 +1279,16 @@ function showAnnotBar(rect) {
 }
 
 async function doAnnotate(kind, text) {
-  hideAnnotBar();
+  // Read the rect before hiding the bar: the bar's document-level `pointerdown`
+  // handler fires ahead of the button's `click`, so hiding first would leave
+  // `annotRect` null here and silently drop every annotation.
   if (!currentPdf || !annotRect) return;
   const rect = [annotRect.x, annotRect.y, annotRect.w, annotRect.h];
+  hideAnnotBar();
   setBusy(true);
   try {
     await annotatePdf(kind, rect, text);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     await renderThumbs();
     await renderMain();
     showSaved();
@@ -685,7 +1312,7 @@ async function doReplaceText(oldText, newText) {
   setBusy(true);
   try {
     const res = await replaceTextApi(currentPage, oldText, newText);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     await renderThumbs();
     await renderMain();
     showSaved();
@@ -708,7 +1335,7 @@ async function doWatermark(text) {
   setBusy(true);
   try {
     await watermarkApi(text);
-    clearDocCache(currentPdf.pdf_id);
+    dropPdfDoc();
     await renderThumbs();
     await renderMain();
     showSaved();
@@ -932,6 +1559,21 @@ export function mountPdfTile() {
   const rotLeft = toolbarButton('ui/rotate-left', 'Rotate page counter-clockwise', () => void rotateCurrent(-90));
   const rotRight = toolbarButton('ui/rotate-right', 'Rotate page clockwise', () => void rotateCurrent(90));
 
+  /* Edit text in place */
+  // The two text tools sit together, so their icons have to be obviously
+  // different: `+` was already taken by New PDF and made "add text" invisible.
+  editToggleBtn = toolbarButton('ui/bold', 'Change text — click a line to retype it',
+    () => void toggleEditMode());
+  editToggleBtn.classList.add('pdf-tool--edit');
+  editToggleBtn.setAttribute('aria-pressed', 'false');
+
+  /* Add text — click the page to place a formatted text box. Unlike the line
+     editor above, this can apply size, weight and colour. */
+  addTextBtn = toolbarButton('ui/list', 'Add text — pick size, bold and colour',
+    () => void toggleAddText());
+  addTextBtn.classList.add('pdf-tool--addtext');
+  addTextBtn.setAttribute('aria-pressed', 'false');
+
   /* File actions */
   const newBtn = toolbarButton('ui/plus', 'New PDF', () => void newPdf());
   const importBtn = toolbarButton('ui/download', 'Import .pdf', pickPdfFile);
@@ -947,7 +1589,7 @@ export function mountPdfTile() {
     docMenuBtn, titleInput,
     prevBtn, pageLabelEl, nextBtn,
     zoomOut, zoomLabelEl, zoomIn,
-    rotLeft, rotRight,
+    rotLeft, rotRight, editToggleBtn, addTextBtn,
     newBtn, importBtn, exportBtn, delBtn, saveDot,
   );
   tileEl.appendChild(bar);
@@ -993,6 +1635,24 @@ export function unmountPdfTile() {
   pageLabelEl = null;
   zoomLabelEl = null;
   menuMode = 'default';
+
+  // Release the pdf.js document and worker, and forget the page geometry, so a
+  // later mount starts clean rather than reusing a destroyed document.
+  dropPdfDoc();
+  pageEl = null;
+  textLayerEl = null;
+  pageSizePt = null;
+  selOverlay = null;
+  selStart = null;
+  hideAnnotBar();
+  editMode = false;
+  editLayer = null;
+  editRuns = [];
+  editToggleBtn = null;
+  addTextBtn = null;
+  addTextMode = false;
+  cancelAddText();
+  closeRunEditor();
 }
 
 export function getPdfTileElement() {
@@ -1009,7 +1669,8 @@ function onAgentActions(e) {
   window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: PDF_PLUGIN } }));
 
   const created = pdfActions.some((a) => a.action === 'pdf_create' && a.result === 'ok');
-  const modified = pdfActions.some((a) => ['pdf_rotate', 'pdf_reorder', 'pdf_delete_pages', 'pdf_merge'].includes(a.action) && a.result === 'ok');
+  const modified = pdfActions.some((a) => ['pdf_rotate', 'pdf_reorder', 'pdf_delete_pages', 'pdf_merge',
+    'pdf_replace_text', 'pdf_annotate', 'pdf_watermark'].includes(a.action) && a.result === 'ok');
   const deleted = pdfActions.some((a) => a.action === 'pdf_delete' && a.result === 'ok');
 
   void refreshDocs().then(() => {

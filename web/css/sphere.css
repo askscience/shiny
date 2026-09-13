@@ -16,9 +16,7 @@
 }
 
 #chrome-bottom #sphere-container,
-#chrome-bottom #artifact-dock,
-#chrome-bottom #compose-dock-input,
-#chrome-bottom #text-input-field {
+#chrome-bottom #artifact-dock {
   pointer-events: auto;
 }
 

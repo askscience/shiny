@@ -7,7 +7,7 @@ import {
   getSphereState,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
-import { sendToAgent, sendToAgentCompose } from './agent.js';
+import { sendToAgent, sendToAgentCompose, stopActiveTurn, isTurnActive } from './agent.js';
 import { startGpsTracking, stopGpsTracking } from './gps.js';
 import {
   initThemeLoader, initAppearance, refreshAppearance,
@@ -20,6 +20,7 @@ import { initHudClock, initHudTrips } from './hudLeft.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles } from './tiles.js';
+import { initFullscreen } from './fullscreen.js';
 import { initContextMenu } from './contextMenu.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
@@ -104,6 +105,7 @@ async function initApp() {
   initHudClock(); // core chrome — works with zero plugins
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
+  initFullscreen(); // real fullscreen + edge-revealed chrome for a fullscreen window
   initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
 
@@ -197,6 +199,10 @@ function wireSphere() {
       return;
     }
 
+    // Tapping while the assistant is answering stops it and hands the mic
+    // straight over: "stop, let me rephrase".
+    if (isTurnActive()) await stopActiveTurn('tap');
+
     try {
       await startListening('single');
     } catch (e) {
@@ -212,6 +218,7 @@ function wireSphere() {
       voiceNotReady();
       return;
     }
+    if (isTurnActive()) await stopActiveTurn('long-press');
     try {
       // Long-press is the wake-word gesture; when the wake word is disabled it
       // falls back to a normal single-shot listen.
@@ -255,6 +262,29 @@ async function submitTextToAgent(text, handlers) {
   } catch (_) {}
 }
 
+/**
+ * Voice barge-in: the user started talking over the assistant.
+ *
+ * Stop the answer (voice.js already cut the audio; this abandons the turn so
+ * the core records the interruption) and open the microphone on the new
+ * request, so "wait, I meant…" lands as the next question instead of being
+ * talked over.
+ */
+async function handleBargeIn() {
+  stopActiveTurn('barge-in');
+
+  if (isTextInputOpen() || isComposeAwaiting()) return;
+  if (isListening() || !voiceReady()) return;
+
+  try {
+    await startListening('single');
+  } catch (e) {
+    setSphereState('error');
+    toast(e.message || 'Microphone unavailable', { type: 'error' });
+    setTimeout(() => setSphereState('idle'), 2000);
+  }
+}
+
 function wireVoiceResults() {
   window.addEventListener('voice:result', async (e) => {
     const { text, mode } = e.detail;
@@ -269,6 +299,10 @@ function wireVoiceResults() {
     } catch (_) {}
 
     if (!isTextInputOpen() && !isComposeAwaiting()) setSphereState('idle');
+  });
+
+  window.addEventListener('voice:barge-in', () => {
+    void handleBargeIn();
   });
 
   window.addEventListener('voice:level', (e) => {

@@ -13,6 +13,7 @@ use std::collections::HashSet;
 
 use pdf_oxide::editor::DocumentEditor;
 use pdf_oxide::elements::{FontSpec, PathContent, PathOperation, TextContent, TextStyle};
+use pdf_oxide::layout::FontWeight;
 use pdf_oxide::geometry::Rect;
 use pdf_oxide::layout::Color;
 use pdf_oxide::rendering::{render_page, RenderOptions};
@@ -716,30 +717,122 @@ pub fn merge(bytes: &[u8], other: &[u8]) -> Result<Vec<u8>, AppError> {
 
 /* ── Content editing & annotations ──────────────────────────── */
 
-pub fn replace_text(
-    bytes: &[u8],
-    page: usize,
-    old: &str,
-    new: &str,
-) -> Result<(Vec<u8>, usize), AppError> {
-    if old.is_empty() {
-        return Err(AppError::BadRequest("old text must not be empty".into()));
-    }
+/* ── Inline text editing ────────────────────────────────────── */
+
+/// One editable run of text on a page, as the viewer needs it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TextRun {
+    pub text: String,
+    /// `[x, y, w, h]` in PDF points, bottom-left origin.
+    pub rect: [f32; 4],
+    pub font: String,
+    pub size: f32,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+    /// `#rrggbb`, so the viewer can show the real colour in its toolbar.
+    pub color: String,
+}
+
+fn color_hex(c: &Color) -> String {
+    let to = |v: f32| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round() as u8 };
+    format!("#{:02x}{:02x}{:02x}", to(c.r), to(c.g), to(c.b))
+}
+
+/// Every text run on a page, in reading order.
+///
+/// This is what makes in-place editing possible: the viewer paints these as
+/// clickable overlays on top of the rendered page, so the user edits the text
+/// they can actually see instead of typing a search string.
+pub fn page_text_runs(bytes: &[u8], page: usize) -> Result<Vec<TextRun>, AppError> {
     let mut ed = open_editor(bytes)?;
-    let mut count = 0usize;
+    let mut out = Vec::new();
     ed.edit_page(page, |p| {
-        let ids: Vec<_> = p.find_text_containing(old).into_iter().map(|m| m.id()).collect();
-        count = ids.len();
-        for id in ids {
-            p.modify_text(id, |t| {
-                t.text = t.text.replace(old, new);
-            })?;
+        for t in p.find_text(|_| true) {
+            if t.text().trim().is_empty() {
+                continue;
+            }
+            let b = t.bbox();
+            out.push(TextRun {
+                text: t.text().to_string(),
+                rect: [b.x, b.y, b.width, b.height],
+                font: t.font_name().to_string(),
+                size: t.font_size(),
+                bold: t.is_bold(),
+                italic: t.is_italic(),
+                underline: t.content.style.underline,
+                strikethrough: t.content.style.strikethrough,
+                color: color_hex(&t.content.style.color),
+            });
         }
         Ok(())
     })
     .map_err(pdf_err)?;
-    let out = ed.save_to_bytes().map_err(pdf_err)?;
-    Ok((out, count))
+    Ok(out)
+}
+
+/// A single in-place edit coming back from the viewer.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TextEdit {
+    /// The run's text as the viewer last saw it — the find side of the replace.
+    pub match_text: String,
+    /// `[x, y, w, h]` of that run, kept so the viewer's selection round-trips.
+    /// The content-stream engine matches by text, so this is informational.
+    pub match_rect: [f32; 4],
+    /// Replacement text.
+    pub text: String,
+}
+
+/// Apply in-place text edits to one page and return the new bytes.
+///
+/// Replacement goes through the raw operator stream (`stream_edit`), which is
+/// what makes it work on an existing page — see that module for why
+/// pdf_oxide's `modify_text` could not be used.
+///
+/// Text only, on purpose. Restyling a run means rewriting inherited graphics
+/// state: a run's `Tf`/`rg` stay in force for every following text object, and
+/// in a typical file most runs do not even set their own `Tf`. Doing that
+/// correctly is separate work.
+///
+/// The viewer's `match_text` comes from pdf_oxide, which synthesises a trailing
+/// space for an advance gap that is not a byte in the stream (`"TIM "` for a
+/// stream that holds `TIM`). The exact text is tried first; only when it finds
+/// nothing does the trimmed text get a turn, so a selected line still matches.
+pub fn edit_text_runs(
+    bytes: &[u8],
+    page: usize,
+    edits: &[TextEdit],
+) -> Result<(Vec<u8>, usize), AppError> {
+    if edits.is_empty() {
+        return Err(AppError::BadRequest("no edits supplied".into()));
+    }
+    let mut out = bytes.to_vec();
+    let mut applied = 0usize;
+    for edit in edits {
+        if edit.match_text.is_empty() {
+            continue;
+        }
+        if edit.match_text == edit.text {
+            continue;
+        }
+        // The viewer's text comes from pdf_oxide, which can synthesise a
+        // trailing space the content stream does not contain, so try the exact
+        // text first and the trimmed form after.
+        for needle in [edit.match_text.as_str(), edit.match_text.trim()] {
+            if needle.is_empty() {
+                continue;
+            }
+            let (new_bytes, report) =
+                crate::stream_edit::replace_text(&out, page, needle, &edit.text)?;
+            if report.replaced > 0 {
+                out = new_bytes;
+                applied += report.replaced;
+                break;
+            }
+        }
+    }
+    Ok((out, applied))
 }
 
 fn line_path(rect: [f32; 4], y_at: f32, color: Color, width: f32, dashed: bool) -> PathContent {
@@ -776,6 +869,59 @@ fn rect_fill(rect: [f32; 4], color: Color) -> PathContent {
 /// (not annotations) so pdf_oxide's rasteriser — which only paints annotations
 /// that carry an `/AP` appearance stream — shows them. `rect` is
 /// `[x, y, width, height]` in PDF points (bottom-left origin).
+/// Formatting for text the user *adds* (the `free_text` annotation).
+///
+/// Unlike restyling an existing run, this has no inherited-graphics-state
+/// problem: the inserted text carries its own `Tf`, so size, weight and colour
+/// apply to it and to nothing else.
+#[derive(Debug, Clone)]
+pub struct TextFormat {
+    pub size: f32,
+    pub bold: bool,
+    pub italic: bool,
+    /// `#rrggbb`; defaults to black.
+    pub color: Option<String>,
+}
+
+impl Default for TextFormat {
+    fn default() -> Self {
+        Self { size: 11.0, bold: false, italic: false, color: None }
+    }
+}
+
+/// Resolve a format to the Base-14 font that best matches it. Only the standard
+/// families are used, so no font has to be embedded.
+fn format_font(f: &TextFormat) -> &'static str {
+    match (f.bold, f.italic) {
+        (true, true) => "Times-BoldItalic",
+        (true, false) => "Times-Bold",
+        (false, true) => "Times-Italic",
+        (false, false) => "Times-Roman",
+    }
+}
+
+fn format_color(f: &TextFormat) -> Color {
+    f.color
+        .as_deref()
+        .and_then(parse_hex_opt)
+        .unwrap_or_else(Color::black)
+}
+
+/// Parse `#rrggbb`. Public so the route can reject a bad value instead of
+/// silently drawing the text in black.
+pub fn parse_text_color(s: &str) -> Option<Color> {
+    parse_hex_opt(s)
+}
+
+fn parse_hex_opt(s: &str) -> Option<Color> {
+    let h = s.trim_start_matches('#');
+    if h.len() != 6 {
+        return None;
+    }
+    let b = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|v| v as f32 / 255.0);
+    Some(Color::new(b(0)?, b(2)?, b(4)?))
+}
+
 pub fn annotate(
     bytes: &[u8],
     page: usize,
@@ -783,6 +929,7 @@ pub fn annotate(
     rect: [f32; 4],
     text: &str,
     color: Option<[f32; 3]>,
+    format: &TextFormat,
 ) -> Result<Vec<u8>, AppError> {
     let kind = kind.trim().to_lowercase();
     let rgb = color.unwrap_or(match kind.as_str() {
@@ -819,11 +966,20 @@ pub fn annotate(
                 ));
             }
             "free_text" => {
+                // New text, its own font and size — so the formatting is the
+                // text's own and cannot leak into the rest of the page.
                 p.add_text(TextContent::new(
                     text,
                     Rect::new(rect[0], rect[1], rect[2], rect[3]),
-                    FontSpec::new("Helvetica", 10.0),
-                    TextStyle::new().with_color(Color::new(0.0, 0.0, 0.0)),
+                    FontSpec::new(format_font(format), format.size),
+                    TextStyle::new()
+                        .with_weight(if format.bold {
+                            FontWeight::Bold
+                        } else {
+                            FontWeight::Normal
+                        })
+                        .with_italic(format.italic)
+                        .with_color(format_color(format)),
                 ));
             }
             "link" => {

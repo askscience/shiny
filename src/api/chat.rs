@@ -175,7 +175,8 @@ pub async fn list_conversations(
     let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
         "SELECT c.id, c.title, c.updated_at, \
                 (SELECT content FROM chat_messages m \
-                 WHERE m.conversation_id = c.id ORDER BY m.timestamp DESC LIMIT 1) AS preview \
+                 WHERE m.conversation_id = c.id AND m.role != 'system' \
+                 ORDER BY m.timestamp DESC LIMIT 1) AS preview \
          FROM chat_conversations c \
          WHERE c.traveler_id = ?1 \
          ORDER BY c.updated_at DESC",
@@ -235,8 +236,11 @@ pub async fn conversation_messages(
     axum::extract::Path(path): axum::extract::Path<ConversationPath>,
 ) -> Result<Json<ChatHistoryResponse>, AppError> {
     let entries = sqlx::query_as::<_, (String, String, Option<String>)>(
+        // `system` rows are invisible notes written for the model (e.g. "the
+        // user stopped this reply"). They belong in the agent's history and
+        // must never show up as a bubble in the user's chat.
         "SELECT role, content, timestamp FROM chat_messages \
-         WHERE conversation_id = ?1 AND traveler_id = ?2 \
+         WHERE conversation_id = ?1 AND traveler_id = ?2 AND role != 'system' \
          ORDER BY timestamp ASC, rowid ASC",
     )
     .bind(&path.id)

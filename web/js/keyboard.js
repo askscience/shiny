@@ -12,9 +12,10 @@
 import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
 import { getTraveler } from './api.js';
 import {
-  cycleFocusActive, toggleFullscreenActive, createWorkspace,
+  cycleFocusActive, createWorkspace,
   removeWorkspace, switchWorkspace,
 } from './desktop.js';
+import { toggleWindowFullscreenActive } from './fullscreen.js';
 import { setIcon } from '../ui/index.js';
 
 export const KEYBOARD_PLUGIN = 'keyboard';
@@ -384,7 +385,7 @@ function renderDesktopRow() {
     });
     row.appendChild(b);
   };
-  btn('\u2922', 'Fullscreen (Alt+Enter)', () => toggleFullscreenActive());
+  btn('\u2922', 'Fullscreen (Alt+Enter)', () => toggleWindowFullscreenActive());
   btn('\u25C0', 'Previous workspace (Alt+,)', () => switchWorkspace('prev'));
   btn('\u25B6', 'Next workspace (Alt+.)', () => switchWorkspace('next'));
   btn('+', 'New workspace (Alt+N)', () => createWorkspace());

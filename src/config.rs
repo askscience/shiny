@@ -17,6 +17,17 @@ pub struct Config {
     pub supertonic_url: String,
     pub supertonic_voice: String,
     pub vosk_models_dir: String,
+    /// URL of the faster-whisper streaming STT sidecar.
+    pub whisper_url: String,
+    /// Directory holding faster-whisper (CTranslate2) model folders.
+    pub whisper_models_dir: String,
+    /// Start the faster-whisper sidecar together with the server.
+    pub auto_start_whisper: bool,
+    /// Let the launcher build `.venv-whisper` and pip-install faster-whisper
+    /// when no interpreter on the machine already provides it.
+    pub auto_install_whisper: bool,
+    /// Explicit interpreter for the sidecar (must have faster-whisper).
+    pub whisper_python: Option<String>,
     pub auto_start_supertonic: bool,
     pub web_dir: String,
     /// Directory containing installed plugins.
@@ -58,6 +69,23 @@ impl Config {
             supertonic_voice: env::var("SUPERTONIC_VOICE").unwrap_or_else(|_| "M1".into()),
             vosk_models_dir: env::var("VOSK_MODELS_DIR")
                 .unwrap_or_else(|_| "data/vosk-models".into()),
+            whisper_url: env::var("WHISPER_URL")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "http://127.0.0.1:7789".into()),
+            whisper_models_dir: env::var("WHISPER_MODELS_DIR")
+                .unwrap_or_else(|_| "data/whisper-models".into()),
+            auto_start_whisper: env::var("AUTO_START_WHISPER")
+                .unwrap_or_else(|_| "true".into())
+                .parse()
+                .unwrap_or(true),
+            auto_install_whisper: env::var("WHISPER_AUTO_INSTALL")
+                .unwrap_or_else(|_| "false".into())
+                .parse()
+                .unwrap_or(false),
+            whisper_python: env::var("WHISPER_PYTHON")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
             auto_start_supertonic: env::var("AUTO_START_SUPERTONIC")
                 .unwrap_or_else(|_| "false".into())
                 .parse()

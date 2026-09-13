@@ -1,13 +1,14 @@
 import { setSphereState } from './sphere.js';
-import { getDockSummaries } from './artifactStore.js';
-import { currentConversationId, loadConversationMessages } from './agent.js';
+import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
 const conversationEl = document.getElementById('compose-conversation');
-const dock = document.getElementById('artifact-dock');
-const dockIcons = document.getElementById('artifact-dock-icons');
-const dockInput = document.getElementById('compose-dock-input');
+const stopBtn = document.getElementById('compose-stop');
+// The composer is the one and only text input, pinned inside the bottom of the
+// conversation. It is not moved around: field, send and stop live here always.
+const composer = document.getElementById('compose-composer');
+const sendBtn = document.getElementById('compose-send');
 
 let onSubmitCallback = null;
 let isOpen = false;
@@ -17,7 +18,7 @@ let assistantBubble = null;
 
 function isInsideComposeInput(target) {
   if (!target) return false;
-  if (target.closest('#text-input-field, #compose-dock-input')) return true;
+  if (target.closest('#text-input-field, #compose-composer')) return true;
   if (!document.body.classList.contains('compose-awaiting') && target.closest('#artifact-dock')) {
     return true;
   }
@@ -32,33 +33,32 @@ function setAwaiting(on) {
   document.body.classList.toggle('compose-awaiting', on);
 }
 
+/** The stop control only exists while there is an answer to stop. */
+function setStopVisible(on) {
+  stopBtn?.classList.toggle('visible', on);
+  stopBtn?.setAttribute('aria-hidden', on ? 'false' : 'true');
+  // The send button yields to stop while an answer runs.
+  sendBtn?.classList.toggle('hidden', on);
+}
+
+function finishSending() {
+  field.disabled = false;
+  autoResizeField();
+  isSending = false;
+  setStopVisible(false);
+  showComposeInput();
+  setSphereState('idle');
+  field.focus();
+}
+
 function showComposeInput() {
-  dock?.classList.remove('hidden');
-  dockIcons?.classList.add('hidden');
-  dockInput?.classList.remove('hidden');
-  dockInput?.setAttribute('aria-hidden', 'false');
   setAwaiting(false);
   requestAnimationFrame(() => field?.focus());
 }
 
 function hideComposeInput() {
-  dockInput?.classList.add('hidden');
-  dockInput?.setAttribute('aria-hidden', 'true');
   field?.blur();
   setAwaiting(true);
-  showDockIcons();
-}
-
-function showDockIcons() {
-  dockIcons?.classList.remove('hidden');
-  dock?.classList.remove('hidden');
-  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
-}
-
-function restoreDock() {
-  dockInput?.classList.add('hidden');
-  dockInput?.setAttribute('aria-hidden', 'true');
-  showDockIcons();
 }
 
 /* ── Bubble conversation (text mode only) ─────────────────── */
@@ -96,13 +96,14 @@ function renderBubble(role, text) {
     bubbleText.textContent = text || '';
   }
   bubble.appendChild(bubbleText);
-  conversationEl.appendChild(bubble);
+  // Bubbles go above the composer so the input stays last.
+  conversationEl.insertBefore(bubble, composer || null);
   scrollConversation();
   return bubble;
 }
 
 function clearConversation() {
-  if (conversationEl) conversationEl.textContent = '';
+  conversationEl?.querySelectorAll(':scope > .compose-bubble').forEach((b) => b.remove());
   assistantBubble = null;
 }
 
@@ -143,7 +144,10 @@ export function initTextInput(onSubmit) {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      closeTextInput();
+      // Escape during an answer stops it; the panel stays open so the user can
+      // immediately type something else.
+      if (isSending) stopActiveTurn('escape');
+      else closeTextInput();
     }
   });
 
@@ -157,7 +161,20 @@ export function initTextInput(onSubmit) {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isOpen && !isSending) closeTextInput();
+    if (e.key !== 'Escape' || !isOpen) return;
+    if (isSending) stopActiveTurn('escape');
+    else closeTextInput();
+  });
+
+  stopBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopActiveTurn('button');
+  });
+
+  // The send button submits the same way Enter does.
+  sendBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    void submitTextInput();
   });
 
   document.addEventListener('pointerdown', (e) => {
@@ -197,11 +214,11 @@ export function closeTextInput(force = false) {
   if (!compose || !isOpen || (isSending && !force)) return;
   isOpen = false;
   isSending = false;
+  setStopVisible(false);
   document.body.classList.remove('compose-active', 'compose-awaiting');
   compose.classList.remove('visible');
   compose.setAttribute('aria-hidden', 'true');
   field.blur();
-  restoreDock();
   setSphereState('idle');
   setTimeout(() => {
     if (!isOpen) compose.classList.add('hidden');
@@ -233,6 +250,7 @@ async function submitTextInput() {
   startAssistantBubble();
   hideComposeInput();
   setSphereState('processing');
+  setStopVisible(true);
   scrollConversation();
 
   try {
@@ -242,28 +260,26 @@ async function submitTextInput() {
       },
       onDone: () => {
         field.value = '';
-        field.disabled = false;
-        autoResizeField();
-        isSending = false;
-        showComposeInput();
-        setSphereState('idle');
-        field.focus();
+        finishSending();
       },
       onError: (msg) => {
         streamAssistantBubble(msg);
-        field.disabled = false;
-        isSending = false;
-        showComposeInput();
-        setSphereState('idle');
-        field.focus();
+        finishSending();
+      },
+      onStopped: () => {
+        // Keep whatever arrived; the core has recorded the interruption, so
+        // the thread stays coherent for the next question.
+        if (assistantBubble) {
+          assistantBubble.classList.remove('is-thinking');
+          const t = assistantBubble.querySelector('.compose-bubble-text');
+          if (t && !t.textContent.trim()) t.textContent = '';
+          assistantBubble.classList.add('is-stopped');
+        }
+        finishSending();
       },
     });
   } catch (e) {
     streamAssistantBubble(e.message || 'Something went wrong');
-    field.disabled = false;
-    isSending = false;
-    showComposeInput();
-    setSphereState('idle');
-    field.focus();
+    finishSending();
   }
 }

@@ -316,6 +316,36 @@
             <label for="desktop-title-height">Title bar height <span id="desktop-title-value"></span></label>
             <input type="range" id="desktop-title-height" class="ui-slider" min="28" max="48" step="1" value="36" aria-label="Window title bar height">
 
+            <h4 class="settings-subhead">Top bar &amp; orb</h4>
+            <p class="settings-hint">How the desktop chrome behaves — everywhere, fullscreen or not. The top bar and the orb are independent, so you can keep the orb up while the bar hides, or leave both in place.</p>
+
+            <div class="ui-row ui-toggle-row">
+              <div class="ui-list-item-main">
+                <div class="ui-list-item-title">Autohide the top bar</div>
+                <div class="ui-list-item-sub">Slide the top bar away until the pointer reaches the edge it docks to.</div>
+              </div>
+              <button type="button" class="ui-toggle" role="switch" id="immersive-autohide-bar" aria-checked="true"></button>
+            </div>
+
+            <label for="immersive-bar-position">Top bar position</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="immersive-bar-position" class="ui-select">
+                <option value="top">Top</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="center">Center</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+
+            <div class="ui-row ui-toggle-row">
+              <div class="ui-list-item-main">
+                <div class="ui-list-item-title">Autohide the AI orb</div>
+                <div class="ui-list-item-sub">Slide the orb away until the pointer reaches the bottom centre.</div>
+              </div>
+              <button type="button" class="ui-toggle" role="switch" id="immersive-autohide-orb" aria-checked="true"></button>
+            </div>
+
             <p class="settings-hint" id="desktop-shortcuts-hint">Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.</p>
           </section>
 
@@ -329,7 +359,34 @@
               <select id="lang-select" class="ui-select"></select>
               <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
             </div>
-            <p class="settings-hint">Controls speech recognition, spoken replies and the language the assistant writes in. <strong>Automatic</strong> follows your browser language; pick a language to pin it for this account.</p>
+            <p class="settings-hint">Controls speech recognition, spoken replies and the language the assistant writes in. Pick the language you speak with — telling the speech engine up front is faster than letting it guess.</p>
+
+            <h4 class="settings-subhead">Speech recognition</h4>
+            <label for="stt-engine-select">Engine</label>
+            <div class="ui-select-wrap settings-control">
+              <select id="stt-engine-select" class="ui-select">
+                <option value="whisper">Faster Whisper (recommended)</option>
+                <option value="vosk">Vosk (in-browser)</option>
+              </select>
+              <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+            </div>
+            <p class="settings-hint"><strong>Faster Whisper</strong> runs on the machine hosting PEAK'D! and streams words while you speak — noticeably more accurate than Vosk. <strong>Vosk</strong> runs entirely in this browser, so it keeps working with no server-side speech service.</p>
+
+            <div id="whisper-fields">
+              <label for="whisper-model-select">Whisper model</label>
+              <div class="ui-select-wrap settings-control">
+                <select id="whisper-model-select" class="ui-select">
+                  <option value="tiny">Tiny — included (~75 MB)</option>
+                  <option value="small">Small — download (~480 MB)</option>
+                </select>
+                <span class="ui-icon" data-icon="ui/chevron-down" aria-hidden="true"></span>
+              </div>
+              <div class="whisper-model-row">
+                <p id="whisper-model-hint" class="settings-hint"></p>
+                <button type="button" id="whisper-model-download" class="ui-btn ui-btn--quiet ui-btn--sm hidden">Download</button>
+              </div>
+              <p class="settings-hint">Tiny is bundled and fast enough for commands. Small is more accurate with accents and noisy rooms, but slower — download it once and it stays on this machine.</p>
+            </div>
 
             <label for="tts-voice-select">Voice</label>
             <div class="ui-select-wrap settings-control">

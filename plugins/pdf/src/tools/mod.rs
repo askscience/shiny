@@ -402,7 +402,10 @@ impl Tool for PdfReplaceText {
         let old = req.params.require_str("old")?;
         let new = req.params.param_str("new").unwrap_or_default();
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
-        let (new_bytes, touched) = ops::replace_text(&bytes, page, &old, &new)?;
+        // Content-stream edit (lopdf): pdf_oxide's modify_text left the
+        // original glyphs in place, so find & replace used to overlap text.
+        let (new_bytes, report) = crate::stream_edit::replace_text(&bytes, page, &old, &new)?;
+        let touched = report.replaced;
         let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
         Ok(ActionOutcome::ok("pdf_replace_text", json!({
             "pdf_id": id, "title": title, "page": page, "replaced": touched, "page_count": count,
@@ -435,7 +438,7 @@ impl Tool for PdfAnnotate {
         let text = req.params.param_str("text").unwrap_or_default();
         let color: Option<[f32; 3]> = arr_f32(req.params.get("color"), 3).map(|v| [v[0], v[1], v[2]]);
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
-        let new_bytes = ops::annotate(&bytes, page, &kind, rect, &text, color)?;
+        let new_bytes = ops::annotate(&bytes, page, &kind, rect, &text, color, &ops::TextFormat::default())?;
         let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
         Ok(ActionOutcome::ok("pdf_annotate", json!({
             "pdf_id": id, "title": title, "page": page, "kind": kind, "page_count": count,
@@ -471,7 +474,7 @@ impl Tool for PdfAddNote {
             .param_f64("y")
             .map(|v| v as f32)
             .unwrap_or((h - 60.0).max(0.0));
-        let new_bytes = ops::annotate(&bytes, page, "note", [x, y, 20.0, 20.0], &text, None)?;
+        let new_bytes = ops::annotate(&bytes, page, "note", [x, y, 20.0, 20.0], &text, None, &ops::TextFormat::default())?;
         let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
         Ok(ActionOutcome::ok("pdf_add_note", json!({
             "pdf_id": id, "title": title, "page": page, "page_count": count,

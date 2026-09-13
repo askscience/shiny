@@ -1,41 +1,14 @@
-/* Compose mode — reply stream + dock pill input
+/* Compose mode — the chat panel: reply stream + in-panel composer.
    Geometry tokens (--compose-*) live in the theme's tokens.css. */
 
-body.compose-active.compose-awaiting {
-  --compose-stack-height: calc(var(--compose-orb-size) + max(32px, env(safe-area-inset-bottom)) + 28px);
-}
-
-/* Hide dock icons only while typing, not while awaiting AI */
-body.compose-active:not(.compose-awaiting) #artifact-dock-icons {
-  display: none !important;
-}
-
+/* A live voice turn still shows its status pill under the orb. */
 body.agent-awaiting #artifact-dock {
   display: flex !important;
 }
 
-body.compose-active.compose-awaiting #artifact-dock-icons {
-  display: flex !important;
-}
-
+/* Text mode owns its own composer, so the orb dock stands down — this has to
+   come after the voice rule above to win while both classes are set. */
 body.compose-active #artifact-dock {
-  display: flex !important;
-  overflow: visible;
-}
-
-body.compose-active:not(.compose-awaiting) #compose-dock-input {
-  display: flex !important;
-}
-
-body.compose-active.compose-awaiting #compose-dock-input {
-  display: none !important;
-}
-
-/* Awaiting the answer the compose pill is away, so the dock is only there for
-   the status line — and when that line is gone too, the pill goes with it
-   rather than sitting under the orb empty. This has to live here, after the
-   `display: flex !important` above, to win against it. */
-body.compose-active.compose-awaiting #artifact-dock:has(> #artifact-dock-icons:empty):has(> #artifact-dock-step.hidden) {
   display: none !important;
 }
 
@@ -78,11 +51,8 @@ body.compose-active #hud-transcript {
   flex-direction: column;
   pointer-events: none;
   opacity: 0;
-  padding-bottom: var(--compose-stack-height);
   box-sizing: border-box;
-  transition:
-    opacity var(--duration-normal) var(--ease-out),
-    padding-bottom var(--duration-normal) var(--ease-out);
+  transition: opacity var(--duration-normal) var(--ease-out);
   background: transparent;
 }
 
@@ -102,9 +72,9 @@ body.compose-active #hud-transcript {
   background: var(--bg-elevated);
   border-radius: 0 20px 20px 0;
   padding:
-    max(24px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-top))
     max(18px, env(safe-area-inset-right))
-    calc(var(--compose-stack-height) + 20px)
+    max(14px, env(safe-area-inset-bottom))
     18px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -116,6 +86,49 @@ body.compose-active #hud-transcript {
 
 .compose-conversation::-webkit-scrollbar {
   display: none;
+}
+
+/* ── Stop button ─────────────────────────────────────────────
+   A peer of the field in the composer while the assistant is thinking or
+   typing its reply out, and gone the moment the answer is done. */
+.compose-stop {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    opacity var(--duration-fast, 0.15s) var(--ease-out),
+    transform var(--duration-fast, 0.15s) var(--ease-out);
+}
+.compose-stop.visible { display: flex; }
+.compose-stop:active { transform: scale(0.92); }
+/* The universal stop glyph, drawn rather than bundled as an icon. */
+.compose-stop::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+/* A stopped answer keeps whatever arrived, dimmed and labelled. */
+.compose-bubble.is-stopped .compose-bubble-text { opacity: 0.7; }
+.compose-bubble.is-stopped::after {
+  content: 'stopped';
+  margin-top: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .compose-bubble {
@@ -202,15 +215,6 @@ body.compose-active #hud-transcript {
   animation: composePulse 1.4s ease-in-out infinite;
 }
 
-.compose-dock-input {
-  display: none;
-  align-items: center;
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  min-height: 38px;
-}
-
 .compose-dock-field,
 #text-input-field {
   display: block;
@@ -250,21 +254,104 @@ body.compose-active #hud-transcript {
   outline: none;
 }
 
-body.compose-active #artifact-dock {
-  min-width: min(280px, calc(100vw - 96px));
-  max-width: min(calc(100vw - 64px), 380px);
-  width: min(380px, calc(100vw - 64px));
-  padding: 8px 18px;
-  min-height: 52px;
+/* ── Composer: field + send + stop, inside the conversation ── */
+
+/* The chat-history button sits at the top-right of the chat it switches
+   between, styled like the chat surface itself rather than the desktop HUD. */
+.compose-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 2px;
 }
 
-body.compose-active.compose-awaiting #artifact-dock {
-  min-width: 0;
-  width: auto;
-  max-width: min(calc(100vw - 32px), 340px);
-  padding: 6px 10px;
-  min-height: 0;
+.compose-chats-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-glass);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-spring);
 }
+
+.compose-chats-btn:hover {
+  background: var(--glass-hover);
+  border-color: var(--glass-highlight);
+  color: var(--text);
+}
+
+.compose-chats-btn:active { transform: scale(0.94); }
+.compose-chats-btn svg { width: 17px; height: 17px; }
+
+/* The composer is a direct child of the thread; `sticky` keeps it pinned to
+   the bottom edge of the panel once the bubbles scroll past it. */
+.compose-composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--surface);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-float, var(--shadow-glass));
+}
+
+/* The field takes the row; inside it, it may shrink past its dock width. */
+.compose-composer #text-input-field,
+.compose-composer .compose-dock-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* While an answer runs the field yields to stop. */
+body.compose-awaiting .compose-composer #text-input-field,
+body.compose-awaiting .compose-composer .compose-send {
+  display: none;
+}
+
+.compose-send {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--ease-spring),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.compose-send:hover { transform: translateY(-1px); }
+.compose-send:active { transform: scale(0.94); }
+.compose-send .ui-icon { width: 16px; height: 16px; }
 
 @keyframes composePulse {
   0%, 100% { opacity: 0.4; }
@@ -280,19 +367,13 @@ body.compose-active.compose-awaiting #artifact-dock {
   .compose-conversation {
     width: 100%;
     border-radius: 0 16px 16px 0;
-    padding-top: max(56px, calc(env(safe-area-inset-top) + 44px));
+    padding-top: max(14px, env(safe-area-inset-top));
   }
 
-  body.compose-active:not(.compose-awaiting) #artifact-dock {
-    min-width: min(260px, calc(100vw - 80px));
-    max-width: calc(100vw - 48px);
-    width: calc(100vw - 48px);
-  }
+  /* The orb would sit on the composer on a phone — the panel owns the bottom. */
+  body.compose-active #chrome-bottom { display: none !important; }
 
-  .compose-dock-field {
-    font-size: 16px;
-    min-width: 180px;
-  }
+  .compose-dock-field { font-size: 16px; min-width: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

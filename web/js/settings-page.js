@@ -1,7 +1,7 @@
 // Settings page controller — standalone page (no modal), built on the UI library.
 // Same preferences as before: profile, appearance, assistant, voice.
 
-import { apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, clearVoiceLang, getTraveler, getToken, logoutSession, validateSession } from './api.js';
+import { apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, getTraveler, getToken, logoutSession, validateSession } from './api.js';
 import {
   initThemeLoader, initAppearance, hydrateIcons, toast,
   listThemes, setTheme, getActiveTheme, getThemeManifest,
@@ -16,8 +16,10 @@ import {
   getPluginLayout, setPluginLayout, getDesktopLayout, setDesktopLayout,
   loadUserPreferences, getRemember, setRemember, flushPreferencesNow,
   getDesktopSurface, setDesktopSurface,
+  getImmersive, setImmersive,
   getTtsVoice, setTtsVoice, getTtsSpeed, setTtsSpeed,
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
+  getSttEngine, setSttEngine, getWhisperModel, setWhisperModel,
   ORB_STYLES, getOrbStyle, setOrbStyle,
 } from './preferences.js';
 import { createOrbPreview } from './orbCanvas.js';
@@ -50,6 +52,12 @@ const openaiModelInput = document.getElementById('openai-model-input');
 const openaiModelHint = document.getElementById('openai-model-hint');
 const userAvatarEl = document.getElementById('settings-user-avatar');
 const userNameEl = document.getElementById('settings-user-name');
+
+const sttEngineSelect = document.getElementById('stt-engine-select');
+const whisperFields = document.getElementById('whisper-fields');
+const whisperModelSelect = document.getElementById('whisper-model-select');
+const whisperModelHint = document.getElementById('whisper-model-hint');
+const whisperModelDownload = document.getElementById('whisper-model-download');
 
 const rememberToggle = document.getElementById('remember-toggle');
 const bgModeSelect = document.getElementById('background-mode');
@@ -405,14 +413,6 @@ async function loadLanguages() {
     const res = await apiFetch('/api/voice/languages');
     langSelect.innerHTML = '';
 
-    // "Automatic" = follow the browser language (default until the user
-    // picks a specific one). Selecting a concrete language pins both voice
-    // (STT/TTS) and the assistant's reply language.
-    const autoOpt = document.createElement('option');
-    autoOpt.value = 'auto';
-    autoOpt.textContent = 'Automatic (browser)';
-    langSelect.appendChild(autoOpt);
-
     res.data.forEach((lang) => {
       const opt = document.createElement('option');
       opt.value = lang.code;
@@ -420,10 +420,18 @@ async function loadLanguages() {
       langSelect.appendChild(opt);
     });
 
+    // There is deliberately no "Automatic" entry: both engines are faster when
+    // told the language up front (Whisper skips detection, Vosk needs a model),
+    // so the first visit pins the browser's language as an explicit choice the
+    // user can change.
     const explicit = getVoiceLangExplicit();
-    langSelect.value = explicit || 'auto';
+    const resolved = explicit || getVoiceLang();
+    const codes = res.data.map((l) => l.code);
+    const chosen = codes.includes(resolved) ? resolved : 'en';
+    langSelect.value = chosen;
+    if (!explicit) setVoiceLang(chosen);
   } catch (_) {
-    langSelect.innerHTML = '<option value="auto">Automatic (browser)</option><option value="en">EN</option>';
+    langSelect.innerHTML = '<option value="en">EN</option>';
   }
 }
 
@@ -548,6 +556,31 @@ function wireDesktopSection() {
   });
 }
 
+/* ── Fullscreen immersion (autohide + bar position) ─────────── */
+
+function wireImmersiveSection() {
+  const barToggle = document.getElementById('immersive-autohide-bar');
+  const barPos = document.getElementById('immersive-bar-position');
+  const orbToggle = document.getElementById('immersive-autohide-orb');
+  const s = getImmersive();
+
+  barToggle?.setAttribute('aria-checked', String(s.autohide_bar));
+  orbToggle?.setAttribute('aria-checked', String(s.autohide_orb));
+  if (barPos) barPos.value = s.bar_position;
+
+  barToggle?.addEventListener('click', () => {
+    const next = !getImmersive().autohide_bar;
+    barToggle.setAttribute('aria-checked', String(next));
+    setImmersive({ autohide_bar: next });
+  });
+  barPos?.addEventListener('change', () => setImmersive({ bar_position: barPos.value }));
+  orbToggle?.addEventListener('click', () => {
+    const next = !getImmersive().autohide_orb;
+    orbToggle.setAttribute('aria-checked', String(next));
+    setImmersive({ autohide_orb: next });
+  });
+}
+
 /* ── Granular desktop surface (appearance → window chrome) ── */
 
 function syncSurfaceUI() {
@@ -606,6 +639,126 @@ function wireSurfaceSection() {
     setDesktopSurface({ window_shadow: next });
     shadow.setAttribute('aria-checked', String(next));
   });
+}
+
+/* ── Speech recognition engine (faster-whisper / Vosk) ────── */
+
+/** Last `/api/voice/status` payload: sidecar readiness + model inventory. */
+let whisperStatus = null;
+let whisperStatusLoaded = false;
+let whisperPoll = null;
+
+const WHISPER_MODEL_LABEL = { tiny: 'Tiny', small: 'Small' };
+
+function stopWhisperPoll() {
+  if (whisperPoll) {
+    clearInterval(whisperPoll);
+    whisperPoll = null;
+  }
+}
+
+function updateWhisperModelUI() {
+  const engine = getSttEngine();
+  const model = getWhisperModel();
+  if (whisperModelSelect) whisperModelSelect.value = model;
+  whisperFields?.classList.toggle('hidden', engine !== 'whisper');
+
+  if (!whisperModelHint) return;
+  const info = whisperStatus?.whisper_models?.[model];
+  const download = whisperStatus?.whisper_downloads?.[model];
+  const label = WHISPER_MODEL_LABEL[model] || model;
+
+  if (whisperStatus && whisperStatus.whisper !== 'ready') {
+    whisperModelHint.textContent = 'Faster Whisper is not running on this machine — voice falls back to Vosk until it is started (./voice/start_whisper.sh).';
+    whisperModelDownload?.classList.add('hidden');
+    return;
+  }
+  if (!whisperStatus) {
+    whisperModelHint.textContent = whisperStatusLoaded
+      ? 'Could not check the speech service.'
+      : 'Checking the speech service…';
+    whisperModelDownload?.classList.add('hidden');
+    return;
+  }
+  if (info?.present) {
+    whisperModelHint.textContent = `${label} model ready${info.loaded ? ' and loaded' : ''}${model === 'tiny' ? ' (included with the app)' : ''}.`;
+    whisperModelDownload?.classList.add('hidden');
+    return;
+  }
+  if (download?.status === 'downloading') {
+    const pct = download.total ? Math.round((download.bytes / download.total) * 100) : 0;
+    whisperModelHint.textContent = `Downloading the ${label.toLowerCase()} model… ${pct}%`;
+    whisperModelDownload?.classList.add('hidden');
+    return;
+  }
+  if (download?.status === 'error') {
+    whisperModelHint.textContent = download.error || 'Download failed.';
+    whisperModelDownload?.classList.remove('hidden');
+    return;
+  }
+  whisperModelHint.textContent = `${label} model is not downloaded yet — voice uses Tiny until you download it.`;
+  whisperModelDownload?.classList.remove('hidden');
+  if (whisperModelDownload) whisperModelDownload.disabled = false;
+}
+
+async function refreshWhisperStatus() {
+  try {
+    whisperStatus = await apiFetch(`/api/voice/status?lang=${encodeURIComponent(getVoiceLang())}`);
+  } catch (_) {
+    whisperStatus = null;
+  }
+  whisperStatusLoaded = true;
+  updateWhisperModelUI();
+  return whisperStatus;
+}
+
+function pollWhisperDownload() {
+  stopWhisperPoll();
+  whisperPoll = setInterval(async () => {
+    const status = await refreshWhisperStatus();
+    const model = getWhisperModel();
+    const state = status?.whisper_downloads?.[model]?.status;
+    const present = status?.whisper_models?.[model]?.present === true;
+    if (present || state === 'error') {
+      stopWhisperPoll();
+      if (present) toast(`${WHISPER_MODEL_LABEL[model] || model} model ready`, { type: 'info' });
+    }
+  }, 1500);
+}
+
+async function downloadWhisperModel() {
+  const model = getWhisperModel();
+  if (whisperModelDownload) whisperModelDownload.disabled = true;
+  try {
+    await apiFetch('/api/voice/whisper/download', {
+      method: 'POST',
+      body: JSON.stringify({ model }),
+    });
+    toast(`Downloading the ${model} model in the background…`, { type: 'info' });
+    pollWhisperDownload();
+  } catch (e) {
+    toast(e.message || 'Could not start the download', { type: 'error' });
+    if (whisperModelDownload) whisperModelDownload.disabled = false;
+  }
+}
+
+function wireSttEngine() {
+  updateWhisperModelUI();
+
+  sttEngineSelect?.addEventListener('change', () => {
+    setSttEngine(sttEngineSelect.value);
+    updateWhisperModelUI();
+    if (sttEngineSelect.value === 'whisper' && whisperStatus?.whisper !== 'ready') {
+      toast('Faster Whisper is not running — voice will use Vosk', { type: 'info' });
+    }
+  });
+
+  whisperModelSelect?.addEventListener('change', () => {
+    setWhisperModel(whisperModelSelect.value);
+    updateWhisperModelUI();
+  });
+
+  whisperModelDownload?.addEventListener('click', downloadWhisperModel);
 }
 
 /* ── Voice extras (TTS voice, speed, wake word, silence) ──── */
@@ -774,11 +927,10 @@ async function saveAndLeave() {
   setOpenAiBaseUrl(openaiBaseUrlInput?.value || '');
   setOpenAiApiKey(openaiApiKeyInput?.value || '');
   setOpenAiModel(openaiModelInput?.value || '');
-  if (langSelect) {
-    // Persisted here; the sphere re-prepares voice on next load. "auto" keeps
-    // following the browser language, a concrete code pins it per user.
-    if (langSelect.value === 'auto') clearVoiceLang();
-    else if (langSelect.value !== getVoiceLang()) setVoiceLang(langSelect.value);
+  if (langSelect && langSelect.value) {
+    // Persisted here; the sphere re-prepares voice on next load. The value is
+    // always a concrete language — both speech engines are faster that way.
+    setVoiceLang(langSelect.value);
   }
 
   const name = profileNameInput?.value.trim();
@@ -839,11 +991,15 @@ async function boot() {
 
   await Promise.all([loadLanguages(), loadAiModels(), loadPluginLayouts()]);
   wireDesktopSection();
+  wireImmersiveSection();
   wireSurfaceSection();
   wireVoiceExtras();
+  wireSttEngine();
   wireNav();
   wireBackground();
   wireSession();
+  // Speech-service readiness in the background: the page is usable without it.
+  refreshWhisperStatus();
 
   aiNameInput?.addEventListener('input', () => {
     setAiName(aiNameInput.value);

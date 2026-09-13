@@ -18,6 +18,8 @@ const VOICE_TTS_VOICE_KEY = 'voice.tts_voice';
 const VOICE_TTS_SPEED_KEY = 'voice.tts_speed';
 const VOICE_SILENCE_KEY = 'voice.silence_timeout';
 const VOICE_WAKE_KEY = 'voice.wake_word';
+const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
+const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
 const ORB_STYLE_KEY = 'orb.style';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
@@ -85,6 +87,7 @@ export async function loadUserPreferences() {
     // Keep the existing local cache when the server is unreachable.
   }
   applyDesktopSurface();
+  applyImmersive();
 }
 
 export function getAiName() {
@@ -327,6 +330,53 @@ export function applyDesktopSurface() {
   root.style.setProperty('--tile-header-height', `${s.title_height}px`);
 }
 
+/* ── Fullscreen immersion (autohide + bar position) ───────────
+ * While a window is fullscreen the desktop chrome steps aside. These
+ * preferences decide what steps aside, and from which edge the top bar comes
+ * back: the top bar and the orb are independent, so the orb can stay up while
+ * the bar hides (or nothing hides at all).
+ * ───────────────────────────────────────────────────────────── */
+
+const IMMERSIVE_KEY = 'desktop.immersive';
+
+/** Where the fullscreen top bar docks and slides in from. */
+export const BAR_POSITIONS = ['top', 'left', 'right', 'center'];
+
+const DEFAULT_IMMERSIVE = {
+  autohide_bar: true,
+  bar_position: 'top',
+  autohide_orb: true,
+};
+
+/** Fullscreen chrome behaviour, merged over defaults. */
+export function getImmersive() {
+  const stored = readJson(scopedKey(IMMERSIVE_KEY), {});
+  const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+  return {
+    autohide_bar: src.autohide_bar !== false,
+    bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : 'top',
+    autohide_orb: src.autohide_orb !== false,
+  };
+}
+
+export function setImmersive(patch) {
+  const merged = { ...getImmersive(), ...patch };
+  const raw = JSON.stringify(merged);
+  localStorage.setItem(scopedKey(IMMERSIVE_KEY), raw);
+  persist(IMMERSIVE_KEY, raw);
+  applyImmersive();
+}
+
+/** Publish the immersion settings to CSS and the fullscreen controller. */
+export function applyImmersive() {
+  const s = getImmersive();
+  const root = document.documentElement;
+  root.dataset.barPos = s.bar_position;
+  root.dataset.autohideBar = s.autohide_bar ? '1' : '0';
+  root.dataset.autohideOrb = s.autohide_orb ? '1' : '0';
+  window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));
+}
+
 /* ── Voice (per-user, server-backed) ───────────────────────── */
 
 export function getTtsVoice() {
@@ -372,6 +422,37 @@ export function setWakeWord(on) {
   if (on) localStorage.removeItem(key); // default true
   else localStorage.setItem(key, 'false');
   persist(VOICE_WAKE_KEY, on ? 'true' : 'false');
+}
+
+/* ── Speech recognition engine (per-user, server-backed) ──── */
+
+/** Which STT engine voice input uses: 'whisper' (default) or 'vosk'. */
+export function getSttEngine() {
+  return localStorage.getItem(scopedKey(VOICE_STT_ENGINE_KEY)) === 'vosk' ? 'vosk' : 'whisper';
+}
+
+export function setSttEngine(engine) {
+  const value = engine === 'vosk' ? 'vosk' : 'whisper';
+  const key = scopedKey(VOICE_STT_ENGINE_KEY);
+  if (value === 'whisper') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(VOICE_STT_ENGINE_KEY, value === 'whisper' ? '' : value);
+}
+
+/**
+ * faster-whisper model size. `tiny` is bundled with the app; `small` is a
+ * ~480 MB opt-in download.
+ */
+export function getWhisperModel() {
+  return localStorage.getItem(scopedKey(VOICE_WHISPER_MODEL_KEY)) === 'small' ? 'small' : 'tiny';
+}
+
+export function setWhisperModel(model) {
+  const value = model === 'small' ? 'small' : 'tiny';
+  const key = scopedKey(VOICE_WHISPER_MODEL_KEY);
+  if (value === 'tiny') localStorage.removeItem(key);
+  else localStorage.setItem(key, value);
+  persist(VOICE_WHISPER_MODEL_KEY, value === 'tiny' ? '' : value);
 }
 
 /* ── Voice orb style (per-user, server-backed) ─────────────── */

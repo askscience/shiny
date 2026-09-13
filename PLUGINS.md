@@ -835,7 +835,7 @@ Before publishing a plugin:
 | `plugins/word/` | **Self-contained** — `doc_*` tools, its own `documents` table (`migrations/`), the `/api/documents` REST routes (`RouteSpec` + `route_handler`), and the Word window (`web/plugin.js`) all live in the plugin folder. Documents are real OpenDocument Text (`.odt`) bytes via the SDK codec (`crates/shiny-plugin-sdk/src/odt.rs`). Zero core footprint. |
 | `plugins/calc/` | **Self-contained** — `calc_*` tools, its own `spreadsheets` table, `/api/spreadsheets` routes, and the Calc window (`web/plugin.js`) all in the plugin folder. Cell grids (A1 refs) stored as a JSON map; formulas (`=SUM(A1:A3)`) evaluate live in the window; real **`.ods` import/export** via `crates/shiny-plugin-sdk/src/ods.rs`. |
 | `plugins/impress/` | **Self-contained** — `slide_*` tools, its own `presentations` table, `/api/presentations` routes, and the Impress window (`web/plugin.js`) all in the plugin folder. Decks are a JSON array of slides (six layouts, five themes, per-slide `transition` + `reveal` build); real **`.odp` import/export** via `crates/shiny-plugin-sdk/src/odp.rs`, which writes transitions as ODF `presentation:transition-style`. |
-| `plugins/pdf/` | **Self-contained** — `pdf_*` tools, its own `pdf_documents` table, `/api/pdfs` routes, and the PDF window (`web/plugin.js`) all in the plugin folder. Documents are real **`.pdf` bytes** parsed/edited with **`pdf_oxide`** (`rendering` feature): pages render to PNG, text extracts per page, and a single operations engine (`src/ops.rs`) powers both the AI tools and the window — page `rotate`/`reorder`/`delete-pages`/`merge`, content `replace_text`, and annotations (`highlight`/`underline`/`strikeout`/`squiggly`/`note`/`free_text`/`link`) plus `watermark`. Creation goes through pdf_oxide's HTML+CSS engine (bundled DejaVu fonts) so long text wraps instead of running off the page. |
+| `plugins/pdf/` | **Self-contained** — `pdf_*` tools, its own `pdf_documents` table, `/api/pdfs` routes, and the PDF window (`web/plugin.js`) all in the plugin folder. Documents are real **`.pdf` bytes** parsed/edited with **`pdf_oxide`** (`rendering` feature): the browser lays out and paints the real document with **pdf.js** (see §19 "PDF window"), while the server keeps the single operations engine (`src/ops.rs`) that powers both the AI tools and the window — page `rotate`/`reorder`/`delete-pages`/`merge`, content `replace_text`, and annotations (`highlight`/`underline`/`strikeout`/`squiggly`/`note`/`free_text`/`link`) plus `watermark`, and renders a page to PNG when the server needs one. Creation goes through pdf_oxide's HTML+CSS engine (bundled DejaVu fonts) so long text wraps instead of running off the page. |
 | `plugins/keyboard/` | Pure surface plugin — virtual multi-language keyboard bar (8 layouts). Still **chrome-integrated** (`web/js/keyboard.js` + HUD toggle live in core, not the plugin folder): it is not a tile, so it awaits the "chrome surface" contract (see §20 item 7). |
 | `plugins/youtube/` | **Self-contained** — `youtube_search`/`youtube_play` tools, the `/api/youtube/search` route (`RouteSpec`), and the YouTube window (`web/plugin.js`) all in the plugin folder. Search scrapes YouTube's public `ytInitialData` JSON (no API key); playback loads `youtube.com/embed/<id>`. |
 | `plugins/calendar/` | **Self-contained** — `calendar_*` tools, its own `calendar_events` table (`migrations/`), the `/api/calendar/events` routes (`RouteSpec`), and the Calendar window (`web/plugin.js`) all in the plugin folder. Events are `YYYY-MM-DD` dates with optional `HH:MM` times; the window is a month grid + day detail. `src/date.rs` normalizes friendly dates/times ("today", "9:30am"). |
@@ -1096,6 +1096,145 @@ tokens `--glow-brightness`, `--glow-opacity`, `--glow-permeability` and
 `--glow-veil`; the neumorphic themes additionally make the window chrome
 translucent inside `.tile` so the light reads through it. Colours repaint
 automatically on `theme:change` / `appearance:change` (`refreshGlow()`).
+
+### PDF window
+
+The PDF window renders **the real document in the browser**, not a picture of
+it. This matters for the things users actually expect from a PDF viewer, and it
+is the plugin most likely to be copied by another document-style window, so the
+shape is worth stating.
+
+**Why not server-rendered images.** An earlier version asked the server for a
+PNG per page (`/api/pdfs/:id/pages/:page?dpi=…`) and put it in an `<img>`. That
+gives you a bitmap you cannot select, cannot search, and can only "zoom" by
+re-rasterising the whole page on the server — so text never gets sharper and
+every zoom step costs a round-trip and a fresh image in memory.
+
+**How it works now.**
+
+- The plugin's own route `GET /api/pdfs/:id/file` serves the stored bytes
+  inline (`application/pdf`, `no-store`) — deliberately **separate** from
+  `GET /api/pdfs/:id/export`, which sets `Content-Disposition: attachment` for
+  downloading. Keep them distinct: the viewer must never trigger a download.
+- `web/plugin.js` loads PDF.js from the vendored `web/vendor/pdfjs/`, paints
+  each page to a `<canvas>` at `zoom × devicePixelRatio`, and lays PDF.js's
+  **text layer** over it. Text is therefore selectable and copyable, and zoom is
+  crisp at every step with no server involvement.
+- `cMapUrl` / `standardFontDataUrl` point at the vendored `cmaps/` and
+  `standard_fonts/` so CID-keyed documents and PDFs without embedded fonts still
+  render. Those directories are part of the vendored dependency — don't drop
+  them.
+- Thumbnails come from the same loaded document (two passes: quick, then sharp),
+  so the rail costs no extra network requests.
+
+**Gotchas learned here.**
+
+- **Never let a flex parent size the page.** `.pdf-canvas` and `.pdf-page` set
+  `align-items: flex-start`, and the viewer pins the page box from the PDF.js
+  viewport. Flex's default `stretch` otherwise overrides the page height and
+  silently changes its aspect ratio — pages render squashed, circles become
+  ellipses.
+- **Set `--scale-factor`** on the page element (the value PDF.js positions text
+  spans with); it must equal the viewport scale or the text layer drifts.
+- **The annotation gesture is Shift+drag.** A plain drag belongs to text
+  selection now. Region selection converts to PDF points via the viewport scale
+  and posts the rect in points (A4 = 595×842), which is what
+  `/api/pdfs/:id/annotate` expects. The bar reads the current text selection
+  *before* dismissing it, so **Note**, **Text box** and the extra
+  **Find & replace…** entry arrive pre-filled with the words the user pointed
+  at; `showAnnotBar()` must capture the selection before anything clears it.
+- **Capture `annotRect` before hiding the action bar.** The bar's
+  document-level `pointerdown` handler runs *before* a button's `click`, so
+  hiding the bar first leaves the rect null and every annotation silently
+  no-ops.
+- **After any server-side edit**, call `dropPdfDoc()` and re-render. The bytes
+  changed, so the parsed document and its pages are stale. `rotate`,
+  `reorder`, `delete-pages`, `merge`, `replace-text`, `annotate` and `watermark`
+  all take this path — including when the agent triggers them (`agent:actions`).
+
+Server-side rendering has not gone away: `pdf_oxide` still powers rendering and
+the structural edit operations (create, merge, rotate, annotate, watermark), and
+still exposes `render_png` for anything that needs a bitmap. Text replacement is
+the exception — see below.
+
+**In-place text editing uses lopdf, not pdf_oxide.** Replacing the text of an
+existing line edits the raw content stream with the **lopdf** crate
+(`plugins/pdf/src/stream_edit.rs`). `pdf_oxide` still does rendering and the
+structural operations (create, merge, rotate, annotate, watermark). The split is
+deliberate: a PDF content stream is **append-only**, so pdf_oxide's
+`modify_text` re-emits a run without removing the original glyphs — find &
+replace on an existing document produced the old and new text on top of each
+other.
+
+Two traps make a naive content-stream edit fail silently:
+
+- **Text often lives in Form XObjects, not the page stream.** A page's own
+  stream may be a few hundred bytes while its header is a `/TPL1` XObject with
+  thousands of operators. lopdf's own `replace_text` only scans the page stream,
+  so it can silently do nothing on such files. This engine recurses into the
+  page's Form XObjects.
+- **Text usually arrives as a `TJ` array, not one string.** Glyphs are split by
+  kerning numbers (`[(T) -3 (I) 10 (M)]`), so byte matching finds nothing. The
+  array is flattened, edited, then re-emitted with a kerning correction so the
+  line keeps its original width.
+
+The kern correction goes **after** the string in the rebuilt array. Putting it
+first shifted the replacement left of its own margin — a bug that was fixed.
+
+Both call sites — the agent tool `pdf_replace_text` and the window's inline
+editor (`POST /api/pdfs/:id/edit-text`) — go through this one engine, so the AI
+and the human have exactly the same capability. Keep that parity. The viewer's
+`match_text` comes from pdf_oxide, which can synthesise a trailing space that is
+not a byte in the stream, so the editor retries with the trimmed text when the
+exact string finds nothing.
+
+Style changes (bold, size, colour) are **not** supported, and the toolbar controls
+for them were removed rather than left pretending to work. This is worth spelling
+out, because an attempt to add them looked successful and was not:
+
+- A run's `Tf` (font, size) and `rg` (colour) are **inherited graphics state**.
+  They stay in force for every following text object, so restyling one run
+  repaints everything after it unless the previous state is explicitly restored.
+- **Most runs never set their own `Tf`.** In the sample document 850 of 890 text
+  objects inherit it, so a style edit aimed at one of them silently matches
+  nothing while still reporting success.
+- Consequently an "apply style" that reports `applied: 1` can be a **no-op**, and
+  the naive fix leaks. Both were observed; the feature was reverted rather than
+  shipped. Doing it properly needs save/restore of the inherited state around the
+  edited run.
+
+**This was attempted four more times and every attempt failed verification**, so
+it is withdrawn: `stream_edit::style_text` exists and is documented, but no route
+is registered for it and the toolbar has no formatting controls. If you pick it
+up, the traps are known rather than hypothetical:
+
+- **A single edit works.** Verified: `size`/`bold`/`colour` apply to one run with
+  exactly one changed band, neighbours pixel-identical, logo and page intact.
+- **It is not idempotent, and that is the blocker.** Each call appends another
+  `Tf` plus its undo instead of reusing the existing slot, so a second call on
+  the same document grows the stream (observed `Tf` 41→43→45→47→49→51) and the
+  later value stops winning. A stream cannot tell our injected `Tf` from the
+  document's own, so idempotence needs either marked injections or the run's byte
+  offsets recorded alongside the stored document. Neither is implemented.
+- **Never insert a `Tf` in front of the object's own one.** Every earlier
+  variation of this failed: the object's `Tf` wins, and each insert puts the
+  *older* edit closer to the text, so `size:22` could never undo a `size:30`.
+- **Do not overwrite the object's `Tf` in place either.** That operator is what
+  every following sibling block inherits, so changing it restyles the rest of the
+  block (one attempt restyled all five address lines and garbled them).
+- **`q`/`Q` around the text object is not a fix.** `Q` restores the state from
+  *before* the object, discarding a `Tf` a preceding sibling set.
+- **`TJ` numbers are already em-relative** — thousandths of a unit of text space,
+  scaled by `Tf`. Rewriting them (scaling by `new/old`, or substituting one
+  nominal correction) double-applies and visibly mis-spaces the word.
+- **When editing the content-stream code, make sure the pass that copies the
+  untouched operators survives your edit.** One attempt removed that copy loop,
+  the rebuilt stream began mid-object, and the page silently lost its header —
+  while the API still returned success. Every change here needs a render
+  comparison against the original, not an API "success".
+
+Matching is also by plain glyph bytes, so replacement is correct for simple fonts
+(e.g. WinAnsi) but would need ToUnicode/CMap mapping for CID-keyed fonts.
 
 ### Notifications
 

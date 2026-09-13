@@ -1,9 +1,51 @@
-import { apiFetch, getVoiceLang, setVoiceLang } from './api.js';
+import { apiFetch, getVoiceLang } from './api.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
-import { getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout } from './preferences.js';
+import {
+  getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout,
+  getSttEngine, getWhisperModel,
+} from './preferences.js';
 
-const WAKE_WAIT_TIMEOUT_MS = 15000;
+/* Wake mode: the long-press arms the wake listener and it stays armed until
+ * the wake phrase is heard or the user taps to cancel. There is deliberately no
+ * "waiting for the wake word" timeout — being timed out mid-thought is the
+ * whole complaint. Idle listening stays cheap because nothing is uploaded to
+ * the STT server unless the local VAD hears speech (see pushWhisperAudio). */
 const WAKE_COMMAND_TIMEOUT_MS = 8000;
+
+/* ── faster-whisper streaming tuning ─────────────────────────
+ * Whisper has no incremental decoder, so the sidecar re-decodes the tail of
+ * the utterance and commits the stable prefix (LocalAgreement). The browser
+ * only has to ship audio steadily and decide when the user stopped talking —
+ * Whisper gives no end-of-speech signal of its own.
+ */
+const WHISPER_CHUNK_MS = 500;
+/** Trailing silence that ends an utterance (after speech was heard). */
+const WHISPER_ENDPOINT_SILENCE_MS = 900;
+/** Frame RMS above which we count a frame as speech, not room noise. */
+const WHISPER_SPEECH_RMS = 0.012;
+/** Drop audio if the network cannot keep up, rather than growing forever. */
+const WHISPER_MAX_QUEUED_SECONDS = 20;
+/* Local voice-activity gate. While nobody is talking there is nothing worth
+ * transcribing, so the mic is monitored locally and only speech (plus a short
+ * run-up and tail) is uploaded. That is what makes an all-day open wake
+ * listener affordable: silence costs no network and no Whisper CPU. */
+const WHISPER_PREROLL_MS = 400;
+const WHISPER_HANGOVER_MS = 700;
+
+/* Barge-in: speaking over the assistant stops it and starts a new request.
+ * The threshold sits well above the speech threshold used for transcription so
+ * the assistant's own voice (imperfectly cancelled by the browser's AEC) does
+ * not cut it off, and a short guard window after playback starts gives the
+ * echo canceller time to converge. */
+const BARGE_IN_RMS = 0.03;
+const BARGE_IN_HOLD_MS = 350;
+const BARGE_IN_SETTLE_MS = 800;
+const BARGE_IN_TTS_GUARD_MS = 700;
+/** Status polls while the sidecar starts (it may boot with the server). */
+const WHISPER_READY_ATTEMPTS = 8;
+/** Longer window when the bundled model still has to be fetched. */
+const WHISPER_DOWNLOAD_ATTEMPTS = 40;
+const WHISPER_READY_DELAY_MS = 700;
 
 let voskModel = null;
 let recognizer = null;
@@ -13,10 +55,45 @@ let processor = null;
 let listening = false;
 let listenMode = 'single';
 let currentAudio = null;
-let sttLang = 'en';
+let sttLang = 'en';          // Vosk model language (lang_map's vosk_stt_lang)
+let voiceLang = 'en';        // ISO-639-1 passed to faster-whisper
 let silenceTimer = null;
 let wakeDetected = false;
 let awaitingCommand = false;
+
+// Engine selection, resolved in prepareVoice().
+let sttEngine = 'whisper';
+let whisperModel = 'tiny';
+let whisperReady = false;
+/** True when this boot kicked off a model download that is still running. */
+let whisperPendingDownload = false;
+
+// faster-whisper streaming session state.
+let whisperSession = null;
+let whisperQueue = [];
+let whisperQueuedSamples = 0;
+let whisperSending = false;
+let whisperFinalizing = false;
+let whisperLastPartial = '';
+/** Local VAD state: true while the user is (probably) talking. */
+let whisperSpeechActive = false;
+let whisperLastVoiceAt = 0;
+/** Run-up audio kept while idle, flushed when speech starts. */
+let whisperPreroll = [];
+let whisperPrerollSamples = 0;
+/** Resolver for the TTS playback currently in flight (stopSpeaking). */
+let stopPlayback = null;
+/** Bumped by stopSpeaking() so a reply still being fetched is dropped too. */
+let speakToken = 0;
+/** Barge-in monitor (mic stays open while the assistant answers). */
+let barge = { stream: null, ctx: null, proc: null, source: null, since: 0, startedAt: 0, fired: true };
+let bargeGuardUntil = 0;
+/** Bumped on every listen start/stop so stale async work is ignored. */
+let listenToken = 0;
+let sawSpeech = false;
+let lastVoiceAt = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function clearSilenceTimer() {
   if (silenceTimer) {
@@ -30,31 +107,91 @@ function resetWakeState() {
   awaitingCommand = false;
 }
 
+function resetEndpointing() {
+  sawSpeech = false;
+  lastVoiceAt = 0;
+  whisperSpeechActive = false;
+  whisperLastVoiceAt = 0;
+  whisperPreroll = [];
+  whisperPrerollSamples = 0;
+}
+
 function normalizeSpeech(text) {
   return text.toLowerCase().replace(/[^\w\s,]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Plain Levenshtein distance — used only on short wake-word tokens. */
+function editDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length];
 }
 
-function extractAfterWake(text) {
-  const aiName = normalizeSpeech(getAiName());
-  const norm = normalizeSpeech(text);
-  if (!aiName) return null;
+function tokenMatches(got, want) {
+  if (got === want) return true;
+  if (!got) return false;
+  const tolerance = Math.max(got.length, want.length) >= 5 ? 2 : 1;
+  return editDistance(got, want) <= tolerance;
+}
 
-  const patterns = [
-    new RegExp(`^hey[,\\s]+${escapeRegex(aiName)}[,\\s]*(.*)$`),
-    new RegExp(`^hey\\s+${escapeRegex(aiName)}[,\\s]*(.*)$`),
-  ];
-  for (const re of patterns) {
-    const m = norm.match(re);
-    if (m) return (m[1] || '').trim();
+/**
+ * Index just past a wake phrase ending at `tokens[s …]`, or null.
+ * The name must be either the whole utterance, right after "hey", or right
+ * after a clipped "hey" (tiny Whisper renders "Hey Peak'd" as "K. Beak").
+ */
+function matchWakeName(tokens, nameTokens) {
+  for (let s = 0; s + nameTokens.length <= tokens.length; s++) {
+    let matched = true;
+    for (let k = 0; k < nameTokens.length; k++) {
+      if (!tokenMatches(tokens[s + k], nameTokens[k])) {
+        matched = false;
+        break;
+      }
+    }
+    if (!matched) continue;
+    if (s === 0) return nameTokens.length;
+    if (tokenMatches(tokens[s - 1], 'hey')) return s + nameTokens.length;
+    if (s === 1 && tokens[0].length <= 2) return s + nameTokens.length;
   }
+  return null;
+}
 
-  const inline = norm.indexOf(`hey ${aiName}`);
-  if (inline >= 0) {
-    return norm.slice(inline + `hey ${aiName}`.length).replace(/^[,.\s]+/, '').trim();
+/**
+ * Pull the request out of a transcript that starts with (or contains) the wake
+ * phrase, e.g. "hey <name>, turn on the lights" → "turn on the lights".
+ *
+ * Matching is fuzzy on the name on purpose: the tiny Whisper model regularly
+ * renders an unusual assistant name as a near-homophone ("Peak'd" → "Beak"),
+ * and a wake phrase that only matches perfectly is a wake phrase that never
+ * fires. Returns `''` when the phrase was heard with nothing after it, and
+ * `null` when the phrase is absent.
+ */
+function extractAfterWake(text) {
+  const nameTokens = normalizeSpeech(getAiName()).split(' ').filter(Boolean);
+  if (!nameTokens.length) return null;
+  const tokens = normalizeSpeech(text).split(' ').filter(Boolean);
+
+  // The name arrives either as separate words ("peak d") or merged into one
+  // ("peakd" / "peaked"), so both shapes are worth a try.
+  const shapes = [nameTokens];
+  if (nameTokens.length > 1) shapes.push([nameTokens.join('')]);
+
+  for (const shape of shapes) {
+    const end = matchWakeName(tokens, shape);
+    if (end !== null) return tokens.slice(end).join(' ').trim();
   }
   return null;
 }
@@ -72,17 +209,6 @@ function armSilenceTimer() {
     }));
     window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
   }, getSilenceTimeout());
-}
-
-function armWakeWaitTimer() {
-  clearSilenceTimer();
-  silenceTimer = setTimeout(() => {
-    silenceTimer = null;
-    if (!listening || wakeDetected || awaitingCommand) return;
-    cancelListening();
-    setSphereState('idle');
-    window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
-  }, WAKE_WAIT_TIMEOUT_MS);
 }
 
 function armWakeCommandTimer() {
@@ -140,6 +266,286 @@ function handleTranscript(text, isFinal) {
   if (isFinal) dispatchVoiceResult(text);
 }
 
+/* ── faster-whisper transport ───────────────────────────────── */
+
+function newSessionId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return uuid;
+  return `stt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function floatTo16BitPCM(float32) {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+function enqueueWhisper(pcm) {
+  whisperQueue.push(pcm);
+  whisperQueuedSamples += pcm.length;
+  const max = WHISPER_MAX_QUEUED_SECONDS * 16000;
+  while (whisperQueuedSamples > max && whisperQueue.length > 1) {
+    whisperQueuedSamples -= whisperQueue.shift().length;
+  }
+}
+
+function drainWhisperQueue() {
+  if (!whisperQueue.length) return null;
+  let total = 0;
+  for (const chunk of whisperQueue) total += chunk.length;
+  const out = new Int16Array(total);
+  let offset = 0;
+  for (const chunk of whisperQueue) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  whisperQueue = [];
+  whisperQueuedSamples = 0;
+  return out;
+}
+
+/**
+ * Local voice-activity gate for the faster-whisper path.
+ *
+ * Idle silence is not worth a round trip or a Whisper pass, so audio is only
+ * queued while speech is (probably) present — plus a short run-up kept in a
+ * ring buffer so the first syllable is never clipped, and a tail so trailing
+ * words are not cut. With this, an open wake listener costs one cheap RMS loop
+ * per audio frame until somebody actually speaks.
+ */
+function pushWhisperAudio(pcm, isSpeech, now) {
+  if (isSpeech) {
+    if (!whisperSpeechActive) {
+      whisperSpeechActive = true;
+      for (const chunk of whisperPreroll) enqueueWhisper(chunk);
+      whisperPreroll = [];
+      whisperPrerollSamples = 0;
+    }
+    enqueueWhisper(pcm);
+    whisperLastVoiceAt = now;
+    return;
+  }
+
+  if (whisperSpeechActive) {
+    if (now - whisperLastVoiceAt <= WHISPER_HANGOVER_MS) {
+      enqueueWhisper(pcm);
+      return;
+    }
+    whisperSpeechActive = false;
+  }
+
+  // Idle: remember just enough audio to prepend to the next utterance.
+  whisperPreroll.push(pcm);
+  whisperPrerollSamples += pcm.length;
+  const maxPreroll = Math.round((WHISPER_PREROLL_MS / 1000) * 16000);
+  while (whisperPrerollSamples > maxPreroll && whisperPreroll.length > 1) {
+    whisperPrerollSamples -= whisperPreroll.shift().length;
+  }
+}
+
+async function postWhisperChunk(pcm, isFinal, session) {
+  const params = new URLSearchParams({ session, lang: voiceLang, model: whisperModel });
+  if (isFinal) params.set('final', 'true');
+  // Wake mode biases the decoder with the wake phrase: without it the tiny
+  // model turns an unusual assistant name into a homophone ("Peak'd"→"Beak"),
+  // and the wake word stops firing.
+  if (listenMode === 'wake') params.set('prompt', `Hey ${getAiName()}`);
+  // A zero-length body is still a valid flush: the sidecar decodes the whole
+  // utterance and drops the session.
+  const body = pcm && pcm.length
+    ? pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength)
+    : new ArrayBuffer(0);
+  return apiFetch(`/api/voice/stt/chunk?${params.toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body,
+  });
+}
+
+function applyWhisperPartial(res) {
+  const text = (res?.text || '').trim();
+  if (text) whisperLastPartial = text;
+  // Only wake mode acts on partials; single-shot waits for the final pass.
+  if (listenMode === 'wake' && !whisperFinalizing) handleTranscript(text, false);
+}
+
+async function pumpWhisperQueue(token) {
+  if (whisperSending || !whisperReady || !whisperSession) return;
+  whisperSending = true;
+  const session = whisperSession;
+  try {
+    while (whisperQueue.length && listening && token === listenToken && session === whisperSession) {
+      const pcm = drainWhisperQueue();
+      if (!pcm) break;
+      const res = await postWhisperChunk(pcm, false, session);
+      if (token !== listenToken || session !== whisperSession) return;
+      applyWhisperPartial(res);
+    }
+  } catch (e) {
+    if (token === listenToken) whisperFailed(e);
+  } finally {
+    whisperSending = false;
+  }
+}
+
+/**
+ * End-of-utterance: send whatever is buffered, ask for one accurate pass over
+ * the whole utterance, and hand the text to the agent.
+ *
+ * Whisper never says "the user stopped talking", so this is driven by the
+ * trailing-silence detector in the audio callback.
+ */
+async function finalizeWhisper() {
+  if (!listening || whisperFinalizing || sttEngine !== 'whisper') return;
+  const token = listenToken;
+  const session = whisperSession;
+  if (!session) return;
+
+  whisperFinalizing = true;
+  const mode = listenMode;
+  let text = whisperLastPartial;
+
+  try {
+    const pcm = drainWhisperQueue();
+    if (pcm && pcm.length) {
+      const res = await postWhisperChunk(pcm, false, session);
+      if (token !== listenToken) return;
+      const partial = (res?.text || '').trim();
+      if (partial) text = partial;
+    }
+    const res = await postWhisperChunk(null, true, session);
+    if (token !== listenToken) return;
+    const finalText = (res?.text || '').trim();
+    if (finalText) text = finalText;
+  } catch (e) {
+    if (token !== listenToken) return;
+    // A failed flush must not throw away what we already heard.
+    if (!text) {
+      whisperFinalizing = false;
+      whisperFailed(e);
+      return;
+    }
+  } finally {
+    whisperFinalizing = false;
+  }
+
+  if (token !== listenToken) return;
+  clearSilenceTimer();
+  stopListening();
+
+  if (text) {
+    window.dispatchEvent(new CustomEvent('voice:result', { detail: { text, mode } }));
+    return;
+  }
+  setSphereState('idle');
+  window.dispatchEvent(new CustomEvent('app:toast', {
+    detail: { message: "Didn't catch that", type: 'info' },
+  }));
+  window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
+}
+
+function whisperFailed(e) {
+  console.warn('Faster-whisper STT failed:', e);
+  const message = /not running|not responding|Failed to fetch|502/i.test(e?.message || '')
+    ? 'Faster Whisper is not responding — pick Vosk in Settings → Voice'
+    : (e?.message || 'Speech recognition failed');
+  if (!listening) return;
+  stopListening();
+  setSphereState('idle');
+  window.dispatchEvent(new CustomEvent('app:toast', {
+    detail: { message, type: 'error' },
+  }));
+  window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'error' } }));
+}
+
+/** Trailing-silence endpointing: Whisper has no VAD on the wire. */
+function trackEndpointing(rms) {
+  if (sttEngine !== 'whisper' || !listening || whisperFinalizing) return;
+  const now = performance.now();
+
+  if (rms > WHISPER_SPEECH_RMS) {
+    sawSpeech = true;
+    lastVoiceAt = now;
+    // Keep the "waiting for speech" cap from cutting off a long sentence.
+    if (listenMode === 'single') armSilenceTimer();
+    return;
+  }
+  if (!sawSpeech) return;
+  if (now - lastVoiceAt < WHISPER_ENDPOINT_SILENCE_MS) return;
+
+  // "Hey <name>" then a pause: that pause is the user getting ready to speak,
+  // not the end of the request — keep the session open for the command.
+  if (listenMode === 'wake' && wakeDetected && !awaitingCommand) {
+    sawSpeech = false;
+    awaitingCommand = true;
+    setSphereState('listening');
+    armWakeCommandTimer();
+    return;
+  }
+
+  const expecting = listenMode === 'single' || (listenMode === 'wake' && awaitingCommand);
+  if (!expecting) return;
+  sawSpeech = false;
+  void finalizeWhisper();
+}
+
+/* ── Voice preparation ──────────────────────────────────────── */
+
+async function fetchVoiceStatus(lang) {
+  try {
+    return await apiFetch(`/api/voice/status?lang=${encodeURIComponent(lang)}`);
+  } catch (_) {
+    return null;
+  }
+}
+
+const hasWhisperModel = (status, key) => status?.whisper_models?.[key]?.present === true;
+
+/**
+ * Make sure the faster-whisper sidecar is up and the chosen model is on disk.
+ *
+ * The tiny model is bundled with the app, so a fresh install needs no
+ * download; this only has to wait for the sidecar (it is started alongside
+ * the server) and fall back to tiny when the optional small model is absent.
+ */
+async function ensureWhisperReady(lang, initial) {
+  let status = initial;
+  let downloading = false;
+
+  if (status?.whisper === 'ready' && !hasWhisperModel(status, whisperModel)) {
+    if (whisperModel !== 'tiny' && hasWhisperModel(status, 'tiny')) {
+      whisperModel = 'tiny';
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: 'Small model not downloaded — using Tiny', type: 'info' },
+      }));
+    } else {
+      // Fresh checkout: fetch the bundled tiny model rather than going silent.
+      whisperModel = 'tiny';
+      downloading = true;
+      try {
+        await apiFetch('/api/voice/whisper/download', {
+          method: 'POST',
+          body: JSON.stringify({ model: 'tiny' }),
+        });
+      } catch (_) { /* status polling below decides readiness */ }
+    }
+  }
+
+  // A bundled model needs a moment for the sidecar to load; a download needs
+  // much longer, so give it a real chance before falling back to Vosk.
+  const attempts = downloading ? WHISPER_DOWNLOAD_ATTEMPTS : WHISPER_READY_ATTEMPTS;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (status?.whisper === 'ready' && hasWhisperModel(status, whisperModel)) return status;
+    await sleep(WHISPER_READY_DELAY_MS);
+    status = await fetchVoiceStatus(lang);
+  }
+  whisperPendingDownload = downloading;
+  return status;
+}
+
 export async function prepareVoice() {
   const lang = getVoiceLang();
   // Voice loads silently in the background — no progress card, no
@@ -148,40 +554,61 @@ export async function prepareVoice() {
   setVoiceReady(false);
   setSphereState('downloading');
 
-  let status;
-  try {
-    status = await apiFetch(`/api/voice/status?lang=${lang}`);
-  } catch (e) {
-    status = { vosk: 'missing', stt_lang: 'en' };
+  voiceLang = lang;
+  sttEngine = getSttEngine();
+  whisperModel = getWhisperModel();
+
+  let status = await fetchVoiceStatus(lang);
+  sttLang = status?.stt_lang || lang;
+
+  if (sttEngine === 'whisper') {
+    status = await ensureWhisperReady(lang, status);
+    whisperReady = status?.whisper === 'ready' && hasWhisperModel(status, whisperModel);
+    if (!whisperReady) {
+      sttEngine = 'vosk';
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: {
+          message: whisperPendingDownload
+            ? 'Faster Whisper model is downloading — using Vosk for now'
+            : 'Faster Whisper unavailable — using Vosk',
+          type: 'info',
+        },
+      }));
+    }
+  } else {
+    whisperReady = false;
   }
 
-  sttLang = status.stt_lang || lang;
+  if (sttEngine === 'vosk') {
+    // A failed status probe is treated as "missing": attempting the download
+    // is harmless when the archive is already there, and initVosk would fail
+    // anyway when it is not.
+    if ((status?.vosk || 'missing') === 'missing') {
+      try {
+        await apiFetch('/api/voice/download', {
+          method: 'POST',
+          body: JSON.stringify({ lang }),
+        });
+      } catch (e) {
+        window.dispatchEvent(new CustomEvent('app:toast', {
+          detail: { message: 'Voice model download failed', type: 'error' },
+        }));
+        setVoiceReady(true);
+        setSphereState('error');
+        return;
+      }
+    }
 
-  if (status.vosk === 'missing') {
     try {
-      await apiFetch('/api/voice/download', {
-        method: 'POST',
-        body: JSON.stringify({ lang }),
-      });
+      await initVosk(sttLang);
     } catch (e) {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: 'Voice model download failed', type: 'error' },
+        detail: { message: 'Speech model failed to load', type: 'error' },
       }));
       setVoiceReady(true);
       setSphereState('error');
       return;
     }
-  }
-
-  try {
-    await initVosk(sttLang);
-  } catch (e) {
-    window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: 'Speech model failed to load', type: 'error' },
-    }));
-    setVoiceReady(true);
-    setSphereState('error');
-    return;
   }
 
   setVoiceReady(true);
@@ -201,11 +628,19 @@ async function initVosk(lang) {
   voskModel = await Vosk.createModel(modelUrl);
 }
 
+/* ── Listening ──────────────────────────────────────────────── */
+
 export async function startListening(mode) {
   if (listening) return;
   listenMode = mode;
   listening = true;
+  const token = ++listenToken;
   resetWakeState();
+  resetEndpointing();
+  whisperLastPartial = '';
+  whisperQueue = [];
+  whisperQueuedSamples = 0;
+  whisperFinalizing = false;
   setSphereState(mode === 'single' ? 'listening' : 'conversation');
 
   try {
@@ -222,18 +657,34 @@ export async function startListening(mode) {
     });
 
     audioContext = new AudioContext({ sampleRate: 16000 });
-    recognizer = new voskModel.KaldiRecognizer(16000);
-    recognizer.setWords(false);
 
-    recognizer.on('result', (msg) => {
-      const text = msg.result?.text?.trim();
-      handleTranscript(text, true);
-    });
+    // The permission prompt can outlive the gesture that started it: if the
+    // session was cancelled meanwhile, release the fresh stream instead of
+    // leaving the microphone open.
+    if (token !== listenToken || !listening) {
+      mediaStream?.getTracks().forEach((t) => t.stop());
+      try { audioContext.close(); } catch (_) {}
+      mediaStream = null;
+      audioContext = null;
+      return;
+    }
 
-    recognizer.on('partialresult', (msg) => {
-      const text = msg.result?.partial?.trim();
-      if (listenMode === 'wake') handleTranscript(text, false);
-    });
+    if (sttEngine === 'whisper') {
+      whisperSession = newSessionId();
+    } else {
+      recognizer = new voskModel.KaldiRecognizer(16000);
+      recognizer.setWords(false);
+
+      recognizer.on('result', (msg) => {
+        const text = msg.result?.text?.trim();
+        handleTranscript(text, true);
+      });
+
+      recognizer.on('partialresult', (msg) => {
+        const text = msg.result?.partial?.trim();
+        if (listenMode === 'wake') handleTranscript(text, false);
+      });
+    }
 
     const source = audioContext.createMediaStreamSource(mediaStream);
     processor = audioContext.createScriptProcessor(4096, 2, 1);
@@ -246,7 +697,7 @@ export async function startListening(mode) {
         const left = input.getChannelData(0);
         const right = input.numberOfChannels > 1 ? input.getChannelData(1) : left;
 
-        // Vosk wants a mono 16 kHz buffer; downmix once and reuse it.
+        // Both engines want a mono 16 kHz buffer; downmix once and reuse it.
         if (!monoBuffer || monoBuffer.length !== n) {
           monoBuffer = audioContext.createBuffer(1, n, 16000);
         }
@@ -263,32 +714,44 @@ export async function startListening(mode) {
           sumM += m * m;
           mono[i] = m;
         }
-        recognizer.acceptWaveform(monoBuffer);
 
         const rms = (sum) => Math.sqrt(sum / n);
         const lvl = (v) => Math.min(1, v * 10);
+        const level = rms(sumM);
+
+        // One speech decision drives both the upload gate and the endpointer.
+        if (sttEngine === 'whisper') {
+          pushWhisperAudio(floatTo16BitPCM(mono), level > WHISPER_SPEECH_RMS, performance.now());
+          void pumpWhisperQueue(token);
+        } else {
+          recognizer.acceptWaveform(monoBuffer);
+        }
+
         const rl = rms(sumL);
         const rr = rms(sumR);
         const total = rl + rr + 1e-6;
         window.dispatchEvent(new CustomEvent('voice:level', {
           detail: {
-            level: lvl(rms(sumM)),
+            level: lvl(level),
             left: lvl(rl),
             right: lvl(rr),
             // -1 hard left … +1 hard right.
             pan: Math.max(-1, Math.min(1, (rr - rl) / total)),
           },
         }));
+
+        trackEndpointing(level);
       } catch (_) {}
     };
     source.connect(processor);
     processor.connect(audioContext.destination);
 
     if (mode === 'single') armSilenceTimer();
-    else if (mode === 'wake') armWakeWaitTimer();
+    // Wake mode arms no timer on purpose: it listens until the wake word.
   } catch (e) {
     listening = false;
     resetWakeState();
+    resetEndpointing();
     clearSilenceTimer();
     setSphereState('error');
     const msg = normalizeMicError(e);
@@ -307,10 +770,28 @@ function normalizeMicError(e) {
 }
 
 export function stopListening() {
-  if (!listening && !processor && !mediaStream) return;
+  const finishedSession = whisperSession;
+  const wasActive = listening || processor || mediaStream;
+
+  listenToken++;
   listening = false;
   resetWakeState();
+  resetEndpointing();
   clearSilenceTimer();
+  whisperQueue = [];
+  whisperQueuedSamples = 0;
+  whisperFinalizing = false;
+  whisperSession = null;
+
+  // Tell the sidecar to drop its buffer. A cancelled session is best-effort:
+  // the sidecar also expires idle sessions on its own.
+  if (finishedSession) {
+    apiFetch(`/api/voice/stt/close?session=${encodeURIComponent(finishedSession)}`, {
+      method: 'POST',
+    }).catch(() => {});
+  }
+
+  if (!wasActive) return;
   try {
     processor?.disconnect();
   } catch (_) {}
@@ -335,22 +816,21 @@ export function cancelListening() {
  * Holding the orb only *arms* wake recognition — the hold is the trigger for
  * "hey <name>", not the thing that keeps the microphone open. Releasing must
  * therefore leave the recogniser running so the phrase (and then the request)
- * can be spoken after the finger lifts. Letting go also restarts the wake
- * window, so a long hold does not eat into the time left to talk.
+ * can be spoken after the finger lifts. There is no expiry on that: the wake
+ * listener runs until the phrase arrives or the user taps to cancel.
  *
  * Returns true while a wake session is still listening.
  */
 export function releaseWakeHold() {
   if (listenMode !== 'wake' || !listening) return false;
-  if (!wakeDetected && !awaitingCommand) armWakeWaitTimer();
   return true;
 }
 
+/* ── Text-to-speech ─────────────────────────────────────────── */
+
 export async function speak(text, lang) {
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
+  stopSpeaking();
+  const token = ++speakToken;
 
   // Nothing sits under the orb while the answer is fetched and read aloud.
   // This is a class rather than a direct hide so the CSS can keep the dock's
@@ -369,6 +849,8 @@ export async function speak(text, lang) {
       }),
       responseType: 'blob',
     });
+    // Stopped while the audio was still being synthesised: say nothing.
+    if (token !== speakToken) return;
     const url = URL.createObjectURL(blob);
     currentAudio = new Audio(url);
 
@@ -379,9 +861,29 @@ export async function speak(text, lang) {
     const stopPulse = attachTtsPulse(currentAudio);
 
     await new Promise((resolve, reject) => {
-      currentAudio.onended = () => { stopPulse(); URL.revokeObjectURL(url); resolve(); };
-      currentAudio.onerror = () => { stopPulse(); reject(new Error('playback failed')); };
-      currentAudio.play().catch((e) => { stopPulse(); reject(e); });
+      const finish = () => {
+        stopPlayback = null;
+        stopPulse();
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      // stopSpeaking() resolves the same promise, so callers awaiting playback
+      // (the agent turn) never hang when the user talks over the answer.
+      stopPlayback = finish;
+      currentAudio.onended = finish;
+      currentAudio.onerror = () => {
+        stopPlayback = null;
+        stopPulse();
+        reject(new Error('playback failed'));
+      };
+      // Give the echo canceller a moment before barge-in can fire on the
+      // assistant's own voice.
+      bargeGuardUntil = performance.now() + BARGE_IN_TTS_GUARD_MS;
+      currentAudio.play().catch((e) => {
+        stopPlayback = null;
+        stopPulse();
+        reject(e);
+      });
     });
   } catch (e) {
     console.warn('TTS failed:', e);
@@ -391,6 +893,97 @@ export async function speak(text, lang) {
   } finally {
     document.body.classList.remove('orb-speaking');
   }
+}
+
+/**
+ * Cut the assistant off mid-sentence.
+ *
+ * Resolves the in-flight `speak()` promise so the turn that is awaiting
+ * playback finishes immediately instead of hanging until the audio ends.
+ * Returns true when something was actually playing.
+ */
+export function stopSpeaking() {
+  const wasPlaying = !!stopPlayback;
+  const stop = stopPlayback;
+  stopPlayback = null;
+  speakToken += 1; // a reply still being fetched must not start playing
+  if (currentAudio) {
+    try { currentAudio.pause(); } catch (_) {}
+    currentAudio = null;
+  }
+  if (stop) {
+    try { stop(); } catch (_) {}
+  }
+  document.body.classList.remove('orb-speaking');
+  return wasPlaying;
+}
+
+/* ── Barge-in (talking over the assistant) ──────────────────── */
+
+/**
+ * Watch the microphone while the assistant is thinking or speaking.
+ *
+ * The mic has to stay open for the user to be able to interrupt, which is a
+ * deliberate trade: `echoCancellation` plus a threshold well above the speech
+ * threshold (and a short guard right after playback starts) keep the
+ * assistant's own voice from cutting itself off.
+ */
+export async function startBargeInMonitor() {
+  if (barge.stream) return;
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: false,
+      audio: { echoCancellation: true, noiseSuppression: true, channelCount: { ideal: 1 } },
+    });
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    const source = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(1024, 1, 1);
+    barge = {
+      stream, ctx, proc, source,
+      since: 0,
+      startedAt: performance.now(),
+      fired: false,
+    };
+    proc.onaudioprocess = (e) => {
+      if (barge.fired || !barge.stream) return;
+      const now = performance.now();
+      if (now - barge.startedAt < BARGE_IN_SETTLE_MS || now < bargeGuardUntil) return;
+      const data = e.inputBuffer.getChannelData(0);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+      if (Math.sqrt(sum / data.length) > BARGE_IN_RMS) {
+        if (!barge.since) barge.since = now;
+        if (now - barge.since >= BARGE_IN_HOLD_MS) {
+          barge.fired = true;
+          window.dispatchEvent(new CustomEvent('voice:barge-in'));
+        }
+      } else {
+        barge.since = 0;
+      }
+    };
+    source.connect(proc);
+    // A ScriptProcessor is only pulled while connected to a destination; it
+    // writes nothing, so this stays silent.
+    proc.connect(ctx.destination);
+  } catch (_) {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stopBargeInMonitor();
+  }
+}
+
+export function stopBargeInMonitor() {
+  const { stream, ctx, proc, source } = barge;
+  barge = { stream: null, ctx: null, proc: null, source: null, since: 0, startedAt: 0, fired: true };
+  try { source?.disconnect(); } catch (_) {}
+  try { proc?.disconnect(); } catch (_) {}
+  try { ctx?.close(); } catch (_) {}
+  stream?.getTracks().forEach((t) => t.stop());
+}
+
+export function isBargeInMonitoring() {
+  return !!barge.stream;
 }
 
 /** WebAudio context for analysing the assistant's playback (lazily created). */
@@ -483,4 +1076,9 @@ export function isListening() {
 
 export function isWakeAwaitingCommand() {
   return listenMode === 'wake' && (wakeDetected || awaitingCommand);
+}
+
+/** Which STT engine the last prepareVoice() settled on (for diagnostics/UI). */
+export function getActiveSttEngine() {
+  return sttEngine;
 }

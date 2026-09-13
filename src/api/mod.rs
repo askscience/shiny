@@ -32,6 +32,7 @@ use crate::services::ollama::OllamaClient;
 use crate::services::osm::OsmService;
 use crate::services::supertonic::SupertonicClient;
 use crate::services::web_search::SearchService;
+use crate::services::whisper::WhisperClient;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -42,7 +43,11 @@ pub struct AppState {
     pub osm: OsmService,
     pub gpsd: GpsdService,
     pub diary_gen: Arc<DiaryGenerator>,
+    /// In-flight agent turns, so a stop request can abort one mid-answer.
+    pub agent_turns: crate::services::agent_cancel::TurnRegistry,
     pub supertonic: SupertonicClient,
+    /// faster-whisper streaming STT sidecar (optional; Vosk is the fallback).
+    pub whisper: WhisperClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
     /// Admin-supplied router-rebuild trigger (set by `main.rs` once the live
@@ -259,6 +264,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chat/conversations/:id", get(chat::conversation_messages).delete(chat::delete_conversation))
         .route("/api/search", post(search::search_web))
         .route("/api/agent", post(agent::handle_agent_dispatch))
+        // Stop the answer currently being generated (voice barge-in, or the
+        // stop button in text mode).
+        .route("/api/agent/stop", post(agent::handle_agent_stop))
         .route("/api/ai/models", get(ai::list_models))
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
@@ -267,6 +275,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/tts", post(voice::tts))
         .route("/api/voice/status", get(voice::voice_status))
         .route("/api/voice/download", post(voice::voice_download))
+        // faster-whisper: model downloads + streaming STT proxy. Audio chunks
+        // are raw PCM up to ~64 KB each; the default 2 MB body cap is plenty.
+        .route("/api/voice/whisper/download", post(voice::voice_whisper_download))
+        .route("/api/voice/stt/chunk", post(voice::voice_stt_chunk))
+        .route("/api/voice/stt/close", post(voice::voice_stt_close))
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let static_files = ServeDir::new(&web_dir)

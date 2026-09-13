@@ -19,6 +19,7 @@ use shiny::services::ollama::OllamaClient;
 use shiny::services::osm::OsmService;
 use shiny::services::supertonic::SupertonicClient;
 use shiny::services::web_search::SearchService;
+use shiny::services::whisper::WhisperClient;
 
 /// Swappable router handle: implements `tower::Service<IncomingStream>` by
 /// delegating to the currently-loaded `Router`, so plugin installs/uninstalls
@@ -85,6 +86,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         spawn_supertonic_sidecar(&config.supertonic_url);
     }
 
+    // faster-whisper is the default speech engine, so try to bring its sidecar
+    // up with the server. The launcher is idempotent (it probes /health first)
+    // and exits quietly when the package is not installed — Vosk still works.
+    if config.auto_start_whisper {
+        spawn_whisper_sidecar(&config);
+    }
+
     let pool = db::init_pool(&config.database_url).await?;
     db::run_migrations(&pool).await?;
 
@@ -117,6 +125,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let osm = OsmService::new();
     let gpsd = GpsdService::new(config.gpsd_host.clone(), config.gpsd_port);
 
+    let whisper = WhisperClient::new(
+        config.whisper_url.clone(),
+        config.whisper_models_dir.clone(),
+    );
+    if whisper.is_available().await {
+        tracing::info!("faster-whisper STT available at {}", config.whisper_url);
+    } else {
+        tracing::warn!(
+            "faster-whisper not available at {}. Voice falls back to Vosk.",
+            config.whisper_url
+        );
+    }
+
     gpsd.start().await;
 
     if gpsd.is_connected().await {
@@ -137,7 +158,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         osm,
         gpsd,
         diary_gen: diary_gen.clone(),
+        agent_turns: Default::default(),
         supertonic,
+        whisper,
         plugins: shiny::plugins::PluginManager::new(std::path::PathBuf::from(&config.plugins_dir), pool.clone()),
         router_rebuild: None,
     };
@@ -252,6 +275,42 @@ fn spawn_supertonic_sidecar(supertonic_url: &str) {
     {
         Ok(_) => tracing::info!("Started Supertonic sidecar on port {}", port),
         Err(e) => tracing::warn!("Could not auto-start Supertonic: {}", e),
+    }
+}
+
+/// Bring up the faster-whisper STT sidecar (`voice/start_whisper.sh`).
+///
+/// Detached and non-blocking: the script probes `WHISPER_URL/health` first, so
+/// a second server process never double-starts it, and it exits quietly when
+/// no interpreter provides faster-whisper — in that case the app simply stays
+/// on Vosk and Settings offers to install it.
+fn spawn_whisper_sidecar(config: &Config) {
+    let port = config
+        .whisper_url
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
+        .unwrap_or(7789);
+
+    let mut cmd = Command::new("bash");
+    cmd.arg("voice/start_whisper.sh")
+        .env("WHISPER_PORT", port.to_string())
+        .env("WHISPER_MODELS_DIR", &config.whisper_models_dir);
+    if let Some(python) = &config.whisper_python {
+        cmd.env("WHISPER_PYTHON", python);
+    }
+    if config.auto_install_whisper {
+        cmd.env("WHISPER_AUTO_INSTALL", "1");
+    }
+
+    match cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(_) => tracing::info!("Starting faster-whisper sidecar on port {}", port),
+        Err(e) => tracing::warn!("Could not auto-start faster-whisper: {}", e),
     }
 }
 

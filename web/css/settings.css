@@ -447,6 +447,16 @@ body {
 /* Background controls */
 .background-image-row { display: flex; gap: 10px; margin-top: 14px; }
 
+/* Speech engine: model status line + its Download action on one baseline. */
+.whisper-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.whisper-model-row .settings-hint { margin-top: 8px; }
+.whisper-model-row .ui-btn { flex: 0 0 auto; margin-top: 8px; }
+
 /* Wallpaper picker — a grid of built-in artwork plus an "upload your own" tile. */
 .bg-preset-grid {
   display: grid;

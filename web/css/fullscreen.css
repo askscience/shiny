@@ -1,0 +1,347 @@
+/* ─────────────────────────────────────────────────────────────
+   Desktop chrome behaviour — bar position, autohide, and the fullscreen
+   takeover (fullscreen.js).
+
+   These preferences apply to the WHOLE desktop, not just a fullscreen window:
+     data-bar-pos       top | left | right | center
+     data-autohide-bar  1 | 0
+     data-autohide-orb  1 | 0
+
+   With autohide on, the top bar is away until the pointer reaches the edge it
+   docks to, and the AI orb (with its dock and reply line) is away until the
+   pointer reaches the bottom centre. Both slide back with the `fs-top` /
+   `fs-orb` body classes. A real-fullscreen window additionally gets the whole
+   screen: its own title bar joins the top reveal, and the desktop chrome
+   overlays it instead of making room.
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Top bar: autohide + dock position ──────────────────────── */
+
+/* The entrance animation would pin opacity/transform, so it stands down for
+   the reveal transition. */
+html[data-autohide-bar='1'] #hud-header {
+  animation: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(-100% - 16px));
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear var(--duration-normal);
+}
+
+html[data-autohide-bar='1'] body.fs-top #hud-header {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s;
+}
+
+/* Left / right: a vertical column against that edge, full height. */
+html[data-bar-pos='left'] #hud-header,
+html[data-bar-pos='right'] #hud-header {
+  top: 0;
+  bottom: 0;
+  width: auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding:
+    max(10px, env(safe-area-inset-top))
+    8px
+    max(10px, env(safe-area-inset-bottom));
+}
+
+html[data-bar-pos='left'] #hud-header { left: 0; right: auto; }
+html[data-bar-pos='right'] #hud-header { right: 0; left: auto; }
+
+html[data-bar-pos='left'][data-autohide-bar='1'] #hud-header {
+  transform: translateX(calc(-100% - 16px));
+}
+
+html[data-bar-pos='right'][data-autohide-bar='1'] #hud-header {
+  transform: translateX(calc(100% + 16px));
+}
+
+html[data-bar-pos='left'][data-autohide-bar='1'] body.fs-top #hud-header,
+html[data-bar-pos='right'][data-autohide-bar='1'] body.fs-top #hud-header {
+  transform: translateX(0);
+}
+
+html[data-bar-pos='left'] .hud-header-main,
+html[data-bar-pos='right'] .hud-header-main {
+  flex: 0 1 auto;
+  flex-direction: column;
+  width: var(--hud-bar-height);
+  height: auto;
+  max-height: 100%;
+  padding: 4px 0;
+  gap: 2px;
+  overflow: visible;
+  contain: layout style;
+}
+
+html[data-bar-pos='left'] .hud-divider,
+html[data-bar-pos='right'] .hud-divider {
+  width: 22px;
+  height: 1px;
+}
+
+html[data-bar-pos='left'] .hud-clock,
+html[data-bar-pos='right'] .hud-clock,
+html[data-bar-pos='left'] #hud-meteo,
+html[data-bar-pos='right'] #hud-meteo {
+  flex-direction: column;
+  justify-content: center;
+  height: auto;
+  padding: 6px 0;
+  gap: 2px;
+}
+
+/* A vertical pill has no room for the words — the icons carry the meaning. */
+html[data-bar-pos='left'] .hud-clock-text,
+html[data-bar-pos='right'] .hud-clock-text,
+html[data-bar-pos='left'] #hud-meteo-label,
+html[data-bar-pos='right'] #hud-meteo-label {
+  display: none;
+}
+
+html[data-bar-pos='left'] #hud-plugins,
+html[data-bar-pos='right'] #hud-plugins {
+  position: static;
+  transform: none;
+  flex-direction: column;
+  max-width: none;
+  max-height: min(42vh, 320px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+html[data-bar-pos='left'] #hud-saved-trips,
+html[data-bar-pos='right'] #hud-saved-trips {
+  flex: 0 1 auto;
+  width: 100%;
+  justify-content: center;
+}
+
+/* The saved-places trigger has to shrink to the pill: its icon alone remains. */
+html[data-bar-pos='left'] #hud-saved-trips .ui-hud-menu-label,
+html[data-bar-pos='right'] #hud-saved-trips .ui-hud-menu-label,
+html[data-bar-pos='left'] #hud-saved-trips .ui-hud-menu-chevron,
+html[data-bar-pos='right'] #hud-saved-trips .ui-hud-menu-chevron {
+  display: none;
+}
+
+html[data-bar-pos='left'] #hud-saved-trips .ui-hud-menu-trigger,
+html[data-bar-pos='right'] #hud-saved-trips .ui-hud-menu-trigger {
+  max-width: 100%;
+  padding: 0 8px;
+}
+
+html[data-bar-pos='left'] #hud-top,
+html[data-bar-pos='right'] #hud-top {
+  flex-direction: column;
+  margin-left: 0;
+  padding-left: 0;
+  padding-top: 6px;
+  border-left: none;
+  border-top: 1px solid var(--glass-border);
+}
+
+html[data-bar-pos='left'] #workspace-bar,
+html[data-bar-pos='right'] #workspace-bar {
+  flex-direction: column;
+  height: auto;
+  padding: 6px 0;
+}
+
+html[data-bar-pos='left'] .workspace-bar-dots,
+html[data-bar-pos='right'] .workspace-bar-dots {
+  flex-direction: column;
+}
+
+/* Center: a compact pill floating at the top, with the workspaces beside it. */
+html[data-bar-pos='center'] #hud-header { justify-content: center; }
+
+html[data-bar-pos='center'] .hud-header-main {
+  flex: 0 1 auto;
+  max-width: min(760px, calc(100vw - 28px));
+}
+
+/* ── Desktop layout: make room for a side-docked bar ────────── */
+
+/* A side dock takes the side, not the top band. */
+html[data-bar-pos='left'] body:not(.fullscreen-active) #tile-grid {
+  top: max(8px, env(safe-area-inset-top));
+  left: calc(var(--hud-bar-height) + 32px);
+}
+
+html[data-bar-pos='right'] body:not(.fullscreen-active) #tile-grid {
+  top: max(8px, env(safe-area-inset-top));
+  right: calc(var(--hud-bar-height) + 32px);
+}
+
+/* ── AI orb, dock and reply line: autohide ──────────────────── */
+
+html[data-autohide-orb='1'] #chrome-bottom {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, calc(100% + 24px));
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear var(--duration-normal);
+}
+
+html[data-autohide-orb='1'] body.fs-orb #chrome-bottom {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s;
+}
+
+html[data-autohide-orb='1'] #hud-transcript {
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+html[data-autohide-orb='1'] body.fs-orb #hud-transcript {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Text mode and a live voice turn need the dock, so on the open desktop the
+   orb strip stays up for them rather than hiding mid-conversation. In real
+   fullscreen the composer lives inside the thread, so the orb can stay away. */
+html[data-autohide-orb='1'] body:not(.fullscreen-active).compose-active #chrome-bottom,
+html[data-autohide-orb='1'] body:not(.fullscreen-active).agent-awaiting #chrome-bottom {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+html[data-autohide-orb='1'] body:not(.fullscreen-active).agent-awaiting #hud-transcript {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ── Real fullscreen: the window owns the screen ────────────── */
+
+body.fullscreen-active #tile-grid {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  gap: 0;
+}
+
+body.fullscreen-active #tile-grid .tile--full {
+  border: none;
+  border-radius: 0;
+}
+
+/* The grip belongs to the floating desktop, not to a fullscreen window. */
+body.fullscreen-active .tile-resize { display: none; }
+
+/* The window title bar rides down under the top bar. Being out of flow, the
+   window content keeps the whole screen while the chrome is away. */
+body.fullscreen-active #tile-grid .tile--full > .tile-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  opacity: 0;
+  transform: translateY(-100%);
+  /* A darker glass than the desktop's: the fullscreen title bar floats over
+     arbitrary content, so it blurs hard and dims what is behind it. */
+  background: rgba(0, 0, 0, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+body.fullscreen-active.fs-top #tile-grid .tile--full > .tile-header {
+  opacity: 1;
+  transform: translateY(var(--hud-header-total));
+}
+
+/* Light text on the dark glass, whatever the theme. */
+body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-btn {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-btn--close:hover {
+  background: rgba(255, 60, 60, 0.28);
+  color: #fff;
+}
+
+/* A side-docked bar leaves the top of the window free, so its title bar comes
+   back at the top edge rather than under the (top) bar. */
+html[data-bar-pos='left'] body.fullscreen-active.fs-top #tile-grid .tile--full > .tile-header,
+html[data-bar-pos='right'] body.fullscreen-active.fs-top #tile-grid .tile--full > .tile-header {
+  transform: translateY(0);
+}
+
+/* ── Fullscreen text mode: a little more room for the thread ── */
+
+body.fullscreen-active .compose-conversation {
+  width: min(520px, 100%);
+}
+
+/* ── Touch screens: no hover, so the chrome simply stays ────── */
+
+@media (hover: none) {
+  html[data-bar-pos] #hud-header,
+  html[data-bar-pos] #chrome-bottom,
+  html[data-bar-pos] #hud-transcript {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Matches the side-dock hidden transforms (two attributes) so the bar is
+     never left parked off-screen on a touch device. */
+  html[data-bar-pos][data-autohide-bar] #hud-header,
+  html[data-bar-pos] #hud-header { transform: none; }
+  html[data-bar-pos] #chrome-bottom { transform: translate(-50%, 0); }
+  html[data-bar-pos] #hud-transcript { transform: translate(-50%, 0); }
+
+  html[data-bar-pos] body.fullscreen-active #tile-grid .tile--full > .tile-header {
+    position: static;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #hud-header,
+  #chrome-bottom,
+  #hud-transcript,
+  body.fullscreen-active #tile-grid .tile--full > .tile-header,
+  .compose-composer,
+  .compose-send {
+    transition: none;
+  }
+}

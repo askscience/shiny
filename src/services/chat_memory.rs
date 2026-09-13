@@ -62,6 +62,16 @@ pub async fn recent_history(
     Ok(rows)
 }
 
+/// Invisible note written to a conversation when the user stops the assistant.
+///
+/// It is stored as a `system`-role row: the agent reads every role back into
+/// its history prompt, while `/api/chat/conversations/:id` filters `system`
+/// rows out, so the user never sees it in the chat.
+pub const INTERRUPTED_NOTE: &str = "The user stopped this reply before it finished. \
+Treat the assistant's previous message as incomplete and possibly unread or unheard — \
+the user may restate, correct or replace their request next. Do not apologise for the \
+interruption or mention this note; just continue naturally.";
+
 /// Persist the user message and the assistant reply, touch the conversation,
 /// and set its title from the first user message when still untitled.
 pub async fn save_turn(
@@ -71,6 +81,29 @@ pub async fn save_turn(
     conversation_id: &str,
     user_message: &str,
     assistant_reply: &str,
+) -> Result<(), AppError> {
+    save_turn_with_note(
+        pool,
+        ai,
+        traveler_id,
+        conversation_id,
+        user_message,
+        assistant_reply,
+        None,
+    )
+    .await
+}
+
+/// Same as [`save_turn`], plus an optional invisible `system` note describing
+/// how the turn ended (e.g. the user stopped it).
+pub async fn save_turn_with_note(
+    pool: &SqlitePool,
+    ai: &AiClient,
+    traveler_id: &str,
+    conversation_id: &str,
+    user_message: &str,
+    assistant_reply: &str,
+    note: Option<&str>,
 ) -> Result<(), AppError> {
     sqlx::query(
         "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
@@ -84,17 +117,25 @@ pub async fn save_turn(
     .await
     .map_err(AppError::Database)?;
 
-    sqlx::query(
-        "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
-         VALUES (?1, ?2, ?3, 'assistant', ?4, datetime('now'))",
-    )
-    .bind(uuid::Uuid::new_v4().to_string())
-    .bind(traveler_id)
-    .bind(conversation_id)
-    .bind(assistant_reply)
-    .execute(pool)
-    .await
-    .map_err(AppError::Database)?;
+    // A stopped turn may have produced nothing at all; an empty assistant
+    // bubble in the history would be noise, so only the note is written.
+    if !assistant_reply.trim().is_empty() {
+        sqlx::query(
+            "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
+             VALUES (?1, ?2, ?3, 'assistant', ?4, datetime('now'))",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(traveler_id)
+        .bind(conversation_id)
+        .bind(assistant_reply)
+        .execute(pool)
+        .await
+        .map_err(AppError::Database)?;
+    }
+
+    if let Some(note) = note {
+        insert_note(pool, traveler_id, conversation_id, note).await?;
+    }
 
     // Title the conversation on its FIRST turn only; later turns just bump
     // updated_at.
@@ -124,6 +165,59 @@ pub async fn save_turn(
             .map_err(AppError::Database)?;
     }
 
+    Ok(())
+}
+
+/// Record an invisible note on a conversation whose turn already finished.
+///
+/// This is the late-stop path: the answer was generated and saved, and the user
+/// stopped it while reading or listening. The model still deserves to know the
+/// reply was not taken in full.
+pub async fn append_note(
+    pool: &SqlitePool,
+    traveler_id: &str,
+    conversation_id: &str,
+    note: &str,
+) -> Result<(), AppError> {
+    // Only the conversation's owner may annotate it.
+    let owned: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM chat_conversations WHERE id = ?1 AND traveler_id = ?2",
+    )
+    .bind(conversation_id)
+    .bind(traveler_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+    if owned == 0 {
+        return Ok(());
+    }
+
+    insert_note(pool, traveler_id, conversation_id, note).await?;
+    sqlx::query("UPDATE chat_conversations SET updated_at = datetime('now') WHERE id = ?1")
+        .bind(conversation_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::Database)?;
+    Ok(())
+}
+
+async fn insert_note(
+    pool: &SqlitePool,
+    traveler_id: &str,
+    conversation_id: &str,
+    note: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
+         VALUES (?1, ?2, ?3, 'system', ?4, datetime('now'))",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(traveler_id)
+    .bind(conversation_id)
+    .bind(note)
+    .execute(pool)
+    .await
+    .map_err(AppError::Database)?;
     Ok(())
 }
 

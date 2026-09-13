@@ -19,6 +19,11 @@ use crate::services::navigation::NavigationSession;
 
 const MAX_TOOL_STEPS: usize = 40;
 
+/// Has the user stopped this turn? (No handle = nothing to cancel.)
+fn turn_stopped(cancel: &Option<crate::services::agent_cancel::CancelHandle>) -> bool {
+    cancel.as_ref().is_some_and(|c| c.is_cancelled())
+}
+
 /// Keep the speech bubble to one short line: collapse whitespace, cap length.
 /// The model gets the full note — the UI never should.
 fn shorten_for_ui(msg: &str) -> String {
@@ -96,8 +101,13 @@ pub struct AgentRunResult {
     /// Plugin the AI chose to surface (via the show_plugin tool).
     pub focus_plugin: Option<String>,
     pub steps: Vec<String>,
+    /// True when the user stopped this turn before it finished. The reply (if
+    /// any) is a partial answer, and the caller records an invisible note so
+    /// the model understands why the turn looks truncated next time.
+    pub interrupted: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_agent<F>(
     state: &AppState,
     traveler: &Traveler,
@@ -105,6 +115,7 @@ pub async fn run_agent<F>(
     ai: &AiClient,
     model: Option<&str>,
     input: AgentRunInput,
+    cancel: Option<crate::services::agent_cancel::CancelHandle>,
     mut on_step: F,
 ) -> Result<AgentRunResult, AppError>
 where
@@ -118,10 +129,16 @@ where
     let mut injected_skills: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut completed_steps: Vec<String> = Vec::new();
     let mut final_reply = String::new();
+    let mut interrupted = false;
 
     on_step(thinking_label());
 
     for iteration in 0..MAX_TOOL_STEPS {
+        if turn_stopped(&cancel) {
+            interrupted = true;
+            break;
+        }
+
         let messages = if completed_steps.is_empty() && iteration == 0 {
             build_planning_messages(&input.system, &input.message)
         } else {
@@ -143,7 +160,20 @@ where
             tracing::warn!("Agent prompt very large ({size} chars), continuing with slim context");
         }
 
-        let response = ai.chat(messages, model).await?;
+        // Dropping the in-flight request is the point of the whole feature: a
+        // local model that keeps generating blocks the *next* question, so a
+        // stopped turn must abandon the call, not just ignore its answer.
+        let response = match &cancel {
+            Some(handle) => tokio::select! {
+                biased;
+                _ = handle.cancelled() => {
+                    interrupted = true;
+                    break;
+                }
+                result = ai.chat(messages, model) => result?,
+            },
+            None => ai.chat(messages, model).await?,
+        };
         // Full transparency: log what the model actually emitted so failures
         // (e.g. "the AI isn't writing to calc") are visible in data/shiny.log.
         tracing::info!(
@@ -174,6 +204,12 @@ where
         // run sequentially instead of silently dropping everything after the
         // first action.
         for (action, params) in actions {
+            // A tool can be slow (a download, a model call of its own). Check
+            // between actions so a stop does not have to wait for the batch.
+            if turn_stopped(&cancel) {
+                interrupted = true;
+                break;
+            }
             tracing::info!(
                 "Agent tool call: {action} {}",
                 serde_json::to_string(&params).unwrap_or_default()
@@ -296,9 +332,15 @@ where
             }
             }
         }
+
+        if interrupted {
+            break;
+        }
     }
 
-    if final_reply.is_empty() {
+    // A stopped turn has no answer yet: leave it empty so the caller stores an
+    // honest "no reply was produced" rather than a fake "Done.".
+    if final_reply.is_empty() && !interrupted {
         final_reply = "Done.".into();
     }
 
@@ -317,5 +359,6 @@ where
         navigation,
         focus_plugin,
         steps: completed_steps,
+        interrupted,
     })
 }

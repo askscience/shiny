@@ -24,6 +24,7 @@ import {
   focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
   setSurfaceNamesProvider,
 } from './desktop.js';
+import { toggleWindowFullscreen, setFullscreenSurfaceProvider } from './fullscreen.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import {
@@ -293,7 +294,9 @@ function ensureWindowChrome(el, name) {
   fullBtn.appendChild(icon('ui/expand', { size: 14 }));
   fullBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    toggleFullscreen(name);
+    // Real fullscreen: its own workspace + the browser Fullscreen API, with
+    // the in-app fullscreen as the fallback (fullscreen.js).
+    toggleWindowFullscreen(name);
   });
 
   controls.append(closeBtn, fullBtn);
@@ -564,6 +567,7 @@ export function initTileManager() {
 
   initDesktop();
   setSurfaceNamesProvider(() => surfacePlugins());
+  setFullscreenSurfaceProvider(() => surfacePlugins());
 
   mountMapTile();
   void refreshCatalog().then(renderTiles);

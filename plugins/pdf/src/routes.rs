@@ -33,8 +33,11 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "pdf_rename" => pdf_rename(ctx),
         "pdf_delete" => pdf_delete(ctx),
         "pdf_export" => pdf_export(ctx),
+        "pdf_file" => pdf_file(ctx),
         "pdf_render" => pdf_render(ctx),
         "pdf_text" => pdf_text(ctx),
+        "pdf_text_runs" => pdf_text_runs(ctx),
+        "pdf_edit_text" => pdf_edit_text(ctx),
         "pdf_rotate" => pdf_rotate(ctx),
         "pdf_reorder" => pdf_reorder(ctx),
         "pdf_delete_pages" => pdf_delete_pages(ctx),
@@ -130,8 +133,16 @@ async fn take_query<T: DeserializeOwned + Send + 'static>(
     Ok((query.0, axum::extract::Request::from_parts(parts, body)))
 }
 
-fn load_bytes(ctx: &PluginCtx, uid: &str, id: &str) -> Result<Vec<u8>, AppError> {
-    let rows = ctx.db().query(
+async fn take_json<T: DeserializeOwned>(
+    req: axum::extract::Request,
+) -> Result<T, AppError> {
+    axum::Json::<T>::from_request(req, &())
+        .await
+        .map(|j| j.0)
+        .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))
+}
+
+fn load_bytes(ctx: &PluginCtx, uid: &str, id: &str) -> Result<Vec<u8>, AppError> {    let rows = ctx.db().query(
         "SELECT bytes FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
         &[Value::text(id), Value::text(uid)],
     )?;
@@ -384,6 +395,31 @@ fn pdf_export(ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
+/* ── GET /api/pdfs/:id/file (raw bytes for the viewer) ──────── */
+
+/// The viewer's data source: the stored PDF exactly as the user imported or
+/// last edited it, so the browser can lay out and paint the real document
+/// instead of showing a server-rendered bitmap.
+///
+/// Distinct from `pdf_export`: no `Content-Disposition`, so the response is
+/// meant to be consumed in-page rather than downloaded, and `no-store` so a
+/// reload always reflects the latest bytes after an edit.
+fn pdf_file(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            Ok(Response::builder()
+                .header(CONTENT_TYPE, MIME_PDF)
+                .header(CACHE_CONTROL, "no-store")
+                .body(axum::body::Body::from(bytes))
+                .map_err(|e| AppError::Internal(format!("PDF serve failed: {e}")))?)
+        }
+    })
+}
+
 /* ── GET /api/pdfs/:id/pages/:page (render PNG) ─────────────── */
 
 fn pdf_render(ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -428,6 +464,58 @@ fn pdf_text(ctx: Arc<PluginCtx>) -> RouteHandler {
             }
             let text = ops::extract_text(&bytes, page)?;
             Ok(ok(json!({ "page": page, "text": text })))
+        }
+    })
+}
+
+/* ── GET /api/pdfs/:id/runs/:page (editable text runs) ──────── */
+
+/// Every text run on a page with its geometry and style. The viewer overlays
+/// these so the user can click a line and edit it in place.
+fn pdf_text_runs(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let (id, page) = take_id_page(&req)?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            if page >= ops::page_count(&bytes)? {
+                return Err(AppError::NotFound("page out of range".into()));
+            }
+            let runs = ops::page_text_runs(&bytes, page)?;
+            Ok(ok(json!({ "page": page, "runs": runs })))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/edit-text ───────────────────────────── */
+
+/// Apply in-place text edits from the viewer, in one transaction.
+fn pdf_edit_text(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize)]
+    struct EditBody {
+        page: usize,
+        edits: Vec<ops::TextEdit>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let body: EditBody = take_json(req).await?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            if body.page >= ops::page_count(&bytes)? {
+                return Err(AppError::NotFound("page out of range".into()));
+            }
+            let (out, applied) = ops::edit_text_runs(&bytes, body.page, &body.edits)?;
+            if applied == 0 {
+                return Err(AppError::NotFound(
+                    "no text run matched the supplied text and position".into(),
+                ));
+            }
+            let count = commit_bytes(&ctx, &uid, &id, out)?;
+            Ok(ok(json!({ "applied": applied, "page_count": count })))
         }
     })
 }
@@ -577,7 +665,9 @@ fn pdf_replace_text(ctx: Arc<PluginCtx>) -> RouteHandler {
             let old = body.old.ok_or_else(|| AppError::BadRequest("old required".into()))?;
             let new = body.new.unwrap_or_default();
             let bytes = load_bytes(&ctx, &uid, &id)?;
-            let (new_bytes, touched) = ops::replace_text(&bytes, page, &old, &new)?;
+            // Same content-stream engine the agent's pdf_replace_text uses.
+            let (new_bytes, report) = crate::stream_edit::replace_text(&bytes, page, &old, &new)?;
+            let touched = report.replaced;
             let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
             Ok(ok(json!({ "pdf_id": id, "page": page, "replaced": touched, "page_count": count, "updated_at": "now" })))
         }
@@ -595,6 +685,16 @@ fn pdf_annotate(ctx: Arc<PluginCtx>) -> RouteHandler {
         rect: Option<[f32; 4]>,
         text: Option<String>,
         color: Option<[f32; 3]>,
+        /// Formatting for added text (`free_text` only).
+        #[serde(default)]
+        size: Option<f32>,
+        #[serde(default)]
+        bold: Option<bool>,
+        #[serde(default)]
+        italic: Option<bool>,
+        /// `#rrggbb` for added text.
+        #[serde(default)]
+        text_color: Option<String>,
     }
 
     bridged_route(move |req: axum::extract::Request| {
@@ -609,8 +709,34 @@ fn pdf_annotate(ctx: Arc<PluginCtx>) -> RouteHandler {
             let kind = body.kind.ok_or_else(|| AppError::BadRequest("kind required".into()))?;
             let rect = body.rect.ok_or_else(|| AppError::BadRequest("rect required".into()))?;
             let text = body.text.unwrap_or_default();
+            // Added text is the one kind that needs a body; an empty one would
+            // append a content stream that draws nothing and still grow the file.
+            if kind.eq_ignore_ascii_case("free_text") && text.trim().is_empty() {
+                return Err(AppError::BadRequest("text must not be empty".into()));
+            }
+            // Reject rather than clamp: silently substituting a different size
+            // than the caller asked for is how a "success" becomes a lie.
+            let size = body.size.unwrap_or(11.0);
+            if !(4.0..=144.0).contains(&size) {
+                return Err(AppError::BadRequest(
+                    "size must be between 4 and 144 points".into(),
+                ));
+            }
+            if let Some(c) = body.text_color.as_deref() {
+                if ops::parse_text_color(c).is_none() {
+                    return Err(AppError::BadRequest(
+                        "text_color must be #rrggbb".into(),
+                    ));
+                }
+            }
+            let format = ops::TextFormat {
+                size,
+                bold: body.bold.unwrap_or(false),
+                italic: body.italic.unwrap_or(false),
+                color: body.text_color,
+            };
             let bytes = load_bytes(&ctx, &uid, &id)?;
-            let new_bytes = ops::annotate(&bytes, page, &kind, rect, &text, body.color)?;
+            let new_bytes = ops::annotate(&bytes, page, &kind, rect, &text, body.color, &format)?;
             let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
             Ok(ok(json!({ "pdf_id": id, "page": page, "kind": kind, "page_count": count, "updated_at": "now" })))
         }

@@ -5485,6 +5485,9 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   overflow: auto;
   display: flex;
   justify-content: flex-start;
+  /* Keep the page pinned to the top of the canvas rather than centred when it
+     is shorter than the viewport. */
+  align-items: flex-start;
   padding: 22px;
   background-color: var(--bg);
   background-image: radial-gradient(var(--glass-border) 1px, transparent 1px);
@@ -5492,20 +5495,181 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 
 .pdf-page {
+  /* The viewer sets an explicit width and height from the pdf.js viewport, so
+     the page box always matches the document's own aspect ratio. */
   flex: none;
   margin: 0 auto;
-  display: flex;
   position: relative;
-}
-
-.pdf-page-img {
-  display: block;
-  max-width: 100%;
-  height: auto;
+  background: #fff;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-glass);
 }
+
+.pdf-page-canvas {
+  display: block;
+  border-radius: inherit;
+  /* The text layer above owns selection; the canvas must not be draggable. */
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Text layer — real selectable text positioned over the painted page.
+   Mirrors pdf.js's contract: absolutely positioned spans, transparent
+   glyphs (the canvas below supplies the pixels), origin at the top-left. */
+.pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 2;
+  /* Only the spans take pointer events, so drags outside the text still reach
+     the page element for Shift-drag region selection. */
+  pointer-events: none;
+}
+.pdf-text-layer span,
+.pdf-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  pointer-events: auto;
+}
+.pdf-text-layer ::selection { background: rgba(110, 168, 255, 0.45); }
+
+.pdf-loading {
+  margin: 40px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* Pending text box in add-text mode: lives in the page, styled with the values
+   the toolbar is showing, so what you see is what gets inserted. */
+.pdf-addtext {
+  position: absolute;
+  z-index: 4;
+  min-width: 40px;
+  min-height: 1.2em;
+  padding: 1px 3px;
+  outline: 1.5px dashed var(--accent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  white-space: pre-wrap;
+  cursor: text;
+}
+.pdf-addtext:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.45;
+}
+/* A crosshair makes "click to place" obvious. */
+.pdf-canvas.is-placing .pdf-page { cursor: crosshair; }
+
+/* ── Inline text editing (edit mode) ───────────────────────────
+   In edit mode the page's text runs are drawn as clickable boxes exactly over
+   the text they represent, so a line can be selected and retyped in place. */
+.pdf-canvas.is-editing .pdf-text-layer { pointer-events: none; }
+
+.pdf-edit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+.pdf-run {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: pre;
+  cursor: text;
+  border-radius: 3px;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  transition: background var(--duration-fast), outline-color var(--duration-fast);
+}
+.pdf-run:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  outline-color: var(--accent);
+}
+.pdf-run.is-selected {
+  outline: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  cursor: text;
+}
+.pdf-run-text { pointer-events: none; }
+.pdf-run.is-selected .pdf-run-text { pointer-events: auto; }
+
+/* Floating formatting toolbar for the selected run. */
+.pdf-edit-bar {
+  position: fixed;
+  z-index: calc(var(--z-hud) + 6);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--surface-strong, var(--surface));
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(10px);
+}
+.pdf-edit-pill,
+.pdf-edit-apply,
+.pdf-edit-cancel {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.pdf-edit-pill:hover { background: var(--accent-soft); color: var(--text); }
+.pdf-edit-pill.is-on {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-weight: 700;
+}
+.pdf-edit-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--glass-border);
+}
+.pdf-edit-label {
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 34px;
+  text-align: center;
+}
+.pdf-edit-color {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xs, 4px);
+  background: transparent;
+  cursor: pointer;
+}
+.pdf-edit-apply {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-weight: 600;
+  padding: 0 12px;
+}
+.pdf-edit-apply:hover { filter: brightness(1.08); }
+.pdf-edit-cancel:hover { background: var(--accent-soft); color: var(--text); }
 
 .pdf-select-box {
   position: absolute;

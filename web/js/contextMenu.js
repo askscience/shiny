@@ -26,10 +26,11 @@
  */
 import {
   createWorkspace, removeWorkspace, switchWorkspace, focusWindow,
-  toggleFullscreen, moveWindow, moveWindowByIndex, getWorkspacesList,
+  moveWindow, moveWindowByIndex, getWorkspacesList,
   activeWorkspaceIndex, getLayout, setLayout, getFocus, getFullscreen,
   workspacesEnabled,
 } from './desktop.js';
+import { toggleWindowFullscreen } from './fullscreen.js';
 import {
   deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
 } from './tiles.js';
@@ -324,10 +325,10 @@ function windowMenu(name, ctx = {}) {
     },
     {
       type: 'item',
-      label: 'Full screen',
+      label: getFullscreen() === name ? 'Exit full screen' : 'Full screen',
       icon: 'ui/expand',
       checked: getFullscreen() === name,
-      onClick: () => toggleFullscreen(name),
+      onClick: () => toggleWindowFullscreen(name),
     },
     { type: 'separator' },
     {
@@ -367,10 +368,10 @@ function trayMenu(btn) {
       });
       items.push({
         type: 'item',
-        label: 'Full screen',
+        label: getFullscreen() === name ? 'Exit full screen' : 'Full screen',
         icon: 'ui/expand',
         checked: getFullscreen() === name,
-        onClick: () => toggleFullscreen(name),
+        onClick: () => toggleWindowFullscreen(name),
       });
     }
     items.push({ type: 'separator' });
@@ -395,10 +396,22 @@ function trayMenu(btn) {
 function switchWorkspaceItems() {
   return getWorkspacesList().map((ws, i) => ({
     type: 'item',
-    label: `Workspace ${i + 1}`,
+    label: ws.name ? `Workspace ${i + 1} — ${ws.name}` : `Workspace ${i + 1}`,
     checked: i === activeWorkspaceIndex(),
     onClick: () => switchWorkspace(i),
   }));
+}
+
+/** The way out of a fullscreen app, offered wherever the desktop is clicked. */
+function exitFullscreenItem() {
+  const fs = getFullscreen();
+  if (!fs) return [];
+  return [{
+    type: 'item',
+    label: `Exit full screen (${label(fs)})`,
+    icon: 'ui/expand',
+    onClick: () => toggleWindowFullscreen(fs),
+  }];
 }
 
 function layoutItems() {
@@ -412,14 +425,17 @@ function layoutItems() {
 
 function desktopMenu() {
   const layout = { type: 'submenu', label: 'Layout', icon: 'ui/arranger', items: layoutItems() };
+  const exitFs = exitFullscreenItem();
   // A vertical screen is one column and one workspace, so the switcher has
   // nothing to offer — the layout menu is all that is left.
   if (!workspacesEnabled()) {
-    return [{ type: 'heading', label: 'Desktop' }, layout];
+    return [{ type: 'heading', label: 'Desktop' }, ...exitFs, layout];
   }
   const wss = getWorkspacesList();
   return [
     { type: 'heading', label: 'Desktop' },
+    ...exitFs,
+    ...(exitFs.length ? [{ type: 'separator' }] : []),
     { type: 'item', label: 'New workspace', icon: 'ui/plus', onClick: () => createWorkspace() },
     {
       type: 'item',
@@ -436,8 +452,10 @@ function desktopMenu() {
 
 function workspaceDotMenu(index) {
   const wss = getWorkspacesList();
+  const ws = wss[index];
   return [
-    { type: 'heading', label: `Workspace ${index + 1}` },
+    { type: 'heading', label: ws?.name ? `Workspace ${index + 1} — ${ws.name}` : `Workspace ${index + 1}` },
+    ...exitFullscreenItem(),
     { type: 'item', label: 'New workspace', icon: 'ui/plus', onClick: () => createWorkspace() },
     {
       type: 'item',

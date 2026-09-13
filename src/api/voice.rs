@@ -5,6 +5,7 @@ use axum::extract::{Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::fs;
@@ -24,11 +25,41 @@ pub struct VoiceStatusResponse {
     pub supertonic: String,
     pub stt_lang: String,
     pub supertonic_lang: String,
+    /// `ready` when the faster-whisper sidecar is answering, else `unavailable`.
+    pub whisper: String,
+    /// Engine the app should use unless the user overrode it in Settings.
+    pub default_engine: String,
+    pub whisper_default_model: String,
+    /// Per-model presence/loaded state for the Settings → Voice panel.
+    pub whisper_models: serde_json::Value,
+    pub whisper_downloads: serde_json::Value,
 }
 
 #[derive(Deserialize)]
 pub struct VoiceDownloadBody {
     pub lang: String,
+}
+
+#[derive(Deserialize)]
+pub struct WhisperDownloadBody {
+    pub model: String,
+}
+
+#[derive(Deserialize)]
+pub struct SttChunkQuery {
+    pub session: String,
+    pub lang: Option<String>,
+    pub model: Option<String>,
+    /// Decoder bias (Whisper `initial_prompt`); the browser sends the wake
+    /// phrase so an unusual assistant name survives the tiny model.
+    pub prompt: Option<String>,
+    #[serde(rename = "final", default)]
+    pub is_final: bool,
+}
+
+#[derive(Deserialize)]
+pub struct SttSessionQuery {
+    pub session: String,
 }
 
 #[derive(Serialize)]
@@ -104,12 +135,21 @@ pub async fn voice_status(
         "unavailable"
     };
 
+    // One probe covers both "is it running" and "which models are loaded".
+    let health = state.whisper.health().await;
+    let whisper = if health.is_some() { "ready" } else { "unavailable" };
+
     Ok(Json(VoiceStatusResponse {
         success: true,
         vosk: vosk.into(),
         supertonic: supertonic.into(),
         stt_lang,
         supertonic_lang,
+        whisper: whisper.into(),
+        default_engine: "whisper".into(),
+        whisper_default_model: "tiny".into(),
+        whisper_models: state.whisper.inventory(health.as_ref()),
+        whisper_downloads: state.whisper.downloads(),
     }))
 }
 
@@ -143,6 +183,61 @@ pub async fn voice_download(
         success: true,
         data,
     }))
+}
+
+/// Start a background download of an optional faster-whisper model (`small`).
+/// Returns immediately; the Settings page polls `/api/voice/status` for progress.
+pub async fn voice_whisper_download(
+    State(state): State<AppState>,
+    Json(body): Json<WhisperDownloadBody>,
+) -> Result<Json<VoiceDownloadResponse>, AppError> {
+    let model = body.model.trim().to_lowercase();
+    state
+        .whisper
+        .start_download(&model)
+        .map_err(AppError::BadRequest)?;
+
+    Ok(Json(VoiceDownloadResponse {
+        success: true,
+        data: json!({ "status": "downloading", "model": model }),
+    }))
+}
+
+/// Forward one microphone chunk (or the final flush) to the STT sidecar.
+/// The body is raw 16 kHz mono PCM16LE.
+pub async fn voice_stt_chunk(
+    State(state): State<AppState>,
+    Query(q): Query<SttChunkQuery>,
+    audio: Bytes,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let value = state
+        .whisper
+        .chunk(
+            &q.session,
+            q.lang.as_deref(),
+            q.model.as_deref(),
+            q.prompt.as_deref(),
+            q.is_final,
+            audio,
+        )
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(value))
+}
+
+/// Drop a streaming session (microphone cancelled before a result).
+pub async fn voice_stt_close(
+    State(state): State<AppState>,
+    Query(q): Query<SttSessionQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // A cancelled session is best-effort: the sidecar already expires idle
+    // sessions, so a dead connection must not surface as an error to the UI.
+    let value = state
+        .whisper
+        .close(&q.session)
+        .await
+        .unwrap_or_else(|_| json!({ "text": "", "final": true }));
+    Ok(Json(value))
 }
 
 pub async fn voice_languages() -> Result<Json<LanguagesResponse>, AppError> {

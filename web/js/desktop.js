@@ -307,12 +307,96 @@ export function clearFullscreen() {
   notify();
 }
 
+/**
+ * Move a window into a brand-new workspace and focus it there — the desktop
+ * half of a real-fullscreen window (fullscreen.js does the browser half).
+ * Returns a token for `restoreFromNewWorkspace`, or null when the window is
+ * not on a workspace (vertical phone screens have no workspace system).
+ */
+export function isolateInNewWorkspace(name) {
+  if (!workspacesEnabled() || !name) return null;
+  const fromId = activeWsObj()?.id || null;
+  syncActiveFocus();
+  const ws = pushWorkspace();
+  // The dedicated space is named after the app it holds, so the workspace
+  // switcher says "Youtube" instead of a bare number.
+  ws.name = label(name);
+  for (const w of workspaces) {
+    if (w.id === ws.id) continue;
+    w.windows = w.windows.filter((x) => x !== name);
+    if (w.focus === name) w.focus = null;
+    if (w.fullscreen === name) w.fullscreen = null;
+  }
+  ws.windows = [name];
+  activeWs = ws.id;
+  focus = name;
+  fullscreen = null;
+  syncActiveFocus();
+  persist();
+  notify();
+  return { workspaceId: ws.id, fromId };
+}
+
+/**
+ * Undo `isolateInNewWorkspace`: take the window out of whichever workspace it
+ * is in now (its dedicated one, or one it was moved to while fullscreen), hand
+ * it back to the workspace it came from, and drop the dedicated workspace when
+ * it is left empty.
+ */
+export function restoreFromNewWorkspace(name, token) {
+  if (!token || !name) return false;
+  const dedicated = workspaces.find((w) => w.id === token.workspaceId) || null;
+  const from = workspaces.find((w) => w.id === token.fromId) || null;
+  for (const w of workspaces) {
+    w.windows = w.windows.filter((x) => x !== name);
+    if (w.focus === name) w.focus = null;
+    if (w.fullscreen === name) w.fullscreen = null;
+  }
+  if (from) {
+    if (!from.windows.includes(name)) from.windows.push(name);
+    from.focus = name;
+    from.fullscreen = null;
+  }
+  if (dedicated && !dedicated.windows.length && workspaces.length > 1) {
+    workspaces = workspaces.filter((w) => w.id !== dedicated.id);
+  }
+  const target = (from && workspaces.includes(from)) ? from : workspaces[0] || null;
+  if (target && !target.windows.includes(name)) target.windows.push(name);
+  activeWs = target ? target.id : null;
+  loadActiveFocus();
+  focus = name;
+  fullscreen = null;
+  syncActiveFocus();
+  persist();
+  notify();
+  return true;
+}
+
 /* ── Workspace mutations ────────────────────────────────────── */
 
-function pushWorkspace() {
-  const ws = { id: freshId(), windows: [] };
+function pushWorkspace(name = null) {
+  const ws = { id: freshId(), windows: [], name };
   workspaces.push(ws);
   return ws;
+}
+
+/**
+ * Drop an empty workspace without merging it into a neighbour. Used by
+ * fullscreen.js when a fullscreen app moved on and left its dedicated space
+ * behind. Refuses to remove the last workspace.
+ */
+export function dropWorkspace(id) {
+  if (!id || !workspacesEnabled() || workspaces.length <= 1) return false;
+  const ws = workspaces.find((w) => w.id === id);
+  if (!ws || ws.windows.length) return false;
+  workspaces = workspaces.filter((w) => w.id !== id);
+  if (activeWs === id) {
+    activeWs = workspaces[0].id;
+    loadActiveFocus();
+  }
+  persist();
+  notify();
+  return true;
 }
 
 export function createWorkspace() {
@@ -380,6 +464,11 @@ export function switchWorkspace(dirOrIndex) {
 export function moveWindow(name, toId) {
   const to = workspaces.find((w) => w.id === toId) || workspaces[0];
   if (!to) return false;
+  const fromId = activeWsObj()?.id || null;
+  // A fullscreen window stays fullscreen in its new workspace: the move must
+  // not drop it into the tiled layout. fullscreen.js retargets the dedicated
+  // workspace off the `desktop:window-moved` event below.
+  const wasFullscreen = fullscreen === name;
   for (const ws of workspaces) {
     ws.windows = ws.windows.filter((w) => w !== name);
     if (ws.focus === name) ws.focus = null;
@@ -390,10 +479,14 @@ export function moveWindow(name, toId) {
   activeWs = to.id;
   loadActiveFocus();
   focus = name;
+  if (wasFullscreen) fullscreen = name;
   syncActiveFocus();
   persist();
   toast(`Moved ${label(name)} to workspace ${activeWorkspaceIndex() + 1}`, { type: 'info' });
   notify();
+  window.dispatchEvent(new CustomEvent('desktop:window-moved', {
+    detail: { name, fromId, toId: to.id, fullscreen: wasFullscreen },
+  }));
   return true;
 }
 
@@ -574,6 +667,9 @@ function wireWindowInteractions(el, name) {
   el.__windowWired = true;
 
   const windowsMode = () => getDesktopLayout().mode === 'windows';
+  // A fullscreen window owns the screen: dragging/resizing would fight the
+  // fullscreen geometry (fullscreen.js drives it, and CSS pins the chrome).
+  const locked = () => document.body.classList.contains('fullscreen-active');
 
   // Clicking anywhere on the window raises it to the front (windows mode only).
   el.addEventListener('pointerdown', () => {
@@ -585,14 +681,14 @@ function wireWindowInteractions(el, name) {
 
   if (header) {
     header.addEventListener('pointerdown', (e) => {
-      if (!windowsMode() || e.button !== 0 || e.target.closest('button')) return;
+      if (locked() || !windowsMode() || e.button !== 0 || e.target.closest('button')) return;
       e.preventDefault();
       startWindowDrag(e, el, name, header);
     });
   }
   if (resize) {
     resize.addEventListener('pointerdown', (e) => {
-      if (!windowsMode() || e.button !== 0) return;
+      if (locked() || !windowsMode() || e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       startWindowResize(e, el, name);
@@ -806,8 +902,11 @@ export function renderWorkspaceBar() {
     dot.type = 'button';
     dot.className = 'workspace-bar-dot';
     dot.textContent = String(i + 1);
-    dot.title = `Workspace ${i + 1}`;
-    dot.setAttribute('aria-label', `Workspace ${i + 1}`);
+    // A dedicated fullscreen workspace is named after its app ("Youtube"), so
+    // the number stays for Alt+1..9 while the tooltip says what lives there.
+    const wsLabel = ws.name ? `Workspace ${i + 1} — ${ws.name}` : `Workspace ${i + 1}`;
+    dot.title = wsLabel;
+    dot.setAttribute('aria-label', wsLabel);
     dot.classList.toggle('is-active', ws.id === activeWs);
     dot.addEventListener('click', () => {
       if (i !== activeWorkspaceIndex()) switchWorkspace(i);
@@ -857,7 +956,10 @@ function wireShortcuts() {
 
     if (k === 'Enter') {
       e.preventDefault();
-      toggleFullscreen();
+      // Real fullscreen (its own workspace + the browser Fullscreen API) is
+      // owned by fullscreen.js, so the shortcut and the window button agree.
+      // It falls back to an in-app fullscreen when the browser says no.
+      window.dispatchEvent(new CustomEvent('app:fullscreen-toggle'));
       return;
     }
     // Workspace jump: Alt+1..9
@@ -901,6 +1003,10 @@ export function cycleFocusActive(dir = 1) {
   cycleFocus(namesForShortcuts(), dir);
 }
 
+/** In-app fullscreen (the window fills the desktop, chrome stays). The
+ *  user-facing fullscreen — its own workspace + the browser Fullscreen API —
+ *  is `toggleWindowFullscreen` in fullscreen.js, which is what the window
+ *  button, Alt+Enter and the context menus call. */
 export function toggleFullscreenActive() {
   return toggleFullscreen(getFocus() || namesForShortcuts()[0]);
 }
