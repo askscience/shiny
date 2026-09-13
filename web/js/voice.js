@@ -42,10 +42,12 @@ const BARGE_IN_HOLD_MS = 350;
 const BARGE_IN_SETTLE_MS = 800;
 const BARGE_IN_TTS_GUARD_MS = 700;
 /** Status polls while the sidecar starts (it may boot with the server). */
-const WHISPER_READY_ATTEMPTS = 8;
+const WHISPER_READY_ATTEMPTS = 20;
 /** Longer window when the bundled model still has to be fetched. */
 const WHISPER_DOWNLOAD_ATTEMPTS = 40;
 const WHISPER_READY_DELAY_MS = 700;
+/** How often a fallback to Vosk re-checks whether the sidecar came up. */
+const WHISPER_RECOVERY_POLL_MS = 5000;
 
 let voskModel = null;
 let recognizer = null;
@@ -67,6 +69,13 @@ let whisperModel = 'tiny';
 let whisperReady = false;
 /** True when this boot kicked off a model download that is still running. */
 let whisperPendingDownload = false;
+/**
+ * True while the session is running on the Vosk fallback because
+ * faster-whisper was not up yet. Cleared once the sidecar answers and the
+ * session upgrades back — see scheduleWhisperRecovery().
+ */
+let whisperRetry = false;
+let whisperRecoveryTimer = null;
 
 // faster-whisper streaming session state.
 let whisperSession = null;
@@ -202,6 +211,14 @@ function armSilenceTimer() {
   silenceTimer = setTimeout(() => {
     silenceTimer = null;
     if (!listening) return;
+    // The utterance has already been sent for a final decode: cancelling now
+    // would discard text that is seconds away. Measured round trips run 1–6 s
+    // against an 8 s budget, so this race is reachable — give it a short grace
+    // window instead, and re-arm if the decode is somehow still going.
+    if (whisperFinalizing) {
+      armSilenceTimer();
+      return;
+    }
     cancelListening();
     setSphereState('idle');
     window.dispatchEvent(new CustomEvent('app:toast', {
@@ -429,6 +446,9 @@ async function finalizeWhisper() {
       return;
     }
   } finally {
+    // Always released, even when this run was superseded: a stale finalize
+    // that returned early used to leave this latch set, and every later turn
+    // then bailed at the guard above and transcribed nothing for good.
     whisperFinalizing = false;
   }
 
@@ -546,6 +566,39 @@ async function ensureWhisperReady(lang, initial) {
   return status;
 }
 
+/**
+ * A fallback to Vosk is not forever.
+ *
+ * The sidecar boots with the server and can still be loading its model when
+ * the page asks — and the page only asks for a few seconds. Rather than let
+ * that timing decide the engine for the whole session, keep checking quietly
+ * and upgrade when it answers.
+ *
+ * The swap is held until nothing is listening: startListening() resolves the
+ * engine into a Vosk recognizer (or a whisper session) for that session's
+ * whole life, and the per-frame reader branches on sttEngine, so flipping it
+ * mid-session would send audio to an engine that was never set up.
+ *
+ * Deliberately invisible: no toast, no status line. The upgrade only makes
+ * the next thing the user says transcribe better.
+ */
+function scheduleWhisperRecovery() {
+  if (whisperRecoveryTimer) return;
+  whisperRecoveryTimer = setInterval(async () => {
+    if (!whisperRetry || listening) return;
+    // The user asked for Vosk outright; a probe would only fight that choice.
+    if (getSttEngine() === 'vosk') return;
+    const status = await fetchVoiceStatus(voiceLang);
+    if (!status || status.whisper !== 'ready' || !hasWhisperModel(status, whisperModel)) return;
+    if (listening) return; // something started during the probe — try again later
+    sttEngine = 'whisper';
+    whisperReady = true;
+    whisperRetry = false;
+    clearInterval(whisperRecoveryTimer);
+    whisperRecoveryTimer = null;
+  }, WHISPER_RECOVERY_POLL_MS);
+}
+
 export async function prepareVoice() {
   const lang = getVoiceLang();
   // Voice loads silently in the background — no progress card, no
@@ -566,6 +619,10 @@ export async function prepareVoice() {
     whisperReady = status?.whisper === 'ready' && hasWhisperModel(status, whisperModel);
     if (!whisperReady) {
       sttEngine = 'vosk';
+      // The sidecar may simply not be up yet: keep an eye out and upgrade the
+      // session if it arrives, instead of making this moment the final word.
+      whisperRetry = true;
+      scheduleWhisperRecovery();
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: {
           message: whisperPendingDownload
