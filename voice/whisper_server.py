@@ -51,10 +51,341 @@ os.environ.setdefault("OMP_NUM_THREADS", str(max(1, (os.cpu_count() or 4) // 2))
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np  # noqa: E402
+import re  # noqa: E402
+import unicodedata  # noqa: E402
 from fastapi import Body, FastAPI, HTTPException, Query  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 
 SAMPLE_RATE = 16_000
+
+# ── Hallucination filter ─────────────────────────────────────────────────────
+# Decoding silence (and near-silence) makes Whisper invent text, and because it
+# was trained on mountains of subtitled video the invented text is usually the
+# boilerplate from a subtitle track: credits, "thanks for watching", "like and
+# subscribe", broadcaster sign-offs. It is not Italian-specific — the same
+# failure is reported for English, German, French, Spanish, Portuguese, Dutch,
+# Russian, Ukrainian, Czech, Romanian, Turkish, Arabic, Chinese, Welsh,
+# Norwegian and Danish, which is why the detector below is built from
+# LANGUAGE-INDEPENDENT signals (URLs, domains, credits-by phrasing, subscribe
+# boilerplate) rather than a list of sentences. The reported offender,
+# "Sottotitoli e revisione a cura di QTSS", appears hundreds of times in the
+# same transcript when it triggers.
+#
+# Two independent guards, because either one alone has a failure mode:
+#   1. segment confidence — the model itself says "this window is not speech"
+#      AND "I am not confident"; quiet-but-real speech survives.
+#   2. text patterns — the transcript is boilerplate, or the phrase is embedded
+#      in otherwise real speech (so the credits are stripped, not the turn).
+# Texts from failed turns are also de-duplicated inside one transcript.
+
+# Credit/boilerplate phrasing. Each entry is a regex over `_normalize`d text
+# (lowercase, accents folded, punctuation dropped, whitespace collapsed).
+_HALLUCINATION_PHRASES = [
+    # "Sottotitoli e revisione a cura di QTSS", "Sottotitoli a cura di …",
+    # "Sottotitoli creati dalla comunità Amara.org", "Revisione a cura di …"
+    r"\bsottotitol\w*(\s+\w+){0,4}\s+a\s+cura\s+di\b",
+    r"\brevisione\s+a\s+cura\s+di\b",
+    r"\bsottotitol\w*\s+(creat|realizz|offert|fornit)\w*\b",
+    # "subtitles by", "subs by", "captions by", "translated by",
+    # "transcription by" (English / Italian "tradotto da" / "tradotto da")
+    r"\bsub(s|titles?|titled)\s+(by|from)(?=\s|$)",
+    r"\bcaptions?\s+by(?=\s|$)",
+    r"\btranslat(ed|ion|or|ions)\s+(by|from)(?=\s|$)",
+    r"\btradott\w*\s+da\b",
+    r"\btraduc\w*\s+por\b",
+    r"\btraduction\s+(par|de)\b",
+    r"ubersetzung\s+(von|durch)\b",
+    r"\buntertitel\w*\s+(von|f.r|durch)\b",
+    r"\bsubtitul\w*\s+por\b",
+    r"\blegendas?\s+por\b",
+    r"\btranslated\s+by\s+the\s+\w+\s+community\b",
+    # "Translated by Amara.org Community", "❤️ Translated by …"
+    r"\bamara\s*(org|com)?\b",
+    r"\bqtss\b",
+    # YouTube-style calls to action
+    r"\blike\s+and\s+subscribe\b",
+    r"\bdon t\s+forget\s+to\s+(like|subscribe)\b",
+    r"\bsubscribe\s+to\s+(the|my|our)\s+channel\b",
+    r"\bthanks?\s+for\s+watching\b",
+    r"\bthank\s+you\s+for\s+watching\b",
+    r"\bthanks?\s+for\s+viewing\b",
+    r"\bgrazie\s+per\s+(la\s+)?visione\b",
+    r"\bdanke\s+f.rs?\s+zuschauen\b",
+    r"\bmerci\s+d\s+avoir\s+regard\b",
+    r"\bmerci\s+d\s+avoir\s+regarde\b",
+    r"\bgracias\s+por\s+(ver|su\s+visita)\b",
+    r"\bobrigad\w*\s+por\s+(assistir|ver)\b",
+    r"\bпродолжение\s+следует\b",
+    r"\bдякую\s+за\s+перегляд\b",
+    r"\bспасибо\s+за\s+просмотр\b",
+    r"\bsubtitles?\s+created\s+by\b",
+    r"\bsubtitles?\s+provided\s+by\b",
+    r"\bthe\s+end\b",
+    r"\bsilence\b",
+    r"\bblank\s+audio\b",
+    # Broadcast subtitle credits, e.g. "Untertitelung des ZDF für funk, 2017".
+    r"\buntertitelung\b",
+    r"\bsubtitling\s+(of|by|for)\b",
+    # Public-domain / archive.org boilerplate.
+    r"\bpublic\s+domain\b",
+    # Arabic: the silence hallucination reported for ar is a translator credit.
+    r"\bترجمة\b",
+    r"\bنانسي\s+قنقر\b",
+    r"\binfo\s+un\s+libro\s+pubblico\b",
+]
+
+_HALLUCINATION_RE = re.compile("|".join(_HALLUCINATION_PHRASES))
+
+# Domains that only ever appear in a subtitle track or a watermark.
+_HALLUCINATION_HOSTS = re.compile(
+    r"\b(?:www\.)?[\w-]+\.(?:org|com|net|info|co\.uk|it|de|fr|es|ru|cz|pl|nl|se|dk|no|fi|tr|gr|pt|br|ar|cn|jp|kr)\b"
+)
+
+# A whole segment that is only this, in a window long enough to have held real
+# speech, is silence being decorated. Whole-utterance "grazie" / "ok" survives,
+# because a real one is short.
+_WINDOW_ONLY_PHRASES = {
+    "grazie", "grazie mille", "ok", "okay", "si", "no", "ciao", "pronto",
+    "thank you", "thanks", "thank you very much", "you", "bye", "hello", "hey",
+    "yeah", "yep", "yes", "right", "sure", "please", "grazie a tutti",
+    "danke", "merci", "gracias", "obrigado", "obrigada", "da", "net", "ja",
+    "sí", "bueno", "vale", "a", "e", "o", "hmm", "mm", "eh", "ehh", "ah",
+    "oh", "uh", "um", "mmm",
+}
+# Below this, an utterance is too short to be judged by its text alone.
+_WINDOW_ONLY_MIN_SECONDS = 1.5
+# A URL takes a moment to dictate ("apri il sito example punto com"); hearing
+# one from a sliver of audio is the decoder inventing it.
+_DICTATED_URL_MIN_SECONDS = 0.8
+
+# faster-whisper's own defaults; a segment is only dropped when BOTH signals
+# agree that this is not speech, so quiet-but-real speech is never thrown away.
+_NO_SPEECH_PROB = 0.6
+_AVG_LOGPROB = -1.0
+
+_PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
+_SPACE_RE = re.compile(r"\s+")
+_URL_RE = re.compile(
+    r"(?:https?://|www\.)[^\s]+|\b[\w-]+\.(?:com|org|net|info|co|io|tv|me|uk|it|de|fr|es|ru|cz|pl|nl|se|dk|no|fi|tr|gr|pt|br|ar|cn|jp|kr)\b(?:/\S*)?",
+    re.IGNORECASE,
+)
+# Boilerplate runs glued together by these are markup noise, not speech.
+_MARKUP_RE = re.compile(r"[♪♫#*_~|<>\[\]{}]+")
+_HASHTAG_RE = re.compile(r"(?:^|\s)[#@][\w.-]+")
+# Leftovers after a credit sentence was removed; none of these is an utterance.
+_CREDIT_TAILS = {
+    "a cura di", "by", "di", "da", "van", "par", "por", "von", "the end",
+    "subtitles", "sottotitoli", "revisione", "translated", "tradotto",
+}
+_DUP_MIN_WORDS = 4   # a 4+ word phrase repeated identically is boilerplate
+_DUP_MIN_RUNS = 2
+
+
+def _normalize(text: str) -> str:
+    """Case-fold, drop accents/punctuation/emoji, collapse whitespace.
+
+    Folding accents matters: Whisper writes "comunità" and "für", and a
+    matcher that only knew the plain ASCII spelling would miss the credits in
+    exactly the languages that trigger them.
+    """
+    folded = unicodedata.normalize("NFKD", text or "")
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    folded = folded.lower().replace("'", " ").replace("’", " ")
+    folded = _PUNCT_RE.sub(" ", folded)
+    return _SPACE_RE.sub(" ", folded).strip()
+
+
+def _words_of(text: str) -> list[str]:
+    return [w for w in _normalize(text).split(" ") if w]
+
+
+def _without_urls(text: str) -> str:
+    return _URL_RE.sub(" ", text or "")
+
+
+def _boilerplate_phrase(text: str) -> bool:
+    """True when the text carries a subtitle/credit/CTA fingerprint.
+
+    This is the language-independent half of the filter: URLs, domains, markup
+    and hashtags only appear in a transcript because the decoder invented them
+    (real dictation is not dictated character by character), and the phrase
+    list covers the credit/outro wording reported across languages.
+    """
+    raw = text or ""
+    norm = _normalize(raw)
+    if not _normalize(_without_urls(raw)) and (raw.strip() or _URL_RE.search(raw)):
+        # Nothing but punctuation/symbols, or nothing but a URL.
+        return True
+    if _MARKUP_RE.search(raw) or _HASHTAG_RE.search(raw):
+        return True
+    if _HALLUCINATION_RE.search(norm):
+        return True
+    # "info un libro pubblico su www.mesmerism.info" keeps the giveaway words
+    # once the URL has been normalized away.
+    if "pubblico" in norm and "libro" in norm:
+        return True
+    return False
+
+
+def _segment_is_hallucination(seg, window_seconds: float) -> bool:
+    """True when this decoded segment is invented rather than speech.
+
+    A segment is dropped when nothing survives cleaning it (pure credits, a
+    bare URL, a decoder loop), when the model says "not speech" AND is unsure
+    (the window where Whisper invents text), or when a multi-second span
+    produced nothing but a filler word.
+    """
+    text = (getattr(seg, "text", "") or "").strip()
+    if not text:
+        return True
+    stripped = clean_transcript(text)
+    if not stripped:
+        return True
+    # Pure credits / a bare URL shorter than it takes to dictate one.
+    if _boilerplate_phrase(text) or (
+        window_seconds < _DICTATED_URL_MIN_SECONDS and not _normalize(_without_urls(text))
+    ):
+        return True
+    no_speech = float(getattr(seg, "no_speech_prob", 0.0) or 0.0)
+    logprob = float(getattr(seg, "avg_logprob", 0.0) or 0.0)
+    if no_speech >= _NO_SPEECH_PROB and logprob <= _AVG_LOGPROB:
+        return True
+    if window_seconds >= _WINDOW_ONLY_MIN_SECONDS and stripped.lower() in _WINDOW_ONLY_PHRASES:
+        return True
+    return False
+
+
+def keep_segments(segments: list[tuple[object, float]]):
+    """Split one decode into (kept segments, words, cleaned text).
+
+    `segments` is [(segment, span in seconds)] for the whole decode, so the
+    confidence rules can see how much audio each segment actually covers.
+    A segment can be half real speech and half credit, so the text is cleaned
+    per segment too and only what survives is joined.
+    """
+    kept: list[object] = []
+    words: list[tuple[str, float, float]] = []
+    texts: list[str] = []
+    for seg, span in segments:
+        if _segment_is_hallucination(seg, span):
+            continue
+        text = clean_transcript(getattr(seg, "text", "") or "")
+        if not text:
+            continue
+        kept.append(seg)
+        texts.append(text)
+        for w in getattr(seg, "words", None) or []:
+            words.append((w.word, float(w.start), float(w.end)))
+    # Segments carry their own leading/trailing space; dropping one in the
+    # middle must not glue its neighbours together.
+    joined = _SPACE_RE.sub(" ", " ".join(texts)).strip()
+    return kept, words, clean_transcript(joined)
+
+
+def _is_duplicated_boilerplate(text: str) -> bool:
+    """True when a ≥4-word phrase fills the text back-to-back.
+
+    This is the shape the reported bug takes: "Sottotitoli e revisione a cura
+    di QTSS" hundreds of times over in one transcript. Two things keep real
+    speech safe: the phrase must be at least four words, and the text has to be
+    nothing but that repeat (a trailing partial repeat is still a loop — that
+    is a window cut mid-repetition).
+    """
+    words = _words_of(text)
+    if len(words) < _DUP_MIN_WORDS * _DUP_MIN_RUNS:
+        return False
+    for size in range(_DUP_MIN_WORDS, len(words) // _DUP_MIN_RUNS + 1):
+        period = words[:size]
+        reps = 0
+        i = 0
+        while words[i:i + size] == period:
+            reps += 1
+            i += size
+        if reps < _DUP_MIN_RUNS:
+            continue
+        # A trailing partial repetition must still follow the period.
+        if all(w == period[j] for j, w in enumerate(words[i:])):
+            return True
+    return False
+
+
+def _symbols_only(text: str) -> bool:
+    """True for a run with no letters or digits at all ("♪♪♪", "..." )."""
+    return not any(ch.isalnum() for ch in text or "")
+
+
+def _strip_credits(text: str) -> str:
+    """Remove credit/boilerplate sentences, keeping whatever real speech is
+    left in the same turn."""
+    if not text or _symbols_only(text):
+        return ""
+    kept = []
+    for sentence in _re_split_sentences(text):
+        if _symbols_only(sentence) or _boilerplate_phrase(sentence):
+            continue
+        # One sentence can hold both real speech and a credit ("accendi la luce
+        # Sottotitoli a cura di QTSS"): cut at the credit, keep what precedes.
+        match = _HALLUCINATION_RE.search(_normalize(sentence))
+        if match:
+            prefix = _drop_from_phrase(sentence, match)
+            if prefix and _normalize(prefix) not in _WINDOW_ONLY_PHRASES:
+                kept.append(prefix)
+            continue
+        # A URL is the one token real dictation may contain ("open
+        # example.com") — strip the URL, keep the sentence.
+        sentence = _URL_RE.sub(" ", sentence)
+        sentence = _SPACE_RE.sub(" ", sentence).strip(" \t\n\r-–—:;,.")
+        if sentence and _normalize(sentence) not in _WINDOW_ONLY_PHRASES:
+            kept.append(sentence)
+    out = " ".join(kept).strip()
+    # A leftover fragment that is only the tail of a credit ("a cura di", "by")
+    # is not a sentence either.
+    if _normalize(out) in _CREDIT_TAILS:
+        return ""
+    if _is_duplicated_boilerplate(out):
+        return ""
+    return out
+
+
+def _drop_from_phrase(sentence: str, match) -> str:
+    """The original sentence up to where the normalized match began.
+
+    Normalizing drops punctuation and folds accents, so its offsets do not map
+    back one-to-one; walking the real characters and counting the characters
+    that survive normalization finds the cut point exactly.
+    """
+    norm_prefix = _normalize(sentence)[:match.start()]
+    if not norm_prefix:
+        return ""
+    used = 0
+    for i in range(len(sentence)):
+        if used >= len(norm_prefix):
+            return sentence[:i].strip()
+        if _normalize(sentence[i:i + 1]):
+            used += 1
+    return sentence.strip()
+
+
+def _re_split_sentences(text: str) -> list[str]:
+    return [s for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip()]
+
+
+def clean_transcript(text: str) -> str:
+    """Public entry point: text -> the part a human actually said.
+
+    Used by every decode path so hallucinations can never reach the UI, the
+    committed streaming prefix, or the agent.
+    """
+    if not text or not text.strip():
+        return ""
+    if _symbols_only(text) or _symbols_only(_without_urls(text)):
+        return ""
+    if _is_duplicated_boilerplate(text):
+        return ""
+    if _boilerplate_phrase(text):
+        return _strip_credits(text)
+    return text.strip()
+
 
 # ── Model inventory ──────────────────────────────────────────────────────────
 # Directory names match what voice/download_whisper.py writes, so the tiny
@@ -196,14 +527,15 @@ _sessions: dict[str, Session] = {}
 _sessions_lock = threading.Lock()
 
 
-def _normalize(word: str) -> str:
+def _fold_word(word: str) -> str:
+    """Word identity for LocalAgreement: case- and punctuation-insensitive."""
     return "".join(ch for ch in word.lower() if ch.isalnum())
 
 
 def _common_prefix_len(a: list[str], b: list[str]) -> int:
     n = 0
     for x, y in zip(a, b):
-        if _normalize(x) != _normalize(y):
+        if _fold_word(x) != _fold_word(y):
             break
         n += 1
     return n
@@ -215,11 +547,16 @@ def _join(words: list[str]) -> str:
 
 
 def _decode(model, audio: np.ndarray, lang: str | None, *, accurate: bool, prompt: str | None = None):
-    """Run one Whisper pass and return (words, text).
+    """Run one Whisper pass and return (words, text), hallucinations removed.
 
     `words` is a list of (word, start, end) in seconds relative to `audio`.
     Partials run greedy (beam 1) and without VAD so nothing the user said is
     dropped between passes; the final pass uses beam search + VAD for accuracy.
+
+    Both passes drop segments the model invented (silence → subtitle credits,
+    "thanks for watching", and friends) and strip credit clauses out of
+    otherwise real speech, so an invented sentence can never be committed to
+    the streaming prefix or handed to the agent.
     """
     segments, _info = model.transcribe(
         audio,
@@ -231,13 +568,23 @@ def _decode(model, audio: np.ndarray, lang: str | None, *, accurate: bool, promp
         without_timestamps=False,
         initial_prompt=(prompt or None),
     )
-    words: list[tuple[str, float, float]] = []
-    text_parts: list[str] = []
-    for seg in segments:
-        text_parts.append(seg.text)
-        for w in seg.words or []:
-            words.append((w.word, float(w.start), float(w.end)))
-    return words, "".join(text_parts).strip()
+    # The confidence gate needs to know how much audio this decode covered
+    # before any segments are consumed.
+    raw = list(segments)
+    total = float(getattr(_info, "duration", 0.0) or 0.0)
+    if total <= 0:
+        total = len(audio) / SAMPLE_RATE if audio is not None else 0.0
+    spans = [
+        max(0.0, float(getattr(seg, "end", 0.0) or 0.0) - float(getattr(seg, "start", 0.0) or 0.0))
+        for seg in raw
+    ]
+    unknown = sum(1 for span in spans if span <= 0)
+    known = sum(spans)
+    for i, span in enumerate(spans):
+        if span <= 0 and unknown:
+            spans[i] = max(0.0, (total - known) / unknown)
+    _kept, words, text = keep_segments(list(zip(raw, spans)))
+    return words, text
 
 
 def _expire_sessions() -> None:
@@ -280,7 +627,7 @@ def _run_partial(session: Session) -> str:
     else:
         session.hyp = words
 
-    head = _join(session.committed)
+    head = clean_transcript(_join(session.committed))
     tail = _join([w for w, _, _ in session.hyp])
     session.partial = (head + " " + tail).strip() if head else tail
     return session.partial
@@ -363,10 +710,12 @@ def stt_chunk(
                     model_obj, audio_all, sess.lang, accurate=True, prompt=sess.prompt
                 )
         else:
-            text = _join(sess.committed)
-        # Fall back to the streamed text when VAD eats a very short utterance.
+            text = clean_transcript(_join(sess.committed))
+        # Fall back to the streamed text when VAD eats a very short utterance —
+        # but never fall back to a hallucination the filter just removed.
         if not text.strip():
-            text = (sess.partial or _join(sess.committed)).strip()
+            text = clean_transcript(sess.partial or _join(sess.committed))
+        text = clean_transcript(text)
         with _sessions_lock:
             _sessions.pop(session, None)
         return JSONResponse({"text": text, "partial": False, "final": True})
@@ -406,7 +755,11 @@ def stt_close(session: str = Query(..., min_length=1)) -> JSONResponse:
     if sess is None:
         return JSONResponse({"text": "", "partial": False, "final": True})
     return JSONResponse(
-        {"text": (sess.partial or _join(sess.committed)).strip(), "partial": False, "final": True}
+        {
+            "text": clean_transcript(sess.partial or _join(sess.committed)),
+            "partial": False,
+            "final": True,
+        }
     )
 
 

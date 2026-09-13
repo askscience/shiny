@@ -1,4 +1,5 @@
 import { apiFetch, getVoiceLang } from './api.js';
+import { cleanTranscript } from './transcriptGuard.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
 import {
   getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout,
@@ -245,11 +246,23 @@ function armWakeCommandTimer() {
 function dispatchVoiceResult(text) {
   clearSilenceTimer();
   const mode = listenMode;
+  // Nothing invented ever reaches the agent: a credits-only result is the same
+  // as hearing nothing, so the turn is dropped instead of answered.
+  const said = cleanTranscript(text);
   stopListening();
-  window.dispatchEvent(new CustomEvent('voice:result', { detail: { text, mode } }));
+  if (!said) {
+    setSphereState('idle');
+    window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
+    return;
+  }
+  window.dispatchEvent(new CustomEvent('voice:result', { detail: { text: said, mode } }));
 }
 
 function handleWakeTranscript(text, isFinal) {
+  // An invented partial can otherwise read as "the wake phrase was heard",
+  // arming a command window that then answers the credits.
+  text = cleanTranscript(text);
+  if (!text) return;
   if (awaitingCommand) {
     if (!isFinal || !text) return;
     // If the wake phrase gets repeated along with the request ("hey <name>,
