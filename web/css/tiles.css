@@ -319,17 +319,17 @@
 
 #map-tile-dock-icons { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 
-/* When the dock lives in the tile, suppress the old under-sphere dock
-   entirely outside compose mode. While composing, #artifact-dock stays for
-   the text-input pill, but its icons row never shows — the tile dock owns
-   the saved cards, including while the AI is thinking. */
-body.tile-dock-active:not(.compose-active) #artifact-dock {
+/* When the dock lives in the tile, the tile owns the SAVED CARDS: hide the
+   under-sphere cards row so they cannot show twice. The step line is not the
+   tile's — it is the little status bubble that belongs under the orb — so it
+   keeps the dock up, exactly as it does without the traveler plugin. */
+body.tile-dock-active #artifact-dock-icons {
   display: none !important;
 }
 
-body.tile-dock-active.compose-active #artifact-dock-icons,
-body.tile-dock-active.compose-active.compose-awaiting #artifact-dock-icons,
-body.tile-dock-active.compose-active.agent-awaiting #artifact-dock-icons {
+/* The dock itself steps aside only when it has nothing of its own to say: no
+   live line and no composer. Everything else it can hold is the tile dock's. */
+html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hidden))):not(.compose-active) {
   display: none !important;
 }
 

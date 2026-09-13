@@ -132,6 +132,12 @@ export async function openSavedArtifact(id) {
   }
 }
 
+/** True while a live agent status line is showing (dockStep.js owns it). */
+function dockStepLive() {
+  const stepEl = document.getElementById('artifact-dock-step');
+  return !!stepEl && !stepEl.classList.contains('hidden') && !!stepEl.textContent.trim();
+}
+
 export function renderArtifactDock(artifacts) {
   const list = artifacts || [];
 
@@ -152,20 +158,30 @@ export function renderArtifactDock(artifacts) {
 
   const composeOpen = document.body.classList.contains('compose-active');
 
+  // The chrome dock is also the status bubble hanging under the orb
+  // (dockStep.js), so a live step line keeps it up whether the saved cards
+  // happen to live in this dock or in the traveler window's own dock.
+  const keepForStep = dockStepLive();
+
   if (!inTile) {
     // Chat-only mode (traveler deactivated): the chrome dock stays hidden —
     // the compose input re-shows it via the compose-active CSS when needed.
     if (!isPluginActive('traveler')) {
-      if (!composeOpen) dock.classList.add('hidden');
+      if (!composeOpen && !keepForStep) dock.classList.add('hidden');
       return;
     }
     if (!list.length) {
-      if (!composeOpen) dock.classList.add('hidden');
+      if (!composeOpen && !keepForStep) dock.classList.add('hidden');
       return;
     }
     if (!composeOpen) {
       dock.classList.remove('hidden');
     }
+  } else if (keepForStep || composeOpen) {
+    // Traveler mode: the cards are the tile dock's, but the bubble and the
+    // composer are still the chrome dock's, and neither is this render's to
+    // hide. Without this a composer opened while idle stays hidden away.
+    dock.classList.remove('hidden');
   }
 
   const visible = list.slice(0, MAX_VISIBLE);
