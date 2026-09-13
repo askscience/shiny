@@ -127,20 +127,12 @@
 /* A plugin window fills its grid cell; with a single plugin it takes the
    whole area but keeps the rounded frame (border + radius). */
 
-.tile--focused {
-  animation: tileFocusPulse 1.8s var(--ease-out);
-}
-
-/* In tiling layouts the accent border marks the focused/master window; in
-   the floating Windows layout focus is shown by z-order, not a border. */
+/* Focus is marked by the accent border in tiling layouts (below) and by
+   z-order in the floating Windows layout. There is deliberately no animation:
+   a scale pulse on every click reads as the window twitching, and it also
+   fights the drag, which positions the window with a transform. */
 #tile-grid:not(.tile-grid--windows) .tile--focused {
   border-color: var(--accent);
-}
-
-@keyframes tileFocusPulse {
-  0% { transform: scale(0.99); }
-  40% { transform: scale(1.005); }
-  100% { transform: scale(1); }
 }
 
 /* ── Window chrome (title bar + controls) ─────────────────────
@@ -1505,7 +1497,6 @@ body.compose-active #tile-overlay {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tile--focused { animation: none; }
   .tile-overlay { transition: none; }
 }
 
