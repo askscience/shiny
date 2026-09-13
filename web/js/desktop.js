@@ -852,7 +852,15 @@ function startWindowDrag(e, el, name, header) {
     // The element is positioned at (origX, origY) by `left`/`top`; the drag is
     // expressed as an offset from there, which the compositor can apply without
     // touching layout.
-    el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    //
+    // Two-dimensional `translate`, deliberately not `translate3d`. The 3D form
+    // forces the tile into its own GPU layer, and this window carries an ambient
+    // blurred glow (`.tile-glow`) that overhangs the window by 6% and sits at
+    // z-index -1 inside it. Promoting the tile puts that overhanging layer
+    // through a different compositing path than it was authored for, which is a
+    // real visual change for a performance win that `translate` already gives
+    // (a 2D transform is still a compositor-only operation).
+    el.style.transform = `translate(${x}px, ${y}px)`;
   };
 
   const move = (ev) => {
