@@ -1,0 +1,26 @@
+[package]
+name = "shiny-peakd-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "The PEAK'D! browser window — a filtered viewport powered by the same adblock-rust engine as the peakd shell"
+
+[lib]
+name = "shiny_peakd_plugin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+# The shared engine. This is the *point*: the same crate, the same filter
+# lists, the same proxy, the same rewriting pipeline as the native shell.
+shiny-filter = { path = "../../crates/shiny-filter" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = { version = "1", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
+futures = "0.3"
+tracing = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "charset"] }
+url = "2"

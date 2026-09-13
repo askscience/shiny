@@ -26,3 +26,8 @@ diaries/
 # Large bundled archives
 vosk-browser-*.tgz
 backpack/
+
+# Performance harness: local measurements and their raw output. Kept out of git
+# on purpose — results are machine-specific and the numbers are reported in the
+# final notes, not committed as fixtures.
+/benchmarks/

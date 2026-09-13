@@ -793,6 +793,11 @@ body.keyboard-open #artifact-dock {
 .login-back { margin-bottom: 14px; }
 .login-card .ui-input { margin-bottom: 10px; text-align: center; }
 .login-card .ui-btn--block { margin-top: 4px; }
+/* The quiet escape hatch between the sign-in and create-profile steps. It must
+   read as secondary to the primary action, but still be a real tap target. */
+.login-link { display: block; width: 100%; margin-top: 10px; text-align: center; }
+.login-link.hidden { display: none; }
+.profile-selected.hidden { display: none; }
 
 .app-error {
   color: var(--error);

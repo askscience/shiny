@@ -17,8 +17,12 @@ const stepRegister = document.getElementById('login-step-register');
 const profilePicker = document.getElementById('profile-picker');
 
 const passwordInput = document.getElementById('login-password');
+const usernameInput = document.getElementById('login-username');
 const loginBtn = document.getElementById('login-btn');
 const loginBackPick = document.getElementById('login-back-pick');
+const registerToLogin = document.getElementById('register-to-login');
+const loginToRegister = document.getElementById('login-to-register');
+const selectedProfileEl = document.querySelector('#login-step-password .profile-selected');
 
 const registerBackBtn = document.getElementById('login-back-from-register');
 const registerBtn = document.getElementById('register-btn');
@@ -56,7 +60,16 @@ export function showLogin() {
   registerAvatarData = null;
   renderProfilePicker();
   const users = getKnownUsers();
-  showStep(users.length ? 'pick' : 'register');
+  if (users.length) {
+    showStep('pick');
+  } else {
+    // No profile is known on this device — which is the normal state for a new
+    // browser, a private window, or cleared storage. The saved-profile picker
+    // would be empty, so go straight to the manual sign-in form: an existing
+    // user must be able to type their username, not be forced into "create
+    // account" and told their own username is taken.
+    showManualLoginStep();
+  }
 }
 
 export function hideLogin() {
@@ -113,13 +126,43 @@ function renderProfilePicker() {
 
 function selectUser(user) {
   selectedUser = user;
+  selectedProfileEl?.classList.remove('hidden');
   renderAvatarEl(selectedAvatarEl, user);
   if (selectedNameEl) selectedNameEl.textContent = user.name || user.username;
+  // A picked profile already names the user: hide the free-text field so there
+  // is exactly one source of truth for the username.
+  usernameInput?.classList.add('hidden');
+  if (usernameInput) usernameInput.value = '';
+  // Back to the picker is meaningful here; "create a profile" is not.
+  loginBackPick?.classList.remove('hidden');
+  loginToRegister?.classList.add('hidden');
   if (passwordInput) {
     passwordInput.value = '';
     passwordInput.focus();
   }
   showStep('password');
+}
+
+/**
+ * Sign in by typing a username, for when no profile is saved on this device.
+ * The picker step is skipped because it would be empty.
+ */
+function showManualLoginStep() {
+  selectedUser = null;
+  // A typed username has no avatar to show; an empty placeholder tile would
+  // just add a meaningless "?" above the form.
+  selectedProfileEl?.classList.add('hidden');
+  // The username field must be *shown*, not merely enabled: `loginBtn` reads
+  // it, and a hidden field that is still read would look like a broken login.
+  usernameInput?.classList.remove('hidden');
+  if (usernameInput) usernameInput.value = '';
+  if (passwordInput) passwordInput.value = '';
+  // Nothing to go back to, so the Back button would be a dead end; offer the
+  // route that helps instead.
+  loginBackPick?.classList.add('hidden');
+  loginToRegister?.classList.remove('hidden');
+  showStep('password');
+  (usernameInput || passwordInput)?.focus();
 }
 
 function showRegisterStep() {
@@ -136,12 +179,25 @@ function showRegisterStep() {
 
 loginBackPick?.addEventListener('click', () => {
   selectedUser = null;
+  // With no saved profiles there is nothing to go back *to*; the button is
+  // hidden in that case (see showManualLoginStep), so this only runs when a
+  // picker exists.
   showStep('pick');
 });
 
+registerToLogin?.addEventListener('click', () => {
+  // "Already have a profile? Sign in" — the escape hatch from the register
+  // screen, which is all a first-time visitor on this device used to see.
+  if (getKnownUsers().length) showStep('pick');
+  else showManualLoginStep();
+});
+
+loginToRegister?.addEventListener('click', () => showRegisterStep());
+
 registerBackBtn?.addEventListener('click', () => {
   registerAvatarData = null;
-  showStep(getKnownUsers().length ? 'pick' : 'register');
+  if (getKnownUsers().length) showStep('pick');
+  else showManualLoginStep();
 });
 
 registerAvatarInput?.addEventListener('change', async () => {
@@ -158,8 +214,21 @@ registerAvatarInput?.addEventListener('change', async () => {
 });
 
 loginBtn?.addEventListener('click', async () => {
-  if (!selectedUser) return;
   hideError();
+
+  // Either a picked profile (picker step) or a typed username (manual step).
+  const username = selectedUser?.username || usernameInput?.value.trim() || '';
+  if (!username) {
+    showError('Enter your username');
+    usernameInput?.focus();
+    return;
+  }
+  if (!passwordInput?.value) {
+    showError('Enter your password');
+    passwordInput?.focus();
+    return;
+  }
+
   try {
     // `authRedirect: false` — a 401 here means "bad credentials", not an
     // expired session. Without this, apiFetch's global 401 handler fires the
@@ -168,7 +237,7 @@ loginBtn?.addEventListener('click', async () => {
       method: 'POST',
       authRedirect: false,
       body: JSON.stringify({
-        username: selectedUser.username,
+        username,
         password: passwordInput.value,
       }),
     });
@@ -181,6 +250,10 @@ loginBtn?.addEventListener('click', async () => {
 
 passwordInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loginBtn?.click();
+});
+
+usernameInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') passwordInput?.focus();
 });
 
 registerBtn?.addEventListener('click', async () => {

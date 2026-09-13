@@ -1,0 +1,21 @@
+[package]
+name = "peakd"
+version = "0.1.0"
+edition = "2021"
+description = "Peak'd — the desktop browser built to serve the PEAK'D! app, with adblock-rust filtering shared with the in-app browser plugin"
+
+[dependencies]
+# The native shell.
+wry = { version = "0.57", features = ["mac-proxy"] }
+tao = "0.37"
+# The shared filtering engine + proxy (adblock-rust). Same crate the in-app
+# browser plugin links, which is what makes both surfaces one engine.
+shiny-filter = { path = "../shiny-filter" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSResponder", "NSRunningApplication"] }

@@ -71,8 +71,13 @@
           <div id="login-selected-avatar" class="profile-avatar"></div>
           <span id="login-selected-name" class="profile-selected-name"></span>
         </div>
+        <!-- Shown only when signing in with a typed username (no saved
+             profile on this device), so the field can never be silently
+             ignored. -->
+        <input type="text" id="login-username" class="ui-input hidden" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false">
         <input type="password" id="login-password" class="ui-input" placeholder="Password" autocomplete="current-password">
         <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block">Sign In</button>
+        <button type="button" id="login-to-register" class="login-link ui-btn ui-btn--quiet ui-btn--sm hidden">New here? Create a profile</button>
       </div>
 
       <div id="login-step-register" class="hidden">
@@ -86,6 +91,7 @@
         <input type="text" id="register-username" class="ui-input" placeholder="Username" autocomplete="username" autocapitalize="off">
         <input type="password" id="register-password" class="ui-input" placeholder="Password" autocomplete="new-password">
         <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block">Create Account</button>
+        <button type="button" id="register-to-login" class="login-link ui-btn ui-btn--quiet ui-btn--sm">Already have a profile? Sign in</button>
       </div>
 
       <p id="login-error" class="app-error hidden"></p>
