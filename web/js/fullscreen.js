@@ -5,29 +5,36 @@
  * Alt+Enter all come through here. Fullscreening a window does three things:
  *
  *   1. Moves it into a brand-new workspace, so the fullscreen app is isolated
- *      from the desktop it came from (desktop.js owns that half).
+ *      from the desktop it came from (desktop.js owns that half). That
+ *      workspace is sealed while the app is fullscreen: nothing may be moved
+ *      into it and the app may not be moved out of it.
  *   2. Puts the window into the desktop's fullscreen state and asks the
  *      browser for real fullscreen on the document. No user gesture (an AI
  *      action, or a browser that refuses) simply leaves the in-app fullscreen
  *      standing — never a broken state.
+ *   3. Hides the chrome of the workspace it took over: the top bar goes away
+ *      (even with `autohide_bar` off, one fullscreen app owns the screen) and
+ *      the window's own title bar — the app name plus close/exit-fullscreen —
+ *      docks flush under it, revealed by the same top-edge gesture. The other
+ *      bar positions keep their desktop-wide behaviour.
  *
  * This module also owns the desktop-wide chrome reveal (Settings → Desktop →
  * Fullscreen): bar position top/left/right/center, plus an independent autohide
  * switch for the bar and the orb. That behaviour is not fullscreen-only — it
- * governs the whole desktop. A fullscreen window additionally joins the top
- * reveal with its own title bar; fullscreen.css owns the actual hiding.
+ * governs the whole desktop. fullscreen.css owns the actual hiding.
  *
- * A fullscreen app moved to another workspace stays fullscreen there, and its
- * dedicated (app-named) workspace follows it. Leaving fullscreen — the button
- * again, Escape, or the browser's own exit — takes the window out of whichever
- * workspace it is in, hands it back to the one it came from, and drops the
+ * A fullscreen app cannot be moved to another workspace while it is fullscreen,
+ * so its dedicated (app-named) workspace stays its own until it leaves
+ * fullscreen. Leaving fullscreen — the button again, Escape, or the browser's
+ * own exit — hands the window back to the workspace it came from and drops the
  * dedicated one, so the desktop is exactly as it was.
  */
 import {
   getFocus, getFullscreen, toggleFullscreen, clearFullscreen,
-  isolateInNewWorkspace, restoreFromNewWorkspace, dropWorkspace,
+  isolateInNewWorkspace, restoreFromNewWorkspace,
 } from './desktop.js';
 import { getImmersive, applyImmersive } from './preferences.js';
+import { isPluginActive } from './activePlugins.js';
 
 const EDGE_ZONE = 120;    // px from the docking edge that reveals the top bar
 const ORB_ZONE = 200;     // px from the bottom edge that reveals the orb…
@@ -97,6 +104,7 @@ function endSession(s) {
   if (!s) return;
   if (s.token) restoreFromNewWorkspace(s.plugin, s.token);
   else clearFullscreen();
+  body.classList.remove('fs-active', 'fs-top', 'fs-orb');
 }
 
 export function enterWindowFullscreen(name) {
@@ -108,6 +116,9 @@ export function enterWindowFullscreen(name) {
   const token = isolateInNewWorkspace(name);
   toggleFullscreen(name, true);
   session = { plugin: name, token };
+  // The in-app half of the state, independent of whether the browser grants
+  // the request: fullscreen.css keys the hidden/relocated chrome off this.
+  body.classList.add('fs-active');
 
   // Must be called synchronously from the user gesture; browsers reject it
   // otherwise. A rejection is not an error — the in-app fullscreen stands and
@@ -159,12 +170,20 @@ function setReveal(top, orb) {
  * The bar and the orb hide and reveal on the whole desktop, not only in
  * fullscreen — the immersion settings are desktop-wide. Each piece is
  * independent, so an always-on bar can sit next to an autohiding orb.
+ *
+ * A fullscreen window overrides the bar's autohide for the top position only:
+ * the app owns the screen while it is fullscreen, so the bar is away until the
+ * pointer reaches the top edge whatever the setting says. The window's own
+ * title bar docks right under it and rides the very same reveal (fullscreen.css
+ * keys it off `fs-top` too).
  */
 function evalReveal() {
   const cfg = immersiveCfg();
   const held = Date.now() < revealUntil;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const fsActive = body.classList.contains('fs-active');
+  const fsTopBar = fsActive && cfg.bar_position === 'top';
 
   // The bar comes back from whichever edge it docks to.
   let nearBar = false;
@@ -176,7 +195,10 @@ function evalReveal() {
     && lastY >= vh - ORB_ZONE
     && Math.abs(lastX - vw / 2) <= ORB_HALF;
 
-  setReveal(!cfg.autohide_bar || held || nearBar, !cfg.autohide_orb || held || nearOrb);
+  // A fullscreen window hides the bar of its workspace no matter what the
+  // desktop-wide autohide preference says.
+  const showBar = fsTopBar ? (held || nearBar) : (!cfg.autohide_bar || held || nearBar);
+  setReveal(showBar, !cfg.autohide_orb || held || nearOrb);
 }
 
 function holdReveal(ms) {
@@ -236,22 +258,6 @@ function nudgeResize() {
   setTimeout(() => window.dispatchEvent(new Event('map:resize')), 220);
 }
 
-/**
- * A fullscreen app moved to another workspace keeps its dedicated role: the
- * destination becomes the dedicated workspace, the empty one it left is
- * dropped, and fullscreen follows the window instead of breaking.
- */
-function onWindowMoved(e) {
-  const { name, toId } = e.detail || {};
-  if (!session || session.plugin !== name || !session.token) return;
-  const dedicated = session.token.workspaceId;
-  if (dedicated && dedicated !== toId) {
-    dropWorkspace(dedicated);
-    session.token.workspaceId = toId;
-  }
-  if (getFullscreen() !== name) toggleFullscreen(name, true);
-}
-
 export function initFullscreen() {
   if (initialized) return;
   initialized = true;
@@ -271,11 +277,14 @@ export function initFullscreen() {
     immersive = e.detail || getImmersive();
     evalReveal();
   });
-  // Keep a moved fullscreen app fullscreen, with its dedicated workspace
-  // following it to the destination.
-  window.addEventListener('desktop:window-moved', onWindowMoved);
   // Alt-tabbing away is not a hover: put the chrome back out of the way.
   window.addEventListener('blur', dismissChrome);
+  // A fullscreen app that gets deactivated (its window button, the tray, the
+  // Plugins page) is gone: leaving fullscreen hands its workspace back rather
+  // than leaving the desktop sealed around an empty screen.
+  window.addEventListener('plugins:changed', () => {
+    if (session && !isPluginActive(session.plugin)) exitWindowFullscreen();
+  });
   // Show the chrome briefly on load, so an autohidden bar/orb is not a
   // mystery the first time the desktop appears.
   holdReveal(2600);

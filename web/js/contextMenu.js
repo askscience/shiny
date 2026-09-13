@@ -28,7 +28,7 @@ import {
   createWorkspace, removeWorkspace, switchWorkspace, focusWindow,
   moveWindow, moveWindowByIndex, getWorkspacesList,
   activeWorkspaceIndex, getLayout, setLayout, getFocus, getFullscreen,
-  workspacesEnabled,
+  workspacesEnabled, workspaceLock, workspaceLabel,
 } from './desktop.js';
 import { toggleWindowFullscreen } from './fullscreen.js';
 import {
@@ -282,12 +282,25 @@ function label(name) {
 
 function moveToWorkspaceItems(name) {
   if (!workspacesEnabled()) return [];
-  const items = getWorkspacesList().map((ws, i) => ({
-    type: 'item',
-    label: `Workspace ${i + 1}`,
-    checked: ws.windows.includes(name),
-    onClick: () => moveWindow(name, ws.id),
-  }));
+  const items = [];
+  getWorkspacesList().forEach((ws, i) => {
+    // A fullscreen app owns its workspace: nothing else can be moved in.
+    const locked = workspaceLock(ws);
+    if (locked) {
+      items.push({
+        type: 'item',
+        label: `${workspaceLabel(ws)} (full screen)`,
+        disabled: true,
+      });
+      return;
+    }
+    items.push({
+      type: 'item',
+      label: workspaceLabel(ws),
+      checked: ws.windows.includes(name),
+      onClick: () => moveWindow(name, ws.id),
+    });
+  });
   items.push({ type: 'separator' });
   items.push({
     type: 'item',
@@ -314,6 +327,22 @@ function travelerMenuItems() {
 /** Window menu: window management + whatever the app contributes. */
 function windowMenu(name, ctx = {}) {
   const app = name === 'traveler' ? travelerMenuItems() : pluginMenuItems(name, ctx);
+  // A fullscreen app is pinned to its workspace for as long as it is
+  // fullscreen, so the move submenu is off rather than misleading.
+  const isFull = getFullscreen() === name;
+  const moveItem = isFull
+    ? {
+      type: 'item',
+      label: 'Move to workspace',
+      icon: 'ui/grid',
+      disabled: true,
+    }
+    : {
+      type: 'submenu',
+      label: 'Move to workspace',
+      icon: 'ui/grid',
+      items: moveToWorkspaceItems(name),
+    };
   return [
     { type: 'heading', label: label(name) },
     {
@@ -325,18 +354,13 @@ function windowMenu(name, ctx = {}) {
     },
     {
       type: 'item',
-      label: getFullscreen() === name ? 'Exit full screen' : 'Full screen',
+      label: isFull ? 'Exit full screen' : 'Full screen',
       icon: 'ui/expand',
-      checked: getFullscreen() === name,
+      checked: isFull,
       onClick: () => toggleWindowFullscreen(name),
     },
     { type: 'separator' },
-    {
-      type: 'submenu',
-      label: 'Move to workspace',
-      icon: 'ui/grid',
-      items: moveToWorkspaceItems(name),
-    },
+    moveItem,
     ...(app.length ? [{ type: 'separator' }, ...app] : []),
     { type: 'separator' },
     {
@@ -396,7 +420,7 @@ function trayMenu(btn) {
 function switchWorkspaceItems() {
   return getWorkspacesList().map((ws, i) => ({
     type: 'item',
-    label: ws.name ? `Workspace ${i + 1} — ${ws.name}` : `Workspace ${i + 1}`,
+    label: workspaceLabel(ws),
     checked: i === activeWorkspaceIndex(),
     onClick: () => switchWorkspace(i),
   }));
@@ -454,7 +478,7 @@ function workspaceDotMenu(index) {
   const wss = getWorkspacesList();
   const ws = wss[index];
   return [
-    { type: 'heading', label: ws?.name ? `Workspace ${index + 1} — ${ws.name}` : `Workspace ${index + 1}` },
+    { type: 'heading', label: workspaceLabel(ws) || `Workspace ${index + 1}` },
     ...exitFullscreenItem(),
     { type: 'item', label: 'New workspace', icon: 'ui/plus', onClick: () => createWorkspace() },
     {

@@ -187,6 +187,15 @@ html, body {
 }
 
 .workspace-bar-dot:hover { background: var(--glass-hover); color: var(--text); }
+/* A fullscreen workspace's dot wears the app's own icon instead of a number:
+   square and centred, with no text padding to make room for. */
+.workspace-bar-dot.is-app {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.workspace-bar-dot.is-app .ui-icon { display: inline-flex; }
 .workspace-bar-dot.is-active {
   background: var(--accent-soft);
   border-color: var(--accent);

@@ -10,9 +10,14 @@
    With autohide on, the top bar is away until the pointer reaches the edge it
    docks to, and the AI orb (with its dock and reply line) is away until the
    pointer reaches the bottom centre. Both slide back with the `fs-top` /
-   `fs-orb` body classes. A real-fullscreen window additionally gets the whole
-   screen: its own title bar joins the top reveal, and the desktop chrome
-   overlays it instead of making room.
+   `fs-orb` body classes.
+
+   A fullscreen window (body.fs-active) additionally gets the whole screen of
+   its own workspace: the top bar is always away there and comes back from the
+   top edge, and the window's own title bar — the app name plus close / exit
+   fullscreen — docks flush under it, no margin, revealed by the very same
+   `fs-top` gesture. The desktop chrome overlays the app instead of making
+   room for it.
    ───────────────────────────────────────────────────────────── */
 
 /* ── Top bar: autohide + dock position ──────────────────────── */
@@ -70,6 +75,37 @@ html[data-bar-pos='right'][data-autohide-bar='1'] #hud-header {
 html[data-bar-pos='left'][data-autohide-bar='1'] body.fs-top #hud-header,
 html[data-bar-pos='right'][data-autohide-bar='1'] body.fs-top #hud-header {
   transform: translateX(0);
+}
+
+/* A fullscreen window owns the screen of its workspace: the top bar goes away
+   there whatever the desktop-wide autohide preference says, and comes back
+   from the top edge like a docked bar. The left/right docks and every other
+   workspace keep that preference. `fs-active` is the in-app fullscreen state,
+   independent of whether the browser granted real fullscreen.
+
+   `!important` is load-bearing: with autohide off the bar carries the app's
+   entrance animation (`hudFadeIn`, fill mode `both`). An animation's filled
+   values beat every normal declaration — including an ID selector — in the
+   window before this rule applies, so the animation is cancelled outright. */
+html[data-bar-pos='top'] body.fs-active #hud-header {
+  animation: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translateY(calc(-100% - 16px)) !important;
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear var(--duration-normal);
+}
+
+html[data-bar-pos='top'] body.fs-active.fs-top #hud-header {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0) !important;
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s;
 }
 
 html[data-bar-pos='left'] .hud-header-main,
@@ -235,7 +271,7 @@ html[data-autohide-orb='1'] body:not(.fullscreen-active).agent-awaiting #hud-tra
   transform: translate(-50%, 0);
 }
 
-/* ── Real fullscreen: the window owns the screen ────────────── */
+/* ── Fullscreen: the window owns the screen ─────────────────── */
 
 body.fullscreen-active #tile-grid {
   top: 0;
@@ -250,59 +286,82 @@ body.fullscreen-active #tile-grid .tile--full {
   border-radius: 0;
 }
 
-/* The grip belongs to the floating desktop, not to a fullscreen window. */
-body.fullscreen-active .tile-resize { display: none; }
+/* Real fullscreen is not required for the takeover: the in-app state does the
+   same, so a browser that refuses the Fullscreen API still loses the top band. */
+body.fs-active #tile-grid {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  gap: 0;
+}
 
-/* The window title bar rides down under the top bar. Being out of flow, the
-   window content keeps the whole screen while the chrome is away. */
-body.fullscreen-active #tile-grid .tile--full > .tile-header {
+body.fs-active #tile-grid .tile--full {
+  border: none;
+  border-radius: 0;
+}
+
+/* The grip belongs to the floating desktop, not to a fullscreen window. */
+body.fullscreen-active .tile-resize,
+body.fs-active .tile-resize { display: none; }
+
+/* ── A fullscreen window's own bar: tucked under the top bar ──
+   The app name plus close / exit-fullscreen dock flush to the top edge, edge
+   to edge with no margin, and slide in right under the top bar when that bar
+   is revealed. Out of flow, so the fullscreen app keeps the whole screen
+   while the chrome is away. */
+body.fs-active #tile-grid .tile--full > .tile-header {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
+  bottom: auto;
+  /* Below the top bar (z-hud is 20), which covers the strip at rest. */
   z-index: 6;
-  opacity: 0;
-  transform: translateY(-100%);
-  /* A darker glass than the desktop's: the fullscreen title bar floats over
-     arbitrary content, so it blurs hard and dims what is behind it. */
-  background: rgba(0, 0, 0, 0.55);
+  padding: 0 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(22px) saturate(1.5);
-  -webkit-backdrop-filter: blur(22px) saturate(1.5);
-  transition:
-    opacity var(--duration-fast) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+  border-radius: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-100%);
+  background: rgba(0, 0, 0, 0.55);
+  /* The reveal is a slide, not a fade: the bar looks drawn out from under the
+     top bar. */
+  transition: transform var(--duration-normal) var(--ease-out);
 }
 
-body.fullscreen-active.fs-top #tile-grid .tile--full > .tile-header {
-  opacity: 1;
-  transform: translateY(var(--hud-header-total));
+/* Resting fullscreen state — the top bar is away, so the window's bar is too.
+   `!important` beats the `:hover`-agnostic touch fallback below. */
+html[data-bar-pos='top'] body.fs-active #tile-grid .tile--full > .tile-header {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translateY(-100%) !important;
+  transition: none;
 }
 
-/* Light text on the dark glass, whatever the theme. */
-body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-title {
-  color: rgba(255, 255, 255, 0.85);
+html[data-bar-pos='top'] body.fs-active.fs-top #tile-grid .tile--full > .tile-header {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(var(--hud-header-total)) !important;
 }
 
-body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-btn {
+/* Light text on the dark bar, whatever the theme. */
+body.fs-active #tile-grid .tile--full > .tile-header .tile-header-title {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+body.fs-active #tile-grid .tile--full > .tile-header .tile-header-btn {
   color: rgba(255, 255, 255, 0.9);
 }
 
-body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+body.fs-active #tile-grid .tile--full > .tile-header .tile-header-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
 
-body.fullscreen-active #tile-grid .tile--full > .tile-header .tile-header-btn--close:hover {
-  background: rgba(255, 60, 60, 0.28);
+body.fs-active #tile-grid .tile--full > .tile-header .tile-header-btn--close:hover {
+  background: rgba(255, 60, 60, 0.3);
   color: #fff;
-}
-
-/* A side-docked bar leaves the top of the window free, so its title bar comes
-   back at the top edge rather than under the (top) bar. */
-html[data-bar-pos='left'] body.fullscreen-active.fs-top #tile-grid .tile--full > .tile-header,
-html[data-bar-pos='right'] body.fullscreen-active.fs-top #tile-grid .tile--full > .tile-header {
-  transform: translateY(0);
 }
 
 /* ── Fullscreen text mode: a little more room for the thread ── */
@@ -328,10 +387,22 @@ body.fullscreen-active .compose-conversation {
   html[data-bar-pos] #chrome-bottom { transform: translate(-50%, 0); }
   html[data-bar-pos] #hud-transcript { transform: translate(-50%, 0); }
 
-  html[data-bar-pos] body.fullscreen-active #tile-grid .tile--full > .tile-header {
-    position: static;
-    opacity: 1;
-    transform: none;
+  /* Touch keeps the bars up — there is no hover to bring them back. The top
+     bar still stands aside for a fullscreen window and the window's own bar
+     (close / exit fullscreen) takes its place under the top edge, so the way
+     out is never hidden behind a hover a touch screen cannot make. `!important`
+     matches the resting fullscreen rule above, which outranks a plain rule in
+     here however specific. */
+  html[data-bar-pos='top'] body.fs-active #hud-header {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(calc(-100% - 16px));
+  }
+
+  html[data-bar-pos] body.fs-active #tile-grid .tile--full > .tile-header {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateY(0) !important;
   }
 }
 
@@ -339,7 +410,7 @@ body.fullscreen-active .compose-conversation {
   #hud-header,
   #chrome-bottom,
   #hud-transcript,
-  body.fullscreen-active #tile-grid .tile--full > .tile-header,
+  body.fs-active #tile-grid .tile--full > .tile-header,
   .compose-composer,
   .compose-send {
     transition: none;

@@ -22,6 +22,7 @@ import {
   getWindowsGeom, setWindowsGeom,
 } from './preferences.js';
 import { toast, icon } from '../ui/index.js';
+import { pluginIconEl } from './pluginIcon.js';
 import { isMobilePortrait, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 
 let workspaces = [];      // [{ id, windows: [pluginName], focus, fullscreen }]
@@ -166,9 +167,62 @@ function wireAgentActions() {
 /* ── Workspace bookkeeping ──────────────────────────────────── */
 
 /**
+ * Keep fullscreen a strictly per-window state, repairing anything that breaks
+ * the rule — whether it was saved by an older build, left behind by a failed
+ * move, or written by a tool:
+ *
+ *   • a fullscreen app whose workspace no longer holds it is forgotten;
+ *   • a workspace that holds a fullscreen app holds NOTHING ELSE: every other
+ *     window is moved out (to the workspace the fullscreen app came from, or
+ *     to any ordinary workspace) and stays non-fullscreen.
+ *
+ * Idempotent, so it is safe to call from every mutation and every render.
+ */
+function reconcile() {
+  if (!workspacesEnabled() || !workspaces.length) return false;
+  let changed = false;
+
+  const locked = new Map();       // workspace id -> fullscreen plugin
+  for (const ws of workspaces) {
+    if (ws.fullscreen && !ws.windows.includes(ws.fullscreen)) {
+      ws.fullscreen = null;
+      changed = true;
+    }
+    if (ws.fullscreen) locked.set(ws.id, ws.fullscreen);
+  }
+  if (!locked.size) {
+    if (changed) loadActiveFocus();
+    return changed;
+  }
+
+  // Strays can only go somewhere that is not itself sealed.
+  const shelter = activeWsObj();
+  const ordinary = workspaces.find((w) => !locked.has(w.id)) || null;
+  for (const ws of workspaces) {
+    if (!locked.has(ws.id) || ws.windows.length <= 1) continue;
+    const fs = locked.get(ws.id);
+    for (const w of [...ws.windows]) {
+      if (w === fs) continue;
+      ws.windows = ws.windows.filter((x) => x !== w);
+      if (ws.focus === w) ws.focus = null;
+      const to = (shelter && shelter.id !== ws.id && !locked.has(shelter.id)) ? shelter : ordinary;
+      if (to) {
+        if (!to.windows.includes(w)) to.windows.push(w);
+      } else {
+        pushWorkspace().windows = [w];
+      }
+      changed = true;
+    }
+  }
+  if (changed) loadActiveFocus();
+  return changed;
+}
+
+/**
  * Guarantee every plugin surface lives in a workspace: migrate a first load
- * (one workspace with everything), prune deactivated surfaces, and add newly
- * activated ones to the active workspace.
+ * (one workspace with everything), prune deactivated surfaces, repair the
+ * fullscreen rule (see `reconcile`), and add newly activated ones to the active
+ * workspace — never into a dedicated fullscreen one.
  */
 export function ensureWindows(names) {
   if (!workspaces.length) {
@@ -188,14 +242,29 @@ export function ensureWindows(names) {
     if (ws.focus && !names.includes(ws.focus)) ws.focus = null;
     if (ws.fullscreen && !names.includes(ws.fullscreen)) ws.fullscreen = null;
   }
+  // A stale/split fullscreen state is repaired first, so a window that an older
+  // build dropped into a fullscreen workspace is moved out before placement.
+  reconcile();
   loadActiveFocus();
   const assigned = new Set(workspaces.flatMap((ws) => ws.windows));
-  const aws = activeWsObj();
+  const anew = [];
   for (const n of names) {
     if (!assigned.has(n)) {
-      aws.windows.push(n);
+      anew.push(n);
       assigned.add(n);
     }
+  }
+  if (anew.length) {
+    let aws = activeWsObj();
+    // A dedicated fullscreen workspace takes nothing else, so a plugin opened
+    // while it is up lands in the workspace the fullscreen app came from (or
+    // any ordinary one) instead of behind the fullscreen window.
+    if (workspaceLock(aws)) aws = workspaces.find((w) => !workspaceLock(w)) || null;
+    if (!aws) {
+      // Every workspace is sealed: open an ordinary one for the new windows.
+      aws = workspaces.find((w) => !workspaceLock(w)) || pushWorkspace();
+    }
+    aws.windows.push(...anew);
   }
   if (!workspaces.some((w) => w.id === activeWs)) activeWs = workspaces[0].id;
   persist();
@@ -222,6 +291,33 @@ export function getWorkspacesList() {
 
 export function workspaceHasWindow(name) {
   return workspaces.some((w) => w.windows.includes(name));
+}
+
+/**
+ * A dedicated fullscreen workspace is sealed: the fullscreen app cannot leave
+ * it and nothing else may be moved in, so no window can ever end up tiled
+ * behind a fullscreen one. Returns the plugin that owns the workspace, or null.
+ */
+export function workspaceLock(ws) {
+  if (!ws || !workspacesEnabled()) return null;
+  // A workspace holding a fullscreen window is sealed even when it is no longer
+  // the active one, so a stale switch cannot drop another window into it.
+  if (ws.fullscreen && ws.windows.includes(ws.fullscreen)) return ws.fullscreen;
+  if (fullscreen && ws.id === activeWs && ws.windows.includes(fullscreen)) return fullscreen;
+  return null;
+}
+
+/** How a workspace is named: a dedicated fullscreen space is just the app. */
+export function workspaceLabel(wsOrIndex) {
+  const byIndex = typeof wsOrIndex === 'number';
+  const ws = byIndex ? workspaces[wsOrIndex] : wsOrIndex;
+  const i = byIndex ? wsOrIndex : workspaces.indexOf(ws);
+  if (!ws) return null;
+  // While an app is fullscreen, its workspace IS that app: "Youtube", not
+  // "Workspace 3 — Youtube".
+  const locked = workspaceLock(ws);
+  if (locked) return label(locked);
+  return ws.name ? `Workspace ${i + 1} — ${ws.name}` : `Workspace ${i + 1}`;
 }
 
 /** Snapshot of the desktop sent to the AI on every request (1-based indices),
@@ -422,6 +518,8 @@ export function removeWorkspace() {
   target.windows = [...target.windows, ...ws.windows];
   workspaces.splice(idx, 1);
   activeWs = target.id;
+  // The merge must not carry a second window into a fullscreen workspace.
+  reconcile();
   loadActiveFocus();
   syncActiveFocus();
   persist();
@@ -453,6 +551,9 @@ export function switchWorkspace(dirOrIndex) {
   if (idx === from) return false;
   syncActiveFocus();
   activeWs = workspaces[idx].id;
+  // Repair the fullscreen rule for the workspace being entered before its
+  // fullscreen state is read, so a stale one can never render behind the app.
+  reconcile();
   loadActiveFocus();
   persist();
   // No toast — the active-workspace dot and the window slide are the feedback.
@@ -460,14 +561,18 @@ export function switchWorkspace(dirOrIndex) {
   return true;
 }
 
-/** Move a window into a workspace (by id), then focus it there. */
+/** Move a window into a workspace (by id), then focus it there. A fullscreen
+ *  window cannot leave its workspace, and nothing can be moved into one — a
+ *  fullscreen app owns its screen exclusively. Both refuse silently: the
+ *  context menu already greys the gesture out. */
 export function moveWindow(name, toId) {
   const to = workspaces.find((w) => w.id === toId) || workspaces[0];
   if (!to) return false;
-  const fromId = activeWsObj()?.id || null;
-  // A fullscreen window stays fullscreen in its new workspace: the move must
-  // not drop it into the tiled layout. fullscreen.js retargets the dedicated
-  // workspace off the `desktop:window-moved` event below.
+  if (workspaceLock(to)) return false;
+  if (workspaceLock(workspaces.find((w) => w.windows.includes(name)))) return false;
+  // A fullscreen window keeps its fullscreen state across the move; the move
+  // must not drop it into the tiled layout (see workspaceLock above — a
+  // fullscreen window is normally never movable at all).
   const wasFullscreen = fullscreen === name;
   for (const ws of workspaces) {
     ws.windows = ws.windows.filter((w) => w !== name);
@@ -484,9 +589,6 @@ export function moveWindow(name, toId) {
   persist();
   toast(`Moved ${label(name)} to workspace ${activeWorkspaceIndex() + 1}`, { type: 'info' });
   notify();
-  window.dispatchEvent(new CustomEvent('desktop:window-moved', {
-    detail: { name, fromId, toId: to.id, fullscreen: wasFullscreen },
-  }));
   return true;
 }
 
@@ -498,7 +600,17 @@ export function moveWindowByIndex(name, idx) {
   if (!workspacesEnabled()) return false;
   if (idx === 'new') {
     const ws = pushWorkspace();
-    return moveWindow(name, ws.id);
+    if (moveWindow(name, ws.id)) return true;
+    // Refused (a fullscreen app is in the way): leave no empty workspace behind.
+    if (!ws.windows.length && workspaces.length > 1) {
+      workspaces = workspaces.filter((w) => w.id !== ws.id);
+      if (activeWs === ws.id) {
+        activeWs = workspaces[0].id;
+        loadActiveFocus();
+      }
+      persist();
+    }
+    return false;
   }
   const n = Number(idx);
   // Cap at 9 workspaces — an unbounded index let the AI spin up hundreds
@@ -781,6 +893,10 @@ export function applyLayout(grid, items) {
   );
   grid.dataset.layout = layout.mode;
 
+  // A fullscreen state that does not name a window of THIS workspace is never
+  // rendered: a stale pointer is ignored rather than allowed to make whichever
+  // window opens next come up fullscreen. (It is repaired by `reconcile()`
+  // before the next workspace switch or activation.)
   const fs = fullscreen && items.some((i) => i.name === fullscreen) ? fullscreen : null;
 
   if (layout.mode === 'windows') {
@@ -901,10 +1017,17 @@ export function renderWorkspaceBar() {
     const dot = document.createElement('button');
     dot.type = 'button';
     dot.className = 'workspace-bar-dot';
-    dot.textContent = String(i + 1);
-    // A dedicated fullscreen workspace is named after its app ("Youtube"), so
-    // the number stays for Alt+1..9 while the tooltip says what lives there.
-    const wsLabel = ws.name ? `Workspace ${i + 1} — ${ws.name}` : `Workspace ${i + 1}`;
+    // A dedicated fullscreen workspace shows the app's own icon instead of a
+    // number — the workspace is that app. The number stays in the label for
+    // Alt+1..9.
+    const app = workspaceLock(ws);
+    if (app) {
+      dot.classList.add('is-app');
+      dot.appendChild(pluginIconEl(app, { size: 15, fallback: 'ui/puzzle' }));
+    } else {
+      dot.textContent = String(i + 1);
+    }
+    const wsLabel = workspaceLabel(ws);
     dot.title = wsLabel;
     dot.setAttribute('aria-label', wsLabel);
     dot.classList.toggle('is-active', ws.id === activeWs);
