@@ -176,6 +176,14 @@ export function setTileGlow(tileEl, imageCss) {
   if (!tileEl) return;
   const glow = glowFor(tileEl);
   glow?.classList.remove('tile-glow--soft');
+  // A gradient glow is inherently soft and needs no blur; a subject glow built
+  // from an image needs one wherever the engine could not bake it in. Decide by
+  // whether this is an image at all, rather than clearing unconditionally —
+  // clearing is what made the fallback a no-op for plugins that call
+  // `glowFromImageUrl()` directly.
+  const isImage = typeof imageCss === 'string' && imageCss.indexOf('url(') === 0;
+  if (isImage) applyGlowFallback(tileEl, 7);
+  else glow?.style.removeProperty('--glow-live-blur');
   setGlow(glow, imageCss);
 }
 
@@ -195,11 +203,20 @@ export async function setTileGlowFromUrl(tileEl, url, opts) {
 
   if (!url) {
     glow.classList.remove('tile-glow--soft');
+    glow.style.removeProperty('--glow-live-blur');
     setGlow(glow, null);
     return;
   }
   const css = await glowFromImageUrl(url, opts);
   if (tileEl.__glowSeq !== seq) return; // a newer image won
+
+  // When the canvas could not bake a blur (WKWebView), the baked image is
+  // sharp. Ask CSS for the blur instead, at the same radius the bake would
+  // have used, so the glow reads the same in every engine. On engines that can
+  // bake it this is 0px and costs nothing.
+  const bakeBlur = opts && opts.blur != null ? opts.blur : 7;
+  applyGlowFallback(tileEl, bakeBlur);
+
   setGlow(glow, css || glowUrl(url));
   glow.classList.toggle('tile-glow--soft', !css);
 }
@@ -240,7 +257,7 @@ export function glowFromDrawable(source, size = 64) {
   try {
     // Overscan so the blur's soft (transparent) edges are cropped away.
     const pad = 8;
-    if (typeof ctx.filter === 'string') ctx.filter = 'blur(2.5px)';
+    if (canvasFilterBlurs()) ctx.filter = 'blur(2.5px)';
     ctx.drawImage(source, -pad, -pad, c.width + pad * 2, c.height + pad * 2);
     return `url("${c.toDataURL('image/jpeg', 0.6)}")`;
   } catch (_) {
@@ -256,6 +273,58 @@ const imageGlowCache = new Map();
  *  too much" blur) while still baking the blur in, so the window pays nothing
  *  per frame. Resolves null when the image can't be used — callers can then
  *  fall back to the raw URL. */
+/**
+ * Whether a 2D canvas can blur via `ctx.filter`.
+ *
+ * This has to be *tested*, not feature-detected by type: WKWebView (so Safari
+ * and every macOS webview) exposes no `ctx.filter` at all — it is `undefined` —
+ * and the old check `typeof ctx.filter === 'string'` therefore evaluated false
+ * and silently skipped the blur, baking a *sharp* thumbnail that was then
+ * scaled up to window size. That is why the ambient glow looked crisp in the
+ * desktop browser but blurred in Chrome.
+ *
+ * Detection is by effect, not by name: draw a hard edge with a filter set and
+ * see whether the pixels next to the edge actually changed.
+ */
+let canvasFilterSupport = null;
+function canvasFilterBlurs() {
+  if (canvasFilterSupport !== null) return canvasFilterSupport;
+  canvasFilterSupport = false;
+  try {
+    const src = document.createElement('canvas');
+    src.width = 32;
+    src.height = 32;
+    const sctx = src.getContext('2d');
+    if (!sctx) return canvasFilterSupport;
+    sctx.fillStyle = '#fff';
+    sctx.fillRect(0, 0, 32, 32);
+    sctx.fillStyle = '#000';
+    sctx.fillRect(0, 0, 16, 32);
+
+    const sample = (withFilter) => {
+      const c = document.createElement('canvas');
+      c.width = 32;
+      c.height = 32;
+      const ctx = c.getContext('2d');
+      if (!ctx) return null;
+      if (withFilter) {
+        try { ctx.filter = 'blur(4px)'; } catch (_) { return null; }
+      }
+      ctx.drawImage(src, 0, 0);
+      return ctx.getImageData(15, 16, 1, 1).data[0];
+    };
+
+    const plain = sample(false);
+    const blurred = sample(true);
+    // A working blur pulls white across the edge, brightening the black side.
+    canvasFilterSupport =
+      plain !== null && blurred !== null && Math.abs(blurred - plain) > 10;
+  } catch (_) {
+    canvasFilterSupport = false;
+  }
+  return canvasFilterSupport;
+}
+
 export async function glowFromImageUrl(url, { size = 320, blur = 7 } = {}) {
   if (!url) return null;
   const key = `${url}|${size}|${blur}`;
@@ -276,7 +345,7 @@ export async function glowFromImageUrl(url, { size = 320, blur = 7 } = {}) {
       if (!ctx) return resolve(null);
       try {
         const pad = 12; // crop the blur's soft edges
-        if (typeof ctx.filter === 'string') ctx.filter = `blur(${blur}px)`;
+        if (canvasFilterBlurs()) ctx.filter = `blur(${blur}px)`;
         ctx.drawImage(img, -pad, -pad, c.width + pad * 2, c.height + pad * 2);
         resolve(`url("${c.toDataURL('image/jpeg', 0.7)}")`);
       } catch (_) {
@@ -289,4 +358,46 @@ export async function glowFromImageUrl(url, { size = 320, blur = 7 } = {}) {
 
   imageGlowCache.set(key, css);
   return css;
+}
+
+/**
+ * Blur radius the glow needs from CSS because the canvas could not bake one.
+ * Zero everywhere `ctx.filter` works.
+ */
+/**
+ * Live blur radius to use in place of a baked one, in CSS pixels.
+ *
+ * Not the same number as the baked radius, and deliberately larger. The baked
+ * blur was applied at *thumbnail* scale (the image is downscaled to 320px
+ * before blurring), so when that thumbnail is stretched across a window the
+ * blur is magnified with it — a 7px blur at 320px reads as roughly a 9%
+ * feather of the window's width. A live CSS blur runs at window scale, where
+ * 7px is only ~0.7% and looks almost sharp, which is why restoring the "same"
+ * radius still looked under-blurred.
+ *
+ * Sized to land in the same visual range as the baked result.
+ */
+const LIVE_BLUR_PX = 18;
+
+export function glowLiveBlurPx(bakedBlur = 7) {
+  if (canvasFilterBlurs()) return 0;
+  // Never go below the baked radius, so a caller asking for more blur gets it.
+  return Math.max(LIVE_BLUR_PX, bakedBlur);
+}
+
+/**
+ * Apply the live-blur fallback to a window's glow layer.
+ *
+ * Exported because plugins legitimately build a glow with `glowFromImageUrl()`
+ * and hand the CSS straight to `setTileGlow()` — the youtube window does
+ * exactly that — so the fallback cannot live only inside `setTileGlowFromUrl`.
+ * Routing every caller through one function is the only way the glow is
+ * consistent across engines and across plugins.
+ */
+export function applyGlowFallback(tileEl, bakedBlur) {
+  const glow = glowFor(tileEl);
+  if (!glow) return;
+  const live = glowLiveBlurPx(bakedBlur);
+  if (live > 0) glow.style.setProperty('--glow-live-blur', `${live}px`);
+  else glow.style.removeProperty('--glow-live-blur');
 }

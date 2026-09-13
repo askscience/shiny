@@ -664,7 +664,13 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
      every resize frame and was the whole cost of this effect. Tier 0
      gradients are inherently soft, and Tier 1 images arrive pre-blurred at
      thumbnail size (glowFromDrawable). Colour filters are essentially free. */
-  filter: saturate(1.3) brightness(var(--glow-brightness, 0.5));
+  /* `--glow-live-blur` is 0 by default, so there is no blur pass on an engine
+     that can bake the blur into the thumbnail (Chrome). WKWebView has no canvas
+     `ctx.filter`, so it cannot bake one; `glow.js` sets this variable for that
+     engine only, making the glow a live blur there instead of a sharp image.
+     Costs a re-rasterise per resize — which is exactly why it is opt-in. */
+  filter: blur(var(--glow-live-blur, 0px)) saturate(1.3)
+          brightness(var(--glow-brightness, 0.5));
   opacity: 0;
   transition: opacity var(--duration-slow) var(--ease-out);
   pointer-events: none;
