@@ -24,7 +24,6 @@ use tao::window::WindowBuilder;
 use wry::WebViewBuilder;
 
 use config::PeakdConfig;
-use filter::FilterRuntime;
 
 #[cfg(target_os = "macos")]
 use wry::ProxyConfig;
@@ -88,7 +87,7 @@ struct Shell {
     /// Held so the filter engine outlives the event loop: dropping it would
     /// tear down the proxy the webview is still pointed at.
     _cfg: PeakdConfig,
-    filtering: Option<FilterRuntime>,
+    filtering: Option<filter::BackgroundFilter>,
 }
 
 fn run(cfg: PeakdConfig) -> Result<(), String> {
@@ -107,27 +106,16 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
         .build(&event_loop)
         .map_err(|e| format!("could not create the browser window: {e}"))?;
 
-    // Start filtering before the webview exists, so the first request is
-    // already proxied. An explicit `--proxy` points at an external proxy
-    // (useful for testing); otherwise we bring up our own engine.
+    // Start the filter engine in the background rather than before the webview.
+    //
+    // It used to run inline here, which delayed the first paint by however long
+    // the engine takes to deserialise its compiled rule set — on every launch,
+    // including on macOS where the platform webview ignores the proxy. The page
+    // now starts loading immediately.
     let filtering = if cfg.proxy.is_some() {
         None
     } else {
-        match FilterRuntime::start(&cfg) {
-            Ok(rt) => {
-                println!(
-                    "peakd: filtering engine on {} ({} rules)",
-                    rt.base(),
-                    rt.metrics().snapshot().requests
-                );
-                Some(rt)
-            }
-            Err(err) => {
-                // A browser that cannot filter must still browse.
-                eprintln!("peakd: filtering unavailable ({err}); browsing unfiltered");
-                None
-            }
-        }
+        Some(filter::start_background(&cfg))
     };
 
     println!("peakd: opening {}", cfg.start_url);
@@ -137,11 +125,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
         if cfg.app_mode { "on" } else { "off" }
     );
     match filtering.as_ref() {
-        Some(rt) => println!(
-            "peakd: filtering engine listening on {} — {}",
-            rt.base(),
-            FILTERING_SCOPE
-        ),
+        Some(_) => println!("peakd: filter engine starting in the background — {FILTERING_SCOPE}"),
         None if cfg.proxy.is_some() => println!(
             "peakd: delegating to the external proxy {}",
             cfg.proxy.as_deref().unwrap_or("")
@@ -211,7 +195,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
             }
             Event::LoopDestroyed => {
                 if let Some(rt) = shell.filtering.as_ref() {
-                    println!("peakd: {}", rt.snapshot().summary());
+                    println!("peakd: filter engine ready: {}", rt.ready());
                 }
             }
             _ => {}
@@ -229,18 +213,59 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
 fn apply_proxy<'a>(
     builder: WebViewBuilder<'a>,
     cfg: &PeakdConfig,
-    own_engine: Option<&FilterRuntime>,
+    own_engine: Option<&filter::BackgroundFilter>,
 ) -> WebViewBuilder<'a> {
-    // An explicit `--proxy` wins; otherwise use the engine we started.
-    let endpoint = match cfg.proxy_endpoint() {
-        Some(ep) => ep,
-        None => match own_engine {
-            Some(rt) => rt.endpoint(),
-            None => return builder,
-        },
-    };
-    let (host, port) = endpoint;
+    // An explicit `--proxy` wins and is known immediately.
+    if let Some((host, port)) = cfg.proxy_endpoint() {
+        return route_through(builder, host, port);
+    }
 
+    let Some(engine) = own_engine else {
+        return builder;
+    };
+
+    // The engine is starting in the background, so its port is not known yet
+    // and cannot be waited for without giving back the startup time this change
+    // exists to save.
+    //
+    // On macOS that costs nothing: the platform webview ignores `ProxyConfig`
+    // anyway (see the note above), so routing it was never going to filter
+    // anything. Blocking startup to configure a proxy that has no effect was
+    // pure loss.
+    //
+    // On Linux the environment variables *are* the mechanism and are read when
+    // the webview's network process starts, so there the port genuinely has to
+    // be known first — waiting is the correct trade.
+    #[cfg(target_os = "macos")]
+    {
+        let _ = engine;
+        println!(
+            "peakd: webview filtering is not wired on macOS, so the engine's port is not \
+             needed at startup"
+        );
+        builder
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        match engine.wait_for_endpoint(std::time::Duration::from_secs(10)) {
+            Some((host, port)) => route_through(builder, host, port),
+            None => {
+                eprintln!(
+                    "peakd: filter engine did not come up in time; browsing without it"
+                );
+                builder
+            }
+        }
+    }
+}
+
+/// Point the webview at a proxy, per platform.
+fn route_through<'a>(
+    builder: WebViewBuilder<'a>,
+    host: String,
+    port: String,
+) -> WebViewBuilder<'a> {
     #[cfg(target_os = "macos")]
     {
         println!("peakd: routing webview traffic through {host}:{port}");

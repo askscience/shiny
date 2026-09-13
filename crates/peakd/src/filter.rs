@@ -20,9 +20,74 @@ use shiny_filter::proxy::{run_proxy, ProxyConfig};
 use crate::config::PeakdConfig;
 
 /// A proxy running on its own runtime, owned by the browser shell.
+/// Start the filter engine on a background thread.
+///
+/// The engine takes real time to come up: it deserialises a ~6 MB compiled
+/// rule set, builds a tokio runtime and binds a listener. Doing that inline
+/// before the webview exists meant every launch showed a **blank window** for
+/// the duration — which is part of why the app felt slower to open than Chrome,
+/// and it is paid even on macOS where the platform webview ignores the proxy
+/// entirely.
+///
+/// Returns immediately. The page starts loading at once; anything that needs
+/// the proxy finds it ready by the time it asks.
+pub fn start_background(cfg: &PeakdConfig) -> BackgroundFilter {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel();
+    let cfg = cfg.clone();
+
+    std::thread::Builder::new()
+        .name("peakd-filter-start".into())
+        .spawn(move || {
+            let started = std::time::Instant::now();
+            let result: anyhow::Result<FilterRuntime> = FilterRuntime::start(&cfg);
+            match &result {
+                Ok(rt) => println!(
+                    "peakd: filter engine ready on {} in {:?}",
+                    rt.base(),
+                    started.elapsed()
+                ),
+                Err(err) => eprintln!("peakd: filter engine unavailable ({err})"),
+            }
+            let _ = tx.send(result);
+        })
+        .expect("failed to spawn the filter startup thread");
+
+    BackgroundFilter { rx: Some(rx) }
+}
+
+/// Handle to a filter engine that is starting up. Dropping it keeps whatever
+/// has already been started alive for the life of the process.
+pub struct BackgroundFilter {
+    rx: Option<std::sync::mpsc::Receiver<anyhow::Result<FilterRuntime>>>,
+}
+
+impl BackgroundFilter {
+    /// Wait for the engine's address, for platforms that need it before the
+    /// webview is created (Linux: the proxy is passed through the environment
+    /// and read when WebKit's network process starts).
+    #[cfg(not(target_os = "macos"))]
+    pub fn wait_for_endpoint(&self, timeout: std::time::Duration) -> Option<(String, String)> {
+        let rx = self.rx.as_ref()?;
+        rx.recv_timeout(timeout).ok()?.ok().map(|rt| rt.endpoint())
+    }
+
+    /// Whether the engine has finished starting. Never blocks.
+    pub fn ready(&self) -> bool {
+        self.rx
+            .as_ref()
+            .map(|rx| !matches!(rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)))
+            .unwrap_or(true)
+    }
+}
+
 pub struct FilterRuntime {
     addr: SocketAddr,
     base: String,
+    /// Read only where the shell has to hand the proxy to the webview, which on
+    /// macOS it never does (see `apply_proxy`). Kept on every platform because
+    /// the struct is constructed the same way everywhere.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     metrics: Metrics,
     /// Wrapped in an `Option` so `Drop` can consume it: `shutdown_timeout`
     /// takes the runtime by value and `Drop` only has `&mut self`.
@@ -101,14 +166,20 @@ impl FilterRuntime {
     }
 
     /// `host:port` for `ProxyConfig`, which wants them separately.
+    ///
+    /// Linux-only in practice: macOS builds the webview without a proxy, so the
+    /// shell never asks for the port there.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub fn endpoint(&self) -> (String, String) {
         ("127.0.0.1".to_string(), self.addr.port().to_string())
     }
 
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub fn metrics(&self) -> &Metrics {
         &self.metrics
     }
 
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub fn snapshot(&self) -> MetricsSnapshot {
         self.metrics.snapshot()
     }
