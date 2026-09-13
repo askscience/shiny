@@ -22,7 +22,7 @@ import {
   initDesktop, ensureWindows, activeWindowNames, activeWorkspaceIndex,
   applyLayout, renderWorkspaceBar,
   focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
-  setSurfaceNamesProvider,
+  setSurfaceNamesProvider, isFocusOnlyChange, bumpZ,
 } from './desktop.js';
 import { toggleWindowFullscreen, setFullscreenSurfaceProvider } from './fullscreen.js';
 import { apiFetch } from './api.js';
@@ -333,10 +333,30 @@ function syncWindowChrome(el, name) {
     : `Full screen ${pluginLabel(name)}`);
 }
 
+/** Plugin names that already had a window at the previous render. A name that
+ *  appears for the first time is a window the user just opened, and must come
+ *  up above the existing ones rather than at whatever stacking order it
+ *  happened to be left with. */
+let mountedNames = new Set();
+
 function renderTiles() {
   if (!grid) return;
   const names = surfacePlugins();
+
+  // Names appearing for the first time are windows being opened now.
+  const opening = names.filter((n) => !mountedNames.has(n));
   ensureWindows(names);
+
+  // Give a window being opened the top of the stacking order *before* the
+  // layout applies it, so one pass is enough.
+  //
+  // `geomFor` cannot do this itself: it only auto-assigns an order when none is
+  // stored (`g.z <= 0`), so a plugin used earlier in the session keeps its old,
+  // stale z and reopens *underneath* windows that have been focused since —
+  // exactly what a reopened calculator did, at z=1294 below mail at z=1778.
+  for (const name of opening) bumpZ(name);
+
+  mountedNames = new Set(names);
 
   const phone = PHONE_QUERY.matches && names.length > 0;
   const visible = activeWindowNames(names);
@@ -404,6 +424,12 @@ function renderTiles() {
   // change so it follows the tile (activation toggles, layout switches).
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
   resizeMapSoon();
+
+  // Focus the window that was just opened, after the layout has positioned it,
+  // so the user's new window is both on top and active. Done last and
+  // explicitly, rather than relying on which window the layout happened to
+  // touch last.
+  if (opening.length) focusWindow(opening[opening.length - 1]);
 }
 
 /** Slide the visible windows into place after a workspace switch, coming from
@@ -575,6 +601,11 @@ export function initTileManager() {
 
   // Desktop state changes (workspace/focus/fullscreen) re-tile the windows.
   window.addEventListener('desktop:changed', (e) => {
+    // A focus-only change has already repainted the focus classes; re-tiling
+    // every window and rebuilding the workspace bar for it was the click
+    // latency. Nothing else on screen depends on which window has focus.
+    if (isFocusOnlyChange(e.detail)) return;
+
     const idx = activeWorkspaceIndex();
     renderTiles();
     // A workspace switch slides the incoming windows into place (desktop.js
