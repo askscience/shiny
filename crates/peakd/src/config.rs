@@ -30,6 +30,34 @@ pub struct PeakdConfig {
     pub data_dir: String,
     /// Skip downloading filter lists; use only the cache and pinned rules.
     pub offline: bool,
+    /// Run the in-app frame benchmark instead of a normal session.
+    ///
+    /// Off by default and compiled into an `Option`, so a normal launch carries
+    /// no measurement code on the hot path.
+    pub benchmark: Option<Benchmark>,
+}
+
+/// Sensible defaults, so `--benchmark-seconds 5` works on its own and in any
+/// argument order.
+fn default_benchmark() -> Benchmark {
+    Benchmark {
+        seconds: 10,
+        settle_seconds: 12,
+        output: None,
+    }
+}
+
+/// How to run the in-app frame benchmark.
+#[derive(Clone, Debug)]
+pub struct Benchmark {
+    /// Seconds to measure for, once the app has settled.
+    pub seconds: u64,
+    /// Seconds to wait for the app to boot before measuring. The orb, the tiles
+    /// and the map all initialise asynchronously, so measuring immediately would
+    /// report the startup burst as if it were steady state.
+    pub settle_seconds: u64,
+    /// Write the JSON report here as well as printing it.
+    pub output: Option<String>,
 }
 
 impl PeakdConfig {
@@ -53,6 +81,7 @@ impl PeakdConfig {
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or_else(default_data_dir),
             offline: env_flag("PEAKD_OFFLINE"),
+            benchmark: None,
         };
 
         let args: Vec<String> = env::args().skip(1).collect();
@@ -66,6 +95,45 @@ impl PeakdConfig {
                     }
                 }
                 "--app-mode" | "--app" => cfg.app_mode = true,
+                "--benchmark" => {
+                    // The benchmark makes the app measure *itself*, in the
+                    // window that is actually on screen. That is the whole
+                    // point: a separate measurement window never becomes
+                    // visible, and WebKit throttles `requestAnimationFrame` to
+                    // a near stop in a hidden page — measured at 0 frames in
+                    // 5 s, against ~30 fps in the real window.
+                    cfg.benchmark = Some(default_benchmark());
+                }
+                "--benchmark-seconds" => {
+                    // Consume the value unconditionally. Guarding this on
+                    // `cfg.benchmark` being set already meant the value fell
+                    // through to the bare-argument branch below and was taken
+                    // as the URL to open — which is what actually happened the
+                    // first time these flags were used.
+                    if let Some(v) = args.get(i + 1) {
+                        if let Some(n) = v.parse().ok() {
+                            cfg.benchmark.get_or_insert_with(default_benchmark).seconds = n;
+                        }
+                        i += 1;
+                    }
+                }
+                "--benchmark-settle" => {
+                    // See the note on --benchmark-seconds: consume unconditionally.
+                    if let Some(v) = args.get(i + 1) {
+                        if let Some(n) = v.parse().ok() {
+                            cfg.benchmark.get_or_insert_with(default_benchmark).settle_seconds = n;
+                        }
+                        i += 1;
+                    }
+                }
+                "--benchmark-output" => {
+                    // See the note on --benchmark-seconds: consume unconditionally.
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.benchmark.get_or_insert_with(default_benchmark).output =
+                            Some(v.clone());
+                        i += 1;
+                    }
+                }
                 "--offline" => cfg.offline = true,
                 "--data-dir" => {
                     if let Some(v) = args.get(i + 1) {
@@ -213,6 +281,10 @@ OPTIONS:
         --proxy <H:P>    Route webview traffic through a filtering proxy
         --data-dir <DIR> Filter cache location (default data/peakd)
         --offline        Never download filter lists; use the cache only
+        --benchmark      Measure this app's own frame timing, then exit
+        --benchmark-seconds <N>  Measurement window (default 10)
+        --benchmark-settle <N>   Seconds to wait for the app to boot (default 12)
+        --benchmark-output <P>   Also write the JSON report to P
         --title <TITLE>  Window title
         --size <WxH>     Window size (default 1280x860)
     -h, --help           Show this help

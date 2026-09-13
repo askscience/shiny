@@ -6,12 +6,17 @@
 //! how fast does it paint" cannot be answered by inspection — it has to be
 //! measured in the engine itself.
 //!
-//! It also doubles as the frame-rate harness used by `benchmarks/run.sh app`:
-//! `--frames` measures the app's real animation loop.
+//! It reports capabilities, a live paint audit and a frame rate. The frame
+//! rate from here is only trustworthy when the window is genuinely frontmost:
+//! an occluded WKWebView has `requestAnimationFrame` throttled, and this probe
+//! cannot guarantee visibility. For a reliable timing measurement use the
+//! browser's own benchmark (below), which runs in the window the user is
+//! actually looking at.
 //!
 //! ```text
-//! cargo run -p peakd --example probe -- --frames
-//! cargo run -p peakd --example probe -- --json
+//! cargo run -p peakd --example probe -- --audit     # paint audit only
+//! cargo run -p peakd --example probe -- --frames    # frame rate (see note)
+//! ./target/release/peakd --benchmark                # reliable timing
 //! ```
 
 use std::process::ExitCode;
@@ -222,7 +227,17 @@ fn main() -> ExitCode {
         .and_then(|v| v.parse().ok())
         .unwrap_or(6000);
 
-    match run(&url, want_frames, frames_ms, settle_ms, visible, (w, h), user.zip(password), audit_only, no_backdrop) {
+    match run(
+        &url,
+        want_frames,
+        frames_ms,
+        settle_ms,
+        visible,
+        (w, h),
+        user.zip(password),
+        audit_only,
+        no_backdrop,
+    ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("probe: {err}");
@@ -318,6 +333,9 @@ fn run(
             return;
         };
 
+        if std::env::var("PROBE_DEBUG").is_ok() {
+            eprintln!("step: {step:?}");
+        }
         match step {
             Step::Login => {
                 let js = login_js(&credentials.0, &credentials.1);

@@ -10,6 +10,7 @@
 //! * [`config`] — launch flags/environment.
 //! * [`filter`] — the filtering proxy on its own runtime.
 
+mod bench;
 mod config;
 mod filter;
 
@@ -17,7 +18,7 @@ use std::process::ExitCode;
 
 use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
-use tao::event_loop::{ControlFlow, EventLoop};
+use tao::event_loop::ControlFlow;
 use tao::window::WindowBuilder;
 
 use wry::WebViewBuilder;
@@ -94,7 +95,10 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
     init_tracing();
     activate_app();
 
-    let event_loop = EventLoop::new();
+    // Typed with the benchmark's step enum so one loop serves both a normal
+    // session (where the variant is never sent) and a benchmark run.
+    let event_loop = bench::event_loop();
+    let proxy = event_loop.create_proxy();
 
     let window = WindowBuilder::new()
         .with_title(cfg.window_title.clone())
@@ -177,9 +181,15 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
 
     let builder = apply_proxy(builder, &cfg, filtering.as_ref());
 
-    let _webview = builder
+    let webview = builder
         .build(&window)
         .map_err(|e| format!("could not create the webview: {e}"))?;
+
+    // The benchmark takes over the process: it measures, prints and exits.
+    if let Some(bench_config) = cfg.benchmark.clone() {
+        bench::announce(&bench_config);
+        bench::run(webview, bench::BenchState::new(bench_config), proxy, event_loop);
+    }
 
     let shell = Shell { _cfg: cfg, filtering };
 
@@ -200,6 +210,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
             }
             _ => {}
         }
+        let _ = &webview;
     });
 }
 
