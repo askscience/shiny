@@ -44,6 +44,21 @@
     longTasks: [],
     started: false,
     durationMs: 0,
+    /** rAF callbacks not preceded by a single timer tick, in a window where
+     *  the main thread was demonstrably alive. */
+    visibilityChanges: [],
+    hiddenAtStart: false,
+    /**
+     * A second, independent canary: a 1 ms busy frame driven by `setInterval`.
+     *
+     * `setInterval` and `requestAnimationFrame` are governed by *different*
+     * throttles. If rAF stalls while this keeps ticking, the page is being
+     * frame-throttled (WebKit's occlusion/visibility heuristics, or the
+     * compositor). If this stalls *too*, the main thread itself is starved.
+     * That single comparison is what separates the two causes.
+     */
+    timerTicks: 0,
+    timerWorstMs: 0,
   };
 
   window.__peakdBench = bench;
@@ -65,6 +80,15 @@
     }
   } catch (e) {}
 
+  bench.hiddenAtStart = !!document.hidden;
+  document.addEventListener("visibilitychange", function () {
+    if (!bench.started) return;
+    bench.visibilityChanges.push({
+      atMs: Math.round(performance.now() - bench.startedAt),
+      state: document.visibilityState,
+    });
+  });
+
   // A resize during the run is a strong hint that whoever is measuring is
   // dragging the window; recording it lets the report separate "slow while
   // moving" from "slow in general".
@@ -77,6 +101,22 @@
       h: window.innerHeight,
     });
   });
+
+  // Independent of rAF: a plain timer doing a tiny, fixed amount of work. It
+  // answers "was the main thread alive?" for any window in which rAF produced
+  // nothing.
+  var timerLast = performance.now();
+  setInterval(function () {
+    if (!bench.started || !bench.running) return;
+    var now = performance.now();
+    var dt = now - timerLast;
+    timerLast = now;
+    bench.timerTicks++;
+    if (dt > bench.timerWorstMs) bench.timerWorstMs = dt;
+    // ~1 ms of work, so this cannot be dismissed as a no-op.
+    var until = now + 1;
+    while (performance.now() < until) { /* spin */ }
+  }, 100);
 
   var last = 0;
 
@@ -137,6 +177,10 @@
       stalls: b.stalls,
       resizes: b.resizes,
       longTasks: b.longTasks,
+      visibilityChanges: b.visibilityChanges,
+      hiddenAtStart: b.hiddenAtStart,
+      timerTicks: b.timerTicks,
+      timerWorstMs: +b.timerWorstMs.toFixed(1),
       // Context so a result is comparable across machines.
       dpr: window.devicePixelRatio,
       viewport: { w: window.innerWidth, h: window.innerHeight },

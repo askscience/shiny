@@ -181,6 +181,94 @@ pub fn run(
     })
 }
 
+/// Turns the raw counters into the one thing a reader wants: which mechanism
+/// stalled, if any.
+///
+/// The comparison is between two independent clocks. `requestAnimationFrame`
+/// and `setInterval` are throttled by *different* rules, so:
+///
+/// * rAF stalls, timers keep ticking  -> the page is being *frame* throttled.
+///   WebKit's visibility/occlusion heuristics, or a compositor that is not
+///   taking frames. The main thread is fine.
+/// * rAF and timers both stall        -> the main thread is starved.
+/// * neither stalls, yet it feels slow -> the cost is outside the page entirely:
+///   the window server recompositing a moving window. Nothing in JavaScript can
+///   observe that, which is precisely why it must be inferred from the absence
+///   of the other two.
+fn diagnose(obj: &serde_json::Map<String, serde_json::Value>) -> serde_json::Value {
+    let fps = obj.get("fps").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let seconds = obj
+        .get("durationMs")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0)
+        / 1000.0;
+    let timer_ticks = obj.get("timerTicks").and_then(|v| v.as_u64()).unwrap_or(0);
+    let timer_worst = obj
+        .get("timerWorstMs")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let worst = obj.get("worstFrameMs").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let stalls = obj
+        .get("stalls")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    let hidden = obj
+        .get("hiddenAtStart")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // The canary fires every 100 ms, so this is the share of expected ticks.
+    let expected_ticks = (seconds * 10.0).max(1.0);
+    let timer_share = (timer_ticks as f64 / expected_ticks).min(1.0);
+
+    let starved_detail = format!(
+        "the timer canary stalled too (worst gap {timer_worst:.0} ms, {:.0}% of expected \
+         ticks), so the main thread itself was blocked rather than frames being \
+         withheld. Look at longTasks and stalls for the cause",
+        timer_share * 100.0
+    );
+
+    let (verdict, detail) = if hidden {
+        (
+            "page-hidden",
+            "the page reported document.hidden at the start: WebKit throttles \
+             requestAnimationFrame in a hidden or occluded page, so nothing here \
+             describes a visible window",
+        )
+    } else if timer_share < 0.85 || timer_worst > 250.0 {
+        ("main-thread-starved", starved_detail.as_str())
+    } else if fps > 0.0 && worst <= 40.0 && stalls == 0 {
+        (
+            "no-page-side-stall",
+            "frames were produced on schedule and no stall exceeded 50 ms, so the \
+             page and its main thread were healthy for this window. If dragging \
+             still felt slow, the cost is outside the page — the window server \
+             recompositing a moving window — which JavaScript cannot observe",
+        )
+    } else if stalls > 0 {
+        (
+            "frames-withheld",
+            "requestAnimationFrame was withheld while the timer canary kept running: \
+             frame throttling, not main-thread starvation",
+        )
+    } else {
+        (
+            "inconclusive",
+            "no single mechanism dominates; read worstFrameMs and stalls directly",
+        )
+    };
+
+    // Bind first: a leading unary `+` is a JS habit, not Rust, and is not valid
+    // where a JSON macro expects an expression.
+    let timer_share_pct = (timer_share * 100.0).round() / 100.0;
+    serde_json::json!({
+        "verdict": verdict,
+        "detail": detail,
+        "timerShare": timer_share_pct,
+    })
+}
+
 /// Normalises, annotates, prints and optionally writes the report.
 fn finish(raw: &str, moves: u64, first_move_ms: Option<u64>, output: Option<&str>) {
     let json = raw.trim().trim_matches('"').replace("\\\"", "\"");
@@ -210,6 +298,10 @@ fn finish(raw: &str, moves: u64, first_move_ms: Option<u64>, output: Option<&str
                 },
             }),
         );
+    }
+
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("diagnosis".into(), diagnose(obj));
     }
 
     let pretty = serde_json::to_string_pretty(&value).unwrap_or(json);
