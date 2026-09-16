@@ -112,6 +112,9 @@ function handleShortTapGesture() {
 }
 
 function handleStart(e) {
+  // Only the primary button drives the voice gestures. A right-click is the
+  // context-menu gesture (contextMenu.js), so it must not start a tap/listen.
+  if (e.button !== 0) return;
   // Never gate gestures on voice readiness here — the action callbacks decide
   // (typing must always work; voice gestures show their own feedback).
   e.preventDefault();
@@ -144,6 +147,7 @@ function handleStart(e) {
 }
 
 function handleEnd(e) {
+  if (e.button !== 0) return;
   e.preventDefault();
   container.classList.remove('pressed');
   if (pointerId != null && container.releasePointerCapture) {

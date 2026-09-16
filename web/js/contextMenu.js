@@ -13,6 +13,12 @@
  *   • Right-click the empty desktop         → desktop menu (new / remove
  *     workspace, switch workspace, layout mode).
  *   • Right-click a workspace dot           → workspace menu (new / remove).
+ *   • Right-click the AI orb                → assistant menu (new chat, chat
+ *     history, type a message, voice, settings).
+ *
+ * On a touchscreen a long press opens the same menus (there is no right
+ * button). The orb and the virtual keyboard keep their own press-and-hold, so
+ * they opt out.
  *
  * Apps extend their own window menu by exporting `contextMenu(ctx)` from their
  * `web/plugin.js` surface (see PLUGINS.md §19); anything they return is spliced
@@ -33,10 +39,15 @@ import {
 import { toggleWindowFullscreen } from './fullscreen.js';
 import {
   deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
-  isCoreWindow, closeCoreWindow,
+  isCoreWindow, closeCoreWindow, openCoreWindow,
 } from './tiles.js';
 import { refreshGpsPosition } from './map.js';
-import { setIcon } from '../ui/index.js';
+import { setIcon, toast } from '../ui/index.js';
+import { newChat, stopActiveTurn, isTurnActive } from './agent.js';
+import { openChatHistory } from './chatHistory.js';
+import { openTextInput } from './textInput.js';
+import { startListening, cancelListening, isListening } from './voice.js';
+import { getAiName, getWakeWord, setWakeWord } from './preferences.js';
 
 /* ── Popup engine ─────────────────────────────────────────────── */
 
@@ -505,6 +516,171 @@ function workspaceDotMenu(index) {
   ];
 }
 
+/* ── The AI orb ───────────────────────────────────────────────── */
+
+/** Start a single listen from the orb menu. A menu click is a real user
+ *  gesture, so the microphone request is allowed to run. */
+async function orbListen() {
+  if (isListening()) return;
+  const sphere = document.getElementById('sphere-container');
+  if (sphere?.classList.contains('disabled')) {
+    toast('Voice is preparing — try again in a moment', { type: 'info' });
+    return;
+  }
+  if (isTurnActive()) await stopActiveTurn('menu');
+  try {
+    await startListening('single');
+  } catch (e) {
+    toast(e.message || 'Microphone unavailable', { type: 'error' });
+  }
+}
+
+/** Right-click / long-press on the orb: the assistant and voice actions. */
+function orbMenu() {
+  return [
+    { type: 'heading', label: getAiName() },
+    {
+      type: 'item',
+      label: 'New chat',
+      icon: 'ui/plus',
+      onClick: () => {
+        newChat();
+        toast('Started a new chat', { type: 'info' });
+      },
+    },
+    { type: 'item', label: 'Chat history', icon: 'ui/list', onClick: () => openChatHistory() },
+    { type: 'item', label: 'Type a message', icon: 'ui/message-circle', onClick: () => openTextInput() },
+    { type: 'separator' },
+    {
+      type: 'submenu',
+      label: 'Voice',
+      icon: 'ui/mic',
+      items: [
+        {
+          type: 'item',
+          label: 'Listen now',
+          icon: 'ui/mic',
+          disabled: isListening(),
+          onClick: () => void orbListen(),
+        },
+        {
+          type: 'item',
+          label: 'Stop listening',
+          icon: 'ui/stop',
+          disabled: !isListening(),
+          onClick: () => cancelListening(),
+        },
+        { type: 'separator' },
+        {
+          type: 'item',
+          label: 'Wake word',
+          icon: 'ui/mic',
+          checked: getWakeWord(),
+          onClick: () => setWakeWord(!getWakeWord()),
+        },
+      ],
+    },
+    { type: 'separator' },
+    { type: 'item', label: 'Settings', icon: 'ui/settings', onClick: () => openCoreWindow('settings') },
+  ];
+}
+
+/* ── Long-press → context menu (touch) ────────────────────────── */
+
+const LONG_PRESS_MS = 450;      // a touch held this long opens the menu
+const LONG_PRESS_MOVE = 12;     // px of travel that turns the gesture into a scroll
+
+/**
+ * Targets that keep their own press-and-hold, or need the browser's native
+ * editing menu. The orb already owns the long press (it starts voice), and the
+ * virtual keyboard repeats a held key.
+ */
+const LONG_PRESS_EXCLUDE = [
+  '#sphere-container',
+  '#keyboard-bar',
+  `.${MENU_CLS}`,
+  'input',
+  'textarea',
+  'select',
+  '[contenteditable="true"]',
+  '[data-no-longpress]',
+].join(',');
+
+/** While set, the browser's own long-press menu is suppressed for touch. */
+let suppressNativeMenuUntil = 0;
+
+/**
+ * Translate a touch long-press into a `contextmenu` event on the pressed
+ * element, so every desktop menu is reachable on a touchscreen. Mouse input is
+ * ignored (it has a right button) and anything that owns the gesture opts out.
+ */
+function wireLongPress() {
+  if (document.__longPressWired) return;
+  document.__longPressWired = true;
+
+  let timer = null;
+  let node = null;
+  let x = 0;
+  let y = 0;
+  // A long press must not also fire the element's click action when the finger
+  // lifts; swallow that click. It is cleared on the next pointerdown, so the
+  // tap that picks a menu item is never swallowed.
+  let swallowClick = false;
+
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    node = null;
+  };
+
+  // Suppress the browser's own callout/context menu for touch in general: we
+  // either open our own menu or the target opted out of the gesture entirely.
+  document.addEventListener('contextmenu', (e) => {
+    if (Date.now() < suppressNativeMenuUntil) e.preventDefault();
+  }, { capture: true });
+
+  document.addEventListener('click', (e) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, { capture: true });
+
+  document.addEventListener('pointerdown', (e) => {
+    swallowClick = false;
+    if (e.pointerType === 'mouse' || e.button !== 0) return;
+    if (e.target?.closest?.(LONG_PRESS_EXCLUDE)) return;
+    suppressNativeMenuUntil = Date.now() + 1200;
+    node = e.target;
+    x = e.clientX;
+    y = e.clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      let target = node;
+      node = null;
+      if (!target || !target.isConnected) target = document.elementFromPoint(x, y);
+      if (!target) return;
+      swallowClick = true;
+      target.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        button: 2,
+        clientX: x,
+        clientY: y,
+      }));
+    }, LONG_PRESS_MS);
+  }, { capture: true, passive: true });
+
+  document.addEventListener('pointermove', (e) => {
+    if (!timer) return;
+    if (Math.hypot(e.clientX - x, e.clientY - y) > LONG_PRESS_MOVE) cancel();
+  }, { capture: true, passive: true });
+
+  document.addEventListener('pointerup', cancel, { capture: true, passive: true });
+  document.addEventListener('pointercancel', cancel, { capture: true, passive: true });
+}
+
 /* ── Wiring ───────────────────────────────────────────────────── */
 
 export function initContextMenu() {
@@ -523,6 +699,14 @@ export function initContextMenu() {
       e.preventDefault();
       closeAllMenus();
       openMenu(entries, e.clientX, e.clientY);
+      return;
+    }
+
+    // The AI orb → assistant / voice menu.
+    if (target.closest?.('#sphere-container')) {
+      e.preventDefault();
+      closeAllMenus();
+      openMenu(orbMenu(), e.clientX, e.clientY);
       return;
     }
 
@@ -571,4 +755,7 @@ export function initContextMenu() {
       openMenu(desktopMenu(), e.clientX, e.clientY);
     }
   });
+
+  // Touchscreens have no right button: a long press opens the same menus.
+  wireLongPress();
 }
