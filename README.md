@@ -58,7 +58,7 @@ The web UI (`web/`) is a desktop-style workspace:
   desktop backgrounds
 - Plugin manager: runtime install/uninstall/activate of `.zip`/`.tar.gz` plugins with
   hot router swap and an install audit log
-- Settings control panel and a Plugins page (install / activate / activity feed)
+- Settings and Plugins windows on the desktop (install / activate / activity feed)
 - Noir + Light themes with a user-selectable accent and gradient; unified UI library
 - GNOME-style plugin notifications and destination insight cards
 
@@ -173,7 +173,7 @@ Speech synthesis runs on a local Supertonic sidecar.
 
 ## Plugins
 
-Every plugin is optional and activated **per user** (on the Plugins page or via its
+Every plugin is optional and activated **per user** (in the Plugins window or via its
 tray icon). Activating one registers its agent tools and skill docs, mounts its REST
 routes, runs its migrations, and — where it has a window surface — opens a window.
 
@@ -255,7 +255,7 @@ Browser (web/)                             shiny (core binary)
 │ desktop workspace shell    │              │ agent loop (Ollama) + web_search +   │
 │  HUD · windows · orb       │    HTTP      │ plugin/desktop control actions       │
 │  compose chat · settings   │◀────────────▶│ voice (Vosk/Whisper + Supertonic TTS) │
-│  / plugins pages           │              │ auth · multi-user · preferences      │
+│  plugins · windows         │              │ auth · multi-user · preferences      │
 └───────────────────────────┘              │ trip/map/diary REST + services        │
                                            │ plugin manager ── hot-swap router     │
                                            └──────────────────┬────────────────────┘
@@ -372,8 +372,9 @@ only while their plugin is installed (and are authenticated as well).
 `/api/radio/nowplaying` (`radio`), `/api/youtube/search` (`youtube`),
 `/api/studio/*` (`studio`).
 
-**Static** — `/settings` and `/plugins` are standalone pages; `/plugins/<name>/*`
-serves each plugin’s web assets; everything else falls back to the app (`web/`).
+**Static** — the app shell is served at `/`; `/plugins/<name>/*` serves each
+plugin’s web assets; everything else falls back to the app (`web/`). Settings and
+Plugins are built-in windows, not separate pages.
 
 ## Voice & Languages
 

@@ -73,16 +73,17 @@
 /* Travel panel — replace the hardcoded black drop shadow. */
 #travel-panel { box-shadow: var(--shadow-float); }
 
-/* Settings + plugins pages. */
-.settings-section, .settings-nav, .plugins-section { border-color: transparent; }
+/* Settings + plugins windows. */
+.settings-section, .settings-nav { border-color: transparent; }
 .bg-preset { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
 .bg-preset.is-active { box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 26px var(--accent-glow); }
 .settings-nav-item { box-shadow: var(--shadow-raise-sm); }
 .settings-nav-item.is-active { box-shadow: var(--shadow-inset-sm); }
-.settings-panel-icon, .plugin-row-icon { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.settings-panel-icon, .plugin-card-icon { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
 .settings-panel .ui-toggle-row { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-raise-sm); }
-.plugins-dropzone { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-inset); }
-.plugins-dropzone:hover, .plugins-dropzone.dragging { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--shadow-inset); }
+.plugin-card { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.plugin-card-mode .ui-select-wrap { box-shadow: var(--shadow-inset-sm); }
+.plugins-activity-details { border-color: transparent; box-shadow: var(--shadow-inset-sm); }
 
 /* ── Ambient glow ────────────────────────────────────────────
    Soft-UI surfaces are opaque and all one colour, which would hide the

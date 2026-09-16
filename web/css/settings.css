@@ -1,152 +1,90 @@
-/* Settings page — flat editorial style. Sharp squares, hairline dividers,
-   huge display type. Components come from /ui + the active theme. */
+/* Settings window — the built-in Settings surface that lives in a tile.
+   Window chrome (frame, title bar, radius) comes from tiles.css; this file
+   only styles the panel inside it. Components come from /ui + the theme. */
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  min-height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-::selection { background: var(--accent-soft); color: var(--text); }
-.hidden { display: none !important; }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-}
-
-body {
-  background: var(--gradient-mesh), var(--bg);
-  background-attachment: fixed;
-}
-
-.settings-page {
-  position: relative;
-  z-index: 1;
-  width: min(1080px, 100%);
-  margin: 0 auto;
-  padding: 0 32px calc(72px + env(safe-area-inset-bottom));
-}
-
-/* ── Header (shared page pattern with the plugins page) ────── */
-.page-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* ── Shell: sidebar + panels ───────────────────────────────── */
+.settings-window {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 2px;
-  /* No plate: the header stays clear and only blurs whatever slides under it. */
-  background: none;
-  border-bottom: 0;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  align-items: stretch;
 }
-.page-header-left { display: flex; align-items: center; gap: 12px; }
 
-@media (prefers-reduced-transparency: reduce) {
-  .page-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
-}
-.page-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px; height: 42px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  border-radius: var(--radius-md);
-  transition: color var(--duration-fast), background var(--duration-fast);
-}
-.page-back:hover { color: var(--text); background: var(--accent-soft); }
-.page-brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--text); }
-.page-brand-mark { width: 38px; height: 38px; }
-.page-brand-name {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.page-user {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  padding: 6px 13px 6px 7px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-}
-.page-user-avatar.profile-avatar { width: 24px; height: 24px; border-radius: 0; font-size: 10px; border-width: 1px; }
-
-/* ── Hero ──────────────────────────────────────────────────── */
-.settings-hero { padding: 36px 2px 30px; display: flex; flex-direction: column; gap: 10px; }
-.settings-hero .ui-eyebrow { color: var(--muted); }
-.settings-title {
-  font-family: var(--font-display);
-  font-size: var(--type-hero);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  /* Type as hero: a soft text→accent sweep. */
-  background: var(--gradient-text);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-}
-.settings-subtitle { max-width: 46ch; font-size: 14px; }
-
-/* ── Sections — glass panels matching the plugin/tile windows ── */
-.settings-section {
+.settings-nav {
+  flex: 0 0 208px;
   display: flex;
   flex-direction: column;
-  padding: 32px 32px;
-  margin-bottom: 16px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  /* Opaque surface (matches plugin tiles) so a desktop background never
-     bleeds through the settings content. */
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-glass);
+  gap: 4px;
+  padding: 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.settings-nav-item:hover { background: var(--glass-hover); color: var(--text); }
+.settings-nav-item.is-active { background: var(--accent-soft); color: var(--accent); }
+
+.settings-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: color var(--duration-fast);
+}
+.settings-nav-item:hover .settings-nav-icon { color: var(--text-secondary); }
+.settings-nav-item.is-active .settings-nav-icon { color: var(--accent); }
+.settings-nav-label { flex: 1; }
+
+.settings-panels {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* One panel is visible at a time (the nav switches between them). */
+.settings-panel { display: none; }
+.settings-panel.is-active { display: flex; }
+
+.settings-section {
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
 }
 .settings-section h3 {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  text-transform: none;
-  margin: 0;
   color: var(--text);
 }
 
-/* Sub-group heading inside a settings panel. */
-.settings-subhead {
-  margin: 26px 0 4px;
-  padding-top: 20px;
-  border-top: 1px solid var(--glass-border);
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text);
-}
-
-/* Panel header — icon + title, like a GNOME settings panel. */
+/* Panel header — icon + title. */
 .settings-panel-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 .settings-panel-icon {
   display: inline-flex;
@@ -160,55 +98,51 @@ body {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.settings-section > label,
-#desktop-tiling-controls > label {
+
+/* ── Fields ────────────────────────────────────────────────── */
+.settings-field { margin-bottom: 16px; }
+.settings-label {
   display: block;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin: 16px 0 8px;
+  margin: 4px 0 8px;
   color: var(--muted);
 }
-.settings-hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
-.settings-control { margin-bottom: 2px; }
-
-/* Round controls inside the glass panels. */
-.settings-section .ui-input,
-.settings-section .ui-select {
-  border-radius: var(--radius-sm);
-}
-.settings-section .ui-select-wrap .ui-select { border-radius: var(--radius-sm); }
-
-/* ── Plugin windows (tile vs full screen) ──────────────────── */
-.plugin-layout-list { display: flex; flex-direction: column; margin-top: 6px; }
-.plugin-layout-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 13px 2px;
-  border-bottom: 1px solid var(--glass-border);
-}
-.plugin-layout-row:last-child { border-bottom: none; }
-.plugin-layout-name {
-  font-family: var(--font-display);
+.settings-value {
+  float: right;
   font-weight: 600;
-  font-size: 14.5px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+.settings-hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+/* Sub-group heading inside a panel. */
+.settings-subhead {
+  margin: 26px 0 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text);
 }
-.plugin-layout-row .ui-select-wrap { min-width: 150px; }
 
-.settings-footer {
-  display: flex;
-  gap: 10px;
-  margin-top: 34px;
-  padding-top: 26px;
-  border-top: 1px solid var(--glass-border);
+.settings-inline-actions { display: flex; gap: 10px; margin-top: 4px; }
+
+.settings-panel .ui-toggle-row {
+  gap: 20px;
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass);
 }
-.settings-footer .ui-btn { flex: 1; border-radius: var(--radius-sm); }
 
-/* ── Profile avatar — squared ──────────────────────────────── */
+/* ── Profile avatar ────────────────────────────────────────── */
 .profile-avatar {
   width: 76px; height: 76px;
   border-radius: var(--radius-lg);
@@ -233,7 +167,7 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
   cursor: pointer;
   width: fit-content;
 }
@@ -246,7 +180,7 @@ body {
   color: var(--muted);
 }
 
-/* ── Appearance swatches — squares ─────────────────────────── */
+/* ── Appearance swatches ───────────────────────────────────── */
 .swatch-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 6px; }
 .swatch {
   width: 34px; height: 34px;
@@ -307,6 +241,7 @@ body {
 .orb-style-canvas { display: block; width: 64px; height: 64px; }
 .orb-style-label { font-size: 12px; font-weight: 600; }
 .orb-style-hint { font-size: 10px; line-height: 1.3; color: var(--muted); }
+
 .gradient-custom { margin-top: 12px; }
 .gradient-custom summary {
   font-size: 11px;
@@ -340,127 +275,12 @@ body {
 }
 .gradient-custom-controls .ui-slider { flex: 1; }
 
-@media (max-width: 640px) {
-  .settings-page {
-    padding: 0 18px calc(72px + env(safe-area-inset-bottom));
-  }
-
-  .settings-hero { padding: 28px 4px 24px; }
-  .settings-section { padding: 26px 20px; }
-
-  /* Bigger touch targets for the primary controls. */
-  .settings-section .ui-input,
-  .settings-section .ui-select { min-height: 42px; }
-  .settings-footer { padding-bottom: env(safe-area-inset-bottom); }
-  .settings-footer .ui-btn { min-height: 46px; }
-
-  /* Profile: full-width row. */
-  .profile-avatar-upload {
-    flex-direction: row;
-    align-items: center;
-    gap: 16px;
-  }
-
-  /* Plugin window rows stack when very narrow. */
-  .plugin-layout-row { flex-wrap: wrap; }
-  .plugin-layout-row .ui-select-wrap { flex: 1; min-width: 140px; }
-
-  .gradient-custom-controls { flex-wrap: wrap; }
-
-  .page-brand-name { display: none; }
-}
-
-@media (max-width: 480px) {
-  #settings-user-name { display: none; }
-  .profile-avatar--large { width: 84px; height: 84px; }
-}
-
-/* ── Control panel layout (nav + panels) ───────────────────── */
-.settings-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 28px;
-  margin-top: 8px;
-}
-
-.settings-nav {
-  position: sticky;
-  top: calc(var(--hud-header-total) + 12px);
-  flex: 0 0 264px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-glass);
-}
-
-.settings-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 52px;
-  padding: 12px 14px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--glass-strong);
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-.settings-nav-item:hover { background: var(--glass-hover); color: var(--text); }
-.settings-nav-item.is-active { background: var(--accent-soft); color: var(--accent); }
-
-.settings-nav-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: var(--muted);
-  transition: color var(--duration-fast);
-}
-.settings-nav-item:hover .settings-nav-icon { color: var(--text-secondary); }
-.settings-nav-item.is-active .settings-nav-icon { color: var(--accent); }
-.settings-nav-label { flex: 1; }
-
-.settings-panels { flex: 1; min-width: 0; }
-
-/* One panel is visible at a time (the nav switches between them). */
-.settings-panel { display: none; }
-.settings-panel.is-active { display: flex; }
-
-/* Session toggle row — give the switch breathing room inside the panel. */
-.settings-panel .ui-toggle-row {
-  gap: 20px;
-  margin: 20px 0;
-  padding: 18px 20px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  background: var(--glass);
-}
-
-/* Background controls */
+/* ── Background ────────────────────────────────────────────── */
 .background-image-row { display: flex; gap: 10px; margin-top: 14px; }
 
-/* Speech engine: model status line + its Download action on one baseline. */
-.whisper-model-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.whisper-model-row .settings-hint { margin-top: 8px; }
-.whisper-model-row .ui-btn { flex: 0 0 auto; margin-top: 8px; }
-
-/* Wallpaper picker — a grid of built-in artwork plus an "upload your own" tile. */
 .bg-preset-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
   margin-top: 10px;
 }
@@ -468,7 +288,6 @@ body {
   position: relative;
   display: block;
   width: 100%;
-  /* 16:9 to match the artwork, so `cover` thumbnails show the real framing. */
   aspect-ratio: 16 / 9;
   padding: 0;
   overflow: hidden;
@@ -503,7 +322,6 @@ body {
   color: #ffffff;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 100%);
 }
-/* The empty upload tile has no artwork to sit on, so the label is plain. */
 .bg-preset--empty {
   display: flex;
   align-items: center;
@@ -532,21 +350,36 @@ body {
 }
 .bg-preset--empty:hover { background-color: var(--accent-soft); }
 
-@media (max-width: 960px) {
-  .settings-layout { flex-direction: column; }
+/* ── Speech engine status ──────────────────────────────────── */
+.whisper-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.whisper-model-row .settings-hint { margin-top: 8px; }
+.whisper-model-row .ui-btn { flex: 0 0 auto; margin-top: 8px; }
+
+/* ── Narrow window: nav becomes a horizontal strip ─────────── */
+@container (max-width: 620px) {
+  .settings-window { flex-direction: column; }
   .settings-nav {
-    position: static;
     flex: none;
     flex-direction: row;
-    flex-wrap: wrap;
-    width: 100%;
-    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--glass-border);
+    padding: 8px;
   }
   .settings-nav-item {
     width: auto;
-    flex: 1;
-    min-width: 150px;
-    min-height: 48px;
-    justify-content: flex-start;
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 12px;
   }
+  .settings-nav-label { display: none; }
+  .settings-nav-item { gap: 0; }
+  .settings-nav-item .settings-nav-icon { color: inherit; }
+  .settings-panels { padding: 16px; }
 }

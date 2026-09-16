@@ -17,14 +17,15 @@
  * - Artifact cards are NOT tiles — they use the dock + travel panel as before.
  */
 import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
+import { CORE_WINDOWS, isCoreWindow, coreWindowTitle } from './coreWindows.js';
 import { getPluginLayout } from './preferences.js';
 import {
   initDesktop, ensureWindows, activeWindowNames, activeWorkspaceIndex,
   applyLayout, renderWorkspaceBar,
   focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
-  setSurfaceNamesProvider, isFocusOnlyChange, bumpZ,
+  setSurfaceNamesProvider, isFocusOnlyChange, bumpZ, getWorkspacesList,
 } from './desktop.js';
-import { toggleWindowFullscreen, setFullscreenSurfaceProvider } from './fullscreen.js';
+import { toggleWindowFullscreen, setFullscreenSurfaceProvider, fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import {
@@ -35,6 +36,11 @@ import { getDockSummaries } from './artifactStore.js';
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
+
+/* Built-in windows (settings, plugins) live in the shared registry so the
+ * tray, workspace bar and context menu can recognise them too. */
+const coreOpen = new Set();          // built-in windows the user has open
+const coreLoading = new Map();       // name -> in-flight import promise
 
 let grid = null;
 let overlay = null;
@@ -50,15 +56,66 @@ let activePhonePlugin = null;  // the window shown on a phone (one at a time)
 let lastWsIndex = null;        // last workspace index seen (for slide direction)
 
 function pluginLabel(name) {
-  return name.charAt(0).toUpperCase() + name.slice(1);
+  return isCoreWindow(name) ? coreWindowTitle(name) : name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 /** Which plugins currently have a window surface? */
 function surfacePlugins() {
   const out = [];
   if (isPluginActive(MAP_TILE_PLUGIN)) out.push(MAP_TILE_PLUGIN);
-  for (const name of surfaceModules.keys()) out.push(name);
+  // Built-in windows are listed even while their module is still importing, so
+  // a restored window is not pruned from its saved workspace before it mounts.
+  for (const name of coreOpen) out.push(name);
+  for (const name of surfaceModules.keys()) {
+    if (!isCoreWindow(name)) out.push(name);
+  }
   return out;
+}
+
+/** Load (once) the module backing a built-in window. */
+function ensureCoreSurface(name) {
+  if (surfaceModules.has(name)) return Promise.resolve();
+  if (!coreLoading.has(name)) {
+    const def = CORE_WINDOWS[name];
+    const p = def.load()
+      .then((mod) => {
+        // A close that raced ahead of the import must not leave a stray mount.
+        if (!coreOpen.has(name)) return;
+        surfaceModules.set(name, mod.default || mod);
+        surfaceModules.get(name)?.wireEvents?.();
+      })
+      .catch((err) => {
+        console.warn(`core window '${name}' failed to load`, err);
+      })
+      .finally(() => coreLoading.delete(name));
+    coreLoading.set(name, p);
+  }
+  return coreLoading.get(name);
+}
+
+/** Open (or focus) a built-in window. */
+export function openCoreWindow(name) {
+  if (!isCoreWindow(name)) return;
+  coreOpen.add(name);
+  void ensureCoreSurface(name).then(() => {
+    renderTiles();
+    focusWindow(name);
+  });
+}
+
+/** Close a built-in window — its own gesture, not a plugin deactivation. */
+export function closeCoreWindow(name) {
+  if (!isCoreWindow(name)) return;
+  // A fullscreen window that is closed must hand back its workspace and the
+  // browser fullscreen. Plugin windows do this through `plugins:changed`;
+  // built-in windows have no such signal, so do it here.
+  if (fullscreenWindow() === name) exitWindowFullscreen();
+  else if (getFullscreen() === name) clearFullscreen();
+  coreOpen.delete(name);
+  surfaceModules.get(name)?.unmount?.();
+  surfaceModules.delete(name);
+  mountedNames.delete(name);
+  renderTiles();
 }
 
 /**
@@ -104,11 +161,14 @@ async function refreshCatalog() {
     window.dispatchEvent(new CustomEvent('agent:actions', { detail: window.__lastAgentActions }));
   }
   for (const name of [...surfaceModules.keys()]) {
+    if (isCoreWindow(name)) continue;
     if (!wanted.has(name)) {
       surfaceModules.get(name)?.unmount?.();
       surfaceModules.delete(name);
     }
   }
+  // Built-in windows behave like plugin surfaces once open.
+  await Promise.all([...coreOpen].map((name) => ensureCoreSurface(name)));
 }
 
 /* ── Map tile (traveler plugin window) ─────────────────────── */
@@ -275,15 +335,17 @@ function ensureWindowChrome(el, name) {
   const controls = document.createElement('span');
   controls.className = 'tile-header-controls';
 
+  const core = isCoreWindow(name);
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'tile-header-btn tile-header-btn--close';
-  closeBtn.title = 'Deactivate plugin';
-  closeBtn.setAttribute('aria-label', `Deactivate ${pluginLabel(name)}`);
+  closeBtn.title = core ? 'Close' : 'Deactivate plugin';
+  closeBtn.setAttribute('aria-label', core ? `Close ${pluginLabel(name)}` : `Deactivate ${pluginLabel(name)}`);
   closeBtn.appendChild(icon('ui/close', { size: 14 }));
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    void deactivatePlugin(name);
+    if (core) closeCoreWindow(name);
+    else void deactivatePlugin(name);
   });
 
   const fullBtn = document.createElement('button');
@@ -596,6 +658,14 @@ export function initTileManager() {
   setFullscreenSurfaceProvider(() => surfacePlugins());
 
   mountMapTile();
+
+  // Reopen the built-in windows that were part of the saved workspace.
+  for (const ws of getWorkspacesList()) {
+    for (const name of ws.windows || []) {
+      if (isCoreWindow(name)) coreOpen.add(name);
+    }
+  }
+
   void refreshCatalog().then(renderTiles);
   renderTiles();
 
@@ -671,3 +741,4 @@ export function refreshTiles() {
 }
 
 export { mountMapTile, unmountMapTile };
+export { isCoreWindow } from './coreWindows.js';

@@ -1006,7 +1006,7 @@ it in two places:
   plugin's `category` manifest field and the groups are separated by a thin
   divider. Clicking an inactive icon activates the plugin; clicking an active
   icon focuses its window.
-- **Plugins page** — the plugin manager shows each plugin's own icon instead of
+- **Plugins window** — the plugin manager shows each plugin's own icon instead of
   the generic puzzle glyph.
 
 Plugins that don't ship an icon fall back to the `ui/puzzle` theme icon.
@@ -1017,7 +1017,7 @@ Plugins that don't declare a `category` are grouped under **Other**.
 Plugin icons share the visual language of the app mark (`web/favicon.svg`, the
 skull on the **PEAK'D!** logo) rather than the thinner line style of the theme
 icons, because these two surfaces paint them small — 18px in the HUD tray, 20px
-on the Plugins page. Follow these rules when adding or restyling one:
+on the Plugins window. Follow these rules when adding or restyling one:
 
 - **Bold strokes.** `stroke-width="2"` on a 24×24 grid — the app mark's weight,
   sized so the strokes still read at 18px.
@@ -1038,7 +1038,7 @@ so `pluginIcon.js` rejects any SVG containing `<script>`, an `on*=` handler or a
 inheritance. One recognizable glyph per plugin, not a wordmark or lettering.
 
 > **Scope.** This style applies to `web/icon.svg` only — the HUD tray
-> (`#hud-plugins`) and the Plugins page. Icons *inside* a plugin window are the
+> (`#hud-plugins`) and the Plugins window. Icons *inside* a plugin window are the
 > regular theme icons from `web/themes/<name>/icons/` and keep their existing
 > `stroke-width="1.5"` style; this restyle does not change them.
 

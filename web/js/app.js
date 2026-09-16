@@ -19,7 +19,7 @@ import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initNavigator } from './navigator.js';
-import { initTileManager, refreshTiles } from './tiles.js';
+import { initTileManager, refreshTiles, openCoreWindow } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
 import { initContextMenu } from './contextMenu.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
@@ -105,6 +105,9 @@ async function initApp() {
   initHudClock(); // core chrome — works with zero plugins
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
+  // Settings and Plugins are built-in windows now, opened from the HUD.
+  document.getElementById('settings-btn')?.addEventListener('click', () => openCoreWindow('settings'));
+  document.getElementById('plugins-btn')?.addEventListener('click', () => openCoreWindow('plugins'));
   initFullscreen(); // real fullscreen + edge-revealed chrome for a fullscreen window
   initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle

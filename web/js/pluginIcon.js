@@ -8,6 +8,7 @@
  * an icon (or whose icon fails to load).
  */
 import { setIcon } from '../ui/index.js';
+import { isCoreWindow, coreWindowIcon } from './coreWindows.js';
 
 const cache = new Map(); // name -> Promise<string|null>
 
@@ -20,6 +21,12 @@ function safeSvg(text) {
 
 export function loadPluginIconSvg(name) {
   if (cache.has(name)) return cache.get(name);
+  // Built-in windows have no web/icon.svg — resolve straight to the fallback.
+  if (isCoreWindow(name)) {
+    const p = Promise.resolve(null);
+    cache.set(name, p);
+    return p;
+  }
   const p = fetch(`/plugins/${name}/icon.svg`)
     .then((res) => (res.ok ? res.text() : null))
     .then(safeSvg)
@@ -48,7 +55,7 @@ export function pluginIconEl(name, { size = 16, fallback = 'ui/puzzle', label = 
 
   loadPluginIconSvg(name).then((svg) => {
     if (svg) span.innerHTML = svg;
-    else void setIcon(span, fallback, { size, label });
+    else void setIcon(span, isCoreWindow(name) ? coreWindowIcon(name) : fallback, { size, label });
   });
   return span;
 }

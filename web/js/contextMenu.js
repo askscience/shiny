@@ -33,6 +33,7 @@ import {
 import { toggleWindowFullscreen } from './fullscreen.js';
 import {
   deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
+  isCoreWindow, closeCoreWindow,
 } from './tiles.js';
 import { refreshGpsPosition } from './map.js';
 import { setIcon } from '../ui/index.js';
@@ -363,13 +364,21 @@ function windowMenu(name, ctx = {}) {
     moveItem,
     ...(app.length ? [{ type: 'separator' }, ...app] : []),
     { type: 'separator' },
-    {
-      type: 'item',
-      label: 'Deactivate',
-      icon: 'ui/close',
-      danger: true,
-      onClick: () => void deactivatePlugin(name),
-    },
+    ...(isCoreWindow(name)
+      ? [{
+        type: 'item',
+        label: 'Close',
+        icon: 'ui/close',
+        danger: true,
+        onClick: () => closeCoreWindow(name),
+      }]
+      : [{
+        type: 'item',
+        label: 'Deactivate',
+        icon: 'ui/close',
+        danger: true,
+        onClick: () => void deactivatePlugin(name),
+      }]),
   ];
 }
 

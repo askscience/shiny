@@ -285,18 +285,10 @@ pub fn build_router(state: AppState) -> Router {
     let static_files = ServeDir::new(&web_dir)
         .not_found_service(ServeFile::new(format!("{}/index.html", web_dir)));
 
-    // Explicit HTML routes for the standalone pages. ServeDir's fallback would
-    // otherwise return index.html for them, which we don't want — these pages
-    // are separate documents.
-    let plugins_page = ServeFile::new(format!("{}/plugins.html", web_dir));
-    let settings_page = ServeFile::new(format!("{}/settings.html", web_dir));
-
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .merge(build_plugin_routes(&state))
-        .route_service("/plugins", plugins_page)
-        .route_service("/settings", settings_page)
         .fallback_service(static_files)
         .layer(CorsLayer::permissive())
         // Never cache HTML/JS/CSS — the frontend must always re-fetch, so a
