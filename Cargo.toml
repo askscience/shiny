@@ -11,6 +11,19 @@ resolver = "2"
 [patch.crates-io]
 libsqlite3-sys = { path = "vendor/libsqlite3-sys" }
 
+# The Studio DSP engine calls into `fundsp` per sample; without cross-crate
+# inlining those AudioNode::tick calls do not get inlined and the render is
+# ~2x slower. Thin LTO (plus a single codegen unit) recovers it and then some.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# fundsp's per-sample DSP is unusably slow at opt-level 0 (every tick becomes a
+# real call chain). Optimize the dependency even in dev builds so debug renders
+# and the test suite stay quick — our own crate stays unoptimised for debugging.
+[profile.dev.package.fundsp]
+opt-level = 2
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"

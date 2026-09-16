@@ -8,7 +8,7 @@ Bitwig-style window and a full agent tool surface so the AI can build all of it.
 ```
 plugins/studio/
 ├── plugin.toml              manifest (name, version, web_dir, skills_dir)
-├── Cargo.toml               cdylib + rlib; no audio dependencies
+├── Cargo.toml               cdylib + rlib; fundsp + rustysynth for the DSP
 ├── skills/studio.md         the contract the model reads (tools + JSON schema)
 ├── migrations/              studio_tracks / arrangements / presets tables
 ├── web/plugin.js            the Studio window (ES module, loaded by the host)
@@ -30,13 +30,15 @@ plugins/studio/
 ## The engine
 
 Everything is rendered **offline, in one block-based pass**. The DSP layer is
-self-contained: no `trem`, no other audio crate.
+built on [`fundsp`](https://github.com/SamiPerttu/fundsp) for oscillators and
+filters, with self-contained code for envelopes, drums, effects and the master
+chain.
 
 | Module | What it provides |
 | --- | --- |
-| `dsp/osc.rs` | polyBLEP saw/square/pulse, an *integrated* band-limited triangle, sine, organ, noise; unison stacks with stereo spread |
+| `dsp/osc.rs` | band-limited wavetable saw/square/triangle/pulse/organ/Hammond/soft-saw plus PolyBLEP fallbacks (all rendered by `fundsp`), in-house sine (for FM) and seeded noise; unison stacks with stereo spread |
 | `dsp/env.rs` | analog-style exponential ADSR (with a linear blend) and a percussive one-shot envelope |
-| `dsp/filter.rs` | TPT state-variable filter (LP/HP/BP/notch/peak), 12 or 24 dB/oct, input drive + saturation, DC blocking |
+| `dsp/filter.rs` | TPT state-variable filter (LP/HP/BP/notch/peak), 12 or 24 dB/oct, input drive + saturation, DC blocking, and a resonant nonlinear Moog ladder from `fundsp` |
 | `dsp/drums.rs` | eleven drum models: kick, snare, hat, clap, tom, perc, rim, cowbell, shaker, crash, ride — layered transients, pitch envelopes, band-passed noise |
 | `dsp/synth.rs` | the polyphonic voice: two unison oscillators (ring + FM), sub, noise, filter with envelope/LFO/key tracking, glide, per-voice drift, voice stealing |
 | `dsp/delay.rs` | fractional delay lines, all-pass, ping-pong stereo delay, chorus, phaser |
@@ -48,9 +50,10 @@ self-contained: no `trem`, no other audio crate.
 
 Design rules that matter for *sound*:
 
-- **Band-limited everything.** Saw/square/pulse use polyBLEP at every discontinuity; the
-  triangle is the accumulated integral of the corrected square (so its amplitude does not
-  change with pitch), and PWM is the difference of two corrected ramps with DC correction.
+- **Band-limited everything.** Saw/square/pulse are `fundsp` band-limited
+  wavetables (organ/Hammond/soft-saw too), and PWM stays clean at any width;
+  the PolyBLEP shapes remain available as a cheaper option. In-house sine is
+  kept for phase-modulation (FM).
 - **Real polyphony.** Every synth is a voice pool (1–16) with voice stealing, so chords,
   overlapping notes and long releases work. Drums are one-shots with natural tails.
 - **Envelopes that move.** Exponential attack/decay/release, velocity → amp *and* filter,

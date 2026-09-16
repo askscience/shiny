@@ -1,10 +1,15 @@
 //! Filters — a topological-preserving-transform (TPT) state-variable filter
-//! with a switchable second pole, plus input saturation.
+//! with a switchable second pole, input saturation, and an optional Moog
+//! ladder from [`fundsp`].
 //!
 //! Two cascaded SVF sections give the classic 24 dB/oct "ladder-ish" slope
 //! without the numerical fragility of a nonlinear feedback ladder: each
 //! section is unconditionally stable at any cutoff/resonance, and the input
-//! `tanh` supplies the drive character.
+//! `tanh` supplies the drive character. The `Ladder` kind instead routes
+//! through fundsp's resonant Moog ladder for its characteristic saturation and
+//! resonance colour.
+
+use fundsp::prelude::{moog, An, Frame, Moog, U3};
 
 use super::util::soft_clip;
 
@@ -15,6 +20,8 @@ pub enum FilterKind {
     BandPass,
     Notch,
     Peak,
+    /// Resonant nonlinear Moog ladder lowpass (fundsp).
+    Ladder,
 }
 
 impl FilterKind {
@@ -24,6 +31,7 @@ impl FilterKind {
             2 => FilterKind::BandPass,
             3 => FilterKind::Notch,
             4 => FilterKind::Peak,
+            5 => FilterKind::Ladder,
             _ => FilterKind::LowPass,
         }
     }
@@ -35,6 +43,7 @@ impl FilterKind {
             FilterKind::BandPass => 2.0,
             FilterKind::Notch => 3.0,
             FilterKind::Peak => 4.0,
+            FilterKind::Ladder => 5.0,
         }
     }
 }
@@ -62,6 +71,8 @@ impl Svf {
             FilterKind::BandPass => v1,
             FilterKind::Notch => x - k * v1,
             FilterKind::Peak => 2.0 * v2 - x + k * v1,
+            // `Ladder` is routed through fundsp's Moog before reaching here.
+            FilterKind::Ladder => v2,
         }
     }
 
@@ -91,6 +102,8 @@ pub struct Filter {
     dc: super::util::DcBlocker,
     /// Optional output trim used by the voice to keep resonance peaks sane.
     pub out_trim: f64,
+    /// The fundsp Moog ladder, used when `kind == Ladder`.
+    moog: An<Moog<f32, U3>>,
 }
 
 impl Filter {
@@ -110,6 +123,7 @@ impl Filter {
             dirty: true,
             dc: super::util::DcBlocker::default(),
             out_trim: 1.0,
+            moog: moog(),
         };
         f.recompute();
         f
@@ -118,6 +132,7 @@ impl Filter {
     pub fn set_sample_rate(&mut self, sr: f64) {
         self.sample_rate = sr;
         self.dirty = true;
+        self.moog.set_sample_rate(sr);
     }
 
     pub fn set_cutoff(&mut self, hz: f64) {
@@ -164,10 +179,24 @@ impl Filter {
         self.a.reset();
         self.b.reset();
         self.dc.reset();
+        self.moog.reset();
     }
 
     #[inline]
     pub fn tick(&mut self, x: f32) -> f32 {
+        if self.kind == FilterKind::Ladder {
+            let cut = self.cutoff.clamp(10.0, self.sample_rate * 0.47) as f32;
+            // The ladder's feedback becomes unstable at high Q; keep it in the
+            // musical range that the SVF path also covers.
+            let q = self.q.clamp(0.5, 4.0) as f32;
+            let mut s = x as f64;
+            if self.drive > 1.0001 {
+                s = (s * self.drive).tanh() * self.makeup;
+            }
+            let input: Frame<f32, U3> = [s as f32, cut, q].into();
+            let y = self.moog.tick(&input)[0];
+            return self.dc.process((y as f64 * self.out_trim) as f32);
+        }
         if self.dirty {
             self.recompute();
         }
@@ -305,4 +334,19 @@ fn probe_filter_cutoff_changes_output() {
     assert!((a - b).abs() > 1e-6, "cutoff must change energy");
 }
 
+#[test]
+fn ladder_filter_is_stable_and_audible() {
+    use crate::dsp::filter::{Filter, FilterKind};
+    use crate::dsp::osc::{Osc, Wave};
+    let mut o = Osc::new(Wave::Saw);
+    let mut f = Filter::new(FilterKind::Ladder, 800.0, 2.5);
+    let mut peak = 0.0f32;
+    for _ in 0..44100 {
+        let y = f.tick(o.tick(110.0, 44100.0));
+        assert!(y.is_finite(), "ladder produced NaN/inf");
+        peak = peak.max(y.abs());
+    }
+    assert!(peak > 0.01, "ladder rendered silence");
+    assert!(peak < 10.0, "ladder blew up: {peak}");
+}
 }

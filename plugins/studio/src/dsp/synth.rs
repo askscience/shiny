@@ -265,6 +265,11 @@ impl SynthParams {
             Wave::Pulse => 4.0,
             Wave::Noise => 5.0,
             Wave::Organ => 6.0,
+            Wave::Hammond => 7.0,
+            Wave::SoftSaw => 8.0,
+            Wave::PolySaw => 9.0,
+            Wave::PolySquare => 10.0,
+            Wave::PolyPulse => 11.0,
         }
     }
 }

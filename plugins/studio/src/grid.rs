@@ -74,8 +74,11 @@ pub const MODULE_KINDS: &[&str] = &[
 
 use crate::voices::{choice as pchoice, def as pdef, logdef as plogdef, ParamDef};
 
-const WAVES: &[&str] = &["Sine", "Triangle", "Saw", "Square", "Pulse", "Noise", "Organ"];
-const FILTER_TYPES: &[&str] = &["LP", "HP", "BP", "Notch", "Peak"];
+const WAVES: &[&str] = &[
+    "Sine", "Triangle", "Saw", "Square", "Pulse", "Noise", "Organ", "Hammond", "SoftSaw", "PolySaw",
+    "PolySquare", "PolyPulse",
+];
+const FILTER_TYPES: &[&str] = &["LP", "HP", "BP", "Notch", "Peak", "Ladder"];
 const LFO_WAVES: &[&str] = &["Sine", "Triangle", "Saw", "Ramp", "Square", "S&H", "Random"];
 const NOISE_KINDS: &[&str] = &["White", "Pink", "Brown", "Bright"];
 

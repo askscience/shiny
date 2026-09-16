@@ -1,18 +1,24 @@
 //! Band-limited oscillators.
 //!
-//! Every shape is derived from a polyBLEP-corrected saw so that the whole set
-//! shares one phase accumulator and one correction routine:
+//! The wavetable shapes — saw, square, triangle, pulse, organ, Hammond,
+//! soft-saw and the PolyBLEP fallbacks — are rendered by the [`fundsp`] DSP
+//! library, which builds *band-limited* mip-mapped wavetables. That is a real
+//! step up in anti-aliasing quality over the previous polyBLEP-only code (and
+//! makes PWM at any width, and organ drawbars, clean at every pitch).
 //!
-//! * `saw`   — the corrected ramp directly.
-//! * `square`/`pulse` — the difference of two saws (a pulse of width `pw`);
-//!   polyBLEP lands on both edges, so PWM stays clean at any width.
-//! * `triangle` — the *integral* of the corrected square. This fixes the
-//!   classic bug where an integrated square is scaled by the pitch-dependent
-//!   step size (`4·dt`) instead of being accumulated, which makes the triangle
-//!   quieter as it goes up and detunes the timbre.
-//! * `sine` — a lookup-free `sin`, used for subs and FM carriers.
+//! Sine and noise stay in-house: the voice engine needs phase modulation (FM)
+//! on the sine carrier and seeded, deterministic noise, neither of which
+//! fundsp's wavetable oscillators expose.
+//!
+//! Shape indices are part of the saved-config contract, so existing variants
+//! keep their numbers; the new fundsp shapes are appended.
 
 use std::f64::consts::PI;
+
+use fundsp::prelude::{
+    hammond, organ, poly_pulse, poly_saw, poly_square, pulse, saw, soft_saw, square, triangle, An,
+    Frame, PolyPulse, PolySaw, PolySquare, PulseWave, Setting, WaveSynth, U1, U2,
+};
 
 use super::util::{cents_ratio, Rng};
 
@@ -27,8 +33,18 @@ pub enum Wave {
     Pulse,
     /// Digital noise (per-sample white).
     Noise,
-    /// A soft, formant-ish "organ" wave (sine + 2nd + 3rd harmonics).
+    /// A soft, formant-ish "organ" wave.
     Organ,
+    /// Band-limited Hammond drawbar wave (fundsp).
+    Hammond,
+    /// Band-limited soft saw whose partials fall off like a triangle (fundsp).
+    SoftSaw,
+    /// Fast PolyBLEP saw (fundsp) — cheaper, slightly less pristine.
+    PolySaw,
+    /// Fast PolyBLEP square (fundsp).
+    PolySquare,
+    /// Fast PolyBLEP pulse (fundsp).
+    PolyPulse,
 }
 
 impl Wave {
@@ -41,25 +57,108 @@ impl Wave {
             4 => Wave::Pulse,
             5 => Wave::Noise,
             6 => Wave::Organ,
+            7 => Wave::Hammond,
+            8 => Wave::SoftSaw,
+            9 => Wave::PolySaw,
+            10 => Wave::PolySquare,
+            11 => Wave::PolyPulse,
             _ => Wave::Saw,
         }
     }
 }
 
-/// Residual of a step discontinuity (polyBLEP).
-#[inline]
-fn poly_blep(t: f64, dt: f64) -> f64 {
-    if dt <= 0.0 {
-        return 0.0;
+/// The fundsp node backing a shape, if any. `None` means the shape is rendered
+/// by the in-house sine/noise code in [`Osc::tick`].
+#[derive(Clone)]
+enum Wt {
+    None,
+    Table(An<WaveSynth<U1>>),
+    Pulse(An<PulseWave>),
+    PolySaw(An<PolySaw<f32>>),
+    PolySquare(An<PolySquare<f32>>),
+    PolyPulse(An<PolyPulse<f32>>),
+}
+
+impl Wt {
+    fn build(wave: Wave) -> Wt {
+        match wave {
+            Wave::Saw => Wt::Table(saw()),
+            Wave::Square => Wt::Table(square()),
+            Wave::Triangle => Wt::Table(triangle()),
+            Wave::Organ => Wt::Table(organ()),
+            Wave::Hammond => Wt::Table(hammond()),
+            Wave::SoftSaw => Wt::Table(soft_saw()),
+            Wave::Pulse => Wt::Pulse(pulse()),
+            Wave::PolySaw => Wt::PolySaw(poly_saw()),
+            Wave::PolySquare => Wt::PolySquare(poly_square()),
+            Wave::PolyPulse => Wt::PolyPulse(poly_pulse()),
+            Wave::Sine | Wave::Noise => Wt::None,
+        }
     }
-    if t < dt {
-        let t = t / dt;
-        2.0 * t - t * t - 1.0
-    } else if t > 1.0 - dt {
-        let t = (t - 1.0) / dt;
-        t * t + 2.0 * t + 1.0
-    } else {
-        0.0
+
+    fn is_none(&self) -> bool {
+        matches!(self, Wt::None)
+    }
+
+    fn set_sample_rate(&mut self, sr: f64) {
+        match self {
+            Wt::Table(n) => n.set_sample_rate(sr),
+            Wt::Pulse(n) => n.set_sample_rate(sr),
+            Wt::PolySaw(n) => n.set_sample_rate(sr),
+            Wt::PolySquare(n) => n.set_sample_rate(sr),
+            Wt::PolyPulse(n) => n.set_sample_rate(sr),
+            Wt::None => {}
+        }
+    }
+
+    /// Seed the pseudorandom start phase so stacked/unison voices don't
+    /// phase-lock into a comb.
+    fn set_hash(&mut self, h: u64) {
+        match self {
+            Wt::Table(n) => n.set_hash(h),
+            Wt::Pulse(n) => n.set_hash(h),
+            Wt::PolySaw(n) => n.set_hash(h),
+            Wt::PolySquare(n) => n.set_hash(h),
+            Wt::PolyPulse(n) => n.set_hash(h),
+            Wt::None => {}
+        }
+    }
+
+    fn set_phase(&mut self, p: f32) {
+        match self {
+            Wt::Table(n) => {
+                n.set(Setting::phase(p));
+                n.reset();
+            }
+            Wt::Pulse(n) => {
+                n.set(Setting::phase(p));
+                n.reset();
+            }
+            Wt::PolySaw(n) => {
+                n.set(Setting::phase(p));
+                n.reset();
+            }
+            Wt::PolySquare(n) => {
+                n.set(Setting::phase(p));
+                n.reset();
+            }
+            Wt::PolyPulse(n) => {
+                n.set(Setting::phase(p));
+                n.reset();
+            }
+            Wt::None => {}
+        }
+    }
+
+    fn reset(&mut self) {
+        match self {
+            Wt::Table(n) => n.reset(),
+            Wt::Pulse(n) => n.reset(),
+            Wt::PolySaw(n) => n.reset(),
+            Wt::PolySquare(n) => n.reset(),
+            Wt::PolyPulse(n) => n.reset(),
+            Wt::None => {}
+        }
     }
 }
 
@@ -68,78 +167,122 @@ fn poly_blep(t: f64, dt: f64) -> f64 {
 pub struct Osc {
     phase: f64,
     tri: f64,
+    /// Public for the Grid's parameter editor; a change is picked up lazily by
+    /// [`Osc::tick`] via [`Osc::sync`].
     pub wave: Wave,
     pub pulse_width: f64,
     /// Phase offset in [0,1) — lets unison voices start decorrelated.
     offset: f64,
     rng: Rng,
+    seed: u64,
+    wt: Wt,
+    wt_wave: Wave,
+    sr: f64,
 }
 
 impl Osc {
     pub fn new(wave: Wave) -> Self {
-        Self { phase: 0.0, tri: 0.0, wave, pulse_width: 0.5, offset: 0.0, rng: Rng::new(0x1234_5678) }
+        let seed = 0x1234_5678u64;
+        let mut o = Self {
+            phase: 0.0,
+            tri: 0.0,
+            wave,
+            pulse_width: 0.5,
+            offset: 0.0,
+            rng: Rng::new(seed),
+            seed,
+            wt: Wt::build(wave),
+            wt_wave: wave,
+            sr: super::SR,
+        };
+        o.wt.set_sample_rate(o.sr);
+        o.wt.set_hash(seed);
+        o
     }
 
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.rng = Rng::new(seed);
+        self.seed = seed;
+        self.wt.set_hash(seed);
         self
     }
 
     pub fn set_phase(&mut self, p: f64) {
         self.phase = p.rem_euclid(1.0);
         self.offset = self.phase;
+        self.wt.set_phase(self.phase as f32);
     }
 
     /// Randomise the start phase (unison / supersaw decorrelation).
     pub fn randomize_phase(&mut self, seed: u64) {
         self.rng = Rng::new(seed);
+        self.seed = seed;
         let p = self.rng.unipolar() as f64;
         self.set_phase(p);
+        self.wt.set_hash(seed);
     }
 
     pub fn reset(&mut self) {
         self.phase = self.offset;
         self.tri = 0.0;
+        self.wt.reset();
+    }
+
+    /// Rebuild the fundsp node after `wave` was changed directly (the Grid and
+    /// parameter UI write the field).
+    fn sync(&mut self) {
+        if self.wave != self.wt_wave {
+            self.wt = Wt::build(self.wave);
+            self.wt.set_sample_rate(self.sr);
+            self.wt.set_hash(self.seed);
+            self.wt_wave = self.wave;
+        }
     }
 
     /// Generate one sample for a frequency in Hz at sample rate `sr`.
     #[inline]
     pub fn tick(&mut self, freq: f64, sr: f64) -> f32 {
+        if self.wave != self.wt_wave {
+            self.sync();
+        }
+        if !self.wt.is_none() {
+            if (sr - self.sr).abs() > 1e-9 {
+                self.sr = sr;
+                self.wt.set_sample_rate(sr);
+            }
+            let f = freq as f32;
+            let pw = self.pulse_width.clamp(0.02, 0.98) as f32;
+            return match &mut self.wt {
+                Wt::Table(n) => {
+                    let x: Frame<f32, U1> = [f].into();
+                    n.tick(&x)[0]
+                }
+                Wt::Pulse(n) => {
+                    let x: Frame<f32, U2> = [f, pw].into();
+                    n.tick(&x)[0]
+                }
+                Wt::PolySaw(n) => {
+                    let x: Frame<f32, U1> = [f].into();
+                    n.tick(&x)[0]
+                }
+                Wt::PolySquare(n) => {
+                    let x: Frame<f32, U1> = [f].into();
+                    n.tick(&x)[0]
+                }
+                Wt::PolyPulse(n) => {
+                    let x: Frame<f32, U2> = [f, pw].into();
+                    n.tick(&x)[0]
+                }
+                Wt::None => 0.0,
+            };
+        }
+
         let dt = (freq / sr).clamp(0.0, 0.45);
         let p = self.phase;
         let sample = match self.wave {
             Wave::Sine => (2.0 * PI * p).sin(),
-            Wave::Organ => {
-                // Sine with a touch of 2nd/3rd harmonic — cheap drawbar colour.
-                0.62 * (2.0 * PI * p).sin() + 0.28 * (4.0 * PI * p).sin() + 0.16 * (6.0 * PI * p).sin()
-            }
-            Wave::Saw => 2.0 * p - 1.0 - poly_blep(p, dt),
-            Wave::Square | Wave::Pulse => {
-                let pw = if self.wave == Wave::Square { 0.5 } else { self.pulse_width.clamp(0.02, 0.98) };
-                let p2 = (p + pw).rem_euclid(1.0);
-                let a = 2.0 * p - 1.0 - poly_blep(p, dt);
-                let b = 2.0 * p2 - 1.0 - poly_blep(p2, dt);
-                // Difference of two ramps = a pulse spanning [-2pw, 2-2pw]
-                // with mean 2-4pw. Remove that mean (duty changes must not
-                // thump) and halve to unity amplitude.
-                0.5 * ((a - b) - (2.0 - 4.0 * pw))
-            }
-            Wave::Triangle => {
-                // Integrate the corrected square. `4·dt` is the per-sample
-                // phase step scaled by the triangle's slope (4 per cycle), so
-                // the accumulating integral has unit amplitude at every pitch.
-                let sq = {
-                    let p2 = (p + 0.5).rem_euclid(1.0);
-                    let a = 2.0 * p - 1.0 - poly_blep(p, dt);
-                    let b = 2.0 * p2 - 1.0 - poly_blep(p2, dt);
-                    a - b
-                };
-                self.tri += sq * 4.0 * dt;
-                // A whisper of leak keeps DC from wandering on very long notes.
-                self.tri *= 0.999_95;
-                self.tri
-            }
             Wave::Noise => self.rng.bipolar() as f64,
+            _ => 0.0,
         };
 
         self.phase += dt;
@@ -247,5 +390,39 @@ impl Unison {
             r += s * self.pans[i].1;
         }
         (l, r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_wave_renders_finite_audio() {
+        for i in 0..12 {
+            let w = Wave::from_index(i as f64);
+            let mut o = Osc::new(w);
+            let mut peak = 0.0f32;
+            for _ in 0..4410 {
+                let s = o.tick(440.0, 44100.0);
+                assert!(s.is_finite(), "{w:?} produced non-finite output");
+                peak = peak.max(s.abs());
+            }
+            assert!(peak > 0.05, "{w:?} rendered silence (peak {peak})");
+        }
+    }
+
+    #[test]
+    fn unison_voices_are_decorrelated() {
+        // Two unison voices must not phase-lock into an identical signal.
+        let mut a = Unison::new(1, Wave::Saw, 0.0, 0.0, 1);
+        let mut b = Unison::new(1, Wave::Saw, 0.0, 0.0, 2);
+        let mut diff = 0.0f64;
+        for _ in 0..4410 {
+            let (la, _) = a.tick(220.0, 44100.0);
+            let (lb, _) = b.tick(220.0, 44100.0);
+            diff += ((la - lb) as f64).abs();
+        }
+        assert!(diff > 1.0, "unison stacks are phase-locked (diff {diff})");
     }
 }
