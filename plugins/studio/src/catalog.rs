@@ -94,6 +94,7 @@ pub fn catalog_json() -> Value {
         "effects": effects,
         "grid_modules": grid_modules,
         "midi_fx": midi_fx,
+        "soundfonts": crate::dsp::sampler::list(),
         "tunings": TUNINGS,
         "master_fx": [
             {"key": "delay_mix", "min": 0.0, "max": 1.0, "default": 0.0, "help": "Master delay send"},

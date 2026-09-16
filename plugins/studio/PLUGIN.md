@@ -44,6 +44,7 @@ chain.
 | `dsp/delay.rs` | fractional delay lines, all-pass, ping-pong stereo delay, chorus, phaser |
 | `dsp/reverb.rs` | 8-line feedback-delay-network reverb with diffusion, damping, pre-delay, width and modulated taps |
 | `dsp/fx.rs` | the insert-effect enum (distortion with 5 modes, filter, 3-band EQ, compressor, delay, reverb, chorus, phaser, bitcrush) |
+| `dsp/sampler.rs` | SoundFont (`.sf2`) sampler via `rustysynth` — user-supplied banks in `soundfonts/`, melodic presets (`sampler`) and GM drum kits (`sfkit`) |
 | `dsp/limiter.rs` | soft-knee stereo compressor, look-ahead brickwall limiter, master bus (DC block, saturation, width) |
 | `dsp/loudness.rs` | ITU-R BS.1770-4 K-weighting, gated integrated LUFS, LRA, true-peak/clip detection |
 | `dsp/util.rs` | deterministic xorshift RNG, saturators, DC blocker, parameter smoother, 2× oversampler for nonlinear stages |
@@ -88,9 +89,20 @@ runtime catalog (`GET /api/studio/catalog`, tool `studio_catalog`):
 - Pattern: `title`, `bpm`, `steps`, `swing`, `tuning`, `ref_hz`, `voices[]`, `fx{}`.
 - Voice: `kind`, `rhythm` (`e<hits>,<rot>` or `x..x`), `degree`, `octave`, `wave`,
   `notes[]`, `level`, `pan`, `accent`, `synth{}`, `fx[]`, `midi[]`, `pads[]`,
-  `macros[]`, `grid{modules,cables}`.
+  `macros[]`, `grid{modules,cables}`, `soundfont`.
 - Arrangement: `tracks[]` (level, pan, mute, **solo**, automation lanes) and
   `clips[]` (`track`, `start`, `length_beats`, `gain_db`, `pattern`).
+
+## Sampled instruments (SoundFonts)
+
+The `sampler` and `sfkit` kinds play real sampled instruments from a
+user-supplied `.sf2` bank. Banks live in the plugin's `soundfonts/` directory
+(`<plugins_dir>/studio/soundfonts`, created on load); there is **no bundled
+bank** — drop one in and it appears in `GET /api/studio/catalog` under
+`soundfonts`, with each bank's presets and drum kits. The voice's `soundfont`
+field selects the bank (omit it for the first one). Parsed banks are cached and
+shared, so a bank is read once per process even across the parallel clip
+renderer. When no bank is present the sampler fails with an actionable message.
 
 ## The agent surface
 

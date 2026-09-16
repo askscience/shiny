@@ -18,8 +18,10 @@ pub const KINDS: &[&str] = &[
     "kick", "snare", "hat", "clap", "tom", "perc", "rim", "cowbell", "shaker", "crash", "ride",
     // Pitched
     "bass", "sub", "pluck", "lead", "pad", "organ", "ep", "bell", "strings", "brass", "synthme", "fm",
+    // Sampled
+    "sampler",
     // Collections
-    "drumkit", "grid",
+    "drumkit", "grid", "sfkit",
 ];
 
 /// Drum-machine kinds (one-shot models).
@@ -30,7 +32,16 @@ pub const DRUM_KINDS: &[&str] = &[
 /// Melodic kinds (the shared subtractive/FM voice engine).
 pub const MELODIC_KINDS: &[&str] = &[
     "bass", "sub", "pluck", "lead", "pad", "organ", "ep", "bell", "strings", "brass", "synthme", "fm",
+    "sampler",
 ];
+
+/// Kinds that render a user-supplied SoundFont bank (`soundfonts/*.sf2`).
+pub const SAMPLER_KINDS: &[&str] = &["sampler", "sfkit"];
+
+/// Whether a kind needs a SoundFont bank to render.
+pub fn needs_soundfont(kind: &str) -> bool {
+    SAMPLER_KINDS.contains(&kind)
+}
 
 /// Maximum voices in one pattern — polyphony multiplies CPU, so this is a
 /// deliberate ceiling rather than an arbitrary one.
@@ -178,6 +189,20 @@ static RIDE: &[ParamDef] = &[
     def("bell", "Bell", "Drum", 0.0, 1.0, 0.01, 0.4),
 ];
 
+/* ── SoundFont sampler parameters ────────────────────────────── */
+
+/// A melodic preset in a user-supplied `.sf2` bank.
+static SAMPLER_PARAMS: &[ParamDef] = &[
+    def("program", "Program", "Sampler", 0.0, 127.0, 1.0, 0.0),
+    def("bank", "Bank", "Sampler", 0.0, 128.0, 1.0, 0.0),
+];
+
+/// A percussion kit in a user-supplied `.sf2` bank (channel 9, bank 128).
+static SFKIT_PARAMS: &[ParamDef] = &[
+    def("program", "Kit", "Sampler", 0.0, 127.0, 1.0, 0.0),
+    def("bank", "Bank", "Sampler", 0.0, 128.0, 1.0, 128.0),
+];
+
 /* ── Shared synth parameter catalog ──────────────────────────── */
 
 /// The parameter list every melodic kind shares. Kinds differ only in their
@@ -250,6 +275,8 @@ pub fn param_defs_for(kind: &str) -> &'static [ParamDef] {
         "shaker" => SHAKER,
         "crash" => CRASH,
         "ride" => RIDE,
+        "sampler" => SAMPLER_PARAMS,
+        "sfkit" => SFKIT_PARAMS,
         k if is_melodic(k) => MELODIC_PARAMS,
         _ => &[],
     }
@@ -270,6 +297,8 @@ fn all_defs() -> impl Iterator<Item = &'static ParamDef> {
         .chain(SHAKER.iter())
         .chain(CRASH.iter())
         .chain(RIDE.iter())
+        .chain(SAMPLER_PARAMS.iter())
+        .chain(SFKIT_PARAMS.iter())
 }
 
 /// The value span of a parameter (for macro depths). Falls back to 1.
@@ -547,6 +576,8 @@ pub fn default_level(kind: &str) -> f32 {
         "fm" => 0.5,
         "drumkit" => 0.7,
         "grid" => 0.6,
+        "sampler" => 0.8,
+        "sfkit" => 0.8,
         _ => 0.6,
     }
 }

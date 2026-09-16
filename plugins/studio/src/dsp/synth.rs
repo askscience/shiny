@@ -37,6 +37,8 @@ pub struct NoteMsg {
     pub at: usize,
     /// The pattern's note id (so On/Off pair up).
     pub id: u64,
+    /// The percussion pad index for one-shot instruments (samplers, kits).
+    pub pad: usize,
     pub kind: NoteKind,
 }
 

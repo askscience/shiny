@@ -26,6 +26,7 @@ pub mod lfo;
 pub mod noise;
 pub mod osc;
 pub mod reverb;
+pub mod sampler;
 pub mod synth;
 pub mod util;
 

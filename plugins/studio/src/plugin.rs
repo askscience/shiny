@@ -66,6 +66,13 @@ impl Plugin for StudioPlugin {
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
+        // The sampler reads user-supplied SoundFont banks from
+        // `<plugins_dir>/studio/soundfonts`; remember the path for the engine.
+        crate::dsp::sampler::set_dir(
+            std::path::PathBuf::from(&ctx.config.plugins_dir)
+                .join("studio")
+                .join("soundfonts"),
+        );
         let _ = self.ctx.set(ctx);
         builder
             .persona(PERSONA)

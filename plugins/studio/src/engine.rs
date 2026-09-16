@@ -22,6 +22,7 @@ use crate::dsp::drums::Drum;
 use crate::dsp::fx::{Effect, EffectKind};
 use crate::dsp::limiter::{Compressor, Limiter, MasterBus};
 use crate::dsp::loudness;
+use crate::dsp::sampler::Sampler;
 use crate::dsp::synth::{NoteKind, NoteMsg, Synth};
 use crate::dsp::util::{pan_gains, Smoother};
 use crate::dsp::SR;
@@ -227,6 +228,10 @@ pub struct VoiceConfig {
     pub midi: Vec<MidiFxConfig>,
     /// Grid patch (modular) for `kind = "grid"` voices.
     pub grid: Option<GridPatch>,
+    /// SoundFont bank filename (in the plugin's `soundfonts/` dir) for the
+    /// `sampler` / `sfkit` kinds; `None` picks the first bank found.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soundfont: Option<String>,
 }
 
 impl Default for VoiceConfig {
@@ -247,6 +252,7 @@ impl Default for VoiceConfig {
             macros: Vec::new(),
             midi: Vec::new(),
             grid: None,
+            soundfont: None,
         }
     }
 }
@@ -665,6 +671,7 @@ enum Instrument {
     Drum(Box<Drum>),
     Drumkit(Vec<Drum>),
     Grid(Box<GridEngine>),
+    Sampler(Box<Sampler>),
 }
 
 impl Instrument {
@@ -682,6 +689,9 @@ impl Instrument {
                 }
             }
             Instrument::Grid(_) => {}
+            // Sampler parameters (program/bank) are chosen at build time; level
+            // and pan automation is handled by the channel around it.
+            Instrument::Sampler(_) => {}
         }
     }
 }
@@ -731,6 +741,16 @@ impl Channel {
         } else if v.kind == "grid" {
             let patch = v.grid.as_ref().ok_or_else(|| "grid voice missing its patch".to_string())?;
             Instrument::Grid(Box::new(GridEngine::compile(patch, seed ^ vi as u64, SAMPLE_RATE)?))
+        } else if v.kind == "sampler" || v.kind == "sfkit" {
+            let drum = v.kind == "sfkit";
+            let sf = crate::dsp::sampler::load(v.soundfont.as_deref())?;
+            let program = params.get("program").copied().unwrap_or(0.0).round() as i32;
+            let bank = params
+                .get("bank")
+                .copied()
+                .unwrap_or(if drum { 128.0 } else { 0.0 })
+                .round() as i32;
+            Instrument::Sampler(Box::new(Sampler::new(sf, drum, program, bank, SAMPLE_RATE)?))
         } else if voices::is_drum(&v.kind) {
             Instrument::Drum(Box::new(Drum::from_kind(&v.kind, seed ^ vi as u64)))
         } else {
@@ -811,6 +831,7 @@ impl Channel {
             Instrument::Drum(d) => d.is_active(),
             Instrument::Drumkit(pads) => pads.iter().any(|d| d.is_active()),
             Instrument::Grid(g) => g.is_active(),
+            Instrument::Sampler(s) => s.is_active(),
         }
     }
 
@@ -822,13 +843,14 @@ impl Channel {
             let ev = self.events[self.cursor];
             self.cursor += 1;
             let at = ev.at.saturating_sub(block_start).min(frames.saturating_sub(1));
-            if !matches!(self.instrument, Instrument::Synth(_)) {
+            if !matches!(self.instrument, Instrument::Synth(_) | Instrument::Sampler(_)) {
                 // Drums and Grid are triggered directly (sample-accurate below).
                 self.pending.push((at, ev));
             } else {
                 self.msgs.push(NoteMsg {
                     at,
                     id: ev.id,
+                    pad: ev.pad,
                     kind: if ev.on { NoteKind::On { freq: ev.freq, velocity: ev.vel } } else { NoteKind::Off },
                 });
             }
@@ -910,6 +932,13 @@ impl Channel {
                     }
                 }
                 g.render(&mut self.scratch_l[..frames], &mut self.scratch_r[..frames], frames);
+            }
+            Instrument::Sampler(s) => {
+                for k in 0..frames {
+                    self.scratch_l[k] = 0.0;
+                    self.scratch_r[k] = 0.0;
+                }
+                s.render(&mut self.scratch_l[..frames], &mut self.scratch_r[..frames], &self.msgs, frames);
             }
         }
         self.pending.clear();
@@ -1749,9 +1778,13 @@ mod tests {
 
     #[test]
     fn every_kind_renders_audible_audio() {
+        let have_sf = !crate::dsp::sampler::files().is_empty();
         for kind in voices::KINDS {
             if *kind == "grid" {
                 continue; // covered separately
+            }
+            if voices::needs_soundfont(kind) && !have_sf {
+                continue; // no user-supplied .sf2 bank in this environment
             }
             let cfg = TrackConfig {
                 steps: 8,

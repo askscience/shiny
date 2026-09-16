@@ -55,7 +55,8 @@ when you need exact parameter names and ranges, and `studio_analyze` when you wa
 
 ```
 { kind, rhythm, degree, octave, wave, notes, level, pan, accent,
-  synth: { … }, fx: [ … ], midi: [ … ], pads: [ … ], macros: [ … ], grid: { … } }
+  synth: { … }, fx: [ … ], midi: [ … ], pads: [ … ], macros: [ … ], grid: { … },
+  soundfont }
 ```
 
 - `rhythm` — `"e<hits>,<rot>"` (Euclidean, e.g. `"e5,2"`) or explicit `"x..x..x."`
@@ -64,6 +65,7 @@ when you need exact parameter names and ranges, and `studio_analyze` when you wa
   `length` is in steps; `velocity` 0.05–1.
 - `degree`/`octave` — scale degree + octave for pitched voices (negative octaves are bass).
 - `level` (0–2), `pan` (−1..1), `accent` (0–0.6: boosts quarter notes, softens off-beats).
+- `soundfont` — bank filename for `sampler`/`sfkit` voices (see **Sampled instruments**).
 - `midi` (note processing, in order): `transpose {steps}`, `velocity {amount}`,
   `gate {amount}`, `ratchet {count}`, `probability {amount}`, `humanize {amount}`.
 - `macros` — 8 knobs the **engine applies**:
@@ -76,13 +78,16 @@ when you need exact parameter names and ranges, and `studio_analyze` when you wa
 | --- | --- |
 | Drums | `kick`, `snare`, `hat`, `clap`, `tom`, `perc`, `rim`, `cowbell`, `shaker`, `crash`, `ride` |
 | Synths | `bass`, `sub`, `pluck`, `lead`, `pad`, `organ`, `ep`, `bell`, `strings`, `brass`, `synthme`, `fm` |
-| Collections | `drumkit` (16 pads), `grid` (modular patch) |
+| Sampled | `sampler` (a preset from a user-supplied `.sf2` bank) |
+| Collections | `drumkit` (16 pads), `grid` (modular patch), `sfkit` (SoundFont drum kit) |
 
 Every synth kind shares one parameter set (kinds differ only in defaults), all polyphonic
 (`poly` 1–16, default 8–12; `bass`/`sub` default to mono with glide). Key parameters:
-`o1w`/`o2w` (waveform 0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, 5 noise, 6 organ),
+`o1w`/`o2w` (waveform 0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, 5 noise, 6 organ,
+7 Hammond, 8 soft-saw, 9 PolyBLEP saw, 10 PolyBLEP square, 11 PolyBLEP pulse),
 `a_level`/`b_level`, `b_semi` (detune in semitones), `b_octave`, `pw`, `unison` (1–8),
-`spread`, `sub`, `noise`, `ring`, `fm_ratio`/`fm_index`, `ftype`, `cutoff`, `res`,
+`spread`, `sub`, `noise`, `ring`, `fm_ratio`/`fm_index`, `ftype` (0 LP, 1 HP, 2 BP,
+3 notch, 4 peak, 5 Moog ladder), `cutoff`, `res`,
 `drive`, `poles` (1 = 12 dB, 2 = 24 dB), `fenv` (filter-env depth in octaves), `keytrack`,
 `fattack`/`fdecay`/`fsustain`/`frelease`, `attack`/`decay`/`sustain`/`release`,
 `env_shape`, `vel_amp`, `vel_filter`, `lfo_rate`/`lfo_wave`/`lfo_pitch`/`lfo_depth`/
@@ -111,10 +116,29 @@ Example — an FM bell:
  "notes":[{"step":0,"degree":0},{"step":8,"degree":1}]}
 ```
 
+## Sampled instruments (`kind: "sampler"` / `"sfkit"`)
+
+These render a preset from a **user-supplied SoundFont** (`.sf2`) placed in the
+plugin's `soundfonts/` directory — there is no bundled bank. `studio_catalog`
+lists the available banks and their presets under `soundfonts`; pass the bank
+filename in the voice's `soundfont` field (omit it to use the first bank).
+
+```json
+{"kind":"sampler","soundfont":"198_Legato_strings.sf2","rhythm":"x...x...","octave":4,
+ "synth":{"program":0,"bank":0}}
+```
+
+- `sampler` — melodic; `program`/`bank` pick the preset, and pattern degrees play
+  the usual scale. If no bank is installed this kind fails to render with a clear
+  message; use a synth kind instead when unsure.
+- `sfkit` — a percussion kit on the MIDI drum channel; `program` selects the kit
+  (bank defaults to `128`), and `notes[].degree` selects the pad (0–15 → GM keys
+  36–51).
+
 ## Effects (`fx` array, in order)
 
 `distortion {mode 0 soft/1 hard/2 fold/3 tube/4 fuzz, drive, mix, tone, out}`,
-`filter {type 0 LP/1 HP/2 BP/3 notch/4 peak, cutoff, resonance, drive, poles}`,
+`filter {type 0 LP/1 HP/2 BP/3 notch/4 peak/5 ladder, cutoff, resonance, drive, poles}`,
 `eq {low_gain, mid_gain, hi_gain}`, `compressor {threshold, ratio, attack, release,
 knee, makeup, mix}`, `delay {time, feedback, mix, ping_pong, damp, mod, offset}`,
 `reverb {size, damping, mix, predelay, width, mod}`,
