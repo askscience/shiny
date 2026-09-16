@@ -78,7 +78,7 @@ The web UI (`web/`) is a desktop-style workspace:
 - `calendar` — events in a month-grid window
 - `calculator` — basic and scientific math
 - `image` — photographic effects, filters and transforms (Photon)
-- `studio` — session-grid music sequencer + synth, rendered to WAV (trem engine)
+- `studio` — session-grid music sequencer + synth, rendered to WAV (self-contained DSP on `fundsp`)
 - `radio` — internet radio via Radio Browser
 - `youtube` — search and watch videos
 - `browser` — the **Browser**: a filtered web window whose iframe origin *is*

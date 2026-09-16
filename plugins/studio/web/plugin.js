@@ -18,7 +18,7 @@
  *   • Browser — floating pop-up (search + Instruments / Effects / Presets /
  *     Patterns / Arrangements) opened from the header.
  *
- * All audio renders through the plugin's REST API (trem engine); playback
+ * All audio renders through the plugin's REST API (the Rust DSP engine); playback
  * is WebAudio. Launcher clips loop and launch quantized to the next bar.
  */
 
@@ -48,7 +48,8 @@ const RULER_H = 26;    // ruler row height
 const TRACK_H = 52;    // track lane height
 const AUTO_H = 34;     // automation lane height
 
-/* Synth parameter catalog — mirrors trem::dsp nodes. */
+/* Synth parameter catalog — fallback mirror of the Rust DSP catalog (the live
+ * `/api/studio/catalog` is preferred when available). */
 const SYNTH = {
   kick: [
     { key: 'pitch', label: 'Pitch', min: 20, max: 200, step: 1, def: 50 },
@@ -342,7 +343,7 @@ function fmt(n) {
   return String(Math.round(n * 1000) / 1000);
 }
 
-/* ── euclidean / rhythm helpers (mirror trem::euclidean) ────── */
+/* ── euclidean / rhythm helpers (mirror the engine) ────── */
 
 function euclid(hits, steps) {
   const p = new Array(steps).fill(false);
@@ -385,7 +386,7 @@ function updateStudioGlow() {
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-// trem's degree 0 resolves to the reference pitch (A4 = 440 Hz = MIDI 69).
+// degree 0 resolves to the reference pitch (A4 = 440 Hz = MIDI 69).
 function degreeLabel(d, tuning) {
   if (tuning === 'edo12') {
     const midi = d + 69;

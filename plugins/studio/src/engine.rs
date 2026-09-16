@@ -5,7 +5,7 @@
 //! one block-based pass. An [`Arrangement`] renders each clip the same way and
 //! mixes it onto the timeline with per-sample level/pan automation.
 //!
-//! Everything the old `trem`-based engine did by *re-rendering* (device
+//! Everything the old re-render-per-beat engine did by *re-rendering* (device
 //! automation, Grid modulation) now happens continuously: parameters are
 //! applied to live processors at control rate, so a filter sweep is a real
 //! exponential sweep instead of a chain of crossfaded segments. The result is
@@ -445,7 +445,7 @@ pub fn rhythm_hits(rhythm: &str, steps: u32) -> Vec<u32> {
         let mut parts = rest.split(',');
         let h: u32 = parts.next().and_then(|s| s.trim().parse().ok()).unwrap_or(0).min(steps);
         let rot: u32 = parts.next().map(|s| s.trim().parse().unwrap_or(0)).unwrap_or(0);
-        // Bjorklund's algorithm, inlined (the trem dependency is gone).
+        // Bjorklund's algorithm, inlined (no external dependency).
         let pattern = euclidean(h, steps);
         let rot = if steps == 0 { 0 } else { rot % steps };
         for (i, b) in pattern.iter().enumerate() {

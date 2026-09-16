@@ -2,7 +2,7 @@
 //!
 //! Every drum is a small self-contained model rather than a one-shot sample:
 //! layered transients, pitch envelopes, band-passed noise and analog-style
-//! saturation. Each one exposes the legacy trem parameter names (`pitch`,
+//! saturation. Each one exposes the legacy parameter names (`pitch`,
 //! `decay`, `sweep`, `tone`, `body`, `noise`) so old configs keep working, plus
 //! richer controls (`click`, `drive`, `snap`, `metal`, …) for the new UI.
 
@@ -194,7 +194,7 @@ impl Drum {
     }
 }
 
-/// `decay`-style control (trem's per-sample rate) → envelope time in seconds.
+/// `decay`-style control (the legacy per-sample rate) → envelope time in seconds.
 #[inline]
 fn rate_to_seconds(rate: f64) -> f64 {
     4.6 / rate.max(0.1)
