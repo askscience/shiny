@@ -20,10 +20,14 @@ use shiny_plugin_sdk::{
     tools::RegistryBuilder,
 };
 
-pub struct PeakdBrowserPlugin {
+pub struct BrowserPlugin {
     /// The ctx handed to `register`; routes resolve through it.
     pub ctx: OnceLock<Arc<PluginCtx>>,
 }
+
+/// The plugin's name, in one place: the manifest, the tile's `data-plugin`
+/// attribute, the route namespace and the artifacts' owner all have to agree.
+pub const PLUGIN_NAME: &str = "browser";
 
 /// Persona fragment the agent sees while this plugin is active.
 pub const PERSONA: &str = "a web navigator; open pages and search the web in the browser window";
@@ -31,20 +35,26 @@ pub const PERSONA: &str = "a web navigator; open pages and search the web in the
 pub const SKILLS: &str = include_str!("../skills/browser.md");
 
 #[async_trait]
-impl Plugin for PeakdBrowserPlugin {
+impl Plugin for BrowserPlugin {
     fn manifest(&self) -> &Manifest {
         static M: OnceLock<Manifest> = OnceLock::new();
         M.get_or_init(|| Manifest {
-            name: "peakd".into(),
+            name: PLUGIN_NAME.into(),
             version: semver::Version::new(0, 1, 0),
             api_level: 1,
             entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
             target_triple: None,
             description: Some(
-                "Browse the web inside Shiny — a filtered window powered by adblock-rust".into(),
+                "Browse the web inside Shiny — a filtered window powered by the shared \
+                 shiny-filter adblocking engine, with a news home ranked from your searches"
+                    .into(),
             ),
             author: Some("shiny".into()),
-            summary: Some("Browser: adblock-filtered web browsing in its own window".into()),
+            summary: Some(
+                "Browser: adblock-filtered web browsing in its own window, with related-news cards \
+                 chosen from what you search for"
+                    .into(),
+            ),
             migrations_dir: "migrations".into(),
             skills_dir: "skills".into(),
             web_dir: "web".into(),
@@ -60,17 +70,21 @@ impl Plugin for PeakdBrowserPlugin {
             .skills(SKILLS)
             .context_line(
                 "Browser: enabled — `browser_open` / `browser_search` open pages in the Browser \
-                 window and `browser_read` returns a page's text.",
+                 window and `browser_read` returns a page's text. The window's home surface shows \
+                 related-news cards ranked from the user's recent searches.",
             );
 
         for spec in [
-            (HttpMethod::Get, "/api/peakd/state", "peakd_state"),
-            (HttpMethod::Get, "/api/peakd/sessions", "peakd_sessions"),
-            (HttpMethod::Post, "/api/peakd/session", "peakd_session_create"),
-            (HttpMethod::Post, "/api/peakd/session/close", "peakd_session_close"),
-            (HttpMethod::Post, "/api/peakd/navigate", "peakd_navigate"),
-            (HttpMethod::Get, "/api/peakd/metrics", "peakd_metrics"),
-            (HttpMethod::Post, "/api/peakd/filter/toggle", "peakd_filter_toggle"),
+            (HttpMethod::Get, "/api/browser/state", "browser_state"),
+            (HttpMethod::Get, "/api/browser/sessions", "browser_sessions"),
+            (HttpMethod::Post, "/api/browser/session", "browser_session_create"),
+            (HttpMethod::Post, "/api/browser/session/close", "browser_session_close"),
+            (HttpMethod::Post, "/api/browser/navigate", "browser_navigate"),
+            (HttpMethod::Get, "/api/browser/metrics", "browser_metrics"),
+            (HttpMethod::Post, "/api/browser/filter/toggle", "browser_filter_toggle"),
+            (HttpMethod::Get, "/api/browser/history", "browser_history"),
+            (HttpMethod::Get, "/api/browser/news", "browser_news"),
+            (HttpMethod::Post, "/api/browser/news/click", "browser_news_click"),
         ] {
             builder.route(RouteSpec {
                 method: spec.0,
@@ -103,7 +117,12 @@ impl Plugin for PeakdBrowserPlugin {
     /// work to the plugin-owned runtime instead; the host just awaits a
     /// channel.
     async fn on_load(&self, ctx: Arc<PluginCtx>) {
-        let _ = &ctx;
+        // Repair a `peakd_history` created before the profile's `query` column
+        // existed. A migration cannot do this idempotently (SQLite has no
+        // conditional DDL), and the code that needs the column cannot function
+        // without it — see `history::ensure_schema`.
+        crate::history::ensure_schema(&ctx);
+
         let started = shiny_plugin_sdk::rt::bridge(async move {
             let cache_dir = shiny_filter::engine::default_cache_dir(std::path::Path::new("data"));
             match crate::proxy::ensure_started(cache_dir).await {
@@ -131,5 +150,5 @@ impl Plugin for PeakdBrowserPlugin {
 /// The C entry symbol the loader transmutes and calls.
 #[no_mangle]
 pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(PeakdBrowserPlugin { ctx: OnceLock::new() }))
+    Box::into_raw(Box::new(BrowserPlugin { ctx: OnceLock::new() }))
 }

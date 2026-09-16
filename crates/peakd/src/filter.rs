@@ -5,7 +5,7 @@
 //! tokio runtime on a dedicated thread; the shell talks to it through the
 //! small, synchronous handle built here.
 //!
-//! Both the `peakd` shell and the `peakd` plugin construct the proxy from
+//! Both the `peakd` shell and the `browser` plugin construct the proxy from
 //! [`shiny_filter`], so the filter engine, request classifier, rewriter and
 //! injection pipeline are literally the same code in both surfaces.
 

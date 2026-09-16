@@ -81,6 +81,12 @@ The web UI (`web/`) is a desktop-style workspace:
 - `studio` — session-grid music sequencer + synth, rendered to WAV (trem engine)
 - `radio` — internet radio via Radio Browser
 - `youtube` — search and watch videos
+- `browser` — the **Browser**: a filtered web window whose iframe origin *is*
+  the ad-blocking proxy (shared verbatim with the native `crates/peakd` shell), plus
+  `browser_open` / `browser_search` / `browser_read` tools. Its home surface is a
+  **related-news shelf chosen from what you search for**: a decayed interest profile
+  over your browsing history picks the topics, the same search engine the address bar
+  uses fetches them, and cards are ranked by relevance, freshness and source
 - `keyboard` — virtual multi-language on-screen keyboard (8 layouts)
 - `hello` — minimal plugin authoring example (one `hello` tool)
 

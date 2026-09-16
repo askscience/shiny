@@ -12,6 +12,7 @@ import { previewDestination } from './map.js';
 import { isPluginActive } from './activePlugins.js';
 import { openArtifactInTile } from './tiles.js';
 import { dockButton, iconForArtifact, labelForArtifact } from '../ui/index.js';
+import { artifactBelongsTo as belongsTo } from './artifactStore.js';
 
 const panel = document.getElementById('travel-panel');
 const backdrop = document.getElementById('travel-panel-backdrop');
@@ -51,6 +52,18 @@ function applyMapForArtifact(artifact) {
   previewDestination(artifact);
 }
 
+/**
+ * Plugins whose window shows the artifact itself.
+ *
+ * Each of these renders its own subject directly — the player, the artwork and
+ * transport, the live page — so an artifact sheet duplicates it. Keep this in
+ * step with the windows that handle their own `artifact:saved` event.
+ */
+const SELF_REPRESENTING = new Set(['radio', 'youtube', 'browser']);
+
+/** The same idea for a card whose *type* identifies the window. */
+const SELF_REPRESENTING_TYPES = new Set(['radio_station', 'youtube_video', 'browser_page']);
+
 export function renderArtifact(artifact, { focus = true } = {}) {
   const normalized = normalizeArtifact(artifact);
   currentArtifact = normalized;
@@ -58,20 +71,25 @@ export function renderArtifact(artifact, { focus = true } = {}) {
   cacheArtifactLocal(normalized);
 
   if (focus) {
-    // Radio is the card: its tile hero already shows everything an artifact
-    // would (art, title, transport) — skip the sheet, just focus the window.
-    if (normalized.plugin === 'radio' || normalized.type === 'radio_station') {
-      window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'radio' } }));
-    } else if (normalized.plugin === 'youtube' || normalized.type === 'youtube_video') {
-      // YouTube is the card too: results live in the window's own grid and
-      // the player is the hero — no card sheet, just focus the window.
-      window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'youtube' } }));
+    // Some windows *are* their own card. Opening a card sheet over them is
+    // noise at best and misleading at worst — the browser sheet, for instance,
+    // showed the URL the address bar already showed, with a "Map" button that
+    // could not work. For these, just bring the window forward.
+    const selfRepresenting = SELF_REPRESENTING.has(normalized.plugin)
+      || SELF_REPRESENTING_TYPES.has(normalized.type);
+    if (selfRepresenting) {
+      window.dispatchEvent(
+        new CustomEvent('plugin:focus', { detail: { name: normalized.plugin } }),
+      );
     } else {
       // Plugin output is contained inside its own window — the tile sheet.
       const plugin = normalized.plugin || 'traveler';
       void openArtifactInTile(plugin, normalized);
     }
-    applyMapForArtifact(normalized);
+    // A window that draws its own content must not also drive the map: a
+    // browser page is not a destination, and applying one would zoom the map
+    // to whatever text happened to be in the card.
+    if (!selfRepresenting) applyMapForArtifact(normalized);
   }
 
   renderArtifactDock(getDockSummaries());
@@ -139,8 +157,6 @@ function dockStepLive() {
 }
 
 export function renderArtifactDock(artifacts) {
-  const list = artifacts || [];
-
   // The dock lives INSIDE the traveler window whenever the traveler plugin
   // is active — even on phones where another window is currently shown (the
   // dock stays with its window instead of jumping under the AI sphere).
@@ -148,6 +164,16 @@ export function renderArtifactDock(artifacts) {
   const tileDock = document.getElementById('map-tile-dock');
   const tileDockIcons = document.getElementById('map-tile-dock-icons');
   const inTile = !!tileDock && isPluginActive('traveler');
+
+  // A dock inside a window shows that window's own cards and nothing else. The
+  // docklist comes from the store, which holds every plugin's artifacts, so an
+  // unfiltered render put a browser page (labelled with its raw URL, since that
+  // is a browser card's title) inside the traveler window. Whoever draws a dock
+  // states whose it is; `null` means the unscoped chrome dock.
+  const dockPlugin = inTile ? 'traveler' : null;
+  const list = (dockPlugin
+    ? (artifacts || []).filter((a) => belongsTo(a, dockPlugin))
+    : artifacts) || [];
   document.body.classList.toggle('tile-dock-active', inTile);
   if (tileDock) tileDock.classList.toggle('hidden', !inTile || !list.length);
 

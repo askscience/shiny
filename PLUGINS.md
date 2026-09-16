@@ -616,6 +616,9 @@ Migrations are idempotent (use `IF NOT EXISTS`, or the table-recreate-and-copy p
 
 - The `plugin_schema_versions` table is **core-owned**; plugins don't manage migration state themselves.
 - Re-installing a plugin runs only **new** migration files (files already in `plugin_schema_versions` are skipped).
+- **An applied migration file is immutable.** The runner records it by *name*; editing its contents afterwards does not re-run it and does not warn. Two consequences that have both bitten this repo:
+  - A fix written into an already-applied file is silently lost on every install that has applied it (fresh installs get it, existing ones never do). Add a **new, higher-numbered** file instead.
+  - A later file's `CREATE TABLE IF NOT EXISTS` is a **no-op** if an earlier file already created that table. If the first version of the table lacked a column the code now writes, the code fails at runtime against the old shape — and a plugin that swallows DB errors (§15) will fail *silently*. Check that the replay of your files produces every column your code names, and when a repair genuinely cannot be expressed as DDL (SQLite has no conditional `ALTER TABLE … ADD COLUMN`), do it in code from `on_load` where a "duplicate column" result can be treated as success — `plugins/browser/src/history.rs::ensure_schema` is the reference.
 - Uninstalling leaves the plugin's tables in place — rolling back structural schema changes is the admin's responsibility. Drop the install directory then `DROP TABLE my_plugin_xxx;` if you want to actually clean up.
 
 ---
@@ -818,6 +821,8 @@ Before publishing a plugin:
 - [ ] `skills_md` and `persona` are set if the plugin contributes persona/skills
 - [ ] `web/icon.svg` ships a 24×24 `currentColor` icon in the plugin icon style — bold `stroke-width="2"`, round caps/joins, tight framing (§19 "Plugin icon" → "Icon style")
 - [ ] User-visible events use the core notification system (`notify()` / `with_notification`) — §19 "Notifications"
+- [ ] **Window surfaces have a JS smoke test.** `import()` of `web/plugin.js` is what core does to mount a window. A syntax error there is not fatal to the app — core logs one `console.warn` — but the window it was meant to be is simply absent, which reads as "the plugin does nothing". `node --check web/plugin.js` catches most of it, and `plugins/browser/web/plugin.smoke.mjs` is the reference for the rest: it mounts the real surface against a small DOM shim and asserts the generated srcdoc, the card markup and the postMessage contract.
+- [ ] Every migration file is idempotent (`CREATE TABLE IF NOT EXISTS`) **and never edited after it has been applied** — the runner records files by name and will not re-run one, so an edit is silently lost (see §9 "Important notes")
 - [ ] zip / tar.gz test build is reproducible
 - [ ] `cargo check` succeeds for the plugin crate
 - [ ] Build smoke test: install via `/api/plugins/install` and `GET /api/plugins` returns it
@@ -842,6 +847,7 @@ Before publishing a plugin:
 | `plugins/calculator/` | **Self-contained** — `calculator_*` tools, its own `calculator_history` table (`migrations/`), the `/api/calculator/eval` routes (`RouteSpec`), and the Calculator window (`web/plugin.js`) all in the plugin folder. One dependency-free scientific expression evaluator (`src/eval.rs`) is shared by the AI tool and the window, so both always agree. |
 | `plugins/image/` | **Self-contained** — `image_*` tools, its own `images` table (`migrations/`), the `/api/images` routes (`RouteSpec`), and the Image window (`web/plugin.js`) all in the plugin folder. Photo editing (grayscale/sepia/blur/sharpen/edge/emboss/tint/rotate/resize/crop/flip/filters) via `photon-rs` (`default-features = false` for native), with one shared operations engine (`src/ops.rs`) used by both the AI tool and the window. |
 | `plugins/studio/` | **Self-contained** — `studio_*` tools, its own `studio_tracks` table (`migrations/`), the `/api/studio` routes (`RouteSpec`, incl. `GET /:id/audio` serving WAV bytes), and the Studio window (`web/plugin.js`) all in the plugin folder. Patterns (explicit `x..x` rhythms + Euclidean fills, voice kinds kick/snare/hat/bass/pluck/lead, plus swing/accent/velocity groove) render to WAV via the `trem` crate (`src/engine.rs` + `src/voices.rs` + `src/wav.rs`); the window is an Ableton/Bitwig-style DAW — Arranger timeline + Clip Launcher, a detail panel (Editor step-grid/piano-roll, Devices, Mixer), DAW keyboard shortcuts (Space/⌘S/⌘E/Del), ruler-click play start, piano-key audition and live scope/spectrum meters. |
+| `plugins/browser/` | **Self-contained** — the in-app **Browser**: `browser_open`/`browser_search`/`browser_read` tools, `/api/browser/*` routes (`state`, `navigate`, `metrics`, `filter/toggle`, `history`, `news`, `news/click`, sessions), its own `peakd_history` table (`migrations/`), the window (`web/plugin.js`), and the **whole filtering engine** (`crates/shiny-filter`, shared verbatim with the native `crates/peakd` shell). The window's iframe origin *is* the proxy (`/p/<scheme>/<host>/…`), so every subresource is filtered rather than best-effort. Its `about:home` surface is a **related-news shelf ranked from what the user searches for** (`src/news.rs`): a decayed profile over `peakd_history` (typed searches weigh more than URL visits, `news_click` more still, and the word pairs of real queries are kept track of) → each interest searched as the *phrase the user typed*, not one word out of it → the same search engine the address bar uses → score by relevance, freshness tier, publisher and cross-interest overlap, with junk hosts, non-article URLs and one-publisher dominance filtered out → thumbnail cards. There is **no core fallback**: the browser, its filter proxy and its news shelf exist only when this plugin is installed. |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
 | `src/plugins/manager.rs` | `PluginManager` — aggregates contributions, persona, skills. |
@@ -1320,6 +1326,38 @@ The top bar follows one convention (Studio sets the standard):
   `studio-save-dot`): muted when saved, accent + glow (`.is-active`) while there
   are unsaved changes. Transient feedback (Studio's "Rendering…") may sit to its
   left, but the persistent saved/unsaved indicator is the dot.
+
+#### A window must not cache server addresses
+
+The Browser window's filter proxy listens on a **random loopback port that
+changes on every server start**. A window that remembers such an address from
+before a restart shows the browser's own "connection refused" page on every
+later navigation, which reads as a broken proxy rather than a stale one. Two
+rules follow, and they apply to any plugin that hands a client a server-owned
+URL:
+
+- **Return the address with the payload.** `/api/browser/navigate` includes
+  `proxy_base` in its response, so the client never has to guess it, and
+  re-reads it on every navigation rather than once at mount.
+- **Recover in the window.** The surface listens for the frame's `error` event
+  *and* arms a short load watchdog (WebKit does not reliably fire `error` for a
+  cross-origin frame), refetches the address and retries **once**; a second
+  failure says so instead of looping. `plugins/browser/web/plugin.js`
+  (`refreshProxyBase`, `onFrameError`, `loadFrame`) is the reference.
+
+> **The proxy lives in the plugin, not in the server.** `plugins/browser/` links
+> `crates/shiny-filter` statically, so the filter proxy the window renders
+> through is code **inside the plugin's cdylib**. Editing `crates/shiny-filter`
+> and restarting the server changes nothing until the plugin is rebuilt and its
+> `.dylib` is copied into `data/plugins/browser/` as well. This bites the person
+> who fixes the proxy, watches `cargo build --release` finish, restarts, and
+> sees the old behaviour — the server binary is simply not the process serving
+> the traffic. Rebuild both:
+>
+> ```bash
+> cargo build --release && cargo build --release -p shiny-browser-plugin
+> cp target/release/libshiny_browser_plugin.dylib data/plugins/browser/
+> ```
 
 > **Editing a window surface during development** — the app serves
 > `data/plugins/<name>/web/` (the installed copy), not `plugins/<name>/web/`

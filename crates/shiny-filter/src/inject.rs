@@ -142,6 +142,87 @@ const SHIM_TEMPLATE: &str = r##"(function () {
     });
   } catch (e) {}
 
+  // ---- navigation bridge (the in-app browser window only) ----------------
+  // When this document is framed by the browser window, report the real page
+  // URL to the parent so its address bar, history and Back/Forward/Reload
+  // controls follow in-page navigations (a link click, a redirect, an SPA
+  // pushState) rather than only the URL the parent last typed. The parent
+  // drives navigation back through `history` so no hop escapes the proxy.
+  //
+  // The native shell loads the proxy top-level (`parent === window`), so this
+  // whole block is skipped there. Every hook is wrapped; nothing may throw
+  // before the page's own scripts run.
+  try {
+    if (window.parent && window.parent !== window) {
+      var realUrl = function () {
+        try {
+          var marker = PROXY + "/p/";
+          var href = location.href;
+          if (href.indexOf(marker) === 0) {
+            var rest = href.slice(marker.length);
+            var slash = rest.indexOf("/");
+            if (slash > 0) {
+              var scheme = rest.slice(0, slash);
+              if (scheme === "http" || scheme === "https") {
+                return scheme + "://" + rest.slice(slash + 1);
+              }
+            }
+          }
+        } catch (e) {}
+        return DOC;
+      };
+      var announce = function () {
+        try {
+          parent.postMessage(
+            { type: "shiny:location", url: realUrl(), title: document.title || "" },
+            "*"
+          );
+        } catch (e) {}
+      };
+      var announceSoon = function () {
+        setTimeout(announce, 0);
+      };
+      // The document URL is known at document-start; waiting for
+      // DOMContentLoaded gives the page's own scripts a chance to update it.
+      if (document.readyState === "complete" || document.readyState === "interactive") {
+        announceSoon();
+      } else {
+        document.addEventListener("DOMContentLoaded", announceSoon, { once: true });
+      }
+      window.addEventListener("load", announce);
+      window.addEventListener("popstate", announceSoon);
+      window.addEventListener("hashchange", announceSoon);
+
+      window.addEventListener("message", function (event) {
+        try {
+          if (event.source !== parent) return;
+          var d = event.data;
+          if (!d || d.type !== "shiny:cmd") return;
+          if (d.cmd === "back") history.back();
+          else if (d.cmd === "forward") history.forward();
+          else if (d.cmd === "reload") location.reload();
+        } catch (e) {}
+      });
+
+      // Links that ask for a new tab would leave the window entirely. Keep
+      // them in-frame; ordinary same-window links are untouched.
+      document.addEventListener(
+        "click",
+        function (event) {
+          try {
+            var a = event.target && event.target.closest ? event.target.closest("a[target]") : null;
+            if (!a) return;
+            var target = (a.getAttribute("target") || "").toLowerCase();
+            if (target && target !== "_self" && target !== "_top" && target !== "_parent") {
+              a.target = "_self";
+            }
+          } catch (e) {}
+        },
+        true
+      );
+    }
+  } catch (e) {}
+
   // ---- native URL rewriting for the page's own API surface ---------------
   try {
     window.__shinyProxyRewrite = rewrite;
@@ -268,6 +349,20 @@ mod tests {
         let shim = runtime_shim("http://p", "https://x/</script><script>alert(1)</script>");
         assert!(!shim.contains("</script>"), "shim must not close its own tag");
         assert!(shim.contains("\\u003c"));
+    }
+
+    #[test]
+    fn shim_carries_the_frame_navigation_bridge() {
+        let shim = runtime_shim("http://127.0.0.1:8899", "https://example.com/a");
+        // The framed document reports its URL and accepts back/forward/reload.
+        assert!(shim.contains("shiny:location"), "no location report");
+        assert!(shim.contains("shiny:cmd"), "no command channel");
+        assert!(shim.contains("parent !== window"), "bridge not frame-guarded");
+        // It must stay a bridge: the scripted-navigation gaps the nav e2e test
+        // pins (location.assign / location.replace / window.open) are still
+        // unpatched by design.
+        assert!(!shim.contains("location.assign"));
+        assert!(!shim.contains("location.replace"));
     }
 
     #[test]

@@ -9,16 +9,38 @@ use std::time::Duration;
 
 use shiny_plugin_sdk::errors::AppError;
 
+/// What a browser sends when it is asking for a document.
+///
+/// The proxy classifies a request by `Sec-Fetch-Dest`, then `Accept`, then the
+/// URL's extension. A tool fetch has none of those, so without this header a
+/// page read is `other`: it is not counted as a document and a mislabelled
+/// response is not recognised as HTML.
+pub const ACCEPT_HTML: &str =
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+/// User-Agent for the related-news fetch.
+///
+/// Deliberately a normal browser string rather than `browser/<version>`: search
+/// engines serve an empty shell (or a challenge page) to unknown library
+/// agents, and the news shelf is built by parsing their HTML.
+pub const NEWS_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+
 /// Fetch `url` through the plugin's own filter proxy and return its text.
 pub async fn text(url: &str) -> Result<String, AppError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(25))
-        .user_agent(concat!("peakd/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("browser/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 
     let response = client
         .get(url)
+        // A real browser asks for a document. Without this the proxy has no
+        // `Sec-Fetch-Dest` and no `Accept` to classify by, so a page read is
+        // counted as `other` (no document metrics) and its HTML is not sniffed
+        // when the origin mislabels the response.
+        .header(reqwest::header::ACCEPT, ACCEPT_HTML)
         .send()
         .await
         .map_err(|e| AppError::BadRequest(format!("could not fetch {url}: {e}")))?;

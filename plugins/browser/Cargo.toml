@@ -1,11 +1,11 @@
 [package]
-name = "shiny-peakd-plugin"
+name = "shiny-browser-plugin"
 version = "0.1.0"
 edition = "2021"
-description = "The PEAK'D! browser window — a filtered viewport powered by the same adblock-rust engine as the peakd shell"
+description = "The Browser window — a filtered viewport powered by the same adblock-rust engine as the native shell"
 
 [lib]
-name = "shiny_peakd_plugin"
+name = "shiny_browser_plugin"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
@@ -24,3 +24,7 @@ futures = "0.3"
 tracing = "0.1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "charset"] }
 url = "2"
+# Interest-profile decay and the recency half of the related-news ranking.
+chrono = { version = "0.4", features = ["serde"] }
+# The related-news cache: a small, rarely-written map read from the request path.
+parking_lot = "0.12"

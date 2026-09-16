@@ -22,7 +22,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::http::{header, HeaderMap, HeaderName, Method, Request, Response, StatusCode, Uri};
+use axum::http::{
+    header, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Uri,
+};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
@@ -362,8 +364,15 @@ async fn handle_forward(
     let target = resolve_target(req.uri(), &headers)
         .ok_or_else(|| format!("cannot determine target for {}", req.uri()))?;
 
-    // Where the request came from, for `$third-party` and `$domain` matching.
-    let source_url = referer_of(&headers).unwrap_or_else(|| target.clone());
+    // Where the request came from, for `$third-party` and `$domain` matching —
+    // and for the same headers upstream, see below. The client sends the
+    // *proxy* URL in `Referer`/`Origin` (that is the document's address in its
+    // world), so both are translated back to the real site before anything
+    // looks at them. Un-translated, every origin saw our loopback URL and every
+    // third-party rule compared the site against itself, so nothing on a page
+    // was ever third-party.
+    let referer_url = referer_of(&headers);
+    let source_url = referer_url.clone().unwrap_or_else(|| target.clone());
 
     // The proxy's own control endpoints.
     if target.starts_with(&state.base) && target.contains("/__shiny/") {
@@ -427,6 +436,29 @@ async fn handle_forward(
             // faithfully without a decompress/recompress round trip.
             continue;
         }
+        // Provenance headers describe the *proxied* document. Forwarding them
+        // verbatim tells the origin the request came from `127.0.0.1:<port>`,
+        // which breaks Referer-based hotlink protection, `Origin`-checked CORS
+        // and CSRF checks — and leaks the proxy's address to every site.
+        if name == header::REFERER {
+            if let Some(real) = &referer_url {
+                if let Ok(translated) = HeaderValue::from_str(real) {
+                    upstream = upstream.header(name, translated);
+                }
+            }
+            continue;
+        }
+        if name == header::ORIGIN {
+            if let Some(real) = &referer_url {
+                // An origin is a scheme://authority triple, not a full URL.
+                if let Some(origin) = origin_of(real) {
+                    if let Ok(translated) = HeaderValue::from_str(&origin) {
+                        upstream = upstream.header(name, translated);
+                    }
+                }
+            }
+            continue;
+        }
         upstream = upstream.header(name, value);
     }
     upstream = upstream.header(header::ACCEPT_ENCODING, "identity");
@@ -443,15 +475,32 @@ async fn handle_forward(
         .unwrap_or("")
         .to_string();
 
-    let is_css = content_type.contains("text/css") || target.ends_with(".css");
-    let is_html = content_type.contains("text/html")
-        || content_type.contains("application/xhtml")
-        || (content_type.is_empty() && kind.is_rewritable());
-
-    let needs_rewrite = (is_html || is_css) && status.is_success();
-
     let mut body = response.bytes().await.map_err(|e| e.to_string())?;
     let src_len = body.len() as u64;
+
+    // Classify *after* the body is in hand, because the declared type is not
+    // always enough: an extensionless CMS route or a misconfigured origin
+    // serves a real document as `application/octet-stream` or with no type at
+    // all. Treated as "not a document", such a page would pass through
+    // unfiltered *and* be refused rendering by a strict-MIME browser. Sniffing
+    // the bytes is what makes those pages work at all.
+    let declared = mime_of(&content_type);
+    let generic_type = is_generic_type(&declared);
+    let is_html = declared == "text/html"
+        || declared == "application/xhtml+xml"
+        || (generic_type && looks_like_html(&body));
+    let is_css = declared == "text/css" || target.ends_with(".css");
+
+    // Rewrite *every* document, including error pages. A 404 page is still a
+    // page: its `href="/"` has to mean the site's home, and if it is left alone
+    // the browser resolves it against the proxy's own origin — sending the user
+    // to the app instead of the site, out of the filter, on the first page that
+    // does not exist. The old `status.is_success()` gate did exactly that.
+    //
+    // A bodyless status (204/304) carries nothing to rewrite, so it is skipped
+    // structurally rather than by status.
+    let has_body = !matches!(status.as_u16(), 204 | 304) && !body.is_empty();
+    let needs_rewrite = (is_html || is_css) && has_body;
 
     if needs_rewrite && body.len() <= state.max_rewrite_bytes {
         let started = Instant::now();
@@ -492,7 +541,14 @@ async fn handle_forward(
     let out_len = body.len() as u64;
     state.metrics.record(kind, false, src_len, out_len);
 
-    Ok(build_response(status, &resp_headers, body, needs_rewrite, &state.base))
+    Ok(build_response(
+        status,
+        &resp_headers,
+        body,
+        needs_rewrite,
+        is_html,
+        &state.base,
+    ))
 }
 
 /// Copy the upstream response, dropping security headers that would stop the
@@ -502,9 +558,12 @@ fn build_response(
     headers: &HeaderMap,
     body: Bytes,
     rewritten: bool,
+    rewritten_html: bool,
     proxy_base: &str,
 ) -> Response<BoxBody> {
     let mut builder = Response::builder().status(status.as_u16());
+    // Whether the upstream actually sent a `Content-Type` we forwarded.
+    let mut sent_content_type = false;
 
     for (name, value) in headers.iter() {
         if is_hop_by_hop(name) || is_proxy_header(name) {
@@ -518,6 +577,24 @@ fn build_response(
             "content-encoding" => continue, // we hold a decoded body
             "content-length" => continue,    // recomputed below
             "strict-transport-security" if rewritten => continue,
+            // A response is classified as a document from its declared type,
+            // its extension, or `Sec-Fetch-Dest`. When the first two are absent
+            // the forwarded `Content-Type` is empty or a generic
+            // `application/octet-stream`, and a browser will refuse to execute
+            // the injected shim in it — and, in strict-MIME mode, may refuse to
+            // render the page at all. Re-declare it as HTML: the body we are
+            // returning genuinely *is* the rewritten HTML document.
+            "content-type" => {
+                let lower = value.to_str().unwrap_or("").to_ascii_lowercase();
+                let is_declared_html = lower.contains("html") || lower.contains("xhtml");
+                if rewritten_html && !is_declared_html {
+                    builder = builder.header(name, "text/html; charset=utf-8");
+                } else {
+                    builder = builder.header(name, value);
+                }
+                sent_content_type = true;
+                continue;
+            }
             // A redirect must stay *inside* the proxy. Forwarding the
             // upstream `Location` verbatim sends the browser straight to the
             // origin, so every request after the first hop escapes filtering —
@@ -543,6 +620,12 @@ fn build_response(
             _ => {}
         }
         builder = builder.header(name, value);
+    }
+
+    // A rewritten document with no `Content-Type` at all still needs one, for
+    // the same MIME reason as above.
+    if rewritten_html && !sent_content_type {
+        builder = builder.header(header::CONTENT_TYPE, "text/html; charset=utf-8");
     }
 
     builder = builder
@@ -583,7 +666,36 @@ fn resolve_target(uri: &Uri, headers: &HeaderMap) -> Option<String> {
 }
 
 fn referer_of(headers: &HeaderMap) -> Option<String> {
-    header_str(headers, header::REFERER.as_str()).map(|r| r.to_string())
+    // Empty and unparseable values are dropped rather than forwarded.
+    header_str(headers, header::REFERER.as_str())
+        .filter(|raw| !raw.trim().is_empty())
+        .map(|raw| decode_proxy_url(raw.trim()))
+}
+
+/// Turn a URL the client used, which may be a proxy path, back into the real
+/// one: `http://proxy/p/https/example.com/a` → `https://example.com/a`.
+///
+/// Returns the input unchanged when it is already a real URL (or is not one at
+/// all), so this is safe to apply to anything.
+fn decode_proxy_url(url: &str) -> String {
+    if let Some(rest) = url.split_once("/p/").map(|(_, rest)| rest) {
+        if let Some((scheme, remainder)) = rest.split_once('/') {
+            if scheme == "http" || scheme == "https" {
+                return format!("{scheme}://{remainder}");
+            }
+        }
+    }
+    url.to_string()
+}
+
+/// The `scheme://authority` of a URL, for an `Origin` header.
+fn origin_of(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    let host = parsed.host_str()?;
+    Some(match parsed.port() {
+        Some(port) => format!("{}://{host}:{port}", parsed.scheme()),
+        None => format!("{}://{host}", parsed.scheme()),
+    })
 }
 
 fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
@@ -604,6 +716,48 @@ fn decode_text(body: &Bytes, content_type: &str) -> String {
         // still be rewritten, not dropped.
         String::from_utf8_lossy(body).into_owned()
     }
+}
+
+/// A `Content-Type` that names nothing: missing, generic, or `text/plain`.
+///
+/// `text/plain` counts as "no document type" on purpose. A framework that
+/// returns a bare string without setting a type emits `text/plain; charset=utf-8`,
+/// and that is exactly the shape of an untyped HTML route. Only bodies that
+/// sniff as markup are promoted, so a real plain-text response is untouched.
+fn is_generic_type(declared: &str) -> bool {
+    matches!(
+        declared,
+        "" | "application/octet-stream" | "text/plain" | "binary/octet-stream"
+    )
+}
+
+/// The MIME type of a `Content-Type` header, lowercased and without parameters.
+///
+/// `substring` checks on the raw header (what this used to do) mis-read
+/// `text/html-ish` and cannot see through `; charset=…`.
+fn mime_of(content_type: &str) -> String {
+    content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase()
+}
+
+/// Whether a body with no useful declared type looks like an HTML document.
+///
+/// Deliberately strict and cheap: skip leading whitespace and BOM, then look
+/// for a doctype or an `<html` tag in the first bytes. A document that starts
+/// with comments or a `<head>` still gets caught by the `<html` check in its
+/// first kilobyte, and a video or a JSON body never matches.
+fn looks_like_html(body: &Bytes) -> bool {
+    let window = &body[..body.len().min(1024)];
+    let text = String::from_utf8_lossy(window);
+    let trimmed = text.trim_start_matches(['\u{feff}', ' ', '\t', '\r', '\n']);
+    let lower = trimmed.to_ascii_lowercase();
+    lower.starts_with("<!doctype html")
+        || lower.starts_with("<html")
+        || lower.contains("<html")
 }
 
 /// Rewrite a redirect target into the proxy's own path form.

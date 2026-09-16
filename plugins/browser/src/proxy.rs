@@ -59,7 +59,7 @@ pub async fn ensure_started(cache_dir: PathBuf) -> Result<&'static ProxyHandle, 
     let filter = AdFilter::load(config).await;
     let handle = run_proxy(ProxyConfig::default(), filter)
         .await
-        .map_err(|e| format!("peakd proxy failed to start: {e}"))?;
+        .map_err(|e| format!("browser proxy failed to start: {e}"))?;
 
     // Racing callers are impossible in practice (one plugin, one on_load), but
     // `set` returning Err keeps the invariant explicit rather than silent.
@@ -101,6 +101,14 @@ pub fn addr() -> Option<SocketAddr> {
 
 // ── Sessions ────────────────────────────────────────────────────────────
 
+/// How many sessions are kept.
+///
+/// Sessions are a *view* concern: the window uses the id it was handed, and
+/// never asks for an old one. Nothing ever deleted them, so a long-lived
+/// server accumulated one entry per navigation, forever. Keep a generous
+/// recent window and let the tail go.
+const MAX_SESSIONS: usize = 64;
+
 pub async fn create_session(url: String) -> Session {
     let session = Session {
         id: uuid::Uuid::new_v4().to_string(),
@@ -108,7 +116,13 @@ pub async fn create_session(url: String) -> Session {
         title: None,
         blocked_seen: 0,
     };
-    sessions().write().await.push(session.clone());
+    let mut all = sessions().write().await;
+    all.push(session.clone());
+    if all.len() > MAX_SESSIONS {
+        let excess = all.len() - MAX_SESSIONS;
+        all.drain(0..excess);
+    }
+    drop(all);
     session
 }
 
@@ -174,5 +188,20 @@ mod tests {
 
         assert!(close_session(&s.id).await);
         assert!(get_session(&s.id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn sessions_do_not_grow_without_bound() {
+        // One session is created per navigation, so an unbounded list is a
+        // slow leak on a long-lived server.
+        let first = create_session("https://example.com/first".into()).await;
+        for i in 0..MAX_SESSIONS + 10 {
+            create_session(format!("https://example.com/{i}")).await;
+        }
+        let all = list_sessions().await;
+        assert!(all.len() <= MAX_SESSIONS, "kept {} sessions", all.len());
+        // The oldest are the ones dropped.
+        assert!(get_session(&first.id).await.is_none());
+        assert!(get_session(&all.last().unwrap().id).await.is_some());
     }
 }

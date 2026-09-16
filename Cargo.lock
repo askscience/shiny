@@ -5039,6 +5039,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-browser-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "futures",
+ "parking_lot",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "shiny-filter",
+ "shiny-plugin-sdk",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "shiny-calc-plugin"
 version = "0.1.0"
 dependencies = [
@@ -5194,25 +5215,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "tokio",
- "uuid",
-]
-
-[[package]]
-name = "shiny-peakd-plugin"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "futures",
- "reqwest",
- "semver",
- "serde",
- "serde_json",
- "shiny-filter",
- "shiny-plugin-sdk",
- "tokio",
- "tracing",
- "url",
  "uuid",
 ]
 

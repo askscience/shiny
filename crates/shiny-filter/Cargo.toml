@@ -2,7 +2,7 @@
 name = "shiny-filter"
 version = "0.1.0"
 edition = "2021"
-description = "Shared adblock-rust filtering engine + HTTP proxy used by both the peakd shell and the in-app Peak'd Browser plugin"
+description = "Shared adblock-rust filtering engine + HTTP proxy used by both the peakd shell and the in-app Browser plugin"
 
 [dependencies]
 # The whole point: Brave's native adblock-rust engine (MPL-2.0).

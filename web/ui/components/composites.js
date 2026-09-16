@@ -36,6 +36,19 @@ const THEME_LABELS = {
 
 const PLAN_TYPES = new Set(['travel_plan', 'tour_plan']);
 
+/**
+ * Whether an artifact describes somewhere on a map.
+ *
+ * Location, a computed route, or drawn geometry — the three things the map can
+ * actually show. Everything else is a card about something that is not a place.
+ */
+export function isMapArtifact(artifact) {
+  if (!artifact) return false;
+  if (artifact.coordinates?.lat != null && artifact.coordinates?.lon != null) return true;
+  if (artifact.route) return true;
+  return Array.isArray(artifact.geometry) && artifact.geometry.length > 0;
+}
+
 /** Theme icon name for an artifact (or summary). */
 export function iconForArtifact(item) {
   if (item?.theme && THEME_ICONS[item.theme]) return THEME_ICONS[item.theme];
@@ -338,7 +351,12 @@ export function artifactPanel(artifact, o = {}) {
 
   const actions = document.createElement('div');
   actions.className = 'ui-artifact-actions';
-  if (o.onNavigate) {
+  // The map action only makes sense for something that *has* a location. A
+  // card for a page, a track or a video has none, and offering "Map" on it led
+  // somewhere useless: the click ran the routing flow and answered "No
+  // destination coordinates for this plan", from a button the user never asked
+  // for and could not explain.
+  if (o.onNavigate && isMapArtifact(artifact)) {
     actions.appendChild(button({
       label: artifact.coordinates ? 'Show route on map' : 'Map',
       variant: 'ghost',

@@ -1,29 +1,36 @@
 /**
- * plugin.css — the Peak'd Browser window.
+ * plugin.css — the Browser window.
  *
  * This file exists because a browser window's *chrome* is not something the
- * core UI library can express: an address bar plus a web viewport is a layout,
+ * core UI library can express: an address bar over a web viewport is a layout,
  * not a component. The README convention (PLUGINS.md §19) is that plugins ship
  * no CSS and build with the core components; this is the single, deliberate
- * exception, and everything below is scoped under `.peakd-tile` so it cannot
+ * exception, and everything below is scoped under `.browser-tile` so it cannot
  * reach another window.
  *
- * It is loaded from plugin.js (`ensureStylesheet`), because core does not
- * auto-inject a plugin's stylesheet — the loader builds `.tile` and leaves the
- * inside to the plugin. Colours come from the active theme's tokens, so this
- * window still follows the user's theme and accent.
+ * What that means in practice: **the controls are core components.** The
+ * toolbar's buttons are `iconButton` and the address field is `searchBar` — the
+ * same element the YouTube and Radio windows use — so their metrics, focus
+ * ring, hover and accent all come from `web/ui/ui.css` and the active theme.
+ * Nothing here restyles a `.ui-btn` or a `.ui-input`; only the arrangement
+ * around them. The file is loaded from plugin.js (`ensureStylesheet`), because
+ * core does not auto-inject a plugin's stylesheet: the loader builds `.tile`
+ * and leaves the inside to the plugin.
  */
 
-.peakd-tile {
+.browser-tile {
   /* The viewport must be able to shrink below its content's intrinsic size,
      otherwise a long page forces the whole tile to grow. */
   min-height: 0;
-  --browser-bar-height: 38px;
+  /* Tall enough for a 34px field plus its own padding, so the bar matches the
+     32–34px control metrics every other window's bar uses. */
+  --browser-bar-height: 44px;
+  --browser-control: 34px;
 }
 
 /* ── Toolbar ────────────────────────────────────────────────── */
 
-.peakd-bar {
+.browser-bar {
   flex: none;
   display: flex;
   align-items: center;
@@ -35,121 +42,68 @@
   backdrop-filter: blur(var(--glass-blur, 12px)) saturate(var(--glass-saturate, 140%));
 }
 
-.peakd-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm, 8px);
-  background: transparent;
-  color: var(--text-secondary, var(--text));
-  cursor: pointer;
-  transition: background var(--duration-fast, 120ms) var(--ease-out, ease),
-              color var(--duration-fast, 120ms) var(--ease-out, ease);
-}
-
-.peakd-btn:hover:not(:disabled) {
-  background: var(--glass-hover, color-mix(in srgb, var(--text) 10%, transparent));
-  color: var(--text);
-}
-
-.peakd-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.peakd-btn .ui-icon {
-  width: 15px;
-  height: 15px;
+/* Back and forward are one glyph, mirrored.
+   The theme ships `ui/arrow-left` but its `ui/forward` is a curved "share"
+   arrow, so using both made the pair look like two unrelated features. Both
+   buttons therefore carry `ui/arrow-left` and the forward one is flipped — the
+   window keeps drawing from the theme (PLUGINS.md §19) instead of shipping an
+   icon asset of its own. */
+.browser-nav--forward .ui-icon {
+  transform: scaleX(-1);
 }
 
 /* ── Address bar ────────────────────────────────────────────── */
 
-.peakd-address {
+.browser-address {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
 }
 
-.peakd-input {
+.browser-address .ui-search {
   flex: 1 1 auto;
   min-width: 0;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--glass-border);
+}
+
+/* Size the library's field to the toolbar rather than to a form: the same
+   height as the icon buttons beside it. The vertical padding is dropped because
+   the 34px height is the whole control here — with the library's 12px it would
+   leave 10px of text box inside a 13px line. */
+.browser-address .ui-input {
+  height: var(--browser-control);
+  padding: 0 14px 0 38px;
+  font-size: 13px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bg, #000) 55%, transparent);
-  color: var(--text);
-  font: inherit;
-  font-size: 12.5px;
-  outline: none;
-  transition: border-color var(--duration-fast, 120ms) var(--ease-out, ease),
-              box-shadow var(--duration-fast, 120ms) var(--ease-out, ease);
-}
-
-.peakd-input::placeholder {
-  color: var(--muted);
-}
-
-.peakd-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft, transparent);
 }
 
 /* ── Filter toggle (pause ad blocking) ──────────────────────── */
 
-.peakd-filter-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm, 8px);
-  background: transparent;
+/* Accent when filtering runs, muted when paused. The paused state is *also* on
+   `aria-pressed`, so it never depends on colour alone. */
+.browser-filter-btn {
   color: var(--accent);
-  cursor: pointer;
-  transition: background var(--duration-fast, 120ms) var(--ease-out, ease),
-              color var(--duration-fast, 120ms) var(--ease-out, ease);
 }
 
-.peakd-filter-btn:hover {
-  background: var(--glass-hover, color-mix(in srgb, var(--text) 10%, transparent));
-}
-
-/* Paused: muted as well as slashed, so the state survives a colourblind or
-   greyscale reading. The slash alone is the primary signal. */
-.peakd-filter-btn.is-paused {
+.browser-filter-btn.is-paused {
   color: var(--muted);
 }
 
-.peakd-filter-btn svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* A paused filter means the counter below is frozen, not zero: dim it so the
-   two controls never disagree. */
-.peakd-shield.is-paused {
+/* A paused filter means the counter to its right is frozen, not zero: dim it so
+   the two controls never disagree. */
+.browser-shield.is-paused {
   opacity: 0.55;
   border-style: dashed;
 }
 
 /* ── Shield (blocked counter) ───────────────────────────────── */
 
-.peakd-shield {
+.browser-shield {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 9px;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   background: transparent;
@@ -162,28 +116,28 @@
               color var(--duration-fast, 120ms) var(--ease-out, ease);
 }
 
-.peakd-shield:hover {
+.browser-shield:hover {
   border-color: var(--accent);
   color: var(--text);
 }
 
-.peakd-shield.is-active {
+.browser-shield.is-active {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.peakd-shield .ui-icon {
+.browser-shield .ui-icon {
   width: 13px;
   height: 13px;
 }
 
-.peakd-shield-count {
+.browser-shield-count {
   line-height: 1;
 }
 
 /* ── Viewport ───────────────────────────────────────────────── */
 
-.peakd-viewport {
+.browser-viewport {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
@@ -192,7 +146,7 @@
   background: #ffffff;
 }
 
-.peakd-frame {
+.browser-frame {
   display: block;
   width: 100%;
   height: 100%;
@@ -201,7 +155,7 @@
 
 /* A status strip overlays the viewport rather than displacing it, so the page
    never jumps when a navigation starts or fails. */
-.peakd-status {
+.browser-status {
   position: absolute;
   left: 10px;
   bottom: 10px;
@@ -216,14 +170,14 @@
   pointer-events: none;
 }
 
-.peakd-status.hidden {
+.browser-status.hidden {
   display: none;
 }
 
 /* A narrow window (two tiles side by side, or a phone) drops the labels that
    no longer fit before it starts shrinking the address field. */
 @container (max-width: 460px) {
-  .peakd-shield-count {
+  .browser-shield-count {
     display: none;
   }
 }

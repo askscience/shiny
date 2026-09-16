@@ -6,14 +6,18 @@
 //! * [`tools`] — the agent tools (`browser_open`, `browser_search`,
 //!   `browser_read`).
 //! * [`fetch`] — page → readable text, for the tools.
-//! * [`history`] — best-effort browsing history.
+//! * [`history`] — best-effort browsing history, and the interest profile's
+//!   raw material.
+//! * [`news`] — the related-news cards on the window's home surface, ranked
+//!   from what the user searches for.
 //! * [`plugin`] — registration and the `shiny_plugin_entry` symbol.
 
 pub mod fetch;
 pub mod history;
+pub mod news;
 pub mod plugin;
 pub mod proxy;
 pub mod routes;
 pub mod tools;
 
-pub use plugin::PeakdBrowserPlugin;
+pub use plugin::BrowserPlugin;

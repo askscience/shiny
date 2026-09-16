@@ -1,7 +1,7 @@
 ## Browser
 
-Open and read web pages inside the **Peak'd Browser** window. Pages are fetched
-through PEAK'D!'s own ad-blocking engine, so ads, trackers and known annoyances
+Open and read web pages inside the **Browser** window. Pages are fetched
+through the app's own ad-blocking engine, so ads, trackers and known annoyances
 are removed before the page reaches the window.
 
 ### Tools
@@ -29,5 +29,10 @@ are removed before the page reaches the window.
   lost. If the user needs those, open the window instead.
 - Pages that render entirely in JavaScript may return little text. Say so
   rather than inventing the content.
-- If a page looks wrong, the user can open the window and use **Direct mode**
-  to load it without filtering.
+- If a page looks wrong because a site needs its trackers, the user can pause ad
+  blocking from the window's shield toggle (it applies to every page until
+  turned back on).
+- The window's home surface (the Home button, shown when it opens) lists
+  **related news** chosen from what the user has recently searched for. Those
+  cards are a UI feature, not a tool: do not offer to "open the news shelf" —
+  just open or read the pages the user actually asks about.

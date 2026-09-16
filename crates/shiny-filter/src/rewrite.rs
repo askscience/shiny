@@ -324,6 +324,20 @@ fn rewrite_url_value(
         return None;
     }
 
+    // Decode HTML entities exactly where a browser does. Markup writes
+    // `&amp;` because a bare `&` would be invalid HTML, and the parser turns it
+    // back into `&` before the URL ever reaches the network. A rewriter that
+    // skips this step produces a *different URL*: measured live, a Wikipedia
+    // page asking for `/w/load.php?lang=en&amp;modules=startup&…` came back as
+    // 196 bytes of error instead of 69 KB of JavaScript, because the origin was
+    // asked for a single parameter literally named `amp;modules`.
+    //
+    // This is the classic "works on single-parameter URLs" bug: with one
+    // parameter there is no `&` to mis-encode, which is why it survived this
+    // long.
+    let trimmed = decode_entities(trimmed);
+    let trimmed = trimmed.as_str();
+
     // Skip non-navigational schemes and fragment-only links.
     let lower = trimmed.to_ascii_lowercase();
     if lower.starts_with('#')
@@ -348,6 +362,78 @@ fn rewrite_url_value(
     let absolute = resolve(document_url, trimmed)?;
     let proxied = proxied_path_of(&absolute)?;
     Some(format!("{proxy_base}{proxied}"))
+}
+
+/// Decode the character references an attribute value can contain.
+///
+/// Only the references that can appear in — and change the meaning of — a URL
+/// are handled: the ampersand (the one that matters, since it separates query
+/// parameters) plus the handful of others an HTML parser would resolve. A URL
+/// with no `&` is returned borrowed-free by the fast path.
+fn decode_entities(value: &str) -> String {
+    if !value.contains('&') {
+        return value.to_string();
+    }
+    let mut out = String::with_capacity(value.len());
+    let bytes = value.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] != b'&' {
+            let ch = value[i..].chars().next().unwrap_or(' ');
+            out.push(ch);
+            i += ch.len_utf8();
+            continue;
+        }
+        let rest = &value[i..];
+        // `&amp;` first, then numeric forms. `&amp;` must not be decoded twice:
+        // a literal `&amp;` typed by an author arrives as `&amp;amp;`, and one
+        // pass correctly yields `&amp;` — which is what the origin wants.
+        let (decoded, consumed) = if let Some(tail) = rest.strip_prefix("&amp;") {
+            let _ = tail;
+            ("&".to_string(), 5)
+        } else if let Some(tail) = rest.strip_prefix("&lt;") {
+            let _ = tail;
+            ("<".to_string(), 4)
+        } else if let Some(tail) = rest.strip_prefix("&gt;") {
+            let _ = tail;
+            (">".to_string(), 4)
+        } else if let Some(tail) = rest.strip_prefix("&quot;") {
+            let _ = tail;
+            ("\"".to_string(), 6)
+        } else if rest.starts_with("&apos;") {
+            ("'".to_string(), 6)
+        } else if rest.starts_with("&nbsp;") {
+            (" ".to_string(), 6)
+        } else {
+            match numeric_reference(rest) {
+                Some((ch, len)) => (ch.to_string(), len),
+                None => ("&".to_string(), 1),
+            }
+        };
+        out.push_str(&decoded);
+        i += consumed;
+    }
+    out
+}
+
+/// Decode `&#38;` / `&#x26;` style references, returning the character and how
+/// many bytes it consumed.
+fn numeric_reference(value: &str) -> Option<(char, usize)> {
+    let body = value.strip_prefix("&#")?;
+    let (digits, radix, prefix_len) = if let Some(hex) = body.strip_prefix(['x', 'X']) {
+        let end = hex.find(';')?;
+        (&hex[..end], 16u32, true)
+    } else {
+        let end = body.find(';')?;
+        (&body[..end], 10u32, false)
+    };
+    if digits.is_empty() || digits.len() > 8 {
+        return None;
+    }
+    let code = u32::from_str_radix(digits, radix).ok()?;
+    let ch = char::from_u32(code)?;
+    let consumed = 2 + usize::from(prefix_len) + digits.len() + 1;
+    Some((ch, consumed))
 }
 
 /// Resolve a possibly-relative URL against a base, returning `None` when the
@@ -571,6 +657,60 @@ mod tests {
     const BASE: &str = "http://127.0.0.1:8899";
 
     #[test]
+    /// A query string in markup is entity-encoded, and the proxy must hand the
+    /// origin what a browser would: `&amp;` → `&`.
+    ///
+    /// Measured live before this was fixed: Wikipedia's JS loader was asked for
+    /// `?lang=en&amp;modules=…&amp;only=scripts`, answered 196 bytes of error
+    /// instead of 69 KB of script, and the page's own scripts never loaded. One
+    /// parameter hides the bug entirely, which is why it took a real navigation
+    /// test to find.
+    #[test]
+    fn query_ampersands_are_decoded_once() {
+        let html = r#"<script src="/w/load.php?lang=en&amp;modules=startup&amp;only=scripts"></script>"#;
+        let out = rewrite_html(
+            "https://en.wikipedia.org/wiki/Page",
+            "http://127.0.0.1:8899",
+            html,
+        );
+        assert!(
+            out.html.contains("?lang=en&modules=startup&only=scripts"),
+            "entities were not decoded: {}",
+            out.html
+        );
+        assert!(
+            !out.html.contains("&amp;modules"),
+            "a literal entity reached the URL: {}",
+            out.html
+        );
+    }
+
+    /// Exactly one pass: an author-escaped `&amp;amp;` means a literal `&amp;`,
+    /// and decoding twice would change what the origin is asked for.
+    #[test]
+    fn entities_are_not_decoded_twice() {
+        let html = r#"<a href="/q?x=1&amp;amp;y=2">x</a>"#;
+        let out = rewrite_html("https://site.example/", "http://127.0.0.1:8899", html);
+        assert!(
+            out.html.contains("x=1&amp;y=2"),
+            "double-decoded: {}",
+            out.html
+        );
+    }
+
+    /// The numeric forms are what a generator emits when it cannot use `&amp;`.
+    #[test]
+    fn numeric_ampersand_references_are_decoded() {
+        for (encoded, expected) in [
+            ("/q?a=1&#38;b=2", "a=1&b=2"),
+            ("/q?a=1&#x26;b=2", "a=1&b=2"),
+        ] {
+            let html = format!(r#"<a href="{encoded}">x</a>"#);
+            let out = rewrite_html("https://site.example/", "http://127.0.0.1:8899", &html);
+            assert!(out.html.contains(expected), "{encoded} → {}", out.html);
+        }
+    }
+
     fn rewrites_src_and_href() {
         let html = r#"<a href="/page"><img src="https://cdn.example.com/a.png"></a>"#;
         let out = rewrite_html("https://site.example.com/", BASE, html);

@@ -3,6 +3,17 @@
 //! These stand up a real origin server, a real proxy, and a real HTTP client,
 //! then assert on what a browser would actually observe. Unit tests can show
 //! the rewriter is correct; only this can show the pipeline works.
+//!
+//! **Run with a reduced thread count.** Each test binds both a proxy and an
+//! origin, and every request burns a client-side ephemeral port that lingers in
+//! `TIME_WAIT`. On macOS the default 16k-port range is exhausted after a couple
+//! of full runs, and the failures it produces (`Can't assign requested address`
+//! → 502) look like bugs in the proxy. When the suite goes red for no code
+//! reason, check `netstat -an | grep -c 127.0.0.1` first:
+//!
+//! ```text
+//! cargo test -p shiny-filter --test proxy_e2e -- --test-threads=2
+//! ```
 
 use std::net::SocketAddr;
 
@@ -83,6 +94,22 @@ async fn spawn_origin() -> SocketAddr {
                     "<html><body>framed</body></html>",
                 )
             }),
+        )
+        // Documents served with a generic type, or none. Common on misconfigured
+        // origins and extensionless CMS routes, and a browser refuses to run the
+        // injected shim inside an `application/octet-stream` response.
+        .route(
+            "/no-type",
+            get(|| async {
+                (
+                    [("content-type", "application/octet-stream")],
+                    "<html><body>untyped</body></html>",
+                )
+            }),
+        )
+        .route(
+            "/really-no-type",
+            get(|| async { "<html><body>bare</body></html>" }),
         );
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -479,6 +506,55 @@ async fn pausing_stops_blocking_and_resuming_restores_it() {
         .unwrap();
     assert_eq!(blocked_again.status(), StatusCode::NO_CONTENT);
     assert_eq!(proxy.metrics().snapshot().blocked, 2);
+
+    proxy.shutdown();
+}
+
+#[tokio::test]
+async fn a_rewritten_document_is_always_declared_as_html() {
+    // The injected shim is JavaScript. A browser only executes (and, in strict
+    // MIME mode, only renders) it when the response is declared as HTML, so a
+    // document that arrived with a generic or missing `Content-Type` must come
+    // back with one — otherwise filtering silently stops working on exactly the
+    // sites most likely to need it.
+    let origin = spawn_origin().await;
+    let proxy = run_proxy(filtering_config(), ad_filter()).await.unwrap();
+    let client = proxied_client(proxy.addr());
+
+    for path in ["/no-type", "/really-no-type"] {
+        let res = client
+            .get(format!("http://{origin}{path}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK, "{path}");
+        let declared = res
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        assert!(
+            declared.contains("text/html"),
+            "{path} was declared as {declared:?}"
+        );
+        let body = res.text().await.unwrap();
+        assert!(body.contains("data-shiny-filter=\"shim\""), "{path}: shim missing");
+    }
+
+    // A correct `Content-Type` is passed through untouched, charset included.
+    let res = client
+        .get(format!("http://{origin}/"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or(""),
+        "text/html; charset=utf-8"
+    );
 
     proxy.shutdown();
 }

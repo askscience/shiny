@@ -93,7 +93,54 @@ export function applyDockDestinationGroup(destinationKey, artifactIds = []) {
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
 }
 
-export function getDockSummaries() {
+/**
+ * Artifact types the traveler plugin owns.
+ *
+ * Needed because artifacts saved before plugins started stamping their owner
+ * have no `plugin` field at all — 103 of them in the live database — and those
+ * are traveler guides. Without this they would vanish from the dock entirely.
+ */
+const TRAVELER_TYPES = new Set([
+  'travel_plan',
+  'tour_plan',
+  'route_preview',
+  'poi_list',
+  'monument_info',
+  'site_info',
+]);
+
+/**
+ * Whether `summary` was produced by `pluginName`.
+ *
+ * A card belongs to the window it came from, and only that window's dock may
+ * draw it. Untagged legacy cards count as the traveler's, since nothing else
+ * existed when they were written; `site_info` is the one type core still emits,
+ * and a core card has no window of its own to live in.
+ */
+export function artifactBelongsTo(summary, pluginName) {
+  if (!summary || !pluginName) return false;
+  const owner = summary.plugin;
+  if (!owner) return pluginName === 'traveler' && TRAVELER_TYPES.has(summary.type);
+  return owner === pluginName;
+}
+
+/**
+ * The cards one window's dock should draw.
+ *
+ * `pluginName` scopes the result to that window's own cards, and skips the
+ * traveler's grouping rules along with it: "the active destination" and the
+ * guide topic slots (overview/food/culture/nightlife) are traveler concepts,
+ * and applying them to another window would both hide its cards and let the
+ * traveler's current city decide what the browser shows.
+ *
+ * Omit `pluginName` for the unscoped chrome dock (chat-only mode), where the
+ * destination grouping is what makes the dock useful.
+ */
+export function getDockSummaries(pluginName) {
+  if (pluginName) {
+    const scoped = summaries.filter((s) => artifactBelongsTo(s, pluginName));
+    return sortDockSummaries(dedupeSummaries(scoped)).slice(0, 4);
+  }
   const pool = activeDestinationKey
     ? summaries.filter((s) => destinationKeyForSummary(s) === activeDestinationKey)
     : summaries;
@@ -182,11 +229,17 @@ function summaryPriority(s) {
 
 /**
  * Unique saved destinations for the left HUD (one chip per city).
+ *
+ * Scoped to the traveler's own cards: "saved places" is a traveler concept, and
+ * another plugin's card that happens to carry a destination should not appear in
+ * the places menu.
+ *
  * @returns {{ key: string, label: string, artifactId: string }[]}
  */
 export function getSavedDestinations() {
   const entries = new Map();
   for (const s of summaries) {
+    if (!artifactBelongsTo(s, 'traveler')) continue;
     const key = destinationKeyForSummary(s);
     if (!key) continue;
     const label = destinationLabel(s);

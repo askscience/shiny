@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Browser">
+  <!--
+    The Browser plugin's flame.
+
+    A flame is the one glyph that says "browser" for this app without a generic
+    window chrome: it is the mark of a fast, live window onto the web. Drawn to
+    the plugin-icon rules in PLUGINS.md §19 — 2px strokes on a 24x24 grid,
+    rounded caps and joins, geometry out into the 2.5..21.5 range so it still
+    reads at 18px in the HUD tray.
+
+    The inner flame is the single solid accent, mirroring the app mark's solid
+    eye socket; no hardcoded colours, so the theme's accent still drives it.
+  -->
+  <!-- Outer flame. -->
+  <path d="M12 2.5C13.5 6 17.5 8 17.5 13a5.5 5.5 0 1 1-11 0C6.5 8 10.5 6 12 2.5Z"/>
+  <!-- Inner flame: one filled accent. -->
+  <path d="M12 16.8a2.2 2.2 0 0 0 2.2-2.2c0-1.1-.7-1.9-1.4-2.6-.2-.2-.5-.6-.8-.9-.7.8-1.4 1.5-1.4 2.8A2.2 2.2 0 0 0 12 16.8Z"
+        fill="currentColor" stroke="none"/>
+</svg>

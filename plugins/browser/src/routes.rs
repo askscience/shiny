@@ -21,13 +21,16 @@ use crate::proxy;
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
     match tag {
-        "peakd_state" => Some(state(ctx)),
-        "peakd_sessions" => Some(sessions(ctx)),
-        "peakd_session_create" => Some(session_create(ctx)),
-        "peakd_session_close" => Some(session_close(ctx)),
-        "peakd_navigate" => Some(navigate(ctx)),
-        "peakd_metrics" => Some(metrics(ctx)),
-        "peakd_filter_toggle" => Some(filter_toggle(ctx)),
+        "browser_state" => Some(state(ctx)),
+        "browser_sessions" => Some(sessions(ctx)),
+        "browser_session_create" => Some(session_create(ctx)),
+        "browser_session_close" => Some(session_close(ctx)),
+        "browser_navigate" => Some(navigate(ctx)),
+        "browser_metrics" => Some(metrics(ctx)),
+        "browser_filter_toggle" => Some(filter_toggle(ctx)),
+        "browser_history" => Some(history_route(ctx.clone())),
+        "browser_news" => Some(news_route(ctx.clone())),
+        "browser_news_click" => Some(news_click(ctx)),
         _ => None,
     }
 }
@@ -144,7 +147,7 @@ impl Target {
     }
 }
 
-/// GET /api/peakd/state — what the window needs to render itself.
+/// GET /api/browser/state — what the window needs to render itself.
 fn state(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         user_id(&req)?;
@@ -164,7 +167,7 @@ fn state(_ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
-/// GET /api/peakd/sessions
+/// GET /api/browser/sessions
 fn sessions(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         user_id(&req)?;
@@ -184,7 +187,7 @@ struct NavigateBody {
     format: Option<String>,
 }
 
-/// POST /api/peakd/navigate — the single entry point for going somewhere.
+/// POST /api/browser/navigate — the single entry point for going somewhere.
 fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| {
         let ctx = ctx.clone();
@@ -192,7 +195,15 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let body = take_json::<NavigateBody>(req).await?;
 
-            let target = normalize_input(&body.input);
+            let raw = body.input.trim().to_string();
+            let target = normalize_input(&raw);
+            // A typed phrase is a search, and a search is the strongest
+            // interest signal the home surface's recommender gets — keep the
+            // words the user actually typed, not the engine URL they became.
+            let query: Option<String> = match &target {
+                Target::Search(q) if !q.trim().is_empty() => Some(q.trim().to_string()),
+                _ => None,
+            };
             let searxng = std::env::var("SEARXNG_URL").ok();
             let url = target.into_url(searxng.as_deref());
 
@@ -215,7 +226,22 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
 
             // Best-effort history: browsing must work even if the shared
             // database is unavailable (see the plugin DB caveat in §15).
-            let _ = crate::history::record(&ctx, &uid, &url, body.format.as_deref()).await;
+            let _ = crate::history::record(
+                &ctx,
+                &uid,
+                &url,
+                body.format.as_deref(),
+                query.as_deref(),
+            )
+            .await;
+
+            // `proxy_base` travels with every navigation because the port is
+            // random per server start (`ProxyConfig::default()` binds :0). A
+            // window that cached the base from before a restart aimed every
+            // later navigation at a dead port — the classic "connection
+            // refused" viewport. Sending the current base lets the window heal
+            // itself instead of needing a reload.
+            let proxy_base = proxy::base();
 
             if body.format.as_deref() == Some("text") {
                 let text = crate::fetch::text(&view_url).await?;
@@ -223,6 +249,7 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
                     "session": session,
                     "url": url,
                     "view_url": view_url,
+                    "proxy_base": proxy_base,
                     "text": text,
                 })));
             }
@@ -231,6 +258,7 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
                 "session": session,
                 "url": url,
                 "view_url": view_url,
+                "proxy_base": proxy_base,
             })))
         }
     })
@@ -241,7 +269,7 @@ struct SessionBody {
     id: String,
 }
 
-/// POST /api/peakd/session — open a new session.
+/// POST /api/browser/session — open a new session.
 fn session_create(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         let _uid = user_id(&req)?;
@@ -250,7 +278,7 @@ fn session_create(_ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
-/// POST /api/peakd/session/close
+/// POST /api/browser/session/close
 fn session_close(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         let _uid = user_id(&req)?;
@@ -260,7 +288,7 @@ fn session_close(_ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
-/// GET /api/peakd/metrics — the counters the window's shield shows.
+/// GET /api/browser/metrics — the counters the window's shield shows.
 fn metrics(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         user_id(&req)?;
@@ -278,7 +306,7 @@ struct FilterToggleBody {
     paused: Option<bool>,
 }
 
-/// POST /api/peakd/filter/toggle — pause or resume ad blocking.
+/// POST /api/browser/filter/toggle — pause or resume ad blocking.
 ///
 /// Some sites genuinely cannot work with their trackers removed. Without this
 /// the only options would be "broken page" or "leave the browser", so the
@@ -296,7 +324,7 @@ fn filter_toggle(_ctx: Arc<PluginCtx>) -> RouteHandler {
 
         let paused = body.paused.unwrap_or(!handle.is_paused());
         handle.set_paused(paused);
-        tracing::info!("peakd: ad filtering {}", if paused { "paused" } else { "resumed" });
+        tracing::info!("browser: ad filtering {}", if paused { "paused" } else { "resumed" });
 
         Ok(ok(json!({
             "filtering_paused": paused,
@@ -304,6 +332,100 @@ fn filter_toggle(_ctx: Arc<PluginCtx>) -> RouteHandler {
             "rules": handle.filter.rule_count(),
         })))
     })
+}
+
+/// GET /api/browser/history — recent navigations, newest first.
+///
+/// Exposed for two reasons: the home surface's "because you searched for …"
+/// chips are built from the same rows the recommender ranks, and a user can
+/// see what the algorithm has learned about them. A recommender the user
+/// cannot inspect is indistinguishable from one that is broken.
+fn history_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let limit = query_limit(&req).unwrap_or(20);
+            let rows = crate::history::recent_rows(&ctx, &uid, limit).unwrap_or_default();
+            Ok(ok(json!({ "history": rows })))
+        }
+    })
+}
+
+/// GET /api/browser/news — the related-news cards for the home surface.
+///
+/// `?refresh=1` bypasses the per-topic cache (the home surface's refresh
+/// button), `?limit=` caps the shelf.
+fn news_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let refresh = query_flag(&req, "refresh");
+            let limit = query_limit(&req).unwrap_or(12).clamp(1, 30);
+            let news = crate::news::home_news(&ctx, &uid, limit, refresh).await?;
+            Ok(ok(serde_json::to_value(news).unwrap_or(Value::Null)))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct NewsClickBody {
+    /// The card's URL.
+    url: String,
+    /// The interest the card was recommended for; re-recording it is what
+    /// makes a click a *stronger* signal than a passive visit.
+    #[serde(default)]
+    topic: Option<String>,
+}
+
+/// POST /api/browser/news/click — record a click on a recommended card.
+///
+/// The home surface sends this before navigating. It is the recommender's only
+/// explicit feedback channel: a card the user opened is worth more than one
+/// they scrolled past, and it costs one row in the same history table.
+fn news_click(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<NewsClickBody>(req).await?;
+            let _ = crate::history::record(
+                &ctx,
+                &uid,
+                &body.url,
+                Some("news_click"),
+                body.topic.as_deref(),
+            )
+            .await;
+            Ok(ok(json!({ "recorded": true })))
+        }
+    })
+}
+
+/// Read an integer query parameter without a `Query<T>` extractor.
+///
+/// The bridged routes hand the handler a whole `Request`, and pulling one
+/// value out of the query string is cheaper than reconstructing the parts for
+/// an extractor that would then consume the body these routes do not use.
+fn query_param(req: &axum::extract::Request, key: &str) -> Option<String> {
+    let query = req.uri().query()?;
+    url::form_urlencoded::parse(query.as_bytes())
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.into_owned())
+}
+
+fn query_limit(req: &axum::extract::Request) -> Option<usize> {
+    query_param(req, "limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+}
+
+fn query_flag(req: &axum::extract::Request, key: &str) -> bool {
+    matches!(
+        query_param(req, key).as_deref(),
+        Some("1") | Some("true") | Some("yes")
+    )
 }
 
 #[cfg(test)]

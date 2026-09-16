@@ -24,7 +24,15 @@ use crate::routes::{normalize_input, Target};
 /// Returning an artifact also makes core focus this window after an AI-driven
 /// navigation (`agent_runner` surfaces the window of the plugin that produced
 /// the turn's only artifact).
-fn page_artifact(title: &str, _url: &str, note: Option<&str>) -> Artifact {
+///
+/// The URL travels in **`narrative`**, which looks odd until you see why: the
+/// window used to read it back from `payload.url`, a key that does not exist in
+/// the saved payload, so the AI could open a site and the window would silently
+/// stay on its home page. A browser card's `title` *is* the URL too, but parsing
+/// a display title to recover a machine value is how that kind of bug survives
+/// its next refactor. `narrative` is the only free-form string field on the
+/// artifact, and it is carried through storage untouched.
+fn page_artifact(title: &str, url: &str, note: Option<&str>) -> Artifact {
     Artifact {
         id: uuid::Uuid::new_v4().to_string(),
         artifact_type: "browser_page".into(),
@@ -36,7 +44,7 @@ fn page_artifact(title: &str, _url: &str, note: Option<&str>) -> Artifact {
         days: vec![],
         route: None,
         geometry: vec![],
-        narrative: None,
+        narrative: Some(url.to_string()),
         theme: None,
         destination: None,
     }
@@ -82,7 +90,7 @@ impl Tool for BrowserOpen {
         format!("Opened {url} in the browser")
     }
 
-    async fn invoke(&self, _ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let raw = req
             .params
             .param_str("url")
@@ -93,10 +101,20 @@ impl Tool for BrowserOpen {
         let url = resolve_target(&raw);
         let view_url = view_url_for(&url)?;
 
-        let title = match normalize_input(&raw) {
+        let target = normalize_input(&raw);
+        let title = match &target {
             Target::Search(q) => format!("Search: {q}"),
-            Target::Url(u) => u,
+            Target::Url(u) => u.clone(),
         };
+
+        // An AI-driven navigation is a navigation: record it for history and
+        // for the home surface's interest profile, exactly like the address
+        // bar's route does. Best-effort — a broken DB must not fail the tool.
+        let query = match &target {
+            Target::Search(q) if !q.trim().is_empty() => Some(q.trim()),
+            _ => None,
+        };
+        let _ = crate::history::record(ctx, req.user_id, &url, Some("page"), query).await;
 
         Ok(ActionOutcome::ok(
             "browser_open",
@@ -129,7 +147,7 @@ impl Tool for BrowserSearch {
     }
 
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `browser_search` — Search the web in the browser window. params: `{ query: string }` — uses the configured SearXNG instance when `SEARXNG_URL` is set, otherwise DuckDuckGo. Prefer this over `browser_open` when the user asks to look something up.")
+        Some("- `browser_search` — Search the web in the browser window. params: `{ query: string }` — uses the configured SearXNG instance when `SEARXNG_URL` is set, otherwise Brave Search. Prefer this over `browser_open` when the user asks to look something up.")
     }
 
     fn humanize(&self, _r: &str, data: &Value) -> String {
@@ -137,7 +155,7 @@ impl Tool for BrowserSearch {
         format!("Searched the browser for “{q}”")
     }
 
-    async fn invoke(&self, _ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let query = req
             .params
             .param_str("query")
@@ -146,6 +164,10 @@ impl Tool for BrowserSearch {
 
         let url = resolve_target(&query);
         let view_url = view_url_for(&url)?;
+
+        // A search is the strongest interest signal there is: record the words
+        // the user asked for, not just the engine URL they became.
+        let _ = crate::history::record(ctx, req.user_id, &url, Some("page"), Some(&query)).await;
 
         Ok(ActionOutcome::ok(
             "browser_search",
