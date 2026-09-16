@@ -93,6 +93,11 @@ runtime catalog (`GET /api/studio/catalog`, tool `studio_catalog`):
 - Arrangement: `tracks[]` (level, pan, mute, **solo**, automation lanes) and
   `clips[]` (`track`, `start`, `length_beats`, `gain_db`, `pattern`).
 
+Output is PCM WAV at 44.1 kHz, 16-bit by default or 24-bit when `fx.wav_bits`
+is `24`. (A configurable sample rate is plumbed through the renderer but pinned
+to 44.1 kHz — the DSP layer is tuned to `dsp::SR`, so enabling 48/96 kHz needs a
+sample-rate-aware pass through envelopes, drums, effects and oversamplers.)
+
 ## Sampled instruments (SoundFonts)
 
 The `sampler` and `sfkit` kinds play real sampled instruments from a

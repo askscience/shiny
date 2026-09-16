@@ -113,6 +113,7 @@ pub fn catalog_json() -> Value {
             {"key": "glue", "min": 0.0, "max": 1.0, "default": 0.0, "help": "Parallel bus compression"},
             {"key": "ceiling", "min": -6.0, "max": 0.0, "default": -0.4, "help": "Limiter ceiling (dBFS)"},
             {"key": "loudness", "min": -30.0, "max": 0.0, "default": 0.0, "help": "Target integrated LUFS (-14 is streaming-normal); 0 disables"},
+            {"key": "wav_bits", "min": 16.0, "max": 24.0, "default": 16.0, "help": "WAV bit depth: 16 (default) or 24"},
         ],
         "limits": {
             "max_voices": voices::MAX_VOICES,

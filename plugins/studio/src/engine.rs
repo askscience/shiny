@@ -28,7 +28,7 @@ use crate::dsp::util::{pan_gains, Smoother};
 use crate::dsp::SR;
 use crate::grid::{GridEngine, GridPatch};
 use crate::voices;
-use crate::wav::encode_wav;
+use crate::wav::encode_wav_bits;
 
 /// Rendered sample rate (CD rate — the WAV contract every existing row uses).
 pub const SAMPLE_RATE: f64 = SR;
@@ -36,6 +36,26 @@ pub const SAMPLE_RATE: f64 = SR;
 /// Extra time rendered past the musical end so releases and reverb tails are
 /// not chopped off mid-decay.
 const TAIL_SECS: f64 = 0.6;
+
+/// Output sample rate from a config's `fx.sample_rate`.
+///
+/// **Currently pinned to 44.1 kHz.** The DSP layer (envelopes, the eleven drum
+/// models, insert effects, oversamplers, limiter) derives its coefficients from
+/// the module constant `SR`, so honouring another rate needs a sample-rate-aware
+/// pass through all of those first — otherwise a 48/96 kHz render would be
+/// *worse* (mistuned filters), not better. The engine plumbing (`render_pattern`
+/// and friends take an `sr`) is in place for that follow-up.
+fn output_sr(_fx: &HashMap<String, f64>) -> f64 {
+    SAMPLE_RATE
+}
+
+/// Output bit depth from a config's `fx.wav_bits` (16 default, 24 opt-in).
+fn output_bits(fx: &HashMap<String, f64>) -> u16 {
+    match fx.get("wav_bits").copied().map(|v| v.round() as i64) {
+        Some(24) => 24,
+        _ => 16,
+    }
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Config — the JSON contract shared by tools, routes and the UI
@@ -338,6 +358,8 @@ pub struct Rendered {
     pub sample_rate: u32,
     pub channels: u32,
     pub duration_ms: u32,
+    /// WAV bit depth (16 default, 24 opt-in).
+    pub bits: u16,
     pub wav: Vec<u8>,
     /// Integrated loudness of the finished render (LUFS).
     pub lufs: f64,
@@ -716,10 +738,12 @@ struct Channel {
     pending: Vec<(usize, Ev)>,
     scratch_l: [f32; crate::dsp::BLOCK],
     scratch_r: [f32; crate::dsp::BLOCK],
+    /// Sample rate this channel's instruments were built for.
+    sr: f64,
 }
 
 impl Channel {
-    fn new(v: &VoiceConfig, vi: usize, seed: u64) -> Result<Channel, String> {
+    fn new(v: &VoiceConfig, vi: usize, seed: u64, sr: f64) -> Result<Channel, String> {
         let mut params = voices::kind_params(&v.kind);
         for (k, val) in &v.synth {
             params.insert(k.clone(), *val);
@@ -740,7 +764,7 @@ impl Channel {
             Instrument::Drumkit(drums)
         } else if v.kind == "grid" {
             let patch = v.grid.as_ref().ok_or_else(|| "grid voice missing its patch".to_string())?;
-            Instrument::Grid(Box::new(GridEngine::compile(patch, seed ^ vi as u64, SAMPLE_RATE)?))
+            Instrument::Grid(Box::new(GridEngine::compile(patch, seed ^ vi as u64, sr)?))
         } else if v.kind == "sampler" || v.kind == "sfkit" {
             let drum = v.kind == "sfkit";
             let sf = crate::dsp::sampler::load(v.soundfont.as_deref())?;
@@ -750,11 +774,11 @@ impl Channel {
                 .copied()
                 .unwrap_or(if drum { 128.0 } else { 0.0 })
                 .round() as i32;
-            Instrument::Sampler(Box::new(Sampler::new(sf, drum, program, bank, SAMPLE_RATE)?))
+            Instrument::Sampler(Box::new(Sampler::new(sf, drum, program, bank, sr)?))
         } else if voices::is_drum(&v.kind) {
             Instrument::Drum(Box::new(Drum::from_kind(&v.kind, seed ^ vi as u64)))
         } else {
-            Instrument::Synth(Box::new(Synth::new(&v.kind, v.wave.as_deref(), &params, seed ^ vi as u64, SAMPLE_RATE)))
+            Instrument::Synth(Box::new(Synth::new(&v.kind, v.wave.as_deref(), &params, seed ^ vi as u64, sr)))
         };
 
         let mut effects = Vec::new();
@@ -786,6 +810,7 @@ impl Channel {
             pending: Vec::new(),
             scratch_l: [0.0; crate::dsp::BLOCK],
             scratch_r: [0.0; crate::dsp::BLOCK],
+            sr,
         })
     }
 
@@ -865,7 +890,7 @@ impl Channel {
                     self.scratch_l[k] = 0.0;
                     self.scratch_r[k] = 0.0;
                 }
-                s.render(&mut self.scratch_l[..frames], &mut self.scratch_r[..frames], &self.msgs, frames, SAMPLE_RATE);
+                s.render(&mut self.scratch_l[..frames], &mut self.scratch_r[..frames], &self.msgs, frames, self.sr);
             }
             Instrument::Drum(d) => {
                 for k in 0..frames {
@@ -879,7 +904,7 @@ impl Channel {
                         }
                         pi += 1;
                     }
-                    self.scratch_l[k] = d.tick(SAMPLE_RATE);
+                    self.scratch_l[k] = d.tick(self.sr);
                 }
                 let l0 = self.scratch_l;
                 self.scratch_r[..frames].copy_from_slice(&l0[..frames]);
@@ -901,7 +926,7 @@ impl Channel {
                     }
                     let mut v = 0.0;
                     for pad in pads.iter_mut() {
-                        v += pad.tick(SAMPLE_RATE);
+                        v += pad.tick(self.sr);
                     }
                     self.scratch_l[k] = v;
                 }
@@ -1021,10 +1046,10 @@ fn validate(cfg: &TrackConfig) -> Result<(), String> {
 }
 
 /// Build the per-voice event lists (absolute frames) for a pattern.
-fn build_events(cfg: &TrackConfig) -> Vec<Vec<Ev>> {
+fn build_events(cfg: &TrackConfig, sr: f64) -> Vec<Vec<Ev>> {
     let steps = cfg.steps.max(1) as u32;
     let bpm = cfg.bpm;
-    let samples_per_beat = SAMPLE_RATE * 60.0 / bpm;
+    let samples_per_beat = sr * 60.0 / bpm;
     let mut out: Vec<Vec<Ev>> = Vec::with_capacity(cfg.voices.len());
     for (vi, v) in cfg.voices.iter().enumerate() {
         let mut evs: Vec<Ev> = Vec::new();
@@ -1058,12 +1083,12 @@ fn build_events(cfg: &TrackConfig) -> Vec<Vec<Ev>> {
 }
 
 /// Build the live channels for a pattern.
-fn build_channels(cfg: &TrackConfig, seed: u64) -> Result<Vec<Channel>, String> {
+fn build_channels(cfg: &TrackConfig, seed: u64, sr: f64) -> Result<Vec<Channel>, String> {
     let mut channels = Vec::with_capacity(cfg.voices.len());
     for (vi, v) in cfg.voices.iter().enumerate() {
-        channels.push(Channel::new(v, vi, seed)?);
+        channels.push(Channel::new(v, vi, seed, sr)?);
     }
-    let events = build_events(cfg);
+    let events = build_events(cfg, sr);
     for (c, evs) in channels.iter_mut().zip(events) {
         c.events = evs;
     }
@@ -1084,13 +1109,13 @@ fn fx_val(fx: &HashMap<String, f64>, key: &str, default: f64) -> f64 {
 }
 
 impl MasterChain {
-    fn new(fx: &HashMap<String, f64>) -> Self {
+    fn new(fx: &HashMap<String, f64>, sr: f64) -> Self {
         let mut delay = crate::dsp::delay::StereoDelay::new(
             fx_val(fx, "delay_time", 250.0),
             fx_val(fx, "feedback", 0.4),
             fx_val(fx, "delay_mix", 0.0),
         );
-        delay.set_sample_rate(SAMPLE_RATE);
+        delay.set_sample_rate(sr);
         delay.ping_pong = fx_val(fx, "delay_ping_pong", 0.45);
         delay.damp = fx_val(fx, "delay_damp", 0.4);
         delay.update_damping();
@@ -1100,7 +1125,7 @@ impl MasterChain {
             fx_val(fx, "reverb_damp", 0.5),
             fx_val(fx, "reverb_mix", 0.0),
         );
-        reverb.set_sample_rate(SAMPLE_RATE);
+        reverb.set_sample_rate(sr);
         reverb.predelay_ms = fx_val(fx, "reverb_predelay", 12.0);
         reverb.width = fx_val(fx, "reverb_width", 1.0);
         reverb.update_damping();
@@ -1209,17 +1234,18 @@ fn render_pattern(
     base_beat: f64,
     lanes: &[AutomationLane],
     seed: u64,
+    sr: f64,
 ) -> Result<PlanarRender, String> {
     validate(cfg)?;
     let steps = cfg.steps.clamp(4, 64);
     let bpm = cfg.bpm.clamp(40.0, 240.0);
-    let samples_per_beat = SAMPLE_RATE * 60.0 / bpm;
+    let samples_per_beat = sr * 60.0 / bpm;
     let musical_frames = (steps as f64 / 4.0 * samples_per_beat).ceil() as usize;
-    let total = musical_frames + (TAIL_SECS * SAMPLE_RATE) as usize;
+    let total = musical_frames + (TAIL_SECS * sr) as usize;
 
-    let mut channels = build_channels(cfg, seed)?;
+    let mut channels = build_channels(cfg, seed, sr)?;
     let (mut lane_set, _, _) = split_lanes(lanes);
-    let mut master = MasterChain::new(&cfg.fx);
+    let mut master = MasterChain::new(&cfg.fx, sr);
 
     let mut mix_l = vec![0.0f32; total];
     let mut mix_r = vec![0.0f32; total];
@@ -1269,8 +1295,8 @@ fn render_pattern(
     }
 
     Ok(PlanarRender {
-        sample_rate: SAMPLE_RATE as u32,
-        duration_ms: (total as f64 / SAMPLE_RATE * 1000.0).round() as u32,
+        sample_rate: sr as u32,
+        duration_ms: (total as f64 / sr * 1000.0).round() as u32,
         frames: total,
         channels: vec![out_l, out_r],
     })
@@ -1314,7 +1340,8 @@ fn peaks_of(p: &PlanarRender, buckets: usize) -> Vec<(f32, f32)> {
 
 /// Render a standalone pattern (no automation).
 pub fn render_planar_track(cfg: &TrackConfig) -> Result<PlanarRender, String> {
-    render_pattern(cfg, 0.0, &[], 0x51D_0001)
+    let sr = output_sr(&cfg.fx);
+    render_pattern(cfg, 0.0, &[], 0x51D_0001, sr)
 }
 
 /// Validate and render a single pattern to WAV, applying the loudness target
@@ -1322,12 +1349,14 @@ pub fn render_planar_track(cfg: &TrackConfig) -> Result<PlanarRender, String> {
 pub fn render_track(cfg: &TrackConfig) -> Result<Rendered, String> {
     let mut p = render_planar_track(cfg)?;
     normalize(&mut p, &cfg.fx);
+    let bits = output_bits(&cfg.fx);
     let report = loudness::measure(&p.channels, p.sample_rate as f64);
-    let wav = encode_wav(&p.channels, p.sample_rate);
+    let wav = encode_wav_bits(&p.channels, p.sample_rate, bits);
     Ok(Rendered {
         sample_rate: p.sample_rate,
         channels: 2,
         duration_ms: p.duration_ms,
+        bits,
         wav,
         lufs: report.integrated_lufs,
         peak: report.peak,
@@ -1521,7 +1550,8 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
 
     let bpm = a.bpm.clamp(40.0, 240.0);
     let length_beats = a.length_beats.clamp(4.0, 512.0);
-    let total = (length_beats * 60.0 / bpm * SAMPLE_RATE).ceil() as usize + (TAIL_SECS * SAMPLE_RATE) as usize;
+    let sr = output_sr(&a.fx);
+    let total = (length_beats * 60.0 / bpm * sr).ceil() as usize + (TAIL_SECS * sr) as usize;
     let any_solo = a.tracks.iter().any(|t| t.solo);
 
     // Build the list of audible clips with their track automation.
@@ -1548,7 +1578,7 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
         (0..jobs.len()).map(|_| Err("clip not rendered".to_string())).collect();
     if jobs.len() <= 1 || workers <= 1 {
         for (j, slot) in jobs.iter().zip(rendered.iter_mut()) {
-            *slot = render_clip_with_lanes(j.clip, bpm, j.lanes, j.seed);
+            *slot = render_clip_with_lanes(j.clip, bpm, j.lanes, j.seed, sr);
         }
     } else {
         let chunk = (jobs.len() + workers - 1) / workers;
@@ -1556,7 +1586,7 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
             for (job_chunk, out_chunk) in jobs.chunks(chunk).zip(rendered.chunks_mut(chunk)) {
                 scope.spawn(move || {
                     for (j, slot) in job_chunk.iter().zip(out_chunk.iter_mut()) {
-                        *slot = render_clip_with_lanes(j.clip, bpm, j.lanes, j.seed);
+                        *slot = render_clip_with_lanes(j.clip, bpm, j.lanes, j.seed, sr);
                     }
                 });
             }
@@ -1565,7 +1595,7 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
 
     let mut mix_l = vec![0.0f32; total];
     let mut mix_r = vec![0.0f32; total];
-    let samples_per_beat = SAMPLE_RATE * 60.0 / bpm;
+    let samples_per_beat = sr * 60.0 / bpm;
 
     for (j, res) in jobs.iter().zip(rendered.into_iter()) {
         let (cl, cr) = res?;
@@ -1598,7 +1628,7 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
     // Global master chain: bus gain/width/glue, then the brickwall limiter.
     let mut fx = a.fx.clone();
     fx.insert("master_gain".into(), a.master as f64);
-    let mut master = MasterChain::new(&fx);
+    let mut master = MasterChain::new(&fx, sr);
     let mut out_l = vec![0.0f32; total];
     let mut out_r = vec![0.0f32; total];
     for i in 0..total {
@@ -1608,28 +1638,30 @@ pub fn render_arrangement(a: &Arrangement) -> Result<Rendered, String> {
     }
 
     let mut p = PlanarRender {
-        sample_rate: SAMPLE_RATE as u32,
-        duration_ms: (total as f64 / SAMPLE_RATE * 1000.0).round() as u32,
+        sample_rate: sr as u32,
+        duration_ms: (total as f64 / sr * 1000.0).round() as u32,
         frames: total,
         channels: vec![out_l, out_r],
     };
     normalize(&mut p, &fx);
+    let bits = output_bits(&a.fx);
     let report = loudness::measure(&p.channels, p.sample_rate as f64);
-    let wav = encode_wav(&p.channels, p.sample_rate);
+    let wav = encode_wav_bits(&p.channels, p.sample_rate, bits);
     Ok(Rendered {
         sample_rate: p.sample_rate,
         channels: 2,
         duration_ms: p.duration_ms,
+        bits,
         wav,
         lufs: report.integrated_lufs,
         peak: report.peak,
     })
 }
 
-fn render_clip_with_lanes(clip: &ArrangementClip, bpm: f64, lanes: &[AutomationLane], seed: u64) -> Result<(Vec<f32>, Vec<f32>), String> {
+fn render_clip_with_lanes(clip: &ArrangementClip, bpm: f64, lanes: &[AutomationLane], seed: u64, sr: f64) -> Result<(Vec<f32>, Vec<f32>), String> {
     let mut cfg = clip.pattern.clone();
     cfg.bpm = bpm;
-    let p = render_pattern(&cfg, clip.start, lanes, seed)?;
+    let p = render_pattern(&cfg, clip.start, lanes, seed, sr)?;
     let mut l = p.channels.first().cloned().unwrap_or_default();
     let mut r = p.channels.get(1).cloned().unwrap_or_else(|| l.clone());
     if clip.gain_db != 0.0 {
@@ -2217,5 +2249,23 @@ mod tests {
         let _ = render_planar_track(&cfg).unwrap();
         let elapsed = start.elapsed();
         assert!(elapsed.as_secs_f64() < 2.0, "kit render took {elapsed:?}");
+    }
+
+    #[test]
+    fn renders_24bit_wav() {
+        let mut cfg = kit(8);
+        cfg.fx.insert("wav_bits".into(), 24.0);
+        let out = render_track(&cfg).expect("render should succeed");
+        assert_eq!(out.bits, 24);
+        // The WAV header must advertise 24-bit and a 3-byte block align.
+        assert_eq!(u16::from_le_bytes([out.wav[34], out.wav[35]]), 24);
+        assert_eq!(u16::from_le_bytes([out.wav[32], out.wav[33]]), 6); // stereo * 3 bytes
+        assert!(out.peak > 0.01, "24-bit render was silent");
+
+        // The default 16-bit contract must be unchanged.
+        let base = render_track(&kit(8)).expect("render should succeed");
+        assert_eq!(base.bits, 16);
+        assert_eq!(base.sample_rate, 44_100);
+        assert_eq!(u16::from_le_bytes([base.wav[34], base.wav[35]]), 16);
     }
 }

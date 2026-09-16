@@ -1,18 +1,29 @@
-//! Minimal WAV encoder: planar f32 buffers → interleaved 16-bit PCM RIFF/WAVE.
+//! Minimal WAV encoder: planar f32 buffers → interleaved PCM RIFF/WAVE.
 //!
 //! The engine renders into planar channel buffers (`Vec<Vec<f32>>`,
-//! channel-major); this tiny dependency-free encoder writes them as a valid
-//! 16-bit PCM file.
+//! channel-major); this tiny dependency-free encoder writes them as 16-bit
+//! PCM by default, or 24-bit PCM on request (`wav_bits`). 16-bit stays the
+//! default so existing rows and the browser contract are unchanged.
 
 /// Encode planar samples (one `Vec<f32>` per channel) as a 16-bit PCM WAV file.
+pub fn encode_wav(samples: &[Vec<f32>], sample_rate: u32) -> Vec<u8> {
+    encode_wav_bits(samples, sample_rate, 16)
+}
+
+/// Encode planar samples as a WAV file with the given bit depth (16 or 24).
 ///
 /// One input channel encodes as a mono file; two channels are interleaved
 /// L/R. Samples are soft-clipped to `[-1.0, 1.0]` before quantizing.
-pub fn encode_wav(samples: &[Vec<f32>], sample_rate: u32) -> Vec<u8> {
+pub fn encode_wav_bits(samples: &[Vec<f32>], sample_rate: u32, bits: u16) -> Vec<u8> {
+    let bits: u16 = match bits {
+        24 => 24,
+        _ => 16,
+    };
+    let bytes_per_sample = (bits / 8) as usize;
     let channels = if samples.len() >= 2 { 2 } else { 1 };
     let frames = samples.iter().map(|c| c.len()).max().unwrap_or(0);
 
-    let data_len = frames * channels * 2; // 16-bit = 2 bytes per sample
+    let data_len = frames * channels * bytes_per_sample;
     let mut out = Vec::with_capacity(44 + data_len);
 
     // RIFF header
@@ -20,15 +31,17 @@ pub fn encode_wav(samples: &[Vec<f32>], sample_rate: u32) -> Vec<u8> {
     out.extend_from_slice(&((36 + data_len) as u32).to_le_bytes());
     out.extend_from_slice(b"WAVE");
 
-    // fmt chunk (16-byte PCM)
+    // fmt chunk (PCM)
     out.extend_from_slice(b"fmt ");
     out.extend_from_slice(&16u32.to_le_bytes());
     out.extend_from_slice(&1u16.to_le_bytes()); // PCM
     out.extend_from_slice(&(channels as u16).to_le_bytes());
     out.extend_from_slice(&sample_rate.to_le_bytes());
-    out.extend_from_slice(&((sample_rate * channels as u32 * 2) as u32).to_le_bytes()); // byte rate
-    out.extend_from_slice(&((channels * 2) as u16).to_le_bytes()); // block align
-    out.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    out.extend_from_slice(
+        &((sample_rate as usize * channels * bytes_per_sample) as u32).to_le_bytes(),
+    ); // byte rate
+    out.extend_from_slice(&((channels * bytes_per_sample) as u16).to_le_bytes()); // block align
+    out.extend_from_slice(&bits.to_le_bytes()); // bits per sample
 
     // data chunk
     out.extend_from_slice(b"data");
@@ -43,16 +56,26 @@ pub fn encode_wav(samples: &[Vec<f32>], sample_rate: u32) -> Vec<u8> {
 
     for i in 0..frames {
         let li = l.get(i).copied().unwrap_or(0.0).clamp(-1.0, 1.0);
-        out.extend_from_slice(&((li * 32767.0) as i16).to_le_bytes());
+        write_sample(&mut out, li, bits);
         // Only stereo interleaves a second sample — a mono file must write
-        // exactly one i16 per frame or the data chunk outgrows its header.
+        // exactly one sample per frame or the data chunk outgrows its header.
         if channels == 2 {
             let ri = r.get(i).copied().unwrap_or(0.0).clamp(-1.0, 1.0);
-            out.extend_from_slice(&((ri * 32767.0) as i16).to_le_bytes());
+            write_sample(&mut out, ri, bits);
         }
     }
 
     out
+}
+
+#[inline]
+fn write_sample(out: &mut Vec<u8>, s: f32, bits: u16) {
+    if bits == 24 {
+        let v = (s * 8_388_607.0).round() as i32;
+        out.extend_from_slice(&v.to_le_bytes()[0..3]);
+    } else {
+        out.extend_from_slice(&((s * 32767.0) as i16).to_le_bytes());
+    }
 }
 
 #[cfg(test)]
@@ -84,6 +107,26 @@ mod tests {
         let bytes = encode_wav(&stereo, 48000);
         let data_len = u32::from_le_bytes([bytes[40], bytes[41], bytes[42], bytes[43]]) as usize;
         assert_eq!(data_len, 100 * 2 * 2);
+        assert_eq!(bytes.len(), 44 + data_len);
+    }
+
+    #[test]
+    fn writes_valid_24bit_header() {
+        let mono = vec![vec![0.0f32, 0.5, -0.5]];
+        let bytes = encode_wav_bits(&mono, 48000, 24);
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        // 1 channel, 48000 Hz, 24-bit
+        assert_eq!(u16::from_le_bytes([bytes[22], bytes[23]]), 1);
+        assert_eq!(
+            u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]),
+            48000
+        );
+        assert_eq!(u16::from_le_bytes([bytes[34], bytes[35]]), 24);
+        // block align = channels * 3 bytes
+        assert_eq!(u16::from_le_bytes([bytes[32], bytes[33]]), 3);
+        let data_len = u32::from_le_bytes([bytes[40], bytes[41], bytes[42], bytes[43]]) as usize;
+        assert_eq!(data_len, 3 * 3);
         assert_eq!(bytes.len(), 44 + data_len);
     }
 }
