@@ -31,6 +31,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_history" => Some(history_route(ctx.clone())),
         "browser_news" => Some(news_route(ctx.clone())),
         "browser_news_click" => Some(news_click(ctx)),
+        "browser_preview" => Some(preview_route(ctx)),
         _ => None,
     }
 }
@@ -400,6 +401,26 @@ fn news_click(ctx: Arc<PluginCtx>) -> RouteHandler {
             .await;
             Ok(ok(json!({ "recorded": true })))
         }
+    })
+}
+
+#[derive(Deserialize)]
+struct PreviewBody {
+    /// The link the pointer is resting on.
+    url: String,
+}
+
+/// POST /api/browser/preview — title/description/image for a hovered link.
+///
+/// The window fetches this on hover (debounced) to show a preview card. It is
+/// SSRF-guarded inside [`crate::preview::fetch`], which also caches the result
+/// so a pointer sweeping a page never turns into a request storm.
+fn preview_route(_ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        user_id(&req)?;
+        let body = take_json::<PreviewBody>(req).await?;
+        let preview = crate::preview::fetch(&body.url).await?;
+        Ok(ok(serde_json::to_value(preview).unwrap_or(Value::Null)))
     })
 }
 

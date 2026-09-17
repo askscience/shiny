@@ -7,8 +7,10 @@
  * whole design — there is no request the engine cannot see, which is what
  * makes filtering here complete rather than best-effort.
  *
- * Chrome: back / forward / reload / home, an address bar that doubles as a
- * search box, and a shield showing how many requests were blocked.
+ * Chrome: a tab strip, back / forward / reload / home, an address bar that
+ * doubles as a search box, and a shield showing how many requests were blocked.
+ * Links that ask for a new tab open one; right-clicking a link offers the
+ * window's own menu; hovering a link shows a preview card.
  *
  * Every control is a core UI component — `iconButton` for the toolbar,
  * `searchBar` for the address field, `icon` for the glyphs — so the window
@@ -25,14 +27,24 @@
  * SPA navigation instead of only the URLs this file was told to load.
  */
 import { apiFetch } from '/js/api.js';
+import { openContextMenu } from '/js/contextMenu.js';
 import { icon, iconButton, searchBar } from '/ui/index.js';
 
 export const BROWSER_PLUGIN = 'browser';
 
 const STATE_POLL_MS = 5000;
 
+/** How many tabs may be open. Each is a live document, so this is bounded. */
+const MAX_TABS = 8;
+
+/** How long the pointer must rest on a link before its preview is fetched. */
+const PREVIEW_DEBOUNCE_MS = 250;
+
 let tileEl = null;
-let frameEl = null;
+let tabstripEl = null;
+let frameWrapEl = null;
+let viewportEl = null;
+let previewEl = null;
 let addressEl = null;
 let backBtn = null;
 let forwardBtn = null;
@@ -41,25 +53,21 @@ let shieldCountEl = null;
 let filterBtn = null;
 let statusEl = null;
 
-let sessionId = null;
 let proxyBase = null;
-let currentUrl = '';
 /** Whether ad filtering is paused (server-owned; this mirrors it). */
 let filteringPaused = false;
 
 /**
- * Navigation-recovery state: how many times the page currently in the frame
- * has been attempted. One retry is allowed, and the count belongs to the page
- * — resetting it inside the retry would loop forever (a bug this file shipped
- * for exactly one test run).
+ * The window's tabs. Each owns its own iframe, its own server session id and
+ * its own navigation history; only the active one is visible. `activeTabId`
+ * always names one of them while the window is mounted.
  */
-let frameAttempt = 0;
-/** Whether the current navigation reached the proxy at all. */
-let frameLoaded = false;
+let tabs = [];
+let activeTabId = null;
+let tabSeq = 0;
 
-/** Local navigation history, reconciled from the frame's own reports. */
-let history = [];
-let historyIndex = -1;
+/** Debounce/target for the hover preview. */
+let previewTimer = null;
 
 let pollTimer = null;
 let wired = false;
@@ -110,65 +118,217 @@ async function refreshProxyBase() {
   }
 }
 
-/**
- * How long a navigation may go without any load at all before it is treated as
- * a failure.
- *
- * `error` does not fire for a cross-origin frame's network failure in every
- * engine (WebKit in particular is unreliable here), so the recovery cannot rest
- * on that event alone. The proxy always answers fast when it is up — it is on
- * loopback — so "nothing loaded at all" within this window means the address is
- * dead, not that the page is slow. Anything that *did* start loading cancels
- * the timer, so slow sites are never interrupted.
- */
-const LOAD_WATCHDOG_MS = 5000;
-let loadWatchdog = null;
+/* ── Tabs ─────────────────────────────────────────────────────── */
 
-function clearLoadWatchdog() {
-  if (loadWatchdog) clearTimeout(loadWatchdog);
-  loadWatchdog = null;
+function activeTab() {
+  return tabs.find((t) => t.id === activeTabId) || null;
 }
 
-/** Load a proxy URL in the viewport. */
-function loadFrame(viewUrl) {
-  if (!frameEl) return;
-  frameLoaded = false;
-  clearLoadWatchdog();
-  loadWatchdog = setTimeout(() => {
-    loadWatchdog = null;
-    // The frame never reached the proxy at all.
-    if (!frameLoaded) onFrameError();
+function tabTitle(tab) {
+  if (tab.title) return tab.title;
+  if (tab.url) {
+    try {
+      return new URL(tab.url).hostname.replace(/^www\./, '');
+    } catch (_) {
+      /* fall through to the placeholder */
+    }
+  }
+  return 'New tab';
+}
+
+/** How long a navigation may go without any load before it is a failure. */
+const LOAD_WATCHDOG_MS = 5000;
+
+function clearWatchdog(tab) {
+  if (tab?.watchdog) clearTimeout(tab.watchdog);
+  if (tab) tab.watchdog = null;
+}
+
+/** Create a tab, its iframe, and (unless a URL is given) its home surface. */
+function createTab({ url = '', activate = true } = {}) {
+  const tab = {
+    id: `t${++tabSeq}`,
+    sessionId: null,
+    title: '',
+    url: '',
+    home: true,
+    history: [],
+    historyIndex: -1,
+    attempt: 0,
+    loaded: false,
+    watchdog: null,
+    frameEl: null,
+    onError: null,
+    onLoad: null,
+  };
+  tab.frameEl = buildFrame(tab);
+  tabs.push(tab);
+  frameWrapEl.appendChild(tab.frameEl);
+
+  // Bound tabs keep the tab model honest even if a very long session opens
+  // more than the cap allows: close the oldest inactive one.
+  if (tabs.length > MAX_TABS) {
+    const victim = tabs.find((t) => t.id !== tab.id && t.id !== activeTabId);
+    if (victim) closeTab(victim.id);
+  }
+
+  if (activate) setActiveTab(tab.id);
+  renderTabs();
+  if (url) void navigateTo(url, { tab });
+  else void showHome(tab);
+  return tab;
+}
+
+/** Tear down one tab's frame and state. */
+function destroyTab(tab) {
+  clearWatchdog(tab);
+  const frame = tab.frameEl;
+  if (!frame) return;
+  if (tab.onError) frame.removeEventListener('error', tab.onError);
+  if (tab.onLoad) frame.removeEventListener('load', tab.onLoad);
+  frame.src = 'about:blank';
+  frame.remove();
+  tab.frameEl = null;
+}
+
+function closeTab(id) {
+  const idx = tabs.findIndex((t) => t.id === id);
+  if (idx < 0) return;
+  const [tab] = tabs.splice(idx, 1);
+  // Best-effort: tell the server its session is done. A failure here cannot
+  // stop the tab from closing.
+  if (tab.sessionId) {
+    void apiFetch('/api/browser/session/close', {
+      method: 'POST',
+      body: JSON.stringify({ id: tab.sessionId }),
+    }).catch(() => {});
+  }
+  const wasActive = activeTabId === id;
+  destroyTab(tab);
+
+  if (wasActive) {
+    const next = tabs[idx] || tabs[idx - 1] || null;
+    if (next) {
+      setActiveTab(next.id);
+    } else {
+      activeTabId = null;
+      renderTabs();
+      createTab({});
+      return;
+    }
+  }
+  renderTabs();
+  updateNavButtons();
+}
+
+function setActiveTab(id) {
+  if (!tabs.some((t) => t.id === id)) return;
+  activeTabId = id;
+  const tab = activeTab();
+  for (const t of tabs) t.frameEl.classList.toggle('is-active', t.id === id);
+  if (addressEl && document.activeElement !== addressEl.input) {
+    addressEl.input.value = tab?.url || '';
+  }
+  hidePreview();
+  renderTabs();
+  updateNavButtons();
+}
+
+/** The tab strip: one button per tab, plus a new-tab action. */
+function renderTabs() {
+  if (!tabstripEl) return;
+  const nodes = [];
+  for (const tab of tabs) {
+    const el = document.createElement('div');
+    el.className = 'browser-tab' + (tab.id === activeTabId ? ' is-active' : '');
+    el.setAttribute('role', 'tab');
+    el.setAttribute('aria-selected', String(tab.id === activeTabId));
+
+    const label = document.createElement('button');
+    label.type = 'button';
+    label.className = 'browser-tab-label';
+    label.textContent = tabTitle(tab);
+    label.title = tab.url || 'New tab';
+    label.addEventListener('click', () => setActiveTab(tab.id));
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'browser-tab-close';
+    close.setAttribute('aria-label', `Close ${tabTitle(tab)}`);
+    close.appendChild(icon('ui/close', { size: 12 }));
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+
+    el.append(label, close);
+    nodes.push(el);
+  }
+  const add = iconButton({
+    icon: 'ui/plus',
+    size: 'sm',
+    label: 'New tab',
+    onClick: () => createTab({}),
+  });
+  add.classList.add('browser-newtab');
+  nodes.push(add);
+  tabstripEl.replaceChildren(...nodes);
+}
+
+function buildFrame(tab) {
+  const frame = document.createElement('iframe');
+  frame.className = 'browser-frame';
+  // The pages we proxy are the open web, not the theme: a white canvas is
+  // correct here, and a sandbox is deliberately NOT used — many sites need
+  // scripts, forms and same-origin storage to work at all, and the requests
+  // are already filtered upstream.
+  frame.setAttribute('referrerpolicy', 'no-referrer');
+  frame.setAttribute('allow', 'clipboard-write; fullscreen');
+  tab.onError = () => onFrameError(tab);
+  tab.onLoad = () => onFrameLoad(tab);
+  frame.addEventListener('error', tab.onError);
+  frame.addEventListener('load', tab.onLoad);
+  return frame;
+}
+
+/** Load a proxy URL in one tab's viewport. */
+function loadFrame(tab, viewUrl) {
+  if (!tab?.frameEl) return;
+  tab.loaded = false;
+  clearWatchdog(tab);
+  tab.watchdog = setTimeout(() => {
+    tab.watchdog = null;
+    if (!tab.loaded) onFrameError(tab);
   }, LOAD_WATCHDOG_MS);
   // Real pages need their own origin: drop the idle-surface sandbox.
-  frameEl.removeAttribute('sandbox');
-  frameEl.removeAttribute('srcdoc');
-  frameEl.src = viewUrl;
+  tab.frameEl.removeAttribute('sandbox');
+  tab.frameEl.removeAttribute('srcdoc');
+  tab.frameEl.src = viewUrl;
 }
 
-/** A load started: the proxy answered, so this navigation is alive. */
-function onFrameLoad() {
-  frameLoaded = true;
-  clearLoadWatchdog();
+function onFrameLoad(tab) {
+  tab.loaded = true;
+  clearWatchdog(tab);
 }
 
-async function navigateTo(input, { retry = false } = {}) {
+async function navigateTo(input, { tab = activeTab(), retry = false } = {}) {
   const value = String(input || '').trim();
-  if (!value) return;
+  if (!value || !tab) return;
 
-  setStatus('Loading…');
+  if (tab.id === activeTabId) setStatus('Loading…');
   let data;
   try {
     const res = await apiFetch('/api/browser/navigate', {
       method: 'POST',
-      body: JSON.stringify({ session_id: sessionId, input: value }),
+      body: JSON.stringify({ session_id: tab.sessionId, input: value }),
     });
     data = res?.data;
   } catch (err) {
-    setStatus('Could not open that page');
+    if (tab.id === activeTabId) setStatus('Could not open that page');
     return;
   }
   if (!data?.view_url) {
-    setStatus('Could not open that page');
+    if (tab.id === activeTabId) setStatus('Could not open that page');
     return;
   }
 
@@ -178,17 +338,18 @@ async function navigateTo(input, { retry = false } = {}) {
   const nextBase = data.proxy_base || (data.view_url || '').match(/^https?:\/\/[^/]+/)?.[0];
   if (nextBase) proxyBase = nextBase;
 
-  sessionId = data.session?.id || sessionId;
-  recordLocation(data.url || value);
+  tab.sessionId = data.session?.id || tab.sessionId;
+  tab.home = false;
+  recordLocation(tab, data.url || value);
 
-  setStatus('');
+  if (tab.id === activeTabId) setStatus('');
   // A fresh navigation gets its own retry budget; an error retry does not, or
   // a dead proxy would re-arm the budget forever (the bug the counter exists
   // to prevent).
-  if (!retry) frameAttempt = 0;
-  frameAttempt += 1;
-  loadFrame(data.view_url);
-  await refreshMetrics();
+  if (!retry) tab.attempt = 0;
+  tab.attempt += 1;
+  loadFrame(tab, data.view_url);
+  if (tab.id === activeTabId) void refreshMetrics();
 }
 
 let lastMetrics = null;
@@ -207,7 +368,6 @@ async function refreshMetrics() {
     /* the proxy may be starting up; the shield just stays as it was */
   }
 }
-
 
 /**
  * Turn ad filtering off or back on, server-side.
@@ -271,9 +431,20 @@ function renderShield(metrics, rules) {
 }
 
 function updateNavButtons() {
-  const onPage = currentUrl !== '';
-  if (backBtn) backBtn.disabled = !onPage || historyIndex <= 0;
-  if (forwardBtn) forwardBtn.disabled = !onPage || historyIndex >= history.length - 1;
+  const tab = activeTab();
+  const onPage = !!tab && tab.url !== '';
+  if (backBtn) backBtn.disabled = !onPage || tab.historyIndex <= 0;
+  if (forwardBtn) {
+    forwardBtn.disabled = !onPage || tab.historyIndex >= tab.history.length - 1;
+  }
+}
+
+function buildTabStrip() {
+  const strip = document.createElement('div');
+  strip.className = 'browser-tabstrip';
+  strip.setAttribute('role', 'tablist');
+  strip.setAttribute('aria-label', 'Tabs');
+  return strip;
 }
 
 function buildToolbar() {
@@ -367,25 +538,17 @@ function buildViewport() {
   const wrap = document.createElement('div');
   wrap.className = 'browser-viewport';
 
-  frameEl = document.createElement('iframe');
-  frameEl.className = 'browser-frame';
-  // The pages we proxy are the open web, not the theme: a white canvas is
-  // correct here, and a sandbox is deliberately NOT used — many sites need
-  // scripts, forms and same-origin storage to work at all, and the requests
-  // are already filtered upstream.
-  frameEl.setAttribute('referrerpolicy', 'no-referrer');
-  frameEl.setAttribute('allow', 'clipboard-write; fullscreen');
-  // A navigation can fail before any page is reached — most often because the
-  // proxy address the frame was pointed at no longer exists (see
-  // `refreshProxyBase`). Without this the viewport shows the browser's own
-  // "connection refused" page and the window has no way back.
-  frameEl.addEventListener('error', onFrameError);
-  frameEl.addEventListener('load', onFrameLoad);
-  wrap.appendChild(frameEl);
+  frameWrapEl = document.createElement('div');
+  frameWrapEl.className = 'browser-frames';
+  wrap.appendChild(frameWrapEl);
 
   statusEl = document.createElement('div');
   statusEl.className = 'browser-status hidden';
   wrap.appendChild(statusEl);
+
+  previewEl = document.createElement('div');
+  previewEl.className = 'browser-preview hidden';
+  wrap.appendChild(previewEl);
 
   return wrap;
 }
@@ -402,79 +565,83 @@ function buildViewport() {
  * the cause is something else (proxy not up yet, server restarting), so the
  * user gets a sentence instead of a bare browser error.
  */
-function onFrameError() {
-  if (!frameEl || currentUrl === '') return; // the idle surface is a srcdoc
-  if (frameAttempt > 1) {
-    setStatus('Lost the connection to the filter proxy — reload the window');
+function onFrameError(tab) {
+  if (!tab || tab.url === '') return; // the idle surface is a srcdoc
+  if (tab.attempt > 1) {
+    if (tab.id === activeTabId) setStatus('Lost the connection to the filter proxy — reload the window');
     return;
   }
-  setStatus('Reconnecting to the filter proxy…');
+  if (tab.id === activeTabId) setStatus('Reconnecting to the filter proxy…');
   void (async () => {
     const state = await refreshProxyBase();
     const base = state?.proxy_base;
     if (!state?.ready || !base) {
-      setStatus('The filter proxy is not running — it starts with the server');
+      if (tab.id === activeTabId) setStatus('The filter proxy is not running — it starts with the server');
       return;
     }
     // Rebuild against the live proxy and hand the frame a URL on the new port.
     // The attempt counter belongs to the page, not to this retry, so a second
     // failure ends in the message above instead of looping forever.
-    void navigateTo(currentUrl, { retry: true });
+    void navigateTo(tab.url, { tab, retry: true });
   })();
 }
 
 /**
- * Reconcile this window's history with a URL the frame reports as current.
+ * Reconcile one tab's history with a URL the frame reports as current.
  *
  * The frame owns the real history (its back/forward is browser-native), so
  * this is a mirror for the address bar and for enabling the buttons: an
  * adjacent URL means the user went back or forward, anything else is a new
  * navigation and truncates the forward entries.
  */
-function recordLocation(url) {
-  if (!url) return;
-  currentUrl = url;
-  if (addressEl && document.activeElement !== addressEl.input) {
+function recordLocation(tab, url) {
+  if (!url || !tab) return;
+  tab.url = url;
+  if (tab.id === activeTabId && addressEl && document.activeElement !== addressEl.input) {
     addressEl.input.value = url;
   }
-  if (history[historyIndex] !== url) {
-    if (history[historyIndex + 1] === url) {
-      historyIndex += 1;
-    } else if (history[historyIndex - 1] === url) {
-      historyIndex -= 1;
+  if (tab.history[tab.historyIndex] !== url) {
+    if (tab.history[tab.historyIndex + 1] === url) {
+      tab.historyIndex += 1;
+    } else if (tab.history[tab.historyIndex - 1] === url) {
+      tab.historyIndex -= 1;
     } else {
-      const existing = history.lastIndexOf(url);
+      const existing = tab.history.lastIndexOf(url);
       if (existing >= 0) {
-        historyIndex = existing;
+        tab.historyIndex = existing;
       } else {
-        history = history.slice(0, historyIndex + 1);
-        history.push(url);
-        historyIndex = history.length - 1;
+        tab.history = tab.history.slice(0, tab.historyIndex + 1);
+        tab.history.push(url);
+        tab.historyIndex = tab.history.length - 1;
       }
     }
   }
-  updateNavButtons();
+  renderTabs();
+  if (tab.id === activeTabId) updateNavButtons();
 }
 
-/** Ask the frame to move through *its* history — no server round-trip. */
+/** Ask the active frame to move through *its* history — no server round-trip. */
 function go(delta) {
-  if (!frameEl?.contentWindow || !currentUrl) return;
+  const tab = activeTab();
+  if (!tab?.frameEl?.contentWindow || !tab.url) return;
   const cmd = delta < 0 ? 'back' : 'forward';
-  frameEl.contentWindow.postMessage({ type: 'shiny:cmd', cmd }, '*');
+  tab.frameEl.contentWindow.postMessage({ type: 'shiny:cmd', cmd }, '*');
 }
 
 function reload() {
-  if (!currentUrl) {
-    void showHome();
+  const tab = activeTab();
+  if (!tab) return;
+  if (!tab.url) {
+    void showHome(tab);
     return;
   }
-  if (frameEl?.contentWindow) {
-    frameEl.contentWindow.postMessage({ type: 'shiny:cmd', cmd: 'reload' }, '*');
+  if (tab.frameEl?.contentWindow) {
+    tab.frameEl.contentWindow.postMessage({ type: 'shiny:cmd', cmd: 'reload' }, '*');
   }
 }
 
 function goHome() {
-  void showHome();
+  void showHome(activeTab());
 }
 
 /* ── Home surface: related-news cards ─────────────────────────────
@@ -644,20 +811,25 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-/** The idle surface: the start page, with related news. */
-async function showHome() {
-  currentUrl = '';
-  if (addressEl) addressEl.input.value = '';
-  if (!frameEl) return;
+/** The idle surface for one tab: the start page, with related news. */
+async function showHome(tab) {
+  if (!tab) return;
+  tab.home = true;
+  tab.url = '';
+  tab.history = [];
+  tab.historyIndex = -1;
+  if (tab.id === activeTabId) {
+    if (addressEl) addressEl.input.value = '';
+    setStatus('Loading recommendations…');
+  }
   // The idle surface must not be same-origin with the app shell (it is
   // rendered from server data), so it is sandboxed without allow-same-origin.
-  frameEl.removeAttribute('allow');
-  frameEl.setAttribute('sandbox', 'allow-scripts');
-  frameEl.removeAttribute('srcdoc');
+  tab.frameEl.removeAttribute('allow');
+  tab.frameEl.setAttribute('sandbox', 'allow-scripts');
+  tab.frameEl.removeAttribute('srcdoc');
   // Clear the previous page *before* awaiting the shelf, so going Home is
   // instant instead of leaving the last site on screen while it loads.
-  frameEl.src = 'about:blank';
-  setStatus('Loading recommendations…');
+  tab.frameEl.src = 'about:blank';
 
   let news = { cards: [], topics: [], personalized: false };
   try {
@@ -665,57 +837,190 @@ async function showHome() {
   } catch (_) {
     news = { cards: [], topics: [], personalized: false, error: 'Could not load recommendations' };
   }
-  // Re-check: the user may have navigated while the shelf was in flight.
-  if (!frameEl || currentUrl) return;
-  setStatus('');
-  frameEl.src = 'about:blank';
-  frameEl.srcdoc = homeDocument(news);
-  // `srcdoc` counts as a navigation for history purposes only if we say so.
-  history = [];
-  historyIndex = -1;
-  updateNavButtons();
+  // Re-check: the user may have navigated this tab while the shelf was in
+  // flight.
+  if (!tab.frameEl || !tab.home) return;
+  if (tab.id === activeTabId) setStatus('');
+  tab.frameEl.src = 'about:blank';
+  tab.frameEl.srcdoc = homeDocument(news);
+  renderTabs();
+  if (tab.id === activeTabId) updateNavButtons();
 }
 
 /** A card in the home shelf was clicked. */
-function onHomeCard(url, topic) {
-  if (!url) return;
+function onHomeCard(tab, url, topic) {
+  if (!url || !tab) return;
   // Best-effort: the click is a ranking signal, not a precondition for
   // navigating. A failed POST must not stop the page from opening.
   void apiFetch('/api/browser/news/click', {
     method: 'POST',
     body: JSON.stringify({ url, topic }),
   }).catch(() => {});
-  void navigateTo(url);
+  void navigateTo(url, { tab });
+}
+
+/** Open a URL in a fresh tab. */
+function openInNewTab(_from, url) {
+  if (!url) return;
+  if (tabs.length >= MAX_TABS) {
+    // At the cap, reuse the active tab rather than silently dropping the click.
+    void navigateTo(url, { tab: activeTab() });
+    return;
+  }
+  createTab({ url });
 }
 
 /**
- * Messages from the framed surface.
+ * The window's own menu for a right-clicked link.
+ *
+ * The frame cannot show a native menu that honours "open in new tab" (its
+ * target is the OS browser, which would leave the filtered window), so the
+ * shim hands the click up and the parent draws the menu.
+ */
+function showLinkMenu(tab, url, x, y) {
+  if (!/^https?:\/\//.test(url)) return;
+  const rect = tab?.frameEl?.getBoundingClientRect ? tab.frameEl.getBoundingClientRect() : null;
+  const left = (rect?.left || 0) + (Number(x) || 0);
+  const top = (rect?.top || 0) + (Number(y) || 0);
+  openContextMenu(
+    [
+      { type: 'heading', label: 'Link' },
+      {
+        type: 'item',
+        label: 'Open in new tab',
+        icon: 'ui/launcher',
+        onClick: () => openInNewTab(tab, url),
+      },
+      {
+        type: 'item',
+        label: 'Open in current tab',
+        icon: 'ui/arrow-left',
+        onClick: () => void navigateTo(url, { tab }),
+      },
+      { type: 'separator' },
+      {
+        type: 'item',
+        label: 'Copy link',
+        icon: 'ui/doc',
+        onClick: () => copyText(url),
+      },
+    ],
+    left,
+    top,
+  );
+}
+
+function copyText(text) {
+  try {
+    navigator.clipboard?.writeText(text).catch(() => {});
+  } catch (_) {
+    /* clipboard is best-effort */
+  }
+}
+
+/* ── Link preview ─────────────────────────────────────────────── */
+
+/**
+ * A hovered link. Debounced so a pointer sweeping across a page does not fire
+ * a request per anchor, and cancelled the moment it leaves the link.
+ */
+function previewHover(tab, url, rect) {
+  if (!/^https?:\/\//.test(url)) return;
+  if (tab.id !== activeTabId) return;
+  if (previewTimer) clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => {
+    previewTimer = null;
+    void fetchPreview(tab, url, rect);
+  }, PREVIEW_DEBOUNCE_MS);
+}
+
+function previewLeave() {
+  if (previewTimer) clearTimeout(previewTimer);
+  previewTimer = null;
+  hidePreview();
+}
+
+async function fetchPreview(tab, url, rect) {
+  try {
+    const res = await apiFetch('/api/browser/preview', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
+    const data = res?.data;
+    if (!data || tab.id !== activeTabId) return;
+    showPreview(data, rect);
+  } catch (_) {
+    /* no preview is a valid outcome */
+  }
+}
+
+function showPreview(data, rect) {
+  if (!previewEl) return;
+  const title = escapeHtml(data.title || data.url || '');
+  const site = escapeHtml(data.site || '');
+  const description = data.description
+    ? `<div class="browser-preview-desc">${escapeHtml(data.description)}</div>`
+    : '';
+  const image = data.image
+    ? `<img class="browser-preview-img" src="${escapeHtml(data.image)}" alt="" referrerpolicy="no-referrer">`
+    : '';
+  previewEl.innerHTML = `<div class="browser-preview-body">
+      ${image}
+      <div class="browser-preview-text">
+        ${site ? `<div class="browser-preview-site">${site}</div>` : ''}
+        <div class="browser-preview-title">${title}</div>
+        ${description}
+      </div>
+    </div>`;
+  const frameRect = frameWrapEl?.getBoundingClientRect ? frameWrapEl.getBoundingClientRect() : null;
+  const r = rect || {};
+  const left = Math.max(8, (frameRect?.left || 0) + (Number(r.x) || 0));
+  const top = Math.max(8, (frameRect?.top || 0) + (Number(r.y) || 0) + (Number(r.h) || 0) + 8);
+  previewEl.style.left = `${left}px`;
+  previewEl.style.top = `${top}px`;
+  previewEl.classList.remove('hidden');
+}
+
+function hidePreview() {
+  if (previewEl) previewEl.classList.add('hidden');
+}
+
+/**
+ * Messages from the framed surfaces.
  *
  * `event.source` is the frame's WindowProxy, not the `<iframe>` element, so the
- * guard must compare against `frameEl.contentWindow` (the old element compare
- * silently dropped every card click).
+ * guard matches it against each tab's `contentWindow` — with more than one tab
+ * open, the message must update the tab that sent it, never the active one.
  */
 function onFrameMessage(event) {
-  const frameWindow = frameEl?.contentWindow;
-  if (!frameWindow || event.source !== frameWindow) return;
   const data = event.data;
   if (!data || typeof data !== 'object') return;
+  const tab = tabs.find((t) => t.frameEl && t.frameEl.contentWindow === event.source);
+  if (!tab) return;
 
   if (data.type === 'shiny:location') {
-    // A proxied page reporting where it actually is (link click, redirect,
-    // SPA navigation) — keep the address bar and history in step.
-    if (typeof data.url === 'string' && data.url) recordLocation(data.url);
+    if (typeof data.title === 'string' && data.title) tab.title = data.title;
+    if (typeof data.url === 'string' && data.url) recordLocation(tab, data.url);
+    renderTabs();
   } else if (data.type === 'browser:open-card') {
-    void onHomeCard(String(data.url || ''), data.topic ? String(data.topic) : undefined);
+    void onHomeCard(tab, String(data.url || ''), data.topic ? String(data.topic) : undefined);
   } else if (data.type === 'browser:refresh-news') {
-    void showHome();
+    void showHome(tab);
+  } else if (data.type === 'shiny:new-tab') {
+    if (typeof data.url === 'string') openInNewTab(tab, data.url);
+  } else if (data.type === 'shiny:link-menu') {
+    showLinkMenu(tab, String(data.url || ''), data.x, data.y);
+  } else if (data.type === 'shiny:hover-link') {
+    previewHover(tab, String(data.url || ''), data.rect);
+  } else if (data.type === 'shiny:leave-link') {
+    previewLeave();
   }
 }
 
 /* ── AI-driven navigation ─────────────────────────────────────── */
 
 /**
- * The AI asked for a page: load it in this window.
+ * The AI asked for a page: load it in the active tab.
  *
  * `narrative` is where the browser tools put the URL (see `page_artifact`).
  * The other two sources are kept because cards saved before that change exist:
@@ -730,14 +1035,25 @@ function onArtifactSaved(event) {
   const url =
     art.narrative || art?.payload?.url || art?.params?.url || art?.payload?.view_url || art?.title;
   if (typeof url === 'string' && /^https?:\/\//.test(url)) {
-    currentUrl = ''; // this is a navigation, not a refresh of the home surface
-    void navigateTo(url);
+    const tab = activeTab();
+    if (tab) {
+      tab.home = false;
+      void navigateTo(url, { tab });
+    } else {
+      createTab({ url });
+    }
   }
 }
 
 /** Entries core splices into this window's right-click menu (PLUGINS.md §19). */
 export function browserContextMenu() {
   return [
+    {
+      type: 'item',
+      label: 'New tab',
+      icon: 'ui/plus',
+      onClick: () => createTab({}),
+    },
     {
       type: 'item',
       label: 'Focus address bar',
@@ -749,7 +1065,7 @@ export function browserContextMenu() {
       type: 'item',
       label: 'Reload',
       icon: 'ui/loop',
-      disabled: !frameEl,
+      disabled: !frameWrapEl,
       onClick: () => reload(),
     },
     {
@@ -757,7 +1073,7 @@ export function browserContextMenu() {
       label: 'Home',
       icon: 'ui/launcher',
       disabled: !tileEl,
-      onClick: () => void showHome(),
+      onClick: () => void showHome(activeTab()),
     },
     { type: 'separator' },
     {
@@ -779,7 +1095,10 @@ export function mountBrowserTile() {
   tileEl = document.createElement('section');
   tileEl.className = 'tile browser-tile';
   tileEl.dataset.plugin = BROWSER_PLUGIN;
-  tileEl.append(buildToolbar(), buildViewport());
+
+  tabstripEl = buildTabStrip();
+  viewportEl = buildViewport();
+  tileEl.append(tabstripEl, buildToolbar(), viewportEl);
 
   updateNavButtons();
   void (async () => {
@@ -805,7 +1124,8 @@ export function mountBrowserTile() {
     } catch (_) {
       setStatus('Filter engine unavailable');
     }
-    await showHome();
+    // One tab, on its home surface.
+    createTab({});
   })();
 
   pollTimer = setInterval(() => void refreshMetrics(), STATE_POLL_MS);
@@ -817,16 +1137,16 @@ export function unmountBrowserTile() {
   pollTimer = null;
   window.removeEventListener('message', onFrameMessage);
   wired = false;
-  // Release the frame explicitly: an iframe left in the DOM keeps running
-  // scripts and holding connections after its window is gone.
-  if (frameEl) {
-    frameEl.removeEventListener('error', onFrameError);
-    frameEl.removeEventListener('load', onFrameLoad);
-    frameEl.src = 'about:blank';
-  }
+  previewLeave();
+  for (const tab of tabs) destroyTab(tab);
+  tabs = [];
+  activeTabId = null;
   tileEl?.remove();
   tileEl = null;
-  frameEl = null;
+  tabstripEl = null;
+  frameWrapEl = null;
+  viewportEl = null;
+  previewEl = null;
   addressEl = null;
   backBtn = null;
   forwardBtn = null;
@@ -834,12 +1154,6 @@ export function unmountBrowserTile() {
   shieldCountEl = null;
   filterBtn = null;
   statusEl = null;
-  history = [];
-  historyIndex = -1;
-  currentUrl = '';
-  frameAttempt = 0;
-  frameLoaded = false;
-  clearLoadWatchdog();
 }
 
 export function getBrowserTileElement() {
@@ -850,7 +1164,7 @@ export function wireBrowserEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('artifact:saved', onArtifactSaved);
-  // Both the home shelf and proxied pages talk back through postMessage; the
+  // The home shelves and proxied pages talk back through postMessage; the
   // frame's navigation reports depend on it.
   window.addEventListener('message', onFrameMessage);
 }

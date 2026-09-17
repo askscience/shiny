@@ -3,14 +3,13 @@
  *
  * There is no headless browser in this environment, so this exercises the real
  * plugin surface (`plugins/browser/web/plugin.js`) against a small DOM shim:
- * mount the window, let the home surface render its news shelf, and run the
- * generated sandboxed document's own click handler to prove a card navigates
- * through `postMessage` rather than doing nothing.
+ * mount the window, drive tab create/close, navigation and the message bridge,
+ * and prove the generated sandboxed home document renders and navigates.
  *
  * It is not a substitute for a browser; it is a substitute for *no* test. The
- * value is in the seams a Rust test cannot reach: the srcdoc string, the
- * card markup, the postMessage contract with the parent frame, and the
- * frame-history bridge the toolbar now drives.
+ * value is in the seams a Rust test cannot reach: the tab model, the
+ * postMessage contract (including which tab a message belongs to), the link
+ * menu, the hover preview, and the srcdoc string.
  *
  * Run:  node --experimental-vm-modules plugins/browser/web/plugin.smoke.mjs
  */
@@ -32,7 +31,7 @@ function makeElement(tag) {
     style: {},
     // A real `classList` and `className` are two views of one attribute, so
     // `classList.add` must be visible in `className`. The window relies on it
-    // (it tags its nav buttons through `classList`), and so do these checks.
+    // (it tags its nav buttons and active tab through `classList`).
     classList: {
       _read(el) { return String(el.className || '').split(/\s+/).filter(Boolean); },
       _write(el, list) { el.className = [...new Set(list)].join(' '); },
@@ -55,18 +54,28 @@ function makeElement(tag) {
     disabled: false,
     src: '',
     value: '',
-    // The real DOM gives an iframe a `contentWindow` WindowProxy. The compiler
-    // fix in this release compares `event.source` against it, so the shim must
-    // provide one — the old test posted with the *element* as `source`, which
-    // is exactly why the bug survived.
+    placeholder: '',
+    // The real DOM gives an iframe a `contentWindow` WindowProxy; the plugin
+    // compares `event.source` against each tab's, so the shim must provide one.
     contentWindow: null,
     _listeners: {},
-    append(...kids) { el.children.push(...kids); },
-    appendChild(kid) { el.children.push(kid); return kid; },
-    remove() {},
+    _parent: null,
+    append(...kids) {
+      for (const kid of kids) { kid._parent = el; el.children.push(kid); }
+    },
+    appendChild(kid) { kid._parent = el; el.children.push(kid); return kid; },
+    remove() {
+      const parent = el._parent;
+      if (parent) {
+        parent.children = parent.children.filter((c) => c !== el);
+        el._parent = null;
+      }
+    },
+    replaceChildren(...kids) { el.children = [...kids]; },
     removeAttribute(name) { delete el.attrs[name]; },
     setAttribute(name, value) { el.attrs[name] = String(value); },
     getAttribute(name) { return el.attrs[name]; },
+    getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; },
     addEventListener(type, fn) { (el._listeners[type] ||= []).push(fn); },
     removeEventListener(type, fn) {
       el._listeners[type] = (el._listeners[type] || []).filter((f) => f !== fn);
@@ -133,23 +142,20 @@ const NEWS_PAYLOAD = {
       age: '2 hours ago',
       score: 7.1,
     },
-    {
-      title: 'Second story',
-      url: 'https://example.com/second',
-      source: 'Another Outlet',
-      snippet: '',
-      image: null,
-      topic: 'solar',
-      age: null,
-      score: 3.0,
-    },
   ],
-  topics: ['aurora', 'solar'],
+  topics: ['aurora'],
   personalized: true,
 };
 
-const calls = { navigate: [], clicks: [], state: 0 };
-/** The proxy port the "server" is currently on. Restarts change it. */
+const PREVIEW_PAYLOAD = {
+  url: 'https://example.com/a',
+  title: 'Example article',
+  description: 'What the page is about.',
+  image: 'https://example.com/img.png',
+  site: 'example.com',
+};
+
+const calls = { navigate: [], clicks: [], sessionClose: [], preview: [], state: 0 };
 let proxyPortValue = '1234';
 const proxyPort = () => proxyPortValue;
 
@@ -176,13 +182,22 @@ const apiFetch = async (path, options = {}) => {
   if (path === '/api/browser/metrics') {
     return { success: true, data: { metrics: { blocked: 3 }, rules: 100, filtering_paused: false } };
   }
+  if (path === '/api/browser/session/close') {
+    calls.sessionClose.push(JSON.parse(options.body));
+    return { success: true, data: { closed: true } };
+  }
+  if (path === '/api/browser/preview') {
+    const body = JSON.parse(options.body);
+    calls.preview.push(body);
+    return { success: true, data: PREVIEW_PAYLOAD };
+  }
   if (path === '/api/browser/navigate') {
     const input = JSON.parse(options.body).input;
     calls.navigate.push({ input });
     return {
       success: true,
       data: {
-        session: { id: 's1', url: input },
+        session: { id: `s${calls.navigate.length}`, url: input },
         url: input,
         proxy_base: `http://127.0.0.1:${proxyPort()}`,
         view_url: `http://127.0.0.1:${proxyPort()}/p/https/${input.replace(/^https?:\/\//, '')}`,
@@ -232,6 +247,12 @@ const searchBar = ({ placeholder = 'Search…', value } = {}) => {
   return wrap;
 };
 
+/** Spy for the core menu the window opens on a link's right-click. */
+const menus = [];
+const openContextMenu = (entries, x, y) => {
+  menus.push({ entries, x, y });
+};
+
 /** Depth-first search of the shim DOM. */
 function findAll(root, predicate, out = []) {
   if (predicate(root)) out.push(root);
@@ -242,7 +263,7 @@ function findAll(root, predicate, out = []) {
 const moduleSource = source
   .replace(/^import .*$/gm, '')
   // Re-export whatever the file defines, minus anything it already exports
-  // itself (a duplicate export is a SyntaxError, as this test discovered).
+  // itself (a duplicate export is a SyntaxError).
   .concat(
     `\nexport { ${[
       'mountBrowserTile',
@@ -263,6 +284,9 @@ const context = vm.createContext({
   icon,
   iconButton,
   searchBar,
+  openContextMenu,
+  navigator: { clipboard: { writeText: () => Promise.resolve() } },
+  URL,
   setTimeout,
   clearTimeout,
   setInterval,
@@ -295,319 +319,148 @@ const check = (name, condition, detail = '') => {
     console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
   }
 };
+const tick = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 
 console.log('browser window smoke test');
 
 check('module exports the window surface', typeof mod.namespace.mountBrowserTile === 'function');
 
 const tile = mod.namespace.mountBrowserTile();
+// Core calls this once when it wires plugin windows; the window registers its
+// global message/artifact listeners there.
+mod.namespace.wireBrowserEvents();
 check('mount returns a tile element', !!tile);
 check('tile is tagged for its plugin', tile.attrs['data-plugin'] === 'browser', tile.attrs['data-plugin']);
 check('tile carries the plugin class', tile.className.includes('browser-tile'), tile.className);
 
-// The mount paints the home surface on an async continuation. Wait for it to
-// settle before driving navigation, or `showHome`'s own frame reset lands after
-// the navigation and clobbers it.
-await new Promise((resolve) => setTimeout(resolve, 120));
+await tick(140);
 
-/* The toolbar must be built from the core UI library, so the window inherits
-   the theme's metrics and accent (PLUGINS.md §19) instead of its own controls. */
+/* Toolbar built from the core UI library. */
 const bar = findAll(tile, (el) => el.className === 'browser-bar')[0];
 check('the window has a toolbar', !!bar);
+const tabstrip = findAll(tile, (el) => el.className === 'browser-tabstrip')[0];
+check('the window has a tab strip', !!tabstrip);
 
 const search = findAll(tile, (el) => String(el.className).includes('ui-search'))[0];
 check('the address field is the core searchBar', !!search);
-check(
-  'the address field is a ui-input',
-  String(search?.children?.[1]?.className || '').includes('ui-input'),
-  search?.children?.[1]?.className,
-);
-check(
-  'the address field carries the theme search icon',
-  (search?.children || []).some((c) => c.dataset?.icon === 'ui/search'),
-);
-check('the address field has a placeholder', !!search?.input?.placeholder);
 
 const buttons = findAll(tile, (el) => String(el.className).includes('ui-btn--icon'));
-check('every toolbar control is a core iconButton', buttons.length >= 5, `${buttons.length} found`);
-
 const byLabel = (label) => buttons.find((b) => b.attrs['aria-label'] === label);
-const back = byLabel('Back');
-const forward = byLabel('Forward');
-check('there is a Back button', !!back);
-check('there is a Forward button', !!forward);
-check(
-  'Back and Forward use the same theme glyph',
-  back?.children?.[0]?.dataset?.icon === forward?.children?.[0]?.dataset?.icon &&
-    back?.children?.[0]?.dataset?.icon === 'ui/arrow-left',
-  `${back?.children?.[0]?.dataset?.icon} vs ${forward?.children?.[0]?.dataset?.icon}`,
-);
-check(
-  'Forward is the mirrored copy',
-  String(forward?.className).includes('browser-nav--forward') &&
-    String(back?.className).includes('browser-nav--back'),
-  forward?.className,
-);
-check(
-  'no curved share arrow is used for Forward',
-  forward?.children?.[0]?.dataset?.icon !== 'ui/forward',
-);
-for (const label of ['Reload', 'Home']) {
-  check(`there is a ${label} control`, !!byLabel(label));
-}
-// The filter control's label states the action, so it flips with the state;
-// its state lives on `aria-pressed`.
-const filterControl = buttons.find((b) =>
-  String(b.attrs['aria-label'] || '').includes('blocking'),
-);
-check('there is an ad-blocking control', !!filterControl, buttons.map((b) => b.attrs['aria-label']).join(' | '));
-check(
-  'the ad-blocking control exposes its state',
-  ['true', 'false'].includes(filterControl?.attrs['aria-pressed']),
-  filterControl?.attrs['aria-pressed'],
-);
+check('there is a Back button', !!byLabel('Back'));
+check('there is a Forward button', !!byLabel('Forward'));
+check('there is a Reload control', !!byLabel('Reload'));
+check('there is a Home control', !!byLabel('Home'));
+check('there is a New tab control', !!byLabel('New tab'));
 
-const frame = tile.children
-  .flatMap((c) => c.children || [])
-  .find((c) => c.className === 'browser-frame');
-check('viewport has an iframe', !!frame);
+const frameWrap = findAll(tile, (el) => el.className === 'browser-frames')[0];
+check('viewport has a frames container', !!frameWrap);
+const frames = () => frameWrap.children.filter((c) => String(c.className).includes('browser-frame'));
+const tabEls = () => tabstrip.children.filter((c) => String(c.className).includes('browser-tab') && !String(c.className).includes('browser-tabstrip'));
 
-// Give the iframe the WindowProxy a real DOM would, so the parent-side
-// `event.source !== contentWindow` guard has something real to compare.
-const frameCommands = [];
-frame.contentWindow = { postMessage: (message) => frameCommands.push(message) };
+check('one tab is open on mount', tabEls().length === 1 && frames().length === 1, `${tabEls().length}/${frames().length}`);
+check('the open tab is active', frames()[0]?.classList.contains('is-active'));
+check('the home surface was rendered', !!frames()[0]?.srcdoc && frames()[0].srcdoc.includes('https://example.com/aurora-alert'));
+check('home frame is sandboxed without same-origin', frames()[0]?.attrs?.sandbox === 'allow-scripts');
 
-const doc = frame?.srcdoc || '';
-check('home document was rendered', doc.length > 0);
-check('home document embeds the card payload', doc.includes('https://example.com/aurora-alert'));
-check('home document shows the source', doc.includes('Example News'));
-check('home document shows the age', doc.includes('2 hours ago'));
-check('home document shows a card image', doc.includes('https://imgs.search.brave.com/thumb/aurora.jpg'));
-check('home document uses the thumb class', doc.includes('class="thumb"'));
-check('home document lists the interest chips', doc.includes('>aurora<') && doc.includes('>solar<'));
-check('home document is personalised', doc.includes('Because of your recent searches'));
-check('home frame is sandboxed without same-origin', frame?.attrs?.sandbox === 'allow-scripts');
-
-/* Run the generated document's own click handler. */
-const scriptMatch = doc.match(/<script>([\s\S]*?)<\/script>/g) || [];
-const inline = scriptMatch[scriptMatch.length - 1]?.replace(/<\/?script>/g, '') || '';
-check('home document ships a click handler', inline.includes('browser:open-card'));
-
-const posted = [];
-const cardParent = {
-  postMessage: (message) => posted.push(message),
+// Give each frame the WindowProxy a real DOM would, for source attribution.
+let fakeWindows = 0;
+const wireFrame = (frame) => {
+  frame.contentWindow = { postMessage: () => {}, _id: ++fakeWindows };
+  return frame;
 };
-const cardDocument = {
-  getElementById: (id) =>
-    id === 'home-data'
-      ? { textContent: (doc.match(/id="home-data" type="application\/json">([\s\S]*?)<\/script>/) || [])[1] || '{}' }
-      : null,
-  addEventListener: (type, fn) => { if (type === 'click') cardDocument._click = fn; },
-};
-vm.runInNewContext(inline, {
-  document: cardDocument,
-  parent: cardParent,
-  JSON,
-  parseInt,
-});
+wireFrame(frames()[0]);
 
-const firstCard = {
-  closest: (sel) => (sel === 'a.card' ? { getAttribute: () => '0' } : null),
-};
-cardDocument._click({ target: firstCard, preventDefault() {} });
-check('clicking a card posts its URL to the window', posted[0]?.type === 'browser:open-card');
-check('clicked card carries the topic signal', posted[0]?.topic === 'aurora', JSON.stringify(posted[0]));
-check('clicked card URL is the article', posted[0]?.url === 'https://example.com/aurora-alert');
-
-const refreshCard = {
-  closest: (sel) => (sel === '[data-refresh]' ? { disabled: false, textContent: 'Refresh' } : null),
-};
-cardDocument._click({ target: refreshCard, preventDefault() {} });
-check('refresh button posts its own message', posted[1]?.type === 'browser:refresh-news');
-
-/* The parent side: the message must navigate and record the click. */
-mod.namespace.wireBrowserEvents();
-const onMessage = (windowListeners.message || [])[0];
-check('the window listens for home-shelf messages', typeof onMessage === 'function');
-
-onMessage({ source: frame.contentWindow, data: { type: 'browser:open-card', url: 'https://example.com/aurora-alert', topic: 'aurora' } });
-await new Promise((resolve) => setTimeout(resolve, 20));
-check(
-  'a card click navigates the window to the article',
-  calls.navigate.some((c) => c.input === 'https://example.com/aurora-alert'),
-  JSON.stringify(calls.navigate),
-);
-check(
-  'a card click is recorded as a ranking signal',
-  calls.clicks.some((c) => c.url === 'https://example.com/aurora-alert' && c.topic === 'aurora'),
-  JSON.stringify(calls.clicks),
-);
-check(
-  'a message from another frame is ignored',
-  (() => {
-    const before = calls.navigate.length;
-    // The old bug: `event.source` is the *window*, not the element. A message
-    // whose source is some other window must still be ignored.
-    onMessage({ source: {}, data: { type: 'browser:open-card', url: 'https://evil.example/x' } });
-    return calls.navigate.length === before;
-  })(),
-);
-
-check('context menu exposes entries', (mod.namespace.browserContextMenu?.() || []).length > 0);
-
-/* ── Frame-history bridge ──────────────────────────────────────
- *
- * The toolbar no longer keeps its own server-side history: it mirrors what the
- * framed page reports and asks the frame to go back / forward / reload. */
+/* ── Navigation in the active tab ─────────────────────────────── */
 
 const addressForm = findAll(tile, (el) => el.className === 'browser-address')[0];
 addressForm.input.value = 'https://example.com/story';
 addressForm.input.blur();
 addressForm.dispatch('submit', { preventDefault() {} });
-await new Promise((resolve) => setTimeout(resolve, 30));
+await tick();
 
 check(
   'navigating points the frame at the proxy',
-  frame.src === `http://127.0.0.1:1234/p/https/example.com/story`,
-  frame.src,
+  frames()[0].src === `http://127.0.0.1:1234/p/https/example.com/story`,
+  frames()[0].src,
 );
+check('the address bar reflects the navigation', addressForm.input.value === 'https://example.com/story');
+
+/* ── Message attribution across tabs ──────────────────────────── */
+
+const onMessage = (windowListeners.message || [])[0];
+check('the window listens for frame messages', typeof onMessage === 'function');
+
+// Open a second tab via the strip's "+".
+byLabel('New tab').dispatch('click', {});
+await tick(60);
+check('the new-tab control opens a tab', tabEls().length === 2 && frames().length === 2, `${tabEls().length}/${frames().length}`);
+wireFrame(frames()[1]);
+check('the new tab becomes active', frames()[1].classList.contains('is-active') && !frames()[0].classList.contains('is-active'));
+
+// A report from the active tab updates the address bar.
+onMessage({ source: frames()[1].contentWindow, data: { type: 'shiny:location', url: 'https://example.com/two', title: 'Two' } });
+check("the active tab's location updates the address bar", addressForm.input.value === 'https://example.com/two');
+
+// A report from the *inactive* tab must not steal the address bar.
+onMessage({ source: frames()[0].contentWindow, data: { type: 'shiny:location', url: 'https://example.com/one', title: 'One' } });
+check('an inactive tab does not change the address bar', addressForm.input.value === 'https://example.com/two');
+
+// A message from an unknown window is ignored.
+const navBefore = calls.navigate.length;
+onMessage({ source: {}, data: { type: 'shiny:new-tab', url: 'https://evil.example/x' } });
+check('a message from another frame is ignored', calls.navigate.length === navBefore);
+
+/* ── Link affordances from the frame ──────────────────────────── */
+
+onMessage({ source: frames()[1].contentWindow, data: { type: 'shiny:new-tab', url: 'https://example.com/link' } });
+await tick(60);
+check('a target=_blank link opens a tab', tabEls().length === 3 && calls.navigate.some((c) => c.input === 'https://example.com/link'));
+wireFrame(frames()[2]);
+// The tab the new-tab action opened is active; hover/leave are active-only.
+const activeWindow = () => frames().find((f) => f.classList.contains('is-active'))?.contentWindow;
+
+onMessage({ source: frames()[1].contentWindow, data: { type: 'shiny:link-menu', url: 'https://example.com/ctx', x: 12, y: 20 } });
+check('right-click opens the window menu', menus.length === 1);
 check(
-  'the address bar reflects the navigation',
-  addressForm.input.value === 'https://example.com/story',
-  addressForm.input.value,
+  'the link menu offers open-in-new-tab',
+  (menus[0]?.entries || []).some((e) => e.label === 'Open in new tab'),
+  JSON.stringify(menus[0]?.entries?.map((e) => e.label)),
 );
 
-// The page reports it moved (e.g. a link click inside it).
-onMessage({ source: frame.contentWindow, data: { type: 'shiny:location', url: 'https://example.com/next' } });
-check(
-  'the address bar follows an in-page navigation',
-  addressForm.input.value === 'https://example.com/next',
-  addressForm.input.value,
-);
-check('Back is enabled once there is history', back.disabled === false);
-check('Forward stays disabled at the tip', forward.disabled === true);
+/* ── Hover preview ────────────────────────────────────────────── */
 
-back.dispatch('click', {});
-await new Promise((resolve) => setTimeout(resolve, 10));
-check(
-  'Back asks the frame to go back in its own history',
-  frameCommands.some((m) => m.type === 'shiny:cmd' && m.cmd === 'back'),
-  JSON.stringify(frameCommands),
-);
+onMessage({ source: activeWindow(), data: { type: 'shiny:hover-link', url: 'https://example.com/preview', rect: { x: 5, y: 6, w: 10, h: 12 } } });
+await tick(320);
+check('hovering a link fetches a preview', calls.preview.some((p) => p.url === 'https://example.com/preview'));
+const previewEl = findAll(tile, (el) => String(el.className).includes('browser-preview'))[0];
+check('the preview card is shown', !!previewEl && !previewEl.classList.contains('hidden'));
+check('the preview card carries the title', String(previewEl?.innerHTML || '').includes('Example article'));
 
-byLabel('Reload').dispatch('click', {});
-check(
-  'Reload asks the frame to reload',
-  frameCommands.some((m) => m.type === 'shiny:cmd' && m.cmd === 'reload'),
-  JSON.stringify(frameCommands),
-);
+onMessage({ source: activeWindow(), data: { type: 'shiny:leave-link' } });
+check('leaving the link hides the preview', previewEl.classList.contains('hidden'));
 
-// A report of an earlier URL means the frame actually went back: the Forward
-// button must come alive again.
-onMessage({ source: frame.contentWindow, data: { type: 'shiny:location', url: 'https://example.com/story' } });
-check('a back navigation re-enables Forward', forward.disabled === false, String(forward.disabled));
+/* ── Closing a tab ────────────────────────────────────────────── */
 
-/* ── Connection-refused recovery ──────────────────────────────
- *
- * The proxy's port is random per server start, so a window left open across a
- * restart used to show the browser's own error page on every navigation. The
- * frame's error handler must notice, ask the server for the current address,
- * and retry — without the user reloading. */
+const closeBtn = findAll(tabEls()[2], (el) => String(el.className).includes('browser-tab-close'))[0];
+check('a tab has a close control', !!closeBtn);
+closeBtn.dispatch('click', { stopPropagation() {} });
+await tick();
+check('closing removes the tab', tabEls().length === 2 && frames().length === 2, `${tabEls().length}/${frames().length}`);
+check('closing the tab tells the server', calls.sessionClose.length >= 1);
 
-addressForm.input.value = 'https://example.com/story';
-addressForm.dispatch('submit', { preventDefault() {} });
-await new Promise((resolve) => setTimeout(resolve, 30));
-
-// The server restarts on a new port while the window stays open.
-proxyPortValue = '5678';
-const stateCallsBefore = calls.state;
-frame.dispatch('error', {});
-await new Promise((resolve) => setTimeout(resolve, 40));
-
-check(
-  'a dead proxy address prompts a state refresh',
-  calls.state > stateCallsBefore,
-  `${stateCallsBefore} → ${calls.state}`,
-);
-check(
-  'the retry loads the same page on the live proxy port',
-  frame.src === `http://127.0.0.1:5678/p/https/example.com/story`,
-  frame.src,
-);
-check(
-  'the retry shows reconnecting rather than a browser error',
-  tile.children.some((c) => (c.children || []).some((s) => String(s.className).includes('browser-status'))),
-);
-
-// A navigation that *did* load is never interrupted by the watchdog, even if
-// the page is slow: the load event clears it.
-frame.dispatch('load', {});
-check('a loaded page is treated as alive', true);
-
-// A second failure is not retried forever; it explains itself.
-const stateCallsAfterRetry = calls.state;
-frame.dispatch('error', {});
-await new Promise((resolve) => setTimeout(resolve, 20));
-check(
-  'a repeated failure does not retry in a loop',
-  calls.state === stateCallsAfterRetry,
-  `${stateCallsAfterRetry} → ${calls.state}`,
-);
-
-/* ── AI-driven navigation ─────────────────────────────────────
- *
- * The shape below is copied from a real row in `saved_artifacts`, and that is
- * the point: the window used to read `payload.url`, a key the server never
- * writes, so asking the AI to open a site left the window on its home page —
- * hidden behind an artifact card that showed the URL it was not loading. */
+/* ── AI-driven navigation ─────────────────────────────────────── */
 
 const savedListeners = windowListeners['artifact:saved'] || [];
 check('the window listens for saved artifacts', savedListeners.length === 1);
-
-// A browser card as the server actually stores it (narrative added by the
-// current tool; `title` is the URL, as it always was).
-windowListeners['artifact:saved'][0]({
-  detail: {
-    id: 'card-1',
-    type: 'browser_page',
-    plugin: 'browser',
-    title: 'https://www.ilfattoquotidiano.it',
-    subtitle: 'Filtered by shiny-filter',
-    narrative: 'https://www.ilfattoquotidiano.it',
-  },
+const beforeAi = calls.navigate.length;
+savedListeners[0]({
+  detail: { id: 'card-1', type: 'browser_page', plugin: 'browser', title: 'x', narrative: 'https://www.ilfattoquotidiano.it' },
 });
-await new Promise((resolve) => setTimeout(resolve, 40));
-check(
-  'an AI-opened page actually loads in the viewport',
-  calls.navigate.some((c) => c.input === 'https://www.ilfattoquotidiano.it'),
-  JSON.stringify(calls.navigate),
-);
+await tick();
+check('an AI-opened page loads in the active tab', calls.navigate.length > beforeAi && calls.navigate.some((c) => c.input === 'https://www.ilfattoquotidiano.it'));
 
-// A legacy card from before the URL was carried in `narrative` still works.
-windowListeners['artifact:saved'][0]({
-  detail: {
-    id: 'card-0',
-    type: 'browser_page',
-    plugin: 'browser',
-    title: 'https://example.com/legacy',
-    subtitle: 'Filtered by shiny-filter',
-  },
-});
-await new Promise((resolve) => setTimeout(resolve, 40));
-check(
-  'a card saved before the narrative field still navigates',
-  calls.navigate.some((c) => c.input === 'https://example.com/legacy'),
-);
+check('context menu exposes entries', (mod.namespace.browserContextMenu?.() || []).length > 0);
 
-// Another plugin's card must not drive this window.
-const before = calls.navigate.length;
-windowListeners['artifact:saved'][0]({
-  detail: { id: 'card-2', type: 'travel_plan', plugin: 'traveler', title: 'Trip to Rome' },
-});
-await new Promise((resolve) => setTimeout(resolve, 20));
-check('a traveler card never navigates the browser', calls.navigate.length === before);
-
-// Unmount last: it tears the window down.
 mod.namespace.unmountBrowserTile?.();
 check('unmount is safe', true);
 

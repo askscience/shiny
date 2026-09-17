@@ -149,6 +149,12 @@ const SHIM_TEMPLATE: &str = r##"(function () {
   // pushState) rather than only the URL the parent last typed. The parent
   // drives navigation back through `history` so no hop escapes the proxy.
   //
+  // The same channel carries the window's link affordances: right-click opens
+  // the parent's "open in new tab / copy link" menu, a `target=_blank` link (or
+  // `window.open`) opens a new tab instead of leaving the frame, and hovering a
+  // link lets the parent show a preview. All of it is best-effort: every hook
+  // is wrapped, and a failure here must never break the page.
+  //
   // The native shell loads the proxy top-level (`parent === window`), so this
   // whole block is skipped there. Every hook is wrapped; nothing may throw
   // before the page's own scripts run.
@@ -170,6 +176,33 @@ const SHIM_TEMPLATE: &str = r##"(function () {
           }
         } catch (e) {}
         return DOC;
+      };
+      // The real URL behind a link the page gives us. The rewriter has already
+      // turned hrefs into proxy paths, so this undoes `PROXY + "/p/<scheme>/…"`
+      // and resolves anything relative against the document.
+      var realUrlOf = function (href) {
+        try {
+          if (!href) return null;
+          var abs = new URL(href, DOC).href;
+          var marker = PROXY + "/p/";
+          if (abs.indexOf(marker) === 0) {
+            var rest = abs.slice(marker.length);
+            var slash = rest.indexOf("/");
+            if (slash > 0) {
+              var scheme = rest.slice(0, slash);
+              if (scheme === "http" || scheme === "https") {
+                return scheme + "://" + rest.slice(slash + 1);
+              }
+            }
+          }
+          if (abs.indexOf("http://") === 0 || abs.indexOf("https://") === 0) return abs;
+        } catch (e) {}
+        return null;
+      };
+      var post = function (message) {
+        try {
+          parent.postMessage(message, "*");
+        } catch (e) {}
       };
       var announce = function () {
         try {
@@ -204,22 +237,100 @@ const SHIM_TEMPLATE: &str = r##"(function () {
         } catch (e) {}
       });
 
-      // Links that ask for a new tab would leave the window entirely. Keep
-      // them in-frame; ordinary same-window links are untouched.
-      document.addEventListener(
-        "click",
-        function (event) {
+      // Links that ask for a new tab — `target=_blank`, or `window.open` —
+      // become a new tab in the window rather than a navigation of this frame
+      // (or a hand-off to the OS browser). Named/`_top`/`_parent` targets keep
+      // the old behaviour of staying put.
+      try {
+        document.addEventListener(
+          "click",
+          function (event) {
+            try {
+              var a = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+              if (!a) return;
+              var target = (a.getAttribute("target") || "").toLowerCase();
+              if (target && target !== "_self" && target !== "_top" && target !== "_parent") {
+                // `_blank` (and any named browsing context): open a tab.
+                if (target === "_blank") {
+                  var url = realUrlOf(a.href);
+                  if (url) {
+                    event.preventDefault();
+                    post({ type: "shiny:new-tab", url: url });
+                    return;
+                  }
+                }
+                a.target = "_self";
+              }
+            } catch (e) {}
+          },
+          true
+        );
+        var origOpen = window.open;
+        if (typeof origOpen === "function") {
+          window.open = function (url) {
+            try {
+              var real = realUrlOf(url);
+              if (real) {
+                post({ type: "shiny:new-tab", url: real });
+                return null; // popup blocked, as far as the page is concerned
+              }
+            } catch (e) {}
+            return origOpen.apply(window, arguments);
+          };
+        }
+      } catch (e) {}
+
+      // Right-click on a link: let the parent draw the window's own menu
+      // (open in a new tab / current tab / copy the link) instead of a native
+      // menu whose "open in new tab" cannot be honoured inside the frame.
+      try {
+        document.addEventListener(
+          "contextmenu",
+          function (event) {
+            try {
+              var a = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+              if (!a) return;
+              var url = realUrlOf(a.href);
+              if (!url) return;
+              event.preventDefault();
+              post({ type: "shiny:link-menu", url: url, x: event.clientX || 0, y: event.clientY || 0 });
+            } catch (e) {}
+          },
+          true
+        );
+      } catch (e) {}
+
+      // Hovering a link: tell the parent, which asks the server for the
+      // target's title/description and shows a preview card. Debounced on the
+      // parent side; `leave` cancels it.
+      try {
+        var hoverLink = function (event) {
           try {
-            var a = event.target && event.target.closest ? event.target.closest("a[target]") : null;
+            var a = event.target && event.target.closest ? event.target.closest("a[href]") : null;
             if (!a) return;
-            var target = (a.getAttribute("target") || "").toLowerCase();
-            if (target && target !== "_self" && target !== "_top" && target !== "_parent") {
-              a.target = "_self";
-            }
+            var url = realUrlOf(a.href);
+            if (!url) return;
+            var r = a.getBoundingClientRect ? a.getBoundingClientRect() : null;
+            post({
+              type: "shiny:hover-link",
+              url: url,
+              rect: r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null,
+            });
           } catch (e) {}
-        },
-        true
-      );
+        };
+        document.addEventListener("pointerover", hoverLink, true);
+        document.addEventListener("focusin", hoverLink, true);
+        document.addEventListener(
+          "pointerout",
+          function (event) {
+            try {
+              var a = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+              if (a) post({ type: "shiny:leave-link" });
+            } catch (e) {}
+          },
+          true
+        );
+      } catch (e) {}
     }
   } catch (e) {}
 
@@ -358,9 +469,14 @@ mod tests {
         assert!(shim.contains("shiny:location"), "no location report");
         assert!(shim.contains("shiny:cmd"), "no command channel");
         assert!(shim.contains("parent !== window"), "bridge not frame-guarded");
+        // The window's link affordances ride the same channel.
+        assert!(shim.contains("shiny:new-tab"), "no new-tab bridge");
+        assert!(shim.contains("shiny:link-menu"), "no link-menu bridge");
+        assert!(shim.contains("shiny:hover-link"), "no hover bridge");
+        assert!(shim.contains("shiny:leave-link"), "no hover-leave bridge");
         // It must stay a bridge: the scripted-navigation gaps the nav e2e test
-        // pins (location.assign / location.replace / window.open) are still
-        // unpatched by design.
+        // pins (location.assign / location.replace) are still unpatched by
+        // design.
         assert!(!shim.contains("location.assign"));
         assert!(!shim.contains("location.replace"));
     }

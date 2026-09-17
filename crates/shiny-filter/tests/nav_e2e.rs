@@ -673,13 +673,27 @@ async fn cookies_survive_a_navigation() {
         .and_then(|v| v.to_str().ok())
         .expect("Set-Cookie reached the browser");
     assert!(set_cookie.contains("sid=abc123"), "got {set_cookie:?}");
+    // The cookie is re-scoped to the site's proxy path. Without this the
+    // browser would store `Path=/` for the proxy origin and send it to *every*
+    // site, and a `Secure`/`Domain` cookie would be dropped entirely (which is
+    // what broke Cloudflare's challenge cookies).
+    assert!(
+        set_cookie.contains(&format!("Path=/p/http/{site}/")),
+        "cookie path was not scoped to the site: {set_cookie:?}"
+    );
+    assert!(
+        !set_cookie.to_ascii_lowercase().contains("domain="),
+        "Domain must be stripped: {set_cookie:?}"
+    );
 
-    // Send it back on the next navigation, as the browser would.
+    // Send it back on the next navigation, as the browser would — alongside the
+    // app's own cookie, which shares `127.0.0.1` and so is sent here too. The
+    // app's cookie must be dropped on the way upstream; only site cookies go.
     let res = client
         .get(format!("{base}/p/http/{site}/cookie-read"))
         .header("accept", "text/html")
         .header("sec-fetch-dest", "document")
-        .header("cookie", "sid=abc123")
+        .header("cookie", "shiny_token=app-secret; sid=abc123")
         .send()
         .await
         .unwrap();
@@ -687,7 +701,7 @@ async fn cookies_survive_a_navigation() {
     assert_eq!(
         seen.header("/cookie-read", "cookie").as_deref(),
         Some("sid=abc123"),
-        "the cookie never reached the origin"
+        "the app cookie leaked upstream, or the site cookie was lost"
     );
 
     proxy.shutdown();
@@ -736,16 +750,25 @@ async fn script_driven_navigation_is_accounted_for() {
         );
     }
 
-    // The ones it does not. `location.assign` and `window.open` are documented
-    // gaps: a site that navigates that way leaves the proxy for that hop.
-    let unpatched = ["location.assign", "window.open", "location.replace"]
+    // `window.open` is now bridged: the shim reports it to the framed window,
+    // which opens a real tab (still filtered) instead of handing the OS browser
+    // an unfiltered jump.
+    assert!(
+        shim.contains("window.open") && shim.contains("shiny:new-tab"),
+        "the shim no longer bridges window.open to a new tab"
+    );
+
+    // The ones that remain gaps: a script that assigns an absolute URL to
+    // `location` leaves the proxy for that hop. `location.assign` and
+    // `location.replace` are documented gaps; `window.open` is no longer one.
+    let unpatched = ["location.assign", "location.replace"]
         .iter()
         .filter(|api| !shim.contains(**api))
         .count();
     assert_eq!(
-        unpatched, 3,
-        "the shim now patches location/window.open — update this test and the \
-         navigation notes, because script-driven navigations are filtered now"
+        unpatched, 2,
+        "the shim now patches location.assign/location.replace — update this \
+         test and the navigation notes, because those navigations are filtered now"
     );
 
     proxy.shutdown();

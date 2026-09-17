@@ -16,6 +16,7 @@ pub mod fetch;
 pub mod history;
 pub mod news;
 pub mod plugin;
+pub mod preview;
 pub mod proxy;
 pub mod routes;
 pub mod tools;

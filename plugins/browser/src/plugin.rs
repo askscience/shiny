@@ -85,6 +85,7 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Get, "/api/browser/history", "browser_history"),
             (HttpMethod::Get, "/api/browser/news", "browser_news"),
             (HttpMethod::Post, "/api/browser/news/click", "browser_news_click"),
+            (HttpMethod::Post, "/api/browser/preview", "browser_preview"),
         ] {
             builder.route(RouteSpec {
                 method: spec.0,
