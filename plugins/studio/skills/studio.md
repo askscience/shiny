@@ -50,7 +50,9 @@ when you need exact parameter names and ranges, and `studio_analyze` when you wa
   `reverb_width`, `master_gain`, `master_drive`, `master_width`, `glue` (bus
   compression), `ceiling` (limiter, dBFS), `loudness` (target integrated LUFS, `-14`
   is streaming-normal; `0` disables), `wav_bits` (`16` default, `24` for a
-  higher-resolution export).
+  higher-resolution export), `sample_rate` (Hz, default `44100`; `48000`/`96000`
+  also fine), `master_oversample` (`1` default; `2`/`4`/`8` oversample the bus
+  saturation for a cleaner master when you push `master_drive`).
 
 ## Voice config
 

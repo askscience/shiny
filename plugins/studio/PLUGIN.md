@@ -73,7 +73,10 @@ Design rules that matter for *performance*:
 - f64 state (no drift over long renders), f32 buffers.
 - Clips are rendered in parallel across CPU cores with scoped threads (each clip owns its
   buffers) and mixed with per-sample level/pan automation.
-- Nonlinear stages (distortion, limiter, drum drive) use a 2× oversampled path.
+- Nonlinear stages (distortion, drum drive, master bus) use an oversampled path; the
+  master bus factor is configurable (1/2/4/8×).
+- Sample-rate-aware: coefficients are derived from the render rate, so a 48/96 kHz
+  render is genuinely higher-fidelity, not a resample.
 - Everything is deterministic: a config always renders bit-identically.
 
 ## The JSON contract
@@ -93,10 +96,13 @@ runtime catalog (`GET /api/studio/catalog`, tool `studio_catalog`):
 - Arrangement: `tracks[]` (level, pan, mute, **solo**, automation lanes) and
   `clips[]` (`track`, `start`, `length_beats`, `gain_db`, `pattern`).
 
-Output is PCM WAV at 44.1 kHz, 16-bit by default or 24-bit when `fx.wav_bits`
-is `24`. (A configurable sample rate is plumbed through the renderer but pinned
-to 44.1 kHz — the DSP layer is tuned to `dsp::SR`, so enabling 48/96 kHz needs a
-sample-rate-aware pass through envelopes, drums, effects and oversamplers.)
+Output is PCM WAV, 44.1 kHz / 16-bit by default. `fx.sample_rate` selects any
+rate from 8 kHz to 192 kHz (48/96 kHz are common) and `fx.wav_bits` selects
+16- or 24-bit. The DSP layer is sample-rate-aware: oscillators take the rate
+per tick, and envelopes, filters, the eleven drum models, insert effects and the
+master chain all derive their coefficients from the rate they are built with.
+`fx.master_oversample` (1/2/4/8) oversamples the bus saturation — the only
+nonlinear master stage — to keep its harmonics from aliasing.
 
 ## Sampled instruments (SoundFonts)
 

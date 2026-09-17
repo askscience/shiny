@@ -1,7 +1,7 @@
 //! Dynamics: a soft-knee stereo compressor and a look-ahead brickwall limiter,
 //! plus the master bus glue used by the engine.
 
-use super::util::{db_to_gain, gain_to_db, soft_clip};
+use super::util::{db_to_gain, gain_to_db, soft_clip, Oversampler};
 
 /// Feed-forward stereo-linked compressor with a soft knee and parallel mix.
 #[derive(Clone)]
@@ -101,26 +101,44 @@ pub struct Limiter {
     slow_rel: f32,
     pub ceiling_db: f64,
     ceiling: f32,
+    release_ms: f64,
+    sr: f64,
 }
 
 impl Limiter {
-    pub fn new(ceiling_db: f64, release_ms: f64) -> Self {
-        let lookahead = (0.0015 * super::SR) as usize; // 1.5 ms of gain look-ahead
-        let sr = super::SR;
-        let fast_tau = (release_ms * 0.1).max(1.0) * 0.001 * sr;
-        let slow_tau = release_ms.max(5.0) * 0.001 * sr;
-        let fast_rel = (1.0 - (-1.0 / fast_tau).exp()) as f32;
-        let slow_rel = (1.0 - (-1.0 / slow_tau).exp()) as f32;
+    pub fn new(ceiling_db: f64, release_ms: f64, sr: f64) -> Self {
         let ceiling = db_to_gain(ceiling_db);
-        Self {
-            delay_l: vec![0.0; lookahead + 2],
-            delay_r: vec![0.0; lookahead + 2],
+        let mut l = Self {
+            delay_l: Vec::new(),
+            delay_r: Vec::new(),
             pos: 0,
             gain: 1.0,
-            fast_rel,
-            slow_rel,
+            fast_rel: 0.0,
+            slow_rel: 0.0,
             ceiling_db,
             ceiling,
+            release_ms,
+            sr,
+        };
+        l.rebuild();
+        l
+    }
+
+    fn rebuild(&mut self) {
+        let lookahead = (0.0015 * self.sr) as usize; // 1.5 ms of gain look-ahead
+        self.delay_l = vec![0.0; lookahead + 2];
+        self.delay_r = vec![0.0; lookahead + 2];
+        self.pos = 0;
+        let fast_tau = (self.release_ms * 0.1).max(1.0) * 0.001 * self.sr;
+        let slow_tau = self.release_ms.max(5.0) * 0.001 * self.sr;
+        self.fast_rel = (1.0 - (-1.0 / fast_tau).exp()) as f32;
+        self.slow_rel = (1.0 - (-1.0 / slow_tau).exp()) as f32;
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        if (sr - self.sr).abs() > 1e-9 {
+            self.sr = sr;
+            self.rebuild();
         }
     }
 
@@ -165,6 +183,10 @@ impl Limiter {
 }
 
 /// The master bus: DC safety, gentle bus saturation, and a final clip.
+///
+/// The saturation is the only nonlinear master stage, so it is the one worth
+/// oversampling (`master_oversample` in the config). The limiter downstream is
+/// a pure gain law and does not alias.
 #[derive(Clone)]
 pub struct MasterBus {
     dc_l: super::util::DcBlocker,
@@ -172,22 +194,35 @@ pub struct MasterBus {
     pub drive: f64,
     pub width: f64,
     pub gain: f64,
+    os: Oversampler,
+    os_l: [f32; 8],
+    os_r: [f32; 8],
 }
 
 impl Default for MasterBus {
     fn default() -> Self {
-        Self::new()
+        Self::new(super::SR, 1)
     }
 }
 
 impl MasterBus {
-    pub fn new() -> Self {
-        Self { dc_l: Default::default(), dc_r: Default::default(), drive: 0.0, width: 1.0, gain: 1.0 }
+    pub fn new(sr: f64, oversample: usize) -> Self {
+        Self {
+            dc_l: Default::default(),
+            dc_r: Default::default(),
+            drive: 0.0,
+            width: 1.0,
+            gain: 1.0,
+            os: Oversampler::new(sr, oversample),
+            os_l: [0.0; 8],
+            os_r: [0.0; 8],
+        }
     }
 
     pub fn reset(&mut self) {
         self.dc_l.reset();
         self.dc_r.reset();
+        self.os.reset();
     }
 
     #[inline]
@@ -196,9 +231,24 @@ impl MasterBus {
         let mut a = self.dc_l.process(l * g);
         let mut b = self.dc_r.process(r * g);
         if self.drive > 0.0 {
-            let d = 1.0 + self.drive as f32 * 4.0;
-            a = soft_clip(a * d) / (1.0 + self.drive as f32 * 0.5);
-            b = soft_clip(b * d) / (1.0 + self.drive as f32 * 0.5);
+            let drive = self.drive as f32;
+            let d = 1.0 + drive * 4.0;
+            let make = 1.0 + drive * 0.5;
+            let sat = |x: f32| soft_clip(x * d) / make;
+            if self.os.factor() > 1 {
+                self.os.up(a, &mut self.os_l);
+                self.os.up(b, &mut self.os_r);
+                let n = self.os.factor();
+                for i in 0..n {
+                    self.os_l[i] = sat(self.os_l[i]);
+                    self.os_r[i] = sat(self.os_r[i]);
+                }
+                a = self.os.down(&self.os_l);
+                b = self.os.down(&self.os_r);
+            } else {
+                a = sat(a);
+                b = sat(b);
+            }
         }
         let w = self.width.clamp(0.0, 2.0) as f32;
         let mid = (a + b) * 0.5;

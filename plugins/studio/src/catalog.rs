@@ -113,7 +113,9 @@ pub fn catalog_json() -> Value {
             {"key": "glue", "min": 0.0, "max": 1.0, "default": 0.0, "help": "Parallel bus compression"},
             {"key": "ceiling", "min": -6.0, "max": 0.0, "default": -0.4, "help": "Limiter ceiling (dBFS)"},
             {"key": "loudness", "min": -30.0, "max": 0.0, "default": 0.0, "help": "Target integrated LUFS (-14 is streaming-normal); 0 disables"},
+            {"key": "sample_rate", "min": 8000.0, "max": 192000.0, "default": 44100.0, "help": "Output sample rate — the engine renders natively at this rate (default 44100)"},
             {"key": "wav_bits", "min": 16.0, "max": 24.0, "default": 16.0, "help": "WAV bit depth: 16 (default) or 24"},
+            {"key": "master_oversample", "min": 1.0, "max": 8.0, "default": 1.0, "help": "Oversampling factor for the master bus saturation: 1 (default), 2, 4 or 8"},
         ],
         "limits": {
             "max_voices": voices::MAX_VOICES,

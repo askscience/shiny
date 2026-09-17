@@ -103,7 +103,11 @@ pub struct Smoother {
 
 impl Smoother {
     pub fn new(initial: f64, seconds: f64) -> Self {
-        let coef = if seconds <= 0.0 { 1.0 } else { 1.0 - (-1.0 / (seconds * super::SR)).exp() };
+        Self::with_sr(initial, seconds, super::SR)
+    }
+
+    pub fn with_sr(initial: f64, seconds: f64, sr: f64) -> Self {
+        let coef = if seconds <= 0.0 { 1.0 } else { 1.0 - (-1.0 / (seconds * sr)).exp() };
         Self { value: initial, coef }
     }
 
@@ -257,52 +261,68 @@ impl Biquad {
 /// right back into the audible band, so both the interpolation filter (up) and
 /// the decimation filter (down) matter. We use two cascaded Butterworth
 /// sections (4th order) at 0.45 × base Nyquist, running at 2×.
+/// A generic oversampler for a nonlinear stage, at `factor`× the base rate.
+///
+/// A zero-ish signal fed straight into `tanh` folds every spectral image back
+/// into the audible band, so both the interpolation filter (up) and the
+/// decimation filter (down) matter. We linearly interpolate between the
+/// previous and current input, then cascade two Butterworth sections (4th
+/// order) at 0.45 × base Nyquist, running at the oversampled rate.
 #[derive(Clone)]
-pub struct Oversampler2x {
+pub struct Oversampler {
+    factor: usize,
     up: [Biquad; 2],
     down: [Biquad; 2],
     prev: f32,
 }
 
-impl Default for Oversampler2x {
+impl Default for Oversampler {
     fn default() -> Self {
-        Self::new()
+        Self::new(super::SR, 2)
     }
 }
 
-impl Oversampler2x {
-    pub fn new() -> Self {
-        let sr2 = (super::SR * 2.0) as f32;
-        let fc = (super::SR as f32) * 0.5 * 0.45;
+impl Oversampler {
+    pub fn new(base_sr: f64, factor: usize) -> Self {
+        let factor = factor.clamp(1, 8);
+        let hr = (base_sr * factor as f64) as f32;
+        let fc = (base_sr * 0.5 * 0.45) as f32;
         Self {
-            up: [Biquad::lowpass(fc, 0.541_2, sr2), Biquad::lowpass(fc, 1.306_6, sr2)],
-            down: [Biquad::lowpass(fc, 0.541_2, sr2), Biquad::lowpass(fc, 1.306_6, sr2)],
+            factor,
+            up: [Biquad::lowpass(fc, 0.541_2, hr), Biquad::lowpass(fc, 1.306_6, hr)],
+            down: [Biquad::lowpass(fc, 0.541_2, hr), Biquad::lowpass(fc, 1.306_6, hr)],
             prev: 0.0,
         }
     }
 
-    /// Upsample one base-rate sample to two 2×-rate samples.
     #[inline]
-    pub fn up(&mut self, x: f32) -> (f32, f32) {
-        // Linear interpolation between the previous and current input is a poor
-        // image filter on its own, but it halves the work of the FIR that
-        // follows; the Butterworth cascade removes the rest.
-        let mid = 0.5 * (self.prev + x);
-        self.prev = x;
-        let a0 = self.up[0].tick(x);
-        let a = self.up[1].tick(a0);
-        let b0 = self.up[0].tick(mid);
-        let b = self.up[1].tick(b0);
-        (a, b)
+    pub fn factor(&self) -> usize {
+        self.factor
     }
 
-    /// Decimate two 2×-rate samples back to one base-rate sample.
+    /// Upsample one base-rate sample into `out[..factor]`.
     #[inline]
-    pub fn down(&mut self, a: f32, b: f32) -> f32 {
-        let a0 = self.down[0].tick(a);
-        let _ = self.down[1].tick(a0);
-        let b0 = self.down[0].tick(b);
-        self.down[1].tick(b0)
+    pub fn up(&mut self, x: f32, out: &mut [f32]) {
+        let n = self.factor;
+        let prev = self.prev;
+        self.prev = x;
+        for i in 0..n {
+            let t = (i as f32 + 1.0) / n as f32;
+            let v = prev + (x - prev) * t;
+            let a = self.up[0].tick(v);
+            out[i] = self.up[1].tick(a);
+        }
+    }
+
+    /// Decimate `input[..factor]` back to one base-rate sample.
+    #[inline]
+    pub fn down(&mut self, input: &[f32]) -> f32 {
+        let mut last = 0.0;
+        for i in 0..self.factor {
+            let a = self.down[0].tick(input[i]);
+            last = self.down[1].tick(a);
+        }
+        last
     }
 
     pub fn reset(&mut self) {

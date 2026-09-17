@@ -221,18 +221,24 @@ impl Filter {
 pub struct OnePole {
     z: f32,
     coef: f32,
+    cutoff: f64,
     hp: bool,
 }
 
 impl OnePole {
     pub fn lowpass(cutoff: f64, sr: f64) -> Self {
         let coef = 1.0 - (-2.0 * std::f64::consts::PI * cutoff / sr).exp();
-        Self { z: 0.0, coef: coef as f32, hp: false }
+        Self { z: 0.0, coef: coef as f32, cutoff, hp: false }
     }
 
     pub fn highpass(cutoff: f64, sr: f64) -> Self {
         let coef = 1.0 - (-2.0 * std::f64::consts::PI * cutoff / sr).exp();
-        Self { z: 0.0, coef: coef as f32, hp: true }
+        Self { z: 0.0, coef: coef as f32, cutoff, hp: true }
+    }
+
+    /// Re-derive the coefficient for a new sample rate.
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        self.coef = (1.0 - (-2.0 * std::f64::consts::PI * self.cutoff / sr).exp()) as f32;
     }
 
     pub fn reset(&mut self) {
@@ -277,6 +283,11 @@ impl BandPass {
 
     pub fn set_q(&mut self, q: f64) {
         self.q = q;
+        self.dirty = true;
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        self.sr = sr;
         self.dirty = true;
     }
 

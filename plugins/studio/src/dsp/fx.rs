@@ -10,7 +10,7 @@ use super::delay::{Chorus, Phaser, StereoDelay};
 use super::filter::{Filter, FilterKind};
 use super::limiter::Compressor;
 use super::reverb::Reverb;
-use super::util::{db_to_gain, soft_clip, tube, Biquad, DcBlocker, Oversampler2x};
+use super::util::{db_to_gain, soft_clip, tube, Biquad, DcBlocker, Oversampler};
 
 /// The effect kinds the engine understands (mirrors `crate::fx::EFFECT_KINDS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,31 +75,43 @@ pub struct Distortion {
     pub mix: f64,
     pub out: f64,
     pub tone: f64,
-    os: Oversampler2x,
+    os: Oversampler,
     tone_l: Biquad,
     tone_r: Biquad,
     dc_l: DcBlocker,
     dc_r: DcBlocker,
     sr: f32,
+    os_l: [f32; 8],
+    os_r: [f32; 8],
 }
 
 impl Distortion {
-    pub fn new(params: &HashMap<String, f64>) -> Self {
+    pub fn new(params: &HashMap<String, f64>, sr: f64) -> Self {
         let mut d = Self {
             mode: v(params, &["mode"], 0.0),
             drive: v(params, &["drive"], 2.0).clamp(0.25, 64.0),
             mix: v(params, &["mix"], 0.5).clamp(0.0, 1.0),
             out: v(params, &["out"], 1.0).clamp(0.05, 4.0),
             tone: v(params, &["tone"], 12000.0).clamp(200.0, 20000.0),
-            os: Oversampler2x::new(),
-            tone_l: Biquad::lowpass(12000.0, 0.707, super::SR as f32),
-            tone_r: Biquad::lowpass(12000.0, 0.707, super::SR as f32),
+            os: Oversampler::new(sr, 2),
+            tone_l: Biquad::lowpass(12000.0, 0.707, sr as f32),
+            tone_r: Biquad::lowpass(12000.0, 0.707, sr as f32),
             dc_l: DcBlocker::default(),
             dc_r: DcBlocker::default(),
-            sr: super::SR as f32,
+            sr: sr as f32,
+            os_l: [0.0; 8],
+            os_r: [0.0; 8],
         };
         d.retune();
         d
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        if (sr as f32 - self.sr).abs() > 1e-6 {
+            self.sr = sr as f32;
+            self.os = Oversampler::new(sr, 2);
+            self.retune();
+        }
     }
 
     pub fn retune(&mut self) {
@@ -134,10 +146,17 @@ impl Distortion {
     #[inline]
     pub fn tick(&mut self, l: f32, r: f32) -> (f32, f32) {
         let drive_comp = 1.0 / (1.0 + self.drive as f32 * 0.25);
-        let (al, a2l) = self.os.up(l * drive_comp);
-        let (ar, a2r) = self.os.up(r * drive_comp);
-        let wl = self.os.down(self.shape(al), self.shape(a2l));
-        let wr = self.os.down(self.shape(ar), self.shape(a2r));
+        self.os.up(l * drive_comp, &mut self.os_l);
+        self.os.up(r * drive_comp, &mut self.os_r);
+        let n = self.os.factor();
+        for i in 0..n {
+            let v = self.shape(self.os_l[i]);
+            self.os_l[i] = v;
+            let v = self.shape(self.os_r[i]);
+            self.os_r[i] = v;
+        }
+        let wl = self.os.down(&self.os_l);
+        let wr = self.os.down(&self.os_r);
         let wl = self.tone_l.tick(wl);
         let wr = self.tone_r.tick(wr);
         let mix = self.mix as f32;
@@ -158,12 +177,14 @@ pub struct FilterFx {
 }
 
 impl FilterFx {
-    pub fn new(params: &HashMap<String, f64>) -> Self {
+    pub fn new(params: &HashMap<String, f64>, sr: f64) -> Self {
         let kind = FilterKind::from_index(v(params, &["type", "ftype"], 0.0));
         let cutoff = v(params, &["cutoff"], 2000.0);
         let q = v(params, &["resonance", "res", "q"], 1.0);
         let mut l = Filter::new(kind, cutoff, q);
         let mut r = Filter::new(kind, cutoff, q);
+        l.set_sample_rate(sr);
+        r.set_sample_rate(sr);
         l.set_drive(v(params, &["drive"], 1.0));
         r.set_drive(v(params, &["drive"], 1.0));
         l.set_poles(v(params, &["poles"], 1.0).round().clamp(1.0, 2.0) as u8);
@@ -222,8 +243,8 @@ pub struct Eq3 {
 }
 
 impl Eq3 {
-    pub fn new(params: &HashMap<String, f64>) -> Self {
-        let sr = super::SR as f32;
+    pub fn new(params: &HashMap<String, f64>, sr: f64) -> Self {
+        let sr = sr as f32;
         let low_f = v(params, &["low_freq"], 220.0) as f32;
         let mid_f = v(params, &["mid_freq"], 1000.0) as f32;
         let hi_f = v(params, &["hi_freq"], 5000.0) as f32;
@@ -289,20 +310,22 @@ impl Eq3 {
 #[derive(Clone)]
 pub struct Comp {
     c: Compressor,
+    sr: f64,
 }
 
 impl Comp {
-    pub fn new(params: &HashMap<String, f64>) -> Self {
+    pub fn new(params: &HashMap<String, f64>, sr: f64) -> Self {
         let mut c = Compressor::new(
             v(params, &["threshold"], -18.0),
             v(params, &["ratio"], 4.0),
             v(params, &["attack"], 10.0),
             v(params, &["release"], 150.0),
         );
+        c.set_sample_rate(sr);
         c.knee_db = v(params, &["knee"], 6.0);
         c.makeup_db = v(params, &["makeup"], 0.0);
         c.mix = v(params, &["mix"], 1.0);
-        Self { c }
+        Self { c, sr }
     }
 
     pub fn set_param(&mut self, key: &str, val: f64) {
@@ -311,11 +334,11 @@ impl Comp {
             "ratio" => self.c.ratio = val,
             "attack" => {
                 self.c.attack_ms = val;
-                self.c.set_sample_rate(super::SR);
+                self.c.set_sample_rate(self.sr);
             }
             "release" => {
                 self.c.release_ms = val;
-                self.c.set_sample_rate(super::SR);
+                self.c.set_sample_rate(self.sr);
             }
             "makeup" => self.c.makeup_db = val,
             "knee" => self.c.knee_db = val,
@@ -394,19 +417,19 @@ pub enum Effect {
 }
 
 impl Effect {
-    pub fn new(kind: EffectKind, params: &HashMap<String, f64>) -> Effect {
+    pub fn new(kind: EffectKind, params: &HashMap<String, f64>, sr: f64) -> Effect {
         match kind {
-            EffectKind::Distortion => Effect::Distortion(Distortion::new(params)),
-            EffectKind::Filter => Effect::Filter(FilterFx::new(params)),
-            EffectKind::Eq => Effect::Eq(Eq3::new(params)),
-            EffectKind::Compressor => Effect::Compressor(Comp::new(params)),
+            EffectKind::Distortion => Effect::Distortion(Distortion::new(params, sr)),
+            EffectKind::Filter => Effect::Filter(FilterFx::new(params, sr)),
+            EffectKind::Eq => Effect::Eq(Eq3::new(params, sr)),
+            EffectKind::Compressor => Effect::Compressor(Comp::new(params, sr)),
             EffectKind::Delay => {
                 let mut d = StereoDelay::new(
                     v(params, &["time"], 250.0),
                     v(params, &["feedback"], 0.4),
                     v(params, &["mix"], 0.3),
                 );
-                d.set_sample_rate(super::SR);
+                d.set_sample_rate(sr);
                 d.ping_pong = v(params, &["ping_pong"], 0.5);
                 d.damp = v(params, &["damp", "damping"], 0.35);
                 d.offset_ms = v(params, &["offset"], 0.0);
@@ -420,7 +443,7 @@ impl Effect {
                     v(params, &["damping", "damp"], 0.5),
                     v(params, &["mix"], 0.2),
                 );
-                r.set_sample_rate(super::SR);
+                r.set_sample_rate(sr);
                 r.predelay_ms = v(params, &["predelay"], 12.0);
                 r.width = v(params, &["width"], 1.0);
                 r.mod_amount = v(params, &["mod"], 0.6);
@@ -433,7 +456,7 @@ impl Effect {
                     v(params, &["depth"], 0.5),
                     v(params, &["mix"], 0.4),
                 );
-                c.set_sample_rate(super::SR);
+                c.set_sample_rate(sr);
                 c.spread = v(params, &["spread"], 0.6);
                 Effect::Chorus(c)
             }
@@ -443,7 +466,7 @@ impl Effect {
                     v(params, &["depth"], 0.7),
                     v(params, &["mix"], 0.5),
                 );
-                p.set_sample_rate(super::SR);
+                p.set_sample_rate(sr);
                 p.feedback = v(params, &["feedback"], 0.4);
                 p.stages = v(params, &["stages"], 4.0).round().clamp(1.0, 6.0) as usize;
                 Effect::Phaser(p)

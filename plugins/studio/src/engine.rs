@@ -39,14 +39,15 @@ const TAIL_SECS: f64 = 0.6;
 
 /// Output sample rate from a config's `fx.sample_rate`.
 ///
-/// **Currently pinned to 44.1 kHz.** The DSP layer (envelopes, the eleven drum
-/// models, insert effects, oversamplers, limiter) derives its coefficients from
-/// the module constant `SR`, so honouring another rate needs a sample-rate-aware
-/// pass through all of those first — otherwise a 48/96 kHz render would be
-/// *worse* (mistuned filters), not better. The engine plumbing (`render_pattern`
-/// and friends take an `sr`) is in place for that follow-up.
-fn output_sr(_fx: &HashMap<String, f64>) -> f64 {
-    SAMPLE_RATE
+/// The whole DSP layer is sample-rate-aware (oscillators take the rate per
+/// tick; envelopes, filters, drums, effects and the master chain derive their
+/// coefficients from the rate they are built with), so any rate in a sane
+/// range renders correctly. Default is 44.1 kHz.
+fn output_sr(fx: &HashMap<String, f64>) -> f64 {
+    match fx.get("sample_rate").copied() {
+        Some(v) if (8_000.0..=192_000.0).contains(&v) => v.round(),
+        _ => SAMPLE_RATE,
+    }
 }
 
 /// Output bit depth from a config's `fx.wav_bits` (16 default, 24 opt-in).
@@ -716,6 +717,23 @@ impl Instrument {
             Instrument::Sampler(_) => {}
         }
     }
+
+    /// Re-derive sample-rate-dependent coefficients where the instrument was
+    /// built at the default rate (drums). Synths/Grid/Sampler already receive
+    /// the rate at construction.
+    fn set_sample_rate(&mut self, sr: f64) {
+        match self {
+            Instrument::Drum(d) => d.set_sample_rate(sr),
+            Instrument::Drumkit(pads) => {
+                for d in pads.iter_mut() {
+                    d.set_sample_rate(sr);
+                }
+            }
+            Instrument::Synth(s) => s.set_sample_rate(sr),
+            Instrument::Grid(_) => {}
+            Instrument::Sampler(_) => {}
+        }
+    }
 }
 
 /// One voice's live processing chain.
@@ -751,7 +769,7 @@ impl Channel {
         // Apply macro rack entries over the base parameters.
         apply_macros(&mut params, &v.macros);
 
-        let instrument = if v.kind == "drumkit" {
+        let mut instrument = if v.kind == "drumkit" {
             let pads = if v.pads.is_empty() { default_pads() } else { v.pads.clone() };
             let mut drums = Vec::with_capacity(pads.len().min(16));
             for (pi, pad) in pads.iter().take(16).enumerate() {
@@ -780,6 +798,9 @@ impl Channel {
         } else {
             Instrument::Synth(Box::new(Synth::new(&v.kind, v.wave.as_deref(), &params, seed ^ vi as u64, sr)))
         };
+        // Instruments built with the default rate (drums) re-derive their
+        // coefficients for this render's rate.
+        instrument.set_sample_rate(sr);
 
         let mut effects = Vec::new();
         for e in &v.fx {
@@ -787,7 +808,7 @@ impl Channel {
                 continue;
             }
             match EffectKind::from_name(&e.kind) {
-                Some(k) => effects.push(Effect::new(k, &e.params)),
+                Some(k) => effects.push(Effect::new(k, &e.params, sr)),
                 None => return Err(format!("unknown effect `{}` (one of {})", e.kind, crate::fx::EFFECT_KINDS.join(", "))),
             }
         }
@@ -802,8 +823,8 @@ impl Channel {
             effects,
             level,
             pan,
-            level_sm: Smoother::new(level as f64, 0.005),
-            pan_sm: Smoother::new(pan as f64, 0.005),
+            level_sm: Smoother::with_sr(level as f64, 0.005, sr),
+            pan_sm: Smoother::with_sr(pan as f64, 0.005, sr),
             events: Vec::new(),
             cursor: 0,
             msgs: Vec::new(),
@@ -1130,13 +1151,15 @@ impl MasterChain {
         reverb.width = fx_val(fx, "reverb_width", 1.0);
         reverb.update_damping();
 
-        let mut bus = MasterBus::new();
+        let oversample = fx_val(fx, "master_oversample", 1.0).round().clamp(1.0, 8.0) as usize;
+        let mut bus = MasterBus::new(sr, oversample);
         bus.gain = fx_val(fx, "master_gain", 1.0);
         bus.drive = fx_val(fx, "master_drive", 0.0);
         bus.width = fx_val(fx, "master_width", 1.0);
 
         let comp = if fx_val(fx, "glue", 0.0) > 0.0 {
             let mut c = Compressor::new(-16.0, 2.0, 30.0, 250.0);
+            c.set_sample_rate(sr);
             c.knee_db = 8.0;
             c.makeup_db = 1.5;
             c.mix = fx_val(fx, "glue", 0.3).clamp(0.0, 1.0);
@@ -1150,7 +1173,7 @@ impl MasterChain {
             reverb,
             bus,
             comp,
-            limiter: Limiter::new(fx_val(fx, "ceiling", -0.4), 120.0),
+            limiter: Limiter::new(fx_val(fx, "ceiling", -0.4), 120.0, sr),
         }
     }
 
@@ -2267,5 +2290,40 @@ mod tests {
         assert_eq!(base.bits, 16);
         assert_eq!(base.sample_rate, 44_100);
         assert_eq!(u16::from_le_bytes([base.wav[34], base.wav[35]]), 16);
+    }
+
+    #[test]
+    fn renders_at_higher_sample_rates() {
+        let base = render_track(&kit(8)).expect("44.1k render");
+        for sr in [48_000.0, 96_000.0] {
+            let mut cfg = kit(8);
+            cfg.fx.insert("sample_rate".into(), sr);
+            let out = render_track(&cfg).expect("render should succeed");
+            assert_eq!(out.sample_rate, sr as u32);
+            assert_eq!(
+                u32::from_le_bytes([out.wav[24], out.wav[25], out.wav[26], out.wav[27]]),
+                sr as u32
+            );
+            assert!(out.peak > 0.01 && out.peak.is_finite(), "silent/broken at {sr}");
+            // Same musical length regardless of rate (frame rounding only).
+            let diff = (out.duration_ms as i64 - base.duration_ms as i64).abs();
+            assert!(diff <= 3, "duration drifted at {sr}: {diff}ms");
+            // Coefficients are rate-correct, so loudness should match closely.
+            let d = (out.lufs - base.lufs).abs();
+            assert!(d < 1.5, "loudness drifted at {sr}: {d} LU");
+        }
+    }
+
+    #[test]
+    fn master_oversample_renders_cleanly() {
+        for factor in [1.0, 2.0, 4.0, 8.0] {
+            let mut cfg = kit(8);
+            cfg.fx.insert("master_drive".into(), 0.7);
+            cfg.fx.insert("master_oversample".into(), factor);
+            let out = render_track(&cfg).expect("render should succeed");
+            assert!(out.peak > 0.01, "silent at oversample {factor}");
+            assert!(out.peak.is_finite(), "non-finite at oversample {factor}");
+            assert!(out.lufs.is_finite());
+        }
     }
 }

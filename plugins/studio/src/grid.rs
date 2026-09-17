@@ -345,11 +345,12 @@ impl GridEngine {
                     let kind = FilterKind::from_index(p(m, "type", 0.0));
                     let cutoff = p(m, "cutoff", 2000.0).clamp(20.0, 20000.0);
                     let mut f = Filter::new(kind, cutoff, p(m, "res", 1.0));
+                    f.set_sample_rate(sr);
                     f.set_drive(p(m, "drive", 1.0));
                     f.set_poles(p(m, "poles", 1.0).round().clamp(1.0, 2.0) as u8);
                     Node::Filter(Box::new(FilterNode { f, base_cutoff: cutoff, env_amount: p(m, "env", 0.0), env: 0.0 }))
                 }
-                "drive" => Node::Drive(Box::new(DriveNode { d: Distortion::new(&m.params) })),
+                "drive" => Node::Drive(Box::new(DriveNode { d: Distortion::new(&m.params, sr) })),
                 "gain" => Node::Gain(GainNode { level: p(m, "level", 0.8) }),
                 "mixer" => Node::Mixer(MixerNode { balance: p(m, "balance", 0.5) }),
                 "env" => {

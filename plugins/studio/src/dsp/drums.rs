@@ -112,6 +112,70 @@ impl Drum {
         }
     }
 
+    /// Re-derive every sample-rate-dependent coefficient (envelopes, tone
+    /// filters) so the drum can render at a non-default rate.
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        match self {
+            Drum::Kick(d) => {
+                d.env.set_sample_rate(sr);
+                d.click_env.set_sample_rate(sr);
+                d.click_hp.set_sample_rate(sr);
+            }
+            Drum::Snare(d) => {
+                d.tone_env.set_sample_rate(sr);
+                d.noise_env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.hp.set_sample_rate(sr);
+            }
+            Drum::Hat(d) => {
+                d.sr = sr;
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.sync();
+            }
+            Drum::Clap(d) => {
+                d.burst.set_sample_rate(sr);
+                d.tail.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.hp.set_sample_rate(sr);
+            }
+            Drum::Tom(d) => {
+                d.env.set_sample_rate(sr);
+                d.noise_env.set_sample_rate(sr);
+            }
+            Drum::Perc(d) => {
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.hp.set_sample_rate(sr);
+            }
+            Drum::Rim(d) => {
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+            }
+            Drum::Cowbell(d) => {
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+            }
+            Drum::Shaker(d) => {
+                d.sr = sr;
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.sync();
+            }
+            Drum::Crash(d) => {
+                d.sr = sr;
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.sync();
+            }
+            Drum::Ride(d) => {
+                d.env.set_sample_rate(sr);
+                d.bp.set_sample_rate(sr);
+                d.hp.set_sample_rate(sr);
+            }
+        }
+    }
+
     /// Apply one parameter by its catalog key. Unknown keys are ignored.
     pub fn set_param(&mut self, key: &str, value: f64) {
         let v = value;
@@ -427,6 +491,7 @@ pub struct Hat {
     metal_mix: f64,
     pub drive: f64,
     vel: f64,
+    sr: f64,
 }
 
 impl Hat {
@@ -442,6 +507,7 @@ impl Hat {
             metal_mix: 0.8,
             drive: 0.1,
             vel: 1.0,
+            sr: SR,
         };
         h.sync();
         h
@@ -449,7 +515,7 @@ impl Hat {
 
     fn sync(&mut self) {
         self.env.set(0.0001, rate_to_seconds(self.decay), 0.0);
-        self.hp = OnePole::highpass(self.tone * 0.7, SR);
+        self.hp = OnePole::highpass(self.tone * 0.7, self.sr);
         self.bp.set_cutoff(self.tone);
     }
 
@@ -840,6 +906,7 @@ pub struct Shaker {
     bp: BandPass,
     decay: f64,
     tone: f64,
+    sr: f64,
 }
 
 impl Shaker {
@@ -851,6 +918,7 @@ impl Shaker {
             bp: BandPass::new(6000.0, 0.6),
             decay: 40.0,
             tone: 6000.0,
+            sr: SR,
         };
         s.sync();
         s
@@ -858,7 +926,7 @@ impl Shaker {
 
     fn sync(&mut self) {
         self.env.set(0.001, rate_to_seconds(self.decay), 0.0);
-        self.hp = OnePole::highpass(self.tone * 0.6, SR);
+        self.hp = OnePole::highpass(self.tone * 0.6, self.sr);
         self.bp.set_cutoff(self.tone);
     }
 
@@ -899,6 +967,7 @@ pub struct Crash {
     decay: f64,
     tone: f64,
     vel: f64,
+    sr: f64,
 }
 
 impl Crash {
@@ -912,6 +981,7 @@ impl Crash {
             decay: 1.6,
             tone: 5000.0,
             vel: 1.0,
+            sr: SR,
         };
         c.sync();
         c
@@ -920,7 +990,7 @@ impl Crash {
     fn sync(&mut self) {
         // Long, slightly non-exponential swell: model with a slower rate.
         self.env.set(0.0004, self.decay * 1.0, 0.01);
-        self.hp = OnePole::highpass(self.tone * 0.5, SR);
+        self.hp = OnePole::highpass(self.tone * 0.5, self.sr);
     }
 
     pub fn trigger(&mut self, velocity: f64) {

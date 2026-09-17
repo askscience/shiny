@@ -198,6 +198,11 @@ impl PercEnv {
         self.recompute();
     }
 
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        self.sample_rate = sr;
+        self.recompute();
+    }
+
     fn recompute(&mut self) {
         let sr = self.sample_rate;
         let ta = (self.attack * 0.683).max(1e-5);

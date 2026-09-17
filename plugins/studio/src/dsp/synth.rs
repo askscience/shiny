@@ -329,6 +329,9 @@ impl SynthVoice {
         };
         v.pan = pan;
         v.filter.set_sample_rate(sr);
+        v.amp.set_sample_rate(sr);
+        v.fenv.set_sample_rate(sr);
+        v.fm_env.set_sample_rate(sr);
         v
     }
 
@@ -526,10 +529,24 @@ impl Synth {
         self.lfo.reset();
     }
 
+    /// Re-derive every sample-rate-dependent coefficient (envelopes, filters).
+    pub fn set_sample_rate(&mut self, sr: f64) {
+        if (sr - self.sr).abs() < 1e-9 {
+            return;
+        }
+        self.sr = sr;
+        for v in self.voices.iter_mut() {
+            v.amp.set_sample_rate(sr);
+            v.fenv.set_sample_rate(sr);
+            v.fm_env.set_sample_rate(sr);
+            v.filter.set_sample_rate(sr);
+        }
+    }
+
     /// Render `frames` samples into the stereo buses, applying the messages
     /// whose offsets fall inside this block.
     pub fn render(&mut self, out_l: &mut [f32], out_r: &mut [f32], msgs: &[NoteMsg], frames: usize, sr: f64) {
-        self.sr = sr;
+        self.set_sample_rate(sr);
         let p = self.params.clone();
         let mut mi = 0usize;
         let glide_coef = if p.glide > 0.0 { 1.0 - (-1.0 / (p.glide * sr)).exp() } else { 1.0 };
