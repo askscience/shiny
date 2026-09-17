@@ -192,7 +192,7 @@ impl AdFilter {
         // 2. Download + compile.
         let mut lists: Vec<String> = Vec::new();
         if !config.offline {
-            let client = match reqwest::Client::builder()
+            let client = match wreq::Client::builder()
                 .timeout(config.fetch_timeout)
                 .user_agent(concat!("shiny-filter/", env!("CARGO_PKG_VERSION")))
                 .build()

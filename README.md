@@ -101,6 +101,10 @@ The web UI (`web/`) is a desktop-style workspace:
 - [GPSD](https://gpsd.io) on `localhost:2947` — optional; falls back to mock GPS
 - ~500 MB disk for the Supertonic ONNX model + ~75 MB for the bundled faster-whisper tiny
   model (+ ~480 MB if you opt into the small model) + ~50 MB per Vosk STT language
+- **CMake and `nasm`** — the browser's upstream client (`wreq`) links BoringSSL, which
+  builds through CMake and needs `nasm` on x86_64 (`brew install cmake nasm` on macOS,
+  `apt-get install build-essential cmake nasm` on Debian/Ubuntu). This is what lets
+  proxied pages carry a real Chrome TLS fingerprint instead of being blocked as a bot.
 
 ### Run
 
@@ -311,7 +315,7 @@ web/                      # browser UI (desktop workspace shell)
 |---|---|
 | HTTP | [axum 0.7](https://crates.io/crates/axum) — router hot-swapped via `arc-swap` |
 | Database | [sqlx 0.8](https://crates.io/crates/sqlx) + system SQLite (vendored `libsqlite3-sys`) |
-| HTTP client | [reqwest 0.12](https://crates.io/crates/reqwest) (rustls) |
+| HTTP client | [reqwest 0.12](https://crates.io/crates/reqwest) (rustls) for core services; [wreq 6](https://crates.io/crates/wreq) (BoringSSL, Chrome TLS/JA3 emulation) for the browser's upstream fetch |
 | Async runtime | [tokio 1](https://crates.io/crates/tokio) |
 | Serialization | [serde](https://crates.io/crates/serde) / [serde_json](https://crates.io/crates/serde_json) |
 | Logging | [tracing](https://crates.io/crates/tracing) + `tracing-subscriber` (stdout + file tee) |

@@ -7,6 +7,7 @@
 
 use std::time::Duration;
 
+use shiny_filter::proxy::impersonated_client_builder;
 use shiny_plugin_sdk::errors::AppError;
 
 /// What a browser sends when it is asking for a document.
@@ -18,19 +19,15 @@ use shiny_plugin_sdk::errors::AppError;
 pub const ACCEPT_HTML: &str =
     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
-/// User-Agent for the related-news fetch.
-///
-/// Deliberately a normal browser string rather than `browser/<version>`: search
-/// engines serve an empty shell (or a challenge page) to unknown library
-/// agents, and the news shelf is built by parsing their HTML.
-pub const NEWS_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
-AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
-
 /// Fetch `url` through the plugin's own filter proxy and return its text.
+///
+/// The client is the shared impersonating one, so the request carries the same
+/// Chrome TLS/HTTP2 fingerprint and `User-Agent` as every other browser fetch
+/// instead of a `browser/<version>` library string that search engines and WAFs
+/// treat as a bot.
 pub async fn text(url: &str) -> Result<String, AppError> {
-    let client = reqwest::Client::builder()
+    let client = impersonated_client_builder()
         .timeout(Duration::from_secs(25))
-        .user_agent(concat!("browser/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 
@@ -40,7 +37,7 @@ pub async fn text(url: &str) -> Result<String, AppError> {
         // `Sec-Fetch-Dest` and no `Accept` to classify by, so a page read is
         // counted as `other` (no document metrics) and its HTML is not sniffed
         // when the origin mislabels the response.
-        .header(reqwest::header::ACCEPT, ACCEPT_HTML)
+        .header("accept", ACCEPT_HTML)
         .send()
         .await
         .map_err(|e| AppError::BadRequest(format!("could not fetch {url}: {e}")))?;

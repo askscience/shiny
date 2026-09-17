@@ -22,7 +22,6 @@ axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
 futures = "0.3"
 tracing = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "charset"] }
 url = "2"
 # Interest-profile decay and the recency half of the related-news ranking.
 chrono = { version = "0.4", features = ["serde"] }

@@ -18,20 +18,33 @@ adblock = { version = "0.13", default-features = false, features = [
     "full-regex-handling",
     "resource-assembler",
 ] }
-# HTTP proxy server + upstream client. rustls everywhere so Linux needs no
-# OpenSSL (matching the rest of the repo).
+# HTTP proxy server + upstream client.
+#
+# The upstream client is `wreq`, a reqwest fork built on BoringSSL that emulates
+# a real browser's TLS (JA3/JA4) and HTTP/2 fingerprints. A plain rustls
+# ClientHello is what bot-detection at DuckDuckGo/Cloudflare/… reads as a robot
+# and answers 403 — the benchmark notes called this out as "not something a
+# header can fix". Impersonating Chrome is what makes proxied pages load; see
+# the search-engine matrix in `benchmarks/README.md`.
+#
+# `wreq`'s stable releases are yanked on crates.io (the author supersedes them
+# aggressively); the `6.0.0-rc` line is the resolvable, Apache-2.0 one and is
+# what everyone is pulling. BoringSSL builds through CMake and needs `nasm` on
+# x86_64 (see README).
 axum = "0.7"
 hyper = { version = "1", features = ["client", "http1"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls-native-roots",
+wreq = { version = "6.0.0-rc.31", default-features = false, features = [
+    "tokio-rt",
     "stream",
     "gzip",
     "brotli",
+    "deflate",
+    "zstd",
     "charset",
-    "http2",
 ] }
+wreq-util = "3.0.0-rc.14"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
 tokio-stream = "0.1"
 futures-util = "0.3"
@@ -48,3 +61,6 @@ parking_lot = "0.12"
 [dev-dependencies]
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
+# The e2e tests act as the *client* talking to the proxy, independent of the
+# upstream client the proxy itself uses, so they stay on reqwest.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }

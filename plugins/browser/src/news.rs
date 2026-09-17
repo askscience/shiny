@@ -1375,9 +1375,8 @@ async fn fetch_topic(topic: &str, searxng: Option<&str>) -> Result<Vec<RawResult
         return Ok(hit);
     }
 
-    let client = reqwest::Client::builder()
+    let client = shiny_filter::proxy::impersonated_client_builder()
         .timeout(FETCH_TIMEOUT)
-        .user_agent(crate::fetch::NEWS_USER_AGENT)
         .build()
         .map_err(|e| format!("http client: {e}"))?;
 
@@ -1385,7 +1384,7 @@ async fn fetch_topic(topic: &str, searxng: Option<&str>) -> Result<Vec<RawResult
         .get(&url)
         // The engine is asked for a document, exactly like the page fetch: the
         // classification and the mislabelled-HTML fallback both key off this.
-        .header(reqwest::header::ACCEPT, crate::fetch::ACCEPT_HTML)
+        .header("accept", crate::fetch::ACCEPT_HTML)
         .send()
         .await
         .map_err(|e| format!("search failed: {e}"))?;
