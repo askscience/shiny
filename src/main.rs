@@ -1,6 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::{self, Write};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
@@ -260,6 +260,21 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TeeMakeWriter {
     }
 }
 
+/// Reap a detached sidecar in the background.
+///
+/// The sidecars are deliberately detached: they outlive the server, and a
+/// second server start finds them already listening and exits without starting
+/// another. But a child whose `Child` handle is simply dropped becomes a
+/// **zombie** the moment it exits, because nothing ever calls `wait()` — which
+/// is exactly what the start scripts do after their health probe finds an
+/// existing daemon. A thread parked on `wait()` reaps it, costs nothing, and
+/// keeps the process table clean.
+fn reap_in_background(mut child: Child) {
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
 fn spawn_supertonic_sidecar(supertonic_url: &str) {
     let port = supertonic_url
         .rsplit(':')
@@ -273,7 +288,10 @@ fn spawn_supertonic_sidecar(supertonic_url: &str) {
         .stderr(Stdio::null())
         .spawn()
     {
-        Ok(_) => tracing::info!("Started Supertonic sidecar on port {}", port),
+        Ok(child) => {
+            reap_in_background(child);
+            tracing::info!("Started Supertonic sidecar on port {}", port)
+        }
         Err(e) => tracing::warn!("Could not auto-start Supertonic: {}", e),
     }
 }
@@ -309,7 +327,10 @@ fn spawn_whisper_sidecar(config: &Config) {
         .stderr(Stdio::null())
         .spawn()
     {
-        Ok(_) => tracing::info!("Starting faster-whisper sidecar on port {}", port),
+        Ok(child) => {
+            reap_in_background(child);
+            tracing::info!("Starting faster-whisper sidecar on port {}", port)
+        }
         Err(e) => tracing::warn!("Could not auto-start faster-whisper: {}", e),
     }
 }
