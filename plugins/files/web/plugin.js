@@ -13,7 +13,7 @@ import {
   setTileGlow, setTileGlowFromUrl, glowGradient,
 } from '/ui/index.js';
 import { openContextMenu } from '/js/contextMenu.js';
-import { pluginForFile, openWithPlugin } from '/js/files.js';
+import { pluginForFile, openWithPlugin, pickFiles } from '/js/files.js';
 import { apiFetch } from '/js/api.js';
 
 export const FILES_PLUGIN = 'files';
@@ -74,6 +74,8 @@ const BOOKMARKS = [
 const enc = encodeURIComponent;
 const rawUrl = (rel) => `/api/files/raw?path=${enc(rel)}`;
 const thumbUrl = (rel, size = 256) => `/api/files/thumb?path=${enc(rel)}&size=${size}`;
+const videoInfoUrl = (rel) => `/api/files/video-info?path=${enc(rel)}`;
+const videoFrameUrl = (rel, t = 1, size = 640) => `/api/files/video-frame?path=${enc(rel)}&t=${enc(t)}&size=${size}`;
 const downloadUrl = (rel) => `/api/files/download?path=${enc(rel)}`;
 
 async function apiList(path) {
@@ -262,31 +264,28 @@ async function cachedThumb(host, entry, producer) {
   if (url) { host.innerHTML = ''; host.classList.remove('files-thumb--icon'); host.appendChild(makeImg(url)); }
   else thumbIcon(host, entry);
 }
-function grabVideoFrame(rel) {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = 'metadata';
-    video.src = rawUrl(rel);
-    const done = (val) => { video.removeAttribute('src'); video.load?.(); resolve(val); };
-    const timer = setTimeout(() => done(null), 8000);
-    video.addEventListener('loadeddata', () => {
-      try { video.currentTime = Math.min(1, (video.duration || 2) * 0.1); } catch (_) { clearTimeout(timer); done(null); }
-    });
-    video.addEventListener('seeked', () => {
-      try {
-        const w = 320;
-        const h = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * w));
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(video, 0, 0, w, h);
-        clearTimeout(timer);
-        done(canvas.toDataURL('image/jpeg', 0.72));
-      } catch (_) { clearTimeout(timer); done(null); }
-    });
-    video.addEventListener('error', () => { clearTimeout(timer); done(null); });
-  });
+/**
+ * Video posters come from the server (ffmpeg), never from a `<video>` +
+ * `<canvas>` here. The browser route depends on the host webview's media stack,
+ * so the same file showed a frame in Chrome and nothing in the native shell.
+ * ffmpeg decodes one still frame on every platform; the video itself is streamed
+ * untouched from `/raw`.
+ */
+function videoThumb(host, entry) {
+  host.innerHTML = '';
+  host.classList.remove('files-thumb--icon');
+  const img = document.createElement('img');
+  img.className = 'files-grid-img';
+  img.alt = '';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.src = thumbUrl(entry.path, 320);
+  img.addEventListener('error', () => { thumbIcon(host, entry); });
+  host.appendChild(img);
+  const badge = document.createElement('span');
+  badge.className = 'files-thumb-play';
+  void setIcon(badge, 'ui/play', { size: 16 });
+  host.appendChild(badge);
 }
 async function textThumb(host, entry) {
   const text = await apiText(entry.path);
@@ -373,7 +372,7 @@ function renderOfficeMini(page, data) {
 function hydrateThumb(host, entry) {
   if (entry.kind === 'dir' || entry.kind === 'symlink') { thumbIcon(host, entry); return; }
   if (entry.is_image) { imageThumb(host, entry); return; }
-  if (entry.is_video) { void cachedThumb(host, entry, () => grabVideoFrame(entry.path)); return; }
+  if (entry.is_video) { videoThumb(host, entry); return; }
   if (entry.is_pdf) { void cachedThumb(host, entry, () => renderPdfPage(entry.path, 1, 260).then((c) => (c ? c.toDataURL('image/jpeg', 0.72) : null))); return; }
   if (entry.is_office) { void officeThumb(host, entry); return; }
   if (entry.is_text) { void textThumb(host, entry); return; }
@@ -901,15 +900,9 @@ async function newFolder() {
     toast(e.message || 'Could not create folder', { type: 'error' });
   }
 }
-function pickUpload() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.multiple = true;
-  input.addEventListener('change', () => {
-    const files = [...(input.files || [])];
-    if (files.length) void uploadFiles(files);
-  });
-  input.click();
+async function pickUpload() {
+  const files = await pickFiles({ multiple: true });
+  if (files.length) void uploadFiles(files);
 }
 async function uploadFiles(files) {
   let ok = 0;
@@ -1021,6 +1014,196 @@ function stepPreview(dir, list) {
   closePreview();
   void openPreview(entry, previewIndex);
 }
+function fmtClock(secs) {
+  if (!Number.isFinite(secs) || secs < 0) secs = 0;
+  const total = Math.floor(secs);
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  const mm = h ? String(m).padStart(2, '0') : String(m);
+  return `${h ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
+}
+
+async function videoInfo(rel) {
+  try {
+    const res = await apiFetch(videoInfoUrl(rel));
+    return res?.data || null;
+  } catch (_) { return null; }
+}
+
+/**
+ * The in-app media player, shared by video and music previews. The stream is
+ * byte-ranged from `/raw`; the controls are the app's own (QuickTime-style
+ * overlay) — no browser default chrome and no dependency on
+ * QuickTime/AVFoundation. Video gets an ffmpeg still as its poster; if the
+ * webview can't decode the codec the poster stays and the player says so
+ * rather than going blank. The file is never re-encoded.
+ *
+ * `{ audio: true }` swaps the `<video>` stage for an album-art panel on a
+ * `<audio>` element, reusing every control and behaviour below unchanged.
+ */
+function buildMediaPlayer(entry, { audio = false } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'files-player' + (audio ? ' files-player--audio' : '');
+
+  const media = document.createElement(audio ? 'audio' : 'video');
+  media.className = 'files-player-media';
+  media.preload = 'metadata';
+  media.autoplay = true;
+  if (!audio) {
+    media.playsInline = true;
+    media.poster = videoFrameUrl(entry.path, 1, 640);
+  }
+  media.src = rawUrl(entry.path);
+
+  let duration = 0;
+  let scrubbing = false;
+  let rafId = null;
+
+  const bar = document.createElement('div');
+  bar.className = 'files-player-bar';
+
+  const playBtn = button({ variant: 'ghost', onClick: () => togglePlay() });
+  playBtn.classList.add('files-player-btn');
+  // A dedicated icon node: `setIcon` on the button itself replaced the whole
+  // button content and could leave it blank.
+  const playIcon = icon('ui/play', { size: 16 });
+  playBtn.appendChild(playIcon);
+
+  const curEl = document.createElement('span');
+  curEl.className = 'files-player-time';
+  curEl.textContent = '0:00';
+
+  const seek = document.createElement('input');
+  seek.type = 'range';
+  seek.min = '0';
+  seek.max = '1000';
+  seek.step = '1';
+  seek.value = '0';
+  seek.className = 'files-player-seek';
+  seek.setAttribute('aria-label', 'Seek');
+
+  const durEl = document.createElement('span');
+  durEl.className = 'files-player-time';
+  durEl.textContent = '0:00';
+
+  const muteBtn = button({ icon: 'ui/music', variant: 'ghost', onClick: () => {
+    media.muted = !media.muted;
+    syncVolume();
+  } });
+  muteBtn.classList.add('files-player-btn');
+  muteBtn.title = 'Mute';
+
+  function syncVolume() {
+    muteBtn.classList.toggle('is-muted', media.muted || media.volume === 0);
+  }
+
+  const fsBtn = button({ icon: 'ui/expand', variant: 'ghost', onClick: () => toggleFullscreen() });
+  fsBtn.classList.add('files-player-btn');
+  fsBtn.title = 'Full screen';
+
+  bar.append(playBtn, curEl, seek, durEl, muteBtn, fsBtn);
+
+  const errorBox = document.createElement('div');
+  errorBox.className = 'files-player-error hidden';
+
+  function togglePlay() {
+    if (media.paused) media.play().catch(() => { /* codec unsupported */ });
+    else media.pause();
+  }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else if (wrap.requestFullscreen) wrap.requestFullscreen();
+    else media.webkitEnterFullscreen?.();
+  }
+  function syncPlay() { void setIcon(playIcon, media.paused ? 'ui/play' : 'ui/pause', { size: 16 }); }
+  function syncTime() {
+    if (!scrubbing) {
+      if (Number.isFinite(media.duration) && media.duration > 0) duration = media.duration;
+      const pos = duration ? (media.currentTime / duration) * 1000 : 0;
+      seek.value = String(Math.max(0, Math.min(1000, Math.round(pos))));
+      curEl.textContent = fmtClock(media.currentTime);
+    }
+    durEl.textContent = fmtClock(duration);
+  }
+
+  // Drive the scrubber from `requestAnimationFrame` while playing: the native
+  // `timeupdate` event fires only ~4×/s, which is why the knob jumped in steps.
+  function tick() {
+    rafId = null;
+    syncTime();
+    if (!media.paused && !media.ended) rafId = requestAnimationFrame(tick);
+  }
+  function startTick() { if (rafId == null) rafId = requestAnimationFrame(tick); }
+  function stopTick() { if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; } }
+
+  media.addEventListener('loadedmetadata', () => { syncTime(); syncPlay(); });
+  media.addEventListener('timeupdate', syncTime); // fallback when rAF is throttled
+  media.addEventListener('seeked', syncTime);
+  media.addEventListener('play', () => { syncPlay(); startTick(); });
+  media.addEventListener('playing', startTick);
+  media.addEventListener('pause', () => { syncPlay(); stopTick(); syncTime(); });
+  media.addEventListener('ended', () => { syncPlay(); stopTick(); });
+  media.addEventListener('error', async () => {
+    const meta = await videoInfo(entry.path);
+    const codec = (audio ? meta?.audio_codec : meta?.video_codec);
+    const label = codec ? String(codec).toUpperCase() : 'This format';
+    errorBox.textContent = `${label} can't be decoded by this browser.`;
+    errorBox.classList.remove('hidden');
+  });
+
+  seek.addEventListener('pointerdown', () => { scrubbing = true; });
+  seek.addEventListener('input', () => {
+    if (duration) curEl.textContent = fmtClock((Number(seek.value) / 1000) * duration);
+  });
+  const commitSeek = () => {
+    scrubbing = false;
+    if (duration) { try { media.currentTime = (Number(seek.value) / 1000) * duration; } catch (_) { /* ignore */ } }
+  };
+  seek.addEventListener('change', commitSeek);
+  seek.addEventListener('pointerup', commitSeek);
+
+  if (audio) {
+    const art = document.createElement('div');
+    art.className = 'files-player-art';
+    art.appendChild(icon('ui/music', { size: 72 }));
+    art.addEventListener('click', togglePlay);
+    wrap.append(media, art, errorBox, bar);
+  } else {
+    media.addEventListener('click', togglePlay);
+    wrap.append(media, errorBox, bar);
+  }
+
+  // Autoplay on preview. Webviews may block *sound* autoplay without a direct
+  // gesture, so if the first attempt is rejected we retry muted (always
+  // allowed) and the user unmutes with the speaker button.
+  function tryAutoplay() {
+    if (!media.paused) return;
+    const started = media.play();
+    if (started && typeof started.catch === 'function') {
+      started.catch(() => {
+        if (media.muted) return;
+        media.muted = true;
+        syncVolume();
+        media.play().catch(() => { /* codec unsupported */ });
+      });
+    }
+  }
+  media.addEventListener('loadeddata', tryAutoplay);
+  media.addEventListener('canplay', tryAutoplay);
+  setTimeout(tryAutoplay, 0);
+
+  // Duration from ffprobe so the timeline is correct before playback starts.
+  void videoInfo(entry.path).then((meta) => {
+    const d = Number(meta?.duration);
+    if (Number.isFinite(d) && d > 0) {
+      if (!duration) duration = d;
+      durEl.textContent = fmtClock(d);
+    }
+  });
+  return wrap;
+}
+
 async function fillPreview(card, entry, nav) {
   const info = document.createElement('div');
   info.className = 'files-preview-meta';
@@ -1043,17 +1226,11 @@ async function fillPreview(card, entry, nav) {
     return;
   }
   if (entry.is_video) {
-    const video = document.createElement('video');
-    video.className = 'files-preview-media';
-    video.controls = true; video.autoplay = true; video.src = rawUrl(entry.path);
-    card.append(video, navBar(nav, ''), info);
+    card.append(buildMediaPlayer(entry), navBar(nav, ''), info);
     return;
   }
   if (entry.is_audio) {
-    const audio = document.createElement('audio');
-    audio.className = 'files-preview-audio';
-    audio.controls = true; audio.autoplay = true; audio.src = rawUrl(entry.path);
-    card.append(audio, navBar(nav, ''), info);
+    card.append(buildMediaPlayer(entry, { audio: true }), navBar(nav, ''), info);
     return;
   }
   if (entry.is_office) {

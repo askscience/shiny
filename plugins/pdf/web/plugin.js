@@ -16,7 +16,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
 
 export const PDF_PLUGIN = 'pdf';
 
@@ -974,15 +974,9 @@ async function newPdf() {
   }
 }
 
-function pickPdfFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.pdf,application/pdf';
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file) void importPdf(file);
-  });
-  input.click();
+async function pickPdfFile() {
+  const [file] = await pickFiles({ accept: '.pdf,application/pdf' });
+  if (file) void importPdf(file);
 }
 
 async function importPdf(file) {

@@ -19,7 +19,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
 
 export const CALC_PLUGIN = 'calc';
 
@@ -623,15 +623,9 @@ function toggleSheetMenu() {
 
 /* ── Import / export ────────────────────────────────────────── */
 
-function pickOdsFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.ods,application/vnd.oasis.opendocument.spreadsheet';
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file) void importOds(file);
-  });
-  input.click();
+async function pickOdsFile() {
+  const [file] = await pickFiles({ accept: '.ods,application/vnd.oasis.opendocument.spreadsheet' });
+  if (file) void importOds(file);
 }
 
 async function importOds(file) {
@@ -660,15 +654,9 @@ async function exportOds() {
   }
 }
 
-function pickCsvFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.csv,text/csv';
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file) void importCsv(file);
-  });
-  input.click();
+async function pickCsvFile() {
+  const [file] = await pickFiles({ accept: '.csv,text/csv' });
+  if (file) void importCsv(file);
 }
 
 function parseCsv(text) {

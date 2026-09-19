@@ -15,7 +15,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
 
 export const WORD_PLUGIN = 'word';
 
@@ -356,15 +356,9 @@ function syncToolbar() {
 
 /* ── Import / export ────────────────────────────────────────── */
 
-function pickOdtFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.odt,application/vnd.oasis.opendocument.text';
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file) void importOdt(file);
-  });
-  input.click();
+async function pickOdtFile() {
+  const [file] = await pickFiles({ accept: '.odt,application/vnd.oasis.opendocument.text' });
+  if (file) void importOdt(file);
 }
 
 async function importOdt(file) {

@@ -77,7 +77,9 @@ The web UI (`web/`) is a desktop-style workspace:
 - `mail` — IMAP inbox + SMTP compose
 - `calendar` — events in a month-grid window
 - `calculator` — basic and scientific math
-- `image` — photographic effects, filters and transforms (Photon)
+- `image` — layered image editor: bottom-to-top layers and folders with opacity,
+  11 blend modes, compositing, merge/flatten, plus Photon effects, filters and
+  transforms applied per layer
 - `studio` — session-grid music sequencer + synth, rendered to WAV (self-contained DSP on `fundsp`)
 - `radio` — internet radio via Radio Browser
 - `youtube` — search and watch videos
@@ -99,6 +101,9 @@ The web UI (`web/`) is a desktop-style workspace:
 - Python 3.9+ with `supertonic[serve]` (TTS sidecar) and `faster-whisper` (STT sidecar)
 - [Ollama](https://ollama.com) — optional; AI features degrade gracefully when absent
 - [GPSD](https://gpsd.io) on `localhost:2947` — optional; falls back to mock GPS
+- [ffmpeg](https://ffmpeg.org) (`ffmpeg` + `ffprobe` on `PATH`, or `FFMPEG_BIN`/`FFPROBE_BIN`)
+  — optional; the Files window uses it to render video thumbnails/posters and read
+  duration. Without it, videos show a generic icon.
 - ~500 MB disk for the Supertonic ONNX model + ~75 MB for the bundled faster-whisper tiny
   model (+ ~480 MB if you opt into the small model) + ~50 MB per Vosk STT language
 - **CMake and `nasm`** — the browser's upstream client (`wreq`) links BoringSSL, which
@@ -194,7 +199,7 @@ routes, runs its migrations, and — where it has a window surface — opens a w
 | `mail` | Office | `mail_status/list/read/send` | `/api/mail/*` | Mail (IMAP + SMTP) |
 | `calendar` | Office | `calendar_*` (5) | `/api/calendar/events…` | Calendar |
 | `calculator` | Office | `calculator_eval/history/clear_history` | `/api/calculator/*` | Calculator |
-| `image` | Media | `image_*` (4) | `/api/images…` | Image editor |
+| `image` | Media | `image_*` (10): docs, layers, merge/flatten, edits | `/api/images…` | Image editor (layers) |
 | `radio` | Media | `radio_search/play/stop` | `/api/radio/nowplaying` | Radio |
 | `youtube` | Media | `youtube_search/play` | `/api/youtube/search` | YouTube |
 | `studio` | Media | `studio_*` + presets/arrangements (12) | `/api/studio/*` | Studio (sequencer) |
@@ -418,6 +423,7 @@ on first use. The **small** model is downloaded on demand from Settings → Voic
 | Supertonic | TTS fails; STT still works |
 | faster-whisper | Voice falls back to the in-browser Vosk engine |
 | GPSD | Mock GPS (fixed point + drift) |
+| ffmpeg | Video thumbnails/posters fall back to a generic icon (playback is unaffected) |
 | Nominatim / OSRM / Overpass | Map and geo endpoints error |
 | DuckDuckGo | Search returns empty results |
 

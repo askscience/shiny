@@ -26,6 +26,9 @@ use crate::preview;
 
 /// Ceiling for a single file read into memory by `read`/`raw`/`download`.
 const MAX_INLINE: usize = 256 * 1024 * 1024;
+/// Largest byte window served per ranged request. Media players fetch the next
+/// window themselves, so this bounds memory for huge videos.
+const RANGE_CHUNK: usize = 4 * 1024 * 1024;
 /// Ceiling for an uploaded file body.
 const MAX_UPLOAD: usize = 128 * 1024 * 1024;
 
@@ -39,6 +42,8 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "files_render" => render(ctx),
         "files_raw" => raw(ctx),
         "files_thumb" => thumb(ctx),
+        "files_video_info" => video_info(ctx),
+        "files_video_frame" => video_frame(ctx),
         "files_download" => download(ctx),
         "files_upload" => upload(ctx),
         "files_write" => write(ctx),
@@ -90,6 +95,15 @@ struct ReadQuery {
 #[serde(default)]
 struct ThumbQuery {
     path: Option<String>,
+    size: Option<u32>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct FrameQuery {
+    path: Option<String>,
+    /// Timestamp in seconds.
+    t: Option<f64>,
     size: Option<u32>,
 }
 
@@ -446,9 +460,21 @@ fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_string);
 
-            if let Some(bytes) = range.as_deref().and_then(|r| parse_range(r, len as usize)) {
+            // A ranged request is served as one bounded window. The plugin may
+            // not hand the host a live file stream: a body built with
+            // `Body::from_stream` is polled on the *host* runtime, and a
+            // `tokio::fs::File` opened on the plugin runtime then panics with
+            // "no reactor running" and aborts the process (PLUGINS.md §15). So
+            // the window is read on the plugin runtime and returned as bytes.
+            //
+            // The window is capped at `RANGE_CHUNK`, so an open-ended
+            // `bytes=start-` over a multi-GB video costs a few MB of RAM, not
+            // the whole remainder; HTML media simply asks for the next window
+            // as it plays. That is what makes progressive playback and seeking
+            // work over the network port.
+            if let Some((start, end)) = range.as_deref().and_then(|r| parse_range(r, len as usize)) {
                 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-                let (start, end) = bytes;
+                let end = end.min(start.saturating_add(RANGE_CHUNK - 1));
                 let mut file = tokio::fs::File::open(&path).await?;
                 file.seek(std::io::SeekFrom::Start(start as u64)).await?;
                 let mut buf = vec![0u8; end - start + 1];
@@ -463,6 +489,9 @@ fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
                     .map_err(|e| AppError::Internal(format!("response: {e}")))?);
             }
 
+            // No `Range`: images, PDF.js and small files are read whole (capped
+            // below). Media elements always range, so this is never the video
+            // path in practice.
             if len as usize > MAX_INLINE {
                 return Err(AppError::BadRequest("file too large to inline".into()));
             }
@@ -489,8 +518,9 @@ fn thumb(ctx: Arc<PluginCtx>) -> RouteHandler {
             let size = q.size.unwrap_or(256).clamp(32, 1024);
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
-            if !preview::is_thumbnailable_image(&path) {
-                return Err(AppError::BadRequest("not a thumbnailable image".into()));
+            let is_video = preview::is_video(&path);
+            if !preview::is_thumbnailable_image(&path) && !is_video {
+                return Err(AppError::BadRequest("not a thumbnailable file".into()));
             }
             let meta = tokio::fs::metadata(&path)
                 .await
@@ -513,11 +543,21 @@ fn thumb(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Ok(png_response(cached));
             }
 
-            let bytes = tokio::fs::read(&path).await?;
             let size_inner = size;
-            let png = tokio::task::spawn_blocking(move || preview::thumbnail_png(&bytes, size_inner))
-                .await
-                .map_err(|e| AppError::Internal(format!("thumbnail task: {e}")))??;
+            let source = path.clone();
+            // Images are decoded with photon-rs; videos get a real frame from
+            // ffmpeg — one PNG, never a re-encode of the video itself.
+            let png = tokio::task::spawn_blocking(move || {
+                if is_video {
+                    preview::video_thumbnail_png(&source, size_inner)
+                } else {
+                    let bytes = std::fs::read(&source)
+                        .map_err(|e| AppError::Internal(format!("read: {e}")))?;
+                    preview::thumbnail_png(&bytes, size_inner)
+                }
+            })
+            .await
+            .map_err(|e| AppError::Internal(format!("thumbnail task: {e}")))??;
             let _ = tokio::fs::write(&cache_file, &png).await;
             Ok(png_response(png))
         }
@@ -530,6 +570,51 @@ fn png_response(bytes: Vec<u8>) -> Response {
         .header(CONTENT_LENGTH, bytes.len().to_string())
         .body(Body::from(bytes))
         .unwrap_or_else(|_| AppError::Internal("response".into()).into_response())
+}
+
+/// `ffprobe` metadata for a video (duration, size, codecs). Powers the custom
+/// player's timeline; the window never has to rely on the webview to decode a
+/// header just to learn how long the clip is.
+fn video_info(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let _ = &ctx;
+        async move {
+            let uid = user_id(&req)?;
+            let home = fs_util::ensure_home(&uid).await?;
+            let (q, _req) = take_query::<PathQuery>(req).await?;
+            let path = fs_util::resolve(&home, &q.path.unwrap_or_default()).await?;
+            if !preview::is_video(&path) {
+                return Err(AppError::BadRequest("not a video".into()));
+            }
+            let info = tokio::task::spawn_blocking(move || preview::video_info_json(&path))
+                .await
+                .map_err(|e| AppError::Internal(format!("ffprobe task: {e}")))?;
+            Ok(ok(info.unwrap_or_else(|| json!({ "duration": 0.0 }))))
+        }
+    })
+}
+
+/// One ffmpeg-extracted PNG frame at `t` seconds — the player poster and the
+/// scrub preview. Always a still frame; the video stream itself is untouched.
+fn video_frame(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let _ = &ctx;
+        async move {
+            let uid = user_id(&req)?;
+            let home = fs_util::ensure_home(&uid).await?;
+            let (q, _req) = take_query::<FrameQuery>(req).await?;
+            let path = fs_util::resolve(&home, &q.path.unwrap_or_default()).await?;
+            if !preview::is_video(&path) {
+                return Err(AppError::BadRequest("not a video".into()));
+            }
+            let size = q.size.unwrap_or(640).clamp(64, 1024);
+            let at = q.t.unwrap_or(0.0);
+            let png = tokio::task::spawn_blocking(move || preview::video_frame_png(&path, at, size))
+                .await
+                .map_err(|e| AppError::Internal(format!("frame task: {e}")))??;
+            Ok(png_response(png))
+        }
+    })
 }
 
 /// Stable 64-bit FNV-1a (used only for cache keys).

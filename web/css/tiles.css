@@ -3459,6 +3459,141 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border-bottom: 1px solid var(--glass-border);
 }
 
+/* Layers panel (between canvas and adjustments) */
+.image-layers-panel {
+  flex: none;
+  width: 258px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.image-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.image-layers-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-layers-actions {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.image-layer-props {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-layer-select {
+  width: 100%;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.image-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 40px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.image-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.image-layer-row:hover { background: var(--glass-hover); }
+.image-layer-row.is-active {
+  border-color: var(--accent);
+  background: var(--glass-hover);
+}
+
+.image-layer-eye {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.image-layer-eye:hover { background: var(--glass); }
+
+.image-layer-icon { display: inline-flex; }
+.image-layer-icon .ui-icon { width: 13px; height: 13px; }
+.image-layer-icon.is-hidden { color: var(--muted); opacity: 0.45; }
+
+.image-layer-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.image-layer-meta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.image-layer-blend {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--glass);
+  color: var(--text-secondary);
+}
+
+.image-layers-empty {
+  padding: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
 /* Sliders */
 .image-slider {
   display: flex;
@@ -3626,12 +3761,171 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   gap: 2px;
 }
 
+/* ── Photoshop-style chrome ──────────────────────────────────
+   A dark document area, docked collapsible panels, a tool strip and
+   layer thumbnails — the layout language of a classic PS workspace. */
+
+.image-stage {
+  background-color: #2e2f33;
+  background-image: none;
+  padding: 30px;
+}
+
+/* Checkerboard behind the document so transparent pixels read as empty. */
+.image-stage-img {
+  background-color: #6f6f6f;
+  background-image:
+    linear-gradient(45deg, #5a5a5a 25%, transparent 25%),
+    linear-gradient(-45deg, #5a5a5a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #5a5a5a 75%),
+    linear-gradient(-45deg, transparent 75%, #5a5a5a 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  border: 1px solid #101114;
+  border-radius: 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+
+.image-doc-meta {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.image-rail {
+  width: 44px;
+  gap: 2px;
+  padding: 8px 0;
+}
+.image-tool {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+}
+.image-tool.is-active {
+  background: var(--glass-hover);
+  color: var(--accent);
+}
+
+/* Docked panel sections */
+.image-panel,
+.image-layers-panel {
+  gap: 8px;
+}
+.image-panel-section {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  overflow: hidden;
+  flex: none;
+}
+.image-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--glass);
+  border-bottom: 1px solid var(--glass-border);
+}
+.image-panel-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.image-panel-chevron .ui-icon { width: 12px; height: 12px; }
+.image-panel-section.is-collapsed .image-panel-chevron { transform: rotate(-90deg); }
+.image-panel-title {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.image-panel-actions { display: flex; gap: 2px; }
+.image-panel-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.image-panel-section.is-collapsed .image-panel-body { display: none; }
+.image-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Layers panel */
+.image-layers { gap: 8px; }
+.image-layer-props { gap: 8px; }
+.image-layer-blend-select { width: 100%; }
+.image-layer-list {
+  max-height: 300px;
+  gap: 1px;
+  padding: 3px;
+}
+.image-layer-row {
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 3px;
+}
+.image-layer-thumb {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 2px;
+  background-color: #6f6f6f;
+  background-image:
+    linear-gradient(45deg, #5a5a5a 25%, transparent 25%),
+    linear-gradient(-45deg, #5a5a5a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #5a5a5a 75%),
+    linear-gradient(-45deg, transparent 75%, #5a5a5a 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+.image-layer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.image-layer-thumb.is-folder {
+  background: var(--glass);
+  color: var(--accent);
+}
+.image-layer-thumb .ui-icon { width: 14px; height: 14px; }
+.image-layers-foot {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  padding-top: 7px;
+  border-top: 1px solid var(--glass-border);
+}
+.image-layers-foot .image-tool { width: 27px; height: 27px; }
+
 /* ── Image compact variant (narrow window / phone) ────────────
    Stacks the editor vertically: the rail becomes a horizontal toolbar,
    the panel becomes a bottom strip below the canvas. */
 @container (max-width: 520px) {
   .image-bar { padding: 8px 12px; }
   .image-title { font-size: 14px; }
+  .image-doc-meta { display: none; }
 
   .image-main { flex-direction: column; }
 
@@ -3656,6 +3950,13 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
     border-left: none;
     border-top: 1px solid var(--glass-border);
     flex-direction: column;
+  }
+
+  .image-layers-panel {
+    width: auto;
+    max-height: 220px;
+    border-left: none;
+    border-top: 1px solid var(--glass-border);
   }
   .image-stage { padding: 16px 16px 52px; }
   .image-status { padding: 6px 12px 7px; }
@@ -5826,7 +6127,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .calculator-keys,
 .calculator-history,
 .calendar-grid,
-.image-stage,
 .pdf-canvas,
 .studio-clip-editor {
   background-color: color-mix(in srgb, var(--bg) var(--glow-permeability, 88%), transparent);
@@ -6199,6 +6499,7 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .files-thumb {
+  position: relative;
   width: 100%;
   max-width: 172px;
   aspect-ratio: 1;
@@ -6208,6 +6509,21 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   overflow: hidden;
   border-radius: 8px;
   color: var(--muted);
+}
+.files-thumb-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  pointer-events: none;
 }
 .files-thumb--folder {
   background: var(--accent-soft);
@@ -6346,6 +6662,101 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   background: #000;
 }
 .files-preview-audio { width: 100%; }
+
+/* In-app video player (quick look) — a QuickTime-style overlay of app-chrome
+   controls over a black stage. The bar is absolutely positioned so it can
+   never be clipped by the player's rounded overflow or a short window, which
+   is what hid the buttons before. */
+.files-player {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  max-height: 72vh;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow-glass);
+}
+.files-player-media {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 72vh;
+  background: #000;
+  object-fit: contain;
+}
+/* Music preview: same controls, an album-art panel instead of a video stage. */
+.files-player--audio .files-player-media { display: none; }
+.files-player-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  aspect-ratio: 16 / 9;
+  color: var(--accent);
+  background:
+    radial-gradient(120% 120% at 30% 20%, var(--accent-soft), transparent 60%),
+    linear-gradient(135deg, #1b1c22, #0d0e12);
+}
+.files-player-art .ui-icon { width: 72px; height: 72px; opacity: 0.9; }
+.files-player-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 12px 10px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+}
+.files-player-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+}
+.files-player-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.18); }
+.files-player-btn.is-muted { color: rgba(255, 255, 255, 0.45); }
+.files-player-time {
+  flex: none;
+  min-width: 42px;
+  text-align: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.files-player-seek { flex: 1; min-width: 0; }
+.files-player-error {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 58px;
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: #fff;
+  background: color-mix(in srgb, var(--error) 60%, rgba(0, 0, 0, 0.6));
+}
+.files-player-error.hidden { display: none; }
+.files-player:fullscreen .files-player-media { max-height: 100vh; }
+
+/* In the quick-look card the player fills the window like other media. */
+.files-preview-card .files-player {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-height: none;
+  border-radius: 0;
+}
+.files-preview-card .files-player-media {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
 .files-preview-text {
   margin: 0;
   max-height: 60vh;

@@ -168,6 +168,23 @@ pub fn encode_png(raw: &[u8], w: u32, h: u32) -> Vec<u8> {
     PhotonImage::new(raw.to_vec(), w, h).get_bytes()
 }
 
+/// Encode a small PNG preview of a layer (longest side `max_dim`), preserving
+/// transparency. Used by the Layers panel thumbnails.
+pub fn thumbnail_png(raw: &[u8], w: u32, h: u32, max_dim: u32) -> Vec<u8> {
+    if w == 0 || h == 0 || raw.len() < (w as usize) * (h as usize) * 4 {
+        return PhotonImage::new(vec![0, 0, 0, 0], 1, 1).get_bytes();
+    }
+    let mut img = PhotonImage::new(raw.to_vec(), w, h);
+    let longest = w.max(h);
+    if longest > max_dim {
+        let scale = max_dim as f64 / longest as f64;
+        let nw = ((w as f64) * scale).round().max(1.0) as u32;
+        let nh = ((h as f64) * scale).round().max(1.0) as u32;
+        img = photon_rs::transform::resize(&img, nw, nh, SamplingFilter::Lanczos3);
+    }
+    img.get_bytes()
+}
+
 /// Apply operations to raw RGBA pixels in memory (no codec round-trip).
 /// `reset` swaps in the original pixels and original dimensions; every other
 /// operation mutates the image in order. Returns (new raw pixels, w, h).

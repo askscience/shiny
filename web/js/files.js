@@ -80,6 +80,62 @@ export async function saveOrDownload(blob, { name, dir = FILES_FOLDER.document, 
   return null;
 }
 
+/**
+ * Open the OS file picker and resolve with the chosen files (empty on cancel).
+ *
+ * Why this exists: WebKit — Safari and the native WKWebView shell — only opens
+ * the panel for a file input that is **connected and rendered**. A detached
+ * input, or one hidden with `display:none`, is silently ignored when
+ * `.click()` is called; Chrome tolerates both. That is why the same
+ * `input.click()` "works in other browsers" but does nothing in the native
+ * browser, and it is not a macOS permission (the shell is not sandboxed and
+ * needs no usage string for the open panel to appear).
+ *
+ * The input is therefore appended just off-screen (still laid out, not
+ * `display:none`) and removed once the dialog closes.
+ */
+export function pickFiles({ accept = '', multiple = false } = {}) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (accept) input.accept = accept;
+    input.multiple = multiple;
+    input.setAttribute('aria-hidden', 'true');
+    input.tabIndex = -1;
+    Object.assign(input.style, {
+      position: 'fixed',
+      left: '0',
+      top: '0',
+      width: '1px',
+      height: '1px',
+      opacity: '0',
+      pointerEvents: 'none',
+      zIndex: '-1',
+    });
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      const files = [...(input.files || [])];
+      input.remove();
+      resolve(files);
+    };
+
+    input.addEventListener('change', settle);
+    // Safari/WebKit ≥ 16.4 cancels the picker without a `change`; fall back to
+    // the window regaining focus when `cancel` is not supported.
+    if ('oncancel' in input) {
+      input.addEventListener('cancel', settle);
+    } else {
+      window.addEventListener('focus', () => setTimeout(settle, 300), { once: true });
+    }
+
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
 /** Focus the Files window, optionally at a folder. */
 export function revealInFiles(dir = '') {
   window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: 'files', path: dir } }));

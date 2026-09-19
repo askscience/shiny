@@ -18,7 +18,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
 
 export const IMPRESS_PLUGIN = 'impress';
 
@@ -635,15 +635,9 @@ function toggleDeckMenu() {
 
 /* ── Import / export ────────────────────────────────────────── */
 
-function pickOdpFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.odp,application/vnd.oasis.opendocument.presentation';
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file) void importOdp(file);
-  });
-  input.click();
+async function pickOdpFile() {
+  const [file] = await pickFiles({ accept: '.odp,application/vnd.oasis.opendocument.presentation' });
+  if (file) void importOdp(file);
 }
 
 async function importOdp(file) {

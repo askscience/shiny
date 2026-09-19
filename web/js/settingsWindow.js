@@ -43,6 +43,7 @@ import {
 import { createOrbPreview } from './orbCanvas.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { getBackground, setBackground, renderBackgroundPresets } from './background.js';
+import { pickFiles } from './files.js';
 
 export const SETTINGS_WINDOW = 'settings';
 
@@ -248,9 +249,10 @@ function buildBackgroundControls() {
 
   const presetGrid = el('div', 'bg-preset-grid');
   presetGrid.setAttribute('role', 'radiogroup');
-  const imageInput = input({ type: 'file' });
-  imageInput.accept = 'image/*';
-  imageInput.hidden = true;
+  const pickBackgroundImage = async () => {
+    const [file] = await pickFiles({ accept: 'image/*' });
+    if (file) void uploadBackground(file, syncBackground);
+  };
   const uploadBtn = button({ label: 'Upload your own…', variant: 'quiet', size: 'sm' });
   const removeBtn = button({ label: 'Remove photo', variant: 'danger', size: 'sm' });
   removeBtn.classList.add('hidden');
@@ -259,7 +261,7 @@ function buildBackgroundControls() {
   const imageHint = el('p', 'settings-hint');
 
   const imageControls = el('div', 'hidden');
-  imageControls.append(presetGrid, imageInput, imageRow, imageHint);
+  imageControls.append(presetGrid, imageRow, imageHint);
 
   const animSelect = select({
     options: [
@@ -290,16 +292,11 @@ function buildBackgroundControls() {
         setBackground({ mode: 'image', preset: preset.id, url: null });
         syncBackground();
       },
-      onUpload: () => imageInput.click(),
+      onUpload: () => void pickBackgroundImage(),
     });
   };
 
-  on(uploadBtn, 'click', () => imageInput.click());
-  on(imageInput, 'change', () => {
-    const file = imageInput.files?.[0];
-    if (file) void uploadBackground(file, syncBackground);
-    imageInput.value = '';
-  });
+  on(uploadBtn, 'click', () => void pickBackgroundImage());
   on(removeBtn, 'click', () => void removeBackgroundImage(syncBackground));
 
   syncBackground();

@@ -45,6 +45,8 @@ fn route_specs() -> Vec<RouteSpec> {
         spec(HttpMethod::Get, "/api/files/render", "files_render"),
         spec(HttpMethod::Get, "/api/files/raw", "files_raw"),
         spec(HttpMethod::Get, "/api/files/thumb", "files_thumb"),
+        spec(HttpMethod::Get, "/api/files/video-info", "files_video_info"),
+        spec(HttpMethod::Get, "/api/files/video-frame", "files_video_frame"),
         spec(HttpMethod::Get, "/api/files/download", "files_download"),
         spec(HttpMethod::Get, "/api/files/search", "files_search"),
         spec(HttpMethod::Post, "/api/files/upload", "files_upload"),

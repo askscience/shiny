@@ -19,7 +19,7 @@
 import { button, emptyState, glowFromDrawable, select, setTileGlow, slider, toast } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch, getToken } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
 
 export const IMAGE_PLUGIN = 'image';
 
@@ -53,6 +53,7 @@ let tileEl = null;
 let imageMenuBtn = null;
 let titleInput = null;
 let statusEl = null;
+let docMetaEl = null;
 let saveDot = null;
 let stageEl = null;
 let canvasEl = null;
@@ -64,6 +65,21 @@ let glowTimer = null;
 let images = [];
 let current = null;   // { image_id, title, width, height }
 let busy = false;
+
+/* Layer stack (bottom-to-top) + selection */
+let layers = [];
+let activeLayerId = null;
+let layerListEl = null;
+let layerBlendEl = null;
+let layerOpacityEl = null;
+let layerOpacityValueEl = null;
+let dragLayerId = null;
+let thumbUrls = [];
+
+const BLEND_MODES = [
+  'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
+  'difference', 'color_dodge', 'color_burn', 'add', 'subtract',
+];
 
 /* Real-time apply queue — at most one in-flight, always send the latest. */
 let pending = null;
@@ -103,14 +119,66 @@ async function createImage(file) {
   return res?.data ?? null;
 }
 
-/** Apply operations server-side (Rust) and stream raw RGBA back. */
-async function rawApply(id, operations, commit) {
+function listLayers(id) { return api(`/api/images/${encodeURIComponent(id)}/layers`); }
+function createLayer(id, body) {
+  return api(`/api/images/${encodeURIComponent(id)}/layers`, {
+    method: 'POST',
+    body: JSON.stringify(body || {}),
+  });
+}
+function updateLayer(id, layerId, patch) {
+  return api(`/api/images/${encodeURIComponent(id)}/layers/${encodeURIComponent(layerId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  });
+}
+function deleteLayer(id, layerId) {
+  return api(`/api/images/${encodeURIComponent(id)}/layers/${encodeURIComponent(layerId)}`, {
+    method: 'DELETE',
+  });
+}
+function duplicateLayer(id, layerId) {
+  return api(`/api/images/${encodeURIComponent(id)}/layers/${encodeURIComponent(layerId)}/duplicate`, { method: 'POST' });
+}
+function mergeLayer(id, layerId) {
+  return api(`/api/images/${encodeURIComponent(id)}/layers/${encodeURIComponent(layerId)}/merge`, { method: 'POST' });
+}
+function reorderLayers(id, ids) {
+  return api(`/api/images/${encodeURIComponent(id)}/layers/reorder`, {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+function flattenImage(id) {
+  return api(`/api/images/${encodeURIComponent(id)}/flatten`, { method: 'POST' });
+}
+
+/** Fetch the flattened composite as raw RGBA. */
+async function fetchRender(id) {
+  const token = getToken();
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(
+    `/api/images/${encodeURIComponent(id)}/render?raw=true`,
+    { headers },
+  );
+  if (!res.ok) throw new Error(res.statusText || 'Render failed');
+  const w = Number(res.headers.get('x-image-width') || 0);
+  const h = Number(res.headers.get('x-image-height') || 0);
+  const buf = await res.arrayBuffer();
+  return { w, h, buf };
+}
+
+/** Apply operations server-side (Rust) and stream the composited RGBA back. */
+async function rawApply(id, operations, commit, layerId) {
   const token = getToken();
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
+  const payload = { operations };
+  if (layerId) payload.layer_id = layerId;
   const res = await fetch(
     `/api/images/${encodeURIComponent(id)}/apply?raw=true&commit=${commit ? 'true' : 'false'}`,
-    { method: 'POST', headers, body: JSON.stringify({ operations }) },
+    { method: 'POST', headers, body: JSON.stringify(payload) },
   );
   if (!res.ok) {
     const text = await res.text();
@@ -137,6 +205,13 @@ function setStatus(mode) {
   if (!statusEl) return;
   const now = new Date();
   const t = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dims = current ? `${current.width} × ${current.height} px` : 'No image';
+  const layerLabel = current
+    ? `${layers.filter((l) => !l.is_group).length} layer${layers.filter((l) => !l.is_group).length === 1 ? '' : 's'}`
+    : '';
+  if (docMetaEl) {
+    docMetaEl.textContent = current ? `${dims} · RGB · ${layerLabel}` : '—';
+  }
   if (mode === 'saving') {
     statusEl.textContent = 'Applying…';
     saveDot?.classList.add('is-active');
@@ -144,7 +219,6 @@ function setStatus(mode) {
     statusEl.textContent = 'Unsaved title';
     saveDot?.classList.add('is-active');
   } else {
-    const dims = current ? `${current.width}×${current.height}` : 'No image';
     statusEl.textContent = `Saved ${t} · ${dims}`;
     saveDot?.classList.remove('is-active');
   }
@@ -189,24 +263,10 @@ function renderRaw(w, h, buf) {
 
 async function loadPixels() {
   if (!current || !canvasCtx) return;
-  const blob = await apiFetch(
-    `/api/images/${encodeURIComponent(current.image_id)}/data`,
-    { responseType: 'blob' },
-  );
-  const url = URL.createObjectURL(blob);
-  const img = new Image();
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('Could not decode image'));
-    img.src = url;
-  });
-  canvasEl.width = img.naturalWidth;
-  canvasEl.height = img.naturalHeight;
-  canvasCtx.drawImage(img, 0, 0);
-  refreshGlowSoon();
-  URL.revokeObjectURL(url);
-  current.width = img.naturalWidth;
-  current.height = img.naturalHeight;
+  const { w, h, buf } = await fetchRender(current.image_id);
+  current.width = w;
+  current.height = h;
+  renderRaw(w, h, buf);
   setStatus('saved');
 }
 
@@ -229,10 +289,44 @@ async function openImage(meta) {
   resetCurve();
   renderTitle();
   renderStage();
+  activeLayerId = null;
   try {
+    await refreshLayers();
     await loadPixels();
   } catch (e) {
     toast(e.message || 'Could not load image', { type: 'error' });
+  }
+}
+
+/** Reload the layer stack and repaint the panel. */
+async function refreshLayers() {
+  if (!current) { layers = []; activeLayerId = null; renderLayerPanel(); return; }
+  try {
+    const r = await listLayers(current.image_id);
+    layers = r?.layers || [];
+  } catch (_) {
+    layers = [];
+  }
+  const selected = layers.find((l) => l.layer_id === activeLayerId && !l.is_group);
+  if (!selected) {
+    const pixel = layers.filter((l) => !l.is_group);
+    activeLayerId = pixel.length ? pixel[pixel.length - 1].layer_id : null;
+  }
+  renderLayerPanel();
+  setStatus('saved');
+}
+
+/** Push a fresh composite (after any layer or pixel change). */
+async function reloadComposite() {
+  if (!current) return;
+  try {
+    const { w, h, buf } = await fetchRender(current.image_id);
+    current.width = w;
+    current.height = h;
+    renderRaw(w, h, buf);
+    setStatus('saved');
+  } catch (e) {
+    toast(e.message || 'Could not render image', { type: 'error' });
   }
 }
 
@@ -263,11 +357,15 @@ async function pump() {
   pending = null;
   setStatus('saving');
   try {
-    const { w, h, buf } = await rawApply(current.image_id, [operation], commit);
+    const { w, h, buf } = await rawApply(
+      current.image_id, [operation], commit, activeLayerId,
+    );
     current.width = w;
     current.height = h;
     renderRaw(w, h, buf);
     setStatus('saved');
+    // A committed resize/crop/rotate changed the layer's own rectangle.
+    if (commit) void refreshLayers();
   } catch (e) {
     toast(e.message || 'Edit failed', { type: 'error' });
     setStatus('saved');
@@ -287,15 +385,9 @@ function apply(operation, { commit = true } = {}) {
 
 /* ── Upload / reset / download / delete ─────────────────────── */
 
-function pickFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file) void uploadFile(file);
-  });
-  input.click();
+async function pickFile() {
+  const [file] = await pickFiles({ accept: 'image/*' });
+  if (file) void uploadFile(file);
 }
 
 async function uploadFile(file) {
@@ -645,11 +737,43 @@ function buildCurveEditor() {
 
 /* ── Panel builders ─────────────────────────────────────────── */
 
-function eyebrow(text) {
-  const d = document.createElement('div');
-  d.className = 'image-eyebrow';
-  d.textContent = text;
-  return d;
+/**
+ * A Photoshop-style docked panel: a title bar with a disclosure chevron,
+ * optional header actions, and a body. Clicking the title collapses it.
+ */
+function panelSection(title, buildBody, opts = {}) {
+  const sec = document.createElement('section');
+  sec.className = 'image-panel-section';
+
+  const head = document.createElement('div');
+  head.className = 'image-panel-head';
+  const chev = document.createElement('span');
+  chev.className = 'image-panel-chevron';
+  void setIcon(chev, 'ui/chevron-down', { size: 12 });
+  const t = document.createElement('span');
+  t.className = 'image-panel-title';
+  t.textContent = title;
+  head.append(chev, t);
+
+  if (opts.actions && opts.actions.length) {
+    const actions = document.createElement('div');
+    actions.className = 'image-panel-actions';
+    for (const a of opts.actions) actions.appendChild(a);
+    head.appendChild(actions);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'image-panel-body';
+  const content = buildBody();
+  if (content) body.appendChild(content);
+
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('button, select, input, a')) return;
+    sec.classList.toggle('is-collapsed');
+  });
+
+  sec.append(head, body);
+  return sec;
 }
 
 function railBtn(iconName, label, onClick, danger = false) {
@@ -688,6 +812,288 @@ function sliderGroup(label, min, max, opFn) {
   });
   group.append(lab, sl, val);
   return group;
+}
+
+/* ── Layers panel ───────────────────────────────────────────── */
+
+/** Depth-first, top-of-stack first: each folder is followed by its contents. */
+function displayRows() {
+  const out = [];
+  const walk = (parentId, depth) => {
+    if (depth > 12) return;
+    const kids = layers
+      .filter((l) => (l.group_id || null) === (parentId || null))
+      .sort((a, b) => b.position - a.position);
+    for (const layer of kids) {
+      out.push({ layer, depth });
+      if (layer.is_group) walk(layer.layer_id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+function layerIcon(kind, visible) {
+  const ic = document.createElement('span');
+  ic.className = 'image-layer-icon';
+  void setIcon(ic, kind, { size: 13 });
+  if (!visible) ic.classList.add('is-hidden');
+  return ic;
+}
+
+let opacityPutTimer = null;
+
+function scheduleOpacity(layerId, value) {
+  window.clearTimeout(opacityPutTimer);
+  opacityPutTimer = window.setTimeout(async () => {
+    if (!current) return;
+    try {
+      await updateLayer(current.image_id, layerId, { opacity: value });
+      await reloadComposite();
+    } catch (e) {
+      toast(e.message || 'Could not change opacity', { type: 'error' });
+    }
+  }, 110);
+}
+
+function renderLayerPanel() {
+  if (!layerListEl) return;
+
+  /* Properties reflect the selected layer. */
+  const selected = layers.find((l) => l.layer_id === activeLayerId) || null;
+  if (layerBlendEl) {
+    layerBlendEl.disabled = !selected;
+    const mode = selected?.blend_mode;
+    layerBlendEl.value = BLEND_MODES.includes(mode) ? mode : 'normal';
+  }
+  if (layerOpacityEl) {
+    layerOpacityEl.disabled = !selected;
+    layerOpacityEl.value = String(Math.round((selected?.opacity ?? 1) * 100));
+  }
+  if (layerOpacityValueEl) {
+    layerOpacityValueEl.textContent = `${Math.round((selected?.opacity ?? 1) * 100)}%`;
+  }
+
+  layerListEl.textContent = '';
+  for (const url of thumbUrls) URL.revokeObjectURL(url);
+  thumbUrls = [];
+
+  /* Display top-to-bottom: each folder is followed by its contents. */
+  const ordered = displayRows();
+  if (!ordered.length) {
+    const empty = document.createElement('div');
+    empty.className = 'image-layers-empty';
+    empty.textContent = 'No layers';
+    layerListEl.appendChild(empty);
+    return;
+  }
+
+  for (const { layer, depth } of ordered) {
+    const row = document.createElement('div');
+    row.className = 'image-layer-row';
+    row.dataset.layerId = layer.layer_id;
+    row.draggable = true;
+    if (layer.layer_id === activeLayerId) row.classList.add('is-active');
+    row.style.paddingLeft = `${6 + depth * 14}px`;
+
+    const eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'image-layer-eye';
+    eye.title = layer.visible ? 'Hide layer' : 'Show layer';
+    eye.setAttribute('aria-label', eye.title);
+    eye.appendChild(layerIcon('ui/eye', layer.visible));
+    eye.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await updateLayer(current.image_id, layer.layer_id, { visible: !layer.visible });
+        await refreshLayers();
+        await reloadComposite();
+      } catch (err) {
+        toast(err.message || 'Could not toggle layer', { type: 'error' });
+      }
+    });
+
+    const thumb = document.createElement('span');
+    thumb.className = 'image-layer-thumb';
+    if (layer.is_group) {
+      thumb.classList.add('is-folder');
+      thumb.appendChild(layerIcon('ui/folder', true));
+    } else {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.draggable = false;
+      thumb.appendChild(img);
+      const layerId = layer.layer_id;
+      const imageId = current.image_id;
+      void (async () => {
+        try {
+          const blob = await apiFetch(
+            `/api/images/${encodeURIComponent(imageId)}/layers/${encodeURIComponent(layerId)}/thumb`,
+            { responseType: 'blob' },
+          );
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          thumbUrls.push(url);
+          img.src = url;
+        } catch (_) { /* thumbnail is best-effort */ }
+      })();
+    }
+
+    const name = document.createElement('span');
+    name.className = 'image-layer-name';
+    name.textContent = layer.name || (layer.is_group ? 'Folder' : 'Layer');
+
+    const meta = document.createElement('span');
+    meta.className = 'image-layer-meta';
+    if (layer.is_group) {
+      meta.appendChild(layerIcon('ui/folder', true));
+    }
+    if (layer.blend_mode && layer.blend_mode !== 'normal') {
+      const badge = document.createElement('span');
+      badge.className = 'image-layer-blend';
+      badge.textContent = layer.blend_mode.replace('_', ' ');
+      meta.appendChild(badge);
+    }
+    if ((layer.opacity ?? 1) < 0.999) {
+      const pct = document.createElement('span');
+      pct.className = 'image-layer-blend';
+      pct.textContent = `${Math.round(layer.opacity * 100)}%`;
+      meta.appendChild(pct);
+    }
+
+    row.append(eye, thumb, name, meta);
+    row.addEventListener('click', () => {
+      activeLayerId = layer.layer_id;
+      renderLayerPanel();
+    });
+
+    /* Reorder within the same parent folder. */
+    row.addEventListener('dragstart', (e) => {
+      dragLayerId = layer.layer_id;
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', layer.layer_id); } catch (_) { /* ignore */ }
+    });
+    row.addEventListener('dragover', (e) => e.preventDefault());
+    row.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const draggedId = dragLayerId;
+      dragLayerId = null;
+      if (!draggedId || draggedId === layer.layer_id) return;
+      const dragged = layers.find((l) => l.layer_id === draggedId);
+      if (!dragged || dragged.group_id !== layer.group_id) return;
+      const siblings = layers
+        .filter((l) => l.group_id === dragged.group_id)
+        .sort((a, b) => a.position - b.position)
+        .map((l) => l.layer_id)
+        .filter((id) => id !== draggedId);
+      const at = siblings.indexOf(layer.layer_id);
+      if (at < 0) return;
+      siblings.splice(at, 0, draggedId);
+      try {
+        await reorderLayers(current.image_id, siblings);
+        await refreshLayers();
+        await reloadComposite();
+      } catch (err) {
+        toast(err.message || 'Could not reorder layers', { type: 'error' });
+      }
+    });
+
+    layerListEl.appendChild(row);
+  }
+}
+
+async function runLayerAction(fn) {
+  if (!current || !activeLayerId) {
+    toast('Select a layer first', { type: 'error' });
+    return;
+  }
+  try {
+    await fn();
+  } catch (e) {
+    toast(e.message || 'Layer action failed', { type: 'error' });
+  }
+}
+
+/** Build the Layers panel: blend + opacity, the stack, and a footer toolbar. */
+function buildLayersPanel() {
+  return panelSection('Layers', () => {
+    const body = document.createElement('div');
+    body.className = 'image-layers';
+
+    const props = document.createElement('div');
+    props.className = 'image-layer-props';
+
+    const blendWrap = select({ options: BLEND_MODES, value: 'normal' });
+    layerBlendEl = blendWrap.select;
+    blendWrap.classList.add('image-layer-blend-select');
+    layerBlendEl.addEventListener('change', () => runLayerAction(async () => {
+      await updateLayer(current.image_id, activeLayerId, { blend_mode: layerBlendEl.value });
+      await refreshLayers();
+      await reloadComposite();
+    }));
+
+    const opacityRow = document.createElement('div');
+    opacityRow.className = 'image-slider';
+    const opacityLabel = document.createElement('span');
+    opacityLabel.className = 'image-slider-label';
+    opacityLabel.textContent = 'Opacity';
+    layerOpacityEl = slider({ min: 0, max: 100, step: 1, value: 100 });
+    layerOpacityValueEl = document.createElement('span');
+    layerOpacityValueEl.className = 'image-slider-value';
+    layerOpacityValueEl.textContent = '100%';
+    layerOpacityEl.addEventListener('input', () => {
+      layerOpacityValueEl.textContent = `${layerOpacityEl.value}%`;
+      if (activeLayerId) scheduleOpacity(activeLayerId, Number(layerOpacityEl.value) / 100);
+    });
+    opacityRow.append(opacityLabel, layerOpacityEl, layerOpacityValueEl);
+
+    props.append(blendWrap, opacityRow);
+    body.appendChild(props);
+
+    layerListEl = document.createElement('div');
+    layerListEl.className = 'image-layer-list';
+    body.appendChild(layerListEl);
+
+    const foot = document.createElement('div');
+    foot.className = 'image-layers-foot';
+    foot.append(
+      railBtn('ui/plus', 'New layer', () => runLayerAction(async () => {
+        const created = await createLayer(current.image_id, {});
+        if (created?.layer_id) activeLayerId = created.layer_id;
+        await refreshLayers();
+        await reloadComposite();
+      })),
+      railBtn('ui/folder-plus', 'New folder', () => runLayerAction(async () => {
+        await createLayer(current.image_id, { is_group: true, name: 'Folder' });
+        await refreshLayers();
+        await reloadComposite();
+      })),
+      railBtn('ui/copy', 'Duplicate layer', () => runLayerAction(async () => {
+        const created = await duplicateLayer(current.image_id, activeLayerId);
+        if (created?.layer_id) activeLayerId = created.layer_id;
+        await refreshLayers();
+        await reloadComposite();
+      })),
+      railBtn('ui/chevron-down', 'Merge down', () => runLayerAction(async () => {
+        await mergeLayer(current.image_id, activeLayerId);
+        await refreshLayers();
+        await reloadComposite();
+      })),
+      railBtn('ui/grid', 'Flatten image', () => runLayerAction(async () => {
+        await flattenImage(current.image_id);
+        await refreshLayers();
+        await reloadComposite();
+      })),
+      railBtn('ui/trash', 'Delete layer', () => runLayerAction(async () => {
+        await deleteLayer(current.image_id, activeLayerId);
+        activeLayerId = null;
+        await refreshLayers();
+        await reloadComposite();
+      }), true),
+    );
+    body.appendChild(foot);
+    return body;
+  });
 }
 
 /* ── Tile lifecycle ─────────────────────────────────────────── */
@@ -738,6 +1144,10 @@ export function mountImageTile() {
     }
   });
 
+  docMetaEl = document.createElement('span');
+  docMetaEl.className = 'image-doc-meta';
+  docMetaEl.textContent = '—';
+
   saveDot = document.createElement('span');
   saveDot.className = 'image-save-dot';
   saveDot.setAttribute('aria-hidden', 'true');
@@ -747,6 +1157,7 @@ export function mountImageTile() {
   bar.append(
     imageMenuBtn,
     titleInput,
+    docMetaEl,
     railBtn('ui/upload', 'Upload image', pickFile),
     railBtn('ui/refresh', 'Reset to original', () => resetCurrent()),
     railBtn('ui/save', 'Save to Pictures', () => void downloadCurrent()),
@@ -771,37 +1182,53 @@ export function mountImageTile() {
   stageEl.className = 'image-stage';
   canvasWrap.appendChild(stageEl);
 
+  const layersWrap = document.createElement('div');
+  layersWrap.className = 'image-layers-panel';
+  layersWrap.appendChild(buildLayersPanel());
+
   const panel = document.createElement('div');
   panel.className = 'image-panel';
 
-  panel.appendChild(eyebrow('Adjust'));
-  panel.appendChild(sliderGroup('Brightness', -255, 255, (v) => ({ op: 'brightness', amount: v })));
-  panel.appendChild(sliderGroup('Contrast', -255, 255, (v) => ({ op: 'contrast', amount: v })));
+  panel.appendChild(panelSection('Adjustments', () => {
+    const stack = document.createElement('div');
+    stack.className = 'image-panel-stack';
+    stack.append(
+      sliderGroup('Brightness', -255, 255, (v) => ({ op: 'brightness', amount: v })),
+      sliderGroup('Contrast', -255, 255, (v) => ({ op: 'contrast', amount: v })),
+    );
+    return stack;
+  }));
 
-  panel.appendChild(eyebrow('Curves'));
-  panel.appendChild(buildCurveEditor());
-  const curveReset = button({ label: 'Reset curve', variant: 'ghost', size: 'sm', onClick: resetCurve });
-  curveReset.classList.add('image-curves-reset');
-  panel.appendChild(curveReset);
+  panel.appendChild(panelSection('Curves', () => {
+    const stack = document.createElement('div');
+    stack.className = 'image-panel-stack';
+    stack.appendChild(buildCurveEditor());
+    const curveReset = button({ label: 'Reset curve', variant: 'ghost', size: 'sm', onClick: resetCurve });
+    curveReset.classList.add('image-curves-reset');
+    stack.appendChild(curveReset);
+    return stack;
+  }));
 
-  panel.appendChild(eyebrow('Effects'));
-  const grid = document.createElement('div');
-  grid.className = 'image-effects';
-  for (const [icon, label, op] of EFFECTS) {
-    grid.appendChild(effectBtn(icon, label, () => apply(op)));
-  }
-  panel.appendChild(grid);
+  panel.appendChild(panelSection('Effects', () => {
+    const grid = document.createElement('div');
+    grid.className = 'image-effects';
+    for (const [icon, label, op] of EFFECTS) {
+      grid.appendChild(effectBtn(icon, label, () => apply(op)));
+    }
+    return grid;
+  }));
 
-  panel.appendChild(eyebrow('Filter'));
-  const filterRow = document.createElement('div');
-  filterRow.className = 'image-filter';
-  const filterSelect = select({ options: FILTERS, value: 'lofi' });
-  filterSelect.select.classList.add('image-filter-select');
-  const applyFilterBtn = button({ label: 'Apply', variant: 'ghost', size: 'sm', onClick: () => apply({ op: 'filter', name: filterSelect.select.value }) });
-  filterRow.append(filterSelect, applyFilterBtn);
-  panel.appendChild(filterRow);
+  panel.appendChild(panelSection('Filter', () => {
+    const filterRow = document.createElement('div');
+    filterRow.className = 'image-filter';
+    const filterSelect = select({ options: FILTERS, value: 'lofi' });
+    filterSelect.select.classList.add('image-filter-select');
+    const applyFilterBtn = button({ label: 'Apply', variant: 'ghost', size: 'sm', onClick: () => apply({ op: 'filter', name: filterSelect.select.value }) });
+    filterRow.append(filterSelect, applyFilterBtn);
+    return filterRow;
+  }));
 
-  main.append(rail, canvasWrap, panel);
+  main.append(rail, canvasWrap, layersWrap, panel);
   tileEl.appendChild(main);
 
   /* Status line */
@@ -829,6 +1256,15 @@ export function unmountImageTile() {
   canvasCtx = null;
   curveCanvas = null;
   imageMenuPopup = null;
+  for (const url of thumbUrls) URL.revokeObjectURL(url);
+  thumbUrls = [];
+  layers = [];
+  activeLayerId = null;
+  layerListEl = null;
+  layerBlendEl = null;
+  layerOpacityEl = null;
+  layerOpacityValueEl = null;
+  docMetaEl = null;
 }
 
 /** The tile element (or null when the Image window is not mounted). */
@@ -864,7 +1300,10 @@ function onAgentActions(e) {
       if (full) {
         current = { ...current, ...full };
         renderStage();
-        try { await loadPixels(); } catch (_) { /* ignore */ }
+        try {
+          await refreshLayers();
+          await loadPixels();
+        } catch (_) { /* ignore */ }
       }
     }
   })();
@@ -892,13 +1331,48 @@ export function wireImageEvents() {
  *  Core supplies the surrounding separators + window management. */
 export function imageContextMenu() {
   const hasImage = !!current;
+  const hasLayer = hasImage && !!activeLayerId;
+  const newLayer = () => runLayerAction(async () => {
+    const created = await createLayer(current.image_id, {});
+    if (created?.layer_id) activeLayerId = created.layer_id;
+    await refreshLayers();
+    await reloadComposite();
+  });
   return [
     { type: 'item', label: 'Upload image', icon: 'ui/upload', onClick: pickFile },
+    { type: 'item', label: 'New layer', icon: 'ui/plus', disabled: !hasImage, onClick: newLayer },
+    { type: 'item', label: 'New folder', icon: 'ui/folder-plus', disabled: !hasImage, onClick: () => runLayerAction(async () => {
+      await createLayer(current.image_id, { is_group: true, name: 'Folder' });
+      await refreshLayers();
+      await reloadComposite();
+    }) },
+    { type: 'item', label: 'Duplicate layer', icon: 'ui/copy', disabled: !hasLayer, onClick: () => runLayerAction(async () => {
+      const created = await duplicateLayer(current.image_id, activeLayerId);
+      if (created?.layer_id) activeLayerId = created.layer_id;
+      await refreshLayers();
+      await reloadComposite();
+    }) },
+    { type: 'item', label: 'Merge down', icon: 'ui/chevron-down', disabled: !hasLayer, onClick: () => runLayerAction(async () => {
+      await mergeLayer(current.image_id, activeLayerId);
+      await refreshLayers();
+      await reloadComposite();
+    }) },
+    { type: 'item', label: 'Flatten image', icon: 'ui/grid', disabled: !hasImage, onClick: () => runLayerAction(async () => {
+      await flattenImage(current.image_id);
+      await refreshLayers();
+      await reloadComposite();
+    }) },
     { type: 'separator' },
-    { type: 'item', label: 'Grayscale', icon: 'ui/grayscale', disabled: !hasImage, onClick: () => apply({ op: 'grayscale' }) },
-    { type: 'item', label: 'Sepia', icon: 'ui/sepia', disabled: !hasImage, onClick: () => apply({ op: 'sepia' }) },
+    { type: 'item', label: 'Grayscale', icon: 'ui/grayscale', disabled: !hasLayer, onClick: () => apply({ op: 'grayscale' }) },
+    { type: 'item', label: 'Sepia', icon: 'ui/sepia', disabled: !hasLayer, onClick: () => apply({ op: 'sepia' }) },
     { type: 'separator' },
-    { type: 'item', label: 'Reset to original', icon: 'ui/refresh', disabled: !hasImage, onClick: () => resetCurrent() },
+    { type: 'item', label: 'Reset to original', icon: 'ui/refresh', disabled: !hasLayer, onClick: () => resetCurrent() },
+    { type: 'item', label: 'Delete layer', icon: 'ui/trash', danger: true, disabled: !hasLayer, onClick: () => runLayerAction(async () => {
+      await deleteLayer(current.image_id, activeLayerId);
+      activeLayerId = null;
+      await refreshLayers();
+      await reloadComposite();
+    }) },
     { type: 'item', label: 'Delete image', icon: 'ui/trash', danger: true, disabled: !hasImage, onClick: () => void removeCurrent() },
   ];
 }

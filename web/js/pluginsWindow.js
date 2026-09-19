@@ -12,6 +12,7 @@ import {
   toast, icon, button, iconButton, badge, emptyState, searchBar, select,
 } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
+import { pickFiles } from './files.js';
 import { getPluginLayout, setPluginLayout } from './preferences.js';
 
 export const PLUGINS_WINDOW = 'plugins';
@@ -327,16 +328,11 @@ function mountPlugins() {
     onInput: (value) => { query = value; render(); },
   });
   const installBtn = button({ label: 'Install', icon: 'ui/upload', variant: 'primary', size: 'sm' });
-  const fileInput = el('input');
-  fileInput.type = 'file';
-  fileInput.accept = '.zip,.tar.gz,.tgz,application/zip,application/gzip';
-  fileInput.hidden = true;
-  on(installBtn, 'click', () => fileInput.click());
-  on(fileInput, 'change', () => {
-    if (fileInput.files?.[0]) void uploadArchive(fileInput.files[0]);
-    fileInput.value = '';
+  on(installBtn, 'click', async () => {
+    const [file] = await pickFiles({ accept: '.zip,.tar.gz,.tgz,application/zip,application/gzip' });
+    if (file) void uploadArchive(file);
   });
-  toolbar.append(search, installBtn, fileInput);
+  toolbar.append(search, installBtn);
 
   const metaRow = el('div', 'plugins-categories-row');
   const categories = el('div', 'plugins-categories');
