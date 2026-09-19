@@ -5376,6 +5376,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-files-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "photon-rs",
+ "semver",
+ "serde",
+ "serde_json",
+ "shiny-plugin-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "shiny-filter"
 version = "0.1.0"
 dependencies = [

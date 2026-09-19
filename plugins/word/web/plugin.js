@@ -15,6 +15,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
 
 export const WORD_PLUGIN = 'word';
 
@@ -287,7 +288,7 @@ function renderDocMenuItems() {
   };
   footItem('ui/plus', 'New document', false, () => void newDocument());
   footItem('ui/download', 'Import .odt', false, pickOdtFile);
-  footItem('ui/upload', 'Export .odt', false, () => void exportCurrent());
+  footItem('ui/save', 'Save to Documents', false, () => void exportCurrent());
   footItem('ui/trash', 'Delete document', true, () => void removeCurrent());
   docMenuPopup.appendChild(foot);
 }
@@ -386,16 +387,9 @@ async function exportCurrent() {
       `/api/documents/${encodeURIComponent(currentDoc.id)}/export`,
       { responseType: 'blob' },
     );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentDoc.title || 'document'}.odt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    await saveOrDownload(blob, { name: `${currentDoc.title || 'document'}.odt`, dir: 'Documents', app: 'Word' });
   } catch (e) {
-    toast(e.message || 'Export failed', { type: 'error' });
+    toast(e.message || 'Save failed', { type: 'error' });
   }
 }
 
@@ -460,8 +454,8 @@ export function mountWordTile() {
   importBtn.setAttribute('aria-label', 'Import .odt');
   const exportBtn = button({ icon: 'ui/upload', variant: 'ghost', onClick: () => void exportCurrent() });
   exportBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  exportBtn.title = 'Export .odt';
-  exportBtn.setAttribute('aria-label', 'Export .odt');
+  exportBtn.title = 'Save to Documents';
+  exportBtn.setAttribute('aria-label', 'Save to Documents');
   const saveBtn = toolbarButton('save', 'ui/save', 'Save now', () => void persist());
   saveBtn.classList.add('word-tool--secondary');
   const delBtn = button({ icon: 'ui/trash', variant: 'ghost', onClick: () => void removeCurrent() });
@@ -569,11 +563,22 @@ function onAgentActions(e) {
   })();
 }
 
+async function importFromFiles(path, name) {
+  try {
+    if (!getWordTileElement()) mountWordTile();
+    const file = await fileFromHome(path, name, 'application/vnd.oasis.opendocument.text');
+    await importOdt(file);
+  } catch (e) {
+    toast(e.message || 'Could not open file', { type: 'error' });
+  }
+}
+
 let wired = false;
 export function wireWordEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('agent:actions', onAgentActions);
+  onOpenFromFiles(WORD_PLUGIN, (d) => importFromFiles(d.path, d.name));
   window.addEventListener('beforeunload', (e) => {
     if (currentDoc && dirty) {
       e.preventDefault();
@@ -589,7 +594,7 @@ export function wordContextMenu() {
   return [
     { type: 'item', label: 'New document', icon: 'ui/plus', onClick: () => void newDocument() },
     { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasDoc, onClick: () => void persist() },
-    { type: 'item', label: 'Export .odt', icon: 'ui/upload', disabled: !hasDoc, onClick: () => void exportCurrent() },
+    { type: 'item', label: 'Save to Documents', icon: 'ui/save', disabled: !hasDoc, onClick: () => void exportCurrent() },
     { type: 'separator' },
     { type: 'item', label: 'Bold', icon: 'ui/bold', disabled: !hasDoc, onClick: () => exec('bold') },
     { type: 'item', label: 'Italic', icon: 'ui/italic', disabled: !hasDoc, onClick: () => exec('italic') },

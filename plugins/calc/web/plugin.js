@@ -19,6 +19,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
 
 export const CALC_PLUGIN = 'calc';
 
@@ -587,7 +588,7 @@ function renderSheetMenuItems() {
   footItem('ui/plus', 'New spreadsheet', false, () => void newSheet());
   footItem('ui/download', 'Import .ods', false, pickOdsFile);
   footItem('ui/download', 'Import CSV', false, pickCsvFile);
-  footItem('ui/upload', 'Export .ods', false, () => void exportOds());
+  footItem('ui/save', 'Save to Documents', false, () => void exportOds());
   footItem('ui/trash', 'Delete spreadsheet', true, () => void removeCurrent());
   sheetMenuPopup.appendChild(foot);
 }
@@ -653,16 +654,9 @@ async function exportOds() {
       `/api/spreadsheets/${encodeURIComponent(current.id)}/export`,
       { responseType: 'blob' },
     );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${current.title || 'spreadsheet'}.ods`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    await saveOrDownload(blob, { name: `${current.title || 'spreadsheet'}.ods`, dir: 'Documents', app: 'Calc' });
   } catch (e) {
-    toast(e.message || 'Export failed', { type: 'error' });
+    toast(e.message || 'Save failed', { type: 'error' });
   }
 }
 
@@ -949,7 +943,7 @@ export function mountCalcTile() {
     titleInput,
     toolBtn('ui/plus', 'New spreadsheet', () => void newSheet()),
     toolBtn('ui/download', 'Import .ods', pickOdsFile),
-    toolBtn('ui/upload', 'Export .ods', () => void exportOds()),
+    toolBtn('ui/save', 'Save to Documents', () => void exportOds()),
     toolBtn('ui/save', 'Save now', () => void persist()),
     toolBtn('ui/trash', 'Delete spreadsheet', () => void removeCurrent(), true),
     saveDot,
@@ -1107,11 +1101,22 @@ function onAgentActions(e) {
   }
 }
 
+async function importFromFiles(path, name) {
+  try {
+    if (!getCalcTileElement()) mountCalcTile();
+    const file = await fileFromHome(path, name, 'application/vnd.oasis.opendocument.spreadsheet');
+    await importOds(file);
+  } catch (e) {
+    toast(e.message || 'Could not open file', { type: 'error' });
+  }
+}
+
 let wired = false;
 export function wireCalcEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('agent:actions', onAgentActions);
+  onOpenFromFiles(CALC_PLUGIN, (d) => importFromFiles(d.path, d.name));
   window.addEventListener('beforeunload', (e) => {
     if (current && dirty) {
       e.preventDefault();
@@ -1127,7 +1132,7 @@ export function calcContextMenu(ctx) {
   return [
     { type: 'item', label: 'New spreadsheet', icon: 'ui/plus', onClick: () => void newSheet() },
     { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasSheet || !dirty, onClick: () => void persist() },
-    { type: 'item', label: 'Export .ods', icon: 'ui/upload', disabled: !hasSheet, onClick: () => void exportOds() },
+    { type: 'item', label: 'Save to Documents', icon: 'ui/save', disabled: !hasSheet, onClick: () => void exportOds() },
     { type: 'separator' },
     { type: 'item', label: 'Delete spreadsheet', icon: 'ui/trash', danger: true, disabled: !hasSheet, onClick: () => void removeCurrent() },
   ];

@@ -16,6 +16,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
 
 export const PDF_PLUGIN = 'pdf';
 
@@ -1004,16 +1005,9 @@ async function exportCurrent() {
       `/api/pdfs/${encodeURIComponent(currentPdf.pdf_id)}/export`,
       { responseType: 'blob' },
     );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentPdf.title || 'document'}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    await saveOrDownload(blob, { name: `${currentPdf.title || 'document'}.pdf`, dir: 'Documents', app: 'PDF' });
   } catch (e) {
-    toast(e.message || 'Export failed', { type: 'error' });
+    toast(e.message || 'Save failed', { type: 'error' });
   }
 }
 
@@ -1460,7 +1454,7 @@ function renderDocMenuItems() {
   foot.className = 'pdf-doc-menu-foot';
   foot.appendChild(docMenuItem('New PDF', 'ui/plus', { onClick: () => void newPdf() }));
   foot.appendChild(docMenuItem('Import .pdf', 'ui/download', { onClick: pickPdfFile }));
-  foot.appendChild(docMenuItem('Export .pdf', 'ui/upload', { onClick: () => void exportCurrent() }));
+  foot.appendChild(docMenuItem('Save to Documents', 'ui/save', { onClick: () => void exportCurrent() }));
   foot.appendChild(docMenuItem('Merge from…', 'ui/loop', { onClick: () => { menuMode = 'merge'; openDocMenu(); } }));
   foot.appendChild(docMenuItem('Find & replace…', 'ui/search', { onClick: promptFindReplace }));
   foot.appendChild(docMenuItem('Watermark…', 'ui/info', { onClick: promptWatermark }));
@@ -1577,7 +1571,7 @@ export function mountPdfTile() {
   /* File actions */
   const newBtn = toolbarButton('ui/plus', 'New PDF', () => void newPdf());
   const importBtn = toolbarButton('ui/download', 'Import .pdf', pickPdfFile);
-  const exportBtn = toolbarButton('ui/upload', 'Export .pdf', () => void exportCurrent());
+  const exportBtn = toolbarButton('ui/save', 'Save to Documents', () => void exportCurrent());
   const delBtn = toolbarButton('ui/trash', 'Delete PDF', () => void removeCurrent());
   delBtn.classList.add('pdf-tool--danger');
 
@@ -1684,11 +1678,22 @@ function onAgentActions(e) {
   });
 }
 
+async function importFromFiles(path, name) {
+  try {
+    if (!getPdfTileElement()) mountPdfTile();
+    const file = await fileFromHome(path, name, 'application/pdf');
+    await importPdf(file);
+  } catch (e) {
+    toast(e.message || 'Could not open file', { type: 'error' });
+  }
+}
+
 let wired = false;
 export function wirePdfEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('agent:actions', onAgentActions);
+  onOpenFromFiles(PDF_PLUGIN, (d) => importFromFiles(d.path, d.name));
   document.addEventListener('mousemove', onSelMove);
   document.addEventListener('mouseup', onSelUp);
   document.addEventListener('pointerdown', (e) => {
@@ -1704,7 +1709,7 @@ export function pdfContextMenu(ctx) {
   return [
     { type: 'item', label: 'New PDF', icon: 'ui/plus', onClick: () => void newPdf() },
     { type: 'item', label: 'Import .pdf', icon: 'ui/download', onClick: pickPdfFile },
-    { type: 'item', label: 'Export .pdf', icon: 'ui/upload', disabled: !hasPdf, onClick: () => void exportCurrent() },
+    { type: 'item', label: 'Save to Documents', icon: 'ui/save', disabled: !hasPdf, onClick: () => void exportCurrent() },
     { type: 'separator' },
     {
       type: 'submenu',

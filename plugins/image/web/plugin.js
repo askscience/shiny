@@ -19,6 +19,7 @@
 import { button, emptyState, glowFromDrawable, select, setTileGlow, slider, toast } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch, getToken } from '/js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
 
 export const IMAGE_PLUGIN = 'image';
 
@@ -323,16 +324,9 @@ async function downloadCurrent() {
       `/api/images/${encodeURIComponent(current.image_id)}/data`,
       { responseType: 'blob' },
     );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${current.title || 'image'}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    await saveOrDownload(blob, { name: `${current.title || 'image'}.png`, dir: 'Pictures', app: 'Image' });
   } catch (e) {
-    toast(e.message || 'Download failed', { type: 'error' });
+    toast(e.message || 'Save failed', { type: 'error' });
   }
 }
 
@@ -755,7 +749,7 @@ export function mountImageTile() {
     titleInput,
     railBtn('ui/upload', 'Upload image', pickFile),
     railBtn('ui/refresh', 'Reset to original', () => resetCurrent()),
-    railBtn('ui/download', 'Download', () => void downloadCurrent()),
+    railBtn('ui/save', 'Save to Pictures', () => void downloadCurrent()),
     railBtn('ui/trash', 'Delete image', () => void removeCurrent(), true),
     saveDot,
   );
@@ -876,11 +870,22 @@ function onAgentActions(e) {
   })();
 }
 
+async function importFromFiles(path, name) {
+  try {
+    if (!getImageTileElement()) mountImageTile();
+    const file = await fileFromHome(path, name, 'application/octet-stream');
+    await uploadFile(file);
+  } catch (e) {
+    toast(e.message || 'Could not open file', { type: 'error' });
+  }
+}
+
 let wired = false;
 export function wireImageEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('agent:actions', onAgentActions);
+  onOpenFromFiles(IMAGE_PLUGIN, (d) => importFromFiles(d.path, d.name));
 }
 
 /** Entries core splices into this window's right-click menu (PLUGINS.md §19).

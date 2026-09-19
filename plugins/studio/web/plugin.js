@@ -24,6 +24,7 @@
 
 import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
+import { saveOrDownload } from '/js/files.js';
 
 export const STUDIO_PLUGIN = 'studio';
 
@@ -4126,16 +4127,12 @@ async function exportWav() {
       blob = await apiFetch('/api/studio/preview', { method: 'POST', body: JSON.stringify(serializePattern(current)), responseType: 'blob' });
       name = current.title || 'clip';
     }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${String(name).replace(/[^\w\- ]+/g, '').trim() || 'studio'}.wav`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    const filename = `${String(name).replace(/[^\w\- ]+/g, '').trim() || 'studio'}.wav`;
+    await saveOrDownload(blob, { name: filename, dir: 'Music', app: 'Studio' });
     setStatus(dirty ? 'dirty' : 'saved');
-    toast('Exported WAV', { type: 'success' });
   } catch (e) {
     console.error('studio: export failed', e);
-    toast(e.message || 'Export failed', { type: 'error' });
+    toast(e.message || 'Save failed', { type: 'error' });
     setStatus('error');
   } finally {
     busy = false;
@@ -4349,9 +4346,9 @@ export function mountStudioTile() {
   saveBtn.classList.add('studio-transport');
   saveBtn.title = 'Save project';
 
-  const exportBtn = button({ variant: 'ghost', icon: 'ui/download', label: '', onClick: () => void exportWav() });
+  const exportBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => void exportWav() });
   exportBtn.classList.add('studio-transport');
-  exportBtn.title = 'Export WAV';
+  exportBtn.title = 'Save WAV to Music';
 
   const browserBtn = button({ variant: 'ghost', icon: 'ui/search', label: '', onClick: toggleBrowser });
   browserBtn.classList.add('studio-transport');

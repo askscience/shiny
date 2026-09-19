@@ -14,7 +14,7 @@ Everything beyond that ships as a **self-contained plugin** — a folder with
 or `.tar.gz` archive through the plugin API: no core edits and no restart (the HTTP
 router hot-swaps on install/uninstall).
 
-- 14 plugins ship in this repo (11 self-contained window apps, a tool-only demo, a
+- 15 plugins ship in this repo (12 self-contained window apps, a tool-only demo, a
   chrome-integrated keyboard, and the traveler domain plugin).
 - See [`PLUGINS.md`](./PLUGINS.md) for the plugin architecture, trait surface and a
   worked install example.
@@ -184,6 +184,7 @@ routes, runs its migrations, and — where it has a window surface — opens a w
 | Plugin | Category | Agent tools | REST routes (all authed) | Window |
 |---|---|---|---|---|
 | `hello` | System | `hello` | — | — (demo) |
+| `files` | System | `file_*` (10) | `/api/files/*` | Files (browser: grid/list, thumbnails, preview with Space, double-click opens in the owning app, upload, trash) |
 | `keyboard` | System | — | — | on-screen keyboard (8 layouts) |
 | `traveler` | Travel | 22: trips, locations, maps/POI, navigation, diary, planning, artifact cards | *domain REST served by core* (`/api/trips`, `/api/map/*`, …) | map + navigator (mounted by core) |
 | `word` | Office | `doc_*` (7) | `/api/documents…` | Word (`.odt`) |
@@ -200,9 +201,12 @@ routes, runs its migrations, and — where it has a window surface — opens a w
 
 Notes: `word` stores real `.odt` bytes; `calc` keeps a JSON cell grid and `impress`
 keeps slide data, exchanging real `.ods`/`.odp` files at import/export (codecs live in
-the SDK). The traveler plugin adds no routes of its own — the trip/map/diary REST API
-and the map window are special-cased in the core binary, so the plugin itself registers
-its agent tools and skills.
+the SDK). With the `files` plugin installed, every app's save/export action writes into
+the user's home folders (`Documents`, `Pictures`, `Music`, …) via `/api/files/upload`
+instead of triggering a browser download — desktop-style; without Files, exports fall
+back to a normal download. The traveler plugin adds no routes of its own — the
+trip/map/diary REST API and the map window are special-cased in the core binary, so the
+plugin itself registers its agent tools and skills.
 
 ## Multi-user
 
@@ -374,7 +378,7 @@ only while their plugin is installed (and are authenticated as well).
 (`impress`), `/api/pdfs` (`pdf`), `/api/mail/*` (`mail`), `/api/calendar/events` (`calendar`),
 `/api/calculator/*` (`calculator`), `/api/images` (`image`),
 `/api/radio/nowplaying` (`radio`), `/api/youtube/search` (`youtube`),
-`/api/studio/*` (`studio`).
+`/api/studio/*` (`studio`), `/api/files/*` (`files`).
 
 **Static** — the app shell is served at `/`; `/plugins/<name>/*` serves each
 plugin’s web assets; everything else falls back to the app (`web/`). Settings and

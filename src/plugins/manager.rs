@@ -293,6 +293,13 @@ impl PluginManager {
         Ok(manifest.name)
     }
 
+    /// Notify every loaded plugin that a new user registered in core identity.
+    /// Plugins use this to provision per-user state — e.g. the Files plugin
+    /// creates the user's classic home folders here.
+    pub async fn notify_user_registered(&self, user_id: &str) {
+        self.inner.loader.call_on_user_registered(user_id).await;
+    }
+
     pub async fn uninstall(&self, name: &str) -> bool {
         self.inner.contribs.write().retain(|c| c.manifest.name != name);
         // Remove the plugin's tools before its library is retired, so a late

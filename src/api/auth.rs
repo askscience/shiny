@@ -196,6 +196,10 @@ pub async fn register(
     public.avatar = req.avatar;
     public.is_admin = is_first_user;
 
+    // Give plugins a chance to provision per-user state for the new account.
+    // The Files plugin creates the user's classic home folders here.
+    state.plugins.notify_user_registered(&traveler.id).await;
+
     session_response(token, public)
 }
 

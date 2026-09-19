@@ -268,6 +268,32 @@ impl Loader {
         }
     }
 
+    /// Invoke the plugin's `on_user_registered` lifecycle hook for a newly
+    /// registered user. Mirrors `call_on_load`; runs for every loaded plugin so
+    /// one can provision per-user state (e.g. Files creates the user's home
+    /// folders). Failures are logged and never abort registration.
+    pub async fn call_on_user_registered(&self, user_id: &str) {
+        let plugins: Vec<(Arc<dyn Plugin>, Arc<PluginCtx>)> = {
+            let guard = self.loaded.read();
+            guard
+                .iter()
+                .map(|p| (p.plugin.clone(), p.ctx.clone()))
+                .collect()
+        };
+        for (plugin, ctx) in plugins {
+            let name = plugin.manifest().name.clone();
+            let hook = std::panic::AssertUnwindSafe(plugin.on_user_registered(ctx, user_id));
+            if let Err(panic) = futures::FutureExt::catch_unwind(hook).await {
+                let msg = panic
+                    .downcast_ref::<&str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".into());
+                tracing::warn!("plugin '{name}' on_user_registered panicked: {msg}");
+            }
+        }
+    }
+
     /// Unload a plugin by name: runs its `on_unload` hook, then retires it.
     /// Its tools must already have been removed from the `ToolRegistry`
     /// (`uninstall_plugin`) before this is called. The cdylib is *not*

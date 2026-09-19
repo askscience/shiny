@@ -1,0 +1,10 @@
+name = "files"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "File browser — browse, preview and manage your home folders"
+summary = "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"
+category = "System"

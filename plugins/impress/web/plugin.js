@@ -18,6 +18,7 @@ import {
 } from '/ui/index.js';
 import { setIcon } from '/ui/index.js';
 import { apiFetch } from '/js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome } from '/js/files.js';
 
 export const IMPRESS_PLUGIN = 'impress';
 
@@ -608,7 +609,7 @@ function renderDeckMenuItems() {
   };
   footItem('ui/plus', 'New presentation', false, () => void newDeck());
   footItem('ui/download', 'Import .odp', false, pickOdpFile);
-  footItem('ui/upload', 'Export .odp', false, () => void exportOdp());
+  footItem('ui/save', 'Save to Documents', false, () => void exportOdp());
   footItem('ui/trash', 'Delete presentation', true, () => void removeCurrent());
   deckMenuPopup.appendChild(foot);
 }
@@ -665,16 +666,9 @@ async function exportOdp() {
       `/api/presentations/${encodeURIComponent(current.id)}/export`,
       { responseType: 'blob' },
     );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${current.title || 'presentation'}.odp`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    await saveOrDownload(blob, { name: `${current.title || 'presentation'}.odp`, dir: 'Documents', app: 'Impress' });
   } catch (e) {
-    toast(e.message || 'Export failed', { type: 'error' });
+    toast(e.message || 'Save failed', { type: 'error' });
   }
 }
 
@@ -980,7 +974,7 @@ export function mountImpressTile() {
     themeSelect,
     toolbarButton('ui/plus', 'New presentation', () => void newDeck()),
     toolbarButton('ui/download', 'Import .odp', pickOdpFile),
-    toolbarButton('ui/upload', 'Export .odp', () => void exportOdp()),
+    toolbarButton('ui/save', 'Save to Documents', () => void exportOdp()),
     toolbarButton('ui/save', 'Save now', () => void persist()),
     toolbarButton('ui/trash', 'Delete presentation', () => void removeCurrent(), true),
     presentBtn,
@@ -1278,11 +1272,22 @@ function onAgentActions(e) {
   }
 }
 
+async function importFromFiles(path, name) {
+  try {
+    if (!getImpressTileElement()) mountImpressTile();
+    const file = await fileFromHome(path, name, 'application/vnd.oasis.opendocument.presentation');
+    await importOdp(file);
+  } catch (e) {
+    toast(e.message || 'Could not open file', { type: 'error' });
+  }
+}
+
 let wired = false;
 export function wireImpressEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('agent:actions', onAgentActions);
+  onOpenFromFiles(IMPRESS_PLUGIN, (d) => importFromFiles(d.path, d.name));
   window.addEventListener('beforeunload', (e) => {
     if (current && dirty) {
       e.preventDefault();
