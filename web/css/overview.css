@@ -1,0 +1,184 @@
+/* ─────────────────────────────────────────────────────────────
+   Gesture surfaces — the window overview and the plugin launcher.
+
+   Both are opened by three-finger swipes (crates/peakd/src/gestures.rs →
+   web/js/gestures.js) and are plain web layers, so they work the same on any
+   input that can raise the `trackpad:gesture` event.
+
+   The overview does not clone windows: it re-sizes the real tiles in place
+   (web/js/overview.js), which is why `#tile-grid` is lifted above the rest of
+   the chrome and its tiles become absolutely positioned cards.
+   ───────────────────────────────────────────────────────────── */
+
+.overview-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Above the HUD (20), transcript (25) and panels (30), below toasts (50). */
+  z-index: 44;
+  background: rgba(6, 8, 12, 0.62);
+  backdrop-filter: blur(10px) saturate(0.9);
+  -webkit-backdrop-filter: blur(10px) saturate(0.9);
+  pointer-events: auto;
+  animation: overlayFade var(--duration-normal) var(--ease-out);
+}
+
+/* The tiles themselves are the overview: lift the grid over the chrome and
+   let it own the whole screen for as long as the overview is up. */
+body.overview-active #tile-grid {
+  z-index: 45;
+  /* The tiles are absolutely positioned by overview.js; the layout engine's
+     own display/gap no longer matters, but stake the claim explicitly so the
+     manager's inline styles cannot change how the container is measured. */
+  display: block !important;
+  gap: 0 !important;
+  overflow: visible;
+}
+
+body.overview-active .tile--overview {
+  position: absolute;
+  transition:
+    left var(--duration-normal) var(--ease-out),
+    top var(--duration-normal) var(--ease-out),
+    width var(--duration-normal) var(--ease-out),
+    height var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+  box-shadow: var(--shadow-float);
+  animation: overviewTileIn var(--duration-normal) var(--ease-out) backwards;
+  cursor: pointer;
+}
+
+/* The "WS n" chip in each window's own header while the overview is up. */
+.overview-badge {
+  flex: none;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ── Plugin launcher ─────────────────────────────────────────── */
+
+/* The launcher is Launchpad, not a dialog: the whole screen, every plugin as a
+   big icon on the blurred desktop, no frame and no header. */
+.plugin-launcher {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vh 5vw;
+  background: rgba(6, 8, 12, 0.45);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  animation: overlayFade var(--duration-normal) var(--ease-out);
+}
+
+.plugin-launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 26px 18px;
+  width: min(1000px, 100%);
+  max-height: 100%;
+  align-content: center;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 10px;
+}
+
+.plugin-launcher-grid::-webkit-scrollbar { display: none; }
+
+.launcher-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  animation: launcherItemIn var(--duration-normal) var(--ease-spring) backwards;
+}
+
+.launcher-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 22px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-float);
+  transition:
+    transform var(--duration-fast) var(--ease-spring),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.launcher-item:hover .launcher-item-icon { transform: translateY(-3px) scale(1.05); }
+.launcher-item:active .launcher-item-icon { transform: scale(0.95); }
+.launcher-item.is-active .launcher-item-icon { border-color: var(--accent); color: var(--accent); }
+
+.launcher-item-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* A running app gets the dot under its name, the way an app grid marks it. */
+.launcher-item-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+}
+
+.launcher-item.is-active .launcher-item-dot { opacity: 1; }
+
+.launcher-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overviewTileIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes launcherItemIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-backdrop,
+  .plugin-launcher,
+  .launcher-item,
+  body.overview-active .tile--overview {
+    animation: none;
+    transition: none;
+  }
+}

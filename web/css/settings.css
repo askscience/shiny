@@ -383,3 +383,36 @@
   .settings-nav-item .settings-nav-icon { color: inherit; }
   .settings-panels { padding: 16px; }
 }
+
+/* ── Remote (Iroh) ───────────────────────────────────────────── */
+.remote-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+
+.remote-ticket {
+  display: block;
+  max-width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.remote-qr {
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-sm);
+  background: #000;
+  image-rendering: pixelated;
+}

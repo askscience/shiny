@@ -2,22 +2,24 @@
 name = "peakd"
 version = "0.1.0"
 edition = "2021"
-description = "Peak'd — the desktop browser built to serve the PEAK'D! app, with adblock-rust filtering shared with the in-app browser plugin"
+description = "Peak'd — the PEAK'D! kiosk shell: Qt 6 + QtWebEngine (Linux). macOS uses peakd-mac (crates/peakd-mac)"
+publish = false
 
+# Linux-only in practice; build.rs and main.rs no-op elsewhere so a macOS
+# `cargo build --workspace` does not need Qt.
 [dependencies]
-# The native shell.
-wry = { version = "0.57", features = ["mac-proxy"] }
-tao = "0.37"
-# The shared filtering engine + proxy (adblock-rust). Same crate the in-app
-# browser plugin links, which is what makes both surfaces one engine.
-shiny-filter = { path = "../shiny-filter" }
-tokio = { version = "1", features = ["rt-multi-thread"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-anyhow = "1"
-parking_lot = "0.12"
 serde_json = "1"
+parking_lot = "0.12"
+# evdev decoding for the three-finger gestures (gestures.rs): raw input_event
+# structs plus one ioctl for the axis ranges.
+libc = "0.2"
+# `--iroh <ticket>`: dial a remote Shiny server through the shared local proxy.
+# Optional so a normal kiosk build stays lean.
+shiny-iroh-client = { path = "../shiny-iroh-client", optional = true }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.4"
-objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSResponder", "NSRunningApplication"] }
+[features]
+iroh = ["dep:shiny-iroh-client"]
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

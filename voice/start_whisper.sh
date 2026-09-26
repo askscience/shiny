@@ -7,6 +7,10 @@
 # to (`--install`, or WHISPER_AUTO_INSTALL=1). Probing before installing keeps
 # a normal start instant and never surprises the user with a silent pip run.
 #
+# It also makes sure the default **tiny** model is on disk before starting: it
+# is not committed (data/ is gitignored), so the first start fetches it once
+# (~72 MB) via the stdlib-only voice/download_whisper.py.
+#
 # Usage:
 #   ./voice/start_whisper.sh              # start (assumes deps are present)
 #   ./voice/start_whisper.sh --install    # create .venv-whisper and install deps
@@ -105,6 +109,23 @@ export KMP_DUPLICATE_LIB_OK="${KMP_DUPLICATE_LIB_OK:-TRUE}"
 export WHISPER_HOST="$HOST"
 export WHISPER_PORT="$PORT"
 mkdir -p "$(dirname "$LOG")"
+
+# The default model is **tiny**. It is not committed to git (all of `data/` is
+# ignored), so fetch it once here: the sidecar refuses to start without a local
+# model, and "bundled" is only true after this runs. Stdlib-only downloader, so
+# it works under any python3, before/without the venv.
+MODELS_DIR="${WHISPER_MODELS_DIR:-$ROOT/data/whisper-models}"
+if [ ! -f "$MODELS_DIR/faster-whisper-tiny/model.bin" ]; then
+  echo "faster-whisper: tiny model missing — downloading to $MODELS_DIR (~72 MB, one-time)…"
+  if [ -t 1 ]; then
+    "${WHISPER_BOOTSTRAP_PYTHON:-python3}" "$ROOT/voice/download_whisper.py" tiny \
+      || echo "faster-whisper: tiny model download failed; will retry on next start" >&2
+  else
+    "${WHISPER_BOOTSTRAP_PYTHON:-python3}" "$ROOT/voice/download_whisper.py" tiny \
+      >>"$LOG" 2>&1 \
+      || echo "faster-whisper: tiny model download failed; will retry on next start" >&2
+  fi
+fi
 
 echo "Starting faster-whisper sidecar on $HOST:$PORT with $PY"
 if [ -t 1 ]; then

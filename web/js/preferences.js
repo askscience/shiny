@@ -1,5 +1,6 @@
 import { apiFetch, getTraveler } from './api.js';
 import { isMobilePortrait } from './viewport.js';
+import { normalizeTouchBarSetting } from './touchbarShared.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
@@ -21,6 +22,7 @@ const VOICE_WAKE_KEY = 'voice.wake_word';
 const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
 const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
 const ORB_STYLE_KEY = 'orb.style';
+const TOUCHBAR_KEY = 'touchbar.enabled';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
 function scopedKey(base) {
@@ -512,6 +514,58 @@ export function setOrbStyle(id) {
   persist(ORB_STYLE_KEY, style === DEFAULT_ORB_STYLE ? '' : style);
 }
 
+/* ── Touch Bar (per-user, server-backed) ───────────────────── */
+
+/**
+ * Whether Touch Bar input is honoured: `auto` (follow the host's detection),
+ * `on` (force it, useful to try the buttons on a normal keyboard) or `off`.
+ */
+export function getTouchBarEnabled() {
+  return normalizeTouchBarSetting(localStorage.getItem(scopedKey(TOUCHBAR_KEY)));
+}
+
+export function setTouchBarEnabled(mode) {
+  const value = normalizeTouchBarSetting(mode);
+  const key = scopedKey(TOUCHBAR_KEY);
+  if (value === 'auto') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(TOUCHBAR_KEY, value === 'auto' ? '' : value);
+  // The runtime listens for this so a change applies without a reload.
+  window.dispatchEvent(new CustomEvent('touchbar:settings'));
+}
+
 function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
+}
+
+/* ── Iroh remote access ───────────────────────────────────────── */
+
+const REMOTE_ALLOW_TERMINAL_KEY = 'remote.allow_terminal';
+const REMOTE_AUTOSTART_KEY = 'remote.autostart';
+
+/**
+ * Whether a remote (Iroh) client may open the Terminal — a real shell on this
+ * machine. Off by default; the server enforces this.
+ */
+export function getRemoteAllowTerminal() {
+  return localStorage.getItem(scopedKey(REMOTE_ALLOW_TERMINAL_KEY)) === 'true';
+}
+
+export function setRemoteAllowTerminal(on) {
+  const key = scopedKey(REMOTE_ALLOW_TERMINAL_KEY);
+  if (on) localStorage.setItem(key, 'true');
+  else localStorage.removeItem(key);
+  persist(REMOTE_ALLOW_TERMINAL_KEY, on ? 'true' : '');
+}
+
+/** Whether to enter server mode automatically on the next login/boot. */
+export function getRemoteAutostart() {
+  return localStorage.getItem(scopedKey(REMOTE_AUTOSTART_KEY)) === 'true';
+}
+
+export function setRemoteAutostart(on) {
+  const key = scopedKey(REMOTE_AUTOSTART_KEY);
+  if (on) localStorage.setItem(key, 'true');
+  else localStorage.removeItem(key);
+  persist(REMOTE_AUTOSTART_KEY, on ? 'true' : '');
 }

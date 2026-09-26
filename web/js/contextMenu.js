@@ -738,8 +738,13 @@ export function initContextMenu() {
       return;
     }
 
-    // Top bar background (the HUD pill / workspace bar) → desktop menu.
-    if (target.closest?.('.hud-header-main') || target.closest?.('#workspace-bar')) {
+    // Top bar background (the HUD pill / workspace bar / fullscreen bubble)
+    // → desktop menu. The bubble's own buttons keep their click behaviour.
+    if (
+      target.closest?.('.hud-header-main')
+      || target.closest?.('#workspace-bar')
+      || target.closest?.('#fullscreen-bubble')
+    ) {
       e.preventDefault();
       closeAllMenus();
       openMenu(desktopMenu(), e.clientX, e.clientY);

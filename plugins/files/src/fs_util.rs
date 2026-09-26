@@ -24,7 +24,6 @@ pub const CLASSIC_DIRS: &[&str] = &[
 
 pub const TRASH_DIR: &str = ".Trash";
 pub const CACHE_DIR: &str = ".cache";
-pub const THUMBS_DIR: &str = ".cache/thumbnails";
 
 /// The OS home directory (real `$HOME`, falling back to `USERPROFILE`, then
 /// the process working directory).
@@ -60,22 +59,77 @@ pub fn user_home(user_id: &str) -> PathBuf {
     shiny_root().join(sanitize_user(user_id))
 }
 
-/// Display form of the home path (used by the window's breadcrumb root).
-pub fn home_display(user_id: &str) -> String {
-    format!("~/.shiny/home/{}", sanitize_user(user_id))
+/// The home directory a request should operate on.
+///
+/// With Linux-user binding the caller's real OS home (`os_home`) is used;
+/// otherwise the account keeps its virtual `~/.shiny/home/<id>`.
+pub fn home_for(user_id: &str, os_home: Option<&str>) -> PathBuf {
+    match os_home.map(str::trim).filter(|h| !h.is_empty()) {
+        Some(home) => PathBuf::from(home),
+        None => user_home(user_id),
+    }
 }
 
-/// Create the user's home plus the classic folders. Idempotent; called for a
-/// brand-new account by `on_user_registered` and lazily by every route/tool so
-/// existing accounts are backfilled on first use.
-pub async fn ensure_home(user_id: &str) -> Result<PathBuf, AppError> {
-    let home = user_home(user_id);
-    tokio::fs::create_dir_all(&home).await?;
+/// Display form of the home path (used by the window's breadcrumb root).
+/// Virtual homes read as `~/.shiny/home/<id>`; a real OS home is shown by its
+/// absolute path.
+pub fn home_display_for(home: &Path) -> String {
+    let root = shiny_root();
+    if let Ok(rel) = home.strip_prefix(&root) {
+        let rel = rel.to_string_lossy();
+        if rel.is_empty() {
+            return "~/.shiny/home".into();
+        }
+        return format!("~/.shiny/home/{rel}");
+    }
+    home.to_string_lossy().into_owned()
+}
+
+/// Thumbnail cache. Namespaced under `shiny/` so a real `~/.cache` is never
+/// clobbered by the desktop's own thumbnails.
+pub fn thumbs_dir(home: &Path) -> PathBuf {
+    home.join(".cache").join("shiny").join("thumbnails")
+}
+
+/// Create any missing classic home folders (Desktop, Documents, …). Idempotent
+/// and never clobbers an existing directory — used for both the virtual home
+/// and a real OS home that predates Shiny.
+async fn provision_classic_dirs(home: &Path) -> Result<(), AppError> {
     for dir in CLASSIC_DIRS {
         tokio::fs::create_dir_all(home.join(dir)).await?;
     }
+    Ok(())
+}
+
+/// Create the user's virtual home plus the classic folders. Idempotent; called
+/// for a brand-new account by `on_user_registered` and lazily by every
+/// route/tool so existing accounts are backfilled on first use.
+pub async fn ensure_home(user_id: &str) -> Result<PathBuf, AppError> {
+    let home = user_home(user_id);
+    tokio::fs::create_dir_all(&home).await?;
+    provision_classic_dirs(&home).await?;
     tokio::fs::create_dir_all(home.join(CACHE_DIR)).await?;
     Ok(home)
+}
+
+/// Resolve the home for a request and make sure it exists. With an `os_home`
+/// the real directory must already exist (it belongs to a Linux account); only
+/// missing classic folders are added.
+pub async fn ensure_home_for(user_id: &str, os_home: Option<&str>) -> Result<PathBuf, AppError> {
+    match os_home.map(str::trim).filter(|h| !h.is_empty()) {
+        Some(h) => {
+            let home = PathBuf::from(h);
+            let meta = tokio::fs::metadata(&home).await.map_err(|_| {
+                AppError::Internal(format!("home folder {h} is unavailable"))
+            })?;
+            if !meta.is_dir() {
+                return Err(AppError::Internal(format!("home path {h} is not a folder")));
+            }
+            provision_classic_dirs(&home).await?;
+            Ok(home)
+        }
+        None => ensure_home(user_id).await,
+    }
 }
 
 /// Validate a user-supplied relative path and return its cleaned form.

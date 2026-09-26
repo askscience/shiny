@@ -13,10 +13,10 @@
  * Playing a video swaps the grid to its suggestions; the back button restores
  * whatever the grid showed before (`lastResults`).
  */
-import { apiFetch } from '/js/api.js';
+import { apiFetch } from '../../js/api.js';
 import {
   setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl, glowFromImageUrl,
-} from '/ui/index.js';
+} from '../../ui/index.js';
 
 export const YOUTUBE_PLUGIN = 'youtube';
 const BG_KEY = 'youtube.background';

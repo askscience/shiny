@@ -696,3 +696,19 @@ export async function refreshKeyboard() {
   if (active) mount();
   else unmount();
 }
+
+/**
+ * Show or hide the keyboard, exactly as the HUD toggle does. Returns false
+ * when the keyboard plugin is not active (there is no bar to toggle) — the
+ * Touch Bar's `Keys` button is a no-op then, rather than an error.
+ */
+export function toggleKeyboard() {
+  if (!bar) return false;
+  if (visible) {
+    close();
+    return false;
+  }
+  pinned = true;
+  open();
+  return true;
+}

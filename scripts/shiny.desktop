@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Shiny
+Comment=Shiny desktop
+Exec=/usr/local/bin/shiny-session
+Type=Application

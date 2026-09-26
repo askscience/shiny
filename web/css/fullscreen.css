@@ -14,10 +14,10 @@
 
    A fullscreen window (body.fs-active) additionally gets the whole screen of
    its own workspace: the top bar is always away there and comes back from the
-   top edge, and the window's own title bar — the app name plus close / exit
-   fullscreen — docks flush under it, no margin, revealed by the very same
-   `fs-top` gesture. The desktop chrome overlays the app instead of making
-   room for it.
+   top edge, carrying the window's bubble — the app name plus close / exit
+   fullscreen, on its left (fullscreenBubble.js) — in place of the window's own
+   title-bar stripe, which is hidden. The desktop chrome overlays the app
+   instead of making room for it.
    ───────────────────────────────────────────────────────────── */
 
 /* ── Top bar: autohide + dock position ──────────────────────── */
@@ -305,64 +305,12 @@ body.fs-active #tile-grid .tile--full {
 body.fullscreen-active .tile-resize,
 body.fs-active .tile-resize { display: none; }
 
-/* ── A fullscreen window's own bar: tucked under the top bar ──
-   The app name plus close / exit-fullscreen dock flush to the top edge, edge
-   to edge with no margin, and slide in right under the top bar when that bar
-   is revealed. Out of flow, so the fullscreen app keeps the whole screen
-   while the chrome is away. */
-body.fs-active #tile-grid .tile--full > .tile-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: auto;
-  /* Below the top bar (z-hud is 20), which covers the strip at rest. */
-  z-index: 6;
-  padding: 0 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-100%);
-  background: rgba(0, 0, 0, 0.55);
-  /* The reveal is a slide, not a fade: the bar looks drawn out from under the
-     top bar. */
-  transition: transform var(--duration-normal) var(--ease-out);
-}
-
-/* Resting fullscreen state — the top bar is away, so the window's bar is too.
-   `!important` beats the `:hover`-agnostic touch fallback below. */
-html[data-bar-pos='top'] body.fs-active #tile-grid .tile--full > .tile-header {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  transform: translateY(-100%) !important;
-  transition: none;
-}
-
-html[data-bar-pos='top'] body.fs-active.fs-top #tile-grid .tile--full > .tile-header {
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: translateY(var(--hud-header-total)) !important;
-}
-
-/* Light text on the dark bar, whatever the theme. */
-body.fs-active #tile-grid .tile--full > .tile-header .tile-header-title {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-body.fs-active #tile-grid .tile--full > .tile-header .tile-header-btn {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-body.fs-active #tile-grid .tile--full > .tile-header .tile-header-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-
-body.fs-active #tile-grid .tile--full > .tile-header .tile-header-btn--close:hover {
-  background: rgba(255, 60, 60, 0.3);
-  color: #fff;
-}
+/* ── A fullscreen window loses its own stripe ─────────────────
+   The app name plus close / exit-fullscreen no longer dock over the app as a
+   pinned strip; they move into the top bar's left-hand bubble
+   (fullscreenBubble.js + app.css), which rides the same top-edge reveal as the
+   rest of the chrome. The window keeps the whole screen. */
+body.fs-active #tile-grid .tile--full > .tile-header { display: none; }
 
 /* ── Fullscreen text mode: a little more room for the thread ── */
 
@@ -387,22 +335,19 @@ body.fullscreen-active .compose-conversation {
   html[data-bar-pos] #chrome-bottom { transform: translate(-50%, 0); }
   html[data-bar-pos] #hud-transcript { transform: translate(-50%, 0); }
 
-  /* Touch keeps the bars up — there is no hover to bring them back. The top
-     bar still stands aside for a fullscreen window and the window's own bar
-     (close / exit fullscreen) takes its place under the top edge, so the way
-     out is never hidden behind a hover a touch screen cannot make. `!important`
-     matches the resting fullscreen rule above, which outranks a plain rule in
-     here however specific. */
-  html[data-bar-pos='top'] body.fs-active #hud-header {
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(calc(-100% - 16px));
-  }
-
-  html[data-bar-pos] body.fs-active #tile-grid .tile--full > .tile-header {
+  /* Touch keeps the bars up — there is no hover to bring them back, and a
+     fullscreen window no longer carries a stripe of its own. So the top bar
+     simply stays on a touch screen, fullscreen included, where the bubble
+     (close / exit fullscreen) is always available. The selectors match the
+     per-position `fs-active` rules above so `!important` resolves in favour of
+     "visible" whichever way the bar docks. */
+  html[data-bar-pos='top'] body.fs-active #hud-header,
+  html[data-bar-pos='left'] body.fs-active #hud-header,
+  html[data-bar-pos='right'] body.fs-active #hud-header,
+  html[data-bar-pos='center'] body.fs-active #hud-header {
     opacity: 1 !important;
     visibility: visible !important;
-    transform: translateY(0) !important;
+    transform: none !important;
   }
 }
 
@@ -410,7 +355,6 @@ body.fullscreen-active .compose-conversation {
   #hud-header,
   #chrome-bottom,
   #hud-transcript,
-  body.fs-active #tile-grid .tile--full > .tile-header,
   .compose-composer,
   .compose-send {
     transition: none;

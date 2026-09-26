@@ -1,0 +1,10 @@
+name = "terminal"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "A real Linux terminal inside the app — a PTY-backed login shell in its own window"
+summary = "Terminal: a real shell over a PTY, rendered with xterm.js"
+author = "askscience"
+skills_dir = "skills"
+web_dir = "web"
+category = "System"

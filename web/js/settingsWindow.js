@@ -39,8 +39,12 @@ import {
   getSttEngine, setSttEngine, getWhisperModel, setWhisperModel,
   ORB_STYLES, getOrbStyle, setOrbStyle,
   getRemember, setRemember,
+  getRemoteAllowTerminal, setRemoteAllowTerminal,
+  getTouchBarEnabled, setTouchBarEnabled,
 } from './preferences.js';
+import { TOUCHBAR_ACTIONS } from './touchbarShared.js';
 import { createOrbPreview } from './orbCanvas.js';
+import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from './display.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { getBackground, setBackground, renderBackgroundPresets } from './background.js';
 import { pickFiles } from './files.js';
@@ -146,6 +150,13 @@ function buildOrbStyles(container) {
     container.appendChild(card);
   }
   requestAnimationFrame(() => {
+    // The window may have closed between the paint request and this frame, and
+    // this section can be rebuilt in place. Drop the previews we are about to
+    // replace — each one owns an animation loop, so losing the reference
+    // without destroying it would leak a running renderer.
+    orbPreviews.forEach((p) => p.destroy?.());
+    orbPreviews = [];
+    if (!container.isConnected) return;
     const canvases = [...container.querySelectorAll('.orb-style-canvas')];
     orbPreviews = canvases
       .map((c, i) => (ORB_STYLES[i] ? createOrbPreview(c, ORB_STYLES[i].id, 64) : null))
@@ -590,7 +601,7 @@ function buildVoice() {
       return;
     }
     if (info?.present) {
-      whisperHint.textContent = `${label} model ready${info.loaded ? ' and loaded' : ''}${current === 'tiny' ? ' (included with the app)' : ''}.`;
+      whisperHint.textContent = `${label} model ready${info.loaded ? ' and loaded' : ''}${current === 'tiny' ? ' (default)' : ''}.`;
       whisperDownload.classList.add('hidden');
       return;
     }
@@ -911,6 +922,234 @@ function buildSystem() {
   ];
 }
 
+/* ── Touch Bar ──────────────────────────────────────────────── */
+
+function buildTouchBar() {
+  const mode = select({
+    options: [
+      { value: 'auto', label: 'Automatic' },
+      { value: 'on', label: 'Always on' },
+      { value: 'off', label: 'Off' },
+    ],
+    onChange: (value) => {
+      setTouchBarEnabled(value);
+      refreshTouchBarHint();
+    },
+  });
+  mode.select.value = getTouchBarEnabled();
+
+  const state = el('p', 'settings-hint');
+  const buttons = el('p', 'settings-hint');
+  const install = el('p', 'settings-hint');
+
+  function refreshTouchBarHint() {
+    const host = document.documentElement.dataset.touchbarHost === '1';
+    const setting = getTouchBarEnabled();
+    if (host) {
+      state.textContent = setting === 'off'
+        ? 'A Touch Bar is present, but input is turned off.'
+        : 'A Touch Bar is present and its buttons are active.';
+    } else if (setting === 'on') {
+      state.textContent = 'No Touch Bar detected, but the buttons are forced on — press Ctrl+Alt+Shift with 1–9 or the − = , . keys to try them.';
+    } else {
+      state.textContent = 'No Touch Bar detected on this machine. The buttons stay dormant, so a normal PC is unaffected.';
+    }
+    buttons.textContent = TOUCHBAR_ACTIONS
+      .map((entry) => `${entry.label} (${entry.code})`)
+      .join(' · ');
+    install.textContent = host
+      ? 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh installs this row through tiny-dfr.'
+      : 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh puts this row on the bar through tiny-dfr.';
+  }
+
+  refreshTouchBarHint();
+  // A change made elsewhere (or the host reporting detection) re-renders it.
+  on(window, 'touchbar:settings', refreshTouchBarHint);
+
+  return [
+    field('Touch Bar', mode, { hint: 'Show the assistant controls on a MacBook Touch Bar. Automatic only uses the bar when this machine has one.' }),
+    state,
+    heading('Buttons'),
+    buttons,
+    install,
+  ];
+}
+
+/* ── Remote (Iroh) ──────────────────────────────────────────── */
+
+function formatBytes(n) {
+  if (!n) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+  return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+function buildRemote() {
+  const state = { enabled: false, endpointId: null, ticket: null, connections: 0, bytes: 0, paired: 0, pairing: false };
+  let revealed = false;
+
+  const serverToggle = toggleRow({
+    label: 'Server',
+    hint: 'Let your other devices reach this desktop over Iroh — end-to-end encrypted, no port forwarding. The link changes every time you start or stop.',
+    checked: false,
+    onChange: setEnabled,
+  });
+
+  const terminalToggle = toggleRow({
+    label: 'Allow Terminal from remote clients',
+    hint: 'The Terminal is a real shell on this machine. Off by default; enable it only for devices you trust.',
+    checked: getRemoteAllowTerminal(),
+    onChange: (on) => { setRemoteAllowTerminal(on); },
+  });
+
+  const statusLine = el('p', 'settings-hint', 'Reading…');
+  const ticketEl = el('code', 'remote-ticket');
+  const qrEl = el('img', 'remote-qr');
+  qrEl.alt = 'Connection QR code';
+
+  const revealBtn = button({
+    label: 'Reveal link',
+    variant: 'ghost',
+    onClick: () => { revealed = !revealed; render(); },
+  });
+  const copyBtn = button({
+    label: 'Copy',
+    variant: 'ghost',
+    onClick: async () => {
+      if (!state.ticket) return;
+      try { await navigator.clipboard.writeText(state.ticket); toast('Link copied'); }
+      catch (_) { toast('Could not copy the link', { type: 'error' }); }
+    },
+  });
+  const rotateBtn = button({ label: 'Rotate key', variant: 'danger', onClick: rotate });
+  const pairBtn = button({ label: 'Pair a new device', variant: 'ghost', onClick: pair });
+  const unpairBtn = button({ label: 'Forget devices', variant: 'quiet', onClick: unpair });
+
+  const actions = el('div', 'settings-inline-actions');
+  actions.append(revealBtn, copyBtn, rotateBtn, pairBtn, unpairBtn);
+
+  const linkBox = el('div', 'remote-link');
+  linkBox.append(ticketEl, qrEl);
+  const linkHint = el('p', 'settings-hint', 'On another device: peakd --iroh <link>, or run shiny-iroh-client --ticket <link> and open http://127.0.0.1:8080.');
+
+  function apply(s) {
+    if (!s) return;
+    state.enabled = !!s.enabled;
+    state.endpointId = s.endpoint_id || null;
+    state.ticket = s.ticket || null;
+    state.connections = s.connections || 0;
+    state.bytes = s.bytes || 0;
+    state.paired = s.paired || 0;
+    state.pairing = !!s.pairing;
+    render();
+  }
+
+  function render() {
+    serverToggle.toggle.setChecked(state.enabled, { silent: true });
+    if (!state.enabled) {
+      statusLine.textContent = 'Off. This desktop is reachable only on this machine.';
+      linkBox.classList.add('hidden');
+      actions.classList.add('hidden');
+      return;
+    }
+    const id = state.endpointId ? `${state.endpointId.slice(0, 12)}…` : '';
+    let line = `On — ${id} · ${state.connections} connection${state.connections === 1 ? '' : 's'} · ${formatBytes(state.bytes)}`;
+    if (state.paired > 0) line += ` · ${state.paired} paired device${state.paired === 1 ? '' : 's'}`;
+    if (state.pairing) line += ' · pairing for the next device…';
+    statusLine.textContent = line;
+    linkBox.classList.remove('hidden');
+    actions.classList.remove('hidden');
+    revealBtn.textContent = revealed ? 'Hide link' : 'Reveal link';
+    if (revealed) {
+      ticketEl.textContent = state.ticket || '';
+      qrEl.src = `/api/remote/qr?t=${Date.now()}`;
+      qrEl.classList.remove('hidden');
+    } else {
+      ticketEl.textContent = '••••••••••••••••••••••••••••••';
+      qrEl.removeAttribute('src');
+      qrEl.classList.add('hidden');
+    }
+  }
+
+  async function refresh() {
+    try { apply(await apiFetch('/api/remote/status', { authRedirect: false })); } catch (_) {}
+  }
+
+  async function setEnabled(on) {
+    try {
+      const res = await apiFetch('/api/remote/enable', {
+        method: 'POST',
+        authRedirect: false,
+        body: JSON.stringify({ enabled: on }),
+      });
+      if (on) {
+        apply(res);
+        // In the kiosk, hand the screen to the server-mode window (the shell
+        // exits with a mode-switch code). A plain browser — or a remote client,
+        // which cannot enable anyway — has no bridge and just shows the link.
+        window.ipc?.postMessage?.('peakd:server-mode');
+      } else {
+        apply({ enabled: false });
+      }
+      toast(on ? 'Server mode on' : 'Server mode off');
+    } catch (e) {
+      serverToggle.toggle.setChecked(!on, { silent: true });
+      toast(e.message || 'Could not change server mode', { type: 'error' });
+    }
+  }
+
+  async function rotate() {
+    try {
+      apply(await apiFetch('/api/remote/rotate', { method: 'POST', authRedirect: false }));
+      revealed = false;
+      render();
+      toast('New link generated');
+    } catch (e) {
+      toast(e.message || 'Could not rotate the link', { type: 'error' });
+    }
+  }
+
+  async function pair() {
+    try {
+      const res = await apiFetch('/api/remote/pair', { method: 'POST', authRedirect: false });
+      toast(`Pairing open for ${res?.seconds || 120}s — connect from the new device now`);
+      refresh();
+    } catch (e) {
+      toast(e.message || 'Could not start pairing', { type: 'error' });
+    }
+  }
+
+  async function unpair() {
+    try {
+      const res = await apiFetch('/api/remote/unpair', { method: 'POST', authRedirect: false });
+      toast(`Forgot ${res?.removed ?? 0} paired device(s)`);
+      refresh();
+    } catch (e) {
+      toast(e.message || 'Could not forget devices', { type: 'error' });
+    }
+  }
+
+  // Poll only while the Remote panel is visible; stop once it is detached.
+  const timer = setInterval(() => {
+    if (!statusLine.isConnected) { clearInterval(timer); return; }
+    const panel = statusLine.closest('.settings-panel');
+    if (panel && panel.classList.contains('is-active')) refresh();
+  }, 3000);
+  refresh();
+
+  return [
+    serverToggle,
+    statusLine,
+    linkBox,
+    linkHint,
+    actions,
+    heading('Remote control'),
+    terminalToggle,
+  ];
+}
+
 /* ── Surface ────────────────────────────────────────────────── */
 
 function mountSettings() {
@@ -930,6 +1169,8 @@ function mountSettings() {
     { id: 'desktop', label: 'Desktop', icon: 'ui/monitor', build: buildDesktop },
     { id: 'assistant', label: 'Assistant', icon: 'ui/message-circle', build: buildAssistant },
     { id: 'voice', label: 'Voice', icon: 'ui/mic', build: buildVoice },
+    { id: 'touchbar', label: 'Touch Bar', icon: 'ui/keyboard', build: buildTouchBar },
+    { id: 'remote', label: 'Remote', icon: 'ui/network', build: buildRemote },
     { id: 'system', label: 'System', icon: 'ui/power', build: buildSystem },
   ];
 
@@ -1008,6 +1249,45 @@ function buildAppearancePanel() {
 
   const backgroundChildren = buildBackgroundControls();
 
+  // Interface scale: a host setting, applied by the kiosk shell as page zoom.
+  // Changing it re-lays-out the page, so the Terminal re-fits automatically.
+  const scale = select({
+    options: SCALE_OPTIONS,
+    onChange: (value) => void applyScale(value),
+  });
+  const scaleField = field('Interface scale', scale);
+  const scaleHint = el('p', 'settings-hint');
+  scaleField.appendChild(scaleHint);
+
+  async function refreshScale() {
+    try {
+      const data = await getDisplayScale();
+      const stored = data?.scale ?? 'auto';
+      scale.select.value = String(stored);
+      const resolved = data?.resolved;
+      const pct = typeof resolved === 'number' && Number.isFinite(resolved)
+        ? Math.round(resolved * 100) : null;
+      const dpi = data?.dpi;
+      const applied = pct
+        ? `The shell applies ${pct}%${typeof dpi === 'number' && dpi > 0 ? ` on this ${Math.round(dpi)}-DPI panel` : ''}. `
+        : '';
+      scaleHint.textContent = `${applied}Scales the whole desktop. Auto follows this panel's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`;
+    } catch (_) {
+      scaleHint.textContent = 'Could not read the current scale.';
+    }
+  }
+
+  async function applyScale(value) {
+    try {
+      await setDisplayScale(value);
+      await refreshScale();
+      toast('Interface scale updated');
+    } catch (err) {
+      toast(err?.message || 'Could not change the interface scale', { type: 'error' });
+      void refreshScale();
+    }
+  }
+
   function syncNeumorphic() {
     neumorphic.toggle.setChecked(isNeumorphicTheme(getActiveTheme()), { silent: true });
   }
@@ -1044,6 +1324,7 @@ function buildAppearancePanel() {
       theme.select.value = getActiveTheme();
     });
     on(window, 'appearance:change', () => orbPreviews.forEach((p) => p.refreshPalette()));
+    void refreshScale();
   });
 
   return [
@@ -1052,6 +1333,8 @@ function buildAppearancePanel() {
     field('Accent', accentSwatches),
     field('Gradient', gradientSwatches),
     custom,
+    heading('Display'),
+    scaleField,
     heading('Voice orb'),
     el('p', 'settings-hint', 'How the orb looks and moves. Every style reacts to your voice — louder grows the ring’s waves and sparks.'),
     orbStyles,

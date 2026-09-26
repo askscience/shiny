@@ -1,122 +1,369 @@
-//! `peakd` — the browser whose reason to exist is the PEAK'D! app.
-//! It serves the app and nothing it does not need.
+//! `peakd` — the PEAK'D! kiosk shell on Qt 6 + QtWebEngine.
 //!
-//! It serves the app from `127.0.0.1:8080` by default and routes every request
-//! through the shared [`shiny_filter`] engine (Brave's adblock-rust), so the
-//! app itself and everything browsed inside it are filtered by the same code
-//! the in-app `peakd` plugin uses.
+//! The app stays the website it is; this binary is the engine host that
+//! replaces WebKitGTK (see `PLAN-qt6-webengine.md`). Rust owns the policy:
+//! config, the Browser plugin's command protocol and queues, interface scale,
+//! trackpad gestures and exit semantics. Qt lives behind `shim.rs`.
 //!
 //! Layout:
 //! * [`config`] — launch flags/environment.
-//! * [`filter`] — the filtering proxy on its own runtime.
+//! * [`browse`] — the `peakd:view:*` protocol, queues and the view state
+//!   machine; [`host`] binds it to the Qt child views.
+//! * [`display`] — interface scale files and the DPI-derived `auto` choice.
+//! * [`gestures`] — evdev three-finger swipes.
+//! * [`shim`] — the C ABI in `shim/peakd_qt.h`.
 
 mod bench;
+mod browse;
 mod config;
-mod filter;
+mod display;
+mod gestures;
+mod host;
+mod shim;
 
-use std::process::ExitCode;
+use std::ffi::{c_char, c_void, CStr};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant, SystemTime};
 
-use tao::dpi::LogicalSize;
-use tao::event::{Event, WindowEvent};
-use tao::event_loop::ControlFlow;
-use tao::window::WindowBuilder;
+use parking_lot::Mutex;
 
-use wry::WebViewBuilder;
-
+use browse::{ViewBus, Views};
 use config::PeakdConfig;
+use host::QtHost;
 
-#[cfg(target_os = "macos")]
-use wry::ProxyConfig;
+/// The IPC message the page sends when the user asks to leave the kiosk.
+const EXIT_MESSAGE: &str = "peakd:exit";
 
-/// What the in-process engine can actually filter on this platform.
+/// The page posts this when the user turns on Server mode. The shell exits
+/// with [`SERVER_MODE_EXIT`] so the session supervisor can relaunch into the
+/// server-mode window instead of ending the session.
+const SERVER_MODE_MESSAGE: &str = "peakd:server-mode";
+
+/// Exit status meaning "switch to server mode".
+const SERVER_MODE_EXIT: i32 = 42;
+
+/// Set by the IPC handler; read once the Qt event loop returns.
+static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
+
+/// Leaving the kiosk: Cmd+Q and Alt+Q.
 ///
-/// This is stated rather than implied because the difference is real and
-/// measurable, and a status line that said "filtering: on" on every platform
-/// would be a lie. See `apply_proxy` for the mechanism.
-#[cfg(target_os = "macos")]
-const FILTERING_SCOPE: &str = "not wired into the native webview on macOS (see apply_proxy)";
-#[cfg(not(target_os = "macos"))]
-const FILTERING_SCOPE: &str = "webview proxied via the http_proxy environment";
+/// On Linux Chromium delivers the Super/Command modifier to the DOM (unlike
+/// WebKitGTK, which stripped it before the page could see it), so this single
+/// script works on every platform the Qt shell runs on. `event.code` rather
+/// than `event.key`: with Alt held on ISO layouts the key *is* `œ`, while the
+/// physical key is still Q. Capture phase, so a page's own handler cannot
+/// swallow the way out first. Injected into every page and future page.
+const EXIT_SHORTCUT_JS: &str = r#"(function () {
+  if (window.__peakdExitShortcut) return;
+  window.__peakdExitShortcut = true;
+  window.addEventListener('keydown', function (event) {
+    if (event.code !== 'KeyQ' && String(event.key).toLowerCase() !== 'q') return;
+    if (!(event.metaKey || event.altKey)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    try {
+      window.ipc.postMessage('peakd:exit');
+    } catch (err) {
+      // No IPC bridge (a plain page in a test, say): nothing to report to.
+    }
+  }, true);
+})();"#;
 
-fn main() -> ExitCode {
+static BUS: OnceLock<ViewBus> = OnceLock::new();
+static VIEWS: OnceLock<Mutex<Views<QtHost>>> = OnceLock::new();
+static GESTURES: OnceLock<gestures::GestureBridge> = OnceLock::new();
+static DISPLAY: OnceLock<Mutex<DisplayState>> = OnceLock::new();
+static BENCH: OnceLock<Mutex<bench::BenchState>> = OnceLock::new();
+static START_URL: OnceLock<String> = OnceLock::new();
+
+/// Interface-scale state, polled on the pump (a stat every 100 ms).
+struct DisplayState {
+    choice_path: PathBuf,
+    runtime_path: PathBuf,
+    /// `--scale`, applied at startup; a later change to the choice file wins,
+    /// exactly like the GTK shell.
+    override_choice: Option<display::Choice>,
+    /// The panel-derived factor `auto` resolves to.
+    auto: f64,
+    /// What was applied; `None` until the first tick.
+    applied: Option<f64>,
+    last_mtime: Option<SystemTime>,
+    info: Option<(f64, i32, i32)>,
+}
+
+fn main() {
+    #[cfg(target_os = "linux")]
+    std::process::exit(linux_main());
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        eprintln!("peakd is Linux-only; macOS keeps the wry/WKWebView shell");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_main() -> i32 {
     let cfg = PeakdConfig::from_env_and_args();
 
+    // Force Qt's own scale factor to 1 before Qt initialises: the interface
+    // scale is the app's page zoom (display.rs), exactly as with WebKitGTK.
+    // Without this, a HiDPI panel would scale twice.
+    std::env::set_var("QT_SCALE_FACTOR", "1");
+    std::env::set_var("QT_AUTO_SCREEN_SCALE_FACTOR", "0");
+
+    if cfg.devtools {
+        // QtWebEngine's devtools live in Chromium; expose them on loopback.
+        std::env::set_var("QTWEBENGINE_REMOTE_DEBUGGING", "127.0.0.1:9222");
+        println!("peakd: devtools on http://127.0.0.1:9222");
+    }
+
     match run(cfg) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => code,
         Err(err) => {
             eprintln!("peakd: {err}");
-            ExitCode::FAILURE
+            1
         }
     }
 }
 
-/// A bare tao/WKWebView process launches as an accessory (background) app, so
-/// its window opens *behind* whatever is already on screen. Promote it to a
-/// regular, activating app — this is both what a user expects of a browser and
-/// what makes automated window screenshots work.
-#[cfg(target_os = "macos")]
-fn activate_app() {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+/// One IPC message from any page. Browser-view commands go to the queue;
+/// everything else is the exit contract.
+extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
+    let body = unsafe { CStr::from_ptr(body) }.to_string_lossy().into_owned();
+    if let Some(bus) = BUS.get() {
+        if bus.handle_ipc(&body) {
+            // Apply the view command now, not on the next 100 ms pump tick. A
+            // `setBounds` during a window drag has to land in the same frame as
+            // the DOM write, otherwise the native Browser page trails its own
+            // window frame by up to a tick.
+            pump_views();
+            return;
+        }
+    }
+    match body.as_str() {
+        EXIT_MESSAGE => {
+            println!("peakd: leaving the kiosk");
+            EXIT_CODE.store(0, Ordering::SeqCst);
+            shim::quit();
+        }
+        SERVER_MODE_MESSAGE => {
+            EXIT_CODE.store(SERVER_MODE_EXIT, Ordering::SeqCst);
+            shim::quit();
+        }
+        _ => {}
+    }
+}
 
-    let Some(mtm) = MainThreadMarker::new() else {
+/// View lifecycle from the shim. Events are queued; the pump reports them to
+/// the plugin with `window.__peakdViewEvent`.
+extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_char, payload: *const c_char) {
+    let id = unsafe { CStr::from_ptr(id) }.to_string_lossy().into_owned();
+    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy().into_owned();
+    let payload = unsafe { CStr::from_ptr(payload) }.to_string_lossy().into_owned();
+
+    // The top-level window's move is the benchmark's drag signal.
+    if id == "window" && kind == "move" {
+        if let Some(bench) = BENCH.get() {
+            bench.lock().observe_window_move();
+        }
+        return;
+    }
+
+    let Some(bus) = BUS.get() else { return };
+    match kind.as_str() {
+        "load" | "title" | "url" | "new-window" => {
+            bus.push_event(ViewBus::view_event(&id, &kind, &payload));
+        }
+        "crashed" => {
+            eprintln!("peakd: view {id} crashed ({payload})");
+            if id == "main" {
+                // The app's own renderer died: bring it back rather than
+                // leaving a dead white window in the kiosk.
+                if let Some(url) = START_URL.get() {
+                    shim::main_load(url);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The shell's pump (Qt timer, ~100 ms): drain view commands/events, dispatch
+/// gestures, apply scale changes.
+extern "C" fn on_pump(_userdata: *mut c_void) {
+    pump_views();
+    if let Some(bridge) = GESTURES.get() {
+        for direction in bridge.drain() {
+            shim::main_run_js(&gestures::dispatch_script(direction), 0);
+        }
+    }
+    display_tick();
+    bench_tick();
+}
+
+/// Drain the browser-view command and event queues. Called on the pump and,
+/// for commands, immediately from `on_ipc` so a moving native view keeps up.
+fn pump_views() {
+    if let Some(views) = VIEWS.get() {
+        views.lock().pump(|script| shim::main_run_js(script, 0));
+    }
+}
+
+/// The benchmark's schedule, advanced on the pump.
+fn bench_tick() {
+    let Some(lock) = BENCH.get() else { return };
+    let mut state = lock.lock();
+    let Some(step) = state.tick() else { return };
+    match step {
+        bench::Step::Inject => {
+            shim::main_run_js(bench::BENCH_JS, 0);
+            if state.drag_tile() {
+                shim::main_run_js(bench::DRAG_TILE_JS, 0);
+                println!("benchmark: dragging a plugin window");
+            }
+            println!("benchmark: measuring...");
+        }
+        bench::Step::Collect => {
+            if state.drag_tile() {
+                shim::main_run_js(
+                    "window.__peakdTileDragStop && window.__peakdTileDragStop()",
+                    0,
+                );
+            }
+            shim::main_run_js(
+                "JSON.stringify(window.__peakdBenchReport ? window.__peakdBenchReport() : null)",
+                1,
+            );
+        }
+    }
+}
+
+/// Results of `run_js`: callback id 1 is the benchmark report.
+extern "C" fn on_js(_userdata: *mut c_void, id: i32, value: *const c_char) {
+    if id != 1 {
+        return;
+    }
+    let raw = unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned();
+    if let Some(bench) = BENCH.get() {
+        bench.lock().finish(&raw);
+    }
+    shim::quit();
+}
+
+fn display_tick() {
+    let Some(lock) = DISPLAY.get() else { return };
+    let mut state = lock.lock();
+
+    let mtime = display::modified(&state.choice_path);
+    let changed = mtime != state.last_mtime;
+    state.last_mtime = mtime;
+    if !changed && state.applied.is_some() {
+        return;
+    }
+
+    let resolved = if state.applied.is_none() {
+        // First application: `--scale` wins over the stored choice.
+        state
+            .override_choice
+            .unwrap_or_else(|| display::read_choice(&state.choice_path))
+            .resolve(state.auto)
+    } else {
+        display::read_choice(&state.choice_path).resolve(state.auto)
+    };
+    if state.applied == Some(resolved) {
+        return;
+    }
+    shim::main_zoom(resolved);
+    display::write_runtime(&state.runtime_path, resolved, state.info);
+    state.applied = Some(resolved);
+    println!("peakd: interface scale {:.0}%", resolved * 100.0);
+}
+
+/// Wait until a loopback start URL actually accepts connections.
+///
+/// The app is served by `shiny.service`, which loads every installed plugin
+/// before it starts listening (several seconds on a cold boot). `After=` only
+/// orders the units, not readiness, so peakd can start first — and a
+/// `connection refused` page is never retried by the webview, which is exactly
+/// how the kiosk ended up white. Non-loopback URLs are not waited for.
+fn wait_for_loopback_origin(url: &str, timeout: Duration) {
+    let Some((host, port)) = loopback_endpoint(url) else {
         return;
     };
-    let app = NSApplication::sharedApplication(mtm);
-    app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
-    #[allow(deprecated)]
-    app.activateIgnoringOtherApps(true);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn activate_app() {}
-
-/// OPT-IN diagnostics: `RUST_LOG=shiny_filter=debug peakd` shows every
-/// request the proxy sees (and every one the filter blocks). Off by default so
-/// a normal launch stays quiet.
-fn init_tracing() {
-    use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(true)
-        .try_init();
-}
-
-struct Shell {
-    /// Held so the filter engine outlives the event loop: dropping it would
-    /// tear down the proxy the webview is still pointed at.
-    _cfg: PeakdConfig,
-    filtering: Option<filter::BackgroundFilter>,
-}
-
-fn run(cfg: PeakdConfig) -> Result<(), String> {
-    init_tracing();
-    activate_app();
-
-    // Typed with the benchmark's step enum so one loop serves both a normal
-    // session (where the variant is never sent) and a benchmark run.
-    let event_loop = bench::event_loop();
-    let proxy = event_loop.create_proxy();
-
-    let window = WindowBuilder::new()
-        .with_title(cfg.window_title.clone())
-        .with_inner_size(LogicalSize::new(cfg.width, cfg.height))
-        .with_min_inner_size(LogicalSize::new(480.0, 360.0))
-        .build(&event_loop)
-        .map_err(|e| format!("could not create the browser window: {e}"))?;
-
-    // Start the filter engine in the background rather than before the webview.
-    //
-    // It used to run inline here, which delayed the first paint by however long
-    // the engine takes to deserialise its compiled rule set — on every launch,
-    // including on macOS where the platform webview ignores the proxy. The page
-    // now starts loading immediately.
-    let filtering = if cfg.proxy.is_some() {
-        None
-    } else {
-        Some(filter::start_background(&cfg))
+    let Ok(mut addrs) = (host.as_str(), port).to_socket_addrs() else {
+        return;
     };
+    let Some(addr) = addrs.next() else {
+        return;
+    };
+
+    let deadline = Instant::now() + timeout;
+    let mut announced = false;
+    loop {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok() {
+            return;
+        }
+        if !announced {
+            println!("peakd: waiting for the app at {addr}");
+            announced = true;
+        }
+        if Instant::now() >= deadline {
+            eprintln!(
+                "peakd: the app at {addr} did not answer within {timeout:?}; opening anyway"
+            );
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// `(host, port)` when the URL points at loopback, `None` otherwise.
+fn loopback_endpoint(url: &str) -> Option<(String, u16)> {
+    let authority = url.split_once("://")?.1;
+    let authority = authority.split(['/', '?', '#']).next()?;
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) => (host, port.parse().ok()?),
+        None => (authority, 80),
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let loopback = host == "localhost" || host == "127.0.0.1" || host == "::1";
+    loopback.then(|| (host.to_string(), port))
+}
+
+/// When `--iroh <ticket>` is set, start a local proxy that tunnels to the
+/// remote server and point the shell at it. Refuse without the feature.
+#[cfg(feature = "iroh")]
+fn resolve_iroh(mut cfg: PeakdConfig) -> Result<PeakdConfig, String> {
+    let Some(ticket) = cfg.iroh.clone() else {
+        return Ok(cfg);
+    };
+    let listen: std::net::SocketAddr = "127.0.0.1:0".parse().expect("valid loopback");
+    let addr = shiny_iroh_client::spawn(&ticket, listen)
+        .map_err(|e| format!("could not start the Iroh proxy: {e}"))?;
+    let origin = format!("http://{addr}");
+    println!("peakd: iroh proxy on {origin}");
+    cfg.start_url = format!("{origin}/");
+    cfg.app_origin = origin;
+    cfg.app_mode = true;
+    Ok(cfg)
+}
+
+#[cfg(not(feature = "iroh"))]
+fn resolve_iroh(cfg: PeakdConfig) -> Result<PeakdConfig, String> {
+    if cfg.iroh.is_some() {
+        return Err("this peakd build has no Iroh support (rebuild with --features iroh)".into());
+    }
+    Ok(cfg)
+}
+
+fn run(cfg: PeakdConfig) -> Result<i32, String> {
+    let cfg = resolve_iroh(cfg)?;
+
+    wait_for_loopback_origin(&cfg.start_url, Duration::from_secs(30));
 
     println!("peakd: opening {}", cfg.start_url);
     println!(
@@ -124,168 +371,89 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
         cfg.app_origin,
         if cfg.app_mode { "on" } else { "off" }
     );
-    match filtering.as_ref() {
-        Some(_) => println!("peakd: filter engine starting in the background — {FILTERING_SCOPE}"),
-        None if cfg.proxy.is_some() => println!(
-            "peakd: delegating to the external proxy {}",
-            cfg.proxy.as_deref().unwrap_or("")
-        ),
-        None => println!("peakd: filtering engine unavailable; traffic is direct"),
+    if let Some(benchmark) = cfg.benchmark.clone() {
+        bench::announce(&benchmark);
+        BENCH
+            .set(Mutex::new(bench::BenchState::new(
+                benchmark,
+                cfg.benchmark_drag_tile,
+            )))
+            .ok();
     }
 
-    let builder = WebViewBuilder::new()
-        .with_url(cfg.start_url.clone())
-        .with_devtools(cfg.devtools)
-        // A browser needs a real UA; the platform default already is one, so
-        // this only pins the version string the app sees.
-        .with_user_agent(concat!(
-            "Peakd/0.1 ",
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-        ))
-        // Keep navigation inside the shell: rather than handing `target=_blank`
-        // to the OS browser, load in place. A real tab layer replaces this.
-        .with_navigation_handler(|_url| true)
-        // Grant microphone/camera to the app's own pages. wry already defaults
-        // to Grant, but relying on a default for something the user experiences
-        // as "the mic does not work" is not good enough — and stating it means
-        // a future wry default change cannot silently break voice input.
-        //
-        // This is only the *webview's* decision. macOS separately requires the
-        // host app to be a bundle declaring NSMicrophoneUsageDescription;
-        // `scripts/bundle-app.sh` builds that. Without it the request is
-        // refused by the OS with no prompt. On Linux the same grant is what the
-        // WebKitGTK permission request needs.
-        .with_permission_handler(|kind| match kind {
-            wry::PermissionKind::Microphone | wry::PermissionKind::Camera => {
-                wry::PermissionResponse::Allow
-            }
-            // Everything else keeps the engine's normal prompting behaviour.
-            _ => wry::PermissionResponse::Default,
-        });
+    // The profile lives beside the shell's other state.
+    let profile_dir = format!("{}/qtwebengine", cfg.data_dir);
 
-    let builder = apply_proxy(builder, &cfg, filtering.as_ref());
+    START_URL.set(cfg.start_url.clone()).ok();
+    let bus = ViewBus::new();
+    BUS.set(bus.clone()).ok();
+    VIEWS
+        .set(Mutex::new(Views::new(bus, QtHost)))
+        .ok();
+    GESTURES.set(gestures::spawn()).ok();
 
-    let webview = builder
-        .build(&window)
-        .map_err(|e| format!("could not create the webview: {e}"))?;
+    let dpi = shim::screen_dpi();
+    let (width, height) = shim::screen_size();
+    let auto = display::auto_scale(dpi);
+    DISPLAY
+        .set(Mutex::new(DisplayState {
+            choice_path: cfg.display_file.clone(),
+            runtime_path: cfg.display_runtime_file.clone(),
+            override_choice: cfg.scale_override.map(display::Choice::Factor),
+            auto,
+            applied: None,
+            last_mtime: None,
+            info: (dpi > 0.0).then_some((dpi, width, height)),
+        }))
+        .ok();
 
-    // The benchmark takes over the process: it measures, prints and exits.
-    if let Some(bench_config) = cfg.benchmark.clone() {
-        bench::announce(&bench_config);
-        let drag_tile = cfg.benchmark_drag_tile;
-        bench::run(
-            webview,
-            bench::BenchState::new(bench_config, drag_tile),
-            proxy,
-            event_loop,
-        );
-    }
+    shim::inject_script("peakd:exit", EXIT_SHORTCUT_JS);
+    shim::set_window(&cfg.window_title, cfg.width, cfg.height);
 
-    let shell = Shell { _cfg: cfg, filtering };
-
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                *control_flow = ControlFlow::Exit;
-            }
-            Event::LoopDestroyed => {
-                if let Some(rt) = shell.filtering.as_ref() {
-                    println!("peakd: filter engine ready: {}", rt.ready());
-                }
-            }
-            _ => {}
-        }
-    });
-}
-
-/// Route the webview through the filtering proxy where the platform supports it.
-///
-/// macOS can be configured in-process through wry's NetworkExtension-backed
-/// `ProxyConfig` (the `mac-proxy` feature). Linux/GTK has no equivalent hook in
-/// wry, so the shell falls back to the environment (`http_proxy`/`https_proxy`,
-/// read by libsoup) and reports honestly when filtering is unavailable rather
-/// than pretending the traffic was filtered.
-fn apply_proxy<'a>(
-    builder: WebViewBuilder<'a>,
-    cfg: &PeakdConfig,
-    own_engine: Option<&filter::BackgroundFilter>,
-) -> WebViewBuilder<'a> {
-    // An explicit `--proxy` wins and is known immediately.
-    if let Some((host, port)) = cfg.proxy_endpoint() {
-        return route_through(builder, host, port);
-    }
-
-    let Some(engine) = own_engine else {
-        return builder;
+    let url = std::ffi::CString::new(cfg.start_url.clone()).expect("URLs carry no NUL");
+    let data_dir =
+        std::ffi::CString::new(profile_dir.clone()).expect("paths carry no NUL");
+    let rc = unsafe {
+        shim::peakd_qt_run(
+            url.as_ptr(),
+            data_dir.as_ptr(),
+            0,
+            on_ipc,
+            on_view,
+            on_pump,
+            on_js,
+            std::ptr::null_mut(),
+        )
     };
 
-    // The engine is starting in the background, so its port is not known yet
-    // and cannot be waited for without giving back the startup time this change
-    // exists to save.
-    //
-    // On macOS that costs nothing: the platform webview ignores `ProxyConfig`
-    // anyway (see the note above), so routing it was never going to filter
-    // anything. Blocking startup to configure a proxy that has no effect was
-    // pure loss.
-    //
-    // On Linux the environment variables *are* the mechanism and are read when
-    // the webview's network process starts, so there the port genuinely has to
-    // be known first — waiting is the correct trade.
-    #[cfg(target_os = "macos")]
-    {
-        let _ = engine;
-        println!(
-            "peakd: webview filtering is not wired on macOS, so the engine's port is not \
-             needed at startup"
-        );
-        builder
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        match engine.wait_for_endpoint(std::time::Duration::from_secs(10)) {
-            Some((host, port)) => route_through(builder, host, port),
-            None => {
-                eprintln!(
-                    "peakd: filter engine did not come up in time; browsing without it"
-                );
-                builder
-            }
-        }
-    }
+    let code = EXIT_CODE.load(Ordering::SeqCst);
+    Ok(if code != 0 { code } else { rc })
 }
 
-/// Point the webview at a proxy, per platform.
-fn route_through<'a>(
-    builder: WebViewBuilder<'a>,
-    host: String,
-    port: String,
-) -> WebViewBuilder<'a> {
-    #[cfg(target_os = "macos")]
-    {
-        println!("peakd: routing webview traffic through {host}:{port}");
-        builder.with_proxy_config(ProxyConfig::Http(wry::ProxyEndpoint { host, port }))
-    }
+#[cfg(test)]
+mod tests {
+    use super::loopback_endpoint;
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        // Best effort: give libsoup/WebKitGTK the proxy through the
-        // environment. This runs before the webview (and therefore any WebKit
-        // thread) exists, so mutating the environment here is not a data race.
-        let addr = format!("http://{host}:{port}");
-        std::env::set_var("http_proxy", &addr);
-        std::env::set_var("https_proxy", &addr);
-        std::env::set_var("HTTP_PROXY", &addr);
-        std::env::set_var("HTTPS_PROXY", &addr);
-        println!(
-            "peakd: webview proxy via environment ({addr}); \
-             on this platform filtering depends on the system webview honouring it"
+    #[test]
+    fn loopback_detection() {
+        assert_eq!(
+            loopback_endpoint("http://127.0.0.1:8080"),
+            Some(("127.0.0.1".to_string(), 8080))
         );
-        builder
+        assert_eq!(
+            loopback_endpoint("http://localhost:8080/x?y#z"),
+            Some(("localhost".to_string(), 8080))
+        );
+        assert_eq!(
+            loopback_endpoint("http://[::1]:8080/"),
+            Some(("::1".to_string(), 8080))
+        );
+        assert_eq!(
+            loopback_endpoint("http://127.0.0.1/"),
+            Some(("127.0.0.1".to_string(), 80))
+        );
+        assert_eq!(loopback_endpoint("https://example.com/a"), None);
+        assert_eq!(loopback_endpoint("https://example.com:8443/a"), None);
+        assert_eq!(loopback_endpoint("about:blank"), None);
     }
 }

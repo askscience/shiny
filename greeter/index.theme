@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=Shiny
+Comment=Shiny Noir greeter theme
+Encoding=UTF-8
+
+[X-GNOME-Metatheme]
+GtkTheme=Shiny
+MetacityTheme=Shiny
+IconTheme=Adwaita
+CursorTheme=Adwaita
+ButtonLayout=:minimize,maximize,close

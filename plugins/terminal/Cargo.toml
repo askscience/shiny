@@ -1,0 +1,22 @@
+[package]
+name = "shiny-terminal-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "shiny_terminal_plugin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = { version = "1", features = ["serde"] }
+axum = { version = "0.7", features = ["json", "query"] }
+bytes = "1"
+futures = "0.3"
+base64 = "0.22"
+portable-pty = "0.9"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"

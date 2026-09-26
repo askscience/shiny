@@ -6,8 +6,8 @@
  * descriptions, so new parameters and modules appear here automatically.
  *
  * Bitwig Studio-style layout:
- *   • Header — transport (stop / play / loop / metronome), position + BPM,
- *     project title, save, WAV export, browser toggle, status.
+ *   • Header — the Browser menu (left), project title, transport (stop / play /
+ *     loop / metronome) + position + BPM, view toggles, WAV export, save, status.
  *   • Body — Arranger (timeline: ruler, track lanes, clips, playhead) and
  *     Clip Launcher (tracks × scenes grid of looping clip slots) side by
  *     side; each is toggled from the header.
@@ -22,9 +22,9 @@
  * is WebAudio. Launcher clips loop and launch quantized to the next bar.
  */
 
-import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient } from '/ui/index.js';
-import { apiFetch } from '/js/api.js';
-import { saveOrDownload } from '/js/files.js';
+import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient } from '../../ui/index.js';
+import { apiFetch } from '../../js/api.js';
+import { saveOrDownload } from '../../js/files.js';
 
 export const STUDIO_PLUGIN = 'studio';
 
@@ -669,6 +669,7 @@ let editorPageEl = null;
 let devicesEl = null;
 let mixerEl = null;
 let browserEl = null;
+let browserBtn = null;          // the left-hand Browser menu button in the bar
 let browserListEl = null;
 let browserTab = 'patterns';
 let browserMode = null;          // null | 'addTrack'
@@ -1322,11 +1323,11 @@ function updateTransport() {
     playBtn.setAttribute('aria-pressed', String(!!arrPlaying));
   }
   if (loopBtn) {
-    loopBtn.classList.toggle('studio-btn--on', arrLoop);
+    loopBtn.classList.toggle('studio-transport--on', arrLoop);
     loopBtn.setAttribute('aria-pressed', String(!!arrLoop));
   }
   if (metroBtn) {
-    metroBtn.classList.toggle('studio-btn--on', metroOn);
+    metroBtn.classList.toggle('studio-transport--on', metroOn);
     metroBtn.setAttribute('aria-pressed', String(!!metroOn));
   }
 }
@@ -3247,11 +3248,13 @@ function openBrowser(tab, mode = null) {
   browserTab = tab || browserTab;
   browserMode = mode ? { type: mode, area: panels.launcher && !panels.arranger ? 'lch' : 'arr' } : null;
   browserEl?.classList.remove('hidden');
+  browserBtn?.setAttribute('aria-expanded', 'true');
   renderBrowser();
   browserEl?.querySelector('input')?.focus();
 }
 function closeBrowser() {
   browserEl?.classList.add('hidden');
+  browserBtn?.setAttribute('aria-expanded', 'false');
   browserMode = null;
 }
 function toggleBrowser() {
@@ -4278,6 +4281,7 @@ export function mountStudioTile() {
   const stopBtn = button({ variant: 'ghost', icon: 'ui/stop', label: '', onClick: () => { stopPlayback(); stopAllLauncher(); } });
   stopBtn.classList.add('studio-transport');
   stopBtn.title = 'Stop';
+  stopBtn.setAttribute('aria-label', 'Stop');
 
   playBtn = button({ variant: 'ghost', icon: 'ui/play', label: '', onClick: () => {
     if (arrPlaying) { stopPlayback(); return; }
@@ -4286,6 +4290,7 @@ export function mountStudioTile() {
   } });
   playBtn.classList.add('studio-transport', 'studio-transport--play');
   playBtn.title = 'Play (Arranger) / Launch scene 1 (Launcher)';
+  playBtn.setAttribute('aria-label', 'Play');
 
   loopBtn = button({ variant: 'ghost', icon: 'ui/loop', label: '', onClick: () => {
     arrLoop = !arrLoop;
@@ -4295,6 +4300,7 @@ export function mountStudioTile() {
   } });
   loopBtn.classList.add('studio-transport');
   loopBtn.title = 'Loop arrangement';
+  loopBtn.setAttribute('aria-label', 'Loop arrangement');
 
   metroBtn = button({ variant: 'ghost', icon: 'ui/metronome', label: '', onClick: () => {
     metroOn = !metroOn;
@@ -4305,6 +4311,7 @@ export function mountStudioTile() {
   } });
   metroBtn.classList.add('studio-transport');
   metroBtn.title = 'Metronome';
+  metroBtn.setAttribute('aria-label', 'Metronome');
 
   timeEl = h('span', 'studio-time');
   beatDotEl = h('span', 'studio-beat');
@@ -4342,25 +4349,44 @@ export function mountStudioTile() {
     markDirty();
   });
 
+  const exportBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => void exportWav() });
+  exportBtn.classList.add('studio-transport');
+  exportBtn.title = 'Export WAV';
+  exportBtn.setAttribute('aria-label', 'Export WAV to Music');
+
   const saveBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => saveProjectNow() });
   saveBtn.classList.add('studio-transport');
   saveBtn.title = 'Save project';
+  saveBtn.setAttribute('aria-label', 'Save project');
 
-  const exportBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => void exportWav() });
-  exportBtn.classList.add('studio-transport');
-  exportBtn.title = 'Save WAV to Music';
-
-  const browserBtn = button({ variant: 'ghost', icon: 'ui/search', label: '', onClick: toggleBrowser });
-  browserBtn.classList.add('studio-transport');
+  // The left-hand list opener (patterns / instruments / effects / presets),
+  // shaped like Word/Calc's documents menu (icon + chevron).
+  browserBtn = document.createElement('button');
+  browserBtn.type = 'button';
+  browserBtn.className = 'studio-menu-btn';
+  browserBtn.setAttribute('aria-haspopup', 'true');
+  browserBtn.setAttribute('aria-expanded', 'false');
+  browserBtn.setAttribute('aria-label', 'Browser');
   browserBtn.title = 'Browser (patterns, instruments, effects, presets)';
+  const browserIcon = h('span', 'studio-menu-btn-icon');
+  browserBtn.appendChild(browserIcon);
+  void setIcon(browserIcon, 'ui/search', { size: 15 });
+  const browserChevron = h('span', 'studio-menu-btn-chevron');
+  browserBtn.appendChild(browserChevron);
+  void setIcon(browserChevron, 'ui/chevron-down', { size: 12 });
+  browserBtn.addEventListener('click', toggleBrowser);
 
   statusEl = h('span', 'studio-status');
   saveDotEl = h('span', 'studio-save-dot');
   saveDotEl.setAttribute('aria-hidden', 'true');
   saveDotEl.title = 'Saved';
 
-  barEl.append(arrToggleBtn, lchToggleBtn, synthmeBtn, gridBtn, h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
-    beatDotEl, timeEl, bpmInput, bpmLabel, titleInput, saveBtn, exportBtn, browserBtn, statusEl, saveDotEl);
+  // Single top bar (Word/Calc convention): left menu button, title (flex: 1),
+  // then transport/view toggles, then file actions (export → save), then the
+  // save dot. Every control keeps the shared 32px metrics.
+  barEl.append(browserBtn, titleInput, arrToggleBtn, lchToggleBtn, synthmeBtn, gridBtn,
+    h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
+    beatDotEl, timeEl, bpmInput, bpmLabel, exportBtn, saveBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
 
   /* ── body: arranger + launcher side by side ── */
@@ -4521,6 +4547,7 @@ export function unmountStudioTile() {
   gridSel = null;
   gridDraft = null;
   browserEl = browserListEl = footerHintEl = footerParamEl = edToolbarEl = editorPageEl = null;
+  browserBtn = null;
   scopeTraceEl = scopeSpecEl = beatDotEl = null;
   scopeTimeData = scopeFreqData = scopePeaks = null;
   scopeMeter = null;

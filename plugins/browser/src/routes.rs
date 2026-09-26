@@ -2,8 +2,9 @@
 //!
 //! The window is a client of the plugin, not a peer of it: every action the
 //! user takes (go, back, reload, search) round-trips through one of these so
-//! the session, the history log and the metrics stay consistent, and so the
-//! proxy base URL never has to be guessed by the front end.
+//! the session and the history log stay consistent. The page itself is rendered
+//! by a native child webview (`crates/peakd`'s `browse` module), so no proxied
+//! view URL has to be handed back.
 
 use std::sync::Arc;
 
@@ -16,18 +17,16 @@ use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request};
 use shiny_plugin_sdk::services::PluginCtx;
 
-use crate::proxy;
+use crate::sessions;
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
     match tag {
         "browser_state" => Some(state(ctx)),
-        "browser_sessions" => Some(sessions(ctx)),
+        "browser_sessions" => Some(sessions_route(ctx)),
         "browser_session_create" => Some(session_create(ctx)),
         "browser_session_close" => Some(session_close(ctx)),
         "browser_navigate" => Some(navigate(ctx)),
-        "browser_metrics" => Some(metrics(ctx)),
-        "browser_filter_toggle" => Some(filter_toggle(ctx)),
         "browser_history" => Some(history_route(ctx.clone())),
         "browser_news" => Some(news_route(ctx.clone())),
         "browser_news_click" => Some(news_click(ctx)),
@@ -131,10 +130,10 @@ impl Target {
                 // third party, and it is the engine this repo already talks to).
                 //
                 // The keyless fallback is **Brave Search**, chosen by
-                // measurement rather than preference: DuckDuckGo refuses this
-                // proxy with 403 (its bot detection dislikes the TLS stack),
-                // and Mojeek/Ecosia likewise; Brave answers 200 with real
-                // results. See `benchmarks/README.md`.
+                // measurement rather than preference: through the old proxied
+                // client DuckDuckGo answered 403 (its bot detection disliked
+                // the TLS stack) and Mojeek/Ecosia likewise; Brave answered 200
+                // with real results.
                 let encoded = url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
                 match searxng {
                     Some(base) if !base.trim().is_empty() => {
@@ -152,16 +151,9 @@ impl Target {
 fn state(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         user_id(&req)?;
-        let base = proxy::base();
-        let metrics = proxy::metrics();
-        let sessions = proxy::list_sessions().await;
+        let sessions = sessions::list_sessions().await;
         Ok(ok(json!({
-            "proxy_base": base,
-            "proxy_addr": proxy::addr().map(|a| a.to_string()),
-            "ready": base.is_some(),
-            "rules": proxy::handle().map(|h| h.filter.rule_count()).unwrap_or(0),
-            "filtering_paused": proxy::is_paused(),
-            "metrics": metrics,
+            "ready": true,
             "sessions": sessions,
             "home": "about:home",
         })))
@@ -169,10 +161,10 @@ fn state(_ctx: Arc<PluginCtx>) -> RouteHandler {
 }
 
 /// GET /api/browser/sessions
-fn sessions(_ctx: Arc<PluginCtx>) -> RouteHandler {
+fn sessions_route(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         user_id(&req)?;
-        Ok(ok(json!({ "sessions": proxy::list_sessions().await })))
+        Ok(ok(json!({ "sessions": sessions::list_sessions().await })))
     })
 }
 
@@ -208,21 +200,15 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
             let searxng = std::env::var("SEARXNG_URL").ok();
             let url = target.into_url(searxng.as_deref());
 
-            let Some(view_url) = proxy::view_url(&url) else {
-                return Err(AppError::Internal(
-                    "the browser proxy is not running yet — try again in a moment".into(),
-                ));
-            };
-
             // Keep the session (or create one) pointing at the new URL. A
             // stale id from a reloaded page falls back to a fresh session
             // rather than failing the navigation.
             let session = match body.session_id.as_deref() {
-                Some(id) => match proxy::update_session(id, Some(url.clone()), None).await {
+                Some(id) => match sessions::update_session(id, Some(url.clone()), None).await {
                     Some(session) => session,
-                    None => proxy::create_session(url.clone()).await,
+                    None => sessions::create_session(url.clone()).await,
                 },
-                None => proxy::create_session(url.clone()).await,
+                None => sessions::create_session(url.clone()).await,
             };
 
             // Best-effort history: browsing must work even if the shared
@@ -236,21 +222,11 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
             )
             .await;
 
-            // `proxy_base` travels with every navigation because the port is
-            // random per server start (`ProxyConfig::default()` binds :0). A
-            // window that cached the base from before a restart aimed every
-            // later navigation at a dead port — the classic "connection
-            // refused" viewport. Sending the current base lets the window heal
-            // itself instead of needing a reload.
-            let proxy_base = proxy::base();
-
             if body.format.as_deref() == Some("text") {
-                let text = crate::fetch::text(&view_url).await?;
+                let text = crate::fetch::text(&url).await?;
                 return Ok(ok(json!({
                     "session": session,
                     "url": url,
-                    "view_url": view_url,
-                    "proxy_base": proxy_base,
                     "text": text,
                 })));
             }
@@ -258,8 +234,6 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
             Ok(ok(json!({
                 "session": session,
                 "url": url,
-                "view_url": view_url,
-                "proxy_base": proxy_base,
             })))
         }
     })
@@ -274,7 +248,7 @@ struct SessionBody {
 fn session_create(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         let _uid = user_id(&req)?;
-        let session = proxy::create_session(String::new()).await;
+        let session = sessions::create_session(String::new()).await;
         Ok(ok(json!({ "session": session })))
     })
 }
@@ -284,54 +258,8 @@ fn session_close(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
         let _uid = user_id(&req)?;
         let body = take_json::<SessionBody>(req).await?;
-        let closed = proxy::close_session(&body.id).await;
+        let closed = sessions::close_session(&body.id).await;
         Ok(ok(json!({ "closed": closed })))
-    })
-}
-
-/// GET /api/browser/metrics — the counters the window's shield shows.
-fn metrics(_ctx: Arc<PluginCtx>) -> RouteHandler {
-    bridged_route(move |req: axum::extract::Request| async move {
-        user_id(&req)?;
-        Ok(ok(json!({
-            "metrics": proxy::metrics(),
-            "rules": proxy::handle().map(|h| h.filter.rule_count()).unwrap_or(0),
-            "filtering_paused": proxy::is_paused(),
-        })))
-    })
-}
-
-#[derive(Deserialize)]
-struct FilterToggleBody {
-    /// Omitted means "flip it", which is what a single toolbar button wants.
-    paused: Option<bool>,
-}
-
-/// POST /api/browser/filter/toggle — pause or resume ad blocking.
-///
-/// Some sites genuinely cannot work with their trackers removed. Without this
-/// the only options would be "broken page" or "leave the browser", so the
-/// window ships the same escape hatch every browser blocker has.
-fn filter_toggle(_ctx: Arc<PluginCtx>) -> RouteHandler {
-    bridged_route(move |req: axum::extract::Request| async move {
-        user_id(&req)?;
-        let body = take_json::<FilterToggleBody>(req).await.unwrap_or(FilterToggleBody { paused: None });
-
-        let Some(handle) = proxy::handle() else {
-            return Err(AppError::Internal(
-                "the browser proxy is not running yet — try again in a moment".into(),
-            ));
-        };
-
-        let paused = body.paused.unwrap_or(!handle.is_paused());
-        handle.set_paused(paused);
-        tracing::info!("browser: ad filtering {}", if paused { "paused" } else { "resumed" });
-
-        Ok(ok(json!({
-            "filtering_paused": paused,
-            "metrics": proxy::metrics(),
-            "rules": handle.filter.rule_count(),
-        })))
     })
 }
 
@@ -511,7 +439,7 @@ mod tests {
     #[test]
     fn search_falls_back_to_brave() {
         // Brave is the keyless default because DuckDuckGo/Mojeek/Ecosia all
-        // refuse this proxy; see the doc comment on `Target::into_url`.
+        // answered 403 to the old proxied client.
         let url = Target::Search("rust".into()).into_url(None);
         assert!(url.starts_with("https://search.brave.com/search?q=rust"));
     }

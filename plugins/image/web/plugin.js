@@ -16,10 +16,10 @@
  * refreshes its list and re-opens the image the AI touched.
  */
 
-import { button, emptyState, glowFromDrawable, select, setTileGlow, slider, toast } from '/ui/index.js';
-import { setIcon } from '/ui/index.js';
-import { apiFetch, getToken } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
+import { button, emptyState, glowFromDrawable, select, setTileGlow, slider, toast } from '../../ui/index.js';
+import { setIcon } from '../../ui/index.js';
+import { apiFetch, getToken } from '../../js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const IMAGE_PLUGIN = 'image';
 

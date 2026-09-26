@@ -1,9 +1,9 @@
 //! Agent tools for the browser plugin.
 //!
 //! These let the AI *drive* the browser window: open a page, search the web,
-//! or read a page's text back into the conversation. All three go through the
-//! same filter proxy the window renders through, so what the model reads is
-//! what the user would see with the ads already gone.
+//! or read a page's text back into the conversation. `browser_open` and
+//! `browser_search` hand the real URL to the window (which renders it in a
+//! native child webview); `browser_read` fetches the page server-side.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -14,7 +14,6 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
-use crate::proxy;
 use crate::routes::{normalize_input, Target};
 
 
@@ -56,13 +55,6 @@ fn resolve_target(input: &str) -> String {
     normalize_input(input).into_url(searxng.as_deref())
 }
 
-/// The view URL inside the window, or a clear error when the proxy is down.
-fn view_url_for(url: &str) -> Result<String, AppError> {
-    proxy::view_url(url).ok_or_else(|| {
-        AppError::Internal("the browser proxy is still starting — try again in a moment".into())
-    })
-}
-
 /* ── browser_open ───────────────────────────────────────────── */
 
 pub struct BrowserOpen;
@@ -82,7 +74,7 @@ impl Tool for BrowserOpen {
     }
 
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `browser_open` — Open a page in the Shiny browser window. params: `{ url: string }` — accepts a full URL or a search phrase (`\"rust webview\"` searches instead). The page is fetched through the built-in adblock engine.")
+        Some("- `browser_open` — Open a page in the Shiny browser window. params: `{ url: string }` — accepts a full URL or a search phrase (`\"rust webview\"` searches instead).")
     }
 
     fn humanize(&self, _r: &str, data: &Value) -> String {
@@ -99,7 +91,6 @@ impl Tool for BrowserOpen {
             .ok_or_else(|| AppError::BadRequest("url required".into()))?;
 
         let url = resolve_target(&raw);
-        let view_url = view_url_for(&url)?;
 
         let target = normalize_input(&raw);
         let title = match &target {
@@ -118,13 +109,9 @@ impl Tool for BrowserOpen {
 
         Ok(ActionOutcome::ok(
             "browser_open",
-            json!({
-                "url": url,
-                "view_url": view_url,
-                "blocked_rules": proxy::handle().map(|h| h.filter.rule_count()).unwrap_or(0),
-            }),
+            json!({ "url": url }),
         )
-        .with_artifact(page_artifact(&title, &url, Some("Filtered by shiny-filter"))))
+        .with_artifact(page_artifact(&title, &url, Some("Opened in the browser window"))))
     }
 }
 
@@ -163,7 +150,6 @@ impl Tool for BrowserSearch {
             .ok_or_else(|| AppError::BadRequest("query required".into()))?;
 
         let url = resolve_target(&query);
-        let view_url = view_url_for(&url)?;
 
         // A search is the strongest interest signal there is: record the words
         // the user asked for, not just the engine URL they became.
@@ -171,7 +157,7 @@ impl Tool for BrowserSearch {
 
         Ok(ActionOutcome::ok(
             "browser_search",
-            json!({ "query": query, "url": url, "view_url": view_url }),
+            json!({ "query": query, "url": url }),
         )
         .with_artifact(page_artifact(
             &format!("Search: {query}"),
@@ -200,7 +186,7 @@ impl Tool for BrowserRead {
     }
 
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `browser_read` — Fetch a page through the adblock engine and return its readable text, without showing it. params: `{ url: string, max_chars?: number }` — use this when you need the page's contents to answer a question.")
+        Some("- `browser_read` — Fetch a page and return its readable text, without showing it. params: `{ url: string, max_chars?: number }` — use this when you need the page's contents to answer a question.")
     }
 
     fn humanize(&self, _r: &str, data: &Value) -> String {
@@ -216,10 +202,9 @@ impl Tool for BrowserRead {
             .ok_or_else(|| AppError::BadRequest("url required".into()))?;
 
         let url = resolve_target(&raw);
-        let view_url = view_url_for(&url)?;
         let max_chars = req.params.param_u32("max_chars").unwrap_or(20_000) as usize;
 
-        let text = crate::fetch::text(&view_url).await?;
+        let text = crate::fetch::text(&url).await?;
         let truncated = text.chars().count() > max_chars;
         let text: String = if truncated {
             text.chars().take(max_chars).collect()

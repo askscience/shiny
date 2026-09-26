@@ -72,6 +72,54 @@ pub struct TravelerId(pub String);
 /// plain string comparison, so they cross the dlopen boundary safely.
 pub const USER_ID_HEADER: &str = "x-shiny-user-id";
 pub const TRAVELER_ID_HEADER: &str = "x-shiny-traveler-id";
+/// Real Linux account the request's owner is bound to (Linux-user mode). Only
+/// present when core resolved an OS user for the caller.
+pub const OS_USER_HEADER: &str = "x-shiny-os-user";
+/// The caller's real OS home directory (Linux-user mode).
+pub const OS_HOME_HEADER: &str = "x-shiny-os-home";
+/// The caller's OS uid, as a decimal string (Linux-user mode).
+pub const OS_UID_HEADER: &str = "x-shiny-os-uid";
+
+/// Resolved Linux identity for a request, when core bound the caller to an OS
+/// account. Plugins that manage files use `home` to operate on the real home;
+/// everything else can ignore it.
+#[derive(Debug, Clone)]
+pub struct OsIdentity {
+    pub user: String,
+    pub home: String,
+    pub uid: u32,
+}
+
+/// Read the OS identity core injected as request headers, if any.
+pub fn os_identity_from_request(req: &axum::extract::Request) -> Option<OsIdentity> {
+    let headers = req.headers();
+    let user = headers.get(OS_USER_HEADER)?.to_str().ok()?.to_string();
+    let home = headers.get(OS_HOME_HEADER)?.to_str().ok()?.to_string();
+    let uid = headers
+        .get(OS_UID_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    if user.is_empty() || home.is_empty() {
+        return None;
+    }
+    Some(OsIdentity { user, home, uid })
+}
+
+/// The caller's real OS home, if core bound them to an OS account.
+pub fn os_home_from_request(req: &axum::extract::Request) -> Option<String> {
+    os_identity_from_request(req).map(|id| id.home)
+}
+
+/// Header the remote (Iroh) client proxy sets on every forwarded request.
+/// Presence means the request arrived from a remote client even though its TCP
+/// peer is loopback (see `PLAN-iroh-remote.md`).
+pub const REMOTE_HEADER: &str = "x-shiny-remote";
+
+/// Did this request arrive over Iroh?
+pub fn is_remote_request(req: &axum::extract::Request) -> bool {
+    req.headers().contains_key(REMOTE_HEADER)
+}
 
 /// Read the authenticated user id the core auth middleware injected as a
 /// request header.

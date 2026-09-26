@@ -35,7 +35,7 @@ pub use outcome::ActionOutcome;
 pub use notification::{Notification, NotificationAction};
 pub use manifest::Manifest;
 pub use tools::{bridged, BridgedTool, Tool, ToolRequest, RegistryBuilder, ParamHelpers, parse_actions, strip_action_blocks, normalize_action_name};
-pub use routes::{RouteSpec, HttpMethod, RouteHandler, bridged_route, UserId, TravelerId, user_id_from_request, traveler_id_from_request, path_params_from_request, USER_ID_HEADER, TRAVELER_ID_HEADER, PATH_PARAMS_HEADER};
+pub use routes::{RouteSpec, HttpMethod, RouteHandler, bridged_route, UserId, TravelerId, user_id_from_request, traveler_id_from_request, path_params_from_request, USER_ID_HEADER, TRAVELER_ID_HEADER, PATH_PARAMS_HEADER, REMOTE_HEADER, is_remote_request, OsIdentity, os_identity_from_request, os_home_from_request, OS_USER_HEADER, OS_HOME_HEADER, OS_UID_HEADER};
 pub use crons::{CronSpec, CronEntry};
 pub use plugin::{Plugin, PluginEntry, PLUGIN_ENTRY_SYMBOL};
 pub use odp::Slide;

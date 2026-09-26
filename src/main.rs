@@ -13,11 +13,17 @@ use shiny::api;
 use shiny::api::AppState;
 use shiny::config::Config;
 use shiny::db;
+use shiny::services::audio::AudioService;
 use shiny::services::diary_gen::DiaryGenerator;
+use shiny::services::display::DisplayService;
 use shiny::services::gpsd::GpsdService;
+use shiny::services::keyboard_backlight::KeyboardBacklightService;
+use shiny::services::network::NetworkService;
 use shiny::services::ollama::OllamaClient;
 use shiny::services::osm::OsmService;
+use shiny::services::screen_brightness::ScreenBrightnessService;
 use shiny::services::supertonic::SupertonicClient;
+use shiny::services::touchbar::TouchBarService;
 use shiny::services::web_search::SearchService;
 use shiny::services::whisper::WhisperClient;
 
@@ -48,8 +54,24 @@ impl<'a> Service<axum::serve::IncomingStream<'a>> for RouterHandle {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, _stream: axum::serve::IncomingStream<'a>) -> Self::Future {
-        std::future::ready(Ok(self.inner.load_full().as_ref().clone()))
+    fn call(&mut self, stream: axum::serve::IncomingStream<'a>) -> Self::Future {
+        // The router rotates through this handle, so the peer address cannot
+        // be injected by a layer built at router-construction time. Add it
+        // here, per connection, as `ConnectInfo`: handlers use it to tell a
+        // local request from a remote one (network changes are loopback-only).
+        let remote = stream.remote_addr();
+        let router = self
+            .inner
+            .load_full()
+            .as_ref()
+            .clone()
+            .layer(axum::middleware::from_fn(
+                move |mut req: axum::extract::Request, next: axum::middleware::Next| async move {
+                    req.extensions_mut().insert(axum::extract::ConnectInfo(remote));
+                    next.run(req).await
+                },
+            ));
+        std::future::ready(Ok(router))
     }
 }
 
@@ -93,8 +115,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         spawn_whisper_sidecar(&config);
     }
 
+    // Migrate on a throwaway connection first, then open the pool: a pooled
+    // connection must never see a schema change after it has cached a
+    // prepared statement (stale `SELECT *` column metadata panics on read).
+    let mut migration_conn = db::connect(&config.database_url).await?;
+    db::run_migrations(&mut migration_conn).await?;
+    drop(migration_conn);
+
     let pool = db::init_pool(&config.database_url).await?;
-    db::run_migrations(&pool).await?;
 
     let ollama = OllamaClient::new(config.ollama_url.clone(), config.ollama_model.clone());
 
@@ -140,6 +168,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     gpsd.start().await;
 
+    // Host network panel (NetworkManager). Spawns and retries in the
+    // background; a machine without NM simply reports `available: false`.
+    let network = NetworkService::new();
+    network.start().await;
+
+    // Host sound panel (PipeWire via the Pulse socket). Same contract: the
+    // probe/event loop is backgrounded, so a machine without PipeWire boots
+    // unchanged and the panel just reports `available: false`.
+    let audio = AudioService::new();
+    audio.start().await;
+
+    // Host interface scale (webview page zoom). Stateless: the choice lives in
+    // a small file the kiosk shell reads, so there is nothing to start.
+    let display = DisplayService::new();
+
+    // Host Touch Bar capability (T2 MacBook). Stateless: a sysfs probe, so a
+    // machine without the hardware reports `available: false` and the web UI
+    // never listens for the bar's keys.
+    let touchbar = TouchBarService::new();
+
+    // Host keyboard backlight (the Mac's kbd_backlight LED). Stateless: reads
+    // and writes a sysfs attribute, so a machine without the LED reports
+    // `available: false` and the backlight actions are a no-op.
+    let keyboard_backlight = KeyboardBacklightService::new();
+
+    // Host panel brightness (the Mac's gmux_backlight). Same contract.
+    let screen_brightness = ScreenBrightnessService::new();
+
     if gpsd.is_connected().await {
         tracing::info!("GPSD connected at {}:{}", config.gpsd_host, config.gpsd_port);
     } else {
@@ -150,6 +206,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let diary_gen = Arc::new(DiaryGenerator::new(pool.clone(), ollama.clone(), osm.clone()));
 
+    // Loopback-only session token: lets the local kiosk and the server-mode
+    // window authenticate without a password (never valid over Iroh/LAN).
+    let session = shiny::auth::init_session(&pool, &config).await;
+
     let state = AppState {
         pool: pool.clone(),
         config: config.clone(),
@@ -157,13 +217,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         search,
         osm,
         gpsd,
+        network,
+        audio,
+        display,
+        touchbar,
+        keyboard_backlight,
+        screen_brightness,
         diary_gen: diary_gen.clone(),
         agent_turns: Default::default(),
         supertonic,
         whisper,
         plugins: shiny::plugins::PluginManager::new(std::path::PathBuf::from(&config.plugins_dir), pool.clone()),
+        iroh: shiny::services::iroh_remote::IrohRemote::new(),
+        session,
         router_rebuild: None,
     };
+
+    // Server mode at startup, when the session user asked for it.
+    state.autostart_remote().await;
 
     // Scan plugins directory and load installed cdylib plugins (hot-reload
     // registration on startup; subsequent installs use the admin API).

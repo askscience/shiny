@@ -13,7 +13,15 @@ pub mod voice;
 pub mod insights;
 pub mod ai;
 pub mod ollama;
+pub mod network;
+pub mod audio;
+pub mod display;
+pub mod touchbar;
+pub mod keyboard_backlight;
+pub mod screen_brightness;
+pub mod remote;
 
+use axum::response::IntoResponse;
 use axum::Router;
 use axum::routing::{delete, get, patch, post, put};
 use shiny_plugin_sdk::routes::{HttpMethod, RouteHandler, RouteSpec};
@@ -26,11 +34,17 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use crate::auth::auth_middleware;
 use crate::config::Config;
 use crate::plugins::PluginManager;
+use crate::services::audio::AudioService;
 use crate::services::diary_gen::DiaryGenerator;
+use crate::services::display::DisplayService;
 use crate::services::gpsd::GpsdService;
+use crate::services::network::NetworkService;
 use crate::services::ollama::OllamaClient;
 use crate::services::osm::OsmService;
 use crate::services::supertonic::SupertonicClient;
+use crate::services::touchbar::TouchBarService;
+use crate::services::keyboard_backlight::KeyboardBacklightService;
+use crate::services::screen_brightness::ScreenBrightnessService;
 use crate::services::web_search::SearchService;
 use crate::services::whisper::WhisperClient;
 
@@ -42,6 +56,18 @@ pub struct AppState {
     pub search: SearchService,
     pub osm: OsmService,
     pub gpsd: GpsdService,
+    /// Host Wi-Fi/Ethernet state (NetworkManager over D-Bus).
+    pub network: NetworkService,
+    /// Host volume/mute/default devices (PipeWire via the Pulse socket).
+    pub audio: AudioService,
+    /// Host interface scale (webview page zoom); the kiosk shell applies it.
+    pub display: DisplayService,
+    /// Host Touch Bar capability (T2 MacBook); the web UI listens for its keys.
+    pub touchbar: TouchBarService,
+    /// Host keyboard backlight LED (the Mac's `kbd_backlight`).
+    pub keyboard_backlight: KeyboardBacklightService,
+    /// Host panel brightness (the Mac's `gmux_backlight`).
+    pub screen_brightness: ScreenBrightnessService,
     pub diary_gen: Arc<DiaryGenerator>,
     /// In-flight agent turns, so a stop request can abort one mid-answer.
     pub agent_turns: crate::services::agent_cancel::TurnRegistry,
@@ -50,6 +76,10 @@ pub struct AppState {
     pub whisper: WhisperClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
+    /// Iroh remote-access service (`PLAN-iroh-remote.md`).
+    pub iroh: crate::services::iroh_remote::IrohRemote,
+    /// Loopback-only session token for the local kiosk / server-mode window.
+    pub session: crate::auth::SessionAuth,
     /// Admin-supplied router-rebuild trigger (set by `main.rs` once the live
     /// router swap is wired up).
     pub router_rebuild: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -61,6 +91,55 @@ impl AppState {
     /// in the user's Assistant settings.
     pub async fn resolve_ai(&self, traveler_id: &str) -> crate::services::ai::ResolvedAi {
         crate::services::ai::resolve_for_user(&self.pool, &self.ollama, traveler_id).await
+    }
+
+    /// Resolve the real Linux account a Shiny traveler is bound to, when
+    /// Linux-user mode is on. Prefers the stored `unix_user` and falls back to
+    /// the account's username, so existing accounts are mapped on first use.
+    pub fn os_identity_for(
+        &self,
+        traveler: &crate::models::Traveler,
+    ) -> Option<crate::services::unix_user::UnixUser> {
+        if !self.config.linux_users {
+            return None;
+        }
+        let name = traveler
+            .unix_user
+            .as_deref()
+            .or(traveler.username.as_deref())?;
+        crate::services::unix_user::lookup_name(name)
+    }
+
+    /// Enter server mode at startup when the session user asked for it (their
+    /// `remote.autostart` preference). Always writes the supervisor's state
+    /// file, so `shiny-session` knows which window to open.
+    pub async fn autostart_remote(&self) {
+        let Some(user_id) = self.session.user_id.as_deref() else {
+            crate::api::remote::write_state(false);
+            return;
+        };
+        let autostart = sqlx::query_scalar::<_, String>(
+            "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'remote.autostart'",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+
+        if autostart {
+            match self.iroh.start(self.config.server_port).await {
+                Ok(_) => {
+                    crate::api::remote::write_state(true);
+                    tracing::info!("iroh: remote access autostarted");
+                }
+                Err(e) => tracing::warn!("iroh autostart failed: {e:?}"),
+            }
+        } else {
+            crate::api::remote::write_state(false);
+        }
     }
 
     /// Build an `Arc<PluginCtx>` for handing to plugins at install/on_load time.
@@ -210,6 +289,19 @@ fn build_plugin_routes(state: &AppState) -> Router<AppState> {
     router
 }
 
+/// Reject host-capability mutations from a remote (Iroh) client. The transparent
+/// proxy makes the request's TCP peer loopback, so `require_local` alone would
+/// let a remote client change the machine's audio, network or display.
+async fn host_remote_gate(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if remote::is_remote(req.headers()) && req.method() != axum::http::Method::GET {
+        return axum::http::StatusCode::FORBIDDEN.into_response();
+    }
+    next.run(req).await
+}
+
 pub fn build_router(state: AppState) -> Router {
     let web_dir = state.config.web_dir.clone();
     let vosk_models_dir = state.config.vosk_models_dir.clone();
@@ -217,6 +309,8 @@ pub fn build_router(state: AppState) -> Router {
     let public_routes = Router::new()
         .route("/api/auth/register", post(auth::register))
         .route("/api/auth/login", post(auth::login))
+        .route("/api/auth/unix-users", get(auth::unix_users))
+        .route("/api/auth/session", get(auth::session_bootstrap))
         .route("/api/voice/languages", get(voice::voice_languages))
         .nest_service(
             "/api/voice/models/vosk",
@@ -237,6 +331,15 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
+        // Host panels (network/audio/display/backlight/brightness/touchbar) are
+        // registered separately in `host_routes` below so the remote-client gate
+        // can wrap them without wrapping the rest of the API.
+        .route("/api/remote/status", get(remote::status))
+        .route("/api/remote/enable", post(remote::enable))
+        .route("/api/remote/rotate", post(remote::rotate))
+        .route("/api/remote/qr", get(remote::qr))
+        .route("/api/remote/pair", post(remote::pair))
+        .route("/api/remote/unpair", post(remote::unpair))
         // Desktop background image: upload/serve/remove the caller's file.
         .route("/api/background", get(background::serve).post(background::upload)
             .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024))
@@ -279,7 +382,39 @@ pub fn build_router(state: AppState) -> Router {
         // are raw PCM up to ~64 KB each; the default 2 MB body cap is plenty.
         .route("/api/voice/whisper/download", post(voice::voice_whisper_download))
         .route("/api/voice/stt/chunk", post(voice::voice_stt_chunk))
-        .route("/api/voice/stt/close", post(voice::voice_stt_close))
+        .route("/api/voice/stt/close", post(voice::voice_stt_close));
+
+    // Host-capability routes. A remote (Iroh) client may read the host panels
+    // (the handlers report `available:false`, so the UI hides them) but must
+    // never mutate the machine — even though the transparent proxy makes the
+    // request's TCP peer loopback.
+    let host_routes = Router::new()
+        .route("/api/network/status", get(network::status))
+        .route("/api/network/events", get(network::events))
+        .route("/api/network/scan", post(network::scan))
+        .route("/api/network/connect", post(network::connect))
+        .route("/api/network/disconnect", post(network::disconnect))
+        .route("/api/network/forget", post(network::forget))
+        .route("/api/network/wifi-power", post(network::wifi_power))
+        .route("/api/audio/status", get(audio::status))
+        .route("/api/audio/events", get(audio::events))
+        .route("/api/audio/volume", post(audio::volume))
+        .route("/api/audio/mute", post(audio::mute))
+        .route("/api/audio/default", post(audio::default_device))
+        .route("/api/display", get(display::status).put(display::set_scale))
+        .route("/api/touchbar", get(touchbar::status))
+        .route(
+            "/api/keyboard/backlight",
+            get(keyboard_backlight::status).post(keyboard_backlight::set),
+        )
+        .route(
+            "/api/screen/brightness",
+            get(screen_brightness::status).post(screen_brightness::set),
+        )
+        .layer(axum::middleware::from_fn(host_remote_gate));
+
+    let protected_routes = protected_routes
+        .merge(host_routes)
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let static_files = ServeDir::new(&web_dir)

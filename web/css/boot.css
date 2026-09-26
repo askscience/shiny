@@ -1,0 +1,297 @@
+/* ─────────────────────────────────────────────────────────────
+   Boot splash — the skull mark, shown while the app starts.
+
+   index.html paints #boot-screen before any module runs; js/bootScreen.js
+   fades it out once the app shell (or the sign-in screen) is ready.
+
+   Every colour comes from the active theme's appearance tokens
+   (--accent / --accent-2 / --accent-glow / --gradient-accent), which
+   appearance.js rewrites from Settings → Appearance, so the splash follows
+   the user's accent and gradient — presets and custom alike.
+   ───────────────────────────────────────────────────────────── */
+
+#boot-screen {
+  position: fixed;
+  inset: 0;
+  /* Above the app and the login overlay, below the film grain (--z-grain). */
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  transition: opacity var(--duration-slow) var(--ease-out),
+              visibility 0s linear var(--duration-slow);
+}
+
+#boot-screen.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* A soft accent band sweeping down the screen — motion, not noise. */
+.boot-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 36%;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    var(--accent-soft) 50%,
+    transparent 100%);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: boot-scan 3.4s linear infinite;
+}
+
+@keyframes boot-scan {
+  from { transform: translateY(-120%); }
+  to   { transform: translateY(320%); }
+}
+
+/* ── The mark ───────────────────────────────────────────────────────────
+   The skull glitches by displacing slices of the image itself, not by
+   stacking a coloured echo on top:
+
+     · __base    the mark, on top. Its own clip-path tears bands out and its
+                 transform shifts the whole image during a burst.
+     · __crear / __cblue
+                 the same mask, 2px out to either side, always on. Because
+                 the base sits above them they read as a chromatic split that
+                 widens wildly during a burst.
+     · __tear*   two thin slices of the mark that snap to a new band and
+                 jump sideways for a few frames — the visible tear.
+   ─────────────────────────────────────────────────────────────────────── */
+.boot-logo {
+  position: relative;
+  width: clamp(84px, 16vmin, 128px);
+  height: clamp(84px, 16vmin, 128px);
+  isolation: isolate;
+  animation: boot-jitter 2.8s steps(1, end) infinite;
+}
+
+.boot-logo__layer.app-icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+  will-change: transform, clip-path;
+}
+
+/* The mark itself — last, so it paints over the split copies. */
+.boot-logo__base {
+  background-color: var(--text);
+  filter: drop-shadow(0 0 26px var(--accent-glow));
+  animation: boot-base 2.8s steps(1, end) infinite;
+}
+
+.boot-logo__crear {
+  background-color: var(--accent);
+  transform: translateX(-2px);
+  animation: boot-crear 3.1s steps(1, end) infinite;
+}
+
+.boot-logo__cblue {
+  background-color: var(--accent-2);
+  transform: translateX(2px);
+  animation: boot-cblue 2.6s steps(1, end) infinite;
+}
+
+/* Tear slices start fully clipped away (zero height) and snap open. */
+.boot-logo__tear-a,
+.boot-logo__tear-b {
+  clip-path: inset(0 0 100% 0);
+}
+.boot-logo__tear-a {
+  background-color: var(--accent);
+  animation: boot-tear-a 2.8s steps(1, end) infinite;
+}
+.boot-logo__tear-b {
+  background-color: var(--accent-2);
+  animation: boot-tear-b 3.4s steps(1, end) infinite;
+}
+
+/* Scanlines, masked to the mark so they sit on the skull, not the plate. */
+.boot-logo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--bg) 0 1px,
+    transparent 1px 3px);
+  opacity: 0.4;
+  -webkit-mask-image: url("/favicon.svg");
+  mask-image: url("/favicon.svg");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* Whole-mark jolt: a couple of pixels and a hair of skew at each burst. */
+@keyframes boot-jitter {
+  0%, 5%, 10%, 30%, 35%, 62%, 67%, 100% { transform: translate(0, 0) skewX(0); }
+  6%  { transform: translate(-1px, 1px) skewX(-1.1deg); }
+  7%  { transform: translate(2px, -1px) skewX(1.3deg); }
+  8%  { transform: translate(-1px, 0) skewX(-0.6deg); }
+  31% { transform: translate(1px, -2px) skewX(0.9deg); }
+  33% { transform: translate(-1px, 1px) skewX(-0.7deg); }
+  63% { transform: translate(-2px, 1px) skewX(1.1deg); }
+  65% { transform: translate(1px, -1px) skewX(-0.9deg); }
+}
+
+/* Base: bands punched out of the image and the whole mark shunted sideways. */
+@keyframes boot-base {
+  0%, 100% { transform: translateX(0); clip-path: inset(0 0 0 0); }
+  5%  { transform: translateX(0); }
+  6%  { transform: translateX(-6px); clip-path: inset(0 0 0 0); }
+  7%  { transform: translateX(5px);  clip-path: inset(40% 0 44% 0); }
+  8%  { transform: translateX(-2px); clip-path: inset(0 0 0 0); }
+  9%  { transform: translateX(0);    clip-path: inset(0 0 0 0); }
+  30% { transform: translateX(0); }
+  31% { transform: translateX(7px);  clip-path: inset(0 0 0 0); }
+  32% { transform: translateX(-4px); clip-path: inset(62% 0 24% 0); }
+  33% { transform: translateX(3px);  clip-path: inset(0 0 0 0); }
+  34% { transform: translateX(0);    clip-path: inset(0 0 0 0); }
+  62% { transform: translateX(0); }
+  63% { transform: translateX(-8px); clip-path: inset(14% 0 70% 0); }
+  64% { transform: translateX(5px);  clip-path: inset(0 0 0 0); }
+  65% { transform: translateX(0);    clip-path: inset(0 0 0 0); }
+}
+
+/* Chromatic copies: a 2px split at rest, flung wide during a burst. */
+@keyframes boot-crear {
+  0%, 100% { transform: translateX(-2px); clip-path: inset(0 0 0 0); }
+  6%  { transform: translateX(-9px); }
+  7%  { transform: translateX(6px);  clip-path: inset(34% 0 52% 0); }
+  8%  { transform: translateX(-7px); clip-path: inset(0 0 0 0); }
+  9%  { transform: translateX(-2px); clip-path: inset(0 0 0 0); }
+  31% { transform: translateX(8px); }
+  33% { transform: translateX(-2px); }
+  63% { transform: translateX(-10px); }
+  65% { transform: translateX(-2px); }
+}
+
+@keyframes boot-cblue {
+  0%, 100% { transform: translateX(2px); clip-path: inset(0 0 0 0); }
+  6%  { transform: translateX(8px); }
+  7%  { transform: translateX(-6px); clip-path: inset(48% 0 38% 0); }
+  8%  { transform: translateX(7px);  clip-path: inset(0 0 0 0); }
+  9%  { transform: translateX(2px);  clip-path: inset(0 0 0 0); }
+  31% { transform: translateX(-8px); }
+  33% { transform: translateX(2px); }
+  63% { transform: translateX(9px); }
+  65% { transform: translateX(2px); }
+}
+
+/* The tear slices: hold a band, jump it sideways, close again. */
+@keyframes boot-tear-a {
+  0%, 5%, 100% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  6%  { clip-path: inset(6% 0 76% 0);  transform: translateX(-11px); }
+  8%  { clip-path: inset(6% 0 76% 0);  transform: translateX(-11px); }
+  9%  { clip-path: inset(44% 0 40% 0); transform: translateX(9px); }
+  11% { clip-path: inset(44% 0 40% 0); transform: translateX(9px); }
+  12% { clip-path: inset(0 0 100% 0);  transform: translateX(0); }
+  30% { clip-path: inset(0 0 100% 0); }
+  31% { clip-path: inset(64% 0 18% 0); transform: translateX(-8px); }
+  33% { clip-path: inset(64% 0 18% 0); transform: translateX(-8px); }
+  34% { clip-path: inset(22% 0 62% 0); transform: translateX(12px); }
+  36% { clip-path: inset(22% 0 62% 0); transform: translateX(12px); }
+  37% { clip-path: inset(0 0 100% 0);  transform: translateX(0); }
+  62% { clip-path: inset(0 0 100% 0); }
+  63% { clip-path: inset(38% 0 46% 0); transform: translateX(-12px); }
+  65% { clip-path: inset(38% 0 46% 0); transform: translateX(-12px); }
+  66% { clip-path: inset(0 0 100% 0);  transform: translateX(0); }
+}
+
+@keyframes boot-tear-b {
+  0%, 2%, 100% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  3%  { clip-path: inset(58% 0 24% 0); transform: translateX(10px); }
+  5%  { clip-path: inset(58% 0 24% 0); transform: translateX(10px); }
+  6%  { clip-path: inset(18% 0 68% 0); transform: translateX(-10px); }
+  8%  { clip-path: inset(18% 0 68% 0); transform: translateX(-10px); }
+  9%  { clip-path: inset(0 0 100% 0);  transform: translateX(0); }
+  44% { clip-path: inset(0 0 100% 0); }
+  45% { clip-path: inset(30% 0 52% 0); transform: translateX(11px); }
+  47% { clip-path: inset(30% 0 52% 0); transform: translateX(11px); }
+  48% { clip-path: inset(70% 0 12% 0); transform: translateX(-9px); }
+  50% { clip-path: inset(70% 0 12% 0); transform: translateX(-9px); }
+  51% { clip-path: inset(0 0 100% 0);  transform: translateX(0); }
+}
+
+/* ── Wordmark + indeterminate bar ───────────────────────────── */
+.boot-wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.34em;
+  /* The tracking adds space after the last glyph; pull it back to centre. */
+  text-indent: 0.34em;
+  text-transform: uppercase;
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  opacity: 0.85;
+  animation: boot-word 2.8s ease-in-out infinite;
+}
+
+@keyframes boot-word {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 0.95; }
+}
+
+.boot-bar {
+  width: 148px;
+  height: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--accent-soft);
+}
+
+.boot-bar span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient-accent);
+  animation: boot-bar 1.4s var(--ease-cinematic) infinite;
+}
+
+@keyframes boot-bar {
+  from { transform: translateX(-110%); }
+  to   { transform: translateX(360%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #boot-screen,
+  .boot-logo,
+  .boot-logo__base,
+  .boot-logo__crear,
+  .boot-logo__cblue,
+  .boot-logo__tear-a,
+  .boot-logo__tear-b,
+  .boot-wordmark,
+  .boot-bar span {
+    animation: none;
+    transition: none;
+  }
+  .boot-scan,
+  .boot-logo__crear,
+  .boot-logo__cblue,
+  .boot-logo__tear-a,
+  .boot-logo__tear-b,
+  .boot-logo::after { display: none; }
+  .boot-bar span { transform: translateX(80%); }
+}

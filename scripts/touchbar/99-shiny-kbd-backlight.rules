@@ -1,0 +1,14 @@
+# Shiny: let the desktop user (in the `video` group) control the Mac's
+# backlights, so the Shiny server — which runs as the desktop user, never root
+# — can change them for the Touch Bar / Settings.
+#
+# The attributes are root:root 0644 by default. udev cannot set a group on a
+# sysfs attribute directly, so these chgrp/chmod them on every (re)add.
+#
+#   * keyboard backlight  -> /sys/class/leds/*kbd_backlight
+#   * screen brightness   -> /sys/class/backlight (panel only; the Touch Bar's
+#                            own appletb_backlight is intentionally left alone)
+#
+# Installed by scripts/touchbar/install-touchbar.sh.
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*kbd_backlight", RUN+="/bin/sh -c 'chgrp video /sys/class/leds/%k/brightness; chmod 0660 /sys/class/leds/%k/brightness'"
+ACTION=="add|change", SUBSYSTEM=="backlight", KERNEL=="gmux_backlight|apple-panel-bl|intel_backlight|acpi_video0", RUN+="/bin/sh -c 'chgrp video /sys/class/backlight/%k/brightness; chmod 0660 /sys/class/backlight/%k/brightness'"

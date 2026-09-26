@@ -1,0 +1,39 @@
+[package]
+name = "peakd-mac"
+version = "0.1.0"
+edition = "2021"
+description = "Peak'd — the macOS shell for the PEAK'D! app (tao + wry + WKWebView). The Linux kiosk shell is peakd (crates/peakd, Qt 6 + QtWebEngine)"
+
+[dependencies]
+# The native shell.
+wry = { version = "0.57", features = ["mac-proxy"] }
+tao = "0.37"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+parking_lot = "0.12"
+serde_json = "1"
+# `--iroh` mode: dial a remote Shiny server through the shared local proxy.
+# Optional so a normal kiosk build stays lean; enable with `--features iroh`.
+shiny-iroh-client = { path = "../shiny-iroh-client", optional = true }
+
+[features]
+iroh = ["dep:shiny-iroh-client"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", features = [
+    "NSApplication",
+    "NSResponder",
+    "NSRunningApplication",
+    # Native Touch Bar (crates/peakd/src/touchbar.rs).
+    "NSWindow",
+    "NSTouchBar",
+    "NSTouchBarItem",
+    "NSButtonTouchBarItem",
+] }
+# The native Touch Bar is built from NSString identifiers, an NSArray of item
+# identifiers and an NSSet of items.
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSArray", "NSSet", "NSObject"] }
+

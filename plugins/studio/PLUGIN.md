@@ -147,8 +147,11 @@ theme and the user's chosen accent, exactly like the other plugin surfaces.
 
 The window provides:
 
-- **Transport bar** — stop/play/loop/metronome, position, BPM, project title, save,
-  export, browser, status.
+- **Top bar** — the left-hand Browser menu (patterns / instruments / effects /
+  presets, icon + chevron), the project title, then the view toggles and
+  transport (arranger / launcher / SynthMe / WaveMe, stop / play / loop /
+  metronome, position, BPM), then the file actions (export → save) and the save
+  dot. Single bar, Word/Calc metrics (PLUGINS.md §19).
 - **Arranger** — timeline with ruler, per-track headers (mute/solo/level/pan), clips with
   waveform/MIDI previews, automation lanes with breakpoint editing, playhead.
 - **Clip Launcher** — tracks × scenes grid of looping slots, bar-quantised launch.

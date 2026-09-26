@@ -1,0 +1,47 @@
+# Shiny Touch Bar row for tiny-dfr (MacBook Pro T1/T2 on Linux).
+#
+# Install it with `scripts/touchbar/install-touchbar.sh` (root), which backs up
+# any existing /etc/tiny-dfr/config.toml and copies this folder's icons into
+# /etc/tiny-dfr. tiny-dfr watches the config and reloads when it changes.
+#
+# How it works
+# ------------
+# tiny-dfr can only emit key codes through uinput, not run commands. So each
+# button sends a `Ctrl+Alt+Shift+<digit>` combo, and the Shiny web UI maps it
+# back to an action — see web/js/touchbarShared.js for the single source of
+# truth. The Node test web/js/tests/touchbar.test.mjs fails if this file and the
+# web layer ever disagree.
+#
+# Why a combo and not F13–F24: tiny-dfr emits key *codes*, and the X keymap
+# decides the keysym. On a us/es layout the FK13–FK21 codes are bound to
+# XF86Tools/XF86Launch5… (from the `inet` symbols), so the page never sees F13.
+# Digits are mapped in every layout, and the page matches on the physical
+# `event.code`, so the shifted character does not matter.
+#
+# Icons: `shiny_*` are ours (scripts/touchbar/icons/, copied to /etc/tiny-dfr);
+# the rest ship with tiny-dfr in /usr/share/tiny-dfr. An icon is looked up in
+# /etc/tiny-dfr first, then /usr/share/tiny-dfr.
+#
+# Merge semantics: tiny-dfr merges this over /usr/share/tiny-dfr/config.toml
+# field by field, but `PrimaryLayerKeys` replaces the whole array. So this file
+# *owns* the primary layer (the F-key row). The media layer is left untouched,
+# so Fn still reaches brightness, keyboard backlight and the media controls.
+# On a wide (2170px) bar tiny-dfr adds the Escape key automatically.
+
+MediaLayerDefault = false
+
+PrimaryLayerKeys = [
+  { Icon = "shiny_talk",     Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num1" ] },
+  { Icon = "shiny_stop",     Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num2" ] },
+  { Icon = "volume_off",     Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num3" ] },
+  { Icon = "volume_down",    Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num4" ] },
+  { Icon = "volume_up",      Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num5" ] },
+  { Icon = "brightness_low", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Comma" ] },
+  { Icon = "brightness_high",Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Dot" ] },
+  { Icon = "fast_rewind",    Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num6" ] },
+  { Icon = "fast_forward",   Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num7" ] },
+  { Icon = "backlight_low",  Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Minus" ] },
+  { Icon = "backlight_high", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Equal" ] },
+  { Icon = "shiny_keyboard", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num8" ] },
+  { Icon = "shiny_settings", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num9" ] },
+]

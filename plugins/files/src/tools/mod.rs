@@ -15,7 +15,7 @@ use crate::preview;
 const MAX_AGENT_READ: usize = 256 * 1024;
 
 async fn home_for(req: &ToolRequest<'_>) -> Result<std::path::PathBuf, AppError> {
-    fs_util::ensure_home(req.traveler_id).await
+    fs_util::ensure_home_for(req.traveler_id, req.os_home).await
 }
 
 async fn resolved(

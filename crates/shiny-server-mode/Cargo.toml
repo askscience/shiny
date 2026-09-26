@@ -1,0 +1,16 @@
+[package]
+name = "shiny-server-mode"
+version.workspace = true
+edition.workspace = true
+description = "Shiny server-mode window — shows the Iroh link and controls remote access"
+
+[[bin]]
+name = "shiny-server-mode"
+path = "src/main.rs"
+
+# Linux-only: it stands in for the kiosk on the seat while the app is served
+# over Iroh. Other platforms compile a stub so the workspace still builds.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
+serde_json = "1"

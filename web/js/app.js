@@ -17,17 +17,25 @@ import { refreshActivePlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
+import { initHudNetwork } from './hudNetwork.js';
+import { initHudAudio } from './hudAudio.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles, openCoreWindow } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
+import { initFullscreenBubble } from './fullscreenBubble.js';
+import { initOverview } from './overview.js';
+import { initLauncher } from './launcher.js';
+import { initGestures } from './gestures.js';
 import { initContextMenu } from './contextMenu.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
+import { initTouchBar } from './touchbar.js';
 import { reloadUserSession } from './session.js';
 import { loadUserPreferences, getWakeWord } from './preferences.js';
 import { initBackground } from './background.js';
+import { hideBootScreen } from './bootScreen.js';
 
 let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
@@ -54,6 +62,7 @@ async function boot() {
 
   window.addEventListener('auth:success', async () => {
     document.getElementById('app')?.classList.remove('hidden');
+    hideBootScreen();
     const userId = getTraveler()?.id;
     // A different account just signed in — do a clean boot so no cross-user
     // state (desktop layout, tiling, tiles, artifacts) leaks between accounts.
@@ -86,6 +95,7 @@ async function boot() {
   if (!(await requireAuth())) return;
 
   document.getElementById('app').classList.remove('hidden');
+  hideBootScreen();
   await loadUserPreferences();
   await initApp();
 }
@@ -103,12 +113,18 @@ async function initApp() {
   initTextInput(submitTextToAgent);
   initChatHistory(); // core chat history panel (new chat / resume old chats)
   initHudClock(); // core chrome — works with zero plugins
+  initHudAudio(); // host sound chip (PipeWire, Linux)
+  initHudNetwork(); // host network status chip (NetworkManager, Linux)
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
   // Settings and Plugins are built-in windows now, opened from the HUD.
   document.getElementById('settings-btn')?.addEventListener('click', () => openCoreWindow('settings'));
   document.getElementById('plugins-btn')?.addEventListener('click', () => openCoreWindow('plugins'));
   initFullscreen(); // real fullscreen + edge-revealed chrome for a fullscreen window
+  initFullscreenBubble(); // app name + close/exit in a top-bar bubble while fullscreen
+  initOverview();    // three-finger swipe up: every open window, live
+  initLauncher();    // three-finger swipe down: the plugin launcher
+  initGestures();    // the trackpad:gesture vocabulary the peakd shell sends (Linux)
   initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
 
@@ -122,6 +138,7 @@ async function initApp() {
   prepareVoice();
   wireSphere();
   wireVoiceResults();
+  initTouchBar({ talk: tapOrb });
   reveal();
 }
 
@@ -189,31 +206,38 @@ function voiceNotReady() {
   );
 }
 
+/**
+ * The orb's short-tap gesture, in one place: the Touch Bar's "Ask" button
+ * calls this too, so both paths share the voice-readiness check, the
+ * stop-and-rephrase behaviour and the error handling.
+ */
+async function tapOrb() {
+  if (isTextInputOpen() || isComposeAwaiting()) return;
+  if (!voiceReady()) {
+    voiceNotReady();
+    return;
+  }
+
+  if (isListening()) {
+    cancelVoiceInput();
+    return;
+  }
+
+  // Tapping while the assistant is answering stops it and hands the mic
+  // straight over: "stop, let me rephrase".
+  if (isTurnActive()) await stopActiveTurn('tap');
+
+  try {
+    await startListening('single');
+  } catch (e) {
+    setSphereState('error');
+    toast(e.message || 'Microphone unavailable', { type: 'error' });
+    setTimeout(() => setSphereState('idle'), 2000);
+  }
+}
+
 function wireSphere() {
-  onShortTap(async () => {
-    if (isTextInputOpen() || isComposeAwaiting()) return;
-    if (!voiceReady()) {
-      voiceNotReady();
-      return;
-    }
-
-    if (isListening()) {
-      cancelVoiceInput();
-      return;
-    }
-
-    // Tapping while the assistant is answering stops it and hands the mic
-    // straight over: "stop, let me rephrase".
-    if (isTurnActive()) await stopActiveTurn('tap');
-
-    try {
-      await startListening('single');
-    } catch (e) {
-      setSphereState('error');
-      toast(e.message || 'Microphone unavailable', { type: 'error' });
-      setTimeout(() => setSphereState('idle'), 2000);
-    }
-  });
+  onShortTap(tapOrb);
 
   onLongPressStart(async () => {
     if (isListening() || isComposeAwaiting()) return;

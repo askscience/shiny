@@ -1,4 +1,4 @@
-use axum::extract::State;
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::header::SET_COOKIE;
 use axum::http::HeaderValue;
 use axum::response::{IntoResponse, Response};
@@ -8,9 +8,15 @@ use argon2::Argon2;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use std::net::SocketAddr;
+
+use serde::Deserialize;
+
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::{AuthResponse, LoginRequest, RegisterRequest, Traveler, TravelerPublic};
+use crate::services::auth_helper::VerifyOutcome;
+use crate::services::unix_user::UnixUser;
 
 /// Hash a password with Argon2id, returned as a PHC string
 /// (`$argon2id$v=19$…`). Verification accepts both this format and the
@@ -104,6 +110,214 @@ fn normalize_username(username: &str) -> String {
     username.trim().to_lowercase()
 }
 
+/// Listing OS accounts is a host capability; the server is reachable on the
+/// LAN, so only the machine itself may enumerate it.
+fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
+    if remote.ip().is_loopback() {
+        return Ok(());
+    }
+    Err(AppError::Unauthorized(
+        "the Linux user list is only available from the local machine".into(),
+    ))
+}
+
+/// `GET /api/auth/unix-users` — the real Linux accounts the login picker can
+/// offer. Empty (and `enabled: false`) unless Linux-user mode is on, so the
+/// frontend can fall back to its stored profiles.
+pub async fn unix_users(
+    State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+) -> Result<Response, AppError> {
+    require_local(&remote)?;
+    let enabled = state.config.linux_users;
+    let users: Vec<serde_json::Value> = if enabled {
+        crate::services::unix_user::list_human_users()
+            .into_iter()
+            .map(|u| {
+                serde_json::json!({
+                    "name": u.name,
+                    "display_name": u.display_name(),
+                    "uid": u.uid,
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok(Json(serde_json::json!({ "enabled": enabled, "users": users })).into_response())
+}
+
+/// `GET /api/auth/session?token=…` — the loopback-only kiosk auto-login.
+///
+/// The server's per-session token (written to `$XDG_RUNTIME_DIR`) is exchanged
+/// for the account's durable `shiny_token` cookie and a redirect to the app. It
+/// is rejected from any non-loopback peer, so it can never be used over Iroh or
+/// the LAN — remote clients still log in with a password.
+#[derive(Deserialize)]
+pub struct SessionQuery {
+    token: Option<String>,
+}
+
+pub async fn session_bootstrap(
+    State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    Query(query): Query<SessionQuery>,
+) -> Result<Response, AppError> {
+    if !remote.ip().is_loopback() {
+        return Err(AppError::Unauthorized("this endpoint is local-only".into()));
+    }
+    let Some(user_id) = state.session.user_id.clone() else {
+        return Err(AppError::Unauthorized("no session account for this machine".into()));
+    };
+    let provided = query.token.unwrap_or_default();
+    if provided.is_empty() || provided != state.session.token {
+        return Err(AppError::Unauthorized("invalid session token".into()));
+    }
+
+    // Ensure the account has a durable token, then hand it to the browser.
+    let durable = Uuid::new_v4().to_string();
+    sqlx::query(
+        "UPDATE travelers SET auth_token = COALESCE(NULLIF(auth_token, ''), ?1), \
+         updated_at = datetime('now') WHERE id = ?2",
+    )
+    .bind(&durable)
+    .bind(&user_id)
+    .execute(&state.pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    let token =
+        sqlx::query_scalar::<_, Option<String>>("SELECT auth_token FROM travelers WHERE id = ?1")
+            .bind(&user_id)
+            .fetch_one(&state.pool)
+            .await
+            .map_err(AppError::Database)?
+            .unwrap_or_default();
+
+    let cookie = format!("shiny_token={token}; Path=/; SameSite=Lax; Max-Age=31536000; HttpOnly");
+    let mut response = axum::response::Redirect::to("/").into_response();
+    response.headers_mut().insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&cookie)
+            .map_err(|_| AppError::Internal("failed to build session cookie".into()))?,
+    );
+    Ok(response)
+}
+
+/// Resolve the traveler's Linux account and cache `unix_user`/`unix_uid`/
+/// `unix_home` on the row. No-op when Linux-user mode is off or the account
+/// doesn't exist in NSS.
+async fn sync_unix_identity(state: &AppState, traveler: &mut Traveler) {
+    if !state.config.linux_users {
+        return;
+    }
+    let Some(name) = traveler
+        .unix_user
+        .as_deref()
+        .or(traveler.username.as_deref())
+    else {
+        return;
+    };
+    let Some(user) = crate::services::unix_user::lookup_name(name) else {
+        return;
+    };
+    let changed = traveler.unix_user.as_deref() != Some(user.name.as_str())
+        || traveler.unix_home.as_deref() != Some(user.home.as_str())
+        || traveler.unix_uid != Some(user.uid as i64);
+    if changed {
+        let res = sqlx::query(
+            "UPDATE travelers SET unix_user = ?1, unix_uid = ?2, unix_home = ?3, \
+             updated_at = datetime('now') WHERE id = ?4",
+        )
+        .bind(&user.name)
+        .bind(user.uid as i64)
+        .bind(&user.home)
+        .bind(&traveler.id)
+        .execute(&state.pool)
+        .await;
+        if let Err(e) = res {
+            tracing::warn!("Failed to cache Linux identity for {}: {}", traveler.id, e);
+        }
+    }
+    traveler.unix_user = Some(user.name);
+    traveler.unix_uid = Some(user.uid as i64);
+    traveler.unix_home = Some(user.home);
+}
+
+/// Resolve the OS account named by the login form. Tries the typed value first
+/// (NSS is case-sensitive) and then the normalized lowercase form.
+fn resolve_os_user(input: &str, normalized: &str) -> Option<UnixUser> {
+    crate::services::unix_user::lookup_name(input)
+        .or_else(|| crate::services::unix_user::lookup_name(normalized))
+        .filter(|u| u.is_human())
+}
+
+/// Find the Shiny account bound to a Linux user, provisioning one on first
+/// PAM login. The account is keyed by `unix_user` (exact) and `username`
+/// (normalized), so an account created earlier by a local registration is
+/// adopted rather than duplicated.
+async fn find_or_provision_linux_user(
+    state: &AppState,
+    user: &UnixUser,
+) -> Result<Traveler, AppError> {
+    let username = normalize_username(&user.name);
+
+    if let Some(existing) = sqlx::query_as::<_, Traveler>(
+        "SELECT * FROM travelers WHERE unix_user = ?1 OR username = ?2 LIMIT 1",
+    )
+    .bind(&user.name)
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::Database)?
+    {
+        return Ok(existing);
+    }
+
+    let existing_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM travelers")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(0);
+    let is_first_user = existing_count == 0;
+
+    let id = Uuid::new_v4().to_string();
+    let email = format!("{username}@shiny.local");
+    let name = user.display_name();
+
+    sqlx::query(
+        "INSERT INTO travelers \
+         (id, name, email, password_hash, auth_token, username, avatar, \
+          unix_user, unix_uid, unix_home, auth_source, is_admin, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, '!pam', NULL, ?4, NULL, ?5, ?6, ?7, 'pam', ?8, datetime('now'), datetime('now'))",
+    )
+    .bind(&id)
+    .bind(&name)
+    .bind(&email)
+    .bind(&username)
+    .bind(&user.name)
+    .bind(user.uid as i64)
+    .bind(&user.home)
+    .bind(is_first_user as i64)
+    .execute(&state.pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    tracing::info!(
+        "Provisioned Shiny account for Linux user {} (uid {})",
+        user.name,
+        user.uid
+    );
+
+    // Give plugins a chance to provision per-user state (e.g. the Files home).
+    state.plugins.notify_user_registered(&id).await;
+
+    sqlx::query_as::<_, Traveler>("SELECT * FROM travelers WHERE id = ?1")
+        .bind(&id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(AppError::Database)
+}
+
 pub(crate) fn validate_username(username: &str) -> Result<(), AppError> {
     if username.len() < 2 {
         return Err(AppError::BadRequest("Username must be at least 2 characters".into()));
@@ -143,6 +357,11 @@ pub async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Response, AppError> {
+    if state.config.linux_users {
+        return Err(AppError::BadRequest(
+            "This system signs in with Linux accounts; self-registration is disabled.".into(),
+        ));
+    }
     let username = normalize_username(&req.username);
     validate_username(&username)?;
     validate_avatar(&req.avatar, false)?;
@@ -207,46 +426,80 @@ pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Response, AppError> {
-    let username = normalize_username(&req.username);
+    let input = req.username.trim().to_string();
+    let username = normalize_username(&input);
 
-    let traveler = sqlx::query_as::<_, Traveler>(
-        "SELECT * FROM travelers WHERE username = ?1",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(AppError::Database)?
-    .ok_or_else(|| AppError::Unauthorized("Invalid username or password".into()))?;
-
-    match verify_password(&traveler.password_hash, &req.password) {
-        PasswordCheck::NoMatch => {
-            return Err(AppError::Unauthorized("Invalid username or password".into()));
-        }
-        // Correct password against a legacy unsalted-SHA-256 hash: upgrade
-        // the stored hash to Argon2id transparently.
-        PasswordCheck::MatchNeedsRehash => {
-            match hash_password(&req.password) {
-                Ok(argon_hash) => {
-                    let res = sqlx::query(
-                        "UPDATE travelers SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2",
-                    )
-                    .bind(&argon_hash)
-                    .bind(&traveler.id)
-                    .execute(&state.pool)
-                    .await;
-                    if let Err(e) = res {
-                        tracing::warn!(
-                            "Failed to upgrade password hash for user {}: {}",
-                            traveler.id,
-                            e
-                        );
-                    }
+    // PAM path: when enabled, the real Linux password is authoritative. A
+    // denial is final; only an unreachable helper falls back to the local hash.
+    let mut os_user = None;
+    if state.config.auth_enabled {
+        if let Some(user) = resolve_os_user(&input, &username) {
+            match crate::services::auth_helper::verify(
+                &state.config.auth_sock,
+                &user.name,
+                &req.password,
+            )
+            .await
+            {
+                VerifyOutcome::Ok => os_user = Some(user),
+                VerifyOutcome::Denied => {
+                    return Err(AppError::Unauthorized("Invalid username or password".into()));
                 }
-                Err(e) => tracing::warn!("Failed to rehash legacy password: {e}"),
+                VerifyOutcome::Unavailable => {
+                    tracing::warn!("shiny-auth helper unavailable — trying the local hash");
+                }
             }
         }
-        PasswordCheck::Match => {}
     }
+
+    let mut traveler = if let Some(user) = &os_user {
+        find_or_provision_linux_user(&state, user).await?
+    } else {
+        sqlx::query_as::<_, Traveler>(
+            "SELECT * FROM travelers WHERE username = ?1",
+        )
+        .bind(&username)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(AppError::Database)?
+        .ok_or_else(|| AppError::Unauthorized("Invalid username or password".into()))?
+    };
+
+    // Check the stored hash only when PAM did not already vouch for the login.
+    if os_user.is_none() {
+        match verify_password(&traveler.password_hash, &req.password) {
+            PasswordCheck::NoMatch => {
+                return Err(AppError::Unauthorized("Invalid username or password".into()));
+            }
+            // Correct password against a legacy unsalted-SHA-256 hash: upgrade
+            // the stored hash to Argon2id transparently.
+            PasswordCheck::MatchNeedsRehash => {
+                match hash_password(&req.password) {
+                    Ok(argon_hash) => {
+                        let res = sqlx::query(
+                            "UPDATE travelers SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2",
+                        )
+                        .bind(&argon_hash)
+                        .bind(&traveler.id)
+                        .execute(&state.pool)
+                        .await;
+                        if let Err(e) = res {
+                            tracing::warn!(
+                                "Failed to upgrade password hash for user {}: {}",
+                                traveler.id,
+                                e
+                            );
+                        }
+                    }
+                    Err(e) => tracing::warn!("Failed to rehash legacy password: {e}"),
+                }
+            }
+            PasswordCheck::Match => {}
+        }
+    }
+
+    // Bind (or refresh) the real Linux account backing this login.
+    sync_unix_identity(&state, &mut traveler).await;
 
     // Reuse the account's existing token when one is present so that logging
     // in from a second tab/device does NOT invalidate already-active sessions.

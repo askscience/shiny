@@ -108,6 +108,7 @@ impl ToolRegistry {
         traveler_id: &str,
         params: &Value,
         agent_ctx: &AgentContext,
+        os_home: Option<&str>,
     ) -> Result<ActionOutcome, AppError> {
         let normalized = normalize_action_name(action);
         let tool = {
@@ -149,6 +150,7 @@ impl ToolRegistry {
             traveler_id,
             params,
             ctx: agent_ctx,
+            os_home,
         };
         tool.invoke(ctx, req).await
     }

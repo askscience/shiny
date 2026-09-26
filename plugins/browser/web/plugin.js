@@ -1,16 +1,16 @@
 /**
  * browser.js — the Browser plugin's window.
  *
- * A focused web viewport rendered *through PEAK'D!'s own filter proxy*: the
- * iframe's origin is the plugin's proxy, not the open internet, so every
- * request the page makes passes through the shared adblock engine. That is the
- * whole design — there is no request the engine cannot see, which is what
- * makes filtering here complete rather than best-effort.
+ * The window's chrome is HTML (this file): a tab strip, back / forward /
+ * reload / home, and an address bar that doubles as a search box. The **page**
+ * is not rendered here — the shell renders it in a native WebKit child webview
+ * (`crates/peakd`'s `browse` module) at the page's real origin, so anti-bot
+ * challenges (Cloudflare) pass and cookies/TLS are the page's own. This file
+ * drives that view over the shell's IPC bridge and mirrors its URL/title back
+ * into the toolbar.
  *
- * Chrome: a tab strip, back / forward / reload / home, an address bar that
- * doubles as a search box, and a shield showing how many requests were blocked.
- * Links that ask for a new tab open one; right-clicking a link offers the
- * window's own menu; hovering a link shows a preview card.
+ * The home surface is the one thing rendered locally: a sandboxed `srcdoc`
+ * iframe holding the related-news shelf, built from what the user searches for.
  *
  * Every control is a core UI component — `iconButton` for the toolbar,
  * `searchBar` for the address field, `icon` for the glyphs — so the window
@@ -19,57 +19,150 @@
  *
  * Server state lives on the plugin side (`/api/browser/*`), so this file owns
  * presentation and local navigation history only.
- *
- * Navigation is *the frame's* history, not this file's. The proxy injects a
- * small bridge (see `shiny-filter`'s `inject.rs`) into every proxied document
- * that reports the real URL to this window and accepts back/forward/reload
- * commands. That is what makes the toolbar follow link clicks, redirects and
- * SPA navigation instead of only the URLs this file was told to load.
  */
-import { apiFetch } from '/js/api.js';
-import { openContextMenu } from '/js/contextMenu.js';
-import { icon, iconButton, searchBar } from '/ui/index.js';
+import { apiFetch } from '../../js/api.js';
+import { icon, iconButton, searchBar } from '../../ui/index.js';
 
 export const BROWSER_PLUGIN = 'browser';
 
-const STATE_POLL_MS = 5000;
-
-/** How many tabs may be open. Each is a live document, so this is bounded. */
+/** How many tabs may be open. Each is a live web view, so this is bounded. */
 const MAX_TABS = 8;
 
-/** How long the pointer must rest on a link before its preview is fetched. */
-const PREVIEW_DEBOUNCE_MS = 250;
+/**
+ * The native-view bridge.
+ *
+ * The shell exposes `window.ipc` (see `crates/peakd`). Every tab is rendered by
+ * a real WebKit child webview at the page's true origin — no iframe, no HTML
+ * rewriting — so anti-bot systems such as Cloudflare see an ordinary browser.
+ */
+const nativeAvailable =
+  typeof window !== 'undefined' &&
+  window.ipc &&
+  typeof window.ipc.postMessage === 'function';
+const NATIVE_PREFIX = 'peakd:view:';
+
+/** Send one native-view command. Returns false when there is no bridge. */
+function nativeSend(payload) {
+  if (!nativeAvailable) return false;
+  try {
+    window.ipc.postMessage(NATIVE_PREFIX + JSON.stringify(payload));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * The viewport rectangle in CSS pixels, plus the device ratio so the shell can
+ * map it to native pixels without assuming the kiosk's page zoom.
+ */
+function viewportRect() {
+  const el = frameWrapEl || viewportEl;
+  const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+  if (!r || !r.width || !r.height) return null;
+  return {
+    x: r.left,
+    y: r.top,
+    w: r.width,
+    h: r.height,
+    dpr: window.devicePixelRatio || 1,
+  };
+}
+
+/**
+ * Whether the active native view should currently be on screen.
+ *
+ * A native child view is a real window stacked above the page, so it ignores
+ * `display: none` and every HTML layer. When its Browser window is hidden (a
+ * workspace switch), covered by the overview/launcher, or underneath a higher
+ * floating window, it would otherwise keep floating over them; the view is
+ * hidden explicitly whenever it is not what the user is looking at.
+ */
+function nativeShouldShow(tab) {
+  if (!tab || !tab.native || !tileEl) return false;
+  if (tileEl.classList.contains('hidden')) return false;
+  const body = document.body;
+  if (body && body.classList) {
+    // The overview and launcher are full-screen HTML layers over the desktop;
+    // the native view cannot be composited beneath them.
+    if (body.classList.contains('overview-active')) return false;
+    if (body.classList.contains('launcher-active')) return false;
+  }
+  return !isNativeOccluded();
+}
+
+/** True when a higher floating window overlaps this view's own rectangle. */
+function isNativeOccluded() {
+  if (!tileEl) return false;
+  const grid = document.getElementById('tile-grid');
+  // Tiled layouts never overlap; only the free "Windows" layout does.
+  if (!grid || grid.dataset.layout !== 'windows') return false;
+  const rect = viewportRect();
+  if (!rect) return false;
+  const z = Number(tileEl.style.zIndex) || 0;
+  const tiles = grid.querySelectorAll(':scope > .tile[data-plugin]');
+  for (const el of tiles) {
+    if (el === tileEl || el.classList.contains('hidden')) continue;
+    if ((Number(el.style.zIndex) || 0) <= z) continue;
+    const r = el.getBoundingClientRect();
+    if (rect.x < r.right && r.left < rect.x + rect.w
+      && rect.y < r.bottom && r.top < rect.y + rect.h) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Push bounds and visibility for one tab, skipping no-op updates. */
+function syncNativeTab(tab) {
+  if (!nativeAvailable || !tab || !tab.native) return;
+  const show = nativeShouldShow(tab);
+  if (show !== lastNativeVisible) {
+    lastNativeVisible = show;
+    nativeSend({ op: 'setVisible', id: tab.id, visible: show });
+  }
+  if (!show) {
+    lastNativeRect = '';
+    return;
+  }
+  const rect = viewportRect();
+  if (!rect) return;
+  const key = `${Math.round(rect.x * rect.dpr)},${Math.round(rect.y * rect.dpr)},`
+    + `${Math.round(rect.w * rect.dpr)},${Math.round(rect.h * rect.dpr)}`;
+  if (key === lastNativeRect) return;
+  lastNativeRect = key;
+  nativeSend({ op: 'setBounds', id: tab.id, rect });
+}
+
+/** Keep the shell's native view aligned with the viewport element. */
+function syncActiveNative() {
+  syncNativeTab(activeTab());
+}
 
 let tileEl = null;
 let tabstripEl = null;
 let frameWrapEl = null;
 let viewportEl = null;
-let previewEl = null;
 let addressEl = null;
 let backBtn = null;
 let forwardBtn = null;
-let shieldEl = null;
-let shieldCountEl = null;
-let filterBtn = null;
 let statusEl = null;
 
-let proxyBase = null;
-/** Whether ad filtering is paused (server-owned; this mirrors it). */
-let filteringPaused = false;
+// Last state pushed for the active native view, so the per-frame sync can skip
+// updates the shell already has. `null` means "unknown, send it".
+let lastNativeVisible = null;
+let lastNativeRect = '';
 
 /**
- * The window's tabs. Each owns its own iframe, its own server session id and
- * its own navigation history; only the active one is visible. `activeTabId`
- * always names one of them while the window is mounted.
+ * The window's tabs. Each owns a native child webview in the shell (and a local
+ * iframe only for its home surface), a server session id and its own navigation
+ * history; only the active one is visible. `activeTabId` always names one of
+ * them while the window is mounted.
  */
 let tabs = [];
 let activeTabId = null;
 let tabSeq = 0;
 
-/** Debounce/target for the hover preview. */
-let previewTimer = null;
-
-let pollTimer = null;
 let wired = false;
 
 /**
@@ -91,33 +184,6 @@ function ensureStylesheet() {
   document.head.appendChild(link);
 }
 
-/* ── Server calls ─────────────────────────────────────────────── */
-
-async function fetchState() {
-  const res = await apiFetch('/api/browser/state');
-  return res?.data || {};
-}
-
-/**
- * The proxy's own address, from the server.
- *
- * Fetched on every navigation rather than cached at mount, because it is a
- * **random port by design** (`ProxyConfig::default()` binds `127.0.0.1:0`) and
- * it changes on every server start. A window that remembered the old port from
- * before a restart showed the browser's own "connection refused" page on every
- * later navigation — the failure looked like a broken proxy but was a stale
- * address.
- */
-async function refreshProxyBase() {
-  try {
-    const state = await fetchState();
-    if (state.proxy_base) proxyBase = state.proxy_base;
-    return state;
-  } catch (_) {
-    return null;
-  }
-}
-
 /* ── Tabs ─────────────────────────────────────────────────────── */
 
 function activeTab() {
@@ -136,8 +202,15 @@ function tabTitle(tab) {
   return 'New tab';
 }
 
-/** How long a navigation may go without any load before it is a failure. */
-const LOAD_WATCHDOG_MS = 5000;
+/**
+ * How long a native view may take before the "Loading…" hint is dropped.
+ *
+ * Native loads are the real web at its real origin: slow pages are normal, and
+ * forcing a reload (as the proxy watchdog does) interrupts Cloudflare
+ * challenges. This timer is therefore long and never reports an error — the
+ * child webview shows its own error page if a load genuinely fails.
+ */
+const NATIVE_LOAD_TIMEOUT_MS = 45000;
 
 function clearWatchdog(tab) {
   if (tab?.watchdog) clearTimeout(tab.watchdog);
@@ -152,14 +225,13 @@ function createTab({ url = '', activate = true } = {}) {
     title: '',
     url: '',
     home: true,
+    /** Whether this tab is currently rendered by a native child webview. */
+    native: false,
     history: [],
     historyIndex: -1,
-    attempt: 0,
     loaded: false,
     watchdog: null,
     frameEl: null,
-    onError: null,
-    onLoad: null,
   };
   tab.frameEl = buildFrame(tab);
   tabs.push(tab);
@@ -182,10 +254,10 @@ function createTab({ url = '', activate = true } = {}) {
 /** Tear down one tab's frame and state. */
 function destroyTab(tab) {
   clearWatchdog(tab);
+  // Release the native child webview, if this tab had one.
+  if (nativeAvailable) nativeSend({ op: 'close', id: tab.id });
   const frame = tab.frameEl;
   if (!frame) return;
-  if (tab.onError) frame.removeEventListener('error', tab.onError);
-  if (tab.onLoad) frame.removeEventListener('load', tab.onLoad);
   frame.src = 'about:blank';
   frame.remove();
   tab.frameEl = null;
@@ -225,11 +297,22 @@ function setActiveTab(id) {
   if (!tabs.some((t) => t.id === id)) return;
   activeTabId = id;
   const tab = activeTab();
-  for (const t of tabs) t.frameEl.classList.toggle('is-active', t.id === id);
+  for (const t of tabs) {
+    t.frameEl.classList.toggle('is-active', t.id === id);
+    // Only the active tab's native view is shown; the rest stay alive (their
+    // history and cookies) but hidden. The active one goes through the shared
+    // sync so window occlusion/overlays are honoured too.
+    if (nativeAvailable && t.id !== id) {
+      nativeSend({ op: 'setVisible', id: t.id, visible: false });
+    }
+  }
   if (addressEl && document.activeElement !== addressEl.input) {
     addressEl.input.value = tab?.url || '';
   }
-  hidePreview();
+  lastNativeVisible = null;
+  lastNativeRect = '';
+  syncActiveNative();
+  if (nativeAvailable && tab?.native) nativeSend({ op: 'focus', id: tab.id });
   renderTabs();
   updateNavButtons();
 }
@@ -275,43 +358,71 @@ function renderTabs() {
   tabstripEl.replaceChildren(...nodes);
 }
 
+/**
+ * The local iframe. It now carries only the home surface (a sandboxed
+ * `srcdoc` shelf); real pages are rendered by a native child webview, so this
+ * element is parked and hidden whenever a tab has one.
+ */
 function buildFrame(tab) {
   const frame = document.createElement('iframe');
   frame.className = 'browser-frame';
-  // The pages we proxy are the open web, not the theme: a white canvas is
-  // correct here, and a sandbox is deliberately NOT used — many sites need
-  // scripts, forms and same-origin storage to work at all, and the requests
-  // are already filtered upstream.
+  // The home shelf is built from server data, so it stays sandboxed without
+  // `allow-same-origin`: it must not be able to reach the app shell.
   frame.setAttribute('referrerpolicy', 'no-referrer');
-  frame.setAttribute('allow', 'clipboard-write; fullscreen');
-  tab.onError = () => onFrameError(tab);
-  tab.onLoad = () => onFrameLoad(tab);
-  frame.addEventListener('error', tab.onError);
-  frame.addEventListener('load', tab.onLoad);
   return frame;
 }
 
-/** Load a proxy URL in one tab's viewport. */
-function loadFrame(tab, viewUrl) {
-  if (!tab?.frameEl) return;
+/**
+ * Render a real URL in a native child webview.
+ *
+ * The local iframe is parked on `about:blank` and hidden so it does not fight
+ * the native view for the viewport; going Home restores it (see `showHome`).
+ * The shell owns the view's history, so back/forward/reload are IPC commands
+ * rather than the injected page shim the proxy path uses.
+ */
+function loadNative(tab, url) {
+  if (!tab) return;
+  tab.native = true;
   tab.loaded = false;
   clearWatchdog(tab);
+  // Non-destructive: drop the "Loading…" hint, never reload or claim the proxy
+  // is down. See NATIVE_LOAD_TIMEOUT_MS.
   tab.watchdog = setTimeout(() => {
     tab.watchdog = null;
-    if (!tab.loaded) onFrameError(tab);
-  }, LOAD_WATCHDOG_MS);
-  // Real pages need their own origin: drop the idle-surface sandbox.
-  tab.frameEl.removeAttribute('sandbox');
-  tab.frameEl.removeAttribute('srcdoc');
-  tab.frameEl.src = viewUrl;
+    if (!tab.loaded && tab.id === activeTabId) setStatus('');
+  }, NATIVE_LOAD_TIMEOUT_MS);
+  if (tab.frameEl) {
+    tab.frameEl.src = 'about:blank';
+    tab.frameEl.classList.remove('is-active');
+    tab.frameEl.classList.add('is-native-hidden');
+  }
+  const rect = viewportRect();
+  nativeSend({ op: 'open', id: tab.id, url, rect, visible: tab.id === activeTabId });
+  lastNativeVisible = null;
+  lastNativeRect = '';
+  if (tab.id === activeTabId) {
+    nativeSend({ op: 'focus', id: tab.id });
+    // Let occlusion/overlay state decide whether it may actually stay visible.
+    syncActiveNative();
+  }
 }
 
-function onFrameLoad(tab) {
-  tab.loaded = true;
-  clearWatchdog(tab);
+/** Park this tab's native view and hand the viewport back to the iframe. */
+function hideNative(tab) {
+  if (!nativeAvailable || !tab) return;
+  tab.native = false;
+  nativeSend({ op: 'setVisible', id: tab.id, visible: false });
+  if (tab.id === activeTabId) {
+    lastNativeVisible = false;
+    lastNativeRect = '';
+  }
+  if (tab.frameEl) {
+    tab.frameEl.classList.remove('is-native-hidden');
+    tab.frameEl.classList.toggle('is-active', tab.id === activeTabId);
+  }
 }
 
-async function navigateTo(input, { tab = activeTab(), retry = false } = {}) {
+async function navigateTo(input, { tab = activeTab() } = {}) {
   const value = String(input || '').trim();
   if (!value || !tab) return;
 
@@ -323,75 +434,20 @@ async function navigateTo(input, { tab = activeTab(), retry = false } = {}) {
       body: JSON.stringify({ session_id: tab.sessionId, input: value }),
     });
     data = res?.data;
-  } catch (err) {
+  } catch (_) {
     if (tab.id === activeTabId) setStatus('Could not open that page');
     return;
   }
-  if (!data?.view_url) {
+  if (!data?.url) {
     if (tab.id === activeTabId) setStatus('Could not open that page');
     return;
   }
-
-  // The server hands back a URL on the proxy it is running *now*. If the window
-  // is holding a base from an earlier server start, adopt the new one — a
-  // mismatch is the exact cause of a "connection refused" viewport.
-  const nextBase = data.proxy_base || (data.view_url || '').match(/^https?:\/\/[^/]+/)?.[0];
-  if (nextBase) proxyBase = nextBase;
 
   tab.sessionId = data.session?.id || tab.sessionId;
   tab.home = false;
   recordLocation(tab, data.url || value);
-
   if (tab.id === activeTabId) setStatus('');
-  // A fresh navigation gets its own retry budget; an error retry does not, or
-  // a dead proxy would re-arm the budget forever (the bug the counter exists
-  // to prevent).
-  if (!retry) tab.attempt = 0;
-  tab.attempt += 1;
-  loadFrame(tab, data.view_url);
-  if (tab.id === activeTabId) void refreshMetrics();
-}
-
-let lastMetrics = null;
-let lastRules = 0;
-
-async function refreshMetrics() {
-  try {
-    const res = await apiFetch('/api/browser/metrics');
-    lastMetrics = res?.data?.metrics ?? null;
-    lastRules = res?.data?.rules ?? 0;
-    if (typeof res?.data?.filtering_paused === 'boolean') {
-      filteringPaused = res.data.filtering_paused;
-    }
-    renderShield(lastMetrics, lastRules);
-  } catch (_) {
-    /* the proxy may be starting up; the shield just stays as it was */
-  }
-}
-
-/**
- * Turn ad filtering off or back on, server-side.
- *
- * Some sites genuinely cannot work with their trackers removed, so this is the
- * escape hatch from a broken page. The proxy is what filters, so the state
- * lives there and every tab sees it.
- */
-async function toggleFiltering() {
-  const next = !filteringPaused;
-  filteringPaused = next; // optimistic: the button must respond immediately
-  renderShield(lastMetrics, lastRules);
-  try {
-    const res = await apiFetch('/api/browser/filter/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ paused: next }),
-    });
-    filteringPaused = !!res?.data?.filtering_paused;
-    setStatus(filteringPaused ? 'Ad blocking is off for every page' : '');
-  } catch (_) {
-    filteringPaused = !next; // rolled back: never claim a state we did not set
-    setStatus('Could not change ad blocking');
-  }
-  renderShield(lastMetrics, lastRules);
+  loadNative(tab, data.url || value);
 }
 
 /* ── Chrome ───────────────────────────────────────────────────── */
@@ -400,34 +456,6 @@ function setStatus(text) {
   if (!statusEl) return;
   statusEl.textContent = text || '';
   statusEl.classList.toggle('hidden', !text);
-}
-
-function renderShield(metrics, rules) {
-  if (shieldCountEl) {
-    const blocked = metrics?.blocked || 0;
-    shieldCountEl.textContent = String(blocked);
-    if (shieldEl) {
-      shieldEl.title = rules
-        ? `${blocked} requests blocked · ${rules.toLocaleString()} filter rules loaded`
-        : `${blocked} requests blocked`;
-      shieldEl.classList.toggle('is-active', blocked > 0 && !filteringPaused);
-      shieldEl.classList.toggle('is-paused', filteringPaused);
-      shieldEl.setAttribute(
-        'aria-label',
-        `${blocked} requests blocked — refresh the count`,
-      );
-    }
-  }
-  if (filterBtn) {
-    filterBtn.classList.toggle('is-paused', filteringPaused);
-    // Say what a click *does*, not what the current state is.
-    const label = filteringPaused
-      ? 'Ad blocking is off — click to turn it back on'
-      : 'Ad blocking is on — click to turn it off for pages that break';
-    filterBtn.title = label;
-    filterBtn.setAttribute('aria-label', label);
-    filterBtn.setAttribute('aria-pressed', String(filteringPaused));
-  }
 }
 
 function updateNavButtons() {
@@ -506,31 +534,7 @@ function buildToolbar() {
   addressEl.input = input;
   addressEl.search = search;
 
-  shieldEl = document.createElement('button');
-  shieldEl.type = 'button';
-  shieldEl.className = 'browser-shield';
-  shieldEl.title = 'Requests blocked';
-  const shieldIcon = icon('ui/power', { size: 15 });
-  shieldIcon.classList.add('browser-shield-icon');
-  shieldCountEl = document.createElement('span');
-  shieldCountEl.className = 'browser-shield-count';
-  shieldCountEl.textContent = '0';
-  shieldEl.append(shieldIcon, shieldCountEl);
-  shieldEl.addEventListener('click', () => void refreshMetrics());
-
-  // A live state needs a glyph that reads in both states. The theme has no
-  // shield, so this is `ui/power`: whole when filtering is on, and the paused
-  // state is carried by the button's own colour plus `aria-pressed` (never by
-  // colour alone).
-  filterBtn = iconButton({
-    icon: 'ui/power',
-    size: 'sm',
-    label: 'Pause ad blocking',
-    onClick: () => void toggleFiltering(),
-  });
-  filterBtn.classList.add('browser-filter-btn');
-
-  bar.append(backBtn, forwardBtn, reloadBtn, homeBtn, addressEl, filterBtn, shieldEl);
+  bar.append(backBtn, forwardBtn, reloadBtn, homeBtn, addressEl);
   return bar;
 }
 
@@ -546,48 +550,13 @@ function buildViewport() {
   statusEl.className = 'browser-status hidden';
   wrap.appendChild(statusEl);
 
-  previewEl = document.createElement('div');
-  previewEl.className = 'browser-preview hidden';
-  wrap.appendChild(previewEl);
-
   return wrap;
 }
 
 /* ── Navigation ───────────────────────────────────────────────── */
 
 /**
- * Recover from a viewport that could not reach the proxy.
- *
- * The proxy listens on a random loopback port that changes every time the
- * server starts, so a window left open across a restart holds a dead address
- * and every navigation lands on the browser's "connection refused" page. This
- * asks the server for the current address and retries once. If it fails again
- * the cause is something else (proxy not up yet, server restarting), so the
- * user gets a sentence instead of a bare browser error.
- */
-function onFrameError(tab) {
-  if (!tab || tab.url === '') return; // the idle surface is a srcdoc
-  if (tab.attempt > 1) {
-    if (tab.id === activeTabId) setStatus('Lost the connection to the filter proxy — reload the window');
-    return;
-  }
-  if (tab.id === activeTabId) setStatus('Reconnecting to the filter proxy…');
-  void (async () => {
-    const state = await refreshProxyBase();
-    const base = state?.proxy_base;
-    if (!state?.ready || !base) {
-      if (tab.id === activeTabId) setStatus('The filter proxy is not running — it starts with the server');
-      return;
-    }
-    // Rebuild against the live proxy and hand the frame a URL on the new port.
-    // The attempt counter belongs to the page, not to this retry, so a second
-    // failure ends in the message above instead of looping forever.
-    void navigateTo(tab.url, { tab, retry: true });
-  })();
-}
-
-/**
- * Reconcile one tab's history with a URL the frame reports as current.
+ * Reconcile one tab's history with a URL the shell reports as current.
  *
  * The frame owns the real history (its back/forward is browser-native), so
  * this is a mirror for the address bar and for enabling the buttons: an
@@ -620,12 +589,11 @@ function recordLocation(tab, url) {
   if (tab.id === activeTabId) updateNavButtons();
 }
 
-/** Ask the active frame to move through *its* history — no server round-trip. */
+/** Ask the active view to move through *its* history — no server round-trip. */
 function go(delta) {
   const tab = activeTab();
-  if (!tab?.frameEl?.contentWindow || !tab.url) return;
-  const cmd = delta < 0 ? 'back' : 'forward';
-  tab.frameEl.contentWindow.postMessage({ type: 'shiny:cmd', cmd }, '*');
+  if (!tab || !tab.url || !tab.native) return;
+  nativeSend({ op: delta < 0 ? 'back' : 'forward', id: tab.id });
 }
 
 function reload() {
@@ -635,9 +603,7 @@ function reload() {
     void showHome(tab);
     return;
   }
-  if (tab.frameEl?.contentWindow) {
-    tab.frameEl.contentWindow.postMessage({ type: 'shiny:cmd', cmd: 'reload' }, '*');
-  }
+  if (tab.native) nativeSend({ op: 'reload', id: tab.id });
 }
 
 function goHome() {
@@ -651,11 +617,10 @@ function goHome() {
  * searches for (`/api/browser/news`), with an explicit card click feeding the
  * ranking back (`/api/browser/news/click`).
  *
- * The surface is rendered inside the sandboxed idle iframe rather than in the
- * window's own DOM. That is deliberate: it is the same element real pages load
- * into, so there is no second layout to keep in sync, and the sandbox (no
- * `allow-same-origin`) means the start page cannot reach the app shell even
- * though it is built from data the server sent.
+ * The surface is rendered inside a sandboxed `srcdoc` iframe rather than in the
+ * window's own DOM. That is deliberate: the sandbox (no `allow-same-origin`)
+ * means the start page cannot reach the app shell even though it is built from
+ * data the server sent.
  */
 
 /** Fetch the shelf. Never throws: an empty shelf with a reason is the fallback. */
@@ -814,6 +779,7 @@ function escapeHtml(value) {
 /** The idle surface for one tab: the start page, with related news. */
 async function showHome(tab) {
   if (!tab) return;
+  hideNative(tab);
   tab.home = true;
   tab.url = '';
   tab.history = [];
@@ -870,127 +836,24 @@ function openInNewTab(_from, url) {
   createTab({ url });
 }
 
-/**
- * The window's own menu for a right-clicked link.
- *
- * The frame cannot show a native menu that honours "open in new tab" (its
- * target is the OS browser, which would leave the filtered window), so the
- * shim hands the click up and the parent draws the menu.
- */
-function showLinkMenu(tab, url, x, y) {
-  if (!/^https?:\/\//.test(url)) return;
-  const rect = tab?.frameEl?.getBoundingClientRect ? tab.frameEl.getBoundingClientRect() : null;
-  const left = (rect?.left || 0) + (Number(x) || 0);
-  const top = (rect?.top || 0) + (Number(y) || 0);
-  openContextMenu(
-    [
-      { type: 'heading', label: 'Link' },
-      {
-        type: 'item',
-        label: 'Open in new tab',
-        icon: 'ui/launcher',
-        onClick: () => openInNewTab(tab, url),
-      },
-      {
-        type: 'item',
-        label: 'Open in current tab',
-        icon: 'ui/arrow-left',
-        onClick: () => void navigateTo(url, { tab }),
-      },
-      { type: 'separator' },
-      {
-        type: 'item',
-        label: 'Copy link',
-        icon: 'ui/doc',
-        onClick: () => copyText(url),
-      },
-    ],
-    left,
-    top,
-  );
-}
-
-function copyText(text) {
-  try {
-    navigator.clipboard?.writeText(text).catch(() => {});
-  } catch (_) {
-    /* clipboard is best-effort */
-  }
-}
-
 /* ── Link preview ─────────────────────────────────────────────── */
 
 /**
- * A hovered link. Debounced so a pointer sweeping across a page does not fire
- * a request per anchor, and cancelled the moment it leaves the link.
+ * The native view owns link interaction.
+ *
+ * The old proxied design injected a shim into every page so this window could
+ * draw its own link context menu and hover preview. A native child webview runs
+ * the page's own document, so those are the page's/WebKit's to handle — there
+ * is nothing to forward here.
  */
-function previewHover(tab, url, rect) {
-  if (!/^https?:\/\//.test(url)) return;
-  if (tab.id !== activeTabId) return;
-  if (previewTimer) clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => {
-    previewTimer = null;
-    void fetchPreview(tab, url, rect);
-  }, PREVIEW_DEBOUNCE_MS);
-}
-
-function previewLeave() {
-  if (previewTimer) clearTimeout(previewTimer);
-  previewTimer = null;
-  hidePreview();
-}
-
-async function fetchPreview(tab, url, rect) {
-  try {
-    const res = await apiFetch('/api/browser/preview', {
-      method: 'POST',
-      body: JSON.stringify({ url }),
-    });
-    const data = res?.data;
-    if (!data || tab.id !== activeTabId) return;
-    showPreview(data, rect);
-  } catch (_) {
-    /* no preview is a valid outcome */
-  }
-}
-
-function showPreview(data, rect) {
-  if (!previewEl) return;
-  const title = escapeHtml(data.title || data.url || '');
-  const site = escapeHtml(data.site || '');
-  const description = data.description
-    ? `<div class="browser-preview-desc">${escapeHtml(data.description)}</div>`
-    : '';
-  const image = data.image
-    ? `<img class="browser-preview-img" src="${escapeHtml(data.image)}" alt="" referrerpolicy="no-referrer">`
-    : '';
-  previewEl.innerHTML = `<div class="browser-preview-body">
-      ${image}
-      <div class="browser-preview-text">
-        ${site ? `<div class="browser-preview-site">${site}</div>` : ''}
-        <div class="browser-preview-title">${title}</div>
-        ${description}
-      </div>
-    </div>`;
-  const frameRect = frameWrapEl?.getBoundingClientRect ? frameWrapEl.getBoundingClientRect() : null;
-  const r = rect || {};
-  const left = Math.max(8, (frameRect?.left || 0) + (Number(r.x) || 0));
-  const top = Math.max(8, (frameRect?.top || 0) + (Number(r.y) || 0) + (Number(r.h) || 0) + 8);
-  previewEl.style.left = `${left}px`;
-  previewEl.style.top = `${top}px`;
-  previewEl.classList.remove('hidden');
-}
-
-function hidePreview() {
-  if (previewEl) previewEl.classList.add('hidden');
-}
 
 /**
  * Messages from the framed surfaces.
  *
- * `event.source` is the frame's WindowProxy, not the `<iframe>` element, so the
- * guard matches it against each tab's `contentWindow` — with more than one tab
- * open, the message must update the tab that sent it, never the active one.
+ * Only the home shelf talks back now: `event.source` is its `WindowProxy`, not
+ * the `<iframe>` element, so the guard matches it against each tab's
+ * `contentWindow` — with more than one tab open, the message must update the tab
+ * that sent it, never the active one.
  */
 function onFrameMessage(event) {
   const data = event.data;
@@ -998,23 +861,120 @@ function onFrameMessage(event) {
   const tab = tabs.find((t) => t.frameEl && t.frameEl.contentWindow === event.source);
   if (!tab) return;
 
-  if (data.type === 'shiny:location') {
-    if (typeof data.title === 'string' && data.title) tab.title = data.title;
-    if (typeof data.url === 'string' && data.url) recordLocation(tab, data.url);
-    renderTabs();
-  } else if (data.type === 'browser:open-card') {
+  if (data.type === 'browser:open-card') {
     void onHomeCard(tab, String(data.url || ''), data.topic ? String(data.topic) : undefined);
   } else if (data.type === 'browser:refresh-news') {
     void showHome(tab);
-  } else if (data.type === 'shiny:new-tab') {
-    if (typeof data.url === 'string') openInNewTab(tab, data.url);
-  } else if (data.type === 'shiny:link-menu') {
-    showLinkMenu(tab, String(data.url || ''), data.x, data.y);
-  } else if (data.type === 'shiny:hover-link') {
-    previewHover(tab, String(data.url || ''), data.rect);
-  } else if (data.type === 'shiny:leave-link') {
-    previewLeave();
   }
+}
+
+/**
+ * Events from the shell about a native view: the child webview's URL, title and
+ * load phase. The shell calls this on the main webview, naming the tab by id.
+ *
+ * Defined at module scope because the shell may call it before `wireEvents`
+ * runs (a navigation can complete while the window is still mounting).
+ */
+window.__peakdViewEvent = function (event) {
+  if (!event || typeof event !== 'object') return;
+  const tab = tabs.find((t) => t.id === event.id);
+  if (!tab) return;
+  if (event.type === 'title' && typeof event.title === 'string' && event.title) {
+    tab.title = event.title;
+    renderTabs();
+  } else if (event.type === 'url' && typeof event.url === 'string' && event.url) {
+    recordLocation(tab, event.url);
+  } else if (event.type === 'load') {
+    if (event.phase === 'finished') {
+      tab.loaded = true;
+      clearWatchdog(tab);
+      if (tab.id === activeTabId) setStatus('');
+    } else if (event.phase === 'started' && tab.id === activeTabId) {
+      setStatus('Loading…');
+    }
+  } else if (event.type === 'new-window' && typeof event.url === 'string' && event.url) {
+    // A `target="_blank"` link in a native view: the shell refused to hand a
+    // popup to the OS browser, so open it as a tab here.
+    openInNewTab(tab, event.url);
+  }
+};
+
+/* ── Native-view bounds sync ──────────────────────────────────── */
+
+let boundsTimer = null;
+let boundsObserver = null;
+let tileObserver = null;
+let bodyObserver = null;
+let syncQueued = false;
+
+/**
+ * Coalesce a burst of layout changes into one sync per frame.
+ *
+ * Dragging or resizing a window writes inline styles many times per frame; the
+ * native view only needs the latest value, and reading it once per frame keeps
+ * the page from chasing the shell.
+ */
+function requestSync() {
+  if (syncQueued) return;
+  if (typeof requestAnimationFrame !== 'function') {
+    syncActiveNative();
+    return;
+  }
+  syncQueued = true;
+  requestAnimationFrame(() => {
+    syncQueued = false;
+    syncActiveNative();
+  });
+}
+
+function startBoundsSync() {
+  stopBoundsSync();
+  // A native child window is positioned in native pixels, so it must follow the
+  // viewport element every frame it moves. A `ResizeObserver` covers resizes and
+  // a `MutationObserver` covers the inline style the drag/resize code writes;
+  // the slow interval is a fallback for anything else (a CSS animation, say).
+  // Only the active tab is visible, so only it is tracked.
+  boundsTimer = setInterval(syncActiveNative, 250);
+  if (typeof ResizeObserver !== 'undefined' && frameWrapEl) {
+    boundsObserver = new ResizeObserver(requestSync);
+    boundsObserver.observe(frameWrapEl);
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    const scope = document.getElementById('tile-grid') || tileEl;
+    if (scope) {
+      // Watch the whole grid: another window moving over—or away from—this one
+      // changes whether the native page may stay on top.
+      tileObserver = new MutationObserver(requestSync);
+      tileObserver.observe(scope, {
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+        subtree: true,
+      });
+    }
+    if (document.body) {
+      bodyObserver = new MutationObserver(requestSync);
+      bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+  window.addEventListener('resize', requestSync);
+  window.addEventListener('desktop:changed', requestSync);
+  window.addEventListener('overlay:open', requestSync);
+  window.addEventListener('fullscreen:change', requestSync);
+}
+
+function stopBoundsSync() {
+  if (boundsTimer) clearInterval(boundsTimer);
+  boundsTimer = null;
+  if (boundsObserver) boundsObserver.disconnect();
+  boundsObserver = null;
+  if (tileObserver) tileObserver.disconnect();
+  tileObserver = null;
+  if (bodyObserver) bodyObserver.disconnect();
+  bodyObserver = null;
+  window.removeEventListener('resize', requestSync);
+  window.removeEventListener('desktop:changed', requestSync);
+  window.removeEventListener('overlay:open', requestSync);
+  window.removeEventListener('fullscreen:change', requestSync);
 }
 
 /* ── AI-driven navigation ─────────────────────────────────────── */
@@ -1075,14 +1035,6 @@ export function browserContextMenu() {
       disabled: !tileEl,
       onClick: () => void showHome(activeTab()),
     },
-    { type: 'separator' },
-    {
-      type: 'item',
-      label: 'Refresh block count',
-      icon: 'ui/power',
-      disabled: !shieldEl,
-      onClick: () => void refreshMetrics(),
-    },
   ];
 }
 
@@ -1101,43 +1053,16 @@ export function mountBrowserTile() {
   tileEl.append(tabstripEl, buildToolbar(), viewportEl);
 
   updateNavButtons();
-  void (async () => {
-    try {
-      const state = await fetchState();
-      proxyBase = state.proxy_base || null;
-      filteringPaused = !!state.filtering_paused;
-      lastMetrics = state.metrics ?? null;
-      lastRules = state.rules ?? 0;
-      renderShield(lastMetrics, lastRules);
-      if (!proxyBase) {
-        setStatus('Filter engine starting…');
-        // One retry covers the plugin's proxy still warming up.
-        setTimeout(async () => {
-          const again = await fetchState().catch(() => null);
-          if (again?.proxy_base) {
-            proxyBase = again.proxy_base;
-            renderShield(again.metrics, again.rules);
-            setStatus('');
-          }
-        }, 1500);
-      }
-    } catch (_) {
-      setStatus('Filter engine unavailable');
-    }
-    // One tab, on its home surface.
-    createTab({});
-  })();
-
-  pollTimer = setInterval(() => void refreshMetrics(), STATE_POLL_MS);
+  startBoundsSync();
+  // One tab, on its home surface.
+  createTab({});
   return tileEl;
 }
 
 export function unmountBrowserTile() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
+  stopBoundsSync();
   window.removeEventListener('message', onFrameMessage);
   wired = false;
-  previewLeave();
   for (const tab of tabs) destroyTab(tab);
   tabs = [];
   activeTabId = null;
@@ -1146,13 +1071,9 @@ export function unmountBrowserTile() {
   tabstripEl = null;
   frameWrapEl = null;
   viewportEl = null;
-  previewEl = null;
   addressEl = null;
   backBtn = null;
   forwardBtn = null;
-  shieldEl = null;
-  shieldCountEl = null;
-  filterBtn = null;
   statusEl = null;
 }
 
@@ -1164,8 +1085,7 @@ export function wireBrowserEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('artifact:saved', onArtifactSaved);
-  // The home shelves and proxied pages talk back through postMessage; the
-  // frame's navigation reports depend on it.
+  // The home shelf talks back through postMessage (card clicks, refresh).
   window.addEventListener('message', onFrameMessage);
 }
 

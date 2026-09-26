@@ -15,10 +15,10 @@
 import {
   icon, button, emptyState, toast,
   setTileGlow, glowGradient,
-} from '/ui/index.js';
-import { setIcon } from '/ui/index.js';
-import { apiFetch } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
+} from '../../ui/index.js';
+import { setIcon } from '../../ui/index.js';
+import { apiFetch } from '../../js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const IMPRESS_PLUGIN = 'impress';
 

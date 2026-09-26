@@ -24,6 +24,8 @@
   <link rel="stylesheet" href="/css/background.css">
   <link rel="stylesheet" href="/css/settings.css">
   <link rel="stylesheet" href="/css/plugins.css">
+  <link rel="stylesheet" href="/css/overview.css">
+  <link rel="stylesheet" href="/css/boot.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
   <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
        after boot, which would flash a different theme first. The
@@ -50,6 +52,31 @@
   </script>
 </head>
 <body>
+  <!-- Boot splash: the skull mark with an accent-coloured glitch. Painted
+       before any module runs and faded out by js/bootScreen.js once the app
+       (or the sign-in screen) is ready. Follows the theme's accent tokens. -->
+  <div id="boot-screen" class="boot-screen" role="status" aria-label="Loading PEAK'D!">
+    <div class="boot-scan" aria-hidden="true"></div>
+    <div class="boot-logo" aria-hidden="true">
+      <span class="boot-logo__layer boot-logo__crear app-icon"></span>
+      <span class="boot-logo__layer boot-logo__cblue app-icon"></span>
+      <span class="boot-logo__layer boot-logo__base app-icon"></span>
+      <span class="boot-logo__layer boot-logo__tear-a app-icon"></span>
+      <span class="boot-logo__layer boot-logo__tear-b app-icon"></span>
+    </div>
+    <span class="boot-wordmark" aria-hidden="true">PEAK'D!</span>
+    <div class="boot-bar" aria-hidden="true"><span></span></div>
+  </div>
+  <script>
+    // Safety net: js/bootScreen.js hides the splash as soon as the app or the
+    // sign-in screen is ready. If the module graph never loads, this still
+    // clears it rather than leaving a stuck full-screen overlay.
+    setTimeout(function () {
+      var el = document.getElementById('boot-screen');
+      if (el) el.classList.add('is-hidden');
+    }, 15000);
+  </script>
+
   <div id="background" aria-hidden="true"></div>
   <div id="grain" aria-hidden="true"></div>
 
@@ -102,6 +129,9 @@
 
   <!-- Main navigator -->
   <div id="app" class="hidden">
+    <!-- Window overview (three-finger swipe up): dims the desktop while
+         overview.js lays every open window out as a live grid. -->
+    <div id="overview-backdrop" class="overview-backdrop hidden" aria-hidden="true"></div>
     <!-- Plugin window grid: every plugin with an interface lives in a tile
          (traveler's map = the "traveler" tile). -->
     <div id="tile-grid"></div>
@@ -111,6 +141,10 @@
     <div id="insight-cards" class="hidden" aria-live="polite" aria-label="Destination insights"></div>
 
     <header id="hud-header" aria-label="Status and controls">
+      <!-- Fullscreen a window and its title-bar stripe is replaced by this
+           bubble (fullscreenBubble.js): app name + close / exit-fullscreen,
+           same glass pill as the workspace switcher. -->
+      <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Fullscreen window"></div>
       <div class="hud-header-main">
         <div class="hud-clock" aria-live="polite">
           <span class="hud-clock-icon" data-icon="hud/clock" aria-hidden="true"></span>
@@ -129,6 +163,16 @@
         <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins"></div>
         <div id="hud-saved-trips" class="empty" aria-label="Saved places"></div>
         <div id="hud-top">
+          <button type="button" id="hud-audio" class="hud-audio hidden" title="Sound" aria-label="Sound">
+            <span class="hud-audio-icon" id="hud-audio-icon" aria-hidden="true"></span>
+            <span class="hud-audio-label" id="hud-audio-label"></span>
+            <span class="hud-audio-pct" id="hud-audio-pct"></span>
+          </button>
+          <button type="button" id="hud-network" class="hud-network hidden" title="Network" aria-label="Network status">
+            <span class="hud-network-icon" id="hud-network-icon" aria-hidden="true"></span>
+            <span class="hud-network-label" id="hud-network-label"></span>
+            <span class="hud-network-pct" id="hud-network-pct"></span>
+          </button>
           <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
@@ -213,6 +257,13 @@
 
     <div id="hud-transcript">
       <div id="reply-text" class="hidden"></div>
+    </div>
+
+    <!-- Plugin launcher (three-finger swipe down): every installed plugin as a
+         full-screen icon grid over the blurred desktop — macOS Launchpad /
+         GNOME app grid, not a dialog. Drawn by launcher.js. -->
+    <div id="plugin-launcher" class="plugin-launcher hidden" role="dialog" aria-modal="true" aria-label="Plugins">
+      <div id="plugin-launcher-grid" class="plugin-launcher-grid"></div>
     </div>
 
   </div>

@@ -144,7 +144,12 @@ async function refreshCatalog() {
   for (const p of plugins) {
     if (activeSet.has(p.name) && p.surface && !surfaceModules.has(p.name)) {
       try {
-        const mod = await import(`/plugins/${p.name}/plugin.js`);
+        // Relative on purpose: a module specifier resolves against the
+        // *module's* URL, and the app can be served through the filtering
+        // proxy (the kiosk), where the module URL lives under `/p/…`.
+        // A root-absolute `/plugins/…` would resolve to the proxy origin
+        // instead of the app and the window would never mount (kiosk bug).
+        const mod = await import(`../plugins/${p.name}/plugin.js`);
         surfaceModules.set(p.name, mod.default || mod);
         surfaceModules.get(p.name)?.wireEvents?.();
         wiredAny = true;

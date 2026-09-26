@@ -1,13 +1,11 @@
-//! The `browser` plugin: an in-app browser window powered by the shared
-//! `shiny-filter` engine.
+//! The `browser` plugin: an in-app browser window.
 //!
-//! Why this plugin exists next to the `peakd` shell: a native webview
-//! cannot be embedded in an HTML page, and — measured, not assumed — macOS
-//! gives a plain `WKWebView` no way to filter its own requests (wry's
-//! `ProxyConfig` produced zero proxied requests in testing). Inside the Shiny
-//! desktop the window *is* HTML, so the proxy can be the window's **origin**,
-//! which makes filtering here complete rather than best-effort: there is no
-//! request the engine does not see.
+//! The window's chrome (tab strip, toolbar, address bar, news home) is HTML
+//! served by this plugin. The page itself is rendered by the shell in a native
+//! child webview — `crates/peakd`'s `browse` module — at the page's real
+//! origin, which is what lets anti-bot challenges (Cloudflare) pass. This
+//! plugin owns the window's sessions, its history and the news shelf; it no
+//! longer runs a filtering proxy.
 
 use std::sync::{Arc, OnceLock};
 
@@ -45,14 +43,14 @@ impl Plugin for BrowserPlugin {
             entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
             target_triple: None,
             description: Some(
-                "Browse the web inside Shiny — a filtered window powered by the shared \
-                 shiny-filter adblocking engine, with a news home ranked from your searches"
+                "Browse the web inside Shiny — a web window with a news home ranked from your \
+                 searches"
                     .into(),
             ),
             author: Some("shiny".into()),
             summary: Some(
-                "Browser: adblock-filtered web browsing in its own window, with related-news cards \
-                 chosen from what you search for"
+                "Browser: web browsing in its own window, with related-news cards chosen from \
+                 what you search for"
                     .into(),
             ),
             migrations_dir: "migrations".into(),
@@ -80,8 +78,6 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/session", "browser_session_create"),
             (HttpMethod::Post, "/api/browser/session/close", "browser_session_close"),
             (HttpMethod::Post, "/api/browser/navigate", "browser_navigate"),
-            (HttpMethod::Get, "/api/browser/metrics", "browser_metrics"),
-            (HttpMethod::Post, "/api/browser/filter/toggle", "browser_filter_toggle"),
             (HttpMethod::Get, "/api/browser/history", "browser_history"),
             (HttpMethod::Get, "/api/browser/news", "browser_news"),
             (HttpMethod::Post, "/api/browser/news/click", "browser_news_click"),
@@ -105,41 +101,20 @@ impl Plugin for BrowserPlugin {
         }
     }
 
-    /// Bring up the filter proxy as soon as the plugin loads, so the window is
-    /// ready the moment the user opens it.
+    /// Repair the history schema when the plugin loads.
     ///
     /// **This must run on the plugin's own runtime.** A plugin cdylib links
     /// its own copy of Tokio, so driving plugin futures from the host's
     /// runtime panics with *"there is no reactor running, must be called from
     /// the context of a Tokio 1.x runtime"* — and because the panic unwinds
-    /// across the `dlopen` boundary the process then aborts. That is precisely
-    /// the failure mode `PLUGINS.md` §15 warns about, and it took down the
-    /// server during the first install of this plugin. `rt::bridge` sends the
-    /// work to the plugin-owned runtime instead; the host just awaits a
-    /// channel.
+    /// across the `dlopen` boundary the process then aborts (PLUGINS.md §15).
+    /// `history::ensure_schema` is synchronous, so no bridge is needed.
     async fn on_load(&self, ctx: Arc<PluginCtx>) {
         // Repair a `peakd_history` created before the profile's `query` column
         // existed. A migration cannot do this idempotently (SQLite has no
         // conditional DDL), and the code that needs the column cannot function
         // without it — see `history::ensure_schema`.
         crate::history::ensure_schema(&ctx);
-
-        let started = shiny_plugin_sdk::rt::bridge(async move {
-            let cache_dir = shiny_filter::engine::default_cache_dir(std::path::Path::new("data"));
-            match crate::proxy::ensure_started(cache_dir).await {
-                Ok(handle) => Ok((handle.base().to_string(), handle.filter.rule_count())),
-                Err(err) => Err(err),
-            }
-        })
-        .await;
-
-        match started {
-            Ok(Ok((base, rules))) => {
-                tracing::info!("browser: filter proxy on {base} ({rules} rules)")
-            }
-            Ok(Err(err)) => tracing::warn!("browser: filter proxy unavailable: {err}"),
-            Err(err) => tracing::warn!("browser: filter proxy startup failed: {err}"),
-        }
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {

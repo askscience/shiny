@@ -25,11 +25,13 @@ The web UI (`web/`) is a desktop-style workspace:
 
 - **Top HUD** — clock + local weather; a plugin icon tray (grouped by category; tap an
   inactive icon to activate the plugin, tap an active one to focus its window); the
-  traveler plugin's saved-places menu; workspace tabs; and Settings / Plugins / Chats
-  on the right.
+  traveler plugin's saved-places menu; host sound and network chips; workspace tabs;
+  and Settings / Plugins / Chats on the right.
 - **Plugin-window desktop** — every active plugin with an interface lives in its own
   window (slim title bar with close/deactivate + fullscreen; drag and resize in the
-  Windows layout). Layouts: **Master & stack**, **Columns**, or free **Windows**, with
+  Windows layout). Fullscreen hands the screen to the app and hides the top bar, which
+  comes back from the top edge with the app name and close / exit-fullscreen in a glass
+  bubble on its left. Layouts: **Master & stack**, **Columns**, or free **Windows**, with
   `Alt`-shortcuts (`Alt+Enter` fullscreen, `Alt+H/L` focus, `Alt+,/.` workspace,
   `Alt+1..9` jump, `Alt+N` / `Alt+Shift+N` add/remove workspace).
 - **Bottom chrome** — the AI **orb** (a fluid canvas sphere that takes its palette from
@@ -56,11 +58,16 @@ The web UI (`web/`) is a desktop-style workspace:
   focus, fullscreen), persisted per user
 - Multi-user accounts; per-user plugin activation, preferences, workspaces and
   desktop backgrounds
+- Host sound panel (PipeWire): a top-bar chip with output/input volume, mute
+  and default-device switching, fed live from the machine's audio server
 - Plugin manager: runtime install/uninstall/activate of `.zip`/`.tar.gz` plugins with
   hot router swap and an install audit log
 - Settings and Plugins windows on the desktop (install / activate / activity feed)
 - Noir + Light themes with a user-selectable accent and gradient; unified UI library
 - GNOME-style plugin notifications and destination insight cards
+- Optional Touch Bar surface (MacBook Pro T1/T2) over the same actions the HUD
+  and orb expose — native on macOS, through `tiny-dfr` on Linux, and completely
+  dormant on any other PC
 
 **Traveler plugin — trips, maps, GPS, diary, navigation**
 - Trips with start/end and statistics; live GPS position logging (GPSD, mock fallback)
@@ -83,8 +90,12 @@ The web UI (`web/`) is a desktop-style workspace:
 - `studio` — session-grid music sequencer + synth, rendered to WAV (self-contained DSP on `fundsp`)
 - `radio` — internet radio via Radio Browser
 - `youtube` — search and watch videos
-- `browser` — the **Browser**: a filtered web window whose iframe origin *is*
-  the ad-blocking proxy (shared verbatim with the native `crates/peakd` shell), plus
+- `browser` — the **Browser**: a web window. In the kiosk each tab is a real
+  child web view (`crates/peakd`'s `browse` module on Linux, `crates/peakd-mac`'s
+  on macOS) at the page's true origin, so anti-bot challenges (Cloudflare) pass.
+  There is no filtering proxy in the page path: the filter engine runs
+  server-side only (the news shelf and link previews).
+  Plus
   `browser_open` / `browser_search` / `browser_read` tools. Its home surface is a
   **related-news shelf chosen from what you search for**: a decayed interest profile
   over your browsing history picks the topics, the same search engine the address bar
@@ -101,6 +112,11 @@ The web UI (`web/`) is a desktop-style workspace:
 - Python 3.9+ with `supertonic[serve]` (TTS sidecar) and `faster-whisper` (STT sidecar)
 - [Ollama](https://ollama.com) — optional; AI features degrade gracefully when absent
 - [GPSD](https://gpsd.io) on `localhost:2947` — optional; falls back to mock GPS
+- [PipeWire](https://pipewire.org) with `pipewire-pulse` and WirePlumber, plus
+  `pactl` (`pulseaudio-utils`) on `PATH` — optional; powers the top-bar sound
+  panel. Without it the chip hides itself and the rest of the app is unchanged.
+  On a T2 Mac, `apple-t2-audio-config` supplies the ALSA UCM profiles for the
+  internal speakers and microphone.
 - [ffmpeg](https://ffmpeg.org) (`ffmpeg` + `ffprobe` on `PATH`, or `FFMPEG_BIN`/`FFPROBE_BIN`)
   — optional; the Files window uses it to render video thumbnails/posters and read
   duration. Without it, videos show a generic icon.
@@ -228,6 +244,84 @@ user is flagged `is_admin`, but core routing never gates on it). Each user gets:
 - **Auth** — accounts are `username` + password; requests authenticate with a Bearer
   token or the `shiny_token` session cookie.
 
+### Linux users
+
+With `SHINY_LINUX_USERS=true` a Shiny account can be **bound to a real Linux
+account**: core resolves the login name through NSS (`getpwnam_r`) at login and
+caches the `unix_user` / `unix_uid` / `unix_home` on the row. Two things change:
+
+- **Files on the real home** — `SHINY_HOME_MODE=real` makes the Files plugin (and
+  every app export) operate on the account's actual `$HOME` instead of
+  `~/.shiny/home/<id>`. The classic folders are created only when missing, and
+  the sandbox still refuses any path that escapes the home.
+- **Real password login** — `SHINY_AUTH_ENABLED=true` verifies the Linux password
+  through the privileged `shiny-auth` helper (PAM). The helper is a root-owned,
+  socket-activated, **verify-only** process (`scripts/install-linux-auth.sh`):
+  it exposes `verify`/`ping`, checks the caller with `SO_PEERCRED`, rate-limits
+  attempts, and never stores or logs a password. A PAM **denial is final**; only
+  an *unreachable* helper falls back to the local Argon2 hash, so
+  `!pam`-provisioned accounts can never be logged into while the helper is down.
+  Self-registration is disabled in this mode: accounts are provisioned from the
+  Linux account on first successful login.
+
+`GET /api/auth/unix-users` (loopback-only) lists the human accounts the login
+picker can offer. Everything is off by default, so a stock install behaves
+exactly as before.
+
+### Desktop session and login manager
+
+For a real multi-user desktop, three idempotent installers wire it up:
+
+```bash
+sudo scripts/install-linux-auth.sh      # PAM helper + Linux-user mode
+sudo scripts/install-linux-session.sh   # per-user server + the `shiny` session
+sudo scripts/install-greeter.sh         # LightDM + the Noir greeter
+```
+
+- Each login runs its **own** `shiny` server as that user — a systemd **user**
+  unit (`/etc/systemd/user/shiny.service`) on port `8080 + uid - 1000`, with its
+  state in `~/.local/share/shiny/` (per-user SQLite DB, log, backgrounds). This
+  is what lets the Files plugin reach *each* user's real home.
+- `/usr/local/bin/shiny-session` waits for that user's server, then runs matchbox
+  + `peakd` (Qt 6 + QtWebEngine; `cargo build -p peakd`). Quitting the
+  shell (`Alt`+`Q`) ends the session and returns to the greeter.
+- LightDM starts `/usr/share/xsessions/shiny.desktop`; the greeter theme lives in
+  `greeter/` (installed to `/usr/share/themes/Shiny`). **Autologin is off** — the
+  greeter is shown on every boot (`autologin-user` is left commented in
+  `/etc/lightdm/lightdm.conf.d/50-shiny.conf`).
+- `install-linux-session.sh` disables the single-user `shiny.service` /
+  `peakd.service`; both scripts have `--uninstall` to restore the old setup.
+
+## Remote access (Iroh)
+
+Shiny can serve the app itself — **not** screen sharing — to your other devices
+over [Iroh](https://www.iroh.computer), a peer-to-peer QUIC transport with NAT
+traversal: no port forwarding, no public IP, end-to-end encrypted. Build the
+server and shell with `--features iroh`.
+
+- **Turn it on**: Settings → **Remote** → *Server*. The link changes on every
+  start/stop. In the kiosk, turning it on hands the screen to the **server-mode
+  window** (link + controls); the kiosk returns when you press *Stop server*.
+- **Connect**: `peakd --iroh <ticket>` (built with `--features iroh`), or the
+  standalone `shiny-iroh-client --ticket <ticket> --listen 127.0.0.1:8080` and
+  open `http://127.0.0.1:8080`. Then log in with your password — remote clients
+  use the normal web login; the local kiosk does not.
+- **Pairing**: *Pair a new device* opens a 120 s window in which the next
+  connecting device is added to the allowlist; after that, unpaired keys are
+  rejected before any HTTP. *Forget devices* returns to ticket-only access;
+  *Rotate key* invalidates the old ticket.
+- **Host controls stay local**: a remote client cannot change the machine's
+  audio, network, brightness or backlight, and the Terminal is refused unless
+  *Allow Terminal from remote clients* is on. Your microphone, speakers and
+  location are the client's own.
+- The loopback session token (`$XDG_RUNTIME_DIR/shiny-session-token`, mode
+  `0600`) logs the local kiosk in without a password and is **never** accepted
+  over Iroh or the LAN.
+
+The app runs on port `8080 + uid − 1000` per user; the proxy dials that user's
+endpoint. Iroh needs outbound UDP and TCP 443 to its relays and `dns.iroh.link`
+(see Iroh's network guide); self-hosted relays are supported.
+
 ## Configuration
 
 Settings are read from the environment; a `.env` file in the repo root is loaded at
@@ -259,6 +353,13 @@ startup (via `dotenvy`). `RUST_LOG` overrides `LOG_LEVEL`.
 | `PLUGINS_DIR` | `data/plugins` | Installed-plugin directory |
 | `BACKGROUNDS_DIR` | `data/backgrounds` | Per-user desktop background files |
 | `ADMIN_TOKEN` | — | Optional token (exposed to plugins; not enforced by core) |
+| `SHINY_LINUX_USERS` | `false` | Bind Shiny accounts to real Linux accounts (NSS lookup, OS-home Files, PAM login). Off keeps today's virtual-home behaviour. |
+| `SHINY_HOME_MODE` | `virtual` | Files-plugin home: `virtual` (`~/.shiny/home/<id>`) or `real` (the account's OS home). `real` needs `SHINY_LINUX_USERS=true`. |
+| `SHINY_AUTH_ENABLED` | `false` | Verify the real Linux password through the `shiny-auth` helper (falls back to the Argon2 hash when the helper is absent). |
+| `SHINY_AUTH_SOCK` | `/run/shiny/auth.sock` | Unix socket the `shiny-auth` helper listens on. |
+| `SHINY_AUTH_PAM_SERVICE` | `shiny` | PAM service the **helper** authenticates against (`/etc/pam.d/<name>`); set in the `shiny-auth.service` unit, not the server. |
+| `SHINY_SESSION_TOKEN_FILE` | `$XDG_RUNTIME_DIR/shiny-session-token` | Loopback-only session token for the local kiosk / server-mode window. |
+| `SHINY_PAIRED_FILE` | `~/.local/share/shiny/paired_devices.json` | Paired-device allowlist for Iroh remote access. |
 
 ## Architecture
 
@@ -367,6 +468,12 @@ only while their plugin is installed (and are authenticated as well).
 | GET | `/api/insights/context` | Destination insight cards |
 | GET · POST | `/api/artifacts` · GET · PUT `/api/artifacts/:id` | Saved artifact cards |
 | POST | `/api/tts` | Supertonic TTS proxy → `audio/wav` |
+| GET | `/api/audio/status` | Host audio: output/input devices, volume, mute (PipeWire) |
+| GET | `/api/audio/events` | Audio change stream (SSE) |
+| POST | `/api/audio/volume` · `/api/audio/mute` · `/api/audio/default` | Set volume, mute, default device (loopback only) |
+| GET | `/api/touchbar` | Host Touch Bar capability (T2 MacBook) |
+| GET · POST | `/api/keyboard/backlight` | Host keyboard backlight (write is loopback-only) |
+| GET · POST | `/api/screen/brightness` | Host screen brightness (write is loopback-only) |
 | GET | `/api/voice/status` | Vosk + faster-whisper + Supertonic readiness, model inventory |
 | POST | `/api/voice/download` | Download a Vosk model |
 | POST | `/api/voice/whisper/download` | Background-download a faster-whisper model (`tiny`/`small`) |
@@ -411,9 +518,198 @@ for accuracy. `voice/start_whisper.sh` finds an interpreter with `faster-whisper
 (app venv → `python3` → common system/conda installs), optionally building
 `.venv-whisper` with `--install`.
 
-The **tiny** model ships in `data/whisper-models/`; if it is missing the app fetches it
-on first use. The **small** model is downloaded on demand from Settings → Voice via
-`voice/download_whisper.py`, which is stdlib-only so it works under any `python3`.
+The **tiny** model is the default. It is not committed to git (all of `data/` is
+ignored), so `voice/start_whisper.sh` downloads it once (~72 MB) the first time the
+sidecar starts. The **small** model is downloaded on demand from Settings → Voice. Both
+go through `voice/download_whisper.py`, which is stdlib-only so it works under any
+`python3`.
+
+## Host audio (PipeWire)
+
+The top-bar sound chip controls the machine itself: output and input volume,
+mute, and the default devices. Core reads PipeWire through its PulseAudio
+compatibility socket — `pactl --format=json` snapshots plus `pactl subscribe`
+for changes — so the host needs `pipewire-pulse` and `pactl`
+(`pulseaudio-utils`). Without them the chip hides itself.
+
+The snapshot is cached and broadcast, exactly like the network panel:
+`/api/audio/status` reads the cache, `/api/audio/events` relays changes as SSE,
+and the mutations (`/api/audio/volume`, `/api/audio/mute`, `/api/audio/default`)
+are accepted only from the local machine. Every `pactl` call is spawned with a
+runtime-dir fallback (`/run/user/<uid>`), so the service finds the user's
+socket without session environment.
+
+### Running unprivileged
+
+The server, the kiosk and PipeWire all run as the **desktop user**, never as
+root: the kiosk is a browser rendering the open web, and PipeWire refuses to
+run as root by design (Debian's units ship `ConditionUser=!root`). On this
+machine the desktop user is `eev`:
+
+- `loginctl enable-linger eev` keeps `user@1000.service` — and therefore
+  PipeWire — running from boot, so `/run/user/1000` exists for the server and
+  the kiosk. The daemons are enabled in that user's session:
+  `systemctl --user enable --now pipewire.socket pipewire-pulse.socket wireplumber.service`.
+- `shiny.service` runs as `User=eev` with `XDG_RUNTIME_DIR=/run/user/1000` and
+  orders itself after `user@1000.service`.
+- `peakd.service` runs as `User=eev` with `PAMName=login`: the PAM session
+  registers seat0 as active, which is what lets an unprivileged Xorg take the
+  DRM/input devices (no setuid Xorg wrapper) and hands the shell's web engine
+  the user's PipeWire socket. `peakd-kiosk.sh` therefore needs no
+  `PULSE_SERVER`.
+- Wi-Fi control (the network chip) needs one polkit grant for a service
+  without an active seat session:
+  `/etc/polkit-1/rules.d/49-shiny-network.rules` allows that user exactly the
+  NetworkManager actions the panel performs. The panel is loopback-only, so
+  remote callers cannot reach them.
+
+On a T2 Mac the internal speakers and mic come from the T2 kernel's
+`t2bce_audio` driver plus `apple-t2-audio-config` (ALSA UCM profiles).
+PipeWire + WirePlumber expose them as the `HiFi` profile — 6-channel speakers
+and a 3-channel mic.
+
+### Power and lid behaviour
+
+The session disables X blanking (`xset s off`, `xset -dpms` in
+`peakd-kiosk.sh`), so an idle kiosk never goes dark on its own. The remaining
+power handling separates what is a hardware bug from what is wanted.
+
+The T2 Mac's ACPI buttons report **phantom presses**, and `systemd-logind`
+acted on all of them:
+
+- **Power Button** (`PWRB`, `/dev/input/event1`) → `Power key pressed short.`,
+  observed 07:31, 10:43, 10:50, 11:25, 11:27, 12:05, 12:19 on 2026-09-20 —
+  each one **powered the machine off** (the default `HandlePowerKey=poweroff`),
+  which looked like "the kiosk dropped to a terminal and I had to restart".
+- **Sleep Button** (`SLPB`, `/dev/input/event2`) → `Suspend key pressed short.`,
+  observed 11:37, 11:44, 11:57 — each one suspended the machine.
+
+So `/etc/systemd/logind.conf.d/49-shiny-kiosk.conf` ignores the *short*
+phantom press but keeps a deliberate *long* hold working:
+
+```
+HandlePowerKey=ignore            HandlePowerKeyLongPress=poweroff
+HandleSuspendKey=ignore          HandleSuspendKeyLongPress=suspend
+HandleHibernateKey=ignore        HandleHibernateKeyLongPress=hibernate
+IdleAction=ignore
+HandleLidSwitch=suspend          HandleLidSwitchExternalPower=suspend
+HandleLidSwitchDocked=ignore
+```
+
+Idle never suspends; closing the lid does (except when docked). This lives
+outside the repo — re-install it after a re-provision. The sleep targets must
+stay **unmasked** for lid-close suspend to work.
+
+### Power/kiosk event log
+
+Because these phantom events are invisible in the moment, everything power- and
+kiosk-related is recorded to `/var/log/shiny-power.log`:
+
+- `shiny-powerlog.service` follows the journal and appends button presses
+  (logged even when the action is `ignore`), suspends/resumes, and the kiosk
+  starting/dying.
+- the `systemd-sleep` hook `/etc/systemd/system-sleep/50-shiny-log` snapshots
+  the kiosk processes, sessions and display state around every suspend/resume,
+  so it is obvious whether the kiosk came back.
+
+Read it with:
+
+```bash
+shiny-power-report        # the log plus recent power journal
+shiny-power-report -f     # follow it live
+```
+
+Finally, `peakd.service.d/10-wait-drm.conf` runs
+`/usr/local/bin/peakd-wait-drm.sh` first: without it Xorg won the race against
+the i915/amdgpu probe on the first start of every boot and died with
+`Cannot run in framebuffer mode`, flashing the console until `Restart=` caught
+it.
+
+## Touch Bar (MacBook Pro T1/T2)
+
+Shiny can drive the Touch Bar, and — this is the important part — it does so
+without assuming the machine has one. The bar is an **optional input surface**
+over actions the HUD and orb already expose. On a normal PC nothing is
+registered, nothing is installed, and the app behaves exactly as before.
+
+There are two transports, but one action vocabulary
+(`web/js/touchbarShared.js`):
+
+- **macOS** — `peakd` puts a native `NSTouchBar` on the kiosk window
+  (`crates/peakd-mac/src/touchbar.rs`); each button evaluates a `touchbar:action`
+  event in the page. A Mac without Touch Bar hardware simply never shows the
+  bar. Turn it off with `PEAKD_TOUCHBAR=0` or `peakd-mac --no-touchbar`.
+- **Linux T2** — the kernel (`hid-appletb-*` / `apple-ib-tb`) plus the
+  `tiny-dfr` daemon own the bar. `sudo scripts/touchbar/install-touchbar.sh`
+  installs a Shiny icon row (mic, stop, mute, volume, screen brightness,
+  workspace arrows, keyboard backlight, on-screen keyboard, gear) and copies
+  the four custom SVGs into `/etc/tiny-dfr`. It also installs a udev rule that
+  lets the desktop user (via the `video` group) write the `kbd_backlight` LED
+  and the panel `backlight`, so the server can dim or brighten the keyboard and
+  the screen — both are plain sysfs, no GTK or desktop daemon, which is why
+  they work in the matchbox kiosk.
+  `tiny-dfr` can only emit key codes, so each button sends a
+  **Ctrl+Alt+Shift+1…9** combo, which `web/js/touchbar.js` maps back to actions.
+  (A combo rather than F13–F24: the X keymap binds those codes to
+  `XF86*` keysyms on a `us`/`es` layout, so the page would never see `F13`;
+  digits are mapped everywhere and the page matches the physical
+  `event.code`.) The script is a clean no-op
+  unless it sees the T2 hardware, backs the existing config up once, and
+  `--uninstall` restores it. The media layer is left to the distro, so Fn still
+  reaches brightness and the media keys. The daemon needs the desktop user in
+  the `video` group to reach the display devices.
+
+Because `tiny-dfr` owns the bar globally, the row shows in every app, not only
+the kiosk — it has no per-app layers.
+
+The page learns a bar exists from two places: the kiosk shell's init flag, or
+the server's `GET /api/touchbar` probe (`available`). The server runs on the
+same machine and does the same sysfs check, so **Automatic** works in a plain
+browser too, not just under `peakd`.
+
+The buttons map to: tap-to-talk (the orb's exact gesture, barge-in included),
+stop the answer, host output mute / volume, screen brightness, previous/next
+workspace, keyboard backlight, toggle the virtual keyboard, and open Settings.
+
+Per-user enablement lives in **Settings → Touch Bar**: *Automatic* (only when
+the host reports a bar), *Always on* (force it, to try the buttons on a normal
+keyboard) or *Off*. The default is Automatic, so an ordinary PC never reacts to
+the combo. `web/js/tests/touchbar.test.mjs` pins the web vocabulary, the
+`tiny-dfr` TOML and the native macOS button list together, so the three cannot
+drift apart.
+
+## Touchpad gestures (three fingers)
+
+The kiosk recognises three-finger trackpad swipes and maps them onto the
+desktop:
+
+| Swipe | Action |
+|---|---|
+| left | next workspace |
+| right | previous workspace |
+| up | window overview — every open window, live |
+| down | plugin launcher |
+
+The web engines do not deliver trackpad gestures to the page (X11 has no
+protocol for them, and no gesture daemon is installed on the image), so the
+Linux shell reads the internal touchpad's evdev stream itself
+(`crates/peakd/src/gestures.rs`) and dispatches a `trackpad:gesture` event
+that
+`web/js/gestures.js` maps onto the desktop. The reader only *watches* the
+device — read-only, never `EVIOCGRAB` — so the pointer and two-finger scrolling
+are untouched. macOS has native multi-touch gestures and does not use this path.
+
+The reader needs permission to open `/dev/input/event*`, and the kiosk runs as
+an unprivileged user, so install the udev rule once:
+
+```bash
+sudo scripts/install-touchpad-gestures.sh
+```
+
+It tags the touchpad with logind's `uaccess` (an ACL for the active seat
+session) and reloads udev. Without the rule the shell logs that gestures are off
+and everything else runs unchanged. `PEAKD_TOUCHPAD=/dev/input/eventN`
+overrides device discovery on unusual hardware.
 
 ## Graceful Degradation
 
@@ -422,7 +718,12 @@ on first use. The **small** model is downloaded on demand from Settings → Voic
 | Ollama | Chat / diary / agent tools error; everything else runs |
 | Supertonic | TTS fails; STT still works |
 | faster-whisper | Voice falls back to the in-browser Vosk engine |
+| PipeWire / `pactl` | The sound chip hides itself; the rest of the app is unchanged |
 | GPSD | Mock GPS (fixed point + drift) |
+| Touch Bar | The feature stays dormant: the native bar is not installed off macOS and `auto` mode never activates. On Linux, `install-touchbar.sh` exits without touching anything. |
+| Touchpad gestures | The evdev reader finds no readable device and stays off; the pointer, scrolling and the rest of the app are unchanged. |
+| Iroh remote access | Not compiled in or not enabled → no endpoint is bound; Settings shows it Off and the built-in login/desktop are unchanged. An unreachable relay still leaves local addresses. |
+| `shiny-auth` helper | Login falls back to the local Argon2 hash; `remote`/Linux-user features still work. |
 | ffmpeg | Video thumbnails/posters fall back to a generic icon (playback is unaffected) |
 | Nominatim / OSRM / Overpass | Map and geo endpoints error |
 | DuckDuckGo | Search returns empty results |

@@ -13,9 +13,9 @@
 import {
   button, emptyState, field, input, modal, notify, textarea, toast, toggleRow,
   setTileGlow, glowGradient,
-} from '/ui/index.js';
-import { setIcon } from '/ui/index.js';
-import { apiFetch } from '/js/api.js';
+} from '../../ui/index.js';
+import { setIcon } from '../../ui/index.js';
+import { apiFetch } from '../../js/api.js';
 
 export const CALENDAR_PLUGIN = 'calendar';
 

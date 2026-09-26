@@ -155,7 +155,16 @@ impl Loader {
 
         // On Windows the file may be locked by the previous load — copy to a
         // versioned path so we can re-install while the old Library is alive.
+        //
+        // On Unix that workaround is unnecessary *and* expensive: the original
+        // can be `dlopen`ed directly, and it can be overwritten or unlinked
+        // while it is mapped (the kernel keeps the inode alive), so a re-install
+        // still works. Copying every cdylib was several GiB of disk I/O on every
+        // startup — the plugin loaders' real cost — for no benefit here.
+        #[cfg(windows)]
         let load_path = make_loadable_copy(&lib_path);
+        #[cfg(not(windows))]
+        let load_path = lib_path;
 
         // SAFETY: cdylib plugins must be `Send + Sync` and free of statics
         // accessible after `dlclose`. We retain `Library` in `LoadedPlugin` so
@@ -361,6 +370,10 @@ pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
     preferred.or(fallback)
 }
 
+/// Windows-only: copy a cdylib to a timestamped sibling so a re-install can
+/// overwrite the original while the previous `Library` still has it locked.
+/// Unix `dlopen`s the original in place — see the call site.
+#[cfg(windows)]
 fn make_loadable_copy(path: &Path) -> PathBuf {
     // Copy to a timestamped sibling so re-installs can overwrite the original
     // even on Windows where the in-use `.dll` is locked.

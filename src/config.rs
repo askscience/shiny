@@ -35,6 +35,20 @@ pub struct Config {
     /// Directory holding per-user desktop background images.
     pub backgrounds_dir: String,
     pub admin_token: Option<String>,
+    /// Bind Shiny accounts to real Linux accounts (NSS lookup + PAM login).
+    /// Off by default: without it nothing changes.
+    pub linux_users: bool,
+    /// Files-plugin home mode: `"real"` uses the account's OS home directory,
+    /// `"virtual"` (default) keeps `~/.shiny/home/<id>`.
+    pub home_mode: String,
+    /// Verify the real Linux password through the privileged `shiny-auth`
+    /// helper instead of the local Argon2 hash (falls back when unavailable).
+    pub auth_enabled: bool,
+    /// Unix socket the `shiny-auth` helper listens on.
+    pub auth_sock: String,
+    /// Where the loopback-only session token is written (default
+    /// `$XDG_RUNTIME_DIR/shiny-session-token`).
+    pub session_token_file: Option<String>,
 }
 
 impl Config {
@@ -94,7 +108,30 @@ impl Config {
             plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
             backgrounds_dir: env::var("BACKGROUNDS_DIR").unwrap_or_else(|_| "data/backgrounds".into()),
             admin_token: env::var("ADMIN_TOKEN").ok().filter(|v| !v.trim().is_empty()),
+            linux_users: env::var("SHINY_LINUX_USERS")
+                .unwrap_or_else(|_| "false".into())
+                .parse()
+                .unwrap_or(false),
+            home_mode: env::var("SHINY_HOME_MODE")
+                .unwrap_or_else(|_| "virtual".into())
+                .trim()
+                .to_lowercase(),
+            auth_enabled: env::var("SHINY_AUTH_ENABLED")
+                .unwrap_or_else(|_| "false".into())
+                .parse()
+                .unwrap_or(false),
+            auth_sock: env::var("SHINY_AUTH_SOCK")
+                .unwrap_or_else(|_| "/run/shiny/auth.sock".into()),
+            session_token_file: env::var("SHINY_SESSION_TOKEN_FILE")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
         }
+    }
+
+    /// Whether the Files plugin should operate on the account's real OS home.
+    /// Requires Linux-user binding; otherwise the virtual home is used.
+    pub fn real_home_mode(&self) -> bool {
+        self.linux_users && self.home_mode == "real"
     }
 
     /// Build a `ConfigSnapshot` for plugin `PluginCtx` construction.

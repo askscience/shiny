@@ -25,6 +25,9 @@ pub struct ToolRequest<'a> {
     pub params: &'a Value,
     /// Live agent context (lat/lon/heading/lang/model override).
     pub ctx: &'a AgentContext,
+    /// The caller's real Linux home directory when their account is bound to an
+    /// OS user (Linux-user mode). `None` keeps a plugin's own virtual home.
+    pub os_home: Option<&'a str>,
 }
 
 /// A single agent tool.
@@ -283,12 +286,14 @@ impl Tool for BridgedTool {
         let traveler_id = req.traveler_id.to_string();
         let params = req.params.clone();
         let agent_ctx = req.ctx.clone();
+        let os_home = req.os_home.map(str::to_string);
         crate::rt::bridge(async move {
             let req = ToolRequest {
                 user_id: &user_id,
                 traveler_id: &traveler_id,
                 params: &params,
                 ctx: &agent_ctx,
+                os_home: os_home.as_deref(),
             };
             inner.invoke(&ctx, req).await
         })

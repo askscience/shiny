@@ -1,0 +1,15 @@
+[package]
+name = "shiny-auth"
+version.workspace = true
+edition.workspace = true
+description = "Privileged Linux-PAM authentication helper for Shiny (verify-only)"
+license = "MIT"
+
+[[bin]]
+name = "shiny-auth"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"

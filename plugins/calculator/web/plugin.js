@@ -11,9 +11,9 @@
  * window shows the last `calculator_eval` result and refreshes its history.
  */
 
-import { button, emptyState, toast, setTileGlow, glowGradient } from '/ui/index.js';
-import { setIcon } from '/ui/index.js';
-import { apiFetch } from '/js/api.js';
+import { button, emptyState, toast, setTileGlow, glowGradient } from '../../ui/index.js';
+import { setIcon } from '../../ui/index.js';
+import { apiFetch } from '../../js/api.js';
 
 export const CALCULATOR_PLUGIN = 'calculator';
 

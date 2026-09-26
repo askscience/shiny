@@ -847,8 +847,8 @@ Before publishing a plugin:
 | `plugins/calculator/` | **Self-contained** — `calculator_*` tools, its own `calculator_history` table (`migrations/`), the `/api/calculator/eval` routes (`RouteSpec`), and the Calculator window (`web/plugin.js`) all in the plugin folder. One dependency-free scientific expression evaluator (`src/eval.rs`) is shared by the AI tool and the window, so both always agree. |
 | `plugins/image/` | **Self-contained** — `image_*` tools, its own `images` + `image_layers` tables (`migrations/`), the `/api/images` routes (`RouteSpec`), and the Image window (`web/plugin.js`) all in the plugin folder. A Photoshop/Compositor-style **layered** editor: a bottom-to-top stack of pixel layers and folders with per-layer opacity, blend mode and placement, composited by one Rust engine (`src/composite.rs` + `src/blend.rs`), with create/update/reorder/duplicate/merge/flatten (`src/layers.rs`). Photo operations (grayscale/sepia/blur/sharpen/edge/emboss/tint/rotate/resize/crop/flip/filters) run per layer via `photon-rs` (`default-features = false` for native) through the shared engine (`src/ops.rs`) used by both the AI tools and the window. Migration 003 wraps every pre-existing single-image row into a one-layer document. |
 | `plugins/studio/` | **Self-contained** — `studio_*` tools, its own `studio_tracks` table (`migrations/`), the `/api/studio` routes (`RouteSpec`, incl. `GET /:id/audio` serving WAV bytes), and the Studio window (`web/plugin.js`) all in the plugin folder. Patterns (explicit `x..x` rhythms + Euclidean fills, voice kinds kick/snare/hat/bass/pluck/lead, plus swing/accent/velocity groove) render to WAV by its own offline DSP engine (`src/engine.rs` + `src/voices.rs` + `src/wav.rs`), built on `fundsp` for band-limited oscillators and filters with a `rustysynth` SoundFont sampler for user-supplied sampled instruments; the window is an Ableton/Bitwig-style DAW — Arranger timeline + Clip Launcher, a detail panel (Editor step-grid/piano-roll, Devices, Mixer), DAW keyboard shortcuts (Space/⌘S/⌘E/Del), ruler-click play start, piano-key audition and live scope/spectrum meters. |
-| `plugins/browser/` | **Self-contained** — the in-app **Browser**: `browser_open`/`browser_search`/`browser_read` tools, `/api/browser/*` routes (`state`, `navigate`, `metrics`, `filter/toggle`, `history`, `news`, `news/click`, sessions), its own `peakd_history` table (`migrations/`), the window (`web/plugin.js`), and the **whole filtering engine** (`crates/shiny-filter`, shared verbatim with the native `crates/peakd` shell). The window's iframe origin *is* the proxy (`/p/<scheme>/<host>/…`), so every subresource is filtered rather than best-effort. Its `about:home` surface is a **related-news shelf ranked from what the user searches for** (`src/news.rs`): a decayed profile over `peakd_history` (typed searches weigh more than URL visits, `news_click` more still, and the word pairs of real queries are kept track of) → each interest searched as the *phrase the user typed*, not one word out of it → the same search engine the address bar uses → score by relevance, freshness tier, publisher and cross-interest overlap, with junk hosts, non-article URLs and one-publisher dominance filtered out → thumbnail cards. There is **no core fallback**: the browser, its filter proxy and its news shelf exist only when this plugin is installed. |
-| `plugins/files/` | **Self-contained** — a GNOME-style file browser over the user's real `$HOME`. Owns no database: every account's home is `$HOME/.shiny/home/<user-id>/` with the classic folders, provisioned by the `on_user_registered` hook (wired through `src/plugins/{loader,manager}.rs` + `src/api/auth.rs`) and lazily on first use. `file_*` tools + `/api/files/*` routes (`list`, `read`, `text`, `raw` with byte ranges, `thumb`, `download`, `upload`, `write`, `mkdir`, `rename`, `delete`→Trash, `restore`, `empty-trash`, `search`), a window (`web/plugin.js`) with lazy thumbnails (server-cached image PNG via `photon-rs`, PDF via vendored PDF.js, **video frames via server-side `ffmpeg`** — not a host `<video>`/QuickTime decode, so the same frame appears on macOS and Linux — text minis) and a Sushi-style Space quick-look with an app-styled streaming video player (byte-ranged from `/raw`, no re-encode), plus a `.Trash`. Deletes are recoverable; `fs_util::resolve` sandboxes every path to the user's home. Other apps save their exports here through the shared `/js/files.js` helper (`saveOrDownload`), which POSTs to `/api/files/upload` instead of triggering a browser download. **Double-clicking** a file opens it in the owning app (`/js/files.js` `openWithPlugin`/`onOpenFromFiles` — Word/Calc/Impress/PDF/Image); **Space** opens the quick-look. The quick-look renders Office documents through `/api/files/render` (`.odt`→HTML via the SDK, `.ods`→cell grid, `.odp`→slide data), not a raw text dump. |
+| `plugins/browser/` | **Self-contained** — the in-app **Browser**: `browser_open`/`browser_search`/`browser_read` tools, `/api/browser/*` routes (`state`, `navigate`, `metrics`, `filter/toggle`, `history`, `news`, `news/click`, sessions), its own `peakd_history` table (`migrations/`), the window (`web/plugin.js`), and the **whole filtering engine** (`crates/shiny-filter`). The window renders each tab in a **native child web view** owned by the shell (`crates/peakd` on Linux, `crates/peakd-mac` on macOS) at the page's true origin — no iframe, no filtering proxy in the page path; the filter engine runs server-side for the news shelf and link previews. Its `about:home` surface is a **related-news shelf ranked from what the user searches for** (`src/news.rs`): a decayed profile over `peakd_history` (typed searches weigh more than URL visits, `news_click` more still, and the word pairs of real queries are kept track of) → each interest searched as the *phrase the user typed*, not one word out of it → the same search engine the address bar uses → score by relevance, freshness tier, publisher and cross-interest overlap, with junk hosts, non-article URLs and one-publisher dominance filtered out → thumbnail cards. There is **no core fallback**: the browser, its filtering engine and its news shelf exist only when this plugin is installed. |
+| `plugins/files/` | **Self-contained** — a GNOME-style file browser over the user's home. Owns no database: each account's home is `$HOME/.shiny/home/<user-id>/` with the classic folders, provisioned by the `on_user_registered` hook (wired through `src/plugins/{loader,manager}.rs` + `src/api/auth.rs`) and lazily on first use. With `SHINY_LINUX_USERS=true` and `SHINY_HOME_MODE=real` the same browser operates on the account's **real Linux home** instead (core passes the resolved OS home as `x-shiny-os-home` on routes and `ToolRequest::os_home` for tools; classic folders are created only when missing). `file_*` tools + `/api/files/*` routes (`list`, `read`, `text`, `raw` with byte ranges, `thumb`, `download`, `upload`, `write`, `mkdir`, `rename`, `delete`→Trash, `restore`, `empty-trash`, `search`), a window (`web/plugin.js`) with lazy thumbnails (server-cached image PNG via `photon-rs`, PDF via vendored PDF.js, **video frames via server-side `ffmpeg`** — not a host `<video>`/QuickTime decode, so the same frame appears on macOS and Linux — text minis) and a Sushi-style Space quick-look with an app-styled streaming video player (byte-ranged from `/raw`, no re-encode), plus a `.Trash`. Deletes are recoverable; `fs_util::resolve` sandboxes every path to the user's home. Other apps save their exports here through the shared `/js/files.js` helper (`saveOrDownload`), which POSTs to `/api/files/upload` instead of triggering a browser download. **Double-clicking** a file opens it in the owning app (`/js/files.js` `openWithPlugin`/`onOpenFromFiles` — Word/Calc/Impress/PDF/Image); **Space** opens the quick-look. The quick-look renders Office documents through `/api/files/render` (`.odt`→HTML via the SDK, `.ods`→cell grid, `.odp`→slide data), not a raw text dump. |
 | `web/js/files.js` | Shared desktop-save helper for every plugin window: `saveOrDownload(blob, {name, dir, app})` writes an export into the user's home via `/api/files/upload` and falls back to a browser download when the Files plugin is not installed. |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
@@ -1061,9 +1061,12 @@ so plugins ship no CSS and do no blur work. Two tiers:
   from its `web/plugin.js`:
 
   ```js
+  // Relative module specifiers: `plugins/<name>/web/plugin.js` is three
+  // levels below the app root. Prefer relative imports over absolute `/ui/…`
+  // paths so the window keeps working wherever the app is mounted.
   import {
     setTileGlow, setTileGlowFromUrl, glowGradient, glowFromDrawable,
-  } from '/ui/index.js';
+  } from '../../../ui/index.js';
 
   setTileGlow(tileEl, glowGradient(colorA, colorB));   // sampled colours
   setTileGlow(tileEl, glowFromDrawable(canvasOrImg));  // canvas / photo frame
@@ -1258,7 +1261,7 @@ text.
 **From a plugin web surface** — import `notify` from the UI library:
 
 ```js
-import { notify } from '/ui/index.js';
+import { notify } from '../../../ui/index.js';
 
 notify({
   app: 'Mail',               // app label shown above the title
@@ -1329,32 +1332,20 @@ The top bar follows one convention (Studio sets the standard):
   are unsaved changes. Transient feedback (Studio's "Rendering…") may sit to its
   left, but the persistent saved/unsaved indicator is the dot.
 
-#### A window must not cache server addresses
+#### A window must not cache server-owned addresses
 
-The Browser window's filter proxy listens on a **random loopback port that
-changes on every server start**. A window that remembers such an address from
-before a restart shows the browser's own "connection refused" page on every
-later navigation, which reads as a broken proxy rather than a stale one. Two
-rules follow, and they apply to any plugin that hands a client a server-owned
-URL:
+Any plugin that hands a client a server-owned URL which can change (a random
+loopback port, a signed URL) must return the address with the payload and have
+the window re-read it rather than remember it from mount: a stale address reads
+as "the feature is broken", not "the address changed".
 
-- **Return the address with the payload.** `/api/browser/navigate` includes
-  `proxy_base` in its response, so the client never has to guess it, and
-  re-reads it on every navigation rather than once at mount.
-- **Recover in the window.** The surface listens for the frame's `error` event
-  *and* arms a short load watchdog (WebKit does not reliably fire `error` for a
-  cross-origin frame), refetches the address and retries **once**; a second
-  failure says so instead of looping. `plugins/browser/web/plugin.js`
-  (`refreshProxyBase`, `onFrameError`, `loadFrame`) is the reference.
-
-> **The proxy lives in the plugin, not in the server.** `plugins/browser/` links
-> `crates/shiny-filter` statically, so the filter proxy the window renders
-> through is code **inside the plugin's cdylib**. Editing `crates/shiny-filter`
-> and restarting the server changes nothing until the plugin is rebuilt and its
-> `.dylib` is copied into `data/plugins/browser/` as well. This bites the person
-> who fixes the proxy, watches `cargo build --release` finish, restarts, and
-> sees the old behaviour — the server binary is simply not the process serving
-> the traffic. Rebuild both:
+> **The Browser no longer renders through a proxy.** It used to: the window
+> showed a proxied iframe whose origin was a loopback filter proxy, and that
+> address changed on every server start. Now each tab is a native child web
+> view owned by the shell (`crates/peakd` on Linux, `crates/peakd-mac` on
+> macOS), at the page's true origin — there is no proxy address to cache, and
+> Cloudflare sees an ordinary browser. `crates/shiny-filter` still runs
+> server-side for the news shelf and link previews; it is not in the page path.
 >
 > ```bash
 > cargo build --release && cargo build --release -p shiny-browser-plugin

@@ -151,6 +151,242 @@ html, body {
 }
 #hud-top .icon-btn svg { width: 17px; height: 17px; }
 
+/* ── Host status chips (top bar: sound, then network) ───────── */
+.hud-network,
+.hud-audio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  max-width: 220px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hud-network:hover,
+.hud-audio:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+}
+.hud-network.is-open,
+.hud-audio.is-open {
+  background: var(--glass-hover);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+.hud-network .hud-network-icon,
+.hud-audio .hud-audio-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+.hud-network-label,
+.hud-audio-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+.hud-network-pct,
+.hud-audio-pct { font-variant-numeric: tabular-nums; opacity: 0.75; }
+.hud-network.is-connected { color: var(--text); }
+.hud-network.is-connected .hud-network-icon { color: var(--accent); }
+.hud-network.is-connected .hud-network-pct { color: var(--muted); }
+.hud-network.is-wired .hud-network-icon { color: var(--accent); }
+.hud-network.is-warning,
+.hud-network.is-warning .hud-network-icon { color: var(--warn); }
+.hud-network.is-dim { color: var(--muted); }
+.hud-audio.is-active { color: var(--text); }
+.hud-audio.is-active .hud-audio-icon { color: var(--accent); }
+.hud-audio.is-muted { color: var(--muted); }
+
+/* ── Network window (core window: `network`) ────────────────── */
+.network-window {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The menu reuses the window's blocks inside a HUD popover: fixed header,
+   scrolling body, no inner chrome. */
+.network-menu {
+  min-width: 0;
+  width: min(380px, calc(100vw - 24px));
+  max-width: min(380px, calc(100vw - 24px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.network-menu .network-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 10px 12px 12px;
+  gap: 14px;
+}
+.network-menu .network-body::-webkit-scrollbar { display: none; }
+.network-idle { padding: 6px 2px; color: var(--muted); font-size: 12.5px; }
+.network-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.network-head-main { flex: 1; min-width: 0; }
+.network-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.network-head-title .ui-icon { color: var(--accent); }
+.network-head-hint { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.network-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.network-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.network-section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.network-card { display: flex; flex-direction: column; gap: 8px; }
+.network-card .ui-list-item {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+}
+.network-actions { justify-content: flex-end; gap: 6px; }
+.network-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.network-pct { font-variant-numeric: tabular-nums; }
+.network-lock { opacity: 0.7; }
+.network-leading { color: var(--text-secondary); }
+.network-error { color: var(--error); }
+
+/* ── Sound menu (HUD popover) ───────────────────────────────── */
+.audio-menu {
+  min-width: 0;
+  width: min(360px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.audio-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.audio-head-main { flex: 1; min-width: 0; }
+.audio-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.audio-head-title .ui-icon { color: var(--accent); }
+.audio-head-hint { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.audio-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 12px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.audio-body::-webkit-scrollbar { display: none; }
+.audio-card { display: flex; flex-direction: column; gap: 8px; }
+.audio-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.audio-section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.audio-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.audio-device-main { flex: 1; min-width: 0; }
+.audio-device-title {
+  color: var(--text);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audio-device-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audio-pct {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.audio-leading { color: var(--text-secondary); }
+.audio-check { color: var(--accent); }
+.audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audio-controls .ui-slider { flex: 1; }
+.audio-devices .ui-list-item {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+}
+
 /* ── Workspace bar (Hyprland-style desktop switcher) ────────── */
 #workspace-bar {
   display: flex;
@@ -227,6 +463,69 @@ html, body {
 @media (max-width: 640px) {
   #workspace-bar { display: none; }
 }
+
+/* ── Fullscreen window bubble (top bar, left) ────────────────
+   While a plugin window is fullscreen, its own title-bar stripe is gone
+   (fullscreen.css). The app name plus close / exit-fullscreen live here
+   instead, as a glass pill on the left of the top bar — the same bubble as the
+   workspace switcher, so the way out of fullscreen rides the bar's top-edge
+   reveal. Unlike the workspace switcher it stays on small screens: it is the
+   only way out of fullscreen there. */
+#fullscreen-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--hud-bar-height);
+  padding: 0 4px 0 9px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-glass);
+  pointer-events: auto;
+}
+
+/* The bubble belongs to the fullscreen takeover: never show it on the open
+   desktop, even if a stale `.hidden` were ever missed. */
+body:not(.fs-active) #fullscreen-bubble { display: none; }
+
+#fullscreen-bubble .fullscreen-bubble-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+#fullscreen-bubble .fullscreen-bubble-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+#fullscreen-bubble .fullscreen-bubble-btn:hover {
+  background: var(--glass-hover);
+  color: var(--text);
+}
+
+#fullscreen-bubble .fullscreen-bubble-btn--close:hover {
+  background: var(--error-soft, var(--glass-hover));
+  color: var(--error);
+}
+
+#fullscreen-bubble .fullscreen-bubble-btn .ui-icon { width: 14px; height: 14px; }
 
 .hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
 

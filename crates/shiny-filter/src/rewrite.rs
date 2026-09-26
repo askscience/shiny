@@ -519,9 +519,15 @@ fn rewrite_import(after: &str, css_url: &str, proxy_base: &str) -> (usize, Strin
         let raw = rest[..end].trim().trim_matches(['"', '\'']);
         let rewritten = rewrite_url_value(raw, "href", css_url, proxy_base)
             .unwrap_or_else(|| raw.to_string());
+        // Keep the at-rule keyword. Emitting a bare URL here turns the sheet
+        // into an unparseable document (every rule after it is dropped), which
+        // is how the app's own theme tokens vanished when the app was loaded
+        // through this proxy: `tokens.css` starts with a Google Fonts
+        // `@import`, so the sheet parsed to zero rules and every
+        // `var(--…)` in the UI fell back to nothing.
         return (
             trimmed_start + 4 + end + 1,
-            format!(" {rewritten}"),
+            format!("@import url({rewritten})"),
         );
     }
 
@@ -533,12 +539,14 @@ fn rewrite_import(after: &str, css_url: &str, proxy_base: &str) -> (usize, Strin
                 .unwrap_or_else(|| raw.to_string());
             return (
                 trimmed_start + 1 + end + 1,
-                format!(" \"{rewritten}\""),
+                format!("@import \"{rewritten}\""),
             );
         }
     }
 
-    (trimmed_start, String::new())
+    // Unrecognised form: keep the keyword and leave the rest of the rule
+    // untouched rather than deleting it.
+    (trimmed_start, "@import".to_string())
 }
 
 fn rewrite_css_urls(css: &str, css_url: &str, proxy_base: &str) -> String {
@@ -799,6 +807,19 @@ mod tests {
         let out = rewrite_css("https://site.example.com/a.css", BASE, css);
         assert!(out.contains("/p/https/site.example.com/font.woff2"), "got {out}");
         assert!(out.contains(r#"format("woff2")"#), "got {out}");
+    }
+
+    #[test]
+    fn css_import_keeps_the_at_rule_keyword() {
+        // Regression: the replacement used to drop `@import`, leaving a bare
+        // URL at the top of the sheet. The stylesheet then parsed to zero
+        // rules, so the app's theme variables (--muted, --surface-strong, …)
+        // disappeared and the UI rendered half-styled through the proxy.
+        let css = "@import url('https://fonts.example/css2?family=DM+Sans');\n:root{--muted:#fff}";
+        let out = rewrite_css("https://site.example.com/tokens.css", BASE, css);
+        assert!(out.contains("@import url("), "got {out}");
+        assert!(out.contains("/p/https/fonts.example/css2?family=DM+Sans"), "got {out}");
+        assert!(out.contains("--muted:#fff"), "got {out}");
     }
 
     #[test]

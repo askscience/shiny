@@ -55,10 +55,19 @@ pub async fn execute_action(
     if state.plugins.tools().has(&action_key) {
         let owner = state.plugins.tools().owner_of(&action_key);
         let plugin_ctx = state.plugin_ctx();
+        let os_home = state.os_identity_for(traveler).map(|u| u.home);
         let outcome = state
             .plugins
             .tools()
-            .invoke(&action_key, &plugin_ctx, &traveler.id, &traveler.id, params, ctx)
+            .invoke(
+                &action_key,
+                &plugin_ctx,
+                &traveler.id,
+                &traveler.id,
+                params,
+                ctx,
+                os_home.as_deref(),
+            )
             .await?;
         return Ok(ActionOutcome {
             action: outcome.action,

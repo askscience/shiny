@@ -1,0 +1,79 @@
+#!/bin/bash
+# Shiny session — started by the display manager (LightDM) for the logged-in
+# user. Installed to /usr/local/bin/shiny-session by
+# scripts/install-linux-session.sh (the @…@ placeholders are substituted there).
+#
+# It brings up *this user's* Shiny server, then supervises one window:
+#
+#   * normally the kiosk (`peakd`);
+#   * when Server mode is on, the server-mode window (link + controls).
+#
+# `peakd` exits 42 when the user turns Server mode on; the server-mode window
+# exits 0 on Stop. Which window to show is decided by the state file the server
+# writes ($XDG_RUNTIME_DIR/shiny-remote.state).
+set -u
+
+export XDG_SESSION_TYPE=x11
+# Pin Qt to X11: the shell is peakd (QtWebEngine, xcb platform plugin), and
+# the session's X-specific parts (matchbox, the evdev gesture reader) assume
+# Xorg.
+export QT_QPA_PLATFORM=xcb
+
+PORT_BASE=@PORT_BASE@
+PORT=$((PORT_BASE + $(id -u) - 1000))
+
+# The per-user server unit reads SERVER_PORT from here, so both sides agree.
+mkdir -p "$HOME/.config/shiny"
+printf 'SERVER_PORT=%s\n' "$PORT" > "$HOME/.config/shiny/env"
+export PEAKD_APP_ORIGIN="http://127.0.0.1:$PORT"
+
+# Bring up this user's Shiny server (idempotent; a no-op if already running).
+systemctl --user start shiny.service 2>/dev/null || true
+
+# Wait until it answers (up to ~30s) so peakd does not open on a dead port.
+for _ in $(seq 1 60); do
+    if curl -sf "http://127.0.0.1:$PORT/api/voice/languages" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 0.5
+done
+
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+TOKEN_FILE="$RUNTIME_DIR/shiny-session-token"
+STATE_FILE="$RUNTIME_DIR/shiny-remote.state"
+
+# Auto-login the kiosk with the loopback-only session token: the server turns it
+# into the normal shiny_token cookie, so the app opens without a second login.
+BOOT_URL="http://127.0.0.1:$PORT/"
+if [ -r "$TOKEN_FILE" ]; then
+    BOOT_URL="http://127.0.0.1:$PORT/api/auth/session?token=$(cat "$TOKEN_FILE")"
+fi
+
+# A kiosk does not blank or sleep the panel.
+xset s off     >/dev/null 2>&1 || true
+xset s noblank >/dev/null 2>&1 || true
+xset -dpms     >/dev/null 2>&1 || true
+
+# matchbox maximises the single window and adds no chrome.
+matchbox-window-manager -use_titlebar no &
+
+peakd=@PEAKD_BIN@
+server_mode=@SERVER_MODE_BIN@
+
+read_state() {
+    cat "$STATE_FILE" 2>/dev/null || echo off
+}
+
+while true; do
+    if [ "$(read_state)" = "on" ]; then
+        # Server mode: show the link/control window. When it exits (Stop), the
+        # state flips to off and the loop brings the kiosk back.
+        "$server_mode"
+    else
+        "$peakd" --url "$BOOT_URL"
+        code=$?
+        # 42 = the user turned Server mode on: switch windows. Any other status
+        # is a real quit (Alt+Q) or a crash: end the session.
+        [ "$code" -eq 42 ] || break
+    fi
+done

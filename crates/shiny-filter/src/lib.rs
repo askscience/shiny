@@ -1,19 +1,19 @@
-//! `shiny-filter` — the one ad-blocking engine shared by both browser surfaces.
+//! `shiny-filter` — the one ad-blocking engine behind Shiny's browser.
 //!
-//! Shiny ships two ways to browse:
+//! Where it runs:
 //!
-//! * **`peakd`**, a native shell (tao + wry) whose webview is pointed at
-//!   this crate's proxy.
-//! * **the `browser` plugin**, whose window in the Shiny desktop embeds an
-//!   iframe whose *origin is this same proxy*.
+//! * **the `browser` plugin** uses it **server-side**: the `browser_read` tool
+//!   and the related-news shelf fetch through it, and link previews use its
+//!   classifier (`src/fetch.rs`, `src/news.rs`, `src/preview.rs`).
+//! * the kiosk shells (`crates/peakd` on Linux, `crates/peakd-mac` on macOS)
+//!   render the open web in native child web views at the page's true origin —
+//!   no proxy in the page path.
 //!
-//! Neither the native webview nor an iframe can filter requests on its own —
-//! wry exposes no HTTP interception hook, and `WKWebView`/`WebKitGTK` have no
-//! `onBeforeRequest` equivalent. So filtering has to live in a proxy, and this
-//! crate is that proxy. Both surfaces therefore run through *exactly* the same
-//! `adblock::Engine`, the same request classifier, and the same injection
-//! pipeline — which is what makes them "the same engine" in the only sense
-//! that survives contact with the platforms.
+//! The proxy machinery below is still the engine the plugin's fetch path uses,
+//! and it is where the request classifier and rewriting rules live. It is not
+//! how the Browser window renders pages: rendering through an origin-rewriting
+//! proxy broke anti-bot systems (Cloudflare's challenge cookies were re-scoped
+//! to the proxy origin), which is why the window moved to native child views.
 //!
 //! # Layout
 //!

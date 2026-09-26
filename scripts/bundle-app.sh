@@ -31,13 +31,13 @@ done
 
 APP_NAME="Peakd"
 BUNDLE_ID="com.askscience.peakd"
-BIN="target/${PROFILE}/peakd"
+BIN="target/${PROFILE}/peakd-mac"
 
-echo "==> building peakd (${PROFILE})"
+echo "==> building peakd-mac (${PROFILE})"
 if [ "$PROFILE" = "release" ]; then
-  cargo build --release -p peakd
+  cargo build --release -p peakd-mac
 else
-  cargo build -p peakd
+  cargo build -p peakd-mac
 fi
 
 if [ ! -x "$BIN" ]; then

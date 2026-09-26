@@ -11,10 +11,10 @@
 import {
   icon, setIcon, button, emptyState, toast, notify, modal,
   setTileGlow, setTileGlowFromUrl, glowGradient,
-} from '/ui/index.js';
-import { openContextMenu } from '/js/contextMenu.js';
-import { pluginForFile, openWithPlugin, pickFiles } from '/js/files.js';
-import { apiFetch } from '/js/api.js';
+} from '../../ui/index.js';
+import { openContextMenu } from '../../js/contextMenu.js';
+import { pluginForFile, openWithPlugin, pickFiles } from '../../js/files.js';
+import { apiFetch } from '../../js/api.js';
 
 export const FILES_PLUGIN = 'files';
 
@@ -384,7 +384,7 @@ function hydrateThumb(host, entry) {
 let pdfjsPromise = null;
 function loadPdfJs() {
   if (!pdfjsPromise) {
-    pdfjsPromise = import('/vendor/pdfjs/pdf.min.mjs').then((mod) => {
+    pdfjsPromise = import('../../vendor/pdfjs/pdf.min.mjs').then((mod) => {
       mod.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
       return mod;
     }).catch(() => null);

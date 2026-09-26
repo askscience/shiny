@@ -14,9 +14,11 @@
  *      standing — never a broken state.
  *   3. Hides the chrome of the workspace it took over: the top bar goes away
  *      (even with `autohide_bar` off, one fullscreen app owns the screen) and
- *      the window's own title bar — the app name plus close/exit-fullscreen —
- *      docks flush under it, revealed by the same top-edge gesture. The other
- *      bar positions keep their desktop-wide behaviour.
+ *      comes back from the top edge. The window gives up its own title-bar
+ *      stripe; the app name plus close/exit-fullscreen move into a glass
+ *      bubble on the left of the top bar (fullscreenBubble.js), so the way out
+ *      rides the same top-edge reveal as the rest of the chrome. The other bar
+ *      positions keep their desktop-wide behaviour.
  *
  * This module also owns the desktop-wide chrome reveal (Settings → Desktop →
  * Fullscreen): bar position top/left/right/center, plus an independent autohide
@@ -99,6 +101,14 @@ function leaveFullscreen() {
   }
 }
 
+/** Tell the chrome — and the fullscreen bubble — that the state changed.
+ *  `fullscreen` is the browser's state, `plugin` the in-app session's. */
+function announce() {
+  window.dispatchEvent(new CustomEvent('fullscreen:change', {
+    detail: { fullscreen: isAppFullscreen(), plugin: session?.plugin || null },
+  }));
+}
+
 /** The desktop half of leaving: give the window its workspace back. */
 function endSession(s) {
   if (!s) return;
@@ -119,15 +129,14 @@ export function enterWindowFullscreen(name) {
   // The in-app half of the state, independent of whether the browser grants
   // the request: fullscreen.css keys the hidden/relocated chrome off this.
   body.classList.add('fs-active');
+  // The in-app state is already live: show the top-bar bubble now, before the
+  // browser transition (or its refusal) round-trips through an event.
+  announce();
 
   // Must be called synchronously from the user gesture; browsers reject it
   // otherwise. A rejection is not an error — the in-app fullscreen stands and
   // the chrome simply keeps its normal, always-visible behaviour.
-  requestFullscreen(document.documentElement).catch(() => {
-    window.dispatchEvent(new CustomEvent('fullscreen:change', {
-      detail: { fullscreen: false, plugin: name },
-    }));
-  });
+  requestFullscreen(document.documentElement).catch(() => announce());
   return true;
 }
 
@@ -141,6 +150,7 @@ export function exitWindowFullscreen() {
   if (isAppFullscreen()) void leaveFullscreen(); // fires fullscreenchange
   dismissChrome();
   endSession(s);
+  announce();
   nudgeResize();
   return true;
 }
@@ -232,11 +242,9 @@ function onPointerMove(e) {
 function onFullscreenChange() {
   const on = isAppFullscreen();
   body.classList.toggle('fullscreen-active', on);
-  window.dispatchEvent(new CustomEvent('fullscreen:change', {
-    detail: { fullscreen: on, plugin: session?.plugin || null },
-  }));
 
   if (on) {
+    announce();
     holdReveal(ENTER_HOLD_MS);
     nudgeResize();
     return;
@@ -248,6 +256,7 @@ function onFullscreenChange() {
   const s = session;
   session = null;
   endSession(s);
+  announce();
   nudgeResize();
 }
 

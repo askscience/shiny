@@ -64,6 +64,16 @@ fn user_id(req: &Request) -> Result<String, AppError> {
         .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
 }
 
+/// Resolve the request's home directory: the caller's real OS home when core
+/// bound them to a Linux account, otherwise the virtual `~/.shiny/home/<id>`.
+///
+/// Takes owned inputs (not `&Request`) because the request body is not `Sync`
+/// and a shared borrow held across the `await` would make the handler future
+/// non-`Send`.
+async fn request_home(uid: &str, os_home: Option<String>) -> Result<std::path::PathBuf, AppError> {
+    fs_util::ensure_home_for(uid, os_home.as_deref()).await
+}
+
 fn ok(data: Json) -> Response {
     axum::Json(json!({ "success": true, "data": data })).into_response()
 }
@@ -201,7 +211,7 @@ fn list(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let dir = fs_util::resolve(&home, &rel).await?;
@@ -209,7 +219,7 @@ fn list(ctx: Arc<PluginCtx>) -> RouteHandler {
             let entries = fs_util::list_dir(&home, &dir).await?;
             Ok(ok(json!({
                 "path": fs_util::rel_display(&home, &dir),
-                "home": fs_util::home_display(&uid),
+                "home": fs_util::home_display_for(&home),
                 "entries": entries,
             })))
         }
@@ -221,10 +231,10 @@ fn home(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let entries = fs_util::list_dir(&home, &home).await?;
             Ok(ok(json!({
-                "home": fs_util::home_display(&uid),
+                "home": fs_util::home_display_for(&home),
                 "classic": fs_util::CLASSIC_DIRS,
                 "path": "",
                 "entries": entries,
@@ -238,7 +248,7 @@ fn read(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<ReadQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
@@ -272,7 +282,7 @@ fn text(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
@@ -331,7 +341,7 @@ fn render(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
@@ -436,7 +446,7 @@ fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
@@ -513,7 +523,7 @@ fn thumb(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<ThumbQuery>(req).await?;
             let size = q.size.unwrap_or(256).clamp(32, 1024);
             let rel = q.path.unwrap_or_default();
@@ -525,7 +535,7 @@ fn thumb(ctx: Arc<PluginCtx>) -> RouteHandler {
             let meta = tokio::fs::metadata(&path)
                 .await
                 .map_err(|_| AppError::NotFound("file not found".into()))?;
-            let cache_dir = home.join(fs_util::THUMBS_DIR);
+            let cache_dir = fs_util::thumbs_dir(&home);
             tokio::fs::create_dir_all(&cache_dir).await?;
             let mtime = meta
                 .modified()
@@ -580,7 +590,7 @@ fn video_info(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let path = fs_util::resolve(&home, &q.path.unwrap_or_default()).await?;
             if !preview::is_video(&path) {
@@ -601,7 +611,7 @@ fn video_frame(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<FrameQuery>(req).await?;
             let path = fs_util::resolve(&home, &q.path.unwrap_or_default()).await?;
             if !preview::is_video(&path) {
@@ -632,7 +642,7 @@ fn download(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
@@ -670,7 +680,7 @@ fn upload(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, req) = take_query::<UploadQuery>(req).await?;
             let name = clean_name(&q.name.unwrap_or_default())?;
             let dir_rel = q.path.unwrap_or_default();
@@ -704,7 +714,7 @@ fn write(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let axum::Json(body) = axum::Json::<WriteBody>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
@@ -738,7 +748,7 @@ fn mkdir(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let axum::Json(body) = axum::Json::<PathBody>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
@@ -758,7 +768,7 @@ fn rename(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let axum::Json(body) = axum::Json::<RenameBody>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
@@ -789,7 +799,7 @@ fn delete(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let axum::Json(body) = axum::Json::<PathBody>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
@@ -819,7 +829,7 @@ fn restore(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let axum::Json(body) = axum::Json::<PathBody>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
@@ -835,7 +845,7 @@ fn empty_trash(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             fs_util::empty_trash(&home).await?;
             Ok(ok(json!({ "emptied": true })))
         }
@@ -847,7 +857,7 @@ fn search(ctx: Arc<PluginCtx>) -> RouteHandler {
         let _ = &ctx;
         async move {
             let uid = user_id(&req)?;
-            let home = fs_util::ensure_home(&uid).await?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
             let (q, _req) = take_query::<SearchQuery>(req).await?;
             let needle = q.q.unwrap_or_default();
             if needle.trim().len() < 2 {

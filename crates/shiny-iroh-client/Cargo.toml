@@ -1,0 +1,16 @@
+[package]
+name = "shiny-iroh-client"
+version.workspace = true
+edition.workspace = true
+description = "Local HTTP proxy that tunnels a browser to a Shiny server over Iroh"
+
+[[bin]]
+name = "shiny-iroh-client"
+path = "src/main.rs"
+
+[dependencies]
+iroh = "1.2.0"
+shiny-iroh-proto = { path = "../shiny-iroh-proto" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

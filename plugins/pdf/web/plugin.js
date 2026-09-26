@@ -13,10 +13,10 @@
 import {
   icon, button, emptyState, toast, spinner,
   setTileGlow, glowFromDrawable,
-} from '/ui/index.js';
-import { setIcon } from '/ui/index.js';
-import { apiFetch } from '/js/api.js';
-import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '/js/files.js';
+} from '../../ui/index.js';
+import { setIcon } from '../../ui/index.js';
+import { apiFetch } from '../../js/api.js';
+import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const PDF_PLUGIN = 'pdf';
 
@@ -36,7 +36,7 @@ let pdfjsLoading = null;
 function loadPdfJs() {
   if (pdfjsLib) return Promise.resolve(pdfjsLib);
   if (!pdfjsLoading) {
-    pdfjsLoading = import('/vendor/pdfjs/pdf.min.mjs').then((mod) => {
+    pdfjsLoading = import('../../vendor/pdfjs/pdf.min.mjs').then((mod) => {
       mod.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
       pdfjsLib = mod;
       return mod;

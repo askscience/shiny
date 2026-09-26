@@ -101,6 +101,7 @@ export class Orb3DRenderer {
     this.targetPan = 0;
     this.t = 0;
     this.running = true;
+    this.rafId = 0;
 
     this.parts = [];     // { obj, kind, baseOpacity, spectrumIndex, pulse }
     this.pulses = [];    // the shared "thinking" rings (rebuilt per style)
@@ -122,14 +123,15 @@ export class Orb3DRenderer {
     this.root = new THREE.Group();
     this.scene.add(this.root);
 
+    this._loop = this._loop.bind(this);
+    this._schedule = this._schedule.bind(this);
     this.resize();
     this.build();
     this.applyColors();
 
     this._onResize = () => this.resize();
     window.addEventListener('resize', this._onResize);
-    this._loop = this._loop.bind(this);
-    requestAnimationFrame(this._loop);
+    this._schedule();
   }
 
   resize() {
@@ -139,6 +141,8 @@ export class Orb3DRenderer {
     this.renderer.setSize(this.displaySize, this.displaySize, false);
     this.canvas.style.width = `${this.displaySize}px`;
     this.canvas.style.height = `${this.displaySize}px`;
+    // A resize clears the drawing buffer, so a fresh frame is needed.
+    this._schedule();
   }
 
   /* ── building blocks ───────────────────────────────────────── */
@@ -272,6 +276,7 @@ export class Orb3DRenderer {
     this.styleId = next;
     this.build();
     this.applyColors();
+    this._schedule();
   }
 
   getStyle() {
@@ -281,6 +286,7 @@ export class Orb3DRenderer {
   setPalette(state) {
     this.stateKey = state;
     this.applyColors();
+    this._schedule();
   }
 
   refreshPalette() {
@@ -301,18 +307,19 @@ export class Orb3DRenderer {
   setSignal(v) {
     if (typeof v === 'number') {
       this.targetLevel = Math.min(1, Math.max(0, v));
-      return;
-    }
-    if (v && typeof v === 'object') {
+    } else if (v && typeof v === 'object') {
       const level = Number(v.level);
       const pan = Number(v.pan);
       if (Number.isFinite(level)) this.targetLevel = Math.min(1, Math.max(0, level));
       if (Number.isFinite(pan)) this.targetPan = Math.min(1, Math.max(-1, pan));
     }
+    this._schedule();
   }
 
   destroy() {
     this.running = false;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
     window.removeEventListener('resize', this._onResize);
     for (const p of this.parts) {
       p.obj.geometry?.dispose?.();
@@ -322,7 +329,39 @@ export class Orb3DRenderer {
     this.renderer.dispose?.();
   }
 
+  /** Queue the next frame unless one is already queued (or we are stopped). */
+  _schedule() {
+    if (!this.running || this.rafId) return;
+    this.rafId = requestAnimationFrame(this._loop);
+  }
+
+  /**
+   * Whether there is anything left to draw. At rest every style is static: the
+   * waves and spikes are all scaled by the voice signal, and `t` only moves
+   * things the signal has turned on. Render-on-demand keeps the idle orb from
+   * re-rendering (and re-uploading deformed geometry) every frame; the last
+   * frame stays on the canvas until `setSignal` / `setPalette` / `setStyle` /
+   * `resize` restarts the loop.
+   *
+   * The active voice states keep animating even in silence — their ring
+   * rhythm is driven by `t` — as do previews and the "processing" state.
+   */
+  _busy() {
+    if (this.preview || this.stateKey === 'processing') return true;
+    if (this.stateKey === 'listening' || this.stateKey === 'conversation'
+      || this.stateKey === 'speaking') {
+      return true;
+    }
+    return (
+      this.targetLevel > 0.002 ||
+      this.intensity > 0.002 ||
+      Math.abs(this.targetPan) > 0.002 ||
+      Math.abs(this.pan) > 0.002
+    );
+  }
+
   _loop(ts) {
+    this.rafId = 0;
     if (!this.running) return;
     this.t = ts * 0.001;
 
@@ -365,7 +404,7 @@ export class Orb3DRenderer {
     this._updatePulses(thinking);
 
     this.renderer.render(this.scene, this.camera);
-    requestAnimationFrame(this._loop);
+    if (this._busy()) this._schedule();
   }
 
   /** The "thinking" pulses: soft rings that leave the orb and fade, so the orb

@@ -6,6 +6,7 @@ import {
   readAvatarFile,
 } from './userProfiles.js';
 import { resetUserSession } from './session.js';
+import { hideBootScreen } from './bootScreen.js';
 
 const overlay = document.getElementById('login-overlay');
 const appEl = document.getElementById('app');
@@ -36,6 +37,35 @@ const selectedNameEl = document.getElementById('login-selected-name');
 
 let selectedUser = null;
 let registerAvatarData = null;
+// Linux-user mode: when the server is bound to real Linux accounts, the picker
+// lists OS users and self-registration is hidden (Linux is the source of truth).
+let linuxMode = false;
+let linuxUsers = [];
+
+/** Fetch the host's Linux accounts (loopback-only). Silently no-ops otherwise. */
+async function loadUnixUsers() {
+  try {
+    const res = await apiFetch('/api/auth/unix-users', { authRedirect: false });
+    linuxMode = !!res?.enabled;
+    linuxUsers = Array.isArray(res?.users) ? res.users : [];
+  } catch {
+    linuxMode = false;
+    linuxUsers = [];
+  }
+}
+
+/** The accounts the picker offers: OS users in Linux mode, saved profiles otherwise. */
+function pickerUsers() {
+  if (linuxMode) {
+    return linuxUsers.map((u) => ({
+      id: u.name,
+      username: u.name,
+      name: u.display_name || u.name,
+      avatar: null,
+    }));
+  }
+  return getKnownUsers();
+}
 
 function showError(msg) {
   errorEl.textContent = msg;
@@ -54,22 +84,26 @@ function showStep(step) {
 }
 
 export function showLogin() {
+  hideBootScreen();
   overlay.classList.remove('hidden');
   appEl?.classList.add('hidden');
   selectedUser = null;
   registerAvatarData = null;
-  renderProfilePicker();
-  const users = getKnownUsers();
-  if (users.length) {
-    showStep('pick');
-  } else {
-    // No profile is known on this device — which is the normal state for a new
-    // browser, a private window, or cleared storage. The saved-profile picker
-    // would be empty, so go straight to the manual sign-in form: an existing
-    // user must be able to type their username, not be forced into "create
-    // account" and told their own username is taken.
-    showManualLoginStep();
-  }
+  // Resolve the host's Linux accounts first, then render. On a stock install
+  // the request returns `enabled:false` and the picker uses saved profiles.
+  loadUnixUsers().finally(() => {
+    renderProfilePicker();
+    if (pickerUsers().length) {
+      showStep('pick');
+    } else {
+      // No profile is known on this device — which is the normal state for a new
+      // browser, a private window, or cleared storage. The saved-profile picker
+      // would be empty, so go straight to the manual sign-in form: an existing
+      // user must be able to type their username, not be forced into "create
+      // account" and told their own username is taken.
+      showManualLoginStep();
+    }
+  });
 }
 
 export function hideLogin() {
@@ -87,7 +121,7 @@ function renderProfilePicker() {
   if (!profilePicker) return;
   profilePicker.innerHTML = '';
 
-  getKnownUsers().forEach((user) => {
+  pickerUsers().forEach((user) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'profile-tile';
@@ -105,6 +139,9 @@ function renderProfilePicker() {
     btn.addEventListener('click', () => selectUser(user));
     profilePicker.appendChild(btn);
   });
+
+  // Linux accounts cannot be created from the web — hide "Add user".
+  if (linuxMode) return;
 
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
@@ -158,14 +195,19 @@ function showManualLoginStep() {
   if (usernameInput) usernameInput.value = '';
   if (passwordInput) passwordInput.value = '';
   // Nothing to go back to, so the Back button would be a dead end; offer the
-  // route that helps instead.
+  // route that helps instead. In Linux mode there is no registration at all.
   loginBackPick?.classList.add('hidden');
-  loginToRegister?.classList.remove('hidden');
+  loginToRegister?.classList.toggle('hidden', linuxMode);
   showStep('password');
   (usernameInput || passwordInput)?.focus();
 }
 
 function showRegisterStep() {
+  // Linux accounts are created in Linux, never here.
+  if (linuxMode) {
+    showManualLoginStep();
+    return;
+  }
   selectedUser = null;
   registerAvatarData = null;
   if (registerUsernameInput) registerUsernameInput.value = '';
@@ -188,7 +230,7 @@ loginBackPick?.addEventListener('click', () => {
 registerToLogin?.addEventListener('click', () => {
   // "Already have a profile? Sign in" — the escape hatch from the register
   // screen, which is all a first-time visitor on this device used to see.
-  if (getKnownUsers().length) showStep('pick');
+  if (pickerUsers().length) showStep('pick');
   else showManualLoginStep();
 });
 
@@ -196,7 +238,7 @@ loginToRegister?.addEventListener('click', () => showRegisterStep());
 
 registerBackBtn?.addEventListener('click', () => {
   registerAvatarData = null;
-  if (getKnownUsers().length) showStep('pick');
+  if (pickerUsers().length) showStep('pick');
   else showManualLoginStep();
 });
 

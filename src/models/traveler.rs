@@ -15,6 +15,16 @@ pub struct Traveler {
     pub avatar: Option<String>,
     #[sqlx(default)]
     pub is_admin: Option<i64>,
+    /// Real Linux login name this account is bound to (Linux-user mode).
+    #[sqlx(default)]
+    pub unix_user: Option<String>,
+    #[sqlx(default)]
+    pub unix_uid: Option<i64>,
+    #[sqlx(default)]
+    pub unix_home: Option<String>,
+    /// How the account authenticates: `local` (Argon2) or `pam`.
+    #[sqlx(default)]
+    pub auth_source: Option<String>,
 }
 
 impl Traveler {
@@ -31,6 +41,10 @@ impl Traveler {
             username: Some(username),
             avatar: None,
             is_admin: Some(0),
+            unix_user: None,
+            unix_uid: None,
+            unix_home: None,
+            auth_source: Some("local".into()),
         }
     }
 
@@ -42,6 +56,7 @@ impl Traveler {
             avatar: self.avatar.clone(),
             created_at: self.created_at.clone(),
             is_admin: self.is_admin.unwrap_or(0) == 1,
+            unix_user: self.unix_user.clone(),
         }
     }
 }
@@ -56,6 +71,9 @@ pub struct TravelerPublic {
     pub created_at: Option<String>,
     #[serde(default)]
     pub is_admin: bool,
+    /// Real Linux login name when the account is bound to an OS user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unix_user: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

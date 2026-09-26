@@ -9,19 +9,27 @@ use std::sync::Arc;
 
 use shiny::api::AppState;
 use shiny::config::Config;
+use shiny::services::audio::AudioService;
 use shiny::services::diary_gen::DiaryGenerator;
+use shiny::services::display::DisplayService;
 use shiny::services::gpsd::GpsdService;
+use shiny::services::keyboard_backlight::KeyboardBacklightService;
+use shiny::services::network::NetworkService;
 use shiny::services::ollama::OllamaClient;
 use shiny::services::osm::OsmService;
+use shiny::services::screen_brightness::ScreenBrightnessService;
 use shiny::services::supertonic::SupertonicClient;
+use shiny::services::touchbar::TouchBarService;
 use shiny::services::web_search::SearchService;
 use shiny::services::whisper::WhisperClient;
 
 /// Build an `AppState` pointed at a scratch plugins dir and database.
 async fn state_for(plugins_dir: &str, db: &str) -> AppState {
     let db_url = format!("sqlite://{db}?mode=rwc");
+    let mut conn = shiny::db::connect(&db_url).await.expect("connection");
+    shiny::db::run_migrations(&mut conn).await.expect("migrations");
+    drop(conn);
     let pool = shiny::db::init_pool(&db_url).await.expect("pool");
-    shiny::db::run_migrations(&pool).await.expect("migrations");
 
     let mut config = Config::from_env();
     config.plugins_dir = plugins_dir.to_string();
@@ -33,6 +41,12 @@ async fn state_for(plugins_dir: &str, db: &str) -> AppState {
         search: SearchService::new(),
         osm: OsmService::new(),
         gpsd: GpsdService::new(config.gpsd_host.clone(), config.gpsd_port),
+        network: NetworkService::new(),
+        audio: AudioService::new(),
+        display: DisplayService::new(),
+        touchbar: TouchBarService::new(),
+        keyboard_backlight: KeyboardBacklightService::new(),
+        screen_brightness: ScreenBrightnessService::new(),
         diary_gen: Arc::new(DiaryGenerator::new(
             pool.clone(),
             OllamaClient::new(config.ollama_url.clone(), config.ollama_model.clone()),
@@ -45,6 +59,8 @@ async fn state_for(plugins_dir: &str, db: &str) -> AppState {
             std::path::PathBuf::from(&config.plugins_dir),
             pool.clone(),
         ),
+        iroh: shiny::services::iroh_remote::IrohRemote::new(),
+        session: Default::default(),
         router_rebuild: None,
         config,
     }

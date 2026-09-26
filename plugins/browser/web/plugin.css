@@ -76,65 +76,6 @@
   border-radius: 999px;
 }
 
-/* ── Filter toggle (pause ad blocking) ──────────────────────── */
-
-/* Accent when filtering runs, muted when paused. The paused state is *also* on
-   `aria-pressed`, so it never depends on colour alone. */
-.browser-filter-btn {
-  color: var(--accent);
-}
-
-.browser-filter-btn.is-paused {
-  color: var(--muted);
-}
-
-/* A paused filter means the counter to its right is frozen, not zero: dim it so
-   the two controls never disagree. */
-.browser-shield.is-paused {
-  opacity: 0.55;
-  border-style: dashed;
-}
-
-/* ── Shield (blocked counter) ───────────────────────────────── */
-
-.browser-shield {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary, var(--text));
-  font: inherit;
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition: border-color var(--duration-fast, 120ms) var(--ease-out, ease),
-              color var(--duration-fast, 120ms) var(--ease-out, ease);
-}
-
-.browser-shield:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.browser-shield.is-active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.browser-shield .ui-icon {
-  width: 13px;
-  height: 13px;
-}
-
-.browser-shield-count {
-  line-height: 1;
-}
-
 /* ── Tab strip ──────────────────────────────────────────────── */
 
 .browser-tabstrip {
@@ -244,73 +185,12 @@
   display: block;
 }
 
-/* ── Link preview ───────────────────────────────────────────── */
-
-.browser-preview {
-  position: absolute;
-  z-index: 6;
-  width: 320px;
-  max-width: calc(100% - 16px);
-  pointer-events: none;
-}
-
-.browser-preview.hidden {
+/* A tab rendered by a native child webview (see plugin.js): the local frame is
+   parked so it cannot fight the native view for the viewport. Declared after
+   `.is-active` so it wins when both classes are present. */
+.browser-frame.is-native-hidden {
   display: none;
 }
-
-.browser-preview-body {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md, 10px);
-  background: var(--glass-strong, var(--surface-strong, rgba(20, 20, 24, 0.94)));
-  color: var(--text);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(var(--glass-blur-light, 8px));
-}
-
-.browser-preview-img {
-  flex: none;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  object-fit: cover;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-}
-
-.browser-preview-text {
-  min-width: 0;
-}
-
-.browser-preview-site {
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.55;
-}
-
-.browser-preview-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.browser-preview-desc {
-  margin-top: 3px;
-  font-size: 11.5px;
-  line-height: 1.4;
-  opacity: 0.72;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 
 /* A status strip overlays the viewport rather than displacing it, so the page
    never jumps when a navigation starts or fails. */
@@ -331,12 +211,4 @@
 
 .browser-status.hidden {
   display: none;
-}
-
-/* A narrow window (two tiles side by side, or a phone) drops the labels that
-   no longer fit before it starts shrinking the address field. */
-@container (max-width: 460px) {
-  .browser-shield-count {
-    display: none;
-  }
 }

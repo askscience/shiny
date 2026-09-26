@@ -20,8 +20,8 @@
 import {
   icon, button, searchBar, spinner, emptyState, notify, toast,
   setTileGlow, setTileGlowFromUrl,
-} from '/ui/index.js';
-import { getToken } from '/js/api.js';
+} from '../../ui/index.js';
+import { getToken } from '../../js/api.js';
 
 export const RADIO_PLUGIN = 'radio';
 

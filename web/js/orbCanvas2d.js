@@ -225,15 +225,17 @@ class OrbRenderer {
 
     this.t = 0;
     this.running = true;
+    this.rafId = 0;
     this.lastDrawAt = 0;
-    // Previews are decoration; the real orb runs at full frame rate.
+    // Previews are decoration; the real orb is uncapped while it animates.
     this.minFrameMs = preview ? 1000 / 24 : 0;
 
+    this._loop = this._loop.bind(this);
+    this._schedule = this._schedule.bind(this);
     this.resize();
     this._onResize = () => this.resize();
     window.addEventListener('resize', this._onResize);
-    this._loop = this._loop.bind(this);
-    requestAnimationFrame(this._loop);
+    this._schedule();
   }
 
   resize() {
@@ -245,10 +247,13 @@ class OrbRenderer {
     this.canvas.style.height = `${this.displaySize}px`;
     this.px = px;
     this.dpr = dpr;
+    // Assigning width/height clears the canvas, so a redraw is always needed.
+    this._schedule();
   }
 
   setStyle(id) {
     this.styleId = STYLES[id] ? id : DEFAULT_STYLE;
+    this._schedule();
   }
 
   getStyle() {
@@ -259,6 +264,7 @@ class OrbRenderer {
    *  signal); the accent itself is read live through `spectrumForState`. */
   setPalette(state) {
     this.stateKey = state;
+    this._schedule();
   }
 
   refreshPalette() {
@@ -269,25 +275,55 @@ class OrbRenderer {
   setSignal(v) {
     if (typeof v === 'number') {
       this.targetLevel = Math.min(1, Math.max(0, v));
-      return;
-    }
-    if (v && typeof v === 'object') {
+    } else if (v && typeof v === 'object') {
       const level = Number(v.level);
       const pan = Number(v.pan);
       if (Number.isFinite(level)) this.targetLevel = Math.min(1, Math.max(0, level));
       if (Number.isFinite(pan)) this.targetPan = Math.min(1, Math.max(-1, pan));
     }
+    this._schedule();
   }
 
   destroy() {
     this.running = false;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
     window.removeEventListener('resize', this._onResize);
   }
 
+  /** Queue the next frame unless one is already queued (or we are stopped). */
+  _schedule() {
+    if (!this.running || this.rafId) return;
+    this.rafId = requestAnimationFrame(this._loop);
+  }
+
+  /**
+   * Whether there is anything left to animate. Every style's motion is scaled
+   * by the voice signal, so at rest the orb is a genuinely static frame — and
+   * `draw()` on an unchanged canvas is pure work for the CPU and GPU. Once the
+   * signal has settled the loop stops and the last frame stays on the canvas;
+   * `setSignal` / `setPalette` / `setStyle` / `resize` restart it.
+   *
+   * `aura` is the exception: its ribbon highlight travels on its own, not on
+   * the signal, so it must keep the loop.
+   */
+  _busy() {
+    if (this.preview) return true;
+    if (this.stateKey === 'processing') return true;
+    if (this.styleId === 'aura') return true;
+    return (
+      this.targetLevel > 0.002 ||
+      this.intensity > 0.002 ||
+      Math.abs(this.targetPan) > 0.002 ||
+      Math.abs(this.pan) > 0.002
+    );
+  }
+
   _loop(ts) {
+    this.rafId = 0;
     if (!this.running) return;
     if (this.minFrameMs && ts - this.lastDrawAt < this.minFrameMs) {
-      requestAnimationFrame(this._loop);
+      this._schedule();
       return;
     }
     this.lastDrawAt = ts;
@@ -305,7 +341,7 @@ class OrbRenderer {
     this.pan += (this.targetPan - this.pan) * 0.16;
 
     this.draw();
-    requestAnimationFrame(this._loop);
+    if (this._busy()) this._schedule();
   }
 
   /** Move + squash the body away from the loud side of a stereo signal. */

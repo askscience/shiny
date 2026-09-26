@@ -4042,6 +4042,28 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 .studio-title::placeholder { color: var(--muted); }
 
+/* Browser/menu button — the left-hand list opener, same shape as Word/Calc's
+   `*-doc-btn` (icon + chevron, 32px tall; height comes from the unified block). */
+.studio-menu-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.studio-menu-btn:hover { background: var(--glass-hover); }
+.studio-menu-btn[aria-expanded='true'] { background: var(--glass-hover); }
+.studio-menu-btn-icon { display: inline-flex; color: var(--accent); }
+.studio-menu-btn-icon .ui-icon { width: 15px; height: 15px; }
+.studio-menu-btn-chevron { display: inline-flex; color: var(--muted); }
+.studio-menu-btn-chevron .ui-icon { width: 12px; height: 12px; }
+
 .studio-select,
 .studio-number {
   background: transparent;
@@ -5293,8 +5315,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 
 .studio-tile { display: flex; flex-direction: column; overflow: hidden; padding: 0; gap: 0; }
 
-/* header / transport */
-.studio-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--glass-border); background: var(--glass); flex-wrap: wrap; }
+/* header / transport. `.studio-bar` itself is defined once above (and shares
+   the unified top-bar metrics with Word/Calc) — do not re-declare it here. */
 .studio-bar-sep { flex: none; width: 1px; align-self: stretch; background: var(--glass-border); margin: 2px 2px; }
 .studio-btn--on { background: var(--glass-hover); color: var(--accent); border-color: var(--accent); }
 .studio-transport--on { color: var(--accent); background: var(--glass-hover); }
@@ -5432,7 +5454,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 .studio-scene--bar { color: var(--accent); font-weight: 700; }
 
 /* pop-up browser */
-.studio-browser { position: absolute; top: 46px; right: 8px; z-index: 40; width: 300px; max-height: 72%; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--glass-border); border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
+.studio-browser { position: absolute; top: 46px; left: 8px; z-index: 40; width: 300px; max-height: 72%; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--glass-border); border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
 .studio-browser-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--glass-border); }
 .studio-browser-title { font-size: 12px; font-weight: 600; color: var(--text); }
 .studio-browser-tabs { flex: none; display: flex; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--glass-border); flex-wrap: wrap; }
@@ -5582,7 +5604,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
    padding). Bars wrap to a second row on narrow widths.
    ───────────────────────────────────────────────────────────── */
 .word-bar, .calc-bar, .impress-bar, .image-bar, .mail-bar,
-.calendar-bar, .calculator-bar, .pdf-bar {
+.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar, .terminal-bar {
   padding: 6px 10px;
   gap: 8px;
   flex-wrap: wrap;
@@ -5590,15 +5612,82 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 
 /* In-bar menu buttons (icon + chevron/label) match Studio's 32px height. */
 .word-doc-btn, .calc-sheet-btn, .impress-deck-btn, .image-menu-btn, .mail-account-btn,
-.pdf-doc-btn {
+.pdf-doc-btn, .studio-menu-btn {
   height: 32px;
 }
 
 /* In-bar icon tools match Studio's 32px transport buttons. */
 .word-tool, .calc-tool, .impress-tool, .mail-tool,
-.image-tool, .calendar-nav-btn, .calculator-bar-btn, .pdf-tool {
+.image-tool, .calendar-nav-btn, .calculator-bar-btn, .pdf-tool, .terminal-tool {
   width: 32px;
   height: 32px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Terminal plugin — the host shell window (xterm.js surface).
+   Chrome (bar/status) follows the theme like every other window; the
+   terminal surface itself keeps a dark palette by default, exposed as
+   tokens so a theme can override it. The window surface ships DOM only —
+   all styling lives here, keyed by the `terminal-*` prefix.
+   ───────────────────────────────────────────────────────────── */
+.terminal-tile {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  --terminal-bg: #0b0b0c;
+  --terminal-fg: #d8d8dc;
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.terminal-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.terminal-tool {
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.terminal-tool:hover { background: var(--glass-hover); color: var(--text); }
+.terminal-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 6px 0;
+  overflow: hidden;
+  background: var(--terminal-bg);
+}
+
+.terminal-status {
+  padding: 4px 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--glass-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─────────────────────────────────────────────────────────────

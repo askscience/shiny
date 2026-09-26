@@ -1,0 +1,53 @@
+#!/bin/sh
+# shiny-xserver — X server wrapper for the Shiny greeter.
+#
+# On dual-GPU Macs (e.g. T2 MacBook Pro: Intel iGPU + AMD dGPU) the panel is
+# wired to the AMD GPU and the Intel GPU has no outputs. LightDM can start the
+# X server before the amdgpu kernel driver has registered its DRM device; Xorg
+# then binds to the Intel card and dies with:
+#
+#   (EE) Cannot run in framebuffer mode. Please specify busIDs ...
+#
+# which makes the greeter crash-loop. Wait for a DRM card backed by amdgpu
+# before handing over to the real X server. Machines without an AMD display GPU
+# start X immediately, and if amdgpu never shows up the wait times out and X is
+# still started — the wrapper can only ever delay the greeter, never block it.
+#
+# Wired in as `xserver-command=/usr/local/bin/shiny-xserver` by
+# scripts/install-greeter.sh. Overridable: SHINY_XSERVER, SHINY_XSERVER_WAIT_SECS.
+set -u
+
+XSERVER=${SHINY_XSERVER:-/usr/bin/X}
+WAIT_SECS=${SHINY_XSERVER_WAIT_SECS:-60}
+
+# Is there an AMD display-class PCI device at all?
+has_amd_vga() {
+    for dev in /sys/bus/pci/devices/*; do
+        [ -r "$dev/vendor" ] || continue
+        [ "$(cat "$dev/vendor" 2>/dev/null)" = "0x1002" ] || continue
+        case "$(cat "$dev/class" 2>/dev/null)" in
+            0x0300*|0x0302*|0x0380*) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+# Has the amdgpu driver registered a DRM card yet?
+amdgpu_ready() {
+    for card in /sys/class/drm/card[0-9]*; do
+        [ -r "$card/device/driver" ] || continue
+        [ "$(basename "$(readlink -f "$card/device/driver")")" = "amdgpu" ] && return 0
+    done
+    return 1
+}
+
+if has_amd_vga && ! amdgpu_ready; then
+    tries=$((WAIT_SECS * 4))
+    while [ "$tries" -gt 0 ]; do
+        sleep 0.25
+        amdgpu_ready && break
+        tries=$((tries - 1))
+    done
+fi
+
+exec "$XSERVER" "$@"

@@ -14,9 +14,9 @@
 import {
   button, emptyState, field, icon, input, modal, notify, select, textarea, toast,
   setTileGlow, glowGradient,
-} from '/ui/index.js';
-import { setIcon } from '/ui/index.js';
-import { apiFetch } from '/js/api.js';
+} from '../../ui/index.js';
+import { setIcon } from '../../ui/index.js';
+import { apiFetch } from '../../js/api.js';
 
 export const MAIL_PLUGIN = 'mail';
 
