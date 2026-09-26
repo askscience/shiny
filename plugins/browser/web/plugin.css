@@ -212,3 +212,184 @@
 .browser-status.hidden {
   display: none;
 }
+
+/* ── Right-cluster controls: shield, downloads, incognito ─────── */
+
+/* The address field flexes, so these land on the right without a spacer. */
+.browser-shield.is-off,
+.browser-incognito {
+  opacity: 0.55;
+}
+
+.browser-shield.is-on,
+.browser-incognito:hover {
+  opacity: 1;
+}
+
+.browser-shield.is-on {
+  color: var(--accent, #7aa2ff);
+}
+
+.browser-shield.is-off {
+  color: var(--text-secondary, var(--text));
+}
+
+.browser-downloads-btn {
+  position: relative;
+}
+
+.browser-downloads-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent, #7aa2ff);
+  color: var(--accent-contrast, #fff);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.browser-downloads-badge.hidden {
+  display: none;
+}
+
+/* Incognito tabs read as private at a glance. */
+.browser-tab.is-incognito {
+  border-color: color-mix(in srgb, var(--accent, #7aa2ff) 35%, transparent);
+  color: var(--text-secondary, var(--text));
+}
+
+.browser-tab-mask {
+  flex: none;
+  margin-right: 4px;
+  opacity: 0.85;
+}
+
+/* ── Downloads panel ────────────────────────────────────────── */
+
+.browser-downloads-panel {
+  position: absolute;
+  top: calc(var(--browser-bar-height) + 34px + 6px);
+  right: 8px;
+  z-index: 40;
+  width: min(360px, calc(100% - 16px));
+  max-height: calc(100% - var(--browser-bar-height) - 34px - 20px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 12px);
+  background: var(--glass-strong, var(--surface-strong, rgba(20, 20, 24, 0.96)));
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(var(--glass-blur, 12px)) saturate(var(--glass-saturate, 140%));
+}
+
+.browser-downloads-panel.hidden {
+  display: none;
+}
+
+.browser-downloads-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.browser-downloads-title {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.browser-downloads-clear {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary, var(--text));
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.browser-downloads-clear:hover {
+  opacity: 1;
+}
+
+.browser-downloads-list {
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.browser-downloads-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.browser-download {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.browser-download:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.browser-download-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.browser-download-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.browser-download-meta {
+  font-size: 10.5px;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.browser-download-progress {
+  margin-top: 5px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  overflow: hidden;
+}
+
+.browser-download-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, #7aa2ff);
+  transition: width 160ms ease;
+}
+
+.browser-download-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.browser-download.is-interrupted .browser-download-name {
+  color: var(--danger, #ff6b6b);
+}

@@ -1,7 +1,7 @@
 //! Build the Qt 6 C++ shim and find the Qt modules through pkg-config.
 //!
-//! Phase 0 spike (see PLAN-qt6-webengine.md §5): this validates that Debian's
-//! Qt 6.8 + QtWebEngine toolchain links from a Cargo build. The shim is
+//! This validates that Debian's Qt 6.8 + QtWebEngine toolchain links from a
+//! Cargo build. The shim is
 //! deliberately tiny — window, main view, IPC bridge, one child view — and
 //! grows into the real shell only after the spike passes.
 

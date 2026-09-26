@@ -14,8 +14,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QHash>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QList>
 #include <QMainWindow>
 #include <QMenu>
@@ -36,6 +38,8 @@
 #include <QWebEngineScript>
 #include <QWebEngineScriptCollection>
 #include <QWebEngineSettings>
+#include <QWebEngineUrlRequestInfo>
+#include <QWebEngineUrlRequestInterceptor>
 #include <QWebEngineView>
 
 #include <cstdio>
@@ -48,6 +52,8 @@ struct Context {
     QMainWindow *window = nullptr;
     QWebEngineView *main_view = nullptr;
     QWebEngineProfile *profile = nullptr;
+    /// Off-the-record profile used by incognito tabs.
+    QWebEngineProfile *otr_profile = nullptr;
     peakd_ipc_cb ipc_cb = nullptr;
     peakd_view_cb view_cb = nullptr;
     peakd_pump_cb pump_cb = nullptr;
@@ -62,6 +68,181 @@ Context *g_ctx = nullptr;
 
 // Scripts injected into every page, registered before the shell starts.
 QList<QWebEngineScript> g_pending_scripts;
+
+// Ad filtering + the Google sign-in User-Agent override (Rust owns the engine).
+peakd_filter_cb g_filter_cb = nullptr;
+peakd_ua_cb g_ua_cb = nullptr;
+
+// The download manager's Rust side.
+peakd_download_cb g_download_cb = nullptr;
+void *g_cb_userdata = nullptr;
+QString g_downloads_dir;
+int g_download_seq = 0;
+QHash<QString, QPointer<QWebEngineDownloadRequest>> g_downloads;
+
+/// Intercepts every request in a profile: asks the Rust engine whether to
+/// block, and applies the per-host User-Agent override. Runs on QtWebEngine's
+/// IO thread, so it only touches thread-safe globals and the Rust engine.
+class ShinyRequestInterceptor : public QWebEngineUrlRequestInterceptor {
+public:
+    void interceptRequest(QWebEngineUrlRequestInfo &info) override {
+        const QUrl url = info.requestUrl();
+        if (g_ua_cb) {
+            const QByteArray host = url.host().toUtf8();
+            if (const char *ua = g_ua_cb(g_cb_userdata, host.constData())) {
+                info.setHttpHeader(QByteArrayLiteral("User-Agent"), QByteArray(ua));
+            }
+        }
+        if (!g_filter_cb) return;
+        const QByteArray u = url.toString(QUrl::FullyEncoded).toUtf8();
+        const QByteArray fp = info.firstPartyUrl().toString(QUrl::FullyEncoded).toUtf8();
+        const QByteArray method = info.requestMethod();
+        const int block = g_filter_cb(g_cb_userdata, u.constData(), fp.constData(),
+                                      static_cast<int>(info.resourceType()), method.constData());
+        if (block) info.block(true);
+    }
+};
+
+/// A filesystem-safe download name.
+QString sanitize_download_name(const QString &raw) {
+    QString name = raw;
+    name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|\\x00-\\x1f]")),
+                 QStringLiteral("_"));
+    name = name.trimmed();
+    while (name.startsWith(QLatin1Char('.'))) name.remove(0, 1);
+    if (name.isEmpty()) name = QStringLiteral("download");
+    return name.left(200);
+}
+
+/// `dir/name`, with ` (n)` inserted before the extension until it is free.
+QString unique_download_path(const QString &dir, const QString &name) {
+    QFileInfo info(name);
+    const QString stem = info.completeBaseName().isEmpty() ? name : info.completeBaseName();
+    const QString suffix = info.suffix();
+    QString candidate = QDir(dir).filePath(name);
+    for (int n = 1; QFileInfo::exists(candidate) && n < 10000; ++n) {
+        const QString next = suffix.isEmpty()
+            ? QStringLiteral("%1 (%2)").arg(stem).arg(n)
+            : QStringLiteral("%1 (%2).%3").arg(stem).arg(n).arg(suffix);
+        candidate = QDir(dir).filePath(next);
+    }
+    return candidate;
+}
+
+void emit_download(QWebEngineDownloadRequest *download, const QString &id, const char *kind,
+                   bool incognito, const QString &error) {
+    if (!g_download_cb || !download) return;
+    QJsonObject o;
+    o[QStringLiteral("id")] = id;
+    o[QStringLiteral("url")] = download->url().toString();
+    o[QStringLiteral("host")] = download->url().host();
+    o[QStringLiteral("file")] = download->downloadFileName();
+    o[QStringLiteral("path")] =
+        QDir(download->downloadDirectory()).filePath(download->downloadFileName());
+    o[QStringLiteral("mime")] = download->mimeType();
+    o[QStringLiteral("total")] = static_cast<double>(download->totalBytes());
+    o[QStringLiteral("received")] = static_cast<double>(download->receivedBytes());
+    o[QStringLiteral("incognito")] = incognito;
+    QString state = QStringLiteral("downloading");
+    switch (download->state()) {
+    case QWebEngineDownloadRequest::DownloadRequested:
+        state = QStringLiteral("requested");
+        break;
+    case QWebEngineDownloadRequest::DownloadInProgress:
+        state = download->isPaused() ? QStringLiteral("paused") : QStringLiteral("downloading");
+        break;
+    case QWebEngineDownloadRequest::DownloadCompleted:
+        state = QStringLiteral("completed");
+        break;
+    case QWebEngineDownloadRequest::DownloadCancelled:
+        state = QStringLiteral("cancelled");
+        break;
+    case QWebEngineDownloadRequest::DownloadInterrupted:
+        state = QStringLiteral("interrupted");
+        break;
+    }
+    o[QStringLiteral("state")] = state;
+    if (!error.isEmpty()) {
+        o[QStringLiteral("error")] = error;
+    } else if (download->state() == QWebEngineDownloadRequest::DownloadInterrupted) {
+        o[QStringLiteral("error")] = download->interruptReasonString();
+    }
+    const QByteArray body = QJsonDocument(o).toJson(QJsonDocument::Compact);
+    g_download_cb(g_cb_userdata, id.toUtf8().constData(), kind, body.constData());
+}
+
+/// Take ownership of one download: assign an id, choose a destination, accept
+/// it, and stream lifecycle events to Rust.
+void handle_download(QWebEngineDownloadRequest *download, bool incognito) {
+    if (!download) return;
+    const QString id = QStringLiteral("d%1").arg(++g_download_seq);
+
+    QString dir;
+    if (incognito) {
+        const QString base = g_downloads_dir.isEmpty()
+            ? QDir::tempPath() + QStringLiteral("/shiny-incognito")
+            : g_downloads_dir + QStringLiteral("/.incognito");
+        dir = base;
+    } else {
+        dir = g_downloads_dir;
+    }
+    if (dir.isEmpty()) {
+        dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    }
+    QDir().mkpath(dir);
+
+    const QString name = QFileInfo(unique_download_path(dir, sanitize_download_name(
+                                                             download->downloadFileName())))
+                             .fileName();
+    // Qt 6.5+: directory + file name are set before accept().
+    download->setDownloadDirectory(dir);
+    download->setDownloadFileName(name);
+    g_downloads.insert(id, download);
+
+    emit_download(download, id, "download", incognito, QString());
+
+    QObject::connect(download, &QWebEngineDownloadRequest::receivedBytesChanged, download,
+                     [download, id, incognito]() {
+                         emit_download(download, id, "progress", incognito, QString());
+                     });
+    QObject::connect(download, &QWebEngineDownloadRequest::totalBytesChanged, download,
+                     [download, id, incognito]() {
+                         emit_download(download, id, "progress", incognito, QString());
+                     });
+    QObject::connect(download, &QWebEngineDownloadRequest::isPausedChanged, download,
+                     [download, id, incognito]() {
+                         emit_download(download, id, "progress", incognito, QString());
+                     });
+    QObject::connect(
+        download, &QWebEngineDownloadRequest::stateChanged, download,
+        [download, id, incognito](QWebEngineDownloadRequest::DownloadState state) {
+            const char *kind = "progress";
+            if (state == QWebEngineDownloadRequest::DownloadCompleted) kind = "completed";
+            else if (state == QWebEngineDownloadRequest::DownloadCancelled) kind = "cancelled";
+            else if (state == QWebEngineDownloadRequest::DownloadInterrupted) kind = "interrupted";
+            emit_download(download, id, kind, incognito, QString());
+        });
+
+    std::fprintf(stderr, "peakd: download %s -> %s\n", name.toUtf8().constData(),
+                 dir.toUtf8().constData());
+    download->accept();
+}
+
+/// Copy the settings the app relies on from the persistent profile to another.
+void mirror_profile_settings(QWebEngineProfile *to) {
+    to->settings()->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, false);
+    to->settings()->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
+    to->settings()->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
+}
+
+/// Install the interceptor and the download handler on a profile.
+void install_profile_services(QWebEngineProfile *profile, bool incognito) {
+    profile->setUrlRequestInterceptor(new ShinyRequestInterceptor());
+    QObject::connect(profile, &QWebEngineProfile::downloadRequested, profile,
+                     [incognito](QWebEngineDownloadRequest *download) {
+                         handle_download(download, incognito);
+                     });
+}
 
 // Window configuration, set before the shell starts.
 QString g_window_title = QStringLiteral("peakd");
@@ -268,7 +449,10 @@ void connect_page(PeakdPage *page, const QString &id) {
 
 /// Install the IPC bridge, the bootstrap and any injected scripts into a page.
 void install_page(PeakdPage *page) {
-    auto *bridge = new IpcBridge(g_ctx->ipc_cb, g_ctx->userdata, page);
+    // Only the app's own view may drive the shell. A child web view renders a
+    // browsing page, so its bridge forwards nothing but the exit message.
+    const bool privileged = page->id() == QLatin1String("main");
+    auto *bridge = new IpcBridge(g_ctx->ipc_cb, g_ctx->userdata, privileged, page);
     auto *channel = new QWebChannel(page);
     channel->registerObject(QStringLiteral("ipc"), bridge);
     page->setWebChannel(channel);
@@ -290,18 +474,22 @@ void install_page(PeakdPage *page) {
     connect_page(page, page->id());
 }
 
-PeakdPage *make_page(const QString &id, QObject *parent) {
-    auto *page = new PeakdPage(g_ctx->profile, id, parent);
+PeakdPage *make_page(const QString &id, QWebEngineProfile *profile, QObject *parent) {
+    auto *page = new PeakdPage(profile, id, parent);
     install_page(page);
     return page;
 }
 
 } // namespace
 
-IpcBridge::IpcBridge(peakd_ipc_cb callback, void *userdata, QObject *parent)
-    : QObject(parent), callback_(callback), userdata_(userdata) {}
+IpcBridge::IpcBridge(peakd_ipc_cb callback, void *userdata, bool privileged, QObject *parent)
+    : QObject(parent), callback_(callback), userdata_(userdata), privileged_(privileged) {}
 
 void IpcBridge::postMessage(const QString &body) {
+    // A non-privileged view (a browsing page) may only ask to leave the kiosk.
+    if (!privileged_ && body != QLatin1String("peakd:exit")) {
+        return;
+    }
     if (callback_) callback_(userdata_, body.toUtf8().constData());
 }
 
@@ -354,11 +542,17 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
     profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
     // The app plays TTS/radio/YouTube without a click on some paths.
-    profile->settings()->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, false);
-    // web/js/fullscreen.js uses the Fullscreen API on plugin windows.
-    profile->settings()->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
-    // The Browser plugin opens links via a tab, never a popup.
-    profile->settings()->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
+    mirror_profile_settings(profile);
+    install_profile_services(profile, false);
+
+    // The off-the-record profile backs incognito tabs: no cookies, no cache, no
+    // storage. Same settings and the same interceptor (filtering and the Google
+    // UA override apply there too).
+    auto *otr_profile = new QWebEngineProfile(&app);
+    otr_profile->setHttpUserAgent(profile->httpUserAgent());
+    mirror_profile_settings(otr_profile);
+    install_profile_services(otr_profile, true);
+    context.otr_profile = otr_profile;
 
     std::printf("peakd: profile storage %s\n",
                 profile->persistentStoragePath().toUtf8().constData());
@@ -373,38 +567,9 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     profile->setHttpUserAgent(user_agent);
     std::printf("peakd: user agent   %s\n", user_agent.toUtf8().constData());
 
-    // Downloads (a plain link with `download`, or Content-Disposition) land in
-    // the user's Downloads folder; the app's own exports go through the Files
-    // plugin's upload path instead.
-    QObject::connect(
-        profile, &QWebEngineProfile::downloadRequested, profile,
-        [](QWebEngineDownloadRequest *download) {
-            const QString dir =
-                QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
-            QDir().mkpath(dir);
-            download->setDownloadDirectory(dir);
-            download->accept();
-            std::fprintf(stderr, "peakd: download %s -> %s\n",
-                         download->downloadFileName().toUtf8().constData(),
-                         dir.toUtf8().constData());
-            QObject::connect(download, &QWebEngineDownloadRequest::stateChanged, download,
-                             [download](QWebEngineDownloadRequest::DownloadState state) {
-                                 if (state == QWebEngineDownloadRequest::DownloadCompleted) {
-                                     std::fprintf(stderr, "peakd: download finished: %s\n",
-                                                  QDir(download->downloadDirectory())
-                                                      .filePath(download->downloadFileName())
-                                                      .toUtf8()
-                                                      .constData());
-                                 } else if (state == QWebEngineDownloadRequest::DownloadInterrupted) {
-                                     std::fprintf(stderr, "peakd: download interrupted: %s\n",
-                                                  download->interruptReasonString().toUtf8().constData());
-                                 }
-                             });
-        });
-
     PeakdWindow window;
     window.setWindowTitle(g_window_title);
-    auto *main_page = make_page(QStringLiteral("main"), &window);
+    auto *main_page = make_page(QStringLiteral("main"), g_ctx->profile, &window);
     auto *view = new PeakdView(&window);
     view->setPage(main_page);
     window.setCentralWidget(view);
@@ -537,12 +702,14 @@ void peakd_qt_screen_size(int *width, int *height) {
 }
 
 void peakd_qt_view_create(const char *id, const char *url, int x, int y, int w, int h,
-                          int visible) {
+                          int visible, int incognito) {
     if (!g_ctx || !g_ctx->main_view) return;
 
     const QString key = QString::fromUtf8(id);
+    QWebEngineProfile *profile =
+        (incognito && g_ctx->otr_profile) ? g_ctx->otr_profile : g_ctx->profile;
     auto *view = new PeakdView(g_ctx->main_view);
-    view->setPage(make_page(key, view));
+    view->setPage(make_page(key, profile, view));
     view->setGeometry(x, y, w, h);
     g_ctx->children.insert(key, view);
     view->load(QUrl(QString::fromUtf8(url)));
@@ -603,5 +770,43 @@ void peakd_qt_view_close(const char *id) {
     const QString key = QString::fromUtf8(id);
     if (auto view = g_ctx->children.take(key)) {
         view->deleteLater();
+    }
+}
+
+void peakd_qt_set_filter_cb(peakd_filter_cb cb, void *userdata) {
+    g_filter_cb = cb;
+    if (userdata) g_cb_userdata = userdata;
+}
+
+void peakd_qt_set_ua_cb(peakd_ua_cb cb, void *userdata) {
+    g_ua_cb = cb;
+    if (userdata) g_cb_userdata = userdata;
+}
+
+void peakd_qt_set_download_cb(peakd_download_cb cb, void *userdata) {
+    g_download_cb = cb;
+    if (userdata) g_cb_userdata = userdata;
+}
+
+void peakd_qt_set_download_dir(const char *dir) {
+    g_downloads_dir = QString::fromUtf8(dir);
+}
+
+void peakd_qt_download_action(const char *id, const char *action) {
+    const QString key = QString::fromUtf8(id);
+    auto download = g_downloads.value(key);
+    if (!download) return;
+    const QString verb = QString::fromUtf8(action);
+    if (verb == QLatin1String("pause")) {
+        download->pause();
+    } else if (verb == QLatin1String("resume")) {
+        download->resume();
+    } else if (verb == QLatin1String("cancel")) {
+        download->cancel();
+    } else if (verb == QLatin1String("forget")) {
+        g_downloads.remove(key);
+        if (g_download_cb) {
+            g_download_cb(g_cb_userdata, id, "removed", "{}");
+        }
     }
 }

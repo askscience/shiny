@@ -1,4 +1,4 @@
-//! Iroh remote access (`PLAN-iroh-remote.md`).
+//! Iroh remote access.
 //!
 //! Exposes the loopback HTTP server over a peer-to-peer QUIC endpoint. The real
 //! implementation is behind the `iroh` cargo feature; without it a stub keeps

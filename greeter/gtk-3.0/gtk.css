@@ -1,133 +1,291 @@
-/* Shiny — Noir greeter theme for lightdm-gtk-greeter.
+/* Shiny — Noir greeter theme for lightdm-gtk-greeter (GTK 3).
  *
- * Derived from web/themes/noir/tokens.css: pure black surfaces, white text,
- * white hairlines, a single accent (white). The background image is set in
- * /etc/lightdm/lightdm-gtk-greeter.conf, not here, so a missing renderer still
- * leaves a black window rather than a broken one.
+ * Visual contract:
+ *   wallpaper  greeter/background.png — the Peak'd art, re-arranged so the
+ *              mark sits above the login card and the wordmark below it;
+ *   surfaces   near-black glass, white hairlines instead of grey fills, one
+ *              top-left light source (the app's Noir tokens, see
+ *              web/themes/noir/tokens.css);
+ *   accent     white — the app's default appearance accent.
+ *
+ * The wallpaper itself is set from lightdm-gtk-greeter.conf; every GTK layer
+ * here stays transparent so it shows through.
  */
 
-@define-color theme_bg_color #000000;
-@define-color theme_fg_color #ffffff;
-@define-color theme_base_color #0a0a0a;
-@define-color theme_text_color #ffffff;
-@define-color theme_selected_bg_color #ffffff;
-@define-color theme_selected_fg_color #000000;
-@define-color borders rgba(255, 255, 255, 0.14);
-@define-color insensitive_fg_color rgba(255, 255, 255, 0.4);
+/* ── palette ─────────────────────────────────────────────────────────────── */
+@define-color noir_fg        #ffffff;
+@define-color noir_muted     rgba(255, 255, 255, 0.55);
+@define-color noir_hairline  rgba(255, 255, 255, 0.14);
+@define-color noir_hairline_strong rgba(255, 255, 255, 0.26);
+@define-color noir_glass     rgba(255, 255, 255, 0.06);
+@define-color noir_glass_hi  rgba(255, 255, 255, 0.11);
+@define-color noir_card      rgba(8, 8, 10, 0.74);
+@define-color noir_menu      rgba(12, 12, 15, 0.96);
 
 * {
-  font-family: "Cantarell", "DejaVu Sans", sans-serif;
+  font-family: "Cantarell", "Inter", "DejaVu Sans", sans-serif;
 }
 
 window,
-.background {
-  background-color: #000000;
-  background-image: none;
-  color: #ffffff;
-}
-
-/* The greeter's own window is transparent so the configured background shows. */
-#lightdm-gtk-greeter,
+.background,
+#screen_overlay,
 .lightdm-gtk-greeter {
   background-color: transparent;
-  color: #ffffff;
-}
-
-label {
-  color: #ffffff;
-}
-
-.dim-label,
-label:disabled {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-entry {
-  background-color: rgba(255, 255, 255, 0.07);
   background-image: none;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  padding: 8px 12px;
-  caret-color: #ffffff;
+  color: @noir_fg;
+}
+
+/* Colour is inherited in GTK CSS; label rules here are only for the places
+   that must not take the parent's colour (see #login_button label below). */
+.dim-label,
+label:disabled { color: @noir_muted; }
+
+/* ── top panel ───────────────────────────────────────────────────────────── */
+#panel_window {
+  background-color: transparent;
+  background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  border: none;
   box-shadow: none;
+  color: @noir_fg;
+  padding: 1px 8px 6px;
+  min-height: 32px;
+}
+
+#panel_window menuitem {
+  background-color: transparent;
+  border-radius: 9px;
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+#panel_window menuitem:hover {
+  background-color: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+
+#panel_window menuitem:active { background-color: rgba(255, 255, 255, 0.16); }
+
+#clock_menuitem label { font-weight: 600; }
+#host_menuitem label { color: rgba(255, 255, 255, 0.55); font-weight: 500; }
+
+/* ── login card ──────────────────────────────────────────────────────────── */
+#login_window {
+  background-color: @noir_card;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0) 46%);
+  border: 1px solid @noir_hairline;
+  border-radius: 26px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10),
+              0 0 80px rgba(139, 92, 246, 0.16),
+              0 30px 70px rgba(0, 0, 0, 0.70),
+              0 2px 10px rgba(0, 0, 0, 0.45);
+  color: @noir_fg;
+  padding: 4px;
+}
+
+/* The frames inside the card only exist to group; strip their borders. */
+#content_frame,
+#buttonbox_frame,
+#power_content_frame,
+#power_buttonbox_frame {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+#content_frame > border,
+#buttonbox_frame > border,
+#power_content_frame > border,
+#power_buttonbox_frame > border {
+  border: none;
+  box-shadow: none;
+}
+
+#grid1 { padding: 8px 4px 0; }
+#box2 { padding: 0 8px 8px; }
+
+/* Entries a touch wider than the .ui's 200px request. */
+#login_window entry { min-width: 212px; }
+
+/* ── avatar ──────────────────────────────────────────────────────────────── */
+#user_image_border {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+#user_image_border > border {
+  background-color: rgba(4, 4, 10, 0.92);
+  border: 1px solid @noir_hairline_strong;
+  border-radius: 999px;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.04),
+              0 0 34px rgba(139, 92, 246, 0.35),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: 3px;
+}
+
+/* ── user name ───────────────────────────────────────────────────────────── */
+#user_combobox button {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 2px 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+#user_combobox button:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+#user_combobox arrow { color: rgba(255, 255, 255, 0.65); min-width: 12px; min-height: 12px; }
+
+/* ── inputs ──────────────────────────────────────────────────────────────── */
+entry {
+  background-color: @noir_glass;
+  background-image: none;
+  color: @noir_fg;
+  border: 1px solid @noir_hairline;
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-height: 20px;
+  box-shadow: none;
+  text-shadow: none;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 entry:focus {
-  border-color: rgba(255, 255, 255, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
-}
-
-entry selection {
-  background-color: rgba(255, 255, 255, 0.28);
-  color: #ffffff;
-}
-
-button {
   background-color: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.60);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.07);
+}
+
+entry selection { background-color: rgba(255, 255, 255, 0.30); color: #ffffff; }
+entry image { color: rgba(255, 255, 255, 0.55); }
+
+/* ── buttons ─────────────────────────────────────────────────────────────── */
+button {
+  background-color: @noir_glass;
   background-image: none;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  padding: 8px 16px;
-  text-shadow: none;
+  color: @noir_fg;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 9px 18px;
   box-shadow: none;
+  text-shadow: none;
+  font-weight: 500;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 
 button:hover {
-  background-color: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.32);
+  background-color: @noir_glass_hi;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
-button:active,
-button:checked,
-button:focus {
+button:active { background-color: rgba(255, 255, 255, 0.20); }
+
+#login_button {
   background-color: #ffffff;
+  border: none;
   color: #000000;
-  border-color: #ffffff;
+  font-weight: 600;
+  padding: 10px 24px;
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.14);
 }
 
-combobox button,
-combobox box,
-cellview {
-  background-color: rgba(255, 255, 255, 0.07);
-  color: #ffffff;
-  border-radius: 10px;
+#login_button label { color: #000000; }
+#login_button:hover { background-color: rgba(255, 255, 255, 0.90); }
+#login_button:active { background-color: rgba(255, 255, 255, 0.80); }
+#cancel_button { color: rgba(255, 255, 255, 0.75); }
+
+/* ── infobar (PAM messages) ──────────────────────────────────────────────── */
+#greeter_infobar,
+#greeter_infobar.background {
+  background-color: rgba(46, 12, 16, 0.94);
+  background-image: none;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 12px;
+  color: @noir_fg;
+  margin: 6px 6px 0;
 }
 
+#greeter_infobar label { color: @noir_fg; }
+
+/* ── menus (session, language, power) ────────────────────────────────────── */
 menu,
+.menu,
 popover,
 popover.background {
-  background-color: rgba(10, 10, 10, 0.96);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
+  background-color: @noir_menu;
+  border: 1px solid @noir_hairline;
+  border-radius: 12px;
+  padding: 6px;
+  color: @noir_fg;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.65);
+}
+
+menuitem {
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 menuitem:hover,
-row:selected,
-list row:selected {
-  background-color: rgba(255, 255, 255, 0.12);
+menuitem:selected {
+  background-color: rgba(255, 255, 255, 0.10);
   color: #ffffff;
 }
 
+menu separator,
 separator {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.10);
+  min-height: 1px;
+  margin: 4px 2px;
 }
+
+/* ── power dialog ────────────────────────────────────────────────────────── */
+#power_window {
+  background-color: @noir_card;
+  border: 1px solid @noir_hairline;
+  border-radius: 22px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10),
+              0 30px 70px rgba(0, 0, 0, 0.70);
+  padding: 4px;
+}
+
+#power_title { font-weight: 600; font-size: 15px; }
+#power_text { color: @noir_muted; }
+
+/* ── user grid (when the greeter is switched to the tile layout) ─────────── */
+#user-list { background-color: transparent; }
+
+#user-list row {
+  border-radius: 14px;
+  padding: 6px;
+  transition: background-color 140ms ease;
+}
+
+#user-list row:hover { background-color: rgba(255, 255, 255, 0.06); }
+
+#user-list row:selected {
+  background-color: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+/* ── scrollbars (rarely visible) ─────────────────────────────────────────── */
+scrollbar { background-color: transparent; border: none; }
 
 scrollbar slider {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  min-width: 6px;
+  min-height: 6px;
 }
 
-/* The user grid / list tiles. */
-.lightdm-gtk-greeter #user-list,
-#user-list {
-  background-color: transparent;
-}
-
-#user-list row:selected,
-.user-tile:selected {
-  background-color: rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-}
+scrollbar slider:hover { background-color: rgba(255, 255, 255, 0.30); }

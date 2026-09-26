@@ -1,10 +1,13 @@
 /**
- * icon — inline SVG icons from the active theme.
+ * icon — inline SVG icons from the unified UI library, with per-theme overrides.
  *
- * Theme icons live at /themes/<theme>/icons/<group>/<name>.svg and use
- * stroke/fill="currentColor", so they inherit color from CSS and follow
- * the accent automatically. Icons are fetched once and cached; theme
- * assets are trusted (shipped with the app), so inline injection is safe.
+ * A theme may restyle an icon at /themes/<theme>/icons/<group>/<name>.svg;
+ * when it does not ship one, the shared icon at /ui/icons/<group>/<name>.svg is
+ * used. New icons therefore belong to `/ui/icons/` (the UI library), and a
+ * theme only carries the ones it wants drawn differently. Icons use
+ * stroke/fill="currentColor", so they inherit color from CSS and follow the
+ * accent automatically. Icons are fetched once and cached; UI assets are
+ * trusted (shipped with the app), so inline injection is safe.
  *
  * Usage:
  *   const el = icon('ui/close', { size: 16 });
@@ -15,13 +18,25 @@ import { getActiveTheme, themeUrl } from './theme-loader.js';
 
 const cache = new Map(); // `${theme}:${name}` -> Promise<string|null>
 
+async function fetchSvg(url) {
+  try {
+    const res = await fetch(url);
+    return res.ok ? await res.text() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function loadSvg(name) {
   const theme = getActiveTheme();
   const key = `${theme}:${name}`;
   if (!cache.has(key)) {
-    cache.set(key, fetch(themeUrl(`icons/${name}.svg`))
-      .then((res) => (res.ok ? res.text() : null))
-      .catch(() => null));
+    // Theme override first, then the unified UI icon set.
+    cache.set(
+      key,
+      (async () => (await fetchSvg(themeUrl(`icons/${name}.svg`)))
+        || (await fetchSvg(`/ui/icons/${name}.svg`)))(),
+    );
   }
   return cache.get(key);
 }

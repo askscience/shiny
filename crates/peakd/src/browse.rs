@@ -71,6 +71,7 @@ pub enum Command {
         url: String,
         rect: Option<CssRect>,
         visible: bool,
+        incognito: bool,
     },
     Navigate {
         id: String,
@@ -115,6 +116,10 @@ impl Command {
                     .get("visible")
                     .and_then(Value::as_bool)
                     .unwrap_or(true),
+                incognito: value
+                    .get("incognito")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             },
             "navigate" => Self::Navigate {
                 id,
@@ -196,7 +201,7 @@ impl Default for ViewBus {
 /// The native side of a child view. Implemented by `host::QtHost` (shim) in
 /// the shell; a stub keeps the state machine testable without Qt.
 pub trait ViewHost {
-    fn create(&mut self, id: &str, url: &str, rect: Option<CssRect>, visible: bool);
+    fn create(&mut self, id: &str, url: &str, rect: Option<CssRect>, visible: bool, incognito: bool);
     fn navigate(&mut self, id: &str, url: &str);
     fn set_bounds(&mut self, id: &str, rect: CssRect);
     fn set_visible(&mut self, id: &str, visible: bool);
@@ -246,6 +251,7 @@ impl<H: ViewHost> Views<H> {
                 url,
                 rect,
                 visible,
+                incognito,
             } => {
                 if self.live.contains(&id) {
                     self.host.navigate(&id, &url);
@@ -254,7 +260,7 @@ impl<H: ViewHost> Views<H> {
                     }
                     self.host.set_visible(&id, visible);
                 } else {
-                    self.host.create(&id, &url, rect, visible);
+                    self.host.create(&id, &url, rect, visible, incognito);
                     self.live.insert(id);
                 }
             }
@@ -336,12 +342,26 @@ mod tests {
                 url,
                 rect,
                 visible,
+                incognito,
             } => {
                 assert_eq!(id, "t1");
                 assert_eq!(url, "https://example.com/");
                 assert!(visible);
+                assert!(!incognito);
                 assert_eq!(rect.unwrap().w, 3.0);
             }
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_an_incognito_open_command() {
+        let value: Value = serde_json::from_str(
+            r#"{"op":"open","id":"t2","url":"https://example.com/","visible":true,"incognito":true}"#,
+        )
+        .unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::Open { incognito, .. } => assert!(incognito),
             other => panic!("wrong command: {other:?}"),
         }
     }
@@ -359,8 +379,8 @@ mod tests {
     }
 
     impl ViewHost for RecordingHost {
-        fn create(&mut self, id: &str, url: &str, _rect: Option<CssRect>, visible: bool) {
-            self.calls.push(format!("create {id} {url} {visible}"));
+        fn create(&mut self, id: &str, url: &str, _rect: Option<CssRect>, visible: bool, incognito: bool) {
+            self.calls.push(format!("create {id} {url} {visible} {incognito}"));
         }
         fn navigate(&mut self, id: &str, url: &str) {
             self.calls.push(format!("navigate {id} {url}"));
@@ -404,7 +424,7 @@ mod tests {
         assert_eq!(
             views.host.calls,
             vec![
-                "create t1 https://a/ true",
+                "create t1 https://a/ true false",
                 "navigate t1 https://b/",
                 "close t1",
             ]

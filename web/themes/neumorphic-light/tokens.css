@@ -74,7 +74,7 @@
   --radius-xl: 38px;
 
   /* Desktop window surface — user-configurable granular settings
-     (Settings → Appearance / Desktop). Overridden inline per user by
+     (Settings → Appearance). Overridden inline per user by
      preferences.js. */
   --window-radius: var(--radius-lg);
   --window-opacity: 100%;

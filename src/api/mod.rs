@@ -76,7 +76,7 @@ pub struct AppState {
     pub whisper: WhisperClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
-    /// Iroh remote-access service (`PLAN-iroh-remote.md`).
+    /// Iroh remote-access service.
     pub iroh: crate::services::iroh_remote::IrohRemote,
     /// Loopback-only session token for the local kiosk / server-mode window.
     pub session: crate::auth::SessionAuth,

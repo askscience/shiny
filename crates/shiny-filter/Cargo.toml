@@ -5,6 +5,9 @@ edition = "2021"
 description = "Shared adblock-rust filtering engine + HTTP proxy used by both the peakd shell and the in-app Browser plugin"
 
 [dependencies]
+# The light engine (adblock-rust only). Kept in its own crate so the peakd
+# kiosk shell can link it without BoringSSL/tokio.
+shiny-filter-core = { path = "../shiny-filter-core" }
 # The whole point: Brave's native adblock-rust engine (MPL-2.0).
 #
 # `default-features = false` is load-bearing: adblock's defaults include

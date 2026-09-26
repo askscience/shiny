@@ -466,17 +466,17 @@ html, body {
 
 /* ── Fullscreen window bubble (top bar, left) ────────────────
    While a plugin window is fullscreen, its own title-bar stripe is gone
-   (fullscreen.css). The app name plus close / exit-fullscreen live here
-   instead, as a glass pill on the left of the top bar — the same bubble as the
-   workspace switcher, so the way out of fullscreen rides the bar's top-edge
-   reveal. Unlike the workspace switcher it stays on small screens: it is the
-   only way out of fullscreen there. */
+   (fullscreen.css). Its close / exit-fullscreen controls live here instead, as
+   a glass pill on the left of the top bar — the same bubble as the workspace
+   switcher, so the way out of fullscreen rides the bar's top-edge reveal.
+   Unlike the workspace switcher it stays on small screens: it is the only way
+   out of fullscreen there. */
 #fullscreen-bubble {
   display: flex;
   align-items: center;
   gap: 4px;
   height: var(--hud-bar-height);
-  padding: 0 4px 0 9px;
+  padding: 0 4px;
   flex-shrink: 0;
   background: var(--surface);
   border: 1px solid var(--glass-border);
@@ -490,14 +490,6 @@ html, body {
 /* The bubble belongs to the fullscreen takeover: never show it on the open
    desktop, even if a stale `.hidden` were ever missed. */
 body:not(.fs-active) #fullscreen-bubble { display: none; }
-
-#fullscreen-bubble .fullscreen-bubble-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--muted);
-}
 
 #fullscreen-bubble .fullscreen-bubble-btn {
   flex-shrink: 0;

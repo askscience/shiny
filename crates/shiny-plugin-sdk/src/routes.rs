@@ -113,7 +113,7 @@ pub fn os_home_from_request(req: &axum::extract::Request) -> Option<String> {
 
 /// Header the remote (Iroh) client proxy sets on every forwarded request.
 /// Presence means the request arrived from a remote client even though its TCP
-/// peer is loopback (see `PLAN-iroh-remote.md`).
+/// peer is loopback.
 pub const REMOTE_HEADER: &str = "x-shiny-remote";
 
 /// Did this request arrive over Iroh?

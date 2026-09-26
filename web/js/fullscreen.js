@@ -14,14 +14,16 @@
  *      standing — never a broken state.
  *   3. Hides the chrome of the workspace it took over: the top bar goes away
  *      (even with `autohide_bar` off, one fullscreen app owns the screen) and
- *      comes back from the top edge. The window gives up its own title-bar
- *      stripe; the app name plus close/exit-fullscreen move into a glass
- *      bubble on the left of the top bar (fullscreenBubble.js), so the way out
- *      rides the same top-edge reveal as the rest of the chrome. The other bar
- *      positions keep their desktop-wide behaviour.
+ *      comes back from the top edge once the pointer insists there. While it is
+ *      up, the window slides down by the bar's height so the app's own top bar
+ *      is never covered. The window gives up its own title-bar stripe; its
+ *      close/exit-fullscreen controls move into a glass bubble on the left of
+ *      the top bar (fullscreenBubble.js), so the way out rides the same
+ *      top-edge reveal as the rest of the chrome. The other bar positions keep
+ *      their desktop-wide behaviour.
  *
- * This module also owns the desktop-wide chrome reveal (Settings → Desktop →
- * Fullscreen): bar position top/left/right/center, plus an independent autohide
+ * This module also owns the desktop-wide chrome reveal (Settings → Appearance
+ * → Top bar & orb): bar position top/left/right/center, plus an independent autohide
  * switch for the bar and the orb. That behaviour is not fullscreen-only — it
  * governs the whole desktop. fullscreen.css owns the actual hiding.
  *
@@ -38,9 +40,11 @@ import {
 import { getImmersive, applyImmersive } from './preferences.js';
 import { isPluginActive } from './activePlugins.js';
 
-const EDGE_ZONE = 120;    // px from the docking edge that reveals the top bar
-const ORB_ZONE = 200;     // px from the bottom edge that reveals the orb…
-const ORB_HALF = 340;     // …within this many px either side of centre
+const EDGE_ZONE = 120;     // px from the edge that keeps the bar up once shown
+const REVEAL_ZONE = 28;    // …but only this close to the very edge summons it
+const BAR_DWELL_MS = 700;  // the pointer must *stay* in the reveal zone this long
+const ORB_ZONE = 200;      // px from the bottom edge that reveals the orb…
+const ORB_HALF = 340;      // …within this many px either side of centre
 const ENTER_HOLD_MS = 1600; // show the chrome briefly after entering
 
 const body = document.body;
@@ -54,6 +58,8 @@ let revealUntil = 0;            // timestamp: keep chrome up until then
 let revealTimer = null;
 let lastX = -1;
 let lastY = -1;
+let edgeDwell = false;          // the pointer has insisted at the docking edge
+let edgeDwellTimer = null;
 
 /** The chrome settings, cached: this runs on every pointer move. */
 function immersiveCfg() {
@@ -177,15 +183,69 @@ function setReveal(top, orb) {
 }
 
 /**
+ * The narrow strip along the edge the bar docks to. Only reaching this close
+ * summons the bar: a plugin window's own top bar lives at the very top of a
+ * fullscreen app, so resting on its buttons must not be enough. The pointer has
+ * to insist here (see [`armEdgeDwell`]) before the chrome comes back.
+ */
+function barRevealProximity() {
+  const cfg = immersiveCfg();
+  const vw = window.innerWidth;
+  if (cfg.bar_position === 'left') return lastX >= 0 && lastX <= REVEAL_ZONE;
+  if (cfg.bar_position === 'right') return lastX >= 0 && vw - lastX <= REVEAL_ZONE;
+  return lastY >= 0 && lastY <= REVEAL_ZONE;
+}
+
+/**
+ * The wider band along the same edge that keeps a *shown* bar up, so the user
+ * can move from the edge onto the bar itself (and a little past it) without the
+ * chrome vanishing mid-reach.
+ */
+function barKeepProximity() {
+  const cfg = immersiveCfg();
+  const vw = window.innerWidth;
+  if (cfg.bar_position === 'left') return lastX >= 0 && lastX <= EDGE_ZONE;
+  if (cfg.bar_position === 'right') return lastX >= 0 && vw - lastX <= EDGE_ZONE;
+  return lastY >= 0 && lastY <= EDGE_ZONE;
+}
+
+/**
+ * Arm, or cancel, the dwell timer. The bar only appears after the pointer has
+ * insisted in the reveal strip for [`BAR_DWELL_MS`]; leaving the wider keep band
+ * forgets the insistence entirely, so brushing the top while reaching for a
+ * window's own toolbar never summons the chrome.
+ */
+function armEdgeDwell(atEdge, nearBar) {
+  if (!nearBar) {
+    clearTimeout(edgeDwellTimer);
+    edgeDwellTimer = null;
+    if (edgeDwell) {
+      edgeDwell = false;
+      evalReveal();
+    }
+    return;
+  }
+  if (edgeDwell || edgeDwellTimer) return; // already up, or already counting down
+  if (!atEdge) return;                     // in the band, but not at the very edge
+  edgeDwellTimer = setTimeout(() => {
+    edgeDwellTimer = null;
+    edgeDwell = true;
+    evalReveal();
+  }, BAR_DWELL_MS);
+}
+
+/**
  * The bar and the orb hide and reveal on the whole desktop, not only in
  * fullscreen — the immersion settings are desktop-wide. Each piece is
  * independent, so an always-on bar can sit next to an autohiding orb.
  *
- * A fullscreen window overrides the bar's autohide for the top position only:
- * the app owns the screen while it is fullscreen, so the bar is away until the
- * pointer reaches the top edge whatever the setting says. The window's own
- * title bar docks right under it and rides the very same reveal (fullscreen.css
- * keys it off `fs-top` too).
+ * The bar only reveals once the pointer has insisted at its docking edge
+ * (`edgeDwell`), so brushing past the top while reaching for a window's own
+ * toolbar does not summon it. A fullscreen window still overrides the bar's
+ * autohide for the top position: the app owns the screen while it is
+ * fullscreen, so the bar is away until the pointer insists at the top edge
+ * whatever the setting says. The window rides the same reveal: fullscreen.css
+ * shifts it down by the bar's height so the chrome never covers it.
  */
 function evalReveal() {
   const cfg = immersiveCfg();
@@ -195,11 +255,9 @@ function evalReveal() {
   const fsActive = body.classList.contains('fs-active');
   const fsTopBar = fsActive && cfg.bar_position === 'top';
 
-  // The bar comes back from whichever edge it docks to.
-  let nearBar = false;
-  if (cfg.bar_position === 'left') nearBar = lastX >= 0 && lastX <= EDGE_ZONE;
-  else if (cfg.bar_position === 'right') nearBar = lastX >= 0 && vw - lastX <= EDGE_ZONE;
-  else nearBar = lastY >= 0 && lastY <= EDGE_ZONE;
+  // The bar comes back from whichever edge it docks to — only after the
+  // pointer has insisted there (or when held up around entering fullscreen).
+  const nearBar = edgeDwell;
 
   const nearOrb = lastY >= 0
     && lastY >= vh - ORB_ZONE
@@ -224,6 +282,9 @@ function holdReveal(ms) {
 function dismissChrome() {
   clearTimeout(revealTimer);
   revealUntil = 0;
+  clearTimeout(edgeDwellTimer);
+  edgeDwellTimer = null;
+  edgeDwell = false;
   body.classList.remove('fs-top', 'fs-orb');
   // A bar/orb the user pinned open must not be dismissed with the rest.
   evalReveal();
@@ -234,6 +295,7 @@ function onPointerMove(e) {
   if (e.pointerType === 'touch') return;
   lastX = e.clientX;
   lastY = e.clientY;
+  armEdgeDwell(barRevealProximity(), barKeepProximity());
   evalReveal();
 }
 

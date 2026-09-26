@@ -30,8 +30,13 @@ are removed before the page reaches the window.
 - Pages that render entirely in JavaScript may return little text. Say so
   rather than inventing the content.
 - If a page looks wrong because a site needs its trackers, the user can pause ad
-  blocking from the window's shield toggle (it applies to every page until
-  turned back on).
+  blocking from the window's **shield toggle** on the right of the toolbar (it
+  applies to every page until turned back on).
+- The window also has a **Downloads** manager (every download from every site,
+  with progress and controls; files land in Files → Downloads) and **incognito**
+  tabs. You do not need to describe these unless the user asks.
+- `browser_read` fetches the page text directly; the ad blocker runs in the
+  window for rendered pages, so `browser_read` filtering is best-effort.
 - The window's home surface (the Home button, shown when it opens) lists
   **related news** chosen from what the user has recently searched for. Those
   cards are a UI feature, not a tool: do not offer to "open the news shelf" —

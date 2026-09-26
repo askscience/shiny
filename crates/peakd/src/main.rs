@@ -1,7 +1,7 @@
 //! `peakd` — the PEAK'D! kiosk shell on Qt 6 + QtWebEngine.
 //!
 //! The app stays the website it is; this binary is the engine host that
-//! replaces WebKitGTK (see `PLAN-qt6-webengine.md`). Rust owns the policy:
+//! replaces WebKitGTK. Rust owns the policy:
 //! config, the Browser plugin's command protocol and queues, interface scale,
 //! trackpad gestures and exit semantics. Qt lives behind `shim.rs`.
 //!
@@ -17,6 +17,8 @@ mod bench;
 mod browse;
 mod config;
 mod display;
+mod downloads;
+mod filter;
 mod gestures;
 mod host;
 mod shim;
@@ -131,7 +133,7 @@ fn linux_main() -> i32 {
 }
 
 /// One IPC message from any page. Browser-view commands go to the queue;
-/// everything else is the exit contract.
+/// everything else is the exit contract or a shell command from the app view.
 extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
     let body = unsafe { CStr::from_ptr(body) }.to_string_lossy().into_owned();
     if let Some(bus) = BUS.get() {
@@ -143,6 +145,47 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
             pump_views();
             return;
         }
+    }
+    // Settings/commands from the app view (the IPC bridge rejects these from
+    // child browsing views, so this is trusted).
+    if let Some(raw) = body.strip_prefix("peakd:settings:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Some(on) = value.get("adblock").and_then(|v| v.as_bool()) {
+                filter::set_enabled(on);
+            }
+            if let Some(dir) = value.get("downloadsDir").and_then(|v| v.as_str()) {
+                downloads::set_dir(dir);
+            }
+            push_shield();
+        }
+        return;
+    }
+    if let Some(raw) = body.strip_prefix("peakd:filter:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Some(on) = value.get("enabled").and_then(|v| v.as_bool()) {
+                filter::set_enabled(on);
+            }
+        }
+        push_shield();
+        return;
+    }
+    if body == "peakd:shield:query" {
+        push_shield();
+        return;
+    }
+    if body == "peakd:downloads:list" {
+        downloads::push_list();
+        return;
+    }
+    if let Some(raw) = body.strip_prefix("peakd:download:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            let id = value.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+            let action = value.get("action").and_then(|v| v.as_str()).unwrap_or_default();
+            if !id.is_empty() && !action.is_empty() {
+                downloads::action(id, action);
+            }
+        }
+        return;
     }
     match body.as_str() {
         EXIT_MESSAGE => {
@@ -156,6 +199,55 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
         }
         _ => {}
     }
+}
+
+/// Report the shield state to the app view (`window.__peakdShield`).
+fn push_shield() {
+    let (enabled, blocked, rules) = filter::stats();
+    let payload = serde_json::json!({ "enabled": enabled, "blocked": blocked, "rules": rules });
+    let script = format!("window.__peakdShield && window.__peakdShield({payload})");
+    shim::main_run_js(&script, 0);
+}
+
+/// Ad-filter verdict for the Qt request interceptor. Runs on QtWebEngine's IO
+/// thread, so it only touches the filter's own thread-safe state.
+extern "C" fn on_filter(
+    _userdata: *mut c_void,
+    url: *const c_char,
+    first_party: *const c_char,
+    resource_type: i32,
+    method: *const c_char,
+) -> i32 {
+    let url = unsafe { CStr::from_ptr(url) }.to_string_lossy();
+    let first_party = unsafe { CStr::from_ptr(first_party) }.to_string_lossy();
+    let method = unsafe { CStr::from_ptr(method) }.to_string_lossy();
+    i32::from(filter::is_blocked(&url, &first_party, resource_type, &method))
+}
+
+/// Per-host User-Agent override for the interceptor (the Google sign-in fix).
+extern "C" fn on_ua(_userdata: *mut c_void, host: *const c_char) -> *const c_char {
+    let host = unsafe { CStr::from_ptr(host) }.to_string_lossy();
+    match filter::user_agent_override(&host) {
+        Some(ua) => {
+            static UA: OnceLock<std::ffi::CString> = OnceLock::new();
+            UA.get_or_init(|| std::ffi::CString::new(ua).expect("UA has no NUL"))
+                .as_ptr()
+        }
+        None => std::ptr::null(),
+    }
+}
+
+/// One download lifecycle event from the Qt shim.
+extern "C" fn on_download(
+    _userdata: *mut c_void,
+    id: *const c_char,
+    kind: *const c_char,
+    payload: *const c_char,
+) {
+    let id = unsafe { CStr::from_ptr(id) }.to_string_lossy();
+    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy();
+    let payload = unsafe { CStr::from_ptr(payload) }.to_string_lossy();
+    downloads::on_event(&id, &kind, &payload);
 }
 
 /// View lifecycle from the shim. Events are queued; the pump reports them to
@@ -409,6 +501,14 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
 
     shim::inject_script("peakd:exit", EXIT_SHORTCUT_JS);
     shim::set_window(&cfg.window_title, cfg.width, cfg.height);
+
+    // In-process ad filtering + the Google sign-in UA override. The engine is
+    // compiled by the server; loading it never fails the shell (it just browses
+    // unfiltered if the cache is absent).
+    filter::install(std::path::Path::new(&cfg.adfilter_dir));
+    shim::set_filter_cb(on_filter);
+    shim::set_ua_cb(on_ua);
+    shim::set_download_cb(on_download);
 
     let url = std::ffi::CString::new(cfg.start_url.clone()).expect("URLs carry no NUL");
     let data_dir =

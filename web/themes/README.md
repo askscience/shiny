@@ -24,6 +24,10 @@ themes/
       hud/               ←   HUD icons (clock, …)
 ```
 
+The **shared** icon set lives in `/ui/icons/<group>/<name>.svg` (the UI
+library). A theme's `icons/` is an **override set**: it only needs to ship the
+icons it draws differently — anything it omits falls back to the shared icon.
+
 Themes are plain static files — no build step, no backend involvement.
 `/themes/` is served directly; `themes.json` exists because directories
 can't be listed over HTTP.
@@ -39,7 +43,8 @@ can't be listed over HTTP.
 4. Restyle `components.css` — one rule block per component. Only visual
    properties (color, background, border, shadow, font); layout lives in
    `/ui/ui.css` and is shared.
-5. Replace the icons, keeping the same file names and `currentColor`.
+5. Override only the icons you want drawn differently, keeping the shared
+   names and `currentColor`; anything you omit uses `/ui/icons/`.
 6. Add `"yourtheme"` to `themes/themes.json`. Users can now pick it in
    *Settings → Appearance → Theme*.
 

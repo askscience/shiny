@@ -139,7 +139,7 @@
    Every plugin window gets a slim title bar: close + fullscreen controls on
    the left, the plugin name centered. In Windows layout the bar is also the
    drag handle; in tiling layout it is decorative but keeps the controls.
-   `--tile-header-height` is user-configurable (Settings → Desktop). */
+   `--tile-header-height` is user-configurable (Settings → Appearance). */
 .tile-header {
   flex: none;
   display: flex;

@@ -12,7 +12,6 @@
  * `fullscreen:change`; this module only mirrors that state onto the bubble and
  * routes the buttons to the same actions as the window's own controls.
  */
-import { pluginIconEl } from './pluginIcon.js';
 import { isCoreWindow, coreWindowTitle } from './coreWindows.js';
 import { closeCoreWindow, deactivatePlugin } from './tiles.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
@@ -40,10 +39,8 @@ function build(name) {
   const core = isCoreWindow(name);
   bubble.textContent = '';
 
-  // Minimal chrome: the app's icon plus the two controls, no title.
-  const appIcon = pluginIconEl(name, { size: 16, fallback: 'ui/puzzle', label: pluginLabel(name) });
-  appIcon.classList.add('fullscreen-bubble-icon');
-
+  // Minimal chrome: just the two controls (deactivate / close and exit
+  // fullscreen) — no app icon, so the left of the bar stays uncluttered.
   const close = makeButton(
     'fullscreen-bubble-btn--close',
     'ui/close',
@@ -67,7 +64,7 @@ function build(name) {
     exitWindowFullscreen();
   });
 
-  bubble.append(appIcon, close, exit);
+  bubble.append(close, exit);
   bubble.dataset.plugin = name;
   bubble.classList.remove('hidden');
 }

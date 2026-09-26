@@ -1,4 +1,4 @@
-//! Remote-access API (`PLAN-iroh-remote.md`).
+//! Remote-access API.
 //!
 //! `status` / `enable` / `rotate` drive the Iroh endpoint, and the
 //! `x-shiny-remote` header helpers gate the host-capability endpoints: the Iroh

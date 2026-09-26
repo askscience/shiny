@@ -9,6 +9,14 @@ pub type IpcCallback = extern "C" fn(*mut c_void, *const c_char);
 pub type ViewCallback = extern "C" fn(*mut c_void, *const c_char, *const c_char, *const c_char);
 pub type PumpCallback = extern "C" fn(*mut c_void);
 pub type JsCallback = extern "C" fn(*mut c_void, i32, *const c_char);
+/// Returns 1 to block the request, 0 to allow it.
+pub type FilterCallback =
+    extern "C" fn(*mut c_void, *const c_char, *const c_char, i32, *const c_char) -> i32;
+/// Returns a User-Agent to force for this host, or null.
+pub type UaCallback = extern "C" fn(*mut c_void, *const c_char) -> *const c_char;
+/// One download lifecycle event: `(userdata, id, kind, payload_json)`.
+pub type DownloadCallback =
+    extern "C" fn(*mut c_void, *const c_char, *const c_char, *const c_char);
 
 extern "C" {
     pub fn peakd_qt_run(
@@ -37,6 +45,7 @@ extern "C" {
         w: i32,
         h: i32,
         visible: i32,
+        incognito: i32,
     );
     pub fn peakd_qt_view_navigate(id: *const c_char, url: *const c_char);
     pub fn peakd_qt_view_bounds(id: *const c_char, x: i32, y: i32, w: i32, h: i32);
@@ -46,6 +55,11 @@ extern "C" {
     pub fn peakd_qt_view_reload(id: *const c_char);
     pub fn peakd_qt_view_focus(id: *const c_char);
     pub fn peakd_qt_view_close(id: *const c_char);
+    pub fn peakd_qt_set_filter_cb(cb: FilterCallback, userdata: *mut c_void);
+    pub fn peakd_qt_set_ua_cb(cb: UaCallback, userdata: *mut c_void);
+    pub fn peakd_qt_set_download_cb(cb: DownloadCallback, userdata: *mut c_void);
+    pub fn peakd_qt_set_download_dir(dir: *const c_char);
+    pub fn peakd_qt_download_action(id: *const c_char, action: *const c_char);
 }
 
 fn cs(value: &str) -> CString {
@@ -93,7 +107,7 @@ pub fn screen_size() -> (i32, i32) {
     (width, height)
 }
 
-pub fn view_create(id: &str, url: &str, x: i32, y: i32, w: i32, h: i32, visible: bool) {
+pub fn view_create(id: &str, url: &str, x: i32, y: i32, w: i32, h: i32, visible: bool, incognito: bool) {
     unsafe {
         peakd_qt_view_create(
             cs(id).as_ptr(),
@@ -103,6 +117,7 @@ pub fn view_create(id: &str, url: &str, x: i32, y: i32, w: i32, h: i32, visible:
             w,
             h,
             i32::from(visible),
+            i32::from(incognito),
         )
     }
 }
@@ -137,4 +152,24 @@ pub fn view_focus(id: &str) {
 
 pub fn view_close(id: &str) {
     unsafe { peakd_qt_view_close(cs(id).as_ptr()) }
+}
+
+pub fn set_filter_cb(cb: FilterCallback) {
+    unsafe { peakd_qt_set_filter_cb(cb, std::ptr::null_mut()) }
+}
+
+pub fn set_ua_cb(cb: UaCallback) {
+    unsafe { peakd_qt_set_ua_cb(cb, std::ptr::null_mut()) }
+}
+
+pub fn set_download_cb(cb: DownloadCallback) {
+    unsafe { peakd_qt_set_download_cb(cb, std::ptr::null_mut()) }
+}
+
+pub fn set_download_dir(dir: &str) {
+    unsafe { peakd_qt_set_download_dir(cs(dir).as_ptr()) }
+}
+
+pub fn download_action(id: &str, action: &str) {
+    unsafe { peakd_qt_download_action(cs(id).as_ptr(), cs(action).as_ptr()) }
 }

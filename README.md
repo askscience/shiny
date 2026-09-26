@@ -93,8 +93,12 @@ The web UI (`web/`) is a desktop-style workspace:
 - `browser` — the **Browser**: a web window. In the kiosk each tab is a real
   child web view (`crates/peakd`'s `browse` module on Linux, `crates/peakd-mac`'s
   on macOS) at the page's true origin, so anti-bot challenges (Cloudflare) pass.
-  There is no filtering proxy in the page path: the filter engine runs
-  server-side only (the news shelf and link previews).
+  Ad blocking runs **in-process** (the server compiles EasyList/EasyPrivacy;
+  the shell blocks requests via a QtWebEngine request interceptor) with a
+  **shield toggle** on the right of the toolbar; a **downloads manager** handles
+  every download from every site (progress, pause/resume/cancel/retry/open,
+  saved into Files → Downloads); and **incognito** tabs use an off-the-record
+  profile. Google sign-in works via a per-host Firefox User-Agent override.
   Plus
   `browser_open` / `browser_search` / `browser_read` tools. Its home surface is a
   **related-news shelf chosen from what you search for**: a decayed interest profile

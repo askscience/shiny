@@ -14,7 +14,12 @@ class IpcBridge : public QObject {
     Q_OBJECT
 
 public:
-    IpcBridge(peakd_ipc_cb callback, void *userdata, QObject *parent = nullptr);
+    // `privileged` is true only for the app's own view (`id == "main"`). A
+    // browsing page in a child web view gets a bridge that forwards nothing but
+    // `peakd:exit`: otherwise any site could drive the view manager or toggle
+    // the ad blocker.
+    IpcBridge(peakd_ipc_cb callback, void *userdata, bool privileged,
+              QObject *parent = nullptr);
 
 public slots:
     void postMessage(const QString &body);
@@ -22,6 +27,7 @@ public slots:
 private:
     peakd_ipc_cb callback_;
     void *userdata_;
+    bool privileged_;
 };
 
 #endif // PEAKD_IPC_BRIDGE_H

@@ -5,8 +5,9 @@
  * sections are fewer and broader than the old standalone page:
  *
  *   Account    — photo + display name
- *   Appearance — theme, accent, gradient, orb style, background
- *   Desktop    — tiling layout, window surface, top bar / orb
+ *   Appearance — theme, accent, gradient, window surface, top bar / orb,
+ *                orb style, background
+ *   Desktop    — tiling layout
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
  *   System     — remember workspace, log out
@@ -798,6 +799,21 @@ function buildDesktop() {
   };
   syncTilingControls();
 
+  const shortcuts = el('p', 'settings-hint');
+  shortcuts.innerHTML = 'Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.';
+
+  return [
+    field('Layout', mode, {
+      hint: 'Tiling snaps windows into workspaces; Windows floats them as draggable, resizable desktop windows.',
+    }),
+    tilingControls,
+    shortcuts,
+  ];
+}
+
+/* ── Window surface & top bar (shown in the Appearance panel) ── */
+
+function buildWindowSurfaceControls() {
   const surface = getDesktopSurface();
   const titleControl = slider({
     min: 28, max: 48, step: 1, value: surface.title_height,
@@ -842,6 +858,17 @@ function buildDesktop() {
     onChange: (checked) => setDesktopSurface({ window_shadow: checked }),
   });
 
+  return [
+    heading('Window surface'),
+    title.wrap,
+    radius.wrap,
+    opacity.wrap,
+    blur.wrap,
+    shadow,
+  ];
+}
+
+function buildTopBarControls() {
   const immersive = getImmersive();
   const autohideBar = toggleRow({
     label: 'Autohide the top bar',
@@ -866,25 +893,11 @@ function buildDesktop() {
     onChange: (checked) => setImmersive({ autohide_orb: checked }),
   });
 
-  const shortcuts = el('p', 'settings-hint');
-  shortcuts.innerHTML = 'Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.';
-
   return [
-    field('Layout', mode, {
-      hint: 'Tiling snaps windows into workspaces; Windows floats them as draggable, resizable desktop windows.',
-    }),
-    tilingControls,
-    title.wrap,
-    heading('Window surface'),
-    radius.wrap,
-    opacity.wrap,
-    blur.wrap,
-    shadow,
     heading('Top bar & orb'),
     autohideBar,
     field('Top bar position', barPosition),
     autohideOrb,
-    shortcuts,
   ];
 }
 
@@ -1248,6 +1261,8 @@ function buildAppearancePanel() {
   orbStyles.setAttribute('aria-label', 'Orb style');
 
   const backgroundChildren = buildBackgroundControls();
+  const windowSurfaceChildren = buildWindowSurfaceControls();
+  const topBarChildren = buildTopBarControls();
 
   // Interface scale: a host setting, applied by the kiosk shell as page zoom.
   // Changing it re-lays-out the page, so the Terminal re-fits automatically.
@@ -1335,6 +1350,8 @@ function buildAppearancePanel() {
     custom,
     heading('Display'),
     scaleField,
+    ...windowSurfaceChildren,
+    ...topBarChildren,
     heading('Voice orb'),
     el('p', 'settings-hint', 'How the orb looks and moves. Every style reacts to your voice — louder grows the ring’s waves and sparks.'),
     orbStyles,

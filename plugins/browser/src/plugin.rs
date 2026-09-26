@@ -82,6 +82,14 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Get, "/api/browser/news", "browser_news"),
             (HttpMethod::Post, "/api/browser/news/click", "browser_news_click"),
             (HttpMethod::Post, "/api/browser/preview", "browser_preview"),
+            (HttpMethod::Get, "/api/browser/settings", "browser_settings"),
+            (HttpMethod::Post, "/api/browser/settings", "browser_settings_set"),
+            (HttpMethod::Get, "/api/browser/filter", "browser_filter"),
+            (HttpMethod::Post, "/api/browser/filter/refresh", "browser_filter_refresh"),
+            (HttpMethod::Get, "/api/browser/downloads", "browser_downloads"),
+            (HttpMethod::Post, "/api/browser/downloads/event", "browser_download_event"),
+            (HttpMethod::Post, "/api/browser/downloads/remove", "browser_download_remove"),
+            (HttpMethod::Post, "/api/browser/downloads/clear", "browser_downloads_clear"),
         ] {
             builder.route(RouteSpec {
                 method: spec.0,
@@ -115,6 +123,26 @@ impl Plugin for BrowserPlugin {
         // conditional DDL), and the code that needs the column cannot function
         // without it — see `history::ensure_schema`.
         crate::history::ensure_schema(&ctx);
+        // Same reasoning for the settings/downloads tables on an install whose
+        // migration has not run.
+        crate::settings::ensure_schema(&ctx);
+        crate::downloads::ensure_schema(&ctx);
+
+        // Fetch + compile the ad-filter lists in the background so the compiled
+        // engine exists for the shell's next start. Never blocks plugin load,
+        // and failure just leaves the shell unfiltered.
+        //
+        // `rt::spawn`, not `tokio::spawn`: `on_load` runs on the host's
+        // executor, where this cdylib's own Tokio has no reactor (a bare
+        // `tokio::spawn` panics across the dlopen boundary and aborts the
+        // server — PLUGINS.md §15).
+        let load_ctx = ctx.clone();
+        shiny_plugin_sdk::rt::spawn(async move {
+            let filter = crate::filter::ensure_loaded(&load_ctx).await;
+            if let Some(filter) = filter {
+                tracing::info!("browser: ad filter ready ({} rules)", filter.rule_count());
+            }
+        });
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {

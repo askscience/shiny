@@ -21,6 +21,7 @@
  * presentation and local navigation history only.
  */
 import { apiFetch } from '../../js/api.js';
+import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { icon, iconButton, searchBar } from '../../ui/index.js';
 
 export const BROWSER_PLUGIN = 'browser';
@@ -46,6 +47,32 @@ function nativeSend(payload) {
   if (!nativeAvailable) return false;
   try {
     window.ipc.postMessage(NATIVE_PREFIX + JSON.stringify(payload));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Send a shell message with a non-view prefix (`peakd:settings:`,
+ * `peakd:filter:`, `peakd:download:`). The app view is the only one whose IPC
+ * bridge forwards these; a browsing page's bridge accepts only `peakd:exit`.
+ */
+function shellSend(prefix, payload) {
+  if (!nativeAvailable) return false;
+  try {
+    window.ipc.postMessage(prefix + JSON.stringify(payload));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Send a raw (non-JSON) shell message, e.g. `peakd:downloads:list`. */
+function shellRaw(message) {
+  if (!nativeAvailable) return false;
+  try {
+    window.ipc.postMessage(message);
     return true;
   } catch (_) {
     return false;
@@ -147,6 +174,21 @@ let addressEl = null;
 let backBtn = null;
 let forwardBtn = null;
 let statusEl = null;
+let shieldBtn = null;
+let downloadsBtn = null;
+let incognitoBtn = null;
+let downloadsPanel = null;
+let downloadsListEl = null;
+
+/**
+ * The window's server-backed settings. `adblock` drives the shield toggle and
+ * `downloadsDir` is the absolute directory the shell saves downloads into (the
+ * user's `Downloads` folder, resolved server-side per account).
+ */
+let browserSettings = { adblock: true, incognito: false, downloadsDir: '' };
+
+/** Live downloads, newest first, keyed by the shell's id. */
+let downloads = [];
 
 // Last state pushed for the active native view, so the per-frame sync can skip
 // updates the shell already has. `null` means "unknown, send it".
@@ -218,13 +260,15 @@ function clearWatchdog(tab) {
 }
 
 /** Create a tab, its iframe, and (unless a URL is given) its home surface. */
-function createTab({ url = '', activate = true } = {}) {
+function createTab({ url = '', activate = true, incognito = false } = {}) {
   const tab = {
     id: `t${++tabSeq}`,
     sessionId: null,
     title: '',
     url: '',
     home: true,
+    /** Whether this tab is rendered by an off-the-record profile. */
+    incognito: !!incognito,
     /** Whether this tab is currently rendered by a native child webview. */
     native: false,
     history: [],
@@ -323,15 +367,24 @@ function renderTabs() {
   const nodes = [];
   for (const tab of tabs) {
     const el = document.createElement('div');
-    el.className = 'browser-tab' + (tab.id === activeTabId ? ' is-active' : '');
+    el.className = 'browser-tab' + (tab.id === activeTabId ? ' is-active' : '')
+      + (tab.incognito ? ' is-incognito' : '');
     el.setAttribute('role', 'tab');
     el.setAttribute('aria-selected', String(tab.id === activeTabId));
 
     const label = document.createElement('button');
     label.type = 'button';
     label.className = 'browser-tab-label';
-    label.textContent = tabTitle(tab);
-    label.title = tab.url || 'New tab';
+    if (tab.incognito) {
+      const mask = icon('ui/incognito', { size: 12 });
+      mask.classList.add('browser-tab-mask');
+      label.appendChild(mask);
+    }
+    const text = document.createElement('span');
+    text.className = 'browser-tab-text';
+    text.textContent = tabTitle(tab);
+    label.appendChild(text);
+    label.title = tab.incognito ? `Incognito — ${tab.url || 'New tab'}` : (tab.url || 'New tab');
     label.addEventListener('click', () => setActiveTab(tab.id));
 
     const close = document.createElement('button');
@@ -397,7 +450,14 @@ function loadNative(tab, url) {
     tab.frameEl.classList.add('is-native-hidden');
   }
   const rect = viewportRect();
-  nativeSend({ op: 'open', id: tab.id, url, rect, visible: tab.id === activeTabId });
+  nativeSend({
+    op: 'open',
+    id: tab.id,
+    url,
+    rect,
+    visible: tab.id === activeTabId,
+    incognito: !!tab.incognito,
+  });
   lastNativeVisible = null;
   lastNativeRect = '';
   if (tab.id === activeTabId) {
@@ -431,7 +491,11 @@ async function navigateTo(input, { tab = activeTab() } = {}) {
   try {
     const res = await apiFetch('/api/browser/navigate', {
       method: 'POST',
-      body: JSON.stringify({ session_id: tab.sessionId, input: value }),
+      body: JSON.stringify({
+        session_id: tab.sessionId,
+        input: value,
+        incognito: !!tab.incognito,
+      }),
     });
     data = res?.data;
   } catch (_) {
@@ -534,7 +598,34 @@ function buildToolbar() {
   addressEl.input = input;
   addressEl.search = search;
 
-  bar.append(backBtn, forwardBtn, reloadBtn, homeBtn, addressEl);
+  // The right cluster: the ad-block shield (the requested toggle), the
+  // downloads manager, and a new incognito tab. Appended after the flexible
+  // address field, so they sit on the right.
+  shieldBtn = iconButton({
+    icon: 'ui/shield',
+    size: 'sm',
+    label: 'Ad blocking',
+    onClick: () => toggleShield(),
+  });
+  shieldBtn.classList.add('browser-shield');
+
+  downloadsBtn = iconButton({
+    icon: 'ui/download',
+    size: 'sm',
+    label: 'Downloads',
+    onClick: () => toggleDownloadsPanel(),
+  });
+  downloadsBtn.classList.add('browser-downloads-btn');
+
+  incognitoBtn = iconButton({
+    icon: 'ui/incognito',
+    size: 'sm',
+    label: 'New incognito tab',
+    onClick: () => createTab({ incognito: true }),
+  });
+  incognitoBtn.classList.add('browser-incognito');
+
+  bar.append(backBtn, forwardBtn, reloadBtn, homeBtn, addressEl, shieldBtn, downloadsBtn, incognitoBtn);
   return bar;
 }
 
@@ -609,6 +700,322 @@ function reload() {
 function goHome() {
   void showHome(activeTab());
 }
+
+/* ── Settings, the shield toggle, and downloads ───────────────────
+ *
+ * Three things live on the right of the toolbar:
+ *  - the **shield**, which toggles the shell's ad blocker live and persists the
+ *    choice per user (`/api/browser/settings`);
+ *  - the **downloads** button + panel, fed by shell events
+ *    (`window.__peakdViewEvent`, type `download`) and persisted server-side;
+ *  - a **new incognito tab**.
+ */
+
+/** Fetch the user's settings and push them to the shell. */
+async function loadSettings() {
+  try {
+    const res = await apiFetch('/api/browser/settings');
+    const d = res?.data || {};
+    browserSettings.adblock = d.adblock !== false;
+    browserSettings.incognito = !!d.incognito;
+    browserSettings.downloadsDir = d.downloads_dir || '';
+  } catch (_) {
+    /* defaults stay in place */
+  }
+  pushSettings();
+  updateShield();
+}
+
+/** Tell the shell the current settings (adblock + where downloads go). */
+function pushSettings() {
+  shellSend('peakd:settings:', {
+    adblock: browserSettings.adblock,
+    downloadsDir: browserSettings.downloadsDir,
+  });
+}
+
+/** Flip ad blocking, optimistically, and persist it. */
+function toggleShield() {
+  const on = !browserSettings.adblock;
+  browserSettings.adblock = on;
+  updateShield();
+  shellSend('peakd:filter:', { enabled: on });
+  void apiFetch('/api/browser/settings', {
+    method: 'POST',
+    body: JSON.stringify({ adblock: on }),
+  }).catch(() => {});
+}
+
+/** Reflect the shield state on its button (on = accent, off = muted). */
+function updateShield() {
+  if (!shieldBtn) return;
+  const on = browserSettings.adblock;
+  shieldBtn.classList.toggle('is-on', on);
+  shieldBtn.classList.toggle('is-off', !on);
+  shieldBtn.setAttribute('aria-pressed', String(on));
+  const blocked = browserSettings.blocked;
+  shieldBtn.title = on
+    ? `Ad blocking: on${typeof blocked === 'number' ? ` — ${blocked} blocked` : ''}`
+    : 'Ad blocking: off';
+  shieldBtn.setAttribute('aria-label', shieldBtn.title);
+}
+
+/* ── Downloads panel ─────────────────────────────────────────── */
+
+/** Build the (hidden) downloads popover. */
+function buildDownloadsPanel() {
+  const panel = document.createElement('div');
+  panel.className = 'browser-downloads-panel hidden';
+
+  const head = document.createElement('div');
+  head.className = 'browser-downloads-head';
+  const title = document.createElement('span');
+  title.className = 'browser-downloads-title';
+  title.textContent = 'Downloads';
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'browser-downloads-clear';
+  clear.textContent = 'Clear finished';
+  clear.addEventListener('click', () => downloadAction('', 'clear'));
+  head.append(title, clear);
+
+  const list = document.createElement('div');
+  list.className = 'browser-downloads-list';
+
+  panel.append(head, list);
+  downloadsListEl = list;
+  return panel;
+}
+
+function toggleDownloadsPanel() {
+  if (!downloadsPanel) return;
+  const hidden = downloadsPanel.classList.toggle('hidden');
+  if (!hidden) void loadDownloads();
+}
+
+function closeDownloadsPanel() {
+  if (downloadsPanel) downloadsPanel.classList.add('hidden');
+}
+
+/** Fetch the persisted history and ask the shell for its live list. */
+async function loadDownloads() {
+  try {
+    const res = await apiFetch('/api/browser/downloads?limit=50');
+    const rows = res?.data?.downloads;
+    if (Array.isArray(rows)) {
+      // Merge rather than replace: the shell may already have reported live
+      // downloads this session, and opening the panel must not drop them.
+      const byId = new Map(rows.map((r) => [r.id, { ...r }]));
+      for (const d of downloads) {
+        const existing = byId.get(d.id);
+        if (!existing) byId.set(d.id, d);
+        else if (isActiveDownload(d.state)) byId.set(d.id, { ...existing, ...d });
+      }
+      downloads = Array.from(byId.values());
+    }
+  } catch (_) {
+    /* history is optional */
+  }
+  shellRaw('peakd:downloads:list');
+  renderDownloads();
+}
+
+/** Merge one shell event into the live list and persist it. */
+function applyDownload(event) {
+  if (!event || event.type !== 'download') return;
+  const d = event.download;
+  if (event.kind === 'removed' || !d || !d.id) {
+    if (d && d.id) {
+      downloads = downloads.filter((x) => x.id !== d.id);
+      renderDownloads();
+    }
+    return;
+  }
+  const idx = downloads.findIndex((x) => x.id === d.id);
+  if (idx >= 0) downloads[idx] = { ...downloads[idx], ...d };
+  else downloads.unshift({ ...d });
+  renderDownloads();
+  void apiFetch('/api/browser/downloads/event', {
+    method: 'POST',
+    body: JSON.stringify(d),
+  }).catch(() => {});
+}
+
+/** Send a control command for one download and mirror it locally. */
+function downloadAction(id, action) {
+  if (action === 'clear') {
+    shellSend('peakd:download:', { id: '', action: 'clear' });
+    downloads = downloads.filter(
+      (d) => !['completed', 'cancelled', 'interrupted'].includes(d.state),
+    );
+    renderDownloads();
+    void apiFetch('/api/browser/downloads/clear', { method: 'POST' }).catch(() => {});
+    return;
+  }
+  if (!id) return;
+  shellSend('peakd:download:', { id, action });
+  if (action === 'remove') {
+    downloads = downloads.filter((d) => d.id !== id);
+    renderDownloads();
+    void apiFetch('/api/browser/downloads/remove', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }
+}
+
+/** Open a finished download in the owning app (or show Downloads in Files). */
+function openDownload(d) {
+  if (!d.file) return;
+  const dir = d.incognito ? '.incognito' : 'Downloads';
+  const rel = `${dir}/${d.file}`;
+  const plugin = pluginForFile ? pluginForFile(d.file) : null;
+  if (plugin && openWithPlugin) {
+    void openWithPlugin({ plugin, path: rel, name: d.file });
+  } else if (revealInFiles) {
+    revealInFiles(dir);
+  }
+}
+
+function formatBytes(n) {
+  const value = Number(n) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function isActiveDownload(state) {
+  return state === 'downloading' || state === 'requested' || state === 'paused';
+}
+
+/** One row: name, host/state, a progress bar while active, and actions. */
+function downloadRow(d) {
+  const row = document.createElement('div');
+  row.className = `browser-download is-${d.state || 'download'}`;
+
+  const info = document.createElement('div');
+  info.className = 'browser-download-info';
+  const name = document.createElement('div');
+  name.className = 'browser-download-name';
+  name.textContent = d.file || d.url || 'download';
+  name.title = d.path || d.url || '';
+  const meta = document.createElement('div');
+  meta.className = 'browser-download-meta';
+  const total = Number(d.total) || 0;
+  const received = Number(d.received) || 0;
+  const sizeText = total ? `${formatBytes(received)} / ${formatBytes(total)}` : formatBytes(received);
+  meta.textContent = [d.host, d.state, sizeText].filter(Boolean).join(' · ');
+  info.append(name, meta);
+
+  if (isActiveDownload(d.state)) {
+    const bar = document.createElement('div');
+    bar.className = 'browser-download-progress';
+    const fill = document.createElement('div');
+    fill.className = 'browser-download-fill';
+    const pct = total ? Math.min(100, Math.round((received / total) * 100)) : 0;
+    fill.style.width = `${pct}%`;
+    bar.appendChild(fill);
+    info.appendChild(bar);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'browser-download-actions';
+
+  if (d.state === 'downloading' || d.state === 'requested' || d.state === 'paused') {
+    actions.appendChild(iconButton({
+      icon: d.state === 'paused' ? 'ui/play' : 'ui/pause',
+      size: 'sm',
+      label: d.state === 'paused' ? 'Resume' : 'Pause',
+      onClick: () => downloadAction(d.id, d.state === 'paused' ? 'resume' : 'pause'),
+    }));
+    actions.appendChild(iconButton({
+      icon: 'ui/close',
+      size: 'sm',
+      label: 'Cancel',
+      onClick: () => downloadAction(d.id, 'cancel'),
+    }));
+  } else if (d.state === 'completed') {
+    actions.appendChild(iconButton({
+      icon: 'ui/folder-open',
+      size: 'sm',
+      label: 'Open',
+      onClick: () => openDownload(d),
+    }));
+    actions.appendChild(iconButton({
+      icon: 'ui/trash',
+      size: 'sm',
+      label: 'Remove',
+      onClick: () => downloadAction(d.id, 'remove'),
+    }));
+  } else {
+    if (d.url) {
+      actions.appendChild(iconButton({
+        icon: 'ui/refresh',
+        size: 'sm',
+        label: 'Retry',
+        onClick: () => navigateTo(d.url),
+      }));
+    }
+    actions.appendChild(iconButton({
+      icon: 'ui/trash',
+      size: 'sm',
+      label: 'Remove',
+      onClick: () => downloadAction(d.id, 'remove'),
+    }));
+  }
+
+  row.append(info, actions);
+  return row;
+}
+
+function renderDownloads() {
+  if (!downloadsListEl) return;
+  if (!downloads.length) {
+    const empty = document.createElement('div');
+    empty.className = 'browser-downloads-empty';
+    empty.textContent = 'No downloads yet';
+    downloadsListEl.replaceChildren(empty);
+  } else {
+    downloadsListEl.replaceChildren(...downloads.map(downloadRow));
+  }
+  updateDownloadsBadge();
+}
+
+/** Show how many downloads are active on the toolbar button. */
+function updateDownloadsBadge() {
+  if (!downloadsBtn) return;
+  const active = downloads.filter((d) => isActiveDownload(d.state)).length;
+  let badge = downloadsBtn.querySelector
+    ? downloadsBtn.querySelector('.browser-downloads-badge')
+    : null;
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'browser-downloads-badge';
+    downloadsBtn.appendChild(badge);
+  }
+  badge.textContent = active ? String(active) : '';
+  badge.classList.toggle('hidden', active === 0);
+}
+
+/* Shell → window: shield state and the live download list. */
+window.__peakdShield = function (state) {
+  if (!state || typeof state !== 'object') return;
+  if (typeof state.enabled === 'boolean') browserSettings.adblock = state.enabled;
+  if (typeof state.blocked === 'number') browserSettings.blocked = state.blocked;
+  if (typeof state.rules === 'number') browserSettings.rules = state.rules;
+  updateShield();
+};
+
+window.__peakdDownloads = function (list) {
+  if (!Array.isArray(list)) return;
+  // The shell's list is chronological (oldest first); show newest first and
+  // keep any persisted rows the shell no longer tracks.
+  const live = list.slice().reverse();
+  const seen = new Set(live.map((d) => d.id));
+  downloads = live.concat(downloads.filter((d) => !seen.has(d.id)));
+  renderDownloads();
+};
 
 /* ── Home surface: related-news cards ─────────────────────────────
  *
@@ -877,6 +1284,11 @@ function onFrameMessage(event) {
  */
 window.__peakdViewEvent = function (event) {
   if (!event || typeof event !== 'object') return;
+  // Download events are not tab-scoped; handle them before the tab lookup.
+  if (event.type === 'download') {
+    applyDownload(event);
+    return;
+  }
   const tab = tabs.find((t) => t.id === event.id);
   if (!tab) return;
   if (event.type === 'title' && typeof event.title === 'string' && event.title) {
@@ -1016,6 +1428,18 @@ export function browserContextMenu() {
     },
     {
       type: 'item',
+      label: 'New incognito tab',
+      icon: 'ui/incognito',
+      onClick: () => createTab({ incognito: true }),
+    },
+    {
+      type: 'item',
+      label: 'Downloads',
+      icon: 'ui/download',
+      onClick: () => toggleDownloadsPanel(),
+    },
+    {
+      type: 'item',
       label: 'Focus address bar',
       icon: 'ui/search',
       disabled: !addressEl,
@@ -1050,12 +1474,17 @@ export function mountBrowserTile() {
 
   tabstripEl = buildTabStrip();
   viewportEl = buildViewport();
-  tileEl.append(tabstripEl, buildToolbar(), viewportEl);
+  downloadsPanel = buildDownloadsPanel();
+  tileEl.append(tabstripEl, buildToolbar(), viewportEl, downloadsPanel);
 
   updateNavButtons();
+  updateShield();
   startBoundsSync();
   // One tab, on its home surface.
   createTab({});
+  // Settings (the shield + where downloads go) and the persisted history.
+  void loadSettings();
+  void loadDownloads();
   return tileEl;
 }
 
@@ -1066,6 +1495,7 @@ export function unmountBrowserTile() {
   for (const tab of tabs) destroyTab(tab);
   tabs = [];
   activeTabId = null;
+  downloads = [];
   tileEl?.remove();
   tileEl = null;
   tabstripEl = null;
@@ -1075,6 +1505,11 @@ export function unmountBrowserTile() {
   backBtn = null;
   forwardBtn = null;
   statusEl = null;
+  shieldBtn = null;
+  downloadsBtn = null;
+  incognitoBtn = null;
+  downloadsPanel = null;
+  downloadsListEl = null;
 }
 
 export function getBrowserTileElement() {

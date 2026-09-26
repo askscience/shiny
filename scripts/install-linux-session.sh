@@ -96,6 +96,7 @@ Environment=DATABASE_URL=sqlite://%h/.local/share/shiny/shiny.db
 Environment=BACKGROUNDS_DIR=%h/.local/share/shiny/backgrounds
 Environment=LOG_FILE=%h/.local/share/shiny/shiny.log
 Environment=PLUGINS_DIR=$SHINY_REPO/data/plugins
+Environment=ADFILTER_DIR=%h/.local/share/shiny/adfilter
 Environment=WEB_DIR=$SHINY_REPO/web
 Environment=VOSK_MODELS_DIR=$SHINY_REPO/data/vosk-models
 Environment=WHISPER_MODELS_DIR=$SHINY_REPO/data/whisper-models

@@ -6,9 +6,9 @@ use crate::shim;
 pub struct QtHost;
 
 impl ViewHost for QtHost {
-    fn create(&mut self, id: &str, url: &str, rect: Option<CssRect>, visible: bool) {
+    fn create(&mut self, id: &str, url: &str, rect: Option<CssRect>, visible: bool, incognito: bool) {
         let (x, y, w, h) = rect.map(CssRect::to_logical).unwrap_or((0, 0, 0, 0));
-        shim::view_create(id, url, x, y, w, h, visible);
+        shim::view_create(id, url, x, y, w, h, visible, incognito);
     }
 
     fn navigate(&mut self, id: &str, url: &str) {

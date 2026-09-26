@@ -5242,6 +5242,7 @@ dependencies = [
  "parking_lot",
  "pkg-config",
  "serde_json",
+ "shiny-filter-core",
  "shiny-iroh-client",
 ]
 
@@ -6967,6 +6968,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "shiny-filter-core",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -6974,6 +6976,17 @@ dependencies = [
  "url",
  "wreq",
  "wreq-util",
+]
+
+[[package]]
+name = "shiny-filter-core"
+version = "0.1.0"
+dependencies = [
+ "adblock",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

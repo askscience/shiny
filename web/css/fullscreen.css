@@ -108,6 +108,19 @@ html[data-bar-pos='top'] body.fs-active.fs-top #hud-header {
     visibility 0s;
 }
 
+/* The revealed bar must not cover the fullscreen window's own top bar (where
+   the app's buttons live). While it is up, the window slides down by exactly
+   the bar's total height and rides the same reveal transition; hiding the bar
+   slides it back to the top. `--hud-header-total` is the bar plus its header
+   padding, so the app clears the chrome with a hair of breathing room. */
+html[data-bar-pos='top'] body.fs-active #tile-grid {
+  transition: top var(--duration-normal) var(--ease-out);
+}
+
+html[data-bar-pos='top'] body.fs-active.fs-top #tile-grid {
+  top: var(--hud-header-total);
+}
+
 html[data-bar-pos='left'] .hud-header-main,
 html[data-bar-pos='right'] .hud-header-main {
   flex: 0 1 auto;
@@ -348,6 +361,13 @@ body.fullscreen-active .compose-conversation {
     opacity: 1 !important;
     visibility: visible !important;
     transform: none !important;
+  }
+
+  /* The bar is permanently up here, so the fullscreen window is permanently
+     clear of it — the same push-down as the hover path's `.fs-top`. */
+  html[data-bar-pos='top'] body.fs-active #tile-grid {
+    top: var(--hud-header-total);
+    transition: none;
   }
 }
 

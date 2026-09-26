@@ -18,6 +18,8 @@ export XDG_SESSION_TYPE=x11
 # the backend silently.
 export QT_QPA_PLATFORM=xcb
 export PEAKD_APP_ORIGIN="${PEAKD_APP_ORIGIN:-http://127.0.0.1:8080}"
+# The compiled ad-filter cache is shared with the server. Per-user, not fixed.
+export PEAKD_ADFILTER_DIR="${PEAKD_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/adfilter}"
 
 # The session's runtime dir — pam_systemd already sets it; the fallback keeps a
 # manual `xinit /usr/local/bin/peakd-kiosk.sh` run working. Audio clients

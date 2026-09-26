@@ -26,6 +26,9 @@ pub struct PeakdConfig {
     /// Where the QtWebEngine profile lives (cookies, cache). Relative paths
     /// resolve against the process working directory.
     pub data_dir: String,
+    /// Where the server's compiled ad-filter cache lives (`engine.dat` +
+    /// `engine.json`). `PEAKD_ADFILTER_DIR` / `--adfilter-dir`.
+    pub adfilter_dir: String,
     /// Where Settings stores the interface-scale choice (`"auto"` or a factor).
     /// The shell reads it at launch and watches it for changes.
     pub display_file: PathBuf,
@@ -88,6 +91,10 @@ impl PeakdConfig {
                 .ok()
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or_else(default_data_dir),
+            adfilter_dir: env::var("PEAKD_ADFILTER_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(default_adfilter_dir),
             display_file: env_path("PEAKD_DISPLAY_FILE")
                 .unwrap_or_else(|| xdg_dir("XDG_CONFIG_HOME", ".config").join("display.json")),
             display_runtime_file: env_path("PEAKD_DISPLAY_RUNTIME_FILE")
@@ -174,6 +181,12 @@ impl PeakdConfig {
                         i += 1;
                     }
                 }
+                "--adfilter-dir" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.adfilter_dir = v.clone();
+                        i += 1;
+                    }
+                }
                 "--devtools" => cfg.devtools = true,
                 "--iroh" | "--ticket" => {
                     if let Some(v) = args.get(i + 1) {
@@ -239,6 +252,33 @@ fn default_data_dir() -> String {
         }
     }
     "data/peakd".to_string()
+}
+
+/// Where the server's compiled ad-filter cache lives when `PEAKD_ADFILTER_DIR`
+/// is unset.
+///
+/// The per-user data dir (`$XDG_DATA_HOME/shiny/adfilter`, defaulting to
+/// `~/.local/share/...`) — the same path the server's `ADFILTER_DIR` resolves
+/// to, so the shell restores the engine the server compiled. Nothing here is
+/// tied to a particular user name.
+fn default_adfilter_dir() -> String {
+    if let Some(data) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+        return PathBuf::from(data)
+            .join("shiny")
+            .join("adfilter")
+            .to_string_lossy()
+            .into_owned();
+    }
+    if let Some(home) = std::env::var_os("HOME").filter(|v| !v.is_empty()) {
+        return PathBuf::from(home)
+            .join(".local")
+            .join("share")
+            .join("shiny")
+            .join("adfilter")
+            .to_string_lossy()
+            .into_owned();
+    }
+    "data/adfilter".to_string()
 }
 
 /// Give a bare host the scheme it obviously meant.

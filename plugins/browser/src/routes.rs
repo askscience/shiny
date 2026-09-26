@@ -18,6 +18,7 @@ use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::sessions;
+use crate::{downloads, filter, settings};
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -31,6 +32,14 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_news" => Some(news_route(ctx.clone())),
         "browser_news_click" => Some(news_click(ctx)),
         "browser_preview" => Some(preview_route(ctx)),
+        "browser_settings" => Some(settings_route(ctx)),
+        "browser_settings_set" => Some(settings_set(ctx)),
+        "browser_downloads" => Some(downloads_route(ctx)),
+        "browser_download_event" => Some(download_event(ctx)),
+        "browser_download_remove" => Some(download_remove(ctx)),
+        "browser_downloads_clear" => Some(downloads_clear(ctx)),
+        "browser_filter" => Some(filter_route(ctx)),
+        "browser_filter_refresh" => Some(filter_refresh(ctx)),
         _ => None,
     }
 }
@@ -178,6 +187,9 @@ struct NavigateBody {
     /// `page` (default) returns the URL to load; `text` returns the filtered
     /// document's text, which is what the AI tool wants.
     format: Option<String>,
+    /// An incognito tab is not recorded for the recommender's interest profile.
+    #[serde(default)]
+    incognito: bool,
 }
 
 /// POST /api/browser/navigate — the single entry point for going somewhere.
@@ -213,14 +225,17 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
 
             // Best-effort history: browsing must work even if the shared
             // database is unavailable (see the plugin DB caveat in §15).
-            let _ = crate::history::record(
-                &ctx,
-                &uid,
-                &url,
-                body.format.as_deref(),
-                query.as_deref(),
-            )
-            .await;
+            // Incognito navigations are deliberately not recorded.
+            if !body.incognito {
+                let _ = crate::history::record(
+                    &ctx,
+                    &uid,
+                    &url,
+                    body.format.as_deref(),
+                    query.as_deref(),
+                )
+                .await;
+            }
 
             if body.format.as_deref() == Some("text") {
                 let text = crate::fetch::text(&url).await?;
@@ -349,6 +364,155 @@ fn preview_route(_ctx: Arc<PluginCtx>) -> RouteHandler {
         let body = take_json::<PreviewBody>(req).await?;
         let preview = crate::preview::fetch(&body.url).await?;
         Ok(ok(serde_json::to_value(preview).unwrap_or(Value::Null)))
+    })
+}
+
+/* ── settings / filter / downloads ──────────────────────────── */
+
+#[derive(Deserialize)]
+struct SettingsBody {
+    adblock: Option<bool>,
+    incognito: Option<bool>,
+}
+
+/// The directory downloads should land in.
+///
+/// Mirrors the Files plugin's home resolution (`fs_util::home_for`): the real OS
+/// home when the account is bound to a Linux user, otherwise the account's
+/// virtual `~/.shiny/home/<id>`. Resolved generically from the request headers
+/// and `$HOME` so it works for any user, not a fixed one. (A shared SDK helper
+/// would remove the small duplication here.)
+fn downloads_dir(user_id: &str, os_home: Option<&str>) -> std::path::PathBuf {
+    let home = match os_home.map(str::trim).filter(|h| !h.is_empty()) {
+        Some(h) => std::path::PathBuf::from(h),
+        None => {
+            let base = std::env::var_os("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            base.join(".shiny").join("home").join(sanitize_user(user_id))
+        }
+    };
+    home.join("Downloads")
+}
+
+/// Keep an account id usable as a single directory name (matches Files).
+fn sanitize_user(user_id: &str) -> String {
+    let cleaned: String = user_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        .take(64)
+        .collect();
+    if cleaned.is_empty() {
+        "default".into()
+    } else {
+        cleaned
+    }
+}
+
+/// GET /api/browser/settings — the shield toggle + where downloads land.
+fn settings_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let os_home = shiny_plugin_sdk::os_home_from_request(&req);
+            let current = settings::get(&ctx, &uid);
+            let dir = downloads_dir(&uid, os_home.as_deref());
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            Ok(ok(json!({
+                "adblock": current.adblock,
+                "incognito": current.incognito,
+                "downloads_dir": dir.to_string_lossy(),
+                "rules": filter::rules(),
+            })))
+        }
+    })
+}
+
+/// POST /api/browser/settings — update the shield toggle / incognito flag.
+fn settings_set(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<SettingsBody>(req).await?;
+            let next = settings::set(&ctx, &uid, body.adblock, body.incognito);
+            Ok(ok(json!({ "adblock": next.adblock, "incognito": next.incognito })))
+        }
+    })
+}
+
+/// GET /api/browser/downloads — persisted download history.
+fn downloads_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let limit = query_limit(&req).unwrap_or(50);
+            Ok(ok(json!({ "downloads": downloads::list(&ctx, &uid, limit) })))
+        }
+    })
+}
+
+/// POST /api/browser/downloads/event — record one shell download event.
+fn download_event(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let item = take_json::<Value>(req).await?;
+            downloads::upsert(&ctx, &uid, &item);
+            Ok(ok(json!({ "recorded": true })))
+        }
+    })
+}
+
+/// POST /api/browser/downloads/remove — drop one row.
+fn download_remove(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<SessionBody>(req).await?;
+            downloads::remove(&ctx, &uid, &body.id);
+            Ok(ok(json!({ "removed": true })))
+        }
+    })
+}
+
+/// POST /api/browser/downloads/clear — drop completed/cancelled rows.
+fn downloads_clear(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            downloads::clear_finished(&ctx, &uid);
+            Ok(ok(json!({ "cleared": true })))
+        }
+    })
+}
+
+/// GET /api/browser/filter — filter status for the window's shield.
+fn filter_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let current = settings::get(&ctx, &uid);
+            Ok(ok(json!({ "enabled": current.adblock, "rules": filter::rules() })))
+        }
+    })
+}
+
+/// POST /api/browser/filter/refresh — re-download + recompile the lists.
+fn filter_refresh(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            user_id(&req)?;
+            let rules = filter::reload(&ctx).await;
+            Ok(ok(json!({ "rules": rules })))
+        }
     })
 }
 

@@ -6,7 +6,8 @@
 # Installs:
 #   lightdm + lightdm-gtk-greeter            (apt)
 #   /usr/share/themes/Shiny/gtk-3.0/gtk.css  (Noir palette)
-#   /usr/share/shiny/greeter/background.png  (rendered from greeter/background.svg)
+#   /usr/share/shiny/greeter/background.png  (greeter/background.png, committed)
+#   /usr/share/shiny/greeter/default-user.png (greeter/default-user.png, committed)
 #   /usr/local/bin/shiny-xserver             (waits for the display GPU, see below)
 #   /etc/lightdm/lightdm.conf.d/50-shiny.conf
 #   /etc/lightdm/lightdm-gtk-greeter.conf
@@ -75,17 +76,43 @@ install -d -m 0755 "$THEME_DIR/gtk-3.0"
 install -m 0644 "$REPO_DIR/greeter/gtk-3.0/gtk.css" "$THEME_DIR/gtk-3.0/gtk.css"
 install -m 0644 "$REPO_DIR/greeter/index.theme" "$THEME_DIR/index.theme"
 
-# ── 3. Background (render the SVG to PNG; fall back to the SVG) ─────────────
+# ── 3. Artwork — background + default avatar ────────────────────────────────
+# The bitmaps ship pre-rendered in greeter/ (committed PNGs). ImageMagick's
+# built-in SVG renderer cannot handle these files: it drops gradients, <use>
+# references and filters — the old background rendered as a black frame with a
+# single stray bar. Prefer the committed PNG, then librsvg through
+# scripts/render-greeter-assets.py, then ImageMagick as a last resort.
 install -d -m 0755 "$GREETER_ASSETS"
 BACKGROUND="$GREETER_ASSETS/background.png"
-if command -v convert >/dev/null 2>&1 && \
-   convert -background none "$REPO_DIR/greeter/background.svg" \
-           -resize 1920x1080 "$BACKGROUND" 2>/dev/null; then
-    echo "  rendered $BACKGROUND"
+AVATAR="$GREETER_ASSETS/default-user.png"
+
+if [ -f "$REPO_DIR/greeter/background.png" ]; then
+    install -m 0644 "$REPO_DIR/greeter/background.png" "$BACKGROUND"
+    echo "  installed $BACKGROUND"
+elif command -v python3 >/dev/null 2>&1 && \
+     python3 "$REPO_DIR/scripts/render-greeter-assets.py" >/dev/null 2>&1 && \
+     [ -f "$REPO_DIR/greeter/background.png" ]; then
+    install -m 0644 "$REPO_DIR/greeter/background.png" "$BACKGROUND"
+    echo "  rendered $BACKGROUND (librsvg)"
+elif command -v convert >/dev/null 2>&1 && \
+     convert -background none "$REPO_DIR/greeter/background.svg" \
+             -resize 1920x1080 "$BACKGROUND" 2>/dev/null; then
+    echo "  rendered $BACKGROUND (ImageMagick — artwork simplified)"
 else
     install -m 0644 "$REPO_DIR/greeter/background.svg" "$GREETER_ASSETS/background.svg"
     BACKGROUND="$GREETER_ASSETS/background.svg"
     echo "  using $BACKGROUND (no PNG renderer)"
+fi
+
+# Default user image, shown until the account has an avatar of its own.
+if [ -f "$REPO_DIR/greeter/default-user.png" ]; then
+    install -m 0644 "$REPO_DIR/greeter/default-user.png" "$AVATAR"
+    echo "  installed $AVATAR"
+elif command -v python3 >/dev/null 2>&1 && \
+     python3 "$REPO_DIR/scripts/render-greeter-assets.py" >/dev/null 2>&1 && \
+     [ -f "$REPO_DIR/greeter/default-user.png" ]; then
+    install -m 0644 "$REPO_DIR/greeter/default-user.png" "$AVATAR"
+    echo "  rendered $AVATAR (librsvg)"
 fi
 
 # ── 4. X server wrapper ─────────────────────────────────────────────────────
@@ -116,13 +143,15 @@ cat > "$GREETER_CONF" <<EOF
 theme-name=Shiny
 icon-theme-name=Adwaita
 background=$BACKGROUND
+default-user-image=$AVATAR
 font-name=Cantarell 11
 xft-antialias=true
 xft-dpi=96
 xft-hintstyle=hintslight
 xft-rgba=rgb
 clock-format=%H:%M
-indicators=~host;~spacer;~clock;~spacer;~session;~power
+# No `indicators` line on purpose: the theme is built for the greeter's
+# default panel (host, clock, session, power).
 EOF
 
 # ── 6. Enable + start the display manager ───────────────────────────────────

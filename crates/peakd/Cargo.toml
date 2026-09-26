@@ -10,6 +10,10 @@ publish = false
 [dependencies]
 serde_json = "1"
 parking_lot = "0.12"
+# The light ad-blocking engine (adblock-rust only — no BoringSSL/tokio). The
+# server compiles the lists into the shared cache; the shell restores it and
+# the Qt request interceptor consults it per request.
+shiny-filter-core = { path = "../shiny-filter-core" }
 # evdev decoding for the three-finger gestures (gestures.rs): raw input_event
 # structs plus one ioctl for the axis ranges.
 libc = "0.2"

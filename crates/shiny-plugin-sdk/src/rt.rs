@@ -64,6 +64,25 @@ fn plugin_tx() -> &'static mpsc::UnboundedSender<Job> {
     })
 }
 
+/// Queue `fut` on the plugin-owned runtime and return immediately.
+///
+/// Use this from lifecycle hooks (`on_load`) and any other code the host
+/// invokes directly: those run on the *host's* executor, so the plugin's own
+/// reactor is not installed on the calling thread and a bare `tokio::spawn`
+/// panics with *"there is no reactor running"* — and, unwinding across the
+/// `dlopen` boundary, aborts the whole process. The job is serviced by the
+/// same serial worker as [`bridge`], and a panicking job is logged without
+/// wedging later jobs.
+pub fn spawn<F>(fut: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    let job: Job = Box::pin(fut);
+    if plugin_tx().send(job).is_err() {
+        tracing::error!("plugin runtime is unavailable; background job dropped");
+    }
+}
+
 /// Run `fut` on the plugin-owned, single-threaded runtime; the returned future
 /// may be awaited from any executor (no Tokio context required on the caller
 /// side). Returns `Err` — never panics or hangs — when the job panics or the

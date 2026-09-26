@@ -1,0 +1,18 @@
+[package]
+name = "shiny-filter-core"
+version = "0.1.0"
+edition = "2021"
+description = "The light adblock-rust engine shared by the shiny server and the peakd kiosk shell (no HTTP client, no runtime)"
+
+[dependencies]
+# Brave's native adblock-rust engine (MPL-2.0). `single-thread` is off so the
+# engine stays `Send + Sync` (see the note in shiny-filter/Cargo.toml).
+adblock = { version = "0.13", default-features = false, features = [
+    "embedded-domain-resolver",
+    "full-regex-handling",
+    "resource-assembler",
+] }
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"

@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/shiny-plugin-sdk", "crates/shiny-filter", "crates/peakd", "crates/peakd-mac", "crates/shiny-auth", "crates/shiny-iroh-client", "crates/shiny-iroh-proto", "crates/shiny-server-mode", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail", "plugins/calendar", "plugins/calculator", "plugins/image", "plugins/studio", "plugins/pdf", "plugins/browser", "plugins/files", "plugins/terminal"]
+members = [".", "crates/shiny-plugin-sdk", "crates/shiny-filter", "crates/shiny-filter-core", "crates/peakd", "crates/peakd-mac", "crates/shiny-auth", "crates/shiny-iroh-client", "crates/shiny-iroh-proto", "crates/shiny-server-mode", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail", "plugins/calendar", "plugins/calculator", "plugins/image", "plugins/studio", "plugins/pdf", "plugins/browser", "plugins/files", "plugins/terminal"]
 resolver = "2"
 
 # Vendored libsqlite3-sys, patched to link the SYSTEM SQLite (one shared
