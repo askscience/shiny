@@ -714,7 +714,7 @@ function buildVoice() {
   let qwenPoll = null;
 
   /**
-   * The voice picker is engine-specific: Supertonic's M*/F* voices and the
+   * The voice picker is engine-specific: Supertonic's M* / F* voices and the
    * Qwen3-TTS CustomVoice speakers share no names, so the options and the
    * chosen value are re-resolved whenever the engine changes.
    */
