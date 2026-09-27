@@ -36,6 +36,31 @@ if [ ! -d "$SRC/.git" ]; then
   git clone --depth 1 --recurse-submodules --shallow-submodules "$REPO" "$SRC"
 fi
 
+# ── Local ggml fixes ────────────────────────────────────────────────────────
+# col2im_1d.comp stores through `DATA_A_BF16` (the *input* type flag) where it
+# needs `DATA_D_BF16` (the output type), so the F16 variant writes with the
+# wrong conversion. snake.comp, the reference for the same pattern, uses
+# DATA_D_BF16. Applied idempotently: the checkout is shallow and rebuilt on
+# demand, so the fix lives here rather than as a local edit that a fresh clone
+# would not have.
+COL2IM="$SRC/ggml/src/ggml-vulkan/vulkan-shaders/col2im_1d.comp"
+if [ -f "$COL2IM" ] && grep -A1 'void store_dst' "$COL2IM" | grep -q 'defined(DATA_A_BF16)'; then
+  log "patching col2im_1d.comp (DATA_A_BF16 -> DATA_D_BF16 in store_dst)"
+  python3 - "$COL2IM" <<'PY'
+import sys
+path = sys.argv[1]
+src = open(path).read()
+# Only the store path is wrong; the load path legitimately checks the input.
+old = """void store_dst(uint32_t idx, float v) {
+#if defined(DATA_A_BF16)"""
+new = """void store_dst(uint32_t idx, float v) {
+#if defined(DATA_D_BF16)"""
+if old not in src:
+    raise SystemExit("col2im_1d.comp: expected store_dst pattern not found")
+open(path, "w").write(src.replace(old, new, 1))
+PY
+fi
+
 # ── Backend detection ───────────────────────────────────────────────────────
 cmake_args=(
   -DGGML_CPU_ALL_VARIANTS=ON
