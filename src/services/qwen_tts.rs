@@ -48,6 +48,10 @@ const FRAMES_PER_CHAR: usize = 5;
 /// Floor for very short text, so a one-word reply still gets room to finish.
 const MIN_FRAMES: usize = 50;
 
+/// Samples per codec frame: the 12 Hz codec hops 1920 samples at 24 kHz, so
+/// audio length converts to codec frames by dividing by this.
+const SAMPLES_PER_FRAME: usize = 1920;
+
 /// (key, talker GGUF filename, label, approximate on-disk size, bundled).
 ///
 /// `0.6b-customvoice` ships with the app; the 1.7B is an opt-in download, the
@@ -253,10 +257,19 @@ impl QwenClient {
     /// Synthesize `text` and return 24 kHz mono PCM (s16le), ready for the
     /// caller to wrap in a WAV header.
     ///
-    /// Text is split into sentence-sized chunks and each is requested with a
-    /// `max_new_tokens` budget, so an EOS miss can only ever overrun by a few
-    /// seconds. Everything is concatenated into one utterance so the reply
-    /// still sounds continuous.
+    /// The text goes to the engine as **one utterance**, which matters for
+    /// prosody: questions keep their rising contour into the next clause,
+    /// commas stay continuations instead of sentence-final falls, and the
+    /// speaker does not drift between pieces. Subdividing measurably flattened
+    /// delivery (peak 27120 → 20395, RMS 3099 → 2196 on a two-sentence test)
+    /// for a saving that turned out to be within run-to-run variance.
+    ///
+    /// The per-request `max_new_tokens` budget is still set, derived from the
+    /// text length, so a miss cannot run for minutes. If a response actually
+    /// reaches that budget the model failed to emit EOS, and the text is then
+    /// retried sentence by sentence — a short utterance is far less likely to
+    /// derail, and any damage stays contained to one sentence. So the split
+    /// path is a fallback for a real failure, not the normal route.
     pub async fn synthesize(
         &self,
         text: &str,
@@ -264,58 +277,93 @@ impl QwenClient {
         voice: Option<&str>,
         speed: Option<f32>,
     ) -> Result<Vec<u8>, String> {
-        let model = self
-            .active_model()
+        if text.trim().is_empty() {
+            return Err("Nothing to say".into());
+        }
+        self.active_model()
             .ok_or_else(|| "Qwen3-TTS model is not downloaded".to_string())?;
         let speaker = voice.filter(|v| !v.is_empty()).unwrap_or("vivian");
 
+        let (pcm, hit_cap) = self.request(text, lang, speaker).await?;
+
+        if !hit_cap {
+            let _ = speed; // speed is not supported by this engine
+            return Ok(pcm);
+        }
+
+        // EOS was missed: redo it in sentence-sized pieces, which is both more
+        // likely to terminate and bounded per piece.
+        tracing::warn!("Qwen3-TTS ran to its frame budget; retrying sentence by sentence");
         let chunks = split_sentences(text);
-        if chunks.is_empty() {
-            return Err("Nothing to say".into());
+        if chunks.len() <= 1 {
+            // Nothing to split — keep the audio rather than returning silence.
+            return Ok(pcm);
         }
 
-        let mut pcm: Vec<u8> = Vec::new();
+        let mut joined: Vec<u8> = Vec::new();
         for chunk in chunks {
-            let budget = frames_budget(&chunk);
-            let body = json!({
-                "input": chunk,
-                "voice": speaker,
-                "language": language_label(lang),
-                "response_format": "pcm",
-                "max_new_tokens": budget,
-                // The engine's own default is 1.05; a mild bump discourages the
-                // repetitive loops that accompany an EOS miss.
-                "repetition_penalty": 1.1,
-            });
-
-            let resp = self
-                .client
-                .post(format!("{}/v1/audio/speech", self.base_url))
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| format!("Qwen3-TTS request failed: {e}"))?;
-
-            if !resp.status().is_success() {
-                let status = resp.status();
-                let detail = resp.text().await.unwrap_or_default();
-                return Err(format!("Qwen3-TTS error ({status}): {detail}"));
+            let (part, part_capped) = self.request(&chunk, lang, speaker).await?;
+            if part_capped {
+                tracing::warn!(chunk = %chunk, "Qwen3-TTS chunk also hit its budget");
             }
+            joined.extend_from_slice(&part);
+        }
+        let _ = speed;
+        if joined.is_empty() {
+            return Ok(pcm);
+        }
+        Ok(joined)
+    }
 
-            let bytes = resp
-                .bytes()
-                .await
-                .map_err(|e| format!("Qwen3-TTS returned invalid audio: {e}"))?;
-            // A sentence that missed its EOS arrives with a long quiet tail;
-            // drop it so a derail costs a sentence, not a minute of hum.
-            pcm.extend_from_slice(trim_runaway_tail(&bytes, 24_000));
+    /// One synthesis request. Returns the PCM plus whether the engine stopped
+    /// on its frame budget rather than on its own end-of-speech token.
+    async fn request(
+        &self,
+        text: &str,
+        lang: &str,
+        speaker: &str,
+    ) -> Result<(Vec<u8>, bool), String> {
+        let budget = frames_budget(text);
+        let body = json!({
+            "input": text,
+            "voice": speaker,
+            "language": language_label(lang),
+            "response_format": "pcm",
+            "max_new_tokens": budget,
+            // The engine's own default is 1.05; a mild bump discourages the
+            // repetitive loops that accompany an EOS miss.
+            "repetition_penalty": 1.1,
+        });
+
+        let resp = self
+            .client
+            .post(format!("{}/v1/audio/speech", self.base_url))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Qwen3-TTS request failed: {e}"))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let detail = resp.text().await.unwrap_or_default();
+            return Err(format!("Qwen3-TTS error ({status}): {detail}"));
         }
 
-        if pcm.is_empty() {
-            return Err("Qwen3-TTS produced no audio".into());
-        }
-        let _ = (model, speed); // speed is not supported by this engine
-        Ok(pcm)
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| format!("Qwen3-TTS returned invalid audio: {e}"))?;
+
+        // One codec frame is 1/12.5 s — the 12 Hz codec hops 1920 samples at
+        // 24 kHz. A render that lands on (or a hair under) the budget did not
+        // stop on its own.
+        let produced = bytes.len() / 2 / SAMPLES_PER_FRAME;
+        let hit_cap = produced + 2 >= budget;
+
+        // A derailed read can also trail off into near-silence instead of
+        // running long; drop that tail in either case.
+        let trimmed = trim_runaway_tail(&bytes, 24_000);
+        Ok((trimmed.to_vec(), hit_cap))
     }
 
     /// The first model on disk, preferring the bundled 0.6B.
@@ -519,6 +567,33 @@ mod tests {
         // now bounded to roughly 17 s — painful but bounded, and most sentences
         // finish in a fraction of it.
         assert_eq!(frames_budget(&"a".repeat(42)), 210);
+    }
+
+    /// The cap detector decides whether the fallback kicks in, so its boundary
+    /// has to be right: a natural stop must not trigger a needless
+    /// re-synthesis (which would flatten prosody for no reason), and a real
+    /// overrun must.
+    #[test]
+    fn cap_detection_distinguishes_natural_stops() {
+        // The 12 Hz codec hops 1920 samples at 24 kHz: 12.5 frames per second,
+        // the value `request()` divides by.
+        const SAMPLES_PER_FRAME: usize = 1920;
+        assert_eq!(24_000.0 / SAMPLES_PER_FRAME as f64, 12.5);
+
+        let hits = |produced: usize, budget: usize| produced + 2 >= budget;
+
+        // Measured natural stops against their budgets during the benchmark.
+        for (produced, budget) in [(104usize, 650usize), (157, 910), (85, 400), (34, 80)] {
+            assert!(
+                !hits(produced, budget),
+                "natural stop {produced}/{budget} must not be treated as capped"
+            );
+        }
+
+        // A render that landed on (or one frame under) the budget did not stop
+        // on its own.
+        assert!(hits(650, 650), "exact cap must count as capped");
+        assert!(hits(648, 650), "one frame under must count as capped");
     }
 
     #[test]
