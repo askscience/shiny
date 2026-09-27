@@ -26,7 +26,7 @@
 .ui-icon svg { width: 100%; height: 100%; display: block; }
 .ui-icon--missing { border-radius: 50%; }
 
-/* App brand icon — the PEAK'D! skull mark (/favicon.svg) painted as a mask,
+/* App brand icon — the PEAK'D! mark (/favicon.svg) painted as a mask,
    so it inherits the surrounding text colour and needs no background plate.
    Size it from the outside; the default is one line tall. */
 .app-icon {

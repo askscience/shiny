@@ -31,6 +31,13 @@ xset s off     >/dev/null 2>&1 || true
 xset s noblank >/dev/null 2>&1 || true
 xset -dpms     >/dev/null 2>&1 || true
 
+# On a T2 MacBook, make sure the speaker DSP is installed. It is system-wide
+# and its files survive reboots, so this is only a safety net after a fresh
+# install; the script is a no-op everywhere else and when already applied.
+if [ -x /usr/local/bin/install-t2-audio-dsp.sh ]; then
+    /usr/local/bin/install-t2-audio-dsp.sh >/dev/null 2>&1 || true
+fi
+
 # matchbox maximises the single window and adds no chrome.
 matchbox-window-manager -use_titlebar no &
 

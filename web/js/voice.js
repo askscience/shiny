@@ -3,7 +3,7 @@ import { cleanTranscript } from './transcriptGuard.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
 import {
   getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout,
-  getSttEngine, getWhisperModel,
+  getSttEngine, getWhisperModel, getTtsEngine,
 } from './preferences.js';
 
 /* Wake mode: the long-press arms the wake listener and it stays armed until
@@ -908,13 +908,19 @@ export async function speak(text, lang) {
   document.body.classList.add('orb-speaking');
 
   const voiceLang = lang || getVoiceLang();
+  const engine = getTtsEngine();
   try {
     const blob = await apiFetch('/api/tts', {
       method: 'POST',
       body: JSON.stringify({
         text,
         lang: voiceLang,
-        voice: getTtsVoice() || 'M1',
+        engine,
+        // Each engine has its own voice set: Supertonic uses M1…F5, Qwen3-TTS
+        // the nine CustomVoice speakers. The stored value is whichever the
+        // user picked; the server falls back to its own default when it does
+        // not apply to the engine in use.
+        voice: getTtsVoice() || (engine === 'qwen' ? 'vivian' : 'M1'),
         speed: getTtsSpeed(),
       }),
       responseType: 'blob',

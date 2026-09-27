@@ -171,6 +171,8 @@ impl Tool for ImageEdit {
             &image_id,
             req.params.param_str("layer_id").as_deref(),
         )?;
+        let doc = layers::load_doc(&db, req.traveler_id, &image_id)?;
+        let mask = layers::local_selection(&doc, &target);
 
         let (new_raw, nw, nh) = ops::apply_raw(
             &target.bytes,
@@ -180,6 +182,7 @@ impl Tool for ImageEdit {
             target.w,
             target.h,
             &operations,
+            mask.as_deref(),
         )?;
         layers::set_layer_pixels(
             &db,

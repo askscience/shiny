@@ -55,6 +55,8 @@ if [ "${1:-}" = "--uninstall" ]; then
     systemctl enable shiny.service peakd.service 2>/dev/null || true
     systemctl start shiny.service 2>/dev/null || true
     echo "Done. Reboot (or start peakd.service) to return to the single-user kiosk."
+    echo "The T2 speaker DSP is left installed; remove it with:"
+    echo "  sudo $T2_INSTALLER --uninstall"
     exit 0
 fi
 
@@ -100,6 +102,10 @@ Environment=ADFILTER_DIR=%h/.local/share/shiny/adfilter
 Environment=WEB_DIR=$SHINY_REPO/web
 Environment=VOSK_MODELS_DIR=$SHINY_REPO/data/vosk-models
 Environment=WHISPER_MODELS_DIR=$SHINY_REPO/data/whisper-models
+# TTS: the server auto-starts the Supertonic sidecar (voice/start_supertonic.sh)
+# and, when the package is missing, provisions .venv-supertonic on first run.
+# Set SUPERTONIC_AUTO_INSTALL=0 to require a manual ./voice/start_supertonic.sh --install.
+Environment=SUPERTONIC_AUTO_INSTALL=true
 Environment=SHINY_LINUX_USERS=true
 Environment=SHINY_HOME_MODE=real
 Environment=SHINY_AUTH_ENABLED=true
@@ -132,6 +138,7 @@ if [ ! -x "$PEAKD_BIN" ]; then
     fi
 fi
 sed -e "s|@PORT_BASE@|$PORT_BASE|g" \
+    -e "s|@SHINY_REPO@|$SHINY_REPO|g" \
     -e "s|@PEAKD_BIN@|$PEAKD_BIN|g" \
     -e "s|@SERVER_MODE_BIN@|$SERVER_MODE_BIN|g" \
     "$SHINY_REPO/scripts/shiny-session" > "$SESSION_BIN"
@@ -146,7 +153,38 @@ if [ ! -f "$USER_DB" ] && [ -f "$SHARED_DB" ]; then
     sudo -u "$SHINY_USER" -H sh -c "mkdir -p '$USER_HOME/.local/share/shiny' && cp '$SHARED_DB' '$USER_DB'"
 fi
 
-# ── 4. Hand the seat to the display manager ─────────────────────────────────
+# ── 4. T2 MacBook audio ─────────────────────────────────────────────────────
+# `apple-t2-audio-config` gives the ALSA UCM profiles; on the 6-speaker 16"
+# MacBook Pro the measured FIR/EQ graph is what actually makes those speakers
+# sound right, and it has to be installed system-wide (it is shared, not
+# per-user). The script itself does nothing on any other model.
+T2_INSTALLER=/usr/local/bin/install-t2-audio-dsp.sh
+if [ -f "$SHINY_REPO/scripts/install-t2-audio-dsp.sh" ]; then
+    install -m 0755 "$SHINY_REPO/scripts/install-t2-audio-dsp.sh" "$T2_INSTALLER"
+    "$T2_INSTALLER" || \
+        echo "note: T2 speaker DSP not installed (see above); continuing."
+fi
+
+# The t2bce_audio driver pins the ALSA period to one frame, which makes the
+# speakers drop out intermittently. The DKMS module fixes the constraint; it is
+# model/ABI-gated and falls back to the stock module, so it is safe to attempt.
+T2_PERIOD_INSTALLER=/usr/local/bin/install-t2-audio-period-fix.sh
+if [ -f "$SHINY_REPO/scripts/install-t2-audio-period-fix.sh" ]; then
+    install -m 0755 "$SHINY_REPO/scripts/install-t2-audio-period-fix.sh" "$T2_PERIOD_INSTALLER"
+    "$T2_PERIOD_INSTALLER" || \
+        echo "note: T2 audio period fix not installed (see above); continuing."
+fi
+
+# Bluetooth audio on a T2 Mac cuts out while the link stays up; the A2DP socket
+# buffer is too small for plain SBC, so prefer SBC-XQ. User-level WirePlumber.
+T2_BT_INSTALLER=/usr/local/bin/install-t2-bluetooth-fix.sh
+if [ -f "$SHINY_REPO/scripts/install-t2-bluetooth-fix.sh" ]; then
+    install -m 0755 "$SHINY_REPO/scripts/install-t2-bluetooth-fix.sh" "$T2_BT_INSTALLER"
+    "$T2_BT_INSTALLER" || \
+        echo "note: T2 Bluetooth audio fix not installed (see above); continuing."
+fi
+
+# ── 5. Hand the seat to the display manager ─────────────────────────────────
 systemctl disable --now shiny.service 2>/dev/null || true
 systemctl disable --now peakd.service 2>/dev/null || true
 systemctl daemon-reload

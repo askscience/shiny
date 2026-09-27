@@ -1,7 +1,7 @@
 /**
  * bootScreen — the startup splash.
  *
- * index.html paints `#boot-screen` (the skull mark with an accent glitch)
+ * index.html paints `#boot-screen` (the PEAK'D! mark with an accent glitch)
  * before any module runs. This module is the single place that takes it away,
  * so every path that commits to a screen — the app shell or the sign-in
  * overlay — leaves the splash behind. Idempotent, so callers never have to

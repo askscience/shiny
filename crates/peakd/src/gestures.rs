@@ -29,6 +29,17 @@
 //! separately, so a palm, thumb or ghost slot resting on the pad during a
 //! two-finger scroll neither counts towards the finger total nor drags the
 //! average with the scrolling fingers.
+//!
+//! `MT_TOOL_PALM` is not enough on its own, though: many pads never report
+//! it. Apple's `bcm5974` trackpads (the T2 MacBook this kiosk runs on) do not
+//! even advertise `ABS_MT_TOOL_TYPE`, so a resting thumb arrives as an
+//! ordinary third contact. When that thumb rides along with the hand during a
+//! two-finger scroll it travels past the movement epsilon, the centre moves
+//! far enough, and the scroll is misread as a three-finger swipe (which is
+//! what popped the window overview). Those pads *do* report contact size,
+//! though, and a thumb or palm covers far more of the pad than a fingertip,
+//! so the largest contact is dropped when it dwarfs the next one. Pads that
+//! report neither size nor pressure keep the old behaviour.
 
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -50,6 +61,16 @@ const SWIPE_MAX_MS: u128 = 900;
 /// Movement below this is hand jitter while the fingers rest; the origin and
 /// the clock keep resetting until the fingers really move.
 const MOVE_EPSILON: i64 = 8;
+/// A live contact this many times larger than the next-largest live contact is
+/// a thumb or palm, not a gesture finger. This is the portable half of palm
+/// detection: pads that report `MT_TOOL_PALM` say so directly, but `bcm5974`
+/// (Apple trackpads) does not, while still reporting `ABS_MT_TOUCH_MAJOR`.
+/// The ratio is deliberately generous so a fingertip pressed a little harder
+/// is never mistaken for a thumb; a real thumb or palm is far larger.
+const THUMB_SIZE_RATIO: f64 = 1.7;
+/// ... and it must be at least this much larger in absolute units too, so a
+/// pad whose contact sizes only wobble is never misread.
+const THUMB_SIZE_MIN_DELTA: i32 = 8;
 
 /// A recognised swipe direction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -222,10 +243,12 @@ const SYN_DROPPED: u16 = 0x03;
 const ABS_X: u16 = 0x00;
 const ABS_Y: u16 = 0x01;
 const ABS_MT_SLOT: u16 = 0x2f;
+const ABS_MT_TOUCH_MAJOR: u16 = 0x30;
 const ABS_MT_POSITION_X: u16 = 0x35;
 const ABS_MT_POSITION_Y: u16 = 0x36;
 const ABS_MT_TOOL_TYPE: u16 = 0x37;
 const ABS_MT_TRACKING_ID: u16 = 0x39;
+const ABS_MT_PRESSURE: u16 = 0x3a;
 
 /// `MT_TOOL_PALM` (linux/input.h): a palm/thumb contact the kernel reports as a
 /// slot but which is not a finger for gesture purposes.
@@ -245,9 +268,27 @@ struct Slot {
     id: i32,
     x: i32,
     y: i32,
-    /// `ABS_MT_TOOL_TYPE == MT_TOOL_PALM`: a palm/thumb resting on the pad. It
-    /// carries a slot but must never count towards a three-finger swipe.
+    /// `ABS_MT_TOOL_TYPE == MT_TOOL_PALM`: a palm/thumb the kernel itself
+    /// labelled. It carries a slot but must never count towards a swipe.
     palm: bool,
+    /// `ABS_MT_TOUCH_MAJOR`: how much of the pad this contact covers. 0 when
+    /// the pad does not report a size axis.
+    touch: i32,
+    /// `ABS_MT_PRESSURE`: the same idea for a pad that reports pressure
+    /// instead of (or as well as) contact size. 0 when unreported.
+    pressure: i32,
+    /// Recomputed every frame: this contact dwarfs every other live one, so it
+    /// is a thumb/palm even though the kernel did not label it. `bcm5974`
+    /// never sends `MT_TOOL_PALM`, so size is the only signal there.
+    big: bool,
+}
+
+impl Slot {
+    /// A contact that may take part in a swipe: live, and neither a kernel
+    /// palm nor a size outlier.
+    fn is_finger(&self) -> bool {
+        self.id >= 0 && !self.palm && !self.big
+    }
 }
 
 /// One in-flight three-finger contact.
@@ -277,11 +318,12 @@ impl Swipe {
         }
     }
 
-    /// The origin of every live finger, `None` for inactive or palm slots.
+    /// The origin of every live finger, `None` for inactive, palm or thumb
+    /// slots.
     fn origins(slots: &[Slot]) -> Vec<Option<(i64, i64)>> {
         slots
             .iter()
-            .map(|s| (s.id >= 0 && !s.palm).then_some((s.x as i64, s.y as i64)))
+            .map(|s| s.is_finger().then_some((s.x as i64, s.y as i64)))
             .collect()
     }
 
@@ -301,7 +343,7 @@ impl Swipe {
         }
         let mut moving = 0;
         for (i, slot) in slots.iter().enumerate() {
-            if slot.id < 0 || slot.palm {
+            if !slot.is_finger() {
                 self.anchors[i] = None;
                 continue;
             }
@@ -322,13 +364,13 @@ impl Swipe {
     }
 
     /// Contacts that have travelled in `dir` by at least the jitter epsilon.
-    /// A palm/thumb, or a finger that only wobbled, does not qualify.
+    /// A palm, thumb or a finger that only wobbled does not qualify.
     fn aligned(&self, slots: &[Slot], dir: Direction) -> usize {
         slots
             .iter()
             .enumerate()
             .filter(|(i, slot)| {
-                if slot.id < 0 || slot.palm {
+                if !slot.is_finger() {
                     return false;
                 }
                 let Some((x0, y0)) = self.anchors.get(*i).copied().flatten() else {
@@ -390,17 +432,74 @@ impl Reader {
 
     fn slot(&mut self, index: usize) -> &mut Slot {
         if index >= self.slots.len() {
-            self.slots
-                .resize(index + 1, Slot { id: -1, x: 0, y: 0, palm: false });
+            self.slots.resize(
+                index + 1,
+                Slot {
+                    id: -1,
+                    x: 0,
+                    y: 0,
+                    palm: false,
+                    touch: 0,
+                    pressure: 0,
+                    big: false,
+                },
+            );
         }
         &mut self.slots[index]
     }
 
+    /// Mark the one live contact that dwarfs the rest as a thumb/palm.
+    ///
+    /// The kernel only labels a contact `MT_TOOL_PALM` when the pad supports
+    /// `ABS_MT_TOOL_TYPE`; Apple's `bcm5974` does not, so a resting thumb
+    /// arrives looking like any other finger. It is not: a thumb or palm
+    /// covers far more of the pad than a fingertip. Dropping the single
+    /// largest contact when it is at least [`THUMB_SIZE_RATIO`] times the
+    /// next-largest (and clearly larger in absolute units) is what stops a
+    /// two-finger scroll with a thumb resting on the pad from reading as a
+    /// three-finger swipe.
+    ///
+    /// Pads that report neither `ABS_MT_TOUCH_MAJOR` nor `ABS_MT_PRESSURE`,
+    /// or whose contacts are all about the same size, classify nothing and
+    /// keep the previous behaviour.
+    fn classify_thumbs(&mut self) {
+        for slot in &mut self.slots {
+            slot.big = false;
+        }
+
+        // Compare like with like: use the size axis if the pad sends it this
+        // frame, else pressure, but never a mix of the two scales.
+        let use_touch = self
+            .slots
+            .iter()
+            .any(|s| s.id >= 0 && !s.palm && s.touch > 0);
+        let weight = |s: &Slot| if use_touch { s.touch } else { s.pressure };
+
+        let mut live: Vec<(usize, i32)> = self
+            .slots
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.id >= 0 && !s.palm && weight(s) > 0)
+            .map(|(i, s)| (i, weight(s)))
+            .collect();
+        if live.len() < 2 {
+            return;
+        }
+        live.sort_by_key(|&(_, w)| w);
+        let (biggest, big_w) = live[live.len() - 1];
+        let second_w = live[live.len() - 2].1;
+        if big_w - second_w >= THUMB_SIZE_MIN_DELTA
+            && big_w as f64 >= second_w as f64 * THUMB_SIZE_RATIO
+        {
+            self.slots[biggest].big = true;
+        }
+    }
+
     fn finger_count(&self) -> usize {
-        // Palms carry a slot but are not fingers; skipping them here is what
-        // stops a hand resting on the pad during a two-finger scroll from
-        // reaching three.
-        let active = self.slots.iter().filter(|s| s.id >= 0 && !s.palm).count();
+        // Palms and size-outlier thumbs carry a slot but are not fingers;
+        // skipping them here is what stops a hand resting on the pad during a
+        // two-finger scroll from reaching three.
+        let active = self.slots.iter().filter(|s| s.is_finger()).count();
         let tools = if self.tool[4] {
             4
         } else if self.tool[3] {
@@ -421,7 +520,7 @@ impl Reader {
         let mut n = 0i64;
         let mut sx = 0i64;
         let mut sy = 0i64;
-        for s in self.slots.iter().filter(|s| s.id >= 0 && !s.palm) {
+        for s in self.slots.iter().filter(|s| s.is_finger()) {
             n += 1;
             sx += s.x as i64;
             sy += s.y as i64;
@@ -433,6 +532,11 @@ impl Reader {
     }
 
     fn on_frame(&mut self) {
+        // Re-classify palms/thumbs for this frame before counting fingers: a
+        // thumb that drifted onto the pad mid-scroll must not become the third
+        // finger that fires the gesture.
+        self.classify_thumbs();
+
         let count = self.finger_count();
         if count < 3 {
             // Gesture over (or never started): the next three-finger contact
@@ -534,6 +638,14 @@ impl Reader {
                     let index = self.current_slot;
                     self.slot(index).y = value;
                 }
+                ABS_MT_TOUCH_MAJOR => {
+                    let index = self.current_slot;
+                    self.slot(index).touch = value;
+                }
+                ABS_MT_PRESSURE => {
+                    let index = self.current_slot;
+                    self.slot(index).pressure = value;
+                }
                 ABS_MT_TOOL_TYPE => {
                     let index = self.current_slot;
                     self.slot(index).palm = value == MT_TOOL_PALM;
@@ -616,6 +728,35 @@ mod tests {
             reader.handle(EV_ABS, ABS_MT_TRACKING_ID, slot + 1);
             reader.handle(EV_ABS, ABS_MT_POSITION_X, *x);
             reader.handle(EV_ABS, ABS_MT_POSITION_Y, *y);
+        }
+        reader.handle(EV_SYN, SYN_REPORT, 0);
+    }
+
+    /// Like [`frame`], but each contact also reports its contact area, so the
+    /// size-based thumb/palm filter can be exercised (the Apple `bcm5974` pad
+    /// never reports `MT_TOOL_PALM`, only `ABS_MT_TOUCH_MAJOR`).
+    fn frame_sized(reader: &mut Reader, fingers: &[(i32, i32, i32)]) {
+        for (i, (x, y, size)) in fingers.iter().enumerate() {
+            let slot = i as i32;
+            reader.handle(EV_ABS, ABS_MT_SLOT, slot);
+            reader.handle(EV_ABS, ABS_MT_TRACKING_ID, slot + 1);
+            reader.handle(EV_ABS, ABS_MT_POSITION_X, *x);
+            reader.handle(EV_ABS, ABS_MT_POSITION_Y, *y);
+            reader.handle(EV_ABS, ABS_MT_TOUCH_MAJOR, *size);
+        }
+        reader.handle(EV_SYN, SYN_REPORT, 0);
+    }
+
+    /// Like [`frame_sized`], but contact area is reported as pressure on a pad
+    /// that has no size axis.
+    fn frame_pressured(reader: &mut Reader, fingers: &[(i32, i32, i32)]) {
+        for (i, (x, y, pressure)) in fingers.iter().enumerate() {
+            let slot = i as i32;
+            reader.handle(EV_ABS, ABS_MT_SLOT, slot);
+            reader.handle(EV_ABS, ABS_MT_TRACKING_ID, slot + 1);
+            reader.handle(EV_ABS, ABS_MT_POSITION_X, *x);
+            reader.handle(EV_ABS, ABS_MT_POSITION_Y, *y);
+            reader.handle(EV_ABS, ABS_MT_PRESSURE, *pressure);
         }
         reader.handle(EV_SYN, SYN_REPORT, 0);
     }
@@ -728,6 +869,61 @@ B: ABS=67f800001000003
         r.handle(EV_SYN, SYN_REPORT, 0);
         frame(&mut r, &[(400, 1000), (600, 1000)]);
         assert!(r.bridge.drain().is_empty());
+    }
+
+    #[test]
+    fn a_large_moving_thumb_does_not_make_a_scroll_a_swipe() {
+        // The reported bug: a two-finger scroll where the thumb rides along.
+        // The T2/bcm5974 pad never reports MT_TOOL_PALM, but it does report
+        // ABS_MT_TOUCH_MAJOR, and the thumb is far larger than the fingers.
+        // The kernel still counts it (BTN_TOOL_TRIPLETAP), so the finger total
+        // really is three — the size outlier is what has to stop the swipe.
+        let mut r = reader();
+        r.handle(EV_KEY, BTN_TOOL_TRIPLETAP, 1);
+        frame_sized(&mut r, &[(1000, 1000, 20), (1200, 1000, 22), (800, 1000, 80)]);
+        frame_sized(&mut r, &[(400, 1000, 20), (600, 1000, 22), (200, 1000, 81)]);
+        assert!(r.bridge.drain().is_empty());
+    }
+
+    #[test]
+    fn a_moving_thumb_is_ignored_by_pressure_too() {
+        // A pad with no size axis but an ABS_MT_PRESSURE axis gets the same
+        // treatment.
+        let mut r = reader();
+        r.handle(EV_KEY, BTN_TOOL_TRIPLETAP, 1);
+        frame_pressured(&mut r, &[(1000, 1000, 20), (1200, 1000, 22), (800, 1000, 80)]);
+        frame_pressured(&mut r, &[(400, 1000, 20), (600, 1000, 22), (200, 1000, 81)]);
+        assert!(r.bridge.drain().is_empty());
+    }
+
+    #[test]
+    fn three_fingers_of_similar_size_still_swipe() {
+        // The filter must not eat a real three-finger swipe just because the
+        // pad reports sizes.
+        let mut r = reader();
+        frame_sized(&mut r, &[(1000, 1000, 20), (1200, 1000, 22), (800, 1000, 24)]);
+        frame_sized(&mut r, &[(700, 1000, 20), (900, 1000, 22), (500, 1000, 24)]);
+        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+    }
+
+    #[test]
+    fn three_large_but_equal_contacts_still_swipe() {
+        // A pad that reports big areas for every contact: only the outlier is
+        // dropped, never the whole hand.
+        let mut r = reader();
+        frame_sized(&mut r, &[(1000, 1000, 90), (1200, 1000, 92), (800, 1000, 94)]);
+        frame_sized(&mut r, &[(700, 1000, 90), (900, 1000, 92), (500, 1000, 94)]);
+        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+    }
+
+    #[test]
+    fn a_slightly_larger_finger_is_not_a_thumb() {
+        // A fingertip pressed a little harder than its neighbours must not be
+        // mistaken for a thumb and dropped.
+        let mut r = reader();
+        frame_sized(&mut r, &[(1000, 1000, 30), (1200, 1000, 22), (800, 1000, 24)]);
+        frame_sized(&mut r, &[(700, 1000, 30), (900, 1000, 22), (500, 1000, 24)]);
+        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
     }
 
     #[test]

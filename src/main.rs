@@ -14,6 +14,7 @@ use shiny::api::AppState;
 use shiny::config::Config;
 use shiny::db;
 use shiny::services::audio::AudioService;
+use shiny::services::bluetooth::BluetoothService;
 use shiny::services::diary_gen::DiaryGenerator;
 use shiny::services::display::DisplayService;
 use shiny::services::gpsd::GpsdService;
@@ -21,11 +22,13 @@ use shiny::services::keyboard_backlight::KeyboardBacklightService;
 use shiny::services::network::NetworkService;
 use shiny::services::ollama::OllamaClient;
 use shiny::services::osm::OsmService;
+use shiny::services::power::PowerService;
 use shiny::services::screen_brightness::ScreenBrightnessService;
 use shiny::services::supertonic::SupertonicClient;
 use shiny::services::touchbar::TouchBarService;
 use shiny::services::web_search::SearchService;
 use shiny::services::whisper::WhisperClient;
+use shiny::services::qwen_tts::QwenClient;
 
 /// Swappable router handle: implements `tower::Service<IncomingStream>` by
 /// delegating to the currently-loaded `Router`, so plugin installs/uninstalls
@@ -105,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all("data").ok();
 
     if config.auto_start_supertonic {
-        spawn_supertonic_sidecar(&config.supertonic_url);
+        spawn_supertonic_sidecar(&config);
     }
 
     // faster-whisper is the default speech engine, so try to bring its sidecar
@@ -113,6 +116,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and exits quietly when the package is not installed — Vosk still works.
     if config.auto_start_whisper {
         spawn_whisper_sidecar(&config);
+    }
+
+    // Qwen3-TTS is opt-in: the first start may build qwentts.cpp and fetch a
+    // ~600 MB model, which must never happen behind the user's back.
+    if config.auto_start_qwen_tts {
+        spawn_qwen_tts_sidecar(&config);
     }
 
     // Migrate on a throwaway connection first, then open the pool: a pooled
@@ -166,6 +175,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    let qwen_tts = QwenClient::new(
+        config.qwen_tts_url.clone(),
+        std::path::PathBuf::from(&config.qwen_tts_models_dir),
+    );
+    if qwen_tts.health().await.is_some() {
+        tracing::info!("Qwen3-TTS available at {}", config.qwen_tts_url);
+    } else if config.auto_start_qwen_tts {
+        tracing::warn!(
+            "Qwen3-TTS not answering yet at {}; it may still be starting.",
+            config.qwen_tts_url
+        );
+    } else {
+        tracing::info!(
+            "Qwen3-TTS not started (opt-in via Settings → Voice or AUTO_START_QWEN_TTS=true)."
+        );
+    }
+
     gpsd.start().await;
 
     // Host network panel (NetworkManager). Spawns and retries in the
@@ -178,6 +204,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // unchanged and the panel just reports `available: false`.
     let audio = AudioService::new();
     audio.start().await;
+
+    // Host Bluetooth panel (BlueZ over D-Bus). Same contract: the reader is
+    // backgrounded, so a machine without BlueZ or an adapter boots unchanged.
+    let bluetooth = BluetoothService::new();
+    bluetooth.start().await;
+
+    // Host power menu (reboot / power off / suspend) through freedesktop
+    // logind. Stateless: every action opens the system bus on demand, so a
+    // machine without logind simply reports `available: false`.
+    let power = PowerService::new();
 
     // Host interface scale (webview page zoom). Stateless: the choice lives in
     // a small file the kiosk shell reads, so there is nothing to start.
@@ -219,6 +255,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         gpsd,
         network,
         audio,
+        bluetooth,
+        power,
         display,
         touchbar,
         keyboard_backlight,
@@ -227,6 +265,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         agent_turns: Default::default(),
         supertonic,
         whisper,
+        qwen_tts,
         plugins: shiny::plugins::PluginManager::new(std::path::PathBuf::from(&config.plugins_dir), pool.clone()),
         iroh: shiny::services::iroh_remote::IrohRemote::new(),
         session,
@@ -346,22 +385,43 @@ fn reap_in_background(mut child: Child) {
     });
 }
 
-fn spawn_supertonic_sidecar(supertonic_url: &str) {
-    let port = supertonic_url
+/// Bring up the Supertonic TTS sidecar (`voice/start_supertonic.sh`).
+///
+/// Detached and non-blocking, mirroring [`spawn_whisper_sidecar`]: the script
+/// probes the port first, picks an interpreter that has `supertonic[serve]`
+/// (the app venv, then PATH), and selects the execution provider (Vulkan →
+/// CUDA → CPU via `voice/detect_accel.py`). `AUTO_START_SUPERTONIC` defaults
+/// on so TTS works out of the box; `SUPERTONIC_AUTO_INSTALL` lets the launcher
+/// provision the venv when the package is absent.
+fn spawn_supertonic_sidecar(config: &Config) {
+    let port = config
+        .supertonic_url
         .rsplit(':')
         .next()
         .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
         .unwrap_or(7788);
 
-    match Command::new("supertonic")
-        .args(["serve", "--host", "127.0.0.1", "--port", &port.to_string()])
+    let mut cmd = Command::new("bash");
+    cmd.arg("voice/start_supertonic.sh")
+        .env("SUPERTONIC_PORT", port.to_string());
+    if let Some(python) = &config.supertonic_python {
+        cmd.env("SUPERTONIC_PYTHON", python);
+    }
+    if config.auto_install_supertonic {
+        cmd.env("SUPERTONIC_AUTO_INSTALL", "1");
+    } else {
+        cmd.env("SUPERTONIC_AUTO_INSTALL", "0");
+    }
+
+    match cmd
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
     {
         Ok(child) => {
             reap_in_background(child);
-            tracing::info!("Started Supertonic sidecar on port {}", port)
+            tracing::info!("Starting Supertonic sidecar on port {}", port)
         }
         Err(e) => tracing::warn!("Could not auto-start Supertonic: {}", e),
     }
@@ -403,6 +463,38 @@ fn spawn_whisper_sidecar(config: &Config) {
             tracing::info!("Starting faster-whisper sidecar on port {}", port)
         }
         Err(e) => tracing::warn!("Could not auto-start faster-whisper: {}", e),
+    }
+}
+
+/// Bring up the Qwen3-TTS sidecar (`voice/start_qwen_tts.sh`).
+///
+/// Opt-in: the launcher builds `qwentts.cpp` on first use and downloads the
+/// GGUF weights, both of which are heavy. It is idempotent (the port is probed
+/// first) and picks Vulkan → CUDA → CPU via `voice/detect_accel.py`.
+fn spawn_qwen_tts_sidecar(config: &Config) {
+    let port = config
+        .qwen_tts_url
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
+        .unwrap_or(7787);
+
+    let mut cmd = Command::new("bash");
+    cmd.arg("voice/start_qwen_tts.sh")
+        .env("QWEN_TTS_PORT", port.to_string())
+        .env("QWEN_TTS_MODELS_DIR", &config.qwen_tts_models_dir);
+
+    match cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => {
+            reap_in_background(child);
+            tracing::info!("Starting Qwen3-TTS sidecar on port {}", port)
+        }
+        Err(e) => tracing::warn!("Could not auto-start Qwen3-TTS: {}", e),
     }
 }
 

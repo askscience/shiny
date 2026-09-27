@@ -28,7 +28,19 @@ pub struct Config {
     pub auto_install_whisper: bool,
     /// Explicit interpreter for the sidecar (must have faster-whisper).
     pub whisper_python: Option<String>,
+    /// Start the Supertonic TTS sidecar together with the server.
     pub auto_start_supertonic: bool,
+    /// Let the launcher build `.venv-supertonic` and pip-install the package
+    /// when no interpreter on the machine already provides it.
+    pub auto_install_supertonic: bool,
+    /// Explicit interpreter for the sidecar (must have supertonic[serve]).
+    pub supertonic_python: Option<String>,
+    /// URL of the Qwen3-TTS sidecar (qwentts.cpp `tts-server`).
+    pub qwen_tts_url: String,
+    /// Directory holding the Qwen3-TTS GGUF weights.
+    pub qwen_tts_models_dir: String,
+    /// Start the Qwen3-TTS sidecar together with the server.
+    pub auto_start_qwen_tts: bool,
     pub web_dir: String,
     /// Directory containing installed plugins.
     pub plugins_dir: String,
@@ -100,7 +112,30 @@ impl Config {
             whisper_python: env::var("WHISPER_PYTHON")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
+            // TTS is otherwise unavailable out of the box, so this defaults on:
+            // the launcher probes for an installed interpreter, and (unless
+            // disabled) provisions `.venv-supertonic` on first run.
             auto_start_supertonic: env::var("AUTO_START_SUPERTONIC")
+                .unwrap_or_else(|_| "true".into())
+                .parse()
+                .unwrap_or(true),
+            auto_install_supertonic: env::var("SUPERTONIC_AUTO_INSTALL")
+                .unwrap_or_else(|_| "true".into())
+                .parse()
+                .unwrap_or(true),
+            supertonic_python: env::var("SUPERTONIC_PYTHON")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
+            qwen_tts_url: env::var("QWEN_TTS_URL")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "http://127.0.0.1:7787".into()),
+            qwen_tts_models_dir: env::var("QWEN_TTS_MODELS_DIR")
+                .unwrap_or_else(|_| "data/qwen-tts-models".into()),
+            // Opt-in, unlike Supertonic: the first start may build qwentts.cpp
+            // (several minutes) and the 0.6B weights are a ~600 MB download.
+            // Settings offers both; nothing heavy happens behind the user's back.
+            auto_start_qwen_tts: env::var("AUTO_START_QWEN_TTS")
                 .unwrap_or_else(|_| "false".into())
                 .parse()
                 .unwrap_or(false),

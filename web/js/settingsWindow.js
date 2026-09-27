@@ -35,9 +35,11 @@ import {
   flushPreferencesNow,
   getDesktopSurface, setDesktopSurface,
   getImmersive, setImmersive,
+  getHudChips, setHudChips,
   getTtsVoice, setTtsVoice, getTtsSpeed, setTtsSpeed,
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
   getSttEngine, setSttEngine, getWhisperModel, setWhisperModel,
+  getTtsEngine, setTtsEngine, getQwenModel, setQwenModel,
   ORB_STYLES, getOrbStyle, setOrbStyle,
   getRemember, setRemember,
   getRemoteAllowTerminal, setRemoteAllowTerminal,
@@ -57,6 +59,15 @@ const NEUMORPHIC_LIGHT = 'neumorphic-light';
 const BASE_DARK = 'noir';
 const BASE_LIGHT = 'light';
 const WHISPER_MODEL_LABEL = { tiny: 'Tiny', small: 'Small' };
+const QWEN_MODEL_LABEL = {
+  '0.6b-customvoice': '0.6B CustomVoice',
+  '1.7b-customvoice': '1.7B CustomVoice',
+};
+/** Supertonic voices (M1…F5) vs Qwen3-TTS CustomVoice speakers. */
+const SUPERTONIC_VOICES = ['M1', 'M2', 'M3', 'M4', 'M5', 'F1', 'F2', 'F3', 'F4', 'F5'];
+const QWEN_SPEAKERS = [
+  'serena', 'vivian', 'uncle_fu', 'ryan', 'aiden', 'ono_anna', 'sohee', 'eric', 'dylan',
+];
 
 let tileEl = null;
 let cleanups = [];
@@ -623,21 +634,10 @@ function buildVoice() {
     whisperDownload.disabled = false;
   }
 
-  async function refreshWhisperStatus() {
-    try {
-      whisperStatus = await apiFetch(`/api/voice/status?lang=${encodeURIComponent(getVoiceLang())}`);
-    } catch (_) {
-      whisperStatus = null;
-    }
-    whisperStatusLoaded = true;
-    updateWhisperUI();
-    return whisperStatus;
-  }
-
   function pollWhisperDownload() {
     clearInterval(whisperPoll);
     whisperPoll = setInterval(async () => {
-      const status = await refreshWhisperStatus();
+      const status = await refreshVoiceStatus();
       const current = getWhisperModel();
       const state = status?.whisper_downloads?.[current]?.status;
       const present = status?.whisper_models?.[current]?.present === true;
@@ -669,9 +669,155 @@ function buildVoice() {
   const ttsVoice = select({
     options: [
       { value: '', label: 'Default (server)' },
-      ...['M1', 'M2', 'M3', 'M4', 'M5', 'F1', 'F2', 'F3', 'F4', 'F5'].map((v) => ({ value: v, label: v })),
+      ...SUPERTONIC_VOICES.map((v) => ({ value: v, label: v })),
     ],
-    onChange: (value) => setTtsVoice(value),
+    onChange: (value) => {
+      setTtsVoice(value);
+      ttsVoiceValue = value;
+    },
+  });
+
+  // ── Speech output engine ────────────────────────────────────
+  const ttsEngine = select({
+    options: [
+      { value: 'supertonic', label: 'Supertonic (default)' },
+      { value: 'qwen', label: 'Qwen3-TTS (experimental)' },
+    ],
+    onChange: (value) => {
+      setTtsEngine(value);
+      updateTtsUI();
+      if (value === 'qwen' && qwenStatus && qwenStatus.qwen !== 'ready') {
+        toast('Qwen3-TTS is not running — Supertonic will keep speaking', { type: 'info' });
+      }
+    },
+  });
+
+  const qwenModel = select({
+    options: [
+      { value: '0.6b-customvoice', label: '0.6B CustomVoice — recommended (~605 MB)' },
+      { value: '1.7b-customvoice', label: '1.7B CustomVoice — better (~1.2 GB)' },
+    ],
+    onChange: (value) => {
+      setQwenModel(value);
+      updateTtsUI();
+    },
+  });
+  const qwenHint = el('p', 'settings-hint');
+  const qwenDownload = button({ label: 'Download', variant: 'quiet', size: 'sm' });
+  qwenDownload.classList.add('hidden');
+  const qwenRow = el('div', 'whisper-model-row');
+  qwenRow.append(qwenHint, qwenDownload);
+  const qwenFields = el('div');
+  qwenFields.append(field('Qwen model', qwenModel), qwenRow);
+
+  let qwenStatus = null;
+  let qwenPoll = null;
+
+  /**
+   * The voice picker is engine-specific: Supertonic's M*/F* voices and the
+   * Qwen3-TTS CustomVoice speakers share no names, so the options and the
+   * chosen value are re-resolved whenever the engine changes.
+   */
+  function updateTtsUI() {
+    const engine = getTtsEngine();
+    ttsEngine.select.value = engine;
+    qwenFields.classList.toggle('hidden', engine !== 'qwen');
+
+    const voices = engine === 'qwen' ? QWEN_SPEAKERS : SUPERTONIC_VOICES;
+    const current = getTtsVoice();
+    ttsVoice.setOptions([
+      { value: '', label: 'Default (server)' },
+      ...voices.map((v) => ({ value: v, label: v })),
+    ]);
+    // Drop a stored voice that belongs to the other engine.
+    ttsVoice.select.value = voices.includes(current) ? current : '';
+    ttsVoiceValue = voices.includes(current) ? current : '';
+  }
+  let ttsVoiceValue = getTtsVoice();
+
+  function updateQwenUI() {
+    const current = getQwenModel();
+    qwenModel.select.value = current;
+    const info = qwenStatus?.qwen_models?.[current];
+    const download = qwenStatus?.qwen_downloads?.[current];
+    const label = QWEN_MODEL_LABEL[current] || current;
+
+    if (!qwenStatus) {
+      qwenHint.textContent = 'Checking the speech service…';
+      qwenDownload.classList.add('hidden');
+      return;
+    }
+    if (info?.present) {
+      qwenHint.textContent =
+        `${label} model ready${current === '0.6b-customvoice' ? ' (default)' : ''}`
+        + (qwenStatus.qwen === 'ready' ? '.' : ' — start the engine to use it.');
+      qwenDownload.classList.add('hidden');
+      return;
+    }
+    if (download?.status === 'downloading') {
+      const pct = download.total ? Math.round((download.bytes / download.total) * 100) : 0;
+      qwenHint.textContent = `Downloading the ${label} model… ${pct}%`;
+      qwenDownload.classList.add('hidden');
+      return;
+    }
+    if (download?.status === 'error') {
+      qwenHint.textContent = download.error || 'Download failed.';
+      qwenDownload.classList.remove('hidden');
+      qwenDownload.disabled = false;
+      return;
+    }
+    qwenHint.textContent =
+      `${label} model is not downloaded yet — download it to use Qwen3-TTS.`;
+    qwenDownload.classList.remove('hidden');
+    qwenDownload.disabled = false;
+  }
+
+  async function refreshVoiceStatus() {
+    try {
+      const status = await apiFetch(`/api/voice/status?lang=${encodeURIComponent(getVoiceLang())}`);
+      whisperStatus = status;
+      qwenStatus = status;
+    } catch (_) {
+      whisperStatus = null;
+      qwenStatus = null;
+    }
+    whisperStatusLoaded = true;
+    updateWhisperUI();
+    updateTtsUI();
+    updateQwenUI();
+    return qwenStatus;
+  }
+
+  function pollQwenDownload() {
+    clearInterval(qwenPoll);
+    qwenPoll = setInterval(async () => {
+      const status = await refreshVoiceStatus();
+      const current = getQwenModel();
+      const state = status?.qwen_downloads?.[current]?.status;
+      const present = status?.qwen_models?.[current]?.present === true;
+      if (present || state === 'error') {
+        clearInterval(qwenPoll);
+        qwenPoll = null;
+        if (present) toast(`${QWEN_MODEL_LABEL[current] || current} model ready`, { type: 'info' });
+      }
+    }, 1500);
+    cleanups.push(() => { clearInterval(qwenPoll); qwenPoll = null; });
+  }
+
+  on(qwenDownload, 'click', async () => {
+    const current = getQwenModel();
+    qwenDownload.disabled = true;
+    try {
+      await apiFetch('/api/voice/qwen/download', {
+        method: 'POST',
+        body: JSON.stringify({ model: current }),
+      });
+      toast(`Downloading ${QWEN_MODEL_LABEL[current] || current} in the background…`, { type: 'info' });
+      pollQwenDownload();
+    } catch (e) {
+      toast(e.message || 'Could not start the download', { type: 'error' });
+      qwenDownload.disabled = false;
+    }
   });
 
   const speedControl = slider({
@@ -705,7 +851,7 @@ function buildVoice() {
     onChange: (checked) => setWakeWord(checked),
   });
 
-  ttsVoice.select.value = getTtsVoice() || '';
+  if (ttsVoiceValue) ttsVoice.select.value = ttsVoiceValue;
 
   void (async () => {
     try {
@@ -727,7 +873,7 @@ function buildVoice() {
   })();
 
   updateWhisperUI();
-  void refreshWhisperStatus();
+  void refreshVoiceStatus();
 
   return [
     field('Language', lang),
@@ -737,7 +883,13 @@ function buildVoice() {
     engineHint,
     whisperFields,
     heading('Speech output'),
-    field('Voice', ttsVoice, { hint: 'The Supertonic voice used for spoken replies.' }),
+    field('Engine', ttsEngine, {
+      hint: 'Supertonic is bundled and always available. Qwen3-TTS sounds more natural, '
+        + 'runs on your GPU through Vulkan when one is available, and needs a one-time '
+        + 'build plus a model download.',
+    }),
+    qwenFields,
+    field('Voice', ttsVoice, { hint: 'The voice used for spoken replies.' }),
     speed.wrap,
     field('Stop listening after', silence, { hint: 'How long to wait for speech before canceling a tap-to-talk input.' }),
     wake,
@@ -898,6 +1050,32 @@ function buildTopBarControls() {
     autohideBar,
     field('Top bar position', barPosition),
     autohideOrb,
+  ];
+}
+
+/* Content of the top-bar host status chips: the device label and the numeric
+ * percentage (volume / signal / battery) can each be hidden. Both off leaves
+ * an icon-only button — see hudChipsShared.js + preferences.js. */
+function buildHudChipControls() {
+  const chips = getHudChips();
+  const names = toggleRow({
+    label: 'Device names',
+    hint: 'Show the device or network name in the sound, network and Bluetooth buttons.',
+    checked: chips.name,
+    onChange: (checked) => setHudChips({ name: checked }),
+  });
+  const percent = toggleRow({
+    label: 'Percentages',
+    hint: 'Show volume, signal and battery numbers. Turn both off for icon-only buttons.',
+    checked: chips.percent,
+    onChange: (checked) => setHudChips({ percent: checked }),
+  });
+
+  return [
+    heading('Host status chips'),
+    el('p', 'settings-hint', 'Choose what the sound, network and Bluetooth buttons in the top bar show.'),
+    names,
+    percent,
   ];
 }
 
@@ -1263,6 +1441,7 @@ function buildAppearancePanel() {
   const backgroundChildren = buildBackgroundControls();
   const windowSurfaceChildren = buildWindowSurfaceControls();
   const topBarChildren = buildTopBarControls();
+  const hudChipChildren = buildHudChipControls();
 
   // Interface scale: a host setting, applied by the kiosk shell as page zoom.
   // Changing it re-lays-out the page, so the Terminal re-fits automatically.
@@ -1352,6 +1531,7 @@ function buildAppearancePanel() {
     scaleField,
     ...windowSurfaceChildren,
     ...topBarChildren,
+    ...hudChipChildren,
     heading('Voice orb'),
     el('p', 'settings-hint', 'How the orb looks and moves. Every style reacts to your voice — louder grows the ring’s waves and sparks.'),
     orbStyles,

@@ -20,6 +20,7 @@ export XDG_SESSION_TYPE=x11
 export QT_QPA_PLATFORM=xcb
 
 PORT_BASE=@PORT_BASE@
+SHINY_REPO=@SHINY_REPO@
 PORT=$((PORT_BASE + $(id -u) - 1000))
 
 # The per-user server unit reads SERVER_PORT from here, so both sides agree.
@@ -33,6 +34,18 @@ export PEAKD_ADFILTER_DIR="${PEAKD_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.local/s
 
 # Bring up this user's Shiny server (idempotent; a no-op if already running).
 systemctl --user start shiny.service 2>/dev/null || true
+
+# Speech sidecars. Both launchers probe their own port first (idempotent) and
+# exit quietly when their Python package is absent — the server starts them too,
+# but doing it here means the engines are warm by the time the first word is
+# spoken. `--install` for whisper is opt-in via WHISPER_AUTO_INSTALL; Supertonic
+# provisions `.venv-supertonic` on demand (SUPERTONIC_AUTO_INSTALL, default on).
+if [ "${WHISPER_AUTO_INSTALL:-0}" = "1" ]; then
+    nohup bash "$SHINY_REPO/voice/start_whisper.sh" --install >/dev/null 2>&1 &
+else
+    nohup bash "$SHINY_REPO/voice/start_whisper.sh" >/dev/null 2>&1 &
+fi
+nohup bash "$SHINY_REPO/voice/start_supertonic.sh" >/dev/null 2>&1 &
 
 # Wait until it answers (up to ~30s) so peakd does not open on a dead port.
 for _ in $(seq 1 60); do

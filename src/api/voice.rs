@@ -33,6 +33,14 @@ pub struct VoiceStatusResponse {
     /// Per-model presence/loaded state for the Settings → Voice panel.
     pub whisper_models: serde_json::Value,
     pub whisper_downloads: serde_json::Value,
+    /// Which TTS engine to speak replies with: `supertonic` or `qwen`.
+    pub tts_engine: String,
+    /// `ready` when the Qwen3-TTS sidecar is answering, else `unavailable`.
+    pub qwen: String,
+    pub qwen_models: serde_json::Value,
+    pub qwen_downloads: serde_json::Value,
+    /// Built-in CustomVoice speakers (for the Settings voice picker).
+    pub qwen_speakers: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +50,11 @@ pub struct VoiceDownloadBody {
 
 #[derive(Deserialize)]
 pub struct WhisperDownloadBody {
+    pub model: String,
+}
+
+#[derive(Deserialize)]
+pub struct QwenDownloadBody {
     pub model: String,
 }
 
@@ -88,6 +101,9 @@ pub struct TtsRequest {
     pub lang: Option<String>,
     pub voice: Option<String>,
     pub speed: Option<f32>,
+    /// Which engine to speak with: `qwen` selects Qwen3-TTS, anything else
+    /// (or absent) keeps Supertonic, the bundled default.
+    pub engine: Option<String>,
 }
 
 fn models_dir(config: &crate::config::Config) -> PathBuf {
@@ -139,6 +155,11 @@ pub async fn voice_status(
     let health = state.whisper.health().await;
     let whisper = if health.is_some() { "ready" } else { "unavailable" };
 
+    // Same for the optional Qwen3-TTS engine.
+    let qwen_health = state.qwen_tts.health().await;
+    let qwen = if qwen_health.is_some() { "ready" } else { "unavailable" };
+    let qwen_inventory = state.qwen_tts.inventory(qwen_health.as_ref());
+
     Ok(Json(VoiceStatusResponse {
         success: true,
         vosk: vosk.into(),
@@ -150,6 +171,17 @@ pub async fn voice_status(
         whisper_default_model: "tiny".into(),
         whisper_models: state.whisper.inventory(health.as_ref()),
         whisper_downloads: state.whisper.downloads(),
+        tts_engine: "supertonic".into(),
+        qwen: qwen.into(),
+        qwen_models: qwen_inventory
+            .get("models")
+            .cloned()
+            .unwrap_or_else(|| json!({})),
+        qwen_downloads: state.qwen_tts.downloads(),
+        qwen_speakers: qwen_inventory
+            .get("speakers")
+            .cloned()
+            .unwrap_or_else(|| json!([])),
     }))
 }
 
@@ -194,6 +226,24 @@ pub async fn voice_whisper_download(
     let model = body.model.trim().to_lowercase();
     state
         .whisper
+        .start_download(&model)
+        .map_err(AppError::BadRequest)?;
+
+    Ok(Json(VoiceDownloadResponse {
+        success: true,
+        data: json!({ "status": "downloading", "model": model }),
+    }))
+}
+
+/// Start a background download of a Qwen3-TTS model (`1.7b-customvoice`).
+/// Returns immediately; the Settings page polls `/api/voice/status`.
+pub async fn voice_qwen_download(
+    State(state): State<AppState>,
+    Json(body): Json<QwenDownloadBody>,
+) -> Result<Json<VoiceDownloadResponse>, AppError> {
+    let model = body.model.trim().to_lowercase();
+    state
+        .qwen_tts
         .start_download(&model)
         .map_err(AppError::BadRequest)?;
 
@@ -273,6 +323,25 @@ pub async fn tts(
     Json(body): Json<TtsRequest>,
 ) -> Result<Response, AppError> {
     let lang = body.lang.unwrap_or_else(|| "en".into());
+
+    // Qwen3-TTS is the opt-in engine. It streams raw PCM from the sidecar (the
+    // buffered WAV path can hang the GPU on a long utterance), so the RIFF
+    // container is added here before the bytes go to the browser.
+    if body.engine.as_deref() == Some("qwen") {
+        let pcm = state
+            .qwen_tts
+            .synthesize(&body.text, &lang, body.voice.as_deref(), body.speed)
+            .await
+            .map_err(AppError::Internal)?;
+        let wav = crate::services::qwen_tts::pcm_to_wav(&pcm, 24_000);
+        return Ok((
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "audio/wav")],
+            wav,
+        )
+            .into_response());
+    }
+
     let map = load_lang_map().await;
     let (_, supertonic_lang) = resolve_stt_lang(&lang, &map);
 

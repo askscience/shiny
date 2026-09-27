@@ -15,6 +15,8 @@ pub mod ai;
 pub mod ollama;
 pub mod network;
 pub mod audio;
+pub mod bluetooth;
+pub mod power;
 pub mod display;
 pub mod touchbar;
 pub mod keyboard_backlight;
@@ -35,11 +37,13 @@ use crate::auth::auth_middleware;
 use crate::config::Config;
 use crate::plugins::PluginManager;
 use crate::services::audio::AudioService;
+use crate::services::bluetooth::BluetoothService;
 use crate::services::diary_gen::DiaryGenerator;
 use crate::services::display::DisplayService;
 use crate::services::gpsd::GpsdService;
 use crate::services::network::NetworkService;
 use crate::services::ollama::OllamaClient;
+use crate::services::power::PowerService;
 use crate::services::osm::OsmService;
 use crate::services::supertonic::SupertonicClient;
 use crate::services::touchbar::TouchBarService;
@@ -47,6 +51,7 @@ use crate::services::keyboard_backlight::KeyboardBacklightService;
 use crate::services::screen_brightness::ScreenBrightnessService;
 use crate::services::web_search::SearchService;
 use crate::services::whisper::WhisperClient;
+use crate::services::qwen_tts::QwenClient;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -60,6 +65,10 @@ pub struct AppState {
     pub network: NetworkService,
     /// Host volume/mute/default devices (PipeWire via the Pulse socket).
     pub audio: AudioService,
+    /// Host Bluetooth adapter and devices (BlueZ over D-Bus).
+    pub bluetooth: BluetoothService,
+    /// Host power actions (reboot / power off / suspend) via freedesktop logind.
+    pub power: PowerService,
     /// Host interface scale (webview page zoom); the kiosk shell applies it.
     pub display: DisplayService,
     /// Host Touch Bar capability (T2 MacBook); the web UI listens for its keys.
@@ -74,6 +83,8 @@ pub struct AppState {
     pub supertonic: SupertonicClient,
     /// faster-whisper streaming STT sidecar (optional; Vosk is the fallback).
     pub whisper: WhisperClient,
+    /// Qwen3-TTS sidecar (qwentts.cpp; optional high-quality TTS engine).
+    pub qwen_tts: QwenClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
     /// Iroh remote-access service.
@@ -273,6 +284,11 @@ fn build_plugin_routes(state: &AppState) -> Router<AppState> {
     for (_name, spec, handler) in state.plugins.routes() {
         router = router.merge(plugin_route(state, spec, handler));
     }
+    // Plugin upload routes (multipart archives/documents/images) routinely
+    // exceed axum's 2MB default body limit, so the default limit is removed
+    // for the contributed API routes. Plugins clamp their own uploads where
+    // they need to.
+    router = router.layer(axum::extract::DefaultBodyLimit::disable());
 
     // Serve each installed plugin's web assets at /plugins/<name>/ (roadmap #4).
     // Register the ServeDir for every plugin unconditionally: ServeDir reads
@@ -381,6 +397,8 @@ pub fn build_router(state: AppState) -> Router {
         // faster-whisper: model downloads + streaming STT proxy. Audio chunks
         // are raw PCM up to ~64 KB each; the default 2 MB body cap is plenty.
         .route("/api/voice/whisper/download", post(voice::voice_whisper_download))
+        // Qwen3-TTS (optional TTS engine): GGUF model downloads.
+        .route("/api/voice/qwen/download", post(voice::voice_qwen_download))
         .route("/api/voice/stt/chunk", post(voice::voice_stt_chunk))
         .route("/api/voice/stt/close", post(voice::voice_stt_close));
 
@@ -401,6 +419,19 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/audio/volume", post(audio::volume))
         .route("/api/audio/mute", post(audio::mute))
         .route("/api/audio/default", post(audio::default_device))
+        .route("/api/bluetooth/status", get(bluetooth::status))
+        .route("/api/bluetooth/events", get(bluetooth::events))
+        .route("/api/bluetooth/power", post(bluetooth::power))
+        .route("/api/bluetooth/scan", post(bluetooth::scan))
+        .route("/api/bluetooth/pair", post(bluetooth::pair))
+        .route("/api/bluetooth/connect", post(bluetooth::connect))
+        .route("/api/bluetooth/disconnect", post(bluetooth::disconnect))
+        .route("/api/bluetooth/forget", post(bluetooth::forget))
+        .route("/api/bluetooth/trust", post(bluetooth::trust))
+        .route("/api/power/status", get(power::status))
+        .route("/api/power/reboot", post(power::reboot))
+        .route("/api/power/off", post(power::power_off))
+        .route("/api/power/suspend", post(power::suspend))
         .route("/api/display", get(display::status).put(display::set_scale))
         .route("/api/touchbar", get(touchbar::status))
         .route(

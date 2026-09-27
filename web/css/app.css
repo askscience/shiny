@@ -151,9 +151,10 @@ html, body {
 }
 #hud-top .icon-btn svg { width: 17px; height: 17px; }
 
-/* ── Host status chips (top bar: sound, then network) ───────── */
+/* ── Host status chips (top bar: sound, network, Bluetooth) ─── */
 .hud-network,
-.hud-audio {
+.hud-audio,
+.hud-bluetooth {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -171,18 +172,21 @@ html, body {
   white-space: nowrap;
 }
 .hud-network:hover,
-.hud-audio:hover {
+.hud-audio:hover,
+.hud-bluetooth:hover {
   background: var(--glass-hover);
   color: var(--text);
 }
 .hud-network.is-open,
-.hud-audio.is-open {
+.hud-audio.is-open,
+.hud-bluetooth.is-open {
   background: var(--glass-hover);
   border-color: var(--glass-border);
   color: var(--text);
 }
 .hud-network .hud-network-icon,
-.hud-audio .hud-audio-icon {
+.hud-audio .hud-audio-icon,
+.hud-bluetooth .hud-bluetooth-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -191,13 +195,24 @@ html, body {
   flex-shrink: 0;
 }
 .hud-network-label,
-.hud-audio-label {
+.hud-audio-label,
+.hud-bluetooth-label {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 140px;
 }
 .hud-network-pct,
-.hud-audio-pct { font-variant-numeric: tabular-nums; opacity: 0.75; }
+.hud-audio-pct,
+.hud-bluetooth-pct { font-variant-numeric: tabular-nums; opacity: 0.75; }
+
+/* Host status chip content (Settings → Appearance → Host status chips). The
+ * data attributes live on <html>; hiding both leaves an icon-only button. */
+html[data-hud-name='0'] .hud-network-label,
+html[data-hud-name='0'] .hud-audio-label,
+html[data-hud-name='0'] .hud-bluetooth-label { display: none; }
+html[data-hud-percent='0'] .hud-network-pct,
+html[data-hud-percent='0'] .hud-audio-pct,
+html[data-hud-percent='0'] .hud-bluetooth-pct { display: none; }
 .hud-network.is-connected { color: var(--text); }
 .hud-network.is-connected .hud-network-icon { color: var(--accent); }
 .hud-network.is-connected .hud-network-pct { color: var(--muted); }
@@ -208,6 +223,10 @@ html, body {
 .hud-audio.is-active { color: var(--text); }
 .hud-audio.is-active .hud-audio-icon { color: var(--accent); }
 .hud-audio.is-muted { color: var(--muted); }
+.hud-bluetooth.is-connected { color: var(--text); }
+.hud-bluetooth.is-connected .hud-bluetooth-icon { color: var(--accent); }
+.hud-bluetooth.is-connected .hud-bluetooth-pct { color: var(--muted); }
+.hud-bluetooth.is-dim { color: var(--muted); }
 
 /* ── Network window (core window: `network`) ────────────────── */
 .network-window {
@@ -387,6 +406,75 @@ html, body {
   border-radius: var(--radius-sm);
 }
 
+/* ── Bluetooth menu (HUD popover) ───────────────────────────── */
+.bluetooth-menu {
+  min-width: 0;
+  width: min(380px, calc(100vw - 24px));
+  max-width: min(380px, calc(100vw - 24px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.bluetooth-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.bluetooth-head-main { flex: 1; min-width: 0; }
+.bluetooth-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.bluetooth-head-title .ui-icon { color: var(--accent); }
+.bluetooth-head-hint { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.bluetooth-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 12px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bluetooth-body::-webkit-scrollbar { display: none; }
+.bluetooth-card { display: flex; flex-direction: column; gap: 8px; }
+.bluetooth-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bluetooth-section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bluetooth-idle { padding: 6px 2px; color: var(--muted); font-size: 12.5px; }
+.bluetooth-card .ui-list-item {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+}
+.bluetooth-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.bluetooth-leading { color: var(--text-secondary); }
+.bluetooth-battery { font-variant-numeric: tabular-nums; }
+.bluetooth-actions { justify-content: flex-end; gap: 6px; }
+
 /* ── Workspace bar (Hyprland-style desktop switcher) ────────── */
 #workspace-bar {
   display: flex;
@@ -523,31 +611,22 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 
 /* ── Plugin icon tray (top bar, right of the weather separator) ── */
 #hud-plugins {
-  flex: 0 1 auto;
+  /* Grow into every pixel the top bar has left between the weather widget and
+     the right-hand controls, so as many plugin icons as fit stay visible. Only
+     when they no longer fit does the tray scroll (overflow-x below). */
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
+  /* Centre the icons in the free space; `safe` falls back to the start edge once
+     they overflow, so the first icon stays reachable when the tray scrolls. */
+  justify-content: safe center;
   gap: 4px;
   min-width: 0;
-  max-width: min(500px, 46vw);
   overflow-x: auto;
   scrollbar-width: none;
 }
 
 #hud-plugins::-webkit-scrollbar { display: none; }
-
-/* On wide desktops, float the plugin tray to the horizontal center of the
-   top-bar pill (the pill's backdrop-filter makes it the tray's containing
-   block, so `left: 50%` = the pill's center) while the settings/plugins/chats
-   buttons stay on the right. Below this width the tray stays in-flow after
-   the weather widget so it can't overlap the clock. */
-@media (min-width: 1280px) {
-  #hud-plugins {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-  }
-}
 
 .hud-plugin-btn {
   flex: none;
@@ -621,9 +700,11 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 }
 #hud-meteo-label { font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
 
-/* Saved places — menu in the HUD (replaces the chip row) */
+/* Saved places — menu in the HUD (replaces the chip row). It no longer grows:
+   the plugin tray to its left owns the free space, and this only takes what its
+   own trigger needs. */
 #hud-saved-trips {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -723,6 +804,24 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 .ui-hud-menu-check .ui-icon { width: 14px; height: 14px; }
 .ui-hud-menu-item.is-active .ui-hud-menu-check { opacity: 1; }
 .ui-hud-menu-empty { padding: 12px; font-size: 11.5px; color: var(--muted); }
+
+/* ── Power menu (top bar: restart / power off / suspend) ────── */
+.power-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 5px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.power-menu-head .ui-icon { width: 14px; height: 14px; }
+.power-menu-body { display: flex; flex-direction: column; gap: 2px; }
+.power-menu .ui-hud-menu-item:disabled { opacity: 0.4; cursor: default; }
+.power-menu .ui-hud-menu-item:disabled:hover { background: transparent; }
+.power-confirm-actions { justify-content: flex-end; gap: 8px; }
 
 /* ── Context menu (right-click on desktop chrome) ─────────────
    Body-level popup opened by /js/contextMenu.js: window title bars, the

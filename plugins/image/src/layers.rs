@@ -65,6 +65,10 @@ pub struct DocMeta {
     pub orig_w: u32,
     pub orig_h: u32,
     pub format: String,
+    /// Canvas-sized 8-bit coverage mask of the active selection, if any.
+    pub selection: Option<Vec<u8>>,
+    pub sel_w: u32,
+    pub sel_h: u32,
 }
 
 fn as_text(v: &Value) -> String {
@@ -126,7 +130,8 @@ fn as_opt_text(v: &Value) -> Option<String> {
 /// Load the document metadata (with ownership check).
 pub fn load_doc(db: &Db, uid: &str, image_id: &str) -> Result<DocMeta, AppError> {
     let rows = db.query(
-        "SELECT title, width, height, bytes, original, orig_width, orig_height, format \
+        "SELECT title, width, height, bytes, original, orig_width, orig_height, format, \
+                selection, selection_width, selection_height \
          FROM images WHERE id = ?1 AND user_id = ?2",
         &[Value::text(image_id), Value::text(uid)],
     )?;
@@ -142,7 +147,40 @@ pub fn load_doc(db: &Db, uid: &str, image_id: &str) -> Result<DocMeta, AppError>
         orig_w: as_int(&r[5]).max(0) as u32,
         orig_h: as_int(&r[6]).max(0) as u32,
         format: as_text(&r[7]),
+        selection: opt_blob(&r[8]),
+        sel_w: as_int(&r[9]).max(0) as u32,
+        sel_h: as_int(&r[10]).max(0) as u32,
     })
+}
+
+/// Crop the document's canvas-sized selection mask down to a layer's own
+/// rectangle, producing a local coverage buffer the operations engine can use.
+/// Returns `None` when the document has no active selection.
+pub fn local_selection(doc: &DocMeta, layer: &LayerRow) -> Option<Vec<u8>> {
+    let sel = doc.selection.as_ref()?;
+    let (sw, sh) = (doc.sel_w, doc.sel_h);
+    if sw == 0 || sh == 0 || sel.len() < (sw as usize) * (sh as usize) {
+        return None;
+    }
+    if layer.w == 0 || layer.h == 0 {
+        return None;
+    }
+    let mut out = vec![0u8; (layer.w as usize) * (layer.h as usize)];
+    for ly in 0..layer.h {
+        let cy = layer.y + ly as i32;
+        if cy < 0 || cy >= sh as i32 {
+            continue;
+        }
+        for lx in 0..layer.w {
+            let cx = layer.x + lx as i32;
+            if cx < 0 || cx >= sw as i32 {
+                continue;
+            }
+            out[(ly as usize) * (layer.w as usize) + lx as usize] =
+                sel[(cy as usize) * (sw as usize) + cx as usize];
+        }
+    }
+    Some(out)
 }
 
 /// Load a document's layers, bottom-to-top within each parent.

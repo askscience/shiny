@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Boot splash — the skull mark, shown while the app starts.
+   Boot splash — the PEAK'D! mark, shown while the app starts.
 
    index.html paints #boot-screen before any module runs; js/bootScreen.js
    fades it out once the app shell (or the sign-in screen) is ready.
@@ -26,7 +26,6 @@
   transition: opacity var(--duration-slow) var(--ease-out),
               visibility 0s linear var(--duration-slow);
 }
-
 #boot-screen.is-hidden {
   opacity: 0;
   visibility: hidden;
@@ -55,7 +54,7 @@
 }
 
 /* ── The mark ───────────────────────────────────────────────────────────
-   The skull glitches by displacing slices of the image itself, not by
+   The mark glitches by displacing slices of the image itself, not by
    stacking a coloured echo on top:
 
      · __base    the mark, on top. Its own clip-path tears bands out and its
@@ -69,8 +68,10 @@
    ─────────────────────────────────────────────────────────────────────── */
 .boot-logo {
   position: relative;
-  width: clamp(84px, 16vmin, 128px);
-  height: clamp(84px, 16vmin, 128px);
+  /* The mark is a portrait glyph (1186 × 1706), so the box is portrait too:
+     contain-fitting it into a square would leave it needlessly small. */
+  width: clamp(66px, 12vmin, 96px);
+  height: clamp(95px, 17vmin, 138px);
   isolation: isolate;
   animation: boot-jitter 2.8s steps(1, end) infinite;
 }
@@ -117,7 +118,7 @@
   animation: boot-tear-b 3.4s steps(1, end) infinite;
 }
 
-/* Scanlines, masked to the mark so they sit on the skull, not the plate. */
+/* Scanlines, masked to the mark so they sit on the glyph, not the plate. */
 .boot-logo::after {
   content: '';
   position: absolute;

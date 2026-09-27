@@ -15,10 +15,13 @@ const FILTERS: &[&str] = &[
     "serenity", "golden", "pastel_pink", "cali", "dramatic", "firenze", "obsidian", "lofi",
 ];
 
-/// Decode image bytes (PNG/JPEG/WebP/…) into a `PhotonImage`.
+/// Decode image bytes (PNG/JPEG/GIF/WebP/BMP/…) into a `PhotonImage`.
 pub fn decode(bytes: &[u8]) -> Result<PhotonImage, AppError> {
-    photon_rs::native::open_image_from_bytes(bytes)
-        .map_err(|e| AppError::BadRequest(format!("could not decode image: {e}")))
+    photon_rs::native::open_image_from_bytes(bytes).map_err(|e| {
+        AppError::BadRequest(format!(
+            "couldn't read that image ({e}) — PNG, JPEG, GIF, WebP and BMP are supported"
+        ))
+    })
 }
 
 /// Resize so the longest side is at most `max_dim` (only ever shrinks).
@@ -48,10 +51,22 @@ fn is_reset(op: &Value) -> bool {
         .unwrap_or(false)
 }
 
-/// Apply one operation in-place.
+/// Apply one operation in-place. Selection masking happens in `apply_raw`.
 fn apply_one(img: &mut PhotonImage, op: &Value, idx: usize) -> Result<(), AppError> {
     let name = op.get("op").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
     let err = |m: String| AppError::BadRequest(format!("operation {idx} (\"{name}\"): {m}"));
+
+    // Adjustment → filter → paint engines first; each returns Ok(false) when it
+    // does not own the name so the next engine can try.
+    if crate::adjust::apply(img, &name, op).map_err(|m| err(m))? {
+        return Ok(());
+    }
+    if crate::filter::apply(img, &name, op).map_err(|m| err(m))? {
+        return Ok(());
+    }
+    if crate::paint::apply(img, &name, op).map_err(|m| err(m))? {
+        return Ok(());
+    }
 
     match name.as_str() {
         "grayscale" | "greyscale" => photon_rs::monochrome::grayscale(img),
@@ -92,7 +107,7 @@ fn apply_one(img: &mut PhotonImage, op: &Value, idx: usize) -> Result<(), AppErr
             let angle = f64_param(op, "angle", 0.0).rem_euclid(360.0) as f32;
             *img = photon_rs::transform::rotate(img, angle);
         }
-        "resize" => {
+        "resize" | "image_size" => {
             let w = i64_param(op, "width", 0);
             let h = i64_param(op, "height", 0);
             if w <= 0 || h <= 0 {
@@ -152,6 +167,16 @@ fn apply_one(img: &mut PhotonImage, op: &Value, idx: usize) -> Result<(), AppErr
     Ok(())
 }
 
+/// Operations that change the layer's rectangle (and therefore invalidate an
+/// active selection for anything that follows in the same batch).
+fn is_geometry(name: &str) -> bool {
+    matches!(
+        name,
+        "resize" | "image_size" | "crop" | "crop_to_selection" | "rotate" | "flip_h"
+            | "fliph" | "flip_v" | "flipv" | "transform" | "free_transform"
+    )
+}
+
 /// Decode stored bytes to raw RGBA. Raw (`rgba`) rows are returned verbatim;
 /// legacy encoded rows are decoded.
 pub fn to_raw(bytes: &[u8], format: &str) -> Result<Vec<u8>, AppError> {
@@ -185,9 +210,52 @@ pub fn thumbnail_png(raw: &[u8], w: u32, h: u32, max_dim: u32) -> Vec<u8> {
     img.get_bytes()
 }
 
+/// Bounding box of the non-zero area of a coverage mask, if any.
+fn mask_bbox(mask: &[u8], w: u32, h: u32) -> Option<(u32, u32, u32, u32)> {
+    let (mut minx, mut miny, mut maxx, mut maxy) = (u32::MAX, u32::MAX, 0u32, 0u32);
+    for y in 0..h {
+        for x in 0..w {
+            if mask[(y as usize) * (w as usize) + x as usize] > 0 {
+                minx = minx.min(x);
+                miny = miny.min(y);
+                maxx = maxx.max(x);
+                maxy = maxy.max(y);
+            }
+        }
+    }
+    if minx == u32::MAX {
+        None
+    } else {
+        Some((minx, miny, maxx + 1, maxy + 1))
+    }
+}
+
+/// Blend `over` into `base` using a per-pixel coverage mask (0..255), used to
+/// confine any operation to the active selection.
+fn blend_masked(base: &PhotonImage, over: &PhotonImage, mask: &[u8], w: u32, h: u32) -> PhotonImage {
+    let b = base.get_raw_pixels();
+    let o = over.get_raw_pixels();
+    let mut out = b.clone();
+    for i in 0..(w as usize) * (h as usize) {
+        let a = mask.get(i).copied().unwrap_or(0) as f64 / 255.0;
+        if a <= 0.0 {
+            continue;
+        }
+        let p = i * 4;
+        for c in 0..4 {
+            out[p + c] = ((b[p + c] as f64) * (1.0 - a) + (o[p + c] as f64) * a).round() as u8;
+        }
+    }
+    PhotonImage::new(out, w, h)
+}
+
 /// Apply operations to raw RGBA pixels in memory (no codec round-trip).
 /// `reset` swaps in the original pixels and original dimensions; every other
-/// operation mutates the image in order. Returns (new raw pixels, w, h).
+/// operation mutates the image in order. `mask` is an optional per-pixel
+/// coverage buffer the size of the *current* layer that confines every
+/// non-geometric operation to the active selection. Returns the new pixels,
+/// width and height.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_raw(
     current_raw: &[u8],
     current_w: u32,
@@ -196,20 +264,59 @@ pub fn apply_raw(
     original_w: u32,
     original_h: u32,
     ops: &[Value],
+    mask: Option<&[u8]>,
 ) -> Result<(Vec<u8>, u32, u32), AppError> {
     let wants_reset = ops.iter().any(is_reset);
-    let (base, w, h) = if wants_reset {
+    let (base, bw, bh) = if wants_reset {
         (original_raw, original_w, original_h)
     } else {
         (current_raw, current_w, current_h)
     };
 
-    let mut img = PhotonImage::new(base.to_vec(), w, h);
+    let mut img = PhotonImage::new(base.to_vec(), bw, bh);
+    let mut mask = mask;
     for (i, op) in ops.iter().enumerate() {
         if is_reset(op) {
             continue;
         }
-        apply_one(&mut img, op, i + 1)?;
+        let name = op.get("op").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+
+        // Crop to the selection's bounding box.
+        if name == "crop_to_selection" {
+            let m = mask.ok_or_else(|| {
+                AppError::BadRequest(format!(
+                    "operation {} (\"crop_to_selection\"): an active selection is required",
+                    i + 1
+                ))
+            })?;
+            let (w, h) = (img.get_width(), img.get_height());
+            let (x0, y0, x1, y1) = mask_bbox(m, w, h).ok_or_else(|| {
+                AppError::BadRequest(format!(
+                    "operation {} (\"crop_to_selection\"): the selection is empty",
+                    i + 1
+                ))
+            })?;
+            img = photon_rs::transform::crop(&img, x0, y0, x1, y1);
+            mask = None;
+            continue;
+        }
+
+        if is_geometry(&name) {
+            apply_one(&mut img, op, i + 1)?;
+            // Geometry changes the rectangle; a stale selection no longer maps.
+            mask = None;
+            continue;
+        }
+
+        match mask {
+            Some(m) => {
+                let (w, h) = (img.get_width(), img.get_height());
+                let mut tmp = PhotonImage::new(img.get_raw_pixels(), w, h);
+                apply_one(&mut tmp, op, i + 1)?;
+                img = blend_masked(&img, &tmp, m, w, h);
+            }
+            None => apply_one(&mut img, op, i + 1)?,
+        }
     }
     Ok((img.get_raw_pixels(), img.get_width(), img.get_height()))
 }
@@ -271,8 +378,8 @@ fn parse_curve_points(op: &Value, idx: usize) -> Result<Vec<(f64, f64)>, AppErro
 }
 
 /// Build a 256-entry tone-curve LUT from control points using **monotone cubic
-/// (Fritsch–Carlson)** interpolation — smooth like Photoshop's Curves but with
-/// no overshoot, so the mapping stays within 0..=255.
+/// (Fritsch–Carlson)** interpolation — smooth like a photographic tone curve but
+/// with no overshoot, so the mapping stays within 0..=255.
 pub fn build_curve_lut(points: &[(f64, f64)]) -> [u8; 256] {
     let n = points.len();
     let mut lut = [0u8; 256];

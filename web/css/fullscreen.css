@@ -161,10 +161,7 @@ html[data-bar-pos='right'] #hud-meteo-label {
 
 html[data-bar-pos='left'] #hud-plugins,
 html[data-bar-pos='right'] #hud-plugins {
-  position: static;
-  transform: none;
   flex-direction: column;
-  max-width: none;
   max-height: min(42vh, 320px);
   overflow-x: hidden;
   overflow-y: auto;

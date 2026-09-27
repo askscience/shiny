@@ -14,7 +14,7 @@ pub struct ImagePlugin {
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str =
-    "a layered image editor AI; build compositions by adding, reordering, blending and merging layers, then apply photographic effects, filters and transforms to a layer";
+    "a layered image editor AI; build compositions by adding, reordering, blending and merging layers, then apply tone and colour adjustments, filters, painted strokes, shapes and transforms to a layer";
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
@@ -25,6 +25,13 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec { method: HttpMethod::Put, path: "/api/images/:id".into(), auth: "auth".into(), handler_tag: "image_rename".into() },
         RouteSpec { method: HttpMethod::Post, path: "/api/images/:id/apply".into(), auth: "auth".into(), handler_tag: "image_apply".into() },
         RouteSpec { method: HttpMethod::Get, path: "/api/images/:id/render".into(), auth: "auth".into(), handler_tag: "image_render".into() },
+        RouteSpec { method: HttpMethod::Get, path: "/api/images/:id/selection".into(), auth: "auth".into(), handler_tag: "image_selection_get".into() },
+        RouteSpec { method: HttpMethod::Put, path: "/api/images/:id/selection".into(), auth: "auth".into(), handler_tag: "image_selection_set".into() },
+        RouteSpec { method: HttpMethod::Delete, path: "/api/images/:id/selection".into(), auth: "auth".into(), handler_tag: "image_selection_delete".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/images/:id/crop".into(), auth: "auth".into(), handler_tag: "image_crop".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/images/:id/resize".into(), auth: "auth".into(), handler_tag: "image_resize".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/images/:id/rotate".into(), auth: "auth".into(), handler_tag: "image_rotate".into() },
+        RouteSpec { method: HttpMethod::Post, path: "/api/images/:id/flip".into(), auth: "auth".into(), handler_tag: "image_flip".into() },
         RouteSpec { method: HttpMethod::Delete, path: "/api/images/:id".into(), auth: "auth".into(), handler_tag: "image_delete".into() },
         // Layer stack
         RouteSpec { method: HttpMethod::Get, path: "/api/images/:id/layers".into(), auth: "auth".into(), handler_tag: "image_layer_list".into() },
@@ -51,10 +58,10 @@ impl Plugin for ImagePlugin {
             entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
             target_triple: None,
             description: Some(
-                "Layered image editor — layers, folders, blend modes and per-layer effects (Photon) in the Image window".into(),
+                "Layered raster editor — layers, groups, blend modes, tone and colour adjustments, filters, painting, shapes and transforms in the Image window".into(),
             ),
             author: Some("shiny".into()),
-            summary: Some("Layered image editor: compositing, effects, filters and transforms".into()),
+            summary: Some("Layered raster editor: adjustments, filters, painting and transforms".into()),
             migrations_dir: "migrations".into(),
             skills_dir: "skills".into(),
             web_dir: "web".into(),
@@ -67,7 +74,7 @@ impl Plugin for ImagePlugin {
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/image.md"))
-            .context_line("Image: enabled — the Image window edits layered images (layers, blend modes, per-layer effects and transforms).");
+            .context_line("Image: enabled — the Image window edits layered images (layers, blend modes, adjustments, filters, painting, selection and transforms).");
         for spec in route_specs() {
             builder.route(spec);
         }

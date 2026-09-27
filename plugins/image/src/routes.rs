@@ -40,6 +40,13 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "image_apply" => image_apply(ctx),
         "image_delete" => image_delete(ctx),
         "image_render" => image_render(ctx),
+        "image_selection_get" => selection_get(ctx),
+        "image_selection_set" => selection_set(ctx),
+        "image_selection_delete" => selection_delete(ctx),
+        "image_crop" => image_crop(ctx),
+        "image_resize" => image_resize(ctx),
+        "image_rotate" => image_rotate(ctx),
+        "image_flip" => image_flip(ctx),
         "image_layer_list" => layer_list(ctx),
         "image_layer_create" => layer_create(ctx),
         "image_layer_update" => layer_update(ctx),
@@ -119,12 +126,177 @@ fn clean_title(t: &str) -> String {
     if t.is_empty() { "Untitled".into() } else { t.chars().take(120).collect() }
 }
 
+/// Query for upload requests: the file's name (for the document title) and an
+/// optional target group when importing into a layer.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct UploadQuery {
+    name: Option<String>,
+    group_id: Option<String>,
+}
+
+/// Read a request body sent as raw bytes rather than multipart.
+///
+/// Consuming the body with `to_bytes` directly bypasses axum's 2MB
+/// `DefaultBodyLimit` (which only applies to extractors that opt in), so a
+/// large photo uploads without the multipart parser tripping over the limit.
+async fn read_raw_upload(
+    req: axum::extract::Request,
+) -> Result<(Vec<u8>, Option<String>, Option<String>), AppError> {
+    let (q, req) = take_query::<UploadQuery>(req).await?;
+    let bytes = axum::body::to_bytes(req.into_body(), MAX_UPLOAD + 1)
+        .await
+        .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
+    if bytes.len() > MAX_UPLOAD {
+        return Err(AppError::BadRequest("image too large (max 32 MB)".into()));
+    }
+    Ok((bytes.to_vec(), q.name, q.group_id))
+}
+
+/// Parse a `multipart/form-data` body and return the `file` field.
+async fn read_multipart_file(
+    req: axum::extract::Request,
+) -> Result<(Vec<u8>, Option<String>), AppError> {
+    let mut multipart = Multipart::from_request(req, &())
+        .await
+        .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
+    let mut bytes: Option<Vec<u8>> = None;
+    let mut name: Option<String> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
+    {
+        if field.name() == Some("file") {
+            name = field.file_name().map(|f| f.to_string()).or(name);
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
+            bytes = Some(data.to_vec());
+        }
+    }
+    let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+    if data.len() > MAX_UPLOAD {
+        return Err(AppError::BadRequest("image too large (max 32 MB)".into()));
+    }
+    Ok((data, name))
+}
+
 fn is_multipart(req: &axum::extract::Request) -> bool {
     req.headers()
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(|v| v.starts_with("multipart/"))
         .unwrap_or(false)
+}
+
+fn is_json(req: &axum::extract::Request) -> bool {
+    req.headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.starts_with("application/json"))
+        .unwrap_or(false)
+}
+
+/// Multipart upload for `POST /layers`, which also carries `name`/`group_id`.
+async fn read_multipart_layer(
+    req: axum::extract::Request,
+) -> Result<(Vec<u8>, Option<String>, Option<String>), AppError> {
+    let mut multipart = Multipart::from_request(req, &())
+        .await
+        .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
+    let mut file: Option<Vec<u8>> = None;
+    let mut name: Option<String> = None;
+    let mut group_id: Option<String> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
+    {
+        match field.name() {
+            Some("file") => {
+                name = field.file_name().map(|f| f.to_string()).or(name);
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
+                file = Some(data.to_vec());
+            }
+            Some("name") => {
+                name = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?,
+                );
+            }
+            Some("group_id") => {
+                group_id = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?,
+                );
+            }
+            _ => {}
+        }
+    }
+    let data = file.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+    if data.len() > MAX_UPLOAD {
+        return Err(AppError::BadRequest("image too large (max 32 MB)".into()));
+    }
+    Ok((data, name, group_id))
+}
+
+/// Decode an uploaded image and append it to a document as a pixel layer,
+/// sizing the canvas when the document had none yet.
+fn insert_uploaded_layer(
+    db: &shiny_plugin_sdk::db::Db,
+    uid: &str,
+    id: &str,
+    doc: &layers::DocMeta,
+    data: Vec<u8>,
+    name: Option<String>,
+    group_id: Option<String>,
+) -> Result<Response, AppError> {
+    let mut img = ops::decode(&data)?;
+    ops::fit(&mut img, MAX_DIM);
+    let w = img.get_width();
+    let h = img.get_height();
+    let raw = img.get_raw_pixels();
+    // First layer sizes the canvas; later ones land at the origin.
+    if doc.width == 0 || doc.height == 0 {
+        db.execute(
+            "UPDATE images SET width = ?1, height = ?2 WHERE id = ?3 AND user_id = ?4",
+            &[
+                Value::Int(w as i64),
+                Value::Int(h as i64),
+                Value::text(id),
+                Value::text(uid),
+            ],
+        )?;
+    }
+    let name = clean_title(
+        &name
+            .as_deref()
+            .map(|n| n.split('.').next().unwrap_or(n).to_string())
+            .unwrap_or_else(|| format!("Layer {}", doc.title)),
+    );
+    let layer_id = layers::insert_layer(
+        db,
+        uid,
+        id,
+        &name,
+        group_id.as_deref().filter(|s| !s.is_empty()),
+        0,
+        0,
+        w,
+        h,
+        raw,
+    )?;
+    layers::refresh_composite(db, uid, id)?;
+    Ok(ok(json!({ "layer_id": layer_id, "name": name, "width": w, "height": h })))
 }
 
 fn raw_response(raw: Vec<u8>, w: u32, h: u32) -> Result<Response, AppError> {
@@ -199,30 +371,12 @@ fn image_create(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let mut multipart = Multipart::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
-
-            let mut bytes: Option<Vec<u8>> = None;
-            let mut original_name: Option<String> = None;
-            while let Some(field) = multipart
-                .next_field()
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
-            {
-                if field.name() == Some("file") {
-                    original_name = field.file_name().map(|f| f.to_string()).or(original_name);
-                    let data = field
-                        .bytes()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
-                    bytes = Some(data.to_vec());
-                }
-            }
-            let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
-            if data.len() > MAX_UPLOAD {
-                return Err(AppError::BadRequest("image too large (max 32 MB)".into()));
-            }
+            let (data, original_name) = if is_multipart(&req) {
+                read_multipart_file(req).await?
+            } else {
+                let (data, name, _) = read_raw_upload(req).await?;
+                (data, name)
+            };
 
             let mut img = ops::decode(&data)?;
             ops::fit(&mut img, MAX_DIM);
@@ -368,6 +522,8 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
             // Make sure the document has a stack, then resolve the target.
             layers::ensure_base_layer(&db, &uid, &id)?;
             let target = layers::active_layer(&db, &uid, &id, body.layer_id.as_deref())?;
+            let doc = layers::load_doc(&db, &uid, &id)?;
+            let mask = layers::local_selection(&doc, &target);
             let (new_raw, nw, nh) = ops::apply_raw(
                 &target.bytes,
                 target.w,
@@ -376,6 +532,7 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
                 target.w,
                 target.h,
                 &operations,
+                mask.as_deref(),
             )?;
 
             let (comp_raw, cw, ch) = if commit {
@@ -433,6 +590,210 @@ fn image_render(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return raw_response(raw, w, h);
             }
             png_response(&raw, w, h)
+        }
+    })
+}
+
+/* ── POST /api/images/:id/crop | resize | rotate | flip ─────── */
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct DocCrop {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+fn image_crop(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let body: DocCrop = take_json(req).await?;
+            crate::document::crop(&ctx.db(), &uid, &id, body.x, body.y, body.width, body.height)?;
+            let (_, w, h) = layers::refresh_composite(&ctx.db(), &uid, &id)?;
+            Ok(ok(json!({ "image_id": id, "width": w, "height": h })))
+        }
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct DocResize {
+    width: u32,
+    height: u32,
+}
+
+fn image_resize(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let body: DocResize = take_json(req).await?;
+            crate::document::resize(&ctx.db(), &uid, &id, body.width, body.height)?;
+            let (_, w, h) = layers::refresh_composite(&ctx.db(), &uid, &id)?;
+            Ok(ok(json!({ "image_id": id, "width": w, "height": h })))
+        }
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct DocRotate {
+    angle: f64,
+}
+
+fn image_rotate(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let body: DocRotate = take_json(req).await?;
+            crate::document::rotate(&ctx.db(), &uid, &id, body.angle)?;
+            let (_, w, h) = layers::refresh_composite(&ctx.db(), &uid, &id)?;
+            Ok(ok(json!({ "image_id": id, "width": w, "height": h })))
+        }
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct DocFlip {
+    axis: Option<String>,
+}
+
+fn image_flip(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let body: DocFlip = take_json(req).await?;
+            crate::document::flip(&ctx.db(), &uid, &id, body.axis.as_deref().unwrap_or("horizontal"))?;
+            let (_, w, h) = layers::refresh_composite(&ctx.db(), &uid, &id)?;
+            Ok(ok(json!({ "image_id": id, "width": w, "height": h })))
+        }
+    })
+}
+
+/* ── GET/PUT/DELETE /api/images/:id/selection ───────────────── */
+
+/// The active selection, as a canvas-sized 8-bit coverage mask (base64).
+fn selection_get(ctx: Arc<PluginCtx>) -> RouteHandler {
+    use base64::Engine;
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let rows = ctx.db().query(
+                "SELECT selection, selection_width, selection_height FROM images \
+                 WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            let row = rows.first().ok_or_else(|| AppError::NotFound("Image not found".into()))?;
+            let mask = match row.first() {
+                Some(Value::Blob(b)) if !b.is_empty() => Some(b.clone()),
+                _ => None,
+            };
+            let data = mask.map(|m| base64::engine::general_purpose::STANDARD.encode(m));
+            Ok(ok(json!({
+                "image_id": id,
+                "width": as_int(row.get(1).unwrap_or(&Value::Null)),
+                "height": as_int(row.get(2).unwrap_or(&Value::Null)),
+                "data": data,
+            })))
+        }
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct SelectionBody {
+    width: Option<u32>,
+    height: Option<u32>,
+    /// Base64, row-major, one byte per pixel.
+    data: Option<String>,
+    /// Clear the selection regardless of the other fields.
+    clear: Option<bool>,
+}
+
+fn selection_set(ctx: Arc<PluginCtx>) -> RouteHandler {
+    use base64::Engine;
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let body: SelectionBody = take_json(req).await?;
+            if body.clear.unwrap_or(false) || body.data.is_none() {
+                let changed = ctx.db().execute(
+                    "UPDATE images SET selection = NULL, selection_width = 0, selection_height = 0 \
+                     WHERE id = ?1 AND user_id = ?2",
+                    &[Value::text(&id), Value::text(&uid)],
+                )?;
+                if changed == 0 {
+                    return Err(AppError::NotFound("Image not found".into()));
+                }
+                return Ok(ok(json!({ "image_id": id, "cleared": true })));
+            }
+            let w = body.width.unwrap_or(0);
+            let h = body.height.unwrap_or(0);
+            if w == 0 || h == 0 {
+                return Err(AppError::BadRequest("selection needs width and height".into()));
+            }
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(body.data.as_deref().unwrap_or(""))
+                .map_err(|e| AppError::BadRequest(format!("selection data is not valid base64: {e}")))?;
+            let need = (w as usize) * (h as usize);
+            if bytes.len() < need {
+                return Err(AppError::BadRequest(format!(
+                    "selection data is {} bytes, need at least {} ({}×{})",
+                    bytes.len(),
+                    need,
+                    w,
+                    h
+                )));
+            }
+            let mask = &bytes[..need];
+            let changed = ctx.db().execute(
+                "UPDATE images SET selection = ?1, selection_width = ?2, selection_height = ?3 \
+                 WHERE id = ?4 AND user_id = ?5",
+                &[
+                    Value::blob(mask.to_vec()),
+                    Value::Int(w as i64),
+                    Value::Int(h as i64),
+                    Value::text(&id),
+                    Value::text(&uid),
+                ],
+            )?;
+            if changed == 0 {
+                return Err(AppError::NotFound("Image not found".into()));
+            }
+            Ok(ok(json!({ "image_id": id, "width": w, "height": h })))
+        }
+    })
+}
+
+fn selection_delete(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = path_param(&req, "id")?;
+            let changed = ctx.db().execute(
+                "UPDATE images SET selection = NULL, selection_width = 0, selection_height = 0 \
+                 WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            if changed == 0 {
+                return Err(AppError::NotFound("Image not found".into()));
+            }
+            Ok(ok(json!({ "image_id": id, "cleared": true })))
         }
     })
 }
@@ -500,86 +861,14 @@ fn layer_create(ctx: Arc<PluginCtx>) -> RouteHandler {
             let doc = layers::load_doc(&db, &uid, &id)?;
 
             if is_multipart(&req) {
-                let mut multipart = Multipart::from_request(req, &())
-                    .await
-                    .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
-                let mut file: Option<Vec<u8>> = None;
-                let mut name: Option<String> = None;
-                let mut group_id: Option<String> = None;
-                while let Some(field) = multipart
-                    .next_field()
-                    .await
-                    .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
-                {
-                    match field.name() {
-                        Some("file") => {
-                            name = field.file_name().map(|f| f.to_string()).or(name);
-                            let data = field
-                                .bytes()
-                                .await
-                                .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
-                            file = Some(data.to_vec());
-                        }
-                        Some("name") => {
-                            name = Some(
-                                field
-                                    .text()
-                                    .await
-                                    .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?,
-                            );
-                        }
-                        Some("group_id") => {
-                            group_id = Some(
-                                field
-                                    .text()
-                                    .await
-                                    .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-                let data = file.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
-                if data.len() > MAX_UPLOAD {
-                    return Err(AppError::BadRequest("image too large (max 32 MB)".into()));
-                }
-                let mut img = ops::decode(&data)?;
-                ops::fit(&mut img, MAX_DIM);
-                let w = img.get_width();
-                let h = img.get_height();
-                let raw = img.get_raw_pixels();
-                // First layer sizes the canvas; later ones land at the origin.
-                if doc.width == 0 || doc.height == 0 {
-                    db.execute(
-                        "UPDATE images SET width = ?1, height = ?2 WHERE id = ?3 AND user_id = ?4",
-                        &[
-                            Value::Int(w as i64),
-                            Value::Int(h as i64),
-                            Value::text(&id),
-                            Value::text(&uid),
-                        ],
-                    )?;
-                }
-                let name = clean_title(
-                    &name
-                        .as_deref()
-                        .map(|n| n.split('.').next().unwrap_or(n).to_string())
-                        .unwrap_or_else(|| format!("Layer {}", doc.title)),
-                );
-                let layer_id = layers::insert_layer(
-                    &db,
-                    &uid,
-                    &id,
-                    &name,
-                    group_id.as_deref().filter(|s| !s.is_empty()),
-                    0,
-                    0,
-                    w,
-                    h,
-                    raw,
-                )?;
-                layers::refresh_composite(&db, &uid, &id)?;
-                return Ok(ok(json!({ "layer_id": layer_id, "name": name, "width": w, "height": h })));
+                let (data, name, group_id) = read_multipart_layer(req).await?;
+                return insert_uploaded_layer(&db, &uid, &id, &doc, data, name, group_id);
+            }
+            // A raw binary body (image bytes) means "import a file as a layer";
+            // only a JSON content type creates a blank layer/group.
+            if !is_json(&req) {
+                let (data, name, group_id) = read_raw_upload(req).await?;
+                return insert_uploaded_layer(&db, &uid, &id, &doc, data, name, group_id);
             }
 
             let body: NewLayer = take_json(req).await?;
@@ -690,24 +979,12 @@ fn layer_image(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let id = path_param(&req, "id")?;
             let layer_id = path_param(&req, "layer_id")?;
-            let mut multipart = Multipart::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
-            let mut file: Option<Vec<u8>> = None;
-            while let Some(field) = multipart
-                .next_field()
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
-            {
-                if field.name() == Some("file") {
-                    let data = field
-                        .bytes()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
-                    file = Some(data.to_vec());
-                }
-            }
-            let data = file.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+            let (data, _) = if is_multipart(&req) {
+                read_multipart_file(req).await?
+            } else {
+                let (data, name, _) = read_raw_upload(req).await?;
+                (data, name)
+            };
             let mut img = ops::decode(&data)?;
             ops::fit(&mut img, MAX_DIM);
             let raw = img.get_raw_pixels();

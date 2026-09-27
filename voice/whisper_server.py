@@ -406,8 +406,33 @@ MODELS: dict[str, dict[str, str]] = {
 }
 DEFAULT_MODEL = os.environ.get("WHISPER_MODEL", "tiny").strip().lower() or "tiny"
 MODELS_DIR = Path(os.environ.get("WHISPER_MODELS_DIR", "data/whisper-models"))
-DEVICE = os.environ.get("WHISPER_DEVICE", "cpu").strip() or "cpu"
-COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "int8").strip() or "int8"
+
+
+def _resolve_device() -> str:
+    """WHISPER_DEVICE, or auto-detect: CUDA when CTranslate2 sees a GPU, else CPU.
+
+    CTranslate2 (the faster-whisper backend) has no Vulkan device — Vulkan STT
+    needs whisper.cpp with GGML_VULKAN, a different engine. ``voice/detect_accel.py``
+    reports the Vulkan presence to the log for exactly that reason.
+    """
+    requested = (os.environ.get("WHISPER_DEVICE") or "auto").strip().lower() or "auto"
+    if requested != "auto":
+        return requested
+    try:
+        import ctranslate2  # type: ignore
+
+        if ctranslate2.get_cuda_device_count() > 0:
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+
+DEVICE = _resolve_device()
+COMPUTE_TYPE = (
+    os.environ.get("WHISPER_COMPUTE_TYPE", "").strip()
+    or ("float16" if DEVICE == "cuda" else "int8")
+)
 
 # Partial decoding cadence: never re-decode until at least this much new audio
 # arrived. 500 ms keeps the transcript visibly live without burning the CPU on
@@ -485,12 +510,30 @@ def get_model(key: str):
             return cached
         from faster_whisper import WhisperModel  # imported lazily: slow + native
 
-        model = WhisperModel(
-            str(model_path(key)),
-            device=DEVICE,
-            compute_type=COMPUTE_TYPE,
-            download_root=str(MODELS_DIR),
-        )
+        try:
+            model = WhisperModel(
+                str(model_path(key)),
+                device=DEVICE,
+                compute_type=COMPUTE_TYPE,
+                download_root=str(MODELS_DIR),
+            )
+        except Exception as exc:
+            # A CUDA build present without a working driver (or a GPU with no
+            # matching kernels) must not take STT down — fall back to CPU once.
+            if DEVICE == "cpu":
+                raise
+            logger.warning(
+                "Whisper device %s (%s) failed to load (%s); retrying on CPU",
+                DEVICE,
+                COMPUTE_TYPE,
+                exc,
+            )
+            model = WhisperModel(
+                str(model_path(key)),
+                device="cpu",
+                compute_type="int8",
+                download_root=str(MODELS_DIR),
+            )
         _models[key] = model
         return model
 

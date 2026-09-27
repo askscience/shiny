@@ -25,7 +25,9 @@ The web UI (`web/`) is a desktop-style workspace:
 
 - **Top HUD** — clock + local weather; a plugin icon tray (grouped by category; tap an
   inactive icon to activate the plugin, tap an active one to focus its window); the
-  traveler plugin's saved-places menu; host sound and network chips; workspace tabs;
+  traveler plugin's saved-places menu; host sound, network and Bluetooth chips (icon +
+  percentage by default; each can reveal its device name and/or hide the percentage in
+  Settings → Appearance); workspace tabs; a power menu (restart / power off / suspend);
   and Settings / Plugins / Chats on the right.
 - **Plugin-window desktop** — every active plugin with an interface lives in its own
   window (slim title bar with close/deactivate + fullscreen; drag and resize in the
@@ -60,6 +62,8 @@ The web UI (`web/`) is a desktop-style workspace:
   desktop backgrounds
 - Host sound panel (PipeWire): a top-bar chip with output/input volume, mute
   and default-device switching, fed live from the machine's audio server
+- Host Bluetooth panel (BlueZ): a top-bar chip with adapter power, scanning,
+  pairing/connecting/disconnecting/forgetting devices, and battery levels
 - Plugin manager: runtime install/uninstall/activate of `.zip`/`.tar.gz` plugins with
   hot router swap and an install audit log
 - Settings and Plugins windows on the desktop (install / activate / activity feed)
@@ -84,9 +88,11 @@ The web UI (`web/`) is a desktop-style workspace:
 - `mail` — IMAP inbox + SMTP compose
 - `calendar` — events in a month-grid window
 - `calculator` — basic and scientific math
-- `image` — layered image editor: bottom-to-top layers and folders with opacity,
-  11 blend modes, compositing, merge/flatten, plus Photon effects, filters and
-  transforms applied per layer
+- `image` — layered raster editor: bottom-to-top layers and folders with opacity,
+  11 blend modes, compositing, merge/flatten, plus a docked workspace (menu bar,
+  tool options, tool palette, panel dock) and a Rust engine for tone/colour
+  adjustments, convolution and distortion filters, painting, shapes, selection
+  masks and document transforms
 - `studio` — session-grid music sequencer + synth, rendered to WAV (self-contained DSP on `fundsp`)
 - `radio` — internet radio via Radio Browser
 - `youtube` — search and watch videos
@@ -120,7 +126,8 @@ The web UI (`web/`) is a desktop-style workspace:
   `pactl` (`pulseaudio-utils`) on `PATH` — optional; powers the top-bar sound
   panel. Without it the chip hides itself and the rest of the app is unchanged.
   On a T2 Mac, `apple-t2-audio-config` supplies the ALSA UCM profiles for the
-  internal speakers and microphone.
+  internal speakers and microphone, and `scripts/install-t2-audio-dsp.sh`
+  installs the measured speaker DSP (see below).
 - [ffmpeg](https://ffmpeg.org) (`ffmpeg` + `ffprobe` on `PATH`, or `FFMPEG_BIN`/`FFPROBE_BIN`)
   — optional; the Files window uses it to render video thumbnails/posters and read
   duration. Without it, videos show a generic icon.
@@ -475,6 +482,9 @@ only while their plugin is installed (and are authenticated as well).
 | GET | `/api/audio/status` | Host audio: output/input devices, volume, mute (PipeWire) |
 | GET | `/api/audio/events` | Audio change stream (SSE) |
 | POST | `/api/audio/volume` · `/api/audio/mute` · `/api/audio/default` | Set volume, mute, default device (loopback only) |
+| GET | `/api/bluetooth/status` | Host Bluetooth: adapter, power, discovery, devices (BlueZ) |
+| GET | `/api/bluetooth/events` | Bluetooth change stream (SSE) |
+| POST | `/api/bluetooth/power` · `/scan` · `/pair` · `/connect` · `/disconnect` · `/forget` · `/trust` | Bluetooth actions (loopback only) |
 | GET | `/api/touchbar` | Host Touch Bar capability (T2 MacBook) |
 | GET · POST | `/api/keyboard/backlight` | Host keyboard backlight (write is loopback-only) |
 | GET · POST | `/api/screen/brightness` | Host screen brightness (write is loopback-only) |
@@ -571,6 +581,110 @@ On a T2 Mac the internal speakers and mic come from the T2 kernel's
 `t2bce_audio` driver plus `apple-t2-audio-config` (ALSA UCM profiles).
 PipeWire + WirePlumber expose them as the `HiFi` profile — 6-channel speakers
 and a 3-channel mic.
+
+### T2 MacBook speaker DSP (MacBookPro16,1)
+
+The 16-inch MacBook Pro's six speakers are tuned by Apple's audio stack on
+macOS. Linux exposes them as one raw stereo sink, which makes them sound thin
+and harsh. `scripts/install-t2-audio-dsp.sh` installs the community's measured
+FIR crossover/EQ graph as a PipeWire software DSP, so the speakers are driven
+the way the hardware expects:
+
+```bash
+sudo apt install bankstown-lv2 lsp-plugins-lv2   # the graph's LV2 plugins
+sudo scripts/install-t2-audio-dsp.sh             # --uninstall reverses it
+systemctl --user restart wireplumber pipewire pipewire-pulse
+```
+
+The graph and FIRs are vendored under `scripts/t2-audio/` from the T2 Linux
+team's [`t2-apple-audio-dsp`](https://github.com/lemmyg/t2-apple-audio-dsp)
+(MIT, with the Asahi Linux audio license — see `scripts/t2-audio/README.md`).
+The script is **gated to `MacBookPro16,1` on purpose**: each model needs its
+own FIRs and the wrong ones can damage speakers. It refuses to run if the LV2
+plugins are missing, because the raw node is hidden by the graph. After
+installation the sound panel shows **“MacBook Pro T2 DSP Speakers”** rather than
+the raw `HiFi` sink. The microphone is left on the raw device — upstream's mic
+DSP needs `triforce-lv2`, which Debian does not package.
+
+### T2 MacBook intermittent-silence fix (t2bce_audio)
+
+The same 16" MacBook's speakers can drop out for a moment and come back while
+everything looks healthy. The cause is in the kernel driver, not PipeWire: it
+pins the ALSA period to one packet, which is a **single frame** on the speaker
+PCM, forcing a one-frame period and a wakeup per frame. A late wakeup starves
+the ring and the stream stalls briefly.
+
+```bash
+grep period_size /proc/asound/card0/pcm0p/sub0/hw_params   # 1 = affected
+sudo scripts/install-t2-audio-period-fix.sh                # builds it with DKMS
+# …then reboot (or: sudo modprobe -r t2bce_audio && sudo modprobe t2bce_audio)
+grep period_size /proc/asound/card0/pcm0p/sub0/hw_params   # 1024 = fixed
+```
+
+The module keeps `bytes_per_packet` as the period floor but lets clients pick a
+larger one; the driver's playback path is hrtimer-driven, so no DMA change is
+needed. It is DKMS (survives kernel updates), test-builds before installing,
+and falls back to the stock module if it ever fails to load. See
+`scripts/t2-audio/period-fix/README.md`. This is independent of the community
+host-clock watchdog, which fixes a different failure ("no timestamp ever").
+
+### T2 MacBook Bluetooth audio dropouts
+
+Bluetooth playback on a T2 Mac can cut out for a moment while the connection
+itself stays up. The A2DP socket buffer holds only ~10 SBC packets
+(`SO_SNDBUF 5344` ≈ 213 ms) and sends a 512-byte block every 21.33 ms, so one
+scheduling hiccup on the T2's combo Wi-Fi/Bluetooth chip drains it and the
+stream gaps until it catches up.
+
+```bash
+sudo scripts/install-t2-bluetooth-fix.sh      # --uninstall reverses it
+systemctl --user restart wireplumber pipewire pipewire-pulse
+```
+
+It enables **SBC-XQ** and orders it ahead of plain SBC, which carries more
+audio per packet and is the more robust choice on this controller family. Pure
+user-space WirePlumber config, gated to T2 MacBooks. Verify with
+`pactl list cards | grep -A3 bluez_card` — the profile should be
+`a2dp-sink-sbc_xq`.
+
+(Diagnosis: measured `block_size 512`, `SO_SNDBUF 5344`, a 21.33 ms cadence,
+and occasional `Failure in Bluetooth audio transport …/sepN/fdN`. Node
+suspension was investigated first and is *not* the cause — the transport is
+released/re-acquired independently of node suspend.)
+
+## Host Bluetooth (BlueZ)
+
+The top-bar Bluetooth chip mirrors the sound and network panels. Core reads
+BlueZ over the **system D-Bus** (`zbus`), caching one snapshot and broadcasting
+it: `/api/bluetooth/status` reads the cache, `/api/bluetooth/events` relays
+changes as SSE, and the mutations (`power`, `scan`, `pair`, `connect`,
+`disconnect`, `forget`, `trust`) are accepted only from the local machine.
+
+The chip shows the connected device (or "Bluetooth off"), and its menu lists
+devices in three groups — Connected, Paired and Nearby — with per-device
+connect/disconnect/forget and battery percentage when BlueZ reports one. A
+short `NoInputNoOutput` pairing agent is registered with BlueZ so "just works"
+devices pair without a PIN prompt; keyboards need a tiny bit of a different
+shape, but pairing still completes. No adapter, or no `bluetoothd`, and the
+chip hides itself — exactly like the network chip with no Wi-Fi.
+
+It needs nothing installed beyond BlueZ (`bluez`, usually already present).
+On a service without an active seat session, BlueZ may require a polkit grant
+for the same reason NetworkManager does (see *Running unprivileged*).
+
+## Host power (logind)
+
+The top-bar power menu restarts, powers off or suspends the machine through the
+freedesktop **logind** D-Bus interface (`org.freedesktop.login1.Manager`, via
+`zbus`) — the same system bus the Bluetooth panel uses. `/api/power/status`
+reports which actions the current session allows (`CanReboot` / `CanPowerOff` /
+`CanSuspend`; `challenge` counts as allowed), and an entry the session would
+refuse is shown disabled instead of failing on click. Restart and power off ask
+for confirmation first; suspend does not, since a keypress brings the machine
+back. The actions (`/api/power/reboot`, `/api/power/off`, `/api/power/suspend`)
+call logind with `interactive = false` and are accepted only from the local
+machine. Without logind the menu reports `available: false` rather than the
+actions.
 
 ### Power and lid behaviour
 
@@ -703,6 +817,16 @@ that
 device — read-only, never `EVIOCGRAB` — so the pointer and two-finger scrolling
 are untouched. macOS has native multi-touch gestures and does not use this path.
 
+Because a two-finger scroll moves just like a three-finger swipe, the reader
+takes care not to mistake one for the other. It tracks every contact's own
+travel, and it drops a contact the kernel labels `MT_TOOL_PALM` — but many
+pads, including Apple's `bcm5974` trackpad, never send that label. On those it
+falls back to contact size (`ABS_MT_TOUCH_MAJOR`, or `ABS_MT_PRESSURE` where
+there is no size axis): a thumb or palm resting beside the scrolling fingers
+covers far more of the pad, so the one contact that dwarfs the rest is ignored.
+A pad that reports neither, or whose contacts are all the same size, keeps the
+simpler behaviour.
+
 The reader needs permission to open `/dev/input/event*`, and the kiosk runs as
 an unprivileged user, so install the udev rule once:
 
@@ -723,6 +847,9 @@ overrides device discovery on unusual hardware.
 | Supertonic | TTS fails; STT still works |
 | faster-whisper | Voice falls back to the in-browser Vosk engine |
 | PipeWire / `pactl` | The sound chip hides itself; the rest of the app is unchanged |
+| NetworkManager | The network chip hides itself; the rest of the app is unchanged |
+| BlueZ / `bluetoothd` | The Bluetooth chip hides itself; the rest of the app is unchanged |
+| T2 speaker DSP (− LV2 plugins) | `install-t2-audio-dsp.sh` refuses to install rather than hiding the raw speakers; audio keeps working untuned |
 | GPSD | Mock GPS (fixed point + drift) |
 | Touch Bar | The feature stays dormant: the native bar is not installed off macOS and `auto` mode never activates. On Linux, `install-touchbar.sh` exits without touching anything. |
 | Touchpad gestures | The evdev reader finds no readable device and stays off; the pointer, scrolling and the rest of the app are unchanged. |

@@ -18,15 +18,19 @@ const BG_KEY = 'ui.background';
  *
  * `dim` — strength of the black scrim painted over the artwork. It only ever
  *         applies on a DARK theme (a light theme never veils a wallpaper):
- *         the dark pieces need almost none, the light "Paper" piece needs a
- *         heavy one to keep white UI text legible.
+ *         the dark pieces need almost none, the light "Parchment" piece needs
+ *         a heavy one to keep white UI text legible.
+ *
+ * The `id`s are kept from the previous set on purpose: a stored selection is
+ * an id, so renaming them would blank the wallpaper for anyone who had picked
+ * one. Only the labels and files changed in the rebrand.
  */
 export const BACKGROUND_PRESETS = [
-  { id: 'split',  label: 'Split',  src: '/backgrounds/split.svg',  dim: 0.12 },
-  { id: 'grid',   label: 'Grid',   src: '/backgrounds/grid.svg',   dim: 0.12 },
-  { id: 'halo',   label: 'Halo',   src: '/backgrounds/halo.svg',   dim: 0.05 },
-  { id: 'offset', label: 'Offset', src: '/backgrounds/offset.svg', dim: 0.18 },
-  { id: 'paper',  label: 'Paper',  src: '/backgrounds/paper.svg',  dim: 0.55 },
+  { id: 'split',  label: 'Swirl',     src: '/backgrounds/swirl.svg',   dim: 0.12 },
+  { id: 'grid',   label: 'Lattice',   src: '/backgrounds/lattice.svg', dim: 0.12 },
+  { id: 'halo',   label: 'Halo',      src: '/backgrounds/halo.svg',    dim: 0.05 },
+  { id: 'offset', label: 'Ripple',    src: '/backgrounds/ripple.svg',  dim: 0.18 },
+  { id: 'paper',  label: 'Parchment', src: '/backgrounds/paper.svg',   dim: 0.55 },
 ];
 
 /**

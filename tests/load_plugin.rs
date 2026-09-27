@@ -10,6 +10,7 @@ use std::sync::Arc;
 use shiny::api::AppState;
 use shiny::config::Config;
 use shiny::services::audio::AudioService;
+use shiny::services::bluetooth::BluetoothService;
 use shiny::services::diary_gen::DiaryGenerator;
 use shiny::services::display::DisplayService;
 use shiny::services::gpsd::GpsdService;
@@ -17,6 +18,7 @@ use shiny::services::keyboard_backlight::KeyboardBacklightService;
 use shiny::services::network::NetworkService;
 use shiny::services::ollama::OllamaClient;
 use shiny::services::osm::OsmService;
+use shiny::services::power::PowerService;
 use shiny::services::screen_brightness::ScreenBrightnessService;
 use shiny::services::supertonic::SupertonicClient;
 use shiny::services::touchbar::TouchBarService;
@@ -43,6 +45,8 @@ async fn state_for(plugins_dir: &str, db: &str) -> AppState {
         gpsd: GpsdService::new(config.gpsd_host.clone(), config.gpsd_port),
         network: NetworkService::new(),
         audio: AudioService::new(),
+        bluetooth: BluetoothService::new(),
+        power: PowerService::new(),
         display: DisplayService::new(),
         touchbar: TouchBarService::new(),
         keyboard_backlight: KeyboardBacklightService::new(),
@@ -55,6 +59,10 @@ async fn state_for(plugins_dir: &str, db: &str) -> AppState {
         agent_turns: Default::default(),
         supertonic: SupertonicClient::new(config.supertonic_url.clone(), config.supertonic_voice.clone()),
         whisper: WhisperClient::new(config.whisper_url.clone(), config.whisper_models_dir.clone()),
+        qwen_tts: shiny::services::qwen_tts::QwenClient::new(
+            config.qwen_tts_url.clone(),
+            std::path::PathBuf::from(&config.qwen_tts_models_dir),
+        ),
         plugins: shiny::plugins::PluginManager::new(
             std::path::PathBuf::from(&config.plugins_dir),
             pool.clone(),

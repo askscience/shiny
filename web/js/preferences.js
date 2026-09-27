@@ -1,6 +1,7 @@
 import { apiFetch, getTraveler } from './api.js';
 import { isMobilePortrait } from './viewport.js';
 import { normalizeTouchBarSetting } from './touchbarShared.js';
+import { normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
@@ -21,6 +22,8 @@ const VOICE_SILENCE_KEY = 'voice.silence_timeout';
 const VOICE_WAKE_KEY = 'voice.wake_word';
 const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
 const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
+const VOICE_TTS_ENGINE_KEY = 'voice.tts_engine';
+const VOICE_QWEN_MODEL_KEY = 'voice.qwen_model';
 const ORB_STYLE_KEY = 'orb.style';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const DEFAULT_AI_NAME = "PEAK'D!";
@@ -90,6 +93,7 @@ export async function loadUserPreferences() {
   }
   applyDesktopSurface();
   applyImmersive();
+  applyHudChips();
 }
 
 export function getAiName() {
@@ -379,6 +383,37 @@ export function applyImmersive() {
   window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));
 }
 
+/* ── Host status chips (top bar: sound, network, Bluetooth) ────
+ * Each top-bar chip shows an icon plus, optionally, a device label and a
+ * number (volume / signal / battery). These two switches decide which text
+ * parts are visible; hiding both leaves an icon-only button. Applied as data
+ * attributes on <html> so the stylesheet can hide the spans without the chip
+ * modules re-rendering.
+ * ───────────────────────────────────────────────────────────── */
+
+const HUD_CHIPS_KEY = 'hud.chips';
+
+/** Which parts of the host status chips are visible, merged over defaults. */
+export function getHudChips() {
+  return normalizeHudChips(readJson(scopedKey(HUD_CHIPS_KEY), null));
+}
+
+export function setHudChips(patch) {
+  const merged = normalizeHudChips({ ...getHudChips(), ...patch });
+  const raw = JSON.stringify(merged);
+  localStorage.setItem(scopedKey(HUD_CHIPS_KEY), raw);
+  persist(HUD_CHIPS_KEY, raw);
+  applyHudChips();
+}
+
+/** Publish the chip visibility to CSS via data attributes on <html>. */
+export function applyHudChips() {
+  const ds = hudChipsDataset(getHudChips());
+  const root = document.documentElement;
+  root.dataset.hudName = ds.hudName;
+  root.dataset.hudPercent = ds.hudPercent;
+}
+
 /* ── Voice (per-user, server-backed) ───────────────────────── */
 
 export function getTtsVoice() {
@@ -402,6 +437,45 @@ export function setTtsSpeed(speed) {
   const n = clamp(numOr(speed, 1.0), 0.7, 2.0);
   localStorage.setItem(scopedKey(VOICE_TTS_SPEED_KEY), String(n));
   persist(VOICE_TTS_SPEED_KEY, String(n));
+}
+
+/**
+ * Which engine speaks the assistant's replies.
+ *
+ *   'supertonic' — bundled, small, always available (the default).
+ *   'qwen'       — Qwen3-TTS via qwentts.cpp: newer and more natural, and the
+ *                  only engine with a Vulkan backend (so an AMD/Intel GPU is
+ *                  usable). Opt-in because it needs a one-time build and a
+ *                  ~600 MB model download.
+ */
+export function getTtsEngine() {
+  return localStorage.getItem(scopedKey(VOICE_TTS_ENGINE_KEY)) === 'qwen' ? 'qwen' : 'supertonic';
+}
+
+export function setTtsEngine(engine) {
+  const value = engine === 'qwen' ? 'qwen' : 'supertonic';
+  const key = scopedKey(VOICE_TTS_ENGINE_KEY);
+  if (value === 'supertonic') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(VOICE_TTS_ENGINE_KEY, value === 'supertonic' ? '' : value);
+}
+
+/**
+ * Qwen3-TTS model size. `0.6b-customvoice` is the bundled default;
+ * `1.7b-customvoice` is a ~1.2 GB opt-in download.
+ */
+export function getQwenModel() {
+  return localStorage.getItem(scopedKey(VOICE_QWEN_MODEL_KEY)) === '1.7b-customvoice'
+    ? '1.7b-customvoice'
+    : '0.6b-customvoice';
+}
+
+export function setQwenModel(model) {
+  const value = model === '1.7b-customvoice' ? '1.7b-customvoice' : '0.6b-customvoice';
+  const key = scopedKey(VOICE_QWEN_MODEL_KEY);
+  if (value === '0.6b-customvoice') localStorage.removeItem(key);
+  else localStorage.setItem(key, value);
+  persist(VOICE_QWEN_MODEL_KEY, value === '0.6b-customvoice' ? '' : value);
 }
 
 export function getSilenceTimeout() {

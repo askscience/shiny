@@ -80,6 +80,10 @@ qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 # service compiles to a stub.
 [target.'cfg(target_os = "linux")'.dependencies]
 nmrs = "3.5"
+# BlueZ over the system D-Bus — the host's Bluetooth adapter and devices for
+# the top-bar panel (src/services/bluetooth.rs). Same Linux-only contract; the
+# crate is already in the tree through `nmrs`.
+zbus = "5"
 # Kernel interface view (addresses + operstate), for interfaces NetworkManager
 # does not manage — e.g. ifupdown-managed links, which NM reports as
 # "unmanaged" with no address. Pure Rust, libc only.

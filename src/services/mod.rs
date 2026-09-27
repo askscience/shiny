@@ -1,14 +1,17 @@
 pub mod ai;
 pub mod audio;
+pub mod bluetooth;
 pub mod ollama;
 pub mod openai;
 pub mod web_search;
 pub mod gpsd;
 pub mod network;
+pub mod power;
 pub mod osm;
 pub mod diary_gen;
 pub mod supertonic;
 pub mod whisper;
+pub mod qwen_tts;
 pub mod artifacts;
 pub mod agent_tools;
 pub mod insights;
