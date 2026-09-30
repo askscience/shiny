@@ -198,7 +198,9 @@ function buildSection(label, target) {
   });
   const range = slider({
     min: 0,
-    max: 100,
+    // Output may be pushed past unity (over-amplification); input stays at
+    // 100 % so a boosted microphone cannot clip the capture.
+    max: target === 'sink' ? 150 : 100,
     step: 1,
     value: 0,
     onInput: (value) => onVolumeInput(target, value),
@@ -289,6 +291,7 @@ function updateSection(ref, target, nodes, defaultName) {
   ref.titleEl.textContent = nodeLabel(node);
   ref.subEl.textContent = nodeSubtitle(node);
   ref.pctEl.textContent = node.muted ? 'Muted' : `${node.volume_percent}%`;
+  ref.pctEl.classList.toggle('is-over', !node.muted && node.volume_percent > 100);
   setButtonIcon(ref.muteBtn, nodeIcon(node, target));
   ref.muteBtn.setAttribute('aria-label', node.muted
     ? (target === 'source' ? 'Unmute microphone' : 'Unmute output')
@@ -333,7 +336,10 @@ function renderDeviceList(ref, target, nodes) {
 function onVolumeInput(target, value) {
   const ref = refs[target];
   dragging = true;
-  if (ref) ref.pctEl.textContent = `${value}%`;
+  if (ref) {
+    ref.pctEl.textContent = `${value}%`;
+    ref.pctEl.classList.toggle('is-over', Number(value) > 100);
+  }
   clearTimeout(volumeTimer);
   volumeTimer = setTimeout(() => void pushVolume(target, value), VOLUME_DEBOUNCE_MS);
 }

@@ -1,6 +1,6 @@
 # Plugin system
 
-`shiny` is built around an **AI sphere** — a conversational agent driven by Ollama with the orb UI, voice (Vosk STT, Supertonic TTS), web search, and an artifact dock at its core. **Every domain beyond that lives in a plugin.**
+`shiny` is built around an **AI sphere** — a conversational agent driven by Ollama with the voice bar UI, voice (Vosk STT, Supertonic TTS), web search, and an artifact dock at its core. **Every domain beyond that lives in a plugin.**
 
 This document explains the architecture, the trait surface, the installer workflow, and a worked example. After reading it you can write, build, package, install, and uninstall a plugin.
 
@@ -14,7 +14,7 @@ This document explains the architecture, the trait surface, the installer workfl
                   shiny (core binary)
             ┌──────────────────────────────┐
             │  AI sphere                   │
-            │  ├─ orb UI / sphere          │
+            │  ├─ voice bar UI             │
             │  ├─ Vosk STT + Supertonic TTS│
             │  ├─ OllamaClient             │
             │  ├─ SearchService            │
@@ -41,13 +41,13 @@ The binary's core responsibilities:
 | HTTP server (axum), auth middleware, Bearer tokens | Tool implementations |
 | `OllamaClient`, `SearchService`, `SupertonicClient`, voice/STT plumbing | REST routes for the plugin's domain |
 | The matching between **an LLM action block** and the right tool | Migrations (one or more `.sql` files) |
-| The orb canvas and the front-end shell | Skill markdown advertised to the LLM |
+| The voice bar and the front-end shell | Skill markdown advertised to the LLM |
 | `PluginManager`, `ToolRegistry`, installer, admin API | A **persona fragment** ("…a travel navigator AI…") |
 | `data/plugins/install.log` (the install audit trail) | Front-end bundle under `web/` |
 
 ### Without any plugins the app is "just the AI sphere"
 
-Start `shiny` with an empty `PLUGINS_DIR` and you get an orb that listens, speaks, replies, and has the built-in generic tools only (`web_search`, `show_artifact`, `update_artifact`). Everything else is opt-in.
+Start `shiny` with an empty `PLUGINS_DIR` and you get a voice bar that listens, speaks, replies, and has the built-in generic tools only (`web_search`, `show_artifact`, `update_artifact`). Everything else is opt-in.
 
 ---
 
@@ -871,7 +871,7 @@ The same split applies to tools: **core is a simple AI assistant** — its only
 built-in tool is `web_search` (`web/skills/core-assistant.md`). Artifact cards
 (`show_artifact`/`update_artifact`), trips, GPS, maps, navigation and diary
 all belong to the traveler plugin; without it the frontend hides the map,
-dock and panels, leaving the voice/text chat over the orb.
+dock and panels, leaving the voice/text chat over the voice bar.
 
 | Layer | Location | Role |
 |---|---|---|
@@ -882,7 +882,7 @@ How plugin content reaches the eye:
 
 - **Plugin windows** — every plugin with an interface lives inside its own
   **window** in the desktop shell (`web/js/tiles.js`, `#tile-grid`): the HUD
-  header and the AI sphere/dock are fixed chrome, and each plugin is an app
+  header and the voice bar/dock are fixed chrome, and each plugin is an app
   with its own window container between them. The traveler plugin's window
   hosts the map. Every window has a slim **title bar** (close = deactivate,
   fullscreen = fill the desktop without covering the HUD); *Settings → Desktop
@@ -902,7 +902,7 @@ How plugin content reaches the eye:
 - **Dock icons** come from the fixed `TYPE_ICONS` / `THEME_ICONS` maps in
   `composites.js` and resolve to the active theme's `icons/artifacts/*.svg`.
 - **Accent & gradient** are chosen per user in *Settings → Appearance* and
-  apply everywhere, including the Leaflet map colors and the orb canvas
+  apply everywhere, including the Leaflet map colors and the voice bar glow
   (via the `appearance:change` window event).
 - **When plugin web assets land** (roadmap item), plugin pages must load
   `/ui/ui.css` + `/ui/index.js` and build with those components instead of

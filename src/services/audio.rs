@@ -38,6 +38,10 @@ const SAFETY_REFRESH: Duration = Duration::from_secs(60);
 const BROADCAST_CAPACITY: usize = 64;
 /// A `pactl` call must never wedge a status request or an API handler.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
+/// Top of the volume range. Above 100 % is deliberate digital
+/// over-amplification (the same range GNOME's sound menu offers), so the
+/// slider can push a quiet source louder than unity.
+pub const MAX_VOLUME: u8 = 150;
 
 #[cfg(target_os = "linux")]
 const START_REASON: &str = "PipeWire is not reachable";
@@ -363,19 +367,20 @@ impl AudioService {
         self.status().available
     }
 
-    /// Set an absolute volume (0–100 %). `id: None` means the default device.
+    /// Set an absolute volume (0–[`MAX_VOLUME`] %). `id: None` means the
+    /// default device.
     ///
-    /// 100 % is the ceiling on purpose: this machine drives the T2's speaker
-    /// array, and pushing past unity into digital gain risks the hardware
-    /// (and sounds worse than the hardware amp anyway).
+    /// Above 100 % is digital over-amplification: it can clip, and on the T2
+    /// speaker array it drives the hardware past the amp's own limit, so the
+    /// UI marks it but does not hide it — the range is the user's call.
     pub async fn set_volume(
         &self,
         target: AudioTarget,
         id: Option<u32>,
         percent: u8,
     ) -> Result<(), String> {
-        if percent > 100 {
-            return Err("volume must be between 0 and 100%".to_string());
+        if percent > MAX_VOLUME {
+            return Err(format!("volume must be between 0 and {MAX_VOLUME}%"));
         }
         let _guard = self.inner.command.lock().await;
         let spec = node_spec(target, id);

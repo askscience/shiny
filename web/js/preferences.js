@@ -24,7 +24,6 @@ const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
 const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
 const VOICE_TTS_ENGINE_KEY = 'voice.tts_engine';
 const VOICE_QWEN_MODEL_KEY = 'voice.qwen_model';
-const ORB_STYLE_KEY = 'orb.style';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
@@ -339,8 +338,8 @@ export function applyDesktopSurface() {
 /* ── Fullscreen immersion (autohide + bar position) ───────────
  * While a window is fullscreen the desktop chrome steps aside. These
  * preferences decide what steps aside, and from which edge the top bar comes
- * back: the top bar and the orb are independent, so the orb can stay up while
- * the bar hides (or nothing hides at all).
+ * back: the top bar and the voice bar are independent, so the voice bar can
+ * stay up while the bar hides (or nothing hides at all).
  * ───────────────────────────────────────────────────────────── */
 
 const IMMERSIVE_KEY = 'desktop.immersive';
@@ -529,63 +528,6 @@ export function setWhisperModel(model) {
   if (value === 'tiny') localStorage.removeItem(key);
   else localStorage.setItem(key, value);
   persist(VOICE_WHISPER_MODEL_KEY, value === 'tiny' ? '' : value);
-}
-
-/* ── Voice orb style (per-user, server-backed) ─────────────── */
-
-/**
- * The five orb looks. The ids are the contract with orbCanvas.js; every one is
- * a variant of the reference ring kept in `web/orbs/` (see that folder's
- * README).
- */
-export const ORB_STYLES = [
-  { id: 'ripple', label: 'Ripple', hint: 'Echoes spreading outward' },
-  { id: 'corona', label: 'Corona', hint: 'A hairline ring with fine sparks' },
-  { id: 'halo', label: 'Halo', hint: 'A ring that ripples with your voice' },
-  { id: 'flare', label: 'Flare', hint: 'A crown of long spectral rays' },
-  { id: 'aura', label: 'Aura', hint: 'Two rings twisting in and out' },
-];
-
-export const DEFAULT_ORB_STYLE = 'ripple';
-
-const ORB_STYLE_IDS = new Set(ORB_STYLES.map((s) => s.id));
-
-/**
- * Older stored ids still resolve. Everything that is gone was derived from the
- * ring, so it falls back to the plain ring rather than to a surprise.
- * (`ripple` is a current id now, so an old first-generation `ripple` resolves
- * to today's ripple.)
- */
-const ORB_STYLE_LEGACY = {
-  // Previous generation.
-  nucleus: 'corona',
-  nebula: 'corona',
-  torus: 'corona',
-  prism: 'corona',
-  eclipse: 'corona',
-  // Earlier generations.
-  filament: 'corona',
-  bubble: 'corona',
-  marble: 'corona',
-  orbit: 'corona',
-  grid: 'corona',
-  fluid: 'corona',
-  pulse: 'corona',
-};
-
-export function getOrbStyle() {
-  const stored = localStorage.getItem(scopedKey(ORB_STYLE_KEY));
-  if (ORB_STYLE_IDS.has(stored)) return stored;
-  if (ORB_STYLE_LEGACY[stored]) return ORB_STYLE_LEGACY[stored];
-  return DEFAULT_ORB_STYLE;
-}
-
-export function setOrbStyle(id) {
-  const style = ORB_STYLE_IDS.has(id) ? id : DEFAULT_ORB_STYLE;
-  const key = scopedKey(ORB_STYLE_KEY);
-  if (style === DEFAULT_ORB_STYLE) localStorage.removeItem(key); // default is implicit
-  else localStorage.setItem(key, style);
-  persist(ORB_STYLE_KEY, style === DEFAULT_ORB_STYLE ? '' : style);
 }
 
 /* ── Touch Bar (per-user, server-backed) ───────────────────── */

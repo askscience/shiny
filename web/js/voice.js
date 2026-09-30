@@ -615,7 +615,7 @@ function scheduleWhisperRecovery() {
 export async function prepareVoice() {
   const lang = getVoiceLang();
   // Voice loads silently in the background — no progress card, no
-  // notification. The orb just stays dimmed (setVoiceReady(false)) until the
+  // notification. The voice bar just stays dimmed (setVoiceReady(false)) until the
   // recognizer is usable; tapping early already gives its own feedback.
   setVoiceReady(false);
   setSphereState('downloading');
@@ -719,7 +719,7 @@ export async function startListening(mode) {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        // Ask for stereo: the orb leans away from the loud side. Mono mics
+        // Ask for stereo: the glow leans away from the loud side. Mono mics
         // simply report pan 0 (both channels identical).
         channelCount: { ideal: 2 },
         sampleRate: 16000,
@@ -883,7 +883,7 @@ export function cancelListening() {
 /**
  * Long-press release.
  *
- * Holding the orb only *arms* wake recognition — the hold is the trigger for
+ * Holding the voice bar only *arms* wake recognition — the hold is the trigger for
  * "hey <name>", not the thing that keeps the microphone open. Releasing must
  * therefore leave the recogniser running so the phrase (and then the request)
  * can be spoken after the finger lifts. There is no expiry on that: the wake
@@ -902,9 +902,9 @@ export async function speak(text, lang) {
   stopSpeaking();
   const token = ++speakToken;
 
-  // Nothing sits under the orb while the answer is fetched and read aloud.
-  // This is a class rather than a direct hide so the CSS can keep the dock's
-  // space — collapsing it would drop the orb and start it moving again.
+  // Nothing sits above the voice bar while the answer is fetched and read
+  // aloud. This is a class rather than a direct hide so the CSS can keep the
+  // dock's space — collapsing it would drop the bar and start it moving again.
   document.body.classList.add('orb-speaking');
 
   const voiceLang = lang || getVoiceLang();
@@ -930,7 +930,7 @@ export async function speak(text, lang) {
     const url = URL.createObjectURL(blob);
     currentAudio = new Audio(url);
 
-    // Keep the orb alive with the ASSISTANT's voice: the mic is already
+    // Keep the glow alive with the ASSISTANT's voice: the mic is already
     // stopped by now, so without this the animation would freeze exactly
     // when the answer arrives. Same signal shape as the microphone, but the
     // assistant speaks from the centre (pan 0).
@@ -1089,9 +1089,9 @@ function unlockAnalyserContext() {
 window.addEventListener('pointerdown', unlockAnalyserContext);
 
 /**
- * Drive `voice:level` from an <audio> element's own output, so the orb keeps
+ * Drive `voice:level` from an <audio> element's own output, so the glow keeps
  * reacting while the assistant talks. Returns a stop() that releases the
- * analyser and lets the orb settle. Falls back to a no-op when WebAudio can't
+ * analyser and lets the glow settle. Falls back to a no-op when WebAudio can't
  * analyse (a suspended context would mute playback, so we never risk that).
  */
 function attachTtsPulse(audio) {
@@ -1139,7 +1139,7 @@ function attachTtsPulse(audio) {
     if (raf) cancelAnimationFrame(raf);
     try { source.disconnect(); } catch (_) {}
     try { analyser.disconnect(); } catch (_) {}
-    // Let the orb fall back to rest instead of freezing on the last frame.
+    // Let the glow fall back to rest instead of freezing on the last frame.
     window.dispatchEvent(new CustomEvent('voice:level', {
       detail: { level: 0, pan: 0, source: 'tts' },
     }));

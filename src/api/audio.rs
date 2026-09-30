@@ -58,7 +58,7 @@ pub struct VolumeBody {
     /// Node index from the latest snapshot; omit for the default device.
     #[serde(default)]
     id: Option<u32>,
-    /// Absolute volume, 0–100.
+    /// Absolute volume, 0–150 (above 100 over-amplifies).
     percent: u8,
 }
 

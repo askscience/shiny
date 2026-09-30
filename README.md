@@ -2,8 +2,8 @@
 
 Shiny is a Rust AI assistant with a browser UI and a plugin system. The core is a
 **voice-first conversational agent** driven by a local Ollama server — streaming
-faster-whisper speech recognition (or in-browser Vosk), Supertonic text-to-speech, an orb
-for voice input, typed chat with resumable conversations, and web search — shown in a
+faster-whisper speech recognition (or in-browser Vosk), Supertonic text-to-speech, a
+bottom voice bar for input, typed chat with resumable conversations, and web search — shown in a
 **desktop-style web workspace**: a fixed top HUD above a Hyprland-style desktop where
 every active plugin runs in its own window (tiled, in columns, or floating) across
 multiple workspaces.
@@ -36,8 +36,9 @@ The web UI (`web/`) is a desktop-style workspace:
   bubble on its left. Layouts: **Master & stack**, **Columns**, or free **Windows**, with
   `Alt`-shortcuts (`Alt+Enter` fullscreen, `Alt+H/L` focus, `Alt+,/.` workspace,
   `Alt+1..9` jump, `Alt+N` / `Alt+Shift+N` add/remove workspace).
-- **Bottom chrome** — the AI **orb** (a fluid canvas sphere that takes its palette from
-  your accent) above an artifact dock and the compose input.
+- **Bottom chrome** — the **voice bar**: a small lip at the bottom centre whose
+  accent-coloured shadow rises from it and swells with your voice, above an artifact
+  dock and the compose input.
 - With no plugins active Shiny is a bare voice/chat assistant on the desktop shell;
   activating plugins adds their windows and agent tools.
 
@@ -49,7 +50,7 @@ The web UI (`web/`) is a desktop-style workspace:
 - Voice: **faster-whisper STT** with streaming partials through a local Python sidecar
   (default; tiny model bundled, small model downloadable) or **Vosk STT** in the browser
   (per-language models auto-downloaded), plus **Supertonic 3 TTS** through a sidecar
-- Orb gestures (tap = talk, long-press = wake, double-tap = type) and bubble chat with
+- Voice-bar gestures (tap = talk, long-press = wake, double-tap = type) and bubble chat with
   Markdown replies
 - Resumable conversations (server-side chat history)
 - Core agent actions: `web_search` (the only built-in *domain* tool) plus plugin and
@@ -70,7 +71,7 @@ The web UI (`web/`) is a desktop-style workspace:
 - Noir + Light themes with a user-selectable accent and gradient; unified UI library
 - GNOME-style plugin notifications and destination insight cards
 - Optional Touch Bar surface (MacBook Pro T1/T2) over the same actions the HUD
-  and orb expose — native on macOS, through `tiny-dfr` on Linux, and completely
+  and voice bar expose — native on macOS, through `tiny-dfr` on Linux, and completely
   dormant on any other PC
 
 **Traveler plugin — trips, maps, GPS, diary, navigation**
@@ -183,7 +184,7 @@ it is typing itself out, or while it is being spoken:
 - **Voice, both modes** — talk over the assistant. The microphone stays open while it
   thinks and speaks; sustained speech above a barge-in threshold cuts the reply off and
   hands the mic straight to the new request, so “wait, I meant…” is not talked over.
-  Tapping the orb during an answer does the same thing.
+  Tapping the voice bar during an answer does the same thing.
 
 Either way the turn is abandoned server-side (an in-flight model call is dropped rather
 than left to finish), the partial answer is kept, and the conversation records an
@@ -313,10 +314,14 @@ server and shell with `--features iroh`.
 - **Turn it on**: Settings → **Remote** → *Server*. The link changes on every
   start/stop. In the kiosk, turning it on hands the screen to the **server-mode
   window** (link + controls); the kiosk returns when you press *Stop server*.
-- **Connect**: `peakd --iroh <ticket>` (built with `--features iroh`), or the
-  standalone `shiny-iroh-client --ticket <ticket> --listen 127.0.0.1:8080` and
-  open `http://127.0.0.1:8080`. Then log in with your password — remote clients
-  use the normal web login; the local kiosk does not.
+- **Connect**: `peakd --iroh <link>` (built with `--features iroh`); the link
+  can be pasted exactly as shown — the `shiny-iroh://` scheme is recognised.
+  For a plain browser, run the standalone
+  `shiny-iroh-client --ticket <link> --listen 127.0.0.1:8080` and open
+  `http://127.0.0.1:8080`. Then log in with your password — remote clients
+  use the normal web login; the local kiosk does not. (An Iroh link is not an
+  `http(s)://` URL: a browser can only reach the app through a local proxy like
+  `peakd`/`shiny-iroh-client`, never by opening the link directly.)
 - **Pairing**: *Pair a new device* opens a 120 s window in which the next
   connecting device is added to the allowlist; after that, unpaired keys are
   rejected before any HTTP. *Forget devices* returns to ticket-only access;
@@ -332,6 +337,24 @@ server and shell with `--features iroh`.
 The app runs on port `8080 + uid − 1000` per user; the proxy dials that user's
 endpoint. Iroh needs outbound UDP and TCP 443 to its relays and `dns.iroh.link`
 (see Iroh's network guide); self-hosted relays are supported.
+
+## Remote access (Tailscale Funnel)
+
+Alongside Iroh, Settings → **Remote** offers **Public URL (Tailscale Funnel)**:
+the same app at a normal `https://<machine>.<tailnet>.ts.net` URL that **any
+browser** can open — phone included — with no client app and no port forwarding.
+
+- **Needs**: the `tailscale` CLI installed and signed in on this machine
+  (`tailscale up`), and Funnel permitted for the tailnet. Tailscale provisions
+  the TLS certificate. On a user systemd unit, grant Funnel management with
+  `sudo tailscale set --operator=$USER`; otherwise the toggle reports a
+  permission error.
+- **How**: the toggle runs `tailscale funnel --bg --https=443 --set-path=/`
+  against the local server and shows the resulting URL (with a QR code in
+  Settings). Turning it off stops the Funnel.
+- **Host controls stay local**: Tailscale Serve/Funnel adds `x-forwarded-for`,
+  which the server treats as the remote-client signal — the same gate Iroh uses.
+- Enabling is local-only; disabling is allowed from a remote client.
 
 ## Configuration
 
@@ -378,7 +401,7 @@ startup (via `dotenvy`). `RUST_LOG` overrides `LOG_LEVEL`.
 Browser (web/)                             shiny (core binary)
 ┌───────────────────────────┐              ┌─────────────────────────────────────┐
 │ desktop workspace shell    │              │ agent loop (Ollama) + web_search +   │
-│  HUD · windows · orb       │    HTTP      │ plugin/desktop control actions       │
+│  HUD · windows · voice bar │    HTTP      │ plugin/desktop control actions       │
 │  compose chat · settings   │◀────────────▶│ voice (Vosk/Whisper + Supertonic TTS) │
 │  plugins · windows         │              │ auth · multi-user · preferences      │
 └───────────────────────────┘              │ trip/map/diary REST + services        │
@@ -747,7 +770,7 @@ it.
 
 Shiny can drive the Touch Bar, and — this is the important part — it does so
 without assuming the machine has one. The bar is an **optional input surface**
-over actions the HUD and orb already expose. On a normal PC nothing is
+over actions the HUD and voice bar already expose. On a normal PC nothing is
 registered, nothing is installed, and the app behaves exactly as before.
 
 There are two transports, but one action vocabulary
@@ -785,7 +808,7 @@ the server's `GET /api/touchbar` probe (`available`). The server runs on the
 same machine and does the same sysfs check, so **Automatic** works in a plain
 browser too, not just under `peakd`.
 
-The buttons map to: tap-to-talk (the orb's exact gesture, barge-in included),
+The buttons map to: tap-to-talk (the voice bar's exact gesture, barge-in included),
 stop the answer, host output mute / volume, screen brightness, previous/next
 workspace, keyboard backlight, toggle the virtual keyboard, and open Settings.
 
@@ -819,13 +842,18 @@ are untouched. macOS has native multi-touch gestures and does not use this path.
 
 Because a two-finger scroll moves just like a three-finger swipe, the reader
 takes care not to mistake one for the other. It tracks every contact's own
-travel, and it drops a contact the kernel labels `MT_TOOL_PALM` — but many
-pads, including Apple's `bcm5974` trackpad, never send that label. On those it
-falls back to contact size (`ABS_MT_TOUCH_MAJOR`, or `ABS_MT_PRESSURE` where
-there is no size axis): a thumb or palm resting beside the scrolling fingers
-covers far more of the pad, so the one contact that dwarfs the rest is ignored.
-A pad that reports neither, or whose contacts are all the same size, keeps the
-simpler behaviour.
+travel and requires the fingers to move *together*: a thumb dragged along by
+the hand lags far behind and does not count. It also drops a contact the
+kernel labels `MT_TOOL_PALM` — but many pads, including Apple's `bcm5974`
+trackpad, never send that label. On those it borrows libinput's thumb
+detection (libinput is the engine behind GNOME's and KDE's gestures): a
+contact in the bottom strip of the pad is a resting thumb, the single
+size/pressure outlier in the lower pad is a thumb, and once a contact is read
+as a thumb it stays one for the whole touch. The verdict is deliberately not
+re-decided every frame; doing so let a thumb flicker back to a finger on the
+busy frames of a scroll and pop the window overview. A pad that reports
+neither size nor pressure, and whose axis range could not be read, falls back
+to contact travel alone.
 
 The reader needs permission to open `/dev/input/event*`, and the kiosk runs as
 an unprivileged user, so install the udev rule once:

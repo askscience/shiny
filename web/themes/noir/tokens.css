@@ -100,10 +100,10 @@
   --reveal-stagger: 60ms;
 
   /* Compose dock (used by text input + chrome-bottom layout) */
-  --compose-orb-size: 84px;
+  --compose-bar-size: 84px;
   --compose-dock-height: 52px;
   --compose-stack-height: calc(
-    var(--compose-orb-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
+    var(--compose-bar-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
   );
 
   /* HUD layout */

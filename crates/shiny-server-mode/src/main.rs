@@ -165,6 +165,42 @@ mod linux {
         auto_row.pack_end(&auto_switch, false, false, 0);
         root.pack_start(&auto_row, false, false, 0);
 
+        // Public URL over Tailscale Funnel: the same app, reachable from any
+        // browser at an https://…ts.net URL. Kept alongside the Iroh link.
+        let ts_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let ts_label = gtk::Label::new(Some("Public URL (Tailscale Funnel)"));
+        ts_label.set_halign(gtk::Align::Start);
+        ts_label.set_hexpand(true);
+        let ts_switch = gtk::Switch::new();
+        ts_row.pack_start(&ts_label, true, true, 0);
+        ts_row.pack_end(&ts_switch, false, false, 0);
+        ts_row.set_visible(false);
+        root.pack_start(&ts_row, false, false, 0);
+
+        let ts_hint = gtk::Label::new(Some(
+            "Open it in any browser, on any device — no app or port forwarding.",
+        ));
+        ts_hint.set_halign(gtk::Align::Start);
+        ts_hint.set_line_wrap(true);
+        ts_hint.set_markup("<small>Open it in any browser, on any device — no app or port forwarding.</small>");
+        ts_hint.set_visible(false);
+        root.pack_start(&ts_hint, false, false, 0);
+
+        let ts_status = gtk::Label::new(Some(""));
+        ts_status.set_halign(gtk::Align::Start);
+        ts_status.set_line_wrap(true);
+        root.pack_start(&ts_status, false, false, 0);
+
+        let ts_url_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let ts_url = gtk::Entry::new();
+        ts_url.set_editable(false);
+        ts_url.set_hexpand(true);
+        let ts_copy = gtk::Button::with_label("Copy URL");
+        ts_url_row.pack_start(&ts_url, true, true, 0);
+        ts_url_row.pack_start(&ts_copy, false, false, 0);
+        ts_url_row.set_visible(false);
+        root.pack_start(&ts_url_row, false, false, 0);
+
         root.pack_start(&gtk::Separator::new(gtk::Orientation::Horizontal), false, false, 6);
 
         let stop = gtk::Button::with_label("Stop server");
@@ -180,6 +216,9 @@ mod linux {
         // ── state + actions ──────────────────────────────────────────────
         let revealed = Rc::new(RefCell::new(false));
         let current_ticket = Rc::new(RefCell::new(String::new()));
+        // Guards the Tailscale switch: the status poll updates it, and setting
+        // `active` fires `state-set`, which must not bounce back as a request.
+        let ts_syncing = Rc::new(RefCell::new(false));
         let client_for_status = client.clone();
         let base_for_status = base.clone();
         let token_for_status = token.clone();
@@ -191,6 +230,13 @@ mod linux {
             let qr = qr.clone();
             let revealed = revealed.clone();
             let current_ticket = current_ticket.clone();
+            let ts_row = ts_row.clone();
+            let ts_hint = ts_hint.clone();
+            let ts_status = ts_status.clone();
+            let ts_url_row = ts_url_row.clone();
+            let ts_url = ts_url.clone();
+            let ts_switch = ts_switch.clone();
+            let ts_syncing = ts_syncing.clone();
 
             gtk::glib::timeout_add_seconds_local(2, move || {
                 if let Some(value) = fetch_status(
@@ -233,8 +279,39 @@ mod linux {
                         status.set_text("Off");
                     }
 
-                    // Preferences from the status payload (if the server sent them).
-                    // They are also mirrored to the switches locally on change.
+                    // Tailscale Funnel state (independent of the Iroh toggle).
+                    let ts = value.get("tailscale").cloned().unwrap_or(Value::Null);
+                    let ts_installed =
+                        ts.get("installed").and_then(Value::as_bool).unwrap_or(false);
+                    let ts_up = ts.get("up").and_then(Value::as_bool).unwrap_or(false);
+                    let ts_on = ts.get("funnel").and_then(Value::as_bool).unwrap_or(false);
+                    let ts_url_str = ts.get("url").and_then(Value::as_str).unwrap_or("");
+                    let ts_err = ts.get("error").and_then(Value::as_str).unwrap_or("");
+
+                    ts_row.set_visible(ts_installed);
+                    ts_hint.set_visible(ts_installed);
+                    *ts_syncing.borrow_mut() = true;
+                    ts_switch.set_active(ts_on);
+                    *ts_syncing.borrow_mut() = false;
+                    let mut ts_line = if !ts_installed {
+                        String::new()
+                    } else if !ts_up {
+                        "Installed, not connected — run `tailscale up`.".to_string()
+                    } else if ts_on {
+                        format!("On — {ts_url_str}")
+                    } else {
+                        "Off.".to_string()
+                    };
+                    if !ts_err.is_empty() {
+                        ts_line.push_str(&format!(" ({ts_err})"));
+                    }
+                    ts_status.set_text(&ts_line);
+                    if ts_on && !ts_url_str.is_empty() {
+                        ts_url.set_text(ts_url_str);
+                        ts_url_row.set_visible(true);
+                    } else {
+                        ts_url_row.set_visible(false);
+                    }
                 }
                 gtk::glib::ControlFlow::Continue
             });
@@ -352,6 +429,44 @@ mod linux {
         // Load the current preference values once.
         seed_switches(&client, &base, &token, &term_switch, &auto_switch);
 
+        // Tailscale Funnel on/off.
+        {
+            let client = client.clone();
+            let base = base.clone();
+            let token = token.clone();
+            let status = status.clone();
+            let ts_syncing = ts_syncing.clone();
+            ts_switch.connect_state_set(move |_, on| {
+                if *ts_syncing.borrow() {
+                    return gtk::glib::Propagation::Proceed;
+                }
+                let path = if on {
+                    "/api/remote/tailscale/enable"
+                } else {
+                    "/api/remote/tailscale/disable"
+                };
+                let _ = client
+                    .post(format!("{base}{path}"))
+                    .bearer_auth(&token)
+                    .send();
+                status.set_text(if on {
+                    "Enabling public URL…"
+                } else {
+                    "Disabling public URL…"
+                });
+                gtk::glib::Propagation::Proceed
+            });
+        }
+
+        // Copy the public URL.
+        {
+            let ts_url = ts_url.clone();
+            ts_copy.connect_clicked(move |_| {
+                ts_url.select_region(0, -1);
+                ts_url.copy_clipboard();
+            });
+        }
+
         // Stop → turn server mode off and exit back to the kiosk.
         {
             let client = client.clone();
@@ -374,6 +489,11 @@ mod linux {
         window.show_all();
         ticket.set_visible(false);
         qr.set_visible(false);
+        // `show_all` reveals every child; re-hide the Tailscale controls until
+        // the first status poll says Tailscale is installed and on.
+        ts_row.set_visible(false);
+        ts_hint.set_visible(false);
+        ts_url_row.set_visible(false);
     }
 
     fn fetch_status(

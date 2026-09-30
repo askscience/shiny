@@ -8,7 +8,7 @@
      data-autohide-orb  1 | 0
 
    With autohide on, the top bar is away until the pointer reaches the edge it
-   docks to, and the AI orb (with its dock and reply line) is away until the
+   docks to, and the voice bar (with its dock and reply line) is away until the
    pointer reaches the bottom centre. Both slide back with the `fs-top` /
    `fs-orb` body classes.
 
@@ -231,7 +231,7 @@ html[data-bar-pos='right'] body:not(.fullscreen-active) #tile-grid {
   right: calc(var(--hud-bar-height) + 32px);
 }
 
-/* ── AI orb, dock and reply line: autohide ──────────────────── */
+/* ── Voice bar, dock and reply line: autohide ───────────────── */
 
 html[data-autohide-orb='1'] #chrome-bottom {
   opacity: 0;
@@ -267,8 +267,8 @@ html[data-autohide-orb='1'] body.fs-orb #hud-transcript {
 }
 
 /* Text mode and a live voice turn need the dock, so on the open desktop the
-   orb strip stays up for them rather than hiding mid-conversation. In real
-   fullscreen the composer lives inside the thread, so the orb can stay away. */
+   voice bar stays up for them rather than hiding mid-conversation. In real
+   fullscreen the composer lives inside the thread, so the bar can stay away. */
 html[data-autohide-orb='1'] body:not(.fullscreen-active).compose-active #chrome-bottom,
 html[data-autohide-orb='1'] body:not(.fullscreen-active).agent-awaiting #chrome-bottom {
   opacity: 1;

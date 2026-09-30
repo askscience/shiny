@@ -12,7 +12,7 @@
  *
  * It is active only when `isTouchBarActive()` says so, so a normal PC that
  * never sees those keys behaves exactly as before. The `talk` action is passed
- * in by `app.js` so it reuses the orb's exact gesture logic (voice-readiness,
+ * in by `app.js` so it reuses the voice bar's exact gesture logic (voice-readiness,
  * barge-in, wake handling) rather than a second copy of it.
  */
 
@@ -153,7 +153,8 @@ async function currentOutput() {
 async function nudgeVolume(delta) {
   const sink = await currentOutput();
   if (!sink) return;
-  const percent = Math.max(0, Math.min(100, Math.round((sink.volume_percent || 0) + delta)));
+  // Same 150 % over-amplification ceiling as the Sound menu slider.
+  const percent = Math.max(0, Math.min(150, Math.round((sink.volume_percent || 0) + delta)));
   await apiFetch('/api/audio/volume', {
     method: 'POST',
     body: JSON.stringify({ target: 'sink', id: sink.id, percent }),

@@ -5,8 +5,7 @@
  * sections are fewer and broader than the old standalone page:
  *
  *   Account    — photo + display name
- *   Appearance — theme, accent, gradient, window surface, top bar / orb,
- *                orb style, background
+ *   Appearance — theme, accent, gradient, window surface, top bar, background
  *   Desktop    — tiling layout
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
@@ -40,13 +39,11 @@ import {
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
   getSttEngine, setSttEngine, getWhisperModel, setWhisperModel,
   getTtsEngine, setTtsEngine, getQwenModel, setQwenModel,
-  ORB_STYLES, getOrbStyle, setOrbStyle,
   getRemember, setRemember,
   getRemoteAllowTerminal, setRemoteAllowTerminal,
   getTouchBarEnabled, setTouchBarEnabled,
 } from './preferences.js';
 import { TOUCHBAR_ACTIONS } from './touchbarShared.js';
-import { createOrbPreview } from './orbCanvas.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from './display.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { getBackground, setBackground, renderBackgroundPresets } from './background.js';
@@ -130,59 +127,12 @@ function panel(id, iconName, title, children) {
 
 /* ── Appearance ─────────────────────────────────────────────── */
 
-let orbPreviews = [];
-
 function isNeumorphicTheme(name) {
   return name === NEUMORPHIC_DARK || name === NEUMORPHIC_LIGHT;
 }
 
 function isLightTheme(name) {
   return name === NEUMORPHIC_LIGHT || name === BASE_LIGHT;
-}
-
-function buildOrbStyles(container) {
-  container.textContent = '';
-  for (const style of ORB_STYLES) {
-    const card = el('button', 'orb-style');
-    card.type = 'button';
-    card.dataset.orbStyle = style.id;
-    card.setAttribute('role', 'radio');
-    card.setAttribute('aria-label', `${style.label} — ${style.hint}`);
-
-    const canvas = el('canvas', 'orb-style-canvas');
-    canvas.setAttribute('aria-hidden', 'true');
-
-    card.append(canvas, el('span', 'orb-style-label', style.label), el('span', 'orb-style-hint', style.hint));
-    on(card, 'click', () => {
-      setOrbStyle(style.id);
-      markActiveOrb(container);
-      const found = ORB_STYLES.find((s) => s.id === style.id);
-      if (found) toast(`Orb style: ${found.label}`, { type: 'info' });
-    });
-    container.appendChild(card);
-  }
-  requestAnimationFrame(() => {
-    // The window may have closed between the paint request and this frame, and
-    // this section can be rebuilt in place. Drop the previews we are about to
-    // replace — each one owns an animation loop, so losing the reference
-    // without destroying it would leak a running renderer.
-    orbPreviews.forEach((p) => p.destroy?.());
-    orbPreviews = [];
-    if (!container.isConnected) return;
-    const canvases = [...container.querySelectorAll('.orb-style-canvas')];
-    orbPreviews = canvases
-      .map((c, i) => (ORB_STYLES[i] ? createOrbPreview(c, ORB_STYLES[i].id, 64) : null))
-      .filter(Boolean);
-  });
-}
-
-function markActiveOrb(container) {
-  const current = getOrbStyle();
-  container.querySelectorAll('.orb-style').forEach((node) => {
-    const active = node.dataset.orbStyle === current;
-    node.classList.toggle('is-active', active);
-    node.setAttribute('aria-checked', String(active));
-  });
 }
 
 function buildAccentSwatches(container) {
@@ -1039,14 +989,14 @@ function buildTopBarControls() {
   });
   barPosition.select.value = immersive.bar_position;
   const autohideOrb = toggleRow({
-    label: 'Autohide the AI orb',
-    hint: 'Slide the orb away until the pointer reaches the bottom centre.',
+    label: 'Autohide the voice bar',
+    hint: 'Slide the voice bar away until the pointer reaches the bottom centre.',
     checked: immersive.autohide_orb,
     onChange: (checked) => setImmersive({ autohide_orb: checked }),
   });
 
   return [
-    heading('Top bar & orb'),
+    heading('Top bar & voice bar'),
     autohideBar,
     field('Top bar position', barPosition),
     autohideOrb,
@@ -1178,7 +1128,7 @@ function formatBytes(n) {
 }
 
 function buildRemote() {
-  const state = { enabled: false, endpointId: null, ticket: null, connections: 0, bytes: 0, paired: 0, pairing: false };
+  const state = { enabled: false, endpointId: null, ticket: null, connections: 0, bytes: 0, paired: 0, pairing: false, tailscale: null };
   let revealed = false;
 
   const serverToggle = toggleRow({
@@ -1223,7 +1173,25 @@ function buildRemote() {
 
   const linkBox = el('div', 'remote-link');
   linkBox.append(ticketEl, qrEl);
-  const linkHint = el('p', 'settings-hint', 'On another device: peakd --iroh <link>, or run shiny-iroh-client --ticket <link> and open http://127.0.0.1:8080.');
+  const linkHint = el('p', 'settings-hint', 'On another device: peakd --iroh <link> opens the app in a window. To use a plain browser instead, turn on the public URL below.');
+
+  // ── Tailscale Funnel: a normal https:// URL for any browser ──────────
+  const tsToggle = toggleRow({
+    label: 'Public URL (Tailscale Funnel)',
+    hint: 'Serve the app at an https://…ts.net URL through Tailscale — open it in any browser, on any device, no app or port forwarding. Free; needs Tailscale installed and signed in.',
+    checked: false,
+    onChange: setTailscale,
+  });
+  const tsMissing = el('p', 'settings-hint', 'Tailscale is not installed on this machine.');
+  const tsStatus = el('p', 'settings-hint', '');
+  const tsUrlEl = el('code', 'remote-ticket');
+  const tsQrEl = el('img', 'remote-qr');
+  tsQrEl.alt = 'Tailscale URL QR code';
+  const tsUrlBox = el('div', 'remote-link');
+  tsUrlBox.append(tsUrlEl, tsQrEl);
+  const tsCopyBtn = button({ label: 'Copy URL', variant: 'ghost', onClick: copyTailscale });
+  const tsActions = el('div', 'settings-inline-actions');
+  tsActions.append(tsCopyBtn);
 
   function apply(s) {
     if (!s) return;
@@ -1234,11 +1202,13 @@ function buildRemote() {
     state.bytes = s.bytes || 0;
     state.paired = s.paired || 0;
     state.pairing = !!s.pairing;
+    state.tailscale = s.tailscale || null;
     render();
   }
 
   function render() {
     serverToggle.toggle.setChecked(state.enabled, { silent: true });
+    renderTailscale();
     if (!state.enabled) {
       statusLine.textContent = 'Off. This desktop is reachable only on this machine.';
       linkBox.classList.add('hidden');
@@ -1262,6 +1232,57 @@ function buildRemote() {
       qrEl.removeAttribute('src');
       qrEl.classList.add('hidden');
     }
+  }
+
+  function renderTailscale() {
+    const ts = state.tailscale;
+    const installed = !!(ts && ts.installed);
+    tsMissing.classList.toggle('hidden', installed);
+    tsToggle.classList.toggle('hidden', !installed);
+    if (!installed) {
+      tsStatus.textContent = ts && ts.error ? `Tailscale: ${ts.error}` : '';
+      tsUrlBox.classList.add('hidden');
+      tsActions.classList.add('hidden');
+      return;
+    }
+    const on = !!ts.funnel;
+    tsToggle.toggle.setChecked(on, { silent: true });
+    let line;
+    if (!ts.up) line = 'Installed, but not connected — run `tailscale up` on this machine.';
+    else if (on) line = `On — ${ts.hostname || 'this device'}`;
+    else line = 'Off. The app is reachable only locally and over Iroh.';
+    if (ts.error) line += ` (${ts.error})`;
+    tsStatus.textContent = line;
+    if (on && ts.url) {
+      tsUrlEl.textContent = ts.url;
+      tsUrlBox.classList.remove('hidden');
+      tsActions.classList.remove('hidden');
+      tsQrEl.src = `/api/remote/tailscale/qr?t=${Date.now()}`;
+    } else {
+      tsUrlBox.classList.add('hidden');
+      tsActions.classList.add('hidden');
+    }
+  }
+
+  async function setTailscale(on) {
+    try {
+      await apiFetch(`/api/remote/tailscale/${on ? 'enable' : 'disable'}`, {
+        method: 'POST',
+        authRedirect: false,
+      });
+      toast(on ? 'Tailscale Funnel on' : 'Tailscale Funnel off');
+      await refresh();
+    } catch (e) {
+      tsToggle.toggle.setChecked(!on, { silent: true });
+      toast(e.message || 'Could not change Tailscale Funnel', { type: 'error' });
+    }
+  }
+
+  async function copyTailscale() {
+    const url = state.tailscale && state.tailscale.url;
+    if (!url) return;
+    try { await navigator.clipboard.writeText(url); toast('URL copied'); }
+    catch (_) { toast('Could not copy the URL', { type: 'error' }); }
   }
 
   async function refresh() {
@@ -1336,6 +1357,12 @@ function buildRemote() {
     linkBox,
     linkHint,
     actions,
+    heading('Public URL (Tailscale)'),
+    tsMissing,
+    tsToggle,
+    tsStatus,
+    tsUrlBox,
+    tsActions,
     heading('Remote control'),
     terminalToggle,
   ];
@@ -1434,10 +1461,6 @@ function buildAppearancePanel() {
   on(stopB, 'input', applyCustomGradient);
   on(angle, 'input', applyCustomGradient);
 
-  const orbStyles = el('div', 'orb-style-row');
-  orbStyles.setAttribute('role', 'radiogroup');
-  orbStyles.setAttribute('aria-label', 'Orb style');
-
   const backgroundChildren = buildBackgroundControls();
   const windowSurfaceChildren = buildWindowSurfaceControls();
   const topBarChildren = buildTopBarControls();
@@ -1498,11 +1521,10 @@ function buildAppearancePanel() {
     buildGradientSwatches(gradientSwatches);
   }
 
-  // Deferred so the swatches/orbs exist in the DOM before they are built.
+  // Deferred so the swatches exist in the DOM before they are built.
   queueMicrotask(() => {
     buildAccentSwatches(accentSwatches);
     buildGradientSwatches(gradientSwatches);
-    buildOrbStyles(orbStyles);
     custom.open = getGradient().id === 'custom';
     const g = getGradient();
     if (g.id === 'custom' && g.stops?.length >= 2) {
@@ -1517,7 +1539,6 @@ function buildAppearancePanel() {
       })));
       theme.select.value = getActiveTheme();
     });
-    on(window, 'appearance:change', () => orbPreviews.forEach((p) => p.refreshPalette()));
     void refreshScale();
   });
 
@@ -1532,9 +1553,6 @@ function buildAppearancePanel() {
     ...windowSurfaceChildren,
     ...topBarChildren,
     ...hudChipChildren,
-    heading('Voice orb'),
-    el('p', 'settings-hint', 'How the orb looks and moves. Every style reacts to your voice — louder grows the ring’s waves and sparks.'),
-    orbStyles,
     heading('Background'),
     el('p', 'settings-hint', 'The full-screen backdrop behind the desktop — the default mesh, your gradient, a photo, or a subtle animation.'),
     ...backgroundChildren,
@@ -1546,8 +1564,6 @@ function unmountSettings() {
     try { dispose(); } catch (_) { /* ignore */ }
   }
   cleanups = [];
-  orbPreviews.forEach((p) => p.destroy?.());
-  orbPreviews = [];
   tileEl?.remove();
   tileEl = null;
 }

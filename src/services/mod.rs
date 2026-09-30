@@ -27,6 +27,7 @@ pub mod screen_brightness;
 pub mod unix_user;
 pub mod auth_helper;
 pub mod iroh_remote;
+pub mod tailscale;
 
 /// Shared sysfs backlight read/write logic (keyboard + screen).
 mod backlight;

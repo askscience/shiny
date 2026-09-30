@@ -55,7 +55,7 @@ export function getThemeManifest() {
 /**
  * Which canvas the active theme paints — 'light', 'dark', or null before the
  * manifest has loaded. Every canvas-dependent decision goes through here: the
- * accent's readability as ink, the wallpaper scrim, and the orb's colours.
+ * accent's readability as ink, the wallpaper scrim, and the voice bar's glow.
  */
 export function themeMode() {
   const modes = manifest?.modes;

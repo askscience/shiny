@@ -230,14 +230,18 @@
       <div id="tile-overlay-body" class="tile-overlay-body"></div>
     </div>
 
+    <!-- The assistant's presence: a small lip pinned to the bottom centre with
+         a coloured shadow that rises from it and swells with the voice. The
+         status pill (artifact dock) sits above it, never below. -->
     <div id="chrome-bottom">
-      <button type="button" id="sphere-container" aria-label="Voice assistant">
-        <canvas id="orb-canvas" aria-hidden="true"></canvas>
-      </button>
       <div id="artifact-dock" class="hidden" aria-label="Saved cards">
         <div id="artifact-dock-icons"></div>
         <div id="artifact-dock-step" class="artifact-dock-step hidden" aria-live="polite"></div>
       </div>
+      <button type="button" id="sphere-container" aria-label="Voice assistant">
+        <span class="voice-glow" aria-hidden="true"></span>
+        <span class="voice-lip" aria-hidden="true"></span>
+      </button>
     </div>
 
     <div id="compose-mode" class="compose-mode hidden" aria-hidden="true">
@@ -252,7 +256,7 @@
           </button>
         </div>
         <!-- The composer is the one and only text input: field, send and stop
-             live at the bottom of the conversation, never in the orb dock. -->
+             live at the bottom of the conversation, never in the voice dock. -->
         <div id="compose-composer" class="compose-composer">
           <textarea id="text-input-field" class="compose-dock-field" rows="1" placeholder="Ask anything…" autocomplete="off" enterkeyhint="send"></textarea>
           <button type="button" id="compose-send" class="compose-send" aria-label="Send" title="Send">

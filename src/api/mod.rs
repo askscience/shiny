@@ -89,6 +89,8 @@ pub struct AppState {
     pub plugins: PluginManager,
     /// Iroh remote-access service.
     pub iroh: crate::services::iroh_remote::IrohRemote,
+    /// Tailscale Serve/Funnel access (a public `*.ts.net` HTTPS URL).
+    pub tailscale: crate::services::tailscale::TailscaleService,
     /// Loopback-only session token for the local kiosk / server-mode window.
     pub session: crate::auth::SessionAuth,
     /// Admin-supplied router-rebuild trigger (set by `main.rs` once the live
@@ -356,6 +358,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/remote/qr", get(remote::qr))
         .route("/api/remote/pair", post(remote::pair))
         .route("/api/remote/unpair", post(remote::unpair))
+        // Tailscale Funnel: a public `*.ts.net` HTTPS URL (kept alongside Iroh).
+        .route("/api/remote/tailscale/enable", post(remote::tailscale_enable))
+        .route("/api/remote/tailscale/disable", post(remote::tailscale_disable))
+        .route("/api/remote/tailscale/qr", get(remote::tailscale_qr))
         // Desktop background image: upload/serve/remove the caller's file.
         .route("/api/background", get(background::serve).post(background::upload)
             .layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024))

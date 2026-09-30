@@ -159,7 +159,7 @@ function dockStepLive() {
 export function renderArtifactDock(artifacts) {
   // The dock lives INSIDE the traveler window whenever the traveler plugin
   // is active — even on phones where another window is currently shown (the
-  // dock stays with its window instead of jumping under the AI sphere).
+  // dock stays with its window instead of jumping to the chrome dock).
   // The chrome-bottom dock is only the chat-only fallback.
   const tileDock = document.getElementById('map-tile-dock');
   const tileDockIcons = document.getElementById('map-tile-dock-icons');
@@ -184,7 +184,7 @@ export function renderArtifactDock(artifacts) {
 
   const composeOpen = document.body.classList.contains('compose-active');
 
-  // The chrome dock is also the status bubble hanging under the orb
+  // The chrome dock is also the status bubble floating above the voice bar
   // (dockStep.js), so a live step line keeps it up whether the saved cards
   // happen to live in this dock or in the traveler window's own dock.
   const keepForStep = dockStepLive();

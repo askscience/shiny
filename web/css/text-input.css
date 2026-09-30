@@ -1,12 +1,12 @@
 /* Compose mode — the chat panel: reply stream + in-panel composer.
    Geometry tokens (--compose-*) live in the theme's tokens.css. */
 
-/* A live voice turn still shows its status pill under the orb. */
+/* A live voice turn still shows its status pill above the voice bar. */
 body.agent-awaiting #artifact-dock {
   display: flex !important;
 }
 
-/* Text mode owns its own composer, so the orb dock stands down — this has to
+/* Text mode owns its own composer, so the voice dock stands down — this has to
    come after the voice rule above to win while both classes are set. */
 body.compose-active #artifact-dock {
   display: none !important;
@@ -370,7 +370,7 @@ body.compose-awaiting .compose-composer .compose-send {
     padding-top: max(14px, env(safe-area-inset-top));
   }
 
-  /* The orb would sit on the composer on a phone — the panel owns the bottom. */
+  /* The voice bar would sit on the composer on a phone — the panel owns the bottom. */
   body.compose-active #chrome-bottom { display: none !important; }
 
   .compose-dock-field { font-size: 16px; min-width: 0; }

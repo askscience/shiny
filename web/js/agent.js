@@ -82,7 +82,7 @@ async function ingestAgentArtifacts(artifacts) {
   if (artifacts.length > 1) {
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: {
-        message: `${artifacts.length} guides ready — tap an icon below the orb`,
+        message: `${artifacts.length} guides ready — tap an icon below`,
         type: 'info',
       },
     }));
@@ -168,7 +168,7 @@ function buildAgentBody(message, mode, context, voice = false, turnId = null) {
 
 /* ── The turn in flight (stop / barge-in) ────────────────────
  * Exactly one agent turn runs at a time. Tracking it here (rather than in each
- * caller) is what lets the stop button, the orb and the voice barge-in all mean
+ * caller) is what lets the stop button, the voice bar and the voice barge-in all mean
  * the same thing: abandon this answer, and let the core record that the user
  * stopped it so the model understands the truncated thread.
  * ─────────────────────────────────────────────────────────── */
@@ -466,12 +466,12 @@ export async function sendToAgent(message, mode, context) {
     if (activeTurn !== turn) return null;
 
     // The answer has arrived: retire the status line before it is spoken, so
-    // nothing sits under the orb while the assistant talks.
+    // nothing sits above the voice bar while the assistant talks.
     clearDockStep();
     setSphereState('speaking');
 
     // Voice modes: the answer is spoken and saved to the chat — it is NOT
-    // echoed in a bubble. The orb reacting to the playback IS the feedback.
+    // echoed in a bubble. The voice bar reacting to the playback IS the feedback.
     try {
       await speak(res.reply, getVoiceLang());
     } catch (ttsErr) {

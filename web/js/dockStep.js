@@ -1,15 +1,16 @@
 /**
  * Step summary line below the artifact dock while AI work is in progress.
  *
- * The dock is ALSO the little status bubble that hangs under the orb, but two
- * other rules can take it away from the line: the markup ships with `hidden`,
- * and artifacts.js hides the dock whenever the window has no saved cards.
- * Nothing re-showed it, so the bubble lived in the code without ever being
- * painted. Owning the dock's visibility here keeps the line and its bubble in
- * step — as long as the line is up, the bubble is up.
+ * The dock is ALSO the little status bubble that hangs above the voice bar, but
+ * two other rules can take it away from the line: the markup ships with
+ * `hidden`, and artifacts.js hides the dock whenever the window has no saved
+ * cards. Nothing re-showed it, so the bubble lived in the code without ever
+ * being painted. Owning the dock's visibility here keeps the line and its
+ * bubble in step — as long as the line is up, the bubble is up.
  *
  * Being a child of #chrome-bottom, the bubble needs no hiding of its own: it
- * rides the orb's reveal, so with autohide on the two slide away together.
+ * rides the voice bar's reveal, so with autohide on the two slide away
+ * together.
  */
 
 const stepEl = document.getElementById('artifact-dock-step');

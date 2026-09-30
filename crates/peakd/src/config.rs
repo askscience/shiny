@@ -216,10 +216,14 @@ impl PeakdConfig {
                     std::process::exit(0);
                 }
                 other => {
-                    // A bare argument is treated as the URL to open, or as an
-                    // Iroh ticket when it carries the `iroh://` scheme.
-                    if let Some(ticket) = other.strip_prefix("iroh://") {
-                        cfg.iroh = Some(ticket.to_string());
+                    // A bare argument is the URL to open, or an Iroh link when
+                    // it carries one of the schemes `shiny-iroh-proto` knows.
+                    // The server mints `shiny-iroh://…`, so accept that (and the
+                    // `shiny://` / `iroh://` aliases) here too: otherwise a link
+                    // pasted from Remote settings, or handed over by the OS, is
+                    // mistaken for a page URL and silently fails to dial.
+                    if is_iroh_link(other) {
+                        cfg.iroh = Some(other.to_string());
                     } else if !other.starts_with('-') {
                         cfg.start_url = normalize_url(other);
                     }
@@ -281,6 +285,16 @@ fn default_adfilter_dir() -> String {
     "data/adfilter".to_string()
 }
 
+/// Does a bare argument carry an Iroh link scheme?
+///
+/// The server mints `shiny-iroh://…`; `shiny://` and `iroh://` are accepted
+/// aliases (see `shiny-iroh-proto`). Matching the scheme here keeps a copied
+/// link out of the "open this page" path.
+fn is_iroh_link(arg: &str) -> bool {
+    let arg = arg.trim();
+    arg.starts_with("shiny-iroh://") || arg.starts_with("shiny://") || arg.starts_with("iroh://")
+}
+
 /// Give a bare host the scheme it obviously meant.
 ///
 /// `https://` for the open web, `http://` for loopback: a local dev server has
@@ -317,6 +331,16 @@ mod tests {
             "http://example.com/a"
         );
         assert_eq!(normalize_url(""), DEFAULT_APP_ORIGIN);
+    }
+
+    #[test]
+    fn iroh_link_schemes_are_recognised() {
+        // The server mints `shiny-iroh://`; older/aliased schemes still count.
+        assert!(is_iroh_link("shiny-iroh://AbCdEf"));
+        assert!(is_iroh_link("shiny://AbCdEf"));
+        assert!(is_iroh_link("iroh://AbCdEf"));
+        assert!(!is_iroh_link("https://example.com"));
+        assert!(!is_iroh_link("example.com"));
     }
 }
 

@@ -3,7 +3,7 @@
  *
  * Every plugin that has an interface lives inside its own tile window in
  * #tile-grid. The traveler plugin's interface is the map. The HUD header and
- * the AI sphere/dock are fixed chrome — always visible, never tiled.
+ * the voice bar/dock are fixed chrome — always visible, never tiled.
  *
  * The layout engine (workspaces, master/stack/windows, focus, fullscreen)
  * lives in desktop.js; this module owns the plugin-window DOM: mounting the
@@ -199,7 +199,7 @@ function mountMapTile() {
   mapRimEl = createRim(mapTileEl);
 
   // Saved-cards dock lives INSIDE the traveler window (top-right, over the
-  // map) instead of under the AI sphere. artifacts.js renders the buttons
+  // map) instead of above the voice bar. artifacts.js renders the buttons
   // into #map-tile-dock-icons and hides the old chrome-bottom dock.
   const tileDock = document.createElement('div');
   tileDock.id = 'map-tile-dock';

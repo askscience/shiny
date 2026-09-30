@@ -1,5 +1,5 @@
 /* Plugin window tiling (Android Auto-style).
-   The HUD header and the AI sphere/dock are fixed chrome; every plugin with
+   The HUD header and the voice bar/dock are fixed chrome; every plugin with
    an interface lives in a tile window between them. */
 
 #tile-grid {
@@ -64,7 +64,7 @@
 
 /* Floating Windows layout (settings → Layout: Windows). The desktop manager
    positions each window with inline left/top/width/height; the grid is just
-   the desktop area (below the top HUD, above the orb/dock). */
+   the desktop area (below the top HUD, above the voice bar/dock). */
 #tile-grid.tile-grid--windows {
   display: block;
   overflow: hidden;
@@ -285,7 +285,7 @@
 }
 
 /* ── Saved-cards dock inside the traveler window ────────────
-   Top-right over the map, replacing the old under-sphere dock. */
+   Top-right over the map, replacing the old in-stack dock. */
 .map-tile-dock {
   position: absolute;
   /* Below the window title bar, over the map. */
@@ -312,9 +312,9 @@
 #map-tile-dock-icons { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 
 /* When the dock lives in the tile, the tile owns the SAVED CARDS: hide the
-   under-sphere cards row so they cannot show twice. The step line is not the
-   tile's — it is the little status bubble that belongs under the orb — so it
-   keeps the dock up, exactly as it does without the traveler plugin. */
+   in-stack cards row so they cannot show twice. The step line is not the
+   tile's — it is the little status bubble that belongs above the voice bar —
+   so it keeps the dock up, exactly as it does without the traveler plugin. */
 body.tile-dock-active #artifact-dock-icons {
   display: none !important;
 }
@@ -1481,17 +1481,18 @@ body.compose-active #tile-overlay {
   display: none !important;
 }
 
-/* ── Phones: plugin windows stop above the orb/dock ──────────
-   The AI sphere and dock are fixed chrome; on small screens the windows get
-   bottom clearance so editors and lists are never covered by the orb. */
+/* ── Phones: plugin windows stop above the voice bar/dock ────
+   The voice bar and dock are fixed chrome; on small screens the windows get
+   bottom clearance so editors and lists are never covered by them. */
 @media (max-width: 640px) {
   #tile-grid {
     top: calc(var(--hud-header-total) + 6px);
     left: max(10px, env(safe-area-inset-left));
     right: max(10px, env(safe-area-inset-right));
-    /* Clear the whole fixed chrome zone (orb 84px + its bottom offset) so
-       plugin windows never hide behind it; stable whether the dock shows. */
-    bottom: calc(env(safe-area-inset-bottom) + 126px);
+    /* Clear the whole fixed chrome zone (voice bar + its bottom offset, plus
+       the status pill above it) so plugin windows never hide behind it;
+       stable whether the dock shows. */
+    bottom: calc(env(safe-area-inset-bottom) + 96px);
     gap: 10px;
   }
 }

@@ -211,7 +211,7 @@ function voiceNotReady() {
 }
 
 /**
- * The orb's short-tap gesture, in one place: the Touch Bar's "Ask" button
+ * The voice bar's short-tap gesture, in one place: the Touch Bar's "Ask" button
  * calls this too, so both paths share the voice-readiness check, the
  * stop-and-rephrase behaviour and the error handling.
  */
@@ -261,9 +261,9 @@ function wireSphere() {
     }
   });
 
-  // Releasing the orb never closes the microphone: the hold only *arms* the
-  // wake listener ("hey <name>"), or a single-shot listen when the wake word
-  // is off. sphere.js has just flipped the orb to idle on release, so put the
+  // Releasing the voice bar never closes the microphone: the hold only *arms*
+  // the wake listener ("hey <name>"), or a single-shot listen when the wake word
+  // is off. sphere.js has just flipped the bar to idle on release, so put the
   // reactive conversation look back and let the wake window, the silence
   // timeout or a short tap end the session.
   onLongPressEnd(() => {

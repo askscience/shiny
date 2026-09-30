@@ -23,8 +23,9 @@
  *      their desktop-wide behaviour.
  *
  * This module also owns the desktop-wide chrome reveal (Settings → Appearance
- * → Top bar & orb): bar position top/left/right/center, plus an independent autohide
- * switch for the bar and the orb. That behaviour is not fullscreen-only — it
+ * → Top bar & voice bar): bar position top/left/right/center, plus an independent
+ * autohide switch for the bar and the voice bar. That behaviour is not
+ * fullscreen-only — it
  * governs the whole desktop. fullscreen.css owns the actual hiding.
  *
  * A fullscreen app cannot be moved to another workspace while it is fullscreen,
@@ -43,7 +44,7 @@ import { isPluginActive } from './activePlugins.js';
 const EDGE_ZONE = 120;     // px from the edge that keeps the bar up once shown
 const REVEAL_ZONE = 28;    // …but only this close to the very edge summons it
 const BAR_DWELL_MS = 700;  // the pointer must *stay* in the reveal zone this long
-const ORB_ZONE = 200;      // px from the bottom edge that reveals the orb…
+const ORB_ZONE = 200;      // px from the bottom edge that reveals the voice bar…
 const ORB_HALF = 340;      // …within this many px either side of centre
 const ENTER_HOLD_MS = 1600; // show the chrome briefly after entering
 
@@ -235,9 +236,9 @@ function armEdgeDwell(atEdge, nearBar) {
 }
 
 /**
- * The bar and the orb hide and reveal on the whole desktop, not only in
+ * The bar and the voice bar hide and reveal on the whole desktop, not only in
  * fullscreen — the immersion settings are desktop-wide. Each piece is
- * independent, so an always-on bar can sit next to an autohiding orb.
+ * independent, so an always-on bar can sit next to an autohiding voice bar.
  *
  * The bar only reveals once the pointer has insisted at its docking edge
  * (`edgeDwell`), so brushing past the top while reaching for a window's own
@@ -286,7 +287,7 @@ function dismissChrome() {
   edgeDwellTimer = null;
   edgeDwell = false;
   body.classList.remove('fs-top', 'fs-orb');
-  // A bar/orb the user pinned open must not be dismissed with the rest.
+  // A bar/voice bar the user pinned open must not be dismissed with the rest.
   evalReveal();
 }
 
@@ -356,7 +357,7 @@ export function initFullscreen() {
   window.addEventListener('plugins:changed', () => {
     if (session && !isPluginActive(session.plugin)) exitWindowFullscreen();
   });
-  // Show the chrome briefly on load, so an autohidden bar/orb is not a
+  // Show the chrome briefly on load, so an autohidden bar/voice bar is not a
   // mystery the first time the desktop appears.
   holdReveal(2600);
 }

@@ -20,10 +20,26 @@ use crate::models::Traveler;
 /// of truth is the plugin SDK, so plugins gate on the same string).
 pub const REMOTE_HEADER: &str = shiny_plugin_sdk::routes::REMOTE_HEADER;
 
-/// Did this request arrive over Iroh? Presence of the header is the signal (the
-/// proxy adds it and overwrites any client-supplied value).
+/// Headers a reverse proxy (Tailscale Serve/Funnel, Cloudflare, nginx) adds when
+/// it forwards a request from off-box. Presence of any is the second remote
+/// signal; Tailscale sets all three, so checking more than one is belt-and-braces.
+pub const FORWARDED_FOR: &str = "x-forwarded-for";
+pub const FORWARDED_PROTO: &str = "x-forwarded-proto";
+pub const FORWARDED_HOST: &str = "x-forwarded-host";
+
+/// Did this request arrive from off-box — over Iroh, or through a TLS reverse
+/// proxy such as Tailscale Serve/Funnel?
+///
+/// The Iroh client proxy sets `x-shiny-remote`; Tailscale Serve/Funnel (an L7
+/// reverse proxy) adds `x-forwarded-*`. A plain local kiosk request has neither.
+/// Either marker means the caller is remote, so host-capability actions are
+/// refused. Local callers are already trusted, so spoofing a marker only
+/// reduces the caller's own privileges.
 pub fn is_remote(headers: &HeaderMap) -> bool {
     headers.contains_key(REMOTE_HEADER)
+        || headers.contains_key(FORWARDED_FOR)
+        || headers.contains_key(FORWARDED_PROTO)
+        || headers.contains_key(FORWARDED_HOST)
 }
 
 /// `$XDG_RUNTIME_DIR/shiny-remote.state` — the `on`/`off` flag `shiny-session`
@@ -60,9 +76,14 @@ pub fn gate_host_status(data: Value, headers: &HeaderMap) -> Value {
 /// remote.
 pub async fn status(State(state): State<AppState>, headers: HeaderMap) -> Json<Value> {
     let status = state.iroh.status().await;
+    let tailscale = state.tailscale.status().await;
     let mut value = serde_json::to_value(&status).unwrap_or_default();
     if let Some(obj) = value.as_object_mut() {
         obj.insert("remote_client".into(), json!(is_remote(&headers)));
+        obj.insert(
+            "tailscale".into(),
+            serde_json::to_value(&tailscale).unwrap_or_default(),
+        );
     }
     Json(value)
 }
@@ -159,28 +180,80 @@ pub async fn unpair(
     Ok(Json(json!({ "removed": removed })))
 }
 
-/// GET /api/remote/qr — the current ticket as an SVG QR code.
-pub async fn qr(State(state): State<AppState>) -> Result<axum::response::Response, AppError> {
-    let status = state.iroh.status().await;
-    let ticket = status
-        .ticket
-        .ok_or_else(|| AppError::BadRequest("server mode is not enabled".into()))?;
+/// POST /api/remote/tailscale/enable — expose the app through Tailscale Funnel
+/// (a public `*.ts.net` HTTPS URL). Enabling is **local-only**: a remote client
+/// must not be able to re-expose the server.
+pub async fn tailscale_enable(
+    State(state): State<AppState>,
+    Extension(_traveler): Extension<Traveler>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    if is_remote(&headers) {
+        return Err(AppError::Unauthorized(
+            "server mode can only be enabled from the local machine".into(),
+        ));
+    }
+    let status = state
+        .tailscale
+        .enable()
+        .await
+        .map_err(AppError::BadRequest)?;
+    Ok(Json(serde_json::to_value(&status).unwrap_or_default()))
+}
 
-    let code = qrcode::QrCode::new(ticket.as_bytes())
-        .map_err(|e| AppError::Internal(format!("qr encode: {e}")))?;
-    let svg = code
+/// POST /api/remote/tailscale/disable — stop the Funnel. Allowed from a remote
+/// client too, so a remote user can close the exposure they are connected to.
+pub async fn tailscale_disable(
+    State(state): State<AppState>,
+    Extension(_traveler): Extension<Traveler>,
+) -> Result<Json<Value>, AppError> {
+    let status = state
+        .tailscale
+        .disable()
+        .await
+        .map_err(AppError::BadRequest)?;
+    Ok(Json(serde_json::to_value(&status).unwrap_or_default()))
+}
+
+/// Build the shared QR SVG (dark text on a light field).
+fn qr_svg(text: &str) -> Result<String, AppError> {
+    let code =
+        qrcode::QrCode::new(text.as_bytes()).map_err(|e| AppError::Internal(format!("qr encode: {e}")))?;
+    Ok(code
         .render::<qrcode::render::svg::Color>()
         .min_dimensions(260, 260)
         .quiet_zone(true)
         .dark_color(qrcode::render::svg::Color("#ffffff"))
         .light_color(qrcode::render::svg::Color("#000000"))
-        .build();
+        .build())
+}
 
+fn svg_response(svg: String) -> Result<axum::response::Response, AppError> {
     Ok(axum::response::Response::builder()
         .header(axum::http::header::CONTENT_TYPE, "image/svg+xml")
         .header(axum::http::header::CACHE_CONTROL, "no-store")
         .body(axum::body::Body::from(svg))
         .map_err(|e| AppError::Internal(format!("response: {e}")))?)
+}
+
+/// GET /api/remote/qr — the current Iroh link as an SVG QR code.
+pub async fn qr(State(state): State<AppState>) -> Result<axum::response::Response, AppError> {
+    let status = state.iroh.status().await;
+    let ticket = status
+        .ticket
+        .ok_or_else(|| AppError::BadRequest("server mode is not enabled".into()))?;
+    svg_response(qr_svg(&ticket)?)
+}
+
+/// GET /api/remote/tailscale/qr — the Funnel URL as an SVG QR code.
+pub async fn tailscale_qr(
+    State(state): State<AppState>,
+) -> Result<axum::response::Response, AppError> {
+    let status = state.tailscale.status().await;
+    let url = status
+        .url
+        .ok_or_else(|| AppError::BadRequest("Tailscale Funnel is not on".into()))?;
+    svg_response(qr_svg(&url)?)
 }
 
 async fn set_preference(state: &AppState, user_id: &str, key: &str, value: &str) {

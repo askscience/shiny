@@ -1,7 +1,15 @@
-import { initOrbCanvas, setOrbPalette, setOrbIntensity, resetOrbIntensity } from './orbCanvas.js';
+/**
+ * sphere.js — the voice bar at the bottom of the screen.
+ *
+ * There is no rendered orb any more: the assistant's presence is a small lip
+ * with an accent-coloured shadow that rises from it and swells with the audio.
+ * This module owns the gesture vocabulary (tap = listen, long-press = wake,
+ * double-tap = type) and pushes the live audio level into CSS custom
+ * properties on the bar. The look lives in /css/sphere.css; the colour follows
+ * the active theme's accent (or --error while the mic is unhappy).
+ */
 
 const container = document.getElementById('sphere-container');
-const canvas = document.getElementById('orb-canvas');
 
 const LONG_PRESS_MS = 400;
 let currentState = 'idle';
@@ -43,8 +51,6 @@ export function setSphereState(state) {
   if (state !== 'idle') {
     container.classList.add(`state-${state}`);
   }
-  const paletteState = state === 'idle' ? 'idle' : state;
-  setOrbPalette(paletteState);
 }
 
 export function getSphereState() {
@@ -180,17 +186,38 @@ function handleEnd(e) {
 }
 
 export function initSphere() {
-  if (canvas) initOrbCanvas(canvas);
   container.addEventListener('pointerdown', handleStart);
   container.addEventListener('pointerup', handleEnd);
   container.addEventListener('pointercancel', handleEnd);
   setSphereState('disabled');
 }
 
-export function setMicLevel(level) {
-  setOrbIntensity(level);
+/**
+ * Feed the live audio level into the bar. Accepts the `voice:level` detail
+ * ({ level, pan }) or a bare number; both are clamped before they reach CSS.
+ */
+export function setMicLevel(input) {
+  let level = 0;
+  let pan = 0;
+  if (typeof input === 'number') {
+    level = input;
+  } else if (input && typeof input === 'object') {
+    level = Number(input.level);
+    pan = Number(input.pan);
+  }
+  if (Number.isFinite(level)) {
+    container.style.setProperty('--voice-level', clamp(level, 0, 1).toFixed(3));
+  }
+  if (Number.isFinite(pan)) {
+    container.style.setProperty('--voice-pan', clamp(pan, -1, 1).toFixed(3));
+  }
 }
 
 export function resetMicLevel() {
-  resetOrbIntensity();
+  container.style.setProperty('--voice-level', '0');
+  container.style.setProperty('--voice-pan', '0');
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }

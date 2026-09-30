@@ -13,11 +13,11 @@
  *   • Right-click the empty desktop         → desktop menu (new / remove
  *     workspace, switch workspace, layout mode).
  *   • Right-click a workspace dot           → workspace menu (new / remove).
- *   • Right-click the AI orb                → assistant menu (new chat, chat
+ *   • Right-click the voice bar              → assistant menu (new chat, chat
  *     history, type a message, voice, settings).
  *
  * On a touchscreen a long press opens the same menus (there is no right
- * button). The orb and the virtual keyboard keep their own press-and-hold, so
+ * button). The voice bar and the virtual keyboard keep their own press-and-hold, so
  * they opt out.
  *
  * Apps extend their own window menu by exporting `contextMenu(ctx)` from their
@@ -516,9 +516,9 @@ function workspaceDotMenu(index) {
   ];
 }
 
-/* ── The AI orb ───────────────────────────────────────────────── */
+/* ── The voice bar ────────────────────────────────────────────── */
 
-/** Start a single listen from the orb menu. A menu click is a real user
+/** Start a single listen from the voice bar's menu. A menu click is a real user
  *  gesture, so the microphone request is allowed to run. */
 async function orbListen() {
   if (isListening()) return;
@@ -535,7 +535,7 @@ async function orbListen() {
   }
 }
 
-/** Right-click / long-press on the orb: the assistant and voice actions. */
+/** Right-click / long-press on the voice bar: the assistant and voice actions. */
 function orbMenu() {
   return [
     { type: 'heading', label: getAiName() },
@@ -592,7 +592,7 @@ const LONG_PRESS_MOVE = 12;     // px of travel that turns the gesture into a sc
 
 /**
  * Targets that keep their own press-and-hold, or need the browser's native
- * editing menu. The orb already owns the long press (it starts voice), and the
+ * editing menu. The voice bar already owns the long press (it starts voice), and the
  * virtual keyboard repeats a held key.
  */
 const LONG_PRESS_EXCLUDE = [
@@ -702,7 +702,7 @@ export function initContextMenu() {
       return;
     }
 
-    // The AI orb → assistant / voice menu.
+    // The voice bar → assistant / voice menu.
     if (target.closest?.('#sphere-container')) {
       e.preventDefault();
       closeAllMenus();

@@ -396,8 +396,6 @@ function renderDesktopRow() {
 
 function render() {
   if (!rowsEl) return;
-  // Rebuilding wipes the orb slot — rescue the docked AI sphere first.
-  const dockedOrb = document.getElementById('keyboard-orb-slot')?.firstElementChild || null;
   rowsEl.textContent = '';
   rowsEl.appendChild(renderDesktopRow());
   const l = layout();
@@ -428,51 +426,23 @@ function render() {
     rowsEl.appendChild(r);
   });
 
-  /* Bottom row: language, symbols toggle, space split around the AI sphere,
-     enter. */
+  /* Bottom row: language, symbols toggle, space, enter. */
   const bot = document.createElement('div');
   bot.className = 'keyboard-row';
   bot.appendChild(keyButton('lang', l.label, 'keyboard-key--fn'));
   bot.appendChild(keyButton('sym', symbols ? 'ABC' : '123', 'keyboard-key--fn'));
   bot.appendChild(keyButton('space', ' ', 'keyboard-key--space'));
-  const slot = document.createElement('div');
-  slot.id = 'keyboard-orb-slot';
-  slot.className = 'keyboard-orb-slot';
-  bot.appendChild(slot);
-  bot.appendChild(keyButton('space', ' ', 'keyboard-key--space'));
   bot.appendChild(keyButton('enter', '↵', 'keyboard-key--accent keyboard-key--fn'));
   rowsEl.appendChild(bot);
-
-  // Re-dock the sphere into the fresh slot.
-  if (dockedOrb) moveOrbIntoKeyboard(dockedOrb);
 }
 
 /* ── Open / close ───────────────────────────────────────────── */
-
-/** The AI sphere lives INSIDE the keyboard while it is visible — docked
- * between the two space halves. Returns to the chrome-bottom stack on close.
- * `orbEl` is passed when the orb may be detached mid-re-render (getElementById
- * cannot find detached nodes). */
-function moveOrbIntoKeyboard(orbEl) {
-  const orb = orbEl || document.getElementById('sphere-container');
-  const slot = document.getElementById('keyboard-orb-slot');
-  if (!orb || !slot || orb.parentElement === slot) return;
-  slot.appendChild(orb);
-}
-
-function moveOrbBack() {
-  const orb = document.getElementById('sphere-container');
-  const chrome = document.getElementById('chrome-bottom');
-  if (!orb || !chrome || orb.parentElement === chrome) return;
-  chrome.insertBefore(orb, chrome.firstChild);
-}
 
 function open() {
   if (!bar) return;
   visible = true;
   bar.classList.add('visible');
   document.body.classList.add('keyboard-open');
-  moveOrbIntoKeyboard();
   hudBtn?.setAttribute('aria-pressed', 'true');
 }
 
@@ -483,7 +453,6 @@ function close() {
   stopRepeat();
   bar.classList.remove('visible');
   document.body.classList.remove('keyboard-open');
-  moveOrbBack();
   hudBtn?.setAttribute('aria-pressed', 'false');
 }
 

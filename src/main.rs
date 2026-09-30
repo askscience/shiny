@@ -268,6 +268,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         qwen_tts,
         plugins: shiny::plugins::PluginManager::new(std::path::PathBuf::from(&config.plugins_dir), pool.clone()),
         iroh: shiny::services::iroh_remote::IrohRemote::new(),
+        tailscale: shiny::services::tailscale::TailscaleService::new(config.server_port),
         session,
         router_rebuild: None,
     };

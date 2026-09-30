@@ -1,16 +1,19 @@
 #!/bin/sh
-# install-t2-audio-dsp.sh — install the measured speaker DSP for the 6-speaker
-# 16" MacBook Pro (MacBookPro16,1) so PipeWire drives its speakers correctly.
+# install-t2-audio-dsp.sh — install the measured audio DSP for the 6-speaker
+# 16" MacBook Pro (MacBookPro16,1): the speaker FIR/virtual-bass graph, and — when
+# triforce-lv2 is available — the microphone beamformer.
 #
-# The graph and FIRs are vendored under scripts/t2-audio/ (from the T2 Linux
+# The graphs and FIRs are vendored under scripts/t2-audio/ (from the T2 Linux
 # team's t2-apple-audio-dsp project — see scripts/t2-audio/README.md).
 #
 #   sudo scripts/install-t2-audio-dsp.sh
 #   sudo scripts/install-t2-audio-dsp.sh --uninstall
 #
-# Model-gated on purpose: every MacBook model needs its own FIRs, and applying
-# the wrong ones can damage the speakers. On any other machine this script does
-# nothing.
+# T2-gated on purpose: it only runs on a MacBookPro16,1 that actually has the
+# t2bce_audio card, and the udev rule that activates the config only fires for
+# that driver — so a machine without the T2 kernel is untouched. The mic DSP is
+# additionally gated on triforce-lv2: without it the mic rules are dropped and
+# the raw microphone stays visible.
 set -eu
 
 REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -63,13 +66,13 @@ esac
 
 if [ "${1:-}" = "--uninstall" ]; then
     need_root
-    echo "Removing the T2 speaker DSP…"
+    echo "Removing the T2 audio DSP…"
     rm -f "$WP_CONF" "$WP_CONF_LEGACY" "$UDEV_RULE"
     rm -rf "$DEST_DIR/$MODEL_DIR"
     rmdir "$DEST_DIR" 2>/dev/null || true
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger --subsystem-match=sound --action=change 2>/dev/null || true
-    echo "Done. Restart the audio stack (or reboot) to return to the raw speakers:"
+    echo "Done. Restart the audio stack (or reboot) to return to the raw audio:"
     echo "  systemctl --user restart wireplumber pipewire pipewire-pulse"
     exit 0
 fi
@@ -78,9 +81,17 @@ need_root
 
 MODEL=$(detect_model)
 if [ "$MODEL" != "$SUPPORTED_MODEL" ]; then
-    echo "T2 speaker DSP is only shipped for the $SUPPORTED_MODEL."
+    echo "T2 audio DSP is only shipped for the $SUPPORTED_MODEL."
     echo "  detected: ${MODEL:-unknown}"
-    echo "Nothing to do — the FIRs are model-specific and must not be reused."
+    echo "Nothing to do — the FIRs/geometry are model-specific and must not be reused."
+    exit 0
+fi
+
+# Require the T2 audio card, not just the model: on a non-T2 kernel the config
+# would do nothing anyway, but skipping keeps a stray udev rule/conf off disk.
+if ! grep -qiE 'Apple T2 Audio|AppleT2' /proc/asound/cards 2>/dev/null; then
+    echo "No T2 audio card found (t2bce_audio driver not loaded) — nothing to do."
+    echo "This configuration only applies to a T2 Mac running the T2 kernel."
     exit 0
 fi
 
@@ -89,8 +100,10 @@ if [ ! -d "$ASSET_DIR/$MODEL_DIR" ]; then
     exit 1
 fi
 
-# The graph hides the raw speaker node, so if a plugin it needs is missing the
-# DSP sink fails to build and the speakers would go silent. Refuse instead.
+# The speaker graph hides the raw speaker node, so if a plugin it needs is
+# missing the DSP sink fails to build and the speakers would go silent. Refuse
+# instead. The mic DSP is optional: without `triforce` we simply do not wire it
+# in, leaving the raw microphone visible rather than a mic that vanishes.
 missing=""
 have_lv2 bankstown || missing="$missing bankstown-lv2"
 have_lv2 lsp-plugins || missing="$missing lsp-plugins-lv2"
@@ -101,7 +114,14 @@ if [ -n "$missing" ]; then
     exit 1
 fi
 
-echo "Installing the $MODEL speaker DSP"
+MIC=1
+have_lv2 triforce || MIC=0
+
+if [ "$MIC" -eq 1 ]; then
+    echo "Installing the $MODEL speaker + microphone DSP"
+else
+    echo "Installing the $MODEL speaker DSP (microphone DSP skipped: triforce-lv2 missing)"
+fi
 
 # 1. udev: give the ALSA card the id `t2-16_1` the WirePlumber rule keys on.
 sed "s/@MODEL_DIR@/$MODEL_DIR/g" "$ASSET_DIR/99-t2-audio-rename.rules" > "$UDEV_RULE"
@@ -109,9 +129,15 @@ chmod 0644 "$UDEV_RULE"
 udevadm control --reload-rules
 udevadm trigger --subsystem-match=sound --action=change
 
-# 2. WirePlumber: rename the raw speaker node and wrap it in the DSP graph.
+# 2. WirePlumber: rename the raw speaker/mic nodes and wrap them in DSP graphs.
 install -d -m 0755 "$WP_DIR"
 install -m 0644 "$ASSET_DIR/wireplumber.conf" "$WP_CONF"
+# The mic graph hides the raw microphone; without triforce-lv2 there is nothing
+# to build it, so drop the mic blocks and leave the raw mic visible.
+if [ "$MIC" -eq 0 ]; then
+    sed -i -e '/# >>> mic-rename/,/# <<< mic-rename/d' \
+           -e '/# >>> mic-dsp/,/# <<< mic-dsp/d' "$WP_CONF"
+fi
 # Drop a stale copy at the path older installs used.
 rm -f "$WP_CONF_LEGACY"
 
@@ -128,5 +154,14 @@ echo
 echo "Installed. Restart the audio stack (or reboot) to apply:"
 echo "  systemctl --user restart wireplumber pipewire pipewire-pulse"
 echo
-echo "Then pick \"MacBook Pro T2 DSP Speakers\" in the sound panel. Leave the"
+echo "Then pick \"MacBook Pro T2 DSP Speakers\" as the output. Leave the"
 echo "\"Raw Speaker Device (do not use)\" alone — it bypasses all the tuning."
+if [ "$MIC" -eq 1 ]; then
+    echo "\"MacBook Pro T2 DSP Mic\" is the tuned microphone source."
+else
+    echo
+    echo "The microphone DSP was skipped. To enable it, install triforce-lv2:"
+    echo "  Debian 13:  sudo apt install -t trixie-backports triforce-lv2"
+    echo "  Ubuntu:     sudo apt install triforce-lv2"
+    echo "then re-run this script. The raw microphone stays usable meanwhile."
+fi

@@ -4,8 +4,8 @@
  * The UI is monochrome; the user picks ONE accent color and ONE gradient
  * (presets from the active theme manifest, or custom). This module derives
  * every accent-related token (--accent-soft, --gradient-mesh, …) and
- * broadcasts `appearance:change` so JS-rendered surfaces (map, orb canvas)
- * can follow. A legacy `accent:change` event is also dispatched.
+ * broadcasts `appearance:change` so JS-rendered surfaces (map, tiles, the
+ * voice bar's glow) can follow. A legacy `accent:change` event is also dispatched.
  *
  * Storage is per user; the app injects its scope via initAppearance:
  *   initAppearance({ getScope: () => getTraveler()?.id })

@@ -15,8 +15,9 @@ software DSP.
 | Path | Purpose |
 |---|---|
 | `16_1/graph.json` | PipeWire filter-chain graph: virtual bass + per-driver FIR convolution + limiting. |
+| `16_1/mic.json` | PipeWire filter-chain graph: 3-channel array → Triforce beamformer + high-pass (the tuned microphone). |
 | `16_1/{tweeters,woofers}-{44k,48k,96k}.wav` | Measured impulse responses (FIRs), one per sample rate. |
-| `wireplumber.conf` | WirePlumber rules that rename the raw speaker node and wrap it in the graph. |
+| `wireplumber.conf` | WirePlumber rules that rename the raw speaker/mic nodes and wrap them in the graphs. |
 | `99-t2-audio-rename.rules` | udev rule giving the ALSA card the id `t2-16_1` the WirePlumber rule keys on. |
 
 The installer is [`../install-t2-audio-dsp.sh`](../install-t2-audio-dsp.sh).
@@ -27,17 +28,28 @@ its own FIRs, and using the wrong ones can damage the speakers.**
 
 The graph uses these LV2 plugins, which `install-t2-audio-dsp.sh` checks for:
 
-- `bankstown-lv2` (`https://chadmed.au/bankstown` virtual bass)
-- `lsp-plugins-lv2` (`loud_comp_mono`, `compressor_stereo`)
+- `bankstown-lv2` (`https://chadmed.au/bankstown` virtual bass) — **required** for the speakers
+- `lsp-plugins-lv2` (`loud_comp_mono`, `compressor_stereo`) — **required** for the speakers
+- `triforce-lv2` (`https://chadmed.au/triforce` mic beamformer) — **optional**, enables the microphone DSP
 
 On Debian/Ubuntu:
 
 ```sh
 sudo apt install bankstown-lv2 lsp-plugins-lv2
+# microphone DSP (optional):
+#   Debian 13:  sudo apt install -t trixie-backports triforce-lv2
+#   Ubuntu:     sudo apt install triforce-lv2
 ```
 
-The mic DSP from upstream is **not** shipped: it needs `triforce-lv2`, which
-Debian does not package, so the microphone is left on the raw device.
+The installer wires in the mic graph only when `triforce-lv2` is present. The
+T2 mic is a raw 3-channel array with no hardware gain, so without the beamformer
+graph it is far too quiet for speech recognition; the graph combines the array,
+applies the model geometry/gain and a high-pass filter, and exposes a mono
+"MacBook Pro T2 DSP Mic" source.
+
+Everything here is gated on the machine actually being a `MacBookPro16,1` with
+the `t2bce_audio` card, and the udev rule only fires for that driver — so a
+machine without the T2 kernel is never touched.
 
 ## Attribution
 
