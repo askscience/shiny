@@ -13,6 +13,9 @@
  *   input  → keystrokes are POSTed to `/api/terminal/input`
  *   resize → the fit addon measures the window, `/api/terminal/resize` tells
  *            the PTY, so `top`, `vim` and friends get the right width
+ *   render → WebGL where the platform allows it, else canvas, else the built-in
+ *            DOM renderer (see `selectRenderer`) — an agent TUI redrawing in
+ *            here is what makes the renderer choice matter
  *
  * Closing the window does NOT kill the shell: the session id lives in
  * `sessionStorage`, so reopening (or reloading the page) reattaches and
@@ -34,6 +37,7 @@ let statusEl = null;
 
 let term = null;
 let fitAddon = null;
+let canvasAddon = null;
 let assetsPromise = null;
 
 let sessionId = null;
@@ -45,6 +49,16 @@ let dead = false;
 let inputQueue = [];
 let flushTimer = null;
 let resizeTimer = null;
+
+// Output is coalesced before it reaches xterm. A TUI redraws continuously
+// (the agent UI writes ~60 times a second), and xterm repaints the grid for
+// every write it processes, so the repaint count — not the byte count — is
+// what costs a core on a large terminal. Merging the frames that arrive
+// inside one tick keeps the final state and roughly halves the repaints.
+const OUT_FLUSH_MS = 33;
+let outQueue = [];
+let outBytes = 0;
+let outTimer = null;
 
 let shell = { shell: '', cwd: '' };
 
@@ -73,10 +87,20 @@ function ensureAssets() {
       }
       if (!window.Terminal) await loadScript(`${VENDOR}/xterm.js`);
       if (!window.FitAddon) await loadScript(`${VENDOR}/addon-fit.js`);
-      // Optional: the canvas renderer. Worth it because the DOM renderer
-      // rebuilds text for every changed cell, which pegs a core on a wide
-      // terminal showing a redrawing TUI. A load failure is not fatal — the
-      // immediately-following code keeps the DOM renderer.
+      // Renderers, best first, each optional. WebGL draws the whole grid from
+      // a glyph atlas in a few draw calls; canvas repaints changed cells with
+      // Canvas2D `fillText`; the built-in DOM renderer rebuilds text nodes for
+      // every changed cell. It only matters under load: an agent TUI that
+      // redraws continuously costs roughly a full core on the canvas/DOM paths
+      // in this QtWebEngine kiosk, and a few percent on WebGL. A load failure
+      // simply drops to the next renderer down.
+      if (!window.WebglAddon) {
+        try {
+          await loadScript(`${VENDOR}/addon-webgl.js`);
+        } catch (_) {
+          /* canvas/DOM fallback */
+        }
+      }
       if (!window.CanvasAddon) {
         try {
           await loadScript(`${VENDOR}/addon-canvas.js`);
@@ -199,17 +223,7 @@ async function initTerminal() {
   fitAddon = new window.FitAddon.FitAddon();
   term.loadAddon(fitAddon);
   term.open(hostEl);
-
-  // Canvas renderer where available (see ensureAssets): the DOM renderer
-  // rebuilds text spans for every changed row, which is what made a large
-  // terminal showing a redrawing TUI cost a whole core.
-  if (window.CanvasAddon) {
-    try {
-      term.loadAddon(new window.CanvasAddon.CanvasAddon());
-    } catch (_) {
-      /* keep the DOM renderer */
-    }
-  }
+  selectRenderer();
 
   term.onData((data) => queueInput(data));
 
@@ -218,6 +232,52 @@ async function initTerminal() {
 
   fit();
   await attachSession();
+}
+
+/**
+ * Load the canvas renderer as the fallback below WebGL. Idempotent, and a
+ * no-op when the addon is missing or refuses to load — whatever renderer is
+ * already active (the DOM one) stays in place.
+ */
+function useCanvasRenderer() {
+  if (canvasAddon || !term || !window.CanvasAddon) return;
+  try {
+    canvasAddon = new window.CanvasAddon.CanvasAddon();
+    term.loadAddon(canvasAddon);
+  } catch (_) {
+    canvasAddon = null; // keep the DOM renderer
+  }
+}
+
+/**
+ * Pick the fastest renderer the platform can give us: WebGL, then canvas,
+ * then the built-in DOM renderer (see `ensureAssets`). A lost WebGL context
+ * demotes to canvas rather than leaving a blank terminal.
+ */
+function selectRenderer() {
+  if (!term) return;
+  if (window.WebglAddon) {
+    try {
+      const webgl = new window.WebglAddon.WebglAddon();
+      webgl.onContextLoss(() => {
+        try {
+          webgl.dispose();
+        } catch (_) {
+          /* already disposed */
+        }
+        useCanvasRenderer();
+        console.info('terminal: WebGL context lost — renderer =',
+          canvasAddon ? 'canvas' : 'dom');
+      });
+      term.loadAddon(webgl);
+      console.info('terminal: renderer = webgl');
+      return;
+    } catch (err) {
+      console.info('terminal: WebGL unavailable, trying canvas:', err?.message ?? err);
+    }
+  }
+  useCanvasRenderer();
+  console.info('terminal: renderer =', canvasAddon ? 'canvas' : 'dom');
 }
 
 function fit() {
@@ -367,10 +427,14 @@ async function runStream(session, ctrl) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      // Consume frames by index and slice the remainder once: reslicing the
+      // whole buffer per frame is quadratic, and a busy TUI can pack many
+      // frames into one read.
+      let start = 0;
       let end;
-      while ((end = buffer.indexOf('\n\n')) !== -1) {
-        const frame = buffer.slice(0, end);
-        buffer = buffer.slice(end + 2);
+      while ((end = buffer.indexOf('\n\n', start)) !== -1) {
+        const frame = buffer.slice(start, end);
+        start = end + 2;
         const line = frame.split('\n').find((l) => l.startsWith('data:'));
         if (line) handleFrame(line.slice(5).trim());
         if (dead) {
@@ -378,6 +442,7 @@ async function runStream(session, ctrl) {
           return;
         }
       }
+      if (start > 0) buffer = buffer.slice(start);
     }
   } catch (_) {
     if (ctrl.signal.aborted) return;
@@ -411,12 +476,43 @@ function handleFrame(data) {
     setStatus(`${msg.shell || 'shell'} — ${msg.cwd || ''}`);
     onHostResized();
   } else if (msg.type === 'out') {
-    term?.write(b64ToBytes(msg.data));
+    queueOutput(b64ToBytes(msg.data));
   } else if (msg.type === 'exit') {
     dead = true;
+    flushOutput();
     term?.write('\r\n\x1b[2m[session ended — “New shell” starts another]\x1b[0m\r\n');
     setStatus('session ended');
   }
+}
+
+/** Buffer a chunk of shell output and schedule the coalesced write. */
+function queueOutput(bytes) {
+  outQueue.push(bytes);
+  outBytes += bytes.length;
+  if (outTimer === null) outTimer = window.setTimeout(flushOutput, OUT_FLUSH_MS);
+}
+
+/** Write everything buffered so far to xterm as a single chunk. */
+function flushOutput() {
+  if (outTimer !== null) {
+    window.clearTimeout(outTimer);
+    outTimer = null;
+  }
+  if (!outQueue.length) return;
+  let merged;
+  if (outQueue.length === 1) {
+    merged = outQueue[0];
+  } else {
+    merged = new Uint8Array(outBytes);
+    let at = 0;
+    for (const chunk of outQueue) {
+      merged.set(chunk, at);
+      at += chunk.length;
+    }
+  }
+  outQueue = [];
+  outBytes = 0;
+  term?.write(merged);
 }
 
 async function restart() {
@@ -461,9 +557,13 @@ export function unmountTerminalTile() {
   }
   clearTimeout(resizeTimer);
   clearTimeout(flushTimer);
+  if (outTimer !== null) clearTimeout(outTimer);
   resizeTimer = null;
   flushTimer = null;
+  outTimer = null;
   inputQueue = [];
+  outQueue = [];
+  outBytes = 0;
   try {
     term?.dispose();
   } catch (_) {
@@ -471,6 +571,7 @@ export function unmountTerminalTile() {
   }
   term = null;
   fitAddon = null;
+  canvasAddon = null;
   tileEl = null;
   hostEl = null;
   titleEl = null;
