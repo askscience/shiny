@@ -14,6 +14,7 @@
 
 import { apiFetch } from './api.js';
 import { button, emptyState, icon, modal, setIcon, toast } from '../ui/index.js';
+import { notifyMenuChange } from './menuState.js';
 
 const chipEl = document.getElementById('hud-power');
 const iconEl = document.getElementById('hud-power-icon');
@@ -87,6 +88,7 @@ export function openPowerMenu(chip) {
   trigger?.setAttribute('aria-expanded', 'true');
   trigger?.classList.add('is-open');
   reposition();
+  notifyMenuChange();
 }
 
 export function closePowerMenu() {
@@ -98,6 +100,7 @@ export function closePowerMenu() {
   window.removeEventListener('resize', reposition);
   trigger?.setAttribute('aria-expanded', 'false');
   trigger?.classList.remove('is-open');
+  notifyMenuChange();
 }
 
 export function togglePowerMenu(chip) {

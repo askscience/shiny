@@ -12,7 +12,9 @@
 //! * [`fetch`] — page → readable text, for the tools.
 //! * [`history`] — best-effort browsing history, and the interest profile's
 //!   raw material.
-//! * [`settings`] — per-user Browser settings (the shield toggle).
+//! * [`bookmarks`] — per-user saved pages for the toolbar.
+//! * [`settings`] — per-user Browser settings (the shield toggle, the search
+//!   engine).
 //! * [`filter`] — the server half of the ad-filter engine: fetch + compile the
 //!   lists and write the cache the shell reads.
 //! * [`downloads`] — persisted download history for the Downloads panel.
@@ -20,6 +22,7 @@
 //!   from what the user searches for.
 //! * [`plugin`] — registration and the `shiny_plugin_entry` symbol.
 
+pub mod bookmarks;
 pub mod downloads;
 pub mod fetch;
 pub mod filter;

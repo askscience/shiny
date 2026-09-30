@@ -50,9 +50,12 @@ fn page_artifact(title: &str, url: &str, note: Option<&str>) -> Artifact {
 }
 
 /// Resolve raw model input to an absolute URL, searching when it is a phrase.
+///
+/// Tools run without a user in hand, so a search uses the default engine; the
+/// address bar (which does know the user) passes their choice instead.
 fn resolve_target(input: &str) -> String {
     let searxng = std::env::var("SEARXNG_URL").ok();
-    normalize_input(input).into_url(searxng.as_deref())
+    normalize_input(input).into_url(searxng.as_deref(), crate::settings::DEFAULT_SEARCH_ENGINE)
 }
 
 /* ── browser_open ───────────────────────────────────────────── */
@@ -134,7 +137,7 @@ impl Tool for BrowserSearch {
     }
 
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `browser_search` — Search the web in the browser window. params: `{ query: string }` — uses the configured SearXNG instance when `SEARXNG_URL` is set, otherwise Brave Search. Prefer this over `browser_open` when the user asks to look something up.")
+        Some("- `browser_search` — Search the web in the browser window. params: `{ query: string }` — uses the configured SearXNG instance when `SEARXNG_URL` is set, otherwise the user's chosen engine (DuckDuckGo by default). Prefer this over `browser_open` when the user asks to look something up.")
     }
 
     fn humanize(&self, _r: &str, data: &Value) -> String {

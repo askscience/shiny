@@ -79,6 +79,11 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/session/close", "browser_session_close"),
             (HttpMethod::Post, "/api/browser/navigate", "browser_navigate"),
             (HttpMethod::Get, "/api/browser/history", "browser_history"),
+            (HttpMethod::Post, "/api/browser/history/clear", "browser_history_clear"),
+            (HttpMethod::Post, "/api/browser/history/record", "browser_history_record"),
+            (HttpMethod::Get, "/api/browser/bookmarks", "browser_bookmarks"),
+            (HttpMethod::Post, "/api/browser/bookmarks/add", "browser_bookmark_add"),
+            (HttpMethod::Post, "/api/browser/bookmarks/remove", "browser_bookmark_remove"),
             (HttpMethod::Get, "/api/browser/news", "browser_news"),
             (HttpMethod::Post, "/api/browser/news/click", "browser_news_click"),
             (HttpMethod::Post, "/api/browser/preview", "browser_preview"),
@@ -127,6 +132,7 @@ impl Plugin for BrowserPlugin {
         // migration has not run.
         crate::settings::ensure_schema(&ctx);
         crate::downloads::ensure_schema(&ctx);
+        crate::bookmarks::ensure_schema(&ctx);
 
         // Fetch + compile the ad-filter lists in the background so the compiled
         // engine exists for the shell's next start. Never blocks plugin load,

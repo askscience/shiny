@@ -131,6 +131,26 @@ pub async fn record(
     }
 }
 
+/// Forget one user's browsing history.
+///
+/// Best-effort like [`record`]: the window's "clear history" button must not
+/// fail when the plugin-owned database is unreachable, but the error is
+/// returned anyway so a caller that wants to report it can. Only the user's
+/// rows go, so clearing one account never touches another's profile.
+pub async fn clear(ctx: &PluginCtx, user_id: &str) -> Result<(), String> {
+    let sql = format!("DELETE FROM {TABLE} WHERE traveler_id = ?1");
+    match ctx
+        .db()
+        .execute(&sql, &[Value::text(user_id.to_string())])
+    {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            tracing::debug!("browser: history not cleared: {err}");
+            Err(err.to_string())
+        }
+    }
+}
+
 /// Recent history for a user as plain URLs, newest first.
 ///
 /// Returns an empty list on failure, so callers never need to handle the
@@ -350,6 +370,45 @@ mod tests {
         // The typed search is stored verbatim — it is the recommender's input.
         assert_eq!(rows[1].query.as_deref(), Some("aurora forecast"));
         assert!(rows[1].created_at.starts_with("2026-09-13"));
+    }
+
+    #[test]
+    fn clear_drops_only_that_users_rows() {
+        let path = "/tmp/browser-history-clear.db";
+        let ctx = ctx_with_db(path);
+        let db = Db::open(&format!("sqlite://{path}")).unwrap();
+        db.execute(
+            &format!(
+                "CREATE TABLE {TABLE} (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL,
+                 url TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'page',
+                 query TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            ),
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO peakd_history (id, traveler_id, url, mode) VALUES ('r1','u1','https://a/','page')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO peakd_history (id, traveler_id, url, mode) VALUES ('r2','u2','https://b/','visit')",
+            &[],
+        )
+        .unwrap();
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(clear(&ctx, "u1")).expect("clear");
+
+        assert!(recent_rows(&ctx, "u1", 10).unwrap().is_empty());
+        // Another user's history is untouched.
+        let other = recent_rows(&ctx, "u2", 10).unwrap();
+        assert_eq!(other.len(), 1);
+        assert_eq!(other[0].mode, "visit");
+
+        // A missing table is an error, not a panic.
+        let missing = ctx_with_db("/tmp/browser-history-clear-missing.db");
+        assert!(rt.block_on(clear(&missing, "u1")).is_err());
     }
 }
 

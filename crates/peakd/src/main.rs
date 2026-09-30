@@ -156,6 +156,10 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
             if let Some(dir) = value.get("downloadsDir").and_then(|v| v.as_str()) {
                 downloads::set_dir(dir);
             }
+            // The app's theme, so pages' `prefers-color-scheme` matches it.
+            if let Some(scheme) = value.get("colorScheme").and_then(|v| v.as_str()) {
+                shim::set_color_scheme(scheme);
+            }
             push_shield();
         }
         return;

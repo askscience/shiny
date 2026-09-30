@@ -13,6 +13,7 @@ import {
 } from './artifactStore.js';
 import { openSavedArtifact } from './artifacts.js';
 import { getCurrentPosition } from './map.js';
+import { notifyMenuChange } from './menuState.js';
 import { setIcon } from '../ui/index.js';
 
 const clockTimeEl = document.getElementById('hud-clock-time');
@@ -164,6 +165,7 @@ function closeTripMenu() {
   document.removeEventListener('pointerdown', onMenuOutside, true);
   document.removeEventListener('keydown', onMenuKey, true);
   window.removeEventListener('resize', closeTripMenu);
+  notifyMenuChange();
 }
 
 function onMenuOutside(e) {
@@ -189,6 +191,7 @@ function openTripMenu() {
   document.addEventListener('pointerdown', onMenuOutside, true);
   document.addEventListener('keydown', onMenuKey, true);
   window.addEventListener('resize', closeTripMenu);
+  notifyMenuChange();
 }
 
 function toggleTripMenu() {

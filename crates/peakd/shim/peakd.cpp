@@ -16,9 +16,12 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QList>
+#include <QRegion>
+#include <QStyleHints>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMoveEvent>
@@ -735,6 +738,42 @@ void peakd_qt_view_visible(const char *id, int visible) {
     if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
         view->setVisible(visible != 0);
     }
+}
+
+// Clip a child view to everything but the given CSS rects, so the HTML layers
+// the window draws over an always-on-top native page (an open menu, a higher
+// floating window) show through. Coordinates arrive already scaled to the
+// view's own space; an empty list restores the full rectangle.
+void peakd_qt_view_mask(const char *id, const char *holes_json) {
+    if (!g_ctx) return;
+    auto view = g_ctx->children.value(QString::fromUtf8(id));
+    if (!view) return;
+
+    const QRect geometry = view->geometry();
+    QRegion region(0, 0, geometry.width(), geometry.height());
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(QByteArray(holes_json ? holes_json : ""));
+    for (const QJsonValue &value : doc.array()) {
+        const QJsonObject hole = value.toObject();
+        const double dpr = hole.value(QStringLiteral("dpr")).toDouble(1.0);
+        const int x = qRound(hole.value(QStringLiteral("x")).toDouble() * dpr) - geometry.x();
+        const int y = qRound(hole.value(QStringLiteral("y")).toDouble() * dpr) - geometry.y();
+        const int w = qRound(hole.value(QStringLiteral("w")).toDouble() * dpr);
+        const int h = qRound(hole.value(QStringLiteral("h")).toDouble() * dpr);
+        region -= QRegion(x, y, w, h);
+    }
+    view->setMask(region);
+}
+
+// Mirror the app's theme into Qt's colour-scheme hint so pages see a matching
+// `prefers-color-scheme` (Noir is dark, Light is light). QtWebEngine reads the
+// hint when a page is styled; changing it re-styles the live pages.
+void peakd_qt_set_color_scheme(const char *scheme) {
+    if (!scheme) return;
+    QStyleHints *hints = QApplication::styleHints();
+    if (!hints) return;
+    const bool dark = QString::fromUtf8(scheme).compare(QStringLiteral("dark"), Qt::CaseInsensitive) == 0;
+    hints->setColorScheme(dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
 }
 
 void peakd_qt_view_back(const char *id) {

@@ -35,6 +35,7 @@ extern "C" {
     pub fn peakd_qt_main_load(url: *const c_char);
     pub fn peakd_qt_main_zoom(factor: f64);
     pub fn peakd_qt_main_run_js(script: *const c_char, callback_id: i32);
+    pub fn peakd_qt_set_color_scheme(scheme: *const c_char);
     pub fn peakd_qt_screen_dpi() -> f64;
     pub fn peakd_qt_screen_size(width: *mut i32, height: *mut i32);
     pub fn peakd_qt_view_create(
@@ -50,6 +51,7 @@ extern "C" {
     pub fn peakd_qt_view_navigate(id: *const c_char, url: *const c_char);
     pub fn peakd_qt_view_bounds(id: *const c_char, x: i32, y: i32, w: i32, h: i32);
     pub fn peakd_qt_view_visible(id: *const c_char, visible: i32);
+    pub fn peakd_qt_view_mask(id: *const c_char, holes_json: *const c_char);
     pub fn peakd_qt_view_back(id: *const c_char);
     pub fn peakd_qt_view_forward(id: *const c_char);
     pub fn peakd_qt_view_reload(id: *const c_char);
@@ -132,6 +134,31 @@ pub fn view_bounds(id: &str, x: i32, y: i32, w: i32, h: i32) {
 
 pub fn view_visible(id: &str, visible: bool) {
     unsafe { peakd_qt_view_visible(cs(id).as_ptr(), i32::from(visible)) }
+}
+
+/// Clip a view to everything but `holes` (CSS rects the page wants to show
+/// *through* the otherwise always-on-top native page). Serialized by hand: the
+/// holes are a flat, fixed shape and pulling in a serde derive for four numbers
+/// is not worth the dependency.
+pub fn view_mask(id: &str, holes: &[crate::browse::CssRect]) {
+    let mut json = String::from("[");
+    for (i, hole) in holes.iter().enumerate() {
+        if i > 0 {
+            json.push(',');
+        }
+        json.push_str(&format!(
+            "{{\"x\":{},\"y\":{},\"w\":{},\"h\":{},\"dpr\":{}}}",
+            hole.x, hole.y, hole.w, hole.h, hole.dpr
+        ));
+    }
+    json.push(']');
+    unsafe { peakd_qt_view_mask(cs(id).as_ptr(), cs(&json).as_ptr()) }
+}
+
+/// Tell Qt (and through it, the pages) which colour scheme the app is using,
+/// so `prefers-color-scheme` matches the Noir/Light theme.
+pub fn set_color_scheme(scheme: &str) {
+    unsafe { peakd_qt_set_color_scheme(cs(scheme).as_ptr()) }
 }
 
 pub fn view_back(id: &str) {

@@ -18,6 +18,7 @@ import {
   emptyState, icon, iconButton, listItem, slider, toast, setIcon,
 } from '../ui/index.js';
 import { currentNode, nodeIcon, nodeLabel, nodeSubtitle } from './audioShared.js';
+import { notifyMenuChange } from './menuState.js';
 
 const POLL_MS = 2000;
 const VOLUME_DEBOUNCE_MS = 120;
@@ -66,6 +67,7 @@ export function openAudioMenu(chip) {
   trigger?.setAttribute('aria-expanded', 'true');
   trigger?.classList.add('is-open');
   reposition();
+  notifyMenuChange();
 }
 
 export function closeAudioMenu() {
@@ -79,6 +81,7 @@ export function closeAudioMenu() {
   window.removeEventListener('resize', reposition);
   trigger?.setAttribute('aria-expanded', 'false');
   trigger?.classList.remove('is-open');
+  notifyMenuChange();
 }
 
 export function toggleAudioMenu(chip) {

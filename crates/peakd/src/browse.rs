@@ -35,7 +35,14 @@ pub struct CssRect {
 
 impl CssRect {
     fn parse(value: &Value) -> Option<Self> {
-        let rect = value.get("rect")?;
+        Self::from_object(value.get("rect")?)
+    }
+
+    /// Read a rect straight off an object with `x`/`y`/`w`/`h`/`dpr` keys.
+    ///
+    /// `setMask` carries an array of these, each already an object rather than
+    /// wrapped in a `rect` field like the single-rect commands.
+    fn from_object(rect: &Value) -> Option<Self> {
         let num = |key: &str| rect.get(key).and_then(Value::as_f64);
         Some(Self {
             x: num("x")?,
@@ -47,6 +54,8 @@ impl CssRect {
             dpr: num("dpr").filter(|d| *d > 0.0).unwrap_or(1.0),
         })
     }
+
+
 
     /// Qt logical pixels for a child widget.
     ///
@@ -84,6 +93,14 @@ pub enum Command {
     SetVisible {
         id: String,
         visible: bool,
+    },
+    /// Clip the view to everything but `holes`: the HTML layers this window
+    /// draws over an otherwise always-on-top native page (an open menu, a
+    /// higher floating window in the "Windows" layout). Coordinates are the
+    /// holes' own CSS rects; the shell subtracts them from the view's geometry.
+    SetMask {
+        id: String,
+        holes: Vec<CssRect>,
     },
     Back {
         id: String,
@@ -132,6 +149,14 @@ impl Command {
                     .get("visible")
                     .and_then(Value::as_bool)
                     .unwrap_or(true),
+            },
+            "setMask" => Self::SetMask {
+                id,
+                holes: value
+                    .get("holes")
+                    .and_then(Value::as_array)
+                    .map(|holes| holes.iter().filter_map(CssRect::from_object).collect())
+                    .unwrap_or_default(),
             },
             "back" => Self::Back { id },
             "forward" => Self::Forward { id },
@@ -205,6 +230,7 @@ pub trait ViewHost {
     fn navigate(&mut self, id: &str, url: &str);
     fn set_bounds(&mut self, id: &str, rect: CssRect);
     fn set_visible(&mut self, id: &str, visible: bool);
+    fn set_mask(&mut self, id: &str, holes: &[CssRect]);
     fn back(&mut self, id: &str);
     fn forward(&mut self, id: &str);
     fn reload(&mut self, id: &str);
@@ -277,6 +303,11 @@ impl<H: ViewHost> Views<H> {
             Command::SetVisible { id, visible } => {
                 if self.live.contains(&id) {
                     self.host.set_visible(&id, visible);
+                }
+            }
+            Command::SetMask { id, holes } => {
+                if self.live.contains(&id) {
+                    self.host.set_mask(&id, &holes);
                 }
             }
             Command::Back { id } => {
@@ -391,6 +422,9 @@ mod tests {
         fn set_visible(&mut self, id: &str, visible: bool) {
             self.calls.push(format!("visible {id} {visible}"));
         }
+        fn set_mask(&mut self, id: &str, holes: &[CssRect]) {
+            self.calls.push(format!("mask {id} holes={}", holes.len()));
+        }
         fn back(&mut self, id: &str) {
             self.calls.push(format!("back {id}"));
         }
@@ -430,4 +464,28 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn parses_a_mask_with_holes() {
+        let value: Value = serde_json::from_str(
+            r#"{"op":"setMask","id":"t1","holes":[{"x":10,"y":20,"w":30,"h":40,"dpr":1}]}"#,
+        )
+        .unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::SetMask { holes, .. } => assert_eq!(holes.len(), 1),
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_mask_without_holes_is_an_empty_clip() {
+        let value: Value =
+            serde_json::from_str(r#"{"op":"setMask","id":"t1"}"#).unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::SetMask { holes, .. } => assert!(holes.is_empty()),
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+
 }

@@ -56,6 +56,10 @@ void peakd_qt_main_load(const char *url);
 void peakd_qt_main_zoom(double factor);
 void peakd_qt_main_run_js(const char *script, int callback_id);
 
+/// Colour scheme the pages should render for (`"dark"` / `"light"`), mirrored
+/// into Qt's style hint so `prefers-color-scheme` follows the app theme.
+void peakd_qt_set_color_scheme(const char *scheme);
+
 /// Physical DPI of the primary screen (0 when unknown), and its size in px.
 double peakd_qt_screen_dpi(void);
 void peakd_qt_screen_size(int *width, int *height);
@@ -66,6 +70,9 @@ void peakd_qt_view_create(const char *id, const char *url, int x, int y, int w, 
 void peakd_qt_view_navigate(const char *id, const char *url);
 void peakd_qt_view_bounds(const char *id, int x, int y, int w, int h);
 void peakd_qt_view_visible(const char *id, int visible);
+/// Clip a view to everything but the CSS rects in `holes_json` (a JSON array of
+/// `{x,y,w,h,dpr}`, already in the view's logical space). Empty restores it.
+void peakd_qt_view_mask(const char *id, const char *holes_json);
 void peakd_qt_view_back(const char *id);
 void peakd_qt_view_forward(const char *id);
 void peakd_qt_view_reload(const char *id);

@@ -18,7 +18,7 @@ use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::sessions;
-use crate::{downloads, filter, settings};
+use crate::{bookmarks, downloads, filter, settings};
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -29,6 +29,11 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_session_close" => Some(session_close(ctx)),
         "browser_navigate" => Some(navigate(ctx)),
         "browser_history" => Some(history_route(ctx.clone())),
+        "browser_history_clear" => Some(history_clear(ctx.clone())),
+        "browser_history_record" => Some(history_record(ctx.clone())),
+        "browser_bookmarks" => Some(bookmarks_route(ctx.clone())),
+        "browser_bookmark_add" => Some(bookmark_add(ctx.clone())),
+        "browser_bookmark_remove" => Some(bookmark_remove(ctx.clone())),
         "browser_news" => Some(news_route(ctx.clone())),
         "browser_news_click" => Some(news_click(ctx)),
         "browser_preview" => Some(preview_route(ctx)),
@@ -131,27 +136,24 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn into_url(self, searxng: Option<&str>) -> String {
+    /// Turn a parsed target into the URL the webview should load.
+    ///
+    /// `searxng` is the `SEARXNG_URL` override: a self-hosted instance wins
+    /// over any named engine, because it keeps the query off a third party.
+    /// `engine` is the user's setting (see [`settings::SEARCH_ENGINES`]).
+    pub fn into_url(self, searxng: Option<&str>, engine: &str) -> String {
         match self {
             Target::Url(url) => url,
-            Target::Search(query) => {
-                // A user-configured SearXNG instance wins (self-hosted, no
-                // third party, and it is the engine this repo already talks to).
-                //
-                // The keyless fallback is **Brave Search**, chosen by
-                // measurement rather than preference: through the old proxied
-                // client DuckDuckGo answered 403 (its bot detection disliked
-                // the TLS stack) and Mojeek/Ecosia likewise; Brave answered 200
-                // with real results.
-                let encoded = url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
-                match searxng {
-                    Some(base) if !base.trim().is_empty() => {
-                        let base = base.trim_end_matches('/');
-                        format!("{base}/search?q={encoded}")
-                    }
-                    _ => format!("https://search.brave.com/search?q={encoded}"),
+            Target::Search(query) => match searxng {
+                Some(base) if !base.trim().is_empty() => {
+                    let encoded =
+                        url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
+                    let base = base.trim_end_matches('/');
+                    format!("{base}/search?q={encoded}")
                 }
-            }
+                // The user's chosen keyless engine, DuckDuckGo by default.
+                _ => settings::search_url(engine, &query),
+            },
         }
     }
 }
@@ -210,7 +212,8 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
                 _ => None,
             };
             let searxng = std::env::var("SEARXNG_URL").ok();
-            let url = target.into_url(searxng.as_deref());
+            let engine = settings::get(&ctx, &uid).search_engine;
+            let url = target.into_url(searxng.as_deref(), &engine);
 
             // Keep the session (or create one) pointing at the new URL. A
             // stale id from a reloaded page falls back to a fresh session
@@ -296,6 +299,103 @@ fn history_route(ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
+/// POST /api/browser/history/clear — forget the user's recent history.
+///
+/// Best-effort like the rest of [`crate::history`]: a failed delete still
+/// reports success so the window's button is not blocked by an unreachable
+/// database.
+fn history_clear(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let _ = crate::history::clear(&ctx, &uid).await;
+            Ok(ok(json!({ "cleared": true })))
+        }
+    })
+}
+
+/// Body of `POST /api/browser/history/record`.
+///
+/// The window sends the link the shell just navigated to *inside* a page. A
+/// `title` key may be present; serde ignores unknown fields, and there is
+/// deliberately no title column in `peakd_history`, so it is accepted and
+/// dropped rather than rejected.
+#[derive(Deserialize)]
+struct HistoryRecordBody {
+    url: String,
+    /// `visit` (a clicked link, the default) | `page` | `news_click`.
+    #[serde(default)]
+    mode: Option<String>,
+}
+
+/// POST /api/browser/history/record — record an in-page navigation.
+///
+/// The `navigate` route records address-bar visits; this is for links the user
+/// clicks *inside* a page, which the native webview loads without another
+/// round-trip through `navigate`. The default mode is `visit` — a plain link
+/// navigation, distinct from a typed `page` and a recommended `news_click`.
+fn history_record(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<HistoryRecordBody>(req).await?;
+            let mode = body.mode.as_deref().unwrap_or("visit");
+            let _ = crate::history::record(&ctx, &uid, &body.url, Some(mode), None).await;
+            Ok(ok(json!({ "recorded": true })))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct BookmarkAddBody {
+    url: String,
+    #[serde(default)]
+    title: Option<String>,
+}
+
+/// GET /api/browser/bookmarks — the user's saved pages, newest first.
+fn bookmarks_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let limit = query_limit(&req).unwrap_or(100);
+            Ok(ok(json!({ "bookmarks": bookmarks::list(&ctx, &uid, limit) })))
+        }
+    })
+}
+
+/// POST /api/browser/bookmarks/add — save a page; re-adding a URL updates it.
+///
+/// Returns the resulting bookmark (or `null` when the URL was empty or the
+/// database could not be written).
+fn bookmark_add(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<BookmarkAddBody>(req).await?;
+            let bookmark = bookmarks::add(&ctx, &uid, &body.url, body.title.as_deref());
+            Ok(ok(json!({ "bookmark": bookmark })))
+        }
+    })
+}
+
+/// POST /api/browser/bookmarks/remove — drop one bookmark by id.
+fn bookmark_remove(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<SessionBody>(req).await?;
+            let removed = bookmarks::remove(&ctx, &uid, &body.id);
+            Ok(ok(json!({ "removed": removed })))
+        }
+    })
+}
+
 /// GET /api/browser/news — the related-news cards for the home surface.
 ///
 /// `?refresh=1` bypasses the per-topic cache (the home surface's refresh
@@ -373,6 +473,10 @@ fn preview_route(_ctx: Arc<PluginCtx>) -> RouteHandler {
 struct SettingsBody {
     adblock: Option<bool>,
     incognito: Option<bool>,
+    /// A name from [`settings::SEARCH_ENGINES`]; unknown names are ignored by
+    /// [`settings::set`].
+    #[serde(default)]
+    search_engine: Option<String>,
 }
 
 /// The directory downloads should land in.
@@ -422,6 +526,7 @@ fn settings_route(ctx: Arc<PluginCtx>) -> RouteHandler {
             Ok(ok(json!({
                 "adblock": current.adblock,
                 "incognito": current.incognito,
+                "search_engine": current.search_engine,
                 "downloads_dir": dir.to_string_lossy(),
                 "rules": filter::rules(),
             })))
@@ -429,15 +534,25 @@ fn settings_route(ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
-/// POST /api/browser/settings — update the shield toggle / incognito flag.
+/// POST /api/browser/settings — update the shield toggle / incognito / engine.
 fn settings_set(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
             let body = take_json::<SettingsBody>(req).await?;
-            let next = settings::set(&ctx, &uid, body.adblock, body.incognito);
-            Ok(ok(json!({ "adblock": next.adblock, "incognito": next.incognito })))
+            let next = settings::set(
+                &ctx,
+                &uid,
+                body.adblock,
+                body.incognito,
+                body.search_engine.as_deref(),
+            );
+            Ok(ok(json!({
+                "adblock": next.adblock,
+                "incognito": next.incognito,
+                "search_engine": next.search_engine,
+            })))
         }
     })
 }
@@ -596,15 +711,32 @@ mod tests {
 
     #[test]
     fn search_url_is_encoded() {
-        let url = Target::Search("a b&c".into()).into_url(Some("http://searx.local/"));
+        // A self-hosted SearXNG instance still wins over the named engine.
+        let url = Target::Search("a b&c".into()).into_url(Some("http://searx.local/"), "google");
         assert_eq!(url, "http://searx.local/search?q=a+b%26c");
     }
 
     #[test]
-    fn search_falls_back_to_brave() {
-        // Brave is the keyless default because DuckDuckGo/Mojeek/Ecosia all
-        // answered 403 to the old proxied client.
-        let url = Target::Search("rust".into()).into_url(None);
-        assert!(url.starts_with("https://search.brave.com/search?q=rust"));
+    fn each_engine_builds_its_search_url() {
+        for (engine, expected) in [
+            ("duckduckgo", "https://duckduckgo.com/?q=rust+webview"),
+            ("brave", "https://search.brave.com/search?q=rust+webview"),
+            ("google", "https://www.google.com/search?q=rust+webview"),
+            ("bing", "https://www.bing.com/search?q=rust+webview"),
+        ] {
+            assert_eq!(
+                Target::Search("rust webview".into()).into_url(None, engine),
+                expected,
+                "engine {engine}"
+            );
+        }
+    }
+
+    #[test]
+    fn search_falls_back_to_duckduckgo() {
+        // DuckDuckGo is the default engine now that the user can choose; the
+        // address bar passes whatever settings::get returned.
+        let url = Target::Search("rust".into()).into_url(None, settings::DEFAULT_SEARCH_ENGINE);
+        assert_eq!(url, "https://duckduckgo.com/?q=rust");
     }
 }

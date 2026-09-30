@@ -7,6 +7,7 @@
  *   Account    — photo + display name
  *   Appearance — theme, accent, gradient, window surface, top bar, background
  *   Desktop    — tiling layout
+ *   Browser    — default search engine, ad blocking, history
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
  *   System     — remember workspace, log out
@@ -19,6 +20,7 @@ import {
   apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, getTraveler,
   logoutSession,
 } from './api.js';
+import { openCoreWindow } from './tiles.js';
 import {
   toast, icon, button, input, select, slider, toggleRow,
   listThemes, setTheme, getActiveTheme, getThemeManifest,
@@ -1368,6 +1370,101 @@ function buildRemote() {
   ];
 }
 
+/* ── Browser ─────────────────────────────────────────────────── */
+
+/**
+ * The Browser window's settings, mirrored here so the search engine can be
+ * chosen from Settings as well as from the window's own ⋯ menu. The values
+ * live server-side, per user; this section reads them and writes them straight
+ * back, like every other preference here.
+ */
+function buildBrowser() {
+  const holder = el('div', 'settings-browser');
+  holder.appendChild(el('p', 'settings-hint', 'Loading browser settings…'));
+
+  void (async () => {
+    let settings = { search_engine: 'duckduckgo', adblock: true, downloads_dir: '' };
+    try {
+      const res = await apiFetch('/api/browser/settings');
+      settings = { ...settings, ...(res?.data || {}) };
+    } catch (_) {
+      /* the defaults stand in */
+    }
+
+    const engine = select({
+      value: settings.search_engine,
+      options: [
+        { value: 'duckduckgo', label: 'DuckDuckGo (default)' },
+        { value: 'brave', label: 'Brave Search' },
+        { value: 'google', label: 'Google' },
+        { value: 'bing', label: 'Bing' },
+      ],
+      onChange: (value) => {
+        void apiFetch('/api/browser/settings', {
+          method: 'POST',
+          body: JSON.stringify({ search_engine: value }),
+        })
+          .then(() => toast('Search engine saved'))
+          .catch(() => toast('Could not save the search engine', { type: 'error' }));
+      },
+    });
+
+    const adblock = toggleRow({
+      label: 'Block ads and trackers',
+      hint: 'The Browser window filters page requests through the shell.',
+      checked: settings.adblock !== false,
+      onChange: (checked) => {
+        void apiFetch('/api/browser/settings', {
+          method: 'POST',
+          body: JSON.stringify({ adblock: checked }),
+        }).catch(() => {});
+      },
+    });
+
+    const open = button({
+      label: 'Open Browser',
+      variant: 'ghost',
+      onClick: () => openCoreWindow('browser'),
+    });
+    const clear = button({
+      label: 'Clear history',
+      variant: 'ghost',
+      onClick: async () => {
+        try {
+          await apiFetch('/api/browser/history/clear', { method: 'POST' });
+          toast('Browsing history cleared');
+        } catch (_) {
+          toast('Could not clear history', { type: 'error' });
+        }
+      },
+    });
+    const actions = el('div', 'settings-inline-actions');
+    actions.append(open, clear);
+
+    const storage = el(
+      'p',
+      'settings-hint',
+      settings.downloads_dir
+        ? `Downloads are saved to ${settings.downloads_dir}`
+        : 'Downloads are saved to your Downloads folder.',
+    );
+
+    holder.replaceChildren(
+      heading('Search'),
+      engine,
+      el('p', 'settings-hint', 'Used when you type words instead of an address. A self-hosted SearXNG (SEARXNG_URL) takes precedence when configured.'),
+      heading('Privacy'),
+      adblock,
+      heading('Storage'),
+      storage,
+      heading('Actions'),
+      actions,
+    );
+  })();
+
+  return [holder];
+}
+
 /* ── Surface ────────────────────────────────────────────────── */
 
 function mountSettings() {
@@ -1385,6 +1482,7 @@ function mountSettings() {
     { id: 'account', label: 'Account', icon: 'ui/user', build: buildAccount },
     { id: 'appearance', label: 'Appearance', icon: 'ui/droplet', build: buildAppearancePanel },
     { id: 'desktop', label: 'Desktop', icon: 'ui/monitor', build: buildDesktop },
+    { id: 'browser', label: 'Browser', icon: 'ui/launcher', build: buildBrowser },
     { id: 'assistant', label: 'Assistant', icon: 'ui/message-circle', build: buildAssistant },
     { id: 'voice', label: 'Voice', icon: 'ui/mic', build: buildVoice },
     { id: 'touchbar', label: 'Touch Bar', icon: 'ui/keyboard', build: buildTouchBar },

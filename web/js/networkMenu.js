@@ -10,6 +10,7 @@
  */
 
 import { apiFetch } from './api.js';
+import { notifyMenuChange } from './menuState.js';
 import {
   badge, button, emptyState, icon, iconButton, input, listItem, modal,
   spinner, toast, toggle,
@@ -56,6 +57,7 @@ export function openNetworkMenu(chip) {
   trigger?.setAttribute('aria-expanded', 'true');
   trigger?.classList.add('is-open');
   reposition();
+  notifyMenuChange();
 }
 
 export function closeNetworkMenu() {
@@ -69,6 +71,7 @@ export function closeNetworkMenu() {
   window.removeEventListener('resize', reposition);
   trigger?.setAttribute('aria-expanded', 'false');
   trigger?.classList.remove('is-open');
+  notifyMenuChange();
 }
 
 export function toggleNetworkMenu(chip) {

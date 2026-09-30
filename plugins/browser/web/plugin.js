@@ -22,12 +22,30 @@
  */
 import { apiFetch } from '../../js/api.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
-import { icon, iconButton, searchBar } from '../../ui/index.js';
+import { openCoreWindow } from '../../js/tiles.js';
+import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
 
 export const BROWSER_PLUGIN = 'browser';
 
 /** How many tabs may be open. Each is a live web view, so this is bounded. */
 const MAX_TABS = 8;
+
+/**
+ * The search engines the window offers. The id is what the server stores and
+ * maps to a URL (see `plugins/browser/src/settings.rs`); DuckDuckGo is the
+ * default. The list is duplicated here only for the menu's labels — the server
+ * is the single source of truth for where a search actually goes.
+ */
+const SEARCH_ENGINES = [
+  { id: 'duckduckgo', label: 'DuckDuckGo' },
+  { id: 'brave', label: 'Brave Search' },
+  { id: 'google', label: 'Google' },
+  { id: 'bing', label: 'Bing' },
+];
+
+/** Selectors for the HTML popups that have to punch through the page. */
+const POPUP_SELECTOR =
+  '.ctx-menu, .ui-hud-menu-popup:not(.hidden), .ui-modal:not(.hidden)';
 
 /**
  * The native-view bridge.
@@ -101,13 +119,20 @@ function viewportRect() {
  *
  * A native child view is a real window stacked above the page, so it ignores
  * `display: none` and every HTML layer. When its Browser window is hidden (a
- * workspace switch), covered by the overview/launcher, or underneath a higher
- * floating window, it would otherwise keep floating over them; the view is
- * hidden explicitly whenever it is not what the user is looking at.
+ * workspace switch) or the overview/launcher is up, it has to be hidden
+ * outright. Overlapping HTML (open menus, a higher floating window in the
+ * "Windows" layout) is *not* a reason to hide it any more: those are handled by
+ * clipping the view instead (see `occluderHoles`), so the page stays visible
+ * everywhere the overlay does not cover it.
+ *
+ * A window drag is the one place hiding still wins: the native view trails the
+ * window by a frame or two when it is only moved, so during a drag it is
+ * dropped and comes back on release.
  */
 function nativeShouldShow(tab) {
   if (!tab || !tab.native || !tileEl) return false;
   if (tileEl.classList.contains('hidden')) return false;
+  if (isDragging()) return false;
   const body = document.body;
   if (body && body.classList) {
     // The overview and launcher are full-screen HTML layers over the desktop;
@@ -115,32 +140,70 @@ function nativeShouldShow(tab) {
     if (body.classList.contains('overview-active')) return false;
     if (body.classList.contains('launcher-active')) return false;
   }
-  return !isNativeOccluded();
+  return true;
 }
 
-/** True when a higher floating window overlaps this view's own rectangle. */
-function isNativeOccluded() {
+/** True while this window is being dragged (its title bar has the pointer). */
+function isDragging() {
   if (!tileEl) return false;
-  const grid = document.getElementById('tile-grid');
-  // Tiled layouts never overlap; only the free "Windows" layout does.
-  if (!grid || grid.dataset.layout !== 'windows') return false;
+  return tileEl.classList.contains('is-dragging')
+    || !!tileEl.querySelector('.is-dragging');
+}
+
+/**
+ * The CSS rects the page must show *through* — everything the HTML draws over
+ * an otherwise always-on-top native view: open popups (the desktop context
+ * menus, the HUD menus, this window's own popovers) and, in the free "Windows"
+ * layout, any higher floating window that overlaps this one.
+ *
+ * Each rect is in the same client-pixel space as `viewportRect`, so the shell
+ * can subtract them directly from the view's geometry.
+ */
+function occluderHoles() {
   const rect = viewportRect();
-  if (!rect) return false;
-  const z = Number(tileEl.style.zIndex) || 0;
-  const tiles = grid.querySelectorAll(':scope > .tile[data-plugin]');
-  for (const el of tiles) {
-    if (el === tileEl || el.classList.contains('hidden')) continue;
-    if ((Number(el.style.zIndex) || 0) <= z) continue;
-    const r = el.getBoundingClientRect();
-    if (rect.x < r.right && r.left < rect.x + rect.w
-      && rect.y < r.bottom && r.top < rect.y + rect.h) {
-      return true;
+  if (!rect) return [];
+  const holes = [];
+  const add = (r) => {
+    if (!r || r.width < 1 || r.height < 1) return;
+    // Only a rect that actually covers part of the page is a hole.
+    if (r.right <= rect.x || r.left >= rect.x + rect.w) return;
+    if (r.bottom <= rect.y || r.top >= rect.y + rect.h) return;
+    holes.push({ x: r.left, y: r.top, w: r.width, h: r.height, dpr: rect.dpr });
+  };
+
+  for (const el of document.querySelectorAll(POPUP_SELECTOR)) {
+    add(el.getBoundingClientRect());
+  }
+  // This window's own popovers (downloads / menu / history / bookmarks). They
+  // live inside the tile, but the native view still stacks above them.
+  for (const el of [downloadsPanel, browserMenu, historyPanel, bookmarksPanel]) {
+    if (el && !el.classList.contains('hidden')) add(el.getBoundingClientRect());
+  }
+  // A higher floating window overlapping this one, in the "Windows" layout.
+  const grid = document.getElementById('tile-grid');
+  if (grid && grid.dataset.layout === 'windows') {
+    const z = Number(tileEl.style.zIndex) || 0;
+    for (const el of grid.querySelectorAll(':scope > .tile[data-plugin]')) {
+      if (el === tileEl || el.classList.contains('hidden')) continue;
+      if ((Number(el.style.zIndex) || 0) <= z) continue;
+      add(el.getBoundingClientRect());
     }
   }
-  return false;
+  return holes;
 }
 
-/** Push bounds and visibility for one tab, skipping no-op updates. */
+/** Round a rect to whole logical pixels, the way the shell keys updates. */
+function rectKey(r) {
+  return `${Math.round(r.x * r.dpr)},${Math.round(r.y * r.dpr)},`
+    + `${Math.round(r.w * r.dpr)},${Math.round(r.h * r.dpr)}`;
+}
+
+function holeKey(h) {
+  return `${Math.round(h.x * h.dpr)},${Math.round(h.y * h.dpr)},`
+    + `${Math.round(h.w * h.dpr)},${Math.round(h.h * h.dpr)}`;
+}
+
+/** Push bounds, clip and visibility for one tab, skipping no-op updates. */
 function syncNativeTab(tab) {
   if (!nativeAvailable || !tab || !tab.native) return;
   const show = nativeShouldShow(tab);
@@ -150,15 +213,22 @@ function syncNativeTab(tab) {
   }
   if (!show) {
     lastNativeRect = '';
+    lastNativeHoles = '';
     return;
   }
   const rect = viewportRect();
   if (!rect) return;
-  const key = `${Math.round(rect.x * rect.dpr)},${Math.round(rect.y * rect.dpr)},`
-    + `${Math.round(rect.w * rect.dpr)},${Math.round(rect.h * rect.dpr)}`;
-  if (key === lastNativeRect) return;
-  lastNativeRect = key;
-  nativeSend({ op: 'setBounds', id: tab.id, rect });
+  const key = rectKey(rect);
+  if (key !== lastNativeRect) {
+    lastNativeRect = key;
+    nativeSend({ op: 'setBounds', id: tab.id, rect });
+  }
+  const holes = occluderHoles();
+  const holesKey = holes.map(holeKey).join(';');
+  if (holesKey !== lastNativeHoles) {
+    lastNativeHoles = holesKey;
+    nativeSend({ op: 'setMask', id: tab.id, holes });
+  }
 }
 
 /** Keep the shell's native view aligned with the viewport element. */
@@ -177,23 +247,41 @@ let statusEl = null;
 let shieldBtn = null;
 let downloadsBtn = null;
 let incognitoBtn = null;
+let bookmarkBtn = null;
+let menuBtn = null;
 let downloadsPanel = null;
 let downloadsListEl = null;
+let browserMenu = null;
+let historyPanel = null;
+let historyListEl = null;
+let bookmarksPanel = null;
+let bookmarksListEl = null;
+
+/** The persisted history the panels show (newest first). */
+let history = [];
+/** The user's saved pages, newest first. */
+let bookmarks = [];
 
 /**
  * The window's server-backed settings. `adblock` drives the shield toggle and
  * `downloadsDir` is the absolute directory the shell saves downloads into (the
  * user's `Downloads` folder, resolved server-side per account).
  */
-let browserSettings = { adblock: true, incognito: false, downloadsDir: '' };
+let browserSettings = {
+  adblock: true,
+  incognito: false,
+  downloadsDir: '',
+  searchEngine: 'duckduckgo',
+};
 
 /** Live downloads, newest first, keyed by the shell's id. */
 let downloads = [];
 
 // Last state pushed for the active native view, so the per-frame sync can skip
-// updates the shell already has. `null` means "unknown, send it".
+// updates the shell already has. `null`/`''` means "unknown, send it".
 let lastNativeVisible = null;
 let lastNativeRect = '';
+let lastNativeHoles = '';
 
 /**
  * The window's tabs. Each owns a native child webview in the shell (and a local
@@ -355,10 +443,12 @@ function setActiveTab(id) {
   }
   lastNativeVisible = null;
   lastNativeRect = '';
+  lastNativeHoles = '';
   syncActiveNative();
   if (nativeAvailable && tab?.native) nativeSend({ op: 'focus', id: tab.id });
   renderTabs();
   updateNavButtons();
+  updateBookmarkButton();
 }
 
 /** The tab strip: one button per tab, plus a new-tab action. */
@@ -460,6 +550,7 @@ function loadNative(tab, url) {
   });
   lastNativeVisible = null;
   lastNativeRect = '';
+  lastNativeHoles = '';
   if (tab.id === activeTabId) {
     nativeSend({ op: 'focus', id: tab.id });
     // Let occlusion/overlay state decide whether it may actually stay visible.
@@ -510,6 +601,9 @@ async function navigateTo(input, { tab = activeTab() } = {}) {
   tab.sessionId = data.session?.id || tab.sessionId;
   tab.home = false;
   recordLocation(tab, data.url || value);
+  // The server already recorded this navigation (with the search phrase); mark
+  // it so the following load does not log a duplicate "visit".
+  tab.lastHistoryUrl = data.url || value;
   if (tab.id === activeTabId) setStatus('');
   loadNative(tab, data.url || value);
 }
@@ -625,7 +719,28 @@ function buildToolbar() {
   });
   incognitoBtn.classList.add('browser-incognito');
 
-  bar.append(backBtn, forwardBtn, reloadBtn, homeBtn, addressEl, shieldBtn, downloadsBtn, incognitoBtn);
+  // Bookmark the page in the active tab, and the overflow menu (search engine,
+  // history, bookmarks, settings).
+  bookmarkBtn = iconButton({
+    icon: 'ui/star',
+    size: 'sm',
+    label: 'Bookmark this page',
+    onClick: () => toggleBookmark(),
+  });
+  bookmarkBtn.classList.add('browser-bookmark');
+
+  menuBtn = iconButton({
+    icon: 'ui/more',
+    size: 'sm',
+    label: 'Browser menu',
+    onClick: () => toggleBrowserMenu(),
+  });
+  menuBtn.classList.add('browser-menu-btn');
+
+  bar.append(
+    backBtn, forwardBtn, reloadBtn, homeBtn, addressEl,
+    bookmarkBtn, shieldBtn, downloadsBtn, incognitoBtn, menuBtn,
+  );
   return bar;
 }
 
@@ -677,7 +792,10 @@ function recordLocation(tab, url) {
     }
   }
   renderTabs();
-  if (tab.id === activeTabId) updateNavButtons();
+  if (tab.id === activeTabId) {
+    updateNavButtons();
+    updateBookmarkButton();
+  }
 }
 
 /** Ask the active view to move through *its* history — no server round-trip. */
@@ -719,18 +837,25 @@ async function loadSettings() {
     browserSettings.adblock = d.adblock !== false;
     browserSettings.incognito = !!d.incognito;
     browserSettings.downloadsDir = d.downloads_dir || '';
+    browserSettings.searchEngine = d.search_engine || 'duckduckgo';
   } catch (_) {
     /* defaults stay in place */
   }
   pushSettings();
   updateShield();
+  updateEngineChecks();
 }
 
-/** Tell the shell the current settings (adblock + where downloads go). */
+/**
+ * Tell the shell the current settings: ad blocking, where downloads go, and
+ * which colour scheme pages should render for. The last one is what makes a
+ * site's own dark/light styling follow the app's Noir/Light theme.
+ */
 function pushSettings() {
   shellSend('peakd:settings:', {
     adblock: browserSettings.adblock,
     downloadsDir: browserSettings.downloadsDir,
+    colorScheme: themeMode() === 'light' ? 'light' : 'dark',
   });
 }
 
@@ -789,12 +914,18 @@ function buildDownloadsPanel() {
 
 function toggleDownloadsPanel() {
   if (!downloadsPanel) return;
-  const hidden = downloadsPanel.classList.toggle('hidden');
-  if (!hidden) void loadDownloads();
+  const willOpen = downloadsPanel.classList.contains('hidden');
+  closeAllBrowserPanels();
+  if (willOpen) {
+    downloadsPanel.classList.remove('hidden');
+    requestSync();
+    void loadDownloads();
+  }
 }
 
 function closeDownloadsPanel() {
   if (downloadsPanel) downloadsPanel.classList.add('hidden');
+  requestSync();
 }
 
 /** Fetch the persisted history and ask the shell for its live list. */
@@ -1016,6 +1147,388 @@ window.__peakdDownloads = function (list) {
   downloads = live.concat(downloads.filter((d) => !seen.has(d.id)));
   renderDownloads();
 };
+
+/* ── Overflow menu, history and bookmarks ─────────────────────────
+ *
+ * The toolbar's ⋯ button opens a popover holding the search-engine choice,
+ * the history and bookmark panels, and a shortcut to Settings. The panels are
+ * popovers inside the tile, so they need the same treatment as a core menu:
+ * they are subtracted from the native page's mask (see `occluderHoles`) so the
+ * always-on-top page cannot cover them.
+ */
+
+/** A popover shell, hidden until its opener shows it. */
+function popover(className) {
+  const el = document.createElement('div');
+  el.className = `browser-popover ${className} hidden`;
+  return el;
+}
+
+function popoverSeparator() {
+  const el = document.createElement('div');
+  el.className = 'browser-popover-sep';
+  return el;
+}
+
+/** One actionable row in the overflow menu. */
+function menuItem(iconName, label, onClick) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'browser-menu-item';
+  item.setAttribute('role', 'menuitem');
+  item.append(icon(iconName, { size: 15 }), labelSpan(label));
+  item.addEventListener('click', onClick);
+  return item;
+}
+
+function labelSpan(text) {
+  const el = document.createElement('span');
+  el.textContent = text;
+  return el;
+}
+
+function buildBrowserMenu() {
+  const menu = popover('browser-menu');
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', 'Browser menu');
+
+  const heading = document.createElement('div');
+  heading.className = 'browser-popover-heading';
+  heading.textContent = 'Search engine';
+  menu.appendChild(heading);
+
+  const engines = document.createElement('div');
+  engines.className = 'browser-engine-list';
+  for (const engine of SEARCH_ENGINES) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'browser-menu-item browser-engine';
+    item.dataset.engine = engine.id;
+    item.setAttribute('role', 'menuitemradio');
+    const check = icon('ui/check', { size: 14, className: 'browser-engine-check' });
+    item.append(check, labelSpan(engine.label));
+    item.addEventListener('click', () => setSearchEngine(engine.id));
+    engines.appendChild(item);
+  }
+  menu.appendChild(engines);
+
+  menu.append(
+    popoverSeparator(),
+    menuItem('ui/history', 'History', () => {
+      closeBrowserMenu();
+      openHistoryPanel();
+    }),
+    menuItem('ui/star', 'Bookmarks', () => {
+      closeBrowserMenu();
+      openBookmarksPanel();
+    }),
+    popoverSeparator(),
+    menuItem('ui/settings', 'Settings', () => {
+      closeBrowserMenu();
+      openCoreWindow('settings');
+    }),
+  );
+  return menu;
+}
+
+function updateEngineChecks() {
+  if (!browserMenu) return;
+  for (const el of browserMenu.querySelectorAll('.browser-engine')) {
+    const on = el.dataset.engine === browserSettings.searchEngine;
+    el.classList.toggle('is-active', on);
+    el.setAttribute('aria-checked', String(on));
+  }
+}
+
+function setSearchEngine(id) {
+  browserSettings.searchEngine = id;
+  updateEngineChecks();
+  void apiFetch('/api/browser/settings', {
+    method: 'POST',
+    body: JSON.stringify({ search_engine: id }),
+  }).catch(() => {});
+}
+
+function toggleBrowserMenu() {
+  if (!browserMenu) return;
+  const willOpen = browserMenu.classList.contains('hidden');
+  closeAllBrowserPanels();
+  if (willOpen) {
+    updateEngineChecks();
+    browserMenu.classList.remove('hidden');
+    requestSync();
+  }
+}
+
+function closeBrowserMenu() {
+  if (browserMenu) browserMenu.classList.add('hidden');
+  requestSync();
+}
+
+/** Close every popover this window owns. */
+function closeAllBrowserPanels() {
+  let changed = false;
+  for (const el of [browserMenu, historyPanel, bookmarksPanel, downloadsPanel]) {
+    if (el && !el.classList.contains('hidden')) {
+      el.classList.add('hidden');
+      changed = true;
+    }
+  }
+  if (changed) requestSync();
+}
+
+/* ── History panel ─────────────────────────────────────────────── */
+
+function buildHistoryPanel() {
+  const panel = popover('browser-history');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', 'History');
+
+  const head = document.createElement('div');
+  head.className = 'browser-popover-head';
+  head.append(labelSpan('History'));
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'browser-popover-action';
+  clear.textContent = 'Clear';
+  clear.addEventListener('click', () => void clearHistory());
+  head.appendChild(clear);
+
+  const list = document.createElement('div');
+  list.className = 'browser-popover-list';
+  historyListEl = list;
+
+  panel.append(head, list);
+  return panel;
+}
+
+async function openHistoryPanel() {
+  closeAllBrowserPanels();
+  if (historyPanel) {
+    historyPanel.classList.remove('hidden');
+    requestSync();
+  }
+  await loadHistory();
+}
+
+async function loadHistory() {
+  try {
+    const res = await apiFetch('/api/browser/history?limit=100');
+    const rows = res?.data?.history;
+    if (Array.isArray(rows)) history = rows;
+  } catch (_) {
+    /* history is best-effort */
+  }
+  renderHistory();
+}
+
+async function clearHistory() {
+  history = [];
+  renderHistory();
+  try {
+    await apiFetch('/api/browser/history/clear', { method: 'POST' });
+  } catch (_) {
+    /* best-effort */
+  }
+}
+
+function historyLabel(entry) {
+  if (entry.query) return `Search — ${entry.query}`;
+  try {
+    return new URL(entry.url).hostname.replace(/^www\./, '') || entry.url;
+  } catch (_) {
+    return entry.url;
+  }
+}
+
+function renderHistory() {
+  if (!historyListEl) return;
+  if (!history.length) {
+    const empty = document.createElement('div');
+    empty.className = 'browser-popover-empty';
+    empty.textContent = 'No history yet';
+    historyListEl.replaceChildren(empty);
+    return;
+  }
+  historyListEl.replaceChildren(...history.map((entry) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'browser-popover-row';
+    const main = document.createElement('div');
+    main.className = 'browser-popover-main';
+    const title = document.createElement('div');
+    title.className = 'browser-popover-title';
+    title.textContent = historyLabel(entry);
+    const sub = document.createElement('div');
+    sub.className = 'browser-popover-sub';
+    sub.textContent = entry.url;
+    main.append(title, sub);
+    row.appendChild(main);
+    row.addEventListener('click', () => {
+      closeAllBrowserPanels();
+      void navigateTo(entry.url);
+    });
+    return row;
+  }));
+}
+
+/* ── Bookmarks panel ───────────────────────────────────────────── */
+
+function buildBookmarksPanel() {
+  const panel = popover('browser-bookmarks');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', 'Bookmarks');
+
+  const head = document.createElement('div');
+  head.className = 'browser-popover-head';
+  head.append(labelSpan('Bookmarks'));
+
+  const list = document.createElement('div');
+  list.className = 'browser-popover-list';
+  bookmarksListEl = list;
+
+  panel.append(head, list);
+  return panel;
+}
+
+async function openBookmarksPanel() {
+  closeAllBrowserPanels();
+  if (bookmarksPanel) {
+    bookmarksPanel.classList.remove('hidden');
+    requestSync();
+  }
+  await loadBookmarks();
+}
+
+async function loadBookmarks() {
+  try {
+    const res = await apiFetch('/api/browser/bookmarks?limit=200');
+    const rows = res?.data?.bookmarks;
+    if (Array.isArray(rows)) bookmarks = rows;
+  } catch (_) {
+    /* best-effort */
+  }
+  renderBookmarks();
+  updateBookmarkButton();
+}
+
+function renderBookmarks() {
+  if (!bookmarksListEl) return;
+  if (!bookmarks.length) {
+    const empty = document.createElement('div');
+    empty.className = 'browser-popover-empty';
+    empty.textContent = 'No bookmarks yet — use the ☆ in the toolbar';
+    bookmarksListEl.replaceChildren(empty);
+    return;
+  }
+  bookmarksListEl.replaceChildren(...bookmarks.map((bookmark) => {
+    const row = document.createElement('div');
+    row.className = 'browser-popover-row';
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'browser-popover-main';
+    const title = document.createElement('div');
+    title.className = 'browser-popover-title';
+    title.textContent = bookmark.title || bookmark.url;
+    const sub = document.createElement('div');
+    sub.className = 'browser-popover-sub';
+    sub.textContent = bookmark.url;
+    main.append(title, sub);
+    main.addEventListener('click', () => {
+      closeAllBrowserPanels();
+      void navigateTo(bookmark.url);
+    });
+    const remove = iconButton({
+      icon: 'ui/trash',
+      size: 'sm',
+      label: 'Remove bookmark',
+      onClick: () => void removeBookmark(bookmark),
+    });
+    remove.classList.add('browser-popover-remove');
+    row.append(main, remove);
+    return row;
+  }));
+}
+
+function isBookmarked(url) {
+  return !!url && bookmarks.some((b) => b.url === url);
+}
+
+function updateBookmarkButton() {
+  if (!bookmarkBtn) return;
+  const tab = activeTab();
+  const on = !!tab && isBookmarked(tab.url);
+  bookmarkBtn.classList.toggle('is-on', on);
+  const label = on ? 'Remove bookmark' : 'Bookmark this page';
+  bookmarkBtn.title = label;
+  bookmarkBtn.setAttribute('aria-label', label);
+}
+
+async function toggleBookmark() {
+  const tab = activeTab();
+  if (!tab || !tab.url || !/^https?:/.test(tab.url)) return;
+  const existing = bookmarks.find((b) => b.url === tab.url);
+  if (existing) {
+    await removeBookmark(existing);
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/browser/bookmarks/add', {
+      method: 'POST',
+      body: JSON.stringify({ url: tab.url, title: tab.title || tab.url }),
+    });
+    const bookmark = res?.data?.bookmark;
+    if (bookmark) bookmarks.unshift(bookmark);
+  } catch (_) {
+    /* best-effort */
+  }
+  updateBookmarkButton();
+  renderBookmarks();
+}
+
+async function removeBookmark(bookmark) {
+  bookmarks = bookmarks.filter((b) => b.id !== bookmark.id);
+  updateBookmarkButton();
+  renderBookmarks();
+  try {
+    await apiFetch('/api/browser/bookmarks/remove', {
+      method: 'POST',
+      body: JSON.stringify({ id: bookmark.id }),
+    });
+  } catch (_) {
+    /* best-effort */
+  }
+}
+
+/**
+ * Record a finished page load as a visit.
+ *
+ * Typed navigations are already recorded server-side (with the search phrase,
+ * which the recommender weighs). This adds the pages reached *inside* a site —
+ * a link followed on a page never round-trips through `/navigate`, so without
+ * this the history would only ever hold what was typed.
+ */
+function recordVisit(tab) {
+  if (!tab || tab.incognito || !tab.url || !/^https?:/.test(tab.url)) return;
+  if (tab.lastHistoryUrl === tab.url) return;
+  tab.lastHistoryUrl = tab.url;
+  void apiFetch('/api/browser/history/record', {
+    method: 'POST',
+    body: JSON.stringify({ url: tab.url, mode: 'visit' }),
+  }).catch(() => {});
+}
+
+/** Dismiss the popovers when the pointer lands outside them. */
+function onBrowserPointerDown(event) {
+  const target = event.target;
+  if (target?.closest?.('.browser-popover')) return;
+  if (target?.closest?.('.browser-menu-btn, .browser-bookmark, .browser-downloads-btn')) return;
+  closeAllBrowserPanels();
+}
+
+function onBrowserKeydown(event) {
+  if (event.key === 'Escape') closeAllBrowserPanels();
+}
 
 /* ── Home surface: related-news cards ─────────────────────────────
  *
@@ -1300,7 +1813,11 @@ window.__peakdViewEvent = function (event) {
     if (event.phase === 'finished') {
       tab.loaded = true;
       clearWatchdog(tab);
-      if (tab.id === activeTabId) setStatus('');
+      recordVisit(tab);
+      if (tab.id === activeTabId) {
+        setStatus('');
+        updateBookmarkButton();
+      }
     } else if (event.phase === 'started' && tab.id === activeTabId) {
       setStatus('Loading…');
     }
@@ -1372,6 +1889,9 @@ function startBoundsSync() {
   window.addEventListener('desktop:changed', requestSync);
   window.addEventListener('overlay:open', requestSync);
   window.addEventListener('fullscreen:change', requestSync);
+  // A core popup opening/closing changes what covers the page (it becomes a
+  // hole in the view's mask), so re-evaluate on the shared menu signal.
+  window.addEventListener('menu:change', requestSync);
 }
 
 function stopBoundsSync() {
@@ -1387,6 +1907,7 @@ function stopBoundsSync() {
   window.removeEventListener('desktop:changed', requestSync);
   window.removeEventListener('overlay:open', requestSync);
   window.removeEventListener('fullscreen:change', requestSync);
+  window.removeEventListener('menu:change', requestSync);
 }
 
 /* ── AI-driven navigation ─────────────────────────────────────── */
@@ -1440,6 +1961,25 @@ export function browserContextMenu() {
     },
     {
       type: 'item',
+      label: 'History',
+      icon: 'ui/history',
+      onClick: () => void openHistoryPanel(),
+    },
+    {
+      type: 'item',
+      label: 'Bookmarks',
+      icon: 'ui/star',
+      onClick: () => void openBookmarksPanel(),
+    },
+    {
+      type: 'item',
+      label: isBookmarked(activeTab()?.url) ? 'Remove bookmark' : 'Bookmark this page',
+      icon: 'ui/star',
+      disabled: !activeTab()?.url,
+      onClick: () => void toggleBookmark(),
+    },
+    {
+      type: 'item',
       label: 'Focus address bar',
       icon: 'ui/search',
       disabled: !addressEl,
@@ -1475,27 +2015,41 @@ export function mountBrowserTile() {
   tabstripEl = buildTabStrip();
   viewportEl = buildViewport();
   downloadsPanel = buildDownloadsPanel();
-  tileEl.append(tabstripEl, buildToolbar(), viewportEl, downloadsPanel);
+  browserMenu = buildBrowserMenu();
+  historyPanel = buildHistoryPanel();
+  bookmarksPanel = buildBookmarksPanel();
+  tileEl.append(
+    tabstripEl, buildToolbar(), viewportEl,
+    downloadsPanel, browserMenu, historyPanel, bookmarksPanel,
+  );
+
+  document.addEventListener('pointerdown', onBrowserPointerDown, true);
+  document.addEventListener('keydown', onBrowserKeydown, true);
 
   updateNavButtons();
   updateShield();
   startBoundsSync();
   // One tab, on its home surface.
   createTab({});
-  // Settings (the shield + where downloads go) and the persisted history.
+  // Settings (shield, search engine, colour scheme), downloads and bookmarks.
   void loadSettings();
   void loadDownloads();
+  void loadBookmarks();
   return tileEl;
 }
 
 export function unmountBrowserTile() {
   stopBoundsSync();
   window.removeEventListener('message', onFrameMessage);
+  document.removeEventListener('pointerdown', onBrowserPointerDown, true);
+  document.removeEventListener('keydown', onBrowserKeydown, true);
   wired = false;
   for (const tab of tabs) destroyTab(tab);
   tabs = [];
   activeTabId = null;
   downloads = [];
+  history = [];
+  bookmarks = [];
   tileEl?.remove();
   tileEl = null;
   tabstripEl = null;
@@ -1508,8 +2062,15 @@ export function unmountBrowserTile() {
   shieldBtn = null;
   downloadsBtn = null;
   incognitoBtn = null;
+  bookmarkBtn = null;
+  menuBtn = null;
   downloadsPanel = null;
   downloadsListEl = null;
+  browserMenu = null;
+  historyPanel = null;
+  historyListEl = null;
+  bookmarksPanel = null;
+  bookmarksListEl = null;
 }
 
 export function getBrowserTileElement() {
@@ -1522,6 +2083,8 @@ export function wireBrowserEvents() {
   window.addEventListener('artifact:saved', onArtifactSaved);
   // The home shelf talks back through postMessage (card clicks, refresh).
   window.addEventListener('message', onFrameMessage);
+  // Keep the pages' `prefers-color-scheme` in step with the app theme.
+  window.addEventListener('theme:change', pushSettings);
 }
 
 export default {

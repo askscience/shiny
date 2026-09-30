@@ -9,6 +9,7 @@
  */
 
 import { apiFetch } from './api.js';
+import { notifyMenuChange } from './menuState.js';
 import {
   badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle,
 } from '../ui/index.js';
@@ -55,6 +56,7 @@ export function openBluetoothMenu(chip) {
   trigger?.setAttribute('aria-expanded', 'true');
   trigger?.classList.add('is-open');
   reposition();
+  notifyMenuChange();
 }
 
 export function closeBluetoothMenu() {
@@ -68,6 +70,7 @@ export function closeBluetoothMenu() {
   window.removeEventListener('resize', reposition);
   trigger?.setAttribute('aria-expanded', 'false');
   trigger?.classList.remove('is-open');
+  notifyMenuChange();
 }
 
 export function toggleBluetoothMenu(chip) {

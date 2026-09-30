@@ -48,6 +48,7 @@ import { openChatHistory } from './chatHistory.js';
 import { openTextInput } from './textInput.js';
 import { startListening, cancelListening, isListening } from './voice.js';
 import { getAiName, getWakeWord, setWakeWord } from './preferences.js';
+import { notifyMenuChange } from './menuState.js';
 
 /* ── Popup engine ─────────────────────────────────────────────── */
 
@@ -97,6 +98,7 @@ function onGlobalKeyDown(e) {
 function pushMenu(el) {
   menuStack.push(el);
   if (menuStack.length === 1) wireGlobal();
+  notifyMenuChange();
 }
 
 function closeFrom(el) {
@@ -105,12 +107,14 @@ function closeFrom(el) {
   const closing = menuStack.splice(i);
   closing.forEach((m) => m.remove());
   if (!menuStack.length) unwireGlobal();
+  notifyMenuChange();
 }
 
 export function closeAllMenus() {
   const closing = menuStack.splice(0);
   closing.forEach((m) => m.remove());
   unwireGlobal();
+  notifyMenuChange();
 }
 
 /** Position a just-appended menu at (x, y), clamped inside the viewport. */

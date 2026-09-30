@@ -24,6 +24,10 @@ impl ViewHost for QtHost {
         shim::view_visible(id, visible);
     }
 
+    fn set_mask(&mut self, id: &str, holes: &[CssRect]) {
+        shim::view_mask(id, holes);
+    }
+
     fn back(&mut self, id: &str) {
         shim::view_back(id);
     }
