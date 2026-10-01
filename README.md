@@ -33,7 +33,7 @@ The web UI (`web/`) is a desktop-style workspace:
   window (slim title bar with close/deactivate + fullscreen; drag and resize in the
   Windows layout). Fullscreen hands the screen to the app and hides the top bar, which
   comes back from the top edge with the app name and close / exit-fullscreen in a glass
-  bubble on its left. Layouts: **Master & stack**, **Columns**, or free **Windows**, with
+  bubble on its left. Layouts: **Tiling**, **Columns**, or free **Windows**, with
   `Alt`-shortcuts (`Alt+Enter` fullscreen, `Alt+H/L` focus, `Alt+,/.` workspace,
   `Alt+1..9` jump, `Alt+N` / `Alt+Shift+N` add/remove workspace).
 - **Bottom chrome** — the **voice bar**: a small lip at the bottom centre whose

@@ -10,7 +10,7 @@
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: var(--z-map);
   display: grid;
-  gap: 12px;
+  gap: 8px;
   grid-template-columns: 1fr;
   pointer-events: none; /* tiles re-enable their own hit targets */
 }
@@ -48,6 +48,28 @@
   min-width: 0;
   min-height: 0;
   flex: none;
+}
+
+/* Invisible drag handles for the master/stack split. The overlay covers the
+   desktop and each handle sits in a gap, re-enabling pointer events so a
+   click-drag resizes the panes — only the cursor changes, nothing is drawn. */
+#tile-grid > .tile-splitters {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tile-splitter {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+
+body.is-tiling-resize {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Legacy columns layout (settings → Layout: Columns). */

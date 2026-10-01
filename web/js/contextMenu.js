@@ -466,7 +466,7 @@ function layoutItems() {
   const mode = getLayout().mode;
   return [
     { type: 'item', label: 'Columns', checked: mode === 'columns', onClick: () => setLayout({ mode: 'columns' }) },
-    { type: 'item', label: 'Master', checked: mode === 'master', onClick: () => setLayout({ mode: 'master' }) },
+    { type: 'item', label: 'Tiling', checked: mode === 'master', onClick: () => setLayout({ mode: 'master' }) },
     { type: 'item', label: 'Windows', checked: mode === 'windows', onClick: () => setLayout({ mode: 'windows' }) },
   ];
 }

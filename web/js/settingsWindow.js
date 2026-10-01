@@ -855,7 +855,7 @@ function buildDesktop() {
 
   const mode = select({
     options: [
-      { value: 'master', label: 'Master & stack' },
+      { value: 'master', label: 'Tiling' },
       { value: 'columns', label: 'Columns' },
       { value: 'windows', label: 'Windows' },
     ],

@@ -114,6 +114,12 @@ export function initDesktop() {
   // the same transition check so a resize that changes nothing is free.
   MOBILE_PORTRAIT_QUERY.addEventListener('change', onScreenTurn);
   window.addEventListener('resize', onScreenTurn);
+  // The handles are positioned in pixels, so keep them on the gaps when the
+  // viewport changes without a full re-layout.
+  window.addEventListener('resize', () => {
+    const grid = document.getElementById('tile-grid');
+    if (grid) repositionSplitters(grid);
+  });
 }
 
 let wasMobilePortrait = null;
@@ -975,6 +981,263 @@ function startWindowResize(e, el, name) {
   el.addEventListener('pointercancel', up);
 }
 
+/* ── Resizable splits (drag any gap) ────────────────────────── */
+
+const SPLITTER_MIN_HIT = 12; // px of grab area even when the gap is thin
+const RATIO_MIN = 0.25;      // keep in sync with the clamp in preferences.js
+const RATIO_MAX = 0.85;
+const STACK_MIN_SIZE = 80;   // px a stacked window may shrink to
+
+function isHorizontalSplit(layout) {
+  return layout.orientation === 'top' || layout.orientation === 'bottom';
+}
+
+/** True when the master pane is the first (left/top) track. */
+function masterFirst(layout) {
+  return layout.orientation === 'left' || layout.orientation === 'top';
+}
+
+/** The transparent overlay that hosts every drag handle. */
+function ensureSplitterLayer(grid) {
+  let layer = grid.__splitterLayer;
+  if (layer && layer.isConnected) return layer;
+  layer = document.createElement('div');
+  layer.className = 'tile-splitters';
+  layer.setAttribute('aria-hidden', 'true');
+  layer.__splitters = [];
+  grid.__splitterLayer = layer;
+  grid.appendChild(layer);
+  return layer;
+}
+
+/** Drop every handle; called for any layout that has no split. */
+function clearSplitters(grid) {
+  const layer = ensureSplitterLayer(grid);
+  layer.textContent = '';
+  layer.__splitters = [];
+  grid.__splitCtx = null;
+}
+
+/** Create one invisible handle with the right resize cursor. */
+function addSplitter(grid, rec) {
+  const layer = ensureSplitterLayer(grid);
+  const el = document.createElement('div');
+  el.className = 'tile-splitter';
+  el.style.cursor = rec.axis === 'x' ? 'col-resize' : 'row-resize';
+  el.addEventListener('pointerdown', rec.onDown);
+  layer.appendChild(el);
+  layer.__splitters.push({ ...rec, el });
+}
+
+function place(el, x, y, w, h) {
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.style.width = `${w}px`;
+  el.style.height = `${h}px`;
+}
+
+/**
+ * Build the handles for the current split: one on the master↔stack seam and
+ * one in every gap between adjacent stacked windows. They are invisible — only
+ * the cursor changes over them.
+ */
+function buildSplitters(grid, layout, master, stack) {
+  clearSplitters(grid);
+  if (!master || !stack.length) return;
+  grid.__splitCtx = { master, stack };
+
+  // Left/right split → vertical seam dragged horizontally; top/bottom split →
+  // horizontal seam dragged vertically. The stacked windows run the other way.
+  const horizontal = isHorizontalSplit(layout);
+  addSplitter(grid, {
+    kind: 'master',
+    axis: horizontal ? 'y' : 'x',
+    side: layout.orientation,
+    onDown: (e) => startMasterSeamDrag(e, grid, master, stack),
+  });
+  for (let i = 0; i < stack.length - 1; i += 1) {
+    addSplitter(grid, {
+      kind: 'stack',
+      axis: horizontal ? 'x' : 'y',
+      index: i,
+      onDown: (e) => startStackDrag(e, grid, master, stack, i),
+    });
+  }
+
+  positionSplitters(grid, layout, master, stack);
+}
+
+/** Re-position the existing handles from the windows' current boxes. */
+function positionSplitters(grid, layout, master, stack) {
+  const layer = grid.__splitterLayer;
+  if (!layer || !layer.__splitters.length) return;
+  if (!master?.el?.isConnected || stack.some((it) => !it.el.isConnected)) return;
+
+  const base = grid.getBoundingClientRect();
+  const rel = (el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      l: r.left - base.left, t: r.top - base.top,
+      r: r.right - base.left, b: r.bottom - base.top,
+    };
+  };
+  const hit = Math.max(layout.gap, SPLITTER_MIN_HIT);
+  const m = rel(master.el);
+  const s = stack.map((it) => rel(it.el));
+
+  for (const rec of layer.__splitters) {
+    if (rec.kind === 'master') {
+      if (rec.axis === 'x') {
+        const cx = rec.side === 'right' ? (m.l + s[0].r) / 2 : (m.r + s[0].l) / 2;
+        place(rec.el, cx - hit / 2, 0, hit, base.height);
+      } else {
+        const cy = rec.side === 'bottom' ? (m.t + s[0].b) / 2 : (m.b + s[0].t) / 2;
+        place(rec.el, 0, cy - hit / 2, base.width, hit);
+      }
+    } else if (rec.axis === 'y') {
+      const cy = (s[rec.index].b + s[rec.index + 1].t) / 2;
+      const left = Math.min(s[rec.index].l, s[rec.index + 1].l);
+      const right = Math.max(s[rec.index].r, s[rec.index + 1].r);
+      place(rec.el, left, cy - hit / 2, right - left, hit);
+    } else {
+      const cx = (s[rec.index].r + s[rec.index + 1].l) / 2;
+      const top = Math.min(s[rec.index].t, s[rec.index + 1].t);
+      const bottom = Math.max(s[rec.index].b, s[rec.index + 1].b);
+      place(rec.el, cx - hit / 2, top, hit, bottom - top);
+    }
+  }
+}
+
+/** Re-position after a viewport change without a full re-layout. */
+function repositionSplitters(grid) {
+  const ctx = grid.__splitCtx;
+  if (!ctx) return;
+  positionSplitters(grid, getDesktopLayout(), ctx.master, ctx.stack);
+}
+
+/** Track weights for the stacked windows, keyed by plugin name. */
+function stackTrackWeights(layout, stack, override) {
+  const stored = override || layout.stack_weights || {};
+  const known = stack
+    .map((it) => Number(stored[it.name]))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  const fallback = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 1;
+  return stack.map((it) => {
+    const v = Number(stored[it.name]);
+    return Number.isFinite(v) && v > 0 ? v : fallback;
+  });
+}
+
+/** Set the stacked windows' tracks from weights (live drag path). */
+function applyStackWeights(grid, layout, master, stack, weights) {
+  const tracks = stackTrackWeights(layout, stack, weights).map((w) => `minmax(0, ${w}fr)`);
+  if (isHorizontalSplit(layout)) grid.style.gridTemplateColumns = tracks.join(' ');
+  else grid.style.gridTemplateRows = tracks.join(' ');
+  positionSplitters(grid, layout, master, stack);
+}
+
+/** Set the master/stack tracks from a live ratio (live drag path). */
+function applyMasterRatio(grid, layout, ratio, master, stack) {
+  const track = (f) => `minmax(0, ${f}fr)`;
+  const a = masterFirst(layout) ? ratio : 1 - ratio;
+  if (isHorizontalSplit(layout)) grid.style.gridTemplateRows = `${track(a)} ${track(1 - a)}`;
+  else grid.style.gridTemplateColumns = `${track(a)} ${track(1 - a)}`;
+  positionSplitters(grid, { ...layout, master_ratio: ratio }, master, stack);
+}
+
+function startMasterSeamDrag(e, grid, master, stack) {
+  if (e.button !== 0) return;
+  const layout = getDesktopLayout();
+  if (layout.mode !== 'master') return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const divider = e.currentTarget;
+  const axis = isHorizontalSplit(layout) ? 'y' : 'x';
+  const base = grid.getBoundingClientRect();
+  const origin = axis === 'x' ? base.left : base.top;
+  const span = axis === 'x' ? base.width : base.height;
+  const gap = layout.gap;
+  const avail = span - gap;
+  const first = masterFirst(layout);
+  let ratio = layout.master_ratio;
+
+  divider.setPointerCapture?.(e.pointerId);
+  document.body.classList.add('is-tiling-resize');
+  document.body.style.cursor = axis === 'x' ? 'col-resize' : 'row-resize';
+
+  const move = (ev) => {
+    if (avail <= 0) return;
+    const pos = (axis === 'x' ? ev.clientX : ev.clientY) - origin;
+    const frac = clampNum((pos - gap / 2) / avail, 0.05, 0.95);
+    ratio = clampNum(first ? frac : 1 - frac, RATIO_MIN, RATIO_MAX);
+    applyMasterRatio(grid, layout, ratio, master, stack);
+  };
+
+  const up = () => {
+    divider.removeEventListener('pointermove', move);
+    divider.removeEventListener('pointerup', up);
+    divider.removeEventListener('pointercancel', up);
+    divider.releasePointerCapture?.(e.pointerId);
+    document.body.classList.remove('is-tiling-resize');
+    document.body.style.cursor = '';
+    if (Math.abs(ratio - layout.master_ratio) > 0.001) setLayout({ master_ratio: ratio });
+  };
+
+  divider.addEventListener('pointermove', move);
+  divider.addEventListener('pointerup', up);
+  divider.addEventListener('pointercancel', up);
+}
+
+function startStackDrag(e, grid, master, stack, index) {
+  if (e.button !== 0) return;
+  const layout = getDesktopLayout();
+  if (layout.mode !== 'master') return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const divider = e.currentTarget;
+  const axis = isHorizontalSplit(layout) ? 'x' : 'y'; // drag axis
+  const sizes = stack.map((it) => {
+    const r = it.el.getBoundingClientRect();
+    return axis === 'x' ? r.width : r.height;
+  });
+  // Snapshot every track so the untouched windows keep their exact sizes.
+  const weights = {};
+  stack.forEach((it, k) => { weights[it.name] = sizes[k] || 1; });
+
+  const pairTotal = sizes[index] + sizes[index + 1];
+  const minSize = Math.min(STACK_MIN_SIZE, pairTotal / 2);
+  const before = sizes[index];
+  const start = axis === 'x' ? e.clientX : e.clientY;
+
+  divider.setPointerCapture?.(e.pointerId);
+  document.body.classList.add('is-tiling-resize');
+  document.body.style.cursor = axis === 'x' ? 'col-resize' : 'row-resize';
+
+  const move = (ev) => {
+    const delta = (axis === 'x' ? ev.clientX : ev.clientY) - start;
+    const newBefore = clampNum(before + delta, minSize, pairTotal - minSize);
+    weights[stack[index].name] = newBefore;
+    weights[stack[index + 1].name] = pairTotal - newBefore;
+    applyStackWeights(grid, layout, master, stack, weights);
+  };
+
+  const up = () => {
+    divider.removeEventListener('pointermove', move);
+    divider.removeEventListener('pointerup', up);
+    divider.removeEventListener('pointercancel', up);
+    divider.releasePointerCapture?.(e.pointerId);
+    document.body.classList.remove('is-tiling-resize');
+    document.body.style.cursor = '';
+    setLayout({ stack_weights: { ...getDesktopLayout().stack_weights, ...weights } });
+  };
+
+  divider.addEventListener('pointermove', move);
+  divider.addEventListener('pointerup', up);
+  divider.addEventListener('pointercancel', up);
+}
+
 /**
  * Arrange tile elements inside `grid`. `items` = [{ name, el }] for the active
  * workspace's windows (already mounted). Handles fullscreen, single-window,
@@ -993,6 +1256,9 @@ export function applyLayout(grid, items) {
       : 'tile-grid--columns'
   );
   grid.dataset.layout = layout.mode;
+  // The handles are only meaningful for a master/stack split; every other path
+  // below leaves the overlay empty.
+  clearSplitters(grid);
 
   // A fullscreen state that does not name a window of THIS workspace is never
   // rendered: a stale pointer is ignored rather than allowed to make whichever
@@ -1051,12 +1317,13 @@ export function applyLayout(grid, items) {
   const masterName = (focus && items.some((i) => i.name === focus)) ? focus : items[0].name;
   const master = items.find((i) => i.name === masterName) || items[0];
   const stack = items.filter((i) => i !== master);
-  const n = stack.length;
 
   grid.style.display = 'grid';
+  const stackTracks = stackTrackWeights(layout, stack)
+    .map((w) => `minmax(0, ${w}fr)`).join(' ');
 
   if (ori === 'top' || ori === 'bottom') {
-    grid.style.gridTemplateColumns = `repeat(${Math.max(1, n)}, minmax(0, 1fr))`;
+    grid.style.gridTemplateColumns = stackTracks;
     grid.style.gridTemplateRows = ori === 'top'
       ? `minmax(0, ${ratio}fr) minmax(0, ${1 - ratio}fr)`
       : `minmax(0, ${1 - ratio}fr) minmax(0, ${ratio}fr)`;
@@ -1073,7 +1340,7 @@ export function applyLayout(grid, items) {
     grid.style.gridTemplateColumns = ori === 'right'
       ? `minmax(0, ${1 - ratio}fr) minmax(0, ${ratio}fr)`
       : `minmax(0, ${ratio}fr) minmax(0, ${1 - ratio}fr)`;
-    grid.style.gridTemplateRows = `repeat(${Math.max(1, n)}, minmax(0, 1fr))`;
+    grid.style.gridTemplateRows = stackTracks;
     master.el.style.gridColumn = `${masterCol}`;
     master.el.style.gridRow = '1 / -1';
     stack.forEach((it, i) => {
@@ -1084,6 +1351,7 @@ export function applyLayout(grid, items) {
 
   master.el.classList.add('tile--master');
   stack.forEach((it) => it.el.classList.add('tile--stack'));
+  buildSplitters(grid, layout, master, stack);
   markFocus(items);
 }
 

@@ -203,10 +203,11 @@ export function setPluginLayout(name, mode) {
 /* ── Desktop manager (workspaces + tiling layout) ───────────── */
 
 const DEFAULT_DESKTOP_LAYOUT = {
-  mode: 'master',        // 'master' | 'columns' | 'windows'
-  master_ratio: 0.6,     // master fraction (0.25–0.85)
+  mode: 'master',        // 'master' (shown as "Tiling") | 'columns' | 'windows'
+  master_ratio: 0.7,     // master fraction (0.25–0.85)
   orientation: 'left',   // 'left' | 'right' | 'top' | 'bottom'
-  gap: 12,               // px between windows
+  gap: 8,                // px between windows
+  stack_weights: {},     // pluginName -> size of its stack track (relative)
 };
 
 function readJson(key, fallback) {
@@ -251,10 +252,12 @@ export function getDesktopLayout() {
   const stored = readJson(scopedKey(DESKTOP_LAYOUT_KEY), {});
   const out = { ...DEFAULT_DESKTOP_LAYOUT, ...(stored || {}) };
   out.mode = ['master', 'columns', 'windows'].includes(out.mode) ? out.mode : 'master';
-  out.master_ratio = clamp(Number(out.master_ratio) || 0.6, 0.25, 0.85);
+  out.master_ratio = clamp(Number(out.master_ratio) || 0.7, 0.25, 0.85);
   out.orientation = ['left', 'right', 'top', 'bottom'].includes(out.orientation)
     ? out.orientation : 'left';
-  out.gap = Math.round(clamp(Number(out.gap) ?? 12, 0, 40));
+  out.gap = Math.round(clamp(Number(out.gap) ?? 8, 0, 40));
+  const sw = out.stack_weights;
+  out.stack_weights = (sw && typeof sw === 'object' && !Array.isArray(sw)) ? { ...sw } : {};
   // A vertical, phone-like screen has no room for a master/stack split or for
   // floating windows, so it always reads as a column — the stored choice is
   // left alone and comes back with the screen.

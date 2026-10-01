@@ -101,7 +101,7 @@ Use it when you are unsure whether a plugin is installed or active before activa
 ### Desktop control
 
 The screen is a Hyprland-style desktop: plugin windows tile into a master/stack
-layout, live on numbered **workspaces** (desktops), and can be focused or
+("Tiling") layout on numbered **workspaces** (desktops), and can be focused or
 fullscreened. You and the user both control the desktop with these tools.
 
 Your system prompt includes a **"Desktop (current layout)"** section listing

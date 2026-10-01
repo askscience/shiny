@@ -886,7 +886,7 @@ How plugin content reaches the eye:
   with its own window container between them. The traveler plugin's window
   hosts the map. Every window has a slim **title bar** (close = deactivate,
   fullscreen = fill the desktop without covering the HUD); *Settings → Desktop
-  → Layout* picks the desktop style — tiling (master/stack or columns) or
+  → Layout* picks the desktop style — **Tiling** or **Columns**, or
   floating, draggable **Windows**. The AI can surface a window with the core
   `show_plugin` tool (system prompt carries a compact catalog of active
   plugins — name + manifest description — and the response field `focus_plugin`
