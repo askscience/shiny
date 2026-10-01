@@ -1,0 +1,2488 @@
+/* ─────────────────────────────────────────────────────────────
+   Pitch — app-surface override
+
+   Loaded after /css/*.css (including the 7,700-line tiles.css that
+   owns every plugin window), so this file has the last word on the
+   whole interface: app chrome, desktop windows, and all seventeen
+   plugin surfaces.
+
+   What it does, in order of leverage:
+
+     0. Clamps the decorative gradient tokens (see §1).
+     1. Kills every simulated-depth effect the shared CSS reaches for
+        (backdrop blur, dual neumorphic shadows, glow blooms, the
+        film-grain overlay, animated wallpapers).
+     2. Pins the three decorative gradient tokens that appearance.js
+        rewrites inline at runtime.
+     3. Collapses every pill into a rectangle and every gradient into
+        a fill — the two habits that read as "not a launcher".
+     4. Restyles the chrome itself: HUD bar, window frame, launcher
+        grid, voice lip, keyboard, chat, menus.
+     5. Normalises the plugin windows (grouped by prefix at the end)
+        onto the same flat surface grammar.
+
+   Layout is untouched — that belongs to the shared stylesheets.
+   ───────────────────────────────────────────────────────────── */
+
+/* ═══════════════════════════════════════════════════════════════
+   1. Runtime token clamp
+   ═══════════════════════════════════════════════════════════════ */
+
+/* appearance.js writes eight tokens straight onto
+   `document.documentElement.style` on every accent/gradient change —
+   an INLINE style, which beats any stylesheet rule that is not
+   `!important`. Three of those eight are decorative washes:
+
+     --gradient-mesh     the ambient accent cloud behind the desktop
+     --gradient-accent   a colour sweep
+     --gradient-text     a text→accent sweep
+
+   Pitch wants none of them, and `tokens.css` cannot win this race on
+   its own: the inline write lands after the stylesheet. Pinning the
+   three tokens here (with `!important`) is the surgical fix — it beats
+   the inline custom property without touching `background-image` on
+   the elements that use them, so a wallpaper the user picked in
+   Settings (which background.js writes inline on #background) still
+   shows.
+
+   `--accent` itself is deliberately NOT clamped: the user's colour
+   choice is the one thing this theme must honour. */
+:root[data-theme='pitch'] {
+  --gradient-mesh: none !important;
+  --gradient-accent: var(--accent) !important;
+  --gradient-text: var(--text) !important;
+}
+
+/* The consumers of those tokens, restated so they hold even if a
+   caller later inlines them on an element. */
+.brand-mark h1,
+.boot-wordmark {
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--text) !important;
+}
+.login-card::before { background: var(--accent) !important; }
+.boot-bar span { background: var(--accent) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   2. Depth removal — the global pass
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Frosted glass becomes an opaque flat fill. Done at the token level
+   too (--glass-blur: 0), but a hard `none` also covers rules that
+   pass a literal blur() rather than the token. */
+.glass-blur,
+.hud-header-main,
+.icon-btn,
+#workspace-bar,
+#fullscreen-bubble,
+.ui-hud-menu-popup,
+.ctx-menu,
+.ui-modal,
+.ui-sheet,
+.ui-toast,
+.ui-notification,
+.ui-artifact-close,
+.ui-dock-btn,
+.ui-insight,
+.tile-sheet,
+.compose-chats-btn,
+.compose-composer,
+.chat-history-panel .ui-modal-card,
+#keyboard-bar,
+#login-overlay .login-card,
+#travel-panel,
+.ui-card--flat,
+.studio-browser {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* The ambient window glow (tiles.css: .tile-glow) is a blurred colour
+   wash behind every plugin window. It is the single loudest effect in
+   the current design and cannot coexist with a flat dark theme — it is
+   exactly the "AI app" tell. Pitch renders the subject at zero. */
+.tile-glow { display: none !important; }
+.tile { --glow-opacity: 0 !important; }
+
+/* Film grain — a texture layer over the entire viewport. Gone. */
+#grain { display: none !important; }
+
+/* The desktop wallpaper is USER CONTENT, like a document — so it is not
+   suppressed here. `background.css` paints the idle default from
+   `--gradient-mesh`, and Pitch sets that token to `none`, which already
+   leaves a flat near-black canvas with no override at all. A wallpaper,
+   a photo and the animated modes are all chosen by the user and are
+   written inline by background.js, so an `!important` rule here would
+   silently delete them. */
+
+/* Dual-shadow extrusion. tokens.css already zeroes the shadow tokens;
+   this kills the literal shadows (drop shadows on overlays, the
+   scrim under the keyboard) that no token can reach. */
+.tile,
+.chat-history-item,
+.studio-browser,
+#travel-panel,
+#keyboard-bar,
+.overview-backdrop,
+.plugin-launcher,
+.tile-sheet,
+.ui-dock-btn { box-shadow: none !important; }
+
+/* Overlay scrims become plain dim — no blur behind them. */
+.overview-backdrop { background: rgba(0, 0, 0, 0.82) !important; }
+.plugin-launcher { background: #050608 !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   3. Shape + gradient normalisation
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Pills are the other launcher tell. Every 999px-radius rule in the
+   shared CSS becomes a small rectangle. Only genuinely circular
+   affordances (a knob, an avatar, the voice lip) keep a round shape,
+   and those are re-asserted below. */
+.hud-header-main,
+.icon-btn,
+.hud-network,
+.hud-audio,
+.hud-bluetooth,
+.ui-hud-chip,
+.ui-chip,
+.ui-badge,
+.ui-notification,
+.ui-list-item,
+.overview-badge,
+#workspace-bar,
+#fullscreen-bubble,
+.calc-sheet-btn,
+.impress-deck-btn,
+.mail-account-btn,
+.pdf-doc-btn,
+.studio-menu-btn,
+.word-doc-btn,
+.image-menu-btn,
+.ui-toggle,
+.ui-empty-icon,
+.files-status-pill,
+.ui-artifact-day-num,
+.compose-stop,
+.compose-send,
+.compose-chats-btn,
+#sphere-container {
+  border-radius: var(--radius-sm) !important;
+}
+.ui-toggle::after { border-radius: 50% !important; }
+
+/* Affordances that stay genuinely circular: an avatar, a track
+   colour dot, the clip-launcher's play badge, the launcher running-app
+   dot, and a toggle knob. A circle here is not a pill — it is the
+   shape the thing actually is. */
+.ui-avatar,
+.studio-track-dot,
+.studio-launch-play,
+.launcher-item-dot,
+.studio-meter-peak,
+.overview-badge:empty { border-radius: 50% !important; }
+
+/* Everything that paints a gradient. The tokens collapse to flat
+   fills; these rules make sure no element re-introduces one with a
+   literal. */
+.ui-progress-bar,
+.ui-gradient-text,
+.boot-logo__base,
+.boot-bar span,
+.voice-glow,
+.voice-lip,
+.launcher-item-icon { background-image: none !important; }
+
+.ui-gradient-text {
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--text) !important;
+}
+
+/* Selection follows the accent as ink, not a blue wash. */
+::selection { background: var(--accent-soft); color: var(--text); }
+
+/* Scrollbars — thin, dark, only visible against their own track. */
+* { scrollbar-color: var(--glass-highlight) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--glass-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--glass-highlight); background-clip: content-box; }
+
+/* ═══════════════════════════════════════════════════════════════
+   4. App chrome
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Desktop windows ────────────────────────────────────────────
+   A flat rectangle: one hairline, one fill, no radius theatre. The
+   focused window is marked by the accent border (shared CSS) — in a
+   tiling layout the accent IS the focus indicator, so it is kept. */
+.tile {
+  background: var(--bg-elevated) !important;
+  border-color: var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+}
+#tile-grid.tile-grid--windows .tile--full { border-radius: var(--radius-md) !important; }
+
+/* Window title bar — flat, one hairline to the content below. */
+.tile-header {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: 0 !important;
+}
+.tile-header-title {
+  font-family: var(--font-body) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em !important;
+  color: var(--muted) !important;
+}
+.tile-header-btn {
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.tile-header-btn:hover { color: var(--text) !important; }
+.tile-header-btn--full.is-active { background: transparent !important; color: var(--accent) !important; }
+.tile-header-btn--close:hover {
+  background: var(--error-soft) !important;
+  color: var(--error) !important;
+}
+.tile-resize { border-radius: var(--radius-xs) !important; }
+.tile-sheet {
+  background: var(--surface-strong) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+/* ── Top HUD ───────────────────────────────────────────────────
+   One flat bar, hairline-bounded, spanning the width. The pill and
+   its glass are gone; the tray, the chips and the clock all sit in a
+   single horizontal strip, which is how a launcher status bar reads. */
+#hud-header { padding: var(--hud-header-pad) 12px 10px !important; }
+
+.hud-header-main {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0 6px !important;
+}
+
+#hud-top { border-left-color: var(--glass-border) !important; }
+#hud-top .icon-btn,
+#hud-top .icon-btn:hover {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+  transform: none !important;
+}
+#hud-top .icon-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+
+/* Free-standing circular buttons (not inside the bar). */
+.icon-btn {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.icon-btn:hover {
+  background: var(--glass-hover) !important;
+  border-color: var(--glass-highlight) !important;
+  transform: none !important;
+}
+
+/* ── Host status chips ──────────────────────────────────────────
+   Icon + optional label/percentage, bare on the bar. The active
+   (open) state is a flat fill, never a glowing pill. */
+.hud-network:hover,
+.hud-audio:hover,
+.hud-bluetooth:hover,
+.hud-network.is-open,
+.hud-audio.is-open,
+.hud-bluetooth.is-open {
+  background: var(--glass-hover) !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text) !important;
+}
+.hud-network.is-connected,
+.hud-audio.is-active,
+.hud-bluetooth.is-connected { color: var(--text) !important; }
+.hud-network.is-connected .hud-network-icon,
+.hud-network.is-wired .hud-network-icon,
+.hud-audio.is-active .hud-audio-icon,
+.hud-bluetooth.is-connected .hud-bluetooth-icon { color: var(--accent) !important; }
+.hud-network-pct,
+.hud-audio-pct,
+.hud-bluetooth-pct { opacity: 0.55; }
+
+/* ── Clock + weather ────────────────────────────────────────────
+   The launcher clock: time large, date small, both quiet. */
+.hud-clock-icon { color: var(--muted) !important; }
+#hud-clock-time {
+  font-family: var(--font-display) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--text) !important;
+}
+.hud-clock-text #hud-clock-date,
+#hud-clock-date {
+  font-size: 10.5px !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.hud-divider { background: var(--glass-border) !important; opacity: 1 !important; }
+.hud-meteo { color: var(--text-secondary) !important; }
+#hud-meteo-temp { color: var(--text) !important; }
+
+/* ── Plugin tray ───────────────────────────────────────────────
+   A row of bare glyphs in the bar. Active plugins get the accent as
+   ink — that is the whole "is it running" signal. */
+#hud-plugins { gap: 1px !important; }
+.hud-plugin-btn {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+}
+.hud-plugin-btn:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+.hud-plugin-btn.is-active {
+  color: var(--accent) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ── Workspace switcher ────────────────────────────────────────
+   The launcher page indicator: small flat dashes, the active one in
+   the accent. Replaces the neumorphic inset dots. */
+#workspace-bar { background: transparent !important; padding-top: 6px; }
+.workspace-bar-dots { gap: 4px !important; }
+.workspace-bar-dot {
+  width: 18px !important;
+  height: 3px !important;
+  border-radius: 2px !important;
+  background: var(--glass-strong) !important;
+  border: none !important;
+  box-shadow: none !important;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.workspace-bar-dot.is-app { background: var(--glass-highlight) !important; }
+.workspace-bar-dot.is-active { background: var(--accent) !important; }
+.workspace-bar-dot:hover { background: var(--glass-highlight) !important; }
+.workspace-bar-btn {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+}
+.workspace-bar-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+
+/* ── Fullscreen bubble ────────────────────────────────────────
+   A flat floating rectangle. */
+#fullscreen-bubble {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 5px 6px !important;
+}
+.fullscreen-bubble-btn {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.fullscreen-bubble-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+
+/* ── Menus (HUD popovers + context menus) ──────────────────────
+   One opaque rectangle, one hairline. No blur, no float shadow. */
+.ui-hud-menu-popup,
+.ctx-menu {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+.ui-hud-menu-trigger,
+.ctx-menu-item { border-radius: var(--radius-xs) !important; color: var(--text-secondary) !important; }
+.ui-hud-menu-trigger:hover,
+.ctx-menu-item:hover,
+.ctx-menu-item.is-active {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+}
+.ctx-menu-item.is-danger { color: var(--error) !important; }
+.ctx-menu-item:disabled { opacity: 0.35; color: var(--muted) !important; }
+.ctx-menu-label,
+.ui-hud-menu-item-label { font-size: 13px !important; }
+.ctx-menu-heading,
+.ui-hud-menu-empty {
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.ctx-menu-sep { background: var(--glass-border) !important; }
+.ctx-menu-chevron,
+.ui-hud-menu-chevron { color: var(--muted) !important; }
+.ui-hud-menu-check,
+.ctx-menu-check { color: var(--accent) !important; }
+
+/* The three host panels (sound / network / bluetooth) plus the power
+   menu share one grammar: a flat section head, a flat row per device,
+   accent only on the active one. */
+.network-window,
+.audio-menu,
+.bluetooth-menu,
+.power-menu {
+  background: var(--surface-strong) !important;
+  border-color: var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+}
+.network-card,
+.audio-card,
+.bluetooth-card {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.network-card:hover,
+.audio-card:hover,
+.bluetooth-card:hover { border-color: var(--glass-highlight) !important; }
+.network-section-title,
+.audio-section-title,
+.bluetooth-section-title {
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.network-section-head,
+.audio-section-head,
+.bluetooth-section-head { border-bottom: 1px solid var(--glass-border) !important; }
+.network-head-title,
+.audio-head-title,
+.bluetooth-head-title {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+.network-head-hint,
+.audio-head-hint,
+.bluetooth-head-hint { color: var(--muted) !important; }
+.audio-device { border-radius: var(--radius-xs) !important; }
+.audio-device:hover { background: var(--glass-hover) !important; }
+.audio-device-title { color: var(--text) !important; font-weight: 500 !important; }
+.audio-device-sub { color: var(--muted) !important; }
+.audio-check { color: var(--accent) !important; }
+.audio-pct { color: var(--muted) !important; font-variant-numeric: tabular-nums; }
+.network-pct { color: var(--muted) !important; font-variant-numeric: tabular-nums; }
+.network-leading,
+.audio-leading,
+.bluetooth-leading { color: var(--muted) !important; }
+.network-trailing,
+.bluetooth-trailing { color: var(--muted) !important; }
+.network-actions,
+.audio-controls,
+.bluetooth-actions { gap: 6px !important; }
+.network-lock { color: var(--muted) !important; }
+.network-idle,
+.bluetooth-idle { color: var(--muted) !important; }
+.network-error { color: var(--error) !important; }
+.bluetooth-battery { color: var(--muted) !important; font-variant-numeric: tabular-nums; }
+.power-menu-head { border-bottom: 1px solid var(--glass-border) !important; }
+.power-menu-body { gap: 2px !important; }
+.power-confirm-actions .ui-btn--danger { color: var(--error) !important; }
+
+/* ── Plugin launcher ───────────────────────────────────────────
+   The one surface that should look exactly like a launcher home
+   screen: a flat grid of square icon tiles on the canvas, label
+   under each, no frame, no header, no chrome. */
+.plugin-launcher { padding: 8vh 6vw !important; }
+
+.plugin-launcher-grid {
+  gap: 30px 16px !important;
+  width: min(1080px, 100%) !important;
+}
+
+/* Icon tile: a flat square, hairline-bordered. No float, no hover
+   lift, no scale — the launcher reference is still, not bouncy. */
+.launcher-item-icon {
+  width: 72px !important;
+  height: 72px !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--glass-border) !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+.launcher-item:hover .launcher-item-icon {
+  transform: none !important;
+  border-color: var(--glass-highlight) !important;
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+}
+.launcher-item:active .launcher-item-icon { transform: none !important; }
+.launcher-item.is-active .launcher-item-icon {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  background: var(--bg-elevated) !important;
+}
+.launcher-item-name {
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary) !important;
+}
+.launcher-item.is-active .launcher-item-name { color: var(--text) !important; }
+/* The running-app dot, kept — it is launcher grammar. */
+.launcher-item-dot {
+  width: 4px !important;
+  height: 4px !important;
+  background: var(--accent) !important;
+}
+.launcher-empty { color: var(--muted) !important; }
+
+/* ── Window overview ────────────────────────────────────────────
+   Live windows as a flat grid. */
+.overview-badge {
+  background: transparent !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  border-radius: var(--radius-xs) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.1em !important;
+}
+body.overview-active .tile--overview { box-shadow: none !important; }
+
+/* ── Voice bar ─────────────────────────────────────────────────
+   The lip keeps its audio-reactive behaviour — it is the one piece
+   of motion worth having — but it loses the bloom and becomes a flat
+   accent bar that swells in width rather than in glow. */
+#sphere-container {
+  width: 168px !important;
+  height: 34px !important;
+}
+.voice-lip {
+  width: 104px !important;
+  height: 2px !important;
+  background: var(--voice-color) !important;
+  box-shadow: none !important;
+  opacity: calc(0.4 + var(--voice-level) * 0.6);
+}
+.voice-glow {
+  width: 112px !important;
+  height: 2px !important;
+  background: color-mix(in srgb, var(--voice-color) 45%, transparent) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform:
+    translateX(calc(-50% + (var(--voice-pan) * 8px)))
+    scaleX(calc(0.6 + var(--voice-level) * 1.1));
+  opacity: calc(var(--voice-base) + var(--voice-level) * 0.6);
+}
+
+/* ── Artifact dock ────────────────────────────────────────────── */
+#artifact-dock {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  padding: 5px 7px !important;
+}
+#artifact-dock-step {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body) !important;
+}
+
+/* ── Chat / compose ─────────────────────────────────────────────
+   A flat conversation column. Assistant bubbles are hairline-bounded
+   rectangles; the user's turn is the accent fill (one solid element
+   per screen is the rule). */
+.compose-conversation {
+  background: var(--bg) !important;
+  border-right: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.compose-bubble-text {
+  border-radius: var(--radius-sm) !important;
+  font-family: var(--font-body) !important;
+}
+.compose-bubble--assistant .compose-bubble-text {
+  background: var(--bubble) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: none !important;
+}
+.compose-bubble--user .compose-bubble-text {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+  box-shadow: none !important;
+}
+.compose-bubble-text code { background: var(--glass-strong) !important; border-radius: var(--radius-xs) !important; }
+.compose-bubble-text pre {
+  background: var(--bg-elevated) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.compose-bubble-text blockquote { border-left-color: var(--accent) !important; }
+.compose-bubble-text a { color: var(--accent) !important; text-decoration-color: var(--accent-soft) !important; }
+.compose-bubble-text th,
+.compose-bubble-text td { border-color: var(--glass-border) !important; }
+.compose-bubble-text img { border-radius: var(--radius-sm) !important; }
+
+.compose-composer {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+.compose-chats-btn {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: none !important;
+}
+.compose-dock-field {
+  font-family: var(--font-body) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+.compose-send,
+.compose-stop {
+  border-radius: var(--radius-sm) !important;
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.compose-send:hover { transform: none !important; }
+
+.chat-history-item {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.chat-history-item:hover { background: var(--glass-hover) !important; }
+.chat-history-item.is-active { border-color: var(--accent) !important; }
+.chat-history-head {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+.chat-history-item-preview,
+.chat-history-item-time { color: var(--muted) !important; }
+.chat-history-bubble--user {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.chat-history-bubble--assistant {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.chat-history-bubble-role { color: var(--muted) !important; letter-spacing: 0.12em !important; }
+.chat-history-del:hover { color: var(--error) !important; }
+
+/* ── Transcript ───────────────────────────────────────────────── */
+#reply-text {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  font-family: var(--font-body) !important;
+}
+
+/* ── Travel side panel + insight cards ────────────────────────── */
+#travel-panel {
+  background: var(--bg-elevated) !important;
+  border-left: 1px solid var(--glass-border) !important;
+  box-shadow: none !important;
+}
+#travel-panel-backdrop { background: rgba(0, 0, 0, 0.5) !important; backdrop-filter: none !important; }
+#insight-cards .ui-insight {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+
+/* ── Notifications ──────────────────────────────────────────────
+   A flat banner. Urgency is a left hairline in the semantic colour,
+   never a fill. */
+.ui-notification {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.ui-notification--normal { border-left: 2px solid var(--accent) !important; }
+.ui-notification--critical {
+  border-left: 2px solid var(--error) !important;
+  background: var(--surface-strong) !important;
+}
+.ui-notification-app { color: var(--muted) !important; letter-spacing: 0.12em !important; }
+.ui-notification-title { font-family: var(--font-body) !important; }
+.ui-notification-icon { background: transparent !important; color: var(--accent) !important; }
+.ui-notification-action {
+  background: transparent !important;
+  border-color: var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+}
+.ui-notification-close { border-radius: var(--radius-xs) !important; }
+
+/* ── Toasts ───────────────────────────────────────────────────── */
+.ui-toast { box-shadow: none !important; }
+
+/* ── Virtual keyboard ───────────────────────────────────────────
+   A compact flat board: keys are hairline squares, pressed state is
+   a flat fill. */
+#keyboard-bar {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+  box-shadow: none !important;
+}
+.keyboard-key {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+.keyboard-key:active {
+  background: var(--glass-strong) !important;
+  border-color: var(--glass-highlight) !important;
+  transform: none !important;
+}
+.keyboard-key.is-active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.keyboard-key--fn { color: var(--text-secondary) !important; font-weight: 500 !important; }
+.keyboard-key--accent {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+
+/* ── Login ──────────────────────────────────────────────────────
+   A centred flat card. The accent hairline is kept (it is the brand
+   mark) but the frosted plate is not. */
+#login-overlay {
+  background: var(--bg) !important;
+  backdrop-filter: none !important;
+}
+.login-card {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: none !important;
+}
+.login-card::before { opacity: 0.5 !important; height: 1px !important; }
+.brand-mark h1 {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.24em !important;
+  color: var(--text) !important;
+}
+.brand-tagline { color: var(--muted) !important; }
+.login-step-label {
+  font-size: 10.5px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.profile-tile {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.profile-tile:hover { background: var(--glass-hover) !important; border-color: var(--glass-highlight) !important; }
+.profile-tile-name { color: var(--text) !important; font-weight: 500 !important; }
+.profile-avatar { background: var(--glass-strong) !important; border-color: var(--glass-border) !important; }
+.profile-avatar--placeholder { color: var(--muted) !important; }
+.profile-avatar-label { color: var(--muted) !important; letter-spacing: 0.08em !important; }
+.login-link { color: var(--muted) !important; }
+.login-link:hover { color: var(--accent) !important; }
+.app-error { color: var(--error) !important; }
+.profile-selected-name { color: var(--text) !important; font-weight: 500 !important; }
+
+/* ── Boot splash ────────────────────────────────────────────────
+   The glitch-tearing logo is a strong identity but reads as
+   "hacker terminal" rather than minimalist. Kept, but slowed and
+   desaturated so it is a mark, not an effect. */
+.boot-logo__cblue,
+.boot-logo__tear-a,
+.boot-logo__tear-b { opacity: 0.14 !important; }
+.boot-logo { animation-duration: 4.5s !important; }
+.boot-wordmark {
+  font-family: var(--font-display) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.34em !important;
+  color: var(--text) !important;
+}
+.boot-scan { opacity: 0.04 !important; }
+.boot-bar { background: var(--glass-strong) !important; border-radius: 999px; }
+.boot-bar span { background: var(--accent) !important; animation-duration: 1.8s !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   5. Plugin windows
+
+   Shared grammar, then per-plugin normalisation. Everything here
+   was already token-driven, so most of this is removing the last
+   few hardcoded fills, glows and pills and re-pointing the handful
+   of rules that assumed glass or a light canvas.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Shared: unified plugin top bars ────────────────────────────
+   Every plugin window's action row. One flat fill, one hairline. */
+.word-bar, .calc-bar, .impress-bar, .image-bar, .mail-bar,
+.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar, .terminal-bar,
+.radio-hero, .yt-hero, .browser-bar {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+/* In-bar menu triggers: a label + chevron, not a pill. */
+.word-doc-btn, .calc-sheet-btn, .impress-deck-btn, .image-menu-btn,
+.mail-account-btn, .pdf-doc-btn, .studio-menu-btn, .browser-downloads-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+.word-doc-btn:hover, .calc-sheet-btn:hover, .impress-deck-btn:hover,
+.image-menu-btn:hover, .mail-account-btn:hover, .pdf-doc-btn:hover,
+.studio-menu-btn:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+}
+
+/* ── Shared: in-window tool buttons ───────────────────────────── */
+.word-tool, .calc-tool, .impress-tool, .mail-tool, .pdf-tool,
+.terminal-tool, .calculator-bar-btn, .calendar-nav-btn, .radio-t-btn,
+.yt-category, .browser-menu-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+.word-tool:hover, .calc-tool:hover, .impress-tool:hover, .mail-tool:hover,
+.pdf-tool:hover, .terminal-tool:hover, .calculator-bar-btn:hover,
+.calendar-nav-btn:hover, .radio-t-btn:hover, .browser-menu-btn:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+.word-tool--danger:hover, .calc-tool--danger:hover, .impress-tool--danger:hover,
+.mail-tool--danger:hover, .pdf-tool--danger:hover, .impress-op--danger:hover,
+.calendar-tool--danger:hover {
+  background: var(--error-soft) !important;
+  color: var(--error) !important;
+}
+
+/* ── Shared: window titles + status lines ─────────────────────── */
+.word-title, .calc-title, .impress-title, .mail-title, .pdf-title,
+.terminal-title, .calendar-month-label, .studio-title, .browser-tab-text {
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--text-secondary) !important;
+}
+.calc-status, .impress-status, .pdf-status, .files-status-pill,
+.studio-footer-hint, .studio-status, .yt-grid-status, .radio-grid-status {
+  font-family: var(--font-body) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.02em !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+}
+/* The unsaved-changes dot stays accent — it is a state, not chrome. */
+.calc-save-dot, .impress-save-dot, .pdf-save-dot, .studio-save-dot {
+  background: var(--accent) !important;
+  box-shadow: none !important;
+}
+
+/* ── Shared: document menus (body-level popovers) ─────────────── */
+.calc-sheet-menu, .impress-deck-menu, .mail-account-menu, .pdf-doc-menu {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+.calc-sheet-menu-item, .impress-deck-menu-item, .mail-account-menu-item,
+.pdf-doc-menu-item {
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.calc-sheet-menu-item:hover, .impress-deck-menu-item:hover,
+.mail-account-menu-item:hover, .pdf-doc-menu-item:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+}
+.calc-sheet-menu-item--danger, .impress-deck-menu-item--danger,
+.pdf-doc-menu-item--danger { color: var(--error) !important; }
+.calc-sheet-menu-title, .impress-deck-menu-title, .pdf-doc-menu-title,
+.mail-account-menu-foot, .calc-sheet-menu-foot, .pdf-doc-menu-foot {
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+}
+.calc-sheet-menu-check, .impress-deck-menu-check, .pdf-doc-menu-check {
+  color: var(--accent) !important;
+}
+.calc-sheet-menu-empty, .impress-deck-menu-empty, .pdf-doc-menu-empty,
+.mail-account-menu-empty { color: var(--muted) !important; }
+
+/* ── Calculator ─────────────────────────────────────────────────
+   A pocket calculator, flattened. Keys are hairline squares; the
+   equals key is the one accent fill. */
+.calculator-display {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.calculator-display-expr {
+  font-family: var(--font-display) !important;
+  font-weight: 400 !important;
+  color: var(--muted) !important;
+}
+.calculator-display-result {
+  font-family: var(--font-display) !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+}
+.calculator-key {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+.calculator-key:hover { background: var(--glass-hover) !important; border-color: var(--glass-highlight) !important; }
+.calculator-key:active {
+  background: var(--glass-strong) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.calculator-key.is-fn { color: var(--text-secondary) !important; }
+.calculator-key.is-danger { color: var(--error) !important; }
+.calculator-key.is-equals {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.calculator-history {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.calculator-history-item { border-radius: var(--radius-xs) !important; }
+.calculator-history-item:hover { background: var(--glass-hover) !important; }
+.calculator-history-expr { color: var(--muted) !important; font-family: ui-monospace, monospace; }
+.calculator-history-res { color: var(--text) !important; font-family: ui-monospace, monospace; }
+
+/* ── Calc (spreadsheet) ─────────────────────────────────────────
+   A real grid: hairlines between cells, flat headers. */
+.calc-formula-bar {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.calc-formula-ref {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+  font-family: ui-monospace, monospace;
+  font-size: 11px !important;
+}
+.calc-formula-input {
+  background: transparent !important;
+  border: none !important;
+  color: var(--text) !important;
+  font-family: ui-monospace, monospace;
+}
+.calc-grid {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  gap: 0 !important;
+}
+.calc-cell {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+  color: var(--text) !important;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px !important;
+}
+.calc-cell:hover { background: var(--glass-hover) !important; }
+.calc-cell--head,
+.calc-cell--corner,
+.calc-cell--rowhead {
+  background: var(--glass) !important;
+  color: var(--muted) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.calc-cell.is-selected {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+  color: var(--text) !important;
+}
+.calc-cell.is-formula { color: var(--accent) !important; }
+.calc-cell-editor {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text) !important;
+  font-family: ui-monospace, monospace;
+}
+
+/* ── Calendar ───────────────────────────────────────────────────
+   A month grid with hairline cells; today is a filled accent dot. */
+.calendar-weekday {
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+}
+.calendar-month-label {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  color: var(--text) !important;
+}
+.calendar-day {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-sm) !important;
+}
+.calendar-day:hover { background: var(--glass-hover) !important; }
+.calendar-day-num {
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+}
+.calendar-day.is-other .calendar-day-num { color: var(--muted) !important; opacity: 0.5; }
+.calendar-day.is-today {
+  border-color: var(--accent) !important;
+  background: transparent !important;
+}
+.calendar-day.is-today .calendar-day-num { color: var(--accent) !important; }
+.calendar-day.is-selected { background: var(--accent-soft) !important; }
+.calendar-chip {
+  background: var(--glass-strong) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  font-size: 10.5px !important;
+}
+.calendar-detail {
+  background: var(--surface) !important;
+  border-left: 1px solid var(--glass-border) !important;
+}
+.calendar-detail-item {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.calendar-detail-title { color: var(--text) !important; font-weight: 500 !important; }
+.calendar-detail-time,
+.calendar-detail-sub { color: var(--muted) !important; }
+
+/* ── Files ──────────────────────────────────────────────────────
+   Nautilus, flattened: a flat sidebar, hairline rows, no thumbnails
+   with drop shadows. */
+.files-sidebar {
+  background: var(--bg) !important;
+  border-right: 1px solid var(--glass-border) !important;
+}
+.files-sidebar-head {
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.files-place {
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.files-place:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.files-place.is-active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+.files-place-icon { color: inherit !important; }
+.files-place-label { font-size: 12.5px !important; font-weight: 500 !important; color: inherit !important; }
+.files-place-sep { background: var(--glass-border) !important; }
+
+.files-header {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.files-path-crumb {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  font-size: 12.5px !important;
+}
+.files-path-crumb:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.files-path-crumb.is-current { color: var(--text) !important; font-weight: 500 !important; }
+.files-path-sep { color: var(--muted) !important; }
+.files-content { background: var(--bg-elevated) !important; }
+.files-icon-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.files-icon-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.files-icon-btn.is-disabled { opacity: 0.3; }
+.files-search-input {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+}
+.files-col-head {
+  border-bottom: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+}
+.files-entry--row {
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+}
+.files-entry--row:hover { background: var(--glass-hover) !important; }
+.files-entry--row.is-selected {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+}
+/* Grid tiles keep a hairline; the raised plate is what made them
+   read as cards. */
+.files-entry--grid {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.files-entry--grid:hover { background: var(--glass-hover) !important; }
+.files-entry--grid.is-selected {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+}
+.files-thumb {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+}
+.files-thumb--folder { background: var(--glass) !important; }
+.files-grid-name,
+.files-row-name { color: var(--text-secondary) !important; font-size: 12px !important; font-weight: 500 !important; }
+.files-entry.is-selected .files-grid-name,
+.files-entry.is-selected .files-row-name { color: var(--text) !important; }
+.files-row-size,
+.files-row-when { color: var(--muted) !important; font-size: 11.5px !important; }
+.files-rows > .files-entry--row + .files-entry--row { border-top-color: var(--glass-border) !important; }
+.files-status-pill {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+}
+/* Quick look + the in-window media player: flat panels, and the
+   hardcoded black/white chrome normalised onto tokens. */
+.files-preview-card {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+.files-preview-media,
+.files-player,
+.files-player-media {
+  background: #000 !important;
+  border-radius: var(--radius-sm) !important;
+}
+.files-player-bar {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.files-player-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.files-player-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.files-player-time,
+.files-player-error { color: var(--muted) !important; }
+.files-player-seek { background: var(--glass-strong) !important; }
+.files-preview-hint { color: var(--muted) !important; }
+.files-preview-text { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; }
+
+/* ── Word ───────────────────────────────────────────────────────
+   One continuous writing surface: a flat field with a hairline, a
+   quiet toolbar, and no page-with-a-shadow. */
+.word-tile { background: var(--bg-elevated) !important; }
+.word-editor {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  font-family: var(--font-body) !important;
+  line-height: 1.7;
+}
+.word-editor h1, .word-editor h2, .word-editor h3 {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+.word-editor:focus, .word-editor:focus-visible {
+  outline: none !important;
+  border-color: var(--accent) !important;
+}
+.word-tools { gap: 2px !important; }
+.word-status { color: var(--muted) !important; }
+.word-save-dot { background: var(--accent) !important; box-shadow: none !important; }
+.word-doc-menu {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+.word-doc-menu-item { border-radius: var(--radius-xs) !important; color: var(--text-secondary) !important; }
+.word-doc-menu-item:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.word-doc-menu-item--danger { color: var(--error) !important; }
+.word-doc-menu-title,
+.word-doc-menu-time,
+.word-doc-menu-foot { color: var(--muted) !important; font-size: 10px !important; letter-spacing: 0.14em !important; text-transform: uppercase; }
+.word-doc-menu-check { color: var(--accent) !important; }
+.word-doc-menu-empty { color: var(--muted) !important; }
+
+/* ── Impress ────────────────────────────────────────────────────
+   Editor chrome is flattened; the slide canvas keeps its own
+   document palettes (a slide is a document, not chrome). */
+.impress-strip { background: var(--bg) !important; border-right: 1px solid var(--glass-border) !important; }
+.impress-thumb {
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.impress-thumb:hover { border-color: var(--glass-highlight) !important; }
+.impress-thumb.is-active { border-color: var(--accent) !important; box-shadow: none !important; }
+.impress-thumb-num { color: var(--muted) !important; font-size: 10px !important; }
+.impress-stage { background: #000 !important; border-radius: var(--radius-sm) !important; }
+.impress-inspector {
+  background: var(--surface) !important;
+  border-left: 1px solid var(--glass-border) !important;
+}
+.impress-field-label {
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.impress-field-input {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text) !important;
+}
+.impress-op {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.impress-op:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.impress-hint { color: var(--muted) !important; }
+
+/* ── Mail ─────────────────────────────────────────────────────── */
+.mail-folders {
+  background: var(--bg) !important;
+  border-right: 1px solid var(--glass-border) !important;
+}
+.mail-folder {
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.mail-folder:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.mail-folder.is-active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+.mail-folder-name { font-size: 12.5px !important; font-weight: 500 !important; color: inherit !important; }
+.mail-folder-count { color: var(--muted) !important; }
+.mail-list { background: var(--bg-elevated) !important; border-right: 1px solid var(--glass-border) !important; }
+.mail-search-input {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+}
+.mail-item {
+  border-bottom: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+}
+.mail-item:hover { background: var(--glass-hover) !important; }
+.mail-item.is-active { background: var(--accent-soft) !important; border-left: 2px solid var(--accent) !important; }
+.mail-item.is-unread .mail-item-subject { color: var(--text) !important; font-weight: 600 !important; }
+.mail-item-from { color: var(--text-secondary) !important; font-weight: 500 !important; }
+.mail-item-time,
+.mail-item-snippet { color: var(--muted) !important; }
+.mail-item-dot { background: var(--accent) !important; }
+.mail-status-dot { background: var(--muted) !important; }
+.mail-status-dot.is-ok { background: var(--ok) !important; }
+.mail-reader { background: var(--bg-elevated) !important; }
+.mail-reader-subject {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+.mail-reader-meta { color: var(--muted) !important; }
+.mail-reader-body { color: var(--text-secondary) !important; line-height: 1.7; }
+/* The message iframe sits on white because a mail body is a document;
+   framed by a hairline so it does not read as a hole in the window. */
+.mail-reader-html { background: var(--surface) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-sm) !important; }
+.mail-attachment {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.mail-onboarding { color: var(--text-secondary) !important; }
+.mail-help,
+.mail-account-row-label { color: var(--muted) !important; }
+.mail-account-row {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.mail-account-row-badge { background: var(--glass-strong) !important; color: var(--text-secondary) !important; }
+.mail-account-row-badge.is-ok { background: transparent !important; border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: var(--ok) !important; }
+.mail-provider-btn {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-secondary) !important;
+}
+.mail-provider-btn:hover { background: var(--glass-hover) !important; border-color: var(--glass-highlight) !important; }
+
+/* ── PDF ────────────────────────────────────────────────────────
+   Chrome flattened. The page canvas stays white — a PDF page is a
+   document — with a hairline around it instead of a shadow. */
+.pdf-rail {
+  background: var(--bg) !important;
+  border-right: 1px solid var(--glass-border) !important;
+}
+.pdf-thumb {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+}
+.pdf-thumb:hover { border-color: var(--glass-highlight) !important; }
+.pdf-thumb.is-active { border-color: var(--accent) !important; box-shadow: none !important; }
+.pdf-thumb.is-dragging { opacity: 0.5; }
+.pdf-thumb-num { color: var(--muted) !important; font-size: 10px !important; }
+.pdf-thumb-del { border-radius: var(--radius-xs) !important; color: var(--muted) !important; }
+.pdf-thumb-del:hover { background: var(--error-soft) !important; color: var(--error) !important; }
+.pdf-page {
+  background: #fff !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.pdf-canvas { background: var(--bg) !important; }
+.pdf-page-label,
+.pdf-zoom-label { color: var(--muted) !important; font-size: 11.5px !important; }
+/* Selection inside the text layer was a hardcoded blue — the accent,
+   softened, so it does not fight a dark chrome. */
+.pdf-text-layer ::selection {
+  background: color-mix(in srgb, var(--accent) 34%, transparent) !important;
+}
+.pdf-run {
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+}
+.pdf-run:hover { border-color: var(--accent) !important; }
+.pdf-run.is-selected { background: var(--accent-soft) !important; border-color: var(--accent) !important; }
+.pdf-edit-bar,
+.pdf-annot-bar {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.pdf-edit-pill,
+.pdf-edit-label,
+.pdf-edit-apply {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+.pdf-edit-pill.is-on,
+.pdf-edit-apply { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-contrast) !important; }
+.pdf-edit-sep { background: var(--glass-border) !important; }
+.pdf-edit-cancel { color: var(--muted) !important; }
+.pdf-annot-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.pdf-annot-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.pdf-loading { color: var(--muted) !important; }
+
+/* ── Radio ──────────────────────────────────────────────────────
+   Artwork-driven already; drop the duration scrim's hardcoded white
+   and the mask gradients' black. */
+.radio-tile { background: var(--bg-elevated) !important; }
+.radio-hero { background: var(--bg-elevated) !important; }
+.radio-hero-art--empty { background: var(--surface) !important; }
+.radio-hero-title {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+.radio-hero-sub { color: var(--muted) !important; }
+.radio-transport {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.radio-t-btn--primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.radio-cell {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.radio-cell:hover { border-color: var(--glass-highlight) !important; }
+.radio-cell--current { border-color: var(--accent) !important; box-shadow: none !important; }
+.radio-cell-num { color: var(--muted) !important; font-size: 10px !important; }
+.radio-cell-name { color: var(--text-secondary) !important; font-size: 12px !important; font-weight: 500 !important; }
+.radio-cell--current .radio-cell-name { color: var(--text) !important; }
+/* The equaliser bars follow the accent instead of a hardcoded white. */
+.radio-eq span { background: var(--accent) !important; border-radius: 1px !important; }
+
+/* ── YouTube ────────────────────────────────────────────────────
+   Thumbnail-driven already; the letterboxed player stays black and
+   the rest becomes flat tiles on the hairline grid. */
+.yt-tile { background: var(--bg-elevated) !important; }
+.yt-player { background: #000 !important; border-radius: var(--radius-sm) !important; }
+.yt-hero { background: var(--bg-elevated) !important; }
+.yt-hero-text { background: var(--bg) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-sm) !important; }
+.yt-hero-info-title {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--text) !important;
+}
+.yt-hero-sub { color: var(--muted) !important; }
+.yt-hero-back { border-radius: var(--radius-xs) !important; color: var(--muted) !important; }
+.yt-categories { gap: 6px !important; }
+.yt-category {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+}
+.yt-category:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.yt-section-title,
+.yt-grid-label {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  color: var(--text) !important;
+}
+.yt-grid-status { color: var(--muted) !important; font-size: 11px !important; }
+.yt-cell {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.yt-cell:hover { border-color: var(--glass-highlight) !important; }
+.yt-cell--current { border-color: var(--accent) !important; box-shadow: none !important; }
+.yt-cell-art { border-radius: var(--radius-xs) !important; }
+.yt-cell-num { color: var(--muted) !important; font-size: 10px !important; }
+.yt-cell-name { color: var(--text-secondary) !important; font-size: 12.5px !important; font-weight: 500 !important; }
+.yt-cell--current .yt-cell-name { color: var(--text) !important; }
+.yt-cell-channel,
+.yt-cell-meta,
+.yt-cell-dur { color: var(--muted) !important; font-size: 11.5px !important; }
+.yt-cell-dur {
+  background: rgba(0, 0, 0, 0.7) !important;
+  border-radius: var(--radius-xs) !important;
+}
+
+/* ── Browser ────────────────────────────────────────────────────
+   Chrome follows the same grammar; the web viewport keeps the
+   white canvas (a page is not the theme) but is framed by a
+   hairline so it reads as a page inside a window, not a hole. */
+.browser-tabstrip {
+  background: var(--bg) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.browser-tab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0 !important;
+  color: var(--muted) !important;
+}
+.browser-tab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.browser-tab.is-active {
+  background: var(--bg-elevated) !important;
+  border-color: var(--glass-border) !important;
+  color: var(--text) !important;
+}
+.browser-tab.is-incognito .browser-tab-text { color: var(--text-secondary) !important; }
+.browser-newtab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.browser-newtab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.browser-address .ui-input {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  font-family: ui-monospace, monospace !important;
+  font-size: 12.5px !important;
+}
+.browser-nav {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.browser-nav:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.browser-shield,
+.browser-incognito,
+.browser-bookmark,
+.browser-downloads-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.browser-shield:hover, .browser-incognito:hover,
+.browser-bookmark:hover, .browser-downloads-btn:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+}
+.browser-shield.is-on,
+.browser-incognito.is-on,
+.browser-bookmark.is-on { color: var(--accent) !important; }
+.browser-status {
+  background: var(--glass) !important;
+  border-top: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+  font-size: 11px !important;
+}
+.browser-viewport { border: 1px solid var(--glass-border) !important; border-radius: var(--radius-xs) !important; }
+.browser-downloads-panel,
+.browser-popover {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+.browser-downloads-head { border-bottom: 1px solid var(--glass-border) !important; }
+.browser-downloads-title,
+.browser-popover-head {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  color: var(--text) !important;
+}
+.browser-download {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+}
+.browser-download.is-interrupted { border-color: color-mix(in srgb, var(--warn) 40%, transparent) !important; }
+.browser-download-name { color: var(--text) !important; font-weight: 500 !important; }
+.browser-download-meta { color: var(--muted) !important; }
+.browser-download-progress { background: var(--glass-strong) !important; }
+.browser-download-fill { background: var(--accent) !important; }
+.browser-downloads-empty,
+.browser-popover-empty { color: var(--muted) !important; }
+.browser-popover-sep { background: var(--glass-border) !important; }
+.browser-popover-row { border-radius: var(--radius-xs) !important; }
+.browser-popover-row:hover { background: var(--glass-hover) !important; }
+.browser-popover-title { color: var(--text) !important; }
+.browser-popover-sub { color: var(--muted) !important; }
+.browser-menu-item { border-radius: var(--radius-xs) !important; color: var(--text-secondary) !important; }
+.browser-menu-item:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.browser-engine.is-active .browser-engine-check { color: var(--accent) !important; }
+
+/* ── Terminal ───────────────────────────────────────────────────
+   A terminal is a very dark flat field. It was already close; this
+   aligns the remaining chrome and pulls its two hardcoded values
+   onto the canvas so they cannot drift from the theme. */
+.terminal-tile {
+  --terminal-bg: #000000;
+  --terminal-fg: #d6dae0;
+  background: #000 !important;
+}
+.terminal-title { color: var(--text-secondary) !important; font-weight: 500 !important; }
+.terminal-status {
+  background: var(--glass) !important;
+  border-top: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+  font-size: 11.5px !important;
+}
+
+/* ── Image (layered raster editor) ──────────────────────────────
+   The docked workspace is the densest plugin surface, so it gets
+   the full flat grammar: panels are hairlines, sliders are flat,
+   the tool rail is a row of symbols, and the checkerboard behind
+   transparency is toned down to a near-invisible grid. */
+.image-appbar,
+.image-options {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.image-appbar-title {
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+}
+.image-tabs { background: var(--bg) !important; border-bottom: 1px solid var(--glass-border) !important; }
+.image-tab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+}
+.image-tab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.image-tab.is-active {
+  background: var(--bg-elevated) !important;
+  border-color: var(--glass-border) !important;
+  color: var(--text) !important;
+}
+.image-tab-name { color: inherit !important; }
+
+.image-tools { background: var(--bg) !important; border-right: 1px solid var(--glass-border) !important; }
+.image-tool {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+.image-tool:hover { background: var(--glass-hover) !important; color: var(--text) !important; transform: none !important; }
+.image-tool.is-active {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.image-tool-flyout { color: var(--muted) !important; }
+
+.image-workspace { background: var(--bg) !important; }
+/* Transparency checkerboard — 12% grey squares instead of a loud
+   two-tone grid, so a canvas with alpha is still legible. */
+.image-canvas-area,
+.image-doc {
+  background-color: #0a0b0d !important;
+  background-image:
+    linear-gradient(45deg, #121317 25%, transparent 25%, transparent 75%, #121317 75%),
+    linear-gradient(45deg, #121317 25%, transparent 25%, transparent 75%, #121317 75%) !important;
+  background-size: 16px 16px !important;
+  background-position: 0 0, 8px 8px !important;
+}
+.image-canvas-area.is-drop { box-shadow: inset 0 0 0 2px var(--accent) !important; }
+.image-view,
+.image-overlay { border: 1px solid var(--glass-border) !important; border-radius: 2px !important; }
+.image-ruler-corner,
+.image-ruler-h,
+.image-ruler-v { background: var(--bg) !important; border-color: var(--glass-border) !important; }
+.image-empty { color: var(--muted) !important; }
+
+.image-dock {
+  background: var(--surface) !important;
+  border-left: 1px solid var(--glass-border) !important;
+}
+.image-panel-section { border-bottom: 1px solid var(--glass-border) !important; }
+.image-panel-head {
+  background: var(--glass) !important;
+  border-radius: 0 !important;
+  color: var(--text) !important;
+}
+.image-panel-title {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: var(--text-secondary) !important;
+}
+.image-panel-chevron { color: var(--muted) !important; }
+.image-panel-body { background: transparent !important; }
+.image-panel-actions .ui-btn--icon { border-radius: var(--radius-xs) !important; }
+
+/* Sliders + numeric fields across the image panels. */
+.image-opt-field,
+.image-opt-field--slider {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+}
+.image-opt-label {
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.image-opt-number,
+.image-color-input,
+.image-hex,
+.image-dialog-field {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text) !important;
+  font-family: ui-monospace, monospace !important;
+  font-size: 11.5px !important;
+}
+.image-opt-value { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; }
+.image-prop-select {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text) !important;
+}
+.image-adjust-btn {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.image-adjust-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.image-channel-row,
+.image-swatch,
+.image-fg-swatch,
+.image-bg-swatch {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+}
+.image-channel-row.is-off { opacity: 0.45; }
+.image-channel-name,
+.image-layer-name,
+.image-history-label { color: var(--text-secondary) !important; font-size: 12px !important; font-weight: 500 !important; }
+.image-layer-meta,
+.image-history-time,
+.image-history-empty,
+.image-layers-empty { color: var(--muted) !important; font-size: 10.5px !important; }
+.image-layer-row {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+}
+.image-layer-row:hover { background: var(--glass-hover) !important; }
+.image-layer-row.is-active {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+}
+.image-layer-thumb { border: 1px solid var(--glass-border) !important; border-radius: 2px !important; }
+.image-layer-eye { border-radius: var(--radius-xs) !important; color: var(--muted) !important; }
+.image-layer-eye.is-eye-off { opacity: 0.4; }
+.image-layer-blend {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+.image-history-item {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+}
+.image-history-item.is-current { background: var(--accent-soft) !important; border-color: var(--accent) !important; }
+.image-statusbar {
+  background: var(--glass) !important;
+  border-top: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+  font-size: 11px !important;
+}
+.image-status-tool,
+.image-status-zoom,
+.image-status-size,
+.image-status-pos { color: var(--muted) !important; font-family: ui-monospace, monospace; }
+.image-inline-panel {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.image-inline-head { border-bottom: 1px solid var(--glass-border) !important; }
+.image-inline-title {
+  font-size: 10.5px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: var(--text-secondary) !important;
+}
+.image-menu,
+.image-menubar { background: var(--surface-strong) !important; border-color: var(--glass-border) !important; }
+.image-menu-item { border-radius: var(--radius-xs) !important; color: var(--text-secondary) !important; }
+.image-menu-item:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.image-type-panel { background: var(--surface) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-sm) !important; }
+
+/* ── Studio (sequencer + synth) ─────────────────────────────────
+   The busiest window. Everything becomes a flat panel: device
+   strips, the arranger grid, the mixer, and the piano keys. Track
+   colour survives as the one chromatic element (it is data), but
+   the neon panel chrome does not. */
+.studio-bar { background: var(--glass) !important; border-bottom: 1px solid var(--glass-border) !important; }
+.studio-title {
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--text-secondary) !important;
+}
+.studio-menu-btn,
+.studio-btn,
+.studio-head-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+.studio-menu-btn:hover, .studio-btn:hover, .studio-head-btn:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+.studio-transport--play,
+.studio-btn--play {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.studio-beat { background: var(--accent) !important; }
+.studio-time,
+.studio-bpm {
+  font-family: ui-monospace, monospace !important;
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+}
+.studio-bpm { background: transparent !important; border-color: transparent !important; }
+
+.studio-body { background: var(--bg) !important; }
+.studio-panel { background: var(--bg) !important; }
+.studio-arr-scroll { background: var(--bg) !important; }
+.studio-arr-grid {
+  gap: 1px !important;
+  background: var(--glass-border) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.studio-arr-corner,
+.studio-arr-ruler-cell {
+  background: var(--glass) !important;
+  border: none !important;
+  color: var(--muted) !important;
+  font-family: ui-monospace, monospace;
+  font-size: 10px !important;
+}
+.studio-arr-head {
+  background: var(--surface) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.studio-arr-head.is-active { background: var(--accent-soft) !important; }
+.studio-track-stripe { background: transparent !important; border-bottom: 1px solid var(--glass-border) !important; }
+.studio-arr-name { color: var(--text-secondary) !important; font-size: 11.5px !important; font-weight: 500 !important; }
+.studio-track-dot { border-radius: 50% !important; }
+.studio-ms {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.08em;
+}
+.studio-ms--on { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-contrast) !important; }
+.studio-arr-lane {
+  background: var(--bg-elevated) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.studio-arr-lane--muted { opacity: 0.4; }
+.studio-arr-clip {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+}
+.studio-arr-clip--sel { border-color: var(--accent) !important; }
+.studio-arr-clip-name { color: var(--text) !important; font-size: 10.5px !important; }
+.studio-arr-clip-x { border-radius: var(--radius-xs) !important; color: var(--muted) !important; }
+.studio-arr-clip-x:hover { background: var(--error-soft) !important; color: var(--error) !important; }
+.studio-arr-playhead { background: var(--accent) !important; box-shadow: none !important; }
+.studio-arr-addtrack { color: var(--muted) !important; border: 1px dashed var(--glass-border) !important; border-radius: var(--radius-sm) !important; }
+.studio-arr-addtrack:hover { color: var(--text) !important; border-color: var(--glass-highlight) !important; }
+.studio-rename {
+  background: var(--bg) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text) !important;
+}
+
+/* Clip launcher: square slots on a hairline grid. */
+.studio-launch-scene {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+}
+.studio-launch-slot { gap: 4px !important; }
+.studio-launch-clip {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.studio-launch-clip:hover { border-color: var(--glass-highlight) !important; }
+.studio-launch-clip--sel { border-color: var(--accent) !important; background: var(--accent-soft) !important; }
+.studio-launch-clip--playing { border-color: var(--accent) !important; }
+.studio-launch-clip--queued { border-color: color-mix(in srgb, var(--accent) 50%, transparent) !important; }
+.studio-launch-play { background: var(--accent) !important; border-radius: 50% !important; color: var(--accent-contrast) !important; }
+.studio-launch-empty {
+  background: transparent !important;
+  border: 1px dashed var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--muted) !important;
+}
+
+/* Step grid + piano roll. */
+.studio-corner,
+.studio-scene {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase;
+}
+.studio-track-head {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.studio-track-head--active { background: var(--accent-soft) !important; }
+.studio-track-name { color: var(--text-secondary) !important; font-size: 11px !important; font-weight: 500 !important; }
+.studio-track-x { color: var(--muted) !important; border-radius: var(--radius-xs) !important; }
+.studio-track-add {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.studio-track-add:hover { color: var(--text) !important; border-color: var(--glass-highlight) !important; }
+.studio-cell {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 2px !important;
+}
+.studio-cell--on {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+.studio-cell--bar { border-radius: 1px !important; }
+.studio-pianoroll-inline { background: var(--bg) !important; }
+.studio-pr-grid { background: var(--glass-border) !important; gap: 1px !important; border-radius: var(--radius-xs) !important; }
+.studio-pr-step { background: var(--bg-elevated) !important; border-radius: 2px !important; }
+.studio-pr-step--playing { background: var(--accent-soft) !important; }
+/* Piano keys — flat black and white keys with a hairline, rather
+   than a shaded 3-D ramp. */
+.studio-pr-key {
+  background: #e8eaed !important;
+  border: 1px solid var(--black) !important;
+  border-radius: 0 3px 3px 0 !important;
+  color: var(--black) !important;
+  box-shadow: none !important;
+}
+.studio-pr-key--black {
+  background: #15171b !important;
+  border-color: var(--black) !important;
+  color: var(--text-secondary) !important;
+}
+.studio-pr-key--pressed,
+.studio-pr-key:active {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.studio-pr-notes { background: var(--bg-elevated) !important; }
+.studio-pr-note {
+  background: var(--accent-soft) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+
+/* Device rack, macro rack, mixer, pads. */
+.studio-device {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.studio-device:hover { border-color: var(--glass-highlight) !important; }
+.studio-device--add { border-style: dashed !important; border-color: var(--glass-border) !important; color: var(--muted) !important; }
+.studio-device--master { background: var(--bg-elevated) !important; }
+.studio-device-head {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+}
+.studio-device-name {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase;
+  color: var(--text-secondary) !important;
+}
+.studio-device-body { background: transparent !important; }
+.studio-device-bypass {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.1em;
+}
+.studio-device-bypass--on {
+  background: var(--warn) !important;
+  border-color: var(--warn) !important;
+  color: var(--black) !important;
+}
+.studio-device-voice {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.studio-device-voice--on { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-contrast) !important; }
+.studio-device-voices { gap: 4px !important; }
+.studio-rack-label {
+  font-size: 9.5px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.studio-macro {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.studio-macro-name { color: var(--text-secondary) !important; font-size: 11px !important; }
+.studio-macro-entry {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.studio-macro-entry:hover { background: var(--glass-hover) !important; }
+.studio-knob { background: var(--bg) !important; border: 1px solid var(--glass-border) !important; }
+.studio-knob-dial { background: var(--surface) !important; border-color: var(--glass-border) !important; box-shadow: none !important; }
+.studio-knob-pointer { background: var(--accent) !important; }
+.studio-knob-label { color: var(--muted) !important; font-size: 9.5px !important; letter-spacing: 0.08em; }
+.studio-knob-value { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; font-size: 10.5px !important; }
+.studio-knob-auto { color: var(--accent) !important; }
+
+.studio-mixer-strip {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.studio-mixer-strip--sel { border-color: var(--accent) !important; }
+.studio-mixer-strip--master { background: var(--bg-elevated) !important; }
+.studio-mixer-name { color: var(--text-secondary) !important; font-size: 10.5px !important; font-weight: 600 !important; letter-spacing: 0.1em; }
+.studio-mixer-ms {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+  font-size: 9.5px !important;
+}
+.studio-meter { background: var(--glass-strong) !important; border-radius: 1px !important; }
+.studio-meter-fill { background: var(--accent) !important; }
+.studio-meter-peak { background: var(--text) !important; }
+.studio-fader-input { background: var(--glass-strong) !important; }
+.studio-pad {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.studio-pad--active { background: var(--accent) !important; border-color: var(--accent) !important; }
+
+/* Browser popover + presets list. */
+.studio-browser {
+  background: var(--surface-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+.studio-browser-head { border-bottom: 1px solid var(--glass-border) !important; }
+.studio-browser-title {
+  font-size: 10.5px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.studio-browser-item {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+}
+.studio-browser-item:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.studio-browser-label { color: inherit !important; font-size: 12px !important; font-weight: 500 !important; }
+.studio-browser-sub { color: var(--muted) !important; }
+.studio-empty { color: var(--muted) !important; }
+.studio-footer {
+  background: var(--glass) !important;
+  border-top: 1px solid var(--glass-border) !important;
+}
+.studio-scope { background: var(--bg) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-xs) !important; }
+.studio-footer-param { color: var(--muted) !important; font-family: ui-monospace, monospace; font-size: 11px !important; }
+.studio-bar-sep { background: var(--glass-border) !important; }
+/* The WaveMe patch grid + SynthMe rows. */
+.studio-grid-palette { gap: 4px !important; }
+.studio-grid-canvas {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.studio-grid-module {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+}
+.studio-grid-module--sel { border-color: var(--accent) !important; }
+.studio-grid-module-head {
+  background: var(--glass) !important;
+  border-radius: 0 !important;
+  color: var(--text-secondary) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.1em;
+}
+.studio-grid-port {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 50% !important;
+}
+.studio-grid-cable { stroke-width: 1.25 !important; }
+.studio-synthme-head {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.studio-synthme-title { font-size: 12px !important; letter-spacing: 0.06em !important; color: var(--text) !important; }
+.studio-synthme-body { background: var(--bg) !important; gap: 6px !important; }
+.studio-synthme-row {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+}
+.studio-synthme-fx {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+}
+.studio-synthme-fx-row { border-bottom: 1px solid var(--glass-border) !important; }
+.studio-synthme-foot { border-top: 1px solid var(--glass-border) !important; }
+
+/* ── Settings window ────────────────────────────────────────────
+   Nav rail + flat sections. Active section is an accent left bar. */
+.settings-window { background: var(--bg-elevated) !important; }
+.settings-nav {
+  background: var(--bg) !important;
+  border-right: 1px solid var(--glass-border) !important;
+}
+.settings-nav-item {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+.settings-nav-item:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.settings-nav-item.is-active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.settings-nav-label { font-size: 12.5px !important; font-weight: 500 !important; color: inherit !important; }
+.settings-nav-icon { color: inherit !important; }
+.settings-panels { background: var(--bg-elevated) !important; }
+.settings-panel.is-active { display: flex; }
+.settings-panel-head {
+  border-bottom: 1px solid var(--glass-border) !important;
+  padding-bottom: 10px !important;
+}
+.settings-panel-icon {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--text) !important;
+}
+.settings-section {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.settings-subhead {
+  font-size: 10.5px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.settings-label { color: var(--text-secondary) !important; font-weight: 500 !important; }
+.settings-hint { color: var(--muted) !important; }
+.settings-value { color: var(--text) !important; }
+.settings-field .ui-toggle-row {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+}
+.settings-field .ui-toggle-row:hover { background: var(--glass-hover) !important; }
+.swatch {
+  border-color: var(--glass-border) !important;
+  box-shadow: none !important;
+}
+.swatch.is-active {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft) !important;
+}
+.bg-preset {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.bg-preset:hover { border-color: var(--glass-highlight) !important; }
+.bg-preset.is-active {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft) !important;
+}
+.bg-preset-label { color: var(--muted) !important; font-size: 10.5px !important; }
+.whisper-model-row {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.remote-link {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--accent) !important;
+  font-family: ui-monospace, monospace !important;
+}
+.remote-ticket { color: var(--muted) !important; }
+
+/* ── Plugins window (the app store) ─────────────────────────────
+   Flat cards in a grid; active plugins keep the accent border. */
+.plugins-window { background: var(--bg-elevated) !important; }
+.plugins-toolbar {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.plugins-store-meta {
+  font-size: 10.5px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.plugin-chip {
+  background: transparent !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+.plugin-chip:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.plugin-chip.is-active { border-color: var(--accent) !important; color: var(--accent) !important; }
+.plugin-card {
+  background: var(--surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.plugin-card:hover { border-color: var(--glass-highlight) !important; }
+.plugin-card.is-inactive { opacity: 0.6; }
+.plugin-card.is-inactive:hover { opacity: 1; }
+.plugin-card-icon {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.plugin-card-name {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--text) !important;
+}
+.plugin-card-desc { color: var(--muted) !important; }
+.plugin-card-meta {
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+.plugin-card-mode .ui-select-wrap { box-shadow: none !important; }
+.plugin-card-remove { color: var(--error) !important; }
+.plugins-empty { color: var(--muted) !important; }
+.plugins-activity-details {
+  background: var(--bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: none !important;
+}
+.plugins-activity { color: var(--text-secondary) !important; }
+.plugins-activity-line { color: var(--muted) !important; font-family: ui-monospace, monospace; }
+.plugins-activity-line.ok { color: var(--ok) !important; }
+.plugins-activity-line.warn { color: var(--warn) !important; }
+.plugins-activity-line.error { color: var(--error) !important; }
+
+/* ── In-window artifact overlay ───────────────────────────────── */
+.tile-overlay { background: var(--bg) !important; }
+.tile-overlay-head {
+  background: var(--glass) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.tile-overlay-title {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--text) !important;
+}
+.tile-overlay-back,
+.tile-empty { color: var(--muted) !important; border-radius: var(--radius-xs) !important; }
+
+/* ── Traveler map window ────────────────────────────────────────
+   The map itself keeps its dark tiles; only the chrome around it and
+   the saved-cards dock are flattened. */
+.map-tile-dock {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.tile--map #map { background: #05070a !important; }
+.leaflet-container { background: #05070a !important; font-family: var(--font-body) !important; }
+.leaflet-control-attribution {
+  background: rgba(7, 8, 10, 0.8) !important;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a { color: var(--text-secondary) !important; }
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface-strong) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.leaflet-popup-content { margin: 10px 12px !important; font-size: 12.5px !important; }
+.leaflet-popup-close-button { color: var(--muted) !important; }
+
+/* ── Navigation HUD ─────────────────────────────────────────────
+   The one surface that earns a strong fill: it is read at a glance
+   while driving, so it is a solid rectangle in near-black with a
+   large instruction line. */
+#nav-hud { background: transparent; }
+#nav-strip {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.nav-strip-instruction {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--text) !important;
+}
+.nav-strip-meta { color: var(--muted) !important; }
+.nav-exit-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.nav-exit-btn:hover { background: var(--error-soft) !important; color: var(--error) !important; }
+.nav-speed-chip {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+.nav-speed-value {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  font-variant-numeric: tabular-nums;
+}
+.nav-speed-unit { color: var(--muted) !important; letter-spacing: 0.1em !important; }
+#nav-puck { display: none !important; }

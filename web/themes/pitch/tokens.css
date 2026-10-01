@@ -1,0 +1,160 @@
+/* ─────────────────────────────────────────────────────────────
+   Pitch — flat, very dark, launcher-quiet design tokens
+
+   The reference is a minimalist Android launcher (Launcher3, Nothing,
+   a bare AOSP home screen): a near-black canvas, flat rectangles,
+   hairline separators, one accent used as *ink* rather than as fill,
+   and nothing that simulates depth. No glass, no blur, no glow, no
+   gradient mesh, no dual-shadow extrusion. Separation comes from
+   three things only:
+
+     1. a tonal step in the neutral ramp  (surfaces get lighter, not "raised")
+     2. a 1px hairline                  (rgba white at 6–10%)
+     3. the accent                      (selection, focus, active — never chrome)
+
+   Everything numeric is deliberately small and uniform: one 10px radius
+   scale, one hairline weight, one spacing rhythm. Minimalism here is a
+   constraint, not a look — if a surface needs a second border or a third
+   radius to read, it is over-designed.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Neutral ramp ────────────────────────────────────────────
+     A very dark, slightly cool neutral ramp borrowed in spirit from
+     AOSP's system_neutral1 dark tones. Surfaces are FLAT FILLS —
+     the only thing that changes between them is lightness. Nothing
+     is translucent, so nothing needs a backdrop to read through. */
+  --black: #000000;
+  --bg: #07080a;            /* the canvas: the launcher wallpaper       */
+  --bg-elevated: #0d0f13;   /* a window surface sitting on the canvas   */
+  --surface: #111419;       /* a panel inside a window                  */
+  --surface-strong: #171a21;/* a menu, popover, modal — above panels    */
+  --glass: #0f1216;         /* bars and rails: between canvas & panel  */
+  --glass-strong: #1c2029;  /* a pressed / hovered flat fill            */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-hover: #1a1e25;
+  --bubble: #12151b;        /* chat bubbles                             */
+
+  /* Frosted glass — disabled. Pitch is flat: a real 0 means every
+     `backdrop-filter: blur(var(--glass-blur))` in the shared CSS
+     becomes a no-op without touching a single one of those rules. */
+  --glass-blur: 0px;
+  --glass-blur-panel: 0px;
+  --glass-blur-light: 0px;
+  --glass-saturate: 1;
+
+  /* ── Text ─────────────────────────────────────────────────────
+     Four steps of white, high contrast on near-black. */
+  --text: #f2f4f7;
+  --text-secondary: rgba(242, 244, 247, 0.68);
+  --muted: rgba(242, 244, 247, 0.42);
+
+  /* ── Accent — user-selectable, rewritten by appearance.js ─────
+     Pitch's default is a cold white: the launcher at rest has no
+     colour at all until you pick one. */
+  --accent: #e8eaed;
+  --accent-2: #8b9099;
+  --accent-soft: rgba(232, 234, 237, 0.1);
+  --accent-glow: rgba(232, 234, 237, 0.16);
+  --accent-contrast: #0a0b0d;
+
+  /* Gradients exist only because shared CSS references them. Pitch
+     collapses them to flat fills so nothing reads as a wash. */
+  --gradient-accent: var(--accent);
+  --gradient-text: var(--text);
+  --gradient-mesh: none;
+
+  /* ── Functional semantics ────────────────────────────────────
+     Desaturated just enough to sit inside a monochrome UI without
+     shouting. Still clearly legible as state. */
+  --ok: #6ee7a8;
+  --warn: #f5c451;
+  --error: #ff6b6b;
+  --error-soft: rgba(255, 107, 107, 0.14);
+  --accent-error: var(--error); /* legacy alias */
+  --accent-live: var(--ok);     /* legacy alias */
+
+  /* ── Typography ───────────────────────────────────────────────
+     One family for everything. A launcher does not have a display
+     face and an editorial face — it has labels. `--font-editorial`
+     is kept in the contract because shared CSS still reads it; it
+     resolves to the same neutral sans. */
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-editorial: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Display scale — restrained. Type is a label, not a hero. */
+  --type-hero: clamp(1.6rem, 3vw, 2.1rem);
+  --type-display: clamp(1.25rem, 2vw, 1.5rem);
+
+  /* ── Shape ────────────────────────────────────────────────────
+     One small, tight scale. A launcher tile is a rounded rect, not a
+     squircle and not a pill. Nothing here exceeds 14px. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* ── Desktop window surface ───────────────────────────────────
+     Per-user and overridden inline by preferences.js, so these are
+     only the pre-settings defaults. */
+  --window-radius: var(--radius-lg);
+  --window-opacity: 100%;
+  --window-shadow: none;
+  --tile-header-height: 36px;
+
+  /* ── Elevation ────────────────────────────────────────────────
+     Nothing casts a shadow. `--shadow-*` collapse to none so every
+     neumorphic `box-shadow: var(--shadow-raise-sm)` in the shared
+     stylesheets disappears; depth is the flat fill + hairline only.
+     `--shadow-glow` survives as a *selection* ring, not a bloom. */
+  --highlight-top: none;
+  --shadow-sm: none;
+  --shadow-glass: none;
+  --shadow-float: 0 0 0 1px var(--glass-border);
+  --shadow-glow: 0 0 0 3px var(--accent-soft);
+
+  /* ── Motion ───────────────────────────────────────────────────
+     Fast and linear-ish. A launcher responds immediately; nothing
+     eases in slowly, and nothing bounces. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  --ease-cinematic: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 0.1s;
+  --duration-normal: 0.16s;
+  --duration-slow: 0.24s;
+  --reveal-duration: 0.24s;
+  --reveal-stagger: 32ms;
+
+  /* ── Compose dock ────────────────────────────────────────────── */
+  --compose-bar-size: 84px;
+  --compose-dock-height: 52px;
+  --compose-stack-height: calc(
+    var(--compose-bar-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
+  );
+
+  /* ── HUD layout ─────────────────────────────────────────────── */
+  --hud-bar-height: 40px;
+  --hud-header-pad: max(10px, env(safe-area-inset-top));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
+
+  /* ── Voice bar ────────────────────────────────────────────────
+     Driven at runtime by sphere.js; declared here so the defaults are
+     visible next to every other token rather than buried in
+     /css/sphere.css. */
+  --voice-level: 0;   /* 0…1, mic amplitude      */
+  --voice-pan: 0;     /* -1…1, stereo position   */
+  --voice-base: 0.22; /* resting glow strength   */
+  --voice-color: var(--accent);
+
+  /* ── Layering ───────────────────────────────────────────────── */
+  --z-map: 0;
+  --z-hud: 20;
+  --z-transcript: 25;
+  --z-panel: 30;
+  --z-overlay: 40;
+  --z-toast: 50;
+  --z-grain: 9999;
+}

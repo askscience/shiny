@@ -1,0 +1,285 @@
+/* ─────────────────────────────────────────────────────────────
+   Pitch — visual skin for the Shiny UI components
+
+   Flat rectangles on a near-black canvas. Three rules, applied
+   without exception:
+
+     · depth is a FLAT FILL step, never a shadow
+     · a surface is bounded by ONE 1px hairline, never two
+     · the accent is INK — text, icon, selection ring — never a
+       gradient, never a bloom, never a fill on a big surface
+
+   Buttons are the one place a fill is allowed, because a launcher
+   has exactly one primary action per screen and it should be the
+   only solid thing on it.
+   ───────────────────────────────────────────────────────────── */
+
+.ui-icon { color: inherit; }
+.ui-icon--missing { background: var(--glass-strong); }
+
+/* ── Button ────────────────────────────────────────────────── */
+.ui-btn { font-family: var(--font-body); letter-spacing: 0; }
+
+.ui-btn--primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+.ui-btn--primary:hover { filter: brightness(1.08); }
+.ui-btn--primary .ui-spinner { border-color: color-mix(in srgb, var(--accent-contrast) 25%, transparent); border-top-color: var(--accent-contrast); }
+
+.ui-btn--ghost {
+  background: transparent;
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+.ui-btn--ghost:hover { background: var(--glass-hover); border-color: var(--glass-highlight); }
+
+.ui-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.ui-btn--quiet:hover { color: var(--text); background: var(--glass-hover); }
+
+.ui-btn--danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--error) 34%, transparent);
+  color: var(--error);
+}
+.ui-btn--danger:hover { background: var(--error-soft); }
+
+.ui-btn:disabled, .ui-btn.is-disabled { opacity: 0.35; }
+.ui-btn .ui-icon { color: currentColor; }
+
+/* Icon buttons are bare glyphs. A row of tools reads as one strip of
+   symbols; only the pressed/toggled-on state earns a flat fill. */
+.ui-btn--icon {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.ui-btn--icon:hover { background: var(--glass-hover); color: var(--text); }
+.ui-btn--icon:active { background: var(--glass-strong); color: var(--text); }
+
+/* Focus — a 1px accent ring plus a 3px soft halo. The only "glow"
+   in the theme, and it only ever means "you are here". */
+.ui-btn:focus-visible,
+.ui-input:focus-visible,
+.ui-textarea:focus-visible,
+.ui-select:focus-visible,
+.ui-toggle:focus-visible,
+.ui-chip:focus-visible,
+.ui-dock-btn:focus-visible,
+.ui-list-item:focus-visible,
+.ui-hud-chip:focus-visible,
+.ui-checkbox:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ── Fields ────────────────────────────────────────────────── */
+.ui-label { color: var(--text-secondary); }
+.ui-hint { color: var(--muted); }
+
+.ui-input, .ui-textarea, .ui-select {
+  background: var(--bg);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+.ui-input::placeholder, .ui-textarea::placeholder { color: var(--muted); }
+.ui-input:hover, .ui-textarea:hover, .ui-select:hover { border-color: var(--glass-highlight); }
+.ui-input:focus, .ui-textarea:focus, .ui-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ui-select-wrap .ui-icon { color: var(--muted); }
+.ui-select option { background: var(--surface-strong); color: var(--text); }
+
+.ui-search > .ui-icon { color: var(--muted); }
+
+/* Toggle — a flat track with a flat square-ish knob. */
+.ui-toggle { background: var(--glass-strong); border-color: var(--glass-border); }
+.ui-toggle::after { background: var(--muted); border-radius: 50%; }
+.ui-toggle[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.ui-toggle[aria-checked="true"]::after { background: var(--accent-contrast); }
+
+.ui-slider { background: var(--glass-strong); }
+.ui-slider::-webkit-slider-thumb { background: var(--accent); }
+.ui-slider::-moz-slider-thumb { background: var(--accent); }
+
+.ui-checkbox { color: var(--text); }
+.ui-checkbox-box { background: transparent; border-color: var(--glass-highlight); color: var(--accent-contrast); }
+.ui-checkbox.is-checked .ui-checkbox-box { background: var(--accent); border-color: var(--accent); }
+
+/* ── Card / Panel / Section ────────────────────────────────── */
+.ui-card { background: var(--surface); border-color: var(--glass-border); }
+.ui-card--flat { background: transparent; }
+.ui-card-foot { border-top: 1px solid var(--glass-border); }
+
+.ui-panel { background: var(--surface); border-color: var(--glass-border); }
+
+.ui-eyebrow {
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+}
+.ui-title { color: var(--text); font-weight: 600; }
+.ui-subtitle { color: var(--muted); }
+.ui-divider { background: var(--glass-border); }
+
+/* ── Overlay ───────────────────────────────────────────────── */
+/* A scrim, not a frosted pane: the page behind dims, the card is an
+   opaque flat rectangle above it. */
+.ui-modal, .ui-sheet {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.ui-modal-card, .ui-sheet-card {
+  background: var(--surface-strong);
+  border-color: var(--glass-border);
+  border-radius: var(--radius-lg);
+}
+.ui-sheet-card { border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+.ui-sheet-grip {
+  width: 32px; height: 3px; border-radius: 999px;
+  background: var(--glass-highlight); margin: 0 auto 14px;
+}
+
+[data-tooltip]::after {
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  border-radius: var(--radius-xs);
+}
+
+/* ── Feedback ──────────────────────────────────────────────── */
+.ui-toast {
+  background: var(--surface-strong);
+  border-color: var(--glass-border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+.ui-toast--error { border-color: color-mix(in srgb, var(--error) 40%, transparent); color: var(--error); }
+.ui-toast--ok { border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--ok); }
+
+.ui-spinner { border-color: var(--glass-strong); border-top-color: var(--accent); }
+
+.ui-skeleton { background: var(--glass-strong); }
+.ui-skeleton::after {
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+}
+
+.ui-progress { background: var(--glass-strong); }
+.ui-progress-bar { background: var(--accent); }
+
+.ui-empty { color: var(--muted); }
+.ui-empty-icon {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+.ui-empty-title { color: var(--text-secondary); font-family: var(--font-body); font-style: normal; font-weight: 500; }
+
+.ui-badge { background: transparent; border-color: var(--glass-border); color: var(--text-secondary); }
+.ui-badge--accent { background: transparent; border-color: var(--accent); color: var(--accent); }
+.ui-badge--ok { background: transparent; border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--ok); }
+.ui-badge--warn { background: transparent; border-color: color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); }
+.ui-badge--error { background: transparent; border-color: color-mix(in srgb, var(--error) 40%, transparent); color: var(--error); }
+
+/* ── Data ──────────────────────────────────────────────────── */
+.ui-list-item { color: var(--text); border-radius: var(--radius-sm); }
+.ui-list-item:hover { background: var(--glass-hover); border-color: transparent; }
+.ui-list-item-sub { color: var(--muted); }
+.ui-list-item .ui-icon { color: var(--text-secondary); }
+
+.ui-stat-value { color: var(--text); }
+.ui-stat-unit { color: var(--muted); }
+.ui-stat-label { color: var(--muted); font-size: 10.5px; letter-spacing: 0.14em; }
+
+.ui-chip {
+  background: transparent;
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-chip:hover { background: var(--glass-hover); color: var(--text); }
+.ui-chip.is-active {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.ui-avatar { background: var(--glass-strong); color: var(--text-secondary); border: 1px solid var(--glass-border); }
+
+.ui-kv-row + .ui-kv-row { border-top-color: var(--glass-border); }
+.ui-kv-key { color: var(--muted); }
+.ui-kv-val { color: var(--text); }
+
+/* ── Dock ──────────────────────────────────────────────────── */
+.ui-dock-btn {
+  background: var(--surface);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-dock-btn:hover { background: var(--glass-hover); color: var(--text); }
+.ui-dock-btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: none;
+}
+.ui-dock-btn--text { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+
+/* ── Artifact panel (plugin content) ───────────────────────── */
+.ui-artifact-hero {
+  background: var(--surface);
+  border-bottom: 1px solid var(--glass-border);
+}
+.ui-artifact-eyebrow { color: var(--muted); }
+.ui-artifact-title { color: var(--text); font-family: var(--font-display); font-style: normal; font-weight: 600; }
+.ui-artifact-sub { color: var(--text-secondary); }
+.ui-artifact-close {
+  background: var(--surface);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
+.ui-artifact-close:hover { color: var(--text); background: var(--glass-hover); }
+.ui-artifact-prose { color: var(--text-secondary); }
+.ui-artifact-section-head { margin-top: 4px; }
+.ui-artifact-day-num {
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+  background: var(--glass-strong);
+  border-radius: var(--radius-sm);
+}
+.ui-artifact-day-title { color: var(--text); }
+.ui-artifact-day-items { color: var(--text-secondary); }
+ul.ui-artifact-day-items { padding-left: 18px; }
+ul.ui-artifact-day-items li { margin: 2px 0; }
+ul.ui-artifact-day-items li::marker { color: var(--muted); }
+.ui-artifact-section-label { color: var(--muted); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+.ui-artifact-section-value { color: var(--text); font-size: 13px; margin-top: 2px; }
+
+/* ── Insight card ──────────────────────────────────────────── */
+.ui-insight {
+  background: var(--surface);
+  border-color: var(--glass-border);
+}
+.ui-insight > .ui-icon { color: var(--muted); }
+.ui-insight-title { color: var(--text); }
+.ui-insight-body { color: var(--text-secondary); }
+.ui-insight-close { color: var(--muted); }
+.ui-insight-close:hover { color: var(--text); }
+
+/* ── HUD chip ──────────────────────────────────────────────── */
+.ui-hud-chip {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.ui-hud-chip:hover { background: var(--glass-hover); color: var(--text); }
+.ui-hud-chip .ui-icon { color: inherit; }

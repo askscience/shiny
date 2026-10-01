@@ -6,11 +6,27 @@
    soft dual shadows (raised) and pressed/inset states that make
    the whole interface read as one extruded-plastic object.
    Token-driven, so dark + light share this file.
+
+   REVISION (minimal + modern):
+     · Every window, card and section that was raised by shadow alone
+       also gets a 1px hairline, matching components.css. Neumorphism's
+       documented failure is a shadow-only edge having no contrast
+       against its own canvas; the line restores the boundary without
+       flattening the extrusion.
+     · The film grain is dialled down (it is a shared element this
+       theme can only steer, and at 0.035 it was adding noise to a
+       surface whose whole point is a smooth one).
+     · The ambient glow keeps its plumbing but stops making window
+       surfaces translucent. Translucency was the same contrast flaw
+       in a different guise: it let the desktop show through the very
+       surfaces that carry the interface. The glow still reads, because
+       it is drawn behind an opaque window rather than through it.
+     · The login overlay loses its gradient wash.
    ───────────────────────────────────────────────────────────── */
 
 /* HUD circular buttons — the app gives them fill + border only. */
 .icon-btn {
-  border-color: transparent;
+  border-color: var(--glass-border);
   background: var(--surface);
   box-shadow: var(--shadow-raise-sm);
 }
@@ -23,7 +39,7 @@
 /* Plugin windows — extruded and borderless. Focused windows in tiling
    layouts get their accent ring from tiles.css; in the floating Windows
    layout the focused window is raised by z-order only. */
-.tile { border-color: transparent; box-shadow: var(--shadow-raise); }
+.tile { border-color: var(--glass-border); box-shadow: var(--shadow-raise); }
 
 /* Window header controls + plugin-tray icons — FLAT at rest. The soft
    neumorphic inset is reserved for the pressed (and the "on") state, so the
@@ -42,18 +58,18 @@
 .workspace-bar-dot.is-active { box-shadow: var(--shadow-inset-sm); }
 
 /* Login overlay — the theme canvas instead of a near-black veil. */
-#login-overlay { background: var(--gradient-mesh), var(--bg); }
+#login-overlay { background: var(--bg); }
 
 /* Chat history items — raised. */
-.chat-history-item { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.chat-history-item { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 
 /* Compose bubbles + the slide-in conversation panel. */
-.compose-bubble--assistant .compose-bubble-text { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.compose-bubble--assistant .compose-bubble-text { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .compose-bubble--user .compose-bubble-text { box-shadow: var(--shadow-raise-sm); }
 .compose-conversation { box-shadow: var(--shadow-float); }
 
 /* Media cells (radio / youtube / impress thumbnails) — raised frames. */
-.radio-cell, .yt-cell, .impress-thumb { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.radio-cell, .yt-cell, .impress-thumb { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .radio-cell--current, .yt-cell--current { box-shadow: var(--shadow-raise-sm), 0 0 0 2px var(--accent); }
 
 /* Plugin popovers (e.g. Studio's browser) — the theme float shadow instead
@@ -62,46 +78,60 @@
 
 /* Keyboard — raised keys, pressed on tap. */
 #keyboard-bar { box-shadow: var(--shadow-float); }
-.keyboard-key { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.keyboard-key { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .keyboard-key:active, .keyboard-key.is-active { box-shadow: var(--shadow-inset-sm); }
 
 /* Calculator — the keypad follows the keyboard's grammar: raised at rest,
    pressed on tap. Only the keys; the bar buttons and the display stay flat. */
-.calculator-key { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.calculator-key { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .calculator-key:active { box-shadow: var(--shadow-inset-sm); }
 
 /* Travel panel — replace the hardcoded black drop shadow. */
 #travel-panel { box-shadow: var(--shadow-float); }
 
 /* Settings + plugins windows. */
-.settings-section, .settings-nav { border-color: transparent; }
-.bg-preset { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.settings-section, .settings-nav { border-color: var(--glass-border); }
+.bg-preset { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .bg-preset.is-active { box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 26px var(--accent-glow); }
-.settings-nav-item { box-shadow: var(--shadow-raise-sm); }
+.settings-nav-item { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .settings-nav-item.is-active { box-shadow: var(--shadow-inset-sm); }
-.settings-panel-icon, .plugin-card-icon { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
-.settings-panel .ui-toggle-row { border-color: transparent; background: var(--surface); box-shadow: var(--shadow-raise-sm); }
-.plugin-card { border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.settings-panel-icon, .plugin-card-icon { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
+.settings-panel .ui-toggle-row { border-color: var(--glass-border); background: var(--surface); box-shadow: var(--shadow-raise-sm); }
+.plugin-card { border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .plugin-card-mode .ui-select-wrap { box-shadow: var(--shadow-inset-sm); }
 .plugins-activity-details { border-color: transparent; box-shadow: var(--shadow-inset-sm); }
 
 /* ── Ambient glow ────────────────────────────────────────────
-   Soft-UI surfaces are opaque and all one colour, which would hide the
-   plugin-window glow entirely. Inside plugin windows only, let the canvas
-   carry light: the chrome (--glass) and panels (--surface) go translucent
-   and the glow is brightened so accents read against graphite/paper. The
-   rest of the app keeps its opaque extruded look. Token-driven, so the
-   dark and light variants share this block. */
+   The glow layer sits BEHIND the window surface (tiles.css puts it at
+   z-index -1 inside the isolated .tile). An earlier version of this theme
+   made --glass and --surface translucent so the glow would bleed through —
+   which bought a little colour at the cost of the interface's legibility,
+   the same contrast flaw the hairline fixes elsewhere.
+
+   Instead the surfaces stay opaque and the glow is pushed back to where it
+   belongs: behind the window, at a strength that reads as an ambient tint
+   rather than a coloured band. On the map window, where the surface is
+   full-bleed and the behind-layer would be invisible, the rim variant
+   (tiles.css) still carries it at the edges.
+
+   Only the numbers changed; --glow-* plumbing and every plugin's
+   setTileGlow() call are untouched. */
 .tile {
-  --glass: color-mix(in srgb, var(--bg-elevated) 52%, transparent);
-  --surface: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
   --glow-permeability: 72%;
-  --glow-brightness: 0.82;
-  --glow-opacity: 0.55;
+  --glow-brightness: 0.62;
+  --glow-opacity: 0.32;
 }
-/* Light variant: brighten instead of darken, and keep the wash gentle. */
+/* Light variant: the glow darkens rather than brightens, so a pale
+   subject still reads on a paper canvas. */
 .tile[data-glow-light] {
-  --glow-brightness: 0.95;
-  --glow-opacity: 0.4;
+  --glow-brightness: 0.7;
+  --glow-opacity: 0.22;
 }
+
+/* Film grain — a shared element the theme can only steer. At the
+   default 0.035 it put noise on a surface whose entire premise is
+   smoothness; a whisper is enough to keep the plastic from looking
+   sterile. */
+#grain { opacity: 0.014; }
+
 

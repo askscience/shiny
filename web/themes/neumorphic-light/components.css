@@ -2,8 +2,27 @@
    Neumorphic — visual skin for the Shiny UI components
    Soft extruded plastic. Depth is pure dual-shadow: a faint light
    top-left and a dark bottom-right (raised), reversed for pressed
-   (inset) controls. Borders are suppressed; the accent is the only
-   color. Token-driven, so this file is shared by dark + light.
+   (inset) controls. The accent is the only color. Token-driven, so
+   this file is shared by dark + light.
+
+   REVISION (minimal + modern). The style is unchanged — same-canvas
+   surfaces, dual shadows, inset pressed states. Three things changed:
+
+     · Every raised surface gets a 1px hairline. Neumorphism's one
+       documented failure is that a shadow-only edge has almost no
+       contrast against its own canvas (Wikipedia: "criticism ... for
+       its lack of accessibility, low contrast"; takeup collapsed by
+       2021). The hairline is the standard fix in the modern "soft
+       UI" revival — the extrusion stays, and the boundary becomes
+       findable. It is the single most valuable change in this file.
+
+     · The eyebrow label went from accent-coloured to muted. One
+       accent per screen is the discipline; the label was spending it
+       on every section header at once.
+
+     · The hero gradient mesh is gone. It is a decorative wash that
+       fought the plastic, and it was the loudest thing in a UI that
+       is otherwise monochrome.
    ───────────────────────────────────────────────────────────── */
 
 .ui-icon { color: inherit; }
@@ -18,13 +37,13 @@
   border-color: transparent;
   box-shadow: var(--shadow-raise-sm);
 }
-.ui-btn--primary:hover { filter: brightness(1.05); }
+.ui-btn--primary:hover { filter: brightness(1.06); }
 .ui-btn--primary:active { box-shadow: var(--shadow-raise-sm); }
 .ui-btn--primary .ui-spinner { border-color: color-mix(in srgb, var(--accent-contrast) 25%, transparent); border-top-color: var(--accent-contrast); }
 
 .ui-btn--ghost {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text);
   box-shadow: var(--shadow-raise-sm);
 }
@@ -39,8 +58,8 @@
 .ui-btn--quiet:hover { color: var(--text); background: var(--glass-hover); box-shadow: var(--shadow-raise-sm); }
 
 .ui-btn--danger {
-  background: color-mix(in srgb, var(--error) 14%, transparent);
-  border-color: transparent;
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border-color: color-mix(in srgb, var(--error) 28%, transparent);
   color: var(--error);
   box-shadow: var(--shadow-raise-sm);
 }
@@ -80,14 +99,16 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent);
 }
+/* A focus ring must survive on a canvas with no other contrast —
+   hence the double ring: a solid 1px accent plus a soft halo. */
 
 /* ── Fields ────────────────────────────────────────────────── */
 .ui-label { color: var(--text-secondary); }
-.ui-hint { color: var(--muted); }
+.ui-hint { color: var(--text-secondary); opacity: 0.72; }
 
 .ui-input, .ui-textarea, .ui-select {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text);
   box-shadow: var(--shadow-inset);
 }
@@ -102,7 +123,7 @@
 
 .ui-search > .ui-icon { color: var(--muted); }
 
-.ui-toggle { background: var(--surface); border-color: transparent; box-shadow: var(--shadow-inset-sm); }
+.ui-toggle { background: var(--surface); border-color: var(--glass-border); box-shadow: var(--shadow-inset-sm); }
 .ui-toggle::after { background: var(--surface-strong); box-shadow: var(--shadow-sm); }
 .ui-toggle[aria-checked="true"] { background: var(--accent); border-color: transparent; }
 .ui-toggle[aria-checked="true"]::after { background: var(--accent-contrast); box-shadow: var(--shadow-sm); }
@@ -112,22 +133,27 @@
 .ui-slider::-moz-range-thumb { background: var(--accent); box-shadow: var(--shadow-sm); }
 
 .ui-checkbox { color: var(--text); }
-.ui-checkbox-box { background: var(--surface); border-color: transparent; color: var(--accent-contrast); box-shadow: var(--shadow-raise-sm); }
+.ui-checkbox-box { background: var(--surface); border-color: var(--glass-border); color: var(--accent-contrast); box-shadow: var(--shadow-raise-sm); }
 .ui-checkbox.is-checked .ui-checkbox-box { background: var(--accent); border-color: transparent; box-shadow: var(--shadow-inset-sm); }
 
 /* ── Card / Panel / Section ────────────────────────────────── */
-.ui-card { background: var(--surface); border-color: transparent; box-shadow: var(--shadow-raise-sm); }
+.ui-card { background: var(--surface); border-color: var(--glass-border); box-shadow: var(--shadow-raise-sm); }
 .ui-card--flat { background: transparent; box-shadow: none; }
 .ui-card-foot { border-top: 1px solid var(--glass-border); }
 
 .ui-panel {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   box-shadow: var(--shadow-glass);
 }
 
-.ui-eyebrow { color: var(--accent); }
-.ui-title { color: var(--text); }
+.ui-eyebrow {
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.ui-title { color: var(--text); letter-spacing: -0.015em; }
 .ui-subtitle { color: var(--muted); }
 .ui-divider { background: var(--glass-border); }
 
@@ -138,7 +164,7 @@
 }
 .ui-modal-card, .ui-sheet-card {
   background: var(--surface-strong);
-  border-color: transparent;
+  border-color: var(--glass-border);
   box-shadow: var(--shadow-float);
 }
 .ui-sheet-grip {
@@ -156,7 +182,7 @@
 /* ── Feedback ──────────────────────────────────────────────── */
 .ui-toast {
   background: var(--surface-strong);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text);
   box-shadow: var(--shadow-float);
 }
@@ -175,14 +201,14 @@
 
 .ui-empty { color: var(--muted); }
 .ui-empty-icon {
-  color: var(--accent);
+  color: var(--muted);
   background: var(--surface);
-  border-color: transparent;
-  box-shadow: var(--shadow-raise-sm);
+  border-color: var(--glass-border);
+  box-shadow: none;
 }
-.ui-empty-title { color: var(--text); }
+.ui-empty-title { color: var(--text-secondary); font-family: var(--font-display); font-style: normal; font-weight: 500; }
 
-.ui-badge { background: var(--surface); border-color: transparent; color: var(--text-secondary); box-shadow: var(--shadow-raise-sm); }
+.ui-badge { background: var(--surface); border-color: var(--glass-border); color: var(--text-secondary); box-shadow: var(--shadow-raise-sm); }
 .ui-badge--accent { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .ui-badge--ok { background: color-mix(in srgb, var(--ok) 14%, transparent); border-color: color-mix(in srgb, var(--ok) 35%, transparent); color: var(--ok); }
 .ui-badge--warn { background: color-mix(in srgb, var(--warn) 14%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); color: var(--warn); }
@@ -196,11 +222,16 @@
 
 .ui-stat-value { color: var(--text); }
 .ui-stat-unit { color: var(--muted); }
-.ui-stat-label { color: var(--muted); }
+.ui-stat-label {
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
 
 .ui-chip {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text-secondary);
   box-shadow: var(--shadow-raise-sm);
 }
@@ -221,7 +252,7 @@
 /* ── Dock ──────────────────────────────────────────────────── */
 .ui-dock-btn {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text-secondary);
   box-shadow: var(--shadow-raise-sm);
 }
@@ -236,15 +267,15 @@
 
 /* ── Artifact panel (plugin content) ───────────────────────── */
 .ui-artifact-hero {
-  background: var(--gradient-mesh);
+  background: var(--surface);
   border-bottom: 1px solid var(--glass-border);
 }
-.ui-artifact-eyebrow { color: var(--accent); }
+.ui-artifact-eyebrow { color: var(--muted); }
 .ui-artifact-title { color: var(--text); }
 .ui-artifact-sub { color: var(--text-secondary); }
 .ui-artifact-close {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text-secondary);
   box-shadow: var(--shadow-raise-sm);
 }
@@ -253,9 +284,9 @@
 .ui-artifact-prose { color: var(--text-secondary); }
 .ui-artifact-section-head { margin-top: 4px; }
 .ui-artifact-day-num {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+  background: var(--surface-strong);
   box-shadow: var(--shadow-raise-sm);
 }
 .ui-artifact-day-title { color: var(--text); }
@@ -263,13 +294,19 @@
 ul.ui-artifact-day-items { padding-left: 18px; }
 ul.ui-artifact-day-items li { margin: 2px 0; }
 ul.ui-artifact-day-items li::marker { color: var(--accent); }
-.ui-artifact-section-label { color: var(--muted); font-size: 12px; font-weight: 500; }
+.ui-artifact-section-label {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
 .ui-artifact-section-value { color: var(--text); font-size: 13px; margin-top: 2px; }
 
 /* ── Insight card ──────────────────────────────────────────── */
 .ui-insight {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   box-shadow: var(--shadow-glass);
 }
 .ui-insight > .ui-icon { color: var(--accent); }
@@ -281,7 +318,7 @@ ul.ui-artifact-day-items li::marker { color: var(--accent); }
 /* ── HUD chip ──────────────────────────────────────────────── */
 .ui-hud-chip {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--glass-border);
   color: var(--text-secondary);
   box-shadow: var(--shadow-raise-sm);
 }

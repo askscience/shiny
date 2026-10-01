@@ -2,77 +2,119 @@
 
 /* ─────────────────────────────────────────────────────────────
    Neumorphic (dark) — soft extruded-plastic design tokens
+
    "Soft UI": a single graphite canvas. Every surface shares the
-   canvas color; depth is drawn with dual shadows only — a faint
+   canvas colour; depth is drawn with dual shadows only — a faint
    light top-left, a dark bottom-right — never with fills or borders.
    Accent slots are user-selectable and rewritten by appearance.js.
+
+   REVISION (minimal + modern, dark). What changed, and why:
+
+     · Darker canvas. The old ramp sat at #15171b, which is a mid
+       graphite — it reads grey once a full-screen surface is on it.
+       Dropped to #0b0c0e so the highlight side of every shadow has
+       somewhere to go and the extrusion stays legible instead of
+       turning into flat noise.
+
+     · Contrast repaired. Neumorphism's one documented failure is
+       low contrast (Wikipedia: "criticism ... for its lack of
+       accessibility, low contrast"). The ramp solved that by
+       leaving the canvas mid-grey, which cost the look its depth.
+       So the canvas went dark and the *text* went up instead:
+       --text is now a near-solid #f4f6f8 rather than 90% white,
+       --text-secondary 0.74, --muted 0.46. The surfaces stay
+       same-as-canvas; only the ink separates.
+
+     · One less typeface. Instrument Serif was set on headings as
+       an italic editorial voice, which fights the plastic. It now
+       resolves to the display sans, so the interface reads as one
+       voice. (Kept in the contract — shared CSS still reads the
+       token.)
+
+     · Fewer radii, tighter. The old 10/14/20/30/38 scale spanned
+       nearly 4×; the extrusion needs a narrower spread to read as
+       one object. Now 8/12/16/20/26.
+
+     · Calmer motion. The 1.4-overshoot spring is a 2019 tell. One
+       ease-out curve everywhere, and the durations are shorter.
+
+     · Softer decoration. The ambient mesh and the glow are dimmed
+       rather than removed — they belong to this theme, so they stay
+       (see app.css), but they no longer compete with the extrusion.
    ───────────────────────────────────────────────────────────── */
 :root {
   /* Monochrome graphite ramp. Surfaces are the SAME color as the
-     background; --glass-strong / --glass-hover are only a whisper
-     lighter so hover states still read. Deep graphite: the canvas sits
-     just above black so the dual shadows carry all the depth. */
-  --black: #0a0b0d;
-  --bg: #15171b;
-  --bg-elevated: #15171b;
-  --surface: #15171b;
-  --surface-strong: #1a1c21;
-  --glass: #15171b;
-  --glass-strong: #1b1d22;
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-highlight: rgba(255, 255, 255, 0.1);
-  --glass-hover: #1c1e23;
-  --bubble: #1e2026;
+     background — that is the neumorphic rule, and it is what lets
+     the dual shadow do the work; --glass-strong / --glass-hover are
+     only a whisper lighter so hover states still register. */
+  --black: #050607;
+  --bg: #0b0c0e;
+  --bg-elevated: #0b0c0e;
+  --surface: #0b0c0e;
+  --surface-strong: #111318;
+  --glass: #0b0c0e;
+  --glass-strong: #14171d;
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-hover: #14171d;
+  --bubble: #15181e;
 
-  /* Frosted glass (kept for reduced-motion fallbacks; surfaces are
-     opaque in this theme so the blur is mostly a no-op). */
-  --glass-blur: 10px;
-  --glass-blur-panel: 12px;
-  --glass-blur-light: 6px;
+  /* Frosted glass. Kept at a low blur for the reduced-transparency
+     fallbacks; surfaces stay opaque in this theme, so the blur is
+     mostly a no-op on chrome that opts out of it. */
+  --glass-blur: 8px;
+  --glass-blur-panel: 10px;
+  --glass-blur-light: 5px;
   --glass-saturate: 1;
 
-  /* Text — soft white hierarchy */
-  --text: #e8eaee;
-  --text-secondary: rgba(232, 234, 238, 0.72);
-  --muted: rgba(232, 234, 238, 0.5);
+  /* Text — near-solid white so the ink carries the contrast the
+     darker canvas no longer can. */
+  --text: #f4f6f8;
+  --text-secondary: rgba(244, 246, 248, 0.74);
+  --muted: rgba(244, 246, 248, 0.46);
 
   /* Accent — user-selectable. appearance.js rewrites these. */
-  --accent: #e8eaee;
+  --accent: #f4f6f8;
   --accent-2: #8a8f9a;
-  --accent-soft: rgba(232, 234, 238, 0.12);
-  --accent-glow: rgba(232, 234, 238, 0.26);
-  --accent-contrast: #1b1d22;
+  --accent-soft: rgba(244, 246, 248, 0.13);
+  --accent-glow: rgba(244, 246, 248, 0.22);
+  --accent-contrast: #14171d;
 
   /* Gradients — derived from the user's gradient choice */
   --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
   --gradient-text: linear-gradient(120deg, var(--text) 0%, var(--accent) 45%, var(--accent-2) 100%);
+  /* Ambient mesh: same two ellipses as before, but weaker — at a
+     darker canvas the old alphens were invisible anyway. */
   --gradient-mesh:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(232, 234, 238, 0.055) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(138, 143, 154, 0.05) 0%, transparent 50%);
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(244, 246, 248, 0.035) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(138, 143, 154, 0.032) 0%, transparent 50%);
 
   /* Functional semantics — intentionally not accent-driven */
-  --ok: #5fd6a2;
-  --warn: #e8c15a;
-  --error: #f08080;
-  --error-soft: rgba(240, 128, 128, 0.14);
+  --ok: #6fd7a6;
+  --warn: #e6c269;
+  --error: #ef8686;
+  --error-soft: rgba(239, 134, 134, 0.14);
   --accent-error: var(--error); /* legacy alias */
   --accent-live: var(--ok);     /* legacy alias */
 
-  /* Typography */
+  /* Typography — two families, not three. The editorial serif is
+     retired; it is what made the plastic feel decorative. */
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'DM Sans', system-ui, sans-serif;
-  --font-editorial: 'Instrument Serif', Georgia, serif;
+  --font-editorial: 'Space Grotesk', system-ui, sans-serif;
 
-  /* Display scale — "type as hero" */
-  --type-hero: clamp(2rem, 4.5vw, 2.9rem);
-  --type-display: clamp(1.5rem, 3vw, 2rem);
+  /* Display scale — was "type as hero". Tightened: a launcher-era
+     restraint, and the plastic reads better without a headline. */
+  --type-hero: clamp(1.5rem, 3.2vw, 2.1rem);
+  --type-display: clamp(1.25rem, 2.2vw, 1.6rem);
 
-  /* Spacing & shape — generous radii sell the extruded look */
-  --radius-xs: 10px;
-  --radius-sm: 14px;
-  --radius-md: 20px;
-  --radius-lg: 30px;
-  --radius-xl: 38px;
+  /* Spacing & shape — the extrusion needs a NARROW radius spread to
+     read as one object rather than a set of unrelated pills. */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
 
   /* Desktop window surface — user-configurable granular settings
      (Settings → Appearance). Overridden inline per user by
@@ -84,38 +126,47 @@
 
   /* Light & elevation — one top-left light source. Raised surfaces
      pair a dark bottom-right shadow with a faint light top-left
-     sheen; inset surfaces reverse the pair for a pressed look. */
-  --highlight-top: rgba(255, 255, 255, 0.05);
+     sheen; inset surfaces reverse the pair for a pressed look.
+     The light side is lifted (0.05 → 0.07) because the canvas is
+     now much darker and needs more catch-light to separate. */
+  --highlight-top: rgba(255, 255, 255, 0.07);
 
-  --shadow-sm: 3px 3px 8px rgba(0, 0, 0, 0.45), -3px -3px 8px rgba(255, 255, 255, 0.06);
-  --shadow-glass: 5px 5px 14px rgba(0, 0, 0, 0.48), -5px -5px 14px rgba(255, 255, 255, 0.065);
-  --shadow-float: 9px 9px 24px rgba(0, 0, 0, 0.52), -9px -9px 24px rgba(255, 255, 255, 0.06);
-  --shadow-glow: 0 0 26px var(--accent-glow);
+  /* Shadows. The offsets and blur radii are pulled in ~25% from the
+     previous version: at this canvas the old values turned into a
+     wide grey halo instead of a crisp extrusion. Offsets stay equal
+     on both axes — unequal offsets are the fastest way to make
+     neumorphism look accidental. */
+  --shadow-sm: 2px 2px 6px rgba(0, 0, 0, 0.42), -2px -2px 6px rgba(255, 255, 255, 0.05);
+  --shadow-glass: 4px 4px 12px rgba(0, 0, 0, 0.44), -4px -4px 12px rgba(255, 255, 255, 0.055);
+  --shadow-float: 7px 7px 18px rgba(0, 0, 0, 0.5), -7px -7px 18px rgba(255, 255, 255, 0.055);
+  --shadow-glow: 0 0 22px var(--accent-glow);
   /* Extra neumorphic tokens used by this theme's components.css/app.css. */
-  --shadow-raise: 6px 6px 16px rgba(0, 0, 0, 0.5), -6px -6px 16px rgba(255, 255, 255, 0.06);
-  --shadow-raise-sm: 4px 4px 10px rgba(0, 0, 0, 0.46), -4px -4px 10px rgba(255, 255, 255, 0.06);
-  --shadow-inset: inset 3px 3px 7px rgba(0, 0, 0, 0.52), inset -3px -3px 7px rgba(255, 255, 255, 0.055);
-  --shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.52), inset -2px -2px 4px rgba(255, 255, 255, 0.05);
+  --shadow-raise: 5px 5px 13px rgba(0, 0, 0, 0.46), -5px -5px 13px rgba(255, 255, 255, 0.06);
+  --shadow-raise-sm: 3px 3px 8px rgba(0, 0, 0, 0.42), -3px -3px 8px rgba(255, 255, 255, 0.055);
+  --shadow-inset: inset 2px 2px 5px rgba(0, 0, 0, 0.46), inset -2px -2px 5px rgba(255, 255, 255, 0.05);
+  --shadow-inset-sm: inset 1.5px 1.5px 3px rgba(0, 0, 0, 0.44), inset -1.5px -1.5px 3px rgba(255, 255, 255, 0.045);
 
-  /* Motion — restrained by design */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
-  --ease-cinematic: cubic-bezier(0.65, 0, 0.15, 1);
-  --duration-fast: 0.18s;
-  --duration-normal: 0.35s;
-  --duration-slow: 0.55s;
-  --reveal-duration: 0.7s;
-  --reveal-stagger: 60ms;
+  /* Motion — one curve, no overshoot, faster. The 1.4 spring was
+     the most obviously dated part of the theme. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  --ease-cinematic: cubic-bezier(0.3, 0, 0, 1);
+  --duration-fast: 0.13s;
+  --duration-normal: 0.22s;
+  --duration-slow: 0.34s;
+  --reveal-duration: 0.4s;
+  --reveal-stagger: 40ms;
 
-  /* Compose dock (used by text input + chrome-bottom layout) */
+  /* Compose dock */
   --compose-bar-size: 84px;
   --compose-dock-height: 52px;
   --compose-stack-height: calc(
     var(--compose-bar-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
   );
 
-  /* HUD layout */
-  --hud-bar-height: 44px;
+  /* HUD layout — a 44px bar on a near-black canvas is mostly empty;
+     40px is the same rhythm in less space. */
+  --hud-bar-height: 40px;
   --hud-header-pad: max(10px, env(safe-area-inset-top));
   --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
 

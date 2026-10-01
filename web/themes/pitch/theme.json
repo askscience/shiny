@@ -1,0 +1,27 @@
+{
+  "name": "pitch",
+  "label": "Pitch",
+  "version": "1.0.0",
+  "author": "Shiny",
+  "modes": ["dark"],
+  "app": "app.css",
+  "defaultAccent": "#e8eaed",
+  "defaultGradient": "mono",
+  "accents": [
+    { "id": "chalk",   "label": "Chalk",   "value": "#e8eaed" },
+    { "id": "silver",  "label": "Silver",  "value": "#9ca3af" },
+    { "id": "signal",  "label": "Signal",  "value": "#ff5f5f" },
+    { "id": "ember",   "label": "Ember",   "value": "#f59e0b" },
+    { "id": "lime",    "label": "Lime",    "value": "#a3e635" },
+    { "id": "mint",    "label": "Mint",    "value": "#34d399" },
+    { "id": "azure",   "label": "Azure",   "value": "#3b82f6" },
+    { "id": "violet",  "label": "Violet",  "value": "#8b5cf6" }
+  ],
+  "gradients": [
+    { "id": "mono",   "label": "Mono",   "angle": 135, "stops": ["#e8eaed", "#6b7078"] },
+    { "id": "ice",    "label": "Ice",    "angle": 135, "stops": ["#e0f2fe", "#7dd3fc"] },
+    { "id": "mint",   "label": "Mint",   "angle": 135, "stops": ["#d1fae5", "#34d399"] },
+    { "id": "ember",  "label": "Ember",  "angle": 135, "stops": ["#fed7aa", "#f97316"] },
+    { "id": "violet", "label": "Violet", "angle": 135, "stops": ["#e9d5ff", "#a855f7"] }
+  ]
+}

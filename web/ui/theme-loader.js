@@ -18,7 +18,7 @@ const THEMES_KEY = 'ui.theme.list';
  * bootstrap each page runs (see the inline script in index/settings/plugins
  * .html), which cannot import this module — keep the two in step.
  */
-const DEFAULT_THEME = 'neumorphic';
+const DEFAULT_THEME = 'pitch';
 const FALLBACK_THEME = DEFAULT_THEME;
 
 let activeTheme = FALLBACK_THEME;
