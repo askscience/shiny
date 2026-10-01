@@ -176,10 +176,11 @@
 .ui-progress-bar { background: var(--accent); }
 
 .ui-empty { color: var(--muted); }
+/* A bare glyph, not a ringed plate — an empty menu has no chrome. */
 .ui-empty-icon {
   color: var(--muted);
   background: transparent;
-  border-color: var(--glass-border);
+  border: none;
   border-radius: var(--radius-md);
   box-shadow: none;
 }

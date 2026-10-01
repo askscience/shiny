@@ -439,10 +439,23 @@
 .ui-hud-menu-check,
 .ctx-menu-check { color: var(--accent) !important; }
 
-/* The three host panels (sound / network / bluetooth) plus the power
-   menu share one grammar: a flat section head, a flat row per device,
-   accent only on the active one. */
-.network-window,
+/* The three host popovers (sound / network / bluetooth) plus the power
+   menu share one grammar: the popover is the ONLY surface. Everything
+   inside it is bare — no card fills, no row outlines, no header rules.
+   Grouping is carried by space and a small uppercase label, the way a
+   launcher's quick-settings sheet does it.
+
+   The network *panel* is a full window whose tile already draws the
+   frame, so it contributes no fill or border of its own either. */
+.network-window {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* One flat surface per popover — the popup's own hairline (set above)
+   is the single boundary the theme allows. */
+.network-menu,
 .audio-menu,
 .bluetooth-menu,
 .power-menu {
@@ -450,16 +463,22 @@
   border-color: var(--glass-border) !important;
   border-radius: var(--radius-md) !important;
 }
+
+/* Nested surfaces stripped: each section wrapper and each device row is
+   transparent with no rule. */
 .network-card,
 .audio-card,
-.bluetooth-card {
-  background: var(--surface) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
+.bluetooth-card,
+.network-card .ui-list-item,
+.audio-devices .ui-list-item,
+.bluetooth-card .ui-list-item {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
 }
-.network-card:hover,
-.audio-card:hover,
-.bluetooth-card:hover { border-color: var(--glass-highlight) !important; }
+.network-card .ui-list-item:hover,
+.audio-devices .ui-list-item:hover,
+.bluetooth-card .ui-list-item:hover { background: var(--glass-hover) !important; }
 .network-section-title,
 .audio-section-title,
 .bluetooth-section-title {
@@ -468,9 +487,14 @@
   text-transform: uppercase;
   color: var(--muted) !important;
 }
+/* Head and section rules are gone; the label alone separates groups. */
+.network-head,
+.audio-head,
+.bluetooth-head,
+.power-menu-head,
 .network-section-head,
 .audio-section-head,
-.bluetooth-section-head { border-bottom: 1px solid var(--glass-border) !important; }
+.bluetooth-section-head { border-bottom: none !important; }
 .network-head-title,
 .audio-head-title,
 .bluetooth-head-title {
@@ -501,7 +525,6 @@
 .bluetooth-idle { color: var(--muted) !important; }
 .network-error { color: var(--error) !important; }
 .bluetooth-battery { color: var(--muted) !important; font-variant-numeric: tabular-nums; }
-.power-menu-head { border-bottom: 1px solid var(--glass-border) !important; }
 .power-menu-body { gap: 2px !important; }
 .power-confirm-actions .ui-btn--danger { color: var(--error) !important; }
 
@@ -2249,11 +2272,14 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 .studio-synthme-foot { border-top: 1px solid var(--glass-border) !important; }
 
 /* ── Settings window ────────────────────────────────────────────
-   Nav rail + flat sections. Active section is an accent left bar. */
+   One continuous surface. The nav is not a separate rail and the
+   panels are not cards: content sits directly on the window fill and
+   is separated by space and an uppercase label, not by borders. Only
+   interactive state (the active nav item, a hovered row) earns a fill. */
 .settings-window { background: var(--bg-elevated) !important; }
 .settings-nav {
-  background: var(--bg) !important;
-  border-right: 1px solid var(--glass-border) !important;
+  background: transparent !important;
+  border-right: none !important;
 }
 .settings-nav-item {
   background: transparent !important;
@@ -2274,22 +2300,29 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 .settings-panels { background: var(--bg-elevated) !important; }
 .settings-panel.is-active { display: flex; }
 .settings-panel-head {
-  border-bottom: 1px solid var(--glass-border) !important;
-  padding-bottom: 10px !important;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
 }
+/* The panel mark is bare accent ink — no ring, no plate. */
 .settings-panel-icon {
   font-family: var(--font-body) !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
-  color: var(--text) !important;
+  color: var(--accent) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 .settings-section {
-  background: var(--surface) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
 }
 .settings-subhead {
+  margin-top: 22px !important;
+  padding-top: 0 !important;
+  border-top: none !important;
   font-size: 10.5px !important;
   letter-spacing: 0.14em !important;
   text-transform: uppercase;
@@ -2298,13 +2331,15 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 .settings-label { color: var(--text-secondary) !important; font-weight: 500 !important; }
 .settings-hint { color: var(--muted) !important; }
 .settings-value { color: var(--text) !important; }
-.settings-field .ui-toggle-row {
+.settings-field .ui-toggle-row,
+.settings-panel .ui-toggle-row {
   background: transparent !important;
-  border: 1px solid transparent !important;
+  border: none !important;
   border-radius: var(--radius-xs) !important;
   box-shadow: none !important;
 }
-.settings-field .ui-toggle-row:hover { background: var(--glass-hover) !important; }
+.settings-field .ui-toggle-row:hover,
+.settings-panel .ui-toggle-row:hover { background: var(--glass-hover) !important; }
 .swatch {
   border-color: var(--glass-border) !important;
   box-shadow: none !important;
@@ -2326,13 +2361,13 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 .bg-preset-label { color: var(--muted) !important; font-size: 10.5px !important; }
 .whisper-model-row {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
 }
 .remote-link {
   background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
+  border: none !important;
   border-radius: var(--radius-xs) !important;
   color: var(--accent) !important;
   font-family: ui-monospace, monospace !important;
