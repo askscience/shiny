@@ -95,6 +95,14 @@
   cursor: grab;
 }
 
+/* Inside a merged bar the plugin's own controls keep a sensible cursor; only
+   the empty space in the bar shows the grab handle. */
+#tile-grid.tile-grid--windows .tile-header--merged input,
+#tile-grid.tile-grid--windows .tile-header--merged textarea { cursor: text; }
+#tile-grid.tile-grid--windows .tile-header--merged button,
+#tile-grid.tile-grid--windows .tile-header--merged a,
+#tile-grid.tile-grid--windows .tile-header--merged [role="button"] { cursor: pointer; }
+
 /* Fullscreen in Windows layout: fill the desktop area without covering the
    top HUD (the grid itself already sits below it). */
 #tile-grid.tile-grid--windows .tile--full {
@@ -137,17 +145,18 @@
 
 /* ── Window chrome (title bar + controls) ─────────────────────
    Every plugin window gets a slim title bar: close + fullscreen controls on
-   the left, the plugin name centered. In Windows layout the bar is also the
-   drag handle; in tiling layout it is decorative but keeps the controls.
+   the left and, when the window has no toolbar of its own, the plugin name
+   centered. A window that nominates a top bar (`data-window-bar`) merges it
+   into this row instead (see `.tile-header--merged`). In Windows layout the
+   bar is also the drag handle; in tiling layout it keeps the controls.
    `--tile-header-height` is user-configurable (Settings → Appearance). */
 .tile-header {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
-  height: var(--tile-header-height, 36px);
+  min-height: var(--tile-header-height, 36px);
   padding: 0 8px;
-  border-bottom: 1px solid var(--glass-border);
   background: var(--glass);
   user-select: none;
   touch-action: none;
@@ -180,6 +189,38 @@
 .tile-header-spacer {
   flex: none;
   width: 56px;
+}
+
+/* Merged title bar — the window controls and the plugin's own top bar share a
+   single row (no title text), so a window with tools spends one row of chrome
+   instead of two. The bar keeps its own padding/background; its bottom border
+   moves to this row so it also runs under the controls. */
+.tile-header--merged {
+  padding: 0;
+  gap: 0;
+  /* The bar's own bottom border becomes the row's, so it also runs under the
+     controls instead of stopping at the bar's left edge. */
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tile-header--merged > .tile-header-controls {
+  padding: 0 6px 0 8px;
+}
+
+.tile-header--merged > [data-window-bar] {
+  flex: 1;
+  min-width: 0;
+  /* The controls already supply the left inset. */
+  padding-left: 0;
+  border-bottom: none;
+}
+
+/* The header is `user-select: none`; merged bars host real inputs (document
+   titles), which must stay selectable. */
+.tile-header--merged input,
+.tile-header--merged textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .tile-header-btn {
@@ -748,7 +789,10 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   display: block;
 }
 
-.radio-hero-art--empty img { display: none; }
+/* No artwork yet (idle, or a station without one): drop the placeholder
+   square entirely instead of showing a brand play icon that repeats the
+   transport below. */
+.radio-hero-art--empty { display: none; }
 
 .radio-hero-text {
   flex: 1;
@@ -997,8 +1041,8 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 
 /* ─────────────────────────────────────────────────────────────
    YouTube plugin window — flat square surface, thumbnail-driven.
-   Ambient thumbnail glow behind everything; hero (idle brand mark or the
-   embedded player) + search bar + 16:9 thumbnail grid below.
+   Ambient thumbnail glow behind everything; hero (the embedded player +
+   info, only while a video plays) + search bar + 16:9 thumbnail grid below.
    ───────────────────────────────────────────────────────────── */
 .yt-tile {
   padding: 0;
@@ -1020,42 +1064,12 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   background: var(--glass);
 }
 
-.yt-hero-idle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.yt-hero-mark {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border: none;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-}
-
 .yt-hero-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.yt-hero-title {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .yt-hero-sub {
@@ -2951,14 +2965,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   padding: 10px 14px;
   border-bottom: 1px solid var(--glass-border);
   background: var(--glass);
-}
-
-.calculator-title {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
 }
 
 .calculator-bar-spacer { flex: 1; }
@@ -5612,6 +5618,10 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   flex-wrap: wrap;
 }
 
+/* Pushes a bar's action buttons to the right once the duplicated window
+   title has been dropped from the bar. */
+.tile-bar-spacer { flex: 1; }
+
 /* In-bar menu buttons (icon + chevron/label) match Studio's 32px height. */
 .word-doc-btn, .calc-sheet-btn, .impress-deck-btn, .image-menu-btn, .mail-account-btn,
 .pdf-doc-btn, .studio-menu-btn {
@@ -6427,15 +6437,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
-}
-.files-app-title {
-  flex: 1;
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text);
 }
 .files-icon-btn {
   flex: none;

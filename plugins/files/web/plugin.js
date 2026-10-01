@@ -424,11 +424,10 @@ function buildSidebar() {
   const head = document.createElement('div');
   head.className = 'files-sidebar-head';
   searchBtn = iconBtn('ui/search', 'Search', toggleSearch);
-  const title = document.createElement('span');
-  title.className = 'files-app-title';
-  title.textContent = 'Files';
+  const spacer = document.createElement('span');
+  spacer.className = 'tile-bar-spacer';
   const menuBtn = iconBtn('ui/list', 'Menu', (e) => openAppMenu(e.currentTarget));
-  head.append(searchBtn, title, menuBtn);
+  head.append(searchBtn, spacer, menuBtn);
   sidebarEl.appendChild(head);
 
   placesEl = document.createElement('nav');

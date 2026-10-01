@@ -4250,6 +4250,7 @@ export function mountStudioTile() {
 
   /* ── header / transport ── */
   barEl = h('div', 'studio-bar');
+  barEl.dataset.windowBar = '';
 
   arrToggleBtn = h('button', 'studio-transport studio-transport--on');
   arrToggleBtn.type = 'button';

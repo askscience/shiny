@@ -368,15 +368,27 @@ function ensureWindowChrome(el, name) {
 
   controls.append(closeBtn, fullBtn);
 
-  const title = document.createElement('span');
-  title.className = 'tile-header-title';
-  title.textContent = pluginLabel(name);
+  // A plugin window can nominate its top bar (`data-window-bar`) to merge with
+  // the window controls, so the window shows one slim row — close, fullscreen,
+  // then the plugin's own tools — instead of a title bar stacked above the
+  // plugin toolbar. Windows whose top row is content rather than tools (map,
+  // browser, files, an idle YouTube player) keep the centered title.
+  const pluginBar = el.querySelector(':scope > [data-window-bar]');
+  if (pluginBar) {
+    header.classList.add('tile-header--merged');
+    header.append(controls, pluginBar);
+  } else {
+    const title = document.createElement('span');
+    title.className = 'tile-header-title';
+    title.textContent = pluginLabel(name);
 
-  const spacer = document.createElement('span');
-  spacer.className = 'tile-header-spacer';
-  spacer.setAttribute('aria-hidden', 'true');
+    const spacer = document.createElement('span');
+    spacer.className = 'tile-header-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
 
-  header.append(controls, title, spacer);
+    header.append(controls, title, spacer);
+  }
+
   el.prepend(header);
 
   // Bottom-right resize grip (visible in Windows layout mode only).

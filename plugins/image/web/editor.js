@@ -258,18 +258,16 @@ export function buildWorkspace() {
 
   /* Application bar: one menu button (core context menu) + document title. */
   const appbar = el('div', 'image-appbar');
+  appbar.dataset.windowBar = '';
   const menuBtn = iconButton('ui/list', 'Menu', (e) => openMainMenu(e.currentTarget));
   menuBtn.classList.add('image-logo');
-  const appTitle = el('span', 'image-appbar-title', 'Image');
+  const appTitle = el('span', 'image-appbar-title');
   S.els.appTitle = appTitle;
   const appRight = el('div', 'image-appbar-right');
   const optsToggle = iconButton('ui/properties', 'Toggle panels', () => {
     tile.classList.toggle('is-dock-hidden');
   });
-  const fs = iconButton('ui/expand', 'Full screen', () => {
-    window.dispatchEvent(new CustomEvent('plugin:fullscreen', { detail: { name: PLUGIN_NAME } }));
-  });
-  appRight.append(optsToggle, fs);
+  appRight.append(optsToggle);
   appbar.append(menuBtn, appTitle, appRight);
   tile.appendChild(appbar);
 
@@ -1315,7 +1313,7 @@ function drawRuler(ctx, w, h, dir, line, text) {
 export function updateStatus() {
   const tool = findTool(S.tool);
   if (S.els.statusTool) S.els.statusTool.textContent = tool ? tool.label : '';
-  if (S.els.appTitle) S.els.appTitle.textContent = S.doc ? S.doc.title : 'Image';
+  if (S.els.appTitle) S.els.appTitle.textContent = S.doc ? S.doc.title : '';
   if (S.els.statusZoom) S.els.statusZoom.textContent = `${Math.round(S.zoom * 100)}%`;
   if (S.els.statusSize) {
     S.els.statusSize.textContent = S.doc

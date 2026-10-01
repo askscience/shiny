@@ -1018,6 +1018,7 @@ export function mountMailTile() {
 
   /* Top bar: account menu + title + status dot */
   const bar = h('div', 'mail-bar');
+  bar.dataset.windowBar = '';
   barAccountBtn = document.createElement('button');
   barAccountBtn.type = 'button';
   barAccountBtn.className = 'mail-account-btn';

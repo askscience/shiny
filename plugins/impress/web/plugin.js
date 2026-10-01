@@ -910,6 +910,7 @@ export function mountImpressTile() {
 
   /* Top bar: deck menu + title + theme + save indicator */
   const bar = h('div', 'impress-bar');
+  bar.dataset.windowBar = '';
 
   deckMenuBtn = document.createElement('button');
   deckMenuBtn.type = 'button';

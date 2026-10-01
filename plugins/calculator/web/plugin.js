@@ -293,12 +293,11 @@ export function mountCalculatorTile() {
   tileEl.className = 'tile calculator-tile';
   tileEl.dataset.plugin = CALCULATOR_PLUGIN;
 
-  /* Top bar: title + sci/history/clear controls */
+  /* Top bar: sci/history/clear controls (the window title bar already names
+     the plugin, so no title label here). */
   const bar = document.createElement('div');
   bar.className = 'calculator-bar';
-  const title = document.createElement('div');
-  title.className = 'calculator-title';
-  title.textContent = 'Calculator';
+  bar.dataset.windowBar = '';
   const spacer = document.createElement('div');
   spacer.className = 'calculator-bar-spacer';
 
@@ -312,7 +311,7 @@ export function mountCalculatorTile() {
   historyToggleBtn = barBtn('ui/list', 'History', toggleHistory);
   sciToggleBtn = barBtn('ui/scientific', 'Scientific', toggleSci);
   const clearBtn = barBtn('ui/trash', 'Clear history', () => void clearHistory());
-  bar.append(title, spacer, historyToggleBtn, sciToggleBtn, clearBtn);
+  bar.append(spacer, historyToggleBtn, sciToggleBtn, clearBtn);
   tileEl.appendChild(bar);
 
   /* Display */

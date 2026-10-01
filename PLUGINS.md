@@ -1331,6 +1331,14 @@ The top bar follows one convention (Studio sets the standard):
   `studio-save-dot`): muted when saved, accent + glow (`.is-active`) while there
   are unsaved changes. Transient feedback (Studio's "Rendering…") may sit to its
   left, but the persistent saved/unsaved indicator is the dot.
+- **Merged into the window controls.** Mark a window's top bar with
+  `bar.dataset.windowBar = ''` (the `data-window-bar` attribute) and the host
+  merges it with the window's close/fullscreen controls into a single row — no
+  separate title bar, so the window spends one row of chrome instead of two.
+  The bar then supplies the row's background and the host adds the bottom
+  border. Windows whose top row is content rather than tools (the map, the
+  browser, files, an idle YouTube player) omit the marker and keep the centered
+  title bar.
 
 #### A window must not cache server-owned addresses
 

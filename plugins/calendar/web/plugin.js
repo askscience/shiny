@@ -450,6 +450,7 @@ export function mountCalendarTile() {
   /* Top bar */
   barEl = document.createElement('div');
   barEl.className = 'calendar-bar';
+  barEl.dataset.windowBar = '';
 
   const prevBtn = button({ icon: 'ui/chevron-left', variant: 'ghost', size: 'sm', onClick: () => changeMonth(-1) });
   prevBtn.classList.add('ui-btn--icon', 'calendar-nav-btn');

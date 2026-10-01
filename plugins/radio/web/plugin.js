@@ -274,7 +274,8 @@ function equalizer() {
 function heroTitle() {
   if (nowPlaying?.title) return nowPlaying.title;
   if (current) return current.name;
-  return 'Radio';
+  // Idle: the window title bar already says "Radio" — don't repeat it here.
+  return '';
 }
 
 function heroSubtitle() {
@@ -323,11 +324,10 @@ function renderHero() {
     img.onerror = () => {
       artEl.classList.add('radio-hero-art--empty');
       artEl.innerHTML = '';
-      artEl.appendChild(icon('ui/play', { size: 30 }));
     };
     artEl.appendChild(img);
   } else {
-    artEl.appendChild(icon('ui/play', { size: 30 }));
+    artEl.innerHTML = '';
   }
 
   // Ambient glow mirrors the artwork (Tier 1), lightly blurred; with no
@@ -493,6 +493,7 @@ export function mountRadioTile() {
   /* Hero */
   const hero = document.createElement('div');
   hero.className = 'radio-hero';
+  hero.dataset.windowBar = '';
 
   artEl = document.createElement('div');
   artEl.className = 'radio-hero-art radio-hero-art--empty';

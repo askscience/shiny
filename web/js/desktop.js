@@ -663,6 +663,12 @@ const WIN_MIN_W = 280;
 const WIN_MIN_H = 200;
 const WIN_TITLE_H = 36; // keep in sync with --tile-header-height in tiles.css
 
+/* A merged title bar hosts the plugin's own toolbar, so its controls must not
+   start a window drag: only empty space in the bar is a drag handle. */
+const DRAG_IGNORE = 'button, a, input, textarea, select, label, '
+  + '[contenteditable], [role="button"], [role="textbox"], [role="slider"], '
+  + '[role="tab"], [role="menu"], .ui-btn';
+
 function clampNum(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
@@ -839,7 +845,7 @@ function wireWindowInteractions(el, name) {
 
   if (header) {
     header.addEventListener('pointerdown', (e) => {
-      if (locked() || !windowsMode() || e.button !== 0 || e.target.closest('button')) return;
+      if (locked() || !windowsMode() || e.button !== 0 || e.target.closest(DRAG_IGNORE)) return;
       e.preventDefault();
       startWindowDrag(e, el, name, header);
     });

@@ -2,8 +2,9 @@
  * youtube.js — the YouTube plugin's window.
  *
  * Radio-style flat surface: ambient thumbnail glow behind everything, a hero
- * (idle brand mark, or the embedded player while a video plays), a search bar
- * (in-tile, works with the keyboard plugin) and a 16:9 thumbnail grid below.
+ * (the embedded player + playing info, shown only while a video plays), a
+ * search bar (in-tile, works with the keyboard plugin) and a 16:9 thumbnail
+ * grid below.
  *
  * The grid has three sources, all rendered the same way:
  *   • the in-tile search      → GET  /api/youtube/search
@@ -28,7 +29,6 @@ let frameEl = null;      // embed iframe
 let infoEl = null;       // playing info row (title + channel + back)
 let infoTitleEl = null;
 let infoSubEl = null;
-let idleEl = null;       // idle hero view
 let gridEl = null;
 let gridLabelEl = null;  // "Up next" / results caption above the grid
 let categoriesEl = null; // idle-homepage category chips
@@ -62,7 +62,10 @@ function renderHero() {
   if (!tileEl) return;
   const playing = !!current;
 
-  idleEl?.classList.toggle('hidden', playing);
+  // The hero only exists while a video plays (player + info). With nothing
+  // playing there is no hero at all — the search bar sits directly under the
+  // window title bar, and the brand mark/name are not repeated.
+  heroEl?.classList.toggle('hidden', !playing);
   playerWrapEl?.classList.toggle('hidden', !playing);
   infoEl?.classList.toggle('hidden', !playing);
   frameEl?.classList.toggle('hidden', !playing);
@@ -452,24 +455,7 @@ export function mountYoutubeTile() {
 
   /* Hero */
   heroEl = document.createElement('div');
-  heroEl.className = 'yt-hero';
-
-  // Idle view: brand mark + title.
-  idleEl = document.createElement('div');
-  idleEl.className = 'yt-hero-idle';
-  const mark = document.createElement('span');
-  mark.className = 'yt-hero-mark';
-  void setIcon(mark, 'ui/youtube', { size: 30 });
-  const idleText = document.createElement('div');
-  idleText.className = 'yt-hero-text';
-  const h1 = document.createElement('div');
-  h1.className = 'yt-hero-title';
-  h1.textContent = 'YouTube';
-  const sub = document.createElement('div');
-  sub.className = 'yt-hero-sub';
-  sub.textContent = 'Search videos — or ask the AI';
-  idleText.append(h1, sub);
-  idleEl.append(mark, idleText);
+  heroEl.className = 'yt-hero hidden';
 
   // Player + info row.
   playerWrapEl = document.createElement('div');
@@ -500,7 +486,7 @@ export function mountYoutubeTile() {
   backBtn.addEventListener('click', reset);
   infoEl.append(infoText, backBtn);
 
-  heroEl.append(idleEl, playerWrapEl, infoEl);
+  heroEl.append(playerWrapEl, infoEl);
   tileEl.appendChild(heroEl);
 
   /* Search */
@@ -565,7 +551,6 @@ export function unmountYoutubeTile() {
   infoEl = null;
   infoTitleEl = null;
   infoSubEl = null;
-  idleEl = null;
   gridEl = null;
   gridLabelEl = null;
   categoriesEl = null;

@@ -1504,6 +1504,7 @@ export function mountPdfTile() {
   /* Top bar */
   const bar = document.createElement('div');
   bar.className = 'pdf-bar';
+  bar.dataset.windowBar = '';
 
   docMenuBtn = document.createElement('button');
   docMenuBtn.type = 'button';

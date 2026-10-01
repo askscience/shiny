@@ -155,9 +155,11 @@ function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
 }
 
+/** Show the running shell in the bar. The window title bar already names the
+ *  plugin, so this no longer repeats "Terminal". */
 function updateTitle() {
   if (!titleEl) return;
-  titleEl.textContent = shell.shell ? `Terminal — ${shell.shell.replace('/bin/', '')}` : 'Terminal';
+  titleEl.textContent = shell.shell ? shell.shell.replace('/bin/', '') : '';
 }
 
 /* ── tile DOM ─────────────────────────────────────────────────── */
@@ -169,10 +171,11 @@ function buildTile() {
 
   const bar = document.createElement('div');
   bar.className = 'terminal-bar';
+  bar.dataset.windowBar = '';
 
   titleEl = document.createElement('span');
   titleEl.className = 'terminal-title';
-  titleEl.textContent = 'Terminal';
+  titleEl.textContent = '';
 
   const mkBtn = (iconName, title, onClick, danger = false) => {
     const el = button({ icon: iconName, variant: 'ghost', onClick });
@@ -186,7 +189,7 @@ function buildTile() {
   const clearBtn = mkBtn('ui/trash', 'Clear scrollback', () => term?.clear());
   const killBtn = mkBtn('ui/close', 'Kill session', () => void killSession(), true);
 
-  // Single top bar (Word/Calc convention): title + every action button.
+  // Single top bar (Word/Calc convention): shell name + every action button.
   bar.append(titleEl, newBtn, clearBtn, killBtn);
 
   hostEl = document.createElement('div');

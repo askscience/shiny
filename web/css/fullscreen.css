@@ -322,6 +322,13 @@ body.fs-active .tile-resize { display: none; }
    rest of the chrome. The window keeps the whole screen. */
 body.fs-active #tile-grid .tile--full > .tile-header { display: none; }
 
+/* A merged bar IS the plugin's own toolbar: keep it in fullscreen and hand
+   only the window controls to the top-edge bubble. */
+body.fs-active #tile-grid .tile--full > .tile-header--merged { display: flex; }
+body.fs-active #tile-grid .tile--full > .tile-header--merged > .tile-header-controls { display: none; }
+/* Controls are gone here, so give the bar back its normal left inset. */
+body.fs-active #tile-grid .tile--full > .tile-header--merged > [data-window-bar] { padding-left: 10px; }
+
 /* ── Fullscreen text mode: a little more room for the thread ── */
 
 body.fullscreen-active .compose-conversation {

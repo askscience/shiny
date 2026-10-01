@@ -885,6 +885,7 @@ export function mountCalcTile() {
   /* Top bar: sheet menu + title + save indicator */
   const bar = document.createElement('div');
   bar.className = 'calc-bar';
+  bar.dataset.windowBar = '';
 
   sheetMenuBtn = document.createElement('button');
   sheetMenuBtn.type = 'button';

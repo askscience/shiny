@@ -409,6 +409,7 @@ export function mountWordTile() {
   /* Top bar: doc menu + title + save indicator */
   const bar = document.createElement('div');
   bar.className = 'word-bar';
+  bar.dataset.windowBar = '';
 
   docMenuBtn = document.createElement('button');
   docMenuBtn.type = 'button';
