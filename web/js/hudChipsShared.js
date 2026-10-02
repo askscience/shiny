@@ -1,6 +1,6 @@
 /**
  * hudChipsShared.js — pure helpers for the top-bar host status chips (sound,
- * network, Bluetooth). Each chip is a button made of an icon, a device label
+ * network, Bluetooth, battery). Each chip is a button made of an icon, a device label
  * and a numeric percentage; this module decides which of the two text parts
  * the user has chosen to show. Hiding both leaves an icon-only button.
  *

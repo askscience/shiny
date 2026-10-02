@@ -307,7 +307,7 @@ def write_index(out_root: Path) -> int:
     }
     usage = {
         "hud": "Status chips in the top bar and their menus (Wi-Fi, Ethernet, "
-               "Bluetooth, sound). Symbolic, follow the theme accent.",
+               "Bluetooth, sound, battery). Symbolic, follow the theme accent.",
         "ui": "Core UI and the Files plugin: windows, folders, file types, "
               "navigation. Folders are the only coloured glyphs.",
         "apps": "Default icon for each bundled plugin (`pluginIconEl`), shown in "

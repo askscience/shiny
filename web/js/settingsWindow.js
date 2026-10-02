@@ -10,6 +10,7 @@
  *   Browser    — default search engine, ad blocking, history
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
+ *   Power      — power mode, low-power AI, screen/keyboard backlight
  *   System     — remember workspace, log out
  *
  * Everything writes straight to the per-user preference store; there is no
@@ -44,7 +45,11 @@ import {
   getRemember, setRemember,
   getRemoteAllowTerminal, setRemoteAllowTerminal,
   getTouchBarEnabled, setTouchBarEnabled,
+  getPowerMode, setPowerMode, getAutoPowerSaver, setAutoPowerSaver,
+  getLowPowerAi, setLowPowerAi, getEffectivePowerMode,
+  getEffectiveSttEngine, getEffectiveTtsEngine, getPowerBatteryStatus,
 } from './preferences.js';
+import { POWER_MODES, powerModeLabel, powerModeHint, describeEngines } from './powerShared.js';
 import { TOUCHBAR_ACTIONS } from './touchbarShared.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from './display.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
@@ -70,6 +75,24 @@ const QWEN_SPEAKERS = [
 
 let tileEl = null;
 let cleanups = [];
+/** Section switcher of the mounted Settings window; lets other UI deep-link. */
+let selectSectionFn = null;
+let pendingSection = null;
+
+/**
+ * Ask the Settings window to show a section (e.g. the battery quick menu's
+ * "Power settings"). Safe before the window has mounted: the request is
+ * remembered and applied on mount.
+ */
+export function selectSettingsSection(id) {
+  if (!id) return;
+  if (selectSectionFn) {
+    selectSectionFn(id);
+    pendingSection = null;
+  } else {
+    pendingSection = id;
+  }
+}
 
 /* ── Small DOM helpers ──────────────────────────────────────── */
 
@@ -848,6 +871,133 @@ function buildVoice() {
   ];
 }
 
+/* ── Power ──────────────────────────────────────────────────── */
+
+function buildPower() {
+  const mode = select({
+    options: POWER_MODES.map((m) => ({ value: m, label: powerModeLabel(m) })),
+    onChange: (value) => {
+      setPowerMode(value);
+      refreshPowerSummary();
+    },
+  });
+  mode.select.value = getPowerMode();
+  const modeField = field('Power mode', mode);
+  const modeHint = el('p', 'settings-hint', powerModeHint(getPowerMode()));
+  modeField.appendChild(modeHint);
+
+  const auto = toggleRow({
+    label: 'Automatic Power Saver',
+    hint: 'In Balanced, switch to Power Saver when on battery or below 20%.',
+    checked: getAutoPowerSaver(),
+    onChange: (on) => {
+      setAutoPowerSaver(on);
+      refreshPowerSummary();
+    },
+  });
+
+  const lowAi = toggleRow({
+    label: 'Low-power AI',
+    hint: 'Let Power Saver use Vosk for speech recognition and Supertonic for replies '
+      + 'instead of faster-whisper and Qwen3-TTS.',
+    checked: getLowPowerAi(),
+    onChange: (on) => {
+      setLowPowerAi(on);
+      refreshPowerSummary();
+    },
+  });
+
+  const summary = el('p', 'settings-hint');
+
+  function refreshPowerSummary() {
+    const status = getPowerBatteryStatus();
+    const battery = status && status.available
+      ? [
+        status.percent != null ? `${status.percent}%` : 'Battery',
+        status.state || null,
+        status.ac_online === true ? 'plugged in' : null,
+      ].filter(Boolean).join(' · ')
+      : 'No battery on this machine';
+    const effective = getEffectivePowerMode();
+    const engines = describeEngines(getEffectiveSttEngine(), getEffectiveTtsEngine());
+    modeHint.textContent = powerModeHint(getPowerMode());
+    summary.textContent = effective === 'saver'
+      ? `${battery}. Power Saver is in force — ${engines}.`
+      : `${battery}. ${powerModeLabel(effective)} — full-quality AI (${engines}).`;
+  }
+  refreshPowerSummary();
+  on(window, 'power:settings', refreshPowerSummary);
+  on(window, 'battery:changed', refreshPowerSummary);
+
+  return [
+    summary,
+    modeField,
+    auto,
+    lowAi,
+    heading('Display'),
+    backlightField(
+      'Screen brightness',
+      '/api/screen/brightness',
+      'This machine does not expose a writable panel backlight to the app.',
+    ),
+    backlightField(
+      'Keyboard backlight',
+      '/api/keyboard/backlight',
+      'This machine does not expose a writable keyboard backlight to the app.',
+    ),
+  ];
+}
+
+/**
+ * A host backlight slider (screen or keyboard). Writes go straight to the
+ * server's sysfs proxy, debounced so dragging does not flood it; a machine
+ * without the device reports `available:false` and the control is disabled.
+ */
+function backlightField(label, endpoint, unavailableHint) {
+  const value = el('span', 'settings-value', '—');
+  const wrap = el('div', 'settings-field backlight-field');
+  const l = el('label', 'settings-label');
+  l.append(document.createTextNode(`${label} `), value);
+  const control = slider({ min: 0, max: 100, value: 50 });
+  wrap.append(l, control);
+
+  let timer = null;
+  control.addEventListener('input', () => {
+    value.textContent = `${control.value}%`;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ percent: Number(control.value) }) })
+        .catch(() => {});
+    }, 150);
+  });
+  cleanups.push(() => clearTimeout(timer));
+
+  void (async () => {
+    try {
+      const res = await apiFetch(endpoint, { authRedirect: false });
+      const s = res?.data;
+      if (!s || !s.available || s.percent == null) {
+        control.disabled = true;
+        value.textContent = 'Unavailable';
+        wrap.appendChild(el('p', 'settings-hint', unavailableHint));
+        return;
+      }
+      control.value = String(s.percent);
+      value.textContent = `${s.percent}%`;
+      if (s.writable === false) {
+        control.disabled = true;
+        wrap.appendChild(el('p', 'settings-hint', 'The app cannot write this backlight on this machine.'));
+      }
+    } catch (_) {
+      control.disabled = true;
+      value.textContent = 'Unavailable';
+      wrap.appendChild(el('p', 'settings-hint', unavailableHint));
+    }
+  })();
+
+  return wrap;
+}
+
 /* ── Desktop ────────────────────────────────────────────────── */
 
 function buildDesktop() {
@@ -1012,7 +1162,7 @@ function buildHudChipControls() {
   const chips = getHudChips();
   const names = toggleRow({
     label: 'Device names',
-    hint: 'Show the device or network name in the sound, network and Bluetooth buttons.',
+    hint: 'Show the device or network name in the sound, network, Bluetooth and battery buttons.',
     checked: chips.name,
     onChange: (checked) => setHudChips({ name: checked }),
   });
@@ -1025,7 +1175,7 @@ function buildHudChipControls() {
 
   return [
     heading('Host status chips'),
-    el('p', 'settings-hint', 'Choose what the sound, network and Bluetooth buttons in the top bar show.'),
+    el('p', 'settings-hint', 'Choose what the sound, network, Bluetooth and battery buttons in the top bar show.'),
     names,
     percent,
   ];
@@ -1485,6 +1635,7 @@ function mountSettings() {
     { id: 'browser', label: 'Browser', icon: 'ui/launcher', build: buildBrowser },
     { id: 'assistant', label: 'Assistant', icon: 'ui/message-circle', build: buildAssistant },
     { id: 'voice', label: 'Voice', icon: 'ui/mic', build: buildVoice },
+    { id: 'power', label: 'Power', icon: 'ui/power', build: buildPower },
     { id: 'touchbar', label: 'Touch Bar', icon: 'ui/keyboard', build: buildTouchBar },
     { id: 'remote', label: 'Remote', icon: 'ui/network', build: buildRemote },
     { id: 'system', label: 'System', icon: 'ui/power', build: buildSystem },
@@ -1514,7 +1665,9 @@ function mountSettings() {
 
   windowEl.append(nav, panels);
   tileEl.appendChild(windowEl);
-  show('account');
+  selectSectionFn = show;
+  show(pendingSection || 'account');
+  pendingSection = null;
   return tileEl;
 }
 
@@ -1662,6 +1815,7 @@ function unmountSettings() {
     try { dispose(); } catch (_) { /* ignore */ }
   }
   cleanups = [];
+  selectSectionFn = null;
   tileEl?.remove();
   tileEl = null;
 }
@@ -1682,4 +1836,5 @@ export default {
   unmount: unmountSettings,
   getElement: getSettingsElement,
   contextMenu: settingsContextMenu,
+  selectSection: selectSettingsSection,
 };

@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod audio;
+pub mod battery;
 pub mod bluetooth;
 pub mod ollama;
 pub mod openai;

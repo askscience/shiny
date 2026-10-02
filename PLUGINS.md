@@ -910,7 +910,8 @@ user's accent for free. The names cover core UI (`ui/settings`, `ui/puzzle`,
 the Files UI (`ui/folder`, `ui/file`, `ui/doc`, `ui/image`, `ui/video`,
 `ui/music`, `ui/archive`, `ui/download`, `ui/home`, `ui/trash`, `ui/monitor`),
 the HUD (`hud/wifi-0…4`, `hud/ethernet`, `hud/bluetooth`, `hud/volume-*`,
-`hud/clock`) and the app icons (`apps/<plugin>`).
+`hud/battery-0…4`, `hud/battery-charging`, `hud/clock`) and the app icons
+(`apps/<plugin>`).
 
 The HUD, core-window, file-type and `apps/` glyphs are curated from the KDE
 **Slot-Beauty** icon set (GPL-3.0) — the full raw set (thousands of extra app,

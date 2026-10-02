@@ -2,6 +2,7 @@ import { apiFetch, getTraveler } from './api.js';
 import { isMobilePortrait } from './viewport.js';
 import { normalizeTouchBarSetting } from './touchbarShared.js';
 import { normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
+import { effectivePowerMode, normalizePowerMode } from './powerShared.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
@@ -385,7 +386,7 @@ export function applyImmersive() {
   window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));
 }
 
-/* ── Host status chips (top bar: sound, network, Bluetooth) ────
+/* ── Host status chips (top bar: sound, network, Bluetooth, battery) ────
  * Each top-bar chip shows an icon plus, optionally, a device label and a
  * number (volume / signal / battery). These two switches decide which text
  * parts are visible; hiding both leaves an icon-only button. Applied as data
@@ -531,6 +532,122 @@ export function setWhisperModel(model) {
   if (value === 'tiny') localStorage.removeItem(key);
   else localStorage.setItem(key, value);
   persist(VOICE_WHISPER_MODEL_KEY, value === 'tiny' ? '' : value);
+}
+
+/* ── Power management (per-user, server-backed) ──────────────
+ * A stored mode, an automatic-power-saver switch and a "Low power AI" switch.
+ * The *effective* mode also depends on the live battery status, which the
+ * battery chip feeds in with `setPowerBatteryStatus()`. Whenever the effective
+ * mode changes, `power:changed` fires so voice.js can re-resolve its engines.
+ * ─────────────────────────────────────────────────────────────── */
+
+const POWER_MODE_KEY = 'power.mode';
+const POWER_AUTO_SAVER_KEY = 'power.auto_saver';
+const POWER_LOW_AI_KEY = 'power.low_power_ai';
+
+let powerBatteryStatus = null;
+let effectivePowerModeCache = null;
+
+/** The chosen power mode: 'performance', 'balanced' (default) or 'saver'. */
+export function getPowerMode() {
+  return normalizePowerMode(localStorage.getItem(scopedKey(POWER_MODE_KEY)));
+}
+
+export function setPowerMode(mode) {
+  const value = normalizePowerMode(mode);
+  const key = scopedKey(POWER_MODE_KEY);
+  if (value === 'balanced') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(POWER_MODE_KEY, value === 'balanced' ? '' : value);
+  recomputeEffectivePowerMode();
+  announcePowerSettings();
+}
+
+/** Whether Balanced drops to Power Saver on battery / low charge. Default on. */
+export function getAutoPowerSaver() {
+  return localStorage.getItem(scopedKey(POWER_AUTO_SAVER_KEY)) !== 'false';
+}
+
+export function setAutoPowerSaver(on) {
+  const key = scopedKey(POWER_AUTO_SAVER_KEY);
+  if (on) localStorage.removeItem(key); // default true
+  else localStorage.setItem(key, 'false');
+  persist(POWER_AUTO_SAVER_KEY, on ? 'true' : 'false');
+  recomputeEffectivePowerMode();
+  announcePowerSettings();
+}
+
+/**
+ * Whether Power Saver switches the AI to lighter engines (Vosk + Supertonic).
+ * On by default — the whole point of the saver for a voice-first app.
+ */
+export function getLowPowerAi() {
+  return localStorage.getItem(scopedKey(POWER_LOW_AI_KEY)) !== 'false';
+}
+
+export function setLowPowerAi(on) {
+  const key = scopedKey(POWER_LOW_AI_KEY);
+  if (on) localStorage.removeItem(key); // default true
+  else localStorage.setItem(key, 'false');
+  persist(POWER_LOW_AI_KEY, on ? 'true' : 'false');
+  recomputeEffectivePowerMode();
+  announcePowerSettings();
+}
+
+/** The mode actually in force, from the stored mode + battery status. */
+export function getEffectivePowerMode() {
+  if (effectivePowerModeCache == null) recomputeEffectivePowerMode();
+  return effectivePowerModeCache || 'balanced';
+}
+
+/**
+ * Feed the latest battery snapshot in (from the battery chip). Recomputes the
+ * effective mode and announces a change on `power:changed`.
+ */
+export function setPowerBatteryStatus(status) {
+  powerBatteryStatus = status || null;
+  recomputeEffectivePowerMode();
+  announcePowerSettings();
+}
+
+/** Tell open power surfaces (menu, Settings) that a stored value changed. */
+function announcePowerSettings() {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new Event('power:settings'));
+  }
+}
+
+/** The last battery snapshot fed in by the battery chip (may be null). */
+export function getPowerBatteryStatus() {
+  return powerBatteryStatus;
+}
+
+function recomputeEffectivePowerMode() {
+  const next = effectivePowerMode(getPowerMode(), getAutoPowerSaver(), powerBatteryStatus);
+  if (next === effectivePowerModeCache) return;
+  effectivePowerModeCache = next;
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('power:changed', { detail: { mode: next } }));
+  }
+}
+
+/** True when Power Saver is in force and it is allowed to switch engines. */
+export function isLowPowerAiActive() {
+  return getEffectivePowerMode() === 'saver' && getLowPowerAi();
+}
+
+/**
+ * The STT engine voice input should use right now. Low-power AI overrides the
+ * Voice setting with Vosk without overwriting it — leaving the saver restores
+ * the user's own choice.
+ */
+export function getEffectiveSttEngine() {
+  return isLowPowerAiActive() ? 'vosk' : getSttEngine();
+}
+
+/** The TTS engine replies should use right now. Low-power AI forces Supertonic. */
+export function getEffectiveTtsEngine() {
+  return isLowPowerAiActive() ? 'supertonic' : getTtsEngine();
 }
 
 /* ── Touch Bar (per-user, server-backed) ───────────────────── */

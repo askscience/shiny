@@ -3,7 +3,7 @@ import { cleanTranscript } from './transcriptGuard.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
 import {
   getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout,
-  getSttEngine, getWhisperModel, getTtsEngine,
+  getWhisperModel, getEffectiveSttEngine, getEffectiveTtsEngine,
 } from './preferences.js';
 
 /* Wake mode: the long-press arms the wake listener and it stays armed until
@@ -77,6 +77,10 @@ let whisperPendingDownload = false;
  */
 let whisperRetry = false;
 let whisperRecoveryTimer = null;
+/** Power Saver swapped the STT engine while a session was live; apply after. */
+let pendingPowerRefresh = false;
+let reconfiguringVoice = false;
+let voicePreparing = false;
 
 // faster-whisper streaming session state.
 let whisperSession = null;
@@ -599,8 +603,9 @@ function scheduleWhisperRecovery() {
   if (whisperRecoveryTimer) return;
   whisperRecoveryTimer = setInterval(async () => {
     if (!whisperRetry || listening) return;
-    // The user asked for Vosk outright; a probe would only fight that choice.
-    if (getSttEngine() === 'vosk') return;
+    // The user asked for Vosk outright (or Power Saver is forcing it); a probe
+    // would only fight that choice.
+    if (getEffectiveSttEngine() === 'vosk') return;
     const status = await fetchVoiceStatus(voiceLang);
     if (!status || status.whisper !== 'ready' || !hasWhisperModel(status, whisperModel)) return;
     if (listening) return; // something started during the probe — try again later
@@ -613,6 +618,15 @@ function scheduleWhisperRecovery() {
 }
 
 export async function prepareVoice() {
+  voicePreparing = true;
+  try {
+    return await prepareVoiceInner();
+  } finally {
+    voicePreparing = false;
+  }
+}
+
+async function prepareVoiceInner() {
   const lang = getVoiceLang();
   // Voice loads silently in the background — no progress card, no
   // notification. The voice bar just stays dimmed (setVoiceReady(false)) until the
@@ -621,7 +635,7 @@ export async function prepareVoice() {
   setSphereState('downloading');
 
   voiceLang = lang;
-  sttEngine = getSttEngine();
+  sttEngine = getEffectiveSttEngine();
   whisperModel = getWhisperModel();
 
   let status = await fetchVoiceStatus(lang);
@@ -873,7 +887,37 @@ export function stopListening() {
   audioContext = null;
   mediaStream = null;
   recognizer = null;
+
+  // Power Saver may have swapped the STT engine mid-session; re-resolve now
+  // that the microphone is closed.
+  if (pendingPowerRefresh) maybeReconfigureForPower();
 }
+
+/**
+ * Re-resolve the speech engines after a power-mode change. The TTS engine is
+ * read per reply, so only STT needs re-initialising — and only when idle, with
+ * a retry flagged until the current session ends.
+ */
+function maybeReconfigureForPower() {
+  // A prepare already in flight read the freshest effective mode; don't stack
+  // a second one behind it.
+  if (voicePreparing) return;
+  if (listening || document.body.classList.contains('orb-speaking')) {
+    pendingPowerRefresh = true;
+    return;
+  }
+  const want = getEffectiveSttEngine();
+  if (want === sttEngine) {
+    pendingPowerRefresh = false;
+    return;
+  }
+  if (reconfiguringVoice) return;
+  pendingPowerRefresh = false;
+  reconfiguringVoice = true;
+  prepareVoice().finally(() => { reconfiguringVoice = false; });
+}
+
+window.addEventListener('power:changed', maybeReconfigureForPower);
 
 export function cancelListening() {
   stopListening();
@@ -908,7 +952,7 @@ export async function speak(text, lang) {
   document.body.classList.add('orb-speaking');
 
   const voiceLang = lang || getVoiceLang();
-  const engine = getTtsEngine();
+  const engine = getEffectiveTtsEngine();
   try {
     const blob = await apiFetch('/api/tts', {
       method: 'POST',
@@ -968,6 +1012,7 @@ export async function speak(text, lang) {
     }));
   } finally {
     document.body.classList.remove('orb-speaking');
+    if (pendingPowerRefresh) maybeReconfigureForPower();
   }
 }
 
@@ -991,6 +1036,7 @@ export function stopSpeaking() {
     try { stop(); } catch (_) {}
   }
   document.body.classList.remove('orb-speaking');
+  if (pendingPowerRefresh) maybeReconfigureForPower();
   return wasPlaying;
 }
 

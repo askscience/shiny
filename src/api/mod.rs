@@ -15,6 +15,7 @@ pub mod ai;
 pub mod ollama;
 pub mod network;
 pub mod audio;
+pub mod battery;
 pub mod bluetooth;
 pub mod power;
 pub mod display;
@@ -37,6 +38,7 @@ use crate::auth::auth_middleware;
 use crate::config::Config;
 use crate::plugins::PluginManager;
 use crate::services::audio::AudioService;
+use crate::services::battery::BatteryService;
 use crate::services::bluetooth::BluetoothService;
 use crate::services::diary_gen::DiaryGenerator;
 use crate::services::display::DisplayService;
@@ -65,6 +67,8 @@ pub struct AppState {
     pub network: NetworkService,
     /// Host volume/mute/default devices (PipeWire via the Pulse socket).
     pub audio: AudioService,
+    /// Host battery/supply state (the kernel's sysfs power-supply class).
+    pub battery: BatteryService,
     /// Host Bluetooth adapter and devices (BlueZ over D-Bus).
     pub bluetooth: BluetoothService,
     /// Host power actions (reboot / power off / suspend) via freedesktop logind.
@@ -425,6 +429,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/audio/volume", post(audio::volume))
         .route("/api/audio/mute", post(audio::mute))
         .route("/api/audio/default", post(audio::default_device))
+        .route("/api/battery/status", get(battery::status))
+        .route("/api/battery/events", get(battery::events))
         .route("/api/bluetooth/status", get(bluetooth::status))
         .route("/api/bluetooth/events", get(bluetooth::events))
         .route("/api/bluetooth/power", post(bluetooth::power))

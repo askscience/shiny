@@ -18,6 +18,12 @@
     { "name": "volume-3",     "dst": "hud/volume-3.svg",     "src": "status/symbolic/audio-volume-high-symbolic.svg" },
     { "name": "volume-muted", "dst": "hud/volume-muted.svg", "src": "status/symbolic/audio-volume-muted-symbolic.svg" },
     { "name": "headphones",   "dst": "hud/headphones.svg",   "src": "status/symbolic/audio-volume-headphones-symbolic.svg" },
+    { "name": "battery-0",    "dst": "hud/battery-0.svg",    "src": "status/symbolic/battery-000-symbolic.svg" },
+    { "name": "battery-1",    "dst": "hud/battery-1.svg",    "src": "status/symbolic/battery-020-symbolic.svg" },
+    { "name": "battery-2",    "dst": "hud/battery-2.svg",    "src": "status/symbolic/battery-040-symbolic.svg" },
+    { "name": "battery-3",    "dst": "hud/battery-3.svg",    "src": "status/symbolic/battery-070-symbolic.svg" },
+    { "name": "battery-4",    "dst": "hud/battery-4.svg",    "src": "status/symbolic/battery-100-symbolic.svg" },
+    { "name": "battery-charging", "dst": "hud/battery-charging.svg", "src": "status/symbolic/battery-060-charging-symbolic.svg" },
     { "name": "clock",        "dst": "hud/clock.svg",        "src": "actions/symbolic/clock-alt-symbolic.svg" }
   ],
 

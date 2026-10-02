@@ -151,10 +151,11 @@ html, body {
 }
 #hud-top .icon-btn svg { width: 20px; height: 20px; }
 
-/* ── Host status chips (top bar: sound, network, Bluetooth) ─── */
+/* ── Host status chips (top bar: sound, network, Bluetooth, battery) ─── */
 .hud-network,
 .hud-audio,
-.hud-bluetooth {
+.hud-bluetooth,
+.hud-battery {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -173,20 +174,23 @@ html, body {
 }
 .hud-network:hover,
 .hud-audio:hover,
-.hud-bluetooth:hover {
+.hud-bluetooth:hover,
+.hud-battery:hover {
   background: var(--glass-hover);
   color: var(--text);
 }
 .hud-network.is-open,
 .hud-audio.is-open,
-.hud-bluetooth.is-open {
+.hud-bluetooth.is-open,
+.hud-battery.is-open {
   background: var(--glass-hover);
   border-color: var(--glass-border);
   color: var(--text);
 }
 .hud-network .hud-network-icon,
 .hud-audio .hud-audio-icon,
-.hud-bluetooth .hud-bluetooth-icon {
+.hud-bluetooth .hud-bluetooth-icon,
+.hud-battery .hud-battery-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -196,23 +200,27 @@ html, body {
 }
 .hud-network-label,
 .hud-audio-label,
-.hud-bluetooth-label {
+.hud-bluetooth-label,
+.hud-battery-label {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 140px;
 }
 .hud-network-pct,
 .hud-audio-pct,
-.hud-bluetooth-pct { font-variant-numeric: tabular-nums; opacity: 0.75; }
+.hud-bluetooth-pct,
+.hud-battery-pct { font-variant-numeric: tabular-nums; opacity: 0.75; }
 
 /* Host status chip content (Settings → Appearance → Host status chips). The
  * data attributes live on <html>; hiding both leaves an icon-only button. */
 html[data-hud-name='0'] .hud-network-label,
 html[data-hud-name='0'] .hud-audio-label,
-html[data-hud-name='0'] .hud-bluetooth-label { display: none; }
+html[data-hud-name='0'] .hud-bluetooth-label,
+html[data-hud-name='0'] .hud-battery-label { display: none; }
 html[data-hud-percent='0'] .hud-network-pct,
 html[data-hud-percent='0'] .hud-audio-pct,
-html[data-hud-percent='0'] .hud-bluetooth-pct { display: none; }
+html[data-hud-percent='0'] .hud-bluetooth-pct,
+html[data-hud-percent='0'] .hud-battery-pct { display: none; }
 .hud-network.is-connected { color: var(--text); }
 .hud-network.is-connected .hud-network-icon { color: var(--accent); }
 .hud-network.is-connected .hud-network-pct { color: var(--muted); }
@@ -227,6 +235,12 @@ html[data-hud-percent='0'] .hud-bluetooth-pct { display: none; }
 .hud-bluetooth.is-connected .hud-bluetooth-icon { color: var(--accent); }
 .hud-bluetooth.is-connected .hud-bluetooth-pct { color: var(--muted); }
 .hud-bluetooth.is-dim { color: var(--muted); }
+.hud-battery.is-charging { color: var(--text); }
+.hud-battery.is-charging .hud-battery-icon { color: var(--accent); }
+.hud-battery.is-charging .hud-battery-pct { color: var(--muted); }
+.hud-battery.is-low,
+.hud-battery.is-low .hud-battery-icon { color: var(--warn); }
+.hud-battery.is-dim { color: var(--muted); }
 
 /* ── Network window (core window: `network`) ────────────────── */
 .network-window {
@@ -838,6 +852,82 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 .power-menu .ui-hud-menu-item:disabled { opacity: 0.4; cursor: default; }
 .power-menu .ui-hud-menu-item:disabled:hover { background: transparent; }
 .power-confirm-actions { justify-content: flex-end; gap: 8px; }
+
+/* ── Battery quick menu (top bar: power management) ─────────── */
+.battery-menu {
+  width: min(320px, calc(100vw - 24px));
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.battery-menu-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.battery-menu-head-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.battery-menu-head-icon.is-low { color: var(--warn); }
+.battery-menu-head-main { flex: 1; min-width: 0; }
+.battery-menu-title { color: var(--text); font-size: 13px; font-weight: 600; }
+.battery-menu-hint { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.battery-menu-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.battery-menu-body::-webkit-scrollbar { display: none; }
+.battery-menu-section { display: flex; flex-direction: column; gap: 8px; }
+.battery-menu-section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.battery-menu .ui-toggle-row { padding: 4px 2px; border-radius: var(--radius-sm); }
+.battery-menu .ui-toggle-row:hover { background: var(--glass-hover); }
+.battery-menu-summary { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.battery-menu-actions { display: flex; justify-content: flex-end; }
+.power-mode-row { display: flex; gap: 6px; }
+.power-mode-btn {
+  flex: 1;
+  padding: 8px 6px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.power-mode-btn:hover { background: var(--glass-hover); color: var(--text); }
+.power-mode-btn.is-active {
+  background: var(--glass-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.backlight-field .ui-slider { width: 100%; }
+.backlight-field .ui-slider:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Context menu (right-click on desktop chrome) ─────────────
    Body-level popup opened by /js/contextMenu.js: window title bars, the

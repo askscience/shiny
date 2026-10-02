@@ -14,6 +14,7 @@ use shiny::api::AppState;
 use shiny::config::Config;
 use shiny::db;
 use shiny::services::audio::AudioService;
+use shiny::services::battery::BatteryService;
 use shiny::services::bluetooth::BluetoothService;
 use shiny::services::diary_gen::DiaryGenerator;
 use shiny::services::display::DisplayService;
@@ -210,6 +211,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bluetooth = BluetoothService::new();
     bluetooth.start().await;
 
+    // Host battery panel (the kernel's sysfs power-supply class). Same
+    // contract: the reader is backgrounded, so a desktop with no battery boots
+    // unchanged and the chip hides itself.
+    let battery = BatteryService::new();
+    battery.start().await;
+
     // Host power menu (reboot / power off / suspend) through freedesktop
     // logind. Stateless: every action opens the system bus on demand, so a
     // machine without logind simply reports `available: false`.
@@ -255,6 +262,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         gpsd,
         network,
         audio,
+        battery,
         bluetooth,
         power,
         display,

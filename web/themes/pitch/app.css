@@ -142,6 +142,7 @@
 .hud-network,
 .hud-audio,
 .hud-bluetooth,
+.hud-battery,
 .ui-hud-chip,
 .ui-chip,
 .ui-badge,
@@ -297,9 +298,11 @@
 .hud-network:hover,
 .hud-audio:hover,
 .hud-bluetooth:hover,
+.hud-battery:hover,
 .hud-network.is-open,
 .hud-audio.is-open,
-.hud-bluetooth.is-open {
+.hud-bluetooth.is-open,
+.hud-battery.is-open {
   background: var(--glass-hover) !important;
   border-color: transparent !important;
   border-radius: var(--radius-xs) !important;
@@ -307,14 +310,17 @@
 }
 .hud-network.is-connected,
 .hud-audio.is-active,
-.hud-bluetooth.is-connected { color: var(--text) !important; }
+.hud-bluetooth.is-connected,
+.hud-battery.is-charging { color: var(--text) !important; }
 .hud-network.is-connected .hud-network-icon,
 .hud-network.is-wired .hud-network-icon,
 .hud-audio.is-active .hud-audio-icon,
-.hud-bluetooth.is-connected .hud-bluetooth-icon { color: var(--accent) !important; }
+.hud-bluetooth.is-connected .hud-bluetooth-icon,
+.hud-battery.is-charging .hud-battery-icon { color: var(--accent) !important; }
 .hud-network-pct,
 .hud-audio-pct,
-.hud-bluetooth-pct { opacity: 0.55; }
+.hud-bluetooth-pct,
+.hud-battery-pct { opacity: 0.55; }
 
 /* ── Clock + weather ────────────────────────────────────────────
    The launcher clock: time large, date small, both quiet. */

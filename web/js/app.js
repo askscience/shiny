@@ -20,6 +20,7 @@ import { initHudClock, initHudTrips } from './hudLeft.js';
 import { initHudNetwork } from './hudNetwork.js';
 import { initHudAudio } from './hudAudio.js';
 import { initHudBluetooth } from './hudBluetooth.js';
+import { initHudBattery } from './hudBattery.js';
 import { initHudPower } from './powerMenu.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initNavigator } from './navigator.js';
@@ -118,6 +119,7 @@ async function initApp() {
   initHudAudio(); // host sound chip (PipeWire, Linux)
   initHudNetwork(); // host network status chip (NetworkManager, Linux)
   initHudBluetooth(); // host Bluetooth chip (BlueZ, Linux)
+  initHudBattery(); // host battery chip (sysfs power-supply, Linux)
   initHudPower(); // top-bar power menu (reboot / power off / suspend, logind)
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initTileManager(); // plugin window shell — mounts tiles for any active plugin

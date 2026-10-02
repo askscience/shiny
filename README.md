@@ -25,10 +25,10 @@ The web UI (`web/`) is a desktop-style workspace:
 
 - **Top HUD** — clock + local weather; a plugin icon tray (grouped by category; tap an
   inactive icon to activate the plugin, tap an active one to focus its window); the
-  traveler plugin's saved-places menu; host sound, network and Bluetooth chips (icon +
-  percentage by default; each can reveal its device name and/or hide the percentage in
-  Settings → Appearance); workspace tabs; a power menu (restart / power off / suspend);
-  and Settings / Plugins / Chats on the right.
+  traveler plugin's saved-places menu; host sound, network, Bluetooth and battery chips
+  (icon + percentage by default; each can reveal its device name and/or hide the
+  percentage in Settings → Appearance); workspace tabs; a power menu (restart / power
+  off / suspend); and Settings / Plugins / Chats on the right.
 - **Plugin-window desktop** — every active plugin with an interface lives in its own
   window (slim title bar with close/deactivate + fullscreen; drag and resize in the
   Windows layout). Fullscreen hands the screen to the app and hides the top bar, which
@@ -65,6 +65,11 @@ The web UI (`web/`) is a desktop-style workspace:
   and default-device switching, fed live from the machine's audio server
 - Host Bluetooth panel (BlueZ): a top-bar chip with adapter power, scanning,
   pairing/connecting/disconnecting/forgetting devices, and battery levels
+- Host battery chip (sysfs): charge percentage, charging/full/on-battery state and
+  time remaining, read straight from the kernel's power-supply class — no daemon
+- Power management: a battery quick menu and **Settings → Power** with three power
+  modes, automatic power saver on battery/low charge, a low-power AI switch (Vosk +
+  Supertonic instead of faster-whisper + Qwen3-TTS), and host backlight controls
 - Plugin manager: runtime install/uninstall/activate of `.zip`/`.tar.gz` plugins with
   hot router swap and an install audit log
 - Settings and Plugins windows on the desktop (install / activate / activity feed)
@@ -525,6 +530,8 @@ only while their plugin is installed (and are authenticated as well).
 | GET | `/api/audio/events` | Audio change stream (SSE) |
 | POST | `/api/audio/volume` · `/api/audio/mute` · `/api/audio/default` | Set volume, mute, default device (loopback only) |
 | GET | `/api/bluetooth/status` | Host Bluetooth: adapter, power, discovery, devices (BlueZ) |
+| GET | `/api/battery/status` | Host battery: charge, charging state, time remaining (sysfs) |
+| GET | `/api/battery/events` | Battery change stream (SSE) |
 | GET | `/api/bluetooth/events` | Bluetooth change stream (SSE) |
 | POST | `/api/bluetooth/power` · `/scan` · `/pair` · `/connect` · `/disconnect` · `/forget` · `/trust` | Bluetooth actions (loopback only) |
 | GET | `/api/touchbar` | Host Touch Bar capability (T2 MacBook) |
@@ -714,6 +721,53 @@ It needs nothing installed beyond BlueZ (`bluez`, usually already present).
 On a service without an active seat session, BlueZ may require a polkit grant
 for the same reason NetworkManager does (see *Running unprivileged*).
 
+## Host battery (sysfs)
+
+The top-bar battery chip shows the machine's charge level, whether it is on wall
+power, and — when the kernel can estimate it — time remaining. Core reads the
+kernel's **sysfs power-supply class** (`/sys/class/power_supply/*`), which every
+Linux laptop exposes through ACPI or the platform driver, and follows the same
+contract as the other host panels: one cached snapshot
+(`/api/battery/status`) and a change stream (`/api/battery/events`). It is
+deliberately **daemon-free**: no UPower and no D-Bus, so it works in the bare
+matchbox kiosk exactly like the sysfs backlight panels. Clicking the chip opens
+the power quick menu below.
+
+A `Battery` supply provides the percentage (`capacity`) and state
+(`status`: `Charging` / `Discharging` / `Full` / `Not charging`); a `Mains` (or
+`USB`) supply says whether the machine is plugged in. The server buckets the
+percentage into five levels and hands the chip a `hud/battery-<n>` icon (or
+`hud/battery-charging` when charging). On a desktop with no battery the chip
+hides itself, and the rest of the app is unchanged. No extra packages are
+needed.
+
+## Power management
+
+The battery chip opens a **reduced power quick menu** in the top bar: the live
+charge and time remaining, a three-way **power mode** and the two power
+switches. The full panel is **Settings → Power**, which adds the screen and
+keyboard backlight sliders where the machine exposes them. Everything is a
+per-user preference, so it syncs with the account.
+
+**Modes.** *Performance* never drops to low power. *Balanced* (the default)
+keeps full quality on wall power and switches automatically on battery or below
+20% (*Automatic Power Saver*). *Power Saver* always prefers low power. The mode
+is what decides the **effective** mode used by the rest of the app; the stored
+choice is never overwritten.
+
+**Low-power AI.** In an effective Power Saver, **Low-power AI** (on by default)
+swaps the speech engines for the lightest ones — **Vosk** (recognition in the
+browser, no faster-whisper sidecar) and **Supertonic** (bundled TTS, no GPU)
+instead of faster-whisper and Qwen3-TTS. Leaving the saver restores whatever you
+picked in **Settings → Voice**; the swap never touches those settings. The
+engines are re-resolved live — TTS on the next reply, STT at the next voice
+session — with no reload.
+
+This is deliberately an **application** power profile: it changes what Shiny
+runs, not the CPU governor or any privileged system setting. The quick menu and
+the Settings panel write the same per-user preferences, so the two surfaces
+cannot drift.
+
 ## Host power (logind)
 
 The top-bar power menu restarts, powers off or suspends the machine through the
@@ -896,6 +950,7 @@ overrides device discovery on unusual hardware.
 | PipeWire / `pactl` | The sound chip hides itself; the rest of the app is unchanged |
 | NetworkManager | The network chip hides itself; the rest of the app is unchanged |
 | BlueZ / `bluetoothd` | The Bluetooth chip hides itself; the rest of the app is unchanged |
+| No battery (a desktop) | The battery chip hides itself; the rest of the app is unchanged |
 | T2 speaker DSP (− LV2 plugins) | `install-t2-audio-dsp.sh` refuses to install rather than hiding the raw speakers; audio keeps working untuned |
 | GPSD | Mock GPS (fixed point + drift) |
 | Touch Bar | The feature stays dormant: the native bar is not installed off macOS and `auto` mode never activates. On Linux, `install-touchbar.sh` exits without touching anything. |

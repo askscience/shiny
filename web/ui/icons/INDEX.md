@@ -8,7 +8,7 @@ Curated from the KDE **Slot-Beauty** icon themes ([L4ki/Slot-Plasma-Themes](http
 
 ## HUD (top bar status)
 
-Status chips in the top bar and their menus (Wi-Fi, Ethernet, Bluetooth, sound). Symbolic, follow the theme accent.
+Status chips in the top bar and their menus (Wi-Fi, Ethernet, Bluetooth, sound, battery). Symbolic, follow the theme accent.
 
 | Icon | Name | Source (KDE) |
 |---|---|---|
@@ -28,6 +28,12 @@ Status chips in the top bar and their menus (Wi-Fi, Ethernet, Bluetooth, sound).
 | ![](hud/volume-3.svg) | `hud/volume-3` | `status/symbolic/audio-volume-high-symbolic.svg` |
 | ![](hud/volume-muted.svg) | `hud/volume-muted` | `status/symbolic/audio-volume-muted-symbolic.svg` |
 | ![](hud/headphones.svg) | `hud/headphones` | `status/symbolic/audio-volume-headphones-symbolic.svg` |
+| ![](hud/battery-0.svg) | `hud/battery-0` | `status/symbolic/battery-000-symbolic.svg` |
+| ![](hud/battery-1.svg) | `hud/battery-1` | `status/symbolic/battery-020-symbolic.svg` |
+| ![](hud/battery-2.svg) | `hud/battery-2` | `status/symbolic/battery-040-symbolic.svg` |
+| ![](hud/battery-3.svg) | `hud/battery-3` | `status/symbolic/battery-070-symbolic.svg` |
+| ![](hud/battery-4.svg) | `hud/battery-4` | `status/symbolic/battery-100-symbolic.svg` |
+| ![](hud/battery-charging.svg) | `hud/battery-charging` | `status/symbolic/battery-060-charging-symbolic.svg` |
 | ![](hud/clock.svg) | `hud/clock` | `actions/symbolic/clock-alt-symbolic.svg` |
 
 ## UI / Files

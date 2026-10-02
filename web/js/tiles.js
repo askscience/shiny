@@ -103,6 +103,20 @@ export function openCoreWindow(name) {
   });
 }
 
+/**
+ * Open (or focus) a built-in window and ask it to show one of its sections.
+ * Used by the battery quick menu's "Power settings" shortcut; a surface that
+ * has no sections ignores the extra hint.
+ */
+export async function openCoreWindowSection(name, section) {
+  if (!isCoreWindow(name)) return;
+  coreOpen.add(name);
+  await ensureCoreSurface(name);
+  renderTiles();
+  focusWindow(name);
+  surfaceModules.get(name)?.selectSection?.(section);
+}
+
 /** Close a built-in window — its own gesture, not a plugin deactivation. */
 export function closeCoreWindow(name) {
   if (!isCoreWindow(name)) return;
