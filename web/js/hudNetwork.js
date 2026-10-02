@@ -132,7 +132,7 @@ function apply(status) {
   chipEl.classList.remove('hidden', 'is-connected', 'is-warning', 'is-dim', 'is-wired');
 
   if (connection && connection.kind === 'ethernet') {
-    setIcon(iconEl, 'hud/ethernet', { size: 17 });
+    setIcon(iconEl, 'hud/ethernet', { size: 20 });
     chipEl.classList.add('is-wired');
     labelEl.textContent = 'Ethernet';
     pctEl.textContent = '';
@@ -150,7 +150,7 @@ function apply(status) {
 
   if (connection && connection.kind === 'wifi') {
     const limited = connectivity && connectivity.internet === false;
-    setIcon(iconEl, `hud/wifi-${connection.level}`, { size: 17 });
+    setIcon(iconEl, `hud/wifi-${connection.level}`, { size: 20 });
     chipEl.classList.add(limited ? 'is-warning' : 'is-connected');
     labelEl.textContent = connection.ssid || 'Wi-Fi';
     pctEl.textContent = connection.strength != null ? `${connection.strength}%` : '';
@@ -169,7 +169,7 @@ function apply(status) {
 
   // Nothing connected: explain why as briefly as the chip allows.
   if (wifi.present && wifi.hardware_enabled === false) {
-    setIcon(iconEl, 'hud/wifi-blocked', { size: 17 });
+    setIcon(iconEl, 'hud/wifi-blocked', { size: 20 });
     chipEl.classList.add('is-dim');
     labelEl.textContent = 'Wi-Fi blocked';
     pctEl.textContent = '';
@@ -179,7 +179,7 @@ function apply(status) {
   }
 
   if (wifi.present && wifi.enabled === false) {
-    setIcon(iconEl, 'hud/wifi-off', { size: 17 });
+    setIcon(iconEl, 'hud/wifi-off', { size: 20 });
     chipEl.classList.add('is-dim');
     labelEl.textContent = 'Wi-Fi off';
     pctEl.textContent = '';
@@ -189,7 +189,7 @@ function apply(status) {
   }
 
   if (wifi.present) {
-    setIcon(iconEl, 'hud/wifi-0', { size: 17 });
+    setIcon(iconEl, 'hud/wifi-0', { size: 20 });
     chipEl.classList.add('is-dim');
     labelEl.textContent = 'Not connected';
     pctEl.textContent = '';

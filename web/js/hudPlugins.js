@@ -46,7 +46,15 @@ function buildButton(p) {
   btn.setAttribute('aria-label', `${label(p.name)} (${active ? 'active' : 'inactive'})`);
   btn.setAttribute('aria-pressed', String(active));
 
-  btn.appendChild(pluginIconEl(p.name, { size: 18, fallback: 'ui/puzzle' }));
+  btn.appendChild(pluginIconEl(p.name, { size: 24, fallback: 'ui/puzzle' }));
+
+  // A running-app indicator, like an underline tab: present only when active,
+  // so an inactive plugin is just a dimmed glyph with no plate or ring.
+  const line = document.createElement('span');
+  line.className = 'hud-plugin-line';
+  line.setAttribute('aria-hidden', 'true');
+  btn.appendChild(line);
+
   btn.addEventListener('click', () => void onClick(p, active));
   return btn;
 }

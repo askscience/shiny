@@ -128,7 +128,7 @@ function apply(status) {
 
   const device = connectedDevice(status);
   chipEl.classList.remove('hidden', 'is-connected', 'is-dim');
-  setIcon(iconEl, device ? deviceIconName(device.kind) : chipIconName(status), { size: 17 });
+  setIcon(iconEl, device ? deviceIconName(device.kind) : chipIconName(status), { size: 20 });
   labelEl.textContent = chipLabel(status);
   pctEl.textContent = device ? batteryLabel(device) : '';
 

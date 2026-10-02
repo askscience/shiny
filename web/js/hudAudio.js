@@ -126,7 +126,7 @@ function apply(status) {
   }
 
   chipEl.classList.remove('hidden', 'is-muted', 'is-active');
-  setIcon(iconEl, nodeIcon(sink, 'sink'), { size: 17 });
+  setIcon(iconEl, nodeIcon(sink, 'sink'), { size: 20 });
 
   const label = sink.nick || sink.description || 'Sound';
   labelEl.textContent = label;

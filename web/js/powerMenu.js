@@ -253,6 +253,6 @@ function confirmAction(action) {
 
 export function initHudPower() {
   if (!chipEl) return;
-  if (iconEl) void setIcon(iconEl, 'ui/power', { size: 17 });
+  if (iconEl) void setIcon(iconEl, 'ui/power', { size: 20 });
   chipEl.addEventListener('click', () => togglePowerMenu(chipEl));
 }

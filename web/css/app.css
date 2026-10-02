@@ -137,8 +137,8 @@ html, body {
 /* Inside the top-bar pill the nav buttons are flat, muted, circular icons —
    no glass chips of their own — matching the plugin tray buttons. */
 #hud-top .icon-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   background: transparent;
   border-color: transparent;
   color: var(--muted);
@@ -149,7 +149,7 @@ html, body {
   color: var(--text);
   transform: none;
 }
-#hud-top .icon-btn svg { width: 17px; height: 17px; }
+#hud-top .icon-btn svg { width: 20px; height: 20px; }
 
 /* ── Host status chips (top bar: sound, network, Bluetooth) ─── */
 .hud-network,
@@ -158,15 +158,15 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  height: 32px;
   max-width: 220px;
-  padding: 0 8px;
+  padding: 0 6px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   white-space: nowrap;
@@ -190,8 +190,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 17px;
-  height: 17px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 .hud-network-label,
@@ -622,7 +622,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   /* Centre the icons in the free space; `safe` falls back to the start edge once
      they overflow, so the first icon stays reachable when the tray scrolls. */
   justify-content: safe center;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -630,36 +630,50 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 
 #hud-plugins::-webkit-scrollbar { display: none; }
 
+/* A plugin button is just the glyph plus a status line — no circle or ring.
+   The circle used to cost ~12px of horizontal space per plugin for nothing;
+   a short underline carries the same "running" signal in 3px. */
 .hud-plugin-btn {
   flex: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
-  border: 1px solid transparent;
-  border-radius: 50%;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
-.hud-plugin-btn:hover {
-  background: var(--glass-hover);
-  color: var(--text);
+.hud-plugin-btn:hover { color: var(--text); }
+
+/* Active: the icon warms to the accent and a line lights underneath it. */
+.hud-plugin-btn.is-active { color: var(--accent); }
+
+.hud-plugin-line {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 14px;
+  height: 3px;
+  margin-left: -7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
 }
 
-.hud-plugin-btn.is-active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
+.hud-plugin-btn.is-active .hud-plugin-line { opacity: 1; transform: scaleX(1); }
 
 .hud-plugin-btn .ui-icon { display: inline-flex; }
-.hud-plugin-btn svg { width: 18px; height: 18px; }
+.hud-plugin-btn svg { width: 24px; height: 24px; }
 
 .hud-clock {
   display: flex;
@@ -669,7 +683,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   height: calc(var(--hud-bar-height) - 8px);
   flex-shrink: 0;
 }
-.hud-clock-icon { width: 15px; height: 15px; color: var(--accent); flex-shrink: 0; }
+.hud-clock-icon { width: 17px; height: 17px; color: var(--accent); flex-shrink: 0; }
 .hud-clock-text { display: flex; align-items: baseline; gap: 8px; line-height: 1; white-space: nowrap; }
 #hud-clock-time {
   font-family: var(--font-display);
@@ -691,7 +705,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   transition: opacity var(--duration-fast);
 }
 .hud-meteo.loading { opacity: 0.5; }
-#hud-meteo-icon { width: 17px; height: 17px; color: var(--accent); flex-shrink: 0; }
+#hud-meteo-icon { width: 19px; height: 19px; color: var(--accent); flex-shrink: 0; }
 #hud-meteo-temp {
   font-family: var(--font-display);
   font-size: 14px;
