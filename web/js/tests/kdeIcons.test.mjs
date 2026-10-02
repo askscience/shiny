@@ -133,5 +133,30 @@ if (existsSync(index)) {
   check('INDEX.md mentions the coloured folder', idx.includes('coloured folder'));
 }
 
+// The coloured folder follows the accent: its fixed KDE blues are remapped to
+// an accent-derived ramp at load time (web/ui/icon.js `colorizeFolder`).
+console.log('kde icons — folder accent colouring');
+{
+  const iconSrc = readFileSync(join(root, 'web', 'ui', 'icon.js'), 'utf8');
+  check('colorizeFolder present', iconSrc.includes('colorizeFolder'));
+  check('icon.js listens for appearance:change',
+    iconSrc.includes("addEventListener('appearance:change'"));
+  // Every blue in the folder artwork must be one the colorizer remaps.
+  const blues = [...new Set(sharedFolderText.match(/#[0-9a-fA-F]{6}/g) || [])].map((s) => s.toLowerCase());
+  const known = new Set(['#3a435f', '#2c5ba0', '#4077cb', '#4b7fcd', '#5294e2', '#739bd9']);
+  for (const b of blues) {
+    check(`folder blue ${b} is remapped`, known.has(b));
+  }
+  // hexToRgb returns an [r,g,b] array — the colorizer must not destructure it
+  // as an object (that silently produced NaN colours).
+  check('colorizer does not destructure hexToRgb as an object',
+    !/const\s*\{\s*r\s*,\s*g\s*,\s*b\s*\}\s*=\s*hexToRgb/.test(iconSrc));
+  // The light folder override must use the same blues so it recolors too.
+  const lightFolder = readFileSync(
+    join(root, 'web', 'themes', 'light', 'icons', 'ui', 'folder.svg'), 'utf8');
+  check('light folder shares the folder blues',
+    blues.every((b) => lightFolder.toLowerCase().includes(b)));
+}
+
 console.log(`\n${failures ? `${failures} failure(s)` : 'all ok'}`);
 process.exit(failures ? 1 : 0);

@@ -42,11 +42,21 @@ derives a `viewBox` from the source, so the icons follow each theme and the
 user's accent like any other.
 
 The one deliberate exception is the **folder** glyph: it keeps the original
-KDE folder artwork (colour + gradient). The shared `ui/folder.svg` is the dark
-artwork, so the **light** themes (`light`, `neumorphic-light`) each ship their
-own `icons/ui/folder.svg` (light artwork) as an override. Only the curated
-source SVGs (`scripts/kde-icons/source/`) and the generated icons are
-committed; the raw ~180 MB sets live in `assets/iconsets/` and are ignored.
+KDE folder artwork (colour + gradient) instead of `currentColor` — but it
+**follows the user's accent**. The artwork's fixed blues are remapped onto an
+accent-derived light→dark ramp at load time (`colorizeFolder` in
+`web/ui/icon.js`), so the folder keeps its 3D shading in whatever colour is
+picked in *Settings → Appearance*. The shared `ui/folder.svg` is the dark
+artwork (the light themes only differ by the raster they used to carry, which
+we strip), so the **light** themes (`light`, `neumorphic-light`) each ship
+their own `icons/ui/folder.svg` override — with the same blues, so they
+recolor identically.
+
+Live folder icons re-render on the `appearance:change` / `accent:change`
+events, so changing the accent updates open Files windows without a reload.
+Only the curated source SVGs (`scripts/kde-icons/source/`) and the generated
+icons are committed; the raw ~180 MB sets live in `assets/iconsets/` and are
+ignored.
 
 Themes are plain static files — no build step, no backend involvement.
 `/themes/` is served directly; `themes.json` exists because directories

@@ -15,8 +15,48 @@
  */
 
 import { getActiveTheme, themeUrl } from './theme-loader.js';
+import { cssVar, hexToRgb } from './appearance.js';
 
 const cache = new Map(); // `${theme}:${name}` -> Promise<string|null>
+
+/**
+ * The coloured folder glyph is the one icon that ships real paint instead of
+ * `currentColor`. Its KDE artwork is a fixed blue ramp; to let it follow the
+ * user's accent we remap those six blues onto an accent-derived ramp at load
+ * time. Each entry is [source hex, position] where position 0 = near-black
+ * (deep shadow) and 1 = near-white (top-lit highlight); the accent is scaled
+ * between `SHADE_FLOOR` and `SHADE_CEIL` at that position.
+ */
+const FOLDER_BLUES = [
+  ['#3a435f', 0.10], // body shadow
+  ['#2c5ba0', 0.30], // body deep
+  ['#4077cb', 0.45], // body mid
+  ['#4b7fcd', 0.55], // gradient stop (dark)
+  ['#5294e2', 0.72], // body light / fold
+  ['#739bd9', 0.92], // gradient stop (light)
+];
+const SHADE_FLOOR = 0.45; // darkest factor applied to the accent
+const SHADE_CEIL = 1.18;  // brightest factor (a touch of top light)
+
+/** Mix a hex toward black (t<1) or white (t>1); t in [0, ~1.2]. */
+function shadeHex(hex, t) {
+  const [r, g, b] = hexToRgb(hex);
+  const mix = (c) => (t <= 1 ? c * t : c + (255 - c) * (t - 1));
+  return `#${[r, g, b].map((c) => Math.round(mix(c)).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Recolor a folder SVG's blues to the current accent (no-op for other icons). */
+export function colorizeFolder(svg) {
+  if (!svg || !svg.includes('#5294e2')) return svg; // not the folder artwork
+  const accent = (cssVar('--accent') || '#5294e2').trim();
+  let out = svg;
+  for (const [src, pos] of FOLDER_BLUES) {
+    const t = SHADE_FLOOR + (SHADE_CEIL - SHADE_FLOOR) * pos;
+    const dest = shadeHex(accent, t);
+    out = out.replaceAll(src, dest).replaceAll(src.toUpperCase(), dest);
+  }
+  return out;
+}
 
 async function fetchSvg(url) {
   try {
@@ -56,25 +96,42 @@ function prepare(el, size, label) {
   return el;
 }
 
+/** Render (and remember) an icon's painter so it can be re-run on accent change. */
+function paint(el, name) {
+  el.dataset.iconName = name;
+  loadSvg(name).then((svg) => {
+    if (svg) el.innerHTML = colorizeFolder(svg);
+    else el.classList.add('ui-icon--missing');
+  });
+}
+
 /** Create a span that fills itself with the themed SVG once loaded. */
 export function icon(name, { size = 18, label = null, className = '' } = {}) {
   const el = document.createElement('span');
   if (className) el.className = className;
   prepare(el, size, label);
-  loadSvg(name).then((svg) => {
-    if (svg) el.innerHTML = svg;
-    else el.classList.add('ui-icon--missing');
-  });
+  paint(el, name);
   return el;
 }
 
 /** Replace the content of an existing element with a themed icon. */
 export async function setIcon(el, name, { size = null, label = null } = {}) {
   prepare(el, size, label);
-  const svg = await loadSvg(name);
-  if (svg) el.innerHTML = svg;
-  else el.classList.add('ui-icon--missing');
+  paint(el, name);
   return el;
+}
+
+/** Repaint every live folder icon after the accent changes. */
+export function refreshFolderIcons() {
+  document.querySelectorAll('.ui-icon[data-icon-name="ui/folder"]').forEach((el) => {
+    loadSvg('ui/folder').then((svg) => { if (svg) el.innerHTML = colorizeFolder(svg); });
+  });
+}
+
+// The folder tint is a function of the accent, so repaint on every change.
+if (typeof window !== 'undefined') {
+  window.addEventListener('appearance:change', refreshFolderIcons);
+  window.addEventListener('accent:change', refreshFolderIcons);
 }
 
 /** Drop cached icons (e.g. after a theme switch). */

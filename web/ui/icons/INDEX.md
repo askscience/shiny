@@ -4,7 +4,7 @@
 
 Every name below resolves to `/ui/icons/<name>.svg`, or to a theme override at `/themes/<theme>/icons/<name>.svg` when that theme ships one. Use them from JS with `icon('group/name')` or `setIcon(el, 'group/name')`, or from HTML with `<span data-icon="group/name">`.
 
-Curated from the KDE **Slot-Beauty** icon themes ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) and regenerated with `scripts/kde-icons/convert.py`. All icons are `currentColor` except the coloured folder.
+Curated from the KDE **Slot-Beauty** icon themes ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) and regenerated with `scripts/kde-icons/convert.py`. All icons are `currentColor` except the coloured folder, which tints to the user's accent (see `README.md`).
 
 ## HUD (top bar status)
 

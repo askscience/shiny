@@ -328,7 +328,8 @@ def write_index(out_root: Path) -> int:
     lines.append("Curated from the KDE **Slot-Beauty** icon themes "
                  "([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), "
                  "GPL-3.0) and regenerated with `scripts/kde-icons/convert.py`. "
-                 "All icons are `currentColor` except the coloured folder.")
+                 "All icons are `currentColor` except the coloured folder, which "
+                 "tints to the user's accent (see `README.md`).")
     lines.append("")
     for group in ("hud", "ui", "apps"):
         lines.append(f"## {titles[group]}")

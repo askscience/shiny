@@ -85,7 +85,7 @@ The KDE sources cannot be dropped in as-is; `convert.py` normalizes each one:
   recolor the icon to a fixed grey and leak onto other icons.
 - **Rewrites fills/strokes to `currentColor`** so the icon follows the theme
   and accent. (The coloured **folder** is the sole exception — it keeps its own
-  fills and gradients.)
+  fills and gradients; see below.)
 - **Derives a `viewBox`** from the source's own box. KDE grids are 16×16,
   22×22 or 24×24; the app sizes icons by the container, so the box only needs
   to be correct, not a fixed size.
@@ -95,6 +95,23 @@ The KDE sources cannot be dropped in as-is; `convert.py` normalizes each one:
 `--check` fails if any shipped icon drops its `viewBox`, leaks a `<style>` or
 `ColorScheme`, or (for symbolic icons) loses `currentColor`. The test
 `web/js/tests/kdeIcons.test.mjs` pins the same contract plus the plugin map.
+
+## The folder follows the accent
+
+`ui/folder` is the one icon that is **not** `currentColor`: it is real
+artwork, so that folders read as folders. To keep it on-brand it **tints to
+the user's accent**. `web/ui/icon.js` (`colorizeFolder`) remaps the artwork's
+six fixed blues onto an accent-derived light→dark ramp when the icon is
+painted, preserving the 3D shading. Because the tint is a function of the
+accent, live folder icons **re-render on `appearance:change` /
+`accent:change`**, so switching accent updates open Files windows with no
+reload.
+
+To recolor it, the artwork must keep its six blues (`#3a435f`, `#2c5ba0`,
+`#4077cb`, `#4b7fcd`, `#5294e2`, `#739bd9`) — `colorizeFolder` keys off them.
+If you swap in a different folder illustration, either keep those stops or
+update `FOLDER_BLUES` in `web/ui/icon.js` to match. `kdeIcons.test.mjs` fails
+if the folder ships a blue the colorizer does not know.
 
 ## Plugin identity icons
 

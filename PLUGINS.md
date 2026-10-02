@@ -859,7 +859,7 @@ Before publishing a plugin:
 | `src/api/agent.rs` | System prompt = `web/skills/core-assistant.md` + active plugins' skills/persona. |
 | `src/services/agent_tools.rs` | `execute_action`: registry first; core built-in = `web_search` only; traveler verbs refuse cleanly without the plugin. |
 | `data/plugins/install.log` | Audit trail — written on every install/uninstall/error. |
-| `web/ui/icons/` | The **shared icon library**: every glyph the app and plugins resolve by name (`icon('ui/save')`, `<span data-icon="apps/files">`). Catalog in `web/ui/icons/INDEX.md`; prose in `web/ui/icons/README.md`. A theme may override any name in `web/themes/<theme>/icons/`. |
+| `web/ui/icons/` | The **shared icon library**: every glyph the app and plugins resolve by name (`icon('ui/save')`, `<span data-icon="apps/files">`). Catalog in `web/ui/icons/INDEX.md`; prose in `web/ui/icons/README.md`. A theme may override any name in `web/themes/<theme>/icons/`. The `ui/folder` glyph is coloured artwork that tints to the user's accent. |
 | `scripts/kde-icons/` | Curator for the KDE **Slot-Beauty** icons: `convert.py` (sanitize + normalize), `mapping.json` (KDE source → Shiny name), and `source/{dark,light}` (the ~60 curated SVGs, committed). The raw sets live in `assets/iconsets/` (GPL-3.0, not committed). |
 | `assets/iconsets/` | Raw Slot-Beauty KDE icon sets — a large pool of extra app, mimetype, category, emblem and place glyphs. Source for new icons; see `web/ui/icons/README.md`. |
 
