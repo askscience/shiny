@@ -11,10 +11,12 @@
  */
 
 import {
-  icon, button, emptyState, toast, setTileGlow, setTileGlowFromUrl, glowGradient,
+  icon, button, emptyState, toast, select, setTileGlow, setTileGlowFromUrl, glowGradient,
+  fontStackFor,
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { listFonts } from '../../js/fonts.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const WORD_PLUGIN = 'word';
@@ -25,6 +27,7 @@ let titleInput = null;
 let docMenuBtn = null;
 let statusEl = null;
 let saveDot = null;
+let fontSelect = null;
 let toolbarBtns = {};
 
 let docs = [];
@@ -155,6 +158,7 @@ async function openDoc(doc) {
     currentDoc = { id: doc.id, title: full.title, updated_at: full.updated_at };
     titleInput.value = full.title;
     editorEl.innerHTML = full.html || '<p></p>';
+    syncEditorFontFromContent();
     setStatus('saved');
     updateGlow();
   } catch (e) {
@@ -352,6 +356,111 @@ function syncToolbar() {
   for (const [key, btn] of Object.entries(toolbarBtns)) {
     btn?.classList.toggle('is-active', !!state[key]);
   }
+  syncFontSelect();
+}
+
+/* ── Fonts ──────────────────────────────────────────────────────
+ * The picker lists the host's installed fonts (GET /api/fonts). Choosing one
+ * with text selected restyles just that run; with no selection it becomes the
+ * document's default face. Both survive the .odt round trip: the server's
+ * HTML↔ODT codec carries `font-family` as an automatic text style (TF1, …).
+ * ─────────────────────────────────────────────────────────────── */
+
+/** The family name on an element, from `data-font` or its inline stack. */
+function detectFont(node) {
+  if (!node || node.nodeType !== 1) return '';
+  const explicit = node.dataset?.font;
+  if (explicit) return explicit;
+  const stack = node.style?.fontFamily || '';
+  return stack.split(',')[0].replace(/["']/g, '').trim();
+}
+
+/** The current selection, only when it is inside the editor. */
+function editorSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  return editorEl?.contains(range.commonAncestorContainer) ? range : null;
+}
+
+/** Wrap the selected run in a span carrying the chosen family. */
+function applyFontToSelection(range, family) {
+  const span = document.createElement('span');
+  span.style.fontFamily = fontStackFor(family);
+  span.dataset.font = family;
+  try {
+    range.surroundContents(span);
+  } catch (_) {
+    // The range crosses element boundaries — lift it into a single span first.
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+  }
+  editorEl.dispatchEvent(new Event('input'));
+  syncToolbar();
+}
+
+/** Set the document-wide default face (existing text + new typing). */
+function applyDocumentFont(family) {
+  const stack = fontStackFor(family) || '';
+  editorEl.style.fontFamily = stack;
+  editorEl.dataset.font = family;
+  editorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre').forEach((block) => {
+    if (stack) {
+      block.style.fontFamily = stack;
+      block.dataset.font = family;
+    } else {
+      block.style.removeProperty('font-family');
+      delete block.dataset.font;
+    }
+  });
+  editorEl.dispatchEvent(new Event('input'));
+  syncToolbar();
+}
+
+/** Restore the document default after loading an .odt/.html document. */
+function syncEditorFontFromContent() {
+  let family = editorEl.dataset.font || '';
+  if (!family) {
+    const first = editorEl.firstElementChild;
+    if (first) family = detectFont(first);
+  }
+  editorEl.style.fontFamily = family ? (fontStackFor(family) || '') : '';
+  editorEl.dataset.font = family;
+  syncFontSelect();
+}
+
+/** Reflect the face at the caret in the picker. */
+function syncFontSelect() {
+  if (!fontSelect || !fontSelect.select) return;
+  let family = '';
+  const range = editorSelection();
+  if (range) {
+    let node = range.startContainer;
+    while (node && node !== editorEl) {
+      if (node.nodeType === 1) {
+        family = detectFont(node);
+        if (family) break;
+      }
+      node = node.parentNode;
+    }
+  }
+  if (!family) family = editorEl?.dataset.font || '';
+  if (family && ![...fontSelect.select.options].some((o) => o.value === family)) {
+    fontSelect.setOptions([
+      { value: family, label: family },
+      ...[...fontSelect.select.options]
+        .filter((o) => o.value)
+        .map((o) => ({ value: o.value, label: o.textContent })),
+    ]);
+  }
+  fontSelect.select.value = family || fontSelect.select.options[0]?.value || '';
+}
+
+function onFontChange(family) {
+  if (!family || !editorEl) return;
+  const range = editorSelection();
+  if (range && !range.collapsed) applyFontToSelection(range, family);
+  else applyDocumentFont(family);
 }
 
 /* ── Import / export ────────────────────────────────────────── */
@@ -462,6 +571,19 @@ export function mountWordTile() {
   saveDot.className = 'word-save-dot';
   saveDot.setAttribute('aria-hidden', 'true');
 
+  // Font picker — populated from the host's installed fonts.
+  fontSelect = select({
+    options: [{ value: '', label: 'Font' }],
+    onChange: onFontChange,
+  });
+  fontSelect.wrap.classList.add('word-font');
+  fontSelect.select.title = 'Font — applies to the selection, or the whole document when nothing is selected';
+  fontSelect.select.setAttribute('aria-label', 'Font');
+  void listFonts().then((families) => {
+    fontSelect?.setOptions(families.map((f) => ({ value: f, label: f })));
+    syncFontSelect();
+  });
+
   // Single top bar (Studio-style): doc menu + title + every action button.
   bar.append(
     docMenuBtn,
@@ -471,6 +593,7 @@ export function mountWordTile() {
     toolbarButton('underline', 'ui/underline', 'Underline', () => exec('underline')),
     toolbarButton('heading', 'ui/heading', 'Heading', toggleHeading),
     toolbarButton('list', 'ui/list', 'Bullet list', toggleList),
+    fontSelect.wrap,
     newBtn, importBtn, exportBtn, saveBtn, delBtn, saveDot,
   );
   tileEl.appendChild(bar);
@@ -517,6 +640,7 @@ export function unmountWordTile() {
   docMenuBtn = null;
   statusEl = null;
   saveDot = null;
+  fontSelect = null;
   toolbarBtns = {};
 }
 

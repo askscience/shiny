@@ -1108,6 +1108,30 @@ inheritance. One recognizable glyph per plugin, not a wordmark or lettering.
 > regular theme icons from `web/themes/<name>/icons/` and keep their existing
 > `stroke-width="1.5"` style; this restyle does not change them.
 
+### Typography & the font picker
+
+The app never fetches a webfont. The UI faces are **installed on the host** by
+`scripts/install-fonts.sh` (Roboto + Inter from Debian, DM Sans / Space Grotesk /
+Instrument Serif from the `google/fonts` repo), and the theme tokens name them
+directly. There is no `@import url(fonts.googleapis.com…)` in `web/themes/*/`.
+
+- **Global font** (*Settings → Appearance*) is written by `appearance.js`
+  (`getFont`/`setFont`/`applyFont`) onto `--font-body` and `--font-display`;
+  `--font-editorial` is left to the theme. `'theme'` clears the override.
+- The picker is **not a baked-in list**: it reads `GET /api/fonts`
+  (`src/api/fonts.rs` runs `fc-list`, shared through `web/js/fonts.js`), so a
+  font the user installs later appears with no code change.
+
+**The Writer's font menu.** `plugins/word/web/plugin.js` adds a font `select`
+fed by the same `listFonts()`. With a non-collapsed selection it wraps the run in
+`<span style="font-family:…" data-font="…">`; with a collapsed caret it sets the
+document default (the editor plus its block children). The choice survives the
+`.odt` round trip because the SDK codec carries `font-family` as an automatic
+character style: `crates/shiny-plugin-sdk/src/odt.rs` registers a `TF<n>` style
+per family and emits `fo:font-family` on export, then maps style-name →
+`font-family` back to an inline `style` on import. Block-level and legacy
+`<font face>` sources are handled too.
+
 ### Window background: the ambient blurred mirror
 
 Every plugin window carries a **soft ambient glow** behind its content — a
@@ -1171,6 +1195,17 @@ tokens `--glow-brightness`, `--glow-opacity`, `--glow-permeability` and
 `--glow-veil`; the neumorphic themes additionally make the window chrome
 translucent inside `.tile` so the light reads through it. Colours repaint
 automatically on `theme:change` / `appearance:change` (`refreshGlow()`).
+
+**User switch.** Settings → Appearance → *Window surface* has a **Blurred window
+background** toggle (`desktop.surface.window_background`, default on).
+`applyDesktopSurface()` writes `data-window-background="0"` on `<html>` and the
+single rule `html[data-window-background="0"] .tile-glow { display: none }`
+removes the mirror for every window at once. Plugins never check the flag — they
+keep calling `setTileGlow()`/`setTileGlowFromUrl()` as documented above and the
+global gate decides whether the layer is visible, so toggling it back on restores
+every window with no re-render. The switch covers the colour glow *and* the
+subject image; turning it off is what makes a lowered Window opacity read as a
+plain translucent pane.
 
 ### PDF window
 

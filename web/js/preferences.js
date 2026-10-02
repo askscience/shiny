@@ -298,7 +298,11 @@ const DEFAULT_DESKTOP_SURFACE = {
   window_radius: 28,     // px corner radius (matches --radius-lg default)
   window_opacity: 100,   // % window background opacity
   window_shadow: false,  // flat by default (noir hairline aesthetic)
-  glass_blur: 12,        // px frosted-glass backdrop blur (panels/sheets/menus)
+  glass_blur: 12,        // px backdrop blur: window transparency + frosted panels
+  // The ambient "blurred mirror" behind a window (photo / PDF page / artwork /
+  // accent glow — web/ui/components/glow.js + .tile-glow in tiles.css). Global,
+  // so plugins keep calling setTileGlow*() and core decides whether it shows.
+  window_background: true,
   title_height: 36,      // px window title bar height
 };
 
@@ -316,6 +320,7 @@ export function getDesktopSurface() {
     window_opacity: Math.round(clamp(numOr(src.window_opacity, 100), 60, 100)),
     window_shadow: src.window_shadow === true,
     glass_blur: Math.round(clamp(numOr(src.glass_blur, 12), 0, 24)),
+    window_background: src.window_background !== false,
     title_height: Math.round(clamp(numOr(src.title_height, 36), 28, 48)),
   };
 }
@@ -335,7 +340,22 @@ export function applyDesktopSurface() {
   root.style.setProperty('--window-radius', `${s.window_radius}px`);
   root.style.setProperty('--window-opacity', `${s.window_opacity}%`);
   root.style.setProperty('--window-shadow', s.window_shadow ? 'var(--shadow-glass)' : 'none');
-  root.style.setProperty('--glass-blur-panel', `${s.glass_blur}px`);
+  // "Glass blur" drives the backdrop blur of everything frosted: the desktop
+  // seen through a translucent window, plugin chrome, and the shared
+  // panels/sheets/menus. Writing the base token (not just `-panel`) is what
+  // makes the slider do something — themes otherwise own `--glass-blur` and
+  // the setting only reached `--glass-blur-panel`. A user value overrides the
+  // theme's. `--glass-blur-light` (light scrims) and `--popover-blur` (deliber-
+  // ately independent, so menus stay frosted even at 0) keep their theme tuning.
+  const blur = `${s.glass_blur}px`;
+  root.style.setProperty('--glass-blur', blur);
+  root.style.setProperty('--glass-blur-panel', blur);
+  // A translucent window gets a backdrop blur (tiles.css); an opaque one does
+  // not, so the common case costs no compositing pass.
+  root.dataset.windowTranslucent = s.window_opacity < 100 ? '1' : '0';
+  // Ambient window background. Off => a data attribute on <html> lets CSS hide
+  // the `.tile-glow` layer globally (plugins keep painting it; nothing shows).
+  root.dataset.windowBackground = s.window_background ? '1' : '0';
   root.style.setProperty('--tile-header-height', `${s.title_height}px`);
 }
 
@@ -705,3 +725,12 @@ export function setRemoteAutostart(on) {
   else localStorage.removeItem(key);
   persist(REMOTE_AUTOSTART_KEY, on ? 'true' : '');
 }
+
+/* ── Early surface application ─────────────────────────────────
+ * `loadUserPreferences()` (which calls applyDesktopSurface()) only runs after
+ * auth resolves, but the desktop can have already painted by then. Apply the
+ * last session's cached surface now so a translucent/blurred window and a
+ * disabled ambient background are correct from the first frame; the stored
+ * server values simply re-apply the same result a moment later.
+ * ─────────────────────────────────────────────────────────────── */
+if (typeof document !== 'undefined') applyDesktopSurface();

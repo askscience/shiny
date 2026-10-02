@@ -154,6 +154,15 @@ body.is-tiling-resize {
   container-type: inline-size;
 }
 
+/* Translucent window (Window opacity < 100%): blur whatever is behind the
+   window instead of showing the desktop sharp through it. `data-window-
+   translucent` is set by applyDesktopSurface(); gating on it means an opaque
+   window never pays for a backdrop-filter pass. Uses the Glass blur setting. */
+html[data-window-translucent="1"] .tile {
+  backdrop-filter: blur(var(--glass-blur-panel, 12px)) saturate(var(--glass-saturate, 140%));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel, 12px)) saturate(var(--glass-saturate, 140%));
+}
+
 /* A plugin window fills its grid cell; with a single plugin it takes the
    whole area but keeps the rounded frame (border + radius). */
 
@@ -457,6 +466,24 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 
 .word-title::placeholder { color: var(--muted); }
 
+/* Font picker in the Writer toolbar. Reuses the popover recipe (the same one
+   context menus use) so the native option list stays readable and frosted. */
+.word-font {
+  flex: none;
+  width: 132px;
+}
+.word-font .ui-select {
+  height: 30px;
+  padding: 4px 30px 4px 10px;
+  border-radius: var(--radius-xs);
+  background: var(--popover-bg);
+  backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
+  font-size: 12.5px;
+}
+.word-font .ui-select option { background: var(--bg-elevated); color: var(--text); }
+.word-font .ui-icon { right: 10px; width: 12px; height: 12px; }
+
 .word-save-dot {
   flex: none;
   width: 7px;
@@ -662,6 +689,9 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
    document menu. */
 @container (max-width: 480px) {
   .word-tool--secondary { display: none; }
+  /* Drop the font picker before the controls overflow; fonts remain available
+     on a wider window. */
+  .word-font { display: none; }
 
   .word-bar { padding: 8px 12px; }
   .word-title { font-size: 14px; }
@@ -774,6 +804,16 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 
 /* A hidden window must cost nothing. */
 .tile.hidden .tile-glow { display: none; }
+
+/* Settings → Appearance → Window surface: "Blurred window background".
+   applyDesktopSurface() flips `data-window-background` on <html>; when off the
+   ambient mirror is removed for EVERY window (colour glow and subject image
+   alike). Plugins keep calling setTileGlow*() — this is the single global gate,
+   so there is nothing for them to un-paint or re-paint. `!important` so it also
+   beats the rim variant's own opacity rule. */
+html[data-window-background="0"] .tile-glow {
+  display: none !important;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .tile-glow { transition: none; }

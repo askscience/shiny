@@ -27,7 +27,9 @@ import {
   listThemes, setTheme, getActiveTheme, getThemeManifest,
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
+  getFont, setFont, FONT_THEME,
 } from '../ui/index.js';
+import { listFonts } from './fonts.js';
 import {
   getAiName, setAiName, getAiProvider, setAiProvider,
   getOllamaModel, setOllamaModel,
@@ -1105,6 +1107,13 @@ function buildWindowSurfaceControls() {
   });
   const blur = sliderField('Glass blur', `${surface.glass_blur}px`, blurControl);
 
+  const background = toggleRow({
+    label: 'Blurred window background',
+    hint: 'The soft blurred mirror behind a window — its photo, PDF page, artwork or the accent glow. Turn off for flat, fully opaque-looking windows.',
+    checked: surface.window_background,
+    onChange: (checked) => setDesktopSurface({ window_background: checked }),
+  });
+
   const shadow = toggleRow({
     label: 'Window shadows',
     hint: 'Give windows a soft drop shadow instead of a flat hairline.',
@@ -1118,6 +1127,7 @@ function buildWindowSurfaceControls() {
     radius.wrap,
     opacity.wrap,
     blur.wrap,
+    background,
     shadow,
   ];
 }
@@ -1712,6 +1722,28 @@ function buildAppearancePanel() {
   on(stopB, 'input', applyCustomGradient);
   on(angle, 'input', applyCustomGradient);
 
+  const font = select({
+    options: [{ value: getFont(), label: getFont() }],
+    onChange: (value) => setFont(value),
+  });
+  // Populated from the host's installed fonts (GET /api/fonts). The current
+  // choice is kept even when it is not installed here, so a preference carried
+  // from another machine never silently resets.
+  void listFonts().then((families) => {
+    const values = families.slice();
+    const current = getFont();
+    if (current !== FONT_THEME && !values.includes(current)) values.unshift(current);
+    font.setOptions([
+      ...values.map((f) => ({ value: f, label: f })),
+      { value: FONT_THEME, label: 'Theme default' },
+    ]);
+    font.select.value = getFont();
+  });
+  font.select.value = getFont();
+  const fontField = field('Global font', font, {
+    hint: 'Every installed system font is listed. "Theme default" restores the active theme’s own fonts.',
+  });
+
   const backgroundChildren = buildBackgroundControls();
   const windowSurfaceChildren = buildWindowSurfaceControls();
   const topBarChildren = buildTopBarControls();
@@ -1799,6 +1831,7 @@ function buildAppearancePanel() {
     field('Accent', accentSwatches),
     field('Gradient', gradientSwatches),
     custom,
+    fontField,
     heading('Display'),
     scaleField,
     ...windowSurfaceChildren,

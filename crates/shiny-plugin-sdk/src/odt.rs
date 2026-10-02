@@ -14,7 +14,10 @@
 //! (AI document tools) link this module — no runtime state crosses the
 //! dlopen boundary because everything is plain bytes.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
+use std::rc::Rc;
 
 use crate::errors::AppError;
 
@@ -24,6 +27,8 @@ const MIMETYPE: &str = "application/vnd.oasis.opendocument.text";
 /// `(uri, local)` tuple form for namespaced attributes).
 const NS_TEXT: &str = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
 const NS_XLINK: &str = "http://www.w3.org/1999/xlink";
+const NS_STYLE: &str = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+const NS_FO: &str = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
 
 const CONTENT_HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content
@@ -44,10 +49,10 @@ const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 
 /// Build a valid `.odt` file from editor HTML.
 pub fn html_to_odt(title: &str, html: &str) -> Result<Vec<u8>, AppError> {
-    let body = convert_blocks(html);
+    let (body, fonts) = convert_blocks(html);
     let content = format!(
         "{CONTENT_HEADER} {automatic_styles} <office:body><office:text>{body}</office:text></office:body></office:document-content>",
-        automatic_styles = automatic_styles(),
+        automatic_styles = automatic_styles(&fonts),
     );
 
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
@@ -86,6 +91,7 @@ pub fn odt_to_html(odt: &[u8]) -> Result<String, AppError> {
     let doc = roxmltree::Document::parse(&xml)
         .map_err(|e| AppError::Internal(format!("Invalid ODT content.xml: {}", e)))?;
 
+    let fonts = collect_font_styles(&doc);
     let mut out = String::new();
     let mut first = true;
     for node in doc.descendants() {
@@ -96,13 +102,35 @@ pub fn odt_to_html(odt: &[u8]) -> Result<String, AppError> {
                         out.push('\n');
                     }
                     first = false;
-                    render_block(&child, &mut out);
+                    render_block(&child, &mut out, &fonts);
                 }
             }
             break;
         }
     }
     Ok(out)
+}
+
+/// Map every automatic text style name to its `fo:font-family`, so spans can be
+/// turned back into `style="font-family:…"` on import.
+fn collect_font_styles(doc: &roxmltree::Document) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for style in doc.descendants() {
+        if !style.has_tag_name("style") {
+            continue;
+        }
+        let Some(name) = style.attribute((NS_STYLE, "name")) else {
+            continue;
+        };
+        for props in style.children() {
+            if props.has_tag_name("text-properties") {
+                if let Some(family) = props.attribute((NS_FO, "font-family")) {
+                    map.insert(name.to_string(), family.to_string());
+                }
+            }
+        }
+    }
+    map
 }
 
 /// Plain text version of a `.odt` (used by the AI `doc_read` tool).
@@ -118,6 +146,31 @@ pub fn odt_to_plain_text(odt: &[u8]) -> Result<String, AppError> {
 struct P {
     c: Vec<char>,
     i: usize,
+    /// Font families seen so far, in first-use order. Shared with sub-parsers
+    /// so every `text:span` references a style that `automatic_styles()` will
+    /// have emitted (`TF1`, `TF2`, …).
+    fonts: Rc<RefCell<Vec<String>>>,
+}
+
+impl P {
+    fn new(c: Vec<char>) -> Self {
+        P { c, i: 0, fonts: Rc::new(RefCell::new(Vec::new())) }
+    }
+
+    /// A sub-parser over another fragment that shares this one's font registry.
+    fn sub(&self, c: Vec<char>) -> Self {
+        P { c, i: 0, fonts: Rc::clone(&self.fonts) }
+    }
+
+    /// Style name for a family, registering it on first use.
+    fn font_style_name(&self, family: &str) -> String {
+        let mut fonts = self.fonts.borrow_mut();
+        if let Some(idx) = fonts.iter().position(|f| f.eq_ignore_ascii_case(family)) {
+            return format!("TF{}", idx + 1);
+        }
+        fonts.push(family.to_string());
+        format!("TF{}", fonts.len())
+    }
 }
 
 fn is_block_tag(name: &str) -> bool {
@@ -162,8 +215,7 @@ fn style_name(mask: u8) -> &'static str {
     }
 }
 
-fn automatic_styles() -> &'static str {
-    r#"<office:automatic-styles>
+const BASE_AUTOMATIC_STYLES: &str = r#"<office:automatic-styles>
 <style:style style:name="T1" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style>
 <style:style style:name="T2" style:family="text"><style:text-properties fo:font-style="italic"/></style:style>
 <style:style style:name="T3" style:family="text"><style:text-properties text:underline-style="solid" text:underline-width="auto" text:underline-color="font-color"/></style:style>
@@ -177,14 +229,34 @@ fn automatic_styles() -> &'static str {
 <style:list-level-style-number text:level="2" style:num-format="1"/>
 <style:list-level-style-number text:level="3" style:num-format="1"/>
 </style:style>
-</office:automatic-styles>"#
+</office:automatic-styles>"#;
+
+/// The shared style block plus one `TF<n>` character style per font family the
+/// document actually uses (so the registry stays empty for font-free docs).
+fn automatic_styles(fonts: &[String]) -> String {
+    if fonts.is_empty() {
+        return BASE_AUTOMATIC_STYLES.to_string();
+    }
+    let mut extra = String::new();
+    for (i, family) in fonts.iter().enumerate() {
+        extra.push_str(&format!(
+            "<style:style style:name=\"TF{}\" style:family=\"text\"><style:text-properties fo:font-family=\"{}\"/></style:style>",
+            i + 1,
+            escape_attr(family),
+        ));
+    }
+    BASE_AUTOMATIC_STYLES.replace(
+        "</office:automatic-styles>",
+        &format!("{}</office:automatic-styles>", extra),
+    )
 }
 
-fn convert_blocks(html: &str) -> String {
-    let mut p = P { c: html.chars().collect(), i: 0 };
+fn convert_blocks(html: &str) -> (String, Vec<String>) {
+    let mut p = P::new(html.chars().collect());
     let mut out = String::new();
     p.parse_blocks(&mut out, None);
-    escape_and_collapse(&out)
+    let fonts = p.fonts.borrow().clone();
+    (escape_and_collapse(&out), fonts)
 }
 
 impl P {
@@ -290,7 +362,7 @@ impl P {
                 break;
             }
             if self.peek() == Some('<') {
-                let Some((closing, name, _)) = self.peek_tag() else {
+                let Some((closing, name, attrs)) = self.peek_tag() else {
                     para.push(self.c[self.i]);
                     self.i += 1;
                     continue;
@@ -314,13 +386,16 @@ impl P {
                         out.push_str("</text:p>");
                         para.clear();
                     }
+                    // A block-level font-family (the Writer's document default)
+                    // cascades to every run inside the block.
+                    let block_font = font_from_style_attr(&attrs);
                     self.consume_tag();
                     match name.as_str() {
                         "ul" | "ol" => self.list_into(&name, out),
                         "li" => {
                             let inner = self.collect_until_closing("li");
                             out.push_str("<text:p>");
-                            self.inline_into(&inner, out);
+                            self.inline_with_font(&inner, block_font.as_deref(), out);
                             out.push_str("</text:p>");
                         }
                         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
@@ -330,14 +405,14 @@ impl P {
                                 "<text:h text:outline-level=\"{}\">",
                                 lvl.clamp(1, 6)
                             ));
-                            self.inline_into(&inner, out);
+                            self.inline_with_font(&inner, block_font.as_deref(), out);
                             out.push_str("</text:h>");
                         }
                         _ => {
                             // p, div, blockquote, section, pre, table cells…
                             let inner = self.collect_until_closing(&name);
                             out.push_str("<text:p>");
-                            self.inline_into(&inner, out);
+                            self.inline_with_font(&inner, block_font.as_deref(), out);
                             out.push_str("</text:p>");
                         }
                     }
@@ -379,7 +454,7 @@ impl P {
                     // The item content is block-ish: reuse block parsing so
                     // nested lists survive as <text:list> inside the item.
                     let mut blocks = String::new();
-                    let mut sub = P { c: inner.chars().collect(), i: 0 };
+                    let mut sub = self.sub(inner.chars().collect());
                     sub.parse_blocks(&mut blocks, None);
                     let blocks = escape_and_collapse(&blocks);
                     if blocks.trim().is_empty() {
@@ -419,8 +494,21 @@ impl P {
 
     /// Parse a raw inline fragment into ODT spans/text.
     fn inline_into(&mut self, raw: &str, out: &mut String) {
-        let mut sub = P { c: raw.chars().collect(), i: 0 };
+        let mut sub = self.sub(raw.chars().collect());
         sub.parse_inline(out, None);
+    }
+
+    /// Emit `raw` as an inline run, wrapped in a font span when `font` is set.
+    fn inline_with_font(&mut self, raw: &str, font: Option<&str>, out: &mut String) {
+        match font {
+            Some(family) => {
+                let name = self.font_style_name(family);
+                out.push_str(&format!("<text:span text:style-name=\"{}\">", name));
+                self.inline_into(raw, out);
+                out.push_str("</text:span>");
+            }
+            None => self.inline_into(raw, out),
+        }
     }
 
     fn parse_inline(&mut self, out: &mut String, stop: Option<&str>) {
@@ -481,6 +569,13 @@ impl P {
                     "span" => {
                         self.consume_tag();
                         let mask = mask_from_style_attr(&attrs);
+                        let font = font_from_style_attr(&attrs);
+                        // Font is the outer span, bold/italic/underline the
+                        // inner one, so a run can carry both.
+                        if let Some(family) = font.as_deref() {
+                            let name = self.font_style_name(family);
+                            out.push_str(&format!("<text:span text:style-name=\"{}\">", name));
+                        }
                         if mask > 0 {
                             out.push_str(&format!(
                                 "<text:span text:style-name=\"{}\">",
@@ -490,6 +585,22 @@ impl P {
                             out.push_str("</text:span>");
                         } else {
                             self.parse_inline(out, Some("span"));
+                        }
+                        if font.is_some() {
+                            out.push_str("</text:span>");
+                        }
+                    }
+                    "font" => {
+                        // Legacy <font face="…"> (e.g. pasted content).
+                        self.consume_tag();
+                        let font = font_from_face_attr(&attrs);
+                        if let Some(family) = font.as_deref() {
+                            let name = self.font_style_name(family);
+                            out.push_str(&format!("<text:span text:style-name=\"{}\">", name));
+                            self.parse_inline(out, Some("font"));
+                            out.push_str("</text:span>");
+                        } else {
+                            self.parse_inline(out, Some("font"));
                         }
                     }
                     "img" | "script" | "style" | "iframe" | "svg" | "video" | "audio" => {
@@ -552,6 +663,79 @@ fn mask_from_style_attr(raw: &str) -> u8 {
         mask |= 4;
     }
     mask
+}
+
+/// First family from a `font-family:` declaration inside a `style` attribute.
+/// Handles quotes and either `,` or `;` terminators, and HTML entities.
+fn font_from_style_attr(raw: &str) -> Option<String> {
+    let lower = raw.to_lowercase();
+    let start = lower.find("font-family")?;
+    let rest = raw[start + "font-family".len()..].trim_start();
+    let rest = rest.strip_prefix(':')?.trim_start();
+    let mut value = String::new();
+    let mut quote: Option<char> = None;
+    for ch in rest.chars() {
+        match quote {
+            Some(q) => {
+                if ch == q {
+                    quote = None;
+                } else {
+                    value.push(ch);
+                }
+            }
+            None => match ch {
+                '\'' | '"' => quote = Some(ch),
+                ';' | ',' => break,
+                _ => value.push(ch),
+            },
+        }
+    }
+    let name = decode_entities(value.trim())
+        .trim_matches(|c| c == '\'' || c == '"')
+        .trim()
+        .to_string();
+    (!name.is_empty()).then_some(name)
+}
+
+/// The `face` attribute of a legacy `<font>` tag.
+fn font_from_face_attr(raw: &str) -> Option<String> {
+    let name = attr_value_keep(raw, "face")?.trim().to_string();
+    (!name.is_empty()).then_some(name)
+}
+
+/// Case-preserving attribute lookup (`attr_value` lowercases everything, which
+/// would mangle family names like "DM Sans").
+fn attr_value_keep(raw: &str, key: &str) -> Option<String> {
+    let lower = raw.to_lowercase();
+    let mut from = 0;
+    while let Some(pos) = lower[from..].find(key) {
+        let abs = from + pos;
+        let after = raw[abs + key.len()..].trim_start();
+        if let Some(val) = after.strip_prefix('=') {
+            let val = val.trim_start();
+            let (quote, val) = match val.chars().next() {
+                Some(c @ ('"' | '\'')) => (Some(c), &val[c.len_utf8()..]),
+                _ => (None, val),
+            };
+            let end = match quote {
+                Some(c) => val.find(c).unwrap_or(val.len()),
+                None => val.find(char::is_whitespace).unwrap_or(val.len()),
+            };
+            return Some(val[..end].to_string());
+        }
+        from = abs + key.len();
+    }
+    None
+}
+
+/// Minimal HTML entity decode for font names (`&#39;`, `&quot;`, `&amp;`).
+fn decode_entities(s: &str) -> String {
+    s.replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
 }
 
 fn split_top_blocks(xml: &str) -> Vec<&str> {
@@ -693,10 +877,10 @@ fn read_content_xml(odt: &[u8]) -> Result<String, AppError> {
     Ok(content)
 }
 
-fn render_block(node: &roxmltree::Node, out: &mut String) {
+fn render_block(node: &roxmltree::Node, out: &mut String, fonts: &HashMap<String, String>) {
     if node.has_tag_name("p") {
         out.push_str("<p>");
-        render_inline(node, out);
+        render_inline(node, out, fonts);
         out.push_str("</p>");
     } else if node.has_tag_name("h") {
         let lvl = node
@@ -705,7 +889,7 @@ fn render_block(node: &roxmltree::Node, out: &mut String) {
             .unwrap_or(1)
             .clamp(1, 6);
         out.push_str(&format!("<h{}>", lvl));
-        render_inline(node, out);
+        render_inline(node, out, fonts);
         out.push_str(&format!("</h{}>", lvl));
     } else if node.has_tag_name("list") {
         let ordered = node
@@ -720,14 +904,14 @@ fn render_block(node: &roxmltree::Node, out: &mut String) {
                 for child in item.children() {
                     if child.is_element() {
                         if child.has_tag_name("p") || child.has_tag_name("h") {
-                            render_inline(&child, &mut item_html);
+                            render_inline(&child, &mut item_html, fonts);
                         } else if child.has_tag_name("list") {
-                            render_block(&child, &mut item_html);
+                            render_block(&child, &mut item_html, fonts);
                         }
                     }
                 }
                 if item_html.trim().is_empty() {
-                    render_inline(&item, &mut item_html);
+                    render_inline(&item, &mut item_html, fonts);
                 }
                 out.push_str(&item_html);
                 out.push_str("</li>");
@@ -737,26 +921,36 @@ fn render_block(node: &roxmltree::Node, out: &mut String) {
     }
 }
 
-fn render_inline(node: &roxmltree::Node, out: &mut String) {
+fn render_inline(node: &roxmltree::Node, out: &mut String, fonts: &HashMap<String, String>) {
     for child in node.children() {
         if child.is_text() {
             out.push_str(&escape_html_text(child.text().unwrap_or("")));
         } else if child.is_element() {
             if child.has_tag_name("span") {
                 // roxmltree matches attributes by (namespace URI, local name).
-                let mask = child
-                    .attribute((NS_TEXT, "style-name"))
-                    .map(style_mask)
-                    .unwrap_or(0);
+                let style_name = child.attribute((NS_TEXT, "style-name"));
+                let mask = style_name.map(style_mask).unwrap_or(0);
+                let font = style_name.and_then(|n| fonts.get(n)).cloned();
                 let mut inner = String::new();
-                render_inline(&child, &mut inner);
-                wrap_style(mask, &inner, out);
+                render_inline(&child, &mut inner, fonts);
+                // Font wraps the character formatting, matching the importer.
+                if mask != 0 {
+                    inner = style_wrap(mask, &inner);
+                }
+                if let Some(family) = font {
+                    inner = format!(
+                        "<span style=\"font-family:{}\">{}</span>",
+                        escape_html_attr(&family),
+                        inner
+                    );
+                }
+                out.push_str(&inner);
             } else if child.has_tag_name("a") {
                 let href = child
                     .attribute((NS_XLINK, "href"))
                     .unwrap_or("");
                 out.push_str(&format!("<a href=\"{}\">", escape_html_attr(href)));
-                render_inline(&child, out);
+                render_inline(&child, out, fonts);
                 out.push_str("</a>");
             } else if child.has_tag_name("line-break") {
                 out.push_str("<br>");
@@ -770,10 +964,10 @@ fn render_inline(node: &roxmltree::Node, out: &mut String) {
                 out.push('\t');
             } else if child.has_tag_name("p") || child.has_tag_name("h") || child.has_tag_name("list")
             {
-                render_block(&child, out);
+                render_block(&child, out, fonts);
             } else {
                 // note, soft-page-break, bookmark, etc. — flatten content
-                render_inline(&child, out);
+                render_inline(&child, out, fonts);
             }
         }
     }
@@ -792,7 +986,7 @@ fn style_mask(style_name: &str) -> u8 {
     }
 }
 
-fn wrap_style(mask: u8, inner: &str, out: &mut String) {
+fn style_wrap(mask: u8, inner: &str) -> String {
     let mut s = inner.to_string();
     if mask & 1 != 0 {
         s = format!("<b>{}</b>", s);
@@ -803,7 +997,7 @@ fn wrap_style(mask: u8, inner: &str, out: &mut String) {
     if mask & 4 != 0 {
         s = format!("<u>{}</u>", s);
     }
-    out.push_str(&s);
+    s
 }
 
 fn escape_html_text(s: &str) -> String {
@@ -838,6 +1032,43 @@ mod tests {
         assert!(back.contains("<i>italics</i>"), "italics lost: {back}");
         assert!(back.contains("bold</b> paragraph"), "space after span lost: {back}");
         assert!(back.contains("<ul><li>item one</li><li>item two</li></ul>"), "list lost: {back}");
+    }
+
+    #[test]
+    fn roundtrip_keeps_inline_font() {
+        let html = "<p><span style=\"font-family:'DM Sans', sans-serif\">Hello</span> world</p>";
+        let odt = html_to_odt("t", html).unwrap();
+        let xml = read_content_xml(&odt).unwrap();
+        assert!(
+            xml.contains("fo:font-family=\"DM Sans\""),
+            "font style missing: {xml}"
+        );
+        let back = odt_to_html(&odt).unwrap();
+        assert!(
+            back.contains("<span style=\"font-family:DM Sans\">Hello</span>"),
+            "font lost: {back}"
+        );
+        assert!(back.contains(" world"), "trailing text lost: {back}");
+    }
+
+    #[test]
+    fn roundtrip_keeps_block_font_and_weight() {
+        let html = "<p style=\"font-family:Roboto\"><b>Hi</b> there</p>";
+        let odt = html_to_odt("t", html).unwrap();
+        let back = odt_to_html(&odt).unwrap();
+        assert!(back.contains("font-family:Roboto"), "block font lost: {back}");
+        assert!(back.contains("<b>Hi</b>"), "bold inside font lost: {back}");
+    }
+
+    #[test]
+    fn roundtrip_keeps_legacy_font_tag() {
+        let html = "<p><font face=\"Inter\">x</font></p>";
+        let odt = html_to_odt("t", html).unwrap();
+        let back = odt_to_html(&odt).unwrap();
+        assert!(
+            back.contains("<span style=\"font-family:Inter\">x</span>"),
+            "font tag lost: {back}"
+        );
     }
 
     #[test]

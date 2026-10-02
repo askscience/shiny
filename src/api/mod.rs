@@ -1,6 +1,7 @@
 pub mod artifacts;
 pub mod auth;
 pub mod background;
+pub mod fonts;
 pub mod preferences;
 pub mod travelers;
 pub mod trips;
@@ -353,6 +354,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
+        // Installed font families — the appearance "Global font" picker and the
+        // Writer's font menu read the live fontconfig list (see fonts.rs).
+        .route("/api/fonts", get(fonts::list))
         // Host panels (network/audio/display/backlight/brightness/touchbar) are
         // registered separately in `host_routes` below so the remote-client gate
         // can wrap them without wrapping the rest of the API.

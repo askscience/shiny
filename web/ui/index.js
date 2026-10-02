@@ -12,6 +12,7 @@ export {
   initAppearance, refreshAppearance, applyAppearance,
   getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
+  getFont, setFont, applyFont, fontStackFor, FONT_THEME,
   hexToRgb, rgba, contrastFor, cssVar,
 } from './appearance.js';
 export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg, refreshFolderIcons, colorizeFolder } from './icon.js';

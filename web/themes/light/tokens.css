@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* Typefaces (DM Sans, Space Grotesk, Instrument Serif) are installed locally
+   by scripts/install-fonts.sh — no Google Fonts request is made. */
 
 /* ─────────────────────────────────────────────────────────────
    Light — monochrome light design tokens

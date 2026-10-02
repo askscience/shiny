@@ -111,6 +111,41 @@ export function setGradient(gradient) {
   localStorage.setItem(scopedKey(GRADIENT_KEY), JSON.stringify(gradient));
 }
 
+/* ── global font ──────────────────────────────────────────────
+ * One UI-wide typeface, independent of the theme's own `--font-*` tokens.
+ * `'theme'` leaves the theme in charge; any other value is a family name from
+ * the host's fontconfig (see GET /api/fonts + web/js/fonts.js) and overrides
+ * `--font-body` and `--font-display`. `--font-editorial` is deliberately left
+ * alone — it is a display accent (the Writer's face), not body type.
+ * ─────────────────────────────────────────────────────────────── */
+
+const FONT_KEY = 'ui.font';
+const DEFAULT_FONT = 'Roboto';
+
+/** Sentinel: follow the active theme's own fonts instead of an override. */
+export const FONT_THEME = 'theme';
+
+/** The chosen global font family (defaults to Roboto). */
+export function getFont() {
+  return localStorage.getItem(scopedKey(FONT_KEY)) || DEFAULT_FONT;
+}
+
+/** A CSS stack for a family name, with a generic fallback. `null` for theme. */
+export function fontStackFor(family) {
+  const name = String(family || '').trim();
+  if (!name || name === FONT_THEME) return null;
+  if (name === 'system-ui') return 'system-ui, -apple-system, sans-serif';
+  const safe = name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const serif = /serif$/i.test(name) && !/sans[- ]?serif$/i.test(name);
+  return `"${safe}", ${serif ? 'serif' : 'sans-serif'}`;
+}
+
+export function setFont(value) {
+  const v = String(value || '').trim() || DEFAULT_FONT;
+  localStorage.setItem(scopedKey(FONT_KEY), v);
+  applyFont();
+}
+
 /** Gradient presets declared by the active theme. */
 export function gradientPresets() {
   return getThemeManifest()?.gradients || [];
@@ -147,9 +182,24 @@ export function applyAppearance({ accent = getAccent(), gradient = getGradient()
     `radial-gradient(ellipse 80% 60% at 20% 10%, ${rgba(stops[0], 0.13)} 0%, transparent 55%),` +
     `radial-gradient(ellipse 70% 50% at 80% 90%, ${rgba(tail, 0.1)} 0%, transparent 50%)`);
 
+  applyFont();
+
   const detail = { accent, gradient };
   window.dispatchEvent(new CustomEvent('appearance:change', { detail }));
   window.dispatchEvent(new CustomEvent('accent:change', { detail: { accent } })); // legacy
+}
+
+/** Write the global font onto :root, or clear the override for 'theme'. */
+export function applyFont() {
+  const root = document.documentElement;
+  const stack = fontStackFor(getFont());
+  if (!stack) {
+    root.style.removeProperty('--font-body');
+    root.style.removeProperty('--font-display');
+  } else {
+    root.style.setProperty('--font-body', stack);
+    root.style.setProperty('--font-display', stack);
+  }
 }
 
 /** Boot: wire per-user scoping and apply the stored appearance. */
