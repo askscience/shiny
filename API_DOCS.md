@@ -1,5 +1,13 @@
 # API Reference
 
+> **Deprecated / historical.** These examples predate the current route table.
+> The authoritative API reference is now
+> [`docs/api/`](docs/api/README.md) (index) with per-area pages for
+> [auth](docs/api/auth.md), [chat & agent](docs/api/chat-agent.md),
+> [voice](docs/api/voice.md), [host](docs/api/host.md) and
+> [travel](docs/api/travel.md). The live source of truth is
+> [`src/api/mod.rs`](src/api/mod.rs).
+
 Base URL: `http://localhost:8080`
 
 All protected endpoints require: `Authorization: Bearer <token>`
