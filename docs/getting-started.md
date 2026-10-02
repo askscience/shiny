@@ -93,9 +93,9 @@ The [kiosk shell](deployment/kiosk-shell.md) is a separate binary
 
 | Gesture | Action |
 |---|---|
-| Tap the sphere | Listen once, reply spoken aloud |
-| Long-press the sphere | Wake mode — hold, say "Hey &lt;assistant name&gt;", keep talking, release to end |
-| Double-tap the sphere | Type a message (Markdown replies) |
+| Tap the voice bar | Listen once, reply spoken aloud |
+| Long-press the voice bar | Wake mode — hold, say "Hey &lt;assistant name&gt;", keep talking, release to end |
+| Double-tap the voice bar | Type a message (Markdown replies) |
 | Tap while it is answering | Stop it and start listening again |
 
 Everything in the UI is also reachable by voice/typed instruction through the

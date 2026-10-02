@@ -30,7 +30,7 @@ Studio contributes four things to a running Shiny:
 
 1. **A render engine** (`src/engine.rs` + `src/dsp/*`) that turns a JSON pattern or
    arrangement into a WAV (`f32` → 16/24-bit PCM).
-2. **Agent tools** (`src/tools/mod.rs`) named `studio_*` so the AI sphere can compose, list,
+2. **Agent tools** (`src/tools/mod.rs`) named `studio_*` so the AI assistant can compose, list,
    render, measure, save presets and arrange timelines.
 3. **REST routes** (`src/routes.rs`) at `/api/studio/*` that the window and the tools share,
    plus a self-describing catalog at `GET /api/studio/catalog`.

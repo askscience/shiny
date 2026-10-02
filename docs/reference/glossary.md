@@ -4,7 +4,7 @@ Terms that recur across the Shiny docs.
 
 | Term | Meaning |
 |---|---|
-| **AI sphere** | The core product: a conversational agent plus the voice bar, chat, web search and artifact dock. Everything domain-specific is a plugin. |
+| **AI assistant** | The core product: a conversational agent plus the voice bar, chat, web search and artifact dock. Everything domain-specific is a plugin. |
 | **Action / action block** | A JSON object an LLM emits to call a tool, e.g. `{"action":"hello","params":{"name":"world"}}`. `parse_actions` extracts them from a model reply. |
 | **AgentContext** | Per-request state passed to every tool: lat/lon/heading, language, model override. Distinct from `PluginCtx`. |
 | **API level** | `api_level` on a plugin manifest. The running core accepts plugins with `api_level ≤ CORE_API_LEVEL` (currently `1`). |

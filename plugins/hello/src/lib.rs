@@ -1,6 +1,6 @@
 //! Demo "Hello" plugin — a single trivial tool to verify the plugin pipeline.
 //!
-//! Registers one tool: `hello`. The AI sphere can call:
+//! Registers one tool: `hello`. The AI assistant can call:
 //!   {"action":"hello","params":{"name":"world"}}
 //! and gets back `Hello, world!`.
 

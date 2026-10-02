@@ -2,7 +2,7 @@
 
 Studio registers **15 tools** named `studio_*` through the plugin SDK
 (`src/plugin.rs`, implementations in `src/tools/mod.rs`). They are bridged with
-`shiny_plugin_sdk::tools::bridged(tool)` and become callable by the live AI sphere. Tools write
+`shiny_plugin_sdk::tools::bridged(tool)` and become callable by the live AI assistant. Tools write
 through the plugin's own SQLite pool (`ctx.pool()`) scoped to `req.traveler_id`, and share the
 same render engine (`crate::engine`) as the REST routes.
 

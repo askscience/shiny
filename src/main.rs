@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_writer(TeeMakeWriter { file: log_file })
         .init();
 
-    tracing::info!("Starting Shiny AI sphere…");
+    tracing::info!("Starting Shiny AI assistant…");
     tracing::info!("Logging to {}", config.log_file);
 
     std::fs::create_dir_all("data").ok();
@@ -292,7 +292,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !installed.is_empty() {
         tracing::info!("Loaded plugins: {}", installed.join(", "));
     } else {
-        tracing::info!("No plugins installed. Core runs as pure AI sphere.");
+        tracing::info!("No plugins installed. Core runs as pure AI assistant.");
     }
 
     if config.diary_auto_generate {

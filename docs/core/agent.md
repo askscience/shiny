@@ -1,6 +1,6 @@
 # The agent loop and tool dispatch
 
-Shiny's "AI sphere" is a single agent loop: the user speaks or types, the model
+Shiny's "AI assistant" is a single agent loop: the user speaks or types, the model
 is asked to either call one tool or answer in plain language, the core executes
 the tool, feeds the result back, and repeats until the model stops calling
 tools or the turn is stopped. Everything domain-specific (trips, mail, word

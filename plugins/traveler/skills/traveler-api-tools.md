@@ -1,6 +1,6 @@
 # Traveler plugin — agent tools
 
-The traveler plugin contributes these tools to the AI sphere:
+The traveler plugin contributes these tools to the AI assistant:
 
 ## Trips
 - `create_trip` — `{"action":"create_trip","params":{"name":"Paris","description":"..."}}`

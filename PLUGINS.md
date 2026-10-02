@@ -1,10 +1,10 @@
 # Plugin system
 
-`shiny` is built around an **AI sphere** — a conversational agent driven by Ollama with the voice bar UI, voice (Vosk STT, Supertonic TTS), web search, and an artifact dock at its core. **Every domain beyond that lives in a plugin.**
+`shiny` is built around an **AI assistant** — a conversational agent driven by Ollama with the voice bar UI, voice (Vosk STT, Supertonic TTS), web search, and an artifact dock at its core. **Every domain beyond that lives in a plugin.**
 
 This document explains the architecture, the trait surface, the installer workflow, and a worked example. After reading it you can write, build, package, install, and uninstall a plugin.
 
-> **One-line summary:** drop a `.zip` or `.tar.gz` containing `plugin.toml` + `lib<my_plugin>.so` onto `POST /api/plugins/install` and the plugin's tools become callable by the live AI sphere — no restart needed.
+> **One-line summary:** drop a `.zip` or `.tar.gz` containing `plugin.toml` + `lib<my_plugin>.so` onto `POST /api/plugins/install` and the plugin's tools become callable by the live AI assistant — no restart needed.
 
 ---
 
@@ -13,7 +13,7 @@ This document explains the architecture, the trait surface, the installer workfl
 ```
                   shiny (core binary)
             ┌──────────────────────────────┐
-            │  AI sphere                   │
+            │  AI assistant                │
             │  ├─ voice bar UI             │
             │  ├─ Vosk STT + Supertonic TTS│
             │  ├─ OllamaClient             │
@@ -45,7 +45,7 @@ The binary's core responsibilities:
 | `PluginManager`, `ToolRegistry`, installer, admin API | A **persona fragment** ("…a travel navigator AI…") |
 | `data/plugins/install.log` (the install audit trail) | Front-end bundle under `web/` |
 
-### Without any plugins the app is "just the AI sphere"
+### Without any plugins the app is "just the AI assistant"
 
 Start `shiny` with an empty `PLUGINS_DIR` and you get a voice bar that listens, speaks, replies, and has the built-in generic tools only (`web_search`, `show_artifact`, `update_artifact`). Everything else is opt-in.
 
@@ -670,7 +670,7 @@ The plugin system reads these env vars in `Config::from_env`:
 |---|---|---|
 | `PLUGINS_DIR` | `data/plugins` | Where plugins live + the `install.log`. |
 | `ADMIN_TOKEN` | unset | Read into `Config::admin_token` and the plugin `ConfigSnapshot`, but **not currently enforced** by the auth middleware — plugin management is gated by a logged-in user token (see §13/§14). |
-| `CORE_TRAVELER_BUILTIN` | `true` | When `true`, the embedded traveler tools (`src/services/agent_tools.rs`) still answer actions the plugin didn't claim. Set `false` to make core truly sphere-only. |
+| `CORE_TRAVELER_BUILTIN` | `true` | When `true`, the embedded traveler tools (`src/services/agent_tools.rs`) still answer actions the plugin didn't claim. Set `false` to make core a pure assistant. |
 
 All other env vars come through "as-is" to plugins via `PluginCtx::config` (`ConfigSnapshot`).
 

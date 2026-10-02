@@ -1,4 +1,4 @@
-//! Value type for an artifact card — the dock payload the AI sphere shows.
+//! Value type for an artifact card — the dock payload the AI assistant shows.
 //!
 //! `Artifact` is intentionally generic: new artifact types can be introduced
 //! by plugins without a schema migration; the front-end just renders what

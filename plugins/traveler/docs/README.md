@@ -1,6 +1,6 @@
 # Traveler plugin
 
-The **traveler** plugin gives the Shiny AI sphere a travel domain: trip tracking,
+The **traveler** plugin gives the Shiny AI assistant a travel domain: trip tracking,
 GPS location history, an OpenStreetMap client (geocode / reverse / route / POI),
 turn-by-turn navigation sessions, AI-written diaries, a research→prose trip
 planner, and generic artifact cards. It contributes **22 agent tools**, a persona
@@ -41,7 +41,7 @@ name = "traveler"
 version = "0.1.0"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
-description = "Trip tracking, GPS, diary, map and navigation tools for the AI sphere"
+description = "Trip tracking, GPS, diary, map and navigation tools for the AI assistant"
 summary = "Trip tracking, GPS, diary, map tools, navigation"
 migrations_dir = "migrations"
 skills_dir = "skills"
@@ -168,7 +168,7 @@ Install/activation are separate: the cdylib is shared server-wide, while
 **activation is per user** (`user_plugin_states`). `GET /api/plugins` returns the
 per-user `enabled` flag; `POST /api/plugins/activate {"name":"traveler"}`
 activates it. `CORE_TRAVELER_BUILTIN` (`PLUGINS.md` §11) controls whether core's
-legacy embedded traveler answers remain — set `false` for a pure sphere.
+legacy embedded traveler answers remain — set `false` for a pure assistant.
 
 The window is core-hosted, so there is no `web/plugin.js` to build or smoke-test
 for this plugin; only `web/icon.svg` ships.

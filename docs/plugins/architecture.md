@@ -14,7 +14,7 @@ discovery, the hot router swap, activation, and uninstall.
 ```
                   shiny (core binary)
             ┌──────────────────────────────┐
-            │  AI sphere                   │
+            │  AI assistant                │
             │  ├─ voice bar UI             │
             │  ├─ Vosk STT + Supertonic TTS│
             │  ├─ OllamaClient             │
@@ -44,7 +44,7 @@ discovery, the hot router swap, activation, and uninstall.
 | `PluginManager`, `ToolRegistry`, installer, admin API | A **persona fragment** ("…a travel navigator AI…") |
 | `data/plugins/install.log` | A front-end bundle under `web/` |
 
-Without plugins the app is "just the AI sphere": a voice bar that listens,
+Without plugins the app is "just the AI assistant": a voice bar that listens,
 speaks, replies, and has only the built-in generic tools.
 
 ---

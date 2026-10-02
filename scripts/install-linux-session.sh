@@ -79,7 +79,7 @@ echo "  port base : $PORT_BASE"
 install -d -m 0755 /etc/systemd/user
 cat > "$USER_UNIT" <<EOF
 [Unit]
-Description=Shiny AI sphere desktop (per-user server)
+Description=Shiny AI desktop (per-user server)
 Documentation=file:$SHINY_REPO/README.md
 After=pipewire.socket
 Wants=pipewire.socket

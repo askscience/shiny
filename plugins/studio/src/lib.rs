@@ -2,7 +2,7 @@
 //!
 //! Compose rhythmic patterns (explicit `x..x` rhythms and Euclidean fills) and
 //! arrangements, render them through the plugin's own DSP engine (see
-//! [`dsp`]) to WAV, and expose them to the AI sphere via tools + REST routes
+//! [`dsp`]) to WAV, and expose them to the AI assistant via tools + REST routes
 //! and to the user via the Studio window.
 
 pub mod catalog;

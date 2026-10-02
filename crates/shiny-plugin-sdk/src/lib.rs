@@ -1,7 +1,7 @@
 //! shiny Plugin SDK
 //!
 //! Defines the trait surface a plugin implements, the types it exchanges with the
-//! core AI sphere, and a small set of helpers (parsing, parameter extraction,
+//! core AI assistant, and a small set of helpers (parsing, parameter extraction,
 //! migration runner). Plugins compile against this crate only; the binary loads
 //! them via `libloading` at startup or on install.
 //!

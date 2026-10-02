@@ -19,7 +19,7 @@ pub struct Manifest {
     /// Author / publisher.
     #[serde(default)]
     pub author: Option<String>,
-    /// Without plugins enabled, core is just the AI sphere; this is the doc
+    /// Without plugins enabled, core is just the AI assistant; this is the doc
     /// string the admin UI shows as "what this plugin adds".
     #[serde(default)]
     pub summary: Option<String>,

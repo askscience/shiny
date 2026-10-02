@@ -12,7 +12,7 @@ pub struct TravelerPlugin;
 /// Persona fragment the agent system prompt sees when this plugin is active.
 /// Re-used via `read_skills_file()` so the value lives in skills/traveler-api-tools.md
 /// alongside the markdown doc the LLM consumes. Kept short so the generic
-/// "AI sphere" base prompt reads naturally when concatenated.
+/// "AI assistant" base prompt reads naturally when concatenated.
 pub const PERSONA: &str =
     "a travel navigator AI; address the user by first name when it feels natural, \
      suggest places to visit, walks, and routes, and proactively offer to track \

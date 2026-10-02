@@ -1,6 +1,6 @@
 # Plugin system
 
-Shiny is built around an **AI sphere** — a conversational agent driven by Ollama
+Shiny is built around an **AI assistant** — a conversational agent driven by Ollama
 with the voice bar UI, voice input/output, web search, and an artifact dock at
 its core. **Every domain beyond that lives in a plugin.**
 
@@ -9,7 +9,7 @@ root `PLUGINS.md` while preserving its hard-won operational detail.
 
 > **One-line summary:** drop a `.zip` or `.tar.gz` containing `plugin.toml` +
 > `lib<my_plugin>.so` onto `POST /api/plugins/install` and the plugin's tools
-> become callable by the live AI sphere — no restart needed.
+> become callable by the live AI assistant — no restart needed.
 
 ## What a plugin is
 
@@ -36,7 +36,7 @@ and `web/` (a window surface + icon).
 | `PluginManager`, `ToolRegistry`, installer, plugin admin API | A **persona fragment** ("…a travel navigator AI…") |
 | `data/plugins/install.log` (the install audit trail) | A front-end window bundle under `web/` |
 
-Without any plugins the app is "just the AI sphere": a voice bar that listens,
+Without any plugins the app is "just the AI assistant": a voice bar that listens,
 speaks, replies, and has only the built-in generic tools. Everything else is
 opt-in.
 

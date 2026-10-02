@@ -1,6 +1,6 @@
 # Hello plugin
 
-Demo plugin — registers one `hello` tool with the AI sphere.
+Demo plugin — registers one `hello` tool with the AI assistant.
 
 ## Usage
 

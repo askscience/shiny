@@ -1,4 +1,4 @@
-# Shiny — AI Sphere Desktop
+# Shiny — AI Desktop
 
 **Shiny is a local-first AI assistant you talk to, wrapped in a desktop.** The
 core is a voice-first conversational agent (Ollama) inside a browser-based
@@ -9,7 +9,7 @@ optional migrations, skills and a `web/plugin.js` window.
 
 Plugins are installed at runtime (drop a `.zip`/`.tar.gz` on the API) with hot
 router swap: **no core edits, no restart**. With no plugin active, Shiny is just
-the voice/chat sphere.
+the voice/chat assistant.
 
 ```
 Browser (web/)                              shiny (core binary)
