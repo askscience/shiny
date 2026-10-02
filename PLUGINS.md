@@ -819,7 +819,8 @@ Before publishing a plugin:
 - [ ] All DB/HTTP work goes through the async accessors `ctx.pool()/ollama()/search()/supertonic()` — never a host-passed pool or client (§15)
 - [ ] Every migration file is idempotent (`CREATE TABLE IF NOT EXISTS`)
 - [ ] `skills_md` and `persona` are set if the plugin contributes persona/skills
-- [ ] `web/icon.svg` ships a 24×24 `currentColor` icon in the plugin icon style — bold `stroke-width="2"`, round caps/joins, tight framing (§19 "Plugin icon" → "Icon style")
+- [ ] `web/icon.svg` ships a 24×24 `currentColor` icon in the plugin icon style — bold `stroke-width="2"`, round caps/joins, tight framing (§19 "Plugin icon" → "Icon style") — **or** the plugin is mapped to a shared `apps/<name>` icon in `web/js/pluginIcon.js` (bundled plugins). Prefer reusing an existing name from `web/ui/icons/INDEX.md` for anything inside the window.
+- [ ] Any icon referenced inside the window is a **name from the shared catalog** (`web/ui/icons/INDEX.md`), not a hand-drawn SVG — so it follows the theme and accent.
 - [ ] User-visible events use the core notification system (`notify()` / `with_notification`) — §19 "Notifications"
 - [ ] **Window surfaces have a JS smoke test.** `import()` of `web/plugin.js` is what core does to mount a window. A syntax error there is not fatal to the app — core logs one `console.warn` — but the window it was meant to be is simply absent, which reads as "the plugin does nothing". `node --check web/plugin.js` catches most of it, and `plugins/browser/web/plugin.smoke.mjs` is the reference for the rest: it mounts the real surface against a small DOM shim and asserts the generated srcdoc, the card markup and the postMessage contract.
 - [ ] Every migration file is idempotent (`CREATE TABLE IF NOT EXISTS`) **and never edited after it has been applied** — the runner records files by name and will not re-run one, so an edit is silently lost (see §9 "Important notes")
@@ -858,6 +859,9 @@ Before publishing a plugin:
 | `src/api/agent.rs` | System prompt = `web/skills/core-assistant.md` + active plugins' skills/persona. |
 | `src/services/agent_tools.rs` | `execute_action`: registry first; core built-in = `web_search` only; traveler verbs refuse cleanly without the plugin. |
 | `data/plugins/install.log` | Audit trail — written on every install/uninstall/error. |
+| `web/ui/icons/` | The **shared icon library**: every glyph the app and plugins resolve by name (`icon('ui/save')`, `<span data-icon="apps/files">`). Catalog in `web/ui/icons/INDEX.md`; prose in `web/ui/icons/README.md`. A theme may override any name in `web/themes/<theme>/icons/`. |
+| `scripts/kde-icons/` | Curator for the KDE **Slot-Beauty** icons: `convert.py` (sanitize + normalize), `mapping.json` (KDE source → Shiny name), and `source/{dark,light}` (the ~60 curated SVGs, committed). The raw sets live in `assets/iconsets/` (GPL-3.0, not committed). |
+| `assets/iconsets/` | Raw Slot-Beauty KDE icon sets — a large pool of extra app, mimetype, category, emblem and place glyphs. Source for new icons; see `web/ui/icons/README.md`. |
 
 ---
 
@@ -876,7 +880,42 @@ dock and panels, leaving the voice/text chat over the voice bar.
 | Layer | Location | Role |
 |---|---|---|
 | Component library | `web/ui/` | Theme-agnostic engine: `theme-loader`, `appearance` (accent/gradient), `icon`, `reveal`, and all `.ui-*` components (`button`, `field`, `card`, `overlay`, `feedback`, `data`, `composites`). |
-| Themes | `web/themes/<name>/` | Skins: `theme.json` manifest, `tokens.css`, `components.css`, and `icons/` (SVG, `currentColor`). Installed themes are listed in `web/themes/themes.json`. See `web/themes/README.md`. |
+| Shared icons | `web/ui/icons/` | **The one icon library** — HUD, core windows, Files and every plugin's identity glyph. Catalog in `web/ui/icons/INDEX.md`, prose in `web/ui/icons/README.md`. |
+| Themes | `web/themes/<name>/` | Skins: `theme.json` manifest, `tokens.css`, `components.css`, and `icons/` (SVG, `currentColor`) as an **override set** over the shared library. Installed themes are listed in `web/themes/themes.json`. See `web/themes/README.md`. |
+
+### Icons
+
+Every icon in the app resolves by **name** through `web/ui/icon.js`, which
+fetches the active theme's override (`/themes/<theme>/icons/<name>.svg`) first
+and then the shared icon (`/ui/icons/<name>.svg`). Use it from a plugin's
+window code:
+
+```js
+import { icon, setIcon } from '/ui/index.js';   // when plugin web assets land
+
+const wrap = document.createElement('span');
+wrap.appendChild(icon('ui/folder-open', { size: 16 }));
+
+// or fill an existing element:
+await setIcon(el, 'ui/save', { size: 16 });
+```
+
+In static HTML, `<span data-icon="ui/search" data-icon-size="16">` is hydrated
+at boot.
+
+**Always reuse a name from the catalog** (`web/ui/icons/INDEX.md`) instead of
+drawing new SVG — the icons are `currentColor` and follow the theme and the
+user's accent for free. The names cover core UI (`ui/settings`, `ui/puzzle`,
+`ui/close`, `ui/chevron-*`, `ui/search`, `ui/list`, `ui/grid`, `ui/power`, …),
+the Files UI (`ui/folder`, `ui/file`, `ui/doc`, `ui/image`, `ui/video`,
+`ui/music`, `ui/archive`, `ui/download`, `ui/home`, `ui/trash`, `ui/monitor`),
+the HUD (`hud/wifi-0…4`, `hud/ethernet`, `hud/bluetooth`, `hud/volume-*`,
+`hud/clock`) and the app icons (`apps/<plugin>`).
+
+The HUD, core-window, file-type and `apps/` glyphs are curated from the KDE
+**Slot-Beauty** icon set (GPL-3.0) — the full raw set (thousands of extra app,
+mimetype and category glyphs) lives in `assets/iconsets/`, and
+`web/ui/icons/README.md` explains how to pull one more into the library.
 
 How plugin content reaches the eye:
 
@@ -900,7 +939,10 @@ How plugin content reaches the eye:
   structural only: `type` / `theme` (icon + eyebrow + dock slot), `narrative`
   vs `sections`, `days[]`, `route`, `coordinates` / `geometry`.
 - **Dock icons** come from the fixed `TYPE_ICONS` / `THEME_ICONS` maps in
-  `composites.js` and resolve to the active theme's `icons/artifacts/*.svg`.
+  `composites.js` and resolve to the active theme's `icons/artifacts/*.svg`
+  (falling back to `/ui/icons/`). For everything else — buttons, menus, status —
+  reuse a name from the shared catalog (`web/ui/icons/INDEX.md`); never draw new
+  SVG.
 - **Accent & gradient** are chosen per user in *Settings → Appearance* and
   apply everywhere, including the Leaflet map colors and the voice bar glow
   (via the `appearance:change` window event).
@@ -999,27 +1041,48 @@ Rules:
 
 ### Plugin icon
 
-Every plugin ships `web/icon.svg` — a single-color 24×24 SVG drawn with
-`stroke="currentColor"`. Core serves it at `/plugins/<name>/icon.svg` and shows
-it in two places:
+Every plugin's identity icon comes from **`web/js/pluginIcon.js`**, which
+resolves a plugin name in this order:
+
+1. the **shared library icon** mapped to it (`PLUGIN_ICONS` → an
+   `apps/<name>` glyph in `/ui/icons/apps/`),
+2. the plugin's own **`web/icon.svg`**, served at `/plugins/<name>/icon.svg`,
+3. the **core-window icon** (Settings → `ui/settings`, Plugins → `ui/puzzle`),
+4. the fallback `ui/puzzle`.
+
+Bundled plugins all have a curated `apps/<name>` icon (from the KDE
+Slot-Beauty set), so they show that everywhere. A **third-party plugin** that
+ships no icon falls back to `ui/puzzle`; ship a `web/icon.svg` (see *Icon
+style* below) to have a real glyph, or a core mapping can be added.
+
+The resolved icon is shown in:
 
 - **Top-bar plugin tray** (`#hud-plugins`, to the right of the weather widget) —
   one icon per installed plugin, active or inactive. Icons are grouped by the
   plugin's `category` manifest field and the groups are separated by a thin
   divider. Clicking an inactive icon activates the plugin; clicking an active
   icon focuses its window.
-- **Plugins window** — the plugin manager shows each plugin's own icon instead of
+- **Launcher** (the app grid) and the window/tile **dot** on the desktop.
+- **Plugins window** — the plugin manager shows each plugin's icon instead of
   the generic puzzle glyph.
 
-Plugins that don't ship an icon fall back to the `ui/puzzle` theme icon.
 Plugins that don't declare a `category` are grouped under **Other**.
+
+#### Adding or changing a plugin icon
+
+Bundled plugins: add or edit an entry in `PLUGIN_ICONS` in
+`web/js/pluginIcon.js` pointing at an `apps/<name>` icon, and make sure that
+icon exists in `web/ui/icons/apps/` (see `web/ui/icons/README.md` for how to
+curate one from the KDE set). The full catalog is
+[`web/ui/icons/INDEX.md`](../web/ui/icons/INDEX.md).
 
 #### Icon style
 
-Plugin icons share the visual language of the app mark (`web/favicon.svg`, the
-**PEAK'D!** logo) rather than the thinner line style of the theme
-icons, because these two surfaces paint them small — 18px in the HUD tray, 20px
-on the Plugins window. Follow these rules when adding or restyling one:
+A plugin's **own** `web/icon.svg` (fallback tier 2) shares the visual language
+of the app mark (`web/favicon.svg`, the **PEAK'D!** logo) rather than the
+thinner line style of the theme icons, because these surfaces paint them small —
+18px in the HUD tray, 20px on the Plugins window. Follow these rules when
+adding or restyling one:
 
 - **Bold strokes.** `stroke-width="2"` on a 24×24 grid — the app mark's weight,
   sized so the strokes still read at 18px.

@@ -156,6 +156,12 @@ export function applyAppearance({ accent = getAccent(), gradient = getGradient()
 export function initAppearance({ getScope: scopeGetter } = {}) {
   if (typeof scopeGetter === 'function') getScope = scopeGetter;
   applyAppearance();
+  // A theme switch changes the canvas. `setTheme()` updates the manifest before
+  // dispatching, so `themeMode()` is already correct here — this recomputes the
+  // accent (a near-white accent picked in a dark theme must fall back on a light
+  // canvas), `--accent-contrast`, and the gradients. Without it the old theme's
+  // accent lingers as ink and accent-coloured icons/labels go invisible.
+  window.addEventListener('theme:change', () => applyAppearance());
 }
 
 /** Re-apply after login / user switch (scope changed). */

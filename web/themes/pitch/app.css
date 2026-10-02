@@ -76,12 +76,8 @@
 .icon-btn,
 #workspace-bar,
 #fullscreen-bubble,
-.ui-hud-menu-popup,
-.ctx-menu,
 .ui-modal,
 .ui-sheet,
-.ui-toast,
-.ui-notification,
 .ui-artifact-close,
 .ui-dock-btn,
 .ui-insight,
@@ -405,13 +401,16 @@
 .fullscreen-bubble-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
 
 /* ── Menus (HUD popovers + context menus) ──────────────────────
-   One opaque rectangle, one hairline. No blur, no float shadow. */
+   One frosted glass rectangle, one hairline. Shared popover tokens so
+   they match every other theme and the Browser's own menus. */
 .ui-hud-menu-popup,
 .ctx-menu {
-  background: var(--surface-strong) !important;
-  border: 1px solid var(--glass-border) !important;
+  background: var(--popover-bg) !important;
+  border: 1px solid var(--popover-border) !important;
   border-radius: var(--radius-md) !important;
-  box-shadow: none !important;
+  box-shadow: var(--popover-shadow) !important;
+  -webkit-backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate)) !important;
+  backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate)) !important;
   animation: none !important;
 }
 .ui-hud-menu-trigger,
@@ -745,18 +744,20 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 
 /* ── Notifications ──────────────────────────────────────────────
-   A flat banner. Urgency is a left hairline in the semantic colour,
-   never a fill. */
+   A frosted banner matching the menus. Urgency is a left hairline in
+   the semantic colour, never a fill. */
 .ui-notification {
-  background: var(--surface-strong) !important;
-  border: 1px solid var(--glass-border) !important;
+  background: var(--popover-bg) !important;
+  border: 1px solid var(--popover-border) !important;
   border-radius: var(--radius-sm) !important;
-  box-shadow: none !important;
+  box-shadow: var(--popover-shadow) !important;
+  -webkit-backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate)) !important;
+  backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate)) !important;
 }
 .ui-notification--normal { border-left: 2px solid var(--accent) !important; }
 .ui-notification--critical {
   border-left: 2px solid var(--error) !important;
-  background: var(--surface-strong) !important;
+  background: color-mix(in srgb, var(--popover-bg) 88%, var(--error) 12%) !important;
 }
 .ui-notification-app { color: var(--muted) !important; letter-spacing: 0.12em !important; }
 .ui-notification-title { font-family: var(--font-body) !important; }

@@ -25,8 +25,28 @@ themes/
 ```
 
 The **shared** icon set lives in `/ui/icons/<group>/<name>.svg` (the UI
-library). A theme's `icons/` is an **override set**: it only needs to ship the
-icons it draws differently — anything it omits falls back to the shared icon.
+library) — its catalog is [`web/ui/icons/INDEX.md`](../ui/icons/INDEX.md) and
+its authoring guide is [`web/ui/icons/README.md`](../ui/icons/README.md). A
+theme's `icons/` is an **override set**: it only needs to ship the icons it
+draws differently — anything it omits falls back to the shared icon.
+
+### Icon sources
+
+Most shared icons are line glyphs drawn in-house. The HUD, core-window, file
+type and plugin (`/ui/icons/apps/`) glyphs are curated from the **Slot-Beauty**
+KDE icon themes ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes),
+**GPL-3.0**) and regenerated with `scripts/kde-icons/convert.py` — see
+`KDE_ICONS_PLAN.md` and [`web/ui/icons/README.md`](../ui/icons/README.md). The
+converter strips the KDE `<style>` block, rewrites fills to `currentColor` and
+derives a `viewBox` from the source, so the icons follow each theme and the
+user's accent like any other.
+
+The one deliberate exception is the **folder** glyph: it keeps the original
+KDE folder artwork (colour + gradient). The shared `ui/folder.svg` is the dark
+artwork, so the **light** themes (`light`, `neumorphic-light`) each ship their
+own `icons/ui/folder.svg` (light artwork) as an override. Only the curated
+source SVGs (`scripts/kde-icons/source/`) and the generated icons are
+committed; the raw ~180 MB sets live in `assets/iconsets/` and are ignored.
 
 Themes are plain static files — no build step, no backend involvement.
 `/themes/` is served directly; `themes.json` exists because directories

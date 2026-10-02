@@ -6639,9 +6639,11 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   color: #fff;
   pointer-events: none;
 }
+/* Folder tiles show the coloured KDE folder artwork, which carries its own
+   fills — so no accent tint or plate here (it would wash the artwork out). */
 .files-thumb--folder {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: transparent;
+  color: inherit;
 }
 .files-thumb--icon { color: var(--muted); }
 .files-thumb--mini {
@@ -6715,7 +6717,8 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-entry--row:hover { background: var(--glass-hover); }
 .files-entry--row.is-selected { background: var(--accent-soft); }
 .files-row-icon { display: inline-flex; justify-content: center; color: var(--muted); }
-.files-row-icon.is-folder { color: var(--accent); }
+/* The folder glyph is coloured artwork, so don't tint it with the accent. */
+.files-row-icon.is-folder { color: inherit; }
 .files-row-name {
   min-width: 0;
   overflow: hidden;

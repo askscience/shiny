@@ -1,14 +1,44 @@
 /**
  * pluginIcon.js — per-plugin icons.
  *
- * Every plugin ships `web/icon.svg` (a 24×24 `currentColor` SVG), served by
- * core at `/plugins/<name>/icon.svg`. This module inlines that SVG into a
- * `<span class="ui-icon">` so it inherits `color` from its host and follows
- * the active theme, falling back to a theme icon for plugins that don't ship
- * an icon (or whose icon fails to load).
+ * Resolution order for a plugin's icon:
+ *   1. the curated KDE app icon mapped to this plugin (`PLUGIN_ICONS`),
+ *   2. the plugin's own `web/icon.svg` (served at `/plugins/<name>/icon.svg`),
+ *   3. a core-window theme icon, for built-in windows,
+ *   4. the caller's `fallback` (`ui/puzzle` by default).
+ *
+ * The mapped and fallback icons come from the unified UI library
+ * (`/ui/icons/`), so they follow the active theme and the user's accent.
+ * The plugin's own SVG is inlined the same way.
  */
-import { setIcon } from '../ui/index.js';
+import { setIcon, loadIconSvg } from '../ui/index.js';
 import { isCoreWindow, coreWindowIcon } from './coreWindows.js';
+
+/**
+ * Plugin name → shared UI icon. Each name points at a curated icon under
+ * `web/ui/icons/apps/` (generated from the KDE Slot-Beauty set by
+ * `scripts/kde-icons/convert.py`). A plugin missing from this map falls back
+ * to its own `web/icon.svg`, then to `ui/puzzle`.
+ */
+export const PLUGIN_ICONS = {
+  browser: 'apps/browser',
+  calc: 'apps/calc',
+  calculator: 'apps/calculator',
+  calendar: 'apps/calendar',
+  files: 'apps/files',
+  hello: 'apps/hello',
+  image: 'apps/image',
+  impress: 'apps/impress',
+  keyboard: 'apps/keyboard',
+  mail: 'apps/mail',
+  pdf: 'apps/pdf',
+  radio: 'apps/radio',
+  studio: 'apps/studio',
+  terminal: 'apps/terminal',
+  traveler: 'apps/traveler',
+  word: 'apps/word',
+  youtube: 'apps/youtube',
+};
 
 const cache = new Map(); // name -> Promise<string|null>
 
@@ -19,6 +49,10 @@ function safeSvg(text) {
   return text;
 }
 
+/**
+ * The SVG text for a plugin's own shipped icon, or null when it has none
+ * (built-in windows never ship one).
+ */
 export function loadPluginIconSvg(name) {
   if (cache.has(name)) return cache.get(name);
   // Built-in windows have no web/icon.svg — resolve straight to the fallback.
@@ -35,9 +69,20 @@ export function loadPluginIconSvg(name) {
   return p;
 }
 
+/** The themed SVG text for a plugin: mapped KDE icon, else its own icon. */
+async function loadSvg(name) {
+  const mapped = PLUGIN_ICONS[name];
+  if (mapped) {
+    const svg = safeSvg(await loadIconSvg(mapped));
+    if (svg) return svg;
+  }
+  return loadPluginIconSvg(name);
+}
+
 /**
- * Create a `<span class="ui-icon">` filled with the plugin's icon. When the
- * plugin has no `web/icon.svg`, `fallback` (a theme icon path) is used.
+ * Create a `<span class="ui-icon">` filled with the plugin's icon. Uses the
+ * mapped KDE icon when one exists, else the plugin's own `web/icon.svg`, else
+ * `fallback` (a theme icon path) — or the core-window icon for built-ins.
  */
 export function pluginIconEl(name, { size = 16, fallback = 'ui/puzzle', label = null } = {}) {
   const span = document.createElement('span');
@@ -53,7 +98,7 @@ export function pluginIconEl(name, { size = 16, fallback = 'ui/puzzle', label = 
     span.setAttribute('aria-hidden', 'true');
   }
 
-  loadPluginIconSvg(name).then((svg) => {
+  loadSvg(name).then((svg) => {
     if (svg) span.innerHTML = svg;
     else void setIcon(span, isCoreWindow(name) ? coreWindowIcon(name) : fallback, { size, label });
   });

@@ -46,12 +46,16 @@
 .ui-btn:disabled, .ui-btn.is-disabled { opacity: 0.45; }
 .ui-btn .ui-icon { color: currentColor; }
 
+/* Icon-only buttons (plugin toolbars, HUD actions) are FLAT at rest — no
+   chip plate and no hairline around the glyph, exactly like Noir. The border
+   lives on the icon, not on a pill behind it. */
 .ui-btn--icon {
-  background: var(--surface-strong);
-  border-color: var(--glass-border);
+  background: transparent;
+  border-color: transparent;
   color: var(--text-secondary);
+  box-shadow: none;
 }
-.ui-btn--icon:hover { background: var(--glass-hover); color: var(--text); }
+.ui-btn--icon:hover { background: var(--glass-hover); border-color: transparent; color: var(--text); }
 
 /* Focus — a whisper of accent + a faint glow bloom */
 .ui-btn:focus-visible,

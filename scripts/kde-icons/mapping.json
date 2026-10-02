@@ -1,0 +1,76 @@
+{
+  "_comment": "PEAK'D! icon curation map. `src` is relative to the dark source root (assets/iconsets/Slot-Beauty-Dark-Icons-V-3/). `dst` is relative to web/ui/icons/. `color: true` keeps original fills (no currentColor rewrite) and is applied per-theme; `themes` restricts the destination to those themes. `light_src` is relative to the light source root (assets/iconsets/Slot-Beauty-Light-Icons/).",
+
+  "hud": [
+    { "name": "wifi-0",       "dst": "hud/wifi-0.svg",       "src": "panel/24/network-wireless-signal-none-symbolic.svg" },
+    { "name": "wifi-1",       "dst": "hud/wifi-1.svg",       "src": "panel/24/network-wireless-signal-weak-symbolic.svg" },
+    { "name": "wifi-2",       "dst": "hud/wifi-2.svg",       "src": "panel/24/network-wireless-signal-ok-symbolic.svg" },
+    { "name": "wifi-3",       "dst": "hud/wifi-3.svg",       "src": "panel/24/network-wireless-signal-good-symbolic.svg" },
+    { "name": "wifi-4",       "dst": "hud/wifi-4.svg",       "src": "panel/24/network-wireless-signal-excellent-symbolic.svg" },
+    { "name": "wifi-off",     "dst": "hud/wifi-off.svg",     "src": "panel/24/network-wireless-offline-symbolic.svg" },
+    { "name": "wifi-blocked", "dst": "hud/wifi-blocked.svg", "src": "status/symbolic/network-wireless-hardware-disabled-symbolic.svg" },
+    { "name": "ethernet",     "dst": "hud/ethernet.svg",     "src": "devices/symbolic/network-wired-symbolic.svg" },
+    { "name": "bluetooth",    "dst": "hud/bluetooth.svg",    "src": "status/symbolic/bluetooth-active-symbolic.svg" },
+    { "name": "bluetooth-off","dst": "hud/bluetooth-off.svg","src": "status/symbolic/bluetooth-disabled-symbolic.svg" },
+    { "name": "volume-0",     "dst": "hud/volume-0.svg",     "src": "status/symbolic/audio-volume-muted-symbolic.svg" },
+    { "name": "volume-1",     "dst": "hud/volume-1.svg",     "src": "status/symbolic/audio-volume-low-symbolic.svg" },
+    { "name": "volume-2",     "dst": "hud/volume-2.svg",     "src": "status/symbolic/audio-volume-medium-symbolic.svg" },
+    { "name": "volume-3",     "dst": "hud/volume-3.svg",     "src": "status/symbolic/audio-volume-high-symbolic.svg" },
+    { "name": "volume-muted", "dst": "hud/volume-muted.svg", "src": "status/symbolic/audio-volume-muted-symbolic.svg" },
+    { "name": "headphones",   "dst": "hud/headphones.svg",   "src": "status/symbolic/audio-volume-headphones-symbolic.svg" },
+    { "name": "clock",        "dst": "hud/clock.svg",        "src": "actions/symbolic/clock-alt-symbolic.svg" }
+  ],
+
+  "ui": [
+    { "name": "settings",     "dst": "ui/settings.svg",     "src": "actions/symbolic/settings-symbolic.svg" },
+    { "name": "puzzle",       "dst": "ui/puzzle.svg",       "src": "actions/symbolic/extension-symbolic.svg" },
+
+    { "name": "folder",       "dst": "ui/folder.svg",       "src": "places/scalable/folder.svg",  "color": true, "themes": "*" },
+    { "name": "folder",       "dst": "ui/folder.svg",       "src": "places/scalable/folder.svg",  "color": true, "light_src": "Slot-Beauty-Light-Icons/places/folder.svg", "themes": ["light", "neumorphic-light"] },
+
+    { "name": "folder-open",  "dst": "ui/folder-open.svg",  "src": "status/symbolic/folder-open-symbolic.svg" },
+    { "name": "folder-plus",  "dst": "ui/folder-plus.svg",  "src": "actions/symbolic/folder-new-symbolic.svg" },
+
+    { "name": "file",         "dst": "ui/file.svg",         "src": "mimetypes/symbolic/text-x-generic-symbolic.svg" },
+    { "name": "doc",          "dst": "ui/doc.svg",          "src": "mimetypes/symbolic/x-office-document-symbolic.svg" },
+    { "name": "image",        "dst": "ui/image.svg",        "src": "mimetypes/symbolic/image-x-generic-symbolic.svg" },
+    { "name": "video",        "dst": "ui/video.svg",        "src": "mimetypes/symbolic/video-x-generic-symbolic.svg" },
+    { "name": "music",        "dst": "ui/music.svg",        "src": "mimetypes/symbolic/audio-x-generic-symbolic.svg" },
+    { "name": "archive",      "dst": "ui/archive.svg",      "src": "mimetypes/symbolic/package-x-generic-symbolic.svg" },
+    { "name": "forward",      "dst": "ui/forward.svg",      "src": "emblems/scalable/emblem-symbolic-link.svg" },
+
+    { "name": "home",         "dst": "ui/home.svg",         "src": "places/symbolic/user-home-symbolic.svg" },
+    { "name": "trash",        "dst": "ui/trash.svg",        "src": "places/symbolic/user-trash-symbolic.svg" },
+    { "name": "monitor",      "dst": "ui/monitor.svg",      "src": "devices/symbolic/video-display-symbolic.svg" },
+    { "name": "download",     "dst": "ui/download.svg",     "src": "actions/symbolic/browser-download-symbolic.svg" },
+
+    { "name": "search",       "dst": "ui/search.svg",       "src": "actions/symbolic/search-symbolic.svg" },
+    { "name": "list",         "dst": "ui/list.svg",         "src": "actions/symbolic/view-list-symbolic.svg" },
+    { "name": "grid",         "dst": "ui/grid.svg",         "src": "actions/symbolic/view-grid-symbolic.svg" },
+    { "name": "close",        "dst": "ui/close.svg",        "src": "actions/symbolic/window-close-symbolic.svg" },
+    { "name": "chevron-left", "dst": "ui/chevron-left.svg", "src": "actions/symbolic/go-previous-symbolic.svg" },
+    { "name": "chevron-right","dst": "ui/chevron-right.svg","src": "actions/symbolic/go-next-symbolic.svg" },
+    { "name": "chevron-up",   "dst": "ui/chevron-up.svg",   "src": "actions/symbolic/go-up-symbolic.svg" },
+    { "name": "power",        "dst": "ui/power.svg",        "src": "actions/symbolic/system-shutdown-symbolic.svg" }
+  ],
+
+  "apps": [
+    { "name": "browser",    "dst": "apps/browser.svg",    "src": "apps/symbolic/internet-web-browser-symbolic.svg" },
+    { "name": "calculator", "dst": "apps/calculator.svg", "src": "apps/symbolic/accessories-calculator-symbolic.svg" },
+    { "name": "calc",       "dst": "apps/calc.svg",       "src": "apps/symbolic/libreoffice-calc-symbolic.svg" },
+    { "name": "calendar",   "dst": "apps/calendar.svg",   "src": "apps/symbolic/office-calendar-symbolic.svg" },
+    { "name": "files",      "dst": "apps/files.svg",      "src": "apps/symbolic/system-file-manager-symbolic.svg" },
+    { "name": "hello",      "dst": "apps/hello.svg",      "src": "actions/symbolic/lucide-smile-plus-symbolic.svg" },
+    { "name": "image",      "dst": "apps/image.svg",      "src": "apps/symbolic/shotwell-symbolic.svg" },
+    { "name": "impress",    "dst": "apps/impress.svg",    "src": "apps/symbolic/libreoffice-impress-symbolic.svg" },
+    { "name": "keyboard",   "dst": "apps/keyboard.svg",   "src": "apps/symbolic/preferences-desktop-keyboard-symbolic.svg" },
+    { "name": "mail",       "dst": "apps/mail.svg",       "src": "apps/symbolic/kmail-symbolic.svg" },
+    { "name": "pdf",        "dst": "apps/pdf.svg",        "src": "mimetypes/symbolic/x-office-document-symbolic.svg" },
+    { "name": "radio",      "dst": "apps/radio.svg",      "src": "apps/symbolic/de.haeckerfelix.gradio-symbolic.svg" },
+    { "name": "studio",     "dst": "apps/studio.svg",     "src": "apps/symbolic/multimedia-audio-player-symbolic.svg" },
+    { "name": "terminal",   "dst": "apps/terminal.svg",   "src": "apps/symbolic/utilities-terminal-symbolic.svg" },
+    { "name": "traveler",   "dst": "apps/traveler.svg",   "src": "categories/symbolic/emoji-travel-symbolic.svg" },
+    { "name": "word",       "dst": "apps/word.svg",       "src": "apps/symbolic/libreoffice-writer-symbolic.svg" },
+    { "name": "youtube",    "dst": "apps/youtube.svg",    "src": "actions/symbolic/media-playback-start-symbolic.svg" }
+  ]
+}

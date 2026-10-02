@@ -712,6 +712,14 @@ void peakd_qt_view_create(const char *id, const char *url, int x, int y, int w, 
     QWebEngineProfile *profile =
         (incognito && g_ctx->otr_profile) ? g_ctx->otr_profile : g_ctx->profile;
     auto *view = new PeakdView(g_ctx->main_view);
+    // A QWebEngineView paints through an internal QQuickWidget surface that a
+    // plain child-widget QWidget mask does not clip, so `setMask` was silently
+    // ignored and the page covered every HTML layer above it. Making the view
+    // its own native window means the mask (X Shape) actually punches holes,
+    // revealing menus and higher windows drawn by the app behind it. Force the
+    // native window now, before the page/mask are set.
+    view->setAttribute(Qt::WA_NativeWindow, true);
+    view->winId();
     view->setPage(make_page(key, profile, view));
     view->setGeometry(x, y, w, h);
     g_ctx->children.insert(key, view);
@@ -749,11 +757,21 @@ void peakd_qt_view_mask(const char *id, const char *holes_json) {
     auto view = g_ctx->children.value(QString::fromUtf8(id));
     if (!view) return;
 
-    const QRect geometry = view->geometry();
-    QRegion region(0, 0, geometry.width(), geometry.height());
     const QJsonDocument doc =
         QJsonDocument::fromJson(QByteArray(holes_json ? holes_json : ""));
-    for (const QJsonValue &value : doc.array()) {
+    const QJsonArray holes = doc.array();
+    if (holes.isEmpty()) {
+        // No holes: restore the plain rectangle. An explicit full-rect region
+        // would leave `hasMask` set, which on some backends keeps clipping the
+        // QQuickWidget after a geometry change (the "content disappears when the
+        // window moves" bug).
+        view->clearMask();
+        return;
+    }
+
+    const QRect geometry = view->geometry();
+    QRegion region(0, 0, geometry.width(), geometry.height());
+    for (const QJsonValue &value : holes) {
         const QJsonObject hole = value.toObject();
         const double dpr = hole.value(QStringLiteral("dpr")).toDouble(1.0);
         const int x = qRound(hole.value(QStringLiteral("x")).toDouble() * dpr) - geometry.x();

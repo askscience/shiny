@@ -756,12 +756,12 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  box-shadow: var(--popover-shadow);
+  backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
   animation: hudMenuIn var(--duration-fast) var(--ease-out);
 }
 .ui-hud-menu-popup::-webkit-scrollbar { display: none; }
@@ -841,12 +841,12 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  box-shadow: var(--popover-shadow);
+  backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
   animation: hudMenuIn var(--duration-fast) var(--ease-out);
 }
 .ctx-menu::-webkit-scrollbar { display: none; }

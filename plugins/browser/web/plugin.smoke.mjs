@@ -79,7 +79,24 @@ function makeElement(tag) {
       }
       return null;
     },
-    getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; },
+    querySelectorAll(sel) {
+      // The window queries its own popovers for engine checks / occluders.
+      const want = String(sel).replace(/^\./, '');
+      const out = [];
+      const stack = [...(el.children || [])];
+      while (stack.length) {
+        const node = stack.shift();
+        if (String(node.className || '').split(/\s+/).includes(want)) out.push(node);
+        stack.push(...(node.children || []));
+      }
+      return out;
+    },
+    // A non-zero viewport so `viewportRect()`/`occluderHoles()` actually run:
+    // a native view cannot be sized from a zero rect, and the mask contract is
+    // only exercised when the page reports where it is.
+    getBoundingClientRect() {
+      return { left: 40, top: 80, width: 400, height: 300, right: 440, bottom: 380 };
+    },
     addEventListener(type, fn) { (el._listeners[type] ||= []).push(fn); },
     removeEventListener(type, fn) {
       el._listeners[type] = (el._listeners[type] || []).filter((f) => f !== fn);
@@ -111,8 +128,11 @@ const documentStub = {
   activeElement: null,
   createElement: makeElement,
   getElementById: () => null,
-  addEventListener: () => {},
   querySelector: () => null,
+  querySelectorAll: () => [],
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => {},
 };
 
 /** Capture everything the window posts to the shell's IPC bridge. */
@@ -245,6 +265,10 @@ const moduleSource = source
 const context = vm.createContext({
   console, document: documentStub, window: windowStub,
   apiFetch, icon, iconButton, searchBar, openWithPlugin, pluginForFile, revealInFiles,
+  // Imported by the window from the core UI library; stubbed so mount() and the
+  // settings/theming paths can run without the real shell.
+  themeMode: () => 'dark',
+  openCoreWindow: () => {},
   navigator: { clipboard: { writeText: () => Promise.resolve() } },
   URL, setTimeout, clearTimeout, setInterval, clearInterval,
   JSON, String, Number, Array, Object, Math, RegExp, parseInt, parseFloat, Error, Promise, Set, Map,
@@ -325,6 +349,14 @@ check('navigating opens a native view', navOpen?.op === 'open' && navOpen.url ==
 check('a normal tab is not incognito', navOpen?.incognito === false);
 check('the address bar reflects the navigation', addressForm.input.value === 'https://example.com/story');
 
+/* The native child view is positioned and its mask contract is exercised. */
+check('the native view is told its bounds', !!lastView('setBounds'), JSON.stringify(lastView('setBounds')));
+check(
+  'the native view starts with an empty mask',
+  lastView('setMask')?.holes?.length === 0,
+  JSON.stringify(lastView('setMask')),
+);
+
 /* The shield toggles ad blocking and tells the shell. */
 const shield = shieldControl;
 shield.dispatch('click', {});
@@ -380,6 +412,43 @@ byLabel('Downloads').dispatch('click', {});
 await tick(60);
 check('the downloads button opens the panel', panel && !panel.classList.contains('hidden'));
 check('the panel lists history + live downloads', panel?.children?.[1]?.children?.length >= 2, String(panel?.children?.[1]?.children?.length));
+
+/* The open panel must be punched through the native page... */
+check(
+  'an open panel punches a hole in the native page',
+  lastView('setMask')?.holes?.length >= 1,
+  JSON.stringify(lastView('setMask')),
+);
+byLabel('Downloads').dispatch('click', {});
+await tick(60);
+/* ...and closing it must clear the hole, not leave it clipping the page. */
+check(
+  'closing the panel clears the hole',
+  lastView('setMask')?.holes?.length === 0,
+  JSON.stringify(lastView('setMask')),
+);
+
+/* A hidden native view must re-send its mask on the way back: otherwise a stale
+   hole from before the hide clips the page once the window moves. */
+const masksBeforeDrag = viewCommands().filter((c) => c.op === 'setMask').length;
+tile.classList.add('is-dragging');
+await tick(320);
+check(
+  'dragging hides the native page',
+  lastView('setVisible')?.visible === false,
+  JSON.stringify(lastView('setVisible')),
+);
+tile.classList.remove('is-dragging');
+await tick(320);
+check(
+  'releasing the drag re-sends the mask even when empty',
+  viewCommands().filter((c) => c.op === 'setMask').length > masksBeforeDrag,
+);
+check(
+  'the native page comes back after the drag',
+  lastView('setVisible')?.visible === true,
+  JSON.stringify(lastView('setVisible')),
+);
 
 /* Closing a tab tells the server. */
 const firstTabClose = findAll(tile, (el) => String(el.className).includes('browser-tab-close'))[0];

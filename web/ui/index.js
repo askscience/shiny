@@ -14,7 +14,7 @@ export {
   accentPresets, gradientPresets, gradientToCss,
   hexToRgb, rgba, contrastFor, cssVar,
 } from './appearance.js';
-export { icon, setIcon, clearIconCache, hydrateIcons } from './icon.js';
+export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg } from './icon.js';
 export { reveal } from './reveal.js';
 
 export { button, iconButton } from './components/button.js';

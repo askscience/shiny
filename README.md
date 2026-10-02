@@ -451,7 +451,26 @@ voice/                    # Supertonic + faster-whisper sidecar launchers, model
                           # downloaders, lang map
 migrations/               # core schema (001_init .. 007_chat_conversations)
 web/                      # browser UI (desktop workspace shell)
+├── ui/icons/             # THE shared icon library — every icon the app uses
+│                         # (README.md prose + the generated INDEX.md catalog)
+├── themes/<name>/icons/  # per-theme icon overrides (see web/themes/README.md)
+scripts/kde-icons/        # icon-set curator: convert.py + mapping.json
+                          # + source/{dark,light} (the ~60 curated KDE SVGs)
+assets/iconsets/          # raw Slot-Beauty KDE sets (GPL-3.0), not committed
 ```
+
+### Icons
+
+There is **one shared icon library at `web/ui/icons/`** — the HUD, the core
+windows, the desktop and every plugin's identity icon come from it. Browse
+**[`web/ui/icons/INDEX.md`](./web/ui/icons/INDEX.md)** for the full catalog, or
+read [`web/ui/icons/README.md`](./web/ui/icons/README.md) for how lookups,
+theming and the KDE Slot-Beauty source set work.
+
+Use an icon by name — `icon('apps/files')` / `setIcon(el, 'ui/save')` in JS, or
+`<span data-icon="ui/puzzle">` in HTML. A theme may override any name at
+`web/themes/<theme>/icons/<name>.svg`; anything it omits falls back to the
+shared icon. Don't hand-draw SVG in a plugin — pick a name from the catalog.
 
 ## Tech Stack
 

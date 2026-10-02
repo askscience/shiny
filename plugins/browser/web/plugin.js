@@ -45,7 +45,8 @@ const SEARCH_ENGINES = [
 
 /** Selectors for the HTML popups that have to punch through the page. */
 const POPUP_SELECTOR =
-  '.ctx-menu, .ui-hud-menu-popup:not(.hidden), .ui-modal:not(.hidden)';
+  '.ctx-menu, .ui-hud-menu-popup:not(.hidden), .ui-modal:not(.hidden), '
+  + '.ui-notification-container, .ui-toast-container';
 
 /**
  * The native-view bridge.
@@ -180,14 +181,19 @@ function occluderHoles() {
     if (el && !el.classList.contains('hidden')) add(el.getBoundingClientRect());
   }
   // A higher floating window overlapping this one, in the "Windows" layout.
+  // Compare by z-index, falling back to DOM order when equal (windows that
+  // have never been raised share a z, and the later sibling is painted on top).
   const grid = document.getElementById('tile-grid');
   if (grid && grid.dataset.layout === 'windows') {
     const z = Number(tileEl.style.zIndex) || 0;
-    for (const el of grid.querySelectorAll(':scope > .tile[data-plugin]')) {
-      if (el === tileEl || el.classList.contains('hidden')) continue;
-      if ((Number(el.style.zIndex) || 0) <= z) continue;
-      add(el.getBoundingClientRect());
-    }
+    const tiles = [...grid.querySelectorAll(':scope > .tile[data-plugin]')];
+    const myIndex = tiles.indexOf(tileEl);
+    tiles.forEach((el, index) => {
+      if (el === tileEl || el.classList.contains('hidden')) return;
+      const ez = Number(el.style.zIndex) || 0;
+      const above = ez > z || (ez === z && index > myIndex);
+      if (above) add(el.getBoundingClientRect());
+    });
   }
   return holes;
 }
@@ -213,7 +219,7 @@ function syncNativeTab(tab) {
   }
   if (!show) {
     lastNativeRect = '';
-    lastNativeHoles = '';
+    lastNativeHoles = null;
     return;
   }
   const rect = viewportRect();
@@ -281,7 +287,11 @@ let downloads = [];
 // updates the shell already has. `null`/`''` means "unknown, send it".
 let lastNativeVisible = null;
 let lastNativeRect = '';
-let lastNativeHoles = '';
+// `null` means "unknown" and `''` means "no holes". The shell keeps the last
+// mask it was given, so after the view is hidden (a drag, a tab switch) the
+// mask must be re-sent even when it is now empty — otherwise a stale hole from
+// before the hide clips the page once the view moves.
+let lastNativeHoles = null;
 
 /**
  * The window's tabs. Each owns a native child webview in the shell (and a local
@@ -443,7 +453,7 @@ function setActiveTab(id) {
   }
   lastNativeVisible = null;
   lastNativeRect = '';
-  lastNativeHoles = '';
+  lastNativeHoles = null;
   syncActiveNative();
   if (nativeAvailable && tab?.native) nativeSend({ op: 'focus', id: tab.id });
   renderTabs();
@@ -550,7 +560,7 @@ function loadNative(tab, url) {
   });
   lastNativeVisible = null;
   lastNativeRect = '';
-  lastNativeHoles = '';
+  lastNativeHoles = null;
   if (tab.id === activeTabId) {
     nativeSend({ op: 'focus', id: tab.id });
     // Let occlusion/overlay state decide whether it may actually stay visible.
@@ -566,6 +576,7 @@ function hideNative(tab) {
   if (tab.id === activeTabId) {
     lastNativeVisible = false;
     lastNativeRect = '';
+    lastNativeHoles = null;
   }
   if (tab.frameEl) {
     tab.frameEl.classList.remove('is-native-hidden');

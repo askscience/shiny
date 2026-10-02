@@ -82,6 +82,16 @@ export function clearIconCache() {
   cache.clear();
 }
 
+/**
+ * The raw themed SVG text for an icon name (theme override, then shared
+ * library), or null when neither ships it. Exposed so callers that need to
+ * decide *where* an icon comes from (e.g. plugin icons) can reuse the same
+ * theme-aware lookup instead of duplicating it.
+ */
+export function loadIconSvg(name) {
+  return loadSvg(name);
+}
+
 /** Fill every [data-icon] element in a subtree with its themed icon. */
 export function hydrateIcons(root = document) {
   root.querySelectorAll('[data-icon]').forEach((el) => {
