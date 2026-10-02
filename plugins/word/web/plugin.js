@@ -576,7 +576,7 @@ export function mountWordTile() {
     options: [{ value: '', label: 'Font' }],
     onChange: onFontChange,
   });
-  fontSelect.wrap.classList.add('word-font');
+  fontSelect.classList.add('word-font');
   fontSelect.select.title = 'Font — applies to the selection, or the whole document when nothing is selected';
   fontSelect.select.setAttribute('aria-label', 'Font');
   void listFonts().then((families) => {
@@ -593,7 +593,7 @@ export function mountWordTile() {
     toolbarButton('underline', 'ui/underline', 'Underline', () => exec('underline')),
     toolbarButton('heading', 'ui/heading', 'Heading', toggleHeading),
     toolbarButton('list', 'ui/list', 'Bullet list', toggleList),
-    fontSelect.wrap,
+    fontSelect,
     newBtn, importBtn, exportBtn, saveBtn, delBtn, saveDot,
   );
   tileEl.appendChild(bar);
