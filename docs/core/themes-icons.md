@@ -16,11 +16,22 @@ A theme is a folder under `web/themes/<name>/`. Installed themes are listed in
 | `theme.json` | Manifest: display name, mode (dark/light), etc. |
 | `tokens.css` | Design tokens (`--accent`, surfaces, text, spacing, radii). |
 | `components.css` | Component styling (`web/ui/ui.css` overrides). |
-| `app.css` | Theme-specific overrides. |
+| `app.css` | Theme-specific overrides (declared via `"app"` in `theme.json`). |
 | `icons/` | Optional per-theme **icon overrides** (SVG, `currentColor`). |
 
 Bundled themes: **noir**, **neumorphic**, **pitch** (dark) and **light**,
 **neumorphic-light** (light). The default is `pitch`.
+
+### Centralized scrollbar
+
+The single scrollbar for the whole app lives in
+[`web/ui/ui.css`](../../web/ui/ui.css): one `::-webkit-scrollbar` recipe plus
+the standard `scrollbar-width`/`scrollbar-color`, driven by the
+`--scrollbar-size`, `--scrollbar-thumb`, `--scrollbar-thumb-hover` and
+`--scrollbar-track` tokens. Windows and plugins never ship their own scrollbar
+styling — they inherit this one. A theme retunes the tokens; a surface that
+intentionally hides its bar opts out with `scrollbar-width: none` and a matching
+`::-webkit-scrollbar { display: none }`.
 
 ### Live switching
 

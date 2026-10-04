@@ -1,0 +1,11 @@
+name = "updates"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Check and install system + Ollama updates across every major Linux distribution"
+summary = "Updates: one window (and HUD chip) for system and Ollama updates"
+author = "shiny"
+migrations_dir = "migrations"
+skills_dir = "skills"
+web_dir = "web"
+category = "System"

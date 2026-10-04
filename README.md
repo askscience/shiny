@@ -98,6 +98,7 @@ window. In the multi-user install plugins are also **installed per user**
 | `terminal` | System | A real PTY login shell rendered with xterm.js. |
 | `keyboard` | System | Virtual multi-language on-screen keyboard (8 layouts). |
 | `hello` | System | Minimal plugin-authoring example (one tool). |
+| `updates` | System | System + Ollama updates for every major distro, with a top-bar chip. |
 | `traveler` | Travel | 22 trip/GPS/map/navigation/diary/planning/artifact tools. |
 | `word` | Office | Word processor storing real `.odt` documents. |
 | `calc` | Office | Spreadsheets with live formulas and `.ods` import/export. |
@@ -142,7 +143,7 @@ crates/
   peakd/ · peakd-mac/     # Linux / macOS native shells
   shiny-auth/             # root PAM verify helper
   shiny-iroh-client/ · shiny-iroh-proto/ · shiny-server-mode/
-plugins/<name>/           # 17 self-contained plugins, each with docs/
+plugins/<name>/           # 18 self-contained plugins, each with docs/
 migrations/               # core SQL migrations (001..009)
 web/                      # browser UI: ui/ (library), themes/, js/, vendor/
 voice/                    # speech sidecars and model tooling

@@ -247,6 +247,29 @@ Development gotcha: the app serves the **installed** copy at
 `data/plugins/<name>/web/`, not `plugins/<name>/web/`. Copy (or reinstall) after
 editing.
 
+### Top-bar chips (`web/hud.js`)
+
+A window surface is loaded only while the plugin is *active*. A plugin that
+needs a **persistent** top-bar presence (a status badge, an always-visible
+button) ships `web/hud.js` instead — core loads it for the plugin simply being
+*installed*, active or not:
+
+```js
+// plugins/myplugin/web/hud.js
+export function install({ plugin } = {}) {
+  // create your DOM (append to #hud-top, etc.)
+}
+export function uninstall() {
+  // remove it
+}
+export default { install, uninstall };
+```
+
+Core calls `install()` once per page load and `uninstall()` when the plugin is
+uninstalled. The plugin owns its DOM; reuse core classes (`icon-btn` etc.) and
+the UI library rather than shipping CSS. `GET /api/plugins` exposes a `hud`
+boolean when the file exists.
+
 ---
 
 ## 8. Authoring checklist

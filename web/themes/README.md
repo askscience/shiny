@@ -92,6 +92,12 @@ can't be listed over HTTP.
 - **Motion** — restrained: single soft entrances, no looping decoration.
   Honor `prefers-reduced-motion` (already handled in `/ui/ui.css` for
   reveals/spinners; keep it that way in your additions).
+- **Scrollbars** — centralized. `/ui/ui.css` defines one scrollbar for the
+  whole app from the `--scrollbar-size`, `--scrollbar-thumb`,
+  `--scrollbar-thumb-hover` and `--scrollbar-track` tokens. Windows and
+  plugins must not restyle scrollbars; retune the tokens instead. Hide one
+  only deliberately, with `scrollbar-width: none` plus a matching
+  `::-webkit-scrollbar { display: none }`.
 - **Modes** — declare `modes: ["dark"]` or `["light"]` in the manifest;
   the first mode drives the map tile flavor.
 

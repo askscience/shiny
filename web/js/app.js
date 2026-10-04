@@ -23,6 +23,7 @@ import { initHudBluetooth } from './hudBluetooth.js';
 import { initHudBattery } from './hudBattery.js';
 import { initHudPower } from './powerMenu.js';
 import { initHudPlugins } from './hudPlugins.js';
+import { initPluginHud } from './pluginHud.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles, openCoreWindow } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
@@ -122,6 +123,7 @@ async function initApp() {
   initHudBattery(); // host battery chip (sysfs power-supply, Linux)
   initHudPower(); // top-bar power menu (reboot / power off / suspend, logind)
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
+  initPluginHud(); // optional per-plugin top-bar chips (loaded when installed)
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
   // Settings and Plugins are built-in windows now, opened from the HUD.
   document.getElementById('settings-btn')?.addEventListener('click', () => openCoreWindow('settings'));

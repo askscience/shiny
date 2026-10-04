@@ -24,6 +24,9 @@ struct PluginListEntry {
     summary: Option<String>,
     /// True when the plugin ships a `web/plugin.js` window surface.
     surface: bool,
+    /// True when the plugin ships a `web/hud.js` top-bar contribution, loaded
+    /// for the plugin simply being installed (not only when active).
+    hud: bool,
     /// Grouping category declared in `plugin.toml` (e.g. "Office", "Media").
     category: Option<String>,
 }
@@ -50,6 +53,11 @@ pub async fn list(
                 .plugin_dir_for(&m.name)
                 .map(|dir| dir.join(&m.web_dir).join("plugin.js").is_file())
                 .unwrap_or(false);
+            let hud = state
+                .plugins
+                .plugin_dir_for(&m.name)
+                .map(|dir| dir.join(&m.web_dir).join("hud.js").is_file())
+                .unwrap_or(false);
             PluginListEntry {
                 category: state.plugins.category_for(&m.name),
                 name: m.name,
@@ -59,6 +67,7 @@ pub async fn list(
                 summary: m.summary,
                 enabled,
                 surface,
+                hud,
             }
         })
         .collect();

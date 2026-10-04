@@ -1,0 +1,70 @@
+/* ─────────────────────────────────────────────────────────────
+   Noir — app-surface overrides
+   Loaded AFTER /css/app.css, so these rules restyle chrome the UI
+   library does not own. Flat by design: hairlines and ink, never a
+   plate behind a glyph.
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Top-bar action icons ──────────────────────────────────────
+   Settings, Plugins and Power are bare glyphs in the bar. The
+   shared `.icon-btn` treats them as free-standing glass circles
+   (background + 50% radius); in noir that plate is removed, leaving
+   the icon and nothing else. Hover is an ink shift, not a chip. */
+#hud-top .icon-btn,
+#hud-top .icon-btn:hover,
+#hud-top .icon-btn:active {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--muted);
+  transform: none;
+}
+#hud-top .icon-btn:hover { color: var(--text); }
+#hud-top .icon-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
+}
+
+/* Free-standing `.icon-btn` uses (outside the top bar) keep a single
+   hairline but drop the circular plate. */
+.icon-btn {
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--radius-xs);
+  box-shadow: none;
+}
+.icon-btn:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  transform: none;
+}
+
+/* ── Host status chips ──────────────────────────────────────────
+   Bare on the bar; the open state is a hairline, never a rounded
+   glass pill. */
+.hud-network,
+.hud-audio,
+.hud-bluetooth,
+.hud-battery,
+.hud-updates { border-radius: var(--radius-xs); }
+.hud-network.is-open,
+.hud-audio.is-open,
+.hud-bluetooth.is-open,
+.hud-battery.is-open,
+.hud-updates.is-open {
+  background: transparent;
+  border-color: var(--glass-border);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────
+   Noir keeps the centralized bar from /ui/ui.css but maps the thumb
+   to its white hairlines. */
+:root {
+  --scrollbar-thumb: var(--glass-highlight);
+  --scrollbar-thumb-hover: var(--accent-soft);
+}

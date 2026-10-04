@@ -143,6 +143,7 @@
 .hud-audio,
 .hud-bluetooth,
 .hud-battery,
+.hud-updates,
 .ui-hud-chip,
 .ui-chip,
 .ui-badge,
@@ -200,9 +201,10 @@
 /* Selection follows the accent as ink, not a blue wash. */
 ::selection { background: var(--accent-soft); color: var(--text); }
 
-/* Scrollbars — thin, dark, only visible against their own track. */
+/* Scrollbars — thin, dark, only visible against their own track. The
+   centralized bar from /ui/ui.css is retuned to the highlight token. */
 * { scrollbar-color: var(--glass-highlight) transparent; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--glass-strong);
@@ -299,10 +301,12 @@
 .hud-audio:hover,
 .hud-bluetooth:hover,
 .hud-battery:hover,
+.hud-updates:hover,
 .hud-network.is-open,
 .hud-audio.is-open,
 .hud-bluetooth.is-open,
-.hud-battery.is-open {
+.hud-battery.is-open,
+.hud-updates.is-open {
   background: var(--glass-hover) !important;
   border-color: transparent !important;
   border-radius: var(--radius-xs) !important;
@@ -311,12 +315,14 @@
 .hud-network.is-connected,
 .hud-audio.is-active,
 .hud-bluetooth.is-connected,
-.hud-battery.is-charging { color: var(--text) !important; }
+.hud-battery.is-charging,
+.hud-updates.is-active { color: var(--text) !important; }
 .hud-network.is-connected .hud-network-icon,
 .hud-network.is-wired .hud-network-icon,
 .hud-audio.is-active .hud-audio-icon,
 .hud-bluetooth.is-connected .hud-bluetooth-icon,
-.hud-battery.is-charging .hud-battery-icon { color: var(--accent) !important; }
+.hud-battery.is-charging .hud-battery-icon,
+.hud-updates.is-active .hud-updates-icon { color: var(--accent) !important; }
 .hud-network-pct,
 .hud-audio-pct,
 .hud-bluetooth-pct,

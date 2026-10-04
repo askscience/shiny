@@ -1,0 +1,27 @@
+/* ─────────────────────────────────────────────────────────────
+   Light — app-surface overrides
+   Loaded AFTER /css/app.css, so these rules restyle chrome the UI
+   library does not own.
+
+   The top-bar action icons (Settings / Plugins / Power) are kept as
+   bare glyphs like the host status chips — no circular glass plate at
+   rest or on hover. Without this they inherit the shared `.icon-btn`
+   plate from /css/app.css.
+   ───────────────────────────────────────────────────────────── */
+
+#hud-top .icon-btn,
+#hud-top .icon-btn:hover,
+#hud-top .icon-btn:active {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--muted);
+  transform: none;
+}
+#hud-top .icon-btn:hover { color: var(--text); }
+#hud-top .icon-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
+}

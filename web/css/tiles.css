@@ -1705,11 +1705,7 @@ body.compose-active #tile-overlay {
   grid-template-columns: 44px repeat(26, 110px);
   grid-auto-rows: 28px;
   background: var(--bg);
-  scrollbar-width: thin;
 }
-
-.calc-grid::-webkit-scrollbar { width: 6px; height: 6px; }
-.calc-grid::-webkit-scrollbar-thumb { background: var(--glass-border); }
 
 .calc-cell {
   border-right: 1px solid var(--glass-border);
@@ -2048,7 +2044,6 @@ body.compose-active #tile-overlay {
   flex: none;
   width: 136px;
   overflow-y: auto;
-  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2056,9 +2051,6 @@ body.compose-active #tile-overlay {
   border-right: 1px solid var(--glass-border);
   background: var(--bg);
 }
-
-.impress-strip::-webkit-scrollbar { width: 6px; }
-.impress-strip::-webkit-scrollbar-thumb { background: var(--glass-border); }
 
 .impress-thumb {
   position: relative;
@@ -2122,15 +2114,11 @@ body.compose-active #tile-overlay {
   flex: 0 0 auto;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 12px 16px 16px;
 }
-
-.impress-inspector::-webkit-scrollbar { width: 6px; }
-.impress-inspector::-webkit-scrollbar-thumb { background: var(--glass-border); }
 
 .impress-field {
   display: flex;
@@ -2724,7 +2712,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   flex: none;
   width: 120px;
   overflow-y: auto;
-  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2788,7 +2775,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
 }
@@ -2877,7 +2863,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 .mail-reader-content iframe {
   width: 100%;
@@ -3508,7 +3493,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   width: 264px;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -3534,7 +3518,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   width: 258px;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
   padding: 12px 10px;
   display: flex;
   flex-direction: column;
@@ -3584,7 +3567,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   min-height: 40px;
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-width: thin;
   padding: 4px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
@@ -6627,8 +6609,6 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
   padding: 4px 16px 48px;
 }
 
@@ -7431,7 +7411,6 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   gap: 6px;
   padding: 6px;
   overflow-y: auto;
-  scrollbar-width: thin;
   border-left: 1px solid var(--glass-border);
   background: var(--glass);
 }
@@ -7525,7 +7504,7 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .image-channel-name { flex: 1; }
 
 /* History */
-.image-history { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; scrollbar-width: thin; }
+.image-history { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
 .image-history-item {
   display: flex;
   align-items: baseline;

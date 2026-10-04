@@ -156,7 +156,8 @@ html, body {
 .hud-network,
 .hud-audio,
 .hud-bluetooth,
-.hud-battery {
+.hud-battery,
+.hud-updates {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -176,10 +177,13 @@ html, body {
 .hud-network:hover,
 .hud-audio:hover,
 .hud-bluetooth:hover,
-.hud-battery:hover {
+.hud-battery:hover,
+.hud-updates:hover {
   background: var(--glass-hover);
   color: var(--text);
 }
+.hud-updates.is-active { color: var(--text); }
+.hud-updates.is-active .hud-updates-icon { color: var(--accent); }
 .hud-network.is-open,
 .hud-audio.is-open,
 .hud-bluetooth.is-open,
@@ -191,7 +195,8 @@ html, body {
 .hud-network .hud-network-icon,
 .hud-audio .hud-audio-icon,
 .hud-bluetooth .hud-bluetooth-icon,
-.hud-battery .hud-battery-icon {
+.hud-battery .hud-battery-icon,
+.hud-updates .hud-updates-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -625,6 +630,12 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 #fullscreen-bubble .fullscreen-bubble-btn .ui-icon { width: 14px; height: 14px; }
 
 .hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
+
+/* Global separator between the host status chips and the action icons
+   (Settings / Plugins / Power). It is always present — even on a machine with
+   no battery, where `#hud-battery` hides itself — so the two areas of the bar
+   are always visually divided. */
+.hud-divider--battery { display: block; }
 
 /* ── Plugin icon tray (top bar, right of the weather separator) ── */
 #hud-plugins {
@@ -1103,11 +1114,6 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   overflow: hidden;
 }
 #travel-panel.visible { transform: translateX(0); opacity: 1; }
-
-#travel-panel .ui-artifact-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
-}
 
 @media (min-width: 768px) {
   #travel-panel {

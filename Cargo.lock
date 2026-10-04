@@ -7210,6 +7210,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-updates-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "libc",
+ "semver",
+ "serde",
+ "serde_json",
+ "shiny-plugin-sdk",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "shiny-word-plugin"
 version = "0.1.0"
 dependencies = [

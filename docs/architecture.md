@@ -64,7 +64,7 @@ shiny/
 │   ├── shiny-iroh-client/         # local proxy for remote access
 │   ├── shiny-iroh-proto/          # shared Iroh protocol types
 │   └── shiny-server-mode/         # kiosk server-mode window
-├── plugins/                       # 17 bundled plugins, each self-contained
+├── plugins/                       # 18 bundled plugins, each self-contained
 ├── src/                           # the core binary
 ├── migrations/                    # core SQL migrations (001..009)
 ├── web/                           # the browser UI

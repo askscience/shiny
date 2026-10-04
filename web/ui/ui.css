@@ -15,7 +15,39 @@
   --popover-border: var(--glass-border);
   --popover-blur: 20px;
   --popover-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+
+  /* Centralized scrollbar. Every scrolling surface in the app — windows,
+     panels, menus, rails — uses this one recipe; a theme tunes the four
+     tokens below (and may set `scrollbar-width` on a specific rail). Structural
+     sizes live here, colors come from the theme's glass tokens, so the bar
+     follows the theme and accent for free. */
+  --scrollbar-size: 10px;
+  --scrollbar-thumb: var(--glass-strong);
+  --scrollbar-thumb-hover: var(--glass-highlight);
+  --scrollbar-track: transparent;
 }
+
+/* ── Scrollbars (centralized) ────────────────────────────────
+   One definition for the whole app. Window CSS and plugin surfaces must not
+   restyle scrollbars; to hide one intentionally a rule opts out with
+   `scrollbar-width: none` + a matching `::-webkit-scrollbar { display: none }`.
+   Firefox/Chromium (standard properties): */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+/* WebKit/Blink. A transparent border + content-box clip paints a thin thumb
+   inside the track's full hit area, so the bar stays easy to grab. */
+::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
 
 .ui-stack { display: flex; flex-direction: column; }
 .ui-row { display: flex; align-items: center; }

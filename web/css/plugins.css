@@ -9,8 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
   transition: background var(--duration-fast);
 }
 .plugins-window.is-dragging {
@@ -176,8 +174,6 @@
   padding: 4px 16px 14px;
   max-height: 240px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 11px;
   line-height: 1.9;

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "author": "Shiny",
   "modes": ["dark"],
+  "app": "app.css",
   "defaultAccent": "#ffffff",
   "defaultGradient": "mono",
   "accents": [
