@@ -15,6 +15,7 @@ step is timestamped there.
 | `Plugin api_level X > core Y` | Built against a newer SDK | Upgrade the core, or rebuild the plugin. |
 | `Plugin built for 'x86_64…' but host is 'aarch64…'` | Wrong platform binary | Rebuild the cdylib on the target. |
 | `No cdylib found` | Forgot `.so/.dylib/.dll` | `ls` the archive; include the cdylib. |
+| `… was built before the security floor …` warning | A stale cdylib is loaded after a security fix | Rebuild and reinstall the plugin; `SHINY_MIN_PLUGIN_TS=0` only for a knowingly frozen build. |
 | `Missing symbol shiny_plugin_entry` | Entry fn missing/wrapped | Add `#[no_mangle] pub extern "C" fn shiny_plugin_entry()`. |
 | 401 on install | Not logged in / bad token | Use a valid Bearer token. |
 | Tool not registered | `register()` didn't add it | Ensure `builder.tool_arc(bridged(tool))`. |

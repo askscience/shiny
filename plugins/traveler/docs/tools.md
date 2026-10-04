@@ -71,3 +71,5 @@ and saved to the user's artifact store, tagged with the owning plugin.
   core navigator UI can render them.
 - OSM endpoints are public/rate-limited; when Nominatim/OSRM/Overpass are
   unreachable the tool errors rather than inventing data.
+- Geocoding `limit` values are clamped to `1..=20` before the request leaves
+  the process, so a caller cannot ask Nominatim for an unbounded result set.

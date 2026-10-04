@@ -14,4 +14,6 @@ All routes are `auth`, registered in [`src/plugin.rs`](../src/plugin.rs).
 
 Responses use `{ "success": true, "data": … }`. Path params reach the handler
 through the `x-shiny-path-params` header (see
-[runtime & ABI](../../../docs/plugins/runtime-abi.md)).
+[runtime & ABI](../../../docs/plugins/runtime-abi.md)). A malformed or hostile
+`.ods` archive (bad zip, corrupt `content.xml`, oversized entry) is rejected
+with `400` before anything is stored.

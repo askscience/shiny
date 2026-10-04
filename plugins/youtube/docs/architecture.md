@@ -21,6 +21,9 @@ plugins/youtube/
 thumbnails. This avoids the YouTube Data API key and quota entirely. Playback
 then loads `https://www.youtube.com/embed/<id>` in the window.
 
+The client sets a **5 s connect timeout and a 20 s total timeout**, so a slow or
+hostile upstream cannot pin a request (or a plugin worker) indefinitely.
+
 ## The suggest ranker
 
 `suggest.rs` is a simple **built-in** ranker (no external recommendation

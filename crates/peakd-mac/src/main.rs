@@ -220,6 +220,22 @@ fn resolve_iroh(cfg: PeakdConfig) -> Result<PeakdConfig, String> {
     Ok(cfg)
 }
 
+/// Boundary-safe same-origin check for main-frame navigation: the URL must be
+/// the app origin itself or a path/query/fragment under it. A plain prefix
+/// check would accept `http://127.0.0.1:80800` for origin `…:8080`.
+fn is_app_origin(url: &str, app_origin: &str) -> bool {
+    let app = app_origin.trim_end_matches('/');
+    match url.strip_prefix(app) {
+        Some(rest) => {
+            rest.is_empty()
+                || rest.starts_with('/')
+                || rest.starts_with('?')
+                || rest.starts_with('#')
+        }
+        None => false,
+    }
+}
+
 /// URL for the shell's initial navigation. With a `SHINY_BOOT_TOKEN` from the
 /// session launcher this is the single-use auto-login URL; the token never
 /// appears in argv (world-readable) or in the startup log.
@@ -296,8 +312,13 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
             "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
         ))
         // Keep navigation inside the shell: rather than handing `target=_blank`
-        // to the OS browser, load in place. A real tab layer replaces this.
-        .with_navigation_handler(|_url| true)
+        // to the OS browser, load in place — but only while we stay on the app
+        // origin. The privileged `window.ipc` bridge must never survive a
+        // main-frame navigation to an attacker origin.
+        .with_navigation_handler({
+            let app_origin = cfg.app_origin.clone();
+            move |url| is_app_origin(&url, &app_origin)
+        })
         // Grant microphone/camera to the app's own pages. wry already defaults
         // to Grant, but relying on a default for something the user experiences
         // as "the mic does not work" is not good enough — and stating it means

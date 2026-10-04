@@ -565,7 +565,7 @@ fn blank_slide_xml(colors: &ThemeColors, slide: &Slide) -> String {
 pub fn odp_to_slides(odp: &[u8]) -> Result<Vec<Slide>, AppError> {
     let xml = read_content_xml(odp)?;
     let doc = roxmltree::Document::parse(&xml)
-        .map_err(|e| AppError::Internal(format!("Invalid ODP content.xml: {}", e)))?;
+        .map_err(|e| AppError::BadRequest(format!("Invalid ODP content.xml: {}", e)))?;
 
     let mut slides = Vec::new();
     let presentation = doc

@@ -49,6 +49,24 @@
 #include <cstdlib>
 #include <memory>
 
+/// Origin of the kiosk app view, captured from `peakd_qt_run`'s start URL.
+/// Main-frame navigation and the privileged IPC bridge only trust this origin;
+/// every other page is a browsing child view.
+static QUrl g_app_origin;
+
+static QString origin_of(const QUrl &url) {
+    QString origin = url.scheme() + QStringLiteral("://") + url.host();
+    if (url.port() != -1) {
+        origin += QStringLiteral(":") + QString::number(url.port());
+    }
+    return origin;
+}
+
+static bool is_app_origin(const QUrl &url) {
+    return g_app_origin.isValid() && url.isValid() &&
+           origin_of(url).compare(origin_of(g_app_origin), Qt::CaseInsensitive) == 0;
+}
+
 namespace {
 
 struct Context {
@@ -326,7 +344,15 @@ public:
 
 protected:
     bool acceptNavigationRequest(const QUrl &url, NavigationType, bool isMainFrame) override {
-        if (isMainFrame) emit_view(id_, "url", url.toString());
+        if (isMainFrame) {
+            // The kiosk's own view may only navigate inside the app origin. A
+            // main-frame redirect to an attacker origin would otherwise take
+            // the privileged `window.ipc` bridge with it.
+            if (id_ == QLatin1String("main") && !is_app_origin(url)) {
+                return false;
+            }
+            emit_view(id_, "url", url.toString());
+        }
         return true;
     }
 
@@ -439,10 +465,13 @@ void connect_page(PeakdPage *page, const QString &id) {
             case QWebEnginePage::MediaAudioCapture:
             case QWebEnginePage::MediaVideoCapture:
             case QWebEnginePage::MediaAudioVideoCapture:
-                // The app's own voice input and the pages the user browses
-                // get mic/camera, exactly like the wry shell granted.
-                page->setFeaturePermission(origin, feature,
-                                           QWebEnginePage::PermissionGrantedByUser);
+                // Only the app's own origin gets capture devices. A page the
+                // user browses must ask for permission explicitly instead of
+                // silently receiving the machine's microphone/camera.
+                page->setFeaturePermission(
+                    origin, feature,
+                    is_app_origin(origin) ? QWebEnginePage::PermissionGrantedByUser
+                                          : QWebEnginePage::PermissionDeniedByUser);
                 break;
             default:
                 break;
@@ -490,8 +519,17 @@ IpcBridge::IpcBridge(peakd_ipc_cb callback, void *userdata, bool privileged, QOb
 
 void IpcBridge::postMessage(const QString &body) {
     // A non-privileged view (a browsing page) may only ask to leave the kiosk.
-    if (!privileged_ && body != QLatin1String("peakd:exit")) {
-        return;
+    if (!privileged_) {
+        if (body != QLatin1String("peakd:exit")) {
+            return;
+        }
+    } else {
+        // Defense in depth over the navigation handler: the privileged bridge
+        // only forwards while the document is still on the app origin.
+        auto *page = qobject_cast<QWebEnginePage *>(parent());
+        if (!page || !is_app_origin(page->url())) {
+            return;
+        }
     }
     if (callback_) callback_(userdata_, body.toUtf8().constData());
 }
@@ -532,6 +570,9 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     context.userdata = userdata;
     context.bootstrap = bootstrap_script(load_qwebchannel_js());
     g_ctx = &context;
+    // The start URL *is* the app origin for this run; child views may browse
+    // anywhere, the main view may not.
+    g_app_origin = QUrl(QString::fromLocal8Bit(url));
 
     // One explicit, persistent profile shared by the main view and every
     // Browser-plugin child view: same cookie jar, same cache, same UA. A named

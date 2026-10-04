@@ -180,9 +180,13 @@ carries `x-shiny-os-home`, otherwise `$HOME/.shiny/home/<sanitized-id>`.
 `preview::fetch(url)` first enforces `is_allowed` (public `http(s)` only;
 loopback, `.local`, private/link-local/unspecified IPs refused) to close the
 SSRF hole, then serves a 10-minute, 256-entry cache or fetches the page with the
-impersonating client. `parse` extracts Open Graph / Twitter / `<title>` /
-`<meta description>` metadata and absolutizes the image. Previews are
-best-effort; only the home shelf hovers actually reach this route now.
+impersonating client. `ensure_public_target` resolves the name and rejects any
+non-public answer, and the checked addresses are **pinned** on the client
+(`resolve_to_addrs`) so the resolve-then-request gap cannot be won by a DNS
+rebind. `parse` extracts Open Graph / Twitter / `<title>` / `<meta description>`
+metadata and absolutizes the image. Previews are best-effort; only the home
+shelf hovers actually reach this route now. (Fetches without a preview cache —
+`browser_read`, `navigate?format=text` — share the same guard and pinning.)
 
 ## Schema and best-effort rule
 

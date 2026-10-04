@@ -268,6 +268,11 @@ Tri-modal create/import route.
 
 ## Notes on request plumbing
 
+- **Dimension ceiling** — every layer/document side is capped at
+  `MAX_LAYER_DIM = 8192` with checked `w*h*4` math (`src/ops.rs`):
+  blank-layer create, imports, `insert_layer`, crop/resize and `set_doc_size`
+  all reject larger sizes with `400` before allocating, and image uploads whose
+  **declared** dimensions exceed 8192 px are refused before the decoder runs.
 - **Path params** are read via `path_params_from_request`; `path_param(req, name)`
   falls back to the first positional value for older `:id`-only routes
   (`src/routes.rs:88`).

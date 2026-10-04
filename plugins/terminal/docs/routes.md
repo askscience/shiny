@@ -10,6 +10,9 @@ All routes are `auth`, registered in [`src/plugin.rs`](../src/plugin.rs).
 | `POST` | `/api/terminal/resize` | Resize the PTY (cols/rows) when the window resizes. |
 | `POST` | `/api/terminal/close` | Terminate the session. |
 
+Live sessions are capped at **8 per user** and **32 process-wide**; the shell
+runs with a minimal environment (no server secrets).
+
 ## Remote access
 
 The routes are refused for remote (Iroh/Tailscale) clients unless *Allow

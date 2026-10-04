@@ -24,6 +24,8 @@ the kiosk shell and the auth helper.
 | `LOG_FILE` | `data/shiny.log` | ✓ | File the tracer tees to. |
 | `RUST_LOG` | — | ✓ | Overrides `LOG_LEVEL`. |
 | `PLUGINS_DIR` | `data/plugins` | ✓ | Writable plugin directory (uploads + `install.log`). |
+| `SHINY_MIN_PLUGIN_TS` | security floor | loader | Warn when a plugin cdylib predates this Unix timestamp; `0` disables the check. |
+| `SHINY_MAIL_KEY_FILE` | `data/mail.key` | mail | AES-256-GCM key file (32 bytes, mode 0600) for encrypted account passwords. |
 | `BACKGROUNDS_DIR` | `data/backgrounds` | ✓ | Per-user desktop backgrounds. |
 | `ADMIN_TOKEN` | — | ✓ | Exposed to plugins via `ConfigSnapshot`; **not enforced**. |
 | `SHINY_POWER_SUPPLY_DIR` | `/sys/class/power_supply` | ✓ | Override the battery sysfs root. |

@@ -215,7 +215,7 @@ fn xml_escape(s: &str) -> String {
 pub fn ods_to_cells(ods: &[u8]) -> Result<BTreeMap<String, String>, AppError> {
     let xml = read_content_xml(ods)?;
     let doc = roxmltree::Document::parse(&xml)
-        .map_err(|e| AppError::Internal(format!("Invalid ODS content.xml: {}", e)))?;
+        .map_err(|e| AppError::BadRequest(format!("Invalid ODS content.xml: {}", e)))?;
 
     let mut cells = BTreeMap::new();
 

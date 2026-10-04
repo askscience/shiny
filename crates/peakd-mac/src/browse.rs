@@ -370,10 +370,12 @@ impl Views {
             .with_navigation_handler(nav)
             .with_document_title_changed_handler(title)
             .with_on_page_load_handler(load)
-            // Same grant as the main webview: the mic/camera must work on the
-            // pages the user browses, not only in the app chrome.
+            // The mic/camera belong to the kiosk app's own origin. A page the
+            // user browses in a child view must not receive capture devices
+            // silently; denying here leaves the platform's normal prompt path
+            // to the user's own browser gestures.
             .with_permission_handler(|kind| match kind {
-                PermissionKind::Microphone | PermissionKind::Camera => PermissionResponse::Allow,
+                PermissionKind::Microphone | PermissionKind::Camera => PermissionResponse::Deny,
                 _ => PermissionResponse::Default,
             })
             .with_initialization_script(crate::EXIT_SHORTCUT_JS)

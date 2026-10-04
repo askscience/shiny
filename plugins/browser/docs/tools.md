@@ -153,7 +153,7 @@ open the window.
 |---|---|---|---|---|
 | `url` | string | yes | — | URL **or** search phrase. Falls back to `query`. |
 | `query` | string | alias | — | Accepted when `url` is absent. |
-| `max_chars` | integer (`u32`) | no | `20000` | Truncation cap. |
+| `max_chars` | integer (`u32`) | no | `20000` | Truncation cap, clamped to `1..=100000`. |
 
 ### Returned data
 

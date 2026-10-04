@@ -64,7 +64,7 @@ rejected before insertion. The **original bytes are stored unchanged** (no
 re-encode), preserving foreign formatting.
 
 Errors: `BadRequest("multipart error: …")`, `BadRequest("read error: …")`,
-`BadRequest("missing 'file' field")`, `Internal` (invalid ODT).
+`BadRequest("missing 'file' field")`, `BadRequest` (invalid ODT/zip).
 
 ## `GET /api/documents/:id` — get
 

@@ -89,7 +89,7 @@ pub fn html_to_odt(title: &str, html: &str) -> Result<Vec<u8>, AppError> {
 pub fn odt_to_html(odt: &[u8]) -> Result<String, AppError> {
     let xml = read_content_xml(odt)?;
     let doc = roxmltree::Document::parse(&xml)
-        .map_err(|e| AppError::Internal(format!("Invalid ODT content.xml: {}", e)))?;
+        .map_err(|e| AppError::BadRequest(format!("Invalid ODT content.xml: {}", e)))?;
 
     let fonts = collect_font_styles(&doc);
     let mut out = String::new();

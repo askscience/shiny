@@ -104,9 +104,40 @@ additionally refused for remote clients unless explicitly allowed.
 
 ---
 
+## Secrets at rest
+
+- Mail account passwords are **encrypted at rest** with AES-256-GCM
+  (`enc:v1:<nonce||ciphertext>`). The key lives in `data/mail.key` (mode 0600)
+  or at `SHINY_MAIL_KEY_FILE`. Losing it makes stored passwords unreadable —
+  the accounts must be re-entered. Legacy plaintext rows are re-encrypted when
+  they are loaded and once more at plugin load.
+- Account responses never include the password (the routes serialize with
+  `to_json(false)`).
+
+## Network boundaries
+
+- HTTP `CONNECT` tunnels are checked against the same adblock engine as plain
+  requests: a blocked authority gets `403` before the tunnel opens.
+- Server-side fetches on behalf of a user (browser previews / `browser_read`,
+  radio now-playing) resolve the host, refuse non-public addresses and **pin**
+  the checked addresses on the HTTP client, closing the DNS-rebinding gap
+  between the check and the connection.
+- SDK HTTP clients carry explicit timeouts (Ollama 120 s, search 20 s,
+  Supertonic 30 s; YouTube 5 s connect / 20 s total; OpenAI 10 s / 120 s).
+
+## Stale plugin builds
+
+`loader.rs` compares each cdylib's mtime against a **security floor**
+(`SECURITY_FLOOR_TS`; override with `SHINY_MIN_PLUGIN_TS`, `0` disables). A
+plugin built before the floor logs a warning at load: it may be missing fixes
+that are present in the source tree. Rebuild and reinstall it.
+
+---
+
 ## Practical guidance
 
 - Install only plugins you built or trust the author of.
 - Read `install.log` after any install that misbehaves.
 - Prefer per-user activation; remember it does not isolate the native code.
 - Treat `ADMIN_TOKEN`/`is_admin` as informational, not a security boundary.
+- Keep `data/mail.key` with your backups; it is not stored in the database.

@@ -22,6 +22,16 @@ so list/read/search are instant.
   ([window.md](window.md)).
 - A **"New mail"** notification when the unread count grows.
 
+## Credentials
+
+Account passwords are **encrypted at rest** (AES-256-GCM, stored as
+`enc:v1:<nonce||ciphertext>`). The 32-byte key is generated on first use at
+`data/mail.key` (mode 0600) or at `SHINY_MAIL_KEY_FILE` when set. Rows written
+before encryption existed are migrated when the account is loaded and once at
+plugin load, so no manual step is needed. Responses never contain the
+password, and losing the key file means the stored passwords must be entered
+again.
+
 ## Caching
 
 `src/cache.rs` stores messages locally; the first `list`/`search` of a folder
@@ -35,7 +45,7 @@ plugins/mail/
 ├── plugin.toml
 ├── skills/mail.md
 ├── migrations/{001_init.sql,002_cache.sql}
-├── src/{lib,plugin,routes,tools/mod,mail,cache}.rs
+├── src/{lib,plugin,routes,tools/mod,mail,cache,crypto}.rs
 └── web/{plugin.js,icon.svg}
 ```
 

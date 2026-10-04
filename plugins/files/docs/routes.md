@@ -32,7 +32,10 @@ routes return bytes/streams directly). Registered in
 - `raw` supports HTTP range requests, which is what lets the quick-look video
   player stream without re-encoding.
 - Thumbnails and video frames are cached server-side.
-- Office quick-look uses `/render`, not a raw text dump.
+- Office quick-look uses `/render`, not a raw text dump. A malformed `.odt`/
+  `.ods`/`.odp` is rejected with `400` before any rendering work.
+- `ffmpeg`/`ffprobe` run with a 20 s timeout and capped output, so a hostile
+  media file cannot stall the request or balloon memory.
 
 ## Example
 

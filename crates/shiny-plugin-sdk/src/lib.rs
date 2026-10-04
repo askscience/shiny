@@ -69,10 +69,10 @@ pub(crate) fn read_zip_text_capped(
 
     let reader = std::io::Cursor::new(bytes.to_vec());
     let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| errors::AppError::Internal(format!("not a valid ODF archive: {e}")))?;
+        .map_err(|e| errors::AppError::BadRequest(format!("not a valid ODF archive: {e}")))?;
     let mut file = archive
         .by_name(entry)
-        .map_err(|e| errors::AppError::Internal(format!("missing {entry}: {e}")))?;
+        .map_err(|e| errors::AppError::BadRequest(format!("missing {entry}: {e}")))?;
     if file.size() as usize > max {
         return Err(errors::AppError::BadRequest(format!(
             "{entry} is too large to open"
@@ -82,12 +82,12 @@ pub(crate) fn read_zip_text_capped(
     file.by_ref()
         .take(max as u64 + 1)
         .read_to_end(&mut buf)
-        .map_err(|e| errors::AppError::Internal(format!("failed to read {entry}: {e}")))?;
+        .map_err(|e| errors::AppError::BadRequest(format!("failed to read {entry}: {e}")))?;
     if buf.len() > max {
         return Err(errors::AppError::BadRequest(format!(
             "{entry} expands beyond the size limit"
         )));
     }
     String::from_utf8(buf)
-        .map_err(|e| errors::AppError::Internal(format!("{entry} is not valid UTF-8: {e}")))
+        .map_err(|e| errors::AppError::BadRequest(format!("{entry} is not valid UTF-8: {e}")))
 }

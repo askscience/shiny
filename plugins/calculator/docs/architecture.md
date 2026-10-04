@@ -35,8 +35,9 @@ See PLUGINS.md §15 for the runtime-bridge rules that make this necessary.
 ## The evaluator grammar (`src/eval.rs`)
 
 A hand-written **tokenizer + recursive-descent parser** over `f64`. The public
-`evaluate` tokenizes, parses one expression, requires the token stream to be
-fully consumed, and rejects non-finite results.
+`evaluate` rejects inputs over **64 KiB** or more than **16k tokens** before
+parsing, caps recursion at **128 levels**, parses one expression, requires the
+token stream to be fully consumed, and rejects non-finite results.
 
 ### Tokens
 

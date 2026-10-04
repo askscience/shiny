@@ -21,12 +21,16 @@ fn main() {
         "Qt6WebEngineWidgets",
     ];
     let mut includes = Vec::new();
+    let mut qt_libs = Vec::new();
+    let mut qt_paths = Vec::new();
     for module in MODULES {
         let library = pkg_config::Config::new()
             .cargo_metadata(true)
             .probe(module)
             .unwrap_or_else(|err| panic!("pkg-config could not find {module}: {err}"));
         includes.extend(library.include_paths);
+        qt_libs.extend(library.libs);
+        qt_paths.extend(library.link_paths);
     }
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
@@ -69,6 +73,17 @@ fn main() {
         build.include(include);
     }
     build.compile("peakd_qt_shim");
+
+    // The static shim references Qt symbols and is placed after the shared Qt
+    // libraries on the link line. With `--as-needed` the libraries that precede
+    // it would be dropped, so repeat the search paths and libraries *after*
+    // `cc` emitted the shim.
+    for path in &qt_paths {
+        println!("cargo:rustc-link-search=native={}", path.display());
+    }
+    for lib in &qt_libs {
+        println!("cargo:rustc-link-lib={lib}");
+    }
 }
 
 /// `moc` ships in qt6-base-dev-tools; ask qmake where it is, with fallbacks.
