@@ -641,6 +641,11 @@ function buildTabStrip() {
   strip.className = 'browser-tabstrip';
   strip.setAttribute('role', 'tablist');
   strip.setAttribute('aria-label', 'Tabs');
+  // Nominate the strip as the window's top bar: the shared chrome folds it into
+  // the header row next to the close/fullscreen controls (see `data-window-bar`
+  // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
+  // and the centered "Browser" label is dropped.
+  strip.dataset.windowBar = '';
   return strip;
 }
 

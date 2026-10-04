@@ -91,6 +91,14 @@
   background: color-mix(in srgb, var(--surface, var(--bg-elevated)) 70%, transparent);
 }
 
+/* The strip is the window's top bar (see `data-window-bar` in plugin.js), so
+   inside the merged header it drops its own plate and bottom border and reads
+   as a single row with the close/fullscreen controls. */
+.tile-header--merged > .browser-tabstrip {
+  height: 100%;
+  background: transparent;
+}
+
 .browser-tab {
   flex: 0 1 auto;
   display: flex;
