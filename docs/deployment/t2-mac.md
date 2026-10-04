@@ -31,6 +31,12 @@ systemctl --user restart wireplumber pipewire pipewire-pulse
   hidden by the graph.
 - After installation the sound panel shows **"MacBook Pro T2 DSP Speakers"**
   instead of the raw `HiFi` sink.
+- The DSP sink accepts up to **200 %** in Shiny's sound panel (every other sink
+  stays at 150 %). The graph maps the volume onto the loudness-compensator's
+  linear input gain — unity at 100 %, real amplification above it — instead of
+  the plugin's output volume, which clamps at +7 dB; that is why the raw 6-speaker
+  hardware finally gets loud enough. Both the tweeter and the woofer paths end in
+  a limiter.
 - The microphone is left on the raw device: upstream's mic DSP needs
   `triforce-lv2`, which Debian does not package.
 

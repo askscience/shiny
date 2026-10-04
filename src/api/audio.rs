@@ -58,7 +58,8 @@ pub struct VolumeBody {
     /// Node index from the latest snapshot; omit for the default device.
     #[serde(default)]
     id: Option<u32>,
-    /// Absolute volume, 0–150 (above 100 over-amplifies).
+    /// Absolute volume, 0–200 (above 100 over-amplifies; the T2 DSP sink and
+    /// any other node advertising `max_volume` accept the higher value).
     percent: u8,
 }
 

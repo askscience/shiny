@@ -201,8 +201,9 @@ function buildSection(label, target) {
   });
   const range = slider({
     min: 0,
-    // Output may be pushed past unity (over-amplification); input stays at
-    // 100 % so a boosted microphone cannot clip the capture.
+    // Initial ceiling; `updateSection` replaces the output max with the value
+    // the server advertises per node (150 % normally, more on the T2 DSP).
+    // Input stays at 100 % so a boosted microphone cannot clip the capture.
     max: target === 'sink' ? 150 : 100,
     step: 1,
     value: 0,
@@ -295,6 +296,9 @@ function updateSection(ref, target, nodes, defaultName) {
   ref.subEl.textContent = nodeSubtitle(node);
   ref.pctEl.textContent = node.muted ? 'Muted' : `${node.volume_percent}%`;
   ref.pctEl.classList.toggle('is-over', !node.muted && node.volume_percent > 100);
+  // The server tells us the ceiling: 150 % normally, more for the T2 speaker
+  // DSP. Input stays at 100 % so a boosted microphone cannot clip the capture.
+  ref.range.max = String(target === 'sink' ? (node.max_volume || 150) : 100);
   setButtonIcon(ref.muteBtn, nodeIcon(node, target));
   ref.muteBtn.setAttribute('aria-label', node.muted
     ? (target === 'source' ? 'Unmute microphone' : 'Unmute output')

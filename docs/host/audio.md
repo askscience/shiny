@@ -12,11 +12,14 @@ works with any PulseAudio-compatible server — in practice **PipeWire** through
   node is default for new streams.
 - Per-node listing, so the menu can switch between speakers, headphones, HDMI,
   microphones, etc.
-- Volume is offered over the range `0..=150` (`MAX_VOLUME` in
+- Volume is offered over the range `0..=150` by default (`MAX_VOLUME` in
   `src/services/audio.rs`). Above 100 % is deliberate digital
   over-amplification, the same range GNOME's sound menu offers; the menu marks
-  it (`is-over`) but does not hide it. Input volume is capped at 100 % in the UI
-  so a boosted microphone cannot clip.
+  it (`is-over`) but does not hide it. Each node advertises its own `max_volume`
+  and the UI learns it from there: the T2 Mac speaker DSP sink allows up to
+  `MAX_VOLUME_T2` (200 %), because its raw hardware is far quieter than macOS
+  drives it. Every other node — and every non-T2 machine — stays at 150 %. Input
+  volume is capped at 100 % in the UI so a boosted microphone cannot clip.
 
 ## Backend
 
@@ -53,7 +56,9 @@ service find the desktop user's socket without session environment
 | `RETRY` | 30 s | re-probe cadence while PipeWire is absent |
 | `SAFETY_REFRESH` | 60 s | refresh even with no events |
 | `COMMAND_TIMEOUT` | 10 s | hard cap on one `pactl` call |
-| `MAX_VOLUME` | 150 | top of the accepted volume range |
+| `MAX_VOLUME` | 150 | default top of the accepted volume range |
+| `MAX_VOLUME_T2` | 200 | ceiling advertised by the T2 speaker DSP sink |
+| `HARD_MAX_VOLUME` | 200 | hardest value `set_volume` accepts |
 | `BROADCAST_CAPACITY` | 64 | snapshot channel depth |
 
 The `pactl subscribe` loop ignores `client` events (`is_relevant_event`) because
@@ -78,8 +83,9 @@ and SSE:
 | `sinks`, `sources` | `AudioNode[]` | default first, then playing, then label |
 
 Each `AudioNode` carries `id`, `name`, `description` (long label), `nick`
-(short label the chip shows), `card`, `is_default`, `volume_percent`, `muted`,
-`level` (0–3), `state` (`RUNNING`/`IDLE`/`SUSPENDED`), `channels`, `form_factor`,
+(short label the chip shows), `card`, `is_default`, `volume_percent`,
+`max_volume` (UI ceiling; 150 %, or 200 % on the T2 DSP), `muted`, `level`
+(0–3), `state` (`RUNNING`/`IDLE`/`SUSPENDED`), `channels`, `form_factor`,
 `icon` and `active_port`. Monitor sources (`*.monitor`, `device.class=monitor`)
 are filtered out — they are loopbacks of a sink, not capture hardware.
 
@@ -122,9 +128,9 @@ reflect the change immediately. The request bodies:
 ```
 
 `target` is `"sink"` or `"source"` (`AudioTarget`); `id` omitted means "the
-default device" (`@DEFAULT_SINK@` / `@DEFAULT_SOURCE@`). A volume above 150, or
-a missing/extra field, fails serde deserialization → HTTP 422 (axum's rejection)
-or `BadRequest` (HTTP 400) from the service.
+default device" (`@DEFAULT_SINK@` / `@DEFAULT_SOURCE@`). A volume above
+`HARD_MAX_VOLUME` (200), or a missing/extra field, fails serde deserialization →
+HTTP 422 (axum's rejection) or `BadRequest` (HTTP 400) from the service.
 
 ## UI
 
@@ -136,9 +142,9 @@ or `BadRequest` (HTTP 400) from the service.
   open. Builds the skeleton once and updates in place so a re-render never drops
   a slider under the user's finger. A drag updates optimistically and pushes on
   a 120 ms debounce (`VOLUME_DEBOUNCE_MS`); release commits and refreshes. Output
-  slider max 150, input max 100. The Output section has a **test sound** button
-  that plays a two-note chime through the browser (i.e. through the sink being
-  controlled).
+  slider max is the node's `max_volume` (150 %, or 200 % on the T2 DSP), input
+  max 100. The Output section has a **test sound** button that plays a two-note
+  chime through the browser (i.e. through the sink being controlled).
 - **Shared helpers** — `web/js/audioShared.js`: `currentSink`, `nodeIcon`,
   `nodeLabel`, `nodeSubtitle` (e.g. `Apple Audio Device · [Out] Speaker · in use`).
 
@@ -152,6 +158,15 @@ so the six speakers are driven the way the hardware expects; after installing,
 the sound panel shows **"MacBook Pro T2 DSP Speakers"** instead of the raw
 `HiFi` sink. The microphone is left on the raw device. The script is gated to
 `MacBookPro16,1` on purpose and refuses to run if its LV2 plugins are missing.
+
+That graph maps the sink volume onto the loudness-compensator's **linear input
+gain** (unity at 100 %, real amplification above it) rather than its output
+`volume`, which the plugin clamps at +7 dB. So the T2 DSP sink is the one node
+that advertises `max_volume = 200` (`MAX_VOLUME_T2`): the raw hardware is much
+quieter than macOS drives it, and the extra range is what lets the slider make a
+difference. The tweeter and woofer paths both end in a limiter so the added gain
+cannot clip the drivers. A non-T2 machine never sees the graph, so it never sees
+the wider range.
 
 ## polkit / privilege
 

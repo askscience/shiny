@@ -153,8 +153,10 @@ async function currentOutput() {
 async function nudgeVolume(delta) {
   const sink = await currentOutput();
   if (!sink) return;
-  // Same 150 % over-amplification ceiling as the Sound menu slider.
-  const percent = Math.max(0, Math.min(150, Math.round((sink.volume_percent || 0) + delta)));
+  // Use the ceiling the server advertises for this node: 150 % normally, more
+  // for the T2 speaker DSP whose hardware is quiet.
+  const max = sink.max_volume || 150;
+  const percent = Math.max(0, Math.min(max, Math.round((sink.volume_percent || 0) + delta)));
   await apiFetch('/api/audio/volume', {
     method: 'POST',
     body: JSON.stringify({ target: 'sink', id: sink.id, percent }),

@@ -117,6 +117,19 @@
                 }
             },
             {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/compressor_stereo",
+                "name": "tweeter_lim",
+                "control": {
+                    "sla": 5.0,
+                    "al": 1.0,
+                    "at": 1.0,
+                    "rt": 100.0,
+                    "cr": 15.0,
+                    "kn": 0.5
+                }
+            },
+            {
                 "type": "builtin",
                 "label": "copy",
                 "name": "copyLW"
@@ -158,6 +171,8 @@
             {"output": "copyR:Out", "input": "convRW:In"},
             {"output": "convLW:Out", "input": "woofer_lim:in_l"},
             {"output": "convRW:Out", "input": "woofer_lim:in_r"},
+            {"output": "convLT:Out", "input": "tweeter_lim:in_l"},
+            {"output": "convRT:Out", "input": "tweeter_lim:in_r"},
             {"output": "woofer_lim:out_l", "input": "copyLW:In"},
             {"output": "woofer_lim:out_r", "input": "copyRW:In"},
             {"output": "copyLW:Out", "input": "LW:In"},
@@ -172,23 +187,23 @@
         "outputs": [
             "LW:Out",
             "LW2:Out",
-            "convLT:Out",
+            "tweeter_lim:out_l",
             "RW:Out",
             "RW2:Out",
-            "convRT:Out"
+            "tweeter_lim:out_r"
         ],
         "capture.volumes": [
             {
-                "control": "ell:volume",
-                "min": -65.0,
-                "max": 0.0,
-                "scale": "cubic"
+                "control": "ell:input",
+                "min": 0.0,
+                "max": 1.0,
+                "scale": "linear"
             },
             {
-                "control": "elr:volume",
-                "min": -65.0,
-                "max": 0.0,
-                "scale": "cubic"
+                "control": "elr:input",
+                "min": 0.0,
+                "max": 1.0,
+                "scale": "linear"
             }
         ]
     },

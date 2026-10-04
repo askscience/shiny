@@ -38,10 +38,17 @@ const SAFETY_REFRESH: Duration = Duration::from_secs(60);
 const BROADCAST_CAPACITY: usize = 64;
 /// A `pactl` call must never wedge a status request or an API handler.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
-/// Top of the volume range. Above 100 % is deliberate digital
-/// over-amplification (the same range GNOME's sound menu offers), so the
+/// Top of the volume range the UI offers by default. Above 100 % is deliberate
+/// digital over-amplification (the same range GNOME's sound menu offers), so the
 /// slider can push a quiet source louder than unity.
 pub const MAX_VOLUME: u8 = 150;
+/// A louder ceiling reserved for the T2 Mac speaker DSP graph. Its raw hardware
+/// is far quieter than macOS drives it, so the graph maps the sink volume onto a
+/// linear gain where above 100 % is real amplification instead of a no-op. Other
+/// nodes keep `MAX_VOLUME`, so no non-T2 machine sees a changed range.
+pub const MAX_VOLUME_T2: u8 = 200;
+/// Hardest value any node accepts, T2 or not. `set_volume` rejects above this.
+pub const HARD_MAX_VOLUME: u8 = MAX_VOLUME_T2;
 
 #[cfg(target_os = "linux")]
 const START_REASON: &str = "PipeWire is not reachable";
@@ -122,6 +129,9 @@ pub struct AudioNode {
     pub card: Option<String>,
     pub is_default: bool,
     pub volume_percent: u8,
+    /// Highest volume the UI should offer for this node (`MAX_VOLUME`, or
+    /// [`MAX_VOLUME_T2`] for the T2 speaker DSP whose hardware is quiet).
+    pub max_volume: u8,
     pub muted: bool,
     /// Icon bucket 0–3, see [`volume_level`].
     pub level: u8,
@@ -167,6 +177,25 @@ pub fn volume_level(percent: u8, muted: bool) -> u8 {
         2
     } else {
         3
+    }
+}
+
+/// Highest volume the UI offers for a node.
+///
+/// Almost every sink/source gets [`MAX_VOLUME`]. The one exception is the T2
+/// Mac speaker DSP graph: the raw 6-speaker hardware is much quieter than macOS
+/// drives it, and the graph maps the sink volume onto a linear gain, so offering
+/// [`MAX_VOLUME_T2`] gives the user real amplification headroom. The match is on
+/// the node name/description the graph installs, so any other machine (or a
+/// non-T2 sink on a T2 machine, e.g. headphones) keeps the normal range.
+#[must_use]
+pub fn max_volume_for(name: &str, description: &str) -> u8 {
+    let is_t2_dsp =
+        name.starts_with("audio_effect.t2-") || description.to_ascii_lowercase().contains("t2 dsp");
+    if is_t2_dsp {
+        MAX_VOLUME_T2
+    } else {
+        MAX_VOLUME
     }
 }
 
@@ -367,20 +396,22 @@ impl AudioService {
         self.status().available
     }
 
-    /// Set an absolute volume (0–[`MAX_VOLUME`] %). `id: None` means the
+    /// Set an absolute volume (0–[`HARD_MAX_VOLUME`] %). `id: None` means the
     /// default device.
     ///
     /// Above 100 % is digital over-amplification: it can clip, and on the T2
     /// speaker array it drives the hardware past the amp's own limit, so the
-    /// UI marks it but does not hide it — the range is the user's call.
+    /// UI marks it but does not hide it — the range is the user's call. The T2
+    /// DSP sink allows the higher [`MAX_VOLUME_T2`] ceiling; the UI learns it
+    /// from the node's `max_volume`.
     pub async fn set_volume(
         &self,
         target: AudioTarget,
         id: Option<u32>,
         percent: u8,
     ) -> Result<(), String> {
-        if percent > MAX_VOLUME {
-            return Err(format!("volume must be between 0 and {MAX_VOLUME}%"));
+        if percent > HARD_MAX_VOLUME {
+            return Err(format!("volume must be between 0 and {HARD_MAX_VOLUME}%"));
         }
         let _guard = self.inner.command.lock().await;
         let spec = node_spec(target, id);
@@ -604,6 +635,12 @@ fn parse_node(entry: &serde_json::Value) -> Option<AudioNode> {
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     let volume_percent = entry.get("volume").map(volume_percent).unwrap_or(0);
+    let description = entry
+        .get("description")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_default();
+    let max_volume = max_volume_for(&name, &description);
 
     // Monitor sources are loopbacks of a sink, not capture hardware; the Sound
     // menu lists real inputs only (GNOME's panel hides them too).
@@ -619,15 +656,12 @@ fn parse_node(entry: &serde_json::Value) -> Option<AudioNode> {
     Some(AudioNode {
         id: u32::try_from(id).ok()?,
         name,
-        description: entry
-            .get("description")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string)
-            .unwrap_or_default(),
+        description,
         nick: property("node.nick"),
         card: property("device.description"),
         is_default: false,
         volume_percent,
+        max_volume,
         muted,
         level: volume_level(volume_percent, muted),
         state: entry
@@ -677,7 +711,9 @@ fn volume_percent(volume: &serde_json::Value) -> u8 {
     if count == 0 {
         0
     } else {
-        (total / count as f64).round().clamp(0.0, 150.0) as u8
+        (total / count as f64)
+            .round()
+            .clamp(0.0, f64::from(HARD_MAX_VOLUME)) as u8
     }
 }
 
@@ -734,7 +770,7 @@ fn now() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::volume_level;
+    use super::{max_volume_for, volume_level, MAX_VOLUME, MAX_VOLUME_T2};
 
     #[test]
     fn volume_levels_match_gnome_buckets() {
@@ -750,10 +786,44 @@ mod tests {
         assert_eq!(volume_level(100, false), 3);
     }
 
+    #[test]
+    fn only_the_t2_dsp_sink_gets_the_louder_ceiling() {
+        // The graph the installer ships names its sink audio_effect.t2-161-speakers.
+        assert_eq!(
+            max_volume_for(
+                "audio_effect.t2-161-speakers",
+                "MacBook Pro T2 DSP Speakers"
+            ),
+            MAX_VOLUME_T2
+        );
+        // Description-only match (e.g. a future model with a new node name).
+        assert_eq!(
+            max_volume_for("audio_effect.speakers", "MacBook Pro T2 DSP Speakers"),
+            MAX_VOLUME_T2
+        );
+        // Everything else, including a non-DSP sink on a T2 machine, is normal.
+        assert_eq!(
+            max_volume_for(
+                "alsa_output.platform-sound.RawSpeakers",
+                "Raw Speaker Device (do not use)"
+            ),
+            MAX_VOLUME
+        );
+        assert_eq!(
+            max_volume_for(
+                "alsa_output.pci-0000_04_00.3.HiFi__Headphones__sink",
+                "Apple Audio Device Headphones"
+            ),
+            MAX_VOLUME
+        );
+        assert_eq!(max_volume_for("", ""), MAX_VOLUME);
+    }
+
     #[cfg(target_os = "linux")]
     mod linux {
         use super::super::{
-            default_name, is_relevant_event, parse_nodes, parse_status, volume_percent,
+            default_name, is_relevant_event, parse_nodes, parse_status, volume_percent, MAX_VOLUME,
+            MAX_VOLUME_T2,
         };
         use serde_json::json;
 
@@ -845,6 +915,7 @@ mod tests {
             assert_eq!(sink.nick.as_deref(), Some("Speaker"));
             assert_eq!(sink.card.as_deref(), Some("Apple Audio Device"));
             assert_eq!(sink.volume_percent, 30);
+            assert_eq!(sink.max_volume, MAX_VOLUME);
             assert_eq!(sink.level, 1);
             assert_eq!(sink.channels, 2);
             assert_eq!(sink.active_port.as_deref(), Some("[Out] Speaker"));
@@ -853,6 +924,28 @@ mod tests {
             assert!(!hdmi.is_default);
             assert!(hdmi.muted);
             assert_eq!(hdmi.level, 0);
+        }
+
+        #[test]
+        fn t2_dsp_sink_reports_the_louder_ceiling() {
+            let sinks = json!([
+                {
+                    "index": 90,
+                    "state": "RUNNING",
+                    "name": "audio_effect.t2-161-speakers",
+                    "description": "MacBook Pro T2 DSP Speakers",
+                    "channel_map": "front-left,front-right",
+                    "mute": false,
+                    "volume": {
+                        "front-left": { "value_percent": "150%" },
+                        "front-right": { "value_percent": "150%" },
+                    },
+                    "properties": {},
+                },
+            ]);
+            let nodes = parse_nodes(&sinks, None);
+            assert_eq!(nodes[0].volume_percent, 150);
+            assert_eq!(nodes[0].max_volume, MAX_VOLUME_T2);
         }
 
         #[test]

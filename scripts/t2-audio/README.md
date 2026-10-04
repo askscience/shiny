@@ -14,7 +14,7 @@ software DSP.
 
 | Path | Purpose |
 |---|---|
-| `16_1/graph.json` | PipeWire filter-chain graph: virtual bass + per-driver FIR convolution + limiting. |
+| `16_1/graph.json` | PipeWire filter-chain graph: virtual bass + per-driver FIR convolution + limiting (woofer and tweeter). |
 | `16_1/mic.json` | PipeWire filter-chain graph: 3-channel array → Triforce beamformer + high-pass (the tuned microphone). |
 | `16_1/{tweeters,woofers}-{44k,48k,96k}.wav` | Measured impulse responses (FIRs), one per sample rate. |
 | `wireplumber.conf` | WirePlumber rules that rename the raw speaker/mic nodes and wrap them in the graphs. |
@@ -50,6 +50,18 @@ applies the model geometry/gain and a high-pass filter, and exposes a mono
 Everything here is gated on the machine actually being a `MacBookPro16,1` with
 the `t2bce_audio` card, and the udev rule only fires for that driver — so a
 machine without the T2 kernel is never touched.
+
+## Volume
+
+The graph maps the sink volume onto the loudness-compensator's **input gain**
+(`ell:input` / `elr:input`) rather than its output `volume`. This is deliberate:
+LSP's `loud_comp_mono` output volume is capped at **+7 dB**, so using it made
+100–150 % nearly indistinguishable, which is exactly the "quiet T2 speakers"
+complaint. The linear input gain has a much larger range, so 100 % is unity and
+above it is real amplification (Shiny's panel offers up to 200 % on this sink
+only). Both the tweeter and the woofer paths end in an LSP limiter, so the added
+gain cannot clip the drivers. Every other machine and sink keeps the normal
+150 % ceiling.
 
 ## Attribution
 
