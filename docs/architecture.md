@@ -175,16 +175,20 @@ Full detail in [plugin architecture](plugins/architecture.md) and
 - A plugin is a folder with `plugin.toml`, a Rust `cdylib`, optional
   `migrations/`, `skills/` and `web/`.
 - On boot, [`PluginManager::discover_and_install`](../src/plugins/manager.rs)
-  walks `PLUGINS_DIR`. At runtime, `POST /api/plugins/install` accepts a
-  `.zip`/`.tar.gz`.
-- The [loader](../src/plugins/loader.rs) validates the manifest, `dlopen`s the
-  library, calls `shiny_plugin_entry`, runs new migrations against the core
-  `plugin_schema_versions` table, calls `Plugin::register`, then `on_load`.
+  walks the read-only `SYSTEM_PLUGINS_DIR` baseline first and then the writable
+  `PLUGINS_DIR`, so a user plugin of the same name overrides the baseline. At
+  runtime, `POST /api/plugins/install` accepts a `.zip`/`.tar.gz` and writes it
+  to `PLUGINS_DIR`.
+- The [loader](../src/plugins/loader.rs) validates the manifest (name and
+  relative paths), `dlopen`s the library, calls `shiny_plugin_entry`, runs new
+  migrations against the core `plugin_schema_versions` table, calls
+  `Plugin::register`, then `on_load`.
 - Contributions (tools, skills markdown, persona, context lines, routes) are
   held by the manager and become live immediately; the router is rebuilt.
-- Activation is **per user** (`user_plugin_states`), separate from
-  installation (server-wide). Deactivated plugins contribute nothing to the
-  prompt and their tools refuse dispatch.
+- Activation is **per user** (`user_plugin_states`). Installation is per user
+  in the multi-user install (each server has its own `PLUGINS_DIR`); the
+  baseline is shared and cannot be uninstalled. Deactivated plugins contribute
+  nothing to the prompt and their tools refuse dispatch.
 
 Because plugins are native code in-process, the SDK enforces two rules: wrap
 every tool with `bridged(...)` so it runs on a plugin-owned runtime, and access

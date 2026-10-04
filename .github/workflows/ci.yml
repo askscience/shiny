@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Native dependencies: SQLite, and the audio/D-Bus headers some crates probe.
+      - run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # NOTE: no `cargo fmt --check` gate yet — the tree is not rustfmt-clean
+      # today, so it would fail on pre-existing style. Add it once the repo has
+      # been normalized.
+      # peakd/peakd-mac need the Qt6 WebEngine dev packages, which are not part
+      # of this job; they are exercised on the deployment machines instead.
+      - run: cargo clippy --workspace --exclude peakd --exclude peakd-mac --all-targets
+      - run: cargo test --workspace --exclude peakd --exclude peakd-mac
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Frontend tests
+        run: |
+          for f in web/js/tests/*.test.mjs; do
+            echo "== $f"
+            node "$f"
+          done

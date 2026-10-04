@@ -18,11 +18,12 @@ the kiosk shell and the auth helper.
 | `SERVER_HOST` | `0.0.0.0` | ✓ | HTTP bind address. |
 | `SERVER_PORT` | `8080` | ✓ | HTTP port. Per-user installs use `8080 + uid − 1000`. |
 | `DATABASE_URL` | `sqlite://data/traveler.db` | ✓ | SQLite URL/path. |
+| `SYSTEM_PLUGINS_DIR` | — | — | Read-only system plugin baseline; a same-named plugin in `PLUGINS_DIR` overrides it. |
 | `WEB_DIR` | `web` | ✓ | Static UI directory (SPA fallback). |
 | `LOG_LEVEL` | `info` | ✓ | Filter used when `RUST_LOG` is unset. |
 | `LOG_FILE` | `data/shiny.log` | ✓ | File the tracer tees to. |
 | `RUST_LOG` | — | ✓ | Overrides `LOG_LEVEL`. |
-| `PLUGINS_DIR` | `data/plugins` | ✓ | Installed plugins + `install.log`. |
+| `PLUGINS_DIR` | `data/plugins` | ✓ | Writable plugin directory (uploads + `install.log`). |
 | `BACKGROUNDS_DIR` | `data/backgrounds` | ✓ | Per-user desktop backgrounds. |
 | `ADMIN_TOKEN` | — | ✓ | Exposed to plugins via `ConfigSnapshot`; **not enforced**. |
 | `SHINY_POWER_SUPPLY_DIR` | `/sys/class/power_supply` | ✓ | Override the battery sysfs root. |

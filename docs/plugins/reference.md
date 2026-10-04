@@ -213,7 +213,7 @@ params as **headers**:
 | `USER_ID_HEADER` | `x-shiny-user-id` | `user_id_from_request(req)` |
 | `TRAVELER_ID_HEADER` | `x-shiny-traveler-id` | `traveler_id_from_request(req)` |
 | `PATH_PARAMS_HEADER` | `x-shiny-path-params` | `path_params_from_request(req)` |
-| `REMOTE_HEADER` | `x-shiny-remote` | `is_remote_request(req)` |
+| `REMOTE_HEADER` | `x-shiny-remote` (plus `x-forwarded-*`) | `is_remote_request(req)` |
 | `OS_USER_HEADER` | `x-shiny-os-user` | `os_identity_from_request(req)` |
 | `OS_HOME_HEADER` | `x-shiny-os-home` | `os_home_from_request(req)` |
 | `OS_UID_HEADER` | `x-shiny-os-uid` | `os_identity_from_request(req)` |

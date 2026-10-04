@@ -330,8 +330,11 @@ tar czf hello.tar.gz hello/
 | `POST` | `/api/plugins/uninstall` | Bearer (any logged-in user) | JSON body `{"name":"hello"}` |
 
 > There is **no admin role** in the current auth model: any logged-in user can
-> install/uninstall a plugin (the installed cdylib is shared server-wide), while
-> **activation** is per-user (stored in `user_plugin_states`). The `ADMIN_TOKEN`
+> install/uninstall a plugin, but the install now lands in **that user's own**
+> `PLUGINS_DIR` (per-user servers), not in a shared directory. The read-only
+> `SYSTEM_PLUGINS_DIR` baseline is loaded by everyone and cannot be uninstalled
+> (only deactivated); a user plugin of the same name overrides it.
+> **Activation** is per-user (stored in `user_plugin_states`). The `ADMIN_TOKEN`
 > env var and the `is_admin` column are read but not currently enforced — see §14.
 
 Authenticate with a logged-in user's bearer token (register or login first — see §7):
@@ -668,7 +671,8 @@ The plugin system reads these env vars in `Config::from_env`:
 
 | Var | Default | Purpose |
 |---|---|---|
-| `PLUGINS_DIR` | `data/plugins` | Where plugins live + the `install.log`. |
+| `PLUGINS_DIR` | `data/plugins` | Writable plugin directory: uploads + the `install.log`. |
+| `SYSTEM_PLUGINS_DIR` | unset | Optional read-only system baseline loaded for every user; a user plugin of the same name overrides it. |
 | `ADMIN_TOKEN` | unset | Read into `Config::admin_token` and the plugin `ConfigSnapshot`, but **not currently enforced** by the auth middleware — plugin management is gated by a logged-in user token (see §13/§14). |
 | `CORE_TRAVELER_BUILTIN` | `true` | When `true`, the embedded traveler tools (`src/services/agent_tools.rs`) still answer actions the plugin didn't claim. Set `false` to make core a pure assistant. |
 
@@ -761,7 +765,7 @@ The separation between **deactivate** (keep install dir + tables, just turn tool
 ## 14. Security model
 
 - Plugins are full Rust `cdylib`s loaded into the same process. They have full process privileges — they can read SQLite rows, make HTTP calls, spawn threads, write files. **Don't install plugins you don't trust.**
-- Plugin management (install/uninstall/activate/deactivate) is gated only by a **logged-in user token** — there is currently **no admin role**. The `ADMIN_TOKEN` env var and the `is_admin` column are read but not enforced. For a single-tenant server that is acceptable, but treat every account as able to load native code. Real admin gating, signature verification, and process isolation are roadmap work.
+- Plugin management (install/uninstall/activate/deactivate) is gated only by a **logged-in user token** — there is currently **no admin role**. The `ADMIN_TOKEN` env var and the `is_admin` column are read but not enforced. Isolation comes from the deployment instead: with one server per OS user, each account has its own `PLUGINS_DIR` under `~/.local/share/shiny/`, so a plugin is loaded only by that account's server. `SYSTEM_PLUGINS_DIR` is a read-only baseline shared by all. A single server with several mutually distrusting accounts breaks that separation. Real admin gating, signature verification, and process isolation are roadmap work.
 - The `install.log` makes post-incident forensics possible but does not prevent malicious plugins.
 - For multi-tenant hosting, plan to (a) require `signature` validation, (b) sandbox long-running plugins behind an IPC process boundary. Both are roadmap items; v1 is single-tenant.
 

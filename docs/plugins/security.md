@@ -15,15 +15,23 @@ describes the install audit trail and the (currently inactive) signature hook.
   `ADMIN_TOKEN` env var and the `travelers.is_admin` column are read but **not
   enforced** by core routing. For a single-tenant server that is acceptable;
   treat every account as able to load native code.
-- **Activation** is per-user (`user_plugin_states`); **installation** is
-  server-wide (the shared cdylib). A user enabling a plugin enables it for
-  themselves only, but anyone can install one for the whole server.
+- **Isolation is the deployment, not the plugin API.** With the multi-user
+  install, every account has its own server process and OS identity, with
+  `PLUGINS_DIR` under `~/.local/share/shiny/plugins`: a plugin you install is
+  loaded only by your server. `SYSTEM_PLUGINS_DIR` (the repo's `data/plugins`)
+  is a read-only baseline loaded by everyone; a user plugin of the same name
+  overrides it, and the baseline itself cannot be uninstalled (only
+  deactivated). One shared server with several mutually distrusting accounts
+  breaks this separation — do not run it that way.
+- **Activation** is per-user (`user_plugin_states`); with per-user directories,
+  **installation** is too. A user enabling a plugin enables it for themselves;
+  installing one places it in their own directory.
 - The install log enables post-incident forensics but does not prevent a
   malicious plugin.
 
-For multi-tenant hosting, plan to (a) require signature validation and (b)
-sandbox long-running plugins behind an IPC process boundary. Both are roadmap;
-the current system is single-tenant.
+For stronger hosting guarantees, plan to (a) require signature validation and
+(b) sandbox long-running plugins behind an IPC process boundary. Both are
+roadmap. The system is designed for one server per user.
 
 ---
 

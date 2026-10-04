@@ -87,7 +87,9 @@ Microphone access needs HTTPS unless you connect over `localhost`.
 
 Every plugin is optional and activated **per user**. Activating one registers its
 agent tools and skills, mounts its routes, runs its migrations and opens its
-window.
+window. In the multi-user install plugins are also **installed per user**
+(`PLUGINS_DIR` under the account's data dir) over a read-only system baseline
+(`SYSTEM_PLUGINS_DIR`); a user plugin of the same name overrides the baseline.
 
 | Plugin | Category | Adds |
 |---|---|---|

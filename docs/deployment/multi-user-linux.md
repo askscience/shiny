@@ -66,8 +66,14 @@ sudo scripts/install-greeter.sh         # LightDM + the Noir greeter
 
 - Each login runs its **own** `shiny` server as that user — a systemd **user**
   unit (`/etc/systemd/user/shiny.service`) on port `8080 + uid − 1000`, with its
-  state in `~/.local/share/shiny/` (per-user SQLite DB, log, backgrounds). This
-  is what lets the Files plugin reach *each* user's real home.
+  state in `~/.local/share/shiny/` (per-user SQLite DB, log, backgrounds,
+  **plugins**). This is what lets the Files plugin reach *each* user's real home.
+  The unit sets `PLUGINS_DIR=%h/.local/share/shiny/plugins` and
+  `SYSTEM_PLUGINS_DIR=$SHINY_REPO/data/plugins`: user-installed plugins are
+  private to that account, while the repo's `data/plugins` is a read-only
+  baseline loaded by everyone. Uninstalling a baseline plugin is refused; a user
+  plugin of the same name overrides it. The repo must not be group/other
+  writable (the installer warns), because it also backs the shared web UI.
 - [`/usr/local/bin/shiny-session`](../../scripts/shiny-session) writes the
   per-user `SERVER_PORT`, starts the user's server and the speech sidecars,
   waits for the server to answer, auto-logs-in the kiosk with the loopback
@@ -89,6 +95,12 @@ it in `AppState.session`. `GET /api/auth/session?token=…` exchanges it for the
 account's durable `shiny_token` cookie, but is accepted **only from loopback**,
 so it can never be used over Iroh or the LAN. This is how the kiosk auto-logs in
 without a password.
+
+The token is **single-use**: a successful bootstrap rotates it and rewrites the
+file, so a copy recovered from a log or a browser history entry is already dead.
+`scripts/shiny-session` passes it to `peakd` through the `SHINY_BOOT_TOKEN`
+environment variable (never argv, which `/proc/<pid>/cmdline` exposes
+world-readable); the shell appends it to the initial navigation URL itself.
 
 ---
 

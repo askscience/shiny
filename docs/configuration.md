@@ -17,7 +17,8 @@ All values parsed by the binary live in
 |---|---|---|---|
 | Database | `sqlite://data/traveler.db` | `DATABASE_URL` | Identity, travel, chat, plugin state. |
 | Log | `data/shiny.log` | `LOG_FILE` | Tee'd alongside stdout. |
-| Plugins | `data/plugins` | `PLUGINS_DIR` | Installed plugin folders + `install.log` + `.install.lock`. |
+| Plugins (writable) | `data/plugins` | `PLUGINS_DIR` | Per-user plugin folders + `install.log` + `.install.lock`; uploads land here. |
+| Plugins (baseline) | — | `SYSTEM_PLUGINS_DIR` | Optional read-only system plugin baseline; a same-named user plugin overrides it. |
 | Backgrounds | `data/backgrounds` | `BACKGROUNDS_DIR` | Per-user desktop background images. |
 | Vosk models | `data/vosk-models` | `VOSK_MODELS_DIR` | Served to the browser at `/api/voice/models/vosk`. |
 | Whisper models | `data/whisper-models` | `WHISPER_MODELS_DIR` | faster-whisper CTranslate2 folders. |
@@ -103,7 +104,8 @@ commands — except `SHINY_PAIRED_FILE` for the allowlist.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PLUGINS_DIR` | `data/plugins` | Where plugins live and the install log is written. |
+| `PLUGINS_DIR` | `data/plugins` | Writable plugin directory: uploads and the install log. |
+| `SYSTEM_PLUGINS_DIR` | — | Read-only system plugin baseline loaded for every user; a user plugin of the same name overrides it. |
 | `ADMIN_TOKEN` | — | Exposed to plugins via `ConfigSnapshot`; not enforced. |
 | `CORE_TRAVELER_BUILTIN` | `true` | Legacy switch: when true the embedded traveler code still answers unclaimed actions. |
 

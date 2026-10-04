@@ -129,7 +129,9 @@ extensions do not cross. Core therefore passes portable data as **headers**:
 - `x-shiny-path-params` — captured path params as a JSON array (because axum
   stores them in a private extension type).
 - `x-shiny-os-user`, `x-shiny-os-home`, `x-shiny-os-uid` — Linux-user identity.
-- `x-shiny-remote` — set by the Iroh proxy; means the request is remote.
+- `x-shiny-remote` — set by the Iroh proxy; `x-forwarded-for`/`-proto`/`-host`
+  — added by Tailscale Serve/Funnel and other reverse proxies. Presence of any
+  means the request is remote; `is_remote_request` checks all four.
 
 Read them with `user_id_from_request`, `path_params_from_request`,
 `os_identity_from_request`, `is_remote_request`, etc.
