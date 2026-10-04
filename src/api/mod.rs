@@ -62,8 +62,20 @@ use crate::services::qwen_tts::QwenClient;
 /// markdown path. `'wasm-unsafe-eval'` is required by the in-browser Vosk
 /// recognizer. Styles stay `'unsafe-inline'` for the many `style` attributes
 /// the UI sets; images may come from anywhere (map tiles, article images).
+///
+/// Two app features need explicit allowances:
+/// - The Browser plugin's start page is a sandboxed `srcdoc` iframe whose
+///   click/refresh handler is a **static** inline `<script>`; CSP hashes are the
+///   only way to allow an inline script in a sandboxed (opaque-origin) frame, so
+///   the script's exact SHA-256 is allowlisted below. Editing that script in
+///   `plugins/browser/web/plugin.js` requires updating the hash here.
+/// - Frames are used across the app (the sandboxed `srcdoc` shelves, mail
+///   bodies, the YouTube embed), so `frame-src` is left permissive. Note this
+///   only governs pages the app itself frames; ordinary browsing happens in
+///   native child webviews at the site's real origin, which our CSP never sees.
+///   `frame-ancestors 'none'` still stops other sites from framing the app.
 const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
-script-src 'self' 'wasm-unsafe-eval'; \
+script-src 'self' 'wasm-unsafe-eval' 'sha256-Sz9x6nnEJCuJi8kFyc0Cy6JglT8TyTnBSc7jFTweAIY='; \
 style-src 'self' 'unsafe-inline'; \
 img-src 'self' data: blob: http: https:; \
 connect-src 'self' https://router.project-osrm.org; \
@@ -71,7 +83,7 @@ font-src 'self' data:; \
 media-src 'self' blob:; \
 worker-src 'self' blob:; \
 object-src 'none'; \
-frame-src 'none'; \
+frame-src 'self' https: http: data: blob:; \
 base-uri 'none'; \
 form-action 'self'; \
 frame-ancestors 'none'";
