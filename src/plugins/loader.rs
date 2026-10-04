@@ -44,9 +44,14 @@ pub struct Loader {
 /// Libraries of uninstalled/replaced plugins, kept for the life of the
 /// process. We intentionally never `dlclose` a plugin cdylib: `Arc<dyn Tool>`
 /// objects (and their vtables) may still be referenced by in-flight agent
-/// invocations, and unmapping the library under them is use-after-free. The
-/// leak is bounded by the number of uninstall/reinstall events.
+/// invocations, and unmapping the library under them is use-after-free.
+///
+/// The leak is bounded by the number of install/replace events. So that a user
+/// cannot grow it without limit (each mapped library costs address space), the
+/// loader refuses to load further plugins once this cap is reached; upgrades
+/// stay safe, and a restart reclaims everything.
 static LIBRARY_GRAVEYARD: parking_lot::Mutex<Vec<Library>> = parking_lot::Mutex::new(Vec::new());
+const MAX_RETIRED_LIBRARIES: usize = 100;
 
 /// Retire a loaded plugin: keep its library mapped (see `LIBRARY_GRAVEYARD`)
 /// and drop the rest of the handle.
@@ -77,6 +82,43 @@ pub fn validate_plugin_name(name: &str) -> Result<(), AppError> {
              and must not start with '.' or '_'"
         )))
     }
+}
+
+/// Validate a manifest-declared path (`migrations_dir`, `web_dir`, `skills_dir`)
+/// before it is joined onto an install directory.
+///
+/// These fields come from `plugin.toml`, which is attacker-controlled on
+/// upload. `Path::join` with an absolute path **replaces** the base, so an
+/// unvalidated `web_dir = "/etc"` would let a plugin serve the host filesystem
+/// over HTTP, and `migrations_dir = "/tmp"` would execute arbitrary `.sql`
+/// files with the host database pool. Only plain relative sub-paths are
+/// allowed: no absolute paths, no `..`, no Windows separators.
+pub fn validate_relative_path(field: &str, value: &str) -> Result<(), AppError> {
+    const MAX: usize = 1024;
+    if value.trim().is_empty() || value.len() > MAX || value.contains('\0') || value.contains('\\') {
+        return Err(AppError::BadRequest(format!(
+            "Invalid {field} '{value}': must be a non-empty relative path"
+        )));
+    }
+    let path = Path::new(value);
+    if path.is_absolute() {
+        return Err(AppError::BadRequest(format!(
+            "Invalid {field} '{value}': absolute paths are not allowed"
+        )));
+    }
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(_) | std::path::Component::CurDir => {}
+            std::path::Component::ParentDir
+            | std::path::Component::RootDir
+            | std::path::Component::Prefix(_) => {
+                return Err(AppError::BadRequest(format!(
+                    "Invalid {field} '{value}': must not escape the plugin directory"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 impl Loader {
@@ -145,6 +187,22 @@ impl Loader {
                     manifest.name
                 )));
             }
+        }
+
+        // Manifest-declared directories are attacker-controlled on upload and
+        // are joined onto the install directory below; refuse anything that is
+        // not a plain relative sub-path (e.g. `web_dir = "/etc"`).
+        validate_relative_path("migrations_dir", &manifest.migrations_dir)?;
+        validate_relative_path("skills_dir", &manifest.skills_dir)?;
+        validate_relative_path("web_dir", &manifest.web_dir)?;
+
+        // Never grow the retired-library graveyard without bound: each entry is
+        // a mapped cdylib we cannot safely dlclose. Fail the load instead of
+        // letting an install/uninstall loop exhaust the process.
+        if LIBRARY_GRAVEYARD.lock().len() >= MAX_RETIRED_LIBRARIES {
+            return Err(AppError::Internal(format!(
+                "Too many plugin replacements this session (max {MAX_RETIRED_LIBRARIES}); restart Shiny to load more."
+            )));
         }
 
         // Locate the cdylib file.
@@ -334,40 +392,57 @@ impl Loader {
 }
 
 pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
-    // Accept any `.so` / `.dylib` / `.dll` file at or below the install dir.
-    // We prefer files whose stem contains `name`, but fall back to the first
-    // cdylib we encounter — plugin authors can name the lib whatever they
-    // want as long as there's exactly one cdylib per archive.
-    let mut preferred: Option<PathBuf> = None;
-    let mut fallback: Option<PathBuf> = None;
+    // Accept any regular `.so` / `.dylib` / `.dll` file at or below the install
+    // dir. Selection is deterministic so an archive cannot smuggle in a second
+    // library and win the race by `read_dir` order:
+    //   1. an exact `lib<name>.<ext>` / `<name>.<ext>` match wins;
+    //   2. otherwise the lexicographically first cdylib.
+    // Symlinks are never followed: a tar archive can contain one, and we must
+    // not `dlopen` a file that was not part of the archive's own tree.
+    let mut candidates: Vec<PathBuf> = Vec::new();
     let mut stack: Vec<PathBuf> = vec![install_dir.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                let fname = entry.file_name().to_string_lossy().to_lowercase();
-                let is_cdylib = fname.ends_with(".so")
-                    || fname.ends_with(".dylib")
-                    || fname.ends_with(".dll");
-                if !is_cdylib {
-                    continue;
-                }
-                // `.so` files like `libshiny_hello_plugin.so` are fine.
-                if fname.contains(name) {
-                    preferred = Some(path);
-                    return Some(preferred.unwrap());
-                }
-                if fallback.is_none() {
-                    fallback = Some(path);
-                }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+        paths.sort();
+        for path in paths {
+            let Ok(meta) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+            if meta.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !meta.is_file() {
+                continue;
+            }
+            let fname = path
+                .file_name()
+                .map(|f| f.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            if fname.ends_with(".so") || fname.ends_with(".dylib") || fname.ends_with(".dll") {
+                candidates.push(path);
             }
         }
     }
-    preferred.or(fallback)
+    candidates.sort();
+    let wanted = name.to_lowercase();
+    candidates
+        .iter()
+        .find(|p| {
+            let stem = p
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            stem == wanted || stem == format!("lib{wanted}")
+        })
+        .cloned()
+        .or_else(|| candidates.first().cloned())
 }
 
 /// Windows-only: copy a cdylib to a timestamped sibling so a re-install can
@@ -400,4 +475,48 @@ fn current_target_triple() -> String {
         else if cfg!(target_os = "windows") { "pc-windows-msvc" }
         else { "unknown" };
     format!("{arch}-{os}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_names_are_single_safe_components() {
+        for good in ["hello", "files", "my-plugin", "plugin_1"] {
+            assert!(validate_plugin_name(good).is_ok(), "{good} should be valid");
+        }
+        for bad in ["", ".", "..", ".hidden", "_internal", "a/b", "a\\b", "a\0b"] {
+            assert!(validate_plugin_name(bad).is_err(), "{bad:?} should be rejected");
+        }
+        assert!(validate_plugin_name(&"a".repeat(65)).is_err());
+    }
+
+    /// Regression: `Path::join` with an absolute path *replaces* the base, so
+    /// an unvalidated `web_dir = "/etc"` let a plugin serve the host's
+    /// filesystem and `migrations_dir = "/tmp"` ran arbitrary SQL.
+    #[test]
+    fn manifest_paths_must_stay_relative() {
+        for good in ["web", "migrations", "assets/js", "./web"] {
+            assert!(
+                validate_relative_path("web_dir", good).is_ok(),
+                "{good} should be valid"
+            );
+        }
+        for bad in [
+            "",
+            "/etc",
+            "/",
+            "../other-plugin",
+            "web/../../etc",
+            "C:\\Windows",
+            "a\\b",
+            "a\0b",
+        ] {
+            assert!(
+                validate_relative_path("web_dir", bad).is_err(),
+                "{bad:?} should be rejected"
+            );
+        }
+    }
 }

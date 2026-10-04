@@ -5,6 +5,7 @@
 //! and hands clones (via `PluginCtx`) to each plugin's `register()`.
 
 use std::sync::Arc;
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use crate::errors::AppError;
@@ -29,6 +30,10 @@ pub struct ConfigSnapshot {
     pub auto_start_supertonic: bool,
     pub log_level: String,
     pub plugins_dir: String,
+    /// Read-only directory holding the system plugin baseline. `None` when the
+    /// deployment has no baseline (single-directory setups).
+    #[serde(default)]
+    pub system_plugins_dir: Option<String>,
     pub admin_token: Option<String>,
 }
 
@@ -128,6 +133,16 @@ impl PluginCtx {
 
 // ---------- Ollama -----------------------------------------------------------
 
+/// A reqwest client with a hard per-request timeout. A missing timeout lets a
+/// slow or unreachable endpoint pin an async task forever; every SDK-owned
+/// client is built through this helper.
+fn timeout_client(timeout: Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ChatMessage {
     role: String,
@@ -173,7 +188,7 @@ pub struct OllamaClient {
 impl OllamaClient {
     pub fn new(base_url: String, model: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: timeout_client(Duration::from_secs(120)),
             base_url,
             model,
         }
@@ -351,6 +366,7 @@ impl SearchService {
         Self {
             client: reqwest::Client::builder()
                 .user_agent("Shiny/0.1 (shiny)")
+                .timeout(Duration::from_secs(20))
                 .build()
                 .unwrap(),
         }
@@ -699,7 +715,7 @@ pub struct SupertonicClient {
 impl SupertonicClient {
     pub fn new(base_url: String, default_voice: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: timeout_client(Duration::from_secs(30)),
             base_url,
             default_voice,
         }

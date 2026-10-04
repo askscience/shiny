@@ -37,18 +37,19 @@ pub async fn list(
     Extension(traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let active = state.plugins.session_active_set(&traveler.id).await;
-    let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
     let entries: Vec<PluginListEntry> = state
         .plugins
         .list()
         .into_iter()
         .map(|m| {
             let enabled = active.contains(&m.name);
-            let surface = plugins_dir
-                .join(&m.name)
-                .join(&m.web_dir)
-                .join("plugin.js")
-                .is_file();
+            // A user override lives in the writable dir, a system plugin in
+            // the read-only baseline; the surface check follows whichever won.
+            let surface = state
+                .plugins
+                .plugin_dir_for(&m.name)
+                .map(|dir| dir.join(&m.web_dir).join("plugin.js").is_file())
+                .unwrap_or(false);
             PluginListEntry {
                 category: state.plugins.category_for(&m.name),
                 name: m.name,
@@ -117,7 +118,8 @@ pub async fn install(
 }
 
 /// POST /api/plugins/uninstall  body  {"name":"hello"}  — removes the plugin
-/// from the server. Available to any logged-in user.
+/// from the current user's writable plugin directory (the system baseline
+/// cannot be removed, only deactivated).
 pub async fn uninstall(
     State(state): State<AppState>,
     Extension(_traveler): Extension<Traveler>,
@@ -129,6 +131,17 @@ pub async fn uninstall(
     // `name` is joined into the plugins directory and recursively deleted —
     // only ever allow a single safe path component.
     crate::plugins::loader::validate_plugin_name(&name)?;
+
+    if state.plugins.is_system_only(&name) {
+        crate::plugins::installer::log_event(
+            std::path::Path::new(&state.config.plugins_dir),
+            &format!("uninstall-denied system name={name}"),
+        );
+        return Err(AppError::BadRequest(format!(
+            "'{name}' is part of the system plugin baseline and cannot be uninstalled; deactivate it for this user instead"
+        )));
+    }
+
     let removed = state.plugins.uninstall(&name).await;
     let dir = std::path::Path::new(&state.config.plugins_dir).join(&name);
     if dir.exists() {
@@ -136,10 +149,23 @@ pub async fn uninstall(
     }
     crate::plugins::installer::log_event(std::path::Path::new(&state.config.plugins_dir), &format!("uninstall-ok name={name} removed={removed}"));
 
+    // Removing a user override uncovers the system baseline with the same
+    // name. Reload it so the plugin keeps working (as the system version).
+    if let Some(system_dir) = state.plugins.plugin_dir_for(&name) {
+        let base_ctx = state.plugin_ctx();
+        match state.plugins.install_dir_static(&system_dir, base_ctx).await {
+            Ok(restored) => crate::plugins::installer::log_event(
+                std::path::Path::new(&state.config.plugins_dir),
+                &format!("uninstall-fallback name={restored}"),
+            ),
+            Err(e) => tracing::warn!("system plugin fallback for '{name}' failed: {e}"),
+        }
+    }
+
     if let Some(rebuild) = &state.router_rebuild {
         rebuild();
     }
-    Ok(Json(json!({ "success": removed, "data": { "name": name } })))
+    Ok(Json(json!({ "success": removed, "data": { "name": name, "system_fallback": state.plugins.is_installed(&name) } })))
 }
 
 /// POST /api/plugins/activate  body {"name":"hello"}  — re-enable a plugin

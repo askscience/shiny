@@ -237,6 +237,7 @@ pub(crate) mod tests_support {
             auto_start_supertonic: false,
             log_level: "warn".into(),
             plugins_dir: "data/plugins".into(),
+            system_plugins_dir: None,
             admin_token: None,
         };
         let manifest = shiny_plugin_sdk::manifest::Manifest {

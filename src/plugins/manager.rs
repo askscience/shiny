@@ -30,7 +30,11 @@ pub struct PluginManagerInner {
     pub tools: ToolRegistry,
     pub loader: Loader,
     pub contribs: RwLock<Vec<PluginContrib>>,
+    /// Writable per-user plugin directory: uploads land here and override the
+    /// system baseline by plugin name.
     pub plugins_dir: PathBuf,
+    /// Read-only system plugin baseline, if this deployment has one.
+    pub system_plugins_dir: Option<PathBuf>,
     /// Shared SQLite pool used for the per-user activation state.
     pub pool: sqlx::SqlitePool,
 }
@@ -42,12 +46,21 @@ pub struct PluginManager {
 
 impl PluginManager {
     pub fn new(plugins_dir: PathBuf, pool: sqlx::SqlitePool) -> Self {
+        Self::with_system_dir(plugins_dir, None, pool)
+    }
+
+    pub fn with_system_dir(
+        plugins_dir: PathBuf,
+        system_plugins_dir: Option<PathBuf>,
+        pool: sqlx::SqlitePool,
+    ) -> Self {
         Self {
             inner: Arc::new(PluginManagerInner {
                 tools: ToolRegistry::new(),
                 loader: Loader::new(),
                 contribs: RwLock::new(Vec::new()),
                 plugins_dir,
+                system_plugins_dir,
                 pool,
             }),
         }
@@ -215,40 +228,97 @@ impl PluginManager {
         out
     }
 
-    /// Scan `plugins_dir` and install every directory containing `plugin.toml`.
-    /// Backup dirs (`<name>.bak`), hidden dirs, and leftover install staging
-    /// dirs (`_staging-*`, e.g. after a crash mid-install) are skipped — they
-    /// are not live plugins.
-    pub async fn discover_and_install(
-        &self,
-        base_ctx: Arc<PluginCtx>,
-    ) -> Vec<String> {
+    /// Scan the plugin directories and install every directory containing
+    /// `plugin.toml`. The read-only **system baseline** loads first; the
+    /// writable **per-user directory** loads second, so a user plugin with the
+    /// same name replaces the system one for that user's server. Backup dirs
+    /// (`<name>.bak`), hidden dirs, and leftover install staging dirs
+    /// (`_staging-*`, e.g. after a crash mid-install) are skipped — they are
+    /// not live plugins.
+    pub async fn discover_and_install(&self, base_ctx: Arc<PluginCtx>) -> Vec<String> {
         let mut installed: Vec<String> = Vec::new();
-        let Some(entries) = std::fs::read_dir(&self.inner.plugins_dir).ok() else {
-            return installed;
+        let mut roots: Vec<PathBuf> = Vec::new();
+        if let Some(system) = &self.inner.system_plugins_dir {
+            if system != &self.inner.plugins_dir {
+                roots.push(system.clone());
+            }
+        }
+        roots.push(self.inner.plugins_dir.clone());
+        for root in roots {
+            self.install_tree(&root, base_ctx.clone(), &mut installed).await;
+        }
+        installed
+    }
+
+    async fn install_tree(
+        &self,
+        root: &std::path::Path,
+        base_ctx: Arc<PluginCtx>,
+        installed: &mut Vec<String>,
+    ) {
+        let Some(entries) = std::fs::read_dir(root).ok() else {
+            return;
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
+        // Directory order is filesystem-defined; sort so an override always
+        // wins deterministically and startup logs are stable.
+        let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+        dirs.sort();
+        for path in dirs {
             if !path.is_dir() {
                 continue;
             }
-            let dir_name = entry.file_name().to_string_lossy().to_lowercase();
+            let dir_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
             if dir_name.ends_with(".bak")
                 || dir_name.starts_with('.')
                 || dir_name.starts_with("_staging")
             {
                 continue;
             }
-            let manifest_path = path.join("plugin.toml");
-            if !manifest_path.exists() {
+            if !path.join("plugin.toml").exists() {
                 continue;
             }
             match self.install_dir_static(&path, base_ctx.clone()).await {
-                Ok(n) => installed.push(n),
-                Err(e) => tracing::warn!("Plugin discovery failed for {}: {}", path.display(), e),
+                Ok(n) => {
+                    if !installed.contains(&n) {
+                        installed.push(n);
+                    }
+                }
+                Err(e) => tracing::warn!(
+                    "Plugin discovery failed for {}: {}",
+                    path.display(),
+                    e
+                ),
             }
         }
-        installed
+    }
+
+    /// Where a plugin's files live: the writable per-user directory when it
+    /// contains one (an override), otherwise the read-only system baseline.
+    pub fn plugin_dir_for(&self, name: &str) -> Option<PathBuf> {
+        let user = self.inner.plugins_dir.join(name);
+        if user.join("plugin.toml").is_file() {
+            return Some(user);
+        }
+        self.inner
+            .system_plugins_dir
+            .as_ref()
+            .map(|system| system.join(name))
+            .filter(|dir| dir.join("plugin.toml").is_file())
+    }
+
+    /// True when the plugin exists **only** in the read-only system baseline:
+    /// it cannot be uninstalled, only deactivated for this user.
+    pub fn is_system_only(&self, name: &str) -> bool {
+        !self.inner.plugins_dir.join(name).join("plugin.toml").is_file()
+            && self
+                .inner
+                .system_plugins_dir
+                .as_ref()
+                .map(|system| system.join(name).join("plugin.toml").is_file())
+                .unwrap_or(false)
     }
 
     pub async fn install_dir_static(

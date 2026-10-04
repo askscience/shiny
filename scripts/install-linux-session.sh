@@ -97,7 +97,10 @@ Environment=SERVER_HOST=127.0.0.1
 Environment=DATABASE_URL=sqlite://%h/.local/share/shiny/shiny.db
 Environment=BACKGROUNDS_DIR=%h/.local/share/shiny/backgrounds
 Environment=LOG_FILE=%h/.local/share/shiny/shiny.log
-Environment=PLUGINS_DIR=$SHINY_REPO/data/plugins
+# Plugins are per-user: uploads land in the user's own data dir, while the
+# repo's data/plugins stays the read-only system baseline shared by everyone.
+Environment=PLUGINS_DIR=%h/.local/share/shiny/plugins
+Environment=SYSTEM_PLUGINS_DIR=$SHINY_REPO/data/plugins
 Environment=ADFILTER_DIR=%h/.local/share/shiny/adfilter
 Environment=WEB_DIR=$SHINY_REPO/web
 Environment=VOSK_MODELS_DIR=$SHINY_REPO/data/vosk-models
@@ -148,9 +151,20 @@ install -D -m 0644 "$SHINY_REPO/scripts/shiny.desktop" "$XSESSION"
 # ── 3. Migrate the user's data into their per-user DB (once) ────────────────
 USER_DB="$USER_HOME/.local/share/shiny/shiny.db"
 SHARED_DB="$SHINY_REPO/data/traveler.db"
+sudo -u "$SHINY_USER" -H sh -c "mkdir -p '$USER_HOME/.local/share/shiny/plugins'"
 if [ ! -f "$USER_DB" ] && [ -f "$SHARED_DB" ]; then
     echo "Migrating $SHINY_USER's data into $USER_DB…"
     sudo -u "$SHINY_USER" -H sh -c "mkdir -p '$USER_HOME/.local/share/shiny' && cp '$SHARED_DB' '$USER_DB'"
+fi
+
+# The repo now backs both the system plugin baseline and the served web UI, so
+# it must not be writable by anyone but its owner. Otherwise any local user
+# could overwrite a baseline plugin or inject JavaScript into everyone's UI.
+REPO_MODE=$(stat -c '%a' "$SHINY_REPO" 2>/dev/null || echo "")
+if [ -n "$REPO_MODE" ] && (( (8#$REPO_MODE & 022) != 0 )); then
+    echo "WARNING: $SHINY_REPO is group/other-writable (mode $REPO_MODE)."
+    echo "         System plugins and the web UI must be read-only for other users:"
+    echo "         sudo chmod -R go-w '$SHINY_REPO'"
 fi
 
 # ── 4. T2 MacBook audio ─────────────────────────────────────────────────────

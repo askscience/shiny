@@ -274,7 +274,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         supertonic,
         whisper,
         qwen_tts,
-        plugins: shiny::plugins::PluginManager::new(std::path::PathBuf::from(&config.plugins_dir), pool.clone()),
+        plugins: shiny::plugins::PluginManager::with_system_dir(
+            std::path::PathBuf::from(&config.plugins_dir),
+            config
+                .system_plugins_dir
+                .as_ref()
+                .map(std::path::PathBuf::from),
+            pool.clone(),
+        ),
         iroh: shiny::services::iroh_remote::IrohRemote::new(),
         tailscale: shiny::services::tailscale::TailscaleService::new(config.server_port),
         session,

@@ -42,8 +42,11 @@ pub struct Config {
     /// Start the Qwen3-TTS sidecar together with the server.
     pub auto_start_qwen_tts: bool,
     pub web_dir: String,
-    /// Directory containing installed plugins.
+    /// Writable per-user plugin directory: uploads land here.
     pub plugins_dir: String,
+    /// Read-only system plugin baseline, if any. Plugins found here load for
+    /// every user; a plugin with the same name in `plugins_dir` overrides it.
+    pub system_plugins_dir: Option<String>,
     /// Directory holding per-user desktop background images.
     pub backgrounds_dir: String,
     pub admin_token: Option<String>,
@@ -141,6 +144,9 @@ impl Config {
                 .unwrap_or(false),
             web_dir: env::var("WEB_DIR").unwrap_or_else(|_| "web".into()),
             plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
+            system_plugins_dir: env::var("SYSTEM_PLUGINS_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
             backgrounds_dir: env::var("BACKGROUNDS_DIR").unwrap_or_else(|_| "data/backgrounds".into()),
             admin_token: env::var("ADMIN_TOKEN").ok().filter(|v| !v.trim().is_empty()),
             linux_users: env::var("SHINY_LINUX_USERS")
@@ -184,6 +190,7 @@ impl Config {
             auto_start_supertonic: self.auto_start_supertonic,
             log_level: self.log_level.clone(),
             plugins_dir: self.plugins_dir.clone(),
+            system_plugins_dir: self.system_plugins_dir.clone(),
             admin_token: self.admin_token.clone(),
         }
     }

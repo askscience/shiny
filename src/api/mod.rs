@@ -31,14 +31,12 @@ use axum::routing::{delete, get, patch, post, put};
 use shiny_plugin_sdk::routes::{HttpMethod, RouteHandler, RouteSpec};
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::auth::auth_middleware;
 use crate::config::Config;
-use crate::plugins::PluginManager;
-use crate::services::audio::AudioService;
+use crate::plugins::PluginManager;use crate::services::audio::AudioService;
 use crate::services::battery::BatteryService;
 use crate::services::bluetooth::BluetoothService;
 use crate::services::diary_gen::DiaryGenerator;
@@ -55,6 +53,28 @@ use crate::services::screen_brightness::ScreenBrightnessService;
 use crate::services::web_search::SearchService;
 use crate::services::whisper::WhisperClient;
 use crate::services::qwen_tts::QwenClient;
+
+/// Content-Security-Policy for the whole app.
+///
+/// The UI is fully self-hosted (Leaflet, marked and Vosk are vendored under
+/// `/vendor`), so `script-src 'self'` is enough — inline `<script>` and inline
+/// event handlers are forbidden, which is the backstop for the sanitized
+/// markdown path. `'wasm-unsafe-eval'` is required by the in-browser Vosk
+/// recognizer. Styles stay `'unsafe-inline'` for the many `style` attributes
+/// the UI sets; images may come from anywhere (map tiles, article images).
+const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
+script-src 'self' 'wasm-unsafe-eval'; \
+style-src 'self' 'unsafe-inline'; \
+img-src 'self' data: blob: http: https:; \
+connect-src 'self' https://router.project-osrm.org; \
+font-src 'self' data:; \
+media-src 'self' blob:; \
+worker-src 'self' blob:; \
+object-src 'none'; \
+frame-src 'none'; \
+base-uri 'none'; \
+form-action 'self'; \
+frame-ancestors 'none'";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -125,7 +145,11 @@ impl AppState {
             .unix_user
             .as_deref()
             .or(traveler.username.as_deref())?;
-        crate::services::unix_user::lookup_name(name)
+        // Never map a Shiny account to a system/non-human OS account. `root`
+        // is the dangerous case: an account named "root" (possible while
+        // linux_users is off) must not inherit /root as its Files sandbox once
+        // the flag is enabled.
+        crate::services::unix_user::lookup_name(name).filter(|u| u.is_human())
     }
 
     /// Enter server mode at startup when the session user asked for it (their
@@ -275,13 +299,36 @@ fn plugin_route(state: &AppState, spec: RouteSpec, handler: RouteHandler) -> Rou
 
     let router = Router::new().route(&path, method_router);
     if spec.auth == "public" {
-        router
+        // A public route never sees core-injected identity. Strip any
+        // client-supplied identity/OS headers so a handler reading them cannot
+        // be spoofed — the same hardening `auth_middleware` applies on
+        // authenticated routes.
+        router.layer(axum::middleware::from_fn(strip_identity_headers))
     } else {
         router.layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
         ))
     }
+}
+
+/// Remove every core-injected identity header from a request. Used on plugin
+/// routes that opt out of auth, where `auth_middleware` never runs.
+async fn strip_identity_headers(
+    mut req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    for name in [
+        shiny_plugin_sdk::routes::USER_ID_HEADER,
+        shiny_plugin_sdk::routes::TRAVELER_ID_HEADER,
+        shiny_plugin_sdk::routes::OS_USER_HEADER,
+        shiny_plugin_sdk::routes::OS_HOME_HEADER,
+        shiny_plugin_sdk::routes::OS_UID_HEADER,
+        shiny_plugin_sdk::routes::PATH_PARAMS_HEADER,
+    ] {
+        req.headers_mut().remove(name);
+    }
+    next.run(req).await
 }
 
 /// Build the plugin-contributed portion of the router: every installed
@@ -292,18 +339,35 @@ fn build_plugin_routes(state: &AppState) -> Router<AppState> {
         router = router.merge(plugin_route(state, spec, handler));
     }
     // Plugin upload routes (multipart archives/documents/images) routinely
-    // exceed axum's 2MB default body limit, so the default limit is removed
-    // for the contributed API routes. Plugins clamp their own uploads where
-    // they need to.
-    router = router.layer(axum::extract::DefaultBodyLimit::disable());
+    // exceed axum's 2MB default body limit. Rather than disabling the limit
+    // entirely, raise it to a generous ceiling; plugins still clamp their own
+    // uploads (raw-Request handlers read the body themselves, so this is a
+    // backstop for extractor-based handlers).
+    router = router.layer(axum::extract::DefaultBodyLimit::max(160 * 1024 * 1024));
 
-    // Serve each installed plugin's web assets at /plugins/<name>/ (roadmap #4).
+    // Serve each installed plugin's web assets at /plugins/<name>/.
     // Register the ServeDir for every plugin unconditionally: ServeDir reads
     // from disk per request, so a plugin whose web/ dir (or icon.svg) is added
     // after startup is still served — no restart needed.
-    let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
     for manifest in state.plugins.list() {
-        let web_path = plugins_dir.join(&manifest.name).join(&manifest.web_dir);
+        // `web_dir` is attacker-controlled in plugin.toml; the loader already
+        // rejects absolute/`..` values, and this second check keeps the router
+        // safe even if a manifest was produced by an older build.
+        if let Err(e) =
+            crate::plugins::loader::validate_relative_path("web_dir", &manifest.web_dir)
+        {
+            tracing::warn!(
+                "plugin '{}' has an invalid web_dir, not serving it: {e}",
+                manifest.name
+            );
+            continue;
+        }
+        // A user override lives in the writable plugins dir, a system plugin
+        // in the read-only baseline; serve whichever one won the load.
+        let Some(install_dir) = state.plugins.plugin_dir_for(&manifest.name) else {
+            continue;
+        };
+        let web_path = install_dir.join(&manifest.web_dir);
         router = router.nest_service(
             &format!("/plugins/{}", manifest.name),
             ServeDir::new(web_path),
@@ -472,13 +536,34 @@ pub fn build_router(state: AppState) -> Router {
         .merge(protected_routes)
         .merge(build_plugin_routes(&state))
         .fallback_service(static_files)
-        .layer(CorsLayer::permissive())
+        // The UI is same-origin and never needs CORS. The previous
+        // `CorsLayer::permissive()` emitted `Access-Control-Allow-Origin: *`,
+        // letting any website read this server's responses (and turning a
+        // token leak into a durable cross-origin capability). There is no
+        // legitimate cross-origin caller, so no CORS layer is added at all.
+        //
         // Never cache HTML/JS/CSS — the frontend must always re-fetch, so a
         // server restart or a source edit is picked up on the next reload
         // without stale JS lingering in the browser.
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::header::CACHE_CONTROL,
             axum::http::HeaderValue::from_static("no-store"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("content-security-policy"),
+            axum::http::HeaderValue::from_static(CONTENT_SECURITY_POLICY),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("x-content-type-options"),
+            axum::http::HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("x-frame-options"),
+            axum::http::HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("referrer-policy"),
+            axum::http::HeaderValue::from_static("no-referrer"),
         ))
         .with_state(state)
 }
