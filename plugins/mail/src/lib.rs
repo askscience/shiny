@@ -1,6 +1,7 @@
 //! Mail plugin — mail client backed by pimalaya `io-email` (IMAP + SMTP).
 
 pub mod cache;
+pub mod crypto;
 pub mod mail;
 pub mod plugin;
 pub mod routes;

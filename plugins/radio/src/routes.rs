@@ -59,11 +59,13 @@ fn nowplaying(_ctx: Arc<PluginCtx>) -> RouteHandler {
             // Reject anything that isn't a public http(s) host — this endpoint
             // makes a server-side GET, so it would otherwise be an SSRF
             // vector (http://127.0.0.1, http://169.254.169.254, LAN IPs, …).
-            validate_public_stream_host(&url).await?;
+            // The returned addresses are pinned on the HTTP client below so a
+            // rebinding DNS answer cannot swap in a private address.
+            let pin = validate_public_stream_host(&url).await?;
 
             let data = tokio::time::timeout(
                 std::time::Duration::from_secs(8),
-                fetch_icy_metadata(&url),
+                fetch_icy_metadata(&url, pin),
             )
             .await
             .unwrap_or_else(|_| Ok(NowPlayingData { title: None, station_name: None }))?;
@@ -74,9 +76,13 @@ fn nowplaying(_ctx: Arc<PluginCtx>) -> RouteHandler {
 }
 
 /// Require the URL to be http(s) with a host that resolves exclusively to
-/// globally-routable addresses. Best-effort: a host that re-resolves to a
-/// private address after this check (DNS rebinding) is out of scope.
-async fn validate_public_stream_host(url: &str) -> Result<(), AppError> {
+/// globally-routable addresses, and return the checked `(host, addrs)` so the
+/// caller can pin them on its HTTP client. Pinning closes the DNS-rebinding
+/// TOCTOU: the name cannot re-resolve to a private address between the check
+/// and the connection.
+async fn validate_public_stream_host(
+    url: &str,
+) -> Result<Option<(String, Vec<std::net::SocketAddr>)>, AppError> {
     let parsed = reqwest::Url::parse(url)
         .map_err(|_| AppError::BadRequest("invalid stream url".into()))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
@@ -100,7 +106,7 @@ async fn validate_public_stream_host(url: &str) -> Result<(), AppError> {
     if addrs.iter().any(|a| !is_global_ip(a.ip())) {
         return Err(AppError::BadRequest("stream host is not a public address".into()));
     }
-    Ok(())
+    Ok(Some((host.to_string(), addrs)))
 }
 
 /// True when the address is globally routable. Rejects loopback, private,
@@ -169,12 +175,17 @@ fn ipv6_is_global(ip: std::net::Ipv6Addr) -> bool {
     true
 }
 
-async fn fetch_icy_metadata(url: &str) -> Result<NowPlayingData, AppError> {
-    let client = reqwest::Client::builder()
+async fn fetch_icy_metadata(
+    url: &str,
+    pin: Option<(String, Vec<std::net::SocketAddr>)>,
+) -> Result<NowPlayingData, AppError> {
+    let mut builder = reqwest::Client::builder()
         .user_agent("Shiny/0.1 (shiny-radio)")
-        .timeout(std::time::Duration::from_secs(6))
-        .build()
-        .unwrap_or_default();
+        .timeout(std::time::Duration::from_secs(6));
+    if let Some((host, addrs)) = pin {
+        builder = builder.resolve_to_addrs(&host, &addrs);
+    }
+    let client = builder.build().unwrap_or_default();
 
     let resp = client
         .get(url)

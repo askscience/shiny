@@ -312,7 +312,7 @@ async fn handle_request(
     state: Arc<ProxyState>,
 ) -> Result<Response<BoxBody>, Infallible> {
     let result = if req.method() == Method::CONNECT {
-        handle_connect(req).await
+        handle_connect(req, &state).await
     } else {
         handle_forward(req, &state).await
     };
@@ -352,9 +352,13 @@ fn error_response(status: StatusCode, message: &str) -> Response<BoxBody> {
 /// Tunnel an HTTPS connection.
 ///
 /// Only the `host:port` is visible here, so this is where host-level filter
-/// rules apply. Once the tunnel is open the proxy is a dumb pipe — see the
-/// `CONNECT` note in the crate docs.
-async fn handle_connect(req: Request<Incoming>) -> Result<Response<BoxBody>, String> {
+/// rules apply. The engine is consulted before the tunnel is opened; a blocked
+/// authority gets `403` and no upstream connection. Once the tunnel is open the
+/// proxy is a dumb pipe — see the `CONNECT` note in the crate docs.
+async fn handle_connect(
+    req: Request<Incoming>,
+    state: &Arc<ProxyState>,
+) -> Result<Response<BoxBody>, String> {
     let authority = req
         .uri()
         .authority()
@@ -365,6 +369,33 @@ async fn handle_connect(req: Request<Incoming>) -> Result<Response<BoxBody>, Str
         Some((h, p)) => (h.to_string(), p.parse::<u16>().unwrap_or(443)),
         None => (authority.clone(), 443),
     };
+
+    // Host-level ad filtering (the same engine as the forward path). Only the
+    // authority is visible before the tunnel, which is enough for domain rules
+    // like `||ads.example^`; a blocked host never gets a tunnel.
+    let target = format!("https://{host}/");
+    let kind = classify_request(
+        &target,
+        header_str(req.headers(), "sec-fetch-dest"),
+        header_str(req.headers(), header::ACCEPT.as_str()),
+        header_str(req.headers(), header::CONTENT_TYPE.as_str()),
+        "CONNECT",
+    );
+    let filtering_paused = state.paused.load(std::sync::atomic::Ordering::Relaxed);
+    if !(filtering_paused || (!state.filter_loopback && is_loopback_url(&target))) {
+        if let Some(adblock_request) =
+            crate::classify::build_adblock_request(&target, &target, kind, "CONNECT")
+        {
+            if state.filter.check(&adblock_request).is_blocked() {
+                state.metrics.record(kind, true, 0, 0);
+                tracing::debug!("shiny-filter: BLOCK [{kind:?}] CONNECT {authority}");
+                return Ok(Response::builder()
+                    .status(StatusCode::FORBIDDEN)
+                    .body(empty())
+                    .expect("static response builds"));
+            }
+        }
+    }
 
     let on_upgrade = hyper::upgrade::on(req);
     tokio::spawn(async move {

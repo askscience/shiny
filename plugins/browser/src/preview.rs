@@ -81,7 +81,14 @@ pub fn is_allowed(url: &str) -> bool {
 /// request is made. Redirects are not followed (the shared impersonating
 /// client sets `redirect(none)`), so an allowed URL cannot 302 its way to an
 /// internal one.
-pub async fn ensure_public_target(url: &str) -> Result<(), AppError> {
+///
+/// Returns the checked `(host, addrs)` for a hostname target so the caller can
+/// **pin** DNS on the client (`.resolve_to_addrs`). Without pinning, the
+/// resolve-then-request gap is a DNS-rebinding TOCTOU: the same name can answer
+/// with a public address here and `127.0.0.1` when the client connects.
+pub async fn ensure_public_target(
+    url: &str,
+) -> Result<Option<(String, Vec<std::net::SocketAddr>)>, AppError> {
     if !is_allowed(url) {
         return Err(AppError::BadRequest("that address cannot be fetched".into()));
     }
@@ -90,25 +97,30 @@ pub async fn ensure_public_target(url: &str) -> Result<(), AppError> {
     let Some(host) = parsed.host_str() else {
         return Err(AppError::BadRequest("URL has no host".into()));
     };
+    let host = host.to_string();
+    let ip_host = host.trim_start_matches('[').trim_end_matches(']');
+    if ip_host.parse::<std::net::IpAddr>().is_ok() {
+        // A literal address was already vetted by `is_allowed`; nothing to pin.
+        return Ok(None);
+    }
     let Some(port) = parsed.port_or_known_default() else {
         return Err(AppError::BadRequest("URL has no port".into()));
     };
-    let addrs = tokio::net::lookup_host((host, port))
+    let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host.as_str(), port))
         .await
-        .map_err(|_| AppError::BadRequest(format!("cannot resolve {host}")))?;
-    let mut resolved = false;
-    for addr in addrs {
-        resolved = true;
+        .map_err(|_| AppError::BadRequest(format!("cannot resolve {host}")))?
+        .collect();
+    if addrs.is_empty() {
+        return Err(AppError::BadRequest(format!("{host} did not resolve")));
+    }
+    for addr in &addrs {
         if is_private_ip(addr.ip()) {
             return Err(AppError::BadRequest(format!(
                 "{host} resolves to a non-public address and cannot be fetched"
             )));
         }
     }
-    if !resolved {
-        return Err(AppError::BadRequest(format!("{host} did not resolve")));
-    }
-    Ok(())
+    Ok(Some((host, addrs)))
 }
 
 /// Non-public, reserved, or otherwise unusable targets: loopback, RFC1918,
@@ -170,13 +182,18 @@ fn store(url: &str, preview: Preview) {
 
 /// Fetch metadata for `url`, from the cache when it is warm.
 pub async fn fetch(url: &str) -> Result<Preview, AppError> {
-    ensure_public_target(url).await?;
+    let pin = ensure_public_target(url).await?;
     if let Some(hit) = cached(url) {
         return Ok(hit);
     }
 
-    let client = shiny_filter::proxy::impersonated_client_builder()
-        .timeout(FETCH_TIMEOUT)
+    let mut builder = shiny_filter::proxy::impersonated_client_builder().timeout(FETCH_TIMEOUT);
+    if let Some((host, addrs)) = pin {
+        // Pin the checked addresses: the name cannot re-resolve to something
+        // private between the guard above and the connection below.
+        builder = builder.resolve_to_addrs(host, addrs);
+    }
+    let client = builder
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
     let response = client

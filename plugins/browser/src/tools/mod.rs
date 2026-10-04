@@ -205,7 +205,11 @@ impl Tool for BrowserRead {
             .ok_or_else(|| AppError::BadRequest("url required".into()))?;
 
         let url = resolve_target(&raw);
-        let max_chars = req.params.param_u32("max_chars").unwrap_or(20_000) as usize;
+        let max_chars = req
+            .params
+            .param_u32("max_chars")
+            .unwrap_or(20_000)
+            .clamp(1, 100_000) as usize;
 
         let text = crate::fetch::text(&url).await?;
         let truncated = text.chars().count() > max_chars;

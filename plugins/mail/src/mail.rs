@@ -209,11 +209,24 @@ fn account_from_row(r: &[Value]) -> Result<Account, AppError> {
         smtp_port: as_i64(&r[8]) as u16,
         smtp_security: as_text(&r[9]),
         username: as_text(&r[10]),
-        password: as_text(&r[11]),
+        password: crate::crypto::decrypt(&as_text(&r[11]))?,
         verified: as_bool(&r[12]),
         verified_at: as_opt_text(&r[13]),
         last_error: as_opt_text(&r[14]),
     })
+}
+
+/// Build an account and opportunistically re-encrypt a legacy plaintext
+/// password row in place (lazy migration for accounts created before
+/// encryption-at-rest landed).
+fn account_from_row_migrating(db: &Db, uid: &str, r: &[Value]) -> Result<Account, AppError> {
+    let account = account_from_row(r)?;
+    if !account.password.is_empty() && !crate::crypto::is_encrypted(&as_text(&r[11])) {
+        if let Err(e) = save_account(db, uid, &account) {
+            tracing::warn!("mail: could not re-encrypt the stored password: {e}");
+        }
+    }
+    Ok(account)
 }
 
 pub fn list_accounts(db: &Db, uid: &str) -> Result<Vec<Account>, AppError> {
@@ -221,7 +234,9 @@ pub fn list_accounts(db: &Db, uid: &str) -> Result<Vec<Account>, AppError> {
         &format!("SELECT {COLUMNS} FROM mail_accounts WHERE user_id = ?1 ORDER BY created_at"),
         &[Value::text(uid)],
     )?;
-    rows.iter().map(|r| account_from_row(r)).collect()
+    rows.iter()
+        .map(|r| account_from_row_migrating(db, uid, r))
+        .collect()
 }
 
 pub fn load_account(db: &Db, uid: &str, id: &str) -> Result<Account, AppError> {
@@ -232,7 +247,7 @@ pub fn load_account(db: &Db, uid: &str, id: &str) -> Result<Account, AppError> {
     let row = rows
         .first()
         .ok_or_else(|| AppError::NotFound("mail account not found".into()))?;
-    account_from_row(row)
+    account_from_row_migrating(db, uid, row)
 }
 
 pub fn load_account_by_email(db: &Db, uid: &str, email: &str) -> Result<Account, AppError> {
@@ -243,7 +258,7 @@ pub fn load_account_by_email(db: &Db, uid: &str, email: &str) -> Result<Account,
     let row = rows
         .first()
         .ok_or_else(|| AppError::NotFound("mail account not found".into()))?;
-    account_from_row(row)
+    account_from_row_migrating(db, uid, row)
 }
 
 pub fn save_account(db: &Db, uid: &str, a: &Account) -> Result<(), AppError> {
@@ -265,7 +280,7 @@ pub fn save_account(db: &Db, uid: &str, a: &Account) -> Result<(), AppError> {
             Value::Int(a.smtp_port as i64),
             Value::text(&a.smtp_security),
             Value::text(&a.username),
-            Value::text(&a.password),
+            Value::text(&crate::crypto::encrypt(&a.password)?),
             Value::Int(if a.verified { 1 } else { 0 }),
             Value::text(a.verified_at.clone().unwrap_or_default()),
             Value::text(a.last_error.clone().unwrap_or_default()),
@@ -692,7 +707,7 @@ pub async fn send(
     let fp = send_fingerprint(&a.id, user_id, &to, &cc, &bcc, &subject, &body, html.as_deref());
     let now = chrono::Utc::now().timestamp_millis();
     {
-        let mut recents = RECENT_SENDS.lock().unwrap();
+        let mut recents = RECENT_SENDS.lock().unwrap_or_else(|e| e.into_inner());
         recents.retain(|(t, _)| now - t <= DEDUP_WINDOW_MS);
         if recents.iter().any(|(_, f)| *f == fp) {
             return Ok(false); // duplicate within the window — already sent
@@ -730,7 +745,7 @@ pub async fn send(
 
     // If the send failed, drop the fingerprint so a retry is allowed.
     if result.is_err() {
-        let mut recents = RECENT_SENDS.lock().unwrap();
+        let mut recents = RECENT_SENDS.lock().unwrap_or_else(|e| e.into_inner());
         recents.retain(|(_, f)| *f != fp);
     }
     result.map(|_| true)

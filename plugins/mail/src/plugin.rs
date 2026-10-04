@@ -83,6 +83,52 @@ impl Plugin for MailPlugin {
         let ctx = self.ctx.get()?;
         crate::routes::handle(ctx, tag)
     }
+
+    /// One-shot at load: encrypt every account password still stored in
+    /// plaintext (rows written before encryption-at-rest landed). Runs for all
+    /// users; failures are logged, never fatal.
+    async fn on_load(&self, ctx: Arc<PluginCtx>) {
+        use shiny_plugin_sdk::db::Value;
+        let db = ctx.db();
+        let rows = match db.query(
+            "SELECT id, password FROM mail_accounts \
+             WHERE password IS NOT NULL AND password != '' AND password NOT LIKE 'enc:v1:%'",
+            &[],
+        ) {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::warn!("mail: plaintext-password scan failed: {e}");
+                return;
+            }
+        };
+        let mut migrated = 0usize;
+        for row in rows {
+            let id = match row.first() {
+                Some(Value::Text(s)) => s.clone(),
+                _ => continue,
+            };
+            let plain = match row.get(1) {
+                Some(Value::Text(s)) => s.clone(),
+                _ => continue,
+            };
+            match crate::crypto::encrypt(&plain) {
+                Ok(enc) => {
+                    if let Err(e) = db.execute(
+                        "UPDATE mail_accounts SET password = ?1 WHERE id = ?2",
+                        &[Value::text(&enc), Value::text(&id)],
+                    ) {
+                        tracing::warn!("mail: could not encrypt account {id}: {e}");
+                    } else {
+                        migrated += 1;
+                    }
+                }
+                Err(e) => tracing::warn!("mail: encryption failed for account {id}: {e}"),
+            }
+        }
+        if migrated > 0 {
+            tracing::info!("mail: encrypted {migrated} stored account password(s)");
+        }
+    }
 }
 
 /// The C entry symbol the loader transmutes and calls.

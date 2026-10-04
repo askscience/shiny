@@ -558,3 +558,38 @@ async fn a_rewritten_document_is_always_declared_as_html() {
 
     proxy.shutdown();
 }
+
+/// `CONNECT` must consult the same filter engine as plain HTTP: a blocked
+/// authority is refused (403) before any tunnel is opened, and an allowed one
+/// still gets its 200.
+#[tokio::test]
+async fn connect_is_filtered() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    async fn connect(addr: SocketAddr, target: &str) -> (u16, String) {
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let req = format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n");
+        stream.write_all(req.as_bytes()).await.unwrap();
+        let mut buf = [0u8; 256];
+        let n = stream.read(&mut buf).await.unwrap();
+        let text = String::from_utf8_lossy(&buf[..n]).to_string();
+        let status = text
+            .split_whitespace()
+            .nth(1)
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(0);
+        (status, text)
+    }
+
+    let filter = AdFilter::from_lists(["||ads.example^"], false);
+    let proxy = run_proxy(ProxyConfig::default(), filter).await.unwrap();
+
+    let (status, _) = connect(proxy.addr(), "ads.example:443").await;
+    assert_eq!(status, 403, "a blocked CONNECT must be refused");
+    assert_eq!(proxy.metrics().snapshot().blocked, 1);
+
+    let (status, head) = connect(proxy.addr(), "allowed.invalid:443").await;
+    assert_eq!(status, 200, "an unfiltered authority still tunnels: {head}");
+
+    proxy.shutdown();
+}

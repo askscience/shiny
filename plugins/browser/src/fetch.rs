@@ -33,11 +33,15 @@ const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
 /// them), so the SSRF check cannot be defeated with a 302.
 pub async fn text(url: &str) -> Result<String, AppError> {
     // Every caller (the `browser_read` tool, `navigate?format=text`) goes
-    // through the shared resolve-and-check guard.
-    crate::preview::ensure_public_target(url).await?;
+    // through the shared resolve-and-check guard. It returns the checked
+    // addresses so DNS can be pinned below (no rebinding TOCTOU).
+    let pin = crate::preview::ensure_public_target(url).await?;
 
-    let client = impersonated_client_builder()
-        .timeout(Duration::from_secs(25))
+    let mut builder = impersonated_client_builder().timeout(Duration::from_secs(25));
+    if let Some((host, addrs)) = pin {
+        builder = builder.resolve_to_addrs(host, addrs);
+    }
+    let client = builder
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 
