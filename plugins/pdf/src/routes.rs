@@ -265,17 +265,10 @@ fn pdf_import(ctx: Arc<PluginCtx>) -> RouteHandler {
             {
                 if field.name() == Some("file") {
                     original_name = field.file_name().map(|f| f.to_string()).or(original_name);
-                    let data = field
-                        .bytes()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("read error: {e}")))?;
-                    bytes = Some(data.to_vec());
+                    bytes = Some(shiny_plugin_sdk::field_bytes_capped(field, MAX_UPLOAD).await?);
                 }
             }
             let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
-            if data.len() > MAX_UPLOAD {
-                return Err(AppError::BadRequest("PDF too large (max 64 MB)".into()));
-            }
 
             let count = ops::validate(&data)?;
             let stem = original_name

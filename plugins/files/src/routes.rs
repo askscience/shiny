@@ -31,6 +31,20 @@ const MAX_INLINE: usize = 256 * 1024 * 1024;
 const RANGE_CHUNK: usize = 4 * 1024 * 1024;
 /// Ceiling for an uploaded file body.
 const MAX_UPLOAD: usize = 128 * 1024 * 1024;
+/// Ceiling for a document converted/previewed in memory (ODT/ODS/ODP).
+const MAX_DOCUMENT: usize = 32 * 1024 * 1024;
+
+/// Read at most `max` bytes from the head of a file.
+///
+/// `tokio::fs::read` allocates the whole file: a multi-GB download in the
+/// user's home would exhaust memory before any truncation ran.
+async fn read_prefix(path: &Path, max: usize) -> std::io::Result<Vec<u8>> {
+    use tokio::io::AsyncReadExt;
+    let file = tokio::fs::File::open(path).await?;
+    let mut buf = Vec::with_capacity(max.min(64 * 1024));
+    file.take(max as u64).read_to_end(&mut buf).await?;
+    Ok(buf)
+}
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -259,13 +273,14 @@ fn read(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::BadRequest("cannot read a folder".into()));
             }
             let limit = q.max.unwrap_or(1024 * 1024).clamp(1024, 8 * 1024 * 1024);
-            let bytes = tokio::fs::read(&path).await?;
-            let size = bytes.len();
+            // Read only a prefix; `fs::read` would allocate the whole file.
+            let bytes = read_prefix(&path, limit.saturating_add(1)).await?;
+            let size = meta.len() as usize;
             if bytes.iter().take(8192).any(|&b| b == 0) {
                 return Err(AppError::BadRequest("binary file — download instead".into()));
             }
-            let truncated = size > limit;
-            let slice = &bytes[..size.min(limit)];
+            let truncated = size > limit || bytes.len() > limit;
+            let slice = &bytes[..bytes.len().min(limit)];
             let content = String::from_utf8_lossy(slice).into_owned();
             Ok(ok(json!({
                 "path": fs_util::rel_display(&home, &path),
@@ -286,6 +301,14 @@ fn text(ctx: Arc<PluginCtx>) -> RouteHandler {
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
+            let meta = tokio::fs::metadata(&path)
+                .await
+                .map_err(|_| AppError::NotFound("file not found".into()))?;
+            if meta.len() as usize > MAX_DOCUMENT {
+                return Err(AppError::BadRequest(
+                    "document is too large to convert".into(),
+                ));
+            }
             let bytes = tokio::fs::read(&path).await?;
             let ext = preview::ext_of(&path);
             let content = match ext.as_str() {
@@ -345,6 +368,14 @@ fn render(ctx: Arc<PluginCtx>) -> RouteHandler {
             let (q, _req) = take_query::<PathQuery>(req).await?;
             let rel = q.path.unwrap_or_default();
             let path = fs_util::resolve(&home, &rel).await?;
+            let meta = tokio::fs::metadata(&path)
+                .await
+                .map_err(|_| AppError::NotFound("file not found".into()))?;
+            if meta.len() as usize > MAX_DOCUMENT {
+                return Err(AppError::BadRequest(
+                    "document is too large to preview".into(),
+                ));
+            }
             let bytes = tokio::fs::read(&path).await?;
             let display = fs_util::rel_display(&home, &path);
             let data = match preview::ext_of(&path).as_str() {

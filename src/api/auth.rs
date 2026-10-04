@@ -1,6 +1,89 @@
 use axum::extract::{ConnectInfo, Query, State};
 use axum::http::header::SET_COOKIE;
+use axum::http::{HeaderMap, StatusCode};
 use axum::http::HeaderValue;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
+/// Sliding-window limiter for the unauthenticated auth endpoints. The
+/// privileged PAM helper has its own limiter, but the default local-Argon2 path
+/// has none: each attempt costs ~19 MiB, so an unlimited login endpoint is both
+/// a brute-force and a memory-exhaustion primitive.
+struct RateLimiter {
+    hits: std::sync::Mutex<HashMap<String, Vec<Instant>>>,
+}
+
+impl RateLimiter {
+    fn new() -> Self {
+        Self { hits: std::sync::Mutex::new(HashMap::new()) }
+    }
+
+    /// Record an attempt. Returns `Err(retry_after_secs)` when over budget.
+    fn check(&self, key: &str, max: usize, window: Duration) -> Result<(), u64> {
+        let now = Instant::now();
+        let mut map = self.hits.lock().unwrap_or_else(|e| e.into_inner());
+        // Opportunistic cleanup so unique keys cannot grow the map forever.
+        if map.len() > 10_000 {
+            map.retain(|_, v| v.iter().any(|t| now.duration_since(*t) < window));
+        }
+        let entry = map.entry(key.to_string()).or_default();
+        entry.retain(|t| now.duration_since(*t) < window);
+        if entry.len() >= max {
+            let oldest = entry.first().copied().unwrap_or(now);
+            return Err((window - now.duration_since(oldest)).as_secs().max(1));
+        }
+        entry.push(now);
+        Ok(())
+    }
+}
+
+static LOGIN_LIMITER: std::sync::LazyLock<RateLimiter> =
+    std::sync::LazyLock::new(RateLimiter::new);
+static REGISTER_LIMITER: std::sync::LazyLock<RateLimiter> =
+    std::sync::LazyLock::new(RateLimiter::new);
+static BOOTSTRAP_LIMITER: std::sync::LazyLock<RateLimiter> =
+    std::sync::LazyLock::new(RateLimiter::new);
+
+/// 429 with a `Retry-After` header, shaped like every other API error.
+fn too_many_attempts(retry_after_secs: u64) -> Response {
+    let mut response = (
+        StatusCode::TOO_MANY_REQUESTS,
+        Json(serde_json::json!({
+            "success": false,
+            "data": null,
+            "error": "Too many attempts — wait a moment and retry"
+        })),
+    )
+        .into_response();
+    if let Ok(value) = HeaderValue::from_str(&retry_after_secs.to_string()) {
+        response.headers_mut().insert("retry-after", value);
+    }
+    response
+}
+
+/// Was this request delivered over TLS (directly or by a reverse proxy such as
+/// Tailscale Funnel)? Determines whether the session cookie is marked `Secure`.
+fn request_is_https(headers: &HeaderMap) -> bool {
+    headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.eq_ignore_ascii_case("https"))
+        .unwrap_or(false)
+}
+
+/// Session cookie with the standard hardening. `Secure` is added only when the
+/// request actually arrived over HTTPS: the kiosk and plain-HTTP LAN setups
+/// (loopback is a trusted origin in modern browsers) would otherwise lose the
+/// cookie entirely.
+fn session_cookie(token: &str, secure: bool) -> String {
+    let mut cookie =
+        format!("shiny_token={token}; Path=/; SameSite=Lax; Max-Age=31536000; HttpOnly");
+    if secure {
+        cookie.push_str("; Secure");
+    }
+    cookie
+}
+
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng};
@@ -72,8 +155,9 @@ fn verify_password(stored: &str, password: &str) -> PasswordCheck {
 fn session_response(
     token: String,
     traveler: TravelerPublic,
+    secure: bool,
 ) -> Result<Response, AppError> {
-    let cookie = format!("shiny_token={token}; Path=/; SameSite=Lax; Max-Age=31536000; HttpOnly");
+    let cookie = session_cookie(&token, secure);
     let mut response = Json(AuthResponse { token, traveler }).into_response();
     response.headers_mut().insert(
         SET_COOKIE,
@@ -91,6 +175,7 @@ fn session_response(
 pub async fn logout(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
+    headers: HeaderMap,
 ) -> Result<Response, AppError> {
     sqlx::query("UPDATE travelers SET auth_token = NULL, updated_at = datetime('now') WHERE id = ?1")
         .bind(&traveler.id)
@@ -99,11 +184,23 @@ pub async fn logout(
         .map_err(AppError::Database)?;
 
     let mut response = Json(serde_json::json!({ "success": true })).into_response();
+    let clear = session_cookie_cleared(request_is_https(&headers));
     response.headers_mut().insert(
         SET_COOKIE,
-        HeaderValue::from_static("shiny_token=; Path=/; SameSite=Lax; Max-Age=0; HttpOnly"),
+        HeaderValue::from_str(&clear)
+            .map_err(|_| AppError::Internal("failed to build session cookie".into()))?,
     );
     Ok(response)
+}
+
+/// The `Set-Cookie` that drops the session cookie, mirroring `session_cookie`'s
+/// attributes so the browser matches and removes it.
+fn session_cookie_cleared(secure: bool) -> String {
+    let mut cookie = "shiny_token=; Path=/; SameSite=Lax; Max-Age=0; HttpOnly".to_string();
+    if secure {
+        cookie.push_str("; Secure");
+    }
+    cookie
 }
 
 fn normalize_username(username: &str) -> String {
@@ -161,17 +258,26 @@ pub struct SessionQuery {
 pub async fn session_bootstrap(
     State(state): State<AppState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Query(query): Query<SessionQuery>,
 ) -> Result<Response, AppError> {
     if !remote.ip().is_loopback() {
         return Err(AppError::Unauthorized("this endpoint is local-only".into()));
     }
+    if let Err(retry) = BOOTSTRAP_LIMITER.check(&remote.ip().to_string(), 10, Duration::from_secs(60)) {
+        return Ok(too_many_attempts(retry));
+    }
     let Some(user_id) = state.session.user_id.clone() else {
         return Err(AppError::Unauthorized("no session account for this machine".into()));
     };
     let provided = query.token.unwrap_or_default();
-    if provided.is_empty() || provided != state.session.token {
+    if provided.is_empty() || !state.session.matches(&provided).await {
         return Err(AppError::Unauthorized("invalid session token".into()));
+    }
+    // Single-use: rotate the bootstrap secret before handing out the durable
+    // cookie. A token recovered from argv, logs or history is dead afterwards.
+    if state.session.consume_and_rotate().await.is_none() {
+        return Err(AppError::Unauthorized("session token already redeemed".into()));
     }
 
     // Ensure the account has a durable token, then hand it to the browser.
@@ -194,7 +300,7 @@ pub async fn session_bootstrap(
             .map_err(AppError::Database)?
             .unwrap_or_default();
 
-    let cookie = format!("shiny_token={token}; Path=/; SameSite=Lax; Max-Age=31536000; HttpOnly");
+    let cookie = session_cookie(&token, request_is_https(&headers));
     let mut response = axum::response::Redirect::to("/").into_response();
     response.headers_mut().insert(
         SET_COOKIE,
@@ -218,7 +324,7 @@ async fn sync_unix_identity(state: &AppState, traveler: &mut Traveler) {
     else {
         return;
     };
-    let Some(user) = crate::services::unix_user::lookup_name(name) else {
+    let Some(user) = crate::services::unix_user::lookup_name(name).filter(|u| u.is_human()) else {
         return;
     };
     let changed = traveler.unix_user.as_deref() != Some(user.name.as_str())
@@ -355,8 +461,15 @@ pub(crate) fn validate_avatar(avatar: &Option<String>, allow_empty: bool) -> Res
 
 pub async fn register(
     State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Response, AppError> {
+    // Account creation is unauthenticated and each call costs an Argon2 hash;
+    // throttle per source address.
+    if let Err(retry) = REGISTER_LIMITER.check(&remote.ip().to_string(), 5, Duration::from_secs(3600)) {
+        return Ok(too_many_attempts(retry));
+    }
     if state.config.linux_users {
         return Err(AppError::BadRequest(
             "This system signs in with Linux accounts; self-registration is disabled.".into(),
@@ -419,15 +532,28 @@ pub async fn register(
     // The Files plugin creates the user's classic home folders here.
     state.plugins.notify_user_registered(&traveler.id).await;
 
-    session_response(token, public)
+    session_response(token, public, request_is_https(&headers))
 }
 
 pub async fn login(
     State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(req): Json<LoginRequest>,
 ) -> Result<Response, AppError> {
     let input = req.username.trim().to_string();
     let username = normalize_username(&input);
+
+    // Throttle before any password work. Per (source, account) first, then a
+    // coarser per-source budget so one host cannot spray many accounts; each
+    // Argon2 verify costs ~19 MiB, so this also removes the memory-DoS path.
+    let ip = remote.ip().to_string();
+    if let Err(retry) = LOGIN_LIMITER.check(&format!("{ip}|{username}"), 10, Duration::from_secs(60)) {
+        return Ok(too_many_attempts(retry));
+    }
+    if let Err(retry) = LOGIN_LIMITER.check(&format!("{ip}|*"), 40, Duration::from_secs(60)) {
+        return Ok(too_many_attempts(retry));
+    }
 
     // PAM path: when enabled, the real Linux password is authoritative. A
     // denial is final; only an unreachable helper falls back to the local hash.
@@ -519,7 +645,7 @@ pub async fn login(
         .await
         .map_err(AppError::Database)?;
 
-    session_response(token, traveler.to_public())
+    session_response(token, traveler.to_public(), request_is_https(&headers))
 }
 
 #[cfg(test)]

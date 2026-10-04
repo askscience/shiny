@@ -121,18 +121,24 @@ pub async fn resolve_for_user(
             .map(|s| s.trim())
             .filter(|s| !s.is_empty());
         if let (Some(base), Some(model)) = (base, model) {
-            let key = prefs
-                .get(PREF_OPENAI_API_KEY)
-                .cloned()
-                .unwrap_or_default();
-            return ResolvedAi {
-                client: AiClient::OpenAi(OpenAiClient::new(
-                    base.to_string(),
-                    key,
-                    model.to_string(),
-                )),
-                model: None,
-            };
+            if !OpenAiClient::is_safe_base_url(base) {
+                tracing::warn!(
+                    "refusing unsafe ai.openai_base_url for user; using Ollama instead"
+                );
+            } else {
+                let key = prefs
+                    .get(PREF_OPENAI_API_KEY)
+                    .cloned()
+                    .unwrap_or_default();
+                return ResolvedAi {
+                    client: AiClient::OpenAi(OpenAiClient::new(
+                        base.to_string(),
+                        key,
+                        model.to_string(),
+                    )),
+                    model: None,
+                };
+            }
         }
     }
 

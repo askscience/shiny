@@ -220,12 +220,28 @@ fn resolve_iroh(cfg: PeakdConfig) -> Result<PeakdConfig, String> {
     Ok(cfg)
 }
 
+/// URL for the shell's initial navigation. With a `SHINY_BOOT_TOKEN` from the
+/// session launcher this is the single-use auto-login URL; the token never
+/// appears in argv (world-readable) or in the startup log.
+fn boot_url(origin: &str, token: Option<&str>) -> String {
+    match token.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(token) => {
+            let base = origin.trim_end_matches('/');
+            format!("{base}/api/auth/session?token={token}")
+        }
+        None => origin.to_string(),
+    }
+}
+
 fn run(cfg: PeakdConfig) -> Result<(), String> {
     init_tracing();
     activate_app();
 
     // `--iroh <ticket>`: serve the remote app through a local Iroh proxy.
     let cfg = resolve_iroh(cfg)?;
+    // The single-use auto-login token rides only on the initial navigation; it
+    // is never logged and never placed in argv.
+    let nav_url = boot_url(&cfg.start_url, cfg.boot_token.as_deref());
     // Typed with the benchmark's step enum so one loop serves both a normal
     // session (where the variant is never sent) and a benchmark run.
     let event_loop = bench::event_loop();
@@ -271,7 +287,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
     let touchbar_bridge = touchbar::TouchBarBridge::new();
 
     let builder = WebViewBuilder::new()
-        .with_url(cfg.start_url.clone())
+        .with_url(nav_url)
         .with_devtools(cfg.devtools)
         // A browser needs a real UA; the platform default already is one, so
         // this only pins the version string the app sees.

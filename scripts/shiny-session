@@ -61,9 +61,13 @@ STATE_FILE="$RUNTIME_DIR/shiny-remote.state"
 
 # Auto-login the kiosk with the loopback-only session token: the server turns it
 # into the normal shiny_token cookie, so the app opens without a second login.
+# The token is handed to peakd through the **environment**, never argv: on Linux
+# `/proc/<pid>/cmdline` is world-readable while `/proc/<pid>/environ` is
+# owner-only. The shell appends it to the bootstrap URL itself and the server
+# rotates it after the first redemption (single-use).
 BOOT_URL="http://127.0.0.1:$PORT/"
 if [ -r "$TOKEN_FILE" ]; then
-    BOOT_URL="http://127.0.0.1:$PORT/api/auth/session?token=$(cat "$TOKEN_FILE")"
+    export SHINY_BOOT_TOKEN="$(cat "$TOKEN_FILE")"
 fi
 
 # A kiosk does not blank or sleep the panel.

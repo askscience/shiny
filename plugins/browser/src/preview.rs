@@ -44,12 +44,16 @@ pub struct Preview {
 ///
 /// The browser window can hover *any* link, so without this the preview route
 /// is an SSRF primitive pointed at the user's own machine, its LAN and its
-/// cloud metadata endpoints.
+/// cloud metadata endpoints. This is the lexical half of the guard: names are
+/// resolved by [`ensure_public_target`] before any request is made.
 pub fn is_allowed(url: &str) -> bool {
     let Ok(parsed) = url::Url::parse(url) else {
         return false;
     };
     if !matches!(parsed.scheme(), "http" | "https") {
+        return false;
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
         return false;
     }
     let Some(host) = parsed.host_str() else {
@@ -63,19 +67,80 @@ pub fn is_allowed(url: &str) -> bool {
     let ip_host = host.trim_start_matches('[').trim_end_matches(']');
     match ip_host.parse::<std::net::IpAddr>() {
         Ok(ip) => !is_private_ip(ip),
-        // A name: allowed. Resolving-then-checking would be stronger, but the
-        // impersonating client resolves it; this catches the literal cases.
+        // A name: allowed here, then resolved and re-checked by
+        // `ensure_public_target` right before the request.
         Err(_) => true,
     }
 }
 
+/// Resolve a target and refuse it when **any** answer is non-public.
+///
+/// `is_allowed` only sees the URL string, so a name like
+/// `metadata.google.internal` (or any attacker-controlled hostname pointing at
+/// loopback) would slip through. Every fetch goes through here before the
+/// request is made. Redirects are not followed (the shared impersonating
+/// client sets `redirect(none)`), so an allowed URL cannot 302 its way to an
+/// internal one.
+pub async fn ensure_public_target(url: &str) -> Result<(), AppError> {
+    if !is_allowed(url) {
+        return Err(AppError::BadRequest("that address cannot be fetched".into()));
+    }
+    let parsed = url::Url::parse(url)
+        .map_err(|e| AppError::BadRequest(format!("invalid URL: {e}")))?;
+    let Some(host) = parsed.host_str() else {
+        return Err(AppError::BadRequest("URL has no host".into()));
+    };
+    let Some(port) = parsed.port_or_known_default() else {
+        return Err(AppError::BadRequest("URL has no port".into()));
+    };
+    let addrs = tokio::net::lookup_host((host, port))
+        .await
+        .map_err(|_| AppError::BadRequest(format!("cannot resolve {host}")))?;
+    let mut resolved = false;
+    for addr in addrs {
+        resolved = true;
+        if is_private_ip(addr.ip()) {
+            return Err(AppError::BadRequest(format!(
+                "{host} resolves to a non-public address and cannot be fetched"
+            )));
+        }
+    }
+    if !resolved {
+        return Err(AppError::BadRequest(format!("{host} did not resolve")));
+    }
+    Ok(())
+}
+
+/// Non-public, reserved, or otherwise unusable targets: loopback, RFC1918,
+/// link-local (cloud metadata), CGNAT, documentation ranges, multicast and
+/// unspecified addresses, on both families.
 fn is_private_ip(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v4) => {
-            v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.is_unspecified()
+            let o = v4.octets();
+            v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_multicast()
+                || v4.is_documentation()
+                || o[0] == 0
+                || o[0] >= 240
+                || (o[0] == 100 && (64..128).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 0 && o[2] == 0)
+                || (o[0] == 198 && (o[1] == 18 || o[1] == 19))
         }
         std::net::IpAddr::V6(v6) => {
-            v6.is_loopback() || v6.is_unspecified() || v6.is_unique_local()
+            let seg = v6.segments()[0];
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || v6.is_multicast()
+                || (seg & 0xffc0) == 0xfe80
+                || (seg & 0xffc0) == 0xfec0
+                || (seg == 0x2001 && v6.segments()[1] == 0x0db8)
+                || v6.to_ipv4_mapped().map(is_private_ip).unwrap_or(false)
         }
     }
 }
@@ -105,11 +170,7 @@ fn store(url: &str, preview: Preview) {
 
 /// Fetch metadata for `url`, from the cache when it is warm.
 pub async fn fetch(url: &str) -> Result<Preview, AppError> {
-    if !is_allowed(url) {
-        return Err(AppError::BadRequest(
-            "that address cannot be previewed".into(),
-        ));
-    }
+    ensure_public_target(url).await?;
     if let Some(hit) = cached(url) {
         return Ok(hit);
     }
@@ -130,17 +191,32 @@ pub async fn fetch(url: &str) -> Result<Preview, AppError> {
             response.status()
         )));
     }
-    let body = response
-        .text()
+    // Read at most `MAX_BYTES`; a huge or hostile page must not balloon the
+    // server's memory just because someone hovered a link.
+    let mut body: Vec<u8> = Vec::with_capacity(64 * 1024);
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?;
+        .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?
+    {
+        if body.len() + chunk.len() > MAX_BYTES {
+            let keep = MAX_BYTES.saturating_sub(body.len());
+            body.extend_from_slice(&chunk[..keep]);
+            break;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    let body = String::from_utf8_lossy(&body).into_owned();
 
-    let preview = parse(url, truncate(&body, MAX_BYTES));
+    let preview = parse(url, &body);
     store(url, preview.clone());
     Ok(preview)
 }
 
 /// Truncate at a UTF-8 boundary so a multibyte character is never split.
+/// Only the tests need the standalone helper now; the fetch path caps the
+/// streamed body while reading it.
+#[cfg(test)]
 fn truncate(text: &str, max: usize) -> &str {
     if text.len() <= max {
         return text;

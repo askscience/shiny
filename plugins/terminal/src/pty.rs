@@ -26,6 +26,10 @@ use shiny_plugin_sdk::errors::AppError;
 /// Raw output kept per session so a reconnecting client can catch up.
 const SCROLLBACK_BYTES: usize = 256 * 1024;
 
+/// Per-user and process-wide caps on live PTY sessions.
+const MAX_SESSIONS_PER_USER: usize = 8;
+const MAX_SESSIONS_TOTAL: usize = 32;
+
 /// How often an idle session emits an SSE comment-ish ping.
 const PING_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -123,11 +127,29 @@ fn shell_path() -> String {
 }
 
 /// Spawn a new PTY session running the host's login shell.
+///
+/// Concurrency is capped per user and globally: each session spawns a login
+/// shell plus two OS threads, so an unbounded number of `create` calls is a
+/// trivial fork/thread bomb.
 pub fn create(user_id: &str, cols: u16, rows: u16) -> Result<Arc<Session>, AppError> {
     let cols = cols.clamp(2, 1000);
     let rows = rows.clamp(1, 500);
     let shell = shell_path();
     let cwd = home_dir();
+
+    {
+        let all = SESSIONS.lock().unwrap_or_else(|e| e.into_inner());
+        if all.len() >= MAX_SESSIONS_TOTAL {
+            return Err(AppError::BadRequest(
+                "too many terminal sessions are open".into(),
+            ));
+        }
+        if all.values().filter(|s| s.user_id == user_id).count() >= MAX_SESSIONS_PER_USER {
+            return Err(AppError::BadRequest(format!(
+                "at most {MAX_SESSIONS_PER_USER} terminal sessions per user"
+            )));
+        }
+    }
 
     let pair = native_pty_system()
         .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
@@ -136,9 +158,24 @@ pub fn create(user_id: &str, cols: u16, rows: u16) -> Result<Arc<Session>, AppEr
     let mut cmd = CommandBuilder::new(&shell);
     cmd.arg("-l");
     cmd.cwd(&cwd);
+    // A minimal environment: inheriting the server's env would expose every
+    // operator secret it carries (ADMIN_TOKEN, provider keys) to `env` in the
+    // shell. Keep only what an interactive shell needs.
+    cmd.env_clear();
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "C.UTF-8".into()));
+    cmd.env("HOME", &cwd);
+    cmd.env("USER", std::env::var("USER").unwrap_or_else(|_| "user".into()));
+    cmd.env("LOGNAME", std::env::var("LOGNAME").unwrap_or_else(|_| "user".into()));
+    cmd.env(
+        "PATH",
+        std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".into()),
+    );
+    cmd.env("SHELL", &shell);
+    if let Ok(runtime) = std::env::var("XDG_RUNTIME_DIR") {
+        cmd.env("XDG_RUNTIME_DIR", runtime);
+    }
 
     let child = pair
         .slave

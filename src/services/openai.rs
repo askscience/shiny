@@ -58,6 +58,48 @@ impl OpenAiClient {
         format!("{}{}", self.base_url, path)
     }
 
+    /// Validate a user-configured endpoint before the server sends it a
+    /// request (and the account's API key).
+    ///
+    /// Loopback and RFC1918 addresses stay allowed on purpose: a local
+    /// vLLM/Ollama endpoint is exactly what this setting is for. What is
+    /// refused is the cloud-metadata class — link-local `169.254.0.0/16`,
+    /// unspecified, multicast, documentation ranges — plus non-http(s)
+    /// schemes. Combined with the response body no longer being echoed back,
+    /// an `ai.openai_base_url` preference can no longer be used as an
+    /// arbitrary internal-read primitive.
+    pub fn is_safe_base_url(url: &str) -> bool {
+        let Ok(parsed) = reqwest::Url::parse(url.trim()) else {
+            return false;
+        };
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return false;
+        }
+        let Some(host) = parsed.host_str() else {
+            return false;
+        };
+        let literal = host.trim_start_matches('[').trim_end_matches(']');
+        match literal.parse::<std::net::IpAddr>() {
+            Ok(std::net::IpAddr::V4(v4)) => {
+                let o = v4.octets();
+                !(v4.is_link_local()
+                    || v4.is_unspecified()
+                    || v4.is_broadcast()
+                    || v4.is_multicast()
+                    || v4.is_documentation()
+                    || o[0] == 0
+                    || (o[0] == 169 && o[1] == 254))
+            }
+            Ok(std::net::IpAddr::V6(v6)) => {
+                !(v6.is_unspecified()
+                    || v6.is_multicast()
+                    || (v6.segments()[0] & 0xffc0) == 0xfe80)
+            }
+            // A hostname: resolved by the client at request time; allowed.
+            Err(_) => true,
+        }
+    }
+
     fn request(&self, method: &str, path: &str) -> reqwest::RequestBuilder {
         let url = self.endpoint(path);
         let builder = match method {
@@ -97,15 +139,13 @@ impl OpenAiClient {
 
         if !resp.status().is_success() {
             let status = resp.status();
+            // Log the upstream body server-side; never echo it to the client
+            // (it is attacker-influenced if the endpoint is compromised and it
+            // would otherwise make the endpoint a read primitive).
             let detail = resp.text().await.unwrap_or_default();
+            tracing::warn!("OpenAI-compatible chat failed ({status}): {}", detail.trim());
             return Err(AppError::Internal(format!(
-                "OpenAI-compatible chat failed ({}){}",
-                status,
-                if detail.is_empty() {
-                    String::new()
-                } else {
-                    format!(": {}", detail.trim())
-                }
+                "OpenAI-compatible chat failed ({status})"
             )));
         }
 

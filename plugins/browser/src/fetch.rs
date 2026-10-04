@@ -19,19 +19,28 @@ use shiny_plugin_sdk::errors::AppError;
 pub const ACCEPT_HTML: &str =
     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
+/// Hard cap on how much of a document a tool read will buffer. A hostile or
+/// merely huge page must not be able to balloon the server's memory.
+const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
+
 /// Fetch `url` through the plugin's own filter proxy and return its text.
 ///
 /// The client is the shared impersonating one, so the request carries the same
 /// Chrome TLS/HTTP2 fingerprint and `User-Agent` as every other browser fetch
 /// instead of a `browser/<version>` library string that search engines and WAFs
-/// treat as a bot.
+/// treat as a bot. Redirects are not followed (the shared builder disables
+/// them), so the SSRF check cannot be defeated with a 302.
 pub async fn text(url: &str) -> Result<String, AppError> {
+    // Every caller (the `browser_read` tool, `navigate?format=text`) goes
+    // through the shared resolve-and-check guard.
+    crate::preview::ensure_public_target(url).await?;
+
     let client = impersonated_client_builder()
         .timeout(Duration::from_secs(25))
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 
-    let response = client
+    let mut response = client
         .get(url)
         // A real browser asks for a document. Without this the proxy has no
         // `Sec-Fetch-Dest` and no `Accept` to classify by, so a page read is
@@ -49,10 +58,20 @@ pub async fn text(url: &str) -> Result<String, AppError> {
         )));
     }
 
-    let body = response
-        .text()
+    let mut body: Vec<u8> = Vec::with_capacity(64 * 1024);
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?;
+        .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?
+    {
+        if body.len() + chunk.len() > MAX_TEXT_BYTES {
+            let keep = MAX_TEXT_BYTES.saturating_sub(body.len());
+            body.extend_from_slice(&chunk[..keep]);
+            break;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    let body = String::from_utf8_lossy(&body);
 
     Ok(html_to_text(&body))
 }

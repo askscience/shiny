@@ -20,7 +20,7 @@
 //! because everything is plain bytes.
 
 use std::collections::BTreeMap;
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Write};
 
 use crate::errors::AppError;
 
@@ -354,16 +354,8 @@ fn node_text(node: &roxmltree::Node) -> String {
 }
 
 fn read_content_xml(ods: &[u8]) -> Result<String, AppError> {
-    let reader = Cursor::new(ods.to_vec());
-    let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| AppError::Internal(format!("Not a valid .ods file: {}", e)))?;
-    let mut content = String::new();
-    archive
-        .by_name("content.xml")
-        .map_err(|e| AppError::Internal(format!("Missing content.xml in .ods: {}", e)))?
-        .read_to_string(&mut content)
-        .map_err(|e| AppError::Internal(format!("Failed to read content.xml: {}", e)))?;
-    Ok(content)
+    // Size-capped: a small `content.xml` entry can inflate to gigabytes.
+    crate::read_zip_text_capped(ods, "content.xml", crate::MAX_ODF_CONTENT_XML)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -454,6 +446,7 @@ fn from_openformula(src: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
 
     fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         pairs

@@ -4,6 +4,7 @@
 //! All installation attempts (success and failure) are appended to
 //! `data/plugins/install.log` so admins can audit issues offline.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -212,12 +213,45 @@ async fn acquire_lock(path: &Path) -> Result<std::fs::File, AppError> {
     Ok(file)
 }
 
+/// Hard cap on the total bytes an archive may write to disk, and on its entry
+/// count. The upload is limited to 64 MiB, but a compression bomb expands far
+/// past that; without a cap a 1 KiB archive could fill the disk.
+const MAX_EXTRACTED_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_ENTRIES: usize = 10_000;
+
+/// A `Read` adapter that fails once more than `max` bytes have been produced.
+/// Used to bound a decompressed tar stream, where entries cannot be inspected
+/// before they are read.
+struct CapReader<R> {
+    inner: R,
+    read: u64,
+    max: u64,
+}
+
+impl<R: std::io::Read> std::io::Read for CapReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.read += n as u64;
+        if self.read > self.max {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "archive expands beyond the extraction limit",
+            ));
+        }
+        Ok(n)
+    }
+}
+
 fn extract(bytes: &[u8], format: ArchiveFormat, dest: &Path) -> Result<(), AppError> {
     match format {
         ArchiveFormat::Zip => {
             let cursor = std::io::Cursor::new(bytes.to_vec());
             let mut archive = zip::ZipArchive::new(cursor)
                 .map_err(|e| AppError::BadRequest(format!("Invalid zip: {}", e)))?;
+            if archive.len() > MAX_ENTRIES {
+                return Err(AppError::BadRequest("archive has too many entries".into()));
+            }
+            let mut total: u64 = 0;
             for i in 0..archive.len() {
                 let mut entry = archive.by_index(i)
                     .map_err(|e| AppError::Internal(format!("Zip read error: {}", e)))?;
@@ -232,20 +266,31 @@ fn extract(bytes: &[u8], format: ArchiveFormat, dest: &Path) -> Result<(), AppEr
                         std::fs::create_dir_all(parent)?;
                     }
                     let mut out = std::fs::File::create(&out_path)?;
-                    std::io::copy(&mut entry, &mut out)?;
+                    // Bound this entry by the remaining budget, +1 so crossing
+                    // the limit is detected rather than truncated silently.
+                    let remaining = MAX_EXTRACTED_BYTES.saturating_sub(total);
+                    let copied = std::io::copy(&mut entry.by_ref().take(remaining + 1), &mut out)?;
+                    total += copied;
+                    if total > MAX_EXTRACTED_BYTES {
+                        return Err(AppError::BadRequest(
+                            "archive expands beyond the extraction limit".into(),
+                        ));
+                    }
                 }
             }
         }
         ArchiveFormat::TarGz => {
             let gz = flate2::read::GzDecoder::new(bytes);
-            let mut archive = tar::Archive::new(gz);
+            let capped = CapReader { inner: gz, read: 0, max: MAX_EXTRACTED_BYTES };
+            let mut archive = tar::Archive::new(capped);
             archive.unpack(dest)
-                .map_err(|e| AppError::Internal(format!("Tar unpack error: {}", e)))?;
+                .map_err(|e| AppError::BadRequest(format!("Tar unpack error: {e}")))?;
         }
         ArchiveFormat::Tar => {
-            let mut archive = tar::Archive::new(bytes);
+            let capped = CapReader { inner: bytes, read: 0, max: MAX_EXTRACTED_BYTES };
+            let mut archive = tar::Archive::new(capped);
             archive.unpack(dest)
-                .map_err(|e| AppError::Internal(format!("Tar unpack error: {}", e)))?;
+                .map_err(|e| AppError::BadRequest(format!("Tar unpack error: {e}")))?;
         }
     }
     Ok(())

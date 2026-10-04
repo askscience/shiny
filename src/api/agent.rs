@@ -555,7 +555,7 @@ pub async fn handle_agent(
 
     let cancel = turn_id
         .as_deref()
-        .map(|id| state.agent_turns.register(id));
+        .map(|id| state.agent_turns.register(id, &traveler.id));
 
     let result = run_agent(
         &state,
@@ -635,7 +635,7 @@ pub async fn handle_agent_stop(
 ) -> Result<Json<serde_json::Value>, AppError> {
     use crate::services::agent_cancel::StopOutcome;
 
-    let outcome = state.agent_turns.cancel(&body.turn_id);
+    let outcome = state.agent_turns.cancel(&body.turn_id, &traveler.id);
     let annotate = outcome == StopOutcome::Annotate;
 
     // The turn already finished: its answer was generated and saved, and the
@@ -688,7 +688,7 @@ pub async fn handle_agent_stream(
     let turn_id = prepared.turn_id.clone();
     let cancel = turn_id
         .as_deref()
-        .map(|id| state.agent_turns.register(id));
+        .map(|id| state.agent_turns.register(id, &traveler.id));
 
     tokio::spawn(async move {
         let emit = |event: AgentStreamEvent| {

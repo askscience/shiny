@@ -51,7 +51,13 @@ pub async fn events(
 }
 
 /// POST /api/network/scan
-pub async fn scan(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+/// A Wi-Fi scan is a host capability (it probes SSIDs and can be used for
+/// location tracking), so it is loopback-only like the other mutations.
+pub async fn scan(
+    State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+) -> Result<Json<Value>, AppError> {
+    require_local(&remote)?;
     state.network.scan().await.map_err(AppError::Internal)?;
     Ok(Json(serde_json::json!({ "success": true })))
 }

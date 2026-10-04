@@ -16,7 +16,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Write};
 use std::rc::Rc;
 
 use crate::errors::AppError;
@@ -865,16 +865,8 @@ fn escape_attr(s: &str) -> String {
 // ─────────────────────────────────────────────────────────────
 
 fn read_content_xml(odt: &[u8]) -> Result<String, AppError> {
-    let reader = Cursor::new(odt.to_vec());
-    let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| AppError::Internal(format!("Not a valid .odt file: {}", e)))?;
-    let mut content = String::new();
-    archive
-        .by_name("content.xml")
-        .map_err(|e| AppError::Internal(format!("Missing content.xml in .odt: {}", e)))?
-        .read_to_string(&mut content)
-        .map_err(|e| AppError::Internal(format!("Failed to read content.xml: {}", e)))?;
-    Ok(content)
+    // Size-capped: a small `content.xml` entry can inflate to gigabytes.
+    crate::read_zip_text_capped(odt, "content.xml", crate::MAX_ODF_CONTENT_XML)
 }
 
 fn render_block(node: &roxmltree::Node, out: &mut String, fonts: &HashMap<String, String>) {

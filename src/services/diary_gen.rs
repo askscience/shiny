@@ -110,8 +110,21 @@ impl DiaryGenerator {
         .execute(&self.pool)
         .await?;
 
-        let diary_dir = "diaries";
-        fs::create_dir_all(diary_dir).await.unwrap_or_default();
+        // One directory per traveler: `diaries/` is CWD-relative, so a shared
+        // directory would have one account overwriting another's files. The
+        // DB rows are already scoped; this makes the markdown files match.
+        let safe_user: String = entry
+            .traveler_id
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+            .take(64)
+            .collect();
+        let diary_dir = if safe_user.is_empty() {
+            "diaries".to_string()
+        } else {
+            format!("diaries/{safe_user}")
+        };
+        fs::create_dir_all(&diary_dir).await.unwrap_or_default();
         let file_path = format!("{}/{}.md", diary_dir, date);
         let file_content = format!("# {}\n\n{}", title, content);
         fs::write(&file_path, &file_content).await.unwrap_or_else(|e| {

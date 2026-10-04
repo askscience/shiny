@@ -28,7 +28,7 @@
 //! code link this module — no runtime state crosses the dlopen boundary
 //! because everything is plain bytes.
 
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Write};
 
 use serde::{Deserialize, Serialize};
 
@@ -879,16 +879,8 @@ impl Slide {
 // ─────────────────────────────────────────────────────────────
 
 fn read_content_xml(odp: &[u8]) -> Result<String, AppError> {
-    let reader = Cursor::new(odp.to_vec());
-    let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| AppError::Internal(format!("Not a valid .odp file: {}", e)))?;
-    let mut content = String::new();
-    archive
-        .by_name("content.xml")
-        .map_err(|e| AppError::Internal(format!("Missing content.xml in .odp: {}", e)))?
-        .read_to_string(&mut content)
-        .map_err(|e| AppError::Internal(format!("Failed to read content.xml: {}", e)))?;
-    Ok(content)
+    // Size-capped: a small `content.xml` entry can inflate to gigabytes.
+    crate::read_zip_text_capped(odp, "content.xml", crate::MAX_ODF_CONTENT_XML)
 }
 
 fn xml_escape(s: &str) -> String {
@@ -908,6 +900,7 @@ fn xml_escape_attr(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
 
     fn slide(
         layout: &str,

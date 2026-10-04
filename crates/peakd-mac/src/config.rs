@@ -55,6 +55,9 @@ pub struct PeakdConfig {
     /// Dial a remote Shiny server over Iroh instead of the local app origin.
     /// `--iroh <ticket>` / `PEAKD_IROH`.
     pub iroh: Option<String>,
+    /// Single-use loopback auto-login token from `SHINY_BOOT_TOKEN`, kept out
+    /// of argv (world-readable).
+    pub boot_token: Option<String>,
 }
 
 /// Sensible defaults, so `--benchmark-seconds 5` works on its own and in any
@@ -115,6 +118,10 @@ impl PeakdConfig {
             iroh: env::var("PEAKD_IROH")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
+            boot_token: env::var("SHINY_BOOT_TOKEN")
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty()),
         };
 
         let args: Vec<String> = env::args().skip(1).collect();

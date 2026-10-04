@@ -18,7 +18,7 @@ pub fn evaluate(input: &str) -> Result<f64, String> {
     if tokens.is_empty() {
         return Err("empty expression".into());
     }
-    let mut p = Parser { tokens, pos: 0 };
+    let mut p = Parser { tokens, pos: 0, depth: 0 };
     let value = p.parse_expr()?;
     if p.pos != p.tokens.len() {
         return Err(format!("unexpected trailing input at position {}", p.pos));
@@ -125,7 +125,16 @@ fn tokenize(input: &str) -> Result<Vec<Tok>, String> {
 struct Parser {
     tokens: Vec<Tok>,
     pos: usize,
+    /// Recursion depth of the descent. Every nested parenthesis, unary sign
+    /// and right-associative power adds a level; without a bound, a few tens of
+    /// thousands of characters overflow the stack. A stack overflow is a
+    /// SIGSEGV, not a Rust panic, so it would abort the whole host process.
+    depth: u32,
 }
+
+/// More nesting than any real expression needs, and far below the ~10k frames
+/// that would overflow a worker thread's stack.
+const MAX_PARSE_DEPTH: u32 = 128;
 
 impl Parser {
     fn peek(&self) -> Option<&Tok> {
@@ -141,7 +150,13 @@ impl Parser {
     }
 
     fn parse_expr(&mut self) -> Result<f64, String> {
-        self.parse_add()
+        self.depth += 1;
+        if self.depth > MAX_PARSE_DEPTH {
+            return Err("expression is nested too deeply".into());
+        }
+        let result = self.parse_add();
+        self.depth -= 1;
+        result
     }
 
     fn parse_add(&mut self) -> Result<f64, String> {
@@ -193,6 +208,16 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Result<f64, String> {
+        self.depth += 1;
+        if self.depth > MAX_PARSE_DEPTH {
+            return Err("expression is nested too deeply".into());
+        }
+        let result = self.parse_unary_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_unary_inner(&mut self) -> Result<f64, String> {
         match self.peek() {
             Some(Tok::Op('+')) => {
                 self.next();
@@ -404,5 +429,17 @@ mod tests {
         assert!(evaluate("sqrt(-1)").is_err());
         assert!(evaluate("1 +").is_err());
         assert!(evaluate("").is_err());
+    }
+
+    /// Regression: unbounded recursion used to overflow the worker stack
+    /// (SIGSEGV, killing the whole host process) instead of returning an error.
+    #[test]
+    fn deep_nesting_is_rejected_not_crashing() {
+        let parens = format!("{}1{}", "(".repeat(100_000), ")".repeat(100_000));
+        assert!(evaluate(&parens).is_err(), "nested parentheses must be rejected");
+        let signs = format!("{}1", "-".repeat(100_000));
+        assert!(evaluate(&signs).is_err(), "unary chain must be rejected");
+        let powers = format!("1{}", "^1".repeat(100_000));
+        assert!(evaluate(&powers).is_err(), "power chain must be rejected");
     }
 }

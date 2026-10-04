@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use axum::body::{Body, HttpBody};
 use axum::extract::{State, Request};
@@ -19,10 +20,57 @@ use crate::models::Traveler;
 /// file in the user's runtime dir at startup and accepted **only from
 /// loopback**, so it can never be used over Iroh or the LAN. The web login is
 /// untouched — remote clients still present a real password.
+///
+/// The token is single-use: a successful `/api/auth/session` bootstrap rotates
+/// it and rewrites the file, so a token recovered from argv, logs or browser
+/// history is already dead by the time an attacker tries it.
 #[derive(Clone, Default)]
 pub struct SessionAuth {
-    pub token: String,
     pub user_id: Option<String>,
+    token: Arc<tokio::sync::RwLock<String>>,
+    consumed: Arc<std::sync::atomic::AtomicBool>,
+    token_file: Option<PathBuf>,
+}
+
+impl SessionAuth {
+    /// Constant-time comparison of a presented token against the live secret.
+    pub async fn matches(&self, presented: &str) -> bool {
+        let token = self.token.read().await;
+        constant_time_eq(presented.as_bytes(), token.as_bytes())
+    }
+
+    /// Consume the single-use bootstrap token and rotate it. Returns the new
+    /// token on the first (and only) successful redemption; `None` afterwards.
+    /// The new token is persisted so the next kiosk launch can bootstrap too.
+    pub async fn consume_and_rotate(&self) -> Option<String> {
+        if self.consumed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
+        let new_token = uuid::Uuid::new_v4().to_string();
+        {
+            let mut guard = self.token.write().await;
+            *guard = new_token.clone();
+        }
+        if let Some(path) = &self.token_file {
+            if let Err(e) = write_secret(path, &new_token) {
+                tracing::warn!("could not rewrite rotated session token: {e}");
+            }
+        }
+        Some(new_token)
+    }
+}
+
+/// Length-checked byte comparison that does not early-exit on the first
+/// mismatch. Used for the local session secret.
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 /// Build the session token and bind it to the account of the OS user running
@@ -30,15 +78,23 @@ pub struct SessionAuth {
 pub async fn init_session(pool: &SqlitePool, config: &Config) -> SessionAuth {
     let token = uuid::Uuid::new_v4().to_string();
     let user_id = session_user_id(pool).await;
-    if user_id.is_some() {
-        if let Some(path) = session_token_path(config) {
-            match write_secret(&path, &token) {
-                Ok(()) => tracing::info!("session token written to {}", path.display()),
-                Err(e) => tracing::warn!("could not write session token: {e}"),
-            }
+    let token_file = if user_id.is_some() {
+        session_token_path(config)
+    } else {
+        None
+    };
+    if let Some(path) = &token_file {
+        match write_secret(path, &token) {
+            Ok(()) => tracing::info!("session token written to {}", path.display()),
+            Err(e) => tracing::warn!("could not write session token: {e}"),
         }
     }
-    SessionAuth { token, user_id }
+    SessionAuth {
+        user_id,
+        token: Arc::new(tokio::sync::RwLock::new(token)),
+        consumed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        token_file,
+    }
 }
 
 fn session_token_path(config: &Config) -> Option<PathBuf> {
@@ -146,11 +202,15 @@ where
     }
 
     // The loopback-only session token: the local kiosk's auto-trust. Never valid
-    // from elsewhere.
+    // from elsewhere, and compared in constant time.
     if traveler.is_none() {
         if let Some(user_id) = state.session.user_id.as_deref() {
             let presented = auth_header.as_deref().or(cookie_token.as_deref());
-            if presented == Some(state.session.token.as_str()) && is_loopback(&req) {
+            let valid = match presented {
+                Some(p) => state.session.matches(p).await,
+                None => false,
+            };
+            if valid && is_loopback(&req) {
                 traveler = sqlx::query_as::<_, Traveler>("SELECT * FROM travelers WHERE id = ?1")
                     .bind(user_id)
                     .fetch_optional(&state.pool)
@@ -175,6 +235,19 @@ where
         // links its own copy of the SDK, so a `UserId` inserted here has a
         // different `TypeId` than the one the plugin looks up. Header names
         // are matched by string comparison and cross the dlopen boundary.
+        //
+        // OS identity headers are stripped unconditionally first: a
+        // client-supplied `x-shiny-os-home` must never survive when core did
+        // not resolve an OS account (e.g. linux_users=false). Leaving them in
+        // place let any authenticated user point the Files plugin's sandbox
+        // root at `/`.
+        {
+            let headers = req.headers_mut();
+            headers.remove(shiny_plugin_sdk::routes::OS_USER_HEADER);
+            headers.remove(shiny_plugin_sdk::routes::OS_HOME_HEADER);
+            headers.remove(shiny_plugin_sdk::routes::OS_UID_HEADER);
+        }
+
         if let Ok(value) = HeaderValue::from_str(&user_id) {
             let headers = req.headers_mut();
             headers.insert(shiny_plugin_sdk::routes::USER_ID_HEADER, value.clone());

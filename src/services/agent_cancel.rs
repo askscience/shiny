@@ -38,6 +38,7 @@ enum State {
 }
 
 struct Entry {
+    user_id: String,
     flag: Arc<Flag>,
     state: State,
     finished_at: Option<Instant>,
@@ -84,8 +85,9 @@ pub struct TurnRegistry {
 }
 
 impl TurnRegistry {
-    /// Start tracking a turn. The returned handle belongs to the runner.
-    pub fn register(&self, turn_id: &str) -> CancelHandle {
+    /// Start tracking a turn for `user_id`. The returned handle belongs to the
+    /// runner. The owner is recorded so no other account can cancel it.
+    pub fn register(&self, turn_id: &str, user_id: &str) -> CancelHandle {
         let flag = Arc::new(Flag::default());
         let mut map = self.inner.lock().unwrap();
         map.retain(|_, e| match e.finished_at {
@@ -94,17 +96,28 @@ impl TurnRegistry {
         });
         map.insert(
             turn_id.to_string(),
-            Entry { flag: flag.clone(), state: State::Running, finished_at: None },
+            Entry {
+                user_id: user_id.to_string(),
+                flag: flag.clone(),
+                state: State::Running,
+                finished_at: None,
+            },
         );
         CancelHandle(flag)
     }
 
     /// Ask a running turn to stop (or find out that it already finished).
-    pub fn cancel(&self, turn_id: &str) -> StopOutcome {
+    /// Turns registered by another account are ignored: the id is
+    /// client-supplied, so without this check any authenticated user who
+    /// learned another user's turn id could abort their answer.
+    pub fn cancel(&self, turn_id: &str, user_id: &str) -> StopOutcome {
         let mut map = self.inner.lock().unwrap();
         let Some(entry) = map.get_mut(turn_id) else {
             return StopOutcome::Ignored;
         };
+        if entry.user_id != user_id {
+            return StopOutcome::Ignored;
+        }
         match entry.state {
             State::Running => {
                 entry.flag.cancelled.store(true, Ordering::SeqCst);

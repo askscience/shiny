@@ -161,8 +161,8 @@ impl Target {
 /// GET /api/browser/state — what the window needs to render itself.
 fn state(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
-        user_id(&req)?;
-        let sessions = sessions::list_sessions().await;
+        let uid = user_id(&req)?;
+        let sessions = sessions::list_sessions(&uid).await;
         Ok(ok(json!({
             "ready": true,
             "sessions": sessions,
@@ -174,8 +174,8 @@ fn state(_ctx: Arc<PluginCtx>) -> RouteHandler {
 /// GET /api/browser/sessions
 fn sessions_route(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
-        user_id(&req)?;
-        Ok(ok(json!({ "sessions": sessions::list_sessions().await })))
+        let uid = user_id(&req)?;
+        Ok(ok(json!({ "sessions": sessions::list_sessions(&uid).await })))
     })
 }
 
@@ -219,11 +219,11 @@ fn navigate(ctx: Arc<PluginCtx>) -> RouteHandler {
             // stale id from a reloaded page falls back to a fresh session
             // rather than failing the navigation.
             let session = match body.session_id.as_deref() {
-                Some(id) => match sessions::update_session(id, Some(url.clone()), None).await {
+                Some(id) => match sessions::update_session(&uid, id, Some(url.clone()), None).await {
                     Some(session) => session,
-                    None => sessions::create_session(url.clone()).await,
+                    None => sessions::create_session(&uid, url.clone()).await,
                 },
-                None => sessions::create_session(url.clone()).await,
+                None => sessions::create_session(&uid, url.clone()).await,
             };
 
             // Best-effort history: browsing must work even if the shared
@@ -265,8 +265,8 @@ struct SessionBody {
 /// POST /api/browser/session — open a new session.
 fn session_create(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
-        let _uid = user_id(&req)?;
-        let session = sessions::create_session(String::new()).await;
+        let uid = user_id(&req)?;
+        let session = sessions::create_session(&uid, String::new()).await;
         Ok(ok(json!({ "session": session })))
     })
 }
@@ -274,9 +274,9 @@ fn session_create(_ctx: Arc<PluginCtx>) -> RouteHandler {
 /// POST /api/browser/session/close
 fn session_close(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| async move {
-        let _uid = user_id(&req)?;
+        let uid = user_id(&req)?;
         let body = take_json::<SessionBody>(req).await?;
-        let closed = sessions::close_session(&body.id).await;
+        let closed = sessions::close_session(&uid, &body.id).await;
         Ok(ok(json!({ "closed": closed })))
     })
 }

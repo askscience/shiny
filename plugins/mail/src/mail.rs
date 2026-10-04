@@ -355,12 +355,24 @@ fn io_addr_str(name: Option<&String>, email: &str) -> String {
     }
 }
 
+/// Largest message body the plugin will parse and cache. A hostile or merely
+/// huge message (typically a large base64 attachment) must not exhaust host
+/// memory; the check bounds what the plugin materializes, though the IMAP
+/// client itself still downloads the envelope.
+const MAX_MESSAGE_BYTES: usize = 32 * 1024 * 1024;
+
 pub async fn get_message(a: Account, folder: String, id: String) -> Result<Json, AppError> {
     blocking(move || {
         let mut client = connect_imap(&a)?;
         let raw = client
             .get_message(&folder, &id)
             .map_err(|e| AppError::BadRequest(format!("fetch message failed: {e}")))?;
+        if raw.len() > MAX_MESSAGE_BYTES {
+            return Err(AppError::BadRequest(format!(
+                "message is too large to open ({} MiB max)",
+                MAX_MESSAGE_BYTES / (1024 * 1024)
+            )));
+        }
         parse_message(&id, &raw)
     })
     .await

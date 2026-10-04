@@ -162,7 +162,7 @@ fn accounts_create(ctx: Arc<PluginCtx>) -> RouteHandler {
             }
 
             mail::save_account(ctx.db(), &uid, &a)?;
-            Ok(ok(a.to_json(true)))
+            Ok(ok(a.to_json(false)))
         }
     })
 }
@@ -233,7 +233,7 @@ fn accounts_test(ctx: Arc<PluginCtx>) -> RouteHandler {
                 mail::save_account(ctx.db(), &uid, &a)?;
             }
 
-            Ok(ok(json!({ "ok": a.verified, "error": a.last_error, "account": a.to_json(true) })))
+            Ok(ok(json!({ "ok": a.verified, "error": a.last_error, "account": a.to_json(false) })))
         }
     })
 }
@@ -308,7 +308,7 @@ fn accounts_update(ctx: Arc<PluginCtx>) -> RouteHandler {
                 a.last_error = None;
             }
             mail::save_account(ctx.db(), &uid, &a)?;
-            Ok(ok(a.to_json(true)))
+            Ok(ok(a.to_json(false)))
         }
     })
 }

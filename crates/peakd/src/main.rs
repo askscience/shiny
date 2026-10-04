@@ -430,6 +430,19 @@ fn loopback_endpoint(url: &str) -> Option<(String, u16)> {
     loopback.then(|| (host.to_string(), port))
 }
 
+/// URL for the shell's initial navigation. With a `SHINY_BOOT_TOKEN` from the
+/// session launcher this is the single-use auto-login URL; the token never
+/// appears in argv (world-readable) or in the startup log.
+fn boot_url(origin: &str, token: Option<&str>) -> String {
+    match token.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(token) => {
+            let base = origin.trim_end_matches('/');
+            format!("{base}/api/auth/session?token={token}")
+        }
+        None => origin.to_string(),
+    }
+}
+
 /// When `--iroh <ticket>` is set, start a local proxy that tunnels to the
 /// remote server and point the shell at it. Refuse without the feature.
 #[cfg(feature = "iroh")]
@@ -460,6 +473,10 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
     let cfg = resolve_iroh(cfg)?;
 
     wait_for_loopback_origin(&cfg.start_url, Duration::from_secs(30));
+
+    // The only navigation that carries the single-use auto-login token. It is
+    // built here, never logged, and never placed in argv.
+    let nav_url = boot_url(&cfg.start_url, cfg.boot_token.as_deref());
 
     println!("peakd: opening {}", cfg.start_url);
     println!(
@@ -514,7 +531,7 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
     shim::set_ua_cb(on_ua);
     shim::set_download_cb(on_download);
 
-    let url = std::ffi::CString::new(cfg.start_url.clone()).expect("URLs carry no NUL");
+    let url = std::ffi::CString::new(nav_url).expect("URLs carry no NUL");
     let data_dir =
         std::ffi::CString::new(profile_dir.clone()).expect("paths carry no NUL");
     let rc = unsafe {

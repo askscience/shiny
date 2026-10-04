@@ -116,9 +116,31 @@ pub fn os_home_from_request(req: &axum::extract::Request) -> Option<String> {
 /// peer is loopback.
 pub const REMOTE_HEADER: &str = "x-shiny-remote";
 
-/// Did this request arrive over Iroh?
+/// Reverse-proxy headers added by Tailscale Serve/Funnel (and every other
+/// common reverse proxy). Any of them means the request came from off-box even
+/// though the proxy itself connected over loopback.
+pub const FORWARDED_FOR: &str = "x-forwarded-for";
+pub const FORWARDED_PROTO: &str = "x-forwarded-proto";
+pub const FORWARDED_HOST: &str = "x-forwarded-host";
+
+/// Did this request arrive from off-box — over Iroh **or** through a TLS
+/// reverse proxy such as Tailscale Serve/Funnel?
+///
+/// This is the single source of truth for plugins and must stay identical to
+/// the core's `api::remote::is_remote`: a presence check on any of the four
+/// markers. Spoofing a marker only ever *reduces* the caller's privileges
+/// (core gates host controls on the same signal), so failing closed is
+/// correct.
+///
+/// Checking only [`REMOTE_HEADER`] here was a real bypass: the Iroh proxy sets
+/// it, but Tailscale Serve/Funnel sets only `x-forwarded-*`, so a remote
+/// client reached plugin routes (e.g. the Terminal) as if it were local.
 pub fn is_remote_request(req: &axum::extract::Request) -> bool {
-    req.headers().contains_key(REMOTE_HEADER)
+    let headers = req.headers();
+    headers.contains_key(REMOTE_HEADER)
+        || headers.contains_key(FORWARDED_FOR)
+        || headers.contains_key(FORWARDED_PROTO)
+        || headers.contains_key(FORWARDED_HOST)
 }
 
 /// Read the authenticated user id the core auth middleware injected as a
@@ -195,4 +217,29 @@ where
             }
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn req(headers: &[(&str, &str)]) -> axum::extract::Request {
+        let mut builder = axum::http::Request::builder().uri("/");
+        for (k, v) in headers {
+            builder = builder.header(*k, *v);
+        }
+        builder.body(axum::body::Body::empty()).unwrap()
+    }
+
+    /// Both remote signals must be detected: the Iroh proxy header *and* the
+    /// `x-forwarded-*` set added by Tailscale Serve/Funnel and other reverse
+    /// proxies. Regression test for the Terminal remote-gate bypass.
+    #[test]
+    fn remote_detection_covers_iroh_and_reverse_proxies() {
+        assert!(!is_remote_request(&req(&[])));
+        assert!(is_remote_request(&req(&[("x-shiny-remote", "1")])));
+        assert!(is_remote_request(&req(&[("x-forwarded-for", "203.0.113.9")])));
+        assert!(is_remote_request(&req(&[("x-forwarded-proto", "https")])));
+        assert!(is_remote_request(&req(&[("x-forwarded-host", "host.example")])));
+    }
 }
