@@ -16,13 +16,13 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use futures::StreamExt;
 use parking_lot::Mutex;
 use serde::Serialize;
 
 use shiny_plugin_sdk::errors::AppError;
 
 use crate::fetch::ACCEPT_HTML;
-
 const FETCH_TIMEOUT: Duration = Duration::from_secs(12);
 /// How much of the document to scan for metadata. `<head>` is always near the
 /// top, so a cap keeps a preview from reading a whole video.
@@ -140,7 +140,7 @@ fn is_private_ip(ip: std::net::IpAddr) -> bool {
                 || (seg & 0xffc0) == 0xfe80
                 || (seg & 0xffc0) == 0xfec0
                 || (seg == 0x2001 && v6.segments()[1] == 0x0db8)
-                || v6.to_ipv4_mapped().map(is_private_ip).unwrap_or(false)
+                || v6.to_ipv4_mapped().map(|v4| is_private_ip(v4.into())).unwrap_or(false)
         }
     }
 }
@@ -194,11 +194,10 @@ pub async fn fetch(url: &str) -> Result<Preview, AppError> {
     // Read at most `MAX_BYTES`; a huge or hostile page must not balloon the
     // server's memory just because someone hovered a link.
     let mut body: Vec<u8> = Vec::with_capacity(64 * 1024);
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?
-    {
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk
+            .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?;
         if body.len() + chunk.len() > MAX_BYTES {
             let keep = MAX_BYTES.saturating_sub(body.len());
             body.extend_from_slice(&chunk[..keep]);

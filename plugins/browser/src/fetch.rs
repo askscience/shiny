@@ -7,6 +7,7 @@
 
 use std::time::Duration;
 
+use futures::StreamExt;
 use shiny_filter::proxy::impersonated_client_builder;
 use shiny_plugin_sdk::errors::AppError;
 
@@ -59,11 +60,10 @@ pub async fn text(url: &str) -> Result<String, AppError> {
     }
 
     let mut body: Vec<u8> = Vec::with_capacity(64 * 1024);
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?
-    {
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk
+            .map_err(|e| AppError::Internal(format!("could not read {url}: {e}")))?;
         if body.len() + chunk.len() > MAX_TEXT_BYTES {
             let keep = MAX_TEXT_BYTES.saturating_sub(body.len());
             body.extend_from_slice(&chunk[..keep]);
