@@ -219,6 +219,12 @@ impl AppState {
 async fn inject_path_params(req: axum::extract::Request) -> axum::extract::Request {
     use axum::extract::{FromRequestParts, RawPathParams};
     let (mut parts, body) = req.into_parts();
+    // A client must never be able to smuggle path parameters onto a route the
+    // core did not capture them for. Drop any inbound header first, then
+    // re-add the real path params (if this route has any).
+    parts
+        .headers
+        .remove(shiny_plugin_sdk::routes::PATH_PARAMS_HEADER);
     let params: Vec<(String, String)> = RawPathParams::from_request_parts(&mut parts, &())
         .await
         .map(|p| {

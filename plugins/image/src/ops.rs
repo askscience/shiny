@@ -15,8 +15,61 @@ const FILTERS: &[&str] = &[
     "serenity", "golden", "pastel_pink", "cali", "dramatic", "firenze", "obsidian", "lofi",
 ];
 
+/// Hard ceiling for any layer/document dimension the server will allocate.
+/// Matches the document resize cap; keeps an RGBA buffer bounded at
+/// 8192² × 4 = 256 MiB and stops absurd `width`/`height` values from reaching
+/// `vec![0; …]`, where a failed allocation aborts the whole host process.
+pub const MAX_LAYER_DIM: u32 = 8192;
+
+/// Validate a layer/document size and return its RGBA byte length. All math is
+/// checked, so no `u32` pair can overflow `usize` before the allocation.
+pub fn checked_layer_len(w: u32, h: u32) -> Result<usize, AppError> {
+    if w == 0 || h == 0 {
+        return Err(AppError::BadRequest(
+            "layer width and height must be positive".into(),
+        ));
+    }
+    if w > MAX_LAYER_DIM || h > MAX_LAYER_DIM {
+        return Err(AppError::BadRequest(format!(
+            "layer dimensions may not exceed {MAX_LAYER_DIM}×{MAX_LAYER_DIM}"
+        )));
+    }
+    (w as usize)
+        .checked_mul(h as usize)
+        .and_then(|px| px.checked_mul(4))
+        .ok_or_else(|| AppError::BadRequest("layer dimensions overflow".into()))
+}
+
+/// photon-rs convolutions sample a 3×3 neighbourhood; on 1–2 px images they
+/// index past the raw buffer and panic (`conv.rs`). Skip them instead.
+pub fn convolution_safe(img: &PhotonImage) -> bool {
+    img.get_width() >= 3 && img.get_height() >= 3
+}
+
+/// Read only the declared dimensions from the header, before the decoder
+/// allocates a full pixel buffer. A 32 MiB PNG can still declare a
+/// 100000×100000 canvas; decoding first would abort on allocation failure.
+fn declared_dimensions(bytes: &[u8]) -> Result<(u32, u32), AppError> {
+    use std::io::Cursor;
+    let reader = image::io::Reader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|e| AppError::BadRequest(format!("couldn't read that image ({e})")))?;
+    reader
+        .into_dimensions()
+        .map_err(|e| AppError::BadRequest(format!("couldn't read that image ({e})")))
+}
+
 /// Decode image bytes (PNG/JPEG/GIF/WebP/BMP/…) into a `PhotonImage`.
 pub fn decode(bytes: &[u8]) -> Result<PhotonImage, AppError> {
+    let (w, h) = declared_dimensions(bytes)?;
+    if w == 0 || h == 0 {
+        return Err(AppError::BadRequest("empty image".into()));
+    }
+    if w > MAX_LAYER_DIM || h > MAX_LAYER_DIM {
+        return Err(AppError::BadRequest(format!(
+            "image is too large (max {MAX_LAYER_DIM} px per side)"
+        )));
+    }
     photon_rs::native::open_image_from_bytes(bytes).map_err(|e| {
         AppError::BadRequest(format!(
             "couldn't read that image ({e}) — PNG, JPEG, GIF, WebP and BMP are supported"
@@ -84,13 +137,35 @@ fn apply_one(img: &mut PhotonImage, op: &Value, idx: usize) -> Result<(), AppErr
         }
         "blur" => {
             let r = i64_param(op, "radius", 2).clamp(1, 50) as i32;
-            photon_rs::conv::gaussian_blur(img, r);
+            if convolution_safe(img) {
+                photon_rs::conv::gaussian_blur(img, r);
+            }
         }
-        "sharpen" => photon_rs::conv::sharpen(img),
-        "edge" | "edge_detection" => photon_rs::conv::edge_detection(img),
-        "emboss" => photon_rs::conv::emboss(img),
-        "sobel" => photon_rs::conv::sobel_global(img),
-        "laplace" => photon_rs::conv::laplace(img),
+        "sharpen" => {
+            if convolution_safe(img) {
+                photon_rs::conv::sharpen(img);
+            }
+        }
+        "edge" | "edge_detection" => {
+            if convolution_safe(img) {
+                photon_rs::conv::edge_detection(img);
+            }
+        }
+        "emboss" => {
+            if convolution_safe(img) {
+                photon_rs::conv::emboss(img);
+            }
+        }
+        "sobel" => {
+            if convolution_safe(img) {
+                photon_rs::conv::sobel_global(img);
+            }
+        }
+        "laplace" => {
+            if convolution_safe(img) {
+                photon_rs::conv::laplace(img);
+            }
+        }
         "threshold" => {
             let t = i64_param(op, "amount", 128).clamp(0, 255) as u32;
             photon_rs::monochrome::threshold(img, t);
@@ -503,5 +578,37 @@ mod tests {
         for i in 1..256 {
             assert!(lut[i] >= lut[i - 1], "curve must be monotonic at {i}");
         }
+    }
+
+    #[test]
+    fn checked_layer_len_bounds_dimensions() {
+        // zero sides rejected
+        assert!(checked_layer_len(0, 10).is_err());
+        assert!(checked_layer_len(10, 0).is_err());
+        // absurd sides rejected before any allocation could be attempted
+        assert!(checked_layer_len(1_000_000_000, 1_000_000_000).is_err());
+        assert!(checked_layer_len(MAX_LAYER_DIM + 1, 1).is_err());
+        // the ceiling itself is allowed and the byte count is exact
+        assert_eq!(
+            checked_layer_len(MAX_LAYER_DIM, 1).unwrap(),
+            MAX_LAYER_DIM as usize * 4
+        );
+        assert_eq!(checked_layer_len(4, 3).unwrap(), 48);
+    }
+
+    #[test]
+    fn convolution_skips_tiny_images() {
+        for (w, h, safe) in [(1u32, 1u32, false), (2, 2, false), (2, 8, false), (3, 3, true), (8, 1, false)] {
+            let img = PhotonImage::new(vec![0u8; (w * h * 4) as usize], w, h);
+            assert_eq!(convolution_safe(&img), safe, "{w}×{h}");
+        }
+    }
+
+    #[test]
+    fn blur_on_one_pixel_image_is_a_noop_not_a_panic() {
+        let mut img = PhotonImage::new(vec![10, 20, 30, 255], 1, 1);
+        apply_one(&mut img, &serde_json::json!({"op": "blur", "radius": 2}), 0)
+            .expect("blur on a 1×1 image must not error or panic");
+        assert_eq!(img.get_raw_pixels(), vec![10, 20, 30, 255]);
     }
 }

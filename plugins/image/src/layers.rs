@@ -404,6 +404,18 @@ pub fn insert_layer(
     bytes: Vec<u8>,
 ) -> Result<String, AppError> {
     let position = next_position(db, uid, image_id, group_id)?;
+    // Defense in depth: never store a layer whose dimensions overflow or whose
+    // byte length disagrees with `w*h*4` (all downstream consumers allocate
+    // from these fields).
+    let need = crate::ops::checked_layer_len(w, h)?;
+    if bytes.len() != need {
+        return Err(AppError::BadRequest(format!(
+            "layer is {} bytes but {}×{} needs {need}",
+            bytes.len(),
+            w,
+            h
+        )));
+    }
     let id = uuid::Uuid::new_v4().to_string();
     db.execute(
         "INSERT INTO image_layers (id, image_id, user_id, name, position, visible, opacity, \

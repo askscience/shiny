@@ -10,6 +10,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
 photon-rs = { version = "0.3.3", default-features = false }
+# Header-dimension pre-check before photon-rs/image allocates a full buffer.
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff"] }
 base64 = "0.22"
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }

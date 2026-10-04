@@ -16,6 +16,9 @@ fn set_doc_size(
     w: u32,
     h: u32,
 ) -> Result<(), AppError> {
+    // Every composite allocation derives from these two numbers; refuse
+    // anything that would overflow or exceed the layer dimension ceiling.
+    crate::ops::checked_layer_len(w, h)?;
     db.execute(
         "UPDATE images SET width = ?1, height = ?2, selection = NULL, \
          selection_width = 0, selection_height = 0, updated_at = datetime('now') \
@@ -75,9 +78,9 @@ fn write_geom(
 /// Crop the document to `[x, y, x+w, y+h]`; layers keep their pixels and are
 /// simply offset so the canvas clips them.
 pub fn crop(db: &Db, uid: &str, image_id: &str, x: i32, y: i32, w: u32, h: u32) -> Result<(), AppError> {
-    if w == 0 || h == 0 {
-        return Err(AppError::BadRequest("crop needs positive width and height".into()));
-    }
+    // Rejects zero sides, absurd sizes and any overflow before the composite
+    // (`w*h*4`) is allocated by `refresh_composite`.
+    crate::ops::checked_layer_len(w, h)?;
     let rows = layers::ensure_base_layer(db, uid, image_id)?;
     for layer in &rows {
         let nx = layer.x - x;

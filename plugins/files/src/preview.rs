@@ -144,24 +144,84 @@ pub fn ffprobe_bin() -> String {
     tool("FFPROBE_BIN", "ffprobe")
 }
 
+/// Hard timeout and output ceiling for every ffmpeg/ffprobe invocation.
+/// Untrusted media must never be able to hang a request or balloon memory.
+const TOOL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+const TOOL_OUTPUT_CAP: u64 = 8 * 1024 * 1024;
+
+/// Run a media tool with a timeout and capped stdout.
+///
+/// `Err` is returned for spawn failures and timeouts (the child is killed);
+/// `Ok((success, stdout))` otherwise. stdout is truncated at
+/// [`TOOL_OUTPUT_CAP`] so a hostile file cannot stream unbounded output.
+fn run_tool(cmd: &mut Command) -> Result<(bool, Vec<u8>), std::io::Error> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let mut stdout = child.stdout.take().expect("stdout is piped");
+    let mut stderr = child.stderr.take().expect("stderr is piped");
+
+    let out_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout.by_ref().take(TOOL_OUTPUT_CAP).read_to_end(&mut buf);
+        buf
+    });
+    let err_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr.by_ref().take(TOOL_OUTPUT_CAP).read_to_end(&mut buf);
+        buf
+    });
+
+    let deadline = Instant::now() + TOOL_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(e);
+            }
+        }
+    };
+    let stdout = out_thread.join().unwrap_or_default();
+    let _ = err_thread.join();
+    match status {
+        Some(status) => Ok((status.success(), stdout)),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "media tool timed out",
+        )),
+    }
+}
+
 /// Duration in seconds via `ffprobe` (`None` when unknown or ffprobe is absent).
 pub fn video_duration_secs(path: &Path) -> Option<f64> {
-    let out = Command::new(ffprobe_bin())
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(path)
-        .output()
-        .ok()?;
-    if !out.status.success() {
+    let mut cmd = Command::new(ffprobe_bin());
+    cmd.args([
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+    ])
+    .arg(path);
+    let (ok, stdout) = run_tool(&mut cmd).ok()?;
+    if !ok {
         return None;
     }
-    let text = String::from_utf8_lossy(&out.stdout);
+    let text = String::from_utf8_lossy(&stdout);
     text.trim().parse::<f64>().ok().filter(|d| d.is_finite() && *d > 0.0)
 }
 
@@ -186,16 +246,14 @@ fn run_frame(path: &Path, at: Option<f64>, max: u32) -> Result<Vec<u8>, AppError
             "png",
             "pipe:1",
         ]);
-    let out = cmd.output().map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => {
-            AppError::Internal("ffmpeg is not installed; cannot read video frames".into())
-        }
-        _ => AppError::Internal(format!("ffmpeg failed to start: {e}")),
-    })?;
-    if !out.status.success() || out.stdout.is_empty() {
-        return Err(AppError::BadRequest("could not extract a video frame".into()));
+    match run_tool(&mut cmd) {
+        Ok((true, out)) if !out.is_empty() => Ok(out),
+        Ok(_) => Err(AppError::BadRequest("could not extract a video frame".into())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(AppError::Internal(
+            "ffmpeg is not installed; cannot read video frames".into(),
+        )),
+        Err(e) => Err(AppError::Internal(format!("ffmpeg failed: {e}"))),
     }
-    Ok(out.stdout)
 }
 
 /// A representative frame near 10% of the video, falling back to the first
@@ -218,22 +276,21 @@ pub fn video_frame_png(path: &Path, at: f64, max: u32) -> Result<Vec<u8>, AppErr
 
 /// `ffprobe` metadata as JSON: duration, dimensions and stream codecs.
 pub fn video_info_json(path: &Path) -> Option<serde_json::Value> {
-    let out = Command::new(ffprobe_bin())
-        .args([
-            "-v",
-            "error",
-            "-show_format",
-            "-show_streams",
-            "-of",
-            "json",
-        ])
-        .arg(path)
-        .output()
-        .ok()?;
-    if !out.status.success() {
+    let mut cmd = Command::new(ffprobe_bin());
+    cmd.args([
+        "-v",
+        "error",
+        "-show_format",
+        "-show_streams",
+        "-of",
+        "json",
+    ])
+    .arg(path);
+    let (ok, stdout) = run_tool(&mut cmd).ok()?;
+    if !ok {
         return None;
     }
-    let parsed: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let parsed: serde_json::Value = serde_json::from_slice(&stdout).ok()?;
     let duration = parsed
         .get("format")
         .and_then(|f| f.get("duration"))
@@ -268,9 +325,33 @@ pub fn video_info_json(path: &Path) -> Option<serde_json::Value> {
     }))
 }
 
+/// Read only the declared dimensions from the header, before the decoder
+/// allocates a full pixel buffer.
+fn declared_dimensions(bytes: &[u8]) -> Result<(u32, u32), AppError> {
+    use std::io::Cursor;
+    let reader = image::io::Reader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|e| AppError::BadRequest(format!("cannot decode image: {e}")))?;
+    reader
+        .into_dimensions()
+        .map_err(|e| AppError::BadRequest(format!("cannot decode image: {e}")))
+}
+
 /// Downscale image bytes to a PNG no larger than `max` on its long edge.
 /// Returns `Err` when the bytes are not a decodable raster image.
 pub fn thumbnail_png(bytes: &[u8], max: u32) -> Result<Vec<u8>, AppError> {
+    // Reject absurd declared dimensions before the decoder allocates the full
+    // pixel buffer (a hostile 32 MiB file can declare a 100k × 100k canvas).
+    const MAX_SOURCE_DIM: u32 = 8192;
+    let (sw, sh) = declared_dimensions(bytes)?;
+    if sw == 0 || sh == 0 {
+        return Err(AppError::BadRequest("empty image".into()));
+    }
+    if sw > MAX_SOURCE_DIM || sh > MAX_SOURCE_DIM {
+        return Err(AppError::BadRequest(format!(
+            "image is too large (max {MAX_SOURCE_DIM} px per side)"
+        )));
+    }
     let max = max.clamp(32, 1024);
     let mut img = photon_rs::native::open_image_from_bytes(bytes)
         .map_err(|e| AppError::BadRequest(format!("cannot decode image: {e}")))?;

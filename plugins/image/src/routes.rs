@@ -891,7 +891,10 @@ fn layer_create(ctx: Arc<PluginCtx>) -> RouteHandler {
                 body.width.unwrap_or(doc.width.max(1)),
                 body.height.unwrap_or(doc.height.max(1)),
             );
-            let raw = vec![0u8; (w as usize) * (h as usize) * 4];
+            // Bound the blank layer before allocating: `w*h*4` with unchecked
+            // `u32` inputs used to abort the host on allocation failure.
+            let len = crate::ops::checked_layer_len(w, h)?;
+            let raw = vec![0u8; len];
             let layer_id = layers::insert_layer(
                 &db,
                 &uid,

@@ -49,7 +49,8 @@ impl OsmService {
     }
 
     pub async fn geocode(&self, query: &str, limit: Option<usize>) -> Result<Vec<GeoPlace>, AppError> {
-        let limit = limit.unwrap_or(5);
+        // Public, rate-limited upstream: clamp the caller-supplied count.
+        let limit = limit.unwrap_or(5).clamp(1, 20);
         let url = format!(
             "https://nominatim.openstreetmap.org/search?q={}&format=jsonv2&limit={}",
             shiny_plugin_sdk::services::percent_encode(query),

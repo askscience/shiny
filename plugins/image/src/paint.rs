@@ -538,9 +538,21 @@ fn paste(img: &mut PhotonImage, op: &Value) {
         Ok(d) => d,
         Err(_) => return,
     };
-    let bw = int_param(op, "width", 0).max(0) as u32;
-    let bh = int_param(op, "height", 0).max(0) as u32;
-    if bw == 0 || bh == 0 || decoded.len() < (bw as usize) * (bh as usize) * 4 {
+    let bw = int_param(op, "width", 0).max(0).min(crate::ops::MAX_LAYER_DIM as i64) as u32;
+    let bh = int_param(op, "height", 0).max(0).min(crate::ops::MAX_LAYER_DIM as i64) as u32;
+    if bw == 0 || bh == 0 {
+        return;
+    }
+    // Checked math: the old `(bw * bh) * 4` wrapped in release builds and let a
+    // tiny payload declare a gigantic paste rectangle.
+    let need = match (bw as usize)
+        .checked_mul(bh as usize)
+        .and_then(|px| px.checked_mul(4))
+    {
+        Some(n) => n,
+        None => return,
+    };
+    if decoded.len() < need {
         return;
     }
     let x0 = int_param(op, "x", 0) as i64;

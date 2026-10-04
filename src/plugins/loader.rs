@@ -432,7 +432,7 @@ pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
     }
     candidates.sort();
     let wanted = name.to_lowercase();
-    candidates
+    let selected = candidates
         .iter()
         .find(|p| {
             let stem = p
@@ -442,7 +442,44 @@ pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
             stem == wanted || stem == format!("lib{wanted}")
         })
         .cloned()
-        .or_else(|| candidates.first().cloned())
+        .or_else(|| candidates.first().cloned());
+    if let Some(path) = &selected {
+        warn_if_stale(path);
+    }
+    selected
+}
+
+/// Security floor for plugin binaries. Anything built before this timestamp
+/// predates commit `42e484c` (2026-10-04 00:27:28 UTC), which fixed the files
+/// sandbox escape, the calculator stack-overflow crash, the terminal remote
+/// gate/caps and the ODF/upload limits. Bump the floor when the next security
+/// wave lands; set `SHINY_MIN_PLUGIN_TS=0` to silence the check.
+const SECURITY_FLOOR_TS: u64 = 1_791_073_648;
+
+/// Warn when a plugin cdylib predates the security floor: a stale install
+/// silently undoes fixes that are present in the source tree.
+fn warn_if_stale(path: &Path) {
+    let floor = std::env::var("SHINY_MIN_PLUGIN_TS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(SECURITY_FLOOR_TS);
+    if floor == 0 {
+        return;
+    }
+    let Ok(modified) = std::fs::metadata(path).and_then(|m| m.modified()) else {
+        return;
+    };
+    let Ok(ts) = modified.duration_since(std::time::UNIX_EPOCH) else {
+        return;
+    };
+    if ts.as_secs() < floor {
+        tracing::warn!(
+            "plugin {} was built before the security floor ({} < {}) — rebuild and reinstall it to pick up the security fixes",
+            path.display(),
+            ts.as_secs(),
+            floor
+        );
+    }
 }
 
 /// Windows-only: copy a cdylib to a timestamped sibling so a re-install can

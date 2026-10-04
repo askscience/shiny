@@ -49,6 +49,8 @@ pub async fn search(query: &str, limit: usize) -> Result<Vec<VideoResult>, AppEr
 
     let client = reqwest::Client::builder()
         .user_agent(UA)
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 

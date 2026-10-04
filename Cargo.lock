@@ -6944,6 +6944,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "image 0.24.9",
  "photon-rs",
  "semver",
  "serde",
@@ -7008,6 +7009,7 @@ dependencies = [
  "async-trait",
  "axum",
  "base64 0.22.1",
+ "image 0.24.9",
  "photon-rs",
  "semver",
  "serde",

@@ -18,3 +18,6 @@ axum = { version = "0.7", features = ["json", "query"] }
 # PNG/JPEG/GIF/… decode + Lanczos3 downscale for grid thumbnails. Same crate
 # (and version) the image plugin already builds, so this adds no new tree.
 photon-rs = { version = "0.3.3", default-features = false }
+# Header-dimension pre-check before a hostile image can make the decoder
+# allocate an enormous pixel buffer.
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff"] }

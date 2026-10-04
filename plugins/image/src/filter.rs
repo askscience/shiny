@@ -98,12 +98,17 @@ fn radial_blur(img: &mut PhotonImage, amount: f64, method: &str) {
 }
 
 fn gaussian_blur(img: &mut PhotonImage, radius: u32) {
-    photon_rs::conv::gaussian_blur(img, radius as i32);
+    if crate::ops::convolution_safe(img) {
+        photon_rs::conv::gaussian_blur(img, radius as i32);
+    }
 }
 
 fn unsharp_mask(img: &mut PhotonImage, radius: u32, amount: f64, threshold: f64) {
     let w = img.get_width();
     let h = img.get_height();
+    if !crate::ops::convolution_safe(img) {
+        return;
+    }
     let mut blurred = img.clone();
     photon_rs::conv::gaussian_blur(&mut blurred, radius.max(1) as i32);
     let base = raw(img);
@@ -181,6 +186,9 @@ fn median(img: &mut PhotonImage, radius: u32) {
 fn high_pass(img: &mut PhotonImage, radius: u32) {
     let w = img.get_width();
     let h = img.get_height();
+    if !crate::ops::convolution_safe(img) {
+        return;
+    }
     let mut blurred = img.clone();
     photon_rs::conv::gaussian_blur(&mut blurred, radius.max(1) as i32);
     let base = raw(img);

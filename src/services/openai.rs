@@ -47,7 +47,12 @@ pub struct OpenAiClient {
 impl OpenAiClient {
     pub fn new(base_url: String, api_key: String, model: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                // Never let a slow/hostile endpoint pin a request forever.
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(120))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
             base_url: normalize_base_url(&base_url),
             api_key,
             model,

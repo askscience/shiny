@@ -54,7 +54,9 @@ impl OsmClient {
     }
 
     pub async fn geocode(&self, query: &str, limit: Option<usize>) -> Result<Vec<GeoPlace>, AppError> {
-        let limit = limit.unwrap_or(5);
+        // Nominatim is a public, rate-limited service: never let a caller ask
+        // it for an unbounded number of results.
+        let limit = limit.unwrap_or(5).clamp(1, 20);
         let url = format!(
             "https://nominatim.openstreetmap.org/search?q={}&format=jsonv2&limit={}",
             shiny_plugin_sdk::services::percent_encode(query),
@@ -87,7 +89,8 @@ impl OsmClient {
             return Err(AppError::BadRequest("destination required".into()));
         }
 
-        let limit = limit.unwrap_or(8);
+        // Never forward an unbounded `limit` to Nominatim.
+        let limit = limit.unwrap_or(8).clamp(1, 20);
         let url = format!(
             "https://nominatim.openstreetmap.org/search?q={}&format=jsonv2&limit={}&lat={}&lon={}",
             shiny_plugin_sdk::services::percent_encode(&query),

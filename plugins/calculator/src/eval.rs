@@ -14,9 +14,17 @@ enum Tok {
 
 /// Evaluate a math expression and return a finite result.
 pub fn evaluate(input: &str) -> Result<f64, String> {
+    if input.len() > MAX_EXPR_LEN {
+        return Err(format!(
+            "expression is too long (max {MAX_EXPR_LEN} bytes)"
+        ));
+    }
     let tokens = tokenize(input)?;
     if tokens.is_empty() {
         return Err("empty expression".into());
+    }
+    if tokens.len() > MAX_TOKENS {
+        return Err("expression has too many tokens".into());
     }
     let mut p = Parser { tokens, pos: 0, depth: 0 };
     let value = p.parse_expr()?;
@@ -135,6 +143,12 @@ struct Parser {
 /// More nesting than any real expression needs, and far below the ~10k frames
 /// that would overflow a worker thread's stack.
 const MAX_PARSE_DEPTH: u32 = 128;
+
+/// Upper bounds on the raw input size and token count. The route's body limit
+/// is 160 MB, and each `Tok` costs ~16–24 bytes, so without these caps a single
+/// request could allocate gigabytes before parsing even starts.
+const MAX_EXPR_LEN: usize = 64 * 1024;
+const MAX_TOKENS: usize = 16 * 1024;
 
 impl Parser {
     fn peek(&self) -> Option<&Tok> {
@@ -441,5 +455,21 @@ mod tests {
         assert!(evaluate(&signs).is_err(), "unary chain must be rejected");
         let powers = format!("1{}", "^1".repeat(100_000));
         assert!(evaluate(&powers).is_err(), "power chain must be rejected");
+    }
+
+    /// Regression: the route's 160 MB body limit must not turn into a
+    /// multi-gigabyte token vector. Oversized inputs fail before/at tokenize.
+    #[test]
+    fn oversized_input_is_rejected_before_tokenizing() {
+        let long = "1+".repeat(MAX_EXPR_LEN);
+        assert!(evaluate(&long).is_err(), "input beyond MAX_EXPR_LEN must be rejected");
+
+        let many = "1,".repeat(MAX_TOKENS);
+        assert!(many.len() < MAX_EXPR_LEN);
+        assert!(evaluate(&many).is_err(), "token count beyond MAX_TOKENS must be rejected");
+
+        // an expression at a realistic size still works
+        let ok = "1+".repeat(MAX_TOKENS / 2 / 2) + "1";
+        assert_eq!(evaluate(&ok).unwrap(), (MAX_TOKENS / 2 / 2 + 1) as f64);
     }
 }

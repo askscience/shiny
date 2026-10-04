@@ -360,7 +360,7 @@ impl Tool for ImageLayerAdd {
         }
 
         let (w, h) = (doc.width.max(1), doc.height.max(1));
-        let raw = vec![0u8; (w as usize) * (h as usize) * 4];
+        let raw = vec![0u8; crate::ops::checked_layer_len(w, h)?];
         let layer_id = layers::insert_layer(
             &db, req.traveler_id, &image_id, &name, group_id.as_deref(), 0, 0, w, h, raw,
         )?;
