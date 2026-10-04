@@ -1,5 +1,6 @@
 import { setSphereState } from './sphere.js';
 import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
+import { sanitizeHtml } from './sanitize.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
@@ -91,7 +92,9 @@ function renderBubble(role, text) {
   const bubbleText = document.createElement('div');
   bubbleText.className = 'compose-bubble-text';
   if (role === 'assistant') {
-    bubbleText.innerHTML = renderMarkdown(text || '');
+    // Model output can carry attacker-influenced HTML (pages the agent read);
+    // sanitize before it reaches innerHTML. See sanitize.js.
+    bubbleText.innerHTML = sanitizeHtml(renderMarkdown(text || ''));
   } else {
     bubbleText.textContent = text || '';
   }
@@ -117,7 +120,7 @@ function streamAssistantBubble(text) {
   if (!text) return; // keep the "…" indicator until real text arrives
   assistantBubble?.classList.remove('is-thinking');
   const t = assistantBubble?.querySelector('.compose-bubble-text');
-  if (t) t.innerHTML = renderMarkdown(text);
+  if (t) t.innerHTML = sanitizeHtml(renderMarkdown(text));
   scrollConversation();
 }
 

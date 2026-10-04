@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#07080a">
   <title>PEAK'D!</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <!-- The theme links get their href from the bootstrap below, so the correct
        theme is already loading before the first paint. -->
   <link id="theme-tokens" rel="stylesheet">
@@ -29,27 +29,9 @@
   <link id="theme-app" rel="stylesheet" href="" disabled>
   <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
        after boot, which would flash a different theme first. The
-       installed-theme index is cached by listThemes() for the check here. -->
-  <script>
-    (function () {
-      var DEFAULT = 'pitch';        // keep in step with theme-loader.js
-      var theme = DEFAULT;
-      try {
-        var stored = localStorage.getItem('ui.theme.name');
-        var list = JSON.parse(localStorage.getItem('ui.theme.list') || 'null');
-        var known = Array.isArray(list) && list.length;
-        // Trust a stored choice unless the cached index says it is gone.
-        if (stored && (!known || list.indexOf(stored) >= 0)) theme = stored;
-      } catch (e) { /* keep the default */ }
-      document.documentElement.setAttribute('data-theme', theme);
-      var set = function (id, href) {
-        var el = document.getElementById(id);
-        if (el) el.setAttribute('href', href);
-      };
-      set('theme-tokens', '/themes/' + theme + '/tokens.css');
-      set('theme-components', '/themes/' + theme + '/components.css');
-    })();
-  </script>
+       installed-theme index is cached by listThemes() for the check here.
+       Lives in its own file so the CSP can forbid inline scripts. -->
+  <script src="/js/early-theme.js"></script>
 </head>
 <body>
   <!-- Boot splash: the PEAK'D! mark with an accent-coloured glitch. Painted
@@ -67,15 +49,7 @@
     <span class="boot-wordmark" aria-hidden="true">PEAK'D!</span>
     <div class="boot-bar" aria-hidden="true"><span></span></div>
   </div>
-  <script>
-    // Safety net: js/bootScreen.js hides the splash as soon as the app or the
-    // sign-in screen is ready. If the module graph never loads, this still
-    // clears it rather than leaving a stuck full-screen overlay.
-    setTimeout(function () {
-      var el = document.getElementById('boot-screen');
-      if (el) el.classList.add('is-hidden');
-    }, 15000);
-  </script>
+  <script src="/js/early-boot.js"></script>
 
   <div id="background" aria-hidden="true"></div>
   <div id="grain" aria-hidden="true"></div>
@@ -280,8 +254,8 @@
 
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/vendor/marked/marked.min.js"></script>
   <script src="/vendor/vosk-browser/vosk.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>

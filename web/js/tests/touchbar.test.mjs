@@ -5,7 +5,7 @@
  *
  *   1. `touchbarShared.js`  — the action vocabulary the page runs on.
  *   2. `scripts/touchbar/shiny-touchbar.toml` — the tiny-dfr row (Linux T2).
- *   3. `crates/peakd/src/touchbar.rs` — the native macOS `NSTouchBar` buttons.
+ *   3. `crates/peakd-mac/src/touchbar.rs` — the native macOS `NSTouchBar` buttons.
  *
  * This pins (1) and then parses (2) and (3) to prove they agree: the same
  * action names, the same Ctrl+Alt+Shift+<digit> combos, the same order.
@@ -138,7 +138,7 @@ check(
 
 /* ── The native macOS buttons ───────────────────────────────── */
 
-const rust = readFileSync(here('../../../crates/peakd/src/touchbar.rs'), 'utf8');
+const rust = readFileSync(here('../../../crates/peakd-mac/src/touchbar.rs'), 'utf8');
 const rustButtons = [...rust.matchAll(/\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/g)]
   .map((m) => ({ action: m[1], label: m[2] }));
 
