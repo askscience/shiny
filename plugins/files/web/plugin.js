@@ -59,15 +59,31 @@ const PLACES = [
   { name: 'Trash', path: '.Trash', icon: 'ui/trash' },
 ];
 const BOOKMARKS = [
-  { name: 'Desktop', path: 'Desktop', icon: 'ui/monitor' },
-  { name: 'Documents', path: 'Documents', icon: 'ui/doc' },
-  { name: 'Downloads', path: 'Downloads', icon: 'ui/download' },
-  { name: 'Music', path: 'Music', icon: 'ui/music' },
-  { name: 'Pictures', path: 'Pictures', icon: 'ui/image' },
-  { name: 'Public', path: 'Public', icon: 'ui/forward' },
-  { name: 'Templates', path: 'Templates', icon: 'ui/file' },
-  { name: 'Videos', path: 'Videos', icon: 'ui/video' },
+  { name: 'Desktop', path: 'Desktop', icon: 'ui/folder-desktop' },
+  { name: 'Documents', path: 'Documents', icon: 'ui/folder-documents' },
+  { name: 'Downloads', path: 'Downloads', icon: 'ui/folder-downloads' },
+  { name: 'Music', path: 'Music', icon: 'ui/folder-music' },
+  { name: 'Pictures', path: 'Pictures', icon: 'ui/folder-pictures' },
+  { name: 'Public', path: 'Public', icon: 'ui/folder-public' },
+  { name: 'Templates', path: 'Templates', icon: 'ui/folder-templates' },
+  { name: 'Videos', path: 'Videos', icon: 'ui/folder-videos' },
 ];
+
+/* Well-known folders wear their own coloured folder glyph (one per icon set);
+   anything else uses the generic folder. */
+const SPECIAL_FOLDERS = {
+  desktop: 'ui/folder-desktop',
+  documents: 'ui/folder-documents',
+  downloads: 'ui/folder-downloads',
+  music: 'ui/folder-music',
+  pictures: 'ui/folder-pictures',
+  public: 'ui/folder-public',
+  templates: 'ui/folder-templates',
+  videos: 'ui/folder-videos',
+};
+function folderIconFor(name) {
+  return SPECIAL_FOLDERS[String(name || '').toLowerCase()] || 'ui/folder';
+}
 
 /* ── API ────────────────────────────────────────────────────── */
 
@@ -153,7 +169,7 @@ function formatWhen(secs) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 function entryIcon(entry) {
-  if (entry.kind === 'dir') return 'ui/folder';
+  if (entry.kind === 'dir') return folderIconFor(entry.name);
   if (entry.kind === 'symlink') return 'ui/forward';
   if (entry.is_image) return 'ui/image';
   if (entry.is_pdf) return 'ui/doc';
@@ -231,7 +247,7 @@ function thumbIcon(host, entry) {
   host.innerHTML = '';
   host.classList.remove('files-thumb--mini');
   host.classList.add('files-thumb--icon');
-  const ic = icon(entry.kind === 'dir' ? 'ui/folder' : entryIcon(entry), { size: entry.kind === 'dir' ? 56 : 40 });
+  const ic = icon(entryIcon(entry), { size: entry.kind === 'dir' ? 56 : 40 });
   host.appendChild(ic);
 }
 function imageThumb(host, entry) {

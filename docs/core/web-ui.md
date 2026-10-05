@@ -99,7 +99,7 @@ component library:
 | `index.js` | Public re-exports (`icon`, `button`, `card`, `notify`, `setTileGlow`, …). |
 | `theme-loader.js` | Loads the theme manifest/tokens/components and swaps them live. |
 | `appearance.js` | Accent + gradient; dispatches `appearance:change`. |
-| `icon.js` | Resolves an icon name via theme override → shared library. |
+| `icon.js` | Resolves an icon name via active icon set → theme override → base catalog. |
 | `reveal.js` | Reveal-on-scroll helper. |
 | `components/button.js`, `field.js`, `card.js`, `overlay.js`, `feedback.js`, `data.js` | The `.ui-*` primitives. |
 | `components/composites.js` | Higher-level composites (e.g. the artifact panel). |

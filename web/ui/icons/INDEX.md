@@ -2,80 +2,189 @@
 
 # Shared icon catalog (`/ui/icons/`)
 
-Every name below resolves to `/ui/icons/<name>.svg`, or to a theme override at `/themes/<theme>/icons/<name>.svg` when that theme ships one. Use them from JS with `icon('group/name')` or `setIcon(el, 'group/name')`, or from HTML with `<span data-icon="group/name">`.
+Every name below resolves through the active icon set (`/ui/iconsets/<set>/`), a theme override (`/themes/<theme>/icons/`), then `/ui/icons/`. Use it from JS with `icon('group/name')` or `setIcon(el, 'group/name')`, or from HTML with `<span data-icon="group/name">`.
 
-Curated from the KDE **Slot-Beauty** icon themes ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) and regenerated with `scripts/kde-icons/convert.py`. All icons are `currentColor` except the coloured folder, which tints to the user's accent (see `README.md`).
+Curation: the KDE **Slot-Beauty** set ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) and the **Infinity** set ([rogts/infinity-icon-theme](https://github.com/rogts/infinity-icon-theme), GPL-3.0), regenerated with `scripts/kde-icons/convert.py`. Symbolic icons are `currentColor`; coloured artwork follows the user's accent when *Accent-tinted icons* is on.
 
 ## HUD (top bar status)
 
 Status chips in the top bar and their menus (Wi-Fi, Ethernet, Bluetooth, sound, battery). Symbolic, follow the theme accent.
 
-| Icon | Name | Source (KDE) |
+| Icon | Name | Source |
 |---|---|---|
-| ![](hud/wifi-0.svg) | `hud/wifi-0` | `panel/24/network-wireless-signal-none-symbolic.svg` |
-| ![](hud/wifi-1.svg) | `hud/wifi-1` | `panel/24/network-wireless-signal-weak-symbolic.svg` |
-| ![](hud/wifi-2.svg) | `hud/wifi-2` | `panel/24/network-wireless-signal-ok-symbolic.svg` |
-| ![](hud/wifi-3.svg) | `hud/wifi-3` | `panel/24/network-wireless-signal-good-symbolic.svg` |
-| ![](hud/wifi-4.svg) | `hud/wifi-4` | `panel/24/network-wireless-signal-excellent-symbolic.svg` |
-| ![](hud/wifi-off.svg) | `hud/wifi-off` | `panel/24/network-wireless-offline-symbolic.svg` |
-| ![](hud/wifi-blocked.svg) | `hud/wifi-blocked` | `status/symbolic/network-wireless-hardware-disabled-symbolic.svg` |
-| ![](hud/ethernet.svg) | `hud/ethernet` | `devices/symbolic/network-wired-symbolic.svg` |
-| ![](hud/bluetooth.svg) | `hud/bluetooth` | `status/symbolic/bluetooth-active-symbolic.svg` |
-| ![](hud/bluetooth-off.svg) | `hud/bluetooth-off` | `status/symbolic/bluetooth-disabled-symbolic.svg` |
-| ![](hud/volume-0.svg) | `hud/volume-0` | `status/symbolic/audio-volume-muted-symbolic.svg` |
-| ![](hud/volume-1.svg) | `hud/volume-1` | `status/symbolic/audio-volume-low-symbolic.svg` |
-| ![](hud/volume-2.svg) | `hud/volume-2` | `status/symbolic/audio-volume-medium-symbolic.svg` |
-| ![](hud/volume-3.svg) | `hud/volume-3` | `status/symbolic/audio-volume-high-symbolic.svg` |
-| ![](hud/volume-muted.svg) | `hud/volume-muted` | `status/symbolic/audio-volume-muted-symbolic.svg` |
-| ![](hud/headphones.svg) | `hud/headphones` | `status/symbolic/audio-volume-headphones-symbolic.svg` |
 | ![](hud/battery-0.svg) | `hud/battery-0` | `status/symbolic/battery-000-symbolic.svg` |
 | ![](hud/battery-1.svg) | `hud/battery-1` | `status/symbolic/battery-020-symbolic.svg` |
 | ![](hud/battery-2.svg) | `hud/battery-2` | `status/symbolic/battery-040-symbolic.svg` |
 | ![](hud/battery-3.svg) | `hud/battery-3` | `status/symbolic/battery-070-symbolic.svg` |
 | ![](hud/battery-4.svg) | `hud/battery-4` | `status/symbolic/battery-100-symbolic.svg` |
 | ![](hud/battery-charging.svg) | `hud/battery-charging` | `status/symbolic/battery-060-charging-symbolic.svg` |
+| ![](hud/bluetooth.svg) | `hud/bluetooth` | `status/symbolic/bluetooth-active-symbolic.svg` |
+| ![](hud/bluetooth-off.svg) | `hud/bluetooth-off` | `status/symbolic/bluetooth-disabled-symbolic.svg` |
 | ![](hud/clock.svg) | `hud/clock` | `actions/symbolic/clock-alt-symbolic.svg` |
+| ![](hud/ethernet.svg) | `hud/ethernet` | `devices/symbolic/network-wired-symbolic.svg` |
+| ![](hud/headphones.svg) | `hud/headphones` | `status/symbolic/audio-volume-headphones-symbolic.svg` |
+| ![](hud/volume-0.svg) | `hud/volume-0` | `status/symbolic/audio-volume-muted-symbolic.svg` |
+| ![](hud/volume-1.svg) | `hud/volume-1` | `status/symbolic/audio-volume-low-symbolic.svg` |
+| ![](hud/volume-2.svg) | `hud/volume-2` | `status/symbolic/audio-volume-medium-symbolic.svg` |
+| ![](hud/volume-3.svg) | `hud/volume-3` | `status/symbolic/audio-volume-high-symbolic.svg` |
+| ![](hud/volume-muted.svg) | `hud/volume-muted` | `status/symbolic/audio-volume-muted-symbolic.svg` |
+| ![](hud/wifi-0.svg) | `hud/wifi-0` | `panel/24/network-wireless-signal-none-symbolic.svg` |
+| ![](hud/wifi-1.svg) | `hud/wifi-1` | `panel/24/network-wireless-signal-weak-symbolic.svg` |
+| ![](hud/wifi-2.svg) | `hud/wifi-2` | `panel/24/network-wireless-signal-ok-symbolic.svg` |
+| ![](hud/wifi-3.svg) | `hud/wifi-3` | `panel/24/network-wireless-signal-good-symbolic.svg` |
+| ![](hud/wifi-4.svg) | `hud/wifi-4` | `panel/24/network-wireless-signal-excellent-symbolic.svg` |
+| ![](hud/wifi-blocked.svg) | `hud/wifi-blocked` | `status/symbolic/network-wireless-hardware-disabled-symbolic.svg` |
+| ![](hud/wifi-off.svg) | `hud/wifi-off` | `panel/24/network-wireless-offline-symbolic.svg` |
 
 ## UI / Files
 
-Core UI and the Files plugin: windows, folders, file types, navigation. Folders are the only coloured glyphs.
+Core UI and the Files plugin: windows, folders, file types, navigation. Folder and lock-file-type glyphs are coloured artwork.
 
-| Icon | Name | Source (KDE) |
+| Icon | Name | Source |
 |---|---|---|
-| ![](ui/settings.svg) | `ui/settings` | `actions/symbolic/settings-symbolic.svg` |
-| ![](ui/puzzle.svg) | `ui/puzzle` | `actions/symbolic/extension-symbolic.svg` |
-| ![](ui/folder.svg) | `ui/folder` | `places/scalable/folder.svg` *(coloured folder)* |
-| ![](ui/folder-open.svg) | `ui/folder-open` | `status/symbolic/folder-open-symbolic.svg` |
-| ![](ui/folder-plus.svg) | `ui/folder-plus` | `actions/symbolic/folder-new-symbolic.svg` |
-| ![](ui/file.svg) | `ui/file` | `mimetypes/symbolic/text-x-generic-symbolic.svg` |
-| ![](ui/doc.svg) | `ui/doc` | `mimetypes/symbolic/x-office-document-symbolic.svg` |
-| ![](ui/image.svg) | `ui/image` | `mimetypes/symbolic/image-x-generic-symbolic.svg` |
-| ![](ui/video.svg) | `ui/video` | `mimetypes/symbolic/video-x-generic-symbolic.svg` |
-| ![](ui/music.svg) | `ui/music` | `mimetypes/symbolic/audio-x-generic-symbolic.svg` |
 | ![](ui/archive.svg) | `ui/archive` | `mimetypes/symbolic/package-x-generic-symbolic.svg` |
-| ![](ui/forward.svg) | `ui/forward` | `emblems/scalable/emblem-symbolic-link.svg` |
-| ![](ui/home.svg) | `ui/home` | `places/symbolic/user-home-symbolic.svg` |
-| ![](ui/trash.svg) | `ui/trash` | `places/symbolic/user-trash-symbolic.svg` |
-| ![](ui/monitor.svg) | `ui/monitor` | `devices/symbolic/video-display-symbolic.svg` |
-| ![](ui/download.svg) | `ui/download` | `actions/symbolic/browser-download-symbolic.svg` |
-| ![](ui/search.svg) | `ui/search` | `actions/symbolic/search-symbolic.svg` |
-| ![](ui/list.svg) | `ui/list` | `actions/symbolic/view-list-symbolic.svg` |
-| ![](ui/grid.svg) | `ui/grid` | `actions/symbolic/view-grid-symbolic.svg` |
-| ![](ui/close.svg) | `ui/close` | `actions/symbolic/window-close-symbolic.svg` |
+| ![](ui/arranger.svg) | `ui/arranger` | `— in-house` |
+| ![](ui/arrow-left.svg) | `ui/arrow-left` | `— in-house` |
+| ![](ui/arrow-up.svg) | `ui/arrow-up` | `— in-house` |
+| ![](ui/blur.svg) | `ui/blur` | `— in-house` |
+| ![](ui/bold.svg) | `ui/bold` | `— in-house` |
+| ![](ui/brightness.svg) | `ui/brightness` | `— in-house` |
+| ![](ui/brush.svg) | `ui/brush` | `— in-house` |
+| ![](ui/burn.svg) | `ui/burn` | `— in-house` |
+| ![](ui/calc.svg) | `ui/calc` | `— in-house` |
+| ![](ui/calculator.svg) | `ui/calculator` | `— in-house` |
+| ![](ui/calendar.svg) | `ui/calendar` | `— in-house` |
+| ![](ui/channels.svg) | `ui/channels` | `— in-house` |
+| ![](ui/check.svg) | `ui/check` | `— in-house` |
+| ![](ui/chevron-down.svg) | `ui/chevron-down` | `— in-house` |
 | ![](ui/chevron-left.svg) | `ui/chevron-left` | `actions/symbolic/go-previous-symbolic.svg` |
 | ![](ui/chevron-right.svg) | `ui/chevron-right` | `actions/symbolic/go-next-symbolic.svg` |
 | ![](ui/chevron-up.svg) | `ui/chevron-up` | `actions/symbolic/go-up-symbolic.svg` |
+| ![](ui/clone-stamp.svg) | `ui/clone-stamp` | `— in-house` |
+| ![](ui/close.svg) | `ui/close` | `actions/symbolic/window-close-symbolic.svg` |
+| ![](ui/compress.svg) | `ui/compress` | `— in-house` |
+| ![](ui/contrast.svg) | `ui/contrast` | `— in-house` |
+| ![](ui/copy.svg) | `ui/copy` | `— in-house` |
+| ![](ui/crop.svg) | `ui/crop` | `— in-house` |
+| ![](ui/curves.svg) | `ui/curves` | `— in-house` |
+| ![](ui/deselect.svg) | `ui/deselect` | `— in-house` |
+| ![](ui/doc.svg) | `ui/doc` | `mimetypes/symbolic/x-office-document-symbolic.svg` |
+| ![](ui/dodge.svg) | `ui/dodge` | `— in-house` |
+| ![](ui/download.svg) | `ui/download` | `actions/symbolic/browser-download-symbolic.svg` |
+| ![](ui/droplet.svg) | `ui/droplet` | `— in-house` |
+| ![](ui/edge.svg) | `ui/edge` | `— in-house` |
+| ![](ui/emboss.svg) | `ui/emboss` | `— in-house` |
+| ![](ui/eraser.svg) | `ui/eraser` | `— in-house` |
+| ![](ui/expand.svg) | `ui/expand` | `— in-house` |
+| ![](ui/eye.svg) | `ui/eye` | `— in-house` |
+| ![](ui/eyedropper.svg) | `ui/eyedropper` | `— in-house` |
+| ![](ui/file.svg) | `ui/file` | `mimetypes/symbolic/text-x-generic-symbolic.svg` |
+| ![](ui/fill.svg) | `ui/fill` | `— in-house` |
+| ![](ui/filter.svg) | `ui/filter` | `— in-house` |
+| ![](ui/flip-h.svg) | `ui/flip-h` | `— in-house` |
+| ![](ui/flip-v.svg) | `ui/flip-v` | `— in-house` |
+| ![](ui/folder.svg) | `ui/folder` | `places/scalable/folder.svg` *(coloured)* |
+| ![](ui/folder-open.svg) | `ui/folder-open` | `status/symbolic/folder-open-symbolic.svg` |
+| ![](ui/folder-plus.svg) | `ui/folder-plus` | `actions/symbolic/folder-new-symbolic.svg` |
+| ![](ui/forward.svg) | `ui/forward` | `emblems/scalable/emblem-symbolic-link.svg` |
+| ![](ui/fx.svg) | `ui/fx` | `— in-house` |
+| ![](ui/gradient.svg) | `ui/gradient` | `— in-house` |
+| ![](ui/grayscale.svg) | `ui/grayscale` | `— in-house` |
+| ![](ui/grid.svg) | `ui/grid` | `actions/symbolic/view-grid-symbolic.svg` |
+| ![](ui/grip.svg) | `ui/grip` | `— in-house` |
+| ![](ui/hand.svg) | `ui/hand` | `— in-house` |
+| ![](ui/heading.svg) | `ui/heading` | `— in-house` |
+| ![](ui/history.svg) | `ui/history` | `— in-house` |
+| ![](ui/home.svg) | `ui/home` | `places/symbolic/user-home-symbolic.svg` |
+| ![](ui/image.svg) | `ui/image` | `mimetypes/symbolic/image-x-generic-symbolic.svg` |
+| ![](ui/incognito.svg) | `ui/incognito` | `— in-house` |
+| ![](ui/info.svg) | `ui/info` | `— in-house` |
+| ![](ui/inverse.svg) | `ui/inverse` | `— in-house` |
+| ![](ui/invert.svg) | `ui/invert` | `— in-house` |
+| ![](ui/italic.svg) | `ui/italic` | `— in-house` |
+| ![](ui/keyboard.svg) | `ui/keyboard` | `— in-house` |
+| ![](ui/lasso.svg) | `ui/lasso` | `— in-house` |
+| ![](ui/launcher.svg) | `ui/launcher` | `— in-house` |
+| ![](ui/layers.svg) | `ui/layers` | `— in-house` |
+| ![](ui/link.svg) | `ui/link` | `— in-house` |
+| ![](ui/list.svg) | `ui/list` | `actions/symbolic/view-list-symbolic.svg` |
+| ![](ui/lock.svg) | `ui/lock` | `— in-house` |
+| ![](ui/loop.svg) | `ui/loop` | `— in-house` |
+| ![](ui/magic-wand.svg) | `ui/magic-wand` | `— in-house` |
+| ![](ui/mail.svg) | `ui/mail` | `— in-house` |
+| ![](ui/marquee-ellipse.svg) | `ui/marquee-ellipse` | `— in-house` |
+| ![](ui/marquee-rect.svg) | `ui/marquee-rect` | `— in-house` |
+| ![](ui/mask.svg) | `ui/mask` | `— in-house` |
+| ![](ui/message-circle.svg) | `ui/message-circle` | `— in-house` |
+| ![](ui/metronome.svg) | `ui/metronome` | `— in-house` |
+| ![](ui/mic.svg) | `ui/mic` | `— in-house` |
+| ![](ui/mic-off.svg) | `ui/mic-off` | `— in-house` |
+| ![](ui/minus.svg) | `ui/minus` | `— in-house` |
+| ![](ui/monitor.svg) | `ui/monitor` | `devices/symbolic/video-display-symbolic.svg` |
+| ![](ui/more.svg) | `ui/more` | `— in-house` |
+| ![](ui/move.svg) | `ui/move` | `— in-house` |
+| ![](ui/music.svg) | `ui/music` | `mimetypes/symbolic/audio-x-generic-symbolic.svg` |
+| ![](ui/navigator.svg) | `ui/navigator` | `— in-house` |
+| ![](ui/network.svg) | `ui/network` | `— in-house` |
+| ![](ui/noise.svg) | `ui/noise` | `— in-house` |
+| ![](ui/paint-bucket.svg) | `ui/paint-bucket` | `— in-house` |
+| ![](ui/palette.svg) | `ui/palette` | `— in-house` |
+| ![](ui/paths.svg) | `ui/paths` | `— in-house` |
+| ![](ui/pause.svg) | `ui/pause` | `— in-house` |
+| ![](ui/pencil.svg) | `ui/pencil` | `— in-house` |
+| ![](ui/pin.svg) | `ui/pin` | `— in-house` |
+| ![](ui/play.svg) | `ui/play` | `— in-house` |
+| ![](ui/plus.svg) | `ui/plus` | `— in-house` |
 | ![](ui/power.svg) | `ui/power` | `actions/symbolic/system-shutdown-symbolic.svg` |
+| ![](ui/present.svg) | `ui/present` | `— in-house` |
+| ![](ui/properties.svg) | `ui/properties` | `— in-house` |
+| ![](ui/puzzle.svg) | `ui/puzzle` | `actions/symbolic/extension-symbolic.svg` |
+| ![](ui/redo.svg) | `ui/redo` | `— in-house` |
+| ![](ui/refresh.svg) | `ui/refresh` | `— in-house` |
+| ![](ui/reply.svg) | `ui/reply` | `— in-house` |
+| ![](ui/rotate-left.svg) | `ui/rotate-left` | `— in-house` |
+| ![](ui/rotate-right.svg) | `ui/rotate-right` | `— in-house` |
+| ![](ui/save.svg) | `ui/save` | `— in-house` |
+| ![](ui/scientific.svg) | `ui/scientific` | `— in-house` |
+| ![](ui/search.svg) | `ui/search` | `actions/symbolic/search-symbolic.svg` |
+| ![](ui/select-all.svg) | `ui/select-all` | `— in-house` |
+| ![](ui/send.svg) | `ui/send` | `— in-house` |
+| ![](ui/sepia.svg) | `ui/sepia` | `— in-house` |
+| ![](ui/settings.svg) | `ui/settings` | `actions/symbolic/settings-symbolic.svg` |
+| ![](ui/shape.svg) | `ui/shape` | `— in-house` |
+| ![](ui/sharpen.svg) | `ui/sharpen` | `— in-house` |
+| ![](ui/shield.svg) | `ui/shield` | `— in-house` |
+| ![](ui/solarize.svg) | `ui/solarize` | `— in-house` |
+| ![](ui/sponge.svg) | `ui/sponge` | `— in-house` |
+| ![](ui/star.svg) | `ui/star` | `— in-house` |
+| ![](ui/stop.svg) | `ui/stop` | `— in-house` |
+| ![](ui/stroke.svg) | `ui/stroke` | `— in-house` |
+| ![](ui/suspend.svg) | `ui/suspend` | `— in-house` |
+| ![](ui/swatches.svg) | `ui/swatches` | `— in-house` |
+| ![](ui/synthme.svg) | `ui/synthme` | `— in-house` |
+| ![](ui/threshold.svg) | `ui/threshold` | `— in-house` |
+| ![](ui/trash.svg) | `ui/trash` | `places/symbolic/user-trash-symbolic.svg` |
+| ![](ui/type.svg) | `ui/type` | `— in-house` |
+| ![](ui/underline.svg) | `ui/underline` | `— in-house` |
+| ![](ui/undo.svg) | `ui/undo` | `— in-house` |
+| ![](ui/upload.svg) | `ui/upload` | `— in-house` |
+| ![](ui/user.svg) | `ui/user` | `— in-house` |
+| ![](ui/video.svg) | `ui/video` | `mimetypes/symbolic/video-x-generic-symbolic.svg` |
+| ![](ui/volume.svg) | `ui/volume` | `— in-house` |
+| ![](ui/warning.svg) | `ui/warning` | `— in-house` |
+| ![](ui/youtube.svg) | `ui/youtube` | `— in-house` |
+| ![](ui/zoom-in.svg) | `ui/zoom-in` | `— in-house` |
+| ![](ui/zoom-out.svg) | `ui/zoom-out` | `— in-house` |
 
 ## Plugin / app icons
 
 Default icon for each bundled plugin (`pluginIconEl`), shown in the top-bar tray, the launcher, the Plugins window and the window/tile dot.
 
-| Icon | Name | Source (KDE) |
+| Icon | Name | Source |
 |---|---|---|
 | ![](apps/browser.svg) | `apps/browser` | `apps/symbolic/internet-web-browser-symbolic.svg` |
-| ![](apps/calculator.svg) | `apps/calculator` | `apps/symbolic/accessories-calculator-symbolic.svg` |
 | ![](apps/calc.svg) | `apps/calc` | `apps/symbolic/libreoffice-calc-symbolic.svg` |
+| ![](apps/calculator.svg) | `apps/calculator` | `apps/symbolic/accessories-calculator-symbolic.svg` |
 | ![](apps/calendar.svg) | `apps/calendar` | `apps/symbolic/office-calendar-symbolic.svg` |
 | ![](apps/files.svg) | `apps/files` | `apps/symbolic/system-file-manager-symbolic.svg` |
 | ![](apps/hello.svg) | `apps/hello` | `actions/symbolic/lucide-smile-plus-symbolic.svg` |
@@ -90,6 +199,43 @@ Default icon for each bundled plugin (`pluginIconEl`), shown in the top-bar tray
 | ![](apps/traveler.svg) | `apps/traveler` | `categories/symbolic/emoji-travel-symbolic.svg` |
 | ![](apps/word.svg) | `apps/word` | `apps/symbolic/libreoffice-writer-symbolic.svg` |
 | ![](apps/youtube.svg) | `apps/youtube` | `actions/symbolic/media-playback-start-symbolic.svg` |
+
+## Artifact icons
+
+Traveler artifact dock glyphs (in-house line art).
+
+| Icon | Name | Source |
+|---|---|---|
+| ![](artifacts/culture.svg) | `artifacts/culture` | `— in-house` |
+| ![](artifacts/default.svg) | `artifacts/default` | `— in-house` |
+| ![](artifacts/food.svg) | `artifacts/food` | `— in-house` |
+| ![](artifacts/monument.svg) | `artifacts/monument` | `— in-house` |
+| ![](artifacts/nightlife.svg) | `artifacts/nightlife` | `— in-house` |
+| ![](artifacts/plan.svg) | `artifacts/plan` | `— in-house` |
+| ![](artifacts/poi-list.svg) | `artifacts/poi-list` | `— in-house` |
+| ![](artifacts/route.svg) | `artifacts/route` | `— in-house` |
+| ![](artifacts/site.svg) | `artifacts/site` | `— in-house` |
+| ![](artifacts/tour.svg) | `artifacts/tour` | `— in-house` |
+
+## Insight icons
+
+Traveler insight card glyphs (weather, places; in-house line art).
+
+| Icon | Name | Source |
+|---|---|---|
+| ![](insights/event.svg) | `insights/event` | `— in-house` |
+| ![](insights/place-gallery.svg) | `insights/place-gallery` | `— in-house` |
+| ![](insights/place-landmark.svg) | `insights/place-landmark` | `— in-house` |
+| ![](insights/place-museum.svg) | `insights/place-museum` | `— in-house` |
+| ![](insights/place-theatre.svg) | `insights/place-theatre` | `— in-house` |
+| ![](insights/weather-cloud.svg) | `insights/weather-cloud` | `— in-house` |
+| ![](insights/weather-drizzle.svg) | `insights/weather-drizzle` | `— in-house` |
+| ![](insights/weather-fog.svg) | `insights/weather-fog` | `— in-house` |
+| ![](insights/weather-partly.svg) | `insights/weather-partly` | `— in-house` |
+| ![](insights/weather-rain.svg) | `insights/weather-rain` | `— in-house` |
+| ![](insights/weather-snow.svg) | `insights/weather-snow` | `— in-house` |
+| ![](insights/weather-storm.svg) | `insights/weather-storm` | `— in-house` |
+| ![](insights/weather-sun.svg) | `insights/weather-sun` | `— in-house` |
 
 ## Using an icon in a plugin
 

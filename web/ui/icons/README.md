@@ -1,133 +1,130 @@
-# Shiny shared icon library (`/ui/icons/`)
+# Shiny icon library (`/ui/icons/`)
 
-This folder is the **single source of truth for every icon in the app** — the
-HUD status chips, the core windows (Settings, Plugins), the desktop, and every
-plugin's identity icon. Plugin authors and the AI should pick names from here
-instead of drawing new SVG.
+This folder is the **base catalog** — every icon name in the app resolves here
+unless a selectable icon set or the active theme overrides it. That includes
+the HUD status chips, the core windows (Settings, Plugins), the desktop, the
+Files plugin, and every plugin's identity icon. Plugin authors and the AI
+should pick names from here instead of drawing new SVG.
 
 - **[`INDEX.md`](INDEX.md)** — the full generated catalog: every icon, its
-  name, and the KDE source it came from. Browse it to find a glyph.
-- Served statically at **`/ui/icons/<group>/<name>.svg`** (e.g.
-  `/ui/icons/apps/files.svg`).
+  name, and the source it came from.
+- Served statically at **`/ui/icons/<group>/<name>.svg`**.
 - Consumed through the UI library: `icon('apps/files')` /
   `setIcon(el, 'apps/files')` in JS, or
   `<span data-icon="apps/files" data-icon-size="18">` in HTML.
+
+## Icon sets
+
+The user picks a set in *Settings → Appearance → Icon set* (global, like the
+theme). Sets live in [`/ui/iconsets/`](../iconsets/) and only carry the glyphs
+they draw differently:
+
+| Set | Default | Look | Source |
+|---|---|---|---|
+| `infinity` / `infinity-dark` | **yes** (auto light/dark) | coloured folders, apps and file types | [rogts/infinity-icon-theme](https://github.com/rogts/infinity-icon-theme), GPL-3.0 |
+| base (`/ui/icons/`) | — | monochrome line icons | KDE **Slot-Beauty** ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) + in-house art |
 
 ## How lookups resolve
 
 `web/ui/icon.js` fetches, in order:
 
-1. `/themes/<active-theme>/icons/<name>.svg` — a **theme override**, if the
-   active theme ships one;
-2. `/ui/icons/<name>.svg` — the **shared icon** in this folder.
+1. `/ui/iconsets/<active-set>/<name>.svg` — when the set ships that name
+   (membership comes from the set's generated `index.json`);
+2. `/themes/<active-theme>/icons/<name>.svg` — a theme override, if any;
+3. `/ui/icons/<name>.svg` — the base icon.
 
-The result is inlined into a `<span class="ui-icon">` and inherits `color`
-from its host, so icons follow the theme and the user's accent automatically.
+The result is inlined into a `<span class="ui-icon">`. Symbolic icons use
+`currentColor` and inherit color from CSS; coloured artwork keeps its native
+paint, or follows the accent when **Accent-tinted icons** is on (see below).
 
 ## Groups
 
 | Group | Prefix | Use it for |
 |---|---|---|
-| `hud/` | `hud/…` | Top-bar status chips and their menus: Wi-Fi levels, Ethernet, Bluetooth, volume (`volume-0…3`, `volume-muted`, `headphones`), `clock`. |
-| `ui/` | `ui/…` | Core UI and the Files plugin: `settings`, `puzzle`, folders, file-type glyphs (`file`, `doc`, `image`, `video`, `music`, `archive`), navigation (`search`, `list`, `grid`, `close`, `chevron-*`), `power`, and more. |
-| `apps/` | `apps/…` | One **identity icon per bundled plugin** (`browser`, `files`, `terminal`, `radio`, `studio`, …). |
+| `hud/` | `hud/…` | Top-bar status chips and their menus: Wi-Fi levels, Ethernet, Bluetooth, volume (`volume-0…3`, `volume-muted`, `headphones`), battery, `clock`. |
+| `ui/` | `ui/…` | Core UI and Files: settings, puzzle, folders, file types (`file`, `doc`, `image`, `video`, `music`, `archive`), navigation, power, editor tools, and the well-known folder variants (`folder-documents`, `folder-music`, `folder-pictures`, `folder-videos`, `folder-downloads`, `folder-desktop`, `folder-public`, `folder-templates`). |
+| `apps/` | `apps/…` | One **identity icon per bundled plugin** — coloured in the Infinity set. |
+| `artifacts/` | `artifacts/…` | Traveler artifact dock glyphs (in-house). |
+| `insights/` | `insights/…` | Traveler insight card glyphs (in-house). |
 
-`ui/…` is the biggest group; the in-house line glyphs (brush, layers, zoom,
-etc.) live here too, alongside the curated KDE icons. **`INDEX.md` lists every
-name.**
+**`INDEX.md` lists every name.** If a name is missing from `INDEX.md`, it does
+not exist.
 
-## The Slot-Beauty KDE set
+## Accent tinting
 
-The HUD, core-window, file-type and `apps/` icons are curated from the KDE
-**Slot-Beauty** icon themes by **L4ki**
-([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes),
-**GPL-3.0** — the same license as this project).
+Coloured artwork (folders, plugin apps, file types) ships with a generated
+**tint palette** in its set's `index.json`: the artwork's colours, each with a
+luminance position. When *Settings → Appearance → Accent-tinted icons* is on,
+`tintSvg` in `web/ui/icon.js` remaps every palette colour onto an
+accent-derived dark→light ramp, preserving the shading. The option is off by
+default, so sets show their native colours; it repaints live on accent change.
+The Slot-Beauty folder's six blues are the fallback palette (`FOLDER_BLUES`).
 
-- **Raw sets** live in `assets/iconsets/` (not committed; ~180 MB):
-  `Slot-Beauty-Dark-Icons-V-3/` and the light `Slot-Beauty-Light-Icons/`.
-  A **much larger** pool of extra glyphs — thousands of app icons, every
-  mimetype, categories, emblems, places — lives there too. If you need a glyph
-  that is not in this folder yet, look there.
-- **Curated sources** (the specific SVGs we use, ~60 files) are committed under
-  `scripts/kde-icons/source/{dark,light}/`.
-- **The map** from KDE source → Shiny icon name is
-  `scripts/kde-icons/mapping.json`.
-- **The generator** is `scripts/kde-icons/convert.py`; see
-  `KDE_ICONS_PLAN.md`.
+## Adding one more icon
 
-### Adding one more icon from the set
-
-1. Find a glyph under `assets/iconsets/Slot-Beauty-Dark-Icons-V-3/` (prefer
-   `*/symbolic/*` for monochrome, `places/scalable` for the coloured folders).
-2. Add a line to the relevant group in `scripts/kde-icons/mapping.json`:
+1. Find a glyph in the raw KDE sets under `assets/iconsets/` (not committed).
+   For Infinity, the tree is mirrored by `fetch-infinity.py`; for Slot-Beauty,
+   pull the file into `scripts/kde-icons/source/{dark,light}/`.
+2. Add an entry to the right group in `scripts/kde-icons/mapping.json` (base)
+   or `scripts/kde-icons/mapping-infinity.json` (Infinity):
 
    ```json
-   { "name": "chart", "dst": "ui/chart.svg", "src": "actions/symbolic/office-chart-line-symbolic.svg" }
+   { "name": "chart", "dst": "ui/chart.svg", "src": "actions/16/office-chart-line.svg" }
    ```
 
-3. Run:
+3. Regenerate:
 
    ```bash
-   python3 scripts/kde-icons/convert.py --export-sources   # copy source into the repo
-   python3 scripts/kde-icons/convert.py                   # regenerate /ui/icons
-   python3 scripts/kde-icons/convert.py --index            # refresh INDEX.md
-   python3 scripts/kde-icons/convert.py --check            # sanity: 0 problems
+   python3 scripts/kde-icons/build_infinity_mapping.py   # only when candidates changed
+   python3 scripts/kde-icons/fetch-infinity.py            # only for new Infinity sources
+   python3 scripts/kde-icons/convert.py                    # base /ui/icons
+   python3 scripts/kde-icons/convert.py --set infinity
+   python3 scripts/kde-icons/convert.py --set infinity-dark
+   python3 scripts/kde-icons/convert.py --index            # catalog + index.json
+   python3 scripts/kde-icons/convert.py --set infinity --check
+   python3 scripts/kde-icons/convert.py --set infinity-dark --check
    ```
 
-4. The icon is now available as `ui/chart`.
+4. The icon is now available as `ui/chart` from every set that ships it; names a
+   set omits fall back to the theme/base automatically.
 
 ## Rules the converter enforces
 
-The KDE sources cannot be dropped in as-is; `convert.py` normalizes each one:
+- **Strips the embedded `<style>`** (KDE symbolic SVGs carry a global
+  `.ColorScheme-Text` rule that would leak when inlined).
+- **Rewrites fills/strokes to `currentColor`** for symbolic icons; coloured
+  entries (`"color": true`) keep their native fills — with rasters and blur
+  filters stripped (Infinity's coloured folders ship ~10 MB of embedded image
+  data; the vectors are all that survive, at ~7 KB).
+- **Derives a `viewBox`** from the source's own box.
+- **Emits `index.json`**: the names a set ships plus a tint palette per
+  coloured icon, and `INDEX.md` for the base catalog.
 
-- **Strips the embedded `<style>`.** Symbolic KDE SVGs carry
-  `.ColorScheme-Text { color:#… }`; inlined, that rule is *global* and would
-  recolor the icon to a fixed grey and leak onto other icons.
-- **Rewrites fills/strokes to `currentColor`** so the icon follows the theme
-  and accent. (The coloured **folder** is the sole exception — it keeps its own
-  fills and gradients; see below.)
-- **Derives a `viewBox`** from the source's own box. KDE grids are 16×16,
-  22×22 or 24×24; the app sizes icons by the container, so the box only needs
-  to be correct, not a fixed size.
-- **Drops the redundant raster + blur filters** that ship with the coloured
-  folder artwork (tens of KB of dead weight inline), keeping the vector paths.
-
-`--check` fails if any shipped icon drops its `viewBox`, leaks a `<style>` or
-`ColorScheme`, or (for symbolic icons) loses `currentColor`. The test
-`web/js/tests/kdeIcons.test.mjs` pins the same contract plus the plugin map.
-
-## The folder follows the accent
-
-`ui/folder` is the one icon that is **not** `currentColor`: it is real
-artwork, so that folders read as folders. To keep it on-brand it **tints to
-the user's accent**. `web/ui/icon.js` (`colorizeFolder`) remaps the artwork's
-six fixed blues onto an accent-derived light→dark ramp when the icon is
-painted, preserving the 3D shading. Because the tint is a function of the
-accent, live folder icons **re-render on `appearance:change` /
-`accent:change`**, so switching accent updates open Files windows with no
-reload.
-
-To recolor it, the artwork must keep its six blues (`#3a435f`, `#2c5ba0`,
-`#4077cb`, `#4b7fcd`, `#5294e2`, `#739bd9`) — `colorizeFolder` keys off them.
-If you swap in a different folder illustration, either keep those stops or
-update `FOLDER_BLUES` in `web/ui/icon.js` to match. `kdeIcons.test.mjs` fails
-if the folder ships a blue the colorizer does not know.
+`--check` fails if an icon drops its `viewBox`, leaks a `<style>` or
+`ColorScheme`, loses `currentColor` when it is symbolic, or ships a tint
+palette containing a colour that is not in the artwork. The test
+`web/js/tests/icons.test.mjs` pins the same contract across every set plus the
+plugin map and folder variants.
 
 ## Plugin identity icons
 
 Every plugin's identity icon is chosen in **`web/js/pluginIcon.js`**
 (`PLUGIN_ICONS`), which resolves in this order:
 
-1. the mapped shared icon (`apps/<name>`, from this folder),
+1. the mapped icon of the active set (`apps/<name>` — coloured in Infinity),
 2. the plugin's own `web/icon.svg`,
 3. the core-window icon (for Settings/Plugins),
 4. `ui/puzzle`.
 
-So a bundled plugin gets a curated `apps/` glyph; a third-party plugin that
-ships no icon falls back to `ui/puzzle` unless/until a mapping is added.
+Bundled plugins all have a curated `apps/` glyph and no longer need to ship
+their own. A third-party plugin that ships no icon falls back to `ui/puzzle`
+unless/until a mapping is added.
 
 ## License & attribution
 
-Icons curated from Slot-Beauty are **GPL-3.0**, © L4ki. The upstream license is
-vendored at `assets/iconsets/LICENSE-Slot-Plasma-Themes`, and the origin is
-noted here and in `web/themes/README.md`.
+Both curated sets are **GPL-3.0** — the same license as this project:
+
+- Slot-Beauty, © L4ki — license vendored at
+  `assets/iconsets/LICENSE-Slot-Plasma-Themes`.
+- Infinity (Breeze-derived), © the Infinity/KDE authors — license vendored at
+  `assets/iconsets/Infinity/LICENSE`.

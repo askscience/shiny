@@ -2,23 +2,22 @@
  * pluginIcon.js — per-plugin icons.
  *
  * Resolution order for a plugin's icon:
- *   1. the curated KDE app icon mapped to this plugin (`PLUGIN_ICONS`),
+ *   1. the curated icon mapped to this plugin in the active icon set
+ *      (`PLUGIN_ICONS` → e.g. `apps/files`; Infinity ships these coloured),
  *   2. the plugin's own `web/icon.svg` (served at `/plugins/<name>/icon.svg`),
  *   3. a core-window theme icon, for built-in windows,
  *   4. the caller's `fallback` (`ui/puzzle` by default).
  *
- * The mapped and fallback icons come from the unified UI library
- * (`/ui/icons/`), so they follow the active theme and the user's accent.
- * The plugin's own SVG is inlined the same way.
+ * Icons come through the unified resolver (`/ui/index.js`), so they follow the
+ * active set, the theme, the accent tint and any theme overrides.
  */
-import { setIcon, loadIconSvg } from '../ui/index.js';
+import { setIcon, loadIconSvg, decorateSvg } from '../ui/index.js';
 import { isCoreWindow, coreWindowIcon } from './coreWindows.js';
 
 /**
- * Plugin name → shared UI icon. Each name points at a curated icon under
- * `web/ui/icons/apps/` (generated from the KDE Slot-Beauty set by
- * `scripts/kde-icons/convert.py`). A plugin missing from this map falls back
- * to its own `web/icon.svg`, then to `ui/puzzle`.
+ * Plugin name → shared UI icon. Each name points at a curated icon under the
+ * active set's `apps/` group (coloured in the Infinity set). A plugin missing
+ * from this map falls back to its own `web/icon.svg`, then to `ui/puzzle`.
  */
 export const PLUGIN_ICONS = {
   browser: 'apps/browser',
@@ -69,19 +68,34 @@ export function loadPluginIconSvg(name) {
   return p;
 }
 
-/** The themed SVG text for a plugin: mapped KDE icon, else its own icon. */
+/** The themed SVG text for a plugin: mapped set icon, else its own icon. */
 async function loadSvg(name) {
   const mapped = PLUGIN_ICONS[name];
   if (mapped) {
     const svg = safeSvg(await loadIconSvg(mapped));
-    if (svg) return svg;
+    if (svg) return { svg, iconName: mapped };
   }
-  return loadPluginIconSvg(name);
+  return { svg: await loadPluginIconSvg(name), iconName: null };
+}
+
+/** (Re)render one plugin-icon span from the current set/tint. */
+function paint(span, name) {
+  const size = Number(span.dataset.pluginSize) || 16;
+  const fallback = span.dataset.pluginFallback || 'ui/puzzle';
+  const label = span.getAttribute('aria-label');
+  loadSvg(name).then(async ({ svg, iconName }) => {
+    if (svg) {
+      span.innerHTML = await decorateSvg(svg, iconName);
+    } else {
+      void setIcon(span, isCoreWindow(name) ? coreWindowIcon(name) : fallback,
+        { size, label });
+    }
+  });
 }
 
 /**
  * Create a `<span class="ui-icon">` filled with the plugin's icon. Uses the
- * mapped KDE icon when one exists, else the plugin's own `web/icon.svg`, else
+ * mapped set icon when one exists, else the plugin's own `web/icon.svg`, else
  * `fallback` (a theme icon path) — or the core-window icon for built-ins.
  */
 export function pluginIconEl(name, { size = 16, fallback = 'ui/puzzle', label = null } = {}) {
@@ -98,9 +112,21 @@ export function pluginIconEl(name, { size = 16, fallback = 'ui/puzzle', label = 
     span.setAttribute('aria-hidden', 'true');
   }
 
-  loadSvg(name).then((svg) => {
-    if (svg) span.innerHTML = svg;
-    else void setIcon(span, isCoreWindow(name) ? coreWindowIcon(name) : fallback, { size, label });
-  });
+  span.dataset.pluginName = name;
+  span.dataset.pluginSize = String(size);
+  span.dataset.pluginFallback = fallback;
+  paint(span, name);
   return span;
+}
+
+/** Repaint every live plugin icon (icon-set or tint change). */
+export function refreshPluginIcons() {
+  document.querySelectorAll('.ui-icon[data-plugin-name]').forEach((span) => {
+    paint(span, span.dataset.pluginName);
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('iconset:change', () => refreshPluginIcons());
+  window.addEventListener('tint:change', () => refreshPluginIcons());
 }

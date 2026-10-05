@@ -1,8 +1,8 @@
 # Themes & icons
 
 Two systems keep plugin output visually consistent with the user's theme and
-accent: the **theme layer** (`web/themes/`) and the **shared icon library**
-(`web/ui/icons/`).
+accent: the **theme layer** (`web/themes/`), the **selectable icon sets**
+(`web/ui/iconsets/`) and the **base icon catalog** (`web/ui/icons/`).
 
 ---
 
@@ -50,20 +50,45 @@ colours and the voice bar glow. Settings → Appearance exposes them.
 
 ---
 
-## The shared icon library
+## The icon library
 
-There is **one** icon library at [`web/ui/icons/`](../../web/ui/icons). The HUD,
-the core windows, the desktop, Files and every plugin's identity glyph come from
-it. Browse the catalog in
+There is **one** icon library at [`web/ui/icons/`](../../web/ui/icons): the
+base catalog every name resolves to. On top of it sit **selectable icon
+sets** (`web/ui/iconsets/<set>/`), and a theme may still override individual
+glyphs. The HUD, the core windows, the desktop, Files and every plugin's
+identity glyph come from this chain. Browse the catalog in
 [`web/ui/icons/INDEX.md`](../../web/ui/icons/INDEX.md) and the prose guide in
 [`web/ui/icons/README.md`](../../web/ui/icons/README.md).
+
+### Icon sets
+
+The user picks the set in *Settings → Appearance → Icon set* (stored globally,
+like the theme):
+
+- **Infinity** (default, coloured) — curated from the GPL-3.0
+  [Infinity icon theme](https://github.com/rogts/infinity-icon-theme), a
+  Breeze-derived KDE theme. Light/dark artwork follows the active theme's mode
+  automatically.
+- **Slot-Beauty** (monochrome) — the KDE
+  [Slot-Beauty](https://github.com/L4ki/Slot-Plasma-Themes) line set the app
+  was originally built on; this is the base `/ui/icons/` catalog.
+
+Each set ships an `index.json` listing the names it provides plus a **tint
+palette** for every coloured glyph. *Settings → Appearance → Accent-tinted
+icons* (off by default, so sets show their native colours) remaps those
+palettes onto an accent-derived ramp, so folders and coloured icons follow the
+accent live.
 
 ### Resolution
 
 [`web/ui/icon.js`](../../web/ui/icon.js) resolves an icon **by name**:
 
-1. the active theme's override at `/themes/<theme>/icons/<name>.svg`, else
-2. the shared icon at `/ui/icons/<name>.svg`.
+1. the active icon set at `/ui/iconsets/<set>/<name>.svg`, when it ships one,
+2. the active theme's override at `/themes/<theme>/icons/<name>.svg`, else
+3. the shared base icon at `/ui/icons/<name>.svg`.
+
+Sets and themes therefore only carry the glyphs they draw differently; the
+base catalog guarantees every name always resolves.
 
 Use it in JS:
 
@@ -77,36 +102,42 @@ await setIcon(el, 'ui/save', { size: 16 });
 …or in static HTML: `<span data-icon="ui/search" data-icon-size="16">` (hydrated
 at boot).
 
-**Always reuse a name from the catalog** instead of drawing new SVG: the icons
-are `currentColor` and follow the theme and accent for free.
+**Always reuse a name from the catalog** instead of drawing new SVG: symbolic
+icons are `currentColor` and follow the theme for free; coloured artwork only
+needs the tint option.
 
 ### Namespaces
 
-- `ui/*` — core UI (`ui/settings`, `ui/puzzle`, `ui/close`, `ui/chevron-*`,
-  `ui/search`, `ui/list`, `ui/grid`, `ui/power`, `ui/folder`, `ui/file`,
-  `ui/doc`, `ui/image`, `ui/video`, `ui/music`, `ui/archive`, `ui/download`,
+- `ui/*` — core UI and the Files plugin (`ui/settings`, `ui/puzzle`,
+  `ui/close`, `ui/chevron-*`, `ui/search`, `ui/list`, `ui/grid`, `ui/power`,
+  `ui/folder`, `ui/folder-music`, `ui/folder-documents`, `ui/file`, `ui/doc`,
+  `ui/image`, `ui/video`, `ui/music`, `ui/archive`, `ui/download`,
   `ui/home`, `ui/trash`, `ui/monitor`, …).
 - `hud/*` — top-bar chips (`hud/wifi-0…4`, `hud/ethernet`, `hud/bluetooth`,
   `hud/volume-*`, `hud/battery-0…4`, `hud/battery-charging`, `hud/clock`).
-- `apps/<plugin>` — plugin identity glyphs.
+- `apps/<plugin>` — plugin identity glyphs (coloured in the Infinity set).
 - `artifacts/*` — artifact dock icons resolved through `THEME_ICONS`.
+- `insights/*` — traveler insight cards.
 
-### KDE Slot-Beauty curation
+### Special folders
 
-The HUD, core-window, file-type and `apps/` glyphs are curated from the KDE
-**Slot-Beauty** icon set (GPL-3.0). The raw set (thousands of extra app,
-mimetype and category glyphs) lives in `assets/iconsets/` (not committed). The
-curator is [`scripts/kde-icons/`](../../scripts/kde-icons):
+The Files plugin gives well-known folders their own coloured glyph:
+`ui/folder-documents`, `folder-downloads`, `folder-desktop`, `folder-music`,
+`folder-pictures`, `folder-public`, `folder-templates`, `folder-videos`.
+Unknown folders use the generic `ui/folder`.
 
-- `convert.py` — sanitize + normalize SVGs to `currentColor`.
-- `mapping.json` — KDE source name → Shiny name.
-- `source/{dark,light}` — the ~60 committed curated SVGs.
+### Curation
+
+The base catalog and the Infinity set are curated by
+[`scripts/kde-icons/`](../../scripts/kde-icons):
+
+- `convert.py` — sanitize + normalize SVGs (`--set base|infinity|infinity-dark`)
+  and emit each set's `index.json` / `INDEX.md`.
+- `mapping.json` / `mapping-infinity.json` — source name → Shiny name.
+- `build_infinity_mapping.py` + `fetch-infinity.py` — derive and download the
+  Infinity sources into `assets/iconsets/` (git-ignored).
 
 To pull in one more icon, follow `web/ui/icons/README.md`.
-
-**Folders are the one coloured exception**: the `ui/folder` glyph is real
-artwork (not `currentColor`) and follows the accent/theme mode, so it is shipped
-in dark and light variants.
 
 ---
 
@@ -116,7 +147,7 @@ A plugin's identity icon is resolved by
 [`web/js/pluginIcon.js`](../../web/js/pluginIcon.js) in this order:
 
 1. the shared library icon mapped to it (`PLUGIN_ICONS` → an `apps/<name>`
-   glyph),
+   glyph **of the active set**, coloured in the Infinity set),
 2. the plugin's own `web/icon.svg` (served at `/plugins/<name>/icon.svg`),
 3. the core-window icon (Settings → `ui/settings`, Plugins → `ui/puzzle`),
 4. the fallback `ui/puzzle`.
@@ -130,6 +161,7 @@ single-colour and script-free — core inlines the file and rejects `<script>`,
 
 The resolved icon appears in the **top-bar plugin tray** (grouped by manifest
 `category`), the **launcher**, the window/tile dot, and the **Plugins window**.
+It repaints live when the icon set or accent-tint option changes.
 
 ---
 

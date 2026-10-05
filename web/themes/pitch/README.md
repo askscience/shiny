@@ -20,21 +20,15 @@ pitch/
                   the 7,700-line tiles.css), so it has the last word.
 ```
 
-## Icons — read this before shipping a new theme
+## Icons
 
-Pitch ships a **complete** icon set (128 files: 15 `hud/`, 90 `ui/`, plus
-`artifacts/` and `insights/`), byte-identical to the other themes.
-
-That is deliberate, and it is not what `/themes/README.md` describes. The docs
-say a theme's `icons/` is an *override* set — ship only what you draw
-differently and "anything it omits falls back to the shared icon" at
-`/ui/icons/`. `ui/icon.js` implements exactly that fallback. **But the shared
-set only holds 45 icons** (2 hud + 43 ui); the other 60 live exclusively inside
-the per-theme folders. A new theme that ships an empty `icons/` therefore loses
-60 glyphs and renders them as grey `ui-icon--missing` squares.
-
-The real fix is to populate `/ui/icons/` so the documented fallback is true —
-that is a change to the UI library, not to a theme, so it was left alone.
+Pitch ships **no** icon overrides. The 60 glyphs it used to carry (check,
+chevron-down, play, pause, save, …) now live in the shared base catalog
+`/ui/icons/`, so they are available to every theme and icon set; the resolver
+(`set → theme override → base`) was completed in the same pass. A future theme
+only needs to ship the icons it genuinely draws differently, and anything it
+omits falls back to the active icon set and then `/ui/icons/` — no more
+`ui-icon--missing` squares. See `web/themes/README.md`.
 
 ## How it is wired in
 

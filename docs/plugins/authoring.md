@@ -238,6 +238,9 @@ Rules:
   `web/css/tiles.css` keyed by your class prefix.
 - **Icons**: use names from [`web/ui/icons/INDEX.md`](../../web/ui/icons/INDEX.md);
   never hand-draw SVG inside the window.
+- **Identity icons** resolve through the active icon set (`apps/<name>` mapped
+  in `web/js/pluginIcon.js`). Ship `web/icon.svg` only if your plugin is not
+  mapped — bundled plugins no longer need to carry one.
 - **A window must not cache server-owned addresses** (random ports, signed
   URLs): return the address with the payload and re-read it.
 - Ship `web/icon.svg` for the tray/launcher, or map to an existing

@@ -9,13 +9,17 @@
 
 export { initThemeLoader, listThemes, setTheme, getActiveTheme, getThemeManifest, themeMode, themeUrl } from './theme-loader.js';
 export {
+  initIconLoader, iconsetOptions, getIconsetChoice, getActiveIconset,
+  setIconset, loadSetIndex, setHas, paletteFor, tintEnabled, setTint,
+} from './iconset-loader.js';
+export {
   initAppearance, refreshAppearance, applyAppearance,
   getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
   getFont, setFont, applyFont, fontStackFor, FONT_THEME,
   hexToRgb, rgba, contrastFor, cssVar,
 } from './appearance.js';
-export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg, refreshFolderIcons, colorizeFolder } from './icon.js';
+export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg, refreshIcons, refreshFolderIcons, colorizeFolder, tintSvg, decorateSvg } from './icon.js';
 export { reveal } from './reveal.js';
 
 export { button, iconButton } from './components/button.js';

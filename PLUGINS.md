@@ -863,9 +863,10 @@ Before publishing a plugin:
 | `src/api/agent.rs` | System prompt = `web/skills/core-assistant.md` + active plugins' skills/persona. |
 | `src/services/agent_tools.rs` | `execute_action`: registry first; core built-in = `web_search` only; traveler verbs refuse cleanly without the plugin. |
 | `data/plugins/install.log` | Audit trail — written on every install/uninstall/error. |
-| `web/ui/icons/` | The **shared icon library**: every glyph the app and plugins resolve by name (`icon('ui/save')`, `<span data-icon="apps/files">`). Catalog in `web/ui/icons/INDEX.md`; prose in `web/ui/icons/README.md`. A theme may override any name in `web/themes/<theme>/icons/`. The `ui/folder` glyph is coloured artwork that tints to the user's accent. |
-| `scripts/kde-icons/` | Curator for the KDE **Slot-Beauty** icons: `convert.py` (sanitize + normalize), `mapping.json` (KDE source → Shiny name), and `source/{dark,light}` (the ~60 curated SVGs, committed). The raw sets live in `assets/iconsets/` (GPL-3.0, not committed). |
-| `assets/iconsets/` | Raw Slot-Beauty KDE icon sets — a large pool of extra app, mimetype, category, emblem and place glyphs. Source for new icons; see `web/ui/icons/README.md`. |
+| `web/ui/icons/` | The **base icon catalog**: every glyph the app and plugins resolve by name (`icon('ui/save')`, `<span data-icon="apps/files">`). Catalog in `web/ui/icons/INDEX.md`; prose in `web/ui/icons/README.md`. Resolution is active icon set → theme override (`web/themes/<theme>/icons/`) → this base. |
+| `web/ui/iconsets/` | Selectable sets (Infinity default, auto light/dark; Slot-Beauty is the base). Each set ships `index.json` (names + tint palettes) and only the glyphs it draws differently. |
+| `scripts/kde-icons/` | Curator for both sets: `convert.py --set base\|infinity\|infinity-dark` (sanitize + normalize + index), `mapping.json` / `mapping-infinity.json`, `fetch-infinity.py`, and `source/{dark,light}` (the committed Slot-Beauty curated SVGs). Raw sets live in `assets/iconsets/` (GPL-3.0, not committed). |
+| `assets/iconsets/` | Raw GPL-3.0 icon sets — Slot-Beauty and Infinity (Breeze-derived) — a large pool of extra app, mimetype, category, emblem and place glyphs. Source for new icons; see `web/ui/icons/README.md`. |
 
 ---
 
@@ -885,7 +886,7 @@ dock and panels, leaving the voice/text chat over the voice bar.
 |---|---|---|
 | Component library | `web/ui/` | Theme-agnostic engine: `theme-loader`, `appearance` (accent/gradient), `icon`, `reveal`, and all `.ui-*` components (`button`, `field`, `card`, `overlay`, `feedback`, `data`, `composites`). |
 | Shared icons | `web/ui/icons/` | **The one icon library** — HUD, core windows, Files and every plugin's identity glyph. Catalog in `web/ui/icons/INDEX.md`, prose in `web/ui/icons/README.md`. |
-| Themes | `web/themes/<name>/` | Skins: `theme.json` manifest, `tokens.css`, `components.css`, and `icons/` (SVG, `currentColor`) as an **override set** over the shared library. Installed themes are listed in `web/themes/themes.json`. See `web/themes/README.md`. |
+| Themes | `web/themes/<name>/` | Skins: `theme.json` manifest, `tokens.css`, `components.css`, and `icons/` (SVG, `currentColor`) as an **override set** over the active icon set and base catalog. Installed themes are listed in `web/themes/themes.json`. See `web/themes/README.md`. |
 
 ### Icons
 
@@ -908,19 +909,22 @@ In static HTML, `<span data-icon="ui/search" data-icon-size="16">` is hydrated
 at boot.
 
 **Always reuse a name from the catalog** (`web/ui/icons/INDEX.md`) instead of
-drawing new SVG — the icons are `currentColor` and follow the theme and the
-user's accent for free. The names cover core UI (`ui/settings`, `ui/puzzle`,
-`ui/close`, `ui/chevron-*`, `ui/search`, `ui/list`, `ui/grid`, `ui/power`, …),
-the Files UI (`ui/folder`, `ui/file`, `ui/doc`, `ui/image`, `ui/video`,
-`ui/music`, `ui/archive`, `ui/download`, `ui/home`, `ui/trash`, `ui/monitor`),
-the HUD (`hud/wifi-0…4`, `hud/ethernet`, `hud/bluetooth`, `hud/volume-*`,
-`hud/battery-0…4`, `hud/battery-charging`, `hud/clock`) and the app icons
-(`apps/<plugin>`).
+drawing new SVG — symbolic icons are `currentColor` and follow the theme for
+free; coloured artwork (folders, plugin apps, file types) follows the accent
+when *Settings → Appearance → Accent-tinted icons* is on. The names cover core
+UI (`ui/settings`, `ui/puzzle`, `ui/close`, `ui/chevron-*`, `ui/search`,
+`ui/list`, `ui/grid`, `ui/power`, …), the Files UI (`ui/folder` plus the
+well-known variants `ui/folder-documents`, `ui/folder-music`, …; `ui/file`,
+`ui/doc`, `ui/image`, `ui/video`, `ui/music`, `ui/archive`, `ui/download`,
+`ui/home`, `ui/trash`, `ui/monitor`), the HUD (`hud/wifi-0…4`,
+`hud/ethernet`, `hud/bluetooth`, `hud/volume-*`, `hud/battery-0…4`,
+`hud/battery-charging`, `hud/clock`) and the app icons (`apps/<plugin>`).
 
-The HUD, core-window, file-type and `apps/` glyphs are curated from the KDE
-**Slot-Beauty** icon set (GPL-3.0) — the full raw set (thousands of extra app,
-mimetype and category glyphs) lives in `assets/iconsets/`, and
-`web/ui/icons/README.md` explains how to pull one more into the library.
+The icon sets are curated from GPL-3.0 KDE sources: **Infinity**
+(rogts/infinity-icon-theme, the default) and **Slot-Beauty**
+(L4ki/Slot-Plasma-Themes, the base catalog), with in-house line art mixed in.
+The raw sets live in `assets/iconsets/`, and `web/ui/icons/README.md` explains
+how to pull one more into a set.
 
 How plugin content reaches the eye:
 

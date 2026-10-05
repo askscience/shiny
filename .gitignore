@@ -28,9 +28,10 @@ __pycache__/
 vosk-browser-*.tgz
 backpack/
 
-# Raw third-party icon sets (GPL-3.0, Slot-Plasma-Themes by L4ki). The full
-# folders are ~180 MB; only the curated source SVGs under scripts/kde-icons/
-# are committed. See KDE_ICONS_PLAN.md.
+# Raw third-party icon sets (GPL-3.0): Slot-Plasma-Themes by L4ki and the
+# Infinity icon theme by rogts. The full folders are hundreds of MB; only the
+# curated sources and the generated sets under web/ui/icons*/ are committed.
+# See ICONSETS_PLAN.md and web/ui/icons/README.md.
 /assets/iconsets/
 
 # Local app bundles produced by scripts/bundle-app.sh (machine-specific,

@@ -10,7 +10,7 @@ import { prepareVoice, startListening, cancelListening, isListening, releaseWake
 import { sendToAgent, sendToAgentCompose, stopActiveTurn, isTurnActive } from './agent.js';
 import { startGpsTracking, stopGpsTracking } from './gps.js';
 import {
-  initThemeLoader, initAppearance, refreshAppearance,
+  initThemeLoader, initIconLoader, initAppearance, refreshAppearance,
   wireToastEvents, wireNotificationEvents, toast, hydrateIcons, reveal,
 } from '../ui/index.js';
 import { refreshActivePlugins } from './activePlugins.js';
@@ -58,6 +58,7 @@ function cancelVoiceInput() {
 async function boot() {
   // Theme + appearance first: everything renders through these tokens.
   await initThemeLoader();
+  initIconLoader(); // resolve the stored icon set against the theme's mode
   initAppearance({ getScope: () => getTraveler()?.id });
   initBackground({ getScope: () => getTraveler()?.id });
   wireToastEvents();

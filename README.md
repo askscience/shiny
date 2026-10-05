@@ -40,8 +40,9 @@ Browser (web/)                              shiny (core binary)
 - Top HUD: clock + weather, plugin tray grouped by category, host chips
   (sound, network, Bluetooth, battery), workspace tabs, power menu, Settings /
   Plugins / Chats.
-- Voice bar gestures (tap / long-press wake / double-tap to type), barge-in, and
-  a shared icon library with five bundled themes.
+- Voice bar gestures (tap / long-press wake / double-tap to type), barge-in, a
+  selectable icon library (Infinity coloured set by default, auto light/dark)
+  and five bundled themes.
 
 **Host integration (Linux)**
 - PipeWire sound panel, NetworkManager Wi-Fi, BlueZ Bluetooth, sysfs battery,

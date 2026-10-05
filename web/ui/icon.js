@@ -1,13 +1,18 @@
 /**
- * icon — inline SVG icons from the unified UI library, with per-theme overrides.
+ * icon — inline SVG icons from the unified UI library, with per-set and
+ * per-theme overrides.
  *
- * A theme may restyle an icon at /themes/<theme>/icons/<group>/<name>.svg;
- * when it does not ship one, the shared icon at /ui/icons/<group>/<name>.svg is
- * used. New icons therefore belong to `/ui/icons/` (the UI library), and a
- * theme only carries the ones it wants drawn differently. Icons use
- * stroke/fill="currentColor", so they inherit color from CSS and follow the
- * accent automatically. Icons are fetched once and cached; UI assets are
- * trusted (shipped with the app), so inline injection is safe.
+ * Resolution order for a name:
+ *   1. the active icon set at /ui/iconsets/<set>/<name>.svg (if it ships it),
+ *   2. the active theme's override at /themes/<theme>/icons/<name>.svg,
+ *   3. the shared/base icon at /ui/icons/<name>.svg.
+ *
+ * Sets and themes both only need to carry the glyphs they draw differently.
+ * Symbolic icons use stroke/fill="currentColor" and inherit color from CSS.
+ * Coloured artwork can follow the user's accent when "Accent-tinted icons" is
+ * on (Settings → Appearance): each icon's generated palette (index.json) is
+ * remapped onto an accent-derived ramp, the same trick the folder has always
+ * used. With the option off, coloured icons keep their native paint.
  *
  * Usage:
  *   const el = icon('ui/close', { size: 16 });
@@ -15,17 +20,33 @@
  */
 
 import { getActiveTheme, themeUrl } from './theme-loader.js';
+import { getActiveIconset, setHas, paletteFor, tintEnabled } from './iconset-loader.js';
 import { cssVar, hexToRgb } from './appearance.js';
 
-const cache = new Map(); // `${theme}:${name}` -> Promise<string|null>
+const cache = new Map(); // `${set}:${theme}:${name}` -> Promise<string|null>
 
 /**
- * The coloured folder glyph is the one icon that ships real paint instead of
- * `currentColor`. Its KDE artwork is a fixed blue ramp; to let it follow the
- * user's accent we remap those six blues onto an accent-derived ramp at load
- * time. Each entry is [source hex, position] where position 0 = near-black
- * (deep shadow) and 1 = near-white (top-lit highlight); the accent is scaled
- * between `SHADE_FLOOR` and `SHADE_CEIL` at that position.
+ * Names that fall back to another icon when neither the active set nor a theme
+ * ships them. The well-known folder variants only exist in the Infinity set;
+ * under Slot-Beauty they resolve to the generic folder (and light themes can
+ * still override that).
+ */
+const ALIASES = {
+  'ui/folder-desktop': 'ui/folder',
+  'ui/folder-documents': 'ui/folder',
+  'ui/folder-downloads': 'ui/folder',
+  'ui/folder-music': 'ui/folder',
+  'ui/folder-pictures': 'ui/folder',
+  'ui/folder-public': 'ui/folder',
+  'ui/folder-templates': 'ui/folder',
+  'ui/folder-videos': 'ui/folder',
+};
+
+/**
+ * Fallback palette for the Slot-Beauty folder artwork, used when the base
+ * index ships no palette. Each entry is [source hex, position] where position
+ * 0 = near-black (deep shadow) and 1 = near-white (top-lit highlight); the
+ * accent is scaled between `SHADE_FLOOR` and `SHADE_CEIL` at that position.
  */
 const FOLDER_BLUES = [
   ['#3a435f', 0.10], // body shadow
@@ -45,17 +66,26 @@ function shadeHex(hex, t) {
   return `#${[r, g, b].map((c) => Math.round(mix(c)).toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** Recolor a folder SVG's blues to the current accent (no-op for other icons). */
-export function colorizeFolder(svg) {
-  if (!svg || !svg.includes('#5294e2')) return svg; // not the folder artwork
+/**
+ * Remap every colour of a palette onto an accent-derived light→dark ramp.
+ * Works on solid fills and gradient stops alike (plain text replacement), so
+ * the artwork keeps its shading while following the accent.
+ */
+export function tintSvg(svg, palette) {
+  if (!svg || !Array.isArray(palette) || !palette.length) return svg;
   const accent = (cssVar('--accent') || '#5294e2').trim();
   let out = svg;
-  for (const [src, pos] of FOLDER_BLUES) {
-    const t = SHADE_FLOOR + (SHADE_CEIL - SHADE_FLOOR) * pos;
+  for (const [src, pos] of palette) {
+    const t = SHADE_FLOOR + (SHADE_CEIL - SHADE_FLOOR) * Number(pos);
     const dest = shadeHex(accent, t);
     out = out.replaceAll(src, dest).replaceAll(src.toUpperCase(), dest);
   }
   return out;
+}
+
+/** Back-compat: the Slot-Beauty folder palette as a tint (see FOLDER_BLUES). */
+export function colorizeFolder(svg) {
+  return tintSvg(svg, FOLDER_BLUES);
 }
 
 async function fetchSvg(url) {
@@ -68,17 +98,33 @@ async function fetchSvg(url) {
 }
 
 function loadSvg(name) {
+  const set = getActiveIconset() || 'base';
   const theme = getActiveTheme();
-  const key = `${theme}:${name}`;
+  const key = `${set}:${theme}:${name}`;
   if (!cache.has(key)) {
-    // Theme override first, then the unified UI icon set.
     cache.set(
       key,
-      (async () => (await fetchSvg(themeUrl(`icons/${name}.svg`)))
-        || (await fetchSvg(`/ui/icons/${name}.svg`)))(),
+      (async () => {
+        if (set !== 'base' && await setHas(name)) {
+          return fetchSvg(`/ui/iconsets/${set}/${name}.svg`);
+        }
+        // Theme override first, then the unified base icon set.
+        const svg = (await fetchSvg(themeUrl(`icons/${name}.svg`)))
+          || (await fetchSvg(`/ui/icons/${name}.svg`));
+        if (svg) return svg;
+        const alias = ALIASES[name];
+        return alias ? loadSvg(alias) : null;
+      })(),
     );
   }
   return cache.get(key);
+}
+
+/** Apply the accent tint when enabled and the icon has a palette. */
+export async function decorateSvg(svg, name) {
+  if (!svg || !tintEnabled()) return svg;
+  const palette = await paletteFor(name);
+  return palette ? tintSvg(svg, palette) : svg;
 }
 
 function prepare(el, size, label) {
@@ -96,12 +142,18 @@ function prepare(el, size, label) {
   return el;
 }
 
-/** Render (and remember) an icon's painter so it can be re-run on accent change. */
+/** Render (and remember) an icon's painter so it can be re-run on changes. */
 function paint(el, name) {
   el.dataset.iconName = name;
-  loadSvg(name).then((svg) => {
-    if (svg) el.innerHTML = colorizeFolder(svg);
-    else el.classList.add('ui-icon--missing');
+  loadSvg(name).then(async (svg) => {
+    if (!svg) {
+      el.classList.add('ui-icon--missing');
+      return;
+    }
+    const palette = tintEnabled() ? await paletteFor(name) : null;
+    el.innerHTML = palette ? tintSvg(svg, palette) : svg;
+    if (palette) el.dataset.tintable = '1';
+    else delete el.dataset.tintable;
   });
 }
 
@@ -121,17 +173,36 @@ export async function setIcon(el, name, { size = null, label = null } = {}) {
   return el;
 }
 
-/** Repaint every live folder icon after the accent changes. */
+/**
+ * Repaint live icons after a set/tint/theme change. `tintable` limits the
+ * repaint to coloured icons with a palette — the only ones an accent change
+ * can affect.
+ */
+export function refreshIcons({ tintable = false } = {}) {
+  const selector = tintable
+    ? '.ui-icon[data-tintable]'
+    : '.ui-icon[data-icon-name]';
+  document.querySelectorAll(selector).forEach((el) => paint(el, el.dataset.iconName));
+}
+
+/** Repaint every live folder glyph (kept for API compatibility). */
 export function refreshFolderIcons() {
-  document.querySelectorAll('.ui-icon[data-icon-name="ui/folder"]').forEach((el) => {
-    loadSvg('ui/folder').then((svg) => { if (svg) el.innerHTML = colorizeFolder(svg); });
+  document.querySelectorAll('.ui-icon[data-icon-name*="folder"]').forEach((el) => {
+    paint(el, el.dataset.iconName);
   });
 }
 
-// The folder tint is a function of the accent, so repaint on every change.
+// Accent changes only affect coloured icons while tinting is enabled; icon-set
+// and tint switches change every icon.
 if (typeof window !== 'undefined') {
-  window.addEventListener('appearance:change', refreshFolderIcons);
-  window.addEventListener('accent:change', refreshFolderIcons);
+  window.addEventListener('appearance:change', () => {
+    if (tintEnabled()) refreshIcons({ tintable: true });
+  });
+  window.addEventListener('accent:change', () => {
+    if (tintEnabled()) refreshIcons({ tintable: true });
+  });
+  window.addEventListener('iconset:change', () => refreshIcons());
+  window.addEventListener('tint:change', () => refreshIcons());
 }
 
 /** Drop cached icons (e.g. after a theme switch). */
@@ -140,10 +211,9 @@ export function clearIconCache() {
 }
 
 /**
- * The raw themed SVG text for an icon name (theme override, then shared
- * library), or null when neither ships it. Exposed so callers that need to
- * decide *where* an icon comes from (e.g. plugin icons) can reuse the same
- * theme-aware lookup instead of duplicating it.
+ * The raw themed SVG text for an icon name (set → theme → base). Exposed so
+ * callers that need to decide *where* an icon comes from (e.g. plugin icons)
+ * can reuse the same lookup instead of duplicating it.
  */
 export function loadIconSvg(name) {
   return loadSvg(name);

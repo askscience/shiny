@@ -29,7 +29,7 @@ small number of areas; each area has its own index and cross-links.
 | [Voice](core/voice.md) | faster-whisper / Vosk STT, Supertonic / Qwen TTS, the voice bar. |
 | [Desktop](core/desktop.md) | Window manager, workspaces, layouts, HUD, launcher, gestures. |
 | [Web UI](core/web-ui.md) | The frontend module graph and UI component library. |
-| [Themes & icons](core/themes-icons.md) | Tokens, accent/gradient, the shared icon library and KDE curation. |
+| [Themes & icons](core/themes-icons.md) | Tokens, accent/gradient, selectable icon sets and KDE curation. |
 | [Data & auth](core/data-and-auth.md) | SQLite schema, migrations, users, tokens, Linux-user binding. |
 | [Travel](core/travel.md) | Trips, GPS, maps, navigation and diaries in the core. |
 

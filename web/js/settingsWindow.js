@@ -28,7 +28,9 @@ import {
   applyAppearance, getAccent, setAccent, getGradient, setGradient,
   accentPresets, gradientPresets, gradientToCss,
   getFont, setFont, FONT_THEME,
+  iconsetOptions, getIconsetChoice, setIconset, tintEnabled, setTint, refreshIcons,
 } from '../ui/index.js';
+import { refreshPluginIcons } from './pluginIcon.js';
 import { listFonts } from './fonts.js';
 import {
   getAiName, setAiName, getAiProvider, setAiProvider,
@@ -1697,6 +1699,31 @@ function buildAppearancePanel() {
     onChange: () => void toggleNeumorphic(),
   });
 
+  const iconset = select({
+    options: iconsetOptions().map(({ value, label }) => ({ value, label })),
+    onChange: (value) => {
+      setIconset(value);
+      refreshIcons();
+      refreshPluginIcons();
+    },
+  });
+  iconset.select.value = getIconsetChoice();
+  const iconsetField = field('Icon set', iconset, {
+    hint: iconsetOptions().find((o) => o.value === getIconsetChoice())?.hint
+      || 'Infinity is coloured; Slot-Beauty is the monochrome line set. Themes may still override individual icons.',
+  });
+
+  const tintIcons = toggleRow({
+    label: 'Accent-tinted icons',
+    hint: 'Recolour the set’s artwork (folders, app and file icons) to your accent. Off keeps each set’s native colours.',
+    checked: tintEnabled(),
+    onChange: (checked) => {
+      setTint(checked);
+      refreshIcons();
+      refreshPluginIcons();
+    },
+  });
+
   const accentSwatches = el('div', 'swatch-row');
   accentSwatches.setAttribute('role', 'radiogroup');
   const gradientSwatches = el('div', 'swatch-row swatch-row--gradient');
@@ -1827,6 +1854,8 @@ function buildAppearancePanel() {
 
   return [
     field('Theme', theme),
+    iconsetField,
+    tintIcons,
     neumorphic,
     field('Accent', accentSwatches),
     field('Gradient', gradientSwatches),

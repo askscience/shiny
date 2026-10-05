@@ -24,39 +24,35 @@ themes/
       hud/               ←   HUD icons (clock, …)
 ```
 
-The **shared** icon set lives in `/ui/icons/<group>/<name>.svg` (the UI
+The **base** icon set lives in `/ui/icons/<group>/<name>.svg` (the UI
 library) — its catalog is [`web/ui/icons/INDEX.md`](../ui/icons/INDEX.md) and
-its authoring guide is [`web/ui/icons/README.md`](../ui/icons/README.md). A
-theme's `icons/` is an **override set**: it only needs to ship the icons it
-draws differently — anything it omits falls back to the shared icon.
+its authoring guide is [`web/ui/icons/README.md`](../ui/icons/README.md).
+Selectable icon sets (Infinity, Slot-Beauty) live in `/ui/iconsets/<set>/`, and
+the resolver in `web/ui/icon.js` tries the active set, then the theme, then the
+base. A theme's `icons/` is therefore a true **override set**: it only needs to
+ship the icons it draws differently — anything it omits falls back to the
+active icon set and then the base catalog. Bundled themes currently override
+just one glyph: the **light** themes (`light`, `neumorphic-light`) ship their
+own `icons/ui/folder.svg` artwork.
 
 ### Icon sources
 
-Most shared icons are line glyphs drawn in-house. The HUD, core-window, file
-type and plugin (`/ui/icons/apps/`) glyphs are curated from the **Slot-Beauty**
-KDE icon themes ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes),
-**GPL-3.0**) and regenerated with `scripts/kde-icons/convert.py` — see
-`KDE_ICONS_PLAN.md` and [`web/ui/icons/README.md`](../ui/icons/README.md). The
-converter strips the KDE `<style>` block, rewrites fills to `currentColor` and
-derives a `viewBox` from the source, so the icons follow each theme and the
-user's accent like any other.
+The base catalog mixes in-house line glyphs with the coloured **Slot-Beauty**
+KDE icon set ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes),
+**GPL-3.0**); the coloured **Infinity** set
+([rogts/infinity-icon-theme](https://github.com/rogts/infinity-icon-theme),
+**GPL-3.0**, Breeze-derived) is curated as the default selectable set. Both are
+regenerated with `scripts/kde-icons/convert.py` — see
+[`web/ui/icons/README.md`](../ui/icons/README.md). The converter strips the KDE
+`<style>` block, rewrites symbolic fills to `currentColor` (coloured artwork
+keeps its paint) and derives a `viewBox` from the source.
 
-The one deliberate exception is the **folder** glyph: it keeps the original
-KDE folder artwork (colour + gradient) instead of `currentColor` — but it
-**follows the user's accent**. The artwork's fixed blues are remapped onto an
-accent-derived light→dark ramp at load time (`colorizeFolder` in
-`web/ui/icon.js`), so the folder keeps its 3D shading in whatever colour is
-picked in *Settings → Appearance*. The shared `ui/folder.svg` is the dark
-artwork (the light themes only differ by the raster they used to carry, which
-we strip), so the **light** themes (`light`, `neumorphic-light`) each ship
-their own `icons/ui/folder.svg` override — with the same blues, so they
-recolor identically.
-
-Live folder icons re-render on the `appearance:change` / `accent:change`
-events, so changing the accent updates open Files windows without a reload.
 Only the curated source SVGs (`scripts/kde-icons/source/`) and the generated
-icons are committed; the raw ~180 MB sets live in `assets/iconsets/` and are
-ignored.
+icons are committed; the raw sets live in `assets/iconsets/` and are ignored.
+Coloured icons follow the user's accent when *Settings → Appearance →
+Accent-tinted icons* is enabled; with it off (the default) they show the set's
+native colours. Live icons repaint on `iconset:change`, `tint:change` and
+`accent:change`.
 
 Themes are plain static files — no build step, no backend involvement.
 `/themes/` is served directly; `themes.json` exists because directories
@@ -87,8 +83,9 @@ can't be listed over HTTP.
 - **Semantic colors** — `--ok`, `--warn`, `--error` are functional, not
   decorative. Keep them legible.
 - **Icons** — always `stroke="currentColor"` (or `fill`), 24×24 viewBox,
-  1.5 stroke width for visual rhythm. They inherit color from CSS and
-  follow the accent automatically.
+  1.5 stroke width for visual rhythm. They inherit color from CSS and follow
+  the theme (coloured artwork only follows the accent when *Accent-tinted
+  icons* is on).
 - **Motion** — restrained: single soft entrances, no looping decoration.
   Honor `prefers-reduced-motion` (already handled in `/ui/ui.css` for
   reveals/spinners; keep it that way in your additions).
