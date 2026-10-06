@@ -110,6 +110,7 @@ window. In the multi-user install plugins are also **installed per user**
 | `calculator` | Office | Basic/scientific math sharing one evaluator with the window. |
 | `image` | Media | Layered raster editor (blend modes, filters, painting, selection). |
 | `studio` | Media | DAW-grade sequencer + synth; renders to WAV on a self-contained DSP engine. |
+| `filmcraft` | Media | FilmCraft video editor in a window (cut, colour, sound, export), plus a headless engine for batch renders. |
 | `radio` | Media | Internet radio via Radio Browser. |
 | `youtube` | Media | Search and watch videos, with a built-in recommender. |
 
@@ -144,7 +145,7 @@ crates/
   peakd/ · peakd-mac/     # Linux / macOS native shells
   shiny-auth/             # root PAM verify helper
   shiny-iroh-client/ · shiny-iroh-proto/ · shiny-server-mode/
-plugins/<name>/           # 18 self-contained plugins, each with docs/
+plugins/<name>/           # 19 self-contained plugins, each with docs/
 migrations/               # core SQL migrations (001..009)
 web/                      # browser UI: ui/ (library), themes/, js/, vendor/
 voice/                    # speech sidecars and model tooling

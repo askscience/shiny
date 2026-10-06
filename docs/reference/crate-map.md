@@ -43,6 +43,7 @@ ecosystem. See the plugin's `docs/` folder and
 | `plugins/calculator` | `libshiny_calculator_plugin` | Office |
 | `plugins/image` | `libshiny_image_plugin` | Media |
 | `plugins/studio` | `libshiny_studio_plugin` | Media |
+| `plugins/filmcraft` | `libshiny_filmcraft_plugin` | Media |
 | `plugins/radio` | `libshiny_radio_plugin` | Media |
 | `plugins/youtube` | `libshiny_youtube_plugin` | Media |
 

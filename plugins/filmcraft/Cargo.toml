@@ -1,0 +1,27 @@
+[package]
+name = "shiny-filmcraft-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "shiny_filmcraft_plugin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = { version = "1", features = ["serde"] }
+axum = { version = "0.7", features = ["json"] }
+# `rt`/`macros` for the tests, `time`/`sync` for the relay's bounded waits.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
+
+# The headless FilmCraft engine (real codecs, render, export) used by the
+# `film_headless` / `film_export*` tools. It has no GPU or UI dependency —
+# `filmcraft-engine` stops below the L3 render/export crates.
+#
+# NOTE: this pulls ~40 crates (all the clean-room codecs) into the plugin
+# build. The first build takes minutes; afterwards it is cached like any other
+# dependency. Pinned so a Shiny build is reproducible.
+filmcraft-engine = { git = "https://github.com/storytold/filmcraft", rev = "ada55eb62568ba75be25cd12bd07b5fbdc37f88d" }

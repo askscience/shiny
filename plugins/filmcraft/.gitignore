@@ -1,0 +1,8 @@
+# The FilmCraft WebAssembly bundle is a build artifact, not source.
+#
+# `scripts/build-web-assets.sh <filmcraft-checkout>` regenerates it from the
+# FilmCraft repository; see docs/web-assets.md. Ignore it so a 27.6 MB binary
+# never lands in git, and so a patch cannot carry someone else's build.
+web/filmcraft_web.js
+web/filmcraft_web_bg.wasm
+web/filmcraft-favicon.png

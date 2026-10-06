@@ -1,0 +1,11 @@
+name = "filmcraft"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "FilmCraft — a non-linear video editor (cut, colour, sound, titles, export) hosted as a window in the desktop"
+summary = "Video editor: the whole FilmCraft editor in a window, driven by the assistant or run headless for batch exports"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"
+
+category = "Media"

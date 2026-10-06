@@ -1,0 +1,141 @@
+/**
+ * plugin.css — the FilmCraft window.
+ *
+ * The one deliberate exception to "plugins ship no CSS" (PLUGINS.md §19), and
+ * the same exception the Browser window makes: a canvas that fills a window and
+ * sits under an overlay is a layout, not a component, and the core UI library
+ * has nothing to express it with.
+ *
+ * The controls are still core components — the header is `tile-header` with an
+ * `iconButton`, the boot spinner is `spinner()` — so their metrics, focus ring
+ * and accent come from `web/ui/ui.css` and the active theme. Nothing here
+ * restyles a `.ui-btn` or `.ui-icon`. Every rule is scoped under
+ * `.filmcraft-tile`, so it cannot reach another window.
+ *
+ * Loaded from plugin.js (`ensureStylesheet`): core does not auto-inject a
+ * plugin's stylesheet.
+ */
+
+.filmcraft-tile {
+  /* The editor paints its own dark surface; no gap at the rounded corners. */
+  --filmcraft-bg: #1b1c1f;
+  --filmcraft-fg: #c9c9cc;
+  --filmcraft-danger: #ff8a7a;
+}
+
+.filmcraft-tile .tile-header {
+  gap: 10px;
+}
+
+/* The status line between the title and the spacer. */
+.filmcraft-status {
+  font-size: 11px;
+  color: var(--text-dim, #8b8d93);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46%;
+}
+
+/* The area the canvas fills. */
+.filmcraft-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;      /* contain the canvas; the tile's overlays layer above */
+  background: var(--filmcraft-bg);
+  border-radius: 0 0 var(--window-radius, var(--radius-lg)) var(--window-radius, var(--radius-lg));
+}
+
+/*
+ * The editor instance. It is detached and re-attached when the tile closes and
+ * reopens, so it must survive a move between parents: eframe sizes the canvas
+ * from its own layout, and it observes the element it was appended to.
+ */
+.filmcraft-holder {
+  position: absolute;
+  inset: 0;
+}
+
+.filmcraft-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* egui handles its own input; the tile must not pan or zoom-select it. */
+  touch-action: none;
+}
+
+/* Boot overlay: shown until the engine answers, and on failure. */
+.filmcraft-boot {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  color: var(--filmcraft-fg);
+  font-size: 13px;
+  background: var(--filmcraft-bg);
+}
+
+.filmcraft-boot--done {
+  display: none;
+}
+
+.filmcraft-boot-text {
+  max-width: 44ch;
+  line-height: 1.45;
+}
+
+.filmcraft-boot--error {
+  align-items: stretch;
+  text-align: left;
+  overflow: auto;
+}
+
+.filmcraft-fatal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: 62ch;
+  margin: 0 auto;
+  padding: 20px 24px;
+  border-radius: 8px;
+  background: #26272b;
+}
+
+.filmcraft-fatal strong {
+  font-size: 15px;
+  color: var(--filmcraft-danger);
+}
+
+.filmcraft-fatal p {
+  margin: 0;
+  color: var(--filmcraft-fg);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* The Rust panic message, which can be long and multi-line. */
+.filmcraft-fatal pre {
+  width: 100%;
+  max-height: 34vh;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #1b1c1f;
+  color: var(--filmcraft-fg);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

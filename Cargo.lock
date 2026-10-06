@@ -1876,6 +1876,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "extended"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
+
+[[package]]
 name = "fast-float2"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1955,6 +1961,411 @@ checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
 dependencies = [
  "cfg-if",
  "libc",
+]
+
+[[package]]
+name = "filmcraft-aac"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-ac3"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-audio-dsp"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-av1"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-bitstream"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-captions"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-color",
+ "filmcraft-project",
+ "filmcraft-text",
+ "filmcraft-time",
+ "roxmltree 0.21.1",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-cfb"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-codecs"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-aac",
+ "filmcraft-ac3",
+ "filmcraft-av1",
+ "filmcraft-bitstream",
+ "filmcraft-color",
+ "filmcraft-dnx",
+ "filmcraft-frame",
+ "filmcraft-h264",
+ "filmcraft-hevc",
+ "filmcraft-isobmff",
+ "filmcraft-matroska",
+ "filmcraft-media",
+ "filmcraft-mpeg2v",
+ "filmcraft-mpegts",
+ "filmcraft-mxf",
+ "filmcraft-ogg",
+ "filmcraft-opus",
+ "filmcraft-prores",
+ "filmcraft-time",
+ "filmcraft-vp9",
+ "image 0.25.10",
+ "log",
+ "symphonia",
+ "thiserror 2.0.18",
+ "web-time",
+]
+
+[[package]]
+name = "filmcraft-color"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "filmcraft-dnx"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-edit"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-project",
+ "filmcraft-time",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-engine"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-audio-dsp",
+ "filmcraft-captions",
+ "filmcraft-codecs",
+ "filmcraft-color",
+ "filmcraft-edit",
+ "filmcraft-export",
+ "filmcraft-format",
+ "filmcraft-frame",
+ "filmcraft-geom",
+ "filmcraft-interchange",
+ "filmcraft-media",
+ "filmcraft-mxf",
+ "filmcraft-project",
+ "filmcraft-render",
+ "filmcraft-scopes",
+ "filmcraft-speech",
+ "filmcraft-text",
+ "filmcraft-time",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "web-time",
+]
+
+[[package]]
+name = "filmcraft-export"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-aac",
+ "filmcraft-audio-dsp",
+ "filmcraft-color",
+ "filmcraft-dnx",
+ "filmcraft-frame",
+ "filmcraft-geom",
+ "filmcraft-h264enc",
+ "filmcraft-isobmff",
+ "filmcraft-media",
+ "filmcraft-mxf",
+ "filmcraft-project",
+ "filmcraft-prores",
+ "filmcraft-render",
+ "filmcraft-text",
+ "filmcraft-time",
+ "image 0.25.10",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "web-time",
+]
+
+[[package]]
+name = "filmcraft-format"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-project",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-frame"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-color",
+ "filmcraft-time",
+ "rayon",
+ "serde",
+]
+
+[[package]]
+name = "filmcraft-geom"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "filmcraft-h264"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-h264enc"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-hevc"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-interchange"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-cfb",
+ "filmcraft-color",
+ "filmcraft-geom",
+ "filmcraft-media",
+ "filmcraft-project",
+ "filmcraft-time",
+ "roxmltree 0.21.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-isobmff"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-matroska"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-media"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-color",
+ "filmcraft-frame",
+ "filmcraft-time",
+ "image 0.25.10",
+ "rayon",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-mpeg2v"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-mpegts"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-mxf"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-ogg"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-opus"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+
+[[package]]
+name = "filmcraft-project"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-color",
+ "filmcraft-geom",
+ "filmcraft-media",
+ "filmcraft-time",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-prores"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-render"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-audio-dsp",
+ "filmcraft-captions",
+ "filmcraft-color",
+ "filmcraft-frame",
+ "filmcraft-geom",
+ "filmcraft-media",
+ "filmcraft-project",
+ "filmcraft-text",
+ "filmcraft-time",
+ "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "filmcraft-scopes"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-color",
+ "serde",
+]
+
+[[package]]
+name = "filmcraft-speech"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-project",
+ "filmcraft-time",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "filmcraft-text"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-color",
+ "harfrust",
+ "skrifa 0.44.0",
+ "unicode-bidi",
+ "unicode-linebreak",
+]
+
+[[package]]
+name = "filmcraft-time"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "filmcraft-vp9"
+version = "0.2.0"
+source = "git+https://github.com/storytold/filmcraft?rev=ada55eb62568ba75be25cd12bd07b5fbdc37f88d#ada55eb62568ba75be25cd12bd07b5fbdc37f88d"
+dependencies = [
+ "filmcraft-bitstream",
+ "rayon",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2046,7 +2457,7 @@ version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbc773e24e02d4ddd8395fd30dc147524273a83e54e0f312d986ea30de5f5646"
 dependencies = [
- "roxmltree",
+ "roxmltree 0.20.0",
 ]
 
 [[package]]
@@ -2491,6 +2902,16 @@ name = "gif"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae047235e33e2829703574b54fdec96bfbad892062d97fed2f76022287de61b"
+dependencies = [
+ "color_quant",
+ "weezl 0.1.12",
+]
+
+[[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
 dependencies = [
  "color_quant",
  "weezl 0.1.12",
@@ -3209,7 +3630,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "color_quant",
- "gif",
+ "gif 0.13.3",
  "jpeg-decoder",
  "num-traits",
  "png 0.17.16",
@@ -3224,12 +3645,25 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "color_quant",
+ "gif 0.14.2",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png 0.18.1",
  "tiff 0.11.3",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error",
 ]
 
 [[package]]
@@ -6351,6 +6785,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6954,6 +7397,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-filmcraft-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "filmcraft-engine",
+ "semver",
+ "serde",
+ "serde_json",
+ "shiny-plugin-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "shiny-filter"
 version = "0.1.0"
 dependencies = [
@@ -7120,7 +7577,7 @@ dependencies = [
  "http",
  "libsqlite3-sys",
  "reqwest 0.12.28",
- "roxmltree",
+ "roxmltree 0.20.0",
  "semver",
  "serde",
  "serde_json",
@@ -7349,6 +7806,16 @@ checksum = "0c34617370ae968efb7161bb2beb517d9084659aae19e24b89e3db25b46e4564"
 dependencies = [
  "bytemuck",
  "read-fonts 0.39.2",
+]
+
+[[package]]
+name = "skrifa"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.41.0",
 ]
 
 [[package]]
@@ -7754,7 +8221,7 @@ checksum = "38803281d1c23166c5ebcb455439a5d2afe711cc909cf88af72448c297756ad6"
 dependencies = [
  "kurbo",
  "rustc-hash",
- "skrifa",
+ "skrifa 0.42.1",
  "write-fonts",
 ]
 
@@ -7763,6 +8230,164 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "symphonia"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5773a4c030a19d9bfaa090f49746ff35c75dfddfa700df7a5939d5e076a57039"
+dependencies = [
+ "lazy_static",
+ "symphonia-bundle-flac",
+ "symphonia-bundle-mp3",
+ "symphonia-codec-aac",
+ "symphonia-codec-alac",
+ "symphonia-codec-pcm",
+ "symphonia-codec-vorbis",
+ "symphonia-core",
+ "symphonia-format-isomp4",
+ "symphonia-format-ogg",
+ "symphonia-format-riff",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-bundle-flac"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c91565e180aea25d9b80a910c546802526ffd0072d0b8974e3ebe59b686c9976"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+ "symphonia-utils-xiph",
+]
+
+[[package]]
+name = "symphonia-bundle-mp3"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4872dd6bb56bf5eac799e3e957aa1981086c3e613b27e0ac23b176054f7c57ed"
+dependencies = [
+ "lazy_static",
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-codec-aac"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c263845aa86881416849c1729a54c7f55164f8b96111dba59de46849e73a790"
+dependencies = [
+ "lazy_static",
+ "log",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-codec-alac"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8413fa754942ac16a73634c9dfd1500ed5c61430956b33728567f667fdd393ab"
+dependencies = [
+ "log",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-codec-pcm"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e89d716c01541ad3ebe7c91ce4c8d38a7cf266a3f7b2f090b108fb0cb031d95"
+dependencies = [
+ "log",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-codec-vorbis"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f025837c309cd69ffef572750b4a2257b59552c5399a5e49707cc5b1b85d1c73"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-utils-xiph",
+]
+
+[[package]]
+name = "symphonia-core"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea00cc4f79b7f6bb7ff87eddc065a1066f3a43fe1875979056672c9ef948c2af"
+dependencies = [
+ "arrayvec",
+ "bitflags 1.3.2",
+ "bytemuck",
+ "lazy_static",
+ "log",
+]
+
+[[package]]
+name = "symphonia-format-isomp4"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "243739585d11f81daf8dac8d9f3d18cc7898f6c09a259675fc364b382c30e0a5"
+dependencies = [
+ "encoding_rs",
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+ "symphonia-utils-xiph",
+]
+
+[[package]]
+name = "symphonia-format-ogg"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b4955c67c1ed3aa8ae8428d04ca8397fbef6a19b2b051e73b5da8b1435639cb"
+dependencies = [
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+ "symphonia-utils-xiph",
+]
+
+[[package]]
+name = "symphonia-format-riff"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2d7c3df0e7d94efb68401d81906eae73c02b40d5ec1a141962c592d0f11a96f"
+dependencies = [
+ "extended",
+ "log",
+ "symphonia-core",
+ "symphonia-metadata",
+]
+
+[[package]]
+name = "symphonia-metadata"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36306ff42b9ffe6e5afc99d49e121e0bd62fe79b9db7b9681d48e29fa19e6b16"
+dependencies = [
+ "encoding_rs",
+ "lazy_static",
+ "log",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-utils-xiph"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee27c85ab799a338446b68eec77abf42e1a6f1bb490656e121c6e27bfbab9f16"
+dependencies = [
+ "symphonia-core",
+ "symphonia-metadata",
+]
 
 [[package]]
 name = "syn"
