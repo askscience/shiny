@@ -165,7 +165,11 @@ const NEWS_PAYLOAD = {
   personalized: true,
 };
 
-const calls = { navigate: [], settings: [], downloadEvents: [], downloadRemove: [], sessionClose: [], state: 0, clears: 0 };
+const calls = { navigate: [], settings: [], downloadEvents: [], downloadRemove: [], sessionClose: [], copied: [], state: 0, clears: 0 };
+
+/** The central clipboard service stubs (`js/clipboard.js`). */
+const copyText = async (text) => { calls.copied.push(text); return true; };
+const readClipboardText = async () => 'https://copied.example/';
 
 const apiFetch = async (path, options = {}) => {
   if (path === '/api/browser/settings' && (!options.method || options.method === 'GET')) {
@@ -269,6 +273,7 @@ const context = vm.createContext({
   // settings/theming paths can run without the real shell.
   themeMode: () => 'dark',
   openCoreWindow: () => {},
+  copyText, readClipboardText,
   navigator: { clipboard: { writeText: () => Promise.resolve() } },
   URL, setTimeout, clearTimeout, setInterval, clearInterval,
   JSON, String, Number, Array, Object, Math, RegExp, parseInt, parseFloat, Error, Promise, Set, Map,
@@ -464,6 +469,35 @@ if (savedListeners[0]) {
   savedListeners[0]({ detail: { type: 'browser_page', title: 'x', narrative: 'https://www.ilfattoquotidiano.it' } });
   await tick(60);
   check('an AI-opened page loads in the active tab', calls.navigate.length > before && calls.navigate.some((n) => n.input === 'https://www.ilfattoquotidiano.it'));
+}
+
+/* Clipboard: page copies land in the history menu, and a menu pick pastes
+   into the focused native page through the shell. */
+const menu = mod.namespace.browserContextMenu?.() || [];
+check('the context menu offers Paste and go', menu.some((e) => e.label === 'Paste and go'));
+check('the context menu can copy the page address', menu.some((e) => e.label === 'Copy page address'));
+
+const pasteListeners = windowListeners['clipboard:paste'] || [];
+check('the window listens for clipboard picks', pasteListeners.length === 1);
+if (pasteListeners[0]) {
+  const before = viewCommands().filter((c) => c.op === 'paste').length;
+  pasteListeners[0]({ detail: { text: 'hello from the menu', focused: 'browser' } });
+  await tick(20);
+  const pasted = lastView('paste');
+  check(
+    'a clipboard pick pastes into the active native view',
+    viewCommands().filter((c) => c.op === 'paste').length > before
+      && pasted?.text === 'hello from the menu'
+      && typeof pasted?.id === 'string',
+    JSON.stringify(pasted),
+  );
+  const count = viewCommands().filter((c) => c.op === 'paste').length;
+  pasteListeners[0]({ detail: { text: 'for the terminal', focused: 'terminal' } });
+  await tick(20);
+  check(
+    'a pick aimed at another window is ignored',
+    viewCommands().filter((c) => c.op === 'paste').length === count,
+  );
 }
 
 mod.namespace.unmountBrowserTile?.();

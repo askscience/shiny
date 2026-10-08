@@ -11,6 +11,7 @@ Imports from core:
 
 ```js
 import { apiFetch } from '../../js/api.js';
+import { copyText, readClipboardText } from '../../js/clipboard.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
@@ -65,6 +66,7 @@ Attaches, once:
 | Event | Handler |
 |---|---|
 | `artifact:saved` (on `window`) | `onArtifactSaved` — an AI-created `browser_page` artifact navigates the active tab |
+| `clipboard:paste` (on `window`) | `onClipboardPaste` — a pick in the top-bar Clipboard menu pastes into the focused page (see Clipboard below) |
 | `message` (on `window`) | `onFrameMessage` — the sandboxed home shelf's `browser:open-card` / `browser:refresh-news` |
 | `theme:change` | `pushSettings` — keeps pages' `prefers-color-scheme` in step with the app theme |
 
@@ -75,8 +77,25 @@ navigation can finish while the window is still mounting).
 ### `browserContextMenu()`
 
 Returns menu items: New tab, New incognito tab, Downloads, History, Bookmarks,
-Bookmark/Remove bookmark, Focus address bar, Reload, Home. The bookmark label
-depends on `isBookmarked(activeTab()?.url)`.
+Bookmark/Remove bookmark, Copy page address, Paste and go, Focus address bar,
+Reload, Home. The bookmark label depends on `isBookmarked(activeTab()?.url)`.
+
+## Clipboard
+
+The Browser is one of the surfaces the central clipboard service
+(`web/js/clipboard.js`, see `docs/core/clipboard.md`) integrates:
+
+- The window chrome (address bar, panels) is app DOM, so copies made there are
+  recorded by the service like anywhere else.
+- Copies made **inside the page** never reach the app DOM (the page is a native
+  child view). The Qt shell's clipboard filter reports plain Ctrl/Cmd+C from a
+  child view through `window.__shinyClipboardCapture`, so page copies show up in
+  the top-bar history.
+- A pick in the Clipboard menu with this window focused dispatches
+  `clipboard:paste`; `onClipboardPaste` forwards it to the shell as a
+  `peakd:view:` `paste` command, which sets the system clipboard and triggers
+  the engine's Paste action on the active tab.
+- "Paste and go" reads the clipboard via `readClipboardText()` and navigates.
 
 ## DOM and CSS
 
@@ -139,7 +158,7 @@ depends on `isBookmarked(activeTab()?.url)`.
 `peakd:view:` ops (parsed by `crates/peakd/src/browse.rs` `Command::parse`):
 `open` (`url`, `rect`, `visible`, `incognito`), `navigate`, `setBounds`,
 `setVisible`, `setMask` (`holes`), `back`, `forward`, `reload`, `close`,
-`focus`.
+`focus`, `paste` (`text`).
 
 ## API calls (`apiFetch`)
 
@@ -223,8 +242,9 @@ window events listed above. `stopBoundsSync()` tears them all down.
 and asserts: mount/exports, the toolbar controls, settings push, one sandboxed
 home tab with news, navigation POST + `peakd:view: open`, `setBounds`/`setMask`,
 the shield (state + `peakd:filter:` + persistence), incognito tabs, downloads
-events + badge + panel mask hole, drag hide/restore, tab close, and AI
-`artifact:saved` navigation.
+events + badge + panel mask hole, drag hide/restore, tab close, AI
+`artifact:saved` navigation, and the clipboard contract (context-menu entries,
+`clipboard:paste` → `peakd:view: paste`, picks for other windows ignored).
 
 ```bash
 node --experimental-vm-modules plugins/browser/web/plugin.smoke.mjs

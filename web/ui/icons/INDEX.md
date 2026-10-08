@@ -60,6 +60,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/chevron-left.svg) | `ui/chevron-left` | `actions/symbolic/go-previous-symbolic.svg` |
 | ![](ui/chevron-right.svg) | `ui/chevron-right` | `actions/symbolic/go-next-symbolic.svg` |
 | ![](ui/chevron-up.svg) | `ui/chevron-up` | `actions/symbolic/go-up-symbolic.svg` |
+| ![](ui/clipboard.svg) | `ui/clipboard` | `— in-house` |
 | ![](ui/clone-stamp.svg) | `ui/clone-stamp` | `— in-house` |
 | ![](ui/close.svg) | `ui/close` | `actions/symbolic/window-close-symbolic.svg` |
 | ![](ui/compress.svg) | `ui/compress` | `— in-house` |

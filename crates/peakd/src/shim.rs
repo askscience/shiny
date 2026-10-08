@@ -17,6 +17,8 @@ pub type UaCallback = extern "C" fn(*mut c_void, *const c_char) -> *const c_char
 /// One download lifecycle event: `(userdata, id, kind, payload_json)`.
 pub type DownloadCallback =
     extern "C" fn(*mut c_void, *const c_char, *const c_char, *const c_char);
+/// One clipboard event from a child view: `(userdata, kind, text)`.
+pub type ClipboardCallback = extern "C" fn(*mut c_void, *const c_char, *const c_char);
 
 extern "C" {
     pub fn peakd_qt_run(
@@ -56,12 +58,14 @@ extern "C" {
     pub fn peakd_qt_view_forward(id: *const c_char);
     pub fn peakd_qt_view_reload(id: *const c_char);
     pub fn peakd_qt_view_focus(id: *const c_char);
+    pub fn peakd_qt_view_paste(id: *const c_char, text: *const c_char);
     pub fn peakd_qt_view_close(id: *const c_char);
     pub fn peakd_qt_set_filter_cb(cb: FilterCallback, userdata: *mut c_void);
     pub fn peakd_qt_set_ua_cb(cb: UaCallback, userdata: *mut c_void);
     pub fn peakd_qt_set_download_cb(cb: DownloadCallback, userdata: *mut c_void);
     pub fn peakd_qt_set_download_dir(dir: *const c_char);
     pub fn peakd_qt_download_action(id: *const c_char, action: *const c_char);
+    pub fn peakd_qt_set_clipboard_cb(cb: ClipboardCallback, userdata: *mut c_void);
 }
 
 fn cs(value: &str) -> CString {
@@ -177,6 +181,14 @@ pub fn view_focus(id: &str) {
     unsafe { peakd_qt_view_focus(cs(id).as_ptr()) }
 }
 
+/// Paste `text` into a child view (the Clipboard menu's pick for a Browser
+/// page). Clipboard text is user data, so a stray NUL must not panic the
+/// shell — it is truncated instead.
+pub fn view_paste(id: &str, text: &str) {
+    let text = CString::new(text).unwrap_or_default();
+    unsafe { peakd_qt_view_paste(cs(id).as_ptr(), text.as_ptr()) }
+}
+
 pub fn view_close(id: &str) {
     unsafe { peakd_qt_view_close(cs(id).as_ptr()) }
 }
@@ -199,4 +211,8 @@ pub fn set_download_dir(dir: &str) {
 
 pub fn download_action(id: &str, action: &str) {
     unsafe { peakd_qt_download_action(cs(id).as_ptr(), cs(action).as_ptr()) }
+}
+
+pub fn set_clipboard_cb(cb: ClipboardCallback) {
+    unsafe { peakd_qt_set_clipboard_cb(cb, std::ptr::null_mut()) }
 }

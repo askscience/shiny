@@ -21,6 +21,7 @@
  * presentation and local navigation history only.
  */
 import { apiFetch } from '../../js/api.js';
+import { copyText, readClipboardText } from '../../js/clipboard.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
@@ -1954,7 +1955,30 @@ function onArtifactSaved(event) {
   }
 }
 
-/** Entries core splices into this window's right-click menu (PLUGINS.md §19). */
+/**
+ * A pick in the top-bar Clipboard menu with this window focused.
+ *
+ * The page is a native child view, so the app cannot touch its DOM: the shell
+ * delivers the text (`peakd:view` `paste` command sets the system clipboard
+ * and triggers the engine's Paste action on the tab).
+ */
+function onClipboardPaste(event) {
+  const { text, focused } = event.detail || {};
+  if (focused !== BROWSER_PLUGIN || typeof text !== 'string' || !text) return;
+  const tab = activeTab();
+  if (!nativeAvailable || !tab?.native) return;
+  nativeSend({ op: 'paste', id: tab.id, text });
+}
+
+/** Clipboard text as an address (or search term) in the active tab. */
+async function pasteAndGo() {
+  const text = await readClipboardText();
+  if (text) void navigateTo(text);
+}
+
+/**
+ * Entries core splices into this window's right-click menu (PLUGINS.md §19).
+ */
 export function browserContextMenu() {
   return [
     {
@@ -1993,6 +2017,20 @@ export function browserContextMenu() {
       icon: 'ui/star',
       disabled: !activeTab()?.url,
       onClick: () => void toggleBookmark(),
+    },
+    {
+      // The central clipboard service records this like any other copy.
+      type: 'item',
+      label: 'Copy page address',
+      icon: 'ui/copy',
+      disabled: !activeTab()?.url,
+      onClick: () => void copyText(activeTab()?.url || '', { source: BROWSER_PLUGIN }),
+    },
+    {
+      type: 'item',
+      label: 'Paste and go',
+      icon: 'ui/clipboard',
+      onClick: () => void pasteAndGo(),
     },
     {
       type: 'item',
@@ -2057,6 +2095,7 @@ export function mountBrowserTile() {
 export function unmountBrowserTile() {
   stopBoundsSync();
   window.removeEventListener('message', onFrameMessage);
+  window.removeEventListener('clipboard:paste', onClipboardPaste);
   document.removeEventListener('pointerdown', onBrowserPointerDown, true);
   document.removeEventListener('keydown', onBrowserKeydown, true);
   wired = false;
@@ -2097,6 +2136,8 @@ export function wireBrowserEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('artifact:saved', onArtifactSaved);
+  // A pick in the top-bar Clipboard menu → paste into the focused page.
+  window.addEventListener('clipboard:paste', onClipboardPaste);
   // The home shelf talks back through postMessage (card clicks, refresh).
   window.addEventListener('message', onFrameMessage);
   // Keep the pages' `prefers-color-scheme` in step with the app theme.

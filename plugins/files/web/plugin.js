@@ -13,6 +13,7 @@ import {
   setTileGlow, setTileGlowFromUrl, glowGradient,
 } from '../../ui/index.js';
 import { openContextMenu } from '../../js/contextMenu.js';
+import { copyText } from '../../js/clipboard.js';
 import { pluginForFile, openWithPlugin, pickFiles } from '../../js/files.js';
 import { apiFetch } from '../../js/api.js';
 
@@ -896,10 +897,10 @@ function openPathMenu(anchor) {
 }
 
 function copyPath() {
-  const text = cwd || 'Home';
-  const p = navigator.clipboard?.writeText(text);
-  if (p?.then) p.then(() => toast('Path copied'), () => toast('Could not copy path', { type: 'error' }));
-  else toast('Clipboard unavailable', { type: 'error' });
+  // The central clipboard service records this in the top-bar history.
+  void copyText(cwd || 'Home', { source: 'files' }).then((ok) => {
+    toast(ok ? 'Path copied' : 'Clipboard unavailable', ok ? undefined : { type: 'error' });
+  });
 }
 
 /* ── mutations ──────────────────────────────────────────────── */

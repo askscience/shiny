@@ -24,6 +24,7 @@
 
 import { button, toast } from '../../ui/index.js';
 import { apiFetch, getToken } from '../../js/api.js';
+import { copyText, readClipboardText } from '../../js/clipboard.js';
 
 export const TERMINAL_PLUGIN = 'terminal';
 
@@ -229,6 +230,11 @@ async function initTerminal() {
   selectRenderer();
 
   term.onData((data) => queueInput(data));
+  // Ctrl/Cmd+C and Ctrl/Cmd+V have to be decided by the terminal, not the
+  // browser: without this, Ctrl+C is always a SIGINT (xterm sends \x03) and a
+  // selection cannot be copied — xterm's WebGL selection is not a DOM
+  // selection, so the browser's own copy would find nothing.
+  term.attachCustomKeyEventHandler(onTerminalKey);
 
   observer = new ResizeObserver(() => onHostResized());
   observer.observe(hostEl);
@@ -317,6 +323,50 @@ async function flushInput() {
   } catch (_) {
     /* the stream will report the session state */
   }
+}
+
+/* ── clipboard ────────────────────────────────────────────────── */
+
+/**
+ * Ctrl/Cmd+C copies the selection when there is one and stays a SIGINT
+ * otherwise — the standard terminal trade-off. Ctrl/Cmd+V pastes. Shift is
+ * not excluded, so the classic Ctrl+Shift+C / Ctrl+Shift+V pair works too.
+ *
+ * Returning false tells xterm the key was handled: it must not reach the PTY,
+ * which is what keeps a copy from interrupting the foreground process.
+ */
+function onTerminalKey(event) {
+  if (event.type !== 'keydown') return true; // keypress repeats pass through
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return true;
+  const key = (event.key || '').toLowerCase();
+  if (key === 'c') return copySelection() ? false : true;
+  if (key === 'v') {
+    void pasteFromClipboard();
+    return false;
+  }
+  return true;
+}
+
+/** Copy the current xterm selection through the central clipboard service. */
+function copySelection() {
+  const selection = term?.getSelection?.() || '';
+  if (!selection) return false;
+  void copyText(selection, { source: TERMINAL_PLUGIN });
+  return true;
+}
+
+/**
+ * Paste clipboard text into the shell. `term.paste` honours bracketed-paste
+ * mode (vim/tmux see a paste instead of a burst of typed keys) and flows
+ * through `onData` like any other input.
+ */
+async function pasteFromClipboard() {
+  const text = await readClipboardText();
+  if (!text) {
+    toast('Clipboard unavailable', { type: 'error' });
+    return;
+  }
+  term?.paste(text);
 }
 
 /* ── session lifecycle ────────────────────────────────────────── */
@@ -592,10 +642,25 @@ export function wireTerminalEvents() {
     if (!term) return;
     term.options.theme = { ...term.options.theme, ...terminalTheme() };
   });
+  /* A pick in the top-bar Clipboard menu with this window focused: paste it
+   * straight into the shell (the menu already put it on the OS clipboard). */
+  window.addEventListener('clipboard:paste', (event) => {
+    const { text, focused } = event.detail || {};
+    if (focused === TERMINAL_PLUGIN && text) term?.paste(text);
+  });
 }
 
 export function terminalContextMenu() {
   return [
+    {
+      type: 'item',
+      label: 'Copy',
+      icon: 'ui/copy',
+      disabled: !term?.getSelection?.(),
+      onClick: () => copySelection(),
+    },
+    { type: 'item', label: 'Paste', icon: 'ui/clipboard', onClick: () => void pasteFromClipboard() },
+    { type: 'separator' },
     { type: 'item', label: 'New shell', icon: 'ui/plus', onClick: () => void restart() },
     { type: 'item', label: 'Clear scrollback', icon: 'ui/trash', onClick: () => term?.clear() },
     { type: 'separator' },

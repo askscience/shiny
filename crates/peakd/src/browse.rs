@@ -117,6 +117,14 @@ pub enum Command {
     Focus {
         id: String,
     },
+    /// Deliver clipboard text into the view's focused editable element. The
+    /// app cannot do this itself — the page is a native child window with no
+    /// reachable DOM — so the shell sets the system clipboard and runs the
+    /// engine's Paste action (`peakd_qt_view_paste`).
+    Paste {
+        id: String,
+        text: String,
+    },
 }
 
 impl Command {
@@ -163,6 +171,16 @@ impl Command {
             "reload" => Self::Reload { id },
             "close" => Self::Close { id },
             "focus" => Self::Focus { id },
+            "paste" => Self::Paste {
+                id,
+                // Missing text is an empty paste (the engine clears the
+                // selection); never a parse failure.
+                text: value
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            },
             _ => return None,
         })
     }
@@ -235,6 +253,7 @@ pub trait ViewHost {
     fn forward(&mut self, id: &str);
     fn reload(&mut self, id: &str);
     fn focus(&mut self, id: &str);
+    fn paste(&mut self, id: &str, text: &str);
     fn close(&mut self, id: &str);
 }
 
@@ -333,6 +352,11 @@ impl<H: ViewHost> Views<H> {
             Command::Focus { id } => {
                 if self.live.contains(&id) {
                     self.host.focus(&id);
+                }
+            }
+            Command::Paste { id, text } => {
+                if self.live.contains(&id) {
+                    self.host.paste(&id, &text);
                 }
             }
         }
@@ -437,6 +461,9 @@ mod tests {
         fn focus(&mut self, id: &str) {
             self.calls.push(format!("focus {id}"));
         }
+        fn paste(&mut self, id: &str, text: &str) {
+            self.calls.push(format!("paste {id} {text}"));
+        }
         fn close(&mut self, id: &str) {
             self.calls.push(format!("close {id}"));
         }
@@ -449,6 +476,7 @@ mod tests {
             r#"peakd:view:{"op":"open","id":"t1","url":"https://a/","rect":{"x":1,"y":2,"w":3,"h":4,"dpr":1},"visible":true}"#
         ));
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"navigate","id":"t1","url":"https://b/"}"#));
+        assert!(bus.handle_ipc(r#"peakd:view:{"op":"paste","id":"t1","text":"clip"}"#));
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"close","id":"t1"}"#));
         // A command for a closed view is dropped.
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"back","id":"t1"}"#));
@@ -460,9 +488,32 @@ mod tests {
             vec![
                 "create t1 https://a/ true false",
                 "navigate t1 https://b/",
+                "paste t1 clip",
                 "close t1",
             ]
         );
+    }
+
+    #[test]
+    fn parses_a_paste_command() {
+        let value: Value =
+            serde_json::from_str(r#"{"op":"paste","id":"t1","text":"hello"}"#).unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::Paste { id, text } => {
+                assert_eq!(id, "t1");
+                assert_eq!(text, "hello");
+            }
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_paste_without_text_is_an_empty_paste() {
+        let value: Value = serde_json::from_str(r#"{"op":"paste","id":"t1"}"#).unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::Paste { text, .. } => assert!(text.is_empty()),
+            other => panic!("wrong command: {other:?}"),
+        }
     }
 
     #[test]

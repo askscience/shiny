@@ -59,6 +59,7 @@ import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from './display.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { getBackground, setBackground, renderBackgroundPresets } from './background.js';
 import { pickFiles } from './files.js';
+import { copyText } from './clipboard.js';
 
 export const SETTINGS_WINDOW = 'settings';
 
@@ -1324,8 +1325,9 @@ function buildRemote() {
     variant: 'ghost',
     onClick: async () => {
       if (!state.ticket) return;
-      try { await navigator.clipboard.writeText(state.ticket); toast('Link copied'); }
-      catch (_) { toast('Could not copy the link', { type: 'error' }); }
+      // Copies go through the central service so they land in the history.
+      const ok = await copyText(state.ticket, { source: 'settings' });
+      toast(ok ? 'Link copied' : 'Could not copy the link', ok ? undefined : { type: 'error' });
     },
   });
   const rotateBtn = button({ label: 'Rotate key', variant: 'danger', onClick: rotate });
@@ -1445,8 +1447,8 @@ function buildRemote() {
   async function copyTailscale() {
     const url = state.tailscale && state.tailscale.url;
     if (!url) return;
-    try { await navigator.clipboard.writeText(url); toast('URL copied'); }
-    catch (_) { toast('Could not copy the URL', { type: 'error' }); }
+    const ok = await copyText(url, { source: 'settings' });
+    toast(ok ? 'URL copied' : 'Could not copy the URL', ok ? undefined : { type: 'error' });
   }
 
   async function refresh() {

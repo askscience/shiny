@@ -428,6 +428,67 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
   border-radius: var(--radius-sm);
 }
 
+/* ── Clipboard menu (HUD popover) ───────────────────────────── */
+/* The trigger follows the host chips' open state (the menu toggles `is-open`). */
+#hud-top .icon-btn.is-open {
+  background: var(--glass-hover);
+  color: var(--text);
+}
+.clipboard-menu {
+  min-width: 0;
+  width: min(380px, calc(100vw - 24px));
+  max-width: min(380px, calc(100vw - 24px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.clipboard-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.clipboard-head-main { flex: 1; min-width: 0; }
+.clipboard-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.clipboard-head-title .ui-icon { color: var(--accent); }
+.clipboard-head-hint { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.clipboard-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.clipboard-body::-webkit-scrollbar { display: none; }
+.clipboard-row {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.clipboard-row .ui-list-item-title { font-size: 12.5px; }
+.clipboard-leading { color: var(--text-secondary); flex-shrink: 0; }
+.clipboard-row-remove { flex-shrink: 0; }
+/* The remove button only appears on hover — but only where a pointer can
+   hover at all, so touch keeps it reachable. */
+@media (hover: hover) and (pointer: fine) {
+  .clipboard-row-remove { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+  .clipboard-row:hover .clipboard-row-remove,
+  .clipboard-row:focus-within .clipboard-row-remove { opacity: 1; }
+}
+
 /* ── Bluetooth menu (HUD popover) ───────────────────────────── */
 .bluetooth-menu {
   min-width: 0;

@@ -9,6 +9,7 @@
 #include "ipc_bridge.h"
 
 #include <QApplication>
+#include <QClipboard>
 #include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDir>
@@ -19,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QList>
 #include <QRegion>
 #include <QStyleHints>
@@ -100,6 +102,9 @@ void *g_cb_userdata = nullptr;
 QString g_downloads_dir;
 int g_download_seq = 0;
 QHash<QString, QPointer<QWebEngineDownloadRequest>> g_downloads;
+
+// Copy events from Browser-plugin child views (the app's DOM cannot see them).
+peakd_clipboard_cb g_clipboard_cb = nullptr;
 
 /// Intercepts every request in a profile: asks the Rust engine whether to
 /// block, and applies the per-host User-Agent override. Runs on QtWebEngine's
@@ -428,6 +433,67 @@ protected:
     }
 };
 
+/// Ctrl/Cmd+C pressed inside a Browser-plugin child view.
+///
+/// The page is a real native window, so the app's DOM never sees this key and
+/// nothing would record the copy for the clipboard history. (The app's own view
+/// needs no filter: its DOM fires a `copy` event the clipboard service catches
+/// itself.) The filter runs the engine's own Copy action — so a site's copy
+/// handler still wins — reports the selection to Rust (which forwards it to the
+/// app's clipboard service) and swallows the key so the engine does not copy a
+/// second time.
+class PeakdClipboardFilter : public QObject {
+public:
+    using QObject::QObject;
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        if (event->type() != QEvent::KeyPress) return QObject::eventFilter(watched, event);
+        auto *key = static_cast<QKeyEvent *>(event);
+        const Qt::KeyboardModifiers mods = key->modifiers();
+        if (!mods.testFlag(Qt::ControlModifier) && !mods.testFlag(Qt::MetaModifier)) {
+            return QObject::eventFilter(watched, event);
+        }
+        // Shift keeps its engine meanings (Ctrl+Shift+C is the inspector), and
+        // Alt-combos are the app's own shortcuts.
+        if (mods.testFlag(Qt::ShiftModifier) || mods.testFlag(Qt::AltModifier)) {
+            return QObject::eventFilter(watched, event);
+        }
+        if (key->key() != Qt::Key_C) return QObject::eventFilter(watched, event);
+
+        PeakdView *view = focused_child_view();
+        if (!view) return QObject::eventFilter(watched, event);
+        // Nothing selected: not a copy. Reading the clipboard after a no-op
+        // Copy would report whatever was there before as a fresh copy.
+        const QString selection = view->page()->selectedText();
+        if (selection.isEmpty()) return QObject::eventFilter(watched, event);
+
+        view->page()->triggerAction(QWebEnginePage::Copy);
+        if (g_clipboard_cb) {
+            g_clipboard_cb(g_cb_userdata, "copy", selection.toUtf8().constData());
+        }
+        return true; // handled: the engine must not process the key again
+    }
+
+private:
+    /// The child view owning the focused widget, or null (main view or none).
+    ///
+    /// `dynamic_cast`, not `qobject_cast`: PeakdView carries no Q_OBJECT (this
+    /// file is moc'd only for IpcBridge), and the walk has to survive the
+    /// engine's internal focus widgets, which are plain QWidgets.
+    static PeakdView *focused_child_view() {
+        if (!g_ctx || !g_ctx->main_view) return nullptr;
+        QWidget *widget = QApplication::focusWidget();
+        while (widget) {
+            if (auto *view = dynamic_cast<PeakdView *>(widget)) {
+                return view == g_ctx->main_view ? nullptr : view;
+            }
+            widget = widget->parentWidget();
+        }
+        return nullptr;
+    }
+};
+
 /// The top-level window, reporting moves (the benchmark's dragging signal).
 class PeakdWindow : public QMainWindow {
 protected:
@@ -468,6 +534,17 @@ void connect_page(PeakdPage *page, const QString &id) {
                 // Only the app's own origin gets capture devices. A page the
                 // user browses must ask for permission explicitly instead of
                 // silently receiving the machine's microphone/camera.
+                page->setFeaturePermission(
+                    origin, feature,
+                    is_app_origin(origin) ? QWebEnginePage::PermissionGrantedByUser
+                                          : QWebEnginePage::PermissionDeniedByUser);
+                break;
+            case QWebEnginePage::ClipboardReadWrite:
+                // Reading is for the app itself (the Terminal pastes with
+                // navigator.clipboard.readText). A browsing page stays unable
+                // to read whatever the user copied elsewhere; its own copy
+                // buttons keep working through the engine's sanitized write
+                // path, which needs no grant here.
                 page->setFeaturePermission(
                     origin, feature,
                     is_app_origin(origin) ? QWebEnginePage::PermissionGrantedByUser
@@ -570,6 +647,9 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     context.userdata = userdata;
     context.bootstrap = bootstrap_script(load_qwebchannel_js());
     g_ctx = &context;
+    // Ctrl/Cmd+C inside a Browser child view is invisible to the app (a native
+    // window); this app-wide filter reports it into the clipboard history.
+    app.installEventFilter(new PeakdClipboardFilter(&app));
     // The start URL *is* the app origin for this run; child views may browse
     // anywhere, the main view may not.
     g_app_origin = QUrl(QString::fromLocal8Bit(url));
@@ -863,6 +943,19 @@ void peakd_qt_view_focus(const char *id) {
     }
 }
 
+// Paste text into a child view: the Clipboard menu picked an entry while a
+// Browser page was focused. The text goes onto the system clipboard first (the
+// engine pastes from there), then the engine's Paste action runs on the view's
+// focused element — a site's paste handler still wins.
+void peakd_qt_view_paste(const char *id, const char *text) {
+    if (!g_ctx) return;
+    auto view = g_ctx->children.value(QString::fromUtf8(id));
+    if (!view) return;
+    if (text) QGuiApplication::clipboard()->setText(QString::fromUtf8(text));
+    view->setFocus();
+    view->page()->triggerAction(QWebEnginePage::Paste);
+}
+
 void peakd_qt_view_close(const char *id) {
     if (!g_ctx) return;
     const QString key = QString::fromUtf8(id);
@@ -883,6 +976,11 @@ void peakd_qt_set_ua_cb(peakd_ua_cb cb, void *userdata) {
 
 void peakd_qt_set_download_cb(peakd_download_cb cb, void *userdata) {
     g_download_cb = cb;
+    if (userdata) g_cb_userdata = userdata;
+}
+
+void peakd_qt_set_clipboard_cb(peakd_clipboard_cb cb, void *userdata) {
+    g_clipboard_cb = cb;
     if (userdata) g_cb_userdata = userdata;
 }
 

@@ -437,6 +437,25 @@ export function applyHudChips() {
   root.dataset.hudPercent = ds.hudPercent;
 }
 
+/* ── Clipboard history (per-user, server-backed) ─────────────
+ * The central clipboard service (web/js/clipboard.js) owns the rules; this
+ * is only its storage. The entries are small ({ text, source, at } rows,
+ * capped by clipboardShared.js), so a preference value is enough — no table.
+ * ───────────────────────────────────────────────────────────── */
+
+const CLIPBOARD_HISTORY_KEY = 'clipboard.history';
+
+/** The recorded clipboard entries, newest first (malformed value → empty). */
+export function getClipboardHistory() {
+  return readJson(scopedKey(CLIPBOARD_HISTORY_KEY), []);
+}
+
+export function setClipboardHistory(list) {
+  const raw = JSON.stringify(Array.isArray(list) ? list : []);
+  localStorage.setItem(scopedKey(CLIPBOARD_HISTORY_KEY), raw);
+  persist(CLIPBOARD_HISTORY_KEY, raw);
+}
+
 /* ── Voice (per-user, server-backed) ───────────────────────── */
 
 export function getTtsVoice() {

@@ -1044,6 +1044,11 @@ Rules:
   `'ui/plus'`, `'ui/save'`, `'ui/play'`); omit it if unsure.
 - A plugin that needs a fully custom popup (not the window menu) can call the
   exported `openContextMenu(entries, x, y)` from `web/js/contextMenu.js`.
+- A surface that copies or pastes should use the **core clipboard service**
+  (`web/js/clipboard.js`): `copyText(text, { source: pluginName })` records the
+  copy in the top-bar Clipboard history, `readClipboardText()` reads the OS
+  clipboard (mirror fallback when the webview refuses the async read). See
+  `docs/core/clipboard.md`.
 - The **traveler** window is core-hosted (it is the Leaflet map and ships no
   `web/plugin.js`), so core supplies its app entry — *Center on my position*
   (`refreshGpsPosition()`).

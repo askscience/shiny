@@ -36,6 +36,11 @@ typedef const char *(*peakd_ua_cb)(void *userdata, const char *host);
 typedef void (*peakd_download_cb)(void *userdata, const char *id, const char *kind,
                                   const char *payload);
 
+/// One clipboard event from a child view: `kind` is `copy`, `text` the copied
+/// text. Only copies made inside a Browser-plugin page are reported — the
+/// app's own view handles its clipboard in its DOM.
+typedef void (*peakd_clipboard_cb)(void *userdata, const char *kind, const char *text);
+
 /// Runs the Qt event loop. Returns the process exit code the shell decided on
 /// (`peakd_qt_quit` after setting it).
 int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb ipc,
@@ -77,6 +82,9 @@ void peakd_qt_view_back(const char *id);
 void peakd_qt_view_forward(const char *id);
 void peakd_qt_view_reload(const char *id);
 void peakd_qt_view_focus(const char *id);
+/// Put `text` on the system clipboard and run the engine's Paste action on the
+/// view (the Clipboard menu picked an entry while a page had focus).
+void peakd_qt_view_paste(const char *id, const char *text);
 void peakd_qt_view_close(const char *id);
 
 /// Ad filtering + the Google sign-in User-Agent override. Callbacks are global
@@ -88,6 +96,10 @@ void peakd_qt_set_ua_cb(peakd_ua_cb cb, void *userdata);
 void peakd_qt_set_download_cb(peakd_download_cb cb, void *userdata);
 void peakd_qt_set_download_dir(const char *dir);
 void peakd_qt_download_action(const char *id, const char *action);
+
+/// Clipboard copies made inside Browser child views (a Ctrl/Cmd+C the app DOM
+/// can never see). Registered before `peakd_qt_run`.
+void peakd_qt_set_clipboard_cb(peakd_clipboard_cb cb, void *userdata);
 
 #ifdef __cplusplus
 }

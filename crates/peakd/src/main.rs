@@ -254,6 +254,29 @@ extern "C" fn on_download(
     downloads::on_event(&id, &kind, &payload);
 }
 
+/// A copy made inside a Browser-plugin page (the app DOM never sees it).
+///
+/// The app's clipboard service is the only consumer: it records the text in
+/// the shared history through `window.__shinyClipboardCapture`, defined by
+/// `web/js/clipboard.js`.
+extern "C" fn on_clipboard(_userdata: *mut c_void, kind: *const c_char, text: *const c_char) {
+    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy();
+    if kind != "copy" {
+        return;
+    }
+    let text = unsafe { CStr::from_ptr(text) }.to_string_lossy();
+    if text.is_empty() {
+        return;
+    }
+    // `Value::String(...).to_string()` JSON-encodes (quotes + escapes), so
+    // arbitrary page text cannot break out of the injected script.
+    let payload = serde_json::Value::String(text.into_owned()).to_string();
+    shim::main_run_js(
+        &format!("window.__shinyClipboardCapture && window.__shinyClipboardCapture({payload})"),
+        0,
+    );
+}
+
 /// View lifecycle from the shim. Events are queued; the pump reports them to
 /// the plugin with `window.__peakdViewEvent`.
 extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_char, payload: *const c_char) {
@@ -530,6 +553,9 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
     shim::set_filter_cb(on_filter);
     shim::set_ua_cb(on_ua);
     shim::set_download_cb(on_download);
+    // Copies made inside Browser pages (a native child view) are invisible to
+    // the app; report them so the clipboard history can record them.
+    shim::set_clipboard_cb(on_clipboard);
 
     let url = std::ffi::CString::new(nav_url).expect("URLs carry no NUL");
     let data_dir =

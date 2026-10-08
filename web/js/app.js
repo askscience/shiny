@@ -24,6 +24,8 @@ import { initHudBattery } from './hudBattery.js';
 import { initHudPower } from './powerMenu.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initPluginHud } from './pluginHud.js';
+import { installClipboard } from './clipboard.js';
+import { initHudClipboard } from './clipboardMenu.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, refreshTiles, openCoreWindow } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
@@ -125,6 +127,11 @@ async function initApp() {
   initHudPower(); // top-bar power menu (reboot / power off / suspend, logind)
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initPluginHud(); // optional per-plugin top-bar chips (loaded when installed)
+  // Central clipboard: record every copy app-wide (DOM copy/cut events), expose
+  // the hook the Qt shell reports Browser-page copies through, and mount the
+  // top-bar history menu. Installed before any plugin window can copy.
+  installClipboard();
+  initHudClipboard();
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
   // Settings and Plugins are built-in windows now, opened from the HUD.
   document.getElementById('settings-btn')?.addEventListener('click', () => openCoreWindow('settings'));

@@ -233,7 +233,8 @@ can be created/managed) and hidden on a phone. It is re-rendered on every
 
 `wireShortcuts()` binds these on `document` (`Alt` is the "Super" mod). Keys are
 ignored while a text field is focused, and `Ctrl`/`Meta` combos are left to the
-browser.
+browser — except `Ctrl/Cmd+Shift+V`, which opens the Clipboard menu
+(`web/js/clipboardMenu.js`; see `docs/core/clipboard.md`).
 
 | Shortcut | Action |
 |---|---|
@@ -243,6 +244,7 @@ browser.
 | `Alt+,` / `Alt+.` | Previous / next workspace |
 | `Alt+N` | New workspace |
 | `Alt+Shift+N` | Remove the active workspace |
+| `Ctrl/Cmd+Shift+V` | Open / close the top-bar Clipboard menu (copied-items history) |
 
 `Alt+Enter` only announces the gesture; `fullscreen.js` owns the action, so the
 shortcut and the window's own button agree. The same operations are reachable

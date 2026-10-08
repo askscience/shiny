@@ -44,6 +44,10 @@ impl ViewHost for QtHost {
         shim::view_focus(id);
     }
 
+    fn paste(&mut self, id: &str, text: &str) {
+        shim::view_paste(id, text);
+    }
+
     fn close(&mut self, id: &str) {
         shim::view_close(id);
     }
