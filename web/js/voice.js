@@ -49,6 +49,16 @@ const WHISPER_DOWNLOAD_ATTEMPTS = 40;
 const WHISPER_READY_DELAY_MS = 700;
 /** How often a fallback to Vosk re-checks whether the sidecar came up. */
 const WHISPER_RECOVERY_POLL_MS = 5000;
+/**
+ * Every voice request is bounded. apiFetch has no timeout, and one request
+ * that never answered used to hang prepareVoice() for good: the bar sat in
+ * `warming` — dimmed, pointer-events off — until the page was reloaded.
+ */
+const VOICE_FETCH_TIMEOUT_MS = 8000;
+/** The Vosk model download/parse is local and quick; a stall is a failure. */
+const VOSK_MODEL_TIMEOUT_MS = 30000;
+/** The one-time Vosk model fetch is a real download and may take a while. */
+const VOSK_DOWNLOAD_TIMEOUT_MS = 120000;
 
 let voskModel = null;
 let recognizer = null;
@@ -531,9 +541,35 @@ function trackEndpointing(rms) {
 
 /* ── Voice preparation ──────────────────────────────────────── */
 
+/** Reject when `promise` has not settled within `ms` — a stuck model load must
+ *  not hold the voice bar hostage. */
+function withTimeout(promise, ms, message) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
+/** apiFetch with a hard timeout, for the calls prepareVoice() awaits. */
+async function voiceFetch(path, options = {}, timeoutMs = VOICE_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await apiFetch(path, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e?.name === 'AbortError') console.warn(`Voice request timed out: ${path}`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchVoiceStatus(lang) {
   try {
-    return await apiFetch(`/api/voice/status?lang=${encodeURIComponent(lang)}`);
+    return await voiceFetch(`/api/voice/status?lang=${encodeURIComponent(lang)}`);
   } catch (_) {
     return null;
   }
@@ -563,7 +599,7 @@ async function ensureWhisperReady(lang, initial) {
       whisperModel = 'tiny';
       downloading = true;
       try {
-        await apiFetch('/api/voice/whisper/download', {
+        await voiceFetch('/api/voice/whisper/download', {
           method: 'POST',
           body: JSON.stringify({ model: 'tiny' }),
         });
@@ -621,6 +657,18 @@ export async function prepareVoice() {
   voicePreparing = true;
   try {
     return await prepareVoiceInner();
+  } catch (e) {
+    // Whatever went wrong, the bar must never be left dimmed in `warming` for
+    // good: the recognition chain is bounded, so a rejection here is a real
+    // failure, and enabling the bar in the error state lets the next gesture
+    // say what is wrong instead of "warming up" forever. (One stalled request
+    // used to do exactly that — see voiceFetch.)
+    console.warn('Voice preparation failed:', e);
+    setVoiceReady(true);
+    setSphereState('error');
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { message: 'Voice unavailable — you can still double-tap to type', type: 'error' },
+    }));
   } finally {
     voicePreparing = false;
   }
@@ -670,10 +718,12 @@ async function prepareVoiceInner() {
     // anyway when it is not.
     if ((status?.vosk || 'missing') === 'missing') {
       try {
-        await apiFetch('/api/voice/download', {
+        // The server downloads the model inside this request, so it gets a
+        // bigger budget than an ordinary poll.
+        await voiceFetch('/api/voice/download', {
           method: 'POST',
           body: JSON.stringify({ lang }),
-        });
+        }, VOSK_DOWNLOAD_TIMEOUT_MS);
       } catch (e) {
         window.dispatchEvent(new CustomEvent('app:toast', {
           detail: { message: 'Voice model download failed', type: 'error' },
@@ -710,7 +760,11 @@ async function initVosk(lang) {
   // IndexedDB folder name from the whole URL, so bumping it forces a fresh
   // download of a re-packed model (e.g. after the ivector-layout fix).
   const modelUrl = `/api/voice/models/vosk/${lang}.tar.gz?v=2`;
-  voskModel = await Vosk.createModel(modelUrl);
+  voskModel = await withTimeout(
+    Vosk.createModel(modelUrl),
+    VOSK_MODEL_TIMEOUT_MS,
+    'Vosk model load timed out',
+  );
 }
 
 /* ── Listening ──────────────────────────────────────────────── */
