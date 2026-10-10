@@ -1248,7 +1248,8 @@ export function applyLayout(grid, items) {
   const ratio = layout.master_ratio;
   const ori = layout.orientation;
 
-  grid.style.gap = `${layout.gap}px`;
+  // The gap itself is CSS (`--desktop-gap`, written from the layout config) so
+  // that the window gaps and the desktop's outer frame always agree.
   grid.classList.remove('tile-grid--master', 'tile-grid--columns', 'tile-grid--windows');
   grid.classList.add(
     layout.mode === 'master' ? 'tile-grid--master'

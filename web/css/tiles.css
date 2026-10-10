@@ -4,13 +4,18 @@
 
 #tile-grid {
   position: fixed;
-  top: calc(var(--hud-header-total) + 8px);
-  left: max(16px, env(safe-area-inset-left));
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
+  /* The bar's band (its padding + the bar + its bottom gap) is the desktop's
+     top edge; `--desktop-gap` then frames everything: the gaps between
+     windows and the window-to-screen edges. Both come from the same layout
+     setting (preferences.js → applyDesktopGap), so the desktop breathes as
+     one piece. */
+  top: var(--hud-header-total);
+  left: max(var(--desktop-gap, 16px), env(safe-area-inset-left));
+  right: max(var(--desktop-gap, 16px), env(safe-area-inset-right));
+  bottom: max(var(--desktop-gap, 16px), env(safe-area-inset-bottom));
   z-index: var(--z-map);
   display: grid;
-  gap: 8px;
+  gap: var(--desktop-gap, 8px);
   grid-template-columns: 1fr;
   pointer-events: none; /* tiles re-enable their own hit targets */
 }
@@ -1444,7 +1449,7 @@ html[data-window-background="0"] .tile-glow {
 #tile-grid.tile-grid--phone {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--desktop-gap, 10px);
 }
 
 #tile-grid.tile-grid--phone .tile {
@@ -1562,14 +1567,14 @@ body.compose-active #tile-overlay {
    bottom clearance so editors and lists are never covered by them. */
 @media (max-width: 640px) {
   #tile-grid {
-    top: calc(var(--hud-header-total) + 6px);
-    left: max(10px, env(safe-area-inset-left));
-    right: max(10px, env(safe-area-inset-right));
+    top: var(--hud-header-total);
+    left: max(var(--desktop-gap, 10px), env(safe-area-inset-left));
+    right: max(var(--desktop-gap, 10px), env(safe-area-inset-right));
     /* Clear the whole fixed chrome zone (voice bar + its bottom offset, plus
        the status pill above it) so plugin windows never hide behind it;
        stable whether the dock shows. */
     bottom: calc(env(safe-area-inset-bottom) + 96px);
-    gap: 10px;
+    gap: var(--desktop-gap, 10px);
   }
 }
 

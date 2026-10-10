@@ -100,8 +100,10 @@ html, body {
   z-index: var(--z-hud);
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: var(--hud-header-pad) 14px 12px 14px;
+  /* The bar's own margins and the space to the workspace switcher are the
+     desktop gap too (`--desktop-gap`, written from Settings → Desktop). */
+  gap: var(--desktop-gap, 10px);
+  padding: var(--hud-header-pad) var(--desktop-gap, 14px) var(--desktop-gap, 12px);
   pointer-events: none;
   animation: hudFadeIn 0.7s var(--ease-out) both;
 }

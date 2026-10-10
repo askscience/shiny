@@ -262,7 +262,7 @@
    One flat bar, hairline-bounded, spanning the width. The pill and
    its glass are gone; the tray, the chips and the clock all sit in a
    single horizontal strip, which is how a launcher status bar reads. */
-#hud-header { padding: var(--hud-header-pad) 12px 10px !important; }
+#hud-header { padding: var(--hud-header-pad) var(--desktop-gap, 12px) var(--desktop-gap, 10px) !important; }
 
 .hud-header-main {
   background: var(--bg-elevated) !important;

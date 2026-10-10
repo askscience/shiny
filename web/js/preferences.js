@@ -92,6 +92,7 @@ export async function loadUserPreferences() {
     // Keep the existing local cache when the server is unreachable.
   }
   applyDesktopSurface();
+  applyDesktopGap();
   applyImmersive();
   applyHudChips();
 }
@@ -270,6 +271,18 @@ export function setDesktopLayout(layout) {
   const raw = JSON.stringify(layout);
   localStorage.setItem(scopedKey(DESKTOP_LAYOUT_KEY), raw);
   persist(DESKTOP_LAYOUT_KEY, raw);
+  applyDesktopGap();
+}
+
+/**
+ * Publish the layout gap to CSS as `--desktop-gap`. The gap is the desktop's
+ * one breathing-room value: it separates tiled windows, frames the top bar
+ * (its margins plus the space to the workspace switcher) and holds the window
+ * edges off the screen. Written onto <html> so a slider drag re-frames
+ * everything without a re-render.
+ */
+export function applyDesktopGap() {
+  document.documentElement.style.setProperty('--desktop-gap', `${getDesktopLayout().gap}px`);
 }
 
 /**
@@ -748,8 +761,12 @@ export function setRemoteAutostart(on) {
 /* ── Early surface application ─────────────────────────────────
  * `loadUserPreferences()` (which calls applyDesktopSurface()) only runs after
  * auth resolves, but the desktop can have already painted by then. Apply the
- * last session's cached surface now so a translucent/blurred window and a
- * disabled ambient background are correct from the first frame; the stored
- * server values simply re-apply the same result a moment later.
+ * last session's cached surface and layout gap now so a translucent/blurred
+ * window, a disabled ambient background and the desktop's frame are correct
+ * from the first frame; the stored server values simply re-apply the same
+ * result a moment later.
  * ─────────────────────────────────────────────────────────────── */
-if (typeof document !== 'undefined') applyDesktopSurface();
+if (typeof document !== 'undefined') {
+  applyDesktopSurface();
+  applyDesktopGap();
+}

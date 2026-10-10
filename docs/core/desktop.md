@@ -135,10 +135,22 @@ const DEFAULT_DESKTOP_LAYOUT = {
   mode: 'master',       // Tiling | 'columns' | 'windows'
   master_ratio: 0.7,    // master fraction (0.25–0.85)
   orientation: 'left',  // 'left' | 'right' | 'top' | 'bottom'
-  gap: 8,               // px between windows (0–40)
+  gap: 8,               // desktop breathing room, px (0–40)
   stack_weights: {},    // pluginName -> relative stack track size
 };
 ```
+
+`gap` is the desktop's single spacing value. `applyDesktopGap()` writes it to
+`<html>` as `--desktop-gap` on every layout change, and CSS spends it on:
+
+- the gaps between windows (`#tile-grid`), on every breakpoint;
+- the top bar's own margins and the space to the workspace switcher
+  (`#hud-header`, `--hud-header-pad`);
+- the window-to-screen edges (`#tile-grid` insets), whose top edge is
+  `--hud-header-total` — the bar band the themes build from the same gap.
+
+Dragging the slider therefore re-frames the whole desktop live, with no
+re-render; the settings page calls `setLayout()` so splitter handles follow.
 
 `applyLayout(grid, items)` removes the previous layout classes, clears the
 splitter overlay, then branches:

@@ -22,6 +22,7 @@ import {
   logoutSession,
 } from './api.js';
 import { openCoreWindow } from './tiles.js';
+import { setLayout } from './desktop.js';
 import {
   toast, icon, button, input, select, slider, toggleRow,
   listThemes, setTheme, getActiveTheme, getThemeManifest,
@@ -1045,10 +1046,11 @@ function buildDesktop() {
     min: 0, max: 40, step: 2, value: layout.gap,
     onInput: (value) => {
       gap.value.textContent = `${value}px`;
-      setDesktopLayout({ ...getDesktopLayout(), gap: value });
+      setLayout({ gap: value });
     },
   });
   const gap = sliderField('Gap', `${layout.gap}px`, gapControl);
+  gap.wrap.appendChild(el('p', 'settings-hint', 'Window gaps — and the frame around them: the top bar\u2019s margins, the space to the workspace switcher and the window-to-screen edges.'));
 
   const tilingControls = el('div', 'settings-tiling-controls');
   tilingControls.append(field('Master side', orientation), ratio.wrap, gap.wrap);
