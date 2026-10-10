@@ -629,10 +629,11 @@ export async function prepareVoice() {
 async function prepareVoiceInner() {
   const lang = getVoiceLang();
   // Voice loads silently in the background — no progress card, no
-  // notification. The voice bar just stays dimmed (setVoiceReady(false)) until the
-  // recognizer is usable; tapping early already gives its own feedback.
+  // notification. The voice bar stays dimmed (setVoiceReady(false)) and `warming`
+  // until the recognizer is usable; a gesture that arrives before then waits for
+  // readiness (app.js tapOrb) instead of being dropped.
   setVoiceReady(false);
-  setSphereState('downloading');
+  setSphereState('warming');
 
   voiceLang = lang;
   sttEngine = getEffectiveSttEngine();

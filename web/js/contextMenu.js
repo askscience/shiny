@@ -47,6 +47,7 @@ import { newChat, stopActiveTurn, isTurnActive } from './agent.js';
 import { openChatHistory } from './chatHistory.js';
 import { openTextInput } from './textInput.js';
 import { startListening, cancelListening, isListening } from './voice.js';
+import { getSphereState, waitForVoiceReady } from './sphere.js';
 import { getAiName, getWakeWord, setWakeWord } from './preferences.js';
 import { notifyMenuChange } from './menuState.js';
 
@@ -528,8 +529,18 @@ async function orbListen() {
   if (isListening()) return;
   const sphere = document.getElementById('sphere-container');
   if (sphere?.classList.contains('disabled')) {
-    toast('Voice is preparing — try again in a moment', { type: 'info' });
-    return;
+    // A menu click during the cold-login warm-up is held like a tap on the bar:
+    // listen as soon as the recognizer is ready.
+    if (getSphereState() !== 'warming') {
+      toast('Voice is unavailable — you can still type to the assistant', { type: 'info' });
+      return;
+    }
+    toast('Voice is warming up — listening starts when it is ready', { type: 'info' });
+    if (!(await waitForVoiceReady())) {
+      toast('Voice is still warming up — try again in a moment', { type: 'info' });
+      return;
+    }
+    if (isListening()) return;
   }
   if (isTurnActive()) await stopActiveTurn('menu');
   try {

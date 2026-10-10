@@ -461,6 +461,11 @@ _models: dict[str, Any] = {}
 _model_lock = threading.Lock()
 # CTranslate2 models are not safe to call concurrently on the same instance.
 _decode_lock = threading.Lock()
+# Set once main() has finished the startup preload (whether or not it
+# succeeded). /health answers 503 before that, so the port being held — which
+# the sidecar does from the very start, see main() — is never mistaken for a
+# usable engine.
+_warm = threading.Event()
 
 
 def model_path(key: str) -> Path:
@@ -680,8 +685,13 @@ def _run_partial(session: Session) -> str:
 
 
 @app.get("/health")
-def health() -> dict[str, Any]:
+def health() -> Any:
     _expire_sessions()
+    if not _warm.is_set():
+        return JSONResponse(
+            {"status": "warming", "default_model": DEFAULT_MODEL},
+            status_code=503,
+        )
     return {
         "status": "ok",
         "device": DEVICE,
@@ -807,17 +817,41 @@ def stt_close(session: str = Query(..., min_length=1)) -> JSONResponse:
 
 
 def main() -> None:
+    import socket
     import uvicorn
 
     host = os.environ.get("WHISPER_HOST", "127.0.0.1")
     port = int(os.environ.get("WHISPER_PORT", "7789"))
+
+    # Own the port *before* the slow part. Both launchers — shiny-session and
+    # the core server — start this sidecar on every login; a launcher that
+    # probes while this process is still importing CTranslate2 and loading the
+    # model sees a closed port, starts a second copy, and that copy then dies
+    # on EADDRINUSE after paying the same load cost. Holding the socket from
+    # the start turns the race into "someone is already warming up" for
+    # voice/start_whisper.sh, and /health gates on the preload so the app never
+    # treats a bound-but-loading sidecar as ready.
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, port))
+    except OSError as exc:
+        print(f"[whisper] cannot bind {host}:{port}: {exc}", flush=True)
+        raise SystemExit(1)
+    sock.listen(2048)
+
     # Preload so the first spoken word is not delayed by a cold model load.
     if model_available(DEFAULT_MODEL):
         try:
             get_model(DEFAULT_MODEL)
         except Exception as exc:  # pragma: no cover - startup diagnostics only
             print(f"[whisper] preload failed: {exc}", flush=True)
-    uvicorn.run(app, host=host, port=port, log_level=os.environ.get("WHISPER_LOG", "warning"))
+    _warm.set()
+
+    server = uvicorn.Server(
+        uvicorn.Config(app, host=host, port=port, log_level=os.environ.get("WHISPER_LOG", "warning"))
+    )
+    server.run(sockets=[sock])
 
 
 if __name__ == "__main__":

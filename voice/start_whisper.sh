@@ -77,11 +77,69 @@ done
 
 # Someone (the core server, or a previous run) may already own the port.
 probe_py="${PY:-python3}"
+
+port_open() {
+  "$probe_py" - "$HOST" "$PORT" <<'PY' >/dev/null 2>&1
+import socket, sys
+s = socket.socket()
+s.settimeout(1)
+try:
+    s.connect((sys.argv[1], int(sys.argv[2])))
+finally:
+    s.close()
+PY
+}
+
 if sidecar_up "$probe_py"; then
   echo "faster-whisper sidecar already listening on $HOST:$PORT"
   exit 0
 fi
 [ "$CHECK_ONLY" = "1" ] && exit 1
+
+# Two launchers run on every login — shiny-session and the core server — and
+# both used to import CTranslate2 and load the model before one died on
+# EADDRINUSE. The sidecar now binds the port before it preloads, and the
+# starter holds a lock for as long as the sidecar lives (the descriptor is
+# inherited through the exec below), so a launcher that arrives during a start
+# waits for /health instead of racing it. The lock is per-port runtime state,
+# never a file in the install tree — a distro package may ship that read-only.
+# flock is a Debian staple but not on macOS; without it the port probe is the
+# fallback.
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+[ -d "$runtime_dir" ] || runtime_dir="${TMPDIR:-/tmp}"
+LOCK="${WHISPER_LOCK_FILE:-$runtime_dir/shiny-whisper-$PORT.lock}"
+if command -v flock >/dev/null 2>&1 && : >>"$LOCK" 2>/dev/null; then
+  exec 9>>"$LOCK"
+  if ! flock -n 9; then
+    echo "faster-whisper sidecar is starting on $HOST:$PORT"
+    took_over=0
+    for _ in $(seq 1 120); do  # ~60 s: a cold Python start and model load are slow
+      sleep 0.5
+      if sidecar_up "$probe_py"; then
+        echo "faster-whisper sidecar ready on $HOST:$PORT"
+        exit 0
+      fi
+      if flock -n 9; then  # the starter died — take over and start ours
+        took_over=1
+        break
+      fi
+    done
+    if [ "$took_over" != "1" ]; then
+      echo "faster-whisper sidecar did not answer on $HOST:$PORT" >&2
+      exit 1
+    fi
+  fi
+elif port_open; then
+  echo "faster-whisper sidecar is warming up on $HOST:$PORT"
+  for _ in $(seq 1 120); do
+    sleep 0.5
+    if sidecar_up "$probe_py"; then
+      echo "faster-whisper sidecar ready on $HOST:$PORT"
+      exit 0
+    fi
+    port_open || break  # it died while warming — start our own instead
+  done
+fi
 
 if [ -z "$PY" ]; then
   if [ "${WHISPER_AUTO_INSTALL:-0}" = "1" ]; then

@@ -4,7 +4,7 @@ import { initMap, getCurrentPosition } from './map.js';
 import {
   initSphere, setSphereState, onShortTap, onLongPressStart, onLongPressEnd,
   onDoubleTap, setConversationMode, setMicLevel, resetMicLevel,
-  getSphereState,
+  getSphereState, waitForVoiceReady,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
 import { sendToAgent, sendToAgentCompose, stopActiveTurn, isTurnActive } from './agent.js';
@@ -221,7 +221,7 @@ function voiceReady() {
 
 /** Voice gestures while the speech model prepares: feedback, not silence. */
 function voiceNotReady() {
-  const preparing = getSphereState() === 'downloading';
+  const preparing = getSphereState() === 'warming';
   toast(
     preparing
       ? 'Voice is preparing — try again in a moment'
@@ -238,8 +238,21 @@ function voiceNotReady() {
 async function tapOrb() {
   if (isTextInputOpen() || isComposeAwaiting()) return;
   if (!voiceReady()) {
-    voiceNotReady();
-    return;
+    // Cold login: the speech model can still be warming up when the first tap
+    // arrives. Hold the tap instead of dropping it with a toast — the
+    // microphone opens by itself as soon as the recognizer is usable.
+    if (getSphereState() !== 'warming') {
+      voiceNotReady();
+      return;
+    }
+    toast('Voice is warming up — listening starts when it is ready', { type: 'info' });
+    if (!(await waitForVoiceReady())) {
+      voiceNotReady();
+      return;
+    }
+    // The wait can be long enough for the user to open the keyboard or start
+    // listening some other way; the held tap must not talk over that.
+    if (isListening() || isTextInputOpen() || isComposeAwaiting()) return;
   }
 
   if (isListening()) {

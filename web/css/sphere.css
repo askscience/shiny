@@ -68,7 +68,7 @@
 #sphere-container.state-conversation,
 #sphere-container.state-processing,
 #sphere-container.state-speaking,
-#sphere-container.state-downloading {
+#sphere-container.state-warming {
   --voice-base: 0.42;
 }
 #sphere-container.state-error {

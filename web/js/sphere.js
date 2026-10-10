@@ -20,6 +20,8 @@ let conversationMode = false;
 // `pressTimer` is null by then, so release handling needs this flag.
 let longPressFired = false;
 let voiceReady = false;
+/** Resolvers waiting for the next setVoiceReady(true) — see waitForVoiceReady. */
+const readyWaiters = new Set();
 let pointerId = null;
 
 // Human double-clicks vary a lot (macOS default allows ~500ms between taps).
@@ -71,9 +73,34 @@ export function setVoiceReady(ready) {
   container.classList.toggle('disabled', !ready);
   if (!ready && currentState === 'idle') {
     setSphereState('disabled');
-  } else if (ready && (currentState === 'disabled' || currentState === 'downloading')) {
+  } else if (ready && (currentState === 'disabled' || currentState === 'warming')) {
     setSphereState('idle');
   }
+  if (ready && readyWaiters.size) {
+    const waiters = [...readyWaiters];
+    readyWaiters.clear();
+    for (const resolve of waiters) resolve(true);
+  }
+}
+
+/**
+ * Resolve true the moment the speech model becomes usable, or false after
+ * `timeoutMs`. A gesture that arrives while the bar is still `warming` waits
+ * here instead of being dropped with a toast — on a cold login the
+ * faster-whisper sidecar needs a few seconds before it can listen.
+ */
+export function waitForVoiceReady(timeoutMs = 30000) {
+  if (voiceReady) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let timer = null;
+    const settle = (ok) => {
+      if (timer) clearTimeout(timer);
+      readyWaiters.delete(settle);
+      resolve(ok);
+    };
+    timer = setTimeout(() => settle(false), timeoutMs);
+    readyWaiters.add(settle);
+  });
 }
 
 export function onShortTap(fn) { callbacks.onShortTap = fn; }

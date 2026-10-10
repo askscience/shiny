@@ -58,6 +58,7 @@ the kiosk shell and the auth helper.
 | `WHISPER_PYTHON` | — | ✓ L | Explicit interpreter. |
 | `WHISPER_HOST` / `WHISPER_PORT` | `127.0.0.1` / `7789` | L | Sidecar bind. |
 | `WHISPER_LOG_FILE` | `data/whisper-sidecar.log` | L | Log file. |
+| `WHISPER_LOCK_FILE` | `$XDG_RUNTIME_DIR/shiny-whisper-7789.lock` | L | Start lock — one launcher starts the sidecar, the rest wait (falls back to `/tmp`). |
 | `WHISPER_BOOTSTRAP_PYTHON` | `python3` | L | Downloader/venv interpreter. |
 | `KMP_DUPLICATE_LIB_OK` | `TRUE` (set by launcher) | L | OpenMP duplicate-runtime tolerance. |
 | `VOSK_MODELS_DIR` | `data/vosk-models` | ✓ | Vosk model storage (served to the browser). |
