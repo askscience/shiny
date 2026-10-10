@@ -109,6 +109,15 @@ component library:
 See [themes & icons](themes-icons.md) for theming and icon resolution, and
 [plugin authoring](../plugins/authoring.md) for the window-surface contract.
 
+`field.js`'s `select()` deliberately never opens the platform popup. On X11,
+QtWebEngine 6.8 crashes the whole shell (SIGSEGV in `QXcbWindow::handleNativeEvent`,
+mid-teardown of the popup's native window) as soon as a native `<select>` dropdown
+opens — which is what made choosing a theme or an icon set in Settings → Appearance
+restart the kiosk. The component keeps the styled `<select>` as the closed field
+and draws the open list itself (`.ui-select-menu`, an in-page popover). A raw
+`<select>` a plugin builds must be armed with `useSelectMenu(el)` for the same
+reason. The upstream fix is in Qt 6.9.2 (QTBUG-135036).
+
 ---
 
 ## Loading a plugin window

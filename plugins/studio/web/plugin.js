@@ -22,7 +22,7 @@
  * is WebAudio. Launcher clips loop and launch quantized to the next bar.
  */
 
-import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient } from '../../ui/index.js';
+import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient, useSelectMenu } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { saveOrDownload } from '../../js/files.js';
 
@@ -1493,6 +1493,7 @@ function nativeSelect(options, value, onchange, hint) {
   }
   selEl.value = value;
   selEl.addEventListener('change', () => onchange(selEl.value));
+  useSelectMenu(selEl);
   if (hint) withHint(selEl, hint);
   return selEl;
 }

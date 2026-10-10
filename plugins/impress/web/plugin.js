@@ -14,7 +14,7 @@
 
 import {
   icon, button, emptyState, toast,
-  setTileGlow, glowGradient,
+  setTileGlow, glowGradient, useSelectMenu,
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
@@ -956,6 +956,7 @@ export function mountImpressTile() {
     renderStrip();
     updateGlow();
   });
+  useSelectMenu(themeSelect);
 
   saveDot = h('span', 'impress-save-dot');
   saveDot.setAttribute('aria-hidden', 'true');
@@ -1037,6 +1038,7 @@ function buildInspector() {
       renderStage();
       renderStrip();
     });
+    useSelectMenu(layoutSelect);
     return layoutSelect;
   });
   panel.appendChild(layoutField);
@@ -1055,6 +1057,7 @@ function buildInspector() {
       select.appendChild(opt);
     }
     select.addEventListener('change', () => onChange(select.value));
+    useSelectMenu(select);
     wrap.appendChild(select);
     return { wrap, select };
   };

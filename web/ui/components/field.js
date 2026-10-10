@@ -49,8 +49,15 @@ export function textarea(o = {}) {
 }
 
 /**
- * Styled native select. options: [{value, label}] or [string].
- * Returns the wrapper; `wrap.select` is the raw <select>.
+ * Styled select. options: [{value, label}] or [string].
+ * Returns the wrapper; `wrap.select` is the `<select>` that holds the value and
+ * supplies the closed field's look.
+ *
+ * The platform popup is never opened. QtWebEngine 6.8 on X11 segfaults the
+ * whole shell when a native `<select>` dropdown opens (QTBUG-135036, fixed
+ * upstream in Qt 6.9.2): the popup is a native window and Qt then handles an X
+ * event for a window that is already gone. So the look stays the styled
+ * `<select>`'s, while the open list is an in-page menu (`.ui-select-menu`).
  */
 export function select(o = {}) {
   const wrap = document.createElement('div');
@@ -59,6 +66,7 @@ export function select(o = {}) {
   el.className = 'ui-select';
   if (o.id) el.id = o.id;
   wrap.setOptions = (options = []) => {
+    if (openSelect?.select === el) closeSelectMenu();
     el.textContent = '';
     for (const opt of options) {
       const node = document.createElement('option');
@@ -70,10 +78,135 @@ export function select(o = {}) {
   };
   wrap.setOptions(o.options || []);
   if (o.onChange) el.addEventListener('change', (e) => o.onChange(e.target.value, e));
+  useSelectMenu(el);
   wrap.appendChild(el);
   wrap.appendChild(icon('ui/chevron-down'));
   wrap.select = el;
   return wrap;
+}
+
+/**
+ * Arm a `<select>` to open the in-page menu instead of the platform popup.
+ * `select()` does this for the shared component; call it for raw selects a
+ * plugin builds itself. Keeping the platform popup closed is what keeps the
+ * shell alive (see the note on `select()`).
+ */
+export function useSelectMenu(el) {
+  if (el.dataset.selectMenuArmed) return el;
+  el.dataset.selectMenuArmed = '1';
+  el.addEventListener('mousedown', (e) => { e.preventDefault(); openSelectMenu(el); });
+  el.addEventListener('click', (e) => e.preventDefault());
+  el.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      openSelectMenu(el);
+    }
+  });
+  return el;
+}
+
+/** The one open dropdown, if any. */
+let openSelect = null;
+
+/** Close the open dropdown (no-op when none is open). */
+export function closeSelectMenu() {
+  if (!openSelect) return;
+  const menu = openSelect;
+  openSelect = null;
+  menu.dispose();
+}
+
+function openSelectMenu(el) {
+  const wasOpenFor = openSelect?.select === el;
+  closeSelectMenu();
+  if (wasOpenFor) return; // second click on the same field toggles it shut
+  const options = [...el.options];
+  if (!options.length) return;
+
+  let active = Math.max(0, options.findIndex((opt) => opt.value === el.value));
+  const items = [];
+  const menu = document.createElement('div');
+  menu.className = 'ui-select-menu';
+  menu.setAttribute('role', 'listbox');
+  menu.tabIndex = -1;
+
+  const syncActive = (scroll = false) => {
+    items.forEach((item, i) => item.classList.toggle('is-active', i === active));
+    if (scroll) items[active]?.scrollIntoView({ block: 'nearest' });
+  };
+  const choose = (index) => {
+    const value = options[index]?.value;
+    closeSelectMenu();
+    if (value == null) return;
+    if (el.value !== value) {
+      el.value = value;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    el.focus();
+  };
+
+  options.forEach((opt, i) => {
+    const item = document.createElement('div');
+    item.className = 'ui-select-option';
+    item.setAttribute('role', 'option');
+    item.dataset.value = opt.value;
+    item.textContent = opt.label || opt.textContent || opt.value;
+    item.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); choose(i); });
+    items.push(item);
+    menu.appendChild(item);
+  });
+  syncActive();
+
+  const place = () => {
+    const r = el.getBoundingClientRect();
+    const gap = 6;
+    menu.style.minWidth = `${Math.round(r.width)}px`;
+    menu.style.left = `${Math.round(Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+    const below = window.innerHeight - r.bottom - gap;
+    menu.style.top = menu.offsetHeight > below && r.top - gap > below
+      ? `${Math.round(Math.max(8, r.top - gap - menu.offsetHeight))}px`
+      : `${Math.round(r.bottom + gap)}px`;
+  };
+
+  const onDocPointerDown = (e) => {
+    if (!menu.contains(e.target) && !el.contains(e.target)) closeSelectMenu();
+  };
+  const onWheel = (e) => {
+    if (!menu.contains(e.target)) closeSelectMenu();
+  };
+  const onKeyDown = (e) => {
+    const last = options.length - 1;
+    switch (e.key) {
+      case 'ArrowDown': active = Math.min(last, active + 1); break;
+      case 'ArrowUp': active = Math.max(0, active - 1); break;
+      case 'Home': active = 0; break;
+      case 'End': active = last; break;
+      case 'Enter': case ' ': choose(active); e.preventDefault(); return;
+      case 'Escape': closeSelectMenu(); el.focus(); e.preventDefault(); return;
+      case 'Tab': closeSelectMenu(); return;
+      default: return;
+    }
+    e.preventDefault();
+    syncActive(true);
+  };
+  const dispose = () => {
+    document.removeEventListener('pointerdown', onDocPointerDown, true);
+    window.removeEventListener('wheel', onWheel, true);
+    window.removeEventListener('resize', closeSelectMenu);
+    window.removeEventListener('blur', closeSelectMenu);
+    menu.removeEventListener('keydown', onKeyDown);
+    menu.remove();
+  };
+
+  document.body.appendChild(menu);
+  place();
+  menu.focus();
+  menu.addEventListener('keydown', onKeyDown);
+  document.addEventListener('pointerdown', onDocPointerDown, true);
+  window.addEventListener('wheel', onWheel, { capture: true, passive: true });
+  window.addEventListener('resize', closeSelectMenu);
+  window.addEventListener('blur', closeSelectMenu);
+  openSelect = { select: el, dispose };
 }
 
 /** Switch. Returns button[role=switch]; `.setChecked(v)`, change via onChange. */

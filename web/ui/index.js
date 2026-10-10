@@ -23,7 +23,7 @@ export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg, refreshIcons,
 export { reveal } from './reveal.js';
 
 export { button, iconButton } from './components/button.js';
-export { field, input, textarea, select, toggle, toggleRow, slider, checkbox, searchBar } from './components/field.js';
+export { field, input, textarea, select, useSelectMenu, toggle, toggleRow, slider, checkbox, searchBar } from './components/field.js';
 export { card, panel, section, divider, stack, row } from './components/card.js';
 export { modal, sheet, tooltip } from './components/overlay.js';
 export { toast, wireToastEvents, spinner, skeleton, progress, emptyState, badge } from './components/feedback.js';
