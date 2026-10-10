@@ -120,6 +120,8 @@
            same glass pill as the workspace switcher. -->
       <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Fullscreen window"></div>
       <div class="hud-header-main">
+        <!-- Group separators (clock | weather | tray | status chips | actions)
+             are mounted by js/hudDivider.js — one element, one style. -->
         <!-- Clock and weather are the bar's two popover triggers: the clock
              opens the location time + the calendar's month, the weather chip
              the 5-day forecast. -->
@@ -129,13 +131,11 @@
             <span id="hud-clock-date"></span>
           </span>
         </button>
-        <div class="hud-divider" aria-hidden="true"></div>
         <button type="button" class="hud-meteo" id="hud-meteo" title="Weather at your position" aria-haspopup="dialog" aria-expanded="false">
           <span id="hud-meteo-icon" data-icon="insights/weather-cloud" aria-hidden="true"></span>
           <span id="hud-meteo-temp">—°</span>
           <span id="hud-meteo-label">…</span>
         </button>
-        <div class="hud-divider" aria-hidden="true"></div>
         <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins"></div>
         <div id="hud-saved-trips" class="empty" aria-label="Saved places"></div>
         <div id="hud-top">
@@ -159,7 +159,6 @@
             <span class="hud-battery-label" id="hud-battery-label"></span>
             <span class="hud-battery-pct" id="hud-battery-pct"></span>
           </button>
-          <div class="hud-divider hud-divider--battery" aria-hidden="true"></div>
           <button type="button" id="hud-clipboard" class="icon-btn" title="Clipboard" aria-label="Clipboard history" aria-haspopup="dialog" aria-expanded="false">
             <span data-icon="ui/clipboard" data-icon-size="20" aria-hidden="true"></span>
           </button>

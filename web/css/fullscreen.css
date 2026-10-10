@@ -136,9 +136,12 @@ html[data-bar-pos='right'] .hud-header-main {
 
 html[data-bar-pos='left'] .hud-divider,
 html[data-bar-pos='right'] .hud-divider {
-  width: 22px;
+  width: 14px;
   height: 1px;
 }
+
+html[data-bar-pos='left'] .hud-divider--push,
+html[data-bar-pos='right'] .hud-divider--push { margin-left: 0; }
 
 html[data-bar-pos='left'] .hud-clock,
 html[data-bar-pos='right'] .hud-clock,
@@ -191,11 +194,8 @@ html[data-bar-pos='right'] #hud-saved-trips .ui-hud-menu-trigger {
 html[data-bar-pos='left'] #hud-top,
 html[data-bar-pos='right'] #hud-top {
   flex-direction: column;
-  margin-left: 0;
   padding-left: 0;
   padding-top: 6px;
-  border-left: none;
-  border-top: 1px solid var(--glass-border);
 }
 
 html[data-bar-pos='left'] #workspace-bar,

@@ -9,6 +9,7 @@
  * every plugin, not just the ones currently open, and is visible at all sizes.
  */
 import { apiFetch } from './api.js';
+import { hudDivider } from './hudDivider.js';
 import { pluginIconEl } from './pluginIcon.js';
 
 const trayEl = document.getElementById('hud-plugins');
@@ -79,12 +80,7 @@ function render() {
   }
 
   groups.forEach((group, gi) => {
-    if (gi > 0) {
-      const sep = document.createElement('span');
-      sep.className = 'hud-divider';
-      sep.setAttribute('aria-hidden', 'true');
-      trayEl.appendChild(sep);
-    }
+    if (gi > 0) trayEl.appendChild(hudDivider());
     for (const p of group.items) trayEl.appendChild(buildButton(p));
   });
 

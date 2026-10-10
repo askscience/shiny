@@ -271,7 +271,6 @@
   padding: 0 6px !important;
 }
 
-#hud-top { border-left-color: var(--glass-border) !important; }
 #hud-top .icon-btn,
 #hud-top .icon-btn:hover {
   background: transparent !important;
@@ -343,7 +342,6 @@
   text-transform: uppercase;
   color: var(--muted) !important;
 }
-.hud-divider { background: var(--glass-border) !important; opacity: 1 !important; }
 .hud-meteo { color: var(--text-secondary) !important; }
 #hud-meteo-temp { color: var(--text) !important; }
 

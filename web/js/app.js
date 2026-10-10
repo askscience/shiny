@@ -24,6 +24,7 @@ import { initHudAudio } from './hudAudio.js';
 import { initHudBluetooth } from './hudBluetooth.js';
 import { initHudBattery } from './hudBattery.js';
 import { initHudPower } from './powerMenu.js';
+import { initHudDividers } from './hudDivider.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initPluginHud } from './pluginHud.js';
 import { installClipboard } from './clipboard.js';
@@ -60,6 +61,9 @@ function cancelVoiceInput() {
 }
 
 async function boot() {
+  // The bar's separators come from the one hudDivider factory; mount them
+  // before anything awaits so the bar never paints without them.
+  initHudDividers();
   // Theme + appearance first: everything renders through these tokens.
   await initThemeLoader();
   initIconLoader(); // resolve the stored icon set against the theme's mode

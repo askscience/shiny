@@ -130,9 +130,7 @@ html, body {
   gap: 2px;
   flex-shrink: 0;
   pointer-events: auto;
-  margin-left: auto;
   padding-left: 6px;
-  border-left: 1px solid var(--glass-border);
 }
 
 /* Inside the top-bar pill the nav buttons are flat, muted, circular icons —
@@ -690,13 +688,20 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 
 #fullscreen-bubble .fullscreen-bubble-btn .ui-icon { width: 14px; height: 14px; }
 
-.hud-divider { width: 1px; height: 20px; background: var(--glass-border); flex-shrink: 0; }
+/* The top bar's separator — a single element, built by js/hudDivider.js. A
+   short hairline, so it divides the bar's groups without reading as a bar of
+   its own. */
+.hud-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--glass-border);
+  flex-shrink: 0;
+}
 
-/* Global separator between the host status chips and the action icons
-   (Settings / Plugins / Power). It is always present — even on a machine with
-   no battery, where `#hud-battery` hides itself — so the two areas of the bar
-   are always visually divided. */
-.hud-divider--battery { display: block; }
+/* The separator before the host status chips absorbs the bar's free space, so
+   the chips + actions cluster stays pinned to the end edge whether or not the
+   plugin tray is showing (the tray takes that space when it is). */
+.hud-divider--push { margin-left: auto; }
 
 /* ── Plugin icon tray (top bar, right of the weather separator) ── */
 #hud-plugins {
