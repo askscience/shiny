@@ -114,6 +114,15 @@ async function onClick(p, active) {
   window.dispatchEvent(new CustomEvent('plugins:changed', { detail: { opened: p.name } }));
 }
 
+/**
+ * Activate a plugin if it is not active yet and bring its window forward —
+ * the tray's click behaviour, for other menus (the clock's calendar shortcut).
+ */
+export async function openPlugin(name) {
+  const plugin = plugins.find((item) => item.name === name) || { name };
+  await onClick(plugin, activeSet.has(name));
+}
+
 export function initHudPlugins() {
   if (!trayEl) return;
   window.addEventListener('plugins:changed', () => void refresh());

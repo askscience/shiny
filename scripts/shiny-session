@@ -27,6 +27,9 @@ PORT=$((PORT_BASE + $(id -u) - 1000))
 mkdir -p "$HOME/.config/shiny"
 printf 'SERVER_PORT=%s\n' "$PORT" > "$HOME/.config/shiny/env"
 export PEAKD_APP_ORIGIN="http://127.0.0.1:$PORT"
+# Where the shell opens at startup. It navigates to the auto-login URL instead
+# when a boot token is available (see load_boot_token below).
+APP_URL="$PEAKD_APP_ORIGIN/"
 
 # The compiled ad-filter cache is shared between this user's server and the
 # shell (the unit below sets the server's ADFILTER_DIR). Per-user, not fixed.
@@ -63,12 +66,20 @@ STATE_FILE="$RUNTIME_DIR/shiny-remote.state"
 # into the normal shiny_token cookie, so the app opens without a second login.
 # The token is handed to peakd through the **environment**, never argv: on Linux
 # `/proc/<pid>/cmdline` is world-readable while `/proc/<pid>/environ` is
-# owner-only. The shell appends it to the bootstrap URL itself and the server
-# rotates it after the first redemption (single-use).
-BOOT_URL="http://127.0.0.1:$PORT/"
-if [ -r "$TOKEN_FILE" ]; then
-    export SHINY_BOOT_TOKEN="$(cat "$TOKEN_FILE")"
-fi
+# owner-only. The shell appends it to the bootstrap URL itself.
+#
+# Re-read for *every* launch, not once per session: the server rotates the
+# secret after each redemption and rewrites the file, so a value captured at
+# session start is already spent by the time Server mode hands the screen back
+# (or peakd is restarted) — and a stale token is not a usable login. Unset first,
+# so a token from an earlier iteration can never leak into this one.
+load_boot_token() {
+    unset SHINY_BOOT_TOKEN
+    if [ -r "$TOKEN_FILE" ]; then
+        SHINY_BOOT_TOKEN="$(cat "$TOKEN_FILE")"
+        export SHINY_BOOT_TOKEN
+    fi
+}
 
 # A kiosk does not blank or sleep the panel.
 xset s off     >/dev/null 2>&1 || true
@@ -78,6 +89,17 @@ xset -dpms     >/dev/null 2>&1 || true
 # matchbox maximises the single window and adds no chrome.
 matchbox-window-manager -use_titlebar no &
 
+# GeoClue agent for the kiosk session.
+#
+# QtWebEngine turns navigator.geolocation into Qt Positioning -> GeoClue2.
+# GeoClue's GetClient does not return until an *agent* is present, even for an
+# application allowlisted in /etc/geoclue/conf.d/50-peakd.conf. The packaged
+# demo agent satisfies that presence requirement; `peakd` is allowlisted, so it
+# is authorized without the agent ever prompting.
+if [ -x /usr/libexec/geoclue-2.0/demos/agent ]; then
+    /usr/libexec/geoclue-2.0/demos/agent >/dev/null 2>&1 &
+fi
+
 peakd=@PEAKD_BIN@
 server_mode=@SERVER_MODE_BIN@
 
@@ -85,16 +107,46 @@ read_state() {
     cat "$STATE_FILE" 2>/dev/null || echo off
 }
 
+# A crash should leave a core for the next investigation: `core_pattern` is
+# `core`, and the limit is inherited by peakd (and by the server-mode window).
+ulimit -c unlimited 2>/dev/null || true
+
+# A crash is retried a few times in quick succession: losing the whole session
+# over one bad frame costs a full re-login (and, on this kiosk, a reboot), while
+# a clean quit is still respected.
+crashes=0
+last_crash=0
+
 while true; do
     if [ "$(read_state)" = "on" ]; then
         # Server mode: show the link/control window. When it exits (Stop), the
         # state flips to off and the loop brings the kiosk back.
         "$server_mode"
     else
-        "$peakd" --url "$BOOT_URL"
+        load_boot_token
+        "$peakd" --url "$APP_URL"
         code=$?
-        # 42 = the user turned Server mode on: switch windows. Any other status
-        # is a real quit (Alt+Q) or a crash: end the session.
-        [ "$code" -eq 42 ] || break
+        if [ "$code" -eq 42 ]; then
+            # Server mode: switch windows.
+            crashes=0
+            continue
+        fi
+        if [ "$code" -ge 128 ]; then
+            # Signal death (139 = SIGSEGV, 134 = SIGABRT): a crash.
+            now=$(date +%s)
+            [ $((now - last_crash)) -gt 60 ] && crashes=0
+            crashes=$((crashes + 1))
+            last_crash=$now
+            echo "shiny-session: peakd died with signal $((code - 128)) (attempt $crashes/3)" >&2
+            if [ "$crashes" -lt 3 ]; then
+                sleep 2
+                continue
+            fi
+            echo "shiny-session: peakd crash-looped $crashes times, ending the session" >&2
+        else
+            # A real quit (Alt+Q) or an unexpected clean exit.
+            echo "shiny-session: peakd exited with status $code, ending the session" >&2
+        fi
+        exit "$code"
     fi
 done

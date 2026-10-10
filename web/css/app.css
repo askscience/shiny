@@ -769,8 +769,20 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   padding: 0 14px;
   height: calc(var(--hud-bar-height) - 8px);
   flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
 }
-.hud-clock-icon { width: 17px; height: 17px; color: var(--accent); flex-shrink: 0; }
+.hud-clock:hover { background: var(--glass-hover); }
+.hud-clock.is-open { background: var(--glass-hover); border-color: var(--glass-border); }
+.hud-clock:focus-visible,
+.hud-meteo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hud-clock-text { display: flex; align-items: baseline; gap: 8px; line-height: 1; white-space: nowrap; }
 #hud-clock-time {
   font-family: var(--font-display);
@@ -789,8 +801,19 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   padding: 0 14px;
   height: calc(var(--hud-bar-height) - 8px);
   flex-shrink: 0;
-  transition: opacity var(--duration-fast);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: opacity var(--duration-fast),
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
 }
+.hud-meteo:hover { background: var(--glass-hover); }
+.hud-meteo.is-open { background: var(--glass-hover); border-color: var(--glass-border); }
 .hud-meteo.loading { opacity: 0.5; }
 #hud-meteo-icon { width: 19px; height: 19px; color: var(--accent); flex-shrink: 0; }
 #hud-meteo-temp {
@@ -907,6 +930,192 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 .ui-hud-menu-check .ui-icon { width: 14px; height: 14px; }
 .ui-hud-menu-item.is-active .ui-hud-menu-check { opacity: 1; }
 .ui-hud-menu-empty { padding: 12px; font-size: 11.5px; color: var(--muted); }
+
+/* ── Clock popover (location time + the calendar's month) ───── */
+.clock-menu {
+  width: min(300px, calc(100vw - 28px));
+  max-height: min(70vh, 560px);
+  padding: 0;
+  gap: 0;
+}
+.clock-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 2px;
+}
+.clock-menu-month {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.clock-menu-time {
+  padding: 0 12px 8px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clock-menu-weekdays,
+.clock-menu-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.clock-menu-weekdays { padding: 0 8px; }
+.clock-menu-weekday {
+  padding: 2px 0 4px;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.clock-menu-grid { gap: 1px; padding: 0 8px 6px; }
+.clock-menu-pad { height: 30px; }
+.clock-menu-day {
+  position: relative;
+  height: 30px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.clock-menu-day:hover { background: var(--glass-hover); }
+.clock-menu-day.is-today { color: var(--accent); font-weight: 600; }
+.clock-menu-day.is-selected { background: var(--glass-hover); border-color: var(--glass-border); }
+.clock-menu-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.clock-menu-dot {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  margin-left: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.clock-menu-detail {
+  padding: 8px 10px 6px;
+  border-top: 1px solid var(--glass-border);
+}
+.clock-menu .ui-empty { padding: 6px 4px; }
+.clock-menu-day-head {
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.clock-menu-events { display: flex; flex-direction: column; gap: 2px; }
+.clock-menu-event {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+.clock-menu-event-time {
+  flex-shrink: 0;
+  width: 74px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clock-menu-event-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clock-menu-none { font-size: 11.5px; color: var(--muted); }
+.clock-menu-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+/* ── Weather popover (current + the next five days) ─────────── */
+.weather-menu {
+  width: min(300px, calc(100vw - 28px));
+  padding: 0;
+  gap: 0;
+}
+.weather-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 2px;
+}
+.weather-menu-head-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.weather-menu-head-main { min-width: 0; }
+.weather-menu-temp {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.weather-menu-label { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.weather-menu-meta {
+  padding: 2px 12px 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.weather-menu-meta:empty { display: none; }
+.weather-menu .ui-empty { padding: 6px 6px 10px; }
+.weather-menu-days {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 6px 6px;
+}
+.weather-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  color: var(--text);
+}
+.weather-day-name { flex: 1; min-width: 0; }
+.weather-day-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.weather-day-temps {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  width: 66px;
+  font-variant-numeric: tabular-nums;
+}
+.weather-day-max { font-weight: 600; color: var(--text); }
+.weather-day-min { color: var(--muted); }
 
 /* ── Power menu (top bar: restart / power off / suspend) ────── */
 .power-menu-head {
@@ -1512,3 +1721,39 @@ body.keyboard-open #artifact-dock {
 }
 .chat-history-bubble--user .chat-history-bubble-text { background: var(--accent-soft); color: var(--text); }
 .chat-history-bubble--assistant .chat-history-bubble-text { background: var(--glass); border: 1px solid var(--glass-border); color: var(--text); }
+
+/* ── Select dropdown ──────────────────────────────────────────
+   field.js's select() never opens the platform popup: on X11, QtWebEngine
+   6.8 segfaults the whole shell while tearing a native <select> popup down
+   (QTBUG-135036, fixed upstream in Qt 6.9.2). The open list is this in-page
+   menu instead — appended to <body>, so panel scrolling cannot clip it —
+   wearing the shared popover recipe. */
+.ui-select-menu {
+  position: fixed;
+  z-index: calc(var(--z-overlay) + 1);
+  max-width: min(420px, 92vw);
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--popover-shadow);
+  backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--popover-blur)) saturate(var(--glass-saturate));
+  animation: hudMenuIn var(--duration-fast) var(--ease-out);
+  outline: none;
+}
+.ui-select-option {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.ui-select-option:hover { background: var(--glass-hover); }
+.ui-select-option.is-active { background: var(--accent-soft); }

@@ -17,6 +17,8 @@ import { refreshActivePlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
+import { initClockMenu } from './clockMenu.js';
+import { initWeatherMenu } from './weatherMenu.js';
 import { initHudNetwork } from './hudNetwork.js';
 import { initHudAudio } from './hudAudio.js';
 import { initHudBluetooth } from './hudBluetooth.js';
@@ -120,6 +122,8 @@ async function initApp() {
   initTextInput(submitTextToAgent);
   initChatHistory(); // core chat history panel (new chat / resume old chats)
   initHudClock(); // core chrome — works with zero plugins
+  initClockMenu(); // clock popover: location time + the calendar month
+  initWeatherMenu(); // weather popover: current + the next five days
   initHudAudio(); // host sound chip (PipeWire, Linux)
   initHudNetwork(); // host network status chip (NetworkManager, Linux)
   initHudBluetooth(); // host Bluetooth chip (BlueZ, Linux)

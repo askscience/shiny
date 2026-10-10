@@ -120,19 +120,21 @@
            same glass pill as the workspace switcher. -->
       <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Fullscreen window"></div>
       <div class="hud-header-main">
-        <div class="hud-clock" aria-live="polite">
-          <span class="hud-clock-icon" data-icon="hud/clock" aria-hidden="true"></span>
-          <div class="hud-clock-text">
+        <!-- Clock and weather are the bar's two popover triggers: the clock
+             opens the location time + the calendar's month, the weather chip
+             the 5-day forecast. -->
+        <button type="button" class="hud-clock" aria-haspopup="dialog" aria-expanded="false" title="Time and calendar">
+          <span class="hud-clock-text" aria-live="polite">
             <span id="hud-clock-time">--:--</span>
             <span id="hud-clock-date"></span>
-          </div>
-        </div>
+          </span>
+        </button>
         <div class="hud-divider" aria-hidden="true"></div>
-        <div class="hud-meteo" id="hud-meteo" title="Weather at your position">
+        <button type="button" class="hud-meteo" id="hud-meteo" title="Weather at your position" aria-haspopup="dialog" aria-expanded="false">
           <span id="hud-meteo-icon" data-icon="insights/weather-cloud" aria-hidden="true"></span>
           <span id="hud-meteo-temp">—°</span>
           <span id="hud-meteo-label">…</span>
-        </div>
+        </button>
         <div class="hud-divider" aria-hidden="true"></div>
         <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins"></div>
         <div id="hud-saved-trips" class="empty" aria-label="Saved places"></div>

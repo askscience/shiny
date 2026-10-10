@@ -330,7 +330,6 @@
 
 /* ── Clock + weather ────────────────────────────────────────────
    The launcher clock: time large, date small, both quiet. */
-.hud-clock-icon { color: var(--muted) !important; }
 #hud-clock-time {
   font-family: var(--font-display) !important;
   font-weight: 500 !important;

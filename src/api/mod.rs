@@ -63,7 +63,10 @@ use crate::services::qwen_tts::QwenClient;
 /// recognizer. Styles stay `'unsafe-inline'` for the many `style` attributes
 /// the UI sets; images may come from anywhere (map tiles, article images).
 ///
-/// Two app features need explicit allowances:
+/// Three app features need explicit allowances:
+/// - The top bar's weather chip and the clock read Open-Meteo directly from the
+///   browser (free, no API key) for the forecast and the located place's
+///   timezone, so `api.open-meteo.com` is in `connect-src`.
 /// - The Browser plugin's start page is a sandboxed `srcdoc` iframe whose
 ///   click/refresh handler is a **static** inline `<script>`; CSP hashes are the
 ///   only way to allow an inline script in a sandboxed (opaque-origin) frame, so
@@ -78,7 +81,7 @@ const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
 script-src 'self' 'wasm-unsafe-eval' 'sha256-Sz9x6nnEJCuJi8kFyc0Cy6JglT8TyTnBSc7jFTweAIY='; \
 style-src 'self' 'unsafe-inline'; \
 img-src 'self' data: blob: http: https:; \
-connect-src 'self' https://router.project-osrm.org; \
+connect-src 'self' https://router.project-osrm.org https://api.open-meteo.com; \
 font-src 'self' data:; \
 media-src 'self' blob:; \
 worker-src 'self' blob:; \

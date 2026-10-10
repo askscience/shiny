@@ -6,6 +6,7 @@
 #   /etc/systemd/user/shiny.service       (per-user server, started by the session)
 #   /usr/local/bin/shiny-session          (kiosk launcher for the DM)
 #   /usr/share/xsessions/shiny.desktop    (session entry)
+#   /etc/geoclue/conf.d/50-peakd.conf     (location for the Qt shell's HUD)
 # and migrates the installing user's data from the shared DB into their per-user
 # DB (~/.local/share/shiny/shiny.db). It then disables the single-user system
 # units so the display manager owns the seat:
@@ -29,6 +30,7 @@ PORT_BASE=${PORT_BASE:-8080}
 USER_UNIT=/etc/systemd/user/shiny.service
 SESSION_BIN=/usr/local/bin/shiny-session
 XSESSION=/usr/share/xsessions/shiny.desktop
+GEOCLUE_RULE=/etc/geoclue/conf.d/50-peakd.conf
 
 usage() {
     awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
@@ -49,7 +51,7 @@ esac
 if [ "${1:-}" = "--uninstall" ]; then
     need_root
     echo "Removing the per-user Shiny session…"
-    rm -f "$USER_UNIT" "$SESSION_BIN" "$XSESSION"
+    rm -f "$USER_UNIT" "$SESSION_BIN" "$XSESSION" "$GEOCLUE_RULE"
     systemctl daemon-reload 2>/dev/null || true
     # Bring the single-user units back.
     systemctl enable shiny.service peakd.service 2>/dev/null || true
@@ -147,6 +149,31 @@ sed -e "s|@PORT_BASE@|$PORT_BASE|g" \
     "$SHINY_REPO/scripts/shiny-session" > "$SESSION_BIN"
 chmod 0755 "$SESSION_BIN"
 install -D -m 0644 "$SHINY_REPO/scripts/shiny.desktop" "$XSESSION"
+
+# Location for the kiosk shell: QtWebEngine resolves navigator.geolocation
+# through Qt Positioning -> GeoClue2, whose D-Bus client DesktopId is the
+# applicationName peakd.cpp sets ("peakd"). Without an allowlist entry GeoClue
+# insists on an interactive agent — there is none in a kiosk session — and the
+# HUD weather, the clock's timezone and the traveler GPS would all sit on
+# "Location unavailable". The session launcher starts the packaged demo agent,
+# which GeoClue requires to be *present* even for an allowlisted client.
+install -d -m 0755 /etc/geoclue/conf.d
+cat > "$GEOCLUE_RULE" <<'EOF'
+# The peakd kiosk reads location through Qt Positioning -> GeoClue2.
+# Qt sends QCoreApplication::applicationName() as the D-Bus DesktopId, and
+# peakd.cpp sets it to "peakd". allowed=true keeps GeoClue from needing an
+# interactive agent (there is none in a kiosk session).
+[peakd]
+allowed=true
+system=true
+users=
+
+# The shipped config enables the static source, which makes GeoClue disable its
+# GeoIP-only fallback. Turn static off so a failed WiFi lookup still yields a
+# coarse (city-level) fix for the HUD weather and clock timezone.
+[static-source]
+enable=false
+EOF
 
 # ── 3. Migrate the user's data into their per-user DB (once) ────────────────
 USER_DB="$USER_HOME/.local/share/shiny/shiny.db"

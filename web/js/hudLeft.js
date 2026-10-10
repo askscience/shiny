@@ -15,7 +15,10 @@ import { openSavedArtifact } from './artifacts.js';
 import { getCurrentPosition } from './map.js';
 import { notifyMenuChange } from './menuState.js';
 import { setIcon } from '../ui/index.js';
+import { tempText, weatherIconStem, weatherLabel } from './weatherShared.js';
+import { formatLocationDate, formatLocationTime } from './clockShared.js';
 
+const clockEl = document.querySelector('.hud-clock');
 const clockTimeEl = document.getElementById('hud-clock-time');
 const clockDateEl = document.getElementById('hud-clock-date');
 const meteoEl = document.getElementById('hud-meteo');
@@ -29,78 +32,48 @@ let lastWeatherKey = '';
 let lastWeatherAt = 0;
 const WEATHER_TTL_MS = 10 * 60 * 1000;
 
-const WMO_LABEL = {
-  0: 'Clear',
-  1: 'Mainly clear',
-  2: 'Partly cloudy',
-  3: 'Cloudy',
-  45: 'Fog',
-  48: 'Fog',
-  51: 'Drizzle',
-  53: 'Drizzle',
-  55: 'Drizzle',
-  61: 'Rain',
-  63: 'Rain',
-  65: 'Heavy rain',
-  71: 'Snow',
-  73: 'Snow',
-  75: 'Snow',
-  80: 'Showers',
-  81: 'Showers',
-  82: 'Heavy showers',
-  95: 'Thunderstorm',
-  96: 'Thunderstorm',
-  99: 'Thunderstorm',
-};
+/**
+ * The latest fix + forecast, `null` until the first one lands. The chip, the
+ * clock's zone, the clock popover and the weather menu all read it, and every
+ * new copy rides out on `weather:update`.
+ */
+let weatherState = null;
+/** IANA zone of the located place — the clock follows it, not the OS. */
+let locationTimeZone = null;
+/** Why there is nothing to show yet ('Location unavailable', …); null when fine. */
+let weatherError = null;
 
-function weatherIconStem(code) {
-  switch (code) {
-    case 0: return 'weather-sun';
-    case 1:
-    case 2:
-    case 3: return 'weather-partly';
-    case 45:
-    case 48: return 'weather-fog';
-    case 51:
-    case 53:
-    case 55: return 'weather-drizzle';
-    case 61:
-    case 63:
-    case 65:
-    case 80:
-    case 81:
-    case 82: return 'weather-rain';
-    case 71:
-    case 73:
-    case 75:
-    case 77: return 'weather-snow';
-    case 95:
-    case 96:
-    case 99: return 'weather-storm';
-    default: return 'weather-cloud';
-  }
-}
-
-function weatherLabel(code) {
-  return WMO_LABEL[code] ?? 'Cloudy';
-}
-
+/** Time and date of the located place (the OS zone until one is known). */
 function formatClock() {
   const now = new Date();
   const locale = navigator.language || 'en-US';
   if (clockTimeEl) {
-    clockTimeEl.textContent = now.toLocaleTimeString(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    clockTimeEl.textContent = formatLocationTime(now, locationTimeZone, locale);
   }
   if (clockDateEl) {
-    clockDateEl.textContent = now.toLocaleDateString(locale, {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-    });
+    clockDateEl.textContent = formatLocationDate(now, locationTimeZone, locale);
   }
+}
+
+/** Open-Meteo's parallel `daily` arrays as one row per day. */
+function forecastDays(daily) {
+  if (!Array.isArray(daily?.time)) return [];
+  return daily.time.map((date, i) => ({
+    date,
+    code: daily.weather_code?.[i] ?? 0,
+    min: daily.temperature_2m_min?.[i],
+    max: daily.temperature_2m_max?.[i],
+  }));
+}
+
+/** Nothing to show yet — record and say which half of the chain failed. */
+function markWeatherUnavailable(reason) {
+  weatherError = reason;
+  window.dispatchEvent(new CustomEvent('weather:update', { detail: weatherState }));
+  if (weatherState) return;
+  if (meteoTempEl) meteoTempEl.textContent = '—';
+  if (meteoLabelEl) meteoLabelEl.textContent = reason;
+  meteoEl?.classList.add('unavailable');
 }
 
 async function refreshLocalWeather(lat, lon) {
@@ -115,6 +88,10 @@ async function refreshLocalWeather(lat, lon) {
     url.searchParams.set('latitude', String(lat));
     url.searchParams.set('longitude', String(lon));
     url.searchParams.set('current', 'temperature_2m,weather_code');
+    // The menu's five days, and the place's own zone — the clock reads its
+    // time from here rather than from the OS.
+    url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min');
+    url.searchParams.set('forecast_days', '5');
     url.searchParams.set('timezone', 'auto');
 
     const res = await fetch(url);
@@ -124,19 +101,36 @@ async function refreshLocalWeather(lat, lon) {
     if (!cur) throw new Error('no current');
 
     const code = cur.weather_code ?? 0;
-    const temp = Math.round(cur.temperature_2m ?? 0);
+    weatherState = {
+      lat,
+      lon,
+      timezone: data.timezone || null,
+      timezoneAbbreviation: data.timezone_abbreviation || null,
+      current: { code, temp: cur.temperature_2m },
+      daily: forecastDays(data.daily),
+      at: now,
+    };
+    locationTimeZone = weatherState.timezone;
+    weatherError = null;
+    if (clockEl && locationTimeZone) {
+      clockEl.title = `Time in ${locationTimeZone} — click for the calendar`;
+    }
+
     if (meteoIconEl) {
       void setIcon(meteoIconEl, `insights/${weatherIconStem(code)}`);
     }
-    if (meteoTempEl) meteoTempEl.textContent = `${temp}°`;
+    if (meteoTempEl) meteoTempEl.textContent = tempText(weatherState.current.temp);
     if (meteoLabelEl) meteoLabelEl.textContent = weatherLabel(code);
+    meteoEl.title = `Weather at your position${locationTimeZone ? ` — ${locationTimeZone}` : ''}`;
+    meteoEl.classList.remove('unavailable');
     lastWeatherKey = key;
     lastWeatherAt = now;
-    meteoEl.classList.remove('unavailable');
+    formatClock();
+    window.dispatchEvent(new CustomEvent('weather:update', { detail: weatherState }));
   } catch {
-    if (meteoTempEl) meteoTempEl.textContent = '—';
-    if (meteoLabelEl) meteoLabelEl.textContent = 'Weather unavailable';
-    meteoEl.classList.add('unavailable');
+    // A later refresh keeps the last good reading; only the first failure has
+    // nothing to show, and it must say so instead of leaving an empty chip.
+    markWeatherUnavailable('Weather unavailable');
   } finally {
     meteoEl.classList.remove('loading');
   }
@@ -301,12 +295,32 @@ function onPositionUpdate() {
 
 /** One geolocation fix straight from the browser — no map/plugin needed. */
 function refreshWeatherAtCurrentPosition() {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    markWeatherUnavailable('Location unavailable');
+    return;
+  }
   navigator.geolocation.getCurrentPosition(
     (pos) => void refreshLocalWeather(pos.coords.latitude, pos.coords.longitude),
-    () => {},
+    // A denied permission (the shell's policy) or a missing position source
+    // lands here: the chip has to name that instead of sitting silent at "—°".
+    () => markWeatherUnavailable('Location unavailable'),
     { maximumAge: WEATHER_TTL_MS, timeout: 12000 },
   );
+}
+
+/** The latest fix + forecast, for the weather menu and the clock popover. */
+export function getWeatherState() {
+  return weatherState;
+}
+
+/** Why the chip/menu have nothing to show, or `null` once a fix landed. */
+export function getWeatherError() {
+  return weatherError;
+}
+
+/** Ask for a fresh fix now — the weather menu's first open. */
+export function refreshWeatherNow() {
+  refreshWeatherAtCurrentPosition();
 }
 
 let clockInited = false;
@@ -317,6 +331,7 @@ export function initHudClock() {
   if (clockInited) return;
   clockInited = true;
 
+  if (clockEl) clockEl.title = 'Time and calendar';
   formatClock();
   clockTimer = setInterval(formatClock, 1000);
 
