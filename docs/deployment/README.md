@@ -38,6 +38,7 @@ Replace `sudo scripts/…` with the path under `scripts/` in the repo.
 | `scripts/install-touchpad-gestures.sh` | `/etc/udev/rules.d/70-peakd-touchpad.rules` (logind `uaccess` tag on the internal trackpad) | always (no-op without the device) | [`kiosk-shell.md`](kiosk-shell.md) |
 | `scripts/install-fonts.sh` | `fonts-roboto`, `fonts-inter` and Google's DM Sans / Space Grotesk / Instrument Serif into `/usr/local/share/fonts/shiny` | root | — (UI fonts) |
 | `scripts/install-t2-audio-dsp.sh` | `/usr/share/t2linux-audio/16_1/*`, `/etc/xdg/wireplumber/wireplumber.conf.d/50-t2-audio.conf`, `/etc/udev/rules.d/99-t2-audio-rename.rules` | `MacBookPro16,1` + `t2bce_audio` + LV2 plugins | [`t2-mac.md`](t2-mac.md) |
+| `scripts/install-t2-audio-watchdog.sh` | `/usr/local/bin/shiny-t2-audio-watchdog`, `/etc/systemd/user/shiny-t2-audio-watchdog.service` — restarts WirePlumber when the T2 card binds without its UCM profiles | `t2bce_audio` + WirePlumber | [`t2-mac.md`](t2-mac.md) |
 | `scripts/install-t2-audio-period-fix.sh` | DKMS module `t2bce-audio-period/1.0` + `/etc/modprobe.d/t2bce-audio-fallback.conf` | `t2bce_audio` + DKMS toolchain | [`t2-mac.md`](t2-mac.md) |
 | `scripts/install-t2-bluetooth-fix.sh` | `/etc/xdg/wireplumber/wireplumber.conf.d/52-bt-sbcxq.conf` | any `MacBook*` + WirePlumber | [`t2-mac.md`](t2-mac.md) |
 | `scripts/touchbar/install-touchbar.sh` | `/etc/tiny-dfr/config.toml` (backed up once), Shiny icons, `/etc/udev/rules.d/99-shiny-kbd-backlight.rules` | T2 `appletb` / iBridge hardware + `tiny-dfr` | [`t2-mac.md`](t2-mac.md) |
@@ -75,6 +76,7 @@ codes live in `crates/peakd/src/main.rs` and `crates/shiny-server-mode/src/main.
 | Path | Written by | Purpose |
 |---|---|---|
 | `/etc/systemd/user/shiny.service` | `install-linux-session.sh` | Per-user server unit. |
+| `/etc/systemd/user/shiny-t2-audio-watchdog.service`, `/usr/local/bin/shiny-t2-audio-watchdog` | `install-t2-audio-watchdog.sh` | Per-user T2 stuck-card watchdog. |
 | `/usr/local/bin/shiny-session` | `install-linux-session.sh` | Session supervisor (placeholders substituted). |
 | `/etc/systemd/system/shiny-greeter.service`, `shiny-kiosk@.service` | `install-kiosk-greeter.sh` | Login screen + per-user session template. |
 | `/usr/local/bin/shiny-greeter`, `shiny-wait-drm.sh`, `shiny-seat-stop.sh` | `install-kiosk-greeter.sh` | Greeter launcher, DRM wait, seat handover logic. |
@@ -96,14 +98,14 @@ codes live in `crates/peakd/src/main.rs` and `crates/shiny-server-mode/src/main.
 2. `sudo scripts/install-fonts.sh` — the theme tokens reference these families.
 3. `sudo scripts/install-kiosk-greeter.sh` — the login screen, the PAM helper, the per-user session and the seat units in one go (it invokes the two installers below, and takes LightDM off the seat if it is installed).
 4. `sudo scripts/install-touchpad-gestures.sh` — if the machine has a trackpad.
-5. On a T2 MacBook: `install-t2-audio-dsp.sh`, `install-t2-audio-period-fix.sh`, `install-t2-bluetooth-fix.sh`, `touchbar/install-touchbar.sh`.
+5. On a T2 MacBook: `install-t2-audio-dsp.sh`, `install-t2-audio-watchdog.sh`, `install-t2-audio-period-fix.sh`, `install-t2-bluetooth-fix.sh`, `touchbar/install-touchbar.sh`.
 
 Prefer LightDM instead of the Shiny login screen? Run
 `sudo scripts/install-linux-auth.sh`, `sudo scripts/install-linux-session.sh`
 and then `sudo scripts/install-greeter.sh` (in that order) rather than step 3.
 
 `install-linux-session.sh` itself best-effort-builds `shiny-server-mode` and
-`peakd` when their binaries are absent, and calls the three T2 installers as a
+`peakd` when their binaries are absent, and calls the four T2 installers as a
 safety net.
 
 ## Cross-cutting environment variables
@@ -156,6 +158,7 @@ See the root `README.md` § *Graceful Degradation* for the full table.
 | `scripts/install-touchpad-gestures.sh` | Trackpad `uaccess` udev rule. |
 | `scripts/install-fonts.sh` | System UI fonts. |
 | `scripts/install-t2-audio-dsp.sh`, `scripts/t2-audio/` | T2 speaker/mic DSP. |
+| `scripts/install-t2-audio-watchdog.sh`, `scripts/t2-audio/shiny-t2-audio-watchdog` | T2 stuck-card watchdog (auto-recovery). |
 | `scripts/install-t2-audio-period-fix.sh`, `scripts/t2-audio/period-fix/` | T2 ALSA period DKMS fix. |
 | `scripts/install-t2-bluetooth-fix.sh`, `scripts/t2-audio/52-bt-sbcxq.conf` | T2 Bluetooth SBC-XQ. |
 | `scripts/touchbar/` | Touch Bar row + backlight udev rule. |

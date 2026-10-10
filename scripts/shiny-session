@@ -84,6 +84,13 @@ log "env: DISPLAY=${DISPLAY:-<unset>} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-<unset>
 # Bring up this user's Shiny server (idempotent; a no-op if already running).
 systemctl --user start shiny.service 2>/dev/null || true
 
+# The T2 audio watchdog: WirePlumber can bind the Apple T2 card without its
+# UCM profiles while the session comes up — the card then exposes a single
+# "Dummy Output" and no input device, and never re-probes. The watchdog
+# notices and restarts WirePlumber for the user; it is a no-op on machines
+# that are not T2 Macs.
+systemctl --user start shiny-t2-audio-watchdog.service 2>/dev/null || true
+
 # Speech sidecars. Both launchers probe their own port first (idempotent) and
 # exit quietly when their Python package is absent — the server starts them too,
 # but doing it here means the engines are warm by the time the first word is

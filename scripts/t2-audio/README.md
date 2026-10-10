@@ -19,10 +19,18 @@ software DSP.
 | `16_1/{tweeters,woofers}-{44k,48k,96k}.wav` | Measured impulse responses (FIRs), one per sample rate. |
 | `wireplumber.conf` | WirePlumber rules that rename the raw speaker/mic nodes and wrap them in the graphs. |
 | `99-t2-audio-rename.rules` | udev rule giving the ALSA card the id `t2-16_1` the WirePlumber rule keys on. |
+| `shiny-t2-audio-watchdog` | Watchdog (installed as a per-user service) that restarts WirePlumber when the card binds without its UCM profiles — the "Dummy Output, no mic" state. |
 
 The installer is [`../install-t2-audio-dsp.sh`](../install-t2-audio-dsp.sh).
 It refuses to run on any model other than `MacBookPro16,1`: **each model needs
 its own FIRs, and using the wrong ones can damage the speakers.**
+
+The card itself is watched by
+[`../install-t2-audio-watchdog.sh`](../install-t2-audio-watchdog.sh):
+WirePlumber can bind it without its UCM profiles at boot — leaving only a
+"Dummy Output" and no input device — and the watchdog restarts WirePlumber
+when that happens. See
+[`../../docs/deployment/t2-mac.md`](../../docs/deployment/t2-mac.md).
 
 ## Requirements
 

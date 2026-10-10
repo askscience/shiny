@@ -44,6 +44,13 @@ UID_BASE=${UID_BASE:-$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 { print
 USER_UNIT=/etc/systemd/user/shiny.service
 SESSION_BIN=/usr/local/bin/shiny-session
 GEOCLUE_RULE=/etc/geoclue/conf.d/50-peakd.conf
+# The T2 MacBook installers are copied here and re-run in part 4; the
+# uninstall branch references their installed paths too, so they are defined
+# here rather than inline below.
+T2_INSTALLER=/usr/local/bin/install-t2-audio-dsp.sh
+T2_WATCHDOG_INSTALLER=/usr/local/bin/install-t2-audio-watchdog.sh
+T2_PERIOD_INSTALLER=/usr/local/bin/install-t2-audio-period-fix.sh
+T2_BT_INSTALLER=/usr/local/bin/install-t2-bluetooth-fix.sh
 
 usage() {
     awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
@@ -73,8 +80,9 @@ if [ "${1:-}" = "--uninstall" ]; then
     systemctl enable shiny.service peakd.service 2>/dev/null || true
     systemctl start shiny.service 2>/dev/null || true
     echo "Done. Reboot (or start peakd.service) to return to the single-user kiosk."
-    echo "The T2 speaker DSP is left installed; remove it with:"
+    echo "The T2 audio fixes are left installed; remove them with:"
     echo "  sudo $T2_INSTALLER --uninstall"
+    echo "  sudo $T2_WATCHDOG_INSTALLER --uninstall"
     exit 0
 fi
 
@@ -250,17 +258,25 @@ fi
 # MacBook Pro the measured FIR/EQ graph is what actually makes those speakers
 # sound right, and it has to be installed system-wide (it is shared, not
 # per-user). The script itself does nothing on any other model.
-T2_INSTALLER=/usr/local/bin/install-t2-audio-dsp.sh
 if [ -f "$SHINY_REPO/scripts/install-t2-audio-dsp.sh" ]; then
     install -m 0755 "$SHINY_REPO/scripts/install-t2-audio-dsp.sh" "$T2_INSTALLER"
     "$T2_INSTALLER" || \
         echo "note: T2 speaker DSP not installed (see above); continuing."
 fi
 
+# WirePlumber can bind the Apple T2 card without its UCM profiles at boot:
+# only a "Dummy Output" and no input device remain, with no way back short of
+# a restart. The watchdog detects that state and restarts WirePlumber for the
+# user; it is a no-op on machines without the t2bce_audio card.
+if [ -f "$SHINY_REPO/scripts/install-t2-audio-watchdog.sh" ]; then
+    install -m 0755 "$SHINY_REPO/scripts/install-t2-audio-watchdog.sh" "$T2_WATCHDOG_INSTALLER"
+    "$T2_WATCHDOG_INSTALLER" || \
+        echo "note: T2 audio watchdog not installed (see above); continuing."
+fi
+
 # The t2bce_audio driver pins the ALSA period to one frame, which makes the
 # speakers drop out intermittently. The DKMS module fixes the constraint; it is
 # model/ABI-gated and falls back to the stock module, so it is safe to attempt.
-T2_PERIOD_INSTALLER=/usr/local/bin/install-t2-audio-period-fix.sh
 if [ -f "$SHINY_REPO/scripts/install-t2-audio-period-fix.sh" ]; then
     install -m 0755 "$SHINY_REPO/scripts/install-t2-audio-period-fix.sh" "$T2_PERIOD_INSTALLER"
     "$T2_PERIOD_INSTALLER" || \
@@ -269,7 +285,6 @@ fi
 
 # Bluetooth audio on a T2 Mac cuts out while the link stays up; the A2DP socket
 # buffer is too small for plain SBC, so prefer SBC-XQ. User-level WirePlumber.
-T2_BT_INSTALLER=/usr/local/bin/install-t2-bluetooth-fix.sh
 if [ -f "$SHINY_REPO/scripts/install-t2-bluetooth-fix.sh" ]; then
     install -m 0755 "$SHINY_REPO/scripts/install-t2-bluetooth-fix.sh" "$T2_BT_INSTALLER"
     "$T2_BT_INSTALLER" || \

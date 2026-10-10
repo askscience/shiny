@@ -69,6 +69,36 @@ different failure ("no timestamp ever").
 
 ---
 
+## Stuck "Dummy Output" after boot (watchdog)
+
+WirePlumber can bind the Apple T2 card **without its UCM profiles** while the
+session is coming up: the card is detected, but only `off` and `pro-audio` are
+offered, so it exposes no sinks and no sources. PulseAudio clients then see a
+single **"Dummy Output"** and no input device at all — voice input included —
+and nothing re-probes the card, so it stays that way until WirePlumber is
+restarted by hand.
+
+[`scripts/install-t2-audio-watchdog.sh`](../../scripts/install-t2-audio-watchdog.sh)
+installs a per-user service that watches for exactly that state and restarts
+WirePlumber itself:
+
+```bash
+sudo scripts/install-t2-audio-watchdog.sh      # --uninstall reverses it
+systemctl --user start shiny-t2-audio-watchdog.service   # or just log in again
+```
+
+- It starts with the kiosk session (`shiny-session` starts the unit), checks
+  the card every 10 s, and acts only after the broken state persists — a card
+  that is merely being enumerated is never restarted under.
+- At most **3 restarts per episode**, spaced by a 20 s cooldown; the budget
+  resets after the card has been healthy for a while. If it gives up, the
+  journal says so and the manual fix is `systemctl --user restart wireplumber`.
+- Logs: `journalctl --user -u shiny-t2-audio-watchdog`.
+- Diagnose by hand: `/usr/local/bin/shiny-t2-audio-watchdog --check` prints
+  `healthy`, `broken` or `no-t2-card` (exit 0/1/2).
+
+---
+
 ## Bluetooth audio dropouts
 
 Bluetooth playback can cut out for a moment while the connection stays up. The

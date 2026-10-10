@@ -1,0 +1,187 @@
+#!/bin/sh
+# shiny-t2-audio-watchdog — keep the Apple T2 sound card usable without anyone
+# touching WirePlumber.
+#
+# Installed to /usr/local/bin/shiny-t2-audio-watchdog by
+# scripts/install-t2-audio-watchdog.sh; started per session by shiny-session.
+#
+# WHY
+#   On a T2 Mac, WirePlumber can bind the Apple T2 card without its UCM
+#   profiles while the session is coming up: the card is there, but only `off`
+#   and `pro-audio` are offered, so it exposes no sinks and no sources. Every
+#   PulseAudio client then sees a single "Dummy Output" and no input device at
+#   all — voice input included — and nothing re-probes the card, so it stays
+#   that way until WirePlumber is restarted (docs/deployment/t2-mac.md).
+#
+#   This script watches for exactly that state and restarts WirePlumber for
+#   the user: at most T2_AUDIO_WATCHDOG_MAX_TRIES attempts per episode, spaced
+#   by a cooldown, with the budget reset after a healthy stretch. The failure
+#   costs a few seconds of silence instead of the whole session's audio.
+#
+# USAGE
+#   shiny-t2-audio-watchdog          watch (the unit's ExecStart)
+#   shiny-t2-audio-watchdog --check  one-shot: print `healthy`, `broken` or
+#                                    `no-t2-card`; exit 0/1/2 (3 = unknown)
+#
+# ENV
+#   T2_AUDIO_WATCHDOG_INTERVAL        seconds between checks (default 10)
+#   T2_AUDIO_WATCHDOG_CONFIRM         seconds a broken state must persist
+#                                     before acting (default 3)
+#   T2_AUDIO_WATCHDOG_COOLDOWN        seconds after a restart before the next
+#                                     check (default 20)
+#   T2_AUDIO_WATCHDOG_MAX_TRIES       restarts per episode (default 3)
+#   T2_AUDIO_WATCHDOG_HEALTHY_RESET   healthy checks that reset the budget
+#                                     (default 12)
+set -u
+
+INTERVAL=${T2_AUDIO_WATCHDOG_INTERVAL:-10}
+CONFIRM=${T2_AUDIO_WATCHDOG_CONFIRM:-3}
+COOLDOWN=${T2_AUDIO_WATCHDOG_COOLDOWN:-20}
+MAX_TRIES=${T2_AUDIO_WATCHDOG_MAX_TRIES:-3}
+HEALTHY_RESET=${T2_AUDIO_WATCHDOG_HEALTHY_RESET:-12}
+
+log() { printf 't2-audio-watchdog: %s\n' "$*"; }
+
+usage() {
+    awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
+    exit "${1:-0}"
+}
+
+# The card must be in ALSA at all; otherwise there is nothing to watch (a
+# stock kernel, or a non-T2 machine, simply idles).
+have_t2_card() {
+    grep -qiE 'Apple T2 Audio|AppleT2' /proc/asound/cards 2>/dev/null
+}
+
+# Prints `ok`, `broken` or `unknown` for the sound server's view of the card.
+#
+# `broken` is the failure this script exists for: the T2 card is bound without
+# UCM profiles — its active profile is `off` or `pro-audio` — or it is missing
+# from the graph entirely while ALSA still has it. `unknown` means the sound
+# server could not be queried (not started yet); never act on that.
+card_state() {
+    if command -v pactl >/dev/null 2>&1; then
+        if ! cards=$(pactl list cards 2>/dev/null) || [ -z "$cards" ]; then
+            printf 'unknown\n'
+            return
+        fi
+        printf '%s\n' "$cards" | awk '
+            function flush() {
+                if (t2 && bad) broken = 1
+                t2 = 0; bad = 0
+            }
+            /^Card #[0-9]+/ { flush(); next }
+            {
+                if ($0 ~ /alsa\.card_name = "Apple T2 Audio"/) { t2 = 1; seen = 1 }
+                if ($0 ~ /^[[:space:]]*Active Profile:/) {
+                    p = $0
+                    sub(/.*Active Profile:[[:space:]]*/, "", p)
+                    if (p == "off" || p == "pro-audio") bad = 1
+                }
+            }
+            END { flush(); print ((broken || !seen) ? "broken" : "ok") }
+        '
+        return
+    fi
+
+    # No pactl (pulseaudio-utils absent): fall back to WirePlumber's own view.
+    # "Only Dummy Output among the sinks" is the same failure seen from here.
+    if ! status=$(wpctl status 2>/dev/null) || [ -z "$status" ]; then
+        printf 'unknown\n'
+        return
+    fi
+    printf '%s\n' "$status" | awk '
+        /^Audio/ { audio = 1 }
+        /^Video/ { audio = 0 }
+        audio && $2 ~ /^(Devices|Sinks|Sources|Filters|Streams):$/ { sec = $2; next }
+        audio && sec == "Sinks:" && /[0-9]+\./ {
+            n++
+            if ($0 !~ /Dummy Output/) real = 1
+        }
+        END { print ((n > 0 && !real) ? "broken" : "ok") }
+    '
+}
+
+# Wait (bounded) for WirePlumber to be running after a restart it caused.
+wait_wireplumber() {
+    i=0
+    while [ "$i" -lt 40 ]; do
+        systemctl --user is-active --quiet wireplumber.service && return 0
+        i=$((i + 1))
+        sleep 0.5
+    done
+    return 1
+}
+
+case "${1:-}" in
+    ""|--check) ;;
+    -h|--help) usage 0 ;;
+    *) echo "unknown argument: $1" >&2; usage 2 ;;
+esac
+
+if [ "${1:-}" = "--check" ]; then
+    if ! have_t2_card; then
+        echo "no-t2-card"
+        exit 2
+    fi
+    state=$(card_state)
+    echo "$state"
+    case "$state" in
+        ok) exit 0 ;;
+        broken) exit 1 ;;
+        *) exit 3 ;;
+    esac
+fi
+
+if ! have_t2_card; then
+    log "no Apple T2 audio card here; nothing to watch"
+    exit 0
+fi
+
+log "watching the Apple T2 card (every ${INTERVAL}s; up to ${MAX_TRIES} WirePlumber restarts per episode)"
+
+tries=0
+healthy=0
+warned=0
+
+while :; do
+    state=$(card_state)
+    case "$state" in
+        ok)
+            healthy=$((healthy + 1))
+            warned=0
+            if [ "$tries" -ne 0 ] && [ "$healthy" -ge "$HEALTHY_RESET" ]; then
+                log "the card has been healthy for $HEALTHY_RESET checks; restart budget reset"
+                tries=0
+            fi
+            sleep "$INTERVAL"
+            ;;
+        unknown)
+            sleep "$INTERVAL"
+            ;;
+        broken)
+            healthy=0
+            # Let it persist: a card that is merely being (re-)enumerated must
+            # not be "fixed" with a restart.
+            sleep "$CONFIRM"
+            [ "$(card_state)" = "broken" ] || continue
+            if [ "$tries" -ge "$MAX_TRIES" ]; then
+                if [ "$warned" -eq 0 ]; then
+                    log "still broken after $MAX_TRIES restarts; leaving WirePlumber alone (restart it by hand, or reboot)"
+                    warned=1
+                fi
+                sleep "$INTERVAL"
+                continue
+            fi
+            tries=$((tries + 1))
+            log 'the T2 card is bound without UCM profiles (only "Dummy Output", no input); restarting WirePlumber (attempt '"$tries/$MAX_TRIES)"
+            if err=$(systemctl --user restart wireplumber.service 2>&1); then
+                log "WirePlumber restarted"
+            else
+                log "could not restart WirePlumber: $err"
+            fi
+            wait_wireplumber || log "WirePlumber did not come back yet; will judge the card again anyway"
+            sleep "$COOLDOWN"
+            ;;
+    esac
+done

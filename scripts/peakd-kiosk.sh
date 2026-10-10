@@ -38,6 +38,11 @@ if [ -x /usr/local/bin/install-t2-audio-dsp.sh ]; then
     /usr/local/bin/install-t2-audio-dsp.sh >/dev/null 2>&1 || true
 fi
 
+# The T2 audio watchdog is a per-user service (installed system-wide by
+# install-t2-audio-watchdog.sh); run it in this session too when present. It
+# is a no-op on machines that are not T2 Macs.
+systemctl --user start shiny-t2-audio-watchdog.service 2>/dev/null || true
+
 # matchbox maximises the single window and adds no chrome.
 matchbox-window-manager -use_titlebar no &
 

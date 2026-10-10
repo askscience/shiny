@@ -168,6 +168,14 @@ difference. The tweeter and woofer paths both end in a limiter so the added gain
 cannot clip the drivers. A non-T2 machine never sees the graph, so it never sees
 the wider range.
 
+WirePlumber can also bind the card **without** its UCM profiles while the
+session is coming up: the card then exposes a single "Dummy Output" and no
+input device, and stays that way until WirePlumber is restarted.
+[`scripts/install-t2-audio-watchdog.sh`](../../scripts/install-t2-audio-watchdog.sh)
+installs a per-user watchdog that detects that state and restarts WirePlumber
+for the user — see
+[t2-mac.md](../deployment/t2-mac.md#stuck-dummy-output-after-boot-watchdog).
+
 ## polkit / privilege
 
 None required. PipeWire refuses to run as root by design, and the server runs as
@@ -195,4 +203,5 @@ the reason. The rest of Shiny is unchanged.
 | `web/js/audioShared.js` | icon/label helpers shared by both |
 | `web/js/touchbar.js` | Touch Bar mute/volume posts the same endpoints |
 | `scripts/install-t2-audio-dsp.sh`, `scripts/t2-audio/` | T2 speaker DSP graph |
+| `scripts/install-t2-audio-watchdog.sh` | T2 stuck-card watchdog (restarts WirePlumber) |
 | `scripts/install-t2-bluetooth-fix.sh` | SBC-XQ ordering for BT audio |
