@@ -2,7 +2,7 @@
 
 `plugins/browser/web/plugin.js` is the Browser window. Core builds the `.tile`
 and the plugin mounts a `section.tile.browser-tile` inside it. The chrome is
-HTML; the **page** is a native child webview owned by the shell
+HTML; the **page** is a web view **item in the shell's own scene**
 (`crates/peakd`), driven from here over `window.ipc`. The one thing rendered
 locally is the home surface: a sandboxed `srcdoc` iframe holding the
 related-news shelf.
@@ -193,19 +193,24 @@ historyIndex, loaded, watchdog, frameEl }`.
   are not recorded.
 - Closing the last tab creates a fresh home tab.
 
-## Native-view bounds and mask
+## Page bounds, visibility and holes
 
-A native child view is a real window stacked **above** the page: it ignores
-`display:none` and every HTML layer. The window therefore:
+The page is an item in the shell's own scene, composited by the same renderer
+as the app's DOM, so it follows its window frame for frame — a drag never has
+to drop it (that was the old white flash). The window therefore:
 
-- computes `viewportRect()` in CSS pixels plus `dpr` and sends `setBounds`;
-- hides the view (`setVisible: false`) when the tile is `.hidden`, during a
-  drag (`is-dragging`), or while `overview-active` / `launcher-active`;
+- computes `viewportRect()` in CSS pixels plus `dpr` and sends `setBounds`
+  (the shell moves the item; there is no separate window to move);
+- hides it (`setVisible: false`) only for the states the app draws over
+  everything: a `.hidden` tile (a workspace switch), `overview-active`,
+  `launcher-active`;
 - computes `occluderHoles()` (open `.ctx-menu`, `.ui-hud-menu-popup`,
-  `.ui-modal`, notifications/toasts, and this window's own popovers) and sends
-  `setMask` so the page shows through only where it is not covered;
+  `.ui-modal`, notifications/toasts, this window's own popovers, and any higher
+  tile in the "Windows" layout) and sends `setMask`: the shell cuts the page
+  there and lets the presses through to the app, so a menu or a higher window
+  stays usable while the page keeps rendering everywhere else;
 - re-sends the mask on the way back from a hide, because a stale hole would
-  otherwise clip the page once the window moves.
+  otherwise clip the page once it moves.
 
 `requestSync()` coalesces bursts into one sync per animation frame;
 `startBoundsSync()` adds a 250 ms fallback interval, a `ResizeObserver` on the
@@ -215,7 +220,8 @@ window events listed above. `stopBoundsSync()` tears them all down.
 ## Gotchas
 
 - **The page is not an iframe.** `frameEl` is parked on `about:blank` and hidden
-  whenever a tab is native; all real rendering is the child webview. A test must
+  whenever a tab is native; all real rendering is the page item in the shell's
+  scene. A test must
   assert the IPC *commands*, not the iframe URL (see
   `web/plugin.smoke.mjs`).
 - **The home shelf cannot reach the app.** The sandbox omits

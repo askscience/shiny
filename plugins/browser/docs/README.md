@@ -3,7 +3,7 @@
 The `browser` plugin adds a **web browser window** to Shiny. The window chrome
 (tab strip, toolbar, address bar, downloads/history/bookmarks popovers and the
 related-news home shelf) is HTML shipped by the plugin; the **page itself is
-rendered by the shell** in a native child webview at the page's real origin, so
+rendered by the shell** in a web view inside its own scene at the page's real origin, so
 anti-bot challenges (Cloudflare) pass and cookies/TLS belong to the page, not a
 rewriting proxy. The plugin owns the window's sessions, browsing history and the
 news recommender, and it runs the **server half** of the shared ad-block engine
@@ -240,4 +240,4 @@ Full detail in [`routes.md`](routes.md).
   [`../../../crates/shiny-filter-core/src/lib.rs`](../../../crates/shiny-filter-core/src/lib.rs),
   [`../../../crates/peakd/src/browse.rs`](../../../crates/peakd/src/browse.rs).
 - [`../../../docs/core/desktop.md`](../../../docs/core/desktop.md) for the
-  native child-webview host.
+  scene host for the page items.

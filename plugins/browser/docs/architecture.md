@@ -11,12 +11,12 @@ the usual plugin/core pair.
 | Layer | Owns |
 |---|---|
 | `browser` plugin (server) | Sessions, history, settings, bookmarks, downloads, news profile, link previews, the **server half** of ad filtering |
-| `peakd` shell (kiosk) | The native child webview that renders the page; the **per-request** ad-block interceptor; the actual downloads; `window.__peakdViewEvent` / `__peakdShield` / `__peakdDownloads` callbacks |
+| `peakd` shell (kiosk) | The page items in its own Qt Quick scene that render the page; the **per-request** ad-block interceptor; the actual downloads; `window.__peakdViewEvent` / `__peakdShield` / `__peakdDownloads` callbacks |
 | `browser` plugin (window JS) | The chrome: tab strip, toolbar, address bar, popovers and the sandboxed home shelf; drives the shell over IPC |
 
 The plugin does **not** proxy pages. An earlier design rewrote the origin
 through a local proxy, but Cloudflare re-scoped its challenge cookies to the
-proxy origin, so the window moved to native child views at the page's real
+proxy origin, so the window moved to web views in the shell's own scene at the page's real
 origin. `crates/shiny-filter`'s proxy code is retained for its classifier and
 rewriting rules, but not on the render path.
 
@@ -91,7 +91,7 @@ window.navigateTo(input)
   <- apiFetch resolves
 window.loadNative(tab, url)
   -> IPC "peakd:view:" { op: "open", id, url, rect, visible, incognito }
-shell renders a native child webview and pushes back
+shell positions the page item in its scene and pushes back
 window.__peakdViewEvent({ id, type: "url"|"title"|"load"|"new-window" })
   recordLocation / recordVisit / tab title / new tab
 ```

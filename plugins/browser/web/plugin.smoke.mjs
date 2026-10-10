@@ -433,24 +433,36 @@ check(
   JSON.stringify(lastView('setMask')),
 );
 
-/* A hidden native view must re-send its mask on the way back: otherwise a stale
-   hole from before the hide clips the page once the window moves. */
-const masksBeforeDrag = viewCommands().filter((c) => c.op === 'setMask').length;
+/* The page lives in the shell's own scene: a window drag must NOT drop it (that
+   was the white flash), and it must be back in place when the drag ends. */
 tile.classList.add('is-dragging');
 await tick(320);
 check(
-  'dragging hides the native page',
-  lastView('setVisible')?.visible === false,
+  'dragging keeps the page visible',
+  lastView('setVisible')?.visible !== false,
   JSON.stringify(lastView('setVisible')),
 );
 tile.classList.remove('is-dragging');
 await tick(320);
+
+/* A *real* hide (a workspace switch) must re-send its mask on the way back:
+   otherwise a stale hole from before the hide clips the page when it moves. */
+const masksBeforeHide = viewCommands().filter((c) => c.op === 'setMask').length;
+tile.classList.add('hidden');
+await tick(320);
 check(
-  'releasing the drag re-sends the mask even when empty',
-  viewCommands().filter((c) => c.op === 'setMask').length > masksBeforeDrag,
+  'a hidden tile hides the page',
+  lastView('setVisible')?.visible === false,
+  JSON.stringify(lastView('setVisible')),
+);
+tile.classList.remove('hidden');
+await tick(320);
+check(
+  'coming back from a hide re-sends the mask even when empty',
+  viewCommands().filter((c) => c.op === 'setMask').length > masksBeforeHide,
 );
 check(
-  'the native page comes back after the drag',
+  'the page comes back after a hide',
   lastView('setVisible')?.visible === true,
   JSON.stringify(lastView('setVisible')),
 );

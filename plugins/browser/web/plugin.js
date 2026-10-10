@@ -117,39 +117,30 @@ function viewportRect() {
 }
 
 /**
- * Whether the active native view should currently be on screen.
+ * Whether the active page should currently be on screen.
  *
- * A native child view is a real window stacked above the page, so it ignores
- * `display: none` and every HTML layer. When its Browser window is hidden (a
- * workspace switch) or the overview/launcher is up, it has to be hidden
- * outright. Overlapping HTML (open menus, a higher floating window in the
- * "Windows" layout) is *not* a reason to hide it any more: those are handled by
- * clipping the view instead (see `occluderHoles`), so the page stays visible
+ * The page is an item in the shell's own scene (see `crates/peakd`), composited
+ * by the same renderer as the app's DOM: it follows its window frame for frame
+ * and never has to be dropped while it moves. Only the states the app draws
+ * over everything — a hidden tile (a workspace switch), the overview, the
+ * launcher — hide it.
+ *
+ * Overlapping HTML (open menus, a higher floating window in the "Windows"
+ * layout) is not a reason to hide it either: the shell cuts the page where the
+ * overlay is (see `occluderHoles`), so the page stays visible and live
  * everywhere the overlay does not cover it.
- *
- * A window drag is the one place hiding still wins: the native view trails the
- * window by a frame or two when it is only moved, so during a drag it is
- * dropped and comes back on release.
  */
 function nativeShouldShow(tab) {
   if (!tab || !tab.native || !tileEl) return false;
   if (tileEl.classList.contains('hidden')) return false;
-  if (isDragging()) return false;
   const body = document.body;
   if (body && body.classList) {
     // The overview and launcher are full-screen HTML layers over the desktop;
-    // the native view cannot be composited beneath them.
+    // the page cannot be composited beneath them.
     if (body.classList.contains('overview-active')) return false;
     if (body.classList.contains('launcher-active')) return false;
   }
   return true;
-}
-
-/** True while this window is being dragged (its title bar has the pointer). */
-function isDragging() {
-  if (!tileEl) return false;
-  return tileEl.classList.contains('is-dragging')
-    || !!tileEl.querySelector('.is-dragging');
 }
 
 /**
