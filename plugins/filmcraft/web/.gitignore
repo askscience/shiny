@@ -1,0 +1,9 @@
+# FilmCraft's WASM build artifacts. ASSETS.md: these are produced by
+# scripts/build-web-assets.sh from a checkout of the FilmCraft repository and
+# copied in here; they are ~27 MB and do not belong in the repository.
+# `plugin.js` imports `./filmcraft_web.js` and fetches `./filmcraft_web_bg.wasm`
+# relative to its own URL, so both must sit in this directory when serving.
+filmcraft_web.js
+filmcraft_web_bg.wasm
+filmcraft-favicon.png
+index.html
