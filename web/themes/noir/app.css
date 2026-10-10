@@ -8,19 +8,25 @@
 /* ── Top-bar action icons ──────────────────────────────────────
    Settings, Plugins and Power are bare glyphs in the bar. The
    shared `.icon-btn` treats them as free-standing glass circles
-   (background + 50% radius); in noir that plate is removed, leaving
-   the icon and nothing else. Hover is an ink shift, not a chip. */
+   (background + 50% radius + backdrop blur); in noir that plate is
+   removed, leaving the icon and nothing else. Hover is an ink shift,
+   not a chip — and opening a popover (clipboard / power set
+   `is-open`) must not resurrect the chip either. */
 #hud-top .icon-btn,
 #hud-top .icon-btn:hover,
-#hud-top .icon-btn:active {
+#hud-top .icon-btn:active,
+#hud-top .icon-btn.is-open {
   background: transparent;
   border-color: transparent;
   border-radius: 0;
   box-shadow: none;
   color: var(--muted);
   transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
-#hud-top .icon-btn:hover { color: var(--text); }
+#hud-top .icon-btn:hover,
+#hud-top .icon-btn.is-open { color: var(--text); }
 #hud-top .icon-btn:focus-visible {
   outline: none;
   color: var(--text);

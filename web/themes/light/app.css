@@ -4,22 +4,29 @@
    library does not own.
 
    The top-bar action icons (Settings / Plugins / Power) are kept as
-   bare glyphs like the host status chips — no circular glass plate at
-   rest or on hover. Without this they inherit the shared `.icon-btn`
-   plate from /css/app.css.
+   bare glyphs like the host status chips — no glass plate at rest, on
+   hover, or while their popover is open: no fill, no ring, and no
+   backdrop blur (the blur alone still frosted the bar behind each
+   glyph). Without this they inherit the shared `.icon-btn` plate from
+   /css/app.css, and the clipboard / power triggers wear its `.is-open`
+   chip while a menu is up.
    ───────────────────────────────────────────────────────────── */
 
 #hud-top .icon-btn,
 #hud-top .icon-btn:hover,
-#hud-top .icon-btn:active {
+#hud-top .icon-btn:active,
+#hud-top .icon-btn.is-open {
   background: transparent;
   border-color: transparent;
   border-radius: 0;
   box-shadow: none;
   color: var(--muted);
   transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
-#hud-top .icon-btn:hover { color: var(--text); }
+#hud-top .icon-btn:hover,
+#hud-top .icon-btn.is-open { color: var(--text); }
 #hud-top .icon-btn:focus-visible {
   outline: none;
   color: var(--text);
