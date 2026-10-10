@@ -23,32 +23,39 @@ use crate::models::Traveler;
 ///
 /// The token is single-use: a successful `/api/auth/session` bootstrap rotates
 /// it and rewrites the file, so a token recovered from argv, logs or browser
-/// history is already dead by the time an attacker tries it.
+/// history is already dead by the time an attacker tries it. Rotation *is* the
+/// single-use guarantee — there is no separate "already redeemed" flag, because
+/// a flag would also reject the replacement token, and a kiosk relaunched inside
+/// the same server process (a Server-mode round trip, a crashed shell) has
+/// nothing else to bootstrap with.
 #[derive(Clone, Default)]
 pub struct SessionAuth {
     pub user_id: Option<String>,
     token: Arc<tokio::sync::RwLock<String>>,
-    consumed: Arc<std::sync::atomic::AtomicBool>,
     token_file: Option<PathBuf>,
 }
 
 impl SessionAuth {
     /// Constant-time comparison of a presented token against the live secret.
+    /// Does not consume it: this is the auth-middleware path, which must keep
+    /// accepting the token for the whole life of the kiosk session.
     pub async fn matches(&self, presented: &str) -> bool {
         let token = self.token.read().await;
         constant_time_eq(presented.as_bytes(), token.as_bytes())
     }
 
-    /// Consume the single-use bootstrap token and rotate it. Returns the new
-    /// token on the first (and only) successful redemption; `None` afterwards.
-    /// The new token is persisted so the next kiosk launch can bootstrap too.
-    pub async fn consume_and_rotate(&self) -> Option<String> {
-        if self.consumed.swap(true, std::sync::atomic::Ordering::SeqCst) {
-            return None;
-        }
+    /// Check `presented` against the live secret and rotate it, in one critical
+    /// section. Returns the replacement token (also persisted, so the next kiosk
+    /// launch can bootstrap too), or `None` when `presented` is not the live
+    /// secret — which covers both a replay of a redeemed token and a stale token
+    /// read before a server restart, with no check-then-act window in between.
+    pub async fn consume_and_rotate(&self, presented: &str) -> Option<String> {
         let new_token = uuid::Uuid::new_v4().to_string();
         {
             let mut guard = self.token.write().await;
+            if !constant_time_eq(presented.as_bytes(), guard.as_bytes()) {
+                return None;
+            }
             *guard = new_token.clone();
         }
         if let Some(path) = &self.token_file {
@@ -92,7 +99,6 @@ pub async fn init_session(pool: &SqlitePool, config: &Config) -> SessionAuth {
     SessionAuth {
         user_id,
         token: Arc::new(tokio::sync::RwLock::new(token)),
-        consumed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         token_file,
     }
 }
@@ -282,4 +288,70 @@ fn extract_session_cookie(cookie_header: &str) -> Option<String> {
         let (name, value) = part.trim().split_once('=')?;
         (name == "shiny_token" && !value.is_empty()).then(|| value.to_string())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session_with(token: &str) -> SessionAuth {
+        SessionAuth {
+            user_id: Some("traveler-1".into()),
+            token: Arc::new(tokio::sync::RwLock::new(token.to_string())),
+            token_file: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn redemption_rotates_the_secret() {
+        let session = session_with("first");
+        let rotated = session.consume_and_rotate("first").await.expect("redeemed");
+        assert_ne!(rotated, "first");
+        assert!(session.matches(&rotated).await);
+        assert!(!session.matches("first").await);
+    }
+
+    /// The kiosk hands the server a single-use token, but it can be relaunched
+    /// inside one server process (Server mode round trip, a restarted shell).
+    /// Rotation replaces the secret rather than forbidding redemption outright,
+    /// so the replacement has to work — otherwise every relaunch had no way to
+    /// log in and the shell fell back to the app with no session.
+    #[tokio::test]
+    async fn a_relaunched_kiosk_bootstraps_with_the_rotated_token() {
+        let session = session_with("first");
+        let first = session.consume_and_rotate("first").await;
+        let first = first.expect("first redemption");
+        let second = session.consume_and_rotate(&first).await;
+        let second = second.expect("second redemption");
+        assert!(!session.matches(&first).await);
+        assert!(session.matches(&second).await);
+    }
+
+    /// Single-use still holds: rotation is what makes a redeemed token dead, so
+    /// a copy recovered from argv, logs or history cannot bootstrap again.
+    #[tokio::test]
+    async fn a_redeemed_token_cannot_be_replayed() {
+        let session = session_with("first");
+        session.consume_and_rotate("first").await.expect("redeemed");
+        assert!(session.consume_and_rotate("first").await.is_none());
+    }
+
+    /// A token read from the file before the server restarted is simply unknown.
+    #[tokio::test]
+    async fn a_stale_token_is_rejected() {
+        let session = session_with("current");
+        assert!(session.consume_and_rotate("stale").await.is_none());
+        // A rejected guess must leave the live secret untouched.
+        assert!(session.matches("current").await);
+    }
+
+    /// The auth middleware reads the secret for every request, so `matches` must
+    /// leave it usable for the whole kiosk session.
+    #[tokio::test]
+    async fn matches_does_not_consume() {
+        let session = session_with("live");
+        for _ in 0..5 {
+            assert!(session.matches("live").await);
+        }
+    }
 }

@@ -244,6 +244,17 @@ pub async fn unix_users(
     Ok(Json(serde_json::json!({ "enabled": enabled, "users": users })).into_response())
 }
 
+/// The kiosk web view *navigates* to the session bootstrap, so whatever body
+/// comes back is what the screen shows. Every loopback failure therefore
+/// redirects to the app instead of answering with a JSON error: a raw
+/// `{"success":false,…}` body is not a usable kiosk screen, whereas `/` always
+/// resolves to something — the durable cookie keeps the user signed in, and
+/// without one the app shows its own login screen. A non-loopback caller still
+/// gets a `401`, since that is API misuse rather than a kiosk boot.
+fn app_redirect() -> Response {
+    axum::response::Redirect::to("/").into_response()
+}
+
 /// `GET /api/auth/session?token=…` — the loopback-only kiosk auto-login.
 ///
 /// The server's per-session token (written to `$XDG_RUNTIME_DIR`) is exchanged
@@ -264,20 +275,23 @@ pub async fn session_bootstrap(
     if !remote.ip().is_loopback() {
         return Err(AppError::Unauthorized("this endpoint is local-only".into()));
     }
-    if let Err(retry) = BOOTSTRAP_LIMITER.check(&remote.ip().to_string(), 10, Duration::from_secs(60)) {
-        return Ok(too_many_attempts(retry));
+    if let Err(retry) = BOOTSTRAP_LIMITER.check(&remote.ip().to_string(), 10, Duration::from_secs(60))
+    {
+        tracing::warn!("kiosk bootstrap rate-limited ({retry}s); opening the app unauthenticated");
+        return Ok(app_redirect());
     }
     let Some(user_id) = state.session.user_id.clone() else {
-        return Err(AppError::Unauthorized("no session account for this machine".into()));
+        tracing::warn!("no session account for this machine; opening the app unauthenticated");
+        return Ok(app_redirect());
     };
     let provided = query.token.unwrap_or_default();
-    if provided.is_empty() || !state.session.matches(&provided).await {
-        return Err(AppError::Unauthorized("invalid session token".into()));
-    }
-    // Single-use: rotate the bootstrap secret before handing out the durable
-    // cookie. A token recovered from argv, logs or history is dead afterwards.
-    if state.session.consume_and_rotate().await.is_none() {
-        return Err(AppError::Unauthorized("session token already redeemed".into()));
+    // Validating and rotating in one step is also the single-use guard: the
+    // redeemed token stops matching at the same instant, so a copy replayed
+    // later — including a stale token read before a server restart — cannot
+    // bootstrap a second time.
+    if provided.is_empty() || state.session.consume_and_rotate(&provided).await.is_none() {
+        tracing::warn!("stale or unknown kiosk bootstrap token; opening the app unauthenticated");
+        return Ok(app_redirect());
     }
 
     // Ensure the account has a durable token, then hand it to the browser.
@@ -301,7 +315,7 @@ pub async fn session_bootstrap(
             .unwrap_or_default();
 
     let cookie = session_cookie(&token, request_is_https(&headers));
-    let mut response = axum::response::Redirect::to("/").into_response();
+    let mut response = app_redirect();
     response.headers_mut().insert(
         SET_COOKIE,
         HeaderValue::from_str(&cookie)

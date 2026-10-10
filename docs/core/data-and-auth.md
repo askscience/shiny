@@ -123,7 +123,10 @@ hash.
 - `GET /api/auth/session?token=…` is the **loopback-only** kiosk bootstrap: it
   exchanges `$XDG_RUNTIME_DIR/shiny-session-token` for the account's durable
   cookie and redirects to `/`. Any non-loopback peer is rejected, so it can
-  never be used over Iroh or the LAN. See [multi-user Linux](../deployment/multi-user-linux.md).
+  never be used over Iroh or the LAN. The shell *navigates* to it, so a loopback
+  failure (stale, already-redeemed or rate-limited token, no session account)
+  also redirects to `/` instead of rendering a JSON error body on the kiosk. See
+  [multi-user Linux](../deployment/multi-user-linux.md).
 
 ## Auth middleware
 

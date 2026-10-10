@@ -80,8 +80,13 @@ the cookie is `HttpOnly`, this server response is the only way JS can drop it.
 
 **Loopback only.** The kiosk auto-login: exchanges the per-session token for
 the account's durable `shiny_token` cookie and redirects to `/`. Every non-loopback
-peer is rejected, so it can never be used over Iroh or the LAN. If the machine
-has no session account, returns `401`.
+peer is rejected with `401` (`this endpoint is local-only`).
+
+The kiosk shell **navigates** to this URL, so the response body is what the
+screen shows. A loopback caller therefore never gets a JSON error body: a stale,
+replayed or rate-limited token redirects to `/` like a successful one, where the
+durable cookie keeps the user signed in (or the app shows its login screen). A
+raw `{"success":false,…}` page is not a usable kiosk screen.
 
 ---
 
