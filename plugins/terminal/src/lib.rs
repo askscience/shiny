@@ -6,5 +6,6 @@
 pub mod plugin;
 pub mod pty;
 pub mod routes;
+pub mod tool;
 
 pub use plugin::TerminalPlugin;

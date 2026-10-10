@@ -6,17 +6,20 @@ use shiny_plugin_sdk::{
     plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
     routes::{HttpMethod, RouteHandler, RouteSpec},
     services::PluginCtx,
-    tools::RegistryBuilder,
+    tools::{bridged, RegistryBuilder},
 };
+
+use crate::tool::TerminalExec;
 
 pub struct TerminalPlugin {
     ctx: OnceLock<Arc<PluginCtx>>,
 }
 
-/// No agent tools: the terminal is a human-facing surface. The persona line
-/// only tells the model the window exists so it can point the user at it.
+/// Persona line: the model must know the window exists *and* that it can run
+/// commands there itself (`terminal_exec`), so "run ls" is answered with the
+/// tool instead of an invented action.
 pub const PERSONA: &str =
-    "an assistant with a real Terminal window on the desktop; the user can type shell commands into it directly";
+    "an assistant with a real Terminal window on the desktop, where it can run shell commands for the user and the user can type commands themselves";
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
@@ -80,7 +83,10 @@ impl Plugin for TerminalPlugin {
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/terminal.md"))
-            .context_line("Terminal: enabled — a real shell window is available on the desktop.");
+            .context_line(
+                "Terminal: enabled — the assistant runs shell commands with terminal_exec; the user can also type in the Terminal window.",
+            )
+            .tool_arc(bridged(Arc::new(TerminalExec)));
         for spec in route_specs() {
             builder.route(spec);
         }

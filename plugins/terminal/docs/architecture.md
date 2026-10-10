@@ -6,14 +6,28 @@ plugins/terminal/
 ├── skills/terminal.md
 ├── src/
 │   ├── lib.rs        module wiring
-│   ├── plugin.rs     manifest, routes, entry (no tools)
+│   ├── plugin.rs     manifest, persona, routes + tool registration
 │   ├── routes.rs     /api/terminal/* handlers (SSE stream)
-│   └── pty.rs        PTY session management
+│   ├── pty.rs        PTY session management
+│   └── tool.rs       terminal_exec — run a command in a session
 └── web/
     ├── plugin.js     the Terminal window
     ├── icon.svg
     └── vendor/       xterm.js + addon-fit/-webgl/-canvas + xterm.css
 ```
+
+## Agent tool
+
+`terminal_exec` (aliases `terminal`, `terminal_run`, `shell`, `run_command`)
+lets the AI run a command in the terminal. It writes the command into a
+**persistent shell the tool owns** (`pty::agent_for`, created at 80×24 on first
+use) — never the window's session, so a command can't be typed into whatever
+the user (or a CLI they run there) is doing. It then collects the session's
+output until the shell has been quiet for 400ms or 10s have passed
+(`timed_out: true`). The capture starts after the echo of the typed command, so
+the shell's own echo and any banner are dropped; ANSI sequences are stripped
+and the result is capped at 16k chars, head and tail. The tool wraps the
+session registry directly — it does not go through the REST routes.
 
 ## PTY sessions
 

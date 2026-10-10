@@ -12,7 +12,7 @@ same user the Shiny server runs as.
 | Crate | `shiny-terminal-plugin` (`libshiny_terminal_plugin.so`) |
 | Database | none |
 | Web surface | `plugins/terminal/web/plugin.js` (prefix `terminal-*`) |
-| Agent tools | none (human-facing only) |
+| Agent tools | `terminal_exec` — run a shell command in the session |
 
 ## What it adds
 
@@ -22,15 +22,21 @@ same user the Shiny server runs as.
 - Vendored xterm.js + addons (`addon-fit`, `addon-webgl`, `addon-canvas`) under
   `web/vendor/`.
 
-The plugin contributes **no agent tools and no persona**; the terminal is a
-human-facing surface only. The AI can open it with the core `show_plugin` tool
-but cannot type into it.
+The plugin's agent tool is `terminal_exec`: the AI types a command into a
+persistent shell of its own (never the window's session, so the user's shell is
+never disturbed), waits for the shell to go quiet and gets the output back;
+`timed_out: true` means the command is still running and was left alone. The AI
+can also open the window with the core `show_plugin` tool, and the user types
+there directly.
 
 ## Security
 
 The shell has the server user's privileges. Shiny refuses the Terminal from
 **remote** clients unless *Allow Terminal from remote clients* is enabled in
 Settings. See [remote access](../../../docs/deployment/remote-access.md).
+The `terminal_exec` tool currently runs for the agent regardless of that
+setting — the remote-clients preference only covers the REST routes (the tool
+has no access to the request's remote flag yet); treat it as roadmap.
 
 ## Source layout
 

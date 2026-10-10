@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
@@ -32,6 +32,10 @@ const MAX_SESSIONS_TOTAL: usize = 32;
 
 /// How often an idle session emits an SSE comment-ish ping.
 const PING_INTERVAL: Duration = Duration::from_secs(20);
+
+/// Creation order across all sessions — picks the agent shell again after it
+/// has been alive for a while.
+static NEXT_SEQ: AtomicU64 = AtomicU64::new(1);
 
 fn base64_std() -> base64::engine::general_purpose::GeneralPurpose {
     base64::engine::general_purpose::STANDARD
@@ -89,6 +93,11 @@ pub struct Session {
     pub user_id: String,
     pub shell: String,
     pub cwd: String,
+    /// Creation order — higher means more recent.
+    pub seq: u64,
+    /// True for the shell `terminal_exec` types into (see [`agent_for`]) rather
+    /// than one the Terminal window owns.
+    pub agent: bool,
     inner: Mutex<Inner>,
     master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
@@ -126,12 +135,32 @@ fn shell_path() -> String {
         .unwrap_or_else(|| "/bin/bash".into())
 }
 
-/// Spawn a new PTY session running the host's login shell.
+/// The shell `terminal_exec` types into: a session the tool owns, kept alive
+/// across calls so `cd`/environment changes persist. Deliberately *not* the
+/// window's session — a command must never be typed into whatever the user (or
+/// another agent, e.g. a CLI running in the window) is doing in the visible
+/// shell.
+pub fn agent_for(user_id: &str) -> Result<Arc<Session>, AppError> {
+    if let Some(session) = list_for(user_id)
+        .into_iter()
+        .filter(|s| s.agent && s.is_alive())
+        .max_by_key(|s| s.seq)
+    {
+        return Ok(session);
+    }
+    spawn(user_id, 80, 24, true)
+}
+
+/// Spawn a new PTY session running the host's login shell — the window's path.
 ///
 /// Concurrency is capped per user and globally: each session spawns a login
 /// shell plus two OS threads, so an unbounded number of `create` calls is a
 /// trivial fork/thread bomb.
 pub fn create(user_id: &str, cols: u16, rows: u16) -> Result<Arc<Session>, AppError> {
+    spawn(user_id, cols, rows, false)
+}
+
+fn spawn(user_id: &str, cols: u16, rows: u16, agent: bool) -> Result<Arc<Session>, AppError> {
     let cols = cols.clamp(2, 1000);
     let rows = rows.clamp(1, 500);
     let shell = shell_path();
@@ -198,6 +227,8 @@ pub fn create(user_id: &str, cols: u16, rows: u16) -> Result<Arc<Session>, AppEr
         user_id: user_id.to_string(),
         shell: shell.clone(),
         cwd: cwd.clone(),
+        seq: NEXT_SEQ.fetch_add(1, Ordering::SeqCst),
+        agent,
         inner: Mutex::new(Inner { scrollback: Vec::new(), subscribers: Vec::new(), cols, rows }),
         master: Mutex::new(pair.master),
         writer: Mutex::new(writer),

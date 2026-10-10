@@ -97,7 +97,7 @@ window. In the multi-user install plugins are also **installed per user**
 |---|---|---|
 | `browser` | Web | Ad-filtered web window, child web views, downloads, incognito, news shelf. |
 | `files` | System | File browser over the user's home + the shared save/open helpers. |
-| `terminal` | System | A real PTY login shell rendered with xterm.js. |
+| `terminal` | System | A real PTY login shell rendered with xterm.js, and a `terminal_exec` agent tool that runs commands in it. |
 | `keyboard` | System | Virtual multi-language on-screen keyboard (8 layouts). |
 | `hello` | System | Minimal plugin-authoring example (one tool). |
 | `updates` | System | System + Ollama updates for every major distro, with a top-bar chip. |
