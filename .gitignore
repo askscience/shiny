@@ -6,6 +6,10 @@
 .env.*
 !.env.example
 
+# Command Code's local agent state (taste/preferences, plans, settings). Never
+# commit: it can contain verbatim user text, including credentials.
+.commandcode/
+
 # Runtime data: SQLite databases, logs, downloaded models, diaries
 data/
 diaries/
