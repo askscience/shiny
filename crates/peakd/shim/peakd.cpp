@@ -450,7 +450,12 @@ Item {
         }
         onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
         onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
-        onContextMenuRequested: (request) => shell.contextMenu("main", request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+        onContextMenuRequested: (request) => {
+            shell.contextMenu("main", request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+            // QtWebEngine pops its own context menu for every request that stays
+            // unaccepted, so the shell's menu would come up twice.
+            request.accepted = true
+        }
         onFileDialogRequested: (request) => shell.fileDialog(request.mode, request.acceptedMimeTypes, request.defaultFileName, request)
         onFullScreenRequested: (request) => request.accept()
         webChannel: shell.appChannel
@@ -534,7 +539,10 @@ WebEngineView {
     onNewWindowRequested: (request) => shell.newWindow(pageId, request.requestedUrl)
     onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
     onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
-    onContextMenuRequested: (request) => shell.contextMenu(pageId, request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+    onContextMenuRequested: (request) => {
+        shell.contextMenu(pageId, request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+        request.accepted = true
+    }
     onFileDialogRequested: (request) => shell.fileDialog(request.mode, request.acceptedMimeTypes, request.defaultFileName, request)
     settings.playbackRequiresUserGesture: false
     settings.fullScreenSupportEnabled: true
