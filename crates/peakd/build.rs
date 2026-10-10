@@ -10,15 +10,22 @@ fn main() {
     use std::path::PathBuf;
     use std::process::Command;
 
-    // QtWebEngineWidgets pulls in Core/Gui/Network; WebChannel is explicit
-    // because the IPC bridge needs it.
+    // The shell is one Qt Quick scene: Quick/QuickWidgets host it, WebEngineQuick
+    // renders the app view and the page views in it, WebEngineCore supplies the
+    // profile/download/permission classes the shim configures. Widgets stay for
+    // the window, the menus and the file dialogs.
     const MODULES: &[&str] = &[
         "Qt6Core",
         "Qt6Gui",
         "Qt6Widgets",
         "Qt6Network",
+        "Qt6Qml",
+        "Qt6Quick",
+        "Qt6QuickWidgets",
         "Qt6WebChannel",
-        "Qt6WebEngineWidgets",
+        "Qt6WebChannelQuick",
+        "Qt6WebEngineCore",
+        "Qt6WebEngineQuick",
     ];
     let mut includes = Vec::new();
     let mut qt_libs = Vec::new();
@@ -35,20 +42,25 @@ fn main() {
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
     let moc = find_moc();
-    let moc_output = out_dir.join("moc_ipc_bridge.cpp");
-    let mut moc_cmd = Command::new(&moc);
-    moc_cmd.arg("-I").arg("shim");
-    for include in &includes {
-        moc_cmd.arg("-I").arg(include);
+    // `ipc_bridge.h` carries the QWebChannel object; `peakd.cpp` now carries the
+    // Shell QObject the scene calls into, so both need moc. The .moc goes next
+    // to the build so `#include "peakd.moc"` resolves through the include path.
+    for (source, output) in [
+        ("shim/ipc_bridge.h", "moc_ipc_bridge.cpp"),
+        ("shim/peakd.cpp", "peakd.moc"),
+    ] {
+        let moc_output = out_dir.join(output);
+        let mut moc_cmd = Command::new(&moc);
+        moc_cmd.arg("-I").arg("shim");
+        for include in &includes {
+            moc_cmd.arg("-I").arg(include);
+        }
+        moc_cmd.arg(source).arg("-o").arg(&moc_output);
+        let status = moc_cmd
+            .status()
+            .unwrap_or_else(|err| panic!("could not run {}: {err}", moc.display()));
+        assert!(status.success(), "moc failed on {source}");
     }
-    moc_cmd
-        .arg("shim/ipc_bridge.h")
-        .arg("-o")
-        .arg(&moc_output);
-    let status = moc_cmd
-        .status()
-        .unwrap_or_else(|err| panic!("could not run {}: {err}", moc.display()));
-    assert!(status.success(), "moc failed on shim/ipc_bridge.h");
 
     for file in [
         "shim/peakd.cpp",
@@ -64,7 +76,7 @@ fn main() {
         .cpp(true)
         .std("c++17")
         .file("shim/peakd.cpp")
-        .file(&moc_output)
+        .file(out_dir.join("moc_ipc_bridge.cpp"))
         .include("shim")
         .include(&out_dir)
         .flag_if_supported("-fPIC")

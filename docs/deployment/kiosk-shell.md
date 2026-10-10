@@ -55,12 +55,26 @@ The shell resolves `peakd` via `PEAKD_BIN`, then `/usr/local/bin/peakd` /
 
 ### Browser child web views
 
-The Browser plugin's tabs are **not** iframes. Each tab is a native child web
-view at the page's true origin (`browse.rs`), so anti-bot challenges
-(Cloudflare) pass. Ad blocking runs **in-process**: the server compiles
+The Browser plugin's tabs are **not** iframes. Each tab is a web view **item in
+the shell's own Qt Quick scene** at the page's true origin (`browse.rs`),
+composited by the same renderer as the app's own DOM, so anti-bot challenges
+(Cloudflare) pass and the page follows its window frame for frame. Runtime
+packages needed for that: `qml6-module-qtquick`, `qml6-module-qtquick-effects`
+and `qml6-module-qtwebengine`. Ad blocking runs **in-process**: the server compiles
 EasyList/EasyPrivacy into a cache the shell restores, and a
 `QWebEngineUrlRequestInterceptor` asks the engine per request. There is no
 filter proxy in the page path.
+
+The QtWebEngine profile (cookies, local storage, cache) lives under
+`data/peakd/qtwebengine/` (`--data-dir` moves it; storage in `storage/`, HTTP
+cache in `cache/`). It is configured **before** the first load: the storage name
+first, then the off-the-record flag is cleared, then the paths. Qt refuses those
+changes once a profile has been used — it warns about an empty storage name and
+switches the profile from off-the-record to disk-based, which can drop the store
+the session cookie landed in, i.e. the shell comes up looking signed out. The
+same ordering rule applies to `persistentCookiesPolicy` (the kiosk's auto-login
+cookie must survive a reload) and to the request interceptor, which has to exist
+before the first request.
 
 ---
 
@@ -105,6 +119,14 @@ script (installed by
 4. Auto-logs-in the kiosk with the loopback session token (or opens the plain
    URL if the token file is missing).
 5. Starts matchbox and loops between `peakd` and the server-mode window.
+
+Exit codes in that loop: `42` is the server-mode switch, `0` is a deliberate
+quit (`Alt`+`Q`), and a **signal death** (`≥128`: 139 SIGSEGV, 134 SIGABRT) is a
+crash. Each iteration logs the status it got. A crash is retried up to three
+times, 2 s apart, with the counter reset once the shell has stayed up for a
+minute — a shell crash must not cost a full re-login, but a crash loop ends the
+session rather than spinning. Every other status ends the session, which is why
+the greeter appears when the shell dies in a way this policy does not retry.
 
 Quitting the shell (`Alt`+`Q`) ends the session and returns to the greeter.
 

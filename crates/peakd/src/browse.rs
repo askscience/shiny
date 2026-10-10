@@ -1,7 +1,7 @@
 //! Browser-plugin view protocol and state for the Qt shell.
 //!
-//! The Browser plugin renders each tab in a native child web view at the
-//! page's true origin (its reason to exist: Cloudflare sees an ordinary
+//! The Browser plugin renders each tab in a web view **inside the shell's own
+//! scene** at the page's true origin (its reason to exist: Cloudflare sees an ordinary
 //! browser). The page drives the shell over `window.ipc` with JSON messages
 //! prefixed [`IPC_PREFIX`]; this module owns that protocol, the command and
 //! event queues, and the view state machine. The Qt objects live behind
@@ -94,10 +94,10 @@ pub enum Command {
         id: String,
         visible: bool,
     },
-    /// Clip the view to everything but `holes`: the HTML layers this window
-    /// draws over an otherwise always-on-top native page (an open menu, a
-    /// higher floating window in the "Windows" layout). Coordinates are the
-    /// holes' own CSS rects; the shell subtracts them from the view's geometry.
+    /// Cut the page where the HTML draws over it (an open menu, a higher
+    /// floating window in the "Windows" layout): the shell masks those rects
+    /// out of the page item and lets the press through to the app view below.
+    /// Coordinates are the holes' own CSS rects, minus the item's origin.
     SetMask {
         id: String,
         holes: Vec<CssRect>,
@@ -118,7 +118,7 @@ pub enum Command {
         id: String,
     },
     /// Deliver clipboard text into the view's focused editable element. The
-    /// app cannot do this itself — the page is a native child window with no
+    /// app cannot do this itself — the page is a separate web view with no
     /// reachable DOM — so the shell sets the system clipboard and runs the
     /// engine's Paste action (`peakd_qt_view_paste`).
     Paste {
@@ -241,7 +241,7 @@ impl Default for ViewBus {
     }
 }
 
-/// The native side of a child view. Implemented by `host::QtHost` (shim) in
+/// The Qt side of a page view. Implemented by `host::QtHost` (shim) in
 /// the shell; a stub keeps the state machine testable without Qt.
 pub trait ViewHost {
     fn create(&mut self, id: &str, url: &str, rect: Option<CssRect>, visible: bool, incognito: bool);
@@ -257,7 +257,7 @@ pub trait ViewHost {
     fn close(&mut self, id: &str);
 }
 
-/// Owns the live child views and drains [`ViewBus`] on the shell's pump.
+/// Owns the live page views and drains [`ViewBus`] on the shell's pump.
 pub struct Views<H: ViewHost> {
     bus: ViewBus,
     host: H,

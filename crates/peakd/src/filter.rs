@@ -1,4 +1,4 @@
-//! In-process ad blocking for the native browser child views.
+//! In-process ad blocking for the Browser plugin's page views.
 //!
 //! The proxy is gone (origin rewriting broke anti-bot cookies), so the shell
 //! filters with a `QWebEngineUrlRequestInterceptor`: for every request QtWebEngine

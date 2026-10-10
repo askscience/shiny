@@ -98,9 +98,19 @@ without a password.
 
 The token is **single-use**: a successful bootstrap rotates it and rewrites the
 file, so a copy recovered from a log or a browser history entry is already dead.
+Rotation replaces the secret rather than forbidding further redemptions, so a
+kiosk relaunched inside the same server process (a Server-mode round trip, a
+restarted shell) bootstraps with the replacement token.
 `scripts/shiny-session` passes it to `peakd` through the `SHINY_BOOT_TOKEN`
 environment variable (never argv, which `/proc/<pid>/cmdline` exposes
-world-readable); the shell appends it to the initial navigation URL itself.
+world-readable); the shell appends it to the initial navigation URL itself. The
+launcher re-reads the file before **every** `peakd` launch, so it never hands
+over a token that was already spent.
+
+Because the shell navigates to that URL, a bootstrap that cannot be honoured
+(stale token, no session account) redirects to `/` instead of returning a JSON
+error body: the durable cookie keeps the user signed in, and without one the app
+shows its own login screen.
 
 ---
 

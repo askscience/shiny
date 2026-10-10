@@ -8,7 +8,7 @@
 //! Layout:
 //! * [`config`] — launch flags/environment.
 //! * [`browse`] — the `peakd:view:*` protocol, queues and the view state
-//!   machine; [`host`] binds it to the Qt child views.
+//!   machine; [`host`] binds it to the Qt page views.
 //! * [`display`] — interface scale files and the DPI-derived `auto` choice.
 //! * [`gestures`] — evdev three-finger swipes.
 //! * [`shim`] — the C ABI in `shim/peakd_qt.h`.
@@ -26,7 +26,7 @@ mod shim;
 use std::ffi::{c_char, c_void, CStr};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -80,6 +80,11 @@ static GESTURES: OnceLock<gestures::GestureBridge> = OnceLock::new();
 static DISPLAY: OnceLock<Mutex<DisplayState>> = OnceLock::new();
 static BENCH: OnceLock<Mutex<bench::BenchState>> = OnceLock::new();
 static START_URL: OnceLock<String> = OnceLock::new();
+/// The boot URL: the app origin with the single-use auto-login token. Usable
+/// only until that token has been redeemed once.
+static BOOT_URL: OnceLock<String> = OnceLock::new();
+/// Set once the app's first load finished, i.e. the boot token is spent.
+static BOOT_TOKEN_SPENT: AtomicBool = AtomicBool::new(false);
 
 /// Interface-scale state, polled on the pump (a stat every 100 ms).
 struct DisplayState {
@@ -295,15 +300,30 @@ extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_
     let Some(bus) = BUS.get() else { return };
     match kind.as_str() {
         "load" | "title" | "url" | "new-window" => {
+            if kind == "load"
+                && id == "main"
+                && payload == "finished"
+                && !BOOT_TOKEN_SPENT.swap(true, Ordering::SeqCst)
+            {
+                println!("peakd: app loaded (boot token spent)");
+            }
             bus.push_event(ViewBus::view_event(&id, &kind, &payload));
         }
         "crashed" => {
             eprintln!("peakd: view {id} crashed ({payload})");
             if id == "main" {
-                // The app's own renderer died: bring it back rather than
-                // leaving a dead white window in the kiosk.
-                if let Some(url) = START_URL.get() {
-                    shim::main_load(url);
+                // The app's own renderer died: bring it back rather than leaving a
+                // dead white window in the kiosk. The single-use boot link only
+                // works once, so after that the reload leans on the durable
+                // `shiny_token` cookie the profile keeps on disk.
+                let url = if BOOT_TOKEN_SPENT.load(Ordering::SeqCst) {
+                    START_URL.get().cloned()
+                } else {
+                    BOOT_URL.get().cloned().or_else(|| START_URL.get().cloned())
+                };
+                if let Some(url) = url {
+                    println!("peakd: reloading the app view after the crash");
+                    shim::main_load(&url);
                 }
             }
         }
@@ -500,6 +520,7 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
     // The only navigation that carries the single-use auto-login token. It is
     // built here, never logged, and never placed in argv.
     let nav_url = boot_url(&cfg.start_url, cfg.boot_token.as_deref());
+    BOOT_URL.set(nav_url.clone()).ok();
 
     println!("peakd: opening {}", cfg.start_url);
     println!(
@@ -553,7 +574,7 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
     shim::set_filter_cb(on_filter);
     shim::set_ua_cb(on_ua);
     shim::set_download_cb(on_download);
-    // Copies made inside Browser pages (a native child view) are invisible to
+    // Copies made inside Browser pages (a separate web view) are invisible to
     // the app; report them so the clipboard history can record them.
     shim::set_clipboard_cb(on_clipboard);
 

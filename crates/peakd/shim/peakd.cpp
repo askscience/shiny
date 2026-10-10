@@ -1,55 +1,76 @@
-// Qt 6 + QtWebEngine shim for the PEAK'D! kiosk shell. See peakd.h.
+// Qt 6 + QtWebEngine **Quick** shim for the PEAK'D! kiosk shell. See peakd.h.
 //
-// Everything Qt lives here: the window, the main view, the child views, the
-// QWebChannel IPC bridge, permissions, signals -> Rust callbacks. All policy
-// (config, command protocol, queues, scale, gestures, benchmark) is Rust.
+// Everything Qt lives here: the window, the app view, the Browser plugin's page
+// views, the QWebChannel IPC bridge, permissions, signals -> Rust callbacks.
+// All policy (config, command protocol, queues, scale, gestures, benchmark) is
+// Rust.
+//
+// The app view and every page view are **items in one QQuickWidget scene**, not
+// separate native windows. That is the point: the page is composited by the
+// same renderer as the app's own DOM, so it moves in the same frame as its
+// window, never blanks, and needs no X Shape masking.
+//
+//   geometry   -- item x/y/w/h (there is no separate window to move)
+//   holes      -- where an HTML popup or a higher window overlaps the page, the
+//                 page item is cut: a MultiEffect alpha mask for the visuals,
+//                 `enabled` for input (a disabled item passes the press to the
+//                 app view below, like an X Shape input region)
+//   visibility -- item visible (hidden tile, overview, launcher)
+//
+// Scene: root -> [ appView (WebEngineView), pagesLayer -> page items, maskImage ]
 
 #include "peakd.h"
 
 #include "ipc_bridge.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
-#include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHash>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeyEvent>
-#include <QList>
-#include <QRegion>
-#include <QStyleHints>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMoveEvent>
-#include <QPixmap>
+#include <QPainter>
+#include <QPalette>
 #include <QPointer>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlEngine>
+#include <QQuickImageProvider>
+#include <QQuickItem>
+#include <QQuickWidget>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QStandardPaths>
+#include <QStyle>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
-#include <QWebChannel>
+#include <QtWebChannelQuick/qqmlwebchannel.h>
 #include <QWebEngineDownloadRequest>
-#include <QWebEngineNewWindowRequest>
-#include <QWebEnginePage>
+#include <QWebEnginePermission>
 #include <QWebEngineProfile>
-#include <QWebEngineScript>
-#include <QWebEngineScriptCollection>
 #include <QWebEngineSettings>
 #include <QWebEngineUrlRequestInfo>
 #include <QWebEngineUrlRequestInterceptor>
-#include <QWebEngineView>
+#include <QtQml/qqml.h>
+#include <QtWebEngineQuick/qquickwebenginedownloadrequest.h>
+#include <QtWebEngineQuick/qquickwebengineprofile.h>
+#include <QtWebEngineQuick/qtwebenginequickglobal.h>
 
 #include <cstdio>
 #include <cstdlib>
-#include <memory>
 
 /// Origin of the kiosk app view, captured from `peakd_qt_run`'s start URL.
 /// Main-frame navigation and the privileged IPC bridge only trust this origin;
@@ -71,18 +92,25 @@ static bool is_app_origin(const QUrl &url) {
 
 namespace {
 
+/// Scripts injected into every page (bootstrap + `peakd_qt_inject_script`).
+struct InjectedScript {
+    QString name;
+    QString source;
+};
+
 struct Context {
-    QMainWindow *window = nullptr;
-    QWebEngineView *main_view = nullptr;
-    QWebEngineProfile *profile = nullptr;
-    /// Off-the-record profile used by incognito tabs.
-    QWebEngineProfile *otr_profile = nullptr;
+    QQuickWidget *scene = nullptr;
+    QQuickItem *scene_root = nullptr;
+    QObject *app_view = nullptr;
+    QObject *mask_image = nullptr;
+    QQuickWebEngineProfile *profile = nullptr;
+    QQuickWebEngineProfile *otr_profile = nullptr;
     peakd_ipc_cb ipc_cb = nullptr;
     peakd_view_cb view_cb = nullptr;
     peakd_pump_cb pump_cb = nullptr;
     peakd_js_cb js_cb = nullptr;
     void *userdata = nullptr;
-    QHash<QString, QPointer<QWebEngineView>> children;
+    QHash<QString, QObject *> children;
     QString bootstrap;
 };
 
@@ -90,7 +118,7 @@ struct Context {
 Context *g_ctx = nullptr;
 
 // Scripts injected into every page, registered before the shell starts.
-QList<QWebEngineScript> g_pending_scripts;
+QList<InjectedScript> g_pending_scripts;
 
 // Ad filtering + the Google sign-in User-Agent override (Rust owns the engine).
 peakd_filter_cb g_filter_cb = nullptr;
@@ -101,10 +129,14 @@ peakd_download_cb g_download_cb = nullptr;
 void *g_cb_userdata = nullptr;
 QString g_downloads_dir;
 int g_download_seq = 0;
-QHash<QString, QPointer<QWebEngineDownloadRequest>> g_downloads;
+QHash<QString, QPointer<QQuickWebEngineDownloadRequest>> g_downloads;
 
 // Copy events from Browser-plugin child views (the app's DOM cannot see them).
 peakd_clipboard_cb g_clipboard_cb = nullptr;
+
+// Debug hooks (probe / PEAKD_QT_EVAL) and their result routing.
+bool g_probe = false;
+bool g_eval_exit = false;
 
 /// Intercepts every request in a profile: asks the Rust engine whether to
 /// block, and applies the per-host User-Agent override. Runs on QtWebEngine's
@@ -128,6 +160,39 @@ public:
         if (block) info.block(true);
     }
 };
+
+/// image://peakdmask/<key>: opaque white with the hole rects cleared -- what
+/// MultiEffect.maskSource expects (it masks by alpha).
+class MaskProvider : public QQuickImageProvider {
+public:
+    MaskProvider() : QQuickImageProvider(QQuickImageProvider::Image) {}
+
+    QString add(const QList<QRectF> &holes, int w, int h) {
+        QImage image(qMax(1, w), qMax(1, h), QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        QPainter painter(&image);
+        painter.setCompositionMode(QPainter::CompositionMode_Clear);
+        for (const QRectF &rect : holes) painter.fillRect(rect, Qt::transparent);
+        painter.end();
+        const QString key = QString::number(++seq_);
+        images_.insert(key, image);
+        // One page is in view at a time; a small cache is plenty.
+        while (images_.size() > 24) images_.remove(images_.constBegin().key());
+        return QStringLiteral("image://peakdmask/") + key;
+    }
+
+    QImage requestImage(const QString &id, QSize *size, const QSize &) override {
+        const QImage image = images_.value(id);
+        if (size) *size = image.size();
+        return image;
+    }
+
+private:
+    QHash<QString, QImage> images_;
+    int seq_ = 0;
+};
+
+MaskProvider *g_masks = nullptr;
 
 /// A filesystem-safe download name.
 QString sanitize_download_name(const QString &raw) {
@@ -199,7 +264,7 @@ void emit_download(QWebEngineDownloadRequest *download, const QString &id, const
 
 /// Take ownership of one download: assign an id, choose a destination, accept
 /// it, and stream lifecycle events to Rust.
-void handle_download(QWebEngineDownloadRequest *download, bool incognito) {
+void handle_download(QQuickWebEngineDownloadRequest *download, bool incognito) {
     if (!download) return;
     const QString id = QStringLiteral("d%1").arg(++g_download_seq);
 
@@ -254,18 +319,11 @@ void handle_download(QWebEngineDownloadRequest *download, bool incognito) {
     download->accept();
 }
 
-/// Copy the settings the app relies on from the persistent profile to another.
-void mirror_profile_settings(QWebEngineProfile *to) {
-    to->settings()->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, false);
-    to->settings()->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
-    to->settings()->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
-}
-
 /// Install the interceptor and the download handler on a profile.
-void install_profile_services(QWebEngineProfile *profile, bool incognito) {
+void install_profile_services(QQuickWebEngineProfile *profile, bool incognito) {
     profile->setUrlRequestInterceptor(new ShinyRequestInterceptor());
-    QObject::connect(profile, &QWebEngineProfile::downloadRequested, profile,
-                     [incognito](QWebEngineDownloadRequest *download) {
+    QObject::connect(profile, &QQuickWebEngineProfile::downloadRequested, profile,
+                     [incognito](QQuickWebEngineDownloadRequest *download) {
                          handle_download(download, incognito);
                      });
 }
@@ -337,111 +395,476 @@ QStringList mime_filters(const QStringList &mime_types) {
     return filters;
 }
 
-/// QWebEnginePage with the shell's id, reporting navigation and console, and
-/// answering the file pickers the app's plugins use (`web/js/files.js`
-/// `pickFiles`, image import, uploads).
-class PeakdPage : public QWebEnginePage {
+/// The scene: the app view, the page layer, the mask image and the helpers the
+/// shim calls. Kept as a string so the build needs no qrc/rcc step.
+///
+/// Every storage/cookie setting lives on the profile itself, so it is in place
+/// before the profile is first used. Qt refuses to change the storage backend of
+/// a profile that has already loaded something: it warns that the storage name is
+/// empty, then switches the profile from off-the-record to disk-based, which can
+/// drop the store the session cookie landed in. The app view is therefore
+/// navigated from `Shell.setProfiles` — i.e. only after the request interceptor
+/// and the download handler are installed — and not from a binding evaluated
+/// while the scene is still being built.
+const char *kSceneQml = R"QML(
+import QtQuick
+import QtWebEngine
+import QtWebChannel
+
+Item {
+    id: root
+
+    // Profiles are fully configured before first use: storage name, then the
+    // off-the-record flag, then the disk paths — set in that order from
+    // `Shell.setProfiles`, because the order is load-bearing (see the comment
+    // above kSceneQml). Only the User-Agent is a plain property here.
+    // (Keep QML comments free of quotes: moc scans this raw string literally.)
+    WebEngineProfile {
+        id: appProfile
+        httpUserAgent: shell.userAgent
+    }
+    WebEngineProfile {
+        id: otrProfile
+        storageName: "peakd-otr"
+        offTheRecord: true
+        httpUserAgent: shell.userAgent
+        // No cache/storage/cookie setters here on purpose: any persistent
+        // storage setting flips an off-the-record profile to disk-based, which
+        // would make an incognito tab keep its cookies after all.
+    }
+
+    WebEngineView {
+        id: appView
+        objectName: "appView"
+        anchors.fill: parent
+        profile: appProfile
+        url: shell.appUrl
+        onTitleChanged: shell.viewTitle("main", title)
+        onUrlChanged: shell.viewUrl("main", url)
+        onLoadingChanged: (info) => shell.viewLoad("main", info.status)
+        onRenderProcessTerminated: (status, code) => shell.viewCrashed("main", status, code)
+        onNewWindowRequested: (request) => shell.newWindow("main", request.requestedUrl)
+        onNavigationRequested: (request) => {
+            if (request.isMainFrame && !shell.isAppOrigin(request.url)) request.reject();
+            else request.accept();
+        }
+        onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
+        onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
+        onContextMenuRequested: (request) => shell.contextMenu("main", request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+        onFileDialogRequested: (request) => shell.fileDialog(request.mode, request.acceptedMimeTypes, request.defaultFileName, request)
+        onFullScreenRequested: (request) => request.accept()
+        webChannel: shell.appChannel
+    }
+
+    Item { id: pagesLayer; objectName: "pagesLayer"; anchors.fill: parent }
+
+    Image {
+        id: maskImage
+        objectName: "maskImage"
+        visible: false
+        asynchronous: false
+        cache: false
+        source: ""
+    }
+
+    function applyScripts(view) {
+        var sources = shell.scriptSources();
+        var list = [];
+        for (var i = 0; i < sources.length; ++i) {
+            list.push({
+                name: sources[i].name,
+                sourceCode: sources[i].source,
+                injectionPoint: WebEngineScript.DocumentCreation,
+                worldId: WebEngineScript.MainWorld,
+                runsOnSubFrames: true
+            });
+        }
+        view.userScripts.collection = list;
+    }
+
+    function pageAction(id, name) {
+        var view = shell.pageItem(id);
+        if (view) view.triggerWebAction(WebEngineView[name]);
+    }
+
+    function pageJs(id, token, script) {
+        var view = shell.pageItem(id);
+        if (!view) return;
+        view.runJavaScript(script, function (result) {
+            shell.pageJsResult(token, result === undefined ? "" : String(result));
+        });
+    }
+
+    function runJs(script, id) {
+        appView.runJavaScript(script, function (result) {
+            shell.jsResult(id, typeof result === "string" ? result : JSON.stringify(result));
+        });
+    }
+
+    Component.onCompleted: {
+        shell.setProfiles(appProfile, otrProfile, maskImage, appView);
+        applyScripts(appView);
+        // The app plays TTS/radio/YouTube without a click on some paths, and
+        // full-screen video is allowed; the app's window never parses the UA.
+        appView.settings.playbackRequiresUserGesture = false;
+        appView.settings.fullScreenSupportEnabled = true;
+        appView.settings.javascriptCanOpenWindows = true;
+    }
+}
+)QML";
+
+/// One page: a WebEngineView item whose holes come from the shell, wired to the
+/// same callbacks as the app view but with no privileged IPC bridge.
+const char *kPageQml = R"QML(
+import QtQuick
+import QtQuick.Effects
+import QtWebEngine
+import QtWebChannel
+
+WebEngineView {
+    id: view
+    property string pageId: ""
+    objectName: "pageView"
+    visible: false
+    backgroundColor: "#ffffff"
+    onTitleChanged: shell.viewTitle(pageId, title)
+    onUrlChanged: shell.viewUrl(pageId, url)
+    onLoadingChanged: (info) => shell.viewLoad(pageId, info.status)
+    onRenderProcessTerminated: (status, code) => shell.viewCrashed(pageId, status, code)
+    onNewWindowRequested: (request) => shell.newWindow(pageId, request.requestedUrl)
+    onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
+    onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
+    onContextMenuRequested: (request) => shell.contextMenu(pageId, request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+    onFileDialogRequested: (request) => shell.fileDialog(request.mode, request.acceptedMimeTypes, request.defaultFileName, request)
+    settings.playbackRequiresUserGesture: false
+    settings.fullScreenSupportEnabled: true
+    settings.javascriptCanOpenWindows: true
+    layer.enabled: false
+    layer.effect: MultiEffect { maskEnabled: true; maskSource: shell.maskItem }
+}
+)QML";
+
+/// Everything the scene calls back into. One instance, exposed as `shell`.
+class Shell : public QObject {
+    Q_OBJECT
+    /// The app URL. Empty until `setProfiles` has configured and serviced the
+    /// profiles; the scene binds the app view's `url` to it, so the first load
+    /// starts only once everything is in place.
+    Q_PROPERTY(QUrl appUrl READ appUrl NOTIFY appUrlChanged)
+    Q_PROPERTY(QString storagePath READ storagePath CONSTANT)
+    Q_PROPERTY(QString cachePath READ cachePath CONSTANT)
+    Q_PROPERTY(QString userAgent READ userAgent CONSTANT)
+    Q_PROPERTY(QObject *appBridge READ appBridge CONSTANT)
+    Q_PROPERTY(QObject *childBridge READ childBridge CONSTANT)
+    Q_PROPERTY(QObject *maskItem READ maskItem CONSTANT)
+    Q_PROPERTY(QObject *appChannel READ appChannel CONSTANT)
+
+signals:
+    /// Emitted when `set_app_url` hands the scene its first URL. Declared before
+    /// the setters on purpose: moc parses the class in one pass and rejects
+    /// `emit` of a signal it has not seen yet.
+    void appUrlChanged();
+
 public:
-    PeakdPage(QWebEngineProfile *profile, QString id, QObject *parent)
-        : QWebEnginePage(profile, parent), id_(std::move(id)) {}
+    QUrl appUrl() const { return app_url_; }
+    QString storagePath() const { return storage_path_; }
+    QString cachePath() const { return cache_path_; }
+    QString userAgent() const { return user_agent_; }
+    QObject *appBridge() const { return app_bridge_; }
+    QObject *childBridge() const { return child_bridge_; }
+    QObject *maskItem() const { return mask_item_; }
+    QObject *appChannel() const { return app_channel_; }
 
-    QString id() const { return id_; }
+    void set_app_url(const QUrl &url) {
+        if (app_url_ == url) return;
+        app_url_ = url;
+        emit appUrlChanged();
+    }
+    void set_storage(const QString &storage, const QString &cache) {
+        storage_path_ = storage;
+        cache_path_ = cache;
+    }
+    void set_user_agent(const QString &agent) { user_agent_ = agent; }
+    void set_bridges(QObject *app_bridge, QObject *child_bridge) {
+        app_bridge_ = app_bridge;
+        child_bridge_ = child_bridge;
+    }
+    void set_app_channel(QObject *channel) { app_channel_ = channel; }
 
-protected:
-    bool acceptNavigationRequest(const QUrl &url, NavigationType, bool isMainFrame) override {
-        if (isMainFrame) {
-            // The kiosk's own view may only navigate inside the app origin. A
-            // main-frame redirect to an attacker origin would otherwise take
-            // the privileged `window.ipc` bridge with it.
-            if (id_ == QLatin1String("main") && !is_app_origin(url)) {
-                return false;
-            }
-            emit_view(id_, "url", url.toString());
+    /// {name, source} for the bootstrap and every injected script.
+    Q_INVOKABLE QVariantList scriptSources() const {
+        QVariantList list;
+        if (g_ctx && !g_ctx->bootstrap.isEmpty()) {
+            list.append(QVariantMap{{QStringLiteral("name"), QStringLiteral("peakd:ipc")},
+                                    {QStringLiteral("source"), g_ctx->bootstrap}});
         }
-        return true;
+        for (const InjectedScript &script : g_pending_scripts) {
+            list.append(QVariantMap{{QStringLiteral("name"), script.name},
+                                    {QStringLiteral("source"), script.source}});
+        }
+        return list;
     }
 
-    QStringList chooseFiles(FileSelectionMode mode, const QStringList &oldFiles,
-                            const QStringList &acceptedMimeTypes) override {
-        const QString filters = mime_filters(acceptedMimeTypes).join(QStringLiteral(";;"));
-        QWidget *window = QApplication::activeWindow();
-        switch (mode) {
-        case FileSelectOpen: {
-            const QString file = QFileDialog::getOpenFileName(
-                window, QStringLiteral("Open"), QString(), filters);
-            return file.isEmpty() ? QStringList() : QStringList{file};
-        }
-        case FileSelectOpenMultiple:
-            return QFileDialog::getOpenFileNames(window, QStringLiteral("Open"), QString(),
-                                                 filters);
-        case FileSelectUploadFolder: {
-            // `<input webkitdirectory>` / directory upload.
-            const QString dir =
-                QFileDialog::getExistingDirectory(window, QStringLiteral("Choose folder"));
-            return dir.isEmpty() ? QStringList() : QStringList{dir};
-        }
-        case FileSelectSave: {
-            const QString suggested = oldFiles.isEmpty() ? QString() : oldFiles.first();
-            const QString file = QFileDialog::getSaveFileName(
-                window, QStringLiteral("Save"), suggested, filters);
-            return file.isEmpty() ? QStringList() : QStringList{file};
-        }
-        }
-        return {};
+    Q_INVOKABLE bool isAppOrigin(const QUrl &url) const { return is_app_origin(url); }
+
+    Q_INVOKABLE QObject *pageItem(const QString &id) const {
+        return g_ctx ? g_ctx->children.value(id, nullptr) : nullptr;
     }
 
-    void javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level, const QString &message,
-                                  int line, const QString &source) override {
+    /// The profiles, the mask image and the app view, handed over by the scene.
+    Q_INVOKABLE void setProfiles(QObject *profile, QObject *otr, QObject *mask_image,
+                                 QObject *app_view) {
+        if (!g_ctx) return;
+        g_ctx->profile = qobject_cast<QQuickWebEngineProfile *>(profile);
+        g_ctx->otr_profile = qobject_cast<QQuickWebEngineProfile *>(otr);
+        g_ctx->mask_image = mask_image;
+        g_ctx->app_view = app_view;
+        mask_item_ = mask_image;
+        install_profile_services(g_ctx->profile, /*incognito=*/false);
+        if (g_ctx->otr_profile) install_profile_services(g_ctx->otr_profile, /*incognito=*/true);
+        // Order matters here, and it is deterministic because this is C++ and not
+        // a set of QML properties: the storage name must be registered *before*
+        // the off-the-record flag is cleared (Qt warns and can drop the store when
+        // that switch happens with an empty name), and the cache path has to land
+        // before the cache type (setting the type resets the path). All of it
+        // happens before the app view is pointed anywhere, so no load can race it.
+        if (g_ctx->profile) {
+            g_ctx->profile->setStorageName(QStringLiteral("peakd"));
+            g_ctx->profile->setOffTheRecord(false);
+            g_ctx->profile->setPersistentStoragePath(storage_path_);
+            g_ctx->profile->setCachePath(cache_path_);
+            g_ctx->profile->setHttpCacheType(QQuickWebEngineProfile::DiskHttpCache);
+            g_ctx->profile->setPersistentCookiesPolicy(
+                QQuickWebEngineProfile::ForcePersistentCookies);
+        }
+        std::printf("peakd: user agent   %s\n", user_agent_.toUtf8().constData());
+        // First load of the app view. Deliberately here and not in the QML:
+        // the profile must be fully configured (storage, cookies, UA, request
+        // interceptor) before the first request, which is also what keeps the
+        // session cookie durable across a reload.
+        set_app_url(g_app_origin);
+    }
+
+    Q_INVOKABLE void viewTitle(const QString &id, const QString &title) {
+        emit_view(id, "title", title);
+    }
+    Q_INVOKABLE void viewUrl(const QString &id, const QUrl &url) {
+        emit_view(id, "url", url.toString());
+    }
+    Q_INVOKABLE void viewLoad(const QString &id, int status) {
+        // WebEngineView: 0 started, 1 stopped, 2 succeeded, 3 failed.
+        const char *phase = "started";
+        if (status == 2) phase = "finished";
+        else if (status == 3 || status == 1) phase = "failed";
+        emit_view(id, "load", QString::fromLatin1(phase));
+        if (id == QLatin1String("main") && status == 2) maybe_probe();
+    }
+    Q_INVOKABLE void viewCrashed(const QString &id, int status, int code) {
+        emit_view(id, "crashed", QStringLiteral("%1,%2").arg(status).arg(code));
+    }
+    Q_INVOKABLE void newWindow(const QString &id, const QUrl &url) {
+        emit_view(id, "new-window", url.toString());
+    }
+    Q_INVOKABLE void consoleMessage(int level, const QString &message, int line,
+                                    const QString &source) {
         const char *tag = "log";
-        switch (level) {
-        case InfoMessageLevel:
-            tag = "info";
-            break;
-        case WarningMessageLevel:
-            tag = "warn";
-            break;
-        case ErrorMessageLevel:
-            tag = "error";
-            break;
-        default:
-            break;
-        }
+        if (level == 1) tag = "info";
+        else if (level == 2) tag = "warn";
+        else if (level == 3) tag = "error";
         std::fprintf(stderr, "peakd: console[%s] %s:%d %s\n", tag, source.toUtf8().constData(),
                      line, message.toUtf8().constData());
     }
 
-private:
-    QString id_;
-};
+    /// The old QWebEnginePage permission policy: the app's own origin gets
+    /// capture devices, clipboard reads and the position the HUD's weather,
+    /// the clock's timezone and the traveler GPS all resolve from; a browsed
+    /// page does not.
+    Q_INVOKABLE bool allowPermission(int type, const QUrl &origin) const {
+        const auto kind = static_cast<QWebEnginePermission::PermissionType>(type);
+        using Kind = QWebEnginePermission::PermissionType;
+        const bool capture = kind == Kind::MediaAudioCapture || kind == Kind::MediaVideoCapture ||
+                             kind == Kind::MediaAudioVideoCapture;
+        const bool clipboard = kind == Kind::ClipboardReadWrite;
+        const bool geolocation = kind == Kind::Geolocation;
+        return is_app_origin(origin) && (capture || clipboard || geolocation);
+    }
 
-/// A view with the standard browser context menu. Without this QtWebEngine
-/// shows nothing on right-click, while WebKitGTK showed its own link/image
-/// menu — the Browser plugin's pages rely on the engine for that.
-class PeakdView : public QWebEngineView {
-public:
-    using QWebEngineView::QWebEngineView;
+    /// A context menu for a page: the actions the old widgets shim got from
+    /// `createStandardContextMenu()`, built here and popped over the scene.
+    Q_INVOKABLE void contextMenu(const QString &id, qreal x, qreal y, const QUrl &link_url,
+                                 bool editable, const QString &selection) {
+        if (!g_ctx || !g_ctx->scene) return;
+        auto *menu = new QMenu(g_ctx->scene);
+        QObject::connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
+        const auto add_action = [&](const QString &label, const char *action, bool enabled) {
+            QAction *item = menu->addAction(label);
+            item->setEnabled(enabled);
+            const QString view_id = id;
+            const QString verb = QString::fromLatin1(action);
+            QObject::connect(item, &QAction::triggered, menu, [view_id, verb]() {
+                QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
+                                          Q_ARG(QVariant, view_id), Q_ARG(QVariant, verb));
+            });
+        };
+        if (link_url.isValid() && !link_url.isEmpty()) {
+            QAction *copy_link = menu->addAction(QStringLiteral("Copy Link Address"));
+            const QUrl url = link_url;
+            QObject::connect(copy_link, &QAction::triggered, menu, [url]() {
+                QGuiApplication::clipboard()->setText(url.toString());
+            });
+            menu->addSeparator();
+        }
+        add_action(QStringLiteral("Back"), "Back", true);
+        add_action(QStringLiteral("Forward"), "Forward", true);
+        add_action(QStringLiteral("Reload"), "Reload", true);
+        menu->addSeparator();
+        if (editable) {
+            add_action(QStringLiteral("Cut"), "Cut", true);
+            add_action(QStringLiteral("Copy"), "Copy", !selection.isEmpty());
+            add_action(QStringLiteral("Paste"), "Paste", true);
+        } else {
+            add_action(QStringLiteral("Copy"), "Copy", !selection.isEmpty());
+        }
+        add_action(QStringLiteral("Select All"), "SelectAll", true);
+        menu->popup(g_ctx->scene->mapToGlobal(QPoint(qRound(x), qRound(y))));
+    }
 
-protected:
-    void contextMenuEvent(QContextMenuEvent *event) override {
-        QMenu *menu = createStandardContextMenu();
-        if (!menu) {
-            QWebEngineView::contextMenuEvent(event);
+    /// The file pickers the app's plugins use (`web/js/files.js` pickFiles,
+    /// image import, uploads) and the ones a page requests.
+    Q_INVOKABLE void fileDialog(int mode, const QStringList &mime_types,
+                                const QString &default_name, QObject *request) {
+        if (!request || !g_ctx) return;
+        const QString filters = mime_filters(mime_types).join(QStringLiteral(";;"));
+        QWidget *parent = g_ctx->scene;
+        QStringList files;
+        switch (mode) {
+        case 0: {  // FileModeOpen
+            const QString file =
+                QFileDialog::getOpenFileName(parent, QStringLiteral("Open"), QString(), filters);
+            if (!file.isEmpty()) files << file;
+            break;
+        }
+        case 1:  // FileModeOpenMultiple
+            files = QFileDialog::getOpenFileNames(parent, QStringLiteral("Open"), QString(), filters);
+            break;
+        case 2: {  // FileModeUploadFolder
+            const QString dir =
+                QFileDialog::getExistingDirectory(parent, QStringLiteral("Choose folder"));
+            if (!dir.isEmpty()) files << dir;
+            break;
+        }
+        case 3: {  // FileModeSave
+            const QString file = QFileDialog::getSaveFileName(parent, QStringLiteral("Save"),
+                                                             default_name, filters);
+            if (!file.isEmpty()) files << file;
+            break;
+        }
+        default:
+            break;
+        }
+        request->setProperty("accepted", true);
+        if (files.isEmpty()) QMetaObject::invokeMethod(request, "dialogReject");
+        else QMetaObject::invokeMethod(request, "dialogAccept", Q_ARG(QVariant, QVariant(files)));
+    }
+
+    /// The selection a page reported for a Ctrl+C made inside it.
+    Q_INVOKABLE void pageJsResult(const QString &, const QString &text) {
+        if (!g_clipboard_cb || text.isEmpty()) return;
+        g_clipboard_cb(g_cb_userdata, "copy", text.toUtf8().constData());
+    }
+
+    /// Results of `runJs`: id 1 is the benchmark, negative ids are the debug
+    /// hooks (eval, probe), everything else is ignored like before.
+    Q_INVOKABLE void jsResult(int id, const QString &value) {
+        if (id == -1) {  // PEAKD_QT_EVAL
+            std::printf("peakd: eval %s\n", value.toUtf8().constData());
+            std::fflush(stdout);
+            if (const char *path = std::getenv("PEAKD_QT_SCREENSHOT")) {
+                const QImage image = g_ctx->scene->grabFramebuffer();
+                image.save(QString::fromLocal8Bit(path), "PNG");
+                std::printf("peakd: screenshot -> %s\n", path);
+                std::fflush(stdout);
+            }
+            if (g_eval_exit) QCoreApplication::quit();
             return;
         }
-        menu->popup(event->globalPos());
-        QObject::connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
+        if (id == -2) {  // probe
+            std::printf("peakd: loadFinished=true probe=%s\n", value.toUtf8().constData());
+            std::fflush(stdout);
+            if (const char *path = std::getenv("PEAKD_QT_SCREENSHOT")) {
+                const QImage image = g_ctx->scene->grabFramebuffer();
+                image.save(QString::fromLocal8Bit(path), "PNG");
+                std::printf("peakd: screenshot -> %s\n", path);
+                std::fflush(stdout);
+            }
+            QCoreApplication::quit();
+            return;
+        }
+        if (!g_ctx || !g_ctx->js_cb) return;
+        g_ctx->js_cb(g_ctx->userdata, id, value.toUtf8().constData());
+    }
+
+private:
+    /// The probe the migration checks use: one script on the app view, then quit.
+    void maybe_probe() {
+        if (!g_ctx || !g_probe) return;
+        g_probe = false;
+        QTimer::singleShot(9000, g_ctx->scene_root, []() {
+            const QString script = QStringLiteral(R"JS(
+(() => {
+  const out = {};
+  try {
+    out.optionalChaining = ({ a: { b: 1 } })?.a?.b === 1;
+    out.nullish = (null ?? 'x') === 'x';
+    out.ua = navigator.userAgent;
+    out.secureContext = window.isSecureContext;
+    out.devicePixelRatio = window.devicePixelRatio;
+    out.hidden = document.hidden;
+    out.title = document.title;
+    out.readyState = document.readyState;
+    out.ipc = typeof window.ipc;
+    out.tiles = document.querySelectorAll('.tile').length;
+    out.canvases = document.querySelectorAll('canvas').length;
+    out.htmlLength = document.body ? document.body.innerHTML.length : 0;
+  } catch (e) { out.syntax = String(e); }
+  return JSON.stringify(out);
+})()
+)JS");
+            QMetaObject::invokeMethod(g_ctx->scene_root, "runJs", Q_ARG(QVariant, script),
+                                      Q_ARG(QVariant, -2));
+        });
+    }
+
+    QUrl app_url_;
+    QString storage_path_;
+    QString cache_path_;
+    QString user_agent_;
+    QObject *app_bridge_ = nullptr;
+    QObject *child_bridge_ = nullptr;
+    QObject *mask_item_ = nullptr;
+    QObject *app_channel_ = nullptr;
+};
+
+Shell g_shell;
+
+/// The top-level window, reporting moves (the benchmark's dragging signal).
+class PeakdWindow : public QMainWindow {
+protected:
+    void moveEvent(QMoveEvent *event) override {
+        const QPoint position = event->pos();
+        emit_view(QStringLiteral("window"), "move",
+                  QStringLiteral("%1,%2").arg(position.x()).arg(position.y()));
+        QMainWindow::moveEvent(event);
     }
 };
 
-/// Ctrl/Cmd+C pressed inside a Browser-plugin child view.
+/// Ctrl/Cmd+C pressed inside a Browser-plugin page.
 ///
-/// The page is a real native window, so the app's DOM never sees this key and
-/// nothing would record the copy for the clipboard history. (The app's own view
-/// needs no filter: its DOM fires a `copy` event the clipboard service catches
-/// itself.) The filter runs the engine's own Copy action — so a site's copy
-/// handler still wins — reports the selection to Rust (which forwards it to the
-/// app's clipboard service) and swallows the key so the engine does not copy a
-/// second time.
+/// The page is a separate web view, so the app's DOM never sees this key and
+/// nothing would record the copy for the clipboard history. The filter runs the
+/// engine's own Copy action -- so a site's copy handler still wins -- reports
+/// the selection to Rust (which forwards it to the app's clipboard service) and
+/// swallows the key so the engine does not copy a second time.
 class PeakdClipboardFilter : public QObject {
 public:
     using QObject::QObject;
@@ -461,135 +884,42 @@ protected:
         }
         if (key->key() != Qt::Key_C) return QObject::eventFilter(watched, event);
 
-        PeakdView *view = focused_child_view();
-        if (!view) return QObject::eventFilter(watched, event);
-        // Nothing selected: not a copy. Reading the clipboard after a no-op
-        // Copy would report whatever was there before as a fresh copy.
-        const QString selection = view->page()->selectedText();
-        if (selection.isEmpty()) return QObject::eventFilter(watched, event);
+        const QString id = focused_page_id();
+        if (id.isEmpty()) return QObject::eventFilter(watched, event);
 
-        view->page()->triggerAction(QWebEnginePage::Copy);
-        if (g_clipboard_cb) {
-            g_clipboard_cb(g_cb_userdata, "copy", selection.toUtf8().constData());
-        }
-        return true; // handled: the engine must not process the key again
+        // Run the engine's Copy, then report whatever was selected (empty means
+        // it was not a copy at all).
+        QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction", Q_ARG(QVariant, id),
+                                  Q_ARG(QVariant, QStringLiteral("Copy")));
+        QMetaObject::invokeMethod(g_ctx->scene_root, "pageJs", Q_ARG(QVariant, id),
+                                  Q_ARG(QVariant, QStringLiteral("copy")),
+                                  Q_ARG(QVariant, QStringLiteral("window.getSelection().toString()")));
+        return true;  // handled: the engine must not process the key again
     }
 
 private:
-    /// The child view owning the focused widget, or null (main view or none).
-    ///
-    /// `dynamic_cast`, not `qobject_cast`: PeakdView carries no Q_OBJECT (this
-    /// file is moc'd only for IpcBridge), and the walk has to survive the
-    /// engine's internal focus widgets, which are plain QWidgets.
-    static PeakdView *focused_child_view() {
-        if (!g_ctx || !g_ctx->main_view) return nullptr;
-        QWidget *widget = QApplication::focusWidget();
-        while (widget) {
-            if (auto *view = dynamic_cast<PeakdView *>(widget)) {
-                return view == g_ctx->main_view ? nullptr : view;
-            }
-            widget = widget->parentWidget();
+    /// The page view owning the focused item, or an empty string.
+    static QString focused_page_id() {
+        if (!g_ctx) return QString();
+        QQuickItem *item = nullptr;
+        if (auto *window = qobject_cast<QQuickWindow *>(QGuiApplication::focusWindow())) {
+            item = window->activeFocusItem();
         }
-        return nullptr;
-    }
-};
-
-/// The top-level window, reporting moves (the benchmark's dragging signal).
-class PeakdWindow : public QMainWindow {
-protected:
-    void moveEvent(QMoveEvent *event) override {
-        const QPoint position = event->pos();
-        emit_view(QStringLiteral("window"), "move",
-                  QStringLiteral("%1,%2").arg(position.x()).arg(position.y()));
-        QMainWindow::moveEvent(event);
-    }
-};
-
-/// Connect the per-page signals the shell cares about. Lambdas only: no new
-/// signals/slots, so this file needs moc solely for IpcBridge.
-void connect_page(PeakdPage *page, const QString &id) {
-    QObject::connect(page, &QWebEnginePage::titleChanged, page,
-                     [id](const QString &title) { emit_view(id, "title", title); });
-    QObject::connect(page, &QWebEnginePage::loadStarted, page, [id]() { emit_view(id, "load", "started"); });
-    QObject::connect(page, &QWebEnginePage::loadFinished, page, [id](bool ok) {
-        emit_view(id, "load", ok ? "finished" : "failed");
-    });
-    QObject::connect(page, &QWebEnginePage::renderProcessTerminated, page,
-                     [id](QWebEnginePage::RenderProcessTerminationStatus status, int code) {
-                         emit_view(id, "crashed", QStringLiteral("%1,%2").arg(status).arg(code));
-                     });
-    QObject::connect(page, &QWebEnginePage::newWindowRequested, page,
-                     [id](QWebEngineNewWindowRequest &request) {
-                         // The Browser plugin opens a tab instead of a popup; not
-                         // calling openIn() rejects the request.
-                         emit_view(id, "new-window", request.requestedUrl().toString());
-                     });
-    QObject::connect(
-        page, &QWebEnginePage::featurePermissionRequested, page,
-        [page](const QUrl &origin, QWebEnginePage::Feature feature) {
-            switch (feature) {
-            case QWebEnginePage::MediaAudioCapture:
-            case QWebEnginePage::MediaVideoCapture:
-            case QWebEnginePage::MediaAudioVideoCapture:
-                // Only the app's own origin gets capture devices. A page the
-                // user browses must ask for permission explicitly instead of
-                // silently receiving the machine's microphone/camera.
-                page->setFeaturePermission(
-                    origin, feature,
-                    is_app_origin(origin) ? QWebEnginePage::PermissionGrantedByUser
-                                          : QWebEnginePage::PermissionDeniedByUser);
-                break;
-            case QWebEnginePage::ClipboardReadWrite:
-                // Reading is for the app itself (the Terminal pastes with
-                // navigator.clipboard.readText). A browsing page stays unable
-                // to read whatever the user copied elsewhere; its own copy
-                // buttons keep working through the engine's sanitized write
-                // path, which needs no grant here.
-                page->setFeaturePermission(
-                    origin, feature,
-                    is_app_origin(origin) ? QWebEnginePage::PermissionGrantedByUser
-                                          : QWebEnginePage::PermissionDeniedByUser);
-                break;
-            default:
-                break;
+        if (!item) {
+            if (auto *widget = qobject_cast<QQuickWidget *>(QGuiApplication::focusObject())) {
+                item = widget->quickWindow() ? widget->quickWindow()->activeFocusItem() : nullptr;
             }
-        });
-}
-
-/// Install the IPC bridge, the bootstrap and any injected scripts into a page.
-void install_page(PeakdPage *page) {
-    // Only the app's own view may drive the shell. A child web view renders a
-    // browsing page, so its bridge forwards nothing but the exit message.
-    const bool privileged = page->id() == QLatin1String("main");
-    auto *bridge = new IpcBridge(g_ctx->ipc_cb, g_ctx->userdata, privileged, page);
-    auto *channel = new QWebChannel(page);
-    channel->registerObject(QStringLiteral("ipc"), bridge);
-    page->setWebChannel(channel);
-
-    if (!g_ctx->bootstrap.isEmpty()) {
-        QWebEngineScript script;
-        script.setName(QStringLiteral("peakd:ipc"));
-        script.setInjectionPoint(QWebEngineScript::DocumentCreation);
-        script.setWorldId(QWebEngineScript::MainWorld);
-        script.setRunsOnSubFrames(true);
-        script.setSourceCode(g_ctx->bootstrap);
-        page->scripts().insert(script);
+        }
+        for (QQuickItem *walk = item; walk; walk = walk->parentItem()) {
+            for (auto it = g_ctx->children.constBegin(); it != g_ctx->children.constEnd(); ++it) {
+                if (static_cast<QObject *>(walk) == it.value()) return it.key();
+            }
+        }
+        return QString();
     }
+};
 
-    for (const QWebEngineScript &script : g_pending_scripts) {
-        page->scripts().insert(script);
-    }
-
-    connect_page(page, page->id());
-}
-
-PeakdPage *make_page(const QString &id, QWebEngineProfile *profile, QObject *parent) {
-    auto *page = new PeakdPage(profile, id, parent);
-    install_page(page);
-    return page;
-}
-
-} // namespace
+}  // namespace
 
 IpcBridge::IpcBridge(peakd_ipc_cb callback, void *userdata, bool privileged, QObject *parent)
     : QObject(parent), callback_(callback), userdata_(userdata), privileged_(privileged) {}
@@ -603,8 +933,8 @@ void IpcBridge::postMessage(const QString &body) {
     } else {
         // Defense in depth over the navigation handler: the privileged bridge
         // only forwards while the document is still on the app origin.
-        auto *page = qobject_cast<QWebEnginePage *>(parent());
-        if (!page || !is_app_origin(page->url())) {
+        if (!g_ctx || !g_ctx->app_view ||
+            !is_app_origin(g_ctx->app_view->property("url").toUrl())) {
             return;
         }
     }
@@ -612,13 +942,7 @@ void IpcBridge::postMessage(const QString &body) {
 }
 
 void peakd_qt_inject_script(const char *name, const char *source) {
-    QWebEngineScript script;
-    script.setName(QString::fromUtf8(name));
-    script.setInjectionPoint(QWebEngineScript::DocumentCreation);
-    script.setWorldId(QWebEngineScript::MainWorld);
-    script.setRunsOnSubFrames(true);
-    script.setSourceCode(QString::fromUtf8(source));
-    g_pending_scripts.append(script);
+    g_pending_scripts.append(InjectedScript{QString::fromUtf8(name), QString::fromUtf8(source)});
 }
 
 void peakd_qt_set_window(const char *title, int width, int height) {
@@ -631,6 +955,7 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
                  peakd_view_cb view_cb, peakd_pump_cb pump, peakd_js_cb js, void *userdata) {
     // QtWebEngine wants a shared OpenGL context group; set before QApplication.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    QtWebEngineQuick::initialize();
 
     int argc = 1;
     char name[] = "peakd";
@@ -647,59 +972,77 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     context.userdata = userdata;
     context.bootstrap = bootstrap_script(load_qwebchannel_js());
     g_ctx = &context;
-    // Ctrl/Cmd+C inside a Browser child view is invisible to the app (a native
-    // window); this app-wide filter reports it into the clipboard history.
+    g_probe = probe != 0;
+    // Ctrl/Cmd+C inside a Browser page is invisible to the app; this app-wide
+    // filter reports it into the clipboard history.
     app.installEventFilter(new PeakdClipboardFilter(&app));
     // The start URL *is* the app origin for this run; child views may browse
-    // anywhere, the main view may not.
+    // anywhere, the main view may not. The app view itself is not pointed at it
+    // yet: `Shell.setProfiles` does that once the profile is configured, so no
+    // load can race the storage/cookie setup.
     g_app_origin = QUrl(QString::fromLocal8Bit(url));
 
-    // One explicit, persistent profile shared by the main view and every
-    // Browser-plugin child view: same cookie jar, same cache, same UA. A named
-    // profile (not defaultProfile()) so the storage paths below are honoured
-    // from the start.
+    // Storage paths and the cache live under the shell's data dir; the scene
+    // binds them onto its profiles, which are created (and configured) before
+    // anything loads. The UA is normalised here for the same reason: present as
+    // plain Chromium, since the QtWebEngine token is an unusual fingerprint and
+    // the app never parses it.
     const QString root = QString::fromLocal8Bit(data_dir);
-    auto *profile = new QWebEngineProfile(QStringLiteral("peakd"), &app);
-    context.profile = profile;
-    profile->setPersistentStoragePath(root + QStringLiteral("/storage"));
-    profile->setCachePath(root + QStringLiteral("/cache"));
-    profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
-    profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
-    // The app plays TTS/radio/YouTube without a click on some paths.
-    mirror_profile_settings(profile);
-    install_profile_services(profile, false);
-
-    // The off-the-record profile backs incognito tabs: no cookies, no cache, no
-    // storage. Same settings and the same interceptor (filtering and the Google
-    // UA override apply there too).
-    auto *otr_profile = new QWebEngineProfile(&app);
-    otr_profile->setHttpUserAgent(profile->httpUserAgent());
-    mirror_profile_settings(otr_profile);
-    install_profile_services(otr_profile, true);
-    context.otr_profile = otr_profile;
-
-    std::printf("peakd: profile storage %s\n",
-                profile->persistentStoragePath().toUtf8().constData());
-    std::printf("peakd: profile cache   %s\n", profile->cachePath().toUtf8().constData());
-
-    // Present as plain Chromium. The QtWebEngine token is an unusual
-    // fingerprint, and the app never parses the UA. Stripping the token keeps
-    // Chrome/<engine version> truthful — unlike the old WebKitGTK shell, which
-    // claimed Safari while its TLS/JS fingerprint was WebKitGTK's.
-    QString user_agent = profile->httpUserAgent();
+    g_shell.set_storage(root + QStringLiteral("/storage"), root + QStringLiteral("/cache"));
+    QString user_agent = QWebEngineProfile::defaultProfile()->httpUserAgent();
     user_agent.remove(QRegularExpression(QStringLiteral("QtWebEngine/[0-9.]+\\s*")));
-    profile->setHttpUserAgent(user_agent);
-    std::printf("peakd: user agent   %s\n", user_agent.toUtf8().constData());
+    g_shell.set_user_agent(user_agent);
+
+    // The IPC bridges: the app view is privileged (it drives the shell), every
+    // page view shares one that may only ask to leave the kiosk.
+    auto *app_bridge = new IpcBridge(ipc, userdata, /*privileged=*/true, &app);
+    auto *child_bridge = new IpcBridge(ipc, userdata, /*privileged=*/false, &app);
+    g_shell.set_bridges(app_bridge, child_bridge);
+    auto *app_channel = new QQmlWebChannel(&app);
+    app_channel->registerObject(QStringLiteral("ipc"), app_bridge);
+    g_shell.set_app_channel(app_channel);
+    g_masks = new MaskProvider;
 
     PeakdWindow window;
     window.setWindowTitle(g_window_title);
-    auto *main_page = make_page(QStringLiteral("main"), g_ctx->profile, &window);
-    auto *view = new PeakdView(&window);
-    view->setPage(main_page);
-    window.setCentralWidget(view);
+    auto *scene = new QQuickWidget(&window);
+    scene->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    scene->engine()->addImageProvider(QStringLiteral("peakdmask"), g_masks);
+    scene->rootContext()->setContextProperty(QStringLiteral("shell"), &g_shell);
+    scene->engine()->setObjectOwnership(&g_shell, QQmlEngine::CppOwnership);
+
+    // Build the scene from the embedded QML so no qrc/rcc step is needed.
+    auto *component = new QQmlComponent(scene->engine(), scene);
+    component->setData(QByteArray(kSceneQml), QUrl(QStringLiteral("qrc:/peakd/scene.qml")));
+    if (component->isError()) {
+        for (const QQmlError &error : component->errors())
+            std::fprintf(stderr, "peakd: scene: %s\n", error.toString().toUtf8().constData());
+        return 1;
+    }
+    QObject *root_object = component->create(scene->rootContext());
+    if (!root_object) {
+        std::fprintf(stderr, "peakd: could not create the scene\n");
+        return 1;
+    }
+    scene->setContent(QUrl(), component, root_object);
+    context.scene = scene;
+    context.scene_root = qobject_cast<QQuickItem *>(root_object);
+    window.setCentralWidget(scene);
     window.resize(g_window_width, g_window_height);
-    context.window = &window;
-    context.main_view = view;
+
+    // Show once the scene is up, and report the profile's final storage state
+    // (read back, not echoed: Qt silently refuses some of these paths depending
+    // on the order they were set in).
+    QTimer::singleShot(0, &app, [&window]() {
+        window.show();
+        if (g_ctx && g_ctx->profile) {
+            std::printf("peakd: profile off-the-record %d\n", g_ctx->profile->isOffTheRecord());
+            std::printf("peakd: profile storage %s\n",
+                        g_ctx->profile->persistentStoragePath().toUtf8().constData());
+            std::printf("peakd: profile cache   %s\n",
+                        g_ctx->profile->cachePath().toUtf8().constData());
+        }
+    });
 
     // The shell's pump: queues are drained on this 100 ms tick.
     auto *timer = new QTimer(&app);
@@ -708,109 +1051,42 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     });
     timer->start(100);
 
-    std::printf("peakd: Qt %s\n", qVersion());
-    std::fflush(stdout);
-
-    if (probe) {
-        QObject::connect(view, &QWebEngineView::loadFinished, [view](bool ok) {
-            QTimer::singleShot(9000, view, [view, ok]() {
-                const QString script = QStringLiteral(R"JS(
-(() => {
-  const out = {};
-  try {
-    out.optionalChaining = ({ a: { b: 1 } })?.a?.b === 1;
-    out.nullish = (null ?? 'x') === 'x';
-    out.modules = (() => { try { eval('import("data:text/javascript,")'); return true; } catch (e) { return String(e); } })();
-  } catch (e) { out.syntax = String(e); }
-  out.ua = navigator.userAgent;
-  out.secureContext = window.isSecureContext;
-  out.getUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  out.devicePixelRatio = window.devicePixelRatio;
-  out.hidden = document.hidden;
-  out.title = document.title;
-  out.readyState = document.readyState;
-  out.ipc = typeof window.ipc;
-  out.tiles = document.querySelectorAll('.tile').length;
-  out.canvases = document.querySelectorAll('canvas').length;
-  out.htmlLength = document.body ? document.body.innerHTML.length : 0;
-  out.bodyChildren = document.body
-    ? Array.from(document.body.children).slice(0, 8)
-        .map(e => e.tagName + (e.id ? '#' + e.id : '') + (e.className ? '.' + String(e.className).split(' ')[0] : ''))
-        .join('|')
-    : null;
-  out.shinyKeys = Object.keys(window).filter(k => k.indexOf('__shiny') === 0).join(',');
-  return JSON.stringify(out);
-})()
-)JS");
-                view->page()->runJavaScript(script, [view, ok](const QVariant &value) {
-                    std::printf("peakd: loadFinished=%s probe=%s\n", ok ? "true" : "false",
-                                value.toString().toUtf8().constData());
-                    std::fflush(stdout);
-                    if (const char *path = std::getenv("PEAKD_QT_SCREENSHOT")) {
-                        const QString file = QString::fromLocal8Bit(path);
-                        view->grab().save(file, "PNG");
-                        std::printf("peakd: screenshot -> %s\n", path);
-                    }
-                    QCoreApplication::quit();
-                });
-            });
-        });
-    }
-
-    // Debug hook: run one script on the main view after the page has settled.
+    // Debug hook: run one script on the app view after the page has settled.
     // Used by the migration checks; useful on the kiosk when something needs
-    // inspecting. The script reports through console.log (printed below).
+    // inspecting. The script reports through `jsResult` (id -1).
     if (const char *eval_env = std::getenv("PEAKD_QT_EVAL")) {
         const QString script = QString::fromUtf8(eval_env);
         const int delay_ms = [] {
             const char *value = std::getenv("PEAKD_QT_EVAL_DELAY_MS");
             return value ? std::atoi(value) : 6000;
         }();
-        const bool exit_after = std::getenv("PEAKD_QT_EVAL_EXIT") != nullptr;
-        auto ran = std::make_shared<bool>(false);
-        QObject::connect(
-            view, &QWebEngineView::loadFinished,
-            [view, script, delay_ms, exit_after, ran](bool ok) {
-                if (!ok || *ran) return;
-                *ran = true;
-                QTimer::singleShot(delay_ms, view, [view, script, exit_after]() {
-                    view->page()->runJavaScript(script, [exit_after](const QVariant &value) {
-                        std::printf("peakd: eval %s\n", value.toString().toUtf8().constData());
-                        std::fflush(stdout);
-                        if (exit_after) QCoreApplication::quit();
-                    });
-                });
-            });
+        g_eval_exit = std::getenv("PEAKD_QT_EVAL_EXIT") != nullptr;
+        QTimer::singleShot(delay_ms, &app, [script]() {
+            QMetaObject::invokeMethod(g_ctx->scene_root, "runJs", Q_ARG(QVariant, script),
+                                      Q_ARG(QVariant, -1));
+        });
     }
 
-    view->load(QUrl(QString::fromLocal8Bit(url)));
-    window.show();
+    std::printf("peakd: Qt %s (Quick scene)\n", qVersion());
+    std::fflush(stdout);
     return app.exec();
 }
 
 void peakd_qt_quit(void) { QCoreApplication::quit(); }
 
 void peakd_qt_main_load(const char *url) {
-    if (g_ctx && g_ctx->main_view) g_ctx->main_view->load(QUrl(QString::fromUtf8(url)));
+    if (g_ctx && g_ctx->app_view) g_ctx->app_view->setProperty("url", QUrl(QString::fromUtf8(url)));
 }
 
 void peakd_qt_main_zoom(double factor) {
-    if (g_ctx && g_ctx->main_view) g_ctx->main_view->setZoomFactor(factor);
+    if (g_ctx && g_ctx->app_view) g_ctx->app_view->setProperty("zoomFactor", factor);
 }
 
 void peakd_qt_main_run_js(const char *script, int callback_id) {
-    if (!g_ctx || !g_ctx->main_view) return;
-    const int id = callback_id;
-    g_ctx->main_view->page()->runJavaScript(QString::fromUtf8(script), [id](const QVariant &value) {
-        if (!g_ctx || !g_ctx->js_cb) return;
-        QString text;
-        if (value.userType() == QMetaType::QString) {
-            text = value.toString();
-        } else if (value.isValid()) {
-            text = QString::fromUtf8(QJsonDocument::fromVariant(value).toJson(QJsonDocument::Compact));
-        }
-        g_ctx->js_cb(g_ctx->userdata, id, text.toUtf8().constData());
-    });
+    if (!g_ctx || !g_ctx->scene_root) return;
+    QMetaObject::invokeMethod(g_ctx->scene_root, "runJs",
+                              Q_ARG(QVariant, QString::fromUtf8(script)),
+                              Q_ARG(QVariant, callback_id));
 }
 
 double peakd_qt_screen_dpi(void) {
@@ -827,139 +1103,202 @@ void peakd_qt_screen_size(int *width, int *height) {
 
 void peakd_qt_view_create(const char *id, const char *url, int x, int y, int w, int h,
                           int visible, int incognito) {
-    if (!g_ctx || !g_ctx->main_view) return;
+    if (!g_ctx || !g_ctx->scene_root) return;
+
+    static QQmlComponent *page_component = nullptr;
+    if (!page_component) {
+        page_component = new QQmlComponent(g_ctx->scene->engine(), g_ctx->scene);
+        page_component->setData(QByteArray(kPageQml), QUrl(QStringLiteral("qrc:/peakd/page.qml")));
+        if (page_component->isError()) {
+            for (const QQmlError &error : page_component->errors())
+                std::fprintf(stderr, "peakd: page: %s\n", error.toString().toUtf8().constData());
+            return;
+        }
+    }
 
     const QString key = QString::fromUtf8(id);
-    QWebEngineProfile *profile =
+    QQuickWebEngineProfile *profile =
         (incognito && g_ctx->otr_profile) ? g_ctx->otr_profile : g_ctx->profile;
-    auto *view = new PeakdView(g_ctx->main_view);
-    // A QWebEngineView paints through an internal QQuickWidget surface that a
-    // plain child-widget QWidget mask does not clip, so `setMask` was silently
-    // ignored and the page covered every HTML layer above it. Making the view
-    // its own native window means the mask (X Shape) actually punches holes,
-    // revealing menus and higher windows drawn by the app behind it. Force the
-    // native window now, before the page/mask are set.
-    view->setAttribute(Qt::WA_NativeWindow, true);
-    view->winId();
-    view->setPage(make_page(key, profile, view));
-    view->setGeometry(x, y, w, h);
-    g_ctx->children.insert(key, view);
-    view->load(QUrl(QString::fromUtf8(url)));
+    QVariantMap initial;
+    initial.insert(QStringLiteral("pageId"), key);
+    initial.insert(QStringLiteral("profile"), QVariant::fromValue<QObject *>(profile));
+    QObject *object =
+        page_component->createWithInitialProperties(initial, qmlContext(g_ctx->scene_root));
+    auto *view = qobject_cast<QQuickItem *>(object);
+    if (!view) {
+        std::fprintf(stderr, "peakd: could not create page view %s\n", id);
+        return;
+    }
+    QQuickItem *layer =
+        g_ctx->scene_root->findChild<QQuickItem *>(QStringLiteral("pagesLayer"));
+    view->setParentItem(layer ? layer : g_ctx->scene_root);
+    view->setX(x);
+    view->setY(y);
+    view->setWidth(w);
+    view->setHeight(h);
     view->setVisible(visible != 0);
+    g_ctx->children.insert(key, view);
+
+    if (QObject *child_bridge = g_shell.childBridge()) {
+        auto *channel = new QQmlWebChannel(view);
+        channel->registerObject(QStringLiteral("ipc"), child_bridge);
+        view->setProperty("webChannel", QVariant::fromValue<QObject *>(channel));
+    }
+
+    // Scripts must exist before the first load: the app's modules read
+    // `window.ipc` during import.
+    QMetaObject::invokeMethod(g_ctx->scene_root, "applyScripts",
+                              Q_ARG(QVariant, QVariant::fromValue(view)));
+    view->setProperty("url", QUrl(QString::fromUtf8(url)));
 }
 
 void peakd_qt_view_navigate(const char *id, const char *url) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
-        view->load(QUrl(QString::fromUtf8(url)));
-    }
+    if (QObject *view = g_ctx->children.value(QString::fromUtf8(id)))
+        view->setProperty("url", QUrl(QString::fromUtf8(url)));
 }
 
 void peakd_qt_view_bounds(const char *id, int x, int y, int w, int h) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
-        view->setGeometry(x, y, w, h);
+    if (auto *view = qobject_cast<QQuickItem *>(g_ctx->children.value(QString::fromUtf8(id)))) {
+        view->setX(x);
+        view->setY(y);
+        view->setWidth(w);
+        view->setHeight(h);
     }
 }
 
 void peakd_qt_view_visible(const char *id, int visible) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
+    if (auto *view = qobject_cast<QQuickItem *>(g_ctx->children.value(QString::fromUtf8(id)))) {
         view->setVisible(visible != 0);
+        // Hidden tabs cost nothing to keep alive; the page resumes on switch.
+        view->setProperty("lifecycleState", visible == 0 ? 1 /*Frozen*/ : 0 /*Active*/);
     }
 }
 
-// Clip a child view to everything but the given CSS rects, so the HTML layers
-// the window draws over an always-on-top native page (an open menu, a higher
-// floating window) show through. Coordinates arrive already scaled to the
-// view's own space; an empty list restores the full rectangle.
+// Cut a page where the app draws over it: `holes` are the CSS rects of open
+// menus, the window's own popovers and any higher floating window, already
+// scaled to native pixels. The item's own origin is subtracted here.
+//
+// The hole list is also the page's input region: a page with holes is disabled,
+// so a press inside one reaches the app view below it (a disabled item is
+// skipped by Qt Quick's delivery, exactly like an X Shape input region), while
+// the page keeps rendering.
 void peakd_qt_view_mask(const char *id, const char *holes_json) {
     if (!g_ctx) return;
-    auto view = g_ctx->children.value(QString::fromUtf8(id));
+    const QString key = QString::fromUtf8(id);
+    auto *view = qobject_cast<QQuickItem *>(g_ctx->children.value(key));
     if (!view) return;
 
     const QJsonDocument doc =
         QJsonDocument::fromJson(QByteArray(holes_json ? holes_json : ""));
     const QJsonArray holes = doc.array();
-    if (holes.isEmpty()) {
-        // No holes: restore the plain rectangle. An explicit full-rect region
-        // would leave `hasMask` set, which on some backends keeps clipping the
-        // QQuickWidget after a geometry change (the "content disappears when the
-        // window moves" bug).
-        view->clearMask();
-        return;
-    }
-
-    const QRect geometry = view->geometry();
-    QRegion region(0, 0, geometry.width(), geometry.height());
+    QList<QRectF> rects;
     for (const QJsonValue &value : holes) {
         const QJsonObject hole = value.toObject();
         const double dpr = hole.value(QStringLiteral("dpr")).toDouble(1.0);
-        const int x = qRound(hole.value(QStringLiteral("x")).toDouble() * dpr) - geometry.x();
-        const int y = qRound(hole.value(QStringLiteral("y")).toDouble() * dpr) - geometry.y();
-        const int w = qRound(hole.value(QStringLiteral("w")).toDouble() * dpr);
-        const int h = qRound(hole.value(QStringLiteral("h")).toDouble() * dpr);
-        region -= QRegion(x, y, w, h);
+        rects.append(QRectF(hole.value(QStringLiteral("x")).toDouble() * dpr - view->x(),
+                            hole.value(QStringLiteral("y")).toDouble() * dpr - view->y(),
+                            hole.value(QStringLiteral("w")).toDouble() * dpr,
+                            hole.value(QStringLiteral("h")).toDouble() * dpr));
     }
-    view->setMask(region);
+
+    view->setEnabled(rects.isEmpty());
+
+    const bool cut = !rects.isEmpty();
+    if (QObject *layer = view->property("layer").value<QObject *>())
+        layer->setProperty("enabled", cut);
+    if (g_ctx->mask_image) {
+        g_ctx->mask_image->setProperty(
+            "source", cut ? g_masks->add(rects, qRound(view->width()), qRound(view->height()))
+                          : QString());
+    }
 }
 
-// Mirror the app's theme into Qt's colour-scheme hint so pages see a matching
-// `prefers-color-scheme` (Noir is dark, Light is light). QtWebEngine reads the
-// hint when a page is styled; changing it re-styles the live pages.
+// Mirror the app's theme into Qt's own chrome (menus, dialogs) with a palette
+// swap. Deliberately *not* via QStyleHints::setColorScheme: on X11 that asks the
+// platform theme to re-apply itself, which re-configures platform windows, and Qt
+// then dereferences a window that is already gone while handling the native event
+// that results — a SIGSEGV in QXcbWindow::handleNativeEvent (reproduced on the
+// kiosk's display). A palette touches no window, and the app styles its pages
+// itself (the Browser plugin pushes the scheme for browsed pages).
 void peakd_qt_set_color_scheme(const char *scheme) {
     if (!scheme) return;
-    QStyleHints *hints = QApplication::styleHints();
-    if (!hints) return;
-    const bool dark = QString::fromUtf8(scheme).compare(QStringLiteral("dark"), Qt::CaseInsensitive) == 0;
-    hints->setColorScheme(dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
+    const bool dark =
+        QString::fromUtf8(scheme).compare(QStringLiteral("dark"), Qt::CaseInsensitive) == 0;
+    static int applied = -1; // -1 unset, 0 light, 1 dark
+    if (applied == (dark ? 1 : 0)) return;
+    applied = dark ? 1 : 0;
+
+    QPalette palette;
+    if (dark) {
+        palette.setColor(QPalette::Window, QColor(0x1e, 0x1e, 0x1e));
+        palette.setColor(QPalette::WindowText, QColor(0xf0, 0xf0, 0xf0));
+        palette.setColor(QPalette::Base, QColor(0x27, 0x27, 0x27));
+        palette.setColor(QPalette::AlternateBase, QColor(0x1e, 0x1e, 0x1e));
+        palette.setColor(QPalette::Text, QColor(0xf0, 0xf0, 0xf0));
+        palette.setColor(QPalette::Button, QColor(0x27, 0x27, 0x27));
+        palette.setColor(QPalette::ButtonText, QColor(0xf0, 0xf0, 0xf0));
+        palette.setColor(QPalette::ToolTipBase, QColor(0x27, 0x27, 0x27));
+        palette.setColor(QPalette::ToolTipText, QColor(0xf0, 0xf0, 0xf0));
+        palette.setColor(QPalette::Highlight, QColor(0x2f, 0x6f, 0xd0));
+        palette.setColor(QPalette::HighlightedText, QColor(0xff, 0xff, 0xff));
+        palette.setColor(QPalette::PlaceholderText, QColor(0x9a, 0x9a, 0x9a));
+        palette.setColor(QPalette::Disabled, QPalette::Text, QColor(0x8a, 0x8a, 0x8a));
+        palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x8a, 0x8a, 0x8a));
+    } else {
+        palette = QApplication::style()->standardPalette();
+    }
+    QApplication::setPalette(palette);
 }
 
 void peakd_qt_view_back(const char *id) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
-        view->page()->triggerAction(QWebEnginePage::Back);
-    }
+    QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
+                              Q_ARG(QVariant, QString::fromUtf8(id)),
+                              Q_ARG(QVariant, QStringLiteral("Back")));
 }
 
 void peakd_qt_view_forward(const char *id) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
-        view->page()->triggerAction(QWebEnginePage::Forward);
-    }
+    QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
+                              Q_ARG(QVariant, QString::fromUtf8(id)),
+                              Q_ARG(QVariant, QStringLiteral("Forward")));
 }
 
 void peakd_qt_view_reload(const char *id) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
-        view->page()->triggerAction(QWebEnginePage::Reload);
-    }
+    QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
+                              Q_ARG(QVariant, QString::fromUtf8(id)),
+                              Q_ARG(QVariant, QStringLiteral("Reload")));
 }
 
 void peakd_qt_view_focus(const char *id) {
     if (!g_ctx) return;
-    if (auto view = g_ctx->children.value(QString::fromUtf8(id))) {
-        view->setFocus();
+    if (auto *view = qobject_cast<QQuickItem *>(g_ctx->children.value(QString::fromUtf8(id)))) {
+        view->forceActiveFocus();
     }
 }
 
-// Paste text into a child view: the Clipboard menu picked an entry while a
-// Browser page was focused. The text goes onto the system clipboard first (the
-// engine pastes from there), then the engine's Paste action runs on the view's
-// focused element — a site's paste handler still wins.
+// Paste text into a page: the Clipboard menu picked an entry while a Browser
+// page was focused. The text goes onto the system clipboard first (the engine
+// pastes from there), then the engine's Paste action runs on the view's focused
+// element -- a site's paste handler still wins.
 void peakd_qt_view_paste(const char *id, const char *text) {
     if (!g_ctx) return;
-    auto view = g_ctx->children.value(QString::fromUtf8(id));
-    if (!view) return;
+    if (!g_ctx->children.contains(QString::fromUtf8(id))) return;
     if (text) QGuiApplication::clipboard()->setText(QString::fromUtf8(text));
-    view->setFocus();
-    view->page()->triggerAction(QWebEnginePage::Paste);
+    peakd_qt_view_focus(id);
+    QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
+                              Q_ARG(QVariant, QString::fromUtf8(id)),
+                              Q_ARG(QVariant, QStringLiteral("Paste")));
 }
 
 void peakd_qt_view_close(const char *id) {
     if (!g_ctx) return;
     const QString key = QString::fromUtf8(id);
-    if (auto view = g_ctx->children.take(key)) {
+    if (QObject *view = g_ctx->children.take(key)) {
         view->deleteLater();
     }
 }
@@ -984,9 +1323,7 @@ void peakd_qt_set_clipboard_cb(peakd_clipboard_cb cb, void *userdata) {
     if (userdata) g_cb_userdata = userdata;
 }
 
-void peakd_qt_set_download_dir(const char *dir) {
-    g_downloads_dir = QString::fromUtf8(dir);
-}
+void peakd_qt_set_download_dir(const char *dir) { g_downloads_dir = QString::fromUtf8(dir); }
 
 void peakd_qt_download_action(const char *id, const char *action) {
     const QString key = QString::fromUtf8(id);
@@ -1006,3 +1343,5 @@ void peakd_qt_download_action(const char *id, const char *action) {
         }
     }
 }
+
+#include "peakd.moc"

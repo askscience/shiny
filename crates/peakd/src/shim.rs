@@ -17,7 +17,7 @@ pub type UaCallback = extern "C" fn(*mut c_void, *const c_char) -> *const c_char
 /// One download lifecycle event: `(userdata, id, kind, payload_json)`.
 pub type DownloadCallback =
     extern "C" fn(*mut c_void, *const c_char, *const c_char, *const c_char);
-/// One clipboard event from a child view: `(userdata, kind, text)`.
+/// One clipboard event from a page view: `(userdata, kind, text)`.
 pub type ClipboardCallback = extern "C" fn(*mut c_void, *const c_char, *const c_char);
 
 extern "C" {
