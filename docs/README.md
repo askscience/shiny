@@ -62,6 +62,7 @@ small number of areas; each area has its own index and cross-links.
 | [Overview](deployment/README.md) | Deployment modes and installers. |
 | [Sidecars](deployment/sidecars.md) | The Python/native speech sidecars and their launchers. |
 | [Multi-user Linux](deployment/multi-user-linux.md) | Linux-user mode, per-user servers, session and greeter. |
+| [Shiny greeter](deployment/kiosk-greeter.md) | The default seat: the app's own login screen, no display manager. |
 | [Remote access](deployment/remote-access.md) | Iroh peer-to-peer and Tailscale Funnel. |
 | [Kiosk shell](deployment/kiosk-shell.md) | `peakd` / `peakd-mac`, the native shells and browser views. |
 | [T2 Mac](deployment/t2-mac.md) | Speaker DSP, audio period fix, Bluetooth fix, Touch Bar. |

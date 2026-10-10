@@ -51,7 +51,8 @@ Browser (web/)                              shiny (core binary)
 
 **Kiosk & multi-user**
 - Native shells: `peakd` (Qt WebEngine) and `peakd-mac` (WKWebView + Touch Bar).
-- Real Linux-user mode (NSS + PAM), per-user servers and a LightDM greeter.
+- Real Linux-user mode (NSS + PAM), per-user servers and the **Shiny greeter** —
+  the app's own login screen on the seat, no display manager (LightDM optional).
 - Remote access over **Iroh** (P2P) or **Tailscale Funnel** (public HTTPS URL),
   with host controls kept local.
 
@@ -150,7 +151,7 @@ migrations/               # core SQL migrations (001..009)
 web/                      # browser UI: ui/ (library), themes/, js/, vendor/
 voice/                    # speech sidecars and model tooling
 scripts/                  # installers, kiosk scripts, icon curator
-greeter/                  # LightDM theme
+greeter/                  # LightDM theme (optional seat)
 docs/                     # this documentation
 ```
 

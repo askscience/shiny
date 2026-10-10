@@ -40,6 +40,9 @@ let registerAvatarData = null;
 // Linux-user mode: when the server is bound to real Linux accounts, the picker
 // lists OS users and self-registration is hidden (Linux is the source of truth).
 let linuxMode = false;
+// Greeter mode: this very screen is the machine's login. A successful sign-in
+// starts that account's own session (see the login handler).
+let greeterMode = false;
 let linuxUsers = [];
 
 /** Fetch the host's Linux accounts (loopback-only). Silently no-ops otherwise. */
@@ -47,9 +50,11 @@ async function loadUnixUsers() {
   try {
     const res = await apiFetch('/api/auth/unix-users', { authRedirect: false });
     linuxMode = !!res?.enabled;
+    greeterMode = !!res?.greeter;
     linuxUsers = Array.isArray(res?.users) ? res.users : [];
   } catch {
     linuxMode = false;
+    greeterMode = false;
     linuxUsers = [];
   }
 }
@@ -68,12 +73,36 @@ function pickerUsers() {
 }
 
 function showError(msg) {
+  errorEl.classList.remove('is-status');
   errorEl.textContent = msg;
   errorEl.classList.remove('hidden');
 }
 
 function hideError() {
+  errorEl.classList.remove('is-status');
   errorEl.classList.add('hidden');
+}
+
+/**
+ * Greeter mode: the password was accepted and that account's session is being
+ * started. Freeze the form — the login screen is about to be replaced by the
+ * session's kiosk, so there is nothing else to report here.
+ */
+function showStarting(name) {
+  loginBtn?.setAttribute('disabled', '');
+  passwordInput?.setAttribute('disabled', '');
+  usernameInput?.setAttribute('disabled', '');
+  errorEl.classList.add('is-status');
+  errorEl.textContent = `Starting ${name}…`;
+  errorEl.classList.remove('hidden');
+}
+
+/** Undo `showStarting()` when the sign-in failed after all. */
+function resetStarting() {
+  loginBtn?.removeAttribute('disabled');
+  passwordInput?.removeAttribute('disabled');
+  usernameInput?.removeAttribute('disabled');
+  hideError();
 }
 
 function showStep(step) {
@@ -272,6 +301,10 @@ loginBtn?.addEventListener('click', async () => {
   }
 
   try {
+    // Greeter mode: show "Starting <user>…" right away. The screen is killed
+    // as soon as the new session takes the seat, so the response may never
+    // arrive — the optimistic state is the one the user will see.
+    if (greeterMode) showStarting(selectedUser?.name || username);
     // `authRedirect: false` — a 401 here means "bad credentials", not an
     // expired session. Without this, apiFetch's global 401 handler fires the
     // misleading "Session expired — sign in again" toast on every wrong password.
@@ -283,9 +316,16 @@ loginBtn?.addEventListener('click', async () => {
         password: passwordInput.value,
       }),
     });
+    // Greeter mode: no token comes back — the server verified the password and
+    // started that account's own session.
+    if (data?.session_starting) {
+      showStarting(data.display_name || data.user || username);
+      return;
+    }
     setAuth(data.token, data.traveler);
     onAuthSuccess(data.traveler);
   } catch (e) {
+    if (greeterMode) resetStarting();
     showError(e.message);
   }
 });
@@ -335,6 +375,14 @@ export async function logout() {
   // Invalidate the session server-side + clear the HttpOnly cookie first.
   await logoutSession();
   resetUserSession();
+  // In the kiosk the machine's login screen is the greeter, not this overlay:
+  // ask the shell to sign out (it exits with the sign-out status and the
+  // session supervisor hands the seat back to the greeter). A plain browser
+  // has no IPC bridge and keeps the in-app login screen.
+  if (window.ipc?.postMessage) {
+    window.ipc.postMessage('peakd:logout');
+    return;
+  }
   appEl?.classList.add('hidden');
   showLogin();
 }

@@ -1,6 +1,8 @@
 #!/bin/bash
-# Shiny session — started by the display manager (LightDM) for the logged-in
-# user. Installed to /usr/local/bin/shiny-session by
+# Shiny session — started by `shiny-kiosk@<user>.service` for the account that
+# just signed in on the Shiny login screen (the unit opens the login session
+# through PAMName=login; nothing here impersonates anybody — the server and the
+# shell run as this user). Installed to /usr/local/bin/shiny-session by
 # scripts/install-linux-session.sh (the @…@ placeholders are substituted there).
 #
 # It brings up *this user's* Shiny server, then supervises one window:
@@ -8,10 +10,41 @@
 #   * normally the kiosk (`peakd`);
 #   * when Server mode is on, the server-mode window (link + controls).
 #
-# `peakd` exits 42 when the user turns Server mode on; the server-mode window
-# exits 0 on Stop. Which window to show is decided by the state file the server
-# writes ($XDG_RUNTIME_DIR/shiny-remote.state).
+# `peakd` exits 42 when the user turns Server mode on and 43 when the user logs
+# out; the server-mode window exits 0 on Stop. Which window to show is decided
+# by the state file the server writes ($XDG_RUNTIME_DIR/shiny-remote.state);
+# a sign-out (or a clean quit) ends the session, which hands the seat back to
+# the login screen.
 set -u
+
+# xinit dup2's the X connection over the client's stdout/stderr, so everything
+# this launcher prints on those streams is swallowed by the X server socket and
+# never reaches the journal. A handover failure therefore looked exactly like a
+# wrong password: xinit exits 1, the unit restarts, the seat-stop script brings
+# the login screen back, and the reason is gone. Log to a file as well, from the
+# very first line, so the next failure is diagnosable after the fact.
+#
+# The log lives outside $HOME on purpose: this file has to be readable after a
+# failed handover, when the seat is back on the login screen and there is no
+# shell anywhere. It is appended, never truncated, so the five restart attempts
+# of one handover all survive.
+#
+# One file per account, in a setgid directory owned by the `shiny` group, which
+# every Shiny account (and the greeter) belongs to. A plain root-owned
+# /var/log file is not writable here, and the `|| true` on the write is exactly
+# how this log came out empty the first time.
+SESSION_LOG_DIR="${SHINY_SESSION_LOG_DIR:-/var/log/shiny}"
+SESSION_LOG="$SESSION_LOG_DIR/session-$(id -un).log"
+if ! mkdir -p "$SESSION_LOG_DIR" 2>/dev/null || ! touch "$SESSION_LOG" 2>/dev/null; then
+    # Fall back to the account's own data dir rather than lose the log.
+    SESSION_LOG="$HOME/.local/share/shiny/session.log"
+    mkdir -p "$(dirname -- "$SESSION_LOG")" 2>/dev/null || true
+fi
+log() {
+    line="[$(date '+%Y-%m-%d %H:%M:%S')] [$$] shiny-session: $*"
+    echo "$line" >&2
+    echo "$line" >> "$SESSION_LOG" 2>/dev/null || true
+}
 
 export XDG_SESSION_TYPE=x11
 # Pin Qt to X11: the shell is peakd (QtWebEngine, xcb platform plugin), and
@@ -21,7 +54,12 @@ export QT_QPA_PLATFORM=xcb
 
 PORT_BASE=@PORT_BASE@
 SHINY_REPO=@SHINY_REPO@
-PORT=$((PORT_BASE + $(id -u) - 1000))
+# Per-account port: PORT_BASE + (uid - UID_BASE). UID_BASE is the first human
+# uid on this machine (normally 1000), resolved at install time rather than
+# assumed — a distro image can have the first user at 1001, and hardcoding
+# 1000 would then hand two accounts the same port.
+UID_BASE=@UID_BASE@
+PORT=$((PORT_BASE + $(id -u) - UID_BASE))
 
 # The per-user server unit reads SERVER_PORT from here, so both sides agree.
 mkdir -p "$HOME/.config/shiny"
@@ -34,6 +72,14 @@ APP_URL="$PEAKD_APP_ORIGIN/"
 # The compiled ad-filter cache is shared between this user's server and the
 # shell (the unit below sets the server's ADFILTER_DIR). Per-user, not fixed.
 export PEAKD_ADFILTER_DIR="${PEAKD_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/adfilter}"
+
+# The QtWebEngine profile (cookies, local storage, cache) is per-user too: two
+# accounts on this machine must never share a browser profile. The old shared
+# location was the repo's data/peakd, which only ever worked with one user.
+export PEAKD_DATA_DIR="${PEAKD_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/peakd}"
+
+log "launcher up: user=$(id -un) uid=$(id -u) port=$PORT repo=$SHINY_REPO"
+log "env: DISPLAY=${DISPLAY:-<unset>} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-<unset>} HOME=$HOME"
 
 # Bring up this user's Shiny server (idempotent; a no-op if already running).
 systemctl --user start shiny.service 2>/dev/null || true
@@ -51,10 +97,13 @@ fi
 nohup bash "$SHINY_REPO/voice/start_supertonic.sh" >/dev/null 2>&1 &
 
 # Wait until it answers (up to ~30s) so peakd does not open on a dead port.
+waited=0
 for _ in $(seq 1 60); do
     if curl -sf "http://127.0.0.1:$PORT/api/voice/languages" >/dev/null 2>&1; then
+        log "server answered after ~$((waited / 2))s"
         break
     fi
+    waited=$((waited + 1))
     sleep 0.5
 done
 
@@ -107,6 +156,40 @@ read_state() {
     cat "$STATE_FILE" 2>/dev/null || echo off
 }
 
+# Preflight. This launcher used to die with a bare `status=1/FAILURE` and not
+# one line of output, which made a broken handover indistinguishable from a
+# wrong password: the unit restarted, the seat-stop script brought the login
+# screen back, and the cause was never logged anywhere. Everything the session
+# needs must be reachable *as this user* before Xorg takes the seat, and the
+# reason has to be in the journal when it is not.
+missing=""
+[ -x "$peakd" ] || missing="$missing peakd($peakd)"
+[ -x "$server_mode" ] || missing="$missing server-mode($server_mode)"
+[ -r "$SHINY_REPO/web/index.html" ] || missing="$missing web($SHINY_REPO/web)"
+if [ -n "$missing" ]; then
+    log "cannot run as $(id -un):$missing"
+    log "these are installed by the installer:"
+    log "  sudo $SHINY_REPO/scripts/install-kiosk-greeter.sh"
+    exit 1
+fi
+
+log "session starting for $(id -un) on port $PORT"
+
+# A HOME that is not this account's home is always a misconfiguration, and it
+# used to be fatal in the quietest way possible: every $HOME-relative path below
+# resolves somewhere unwritable, the launcher dies before peakd, and xinit eats
+# the error. Catch it here, where it can still be reported.
+if [ ! -w "$HOME" ] 2>/dev/null || [ "$(id -u)" -eq 0 ]; then
+    log "HOME=$HOME is not this account's home (uid $(id -u)) — refusing to start"
+    log "expected something like $(getent passwd "$(id -u)" | cut -d: -f6)"
+    exit 1
+fi
+
+# Whatever ends this script, record how and where. Without this an exit on an
+# unexpected path leaves nothing at all in the log and the next handover is
+# just as blind as the last one.
+trap 'log "exiting with status $? at line $LINENO (cmd: $BASH_COMMAND)"' EXIT
+
 # A crash should leave a core for the next investigation: `core_pattern` is
 # `core`, and the limit is inherited by peakd (and by the server-mode window).
 ulimit -c unlimited 2>/dev/null || true
@@ -121,15 +204,28 @@ while true; do
     if [ "$(read_state)" = "on" ]; then
         # Server mode: show the link/control window. When it exits (Stop), the
         # state flips to off and the loop brings the kiosk back.
+        log "server mode"
         "$server_mode"
     else
         load_boot_token
-        "$peakd" --url "$APP_URL"
+        log "launching the kiosk on $APP_URL"
+        # peakd's own stderr is swallowed by xinit too, and peakd dying is the
+        # most likely reason this session ends. Tee it into the log so the next
+        # handover says why instead of just exiting 1.
+        "$peakd" --url "$APP_URL" 2>> "$SESSION_LOG"
         code=$?
+        log "peakd exited with $code"
         if [ "$code" -eq 42 ]; then
             # Server mode: switch windows.
             crashes=0
             continue
+        fi
+        if [ "$code" -eq 43 ]; then
+            # Sign-out: the app posted `peakd:logout`. End the session cleanly
+            # so the supervisor hands the seat back to the login screen rather
+            # than showing this user's in-app overlay.
+            echo "shiny-session: signed out" >&2
+            exit 0
         fi
         if [ "$code" -ge 128 ]; then
             # Signal death (139 = SIGSEGV, 134 = SIGABRT): a crash.

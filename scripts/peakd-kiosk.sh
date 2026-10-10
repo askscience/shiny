@@ -2,7 +2,7 @@
 # Peakd kiosk session — X11 + matchbox + the Qt 6 / QtWebEngine shell (`peakd`).
 #
 # Started by xinit from peakd.service (see /etc/systemd/system/peakd.service),
-# which runs it as the desktop user (eev) inside a real PAM login session.
+# which runs it as the desktop user inside a real PAM login session.
 #
 # This file lives in the repo (scripts/peakd-kiosk.sh) and is installed to
 # /usr/local/bin/peakd-kiosk.sh:

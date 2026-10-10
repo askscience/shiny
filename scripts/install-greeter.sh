@@ -3,12 +3,19 @@
 # make it the display manager. Pair with install-linux-session.sh, which
 # provides the `shiny` session the greeter starts.
 #
+# This is the **optional** seat: the default one is the Shiny greeter
+# (`scripts/install-kiosk-greeter.sh`), which uses the app's own login screen
+# and needs no display manager. Use this script when you want a real DM (for
+# example to keep distro tooling that drives lightdm), or to go back from the
+# Shiny greeter.
+#
 # Installs:
 #   lightdm + lightdm-gtk-greeter            (apt)
 #   /usr/share/themes/Shiny/gtk-3.0/gtk.css  (Noir palette)
 #   /usr/share/shiny/greeter/background.png  (greeter/background.png, committed)
 #   /usr/share/shiny/greeter/default-user.png (greeter/default-user.png, committed)
 #   /usr/local/bin/shiny-xserver             (waits for the display GPU, see below)
+#   /usr/share/xsessions/shiny.desktop       (the session LightDM starts)
 #   /etc/lightdm/lightdm.conf.d/50-shiny.conf
 #   /etc/lightdm/lightdm-gtk-greeter.conf
 #
@@ -24,6 +31,7 @@ THEME_DIR=/usr/share/themes/Shiny
 GREETER_ASSETS=/usr/share/shiny/greeter
 LIGHTDM_CONF=/etc/lightdm/lightdm.conf.d/50-shiny.conf
 GREETER_CONF=/etc/lightdm/lightdm-gtk-greeter.conf
+XSESSION=/usr/share/xsessions/shiny.desktop
 
 usage() {
     awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
@@ -44,10 +52,11 @@ esac
 if [ "${1:-}" = "--uninstall" ]; then
     need_root
     echo "Removing the Shiny greeter configuration…"
-    rm -f "$LIGHTDM_CONF" "$GREETER_CONF" /usr/local/bin/shiny-xserver
+    rm -f "$LIGHTDM_CONF" "$GREETER_CONF" "$XSESSION" /usr/local/bin/shiny-xserver
     rm -rf "$THEME_DIR" "$GREETER_ASSETS"
     systemctl disable lightdm 2>/dev/null || true
     echo "Done (packages left installed)."
+    echo "The default seat is the Shiny greeter: scripts/install-kiosk-greeter.sh"
     exit 0
 fi
 
@@ -124,6 +133,11 @@ fi
 # no-op, and it times out into a plain X start if the card never appears.
 install -m 0755 "$REPO_DIR/scripts/shiny-xserver" /usr/local/bin/shiny-xserver
 
+# ── 4b. The session LightDM starts ──────────────────────────────────────────
+# /usr/local/bin/shiny-session itself comes from install-linux-session.sh; this
+# entry is what the greeter hands the seat to.
+install -D -m 0644 "$REPO_DIR/scripts/shiny.desktop" "$XSESSION"
+
 # ── 5. LightDM configuration ────────────────────────────────────────────────
 install -d -m 0755 /etc/lightdm/lightdm.conf.d
 cat > "$LIGHTDM_CONF" <<EOF
@@ -135,7 +149,8 @@ greeter-allow-guest=false
 # Wait for the display GPU before starting X (see scripts/shiny-xserver).
 xserver-command=/usr/local/bin/shiny-xserver
 # Autologin intentionally off — the greeter is shown on every boot.
-# autologin-user=eev
+# To autologin an account instead, name it here, e.g.
+#   autologin-user=$SHINY_USER
 EOF
 
 cat > "$GREETER_CONF" <<EOF

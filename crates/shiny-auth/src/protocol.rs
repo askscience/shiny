@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Request from the server.
 #[derive(Debug, Deserialize)]
 pub struct Request {
-    /// `"verify"` (default) or `"ping"`.
+    /// `"verify"` (default), `"login-session"` or `"ping"`.
     #[serde(default)]
     pub op: Option<String>,
     #[serde(default)]
@@ -32,6 +32,14 @@ impl Response {
             ok: true,
             code: "success".into(),
             message: None,
+        }
+    }
+
+    pub fn ok_with(message: impl Into<String>) -> Self {
+        Self {
+            ok: true,
+            code: "success".into(),
+            message: Some(message.into()),
         }
     }
 

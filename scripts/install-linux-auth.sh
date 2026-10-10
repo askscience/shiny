@@ -9,18 +9,28 @@
 #   /etc/tmpfiles.d/shiny-auth.conf               (/run/shiny)
 #   /etc/systemd/system/shiny.service.d/20-linux-auth.conf
 #                                                 (turns on Linux users + PAM)
+#   /etc/systemd/system/shiny-auth.service.d/50-greeter.conf
+#                                                 (socket allow-list incl. the
+#                                                 Shiny greeter, when installed)
 #
-# The helper never stores or logs a password and exposes only verify/ping.
+# The helper never stores or logs a password and exposes only verify/ping plus
+# `login-session` (the greeter's "start that user's session" request).
 # Everything is reversible with --uninstall.
 #
 #   sudo scripts/install-linux-auth.sh
 #   sudo scripts/install-linux-auth.sh --uninstall
 #
-# Overridable: SHINY_SERVER_USER (default eev), SHINY_PAM_SERVICE (default shiny).
+# Overridable: SHINY_SERVER_USER (default: detected — SHINY_USER /
+# SHINY_SERVER_USER, else SUDO_USER, else the repo's owner), SHINY_PAM_SERVICE
+# (default shiny), SHINY_GREETER_USER (default shiny-greeter).
 set -eu
 
 REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-SERVER_USER=${SHINY_SERVER_USER:-eev}
+# Which account this deployment belongs to. Never hardcoded — derived from
+# SHINY_SERVER_USER / SHINY_USER, else SUDO_USER, else the repo's owner.
+SHINY_REPO_TMP=${SHINY_REPO:-}
+SERVER_USER=${SHINY_SERVER_USER:-$(. "$REPO_DIR/scripts/shiny-install-user.sh")}
+GREETER_USER=${SHINY_GREETER_USER:-shiny-greeter}
 PAM_SERVICE=${SHINY_PAM_SERVICE:-shiny}
 SHINY_GROUP=shiny
 
@@ -30,6 +40,8 @@ SERVICE_UNIT=/etc/systemd/system/shiny-auth.service
 TMPFILES=/etc/tmpfiles.d/shiny-auth.conf
 DROPIN_DIR=/etc/systemd/system/shiny.service.d
 DROPIN=$DROPIN_DIR/20-linux-auth.conf
+AUTH_DROPIN_DIR=/etc/systemd/system/shiny-auth.service.d
+AUTH_DROPIN=$AUTH_DROPIN_DIR/50-greeter.conf
 BIN=/usr/local/bin/shiny-auth
 
 usage() {
@@ -51,8 +63,9 @@ if [ "${1:-}" = "--uninstall" ]; then
     echo "Uninstalling Shiny PAM auth helper…"
     systemctl disable --now shiny-auth.socket 2>/dev/null || true
     systemctl stop shiny-auth.service 2>/dev/null || true
-    rm -f "$SOCKET_UNIT" "$SERVICE_UNIT" "$TMPFILES" "$DROPIN" "$PAM_FILE" "$BIN"
+    rm -f "$SOCKET_UNIT" "$SERVICE_UNIT" "$TMPFILES" "$DROPIN" "$AUTH_DROPIN" "$PAM_FILE" "$BIN"
     rmdir "$DROPIN_DIR" 2>/dev/null || true
+    rmdir "$AUTH_DROPIN_DIR" 2>/dev/null || true
     rm -rf /run/shiny
     systemctl daemon-reload 2>/dev/null || true
     systemctl restart shiny.service 2>/dev/null || true
@@ -76,13 +89,19 @@ echo "  server user : $SERVER_USER (uid $SERVER_UID)"
 echo "  PAM service : $PAM_SERVICE"
 echo "  repo        : $REPO_DIR"
 
-# ── 1. Build (unless a prebuilt binary is already there) ────────────────────
-if [ ! -x "$REPO_DIR/target/release/shiny-auth" ]; then
+# ── 1. Build ────────────────────────────────────────────────────────────────
+# Always (re)build: the helper runs as root, and a stale binary with an old op
+# set is exactly the kind of surprise this installer exists to avoid.
+# SKIP_BUILD=1 installs the binary already in target/release.
+if [ "${SKIP_BUILD:-0}" != "1" ]; then
     echo "Building shiny-auth (release)…"
-    if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+    # sudo resets PATH; cargo usually lives in the repo owner's ~/.cargo/bin.
+    SERVER_HOME=$(getent passwd "$SERVER_USER" | cut -d: -f6)
+    CARGO_PATH="${SERVER_HOME}/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
+    if [ "$(id -u)" -eq 0 ]; then
         # Build as the repo owner so cargo uses their toolchain/target dir.
-        sudo -u "$SERVER_USER" -H sh -c "cd '$REPO_DIR' && cargo build --release -p shiny-auth" \
-            || { echo "error: build failed; build it yourself then re-run" >&2; exit 1; }
+        env PATH="$CARGO_PATH" sudo -u "$SERVER_USER" -H sh -c "cd '$REPO_DIR' && cargo build --release -p shiny-auth" \
+            || { echo "error: build failed; build it yourself then re-run with SKIP_BUILD=1" >&2; exit 1; }
     else
         ( cd "$REPO_DIR" && cargo build --release -p shiny-auth ) \
             || { echo "error: build failed" >&2; exit 1; }
@@ -93,6 +112,15 @@ install -m 0755 "$REPO_DIR/target/release/shiny-auth" "$BIN"
 # ── 2. Group so the server can reach the socket ─────────────────────────────
 getent group "$SHINY_GROUP" >/dev/null 2>&1 || groupadd --system "$SHINY_GROUP"
 usermod -aG "$SHINY_GROUP" "$SERVER_USER"
+
+# The Shiny greeter (scripts/install-kiosk-greeter.sh) runs its own server as
+# this account and calls the same socket to start a session after a PAM check,
+# so it joins the group and the allow-list too. Absent account: nothing to do.
+GREETER_UID=""
+if [ "$GREETER_USER" != "$SERVER_USER" ] && id "$GREETER_USER" >/dev/null 2>&1; then
+    usermod -aG "$SHINY_GROUP" "$GREETER_USER"
+    GREETER_UID=$(id -u "$GREETER_USER")
+fi
 
 # ── 3. PAM service (verify-only: auth + account, no session) ────────────────
 cat > "$PAM_FILE" <<EOF
@@ -166,7 +194,25 @@ Environment=SHINY_LINUX_USERS=true
 Environment=SHINY_HOME_MODE=real
 Environment=SHINY_AUTH_ENABLED=true
 Environment=SHINY_AUTH_SOCK=/run/shiny/auth.sock
+Environment=SHINY_LOGIN_SELF_ONLY=true
 EOF
+
+# ── 7. Socket allow-list: greeter included when it exists ───────────────────
+# The main unit allows the server user; a drop-in (later in load order, so it
+# wins) widens that to the list once the greeter account is present.
+if [ -n "$GREETER_UID" ]; then
+    mkdir -p "$AUTH_DROPIN_DIR"
+    cat > "$AUTH_DROPIN" <<EOF
+# Installed by scripts/install-linux-auth.sh — the Shiny greeter (uid
+# $GREETER_UID) may call the helper. The op is the authority: the
+# login-session op runs the PAM check and starts a session only for the
+# account it verified, and only for real login accounts.
+[Service]
+Environment=SHINY_AUTH_ALLOW_UID=$SERVER_UID,$GREETER_UID
+EOF
+else
+    rm -f "$AUTH_DROPIN"
+fi
 
 systemctl daemon-reload
 systemctl enable --now shiny-auth.socket
@@ -177,6 +223,7 @@ echo
 echo "Installed."
 echo "  socket   : /run/shiny/auth.sock (root:$SHINY_GROUP 0660)"
 echo "  helper   : systemctl status shiny-auth.service"
+echo "  allowed  : uid $SERVER_UID${GREETER_UID:+ and greeter uid $GREETER_UID}"
 echo "  server   : SHINY_LINUX_USERS=true, SHINY_HOME_MODE=real, SHINY_AUTH_ENABLED=true"
 echo
 echo "Log in with a real Linux account. If the server user was just added to the"

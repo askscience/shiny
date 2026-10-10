@@ -49,6 +49,7 @@ The shell resolves `peakd` via `PEAKD_BIN`, then `/usr/local/bin/peakd` /
 |---|---|
 | `PEAKD_APP_ORIGIN` | URL of the local server (default `http://127.0.0.1:8080`). |
 | `PEAKD_ADFILTER_DIR` | Shared compiled ad-filter cache (per user). |
+| `PEAKD_DATA_DIR` | QtWebEngine profile root. Sessions use `~/.local/share/shiny/peakd` (per user; two accounts must not share cookies). |
 | `PEAKD_TOUCHPAD` | Override the touchpad device (`/dev/input/eventN`). |
 | `PEAKD_BIN` | Path to the shell binary. |
 | `QT_QPA_PLATFORM` | Pinned to `xcb`. |
@@ -109,9 +110,11 @@ swap.
 
 ## Per-user session
 
-[`scripts/shiny-session`](../../scripts/shiny-session) is the LightDM session
-script (installed by
-[`scripts/install-linux-session.sh`](../../scripts/install-linux-session.sh)):
+[`scripts/shiny-session`](../../scripts/shiny-session) is the per-user kiosk
+launcher (installed by
+[`scripts/install-linux-session.sh`](../../scripts/install-linux-session.sh);
+started by `shiny-kiosk@<user>.service` in the default [greeter](kiosk-greeter.md)
+install, or by LightDM's session entry):
 
 1. Writes `SERVER_PORT` (`8080 + uid − 1000`) to `~/.config/shiny/env`.
 2. Starts the per-user `shiny.service` and the speech sidecars.
@@ -120,15 +123,15 @@ script (installed by
    URL if the token file is missing).
 5. Starts matchbox and loops between `peakd` and the server-mode window.
 
-Exit codes in that loop: `42` is the server-mode switch, `0` is a deliberate
-quit (`Alt`+`Q`), and a **signal death** (`≥128`: 139 SIGSEGV, 134 SIGABRT) is a
-crash. Each iteration logs the status it got. A crash is retried up to three
-times, 2 s apart, with the counter reset once the shell has stayed up for a
-minute — a shell crash must not cost a full re-login, but a crash loop ends the
-session rather than spinning. Every other status ends the session, which is why
-the greeter appears when the shell dies in a way this policy does not retry.
-
-Quitting the shell (`Alt`+`Q`) ends the session and returns to the greeter.
+Exit codes in that loop: `42` is the server-mode switch, `43` is a **sign-out**
+(the app posts `peakd:logout`; the supervisor exits 0 so the seat returns to
+the login screen), `0` is a deliberate quit (`Alt`+`Q`, same result), and a
+**signal death** (`≥128`: 139 SIGSEGV, 134 SIGABRT) is a crash. Each iteration
+logs the status it got. A crash is retried up to three times, 2 s apart, with
+the counter reset once the shell has stayed up for a minute — a shell crash
+must not cost a full re-login, but a crash loop ends the session rather than
+spinning. Every other status ends the session, which is why the login screen
+appears when the shell dies in a way this policy does not retry.
 
 ---
 

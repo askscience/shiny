@@ -7,7 +7,8 @@ precedence. Core values are parsed in
 the kiosk shell and the auth helper.
 
 **Legend:** ✓ = read by the server core; L = sidecar launcher; K = kiosk shell
-(`peakd`/`peakd-mac`); A = `shiny-auth` helper.
+(`peakd`/`peakd-mac`); A = `shiny-auth` helper; G = greeter session launcher
+(`scripts/shiny-greeter`).
 
 ---
 
@@ -82,8 +83,15 @@ the kiosk shell and the auth helper.
 | `SHINY_HOME_MODE` | `virtual` | ✓ | `virtual` or `real` (`real` requires Linux users). |
 | `SHINY_AUTH_ENABLED` | `false` | ✓ | Verify the real Linux password via the helper. |
 | `SHINY_AUTH_SOCK` | `/run/shiny/auth.sock` | ✓ A | Helper socket. |
+| `SHINY_LOGIN_SELF_ONLY` | = `SHINY_LINUX_USERS` | ✓ | User sessions: only the server's own OS account may log in (and be listed). |
+| `SHINY_GREETER` | `false` | ✓ | Greeter mode: login verifies + starts that account's session instead of issuing a cookie. |
+| `SHINY_GREETER_PORT` | `8079` | G | Greeter server port (loopback). |
 | `SHINY_AUTH_PAM_SERVICE` | `shiny` | A | PAM service (`/etc/pam.d/<name>`). |
-| `SHINY_AUTH_ALLOW_UID` | — | A | Additional uid allowed to connect. |
+| `SHINY_AUTH_ALLOW_UID` | — | A | uids allowed to connect (one, or a comma-separated list; root always). |
+| `SHINY_AUTH_KIOSK_UNIT` | `shiny-kiosk@%s.service` | A | Unit the `login-session` op starts (`%s` = verified account). |
+| `SHINY_AUTH_HANDOVER_FILE` | `/run/shiny/handover` | A | Handover marker the greeter's stop script checks. |
+| `SHINY_AUTH_SYSTEMCTL` | `/usr/bin/systemctl` | A | systemctl path. |
+| `SHINY_AUTH_DRY_RUN` | — | A | Report the unit instead of starting it. |
 | `SHINY_AUTH_MAX_ATTEMPTS` | — | A | Per-user attempt cap. |
 | `SHINY_AUTH_GLOBAL_MAX_ATTEMPTS` | — | A | Global attempt cap. |
 | `SHINY_AUTH_WINDOW_SECS` | — | A | Rate-limit window (seconds). |
@@ -106,7 +114,7 @@ Iroh itself is a build feature (`--features iroh`); Tailscale uses the
 |---|---|---|---|
 | `PEAKD_APP_ORIGIN` | `http://127.0.0.1:8080` | K | URL of the local server. |
 | `PEAKD_ADFILTER_DIR` | `$XDG_DATA_HOME/shiny/adfilter` | K | Shared compiled ad-filter cache. |
-| `PEAKD_DATA_DIR` | — | K | Webview data dir override. |
+| `PEAKD_DATA_DIR` | `~/.local/share/shiny/peakd` (sessions) | K | Webview data dir (per-user profile). |
 | `PEAKD_DISPLAY_FILE` | — | K | Interface-scale config file. |
 | `PEAKD_DISPLAY_RUNTIME_FILE` | — | K | Runtime display state. |
 | `PEAKD_UI_SCALE` | — | K | Explicit interface scale. |

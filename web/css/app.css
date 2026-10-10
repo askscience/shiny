@@ -1595,7 +1595,25 @@ body.keyboard-open #artifact-dock {
   border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
+/* The sign-in screen's "Starting <user>…" notice (greeter mode) shares the
+   error slot: same position, but it is a status, not a failure. */
+.app-error.is-status {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.10);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
 .profile-picker { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px 20px; margin-bottom: 8px; }
+
+/* Only the *tile* — the element wrapping the avatar and the name — loses its
+   fill and its border. The avatar itself keeps its own background, its border
+   and its rounding, and keeps showing the picture the account chose: that
+   picture is the whole point of the picker, so the frame around it stays. */
+.profile-picker .profile-tile,
+.profile-picker .profile-tile:hover {
+  background: none;
+  border: none;
+}
 .profile-tile {
   display: flex;
   flex-direction: column;

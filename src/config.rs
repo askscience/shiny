@@ -61,6 +61,15 @@ pub struct Config {
     pub auth_enabled: bool,
     /// Unix socket the `shiny-auth` helper listens on.
     pub auth_sock: String,
+    /// Greeter mode: this server *is* the login screen. `POST /api/auth/login`
+    /// verifies through the helper and starts that user's own kiosk session —
+    /// no Shiny account is created and no cookie is issued here.
+    pub greeter_mode: bool,
+    /// User sessions: only accept a PAM login for the account the server runs
+    /// as. Every plugin (Terminal included) executes as that user, so another
+    /// account's credentials must not be accepted by this process. Defaults to
+    /// on when Linux-user mode is on; `SHINY_LOGIN_SELF_ONLY=false` opts out.
+    pub login_self_only: bool,
     /// Where the loopback-only session token is written (default
     /// `$XDG_RUNTIME_DIR/shiny-session-token`).
     pub session_token_file: Option<String>,
@@ -68,6 +77,17 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
+        let linux_users = env::var("SHINY_LINUX_USERS")
+            .unwrap_or_else(|_| "false".into())
+            .parse()
+            .unwrap_or(false);
+        // Another account's password must never be accepted by a process that
+        // runs as the session user — every plugin (the Terminal's PTY too)
+        // executes as this process. On by default in Linux-user mode.
+        let login_self_only = match env::var("SHINY_LOGIN_SELF_ONLY") {
+            Ok(v) => v.trim() != "0" && !v.trim().eq_ignore_ascii_case("false"),
+            Err(_) => linux_users,
+        };
         Self {
             server_host: env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
             server_port: env::var("SERVER_PORT")
@@ -149,10 +169,7 @@ impl Config {
                 .filter(|v| !v.trim().is_empty()),
             backgrounds_dir: env::var("BACKGROUNDS_DIR").unwrap_or_else(|_| "data/backgrounds".into()),
             admin_token: env::var("ADMIN_TOKEN").ok().filter(|v| !v.trim().is_empty()),
-            linux_users: env::var("SHINY_LINUX_USERS")
-                .unwrap_or_else(|_| "false".into())
-                .parse()
-                .unwrap_or(false),
+            linux_users,
             home_mode: env::var("SHINY_HOME_MODE")
                 .unwrap_or_else(|_| "virtual".into())
                 .trim()
@@ -163,6 +180,10 @@ impl Config {
                 .unwrap_or(false),
             auth_sock: env::var("SHINY_AUTH_SOCK")
                 .unwrap_or_else(|_| "/run/shiny/auth.sock".into()),
+            greeter_mode: env::var("SHINY_GREETER")
+                .map(|v| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
+            login_self_only,
             session_token_file: env::var("SHINY_SESSION_TOKEN_FILE")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),

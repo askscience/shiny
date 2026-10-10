@@ -57,6 +57,50 @@ pub async fn verify(sock: &str, user: &str, password: &str) -> VerifyOutcome {
     }
 }
 
+/// Result of asking the helper to verify credentials *and* start the session.
+/// This is the greeter path: there is no fallback — a greeter that cannot reach
+/// the helper cannot log anybody in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginSessionOutcome {
+    /// Password verified; the user's kiosk session unit has been started.
+    Started,
+    /// The helper ran and rejected the credentials (or refused the account).
+    Denied,
+    /// The helper could not be reached or could not start the session.
+    Unavailable,
+}
+
+/// Verify `user`'s Linux password and start their kiosk session through the
+/// helper at `sock`. The helper owns the whole decision: it runs the PAM check
+/// and then starts `shiny-kiosk@<user>.service` for the account it verified.
+pub async fn login_session(sock: &str, user: &str, password: &str) -> LoginSessionOutcome {
+    let request = serde_json::json!({
+        "op": "login-session",
+        "user": user,
+        "password": password,
+    })
+    .to_string();
+
+    match tokio::time::timeout(Duration::from_secs(15), roundtrip(sock, &request)).await {
+        Ok(Ok(response)) => match response.get("ok").and_then(Value::as_bool) {
+            Some(true) => LoginSessionOutcome::Started,
+            Some(false) => match response.get("code").and_then(Value::as_str) {
+                Some("unavailable") => LoginSessionOutcome::Unavailable,
+                _ => LoginSessionOutcome::Denied,
+            },
+            None => LoginSessionOutcome::Unavailable,
+        },
+        Ok(Err(e)) => {
+            tracing::debug!("shiny-auth helper unavailable: {e}");
+            LoginSessionOutcome::Unavailable
+        }
+        Err(_) => {
+            tracing::warn!("shiny-auth helper timed out");
+            LoginSessionOutcome::Unavailable
+        }
+    }
+}
+
 /// Is the helper reachable and ready to verify? Used by diagnostics only.
 pub async fn ping(sock: &str) -> bool {
     let request = r#"{"op":"ping"}"#.to_string();

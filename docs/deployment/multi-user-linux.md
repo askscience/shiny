@@ -8,6 +8,7 @@ binds Shiny accounts to the machine's actual accounts.
 
 Source: [`scripts/install-linux-auth.sh`](../../scripts/install-linux-auth.sh),
 [`scripts/install-linux-session.sh`](../../scripts/install-linux-session.sh),
+[`scripts/install-kiosk-greeter.sh`](../../scripts/install-kiosk-greeter.sh),
 [`scripts/install-greeter.sh`](../../scripts/install-greeter.sh),
 [`crates/shiny-auth/`](../../crates/shiny-auth),
 [`src/services/unix_user.rs`](../../src/services/unix_user.rs),
@@ -56,12 +57,22 @@ Install with `sudo scripts/install-linux-auth.sh` (it has `--uninstall`).
 
 ## Per-user servers and the session
 
-For a real multi-user desktop, three idempotent installers wire it up:
+For a real multi-user desktop, one installer wires up the default seat — the
+**Shiny greeter**, the app's own login screen, with no display manager:
+
+```bash
+sudo scripts/install-kiosk-greeter.sh   # login screen + PAM helper + per-user sessions
+```
+
+It invokes the two core installers itself and takes LightDM off the seat if it
+finds it; see [the Shiny greeter](kiosk-greeter.md) for the full flow, the
+units and the failure modes. Prefer LightDM (a real display manager, for
+distro tooling that expects one)? Run the three installers in order:
 
 ```bash
 sudo scripts/install-linux-auth.sh      # PAM helper + Linux-user mode
-sudo scripts/install-linux-session.sh   # per-user server + the `shiny` session
-sudo scripts/install-greeter.sh         # LightDM + the Noir greeter
+sudo scripts/install-linux-session.sh   # per-user server + the `shiny` session launcher
+sudo scripts/install-greeter.sh         # LightDM + the Noir greeter (optional seat)
 ```
 
 - Each login runs its **own** `shiny` server as that user — a systemd **user**
@@ -77,14 +88,26 @@ sudo scripts/install-greeter.sh         # LightDM + the Noir greeter
 - [`/usr/local/bin/shiny-session`](../../scripts/shiny-session) writes the
   per-user `SERVER_PORT`, starts the user's server and the speech sidecars,
   waits for the server to answer, auto-logs-in the kiosk with the loopback
-  session token, then runs matchbox + `peakd`. Quitting the shell (`Alt`+`Q`)
-  ends the session and returns to the greeter. When Server mode is on it shows
-  the server-mode window instead (see [remote access](remote-access.md)).
-- LightDM starts `/usr/share/xsessions/shiny.desktop`; the greeter theme lives
-  in [`greeter/`](../../greeter) (installed to `/usr/share/themes/Shiny`).
-  **Autologin is off** — the greeter is shown on every boot.
-- `install-linux-session.sh` disables the single-user `shiny.service` /
-  `peakd.service`; both scripts have `--uninstall`.
+  session token, then runs matchbox + `peakd`. It is started by
+  `shiny-kiosk@<user>.service` in the greeter install (or by the DM's session
+  entry). Quitting the shell (`Alt`+`Q`) or the app's **Log out** (exit 43)
+  ends the session cleanly and the login screen comes back. When Server mode is
+  on it shows the server-mode window instead (see
+  [remote access](remote-access.md)).
+- The **Shiny greeter** (default) shows the app's own login screen on the seat
+  and starts the chosen account's session; there is no display manager. The
+  **LightDM** path (`install-greeter.sh`) is optional and starts
+  `/usr/share/xsessions/shiny.desktop` with the theme in
+  [`greeter/`](../../greeter) (installed to `/usr/share/themes/Shiny`).
+  Autologin is off in both — the login screen is shown on every boot.
+- A user session's server accepts **only its own OS account**: every plugin
+  (the Terminal's PTY included) runs as that process, so `SHINY_LOGIN_SELF_ONLY`
+  (default on in Linux-user mode) refuses other accounts' PAM logins and keeps
+  them out of the picker. The greeter is exempt — starting somebody else's
+  session is its entire job.
+- `install-kiosk-greeter.sh` and `install-greeter.sh` both take the old
+  single-user `shiny.service` / `peakd.service` units off the seat; all scripts
+  have `--uninstall`.
 
 ---
 

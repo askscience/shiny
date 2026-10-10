@@ -74,7 +74,7 @@ shiny/
 │   └── vendor/                    # vendored pdf.js + vosk-browser
 ├── voice/                         # sidecar launchers, servers and model tooling
 ├── scripts/                       # installers, kiosk scripts, icon curator
-├── greeter/                       # LightDM greeter theme
+├── greeter/                       # LightDM greeter theme (optional seat)
 ├── data/                          # runtime state (gitignored): db, plugins, logs
 └── docs/                          # this documentation
 ```

@@ -1,0 +1,151 @@
+#!/bin/bash
+# Shiny greeter — the machine's login screen. Started inside X by
+# shiny-greeter.service (User=shiny-greeter, PAMName=login) via
+# scripts/install-kiosk-greeter.sh, which substitutes the @…@ placeholders and
+# installs this file to /usr/local/bin/shiny-greeter.
+#
+# It runs the *same* Shiny server in greeter mode: the login overlay is the real
+# app UI, `POST /api/auth/login` verifies the Linux password through the
+# privileged shiny-auth helper, and the helper starts that account's own
+# `shiny-kiosk@<user>.service`. Nothing here touches another user's data, and
+# nothing here survives the handover — systemd stops this unit (it conflicts
+# with every kiosk instance) the moment a session starts. When a session ends,
+# the kiosk unit starts this unit again: the login screen is the fallback the
+# whole machine returns to.
+set -u
+
+export XDG_SESSION_TYPE=x11
+# Pin Qt to X11, like the kiosk session: matchbox and the shell assume Xorg.
+export QT_QPA_PLATFORM=xcb
+
+SHINY_REPO=@SHINY_REPO@
+SHINY_BIN=@SHINY_BIN@
+PEAKD_BIN=@PEAKD_BIN@
+PORT="${SHINY_GREETER_PORT:-8079}"
+
+# pam_systemd sets the runtime dir for the login session; the fallback keeps a
+# manual `xinit /usr/local/bin/shiny-greeter` run working during development.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# Everything the greeter writes lives in its own home. It has no accounts, no
+# plugins and no speech engines to load: the login screen is the whole job, so
+# the plugin directory stays empty on purpose.
+mkdir -p "$HOME/.local/share/shiny/plugins"
+export SERVER_HOST=127.0.0.1
+export SERVER_PORT="$PORT"
+export DATABASE_URL="sqlite://$HOME/.local/share/shiny/shiny.db"
+export LOG_FILE="$HOME/.local/share/shiny/shiny.log"
+export BACKGROUNDS_DIR="$HOME/.local/share/shiny/backgrounds"
+export PLUGINS_DIR="$HOME/.local/share/shiny/plugins"
+export WEB_DIR="$SHINY_REPO/web"
+export RUST_LOG=info
+
+# The greeter *is* the login: it lists Linux accounts and verifies passwords
+# through the privileged helper. In this mode the login endpoint starts a
+# session instead of issuing a cookie (see src/api/auth.rs).
+export SHINY_GREETER=true
+export SHINY_LINUX_USERS=true
+export SHINY_AUTH_ENABLED=true
+export SHINY_AUTH_SOCK="${SHINY_AUTH_SOCK:-/run/shiny/auth.sock}"
+export AUTO_START_WHISPER=false
+export AUTO_START_SUPERTONIC=false
+
+APP_URL="http://127.0.0.1:$PORT/"
+
+# The server is this session's child. systemd stops the whole cgroup on a
+# handover, so it dies with the greeter — nothing to clean up here.
+server=""
+
+# Preflight: everything this launcher needs must be reachable *as this user*.
+# The greeter is a system account, not the desktop user, so anything under a
+# private home ($SHINY_BIN, $PEAKD_BIN and $WEB_DIR all live in the repo) is
+# invisible unless that home is traversable. A 0700 home — the Debian default
+# for a home created with a restrictive umask — makes every one of these fail
+# with a bare "Permission denied" and no window at all. Say so plainly instead.
+preflight() {
+    missing=""
+    for path in "$SHINY_BIN" "$PEAKD_BIN"; do
+        [ -x "$path" ] && [ -r "$path" ] || missing="$missing $path"
+    done
+    [ -r "$WEB_DIR/index.html" ] || missing="$missing $WEB_DIR"
+    [ -z "$missing" ] && return 0
+
+    echo "shiny-greeter: cannot reach as $(id -un):$missing" >&2
+    # Name the ancestor that actually blocks the walk. Top-down: once a
+    # directory is blocked every level below it is unresolvable, so a
+    # bottom-up walk would blame the repo (usually 0755 and innocent) instead
+    # of the home that is actually 0700.
+    blocker=""
+    prefix=""
+    rest=${SHINY_REPO#/}
+    while [ -n "$rest" ]; do
+        case "$rest" in
+            */*) comp=${rest%%/*}; rest=${rest#*/} ;;
+            *)   comp=$rest; rest="" ;;
+        esac
+        [ -z "$comp" ] && continue
+        next="$prefix/$comp"
+        if [ ! -x "$next" ]; then
+            blocker=$next
+            break
+        fi
+        prefix=$next
+    done
+    if [ -n "$blocker" ]; then
+        echo "shiny-greeter: $blocker ($(stat -c %a "$blocker" 2>/dev/null)) is not traversable by $(id -un)." >&2
+        echo "shiny-greeter: fix with: chmod o+x $blocker" >&2
+    else
+        echo "shiny-greeter: the paths above must be readable by $(id -un)." >&2
+    fi
+    exit 1
+}
+preflight
+
+# Start the server and wait until the login API answers (up to ~30 s) so peakd
+# does not open on a dead port. `/api/auth/unix-users` is the loopback-only
+# endpoint the login screen itself calls first.
+start_server() {
+    "$SHINY_BIN" >/dev/null 2>&1 &
+    server=$!
+    for _ in $(seq 1 60); do
+        if curl -sf "http://127.0.0.1:$PORT/api/auth/unix-users" >/dev/null 2>&1; then
+            return 0
+        fi
+        # A server that died (bad config, port busy) must fail fast instead of
+        # holding a black screen for the full timeout.
+        if ! kill -0 "$server" 2>/dev/null; then
+            echo "shiny-greeter: the server exited before answering on $APP_URL" >&2
+            exit 1
+        fi
+        sleep 0.5
+    done
+    echo "shiny-greeter: the server never answered on $APP_URL" >&2
+    exit 1
+}
+
+start_server
+
+# A kiosk does not blank or sleep the panel.
+xset s off     >/dev/null 2>&1 || true
+xset s noblank >/dev/null 2>&1 || true
+xset -dpms     >/dev/null 2>&1 || true
+
+# matchbox maximises the single window and adds no chrome.
+matchbox-window-manager -use_titlebar no &
+
+# The login screen must always be on screen: whatever peakd exits with, bring it
+# back, and if the server behind it died, bring that back too — a login screen
+# that cannot verify passwords is worse than none. A handover stops this unit
+# (SIGTERM to the cgroup), which ends the loop; a crash-loop is bounded by the
+# unit's StartLimit, whose ExecStopPost falls back to a getty so a broken
+# greeter cannot leave the machine unreachable.
+while true; do
+    if ! kill -0 "$server" 2>/dev/null; then
+        echo "shiny-greeter: the server died — restarting it" >&2
+        start_server
+    fi
+    "$PEAKD_BIN" --url "$APP_URL"
+    code=$?
+    echo "shiny-greeter: peakd exited with status $code — restarting" >&2
+    sleep 2
+done

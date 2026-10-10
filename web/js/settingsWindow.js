@@ -1214,6 +1214,14 @@ function buildSystem() {
         await flushPreferencesNow();
       } catch (_) { /* proceed */ }
       await logoutSession();
+      // In the kiosk, hand the seat back to the machine's login screen: the
+      // shell exits with its sign-out status and the session supervisor starts
+      // the greeter. A plain browser has no bridge and reloads to the app's
+      // own login screen.
+      if (window.ipc?.postMessage) {
+        window.ipc.postMessage('peakd:logout');
+        return;
+      }
       window.location.href = '/';
     },
   });

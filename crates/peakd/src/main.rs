@@ -44,8 +44,17 @@ const EXIT_MESSAGE: &str = "peakd:exit";
 /// server-mode window instead of ending the session.
 const SERVER_MODE_MESSAGE: &str = "peakd:server-mode";
 
+/// The page posts this when the user logs out. The shell exits with
+/// [`LOGOUT_EXIT`] so the session supervisor ends the session cleanly and the
+/// machine returns to its login screen (the greeter), instead of leaving the
+/// seat on the app's own sign-in overlay.
+const LOGOUT_MESSAGE: &str = "peakd:logout";
+
 /// Exit status meaning "switch to server mode".
 const SERVER_MODE_EXIT: i32 = 42;
+
+/// Exit status meaning "the user signed out".
+const LOGOUT_EXIT: i32 = 43;
 
 /// Set by the IPC handler; read once the Qt event loop returns.
 static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
@@ -204,6 +213,11 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
         }
         SERVER_MODE_MESSAGE => {
             EXIT_CODE.store(SERVER_MODE_EXIT, Ordering::SeqCst);
+            shim::quit();
+        }
+        LOGOUT_MESSAGE => {
+            println!("peakd: signing out");
+            EXIT_CODE.store(LOGOUT_EXIT, Ordering::SeqCst);
             shim::quit();
         }
         _ => {}

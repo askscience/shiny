@@ -98,7 +98,7 @@ use serde::Deserialize;
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::{AuthResponse, LoginRequest, RegisterRequest, Traveler, TravelerPublic};
-use crate::services::auth_helper::VerifyOutcome;
+use crate::services::auth_helper::{LoginSessionOutcome, VerifyOutcome};
 use crate::services::unix_user::UnixUser;
 
 /// Hash a password with Argon2id, returned as a PHC string
@@ -207,6 +207,16 @@ fn normalize_username(username: &str) -> String {
     username.trim().to_lowercase()
 }
 
+/// The uid this server runs as — the session's own OS account.
+#[cfg(unix)]
+fn session_uid() -> u32 {
+    unsafe { libc::getuid() }
+}
+#[cfg(not(unix))]
+fn session_uid() -> u32 {
+    0
+}
+
 /// Listing OS accounts is a host capability; the server is reachable on the
 /// LAN, so only the machine itself may enumerate it.
 fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
@@ -227,7 +237,7 @@ pub async fn unix_users(
 ) -> Result<Response, AppError> {
     require_local(&remote)?;
     let enabled = state.config.linux_users;
-    let users: Vec<serde_json::Value> = if enabled {
+    let mut users: Vec<serde_json::Value> = if enabled {
         crate::services::unix_user::list_human_users()
             .into_iter()
             .map(|u| {
@@ -241,7 +251,19 @@ pub async fn unix_users(
     } else {
         Vec::new()
     };
-    Ok(Json(serde_json::json!({ "enabled": enabled, "users": users })).into_response())
+    // A session server can only sign in the account it runs as (see `login`),
+    // so the picker must not offer anything else. The greeter is the opposite:
+    // its whole job is to offer every account.
+    if enabled && state.config.login_self_only && !state.config.greeter_mode {
+        let uid = session_uid() as u64;
+        users.retain(|u| u.get("uid").and_then(serde_json::Value::as_u64) == Some(uid));
+    }
+    Ok(Json(serde_json::json!({
+        "enabled": enabled,
+        "greeter": state.config.greeter_mode,
+        "users": users,
+    }))
+    .into_response())
 }
 
 /// The kiosk web view *navigates* to the session bootstrap, so whatever body
@@ -569,11 +591,57 @@ pub async fn login(
         return Ok(too_many_attempts(retry));
     }
 
+    // Greeter mode: this server *is* the machine's login screen. There is no
+    // Shiny account to sign into here — a verified password starts that
+    // account's own session through the privileged helper, and the very next
+    // thing the screen shows is that session's kiosk. No traveler row, no
+    // cookie, nothing written to the database.
+    if state.config.greeter_mode {
+        let Some(user) = resolve_os_user(&input, &username) else {
+            return Err(AppError::Unauthorized("Invalid username or password".into()));
+        };
+        return match crate::services::auth_helper::login_session(
+            &state.config.auth_sock,
+            &user.name,
+            &req.password,
+        )
+        .await
+        {
+            LoginSessionOutcome::Started => Ok(Json(serde_json::json!({
+                "session_starting": true,
+                "user": user.name,
+                "display_name": user.display_name(),
+            }))
+            .into_response()),
+            LoginSessionOutcome::Denied => {
+                Err(AppError::Unauthorized("Invalid username or password".into()))
+            }
+            LoginSessionOutcome::Unavailable => Err(AppError::Internal(
+                "the sign-in helper is not available".into(),
+            )),
+        };
+    }
+
     // PAM path: when enabled, the real Linux password is authoritative. A
     // denial is final; only an unreachable helper falls back to the local hash.
     let mut os_user = None;
     if state.config.auth_enabled {
         if let Some(user) = resolve_os_user(&input, &username) {
+            // This server runs as the session's own OS user and every plugin
+            // (the Terminal's PTY included) executes as this process, so a
+            // login for any other account would be served with *this* user's
+            // privileges. Refuse it.
+            if state.config.login_self_only && user.uid != session_uid() {
+                tracing::warn!(
+                    "refused PAM login for {} (uid {}) in a session running as uid {}",
+                    user.name,
+                    user.uid,
+                    session_uid()
+                );
+                return Err(AppError::Unauthorized(
+                    "This session signs in with the account it runs as.".into(),
+                ));
+            }
             match crate::services::auth_helper::verify(
                 &state.config.auth_sock,
                 &user.name,
