@@ -67,6 +67,9 @@ pub struct ImageFamily {
     pub quant_pattern: &'static str,
     /// Sizes must be multiples of this (sd.cpp requirement per model family).
     pub align: u32,
+    /// Whether the family can edit a reference image (`--llm_vision` + `-r`).
+    /// Only Qwen-Image 2.1 supports it; Z-Image is text-to-image only.
+    pub supports_edit: bool,
 }
 
 const Z_ENCODER_FILE: &str = "Qwen3-4B-Instruct-2507-Q4_K_M.gguf";
@@ -74,6 +77,8 @@ const Z_VAE_FILE: &str = "ae.safetensors";
 const QWEN_ENCODER_FILE: &str = "Qwen3VL-8B-Instruct-Q4_K_M.gguf";
 const QWEN_VAE_FILE: &str = "qwen_image_2.1_vae_bf16.safetensors";
 const QWEN_TAE_FILE: &str = "taeqi2_1.safetensors";
+/// Vision tower (mmproj) — required for image editing (`--llm_vision`).
+const QWEN_MMPROJ_FILE: &str = "mmproj-Qwen3VL-8B-Instruct-F16.gguf";
 
 /// Z-Image Turbo: 6B S3-DiT + Qwen3-4B encoder, FLUX-family VAE. Flag choices
 /// and sizes are measured in `benchmarks/z-image/README.md`.
@@ -95,6 +100,7 @@ pub const Z_IMAGE: ImageFamily = ImageFamily {
     download_env: "Z_IMAGE_MODELS_DIR",
     quant_pattern: "z_image_turbo-{}.gguf",
     align: 16,
+    supports_edit: false,
 };
 
 /// Qwen-Image 2.1 Turbo: 7B DiT + Qwen3-VL-8B encoder, RGBA VAE, decoded by
@@ -115,11 +121,13 @@ pub const QWEN_IMAGE: ImageFamily = ImageFamily {
         (QWEN_ENCODER_FILE, "Qwen3-VL 8B text encoder", 5_027_784_800),
         (QWEN_VAE_FILE, "VAE (qwen_image_2.1_vae_bf16)", 675_509_688),
         (QWEN_TAE_FILE, "Fast decoder (TAEQI2.1)", 30_591_264),
+        (QWEN_MMPROJ_FILE, "Vision tower (editing)", 1_159_029_824),
     ],
     download_script: "voice/download_qwen_image.py",
     download_env: "QWEN_IMAGE_MODELS_DIR",
     quant_pattern: "qwen-image-2.1-turbo-{}.gguf",
     align: 32,
+    supports_edit: true,
 };
 
 /// Every family the app can render with, in Settings order.
@@ -167,6 +175,10 @@ pub struct GenerateRequest {
     pub seed: i64,
     /// The Files-sandbox home the image is written into.
     pub home: PathBuf,
+    /// Source image to edit instead of generating from scratch. The engine is
+    /// only ever handed a private copy of it — the original file is never
+    /// touched. Requires a family with `supports_edit`.
+    pub reference: Option<PathBuf>,
 }
 
 /// Where the finished image ended up + what it cost.
@@ -606,6 +618,12 @@ impl ImageGenClient {
         if !missing.is_empty() {
             return Err(format!("models-missing: {}", missing.join(", ")));
         }
+        if req.reference.is_some() && !family.supports_edit {
+            return Err(format!(
+                "the {} model cannot edit images — use qwen-image-2.1 for edits",
+                family.label
+            ));
+        }
         let cli = self
             .sd_cli
             .as_ref()
@@ -629,21 +647,50 @@ impl ImageGenClient {
         let log = File::create(&log_path).map_err(|e| format!("cannot open render log: {e}"))?;
         let log_err = log.try_clone().map_err(|e| format!("cannot open render log: {e}"))?;
 
+        // Editing: never hand the engine the user's original file. It gets a
+        // private copy beside the render log; sd-cli only ever reads that.
+        let mut reference_copy: Option<PathBuf> = None;
+        if let Some(src) = &req.reference {
+            let ext = src
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp") {
+                return Err(format!(
+                    "cannot edit '{}': only png/jpg/webp images are supported",
+                    src.display()
+                ));
+            }
+            let copy = log_dir.join(format!("{}.ref.{}", name.trim_end_matches(".png"), ext));
+            std::fs::copy(src, &copy)
+                .map_err(|e| format!("cannot copy '{}': {e}", src.display()))?;
+            reference_copy = Some(copy);
+        }
+        let editing = reference_copy.is_some();
+
         let mut cmd = Command::new(cli);
         cmd.arg("--diffusion-model").arg(dir.join(quant_file(family, quant)));
         match family.id {
             "qwen-image-2.1" => {
                 // TAEQI2.1 replaces the full VAE for encode/decode (proven at
                 // ~20× decode speed with no visible loss on the benchmark kit).
+                // Editing keeps the text/vision encoder on the GPU: vision
+                // conditioning measured 385.9 s on CPU vs 20.9 s on the GPU.
                 cmd.arg("--llm").arg(dir.join(QWEN_ENCODER_FILE))
                     .arg("--taesd").arg(dir.join(QWEN_TAE_FILE))
-                    .arg("--backend").arg("te=cpu")
+                    .arg("--backend")
+                    .arg(if editing { "te=vulkan0" } else { "te=cpu" })
                     .arg("--offload-to-cpu")
                     .arg("--diffusion-fa")
                     .arg("--max-vram").arg("3")
                     .arg("--model-args").arg("qwen_image_2_1_prefix_cache_type=q8_0")
                     .arg("--sampling-method").arg("euler")
                     .arg("--sigmas").arg(QWEN_TURBO_SIGMAS);
+                if let Some(copy) = &reference_copy {
+                    cmd.arg("--llm_vision").arg(dir.join(QWEN_MMPROJ_FILE))
+                        .arg("-r").arg(copy);
+                }
             }
             _ => {
                 cmd.arg("--vae").arg(dir.join(Z_VAE_FILE))
@@ -704,6 +751,7 @@ impl ImageGenClient {
             .map_err(|e| format!("sd-cli reported success but {} is missing: {e}", out.display()))?;
         tracing::info!(
             model = family.id, quality = %key, quant = %quant, width, height, steps = req.steps,
+            edit = editing,
             seconds = start.elapsed().as_secs_f64(), "image generated"
         );
         Ok(GenerateResult {

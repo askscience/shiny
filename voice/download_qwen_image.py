@@ -3,10 +3,11 @@
 
 `fast` (Q3_K) is the shipped default; `balanced`/`high`/`max` are opt-in from
 Settings → Images. Every tier needs the shared Qwen3-VL-8B text encoder, the
-2.1 VAE and the TAEQI2.1 tiny decoder, which are fetched first (and only
-once). Sizes are verified after the fetch so a truncated file is re-downloaded
-instead of silently breaking a render; an interrupted fetch resumes from the
-`.part` file when the server honours the Range header.
+2.1 VAE, the TAEQI2.1 tiny decoder and the vision tower (mmproj, image
+editing), which are fetched first (and only once). Sizes are verified after
+the fetch so a truncated file is re-downloaded instead of silently breaking a
+render; an interrupted fetch resumes from the `.part` file when the server
+honours the Range header.
 
 The weights are under the Qwen Research License (non-commercial use) — unlike
 Z-Image's Apache-2.0.
@@ -52,6 +53,12 @@ BASE = [
         "taeqi2_1.safetensors",
         "https://huggingface.co/madebyollin/taeqi2_1/resolve/main/taeqi2_1.safetensors",
         30_591_264,
+    ),
+    (
+        "mmproj-Qwen3VL-8B-Instruct-F16.gguf",
+        "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main/"
+        "mmproj-Qwen3VL-8B-Instruct-F16.gguf",
+        1_159_029_824,
     ),
 ]
 

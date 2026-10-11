@@ -397,11 +397,36 @@ pub async fn execute_action(
                     .await
                     .unwrap_or_else(|| crate::services::image_gen::DEFAULT_FAMILY.to_string()),
             };
-            let Some(family) = crate::services::image_gen::resolve_family(&requested_model) else {
+            let Some(mut family) = crate::services::image_gen::resolve_family(&requested_model)
+            else {
                 return Err(AppError::BadRequest(format!(
                     "unknown image model '{requested_model}' (use z-image or qwen-image-2.1)"
                 )));
             };
+
+            // Editing: only families with `supports_edit` (Qwen-Image 2.1) can
+            // do it. An explicit Z-Image request is an error; otherwise the
+            // tool silently switches to the edit-capable family.
+            let reference = param_str(params, "image")
+                .or_else(|| param_str(params, "reference"))
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty());
+            if reference.is_some() && !family.supports_edit {
+                if param_str(params, "model").is_some() {
+                    return Err(AppError::BadRequest(format!(
+                        "the {} model cannot edit images — edits run with qwen-image-2.1",
+                        family.label
+                    )));
+                }
+                let Some(edit_family) = crate::services::image_gen::FAMILIES
+                    .iter()
+                    .copied()
+                    .find(|f| f.supports_edit)
+                else {
+                    return Err(AppError::BadRequest("image editing is not available".into()));
+                };
+                family = edit_family;
+            }
 
             let requested_quality = match param_str(params, "quality") {
                 Some(q) => q,
@@ -417,7 +442,32 @@ pub async fn execute_action(
                 )));
             };
 
-            let (width, height) = parse_image_size(params.get("size")).unwrap_or((512, 512));
+            let os_home = state.os_identity_for(traveler).map(|u| u.home);
+            let home = crate::services::image_gen::files_home(&traveler.id, os_home.as_deref());
+
+            // The image to edit: absolute, or relative to the user's files
+            // home. Validated here so a typo fails fast; the service copies it
+            // before the engine ever sees it.
+            let reference_path = match &reference {
+                Some(raw) => {
+                    let p = std::path::PathBuf::from(raw);
+                    let resolved = if p.is_absolute() { p } else { home.join(p) };
+                    if !resolved.is_file() {
+                        return Err(AppError::BadRequest(format!(
+                            "image to edit not found: {}",
+                            resolved.display()
+                        )));
+                    }
+                    Some(resolved)
+                }
+                None => None,
+            };
+
+            // Edits default to 1024² (a photo-sized canvas); fresh generations
+            // keep the smaller 512² default.
+            let (width, height) = parse_image_size(params.get("size")).unwrap_or(
+                if reference_path.is_some() { (1024, 1024) } else { (512, 512) },
+            );
             let steps = params.get("steps").and_then(|v| v.as_u64()).unwrap_or(8).clamp(1, 50) as u32;
             let seed = match params.get("seed").and_then(|v| v.as_i64()) {
                 Some(s) if s >= 0 => s,
@@ -457,8 +507,7 @@ pub async fn execute_action(
                     owner: Some("core".into()),
                 }
             } else {
-                let os_home = state.os_identity_for(traveler).map(|u| u.home);
-                let home = crate::services::image_gen::files_home(&traveler.id, os_home.as_deref());
+                let edit_note = reference_path.as_ref().map(|p| p.display().to_string());
                 let req = crate::services::image_gen::GenerateRequest {
                     prompt,
                     family: family.id.to_string(),
@@ -468,6 +517,7 @@ pub async fn execute_action(
                     steps,
                     seed,
                     home,
+                    reference: reference_path,
                 };
                 let client = state.image_gen.clone();
                 let rendered = tokio::task::spawn_blocking(move || client.generate(&req))
@@ -481,6 +531,8 @@ pub async fn execute_action(
                             "path": res.rel_path,
                             "model": res.model,
                             "model_label": family.label,
+                            "edit": edit_note.is_some(),
+                            "reference": edit_note,
                             "width": res.width,
                             "height": res.height,
                             "steps": res.steps,

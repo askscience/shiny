@@ -24,7 +24,7 @@ All values parsed by the binary live in
 | Whisper models | `data/whisper-models` | `WHISPER_MODELS_DIR` | faster-whisper CTranslate2 folders. |
 | Qwen TTS models | `data/qwen-tts-models` | `QWEN_TTS_MODELS_DIR` | Qwen3-TTS GGUF weights. |
 | Z-Image models | `data/z-image-models` | `Z_IMAGE_MODELS_DIR` | Z-Image Turbo GGUF quants + shared Qwen3-4B encoder and VAE. |
-| Qwen-Image models | `data/qwen-image-models` | `QWEN_IMAGE_MODELS_DIR` | Qwen-Image 2.1 Turbo GGUF quants + shared Qwen3-VL encoder, VAE and TAEQI2.1 decoder. |
+| Qwen-Image models | `data/qwen-image-models` | `QWEN_IMAGE_MODELS_DIR` | Qwen-Image 2.1 Turbo GGUF quants + shared Qwen3-VL encoder, VAE, TAEQI2.1 decoder and vision tower (editing). |
 | Web root | `web` | `WEB_DIR` | Static UI, served with an SPA fallback. |
 | User homes | `~/.shiny/home/<id>` | `SHINY_HOME_MODE=real` | Files-plugin home; `real` uses the OS home. |
 | Paired devices | `~/.local/share/shiny/paired_devices.json` | `SHINY_PAIRED_FILE` | Iroh allowlist. |
@@ -77,7 +77,7 @@ See [voice](core/voice.md) and [sidecars](deployment/sidecars.md).
 | Variable | Default | Meaning |
 |---|---|---|
 | `Z_IMAGE_MODELS_DIR` | `data/z-image-models` | Z-Image Turbo quants + the shared Qwen3-4B text encoder and VAE. |
-| `QWEN_IMAGE_MODELS_DIR` | `data/qwen-image-models` | Qwen-Image 2.1 Turbo quants + the shared Qwen3-VL encoder, VAE and TAEQI2.1 decoder. |
+| `QWEN_IMAGE_MODELS_DIR` | `data/qwen-image-models` | Qwen-Image 2.1 Turbo quants + the shared Qwen3-VL encoder, VAE, TAEQI2.1 decoder and vision tower (editing). |
 | `Z_IMAGE_SD_CLI` | auto-discovered | Explicit `sd-cli` (stable-diffusion.cpp) binary (serves both models). |
 | `Z_IMAGE_CACHEDIT` | `0.30` | Cache-DiT residual threshold; `0`/`off` disables the cache (both models). |
 
