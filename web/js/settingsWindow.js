@@ -56,6 +56,7 @@ import {
 } from './preferences.js';
 import { POWER_MODES, powerModeLabel, powerModeHint, describeEngines } from './powerShared.js';
 import { TOUCHBAR_ACTIONS } from './touchbarShared.js';
+import { voicesForEngine } from './voiceShared.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from './display.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js';
 import { getBackground, setBackground, renderBackgroundPresets } from './background.js';
@@ -73,11 +74,6 @@ const QWEN_MODEL_LABEL = {
   '0.6b-customvoice': '0.6B CustomVoice',
   '1.7b-customvoice': '1.7B CustomVoice',
 };
-/** Supertonic voices (M1…F5) vs Qwen3-TTS CustomVoice speakers. */
-const SUPERTONIC_VOICES = ['M1', 'M2', 'M3', 'M4', 'M5', 'F1', 'F2', 'F3', 'F4', 'F5'];
-const QWEN_SPEAKERS = [
-  'serena', 'vivian', 'uncle_fu', 'ryan', 'aiden', 'ono_anna', 'sohee', 'eric', 'dylan',
-];
 
 let tileEl = null;
 let cleanups = [];
@@ -650,10 +646,10 @@ function buildVoice() {
   const ttsVoice = select({
     options: [
       { value: '', label: 'Default (server)' },
-      ...SUPERTONIC_VOICES.map((v) => ({ value: v, label: v })),
+      ...voicesForEngine(getTtsEngine()).map((v) => ({ value: v, label: v })),
     ],
     onChange: (value) => {
-      setTtsVoice(value);
+      setTtsVoice(value, getTtsEngine());
       ttsVoiceValue = value;
     },
   });
@@ -697,24 +693,25 @@ function buildVoice() {
   /**
    * The voice picker is engine-specific: Supertonic's M* / F* voices and the
    * Qwen3-TTS CustomVoice speakers share no names, so the options and the
-   * chosen value are re-resolved whenever the engine changes.
+   * chosen value are re-resolved whenever the engine changes. The value comes
+   * from getTtsVoice(engine), which only returns a voice the engine knows —
+   * each engine's pick is stored under its own preference key, so switching
+   * engines back and forth keeps both choices.
    */
   function updateTtsUI() {
     const engine = getTtsEngine();
     ttsEngine.select.value = engine;
     qwenFields.classList.toggle('hidden', engine !== 'qwen');
 
-    const voices = engine === 'qwen' ? QWEN_SPEAKERS : SUPERTONIC_VOICES;
-    const current = getTtsVoice();
     ttsVoice.setOptions([
       { value: '', label: 'Default (server)' },
-      ...voices.map((v) => ({ value: v, label: v })),
+      ...voicesForEngine(engine).map((v) => ({ value: v, label: v })),
     ]);
-    // Drop a stored voice that belongs to the other engine.
-    ttsVoice.select.value = voices.includes(current) ? current : '';
-    ttsVoiceValue = voices.includes(current) ? current : '';
+    const current = getTtsVoice(engine);
+    ttsVoice.select.value = current;
+    ttsVoiceValue = current;
   }
-  let ttsVoiceValue = getTtsVoice();
+  let ttsVoiceValue = getTtsVoice(getTtsEngine());
 
   function updateQwenUI() {
     const current = getQwenModel();

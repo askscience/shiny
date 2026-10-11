@@ -118,6 +118,7 @@ active, in which case it is forced to Vosk (see below).
 | `whisper` selected, sidecar not answering | falls back to Vosk and starts a recovery poll |
 | sidecar comes up later | a background poll upgrades the next session to faster-whisper |
 | Vosk selected, archive missing | `/api/voice/download` fetches it server-side first |
+| Vosk model fails to load | the bar stays enabled in the error state; the next listen gesture retries the load once and, if it still fails, toasts the reason instead of listening |
 | low-power AI active (Power Saver) | forced to Vosk without overwriting the setting |
 
 Recovery (`scheduleWhisperRecovery`) polls every `WHISPER_RECOVERY_POLL_MS`
@@ -197,9 +198,12 @@ header (`pcm_to_wav`) so `new Audio(...)` can play it.
 
 The engine choice is a client preference; the server reports a default
 (`default_engine: "whisper"`, `tts_engine: "supertonic"`) but does not enforce
-it. Each engine has its own voice set, so Settings re-resolves the picker when
-the engine changes and the stored value is ignored if it belongs to the other
-engine.
+it. Each engine has its own voice set and its own stored pick
+(`voice.tts_voice` for Supertonic, `voice.qwen_voice` for Qwen3-TTS — see
+[`web/js/voiceShared.js`](../../web/js/voiceShared.js)), so switching engines in
+Settings keeps both choices and a speaker name is never sent to an engine that
+does not know it — Supertonic answers an unknown voice with a 400, which would
+otherwise mute every reply.
 
 ## The voice bar and gestures
 
@@ -337,7 +341,7 @@ The swap never touches the stored Voice settings and requires no reload. See
 | [`voice/whisper_server.py`](../../voice/whisper_server.py) | LocalAgreement-2 streaming server. |
 | [`voice/start_whisper.sh`](../../voice/start_whisper.sh), [`start_supertonic.sh`](../../voice/start_supertonic.sh), [`start_qwen_tts.sh`](../../voice/start_qwen_tts.sh) | Launchers. |
 | [`voice/detect_accel.py`](../../voice/detect_accel.py) | Vulkan → CUDA → CPU. |
-| [`web/js/voice.js`](../../web/js/voice.js), [`transcriptGuard.js`](../../web/js/transcriptGuard.js), [`textInput.js`](../../web/js/textInput.js), [`app.js`](../../web/js/app.js) | Voice bar, STT upload, barge-in, power swap. |
+| [`web/js/voice.js`](../../web/js/voice.js), [`transcriptGuard.js`](../../web/js/transcriptGuard.js), [`textInput.js`](../../web/js/textInput.js), [`app.js`](../../web/js/app.js), [`voiceShared.js`](../../web/js/voiceShared.js) | Voice bar, STT upload, barge-in, power swap, per-engine TTS voice sets. |
 
 Related: [sidecars](../deployment/sidecars.md) · [API voice](../api/voice.md) ·
 [low-power AI](../host/battery-power.md#power-management-application-profile).

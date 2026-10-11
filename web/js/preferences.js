@@ -3,6 +3,7 @@ import { isMobilePortrait } from './viewport.js';
 import { normalizeTouchBarSetting } from './touchbarShared.js';
 import { normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
 import { effectivePowerMode, normalizePowerMode } from './powerShared.js';
+import { voiceForEngine } from './voiceShared.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
@@ -17,7 +18,8 @@ const DESKTOP_LAYOUT_KEY = 'desktop.layout';
 const DESKTOP_WINDOWS_KEY = 'desktop.windows';
 const DESKTOP_REMEMBER_KEY = 'session.remember';
 const DESKTOP_SURFACE_KEY = 'desktop.surface';
-const VOICE_TTS_VOICE_KEY = 'voice.tts_voice';
+const VOICE_TTS_VOICE_KEY = 'voice.tts_voice';        // Supertonic voice
+const VOICE_QWEN_VOICE_KEY = 'voice.qwen_voice';      // Qwen3-TTS speaker
 const VOICE_TTS_SPEED_KEY = 'voice.tts_speed';
 const VOICE_SILENCE_KEY = 'voice.silence_timeout';
 const VOICE_WAKE_KEY = 'voice.wake_word';
@@ -471,16 +473,31 @@ export function setClipboardHistory(list) {
 
 /* ── Voice (per-user, server-backed) ───────────────────────── */
 
-export function getTtsVoice() {
-  return localStorage.getItem(scopedKey(VOICE_TTS_VOICE_KEY)) || '';
+/** The preference key that holds `engine`'s voice. */
+function ttsVoiceKey(engine) {
+  return engine === 'qwen' ? VOICE_QWEN_VOICE_KEY : VOICE_TTS_VOICE_KEY;
 }
 
-export function setTtsVoice(voice) {
-  const trimmed = (voice || '').trim();
-  const key = scopedKey(VOICE_TTS_VOICE_KEY);
-  if (trimmed) localStorage.setItem(key, trimmed);
+/**
+ * The stored TTS voice for `engine` (default: the engine in force right now),
+ * or '' for "engine default".
+ *
+ * The two engines' voice sets are disjoint, so a value that does not belong to
+ * `engine` — a Qwen speaker stored before the voice was kept per engine, or
+ * the pick of an engine Power Saver has swapped away from — is ignored here
+ * rather than sent to a server that would answer with a 400.
+ */
+export function getTtsVoice(engine = getEffectiveTtsEngine()) {
+  return voiceForEngine(engine, localStorage.getItem(scopedKey(ttsVoiceKey(engine))));
+}
+
+export function setTtsVoice(voice, engine = getEffectiveTtsEngine()) {
+  const base = ttsVoiceKey(engine);
+  const value = voiceForEngine(engine, voice);
+  const key = scopedKey(base);
+  if (value) localStorage.setItem(key, value);
   else localStorage.removeItem(key);
-  persist(VOICE_TTS_VOICE_KEY, trimmed);
+  persist(base, value);
 }
 
 export function getTtsSpeed() {

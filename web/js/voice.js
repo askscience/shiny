@@ -5,6 +5,7 @@ import {
   getAiName, getTtsVoice, getTtsSpeed, getSilenceTimeout,
   getWhisperModel, getEffectiveSttEngine, getEffectiveTtsEngine,
 } from './preferences.js';
+import { ENGINE_DEFAULT_VOICE } from './voiceShared.js';
 
 /* Wake mode: the long-press arms the wake listener and it stays armed until
  * the wake phrase is heard or the user taps to cancel. There is deliberately no
@@ -783,6 +784,21 @@ export async function startListening(mode) {
   setSphereState(mode === 'single' ? 'listening' : 'conversation');
 
   try {
+    // The Vosk model is resolved before the microphone opens. A failed prepare
+    // leaves the engine on Vosk with no model loaded and the bar enabled in the
+    // error state on purpose, so this gesture is the retry (the failure may
+    // have been a timeout) — and a real failure has to be said, not end in a
+    // null dereference with the microphone left running behind it.
+    if (sttEngine !== 'whisper' && !voskModel) {
+      setSphereState('warming');
+      try {
+        await initVosk(sttLang);
+      } catch (_) {
+        throw new Error('Speech model failed to load — pick another engine in Settings → Voice');
+      }
+      setSphereState(mode === 'single' ? 'listening' : 'conversation');
+    }
+
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: false,
       audio: {
@@ -888,13 +904,12 @@ export async function startListening(mode) {
     if (mode === 'single') armSilenceTimer();
     // Wake mode arms no timer on purpose: it listens until the wake word.
   } catch (e) {
-    listening = false;
-    resetWakeState();
-    resetEndpointing();
-    clearSilenceTimer();
+    // Release whatever the attempt already acquired: a failure after the
+    // microphone opened (no WebAudio, say) must not leave capture running —
+    // and the same teardown drops any whisper session opened for the attempt.
+    stopListening();
     setSphereState('error');
-    const msg = normalizeMicError(e);
-    throw new Error(msg);
+    throw new Error(normalizeMicError(e));
   }
 }
 
@@ -1015,11 +1030,10 @@ export async function speak(text, lang) {
         text,
         lang: voiceLang,
         engine,
-        // Each engine has its own voice set: Supertonic uses M1…F5, Qwen3-TTS
-        // the nine CustomVoice speakers. The stored value is whichever the
-        // user picked; the server falls back to its own default when it does
-        // not apply to the engine in use.
-        voice: getTtsVoice() || (engine === 'qwen' ? 'vivian' : 'M1'),
+        // Each engine has its own voice set and its own stored pick
+        // (voiceShared.js): getTtsVoice(engine) only ever returns a voice this
+        // engine knows, so the fallback is simply the engine's default.
+        voice: getTtsVoice(engine) || ENGINE_DEFAULT_VOICE[engine],
         speed: getTtsSpeed(),
       }),
       responseType: 'blob',
