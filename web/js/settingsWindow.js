@@ -10,7 +10,7 @@
  *   Browser    — default search engine, ad blocking, history
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
- *   Images     — local image generation quality + model downloads
+ *   Images     — local image generation model, quality + downloads
  *   Power      — power mode, low-power AI, screen/keyboard backlight
  *   System     — remember workspace, log out
  *
@@ -48,7 +48,7 @@ import {
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
   getSttEngine, setSttEngine, getWhisperModel, setWhisperModel,
   getTtsEngine, setTtsEngine, getQwenModel, setQwenModel,
-  getImageQuality, setImageQuality,
+  getImageModel, setImageModel, getImageQuality, setImageQuality,
   getRemember, setRemember,
   getRemoteAllowTerminal, setRemoteAllowTerminal,
   getTouchBarEnabled, setTouchBarEnabled,
@@ -892,7 +892,7 @@ function buildVoice() {
 
 /* ── Power ──────────────────────────────────────────────────── */
 
-/* ── Images (Z-Image Turbo) ─────────────────────────────────── */
+/* ── Images (local image generation) ────────────────────────── */
 
 const IMAGE_QUALITY_BLURB = {
   fast: 'smallest and fastest — leaves room for voice',
@@ -901,20 +901,45 @@ const IMAGE_QUALITY_BLURB = {
   max: 'near-lossless, the largest download',
 };
 
+const IMAGE_MODELS = [
+  {
+    value: 'z-image',
+    label: 'Z-Image Turbo',
+    hint: 'Z-Image Turbo runs locally and stays light — the default. Larger tiers render with more detail and need more memory and disk.',
+  },
+  {
+    value: 'qwen-image-2.1',
+    label: 'Qwen-Image 2.1 Turbo',
+    hint: 'Qwen-Image 2.1 renders text and fine detail better, on an 8-step schedule. Heavier than Z-Image, and the weights are under the Qwen Research License — non-commercial use.',
+  },
+];
+
+const IMAGE_QUALITY_OPTIONS = [
+  { value: 'fast', label: 'Fast — recommended' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'high', label: 'High' },
+  { value: 'max', label: 'Max' },
+];
+
 function buildImage() {
+  const model = select({
+    options: IMAGE_MODELS.map((m) => ({ value: m.value, label: m.label })),
+    onChange: (value) => {
+      setImageModel(value);
+      updateImageUI();
+    },
+  });
+  model.select.value = getImageModel();
+
   const quality = select({
-    options: [
-      { value: 'fast', label: 'Fast — recommended' },
-      { value: 'balanced', label: 'Balanced' },
-      { value: 'high', label: 'High' },
-      { value: 'max', label: 'Max' },
-    ],
+    options: IMAGE_QUALITY_OPTIONS,
     onChange: (value) => {
       setImageQuality(value);
       updateImageUI();
     },
   });
 
+  const modelHint = el('p', 'settings-hint');
   const hint = el('p', 'settings-hint');
   const download = button({ label: 'Download', variant: 'quiet', size: 'sm' });
   download.classList.add('hidden');
@@ -925,18 +950,24 @@ function buildImage() {
   let statusLoaded = false;
   let poll = null;
 
-  const infoFor = (key) => status?.inventory?.qualities?.[key] || null;
-  const downloadFor = (key) => status?.downloads?.[key] || null;
-  const describe = (key) => {
-    const info = infoFor(key);
+  const modelDef = (id) => IMAGE_MODELS.find((m) => m.value === id) || IMAGE_MODELS[0];
+  const familyInfo = (id) => status?.inventory?.families?.[id] || null;
+  const infoFor = (id, key) => familyInfo(id)?.qualities?.[key] || null;
+  const downloadFor = (id, key) => status?.downloads?.[id]?.[key] || null;
+  const baseFor = (id) => status?.downloads?.[id]?.base || null;
+  const describe = (id, key) => {
+    const info = infoFor(id, key);
     return info ? `${info.quant} · ${info.size} · ${IMAGE_QUALITY_BLURB[key] || ''}` : '';
   };
 
   function updateImageUI() {
+    const currentModel = getImageModel();
     const current = getImageQuality();
+    model.select.value = currentModel;
     quality.select.value = current;
-    const info = infoFor(current);
-    const base = status?.downloads?.base || null;
+    modelHint.textContent = modelDef(currentModel).hint;
+    const info = infoFor(currentModel, current);
+    const base = baseFor(currentModel);
 
     if (!status) {
       hint.textContent = statusLoaded
@@ -946,17 +977,17 @@ function buildImage() {
       return;
     }
     if (!status.inventory?.sd_cli) {
-      hint.textContent = 'Z-Image is unavailable: the sd-cli binary was not found (set Z_IMAGE_SD_CLI).';
+      hint.textContent = 'Local image generation is unavailable: the sd-cli binary was not found (set Z_IMAGE_SD_CLI).';
       download.classList.add('hidden');
       return;
     }
     if (base?.status === 'downloading') {
       const pct = base.total ? Math.round((base.bytes / base.total) * 100) : 0;
-      hint.textContent = `Downloading the shared text encoder and VAE… ${pct}%`;
+      hint.textContent = `Downloading the shared model files… ${pct}%`;
       download.classList.add('hidden');
       return;
     }
-    const dl = downloadFor(current);
+    const dl = downloadFor(currentModel, current);
     if (dl?.status === 'downloading') {
       const pct = dl.total ? Math.round((dl.bytes / dl.total) * 100) : 0;
       hint.textContent = `Downloading the ${current} model… ${pct}%`;
@@ -970,15 +1001,15 @@ function buildImage() {
       return;
     }
     if (info?.ready) {
-      hint.textContent = `Ready — ${describe(current)}. Images run locally on this machine; larger sizes take minutes.`;
+      hint.textContent = `Ready — ${describe(currentModel, current)}. Images run locally on this machine; larger sizes take minutes.`;
       download.classList.add('hidden');
       return;
     }
     const missing = [];
-    if (!status.inventory?.encoder?.present || !status.inventory?.vae?.present) {
-      missing.push('shared text encoder + VAE');
+    for (const shared of familyInfo(currentModel)?.shared || []) {
+      if (!shared.present) missing.push(shared.label);
     }
-    if (!info?.present) missing.push(describe(current) || current);
+    if (!info?.present) missing.push(describe(currentModel, current) || current);
     hint.textContent = `Not downloaded yet — ${missing.join(', ')}. The assistant asks before fetching.`;
     download.classList.remove('hidden');
     download.disabled = false;
@@ -1000,23 +1031,25 @@ function buildImage() {
     clearInterval(poll);
     poll = setInterval(async () => {
       await refreshImageStatus();
+      const currentModel = getImageModel();
       const current = getImageQuality();
-      const state = downloadFor(current)?.status;
-      if (infoFor(current)?.ready || state === 'error') {
+      const state = downloadFor(currentModel, current)?.status;
+      if (infoFor(currentModel, current)?.ready || state === 'error') {
         clearInterval(poll);
         poll = null;
-        if (infoFor(current)?.ready) toast('Image model ready', { type: 'info' });
+        if (infoFor(currentModel, current)?.ready) toast('Image model ready', { type: 'info' });
       }
     }, 1500);
   }
 
   on(download, 'click', async () => {
+    const currentModel = getImageModel();
     const current = getImageQuality();
     download.disabled = true;
     try {
       await apiFetch('/api/imagegen/download', {
         method: 'POST',
-        body: JSON.stringify({ quality: current }),
+        body: JSON.stringify({ model: currentModel, quality: current }),
       });
       toast('Downloading image models in the background…', { type: 'info' });
       pollDownload();
@@ -1029,10 +1062,11 @@ function buildImage() {
   refreshImageStatus();
   cleanups.push(() => { clearInterval(poll); poll = null; });
 
+  const modelField = field('Model', model);
+  modelField.appendChild(modelHint);
   return [
-    field('Quality model', quality, {
-      hint: 'Z-Image Turbo runs locally. Larger tiers render with more detail and need more memory and disk.',
-    }),
+    modelField,
+    field('Quality model', quality),
     row,
   ];
 }

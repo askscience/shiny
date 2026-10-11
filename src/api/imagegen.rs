@@ -1,5 +1,5 @@
-//! Z-Image Turbo (local image generation): model status, background
-//! downloads, and serving finished images to the chat.
+//! Local image generation (Z-Image Turbo / Qwen-Image 2.1 Turbo): model
+//! status, background downloads, and serving finished images to the chat.
 //!
 //! The heavy lifting lives in `crate::services::image_gen`; these handlers are
 //! the Settings → Images surface plus the `<img>` endpoint the chat embeds.
@@ -15,10 +15,14 @@ use serde_json::json;
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
+use crate::services::image_gen;
 
 #[derive(Deserialize)]
 pub struct ImageDownloadBody {
     pub quality: String,
+    /// Family id ("z-image" | "qwen-image-2.1"); defaults to Z-Image.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// GET /api/imagegen/status — model inventory + live download progress.
@@ -33,19 +37,24 @@ pub async fn status(State(state): State<AppState>) -> Result<Json<serde_json::Va
 }
 
 /// POST /api/imagegen/download — start a background fetch of one tier (or
-/// `all`). Returns immediately; Settings polls `/api/imagegen/status`.
+/// `all`) for one model. Returns immediately; Settings polls
+/// `/api/imagegen/status`.
 pub async fn download(
     State(state): State<AppState>,
     Json(body): Json<ImageDownloadBody>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let quality = body.quality.trim().to_lowercase();
+    let model = body.model.as_deref().unwrap_or(image_gen::DEFAULT_FAMILY);
+    let Some(family) = image_gen::resolve_family(model) else {
+        return Err(AppError::BadRequest(format!("unknown image model: {model}")));
+    };
     state
         .image_gen
-        .start_download(&quality)
+        .start_download(family, &quality)
         .map_err(AppError::BadRequest)?;
     Ok(Json(json!({
         "success": true,
-        "data": { "status": "downloading", "quality": quality }
+        "data": { "status": "downloading", "model": family.id, "quality": quality }
     })))
 }
 

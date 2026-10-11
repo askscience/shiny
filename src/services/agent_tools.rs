@@ -391,13 +391,26 @@ pub async fn execute_action(
                 .filter(|p| !p.is_empty())
                 .ok_or_else(|| AppError::BadRequest("prompt required".into()))?;
 
+            let requested_model = match param_str(params, "model") {
+                Some(m) => m,
+                None => image_model_pref(state, &traveler.id)
+                    .await
+                    .unwrap_or_else(|| crate::services::image_gen::DEFAULT_FAMILY.to_string()),
+            };
+            let Some(family) = crate::services::image_gen::resolve_family(&requested_model) else {
+                return Err(AppError::BadRequest(format!(
+                    "unknown image model '{requested_model}' (use z-image or qwen-image-2.1)"
+                )));
+            };
+
             let requested_quality = match param_str(params, "quality") {
                 Some(q) => q,
                 None => image_quality_pref(state, &traveler.id)
                     .await
-                    .unwrap_or_else(|| crate::services::image_gen::DEFAULT_QUALITY.to_string()),
+                    .unwrap_or_else(|| family.default_quality.to_string()),
             };
-            let Some((quality, ..)) = crate::services::image_gen::resolve_quality(&requested_quality)
+            let Some((quality, ..)) =
+                crate::services::image_gen::resolve_quality(family, &requested_quality)
             else {
                 return Err(AppError::BadRequest(format!(
                     "unknown image quality '{requested_quality}' (use fast, balanced, high or max)"
@@ -413,25 +426,26 @@ pub async fn execute_action(
             let open = params.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
             let allow_download = params.get("allow_download").and_then(|v| v.as_bool()).unwrap_or(false);
 
-            let mut missing = state.image_gen.missing_for(quality);
+            let mut missing = state.image_gen.missing_for(family, quality);
             if !missing.is_empty() && allow_download {
-                if let Err(e) = state.image_gen.start_download(quality) {
+                if let Err(e) = state.image_gen.start_download(family, quality) {
                     return Err(AppError::Internal(e));
                 }
                 let client = state.image_gen.clone();
                 let key = quality.to_string();
                 client
-                    .wait_for_ready(&key, crate::services::image_gen::DOWNLOAD_WAIT)
+                    .wait_for_ready(family, &key, crate::services::image_gen::DOWNLOAD_WAIT)
                     .await;
-                missing = state.image_gen.missing_for(&key);
+                missing = state.image_gen.missing_for(family, &key);
             }
             if !missing.is_empty() {
-                let bytes = state.image_gen.missing_bytes_for(quality);
+                let bytes = state.image_gen.missing_bytes_for(family, quality);
                 ActionOutcome {
                     action: action_key.clone(),
                     result: "error".into(),
                     data: json!({
                         "error": "the image models are not downloaded yet",
+                        "model": family.id,
                         "needs_download": true,
                         "missing": missing,
                         "download_bytes": bytes,
@@ -447,6 +461,7 @@ pub async fn execute_action(
                 let home = crate::services::image_gen::files_home(&traveler.id, os_home.as_deref());
                 let req = crate::services::image_gen::GenerateRequest {
                     prompt,
+                    family: family.id.to_string(),
                     quality: quality.to_string(),
                     width,
                     height,
@@ -464,6 +479,8 @@ pub async fn execute_action(
                             "url": res.url,
                             "file": res.file,
                             "path": res.rel_path,
+                            "model": res.model,
+                            "model_label": family.label,
                             "width": res.width,
                             "height": res.height,
                             "steps": res.steps,
@@ -543,6 +560,21 @@ async fn image_quality_pref(state: &AppState, user_id: &str) -> Option<String> {
     .ok()
     .flatten()
     .filter(|q| !q.trim().is_empty())
+}
+
+/// The user's saved image-model preference (Settings → Images). Unknown values
+/// are ignored so a stale or hand-edited row can't break generation.
+async fn image_model_pref(state: &AppState, user_id: &str) -> Option<String> {
+    let value = sqlx::query_scalar::<_, String>(
+        "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'image.model'",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()
+    .filter(|m| !m.trim().is_empty())?;
+    crate::services::image_gen::resolve_family(&value).map(|f| f.id.to_string())
 }
 
 /// Normalize a workspace target: 1-based number or numeric string → 0-based

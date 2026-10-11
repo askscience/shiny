@@ -65,7 +65,16 @@ async fn state_for(plugins_dir: &str, db: &str) -> AppState {
             std::path::PathBuf::from(&config.qwen_tts_models_dir),
         ),
         image_gen: shiny::services::image_gen::ImageGenClient::new(
-            std::path::PathBuf::from(&config.z_image_models_dir),
+            vec![
+                (
+                    shiny::services::image_gen::Z_IMAGE.id,
+                    std::path::PathBuf::from(&config.z_image_models_dir),
+                ),
+                (
+                    shiny::services::image_gen::QWEN_IMAGE.id,
+                    std::path::PathBuf::from(&config.qwen_image_models_dir),
+                ),
+            ],
             config.z_image_sd_cli.clone(),
         ),
         plugins: shiny::plugins::PluginManager::new(

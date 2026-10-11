@@ -27,6 +27,7 @@ const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
 const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
 const VOICE_TTS_ENGINE_KEY = 'voice.tts_engine';
 const VOICE_QWEN_MODEL_KEY = 'voice.qwen_model';
+const IMAGE_MODEL_KEY = 'image.model';
 const IMAGE_QUALITY_KEY = 'image.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const DEFAULT_AI_NAME = "PEAK'D!";
@@ -552,10 +553,30 @@ export function setQwenModel(model) {
 }
 
 /**
+ * Which local model family renders the assistant's images:
+ * 'z-image' (default) or 'qwen-image-2.1'. The same key is read server-side
+ * from `user_preferences`, so the generate_image tool renders with the model
+ * chosen here unless the request names one explicitly.
+ */
+export function getImageModel() {
+  const v = localStorage.getItem(scopedKey(IMAGE_MODEL_KEY));
+  return ['z-image', 'qwen-image-2.1'].includes(v) ? v : 'z-image';
+}
+
+export function setImageModel(model) {
+  const value = ['z-image', 'qwen-image-2.1'].includes(model) ? model : 'z-image';
+  const key = scopedKey(IMAGE_MODEL_KEY);
+  if (value === 'z-image') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(IMAGE_MODEL_KEY, value);
+}
+
+/**
  * Quality tier for the assistant's local image generation:
  * 'fast' (Q3_K, default) | 'balanced' (Q4_K) | 'high' (Q6_K) | 'max' (Q8_0).
  * The same key is read server-side from `user_preferences`, so the
- * generate_image tool renders at the tier chosen here.
+ * generate_image tool renders at the tier chosen here. Both model families
+ * share the tier names.
  */
 export function getImageQuality() {
   const v = localStorage.getItem(scopedKey(IMAGE_QUALITY_KEY));

@@ -24,6 +24,7 @@ All values parsed by the binary live in
 | Whisper models | `data/whisper-models` | `WHISPER_MODELS_DIR` | faster-whisper CTranslate2 folders. |
 | Qwen TTS models | `data/qwen-tts-models` | `QWEN_TTS_MODELS_DIR` | Qwen3-TTS GGUF weights. |
 | Z-Image models | `data/z-image-models` | `Z_IMAGE_MODELS_DIR` | Z-Image Turbo GGUF quants + shared Qwen3-4B encoder and VAE. |
+| Qwen-Image models | `data/qwen-image-models` | `QWEN_IMAGE_MODELS_DIR` | Qwen-Image 2.1 Turbo GGUF quants + shared Qwen3-VL encoder, VAE and TAEQI2.1 decoder. |
 | Web root | `web` | `WEB_DIR` | Static UI, served with an SPA fallback. |
 | User homes | `~/.shiny/home/<id>` | `SHINY_HOME_MODE=real` | Files-plugin home; `real` uses the OS home. |
 | Paired devices | `~/.local/share/shiny/paired_devices.json` | `SHINY_PAIRED_FILE` | Iroh allowlist. |
@@ -76,15 +77,18 @@ See [voice](core/voice.md) and [sidecars](deployment/sidecars.md).
 | Variable | Default | Meaning |
 |---|---|---|
 | `Z_IMAGE_MODELS_DIR` | `data/z-image-models` | Z-Image Turbo quants + the shared Qwen3-4B text encoder and VAE. |
-| `Z_IMAGE_SD_CLI` | auto-discovered | Explicit `sd-cli` (stable-diffusion.cpp) binary. |
-| `Z_IMAGE_CACHEDIT` | `0.30` | Cache-DiT residual threshold; `0`/`off` disables the cache. |
+| `QWEN_IMAGE_MODELS_DIR` | `data/qwen-image-models` | Qwen-Image 2.1 Turbo quants + the shared Qwen3-VL encoder, VAE and TAEQI2.1 decoder. |
+| `Z_IMAGE_SD_CLI` | auto-discovered | Explicit `sd-cli` (stable-diffusion.cpp) binary (serves both models). |
+| `Z_IMAGE_CACHEDIT` | `0.30` | Cache-DiT residual threshold; `0`/`off` disables the cache (both models). |
 
+Two local model families are offered in Settings → Images: Z-Image Turbo
+(Apache-2.0) and Qwen-Image 2.1 Turbo (Qwen Research License — non-commercial).
 One `sd-cli` process runs per image (nothing stays resident — the text encoder
-lives on the CPU, the diffusion graph is staged inside a 2 GiB planner budget).
-Weights are fetched on demand from Settings → Images; the assistant's
-`generate_image` tool asks in chat before downloading. See
-[agent](core/agent.md) and the
-[benchmark notes](../benchmarks/z-image/README.md).
+lives on the CPU, the diffusion graph is staged inside an explicit planner
+budget). Weights are fetched on demand; the assistant's `generate_image` tool
+asks in chat before downloading. See [agent](core/agent.md) and the
+[Z-Image benchmark notes](../benchmarks/z-image/README.md) /
+[Qwen-Image benchmark notes](../benchmarks/qwen-image-2.1/README.md).
 
 ## Travel
 

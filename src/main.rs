@@ -176,9 +176,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // Z-Image Turbo: one sd-cli process per image, so nothing stays resident.
+    // Local image generation (Z-Image Turbo / Qwen-Image 2.1 Turbo): one
+    // sd-cli process per image, so nothing stays resident.
     let image_gen = shiny::services::image_gen::ImageGenClient::new(
-        std::path::PathBuf::from(&config.z_image_models_dir),
+        vec![
+            (
+                shiny::services::image_gen::Z_IMAGE.id,
+                std::path::PathBuf::from(&config.z_image_models_dir),
+            ),
+            (
+                shiny::services::image_gen::QWEN_IMAGE.id,
+                std::path::PathBuf::from(&config.qwen_image_models_dir),
+            ),
+        ],
         config.z_image_sd_cli.clone(),
     );
 

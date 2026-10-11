@@ -147,20 +147,21 @@ AI summary. Returns results as `{ success, data: … }`.
 
 ## Image generation
 
-Local text-to-image with Z-Image Turbo (stable-diffusion.cpp). The assistant
-drives it with the core `generate_image` tool; these routes back Settings →
-Images and the chat's `<img>` endpoint.
+Local text-to-image with Z-Image Turbo or Qwen-Image 2.1 Turbo
+(stable-diffusion.cpp). The assistant drives it with the core `generate_image`
+tool; these routes back Settings → Images and the chat's `<img>` endpoint.
 
 | Method | Path | Body / query | Response |
 |---|---|---|---|
-| `GET` | `/api/imagegen/status` | — | `{ success, data: { inventory, downloads } }` — tiers, on-disk presence, live download bytes. |
-| `POST` | `/api/imagegen/download` | `{ "quality": "fast" \| "balanced" \| "high" \| "max" \| "all" }` | `{ success, data: { status: "downloading" } }` — background; poll status. |
+| `GET` | `/api/imagegen/status` | — | `{ success, data: { inventory, downloads } }` — per-model tiers, on-disk presence, live download bytes. |
+| `POST` | `/api/imagegen/download` | `{ "quality": "fast" \| "balanced" \| "high" \| "max" \| "all", "model": "z-image" \| "qwen-image-2.1" }` (model optional, defaults to Z-Image) | `{ success, data: { status: "downloading" } }` — background; poll status. |
 | `GET` | `/api/imagegen/images/:name` | — | The PNG itself (`image/png`; cookie or Bearer auth). Files live in the user's Files home under `Pictures/Generated/`. |
 
-The default tier is `fast` (Q3_K). Without downloaded models the tool returns a
-`needs_download` result and the assistant asks in chat before fetching. Step
-caching (Cache-DiT) is on by default at threshold 0.30 — see
-[configuration](../configuration.md).
+The default model is `z-image`; the default tier is `fast` (Q3_K) for both
+models. Qwen-Image 2.1 weights are under the Qwen Research License
+(non-commercial). Without downloaded models the tool returns a `needs_download`
+result and the assistant asks in chat before fetching. Step caching (Cache-DiT)
+is on by default at threshold 0.30 — see [configuration](../configuration.md).
 
 ---
 
