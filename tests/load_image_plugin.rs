@@ -120,13 +120,22 @@ async fn loads_the_image_plugin() {
     let installed = state.plugins.discover_and_install(state.plugin_ctx()).await;
     println!("installed: {installed:?}");
 
-    let tools = state.plugins.tools().list();
-    let names: Vec<String> = tools.iter().map(|t| t.to_string()).collect();
-    assert!(names.iter().any(|t| t.as_str() == "image_edit"), "image_edit registered; got {names:?}");
-    assert!(names.iter().any(|t| t.as_str() == "image_flatten"), "image_flatten registered");
+    let names = state.plugins.tools().list();
+    for tool in ["image_list", "image_get", "image_edit", "image_delete"] {
+        assert!(names.iter().any(|t| t == tool), "{tool} registered; got {names:?}");
+    }
+    // The layers era is gone: no layer tools, no flatten, and no
+    // AI-edit-sounding aliases (`edit_image` used to swallow intent meant for
+    // core `generate_image`).
+    for gone in [
+        "image_layer_list", "image_layer_add", "image_layer_delete", "image_flatten",
+        "add_layer", "flatten_image", "edit_image", "transform_image",
+    ] {
+        assert!(!names.iter().any(|t| t == gone), "{gone} should be gone; got {names:?}");
+    }
     // Reaching here means the manifest, cdylib and *all* migrations (including
-    // the selection migration) applied cleanly, since a migration failure
-    // aborts install before tools are registered.
+    // 005_minimal_layers and 006_drop_layers) applied cleanly, since a
+    // migration failure aborts install before tools are registered.
     println!("SURVIVED");
 }
 

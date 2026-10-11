@@ -1,4 +1,4 @@
-//! Small pixel helpers shared by the adjustment, filter and paint engines.
+//! Small pixel helpers shared by the adjustment and filter engines.
 //!
 //! Everything works on **straight (non-premultiplied) RGBA** `u8` buffers, the
 //! same layout `PhotonImage` exposes, so a result can be handed back to the
@@ -11,17 +11,6 @@ use photon_rs::PhotonImage;
 #[inline]
 pub fn to_u8(v: f64) -> u8 {
     (v.max(0.0).min(255.0).round()) as u8
-}
-
-#[inline]
-pub fn clamp01(v: f32) -> f32 {
-    if v < 0.0 {
-        0.0
-    } else if v > 1.0 {
-        1.0
-    } else {
-        v
-    }
 }
 
 #[inline]
@@ -40,7 +29,7 @@ pub fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
 
-/// Rec. 709 luminance of linear-ish sRGB values in 0..=255.
+/// Rec. 709 luminance of sRGB values in 0..=255.
 #[inline]
 pub fn luminance(r: f64, g: f64, b: f64) -> f64 {
     0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -110,33 +99,6 @@ pub fn from_raw(px: Vec<u8>, w: u32, h: u32) -> PhotonImage {
     PhotonImage::new(px, w, h)
 }
 
-/// Bilinear RGBA sample; out-of-range reads clamp to the edge.
-pub fn sample_bilinear(px: &[u8], w: u32, h: u32, x: f64, y: f64) -> [u8; 4] {
-    if w == 0 || h == 0 {
-        return [0, 0, 0, 0];
-    }
-    let x = clamp(x, 0.0, (w - 1) as f64);
-    let y = clamp(y, 0.0, (h - 1) as f64);
-    let x0 = x.floor() as u32;
-    let y0 = y.floor() as u32;
-    let x1 = (x0 + 1).min(w - 1);
-    let y1 = (y0 + 1).min(h - 1);
-    let fx = x - x0 as f64;
-    let fy = y - y0 as f64;
-    let idx = |xx: u32, yy: u32| ((yy as usize) * (w as usize) + xx as usize) * 4;
-    let mut out = [0u8; 4];
-    for c in 0..4 {
-        let a = px[idx(x0, y0) + c] as f64;
-        let b = px[idx(x1, y0) + c] as f64;
-        let cc = px[idx(x0, y1) + c] as f64;
-        let d = px[idx(x1, y1) + c] as f64;
-        let top = lerp(a, b, fx);
-        let bottom = lerp(cc, d, fx);
-        out[c] = to_u8(lerp(top, bottom, fy));
-    }
-    out
-}
-
 /// Run `f(r, g, b, a)` per pixel and write the returned RGBA back.
 pub fn map_pixels<F: FnMut(u8, u8, u8, u8) -> (u8, u8, u8, u8)>(img: &mut PhotonImage, mut f: F) {
     let w = img.get_width();
@@ -153,44 +115,4 @@ pub fn map_pixels<F: FnMut(u8, u8, u8, u8) -> (u8, u8, u8, u8)>(img: &mut Photon
         i += 4;
     }
     *img = PhotonImage::new(px, w, h);
-}
-
-/// A separable box blur over an arbitrary stride-1 `u8` buffer with `channels`
-/// interleaved components. Used for masks (1 channel) and feathering.
-pub fn box_blur_u8(buf: &mut [u8], w: u32, h: u32, channels: usize, radius: u32) {
-    if radius == 0 || w == 0 || h == 0 {
-        return;
-    }
-    let (w, h, r) = (w as usize, h as usize, radius as usize);
-    let mut tmp = buf.to_vec();
-    // Horizontal.
-    for y in 0..h {
-        for x in 0..w {
-            let lo = x.saturating_sub(r);
-            let hi = (x + r).min(w - 1);
-            let n = (hi - lo + 1) as u32;
-            for c in 0..channels {
-                let mut sum = 0u32;
-                for xx in lo..=hi {
-                    sum += buf[(y * w + xx) * channels + c] as u32;
-                }
-                tmp[(y * w + x) * channels + c] = (sum / n) as u8;
-            }
-        }
-    }
-    // Vertical.
-    for y in 0..h {
-        let lo = y.saturating_sub(r);
-        let hi = (y + r).min(h - 1);
-        let n = (hi - lo + 1) as u32;
-        for x in 0..w {
-            for c in 0..channels {
-                let mut sum = 0u32;
-                for yy in lo..=hi {
-                    sum += tmp[(yy * w + x) * channels + c] as u32;
-                }
-                buf[(y * w + x) * channels + c] = (sum / n) as u8;
-            }
-        }
-    }
 }

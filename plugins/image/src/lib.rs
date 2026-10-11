@@ -1,16 +1,12 @@
-//! Image plugin — a layered raster editor built on `photon-rs`. Tone and colour
-//! adjustments, convolution and distortion filters, painting tools and
-//! transforms are applied server-side; the editor window and the agent tools
-//! share the same operations engine.
+//! Image plugin — a minimal photo editor built on `photon-rs`: tone and colour
+//! adjustments, blur/sharpen/vignette, one-tap looks and 90° geometry, applied
+//! server-side by the engine the editor window and the agent tools share.
 
 pub mod adjust;
-pub mod blend;
-pub mod composite;
-pub mod document;
+pub mod doc;
 pub mod filter;
-pub mod layers;
+pub mod looks;
 pub mod ops;
-pub mod paint;
 pub mod pixels;
 pub mod plugin;
 pub mod routes;

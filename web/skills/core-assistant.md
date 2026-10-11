@@ -60,7 +60,7 @@ Use it when the user's request clearly belongs to one plugin's domain — read t
 
 ### generate_image
 
-Create a new image with a local image model (Z-Image Turbo or Qwen-Image 2.1 Turbo) and show it in the chat.
+Create or edit an image with a local image model (Z-Image Turbo or Qwen-Image 2.1 Turbo). The result is shown in the chat and opens in the Image window.
 
 ```text
 {"action": "generate_image", "params": {"prompt": "a detailed description", "size": "768x768"}}
@@ -69,9 +69,10 @@ Create a new image with a local image model (Z-Image Turbo or Qwen-Image 2.1 Tur
 - `prompt` is required — write a rich, concrete description (subject, setting, light, style, mood); these models reward detail.
 - `model` picks the local checkpoint: `"z-image"` (lighter, faster) or `"qwen-image-2.1"` (writes text inside images and fine detail better, slower). Omit it to use the user's Settings → Images choice — don't set it unless the user asked for a specific model or their request clearly fits one.
 - `image` turns the call into an **edit**: pass the path of an existing picture (absolute, or relative to the user's files home) and describe the change in `prompt`. If the user names a photo without a path, find it with the files tools first. The original file is never modified — the edit runs on a private copy and arrives as a new image. Edits need the `qwen-image-2.1` model (Z-Image cannot edit); the tool switches to it automatically and asks before downloading its weights if missing. Without `size`, edits render at `1024x1024`.
+- These are AI re-renders of the picture. For deterministic adjustments to an image that already lives in the Image window (brightness, contrast, blur, look presets, layers), use the image plugin's `image_edit` tool instead — it is instant and free.
 - `size` defaults to `512x512`. Pick from the user's request: `768x768` or `1024x1024` for detail, `1024x768` wide, `768x1024` portrait. Rendering takes a while (under a minute at 512 on Z-Image, several minutes at 1024) — say you are on it.
 - `steps` defaults to 8, which is the models' distilled schedule — leave it alone.
-- `open: true` when the user wants to edit the image in the Image window.
+- `open` defaults to **true**: the finished image opens in the Image window so the user can refine it there. Pass `open: false` when the user only wants it in the chat.
 - Always end your reply with the image on its own line, using the `url` from the result: `![short description](<url>)`.
 - If the result says the image models are not downloaded yet: tell the user how large the download is (see `download_size`) and ask whether to fetch it. Only after they agree, call `generate_image` again with the same prompt plus `"allow_download": true`.
 

@@ -158,7 +158,6 @@
 .pdf-doc-btn,
 .studio-menu-btn,
 .word-doc-btn,
-.image-menu-btn,
 .ui-toggle,
 .ui-empty-icon,
 .files-status-pill,
@@ -898,7 +897,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 
 /* ── Shared: unified plugin top bars ────────────────────────────
    Every plugin window's action row. One flat fill, one hairline. */
-.word-bar, .calc-bar, .impress-bar, .image-bar, .mail-bar,
+.word-bar, .calc-bar, .impress-bar, .mail-bar,
 .calendar-bar, .calculator-bar, .pdf-bar, .studio-bar, .terminal-bar,
 .radio-hero, .yt-hero, .browser-bar {
   background: var(--glass) !important;
@@ -906,7 +905,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 
 /* In-bar menu triggers: a label + chevron, not a pill. */
-.word-doc-btn, .calc-sheet-btn, .impress-deck-btn, .image-menu-btn,
+.word-doc-btn, .calc-sheet-btn, .impress-deck-btn,
 .mail-account-btn, .pdf-doc-btn, .studio-menu-btn, .browser-downloads-btn {
   background: transparent !important;
   border: 1px solid transparent !important;
@@ -915,7 +914,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   box-shadow: none !important;
 }
 .word-doc-btn:hover, .calc-sheet-btn:hover, .impress-deck-btn:hover,
-.image-menu-btn:hover, .mail-account-btn:hover, .pdf-doc-btn:hover,
+.mail-account-btn:hover, .pdf-doc-btn:hover,
 .studio-menu-btn:hover {
   background: var(--glass-hover) !important;
   color: var(--text) !important;
@@ -1724,202 +1723,76 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   font-size: 11.5px !important;
 }
 
-/* ── Image (layered raster editor) ──────────────────────────────
-   The docked workspace is the densest plugin surface, so it gets
-   the full flat grammar: panels are hairlines, sliders are flat,
-   the tool rail is a row of symbols, and the checkerboard behind
-   transparency is toned down to a near-invisible grid. */
-.image-appbar,
-.image-options {
-  background: var(--glass) !important;
-  border-bottom: 1px solid var(--glass-border) !important;
-}
+/* ── Image (photo editor) ───────────────────────────────────────
+   Flat grammar: a quiet window bar, a dark stage, and a dock of soft
+   pills and look previews — no shadows, no lifts. */
 .image-appbar-title {
   font-family: var(--font-body) !important;
   font-weight: 500 !important;
   color: var(--text-secondary) !important;
 }
-.image-tabs { background: var(--bg) !important; border-bottom: 1px solid var(--glass-border) !important; }
-.image-tab {
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--radius-xs) !important;
+.image-zoom-chip {
   color: var(--muted) !important;
-  font-size: 12px !important;
+  font-family: ui-monospace, monospace !important;
 }
-.image-tab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
-.image-tab.is-active {
-  background: var(--bg-elevated) !important;
-  border-color: var(--glass-border) !important;
-  color: var(--text) !important;
-}
-.image-tab-name { color: inherit !important; }
+.image-zoom-chip:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
 
-.image-tools { background: var(--bg) !important; border-right: 1px solid var(--glass-border) !important; }
-.image-tool {
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text-secondary) !important;
+.image-canvas-area { background: #0a0b0d !important; }
+.image-canvas-area.is-drop {
+  outline: none !important;
+  box-shadow: inset 0 0 0 2px var(--accent) !important;
+}
+.image-view {
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
 }
-.image-tool:hover { background: var(--glass-hover) !important; color: var(--text) !important; transform: none !important; }
-.image-tool.is-active {
-  background: var(--accent-soft) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
-}
-.image-tool-flyout { color: var(--muted) !important; }
-
-.image-workspace { background: var(--bg) !important; }
-/* Transparency checkerboard — 12% grey squares instead of a loud
-   two-tone grid, so a canvas with alpha is still legible. */
-.image-canvas-area,
-.image-doc {
-  background-color: #0a0b0d !important;
-  background-image:
-    linear-gradient(45deg, #121317 25%, transparent 25%, transparent 75%, #121317 75%),
-    linear-gradient(45deg, #121317 25%, transparent 25%, transparent 75%, #121317 75%) !important;
-  background-size: 16px 16px !important;
-  background-position: 0 0, 8px 8px !important;
-}
-.image-canvas-area.is-drop { box-shadow: inset 0 0 0 2px var(--accent) !important; }
-.image-view,
-.image-overlay { border: 1px solid var(--glass-border) !important; border-radius: 2px !important; }
-.image-ruler-corner,
-.image-ruler-h,
-.image-ruler-v { background: var(--bg) !important; border-color: var(--glass-border) !important; }
 .image-empty { color: var(--muted) !important; }
 
 .image-dock {
   background: var(--surface) !important;
-  border-left: 1px solid var(--glass-border) !important;
-}
-.image-panel-section { border-bottom: 1px solid var(--glass-border) !important; }
-.image-panel-head {
-  background: var(--glass) !important;
-  border-radius: 0 !important;
-  color: var(--text) !important;
-}
-.image-panel-title {
-  font-size: 10.5px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.12em !important;
-  text-transform: uppercase;
-  color: var(--text-secondary) !important;
-}
-.image-panel-chevron { color: var(--muted) !important; }
-.image-panel-body { background: transparent !important; }
-.image-panel-actions .ui-btn--icon { border-radius: var(--radius-xs) !important; }
-
-/* Sliders + numeric fields across the image panels. */
-.image-opt-field,
-.image-opt-field--slider {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-}
-.image-opt-label {
-  font-size: 10px !important;
-  letter-spacing: 0.12em !important;
-  text-transform: uppercase;
-  color: var(--muted) !important;
-}
-.image-opt-number,
-.image-color-input,
-.image-hex,
-.image-dialog-field {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text) !important;
-  font-family: ui-monospace, monospace !important;
-  font-size: 11.5px !important;
-}
-.image-opt-value { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; }
-.image-prop-select {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text) !important;
-}
-.image-adjust-btn {
-  background: var(--surface) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text-secondary) !important;
-}
-.image-adjust-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
-.image-channel-row,
-.image-swatch,
-.image-fg-swatch,
-.image-bg-swatch {
-  background: var(--surface) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-}
-.image-channel-row.is-off { opacity: 0.45; }
-.image-channel-name,
-.image-layer-name,
-.image-history-label { color: var(--text-secondary) !important; font-size: 12px !important; font-weight: 500 !important; }
-.image-layer-meta,
-.image-history-time,
-.image-history-empty,
-.image-layers-empty { color: var(--muted) !important; font-size: 10.5px !important; }
-.image-layer-row {
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--radius-xs) !important;
-}
-.image-layer-row:hover { background: var(--glass-hover) !important; }
-.image-layer-row.is-active {
-  background: var(--accent-soft) !important;
-  border-color: var(--accent) !important;
-}
-.image-layer-thumb { border: 1px solid var(--glass-border) !important; border-radius: 2px !important; }
-.image-layer-eye { border-radius: var(--radius-xs) !important; color: var(--muted) !important; }
-.image-layer-eye.is-eye-off { opacity: 0.4; }
-.image-layer-blend {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text-secondary) !important;
-  font-size: 11px !important;
-}
-.image-history-item {
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--radius-xs) !important;
-}
-.image-history-item.is-current { background: var(--accent-soft) !important; border-color: var(--accent) !important; }
-.image-statusbar {
-  background: var(--glass) !important;
   border-top: 1px solid var(--glass-border) !important;
-  color: var(--muted) !important;
-  font-size: 11px !important;
+  box-shadow: none !important;
 }
-.image-status-tool,
-.image-status-zoom,
-.image-status-size,
-.image-status-pos { color: var(--muted) !important; font-family: ui-monospace, monospace; }
-.image-inline-panel {
-  background: var(--surface-strong) !important;
+.image-dock-divider { background: var(--glass-border) !important; }
+
+.image-look-chip {
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--radius-sm) !important;
   box-shadow: none !important;
 }
-.image-inline-head { border-bottom: 1px solid var(--glass-border) !important; }
-.image-inline-title {
-  font-size: 10.5px !important;
-  letter-spacing: 0.12em !important;
-  text-transform: uppercase;
+.image-look-chip:hover {
+  transform: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: none !important;
+}
+
+.image-look-chip.is-active {
+  border-color: var(--accent) !important;
+  box-shadow: none !important;
+}
+
+.image-dial-label { color: var(--muted) !important; }
+.image-dial-value { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; }
+.image-dial-track { stroke: var(--glass-border) !important; }
+.image-dial-arc { stroke: var(--accent) !important; }
+.image-dial:hover .image-dial-knob,
+.image-dial.is-dragging .image-dial-knob { background: var(--glass-hover) !important; }
+
+.image-oneclick {
+  background: var(--glass) !important;
   color: var(--text-secondary) !important;
 }
-.image-menu,
-.image-menubar { background: var(--surface-strong) !important; border-color: var(--glass-border) !important; }
-.image-menu-item { border-radius: var(--radius-xs) !important; color: var(--text-secondary) !important; }
-.image-menu-item:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
-.image-type-panel { background: var(--surface) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-sm) !important; }
+.image-oneclick:hover {
+  background: var(--glass-hover) !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+.image-oneclick--revert {
+  background: transparent !important;
+  border-color: var(--glass-border) !important;
+  color: var(--muted) !important;
+}
 
 /* ── Studio (sequencer + synth) ─────────────────────────────────
    The busiest window. Everything becomes a flat panel: device
@@ -2543,3 +2416,4 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 .nav-speed-unit { color: var(--muted) !important; letter-spacing: 0.1em !important; }
 #nav-puck { display: none !important; }
+

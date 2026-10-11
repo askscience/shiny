@@ -473,7 +473,9 @@ pub async fn execute_action(
                 Some(s) if s >= 0 => s,
                 _ => random_seed(),
             };
-            let open = params.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
+            // Results open in the Image window by default; `open:false` keeps
+            // them in the chat only.
+            let open = params.get("open").and_then(|v| v.as_bool()).unwrap_or(true);
             let allow_download = params.get("allow_download").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let mut missing = state.image_gen.missing_for(family, quality);
