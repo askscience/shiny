@@ -27,6 +27,7 @@ const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
 const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
 const VOICE_TTS_ENGINE_KEY = 'voice.tts_engine';
 const VOICE_QWEN_MODEL_KEY = 'voice.qwen_model';
+const IMAGE_QUALITY_KEY = 'image.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
@@ -548,6 +549,25 @@ export function setQwenModel(model) {
   if (value === '0.6b-customvoice') localStorage.removeItem(key);
   else localStorage.setItem(key, value);
   persist(VOICE_QWEN_MODEL_KEY, value === '0.6b-customvoice' ? '' : value);
+}
+
+/**
+ * Quality tier for the assistant's local image generation:
+ * 'fast' (Q3_K, default) | 'balanced' (Q4_K) | 'high' (Q6_K) | 'max' (Q8_0).
+ * The same key is read server-side from `user_preferences`, so the
+ * generate_image tool renders at the tier chosen here.
+ */
+export function getImageQuality() {
+  const v = localStorage.getItem(scopedKey(IMAGE_QUALITY_KEY));
+  return ['fast', 'balanced', 'high', 'max'].includes(v) ? v : 'fast';
+}
+
+export function setImageQuality(quality) {
+  const value = ['fast', 'balanced', 'high', 'max'].includes(quality) ? quality : 'fast';
+  const key = scopedKey(IMAGE_QUALITY_KEY);
+  if (value === 'fast') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(IMAGE_QUALITY_KEY, value);
 }
 
 export function getSilenceTimeout() {

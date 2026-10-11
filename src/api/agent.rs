@@ -88,6 +88,9 @@ pub struct AgentResponse {
     /// Plugin the AI chose to surface in a window (via show_plugin).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focus_plugin: Option<String>,
+    /// File the AI asked to open in a plugin window (a generated image).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_file: Option<serde_json::Value>,
     /// Conversation thread id for the chat history (continue this chat).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<String>,
@@ -529,6 +532,7 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
         steps: result.steps,
         navigation: result.navigation,
         focus_plugin: result.focus_plugin,
+        open_file: result.open_file,
         conversation_id: None,
         interrupted: result.interrupted,
     }

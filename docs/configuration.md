@@ -23,6 +23,7 @@ All values parsed by the binary live in
 | Vosk models | `data/vosk-models` | `VOSK_MODELS_DIR` | Served to the browser at `/api/voice/models/vosk`. |
 | Whisper models | `data/whisper-models` | `WHISPER_MODELS_DIR` | faster-whisper CTranslate2 folders. |
 | Qwen TTS models | `data/qwen-tts-models` | `QWEN_TTS_MODELS_DIR` | Qwen3-TTS GGUF weights. |
+| Z-Image models | `data/z-image-models` | `Z_IMAGE_MODELS_DIR` | Z-Image Turbo GGUF quants + shared Qwen3-4B encoder and VAE. |
 | Web root | `web` | `WEB_DIR` | Static UI, served with an SPA fallback. |
 | User homes | `~/.shiny/home/<id>` | `SHINY_HOME_MODE=real` | Files-plugin home; `real` uses the OS home. |
 | Paired devices | `~/.local/share/shiny/paired_devices.json` | `SHINY_PAIRED_FILE` | Iroh allowlist. |
@@ -69,6 +70,21 @@ their Assistant settings; see [agent](core/agent.md).
 | `AUTO_START_QWEN_TTS` | `false` | Opt-in: first start may build the server and fetch ~600 MB. |
 
 See [voice](core/voice.md) and [sidecars](deployment/sidecars.md).
+
+## Images
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `Z_IMAGE_MODELS_DIR` | `data/z-image-models` | Z-Image Turbo quants + the shared Qwen3-4B text encoder and VAE. |
+| `Z_IMAGE_SD_CLI` | auto-discovered | Explicit `sd-cli` (stable-diffusion.cpp) binary. |
+| `Z_IMAGE_CACHEDIT` | `0.30` | Cache-DiT residual threshold; `0`/`off` disables the cache. |
+
+One `sd-cli` process runs per image (nothing stays resident — the text encoder
+lives on the CPU, the diffusion graph is staged inside a 2 GiB planner budget).
+Weights are fetched on demand from Settings → Images; the assistant's
+`generate_image` tool asks in chat before downloading. See
+[agent](core/agent.md) and the
+[benchmark notes](../benchmarks/z-image/README.md).
 
 ## Travel
 

@@ -176,6 +176,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    // Z-Image Turbo: one sd-cli process per image, so nothing stays resident.
+    let image_gen = shiny::services::image_gen::ImageGenClient::new(
+        std::path::PathBuf::from(&config.z_image_models_dir),
+        config.z_image_sd_cli.clone(),
+    );
+
     let qwen_tts = QwenClient::new(
         config.qwen_tts_url.clone(),
         std::path::PathBuf::from(&config.qwen_tts_models_dir),
@@ -274,6 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         supertonic,
         whisper,
         qwen_tts,
+        image_gen,
         plugins: shiny::plugins::PluginManager::with_system_dir(
             std::path::PathBuf::from(&config.plugins_dir),
             config

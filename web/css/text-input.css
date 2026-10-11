@@ -215,6 +215,72 @@ body.compose-active #hud-transcript {
   animation: composePulse 1.4s ease-in-out infinite;
 }
 
+.compose-image-pending .compose-bubble-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.compose-image-spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--glass-border);
+  border-top-color: var(--accent);
+  animation: composeImageSpin 0.9s linear infinite;
+}
+@keyframes composeImageSpin { to { transform: rotate(360deg); } }
+
+/* A generated image is its own element — never inside the answer bubble: no
+   panel, no border, rounded corners, actions appear on hover. */
+.compose-image-block {
+  position: relative;
+  align-self: flex-start;
+  max-width: min(100%, 430px);
+  margin: 2px 0 10px;
+}
+.compose-image-block img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: none;
+  border-radius: 12px;
+  background: none;
+}
+.compose-image-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast, 0.15s) var(--ease-out, ease);
+}
+.compose-image-block:hover .compose-image-actions,
+.compose-image-block:focus-within .compose-image-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.compose-image-action {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--bubble);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.compose-image-action:hover { color: var(--accent); }
+.compose-image-action:disabled { opacity: 0.5; cursor: default; }
+.compose-bubble.is-image-only { display: none; }
+
 .compose-dock-field,
 #text-input-field {
   display: block;

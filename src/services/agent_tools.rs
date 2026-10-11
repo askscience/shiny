@@ -385,6 +385,122 @@ pub async fn execute_action(
                 owner: Some("core".into()),
             }
         }
+        "generate_image" => {
+            let prompt = param_str(params, "prompt")
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty())
+                .ok_or_else(|| AppError::BadRequest("prompt required".into()))?;
+
+            let requested_quality = match param_str(params, "quality") {
+                Some(q) => q,
+                None => image_quality_pref(state, &traveler.id)
+                    .await
+                    .unwrap_or_else(|| crate::services::image_gen::DEFAULT_QUALITY.to_string()),
+            };
+            let Some((quality, ..)) = crate::services::image_gen::resolve_quality(&requested_quality)
+            else {
+                return Err(AppError::BadRequest(format!(
+                    "unknown image quality '{requested_quality}' (use fast, balanced, high or max)"
+                )));
+            };
+
+            let (width, height) = parse_image_size(params.get("size")).unwrap_or((512, 512));
+            let steps = params.get("steps").and_then(|v| v.as_u64()).unwrap_or(8).clamp(1, 50) as u32;
+            let seed = match params.get("seed").and_then(|v| v.as_i64()) {
+                Some(s) if s >= 0 => s,
+                _ => random_seed(),
+            };
+            let open = params.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
+            let allow_download = params.get("allow_download").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            let mut missing = state.image_gen.missing_for(quality);
+            if !missing.is_empty() && allow_download {
+                if let Err(e) = state.image_gen.start_download(quality) {
+                    return Err(AppError::Internal(e));
+                }
+                let client = state.image_gen.clone();
+                let key = quality.to_string();
+                client
+                    .wait_for_ready(&key, crate::services::image_gen::DOWNLOAD_WAIT)
+                    .await;
+                missing = state.image_gen.missing_for(&key);
+            }
+            if !missing.is_empty() {
+                let bytes = state.image_gen.missing_bytes_for(quality);
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({
+                        "error": "the image models are not downloaded yet",
+                        "needs_download": true,
+                        "missing": missing,
+                        "download_bytes": bytes,
+                        "download_size": crate::services::image_gen::human_bytes(bytes),
+                        "hint": "Tell the user how large the download is and ask whether you should fetch it. Only after they agree, call generate_image again with allow_download=true and the same prompt.",
+                    }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: Some("core".into()),
+                }
+            } else {
+                let os_home = state.os_identity_for(traveler).map(|u| u.home);
+                let home = crate::services::image_gen::files_home(&traveler.id, os_home.as_deref());
+                let req = crate::services::image_gen::GenerateRequest {
+                    prompt,
+                    quality: quality.to_string(),
+                    width,
+                    height,
+                    steps,
+                    seed,
+                    home,
+                };
+                let client = state.image_gen.clone();
+                let rendered = tokio::task::spawn_blocking(move || client.generate(&req))
+                    .await
+                    .map_err(|e| AppError::Internal(format!("image task panicked: {e}")))?;
+                match rendered {
+                    Ok(res) => {
+                        let mut data = json!({
+                            "url": res.url,
+                            "file": res.file,
+                            "path": res.rel_path,
+                            "width": res.width,
+                            "height": res.height,
+                            "steps": res.steps,
+                            "seed": res.seed,
+                            "quality": res.quality,
+                            "quant": res.quant,
+                            "seconds": (res.seconds * 10.0).round() / 10.0,
+                            "size": crate::services::image_gen::human_bytes(res.bytes),
+                            "hint": "End your reply with the image on its own line: ![short description](<url>)",
+                        });
+                        if open {
+                            data["open_file"] = json!({
+                                "plugin": "image",
+                                "path": res.rel_path,
+                                "name": res.file,
+                            });
+                        }
+                        ActionOutcome {
+                            action: action_key.clone(),
+                            result: "ok".into(),
+                            data,
+                            artifact: None,
+                            extra_artifacts: vec![],
+                            owner: Some("core".into()),
+                        }
+                    }
+                    Err(e) => ActionOutcome {
+                        action: action_key.clone(),
+                        result: "error".into(),
+                        data: json!({ "error": e }),
+                        artifact: None,
+                        extra_artifacts: vec![],
+                        owner: Some("core".into()),
+                    },
+                }
+            }
+        }
         other => {
             tracing::warn!("Unknown agent action: {:?}", other);
             return Err(AppError::BadRequest(format!("Unknown action: {}", other)));
@@ -396,6 +512,37 @@ pub async fn execute_action(
 
 fn param_str(params: &Value, key: &str) -> Option<String> {
     params.get(key).and_then(|v| v.as_str()).map(String::from)
+}
+
+/// `"768x768"`, `"1024X512"` or a single number → a size pair.
+fn parse_image_size(v: Option<&Value>) -> Option<(u32, u32)> {
+    let s = v?.as_str()?.trim().to_ascii_lowercase();
+    if let Some((w, h)) = s.split_once('x') {
+        return Some((w.trim().parse().ok()?, h.trim().parse().ok()?));
+    }
+    let n: u32 = s.parse().ok()?;
+    Some((n, n))
+}
+
+/// A fresh seed each call, so "make me an image" varies run to run.
+fn random_seed() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| (d.as_nanos() % 1_000_000_000) as i64)
+        .unwrap_or(42)
+}
+
+/// The user's saved image-quality preference (Settings → Images).
+async fn image_quality_pref(state: &AppState, user_id: &str) -> Option<String> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'image.quality'",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()
+    .filter(|q| !q.trim().is_empty())
 }
 
 /// Normalize a workspace target: 1-based number or numeric string → 0-based

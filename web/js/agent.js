@@ -15,6 +15,7 @@ import { getAiName, getOllamaModel } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
+import { showImagePlaceholder, clearImagePlaceholder } from './textInput.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -374,6 +375,10 @@ async function requestAgent(body, onStep, signal) {
 }
 
 function handleAgentStep(message) {
+  // The image tool reserves a visible slot for the picture that is coming.
+  if (typeof message === 'string' && message.startsWith('Rendering image')) {
+    showImagePlaceholder();
+  }
   setDockStep(message);
 }
 
@@ -382,6 +387,17 @@ function handleFocusPlugin(res) {
   if (res?.focus_plugin) {
     window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: res.focus_plugin } }));
   }
+}
+
+/** The AI asked for a generated file to open in its plugin window. */
+function openFileFromAgent(res) {
+  const file = res?.open_file;
+  if (!file?.plugin || !file?.path) return;
+  // Open the file the same way Files double-click does: activate the plugin,
+  // park the pending open, then let its surface import the file.
+  import('./files.js')
+    .then((m) => m.openWithPlugin({ plugin: file.plugin, path: file.path, name: file.name }))
+    .catch(() => {});
 }
 
 function setAgentAwaiting(on) {
@@ -457,6 +473,7 @@ export async function sendToAgent(message, mode, context) {
     await handleNavigation(res, message, context);
 
     handleFocusPlugin(res);
+    openFileFromAgent(res);
     dispatchAgentActions(res);
     surfaceNotifications(res);
 
@@ -468,12 +485,16 @@ export async function sendToAgent(message, mode, context) {
     // The answer has arrived: retire the status line before it is spoken, so
     // nothing sits above the voice bar while the assistant talks.
     clearDockStep();
+    clearImagePlaceholder();
     setSphereState('speaking');
 
     // Voice modes: the answer is spoken and saved to the chat — it is NOT
     // echoed in a bubble. The voice bar reacting to the playback IS the feedback.
+    // A markdown image (the generate_image reply) belongs to the chat only —
+    // never read it aloud.
     try {
-      await speak(res.reply, getVoiceLang());
+      const spoken = (res.reply || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+      await speak(spoken, getVoiceLang());
     } catch (ttsErr) {
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: { message: ttsErr?.message || 'Voice playback unavailable', type: 'error' },
@@ -507,6 +528,7 @@ export async function sendToAgent(message, mode, context) {
     endTurn(turn);
     stopBargeInMonitor();
     clearDockStep();
+    clearImagePlaceholder();
     setAgentAwaiting(false);
   }
 }
@@ -534,6 +556,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
       turn.conversationId = res.conversation_id;
     }
 
+    clearImagePlaceholder();
     await streamText(res.reply || '', onStream, 12, () => activeTurn !== turn);
     if (activeTurn !== turn) return null;
 
@@ -542,6 +565,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     await handleNavigation(res, message, context);
 
     handleFocusPlugin(res);
+    openFileFromAgent(res);
     dispatchAgentActions(res);
     surfaceNotifications(res);
 
@@ -560,6 +584,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
   } finally {
     endTurn(turn);
     clearDockStep();
+    clearImagePlaceholder();
     setAgentAwaiting(false);
   }
 }

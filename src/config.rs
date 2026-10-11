@@ -41,6 +41,11 @@ pub struct Config {
     pub qwen_tts_models_dir: String,
     /// Start the Qwen3-TTS sidecar together with the server.
     pub auto_start_qwen_tts: bool,
+    /// Directory holding the Z-Image Turbo weights (diffusion quants + the
+    /// shared Qwen3-4B encoder and VAE).
+    pub z_image_models_dir: String,
+    /// Explicit sd-cli (stable-diffusion.cpp) binary; empty = auto-discover.
+    pub z_image_sd_cli: Option<String>,
     pub web_dir: String,
     /// Writable per-user plugin directory: uploads land here.
     pub plugins_dir: String,
@@ -162,6 +167,11 @@ impl Config {
                 .unwrap_or_else(|_| "false".into())
                 .parse()
                 .unwrap_or(false),
+            z_image_models_dir: env::var("Z_IMAGE_MODELS_DIR")
+                .unwrap_or_else(|_| "data/z-image-models".into()),
+            z_image_sd_cli: env::var("Z_IMAGE_SD_CLI")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
             web_dir: env::var("WEB_DIR").unwrap_or_else(|_| "web".into()),
             plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
             system_plugins_dir: env::var("SYSTEM_PLUGINS_DIR")

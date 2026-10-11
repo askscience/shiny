@@ -520,6 +520,7 @@ Known cores (selected):
 | `plugin_activate`/`plugin_deactivate` | activated / already active / error |
 | `list_plugins` | `Plugins:` + `name (active\|inactive) — description` |
 | `show_plugin` | `Showing {name}` |
+| `generate_image` | falls through to the JSON payload (`url`, `path`, `seconds`, `hint`) — the model embeds the picture from `url` |
 | `show_artifact`/`update_artifact` | `Updated {title}` |
 
 Unknown/plugin actions fall through to:

@@ -58,6 +58,20 @@ Bring a plugin's window to the front (its tile, or full screen if the user confi
 
 Use it when the user's request clearly belongs to one plugin's domain — read the plugin descriptions in the "Plugin windows" section of your system prompt. Call it **after** the domain tool (e.g. plan first, then `show_plugin`). Skip it when the request is generic.
 
+### generate_image
+
+Create a new image with the local Z-Image Turbo model and show it in the chat.
+
+```text
+{"action": "generate_image", "params": {"prompt": "a detailed description", "size": "768x768"}}
+```
+
+- `prompt` is required — write a rich, concrete description (subject, setting, light, style, mood); this model rewards detail.
+- `size` defaults to `512x512`. Pick from the user's request: `768x768` or `1024x1024` for detail, `1024x768` wide, `768x1024` portrait. Rendering takes a while (under a minute at 512, several minutes at 1024) — say you are on it.
+- `open: true` when the user wants to edit the image in the Image window.
+- Always end your reply with the image on its own line, using the `url` from the result: `![short description](<url>)`.
+- If the result says the image models are not downloaded yet: tell the user how large the download is (see `download_size`) and ask whether to fetch it. Only after they agree, call `generate_image` again with the same prompt plus `"allow_download": true`.
+
 ### plugin_activate
 
 Turn on an inactive plugin for the current user. After activation its tools become available to you — the next turn can call them.

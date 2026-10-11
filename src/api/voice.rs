@@ -253,6 +253,19 @@ pub async fn voice_qwen_download(
     }))
 }
 
+/// Reload the Qwen3-TTS sidecar (terminate + re-run the launcher). The voice
+/// always comes back — this is the guaranteed restart for any flow that
+/// paused TTS.
+pub async fn voice_qwen_restart(
+    State(state): State<AppState>,
+) -> Result<Json<VoiceDownloadResponse>, AppError> {
+    state.qwen_tts.restart().await.map_err(AppError::Internal)?;
+    Ok(Json(VoiceDownloadResponse {
+        success: true,
+        data: json!({ "status": "restarting" }),
+    }))
+}
+
 /// Forward one microphone chunk (or the final flush) to the STT sidecar.
 /// The body is raw 16 kHz mono PCM16LE.
 pub async fn voice_stt_chunk(

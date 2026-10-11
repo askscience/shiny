@@ -1,6 +1,7 @@
 import { setSphereState } from './sphere.js';
 import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
+import { icon } from '../ui/index.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
@@ -16,6 +17,7 @@ let isOpen = false;
 let isSending = false;
 let ignoreOutsideClick = false;
 let assistantBubble = null;
+let imagePlaceholder = null;
 
 function isInsideComposeInput(target) {
   if (!target) return false;
@@ -101,18 +103,130 @@ function renderBubble(role, text) {
   bubble.appendChild(bubbleText);
   // Bubbles go above the composer so the input stays last.
   conversationEl.insertBefore(bubble, composer || null);
+  if (role === 'assistant') syncImageBlocks(bubble);
   scrollConversation();
   return bubble;
 }
 
 function clearConversation() {
-  conversationEl?.querySelectorAll(':scope > .compose-bubble').forEach((b) => b.remove());
+  conversationEl
+    ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block')
+    .forEach((b) => b.remove());
   assistantBubble = null;
+  imagePlaceholder = null;
 }
 
 function startAssistantBubble() {
   assistantBubble = renderBubble('assistant', '…');
   assistantBubble?.classList.add('is-thinking');
+}
+
+/** Reserve the spot where a generated image will land (spinner + label). */
+export function showImagePlaceholder() {
+  if (!conversationEl || imagePlaceholder) return;
+  const bubble = document.createElement('div');
+  bubble.className = 'compose-bubble compose-bubble--assistant compose-image-pending';
+  const inner = document.createElement('div');
+  inner.className = 'compose-bubble-text';
+  const spinner = document.createElement('span');
+  spinner.className = 'compose-image-spinner';
+  const label = document.createElement('span');
+  label.textContent = 'Painting your image — this can take a few minutes…';
+  inner.append(spinner, label);
+  bubble.appendChild(inner);
+  conversationEl.insertBefore(bubble, composer || null);
+  scrollConversation();
+  imagePlaceholder = bubble;
+}
+
+export function clearImagePlaceholder() {
+  imagePlaceholder?.remove();
+  imagePlaceholder = null;
+}
+
+/* ── Generated images: their own block, not part of the answer ─────────────
+ * The assistant replies with a markdown image; the bubble keeps the prose and
+ * the picture is lifted out into a standalone block (no panel, no border,
+ * rounded corners) with hover actions: Save (Files → Pictures) and Open (the
+ * Image editor), the same flows Files double-click uses.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const IMAGE_SRC_PREFIX = '/api/imagegen/images/';
+const imageBlocks = new WeakMap(); // bubble -> Map(src -> block)
+
+function makeImageBlock(src, name, alt) {
+  const block = document.createElement('div');
+  block.className = 'compose-image-block';
+
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = alt || 'Generated image';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+
+  const actions = document.createElement('div');
+  actions.className = 'compose-image-actions';
+
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'compose-image-action';
+  open.title = 'Open in the Image editor';
+  open.setAttribute('aria-label', 'Open in the Image editor');
+  open.appendChild(icon('ui/magic-wand', { size: 16 }));
+  open.addEventListener('click', () => {
+    import('./files.js')
+      .then((m) => m.openWithPlugin({ plugin: 'image', path: `Pictures/Generated/${name}`, name }))
+      .catch(() => {});
+  });
+
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'compose-image-action';
+  save.title = 'Save to Pictures';
+  save.setAttribute('aria-label', 'Save to Pictures');
+  save.appendChild(icon('ui/save', { size: 16 }));
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error('Could not load the image');
+      const blob = await res.blob();
+      const m = await import('./files.js');
+      await m.saveOrDownload(blob, { name, dir: 'Pictures', app: 'Image' });
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: e?.message || 'Could not save the image', type: 'error' },
+      }));
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  actions.append(open, save);
+  block.append(img, actions);
+  return block;
+}
+
+/** Pull generated images out of an answer bubble into their own block. */
+function syncImageBlocks(bubble) {
+  const text = bubble?.querySelector('.compose-bubble-text');
+  if (!text) return;
+  for (const inline of text.querySelectorAll(`img[src^="${IMAGE_SRC_PREFIX}"]`)) {
+    const src = inline.getAttribute('src');
+    const alt = inline.getAttribute('alt') || '';
+    inline.remove();
+    let blocks = imageBlocks.get(bubble);
+    if (!blocks) {
+      blocks = new Map();
+      imageBlocks.set(bubble, blocks);
+    }
+    if (blocks.has(src)) continue;
+    const block = makeImageBlock(src, src.slice(IMAGE_SRC_PREFIX.length), alt);
+    bubble.after(block);
+    blocks.set(src, block);
+  }
+  // A reply that is only the picture keeps no empty bubble behind it.
+  bubble.classList.toggle('is-image-only', text.textContent.trim().length === 0);
 }
 
 function streamAssistantBubble(text) {
@@ -121,6 +235,7 @@ function streamAssistantBubble(text) {
   assistantBubble?.classList.remove('is-thinking');
   const t = assistantBubble?.querySelector('.compose-bubble-text');
   if (t) t.innerHTML = sanitizeHtml(renderMarkdown(text));
+  if (assistantBubble) syncImageBlocks(assistantBubble);
   scrollConversation();
 }
 

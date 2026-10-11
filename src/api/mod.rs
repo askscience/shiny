@@ -1,6 +1,7 @@
 pub mod artifacts;
 pub mod auth;
 pub mod background;
+pub mod imagegen;
 pub mod fonts;
 pub mod preferences;
 pub mod travelers;
@@ -53,6 +54,7 @@ use crate::services::screen_brightness::ScreenBrightnessService;
 use crate::services::web_search::SearchService;
 use crate::services::whisper::WhisperClient;
 use crate::services::qwen_tts::QwenClient;
+use crate::services::image_gen::ImageGenClient;
 
 /// Content-Security-Policy for the whole app.
 ///
@@ -125,6 +127,8 @@ pub struct AppState {
     pub whisper: WhisperClient,
     /// Qwen3-TTS sidecar (qwentts.cpp; optional high-quality TTS engine).
     pub qwen_tts: QwenClient,
+    /// Z-Image Turbo image generation (stable-diffusion.cpp `sd-cli`).
+    pub image_gen: ImageGenClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
     /// Iroh remote-access service.
@@ -498,6 +502,13 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/voice/whisper/download", post(voice::voice_whisper_download))
         // Qwen3-TTS (optional TTS engine): GGUF model downloads.
         .route("/api/voice/qwen/download", post(voice::voice_qwen_download))
+        .route("/api/voice/qwen/restart", post(voice::voice_qwen_restart))
+        // Z-Image Turbo (local image generation): model status/downloads and
+        // the chat's `<img>` endpoint. `/api/imagegen/*` deliberately avoids
+        // the image plugin's `/api/images/*` namespace.
+        .route("/api/imagegen/status", get(imagegen::status))
+        .route("/api/imagegen/download", post(imagegen::download))
+        .route("/api/imagegen/images/:name", get(imagegen::serve))
         .route("/api/voice/stt/chunk", post(voice::voice_stt_chunk))
         .route("/api/voice/stt/close", post(voice::voice_stt_close));
 

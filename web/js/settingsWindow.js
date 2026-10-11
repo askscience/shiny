@@ -10,6 +10,7 @@
  *   Browser    — default search engine, ad blocking, history
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
+ *   Images     — local image generation quality + model downloads
  *   Power      — power mode, low-power AI, screen/keyboard backlight
  *   System     — remember workspace, log out
  *
@@ -47,6 +48,7 @@ import {
   getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord,
   getSttEngine, setSttEngine, getWhisperModel, setWhisperModel,
   getTtsEngine, setTtsEngine, getQwenModel, setQwenModel,
+  getImageQuality, setImageQuality,
   getRemember, setRemember,
   getRemoteAllowTerminal, setRemoteAllowTerminal,
   getTouchBarEnabled, setTouchBarEnabled,
@@ -682,8 +684,22 @@ function buildVoice() {
   const qwenHint = el('p', 'settings-hint');
   const qwenDownload = button({ label: 'Download', variant: 'quiet', size: 'sm' });
   qwenDownload.classList.add('hidden');
+  // Reload the sidecar after any pause (and for troubleshooting): kills the
+  // process holding the port and re-runs the idempotent launcher.
+  const qwenReload = button({ label: 'Reload', variant: 'quiet', size: 'sm' });
+  on(qwenReload, 'click', async () => {
+    qwenReload.disabled = true;
+    try {
+      await apiFetch('/api/voice/qwen/restart', { method: 'POST' });
+      toast('Restarting Qwen3-TTS…', { type: 'info' });
+    } catch (e) {
+      toast(e.message || 'Could not restart Qwen3-TTS', { type: 'error' });
+    } finally {
+      setTimeout(() => { qwenReload.disabled = false; }, 1500);
+    }
+  });
   const qwenRow = el('div', 'whisper-model-row');
-  qwenRow.append(qwenHint, qwenDownload);
+  qwenRow.append(qwenHint, qwenDownload, qwenReload);
   const qwenFields = el('div');
   qwenFields.append(field('Qwen model', qwenModel), qwenRow);
 
@@ -875,6 +891,151 @@ function buildVoice() {
 }
 
 /* ── Power ──────────────────────────────────────────────────── */
+
+/* ── Images (Z-Image Turbo) ─────────────────────────────────── */
+
+const IMAGE_QUALITY_BLURB = {
+  fast: 'smallest and fastest — leaves room for voice',
+  balanced: 'a bit more detail',
+  high: 'crisp text and fine texture, slower to load',
+  max: 'near-lossless, the largest download',
+};
+
+function buildImage() {
+  const quality = select({
+    options: [
+      { value: 'fast', label: 'Fast — recommended' },
+      { value: 'balanced', label: 'Balanced' },
+      { value: 'high', label: 'High' },
+      { value: 'max', label: 'Max' },
+    ],
+    onChange: (value) => {
+      setImageQuality(value);
+      updateImageUI();
+    },
+  });
+
+  const hint = el('p', 'settings-hint');
+  const download = button({ label: 'Download', variant: 'quiet', size: 'sm' });
+  download.classList.add('hidden');
+  const row = el('div', 'whisper-model-row');
+  row.append(hint, download);
+
+  let status = null;
+  let statusLoaded = false;
+  let poll = null;
+
+  const infoFor = (key) => status?.inventory?.qualities?.[key] || null;
+  const downloadFor = (key) => status?.downloads?.[key] || null;
+  const describe = (key) => {
+    const info = infoFor(key);
+    return info ? `${info.quant} · ${info.size} · ${IMAGE_QUALITY_BLURB[key] || ''}` : '';
+  };
+
+  function updateImageUI() {
+    const current = getImageQuality();
+    quality.select.value = current;
+    const info = infoFor(current);
+    const base = status?.downloads?.base || null;
+
+    if (!status) {
+      hint.textContent = statusLoaded
+        ? 'Could not check the image models.'
+        : 'Checking the image models…';
+      download.classList.add('hidden');
+      return;
+    }
+    if (!status.inventory?.sd_cli) {
+      hint.textContent = 'Z-Image is unavailable: the sd-cli binary was not found (set Z_IMAGE_SD_CLI).';
+      download.classList.add('hidden');
+      return;
+    }
+    if (base?.status === 'downloading') {
+      const pct = base.total ? Math.round((base.bytes / base.total) * 100) : 0;
+      hint.textContent = `Downloading the shared text encoder and VAE… ${pct}%`;
+      download.classList.add('hidden');
+      return;
+    }
+    const dl = downloadFor(current);
+    if (dl?.status === 'downloading') {
+      const pct = dl.total ? Math.round((dl.bytes / dl.total) * 100) : 0;
+      hint.textContent = `Downloading the ${current} model… ${pct}%`;
+      download.classList.add('hidden');
+      return;
+    }
+    if (dl?.status === 'error') {
+      hint.textContent = dl.error || 'Download failed.';
+      download.classList.remove('hidden');
+      download.disabled = false;
+      return;
+    }
+    if (info?.ready) {
+      hint.textContent = `Ready — ${describe(current)}. Images run locally on this machine; larger sizes take minutes.`;
+      download.classList.add('hidden');
+      return;
+    }
+    const missing = [];
+    if (!status.inventory?.encoder?.present || !status.inventory?.vae?.present) {
+      missing.push('shared text encoder + VAE');
+    }
+    if (!info?.present) missing.push(describe(current) || current);
+    hint.textContent = `Not downloaded yet — ${missing.join(', ')}. The assistant asks before fetching.`;
+    download.classList.remove('hidden');
+    download.disabled = false;
+  }
+
+  async function refreshImageStatus() {
+    try {
+      const res = await apiFetch('/api/imagegen/status');
+      status = res?.data || null;
+    } catch (_) {
+      status = null;
+    }
+    statusLoaded = true;
+    updateImageUI();
+    return status;
+  }
+
+  function pollDownload() {
+    clearInterval(poll);
+    poll = setInterval(async () => {
+      await refreshImageStatus();
+      const current = getImageQuality();
+      const state = downloadFor(current)?.status;
+      if (infoFor(current)?.ready || state === 'error') {
+        clearInterval(poll);
+        poll = null;
+        if (infoFor(current)?.ready) toast('Image model ready', { type: 'info' });
+      }
+    }, 1500);
+  }
+
+  on(download, 'click', async () => {
+    const current = getImageQuality();
+    download.disabled = true;
+    try {
+      await apiFetch('/api/imagegen/download', {
+        method: 'POST',
+        body: JSON.stringify({ quality: current }),
+      });
+      toast('Downloading image models in the background…', { type: 'info' });
+      pollDownload();
+    } catch (e) {
+      toast(e.message || 'Could not start the download', { type: 'error' });
+      download.disabled = false;
+    }
+  });
+
+  refreshImageStatus();
+  cleanups.push(() => { clearInterval(poll); poll = null; });
+
+  return [
+    field('Quality model', quality, {
+      hint: 'Z-Image Turbo runs locally. Larger tiers render with more detail and need more memory and disk.',
+    }),
+    row,
+  ];
+}
 
 function buildPower() {
   const mode = select({
@@ -1656,6 +1817,7 @@ function mountSettings() {
     { id: 'browser', label: 'Browser', icon: 'ui/launcher', build: buildBrowser },
     { id: 'assistant', label: 'Assistant', icon: 'ui/message-circle', build: buildAssistant },
     { id: 'voice', label: 'Voice', icon: 'ui/mic', build: buildVoice },
+    { id: 'images', label: 'Images', icon: 'ui/image', build: buildImage },
     { id: 'power', label: 'Power', icon: 'ui/power', build: buildPower },
     { id: 'touchbar', label: 'Touch Bar', icon: 'ui/keyboard', build: buildTouchBar },
     { id: 'remote', label: 'Remote', icon: 'ui/network', build: buildRemote },

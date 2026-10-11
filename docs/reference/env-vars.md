@@ -66,6 +66,9 @@ the kiosk shell and the auth helper.
 | `QWEN_TTS_MODELS_DIR` | `data/qwen-tts-models` | ✓ L | GGUF storage. |
 | `AUTO_START_QWEN_TTS` | `false` | ✓ | Opt-in: may build the server + fetch ~600 MB. |
 | `QWEN_TTS_PORT` | `7787` | L | Sidecar bind. |
+| `Z_IMAGE_MODELS_DIR` | `data/z-image-models` | ✓ L | Z-Image Turbo quants + shared encoder + VAE. |
+| `Z_IMAGE_SD_CLI` | auto-discovered | ✓ | Explicit `sd-cli` (stable-diffusion.cpp) binary. |
+| `Z_IMAGE_CACHEDIT` | `0.30` | ✓ | Cache-DiT threshold; `0`/`off` disables the cache. |
 
 ## Travel
 

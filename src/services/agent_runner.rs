@@ -100,6 +100,8 @@ pub struct AgentRunResult {
     pub navigation: Option<NavigationSession>,
     /// Plugin the AI chose to surface (via the show_plugin tool).
     pub focus_plugin: Option<String>,
+    /// File the AI asked the frontend to open (generate_image `open`).
+    pub open_file: Option<Value>,
     pub steps: Vec<String>,
     /// True when the user stopped this turn before it finished. The reply (if
     /// any) is a partial answer, and the caller records an invisible note so
@@ -125,6 +127,7 @@ where
     let mut actions_taken: Vec<ActionTaken> = Vec::new();
     let mut navigation: Option<NavigationSession> = None;
     let mut focus_plugin: Option<String> = None;
+    let mut open_file: Option<Value> = None;
     let mut produced_owners: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut injected_skills: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut completed_steps: Vec<String> = Vec::new();
@@ -250,6 +253,10 @@ where
                     }
                 }
 
+                if outcome.action == "generate_image" && outcome.result == "ok" {
+                    open_file = outcome.data.get("open_file").cloned();
+                }
+
                 let mut produced: Vec<Artifact> = Vec::new();
                 if let Some(art) = outcome.artifact {
                     produced.push(art);
@@ -358,6 +365,7 @@ where
         actions_taken,
         navigation,
         focus_plugin,
+        open_file,
         steps: completed_steps,
         interrupted,
     })

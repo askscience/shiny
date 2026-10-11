@@ -145,6 +145,25 @@ AI summary. Returns results as `{ success, data: … }`.
 
 ---
 
+## Image generation
+
+Local text-to-image with Z-Image Turbo (stable-diffusion.cpp). The assistant
+drives it with the core `generate_image` tool; these routes back Settings →
+Images and the chat's `<img>` endpoint.
+
+| Method | Path | Body / query | Response |
+|---|---|---|---|
+| `GET` | `/api/imagegen/status` | — | `{ success, data: { inventory, downloads } }` — tiers, on-disk presence, live download bytes. |
+| `POST` | `/api/imagegen/download` | `{ "quality": "fast" \| "balanced" \| "high" \| "max" \| "all" }` | `{ success, data: { status: "downloading" } }` — background; poll status. |
+| `GET` | `/api/imagegen/images/:name` | — | The PNG itself (`image/png`; cookie or Bearer auth). Files live in the user's Files home under `Pictures/Generated/`. |
+
+The default tier is `fast` (Q3_K). Without downloaded models the tool returns a
+`needs_download` result and the assistant asks in chat before fetching. Step
+caching (Cache-DiT) is on by default at threshold 0.30 — see
+[configuration](../configuration.md).
+
+---
+
 ## Artifacts
 
 Saved artifact cards, per user. Payloads are tagged with the owning plugin's

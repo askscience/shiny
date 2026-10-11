@@ -27,7 +27,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
@@ -138,6 +138,38 @@ impl QwenClient {
             return None;
         }
         resp.json::<Value>().await.ok()
+    }
+
+    /// Reload the sidecar: terminate whatever owns the port, then re-run the
+    /// launcher (idempotent — it probes `/v1/audio/voices` before starting).
+    /// Used by Settings → Voice and by anything that pauses TTS for an image
+    /// job, so the voice always comes back.
+    pub async fn restart(&self) -> Result<(), String> {
+        let port = url_port(&self.base_url).ok_or_else(|| "invalid QWEN_TTS_URL".to_string())?;
+
+        let pids = tts_server_pids();
+        if !pids.is_empty() {
+            for pid in pids {
+                let _ = Command::new("kill").arg(pid.to_string()).spawn();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        }
+
+        let mut child = Command::new("setsid")
+            .arg("bash")
+            .arg("voice/start_qwen_tts.sh")
+            .env("QWEN_TTS_PORT", port.to_string())
+            .env("QWEN_TTS_MODELS_DIR", self.models_dir.to_string_lossy().to_string())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| format!("could not run the TTS launcher: {e}"))?;
+        // Reap the detached launcher so it never turns into a zombie.
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        Ok(())
     }
 
     pub fn model_present(&self, key: &str) -> bool {
@@ -533,6 +565,34 @@ pub fn pcm_to_wav(pcm: &[u8], sample_rate: u32) -> Vec<u8> {
 /// Convenience for the API layer: where the models live.
 pub fn default_models_dir() -> PathBuf {
     PathBuf::from("data/qwen-tts-models")
+}
+
+/// TCP port out of a `http://host:port` base URL.
+fn url_port(base_url: &str) -> Option<u16> {
+    base_url
+        .rsplit(':')
+        .next()?
+        .trim_end_matches('/')
+        .parse()
+        .ok()
+}
+
+/// PIDs whose executable is the qwentts.cpp `tts-server` binary.
+fn tts_server_pids() -> Vec<u32> {
+    let Ok(entries) = std::fs::read_dir("/proc") else { return Vec::new() };
+    let mut pids = Vec::new();
+    for entry in entries.flatten() {
+        let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
+            continue;
+        };
+        if let Ok(exe) = std::fs::read_link(entry.path().join("exe")) {
+            let path = exe.to_string_lossy();
+            if path.contains("qwentts") && path.ends_with("tts-server") {
+                pids.push(pid);
+            }
+        }
+    }
+    pids
 }
 
 #[cfg(test)]
