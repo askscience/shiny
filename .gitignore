@@ -28,6 +28,10 @@ diaries/
 .DS_Store
 __pycache__/
 
+# Python virtualenvs (voice/*.sh tooling)
+.venv*/
+venv/
+
 # Large bundled archives
 vosk-browser-*.tgz
 backpack/

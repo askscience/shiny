@@ -302,23 +302,23 @@ mod tests {
 
     #[test]
     fn echo_end_finds_the_command() {
-        let acc = b"Last login: today\r\neev@box:~$ ls\r\n";
+        let acc = b"Last login: today\r\nalice@box:~$ ls\r\n";
         assert_eq!(echo_end(acc, "ls"), Some(acc.len() - "\r\n".len()));
         assert_eq!(echo_end(acc, "top"), None);
     }
 
     #[test]
     fn after_echo_drops_the_banner_and_echo() {
-        let acc = b"Last login: today\r\neev@box:~$ ls\r\nfile1  file2\r\neev@box:~$ ";
+        let acc = b"Last login: today\r\nalice@box:~$ ls\r\nfile1  file2\r\nalice@box:~$ ";
         let tail = String::from_utf8(after_echo(acc, "ls").to_vec()).expect("utf8");
-        assert_eq!(tail, "\r\nfile1  file2\r\neev@box:~$ ");
+        assert_eq!(tail, "\r\nfile1  file2\r\nalice@box:~$ ");
     }
 
     #[test]
     fn echo_alone_is_not_real_output() {
-        let acc = b"eev@box:~$ ls\r\n";
+        let acc = b"alice@box:~$ ls\r\n";
         assert!(!has_real_output(acc, "ls", Duration::from_millis(10)));
-        let with_output = b"eev@box:~$ ls\r\nfile1\r\n";
+        let with_output = b"alice@box:~$ ls\r\nfile1\r\n";
         assert!(has_real_output(with_output, "ls", Duration::from_millis(10)));
     }
 

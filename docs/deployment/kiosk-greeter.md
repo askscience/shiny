@@ -199,7 +199,7 @@ resolves, in order:
 5. Otherwise it fails and names the override. Guessing would pick `root` and
    hand the deployment to uid 0.
 
-This used to be the literal string `eev` in three separate scripts. On any
+This used to be a hardcoded developer username in three separate scripts. On any
 account with a different name every one of them silently picked the wrong user:
 the PAM allow-list named a uid that does not exist, the per-user server landed
 in the wrong home, and the greeter's profile migration touched nothing. Those

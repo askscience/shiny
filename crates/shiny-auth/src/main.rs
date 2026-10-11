@@ -524,12 +524,12 @@ mod tests {
     #[test]
     fn session_unit_is_built_from_the_validated_name() {
         assert_eq!(
-            kiosk_unit_for("shiny-kiosk@%s.service", "eev").as_deref(),
-            Some("shiny-kiosk@eev.service")
+            kiosk_unit_for("shiny-kiosk@%s.service", "alice").as_deref(),
+            Some("shiny-kiosk@alice.service")
         );
         // The username becomes a systemd instance: no injections, no paths,
         // no stray `@`.
-        for bad in ["eev/../root", "eev; rm -rf /", "eev@x", "eev root", "", &"a".repeat(65)] {
+        for bad in ["alice/../root", "alice; rm -rf /", "alice@x", "alice root", "", &"a".repeat(65)] {
             assert!(kiosk_unit_for("shiny-kiosk@%s.service", bad).is_none());
         }
     }

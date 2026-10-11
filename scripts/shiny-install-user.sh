@@ -3,7 +3,7 @@
 #
 # The three installers (install-kiosk-greeter.sh, install-linux-auth.sh,
 # install-linux-session.sh) all need the same answer: "which human account owns
-# this deployment?". They used to each default to the literal "eev", which is
+# this deployment?". They used to each default to a hardcoded developer name,
 # correct on exactly one machine. On a distro build, or on any account with a
 # different name, every one of them silently picked the wrong user: the auth
 # allow-list named a uid that does not exist, the per-user server was installed

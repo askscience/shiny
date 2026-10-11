@@ -203,15 +203,15 @@ mod tests {
     #[test]
     fn human_filter_accepts_user_range_with_login_shell() {
         let u = UnixUser {
-            name: "eev".into(),
+            name: "alice".into(),
             uid: 1000,
             gid: 1000,
-            home: "/home/eev".into(),
+            home: "/home/alice".into(),
             shell: "/bin/bash".into(),
-            gecos: "Eev,,,".into(),
+            gecos: "Alice,,,".into(),
         };
         assert!(u.is_human());
-        assert_eq!(u.display_name(), "Eev");
+        assert_eq!(u.display_name(), "Alice");
     }
 
     #[test]
@@ -240,13 +240,13 @@ mod tests {
     #[test]
     fn display_name_falls_back_to_login() {
         let u = UnixUser {
-            name: "eev".into(),
+            name: "alice".into(),
             uid: 1000,
             gid: 1000,
-            home: "/home/eev".into(),
+            home: "/home/alice".into(),
             shell: "/bin/bash".into(),
             gecos: String::new(),
         };
-        assert_eq!(u.display_name(), "eev");
+        assert_eq!(u.display_name(), "alice");
     }
 }

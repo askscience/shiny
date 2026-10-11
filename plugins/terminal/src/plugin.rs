@@ -69,7 +69,7 @@ impl Plugin for TerminalPlugin {
             description: Some(
                 "A real Linux terminal — a PTY-backed login shell in its own window".into(),
             ),
-            author: Some("askscience".into()),
+            author: Some("shiny".into()),
             summary: Some("Terminal: a real shell over a PTY, rendered with xterm.js".into()),
             migrations_dir: "migrations".into(),
             skills_dir: "skills".into(),
