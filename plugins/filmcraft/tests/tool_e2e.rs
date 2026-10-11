@@ -11,14 +11,13 @@
 //! registered, advertised and activated. `docs/README.md` covers how to check
 //! that part against a running server.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{json, Value};
 use shiny_plugin_sdk::{
     context::AgentContext,
     services::PluginCtx,
-    tools::{ParamHelpers, Tool, ToolRequest},
+    tools::{Tool, ToolRequest},
 };
 
 use shiny_filmcraft_plugin::tools::{batch, browser};
@@ -37,7 +36,23 @@ fn agent_ctx() -> AgentContext {
 
 /// Run a tool on a dedicated single-threaded runtime, like `rt::bridge` does.
 fn run_tool(tool: &dyn Tool, user: &str, params: Value) -> Result<Value, String> {
-    let ctx = PluginCtx::with_manifest(Arc::new(shiny_plugin_sdk::manifest::Manifest {
+    let config = shiny_plugin_sdk::services::ConfigSnapshot {
+        server_host: "127.0.0.1".into(),
+        server_port: 8080,
+        database_url: "sqlite::memory:".into(),
+        ollama_url: String::new(),
+        ollama_model: String::new(),
+        supertonic_url: String::new(),
+        supertonic_voice: String::new(),
+        web_dir: "web".into(),
+        vosk_models_dir: "data/vosk-models".into(),
+        auto_start_supertonic: false,
+        log_level: "warn".into(),
+        plugins_dir: "data/plugins".into(),
+        system_plugins_dir: None,
+        admin_token: None,
+    };
+    let manifest = shiny_plugin_sdk::manifest::Manifest {
         name: "filmcraft".into(),
         version: semver::Version::new(0, 1, 0),
         api_level: 1,
@@ -50,7 +65,8 @@ fn run_tool(tool: &dyn Tool, user: &str, params: Value) -> Result<Value, String>
         skills_dir: "skills".into(),
         web_dir: "web".into(),
         signature: None,
-    }));
+    };
+    let ctx = PluginCtx::new(config, manifest);
 
     let req = ToolRequest {
         user_id: user,
