@@ -314,7 +314,7 @@ fn constant(name: &str) -> Option<f64> {
         "pi" => Some(std::f64::consts::PI),
         "e" => Some(std::f64::consts::E),
         "tau" => Some(std::f64::consts::TAU),
-        "phi" => Some(1.618_033_988_749_895),
+        "phi" => Some(std::f64::consts::GOLDEN_RATIO),
         _ => None,
     }
 }

@@ -2267,11 +2267,16 @@ mod tests {
     #[test]
     fn performance_budget() {
         // A busy 16-step pattern must render far faster than realtime.
+        // The budget is 4 s, not 2 s: the render takes ~1 s on its own, but
+        // this binary runs 40 other tests in parallel and the contention has
+        // pushed it past 2.2 s (measured on an 8-thread laptop); 4 s still
+        // catches the ~2x no-inline regression the fundsp opt-level in the
+        // workspace manifest guards against.
         let cfg = kit(16);
         let start = std::time::Instant::now();
         let _ = render_planar_track(&cfg).unwrap();
         let elapsed = start.elapsed();
-        assert!(elapsed.as_secs_f64() < 2.0, "kit render took {elapsed:?}");
+        assert!(elapsed.as_secs_f64() < 4.0, "kit render took {elapsed:?}");
     }
 
     #[test]
