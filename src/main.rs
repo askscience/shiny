@@ -192,6 +192,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.z_image_sd_cli.clone(),
     );
 
+    // Local song generation (YuE2 through HOT-Step-CPP's ace-server): one
+    // engine process per song, started on a private port and released when the
+    // render ends.
+    let song_gen = shiny::services::song_gen::SongGenClient::new(
+        std::path::PathBuf::from(&config.yue2_models_dir),
+        config.yue2_engine.clone(),
+    );
+
     let qwen_tts = QwenClient::new(
         config.qwen_tts_url.clone(),
         std::path::PathBuf::from(&config.qwen_tts_models_dir),
@@ -291,6 +299,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         whisper,
         qwen_tts,
         image_gen,
+        song_gen,
         plugins: shiny::plugins::PluginManager::with_system_dir(
             std::path::PathBuf::from(&config.plugins_dir),
             config

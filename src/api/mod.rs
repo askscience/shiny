@@ -2,6 +2,7 @@ pub mod artifacts;
 pub mod auth;
 pub mod background;
 pub mod imagegen;
+pub mod songgen;
 pub mod fonts;
 pub mod preferences;
 pub mod travelers;
@@ -55,6 +56,7 @@ use crate::services::web_search::SearchService;
 use crate::services::whisper::WhisperClient;
 use crate::services::qwen_tts::QwenClient;
 use crate::services::image_gen::ImageGenClient;
+use crate::services::song_gen::SongGenClient;
 
 /// Content-Security-Policy for the whole app.
 ///
@@ -129,6 +131,8 @@ pub struct AppState {
     pub qwen_tts: QwenClient,
     /// Z-Image Turbo image generation (stable-diffusion.cpp `sd-cli`).
     pub image_gen: ImageGenClient,
+    /// YuE2 song generation (HOT-Step-CPP `ace-server`).
+    pub song_gen: SongGenClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
     /// Iroh remote-access service.
@@ -509,6 +513,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/imagegen/status", get(imagegen::status))
         .route("/api/imagegen/download", post(imagegen::download))
         .route("/api/imagegen/images/:name", get(imagegen::serve))
+        // YuE2 (local song generation): model status/downloads and the audio
+        // endpoint the chat's track player embeds. `/api/songgen/*`
+        // deliberately avoids a future music plugin's `/api/music/*` namespace.
+        .route("/api/songgen/status", get(songgen::status))
+        .route("/api/songgen/download", post(songgen::download))
+        .route("/api/songgen/tracks/:name", get(songgen::serve))
         .route("/api/voice/stt/chunk", post(voice::voice_stt_chunk))
         .route("/api/voice/stt/close", post(voice::voice_stt_close));
 

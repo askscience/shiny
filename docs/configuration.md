@@ -90,6 +90,24 @@ asks in chat before downloading. See [agent](core/agent.md) and the
 [Z-Image benchmark notes](../benchmarks/z-image/README.md) /
 [Qwen-Image benchmark notes](../benchmarks/qwen-image-2.1/README.md).
 
+## Music
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `YUE2_MODELS_DIR` | `data/yue2-models` | YuE2 song weights (LM quants + the Oobleck VAE + the v9 decoder companion + tokenizer). |
+| `YUE2_ENGINE` | auto-discovered | Explicit `ace-server` (HOT-Step-CPP) binary. |
+
+Local song generation runs **YuE2** (CC BY-NC 4.0 weights; the authors allow
+individuals — creators, musicians, researchers — to use outputs freely,
+companies need a license) through HOT-Step-CPP's `ace-server`: one engine
+process per song, started on a private loopback port and stopped when the
+render ends. Install the engine once with `scripts/install-yue2-engine.sh`;
+weights are fetched on demand from Settings → Music or by the assistant's
+`generate_song` tool (it asks in chat before downloading). The downloader also
+patches the VAE's decode tile to 128 frames — the engine's default 512-frame
+tile hangs RADV on 8 GB cards. See [agent](core/agent.md) and the
+[YuE2 benchmark notes](../benchmarks/yue-v2/README.md).
+
 ## Travel
 
 | Variable | Default | Meaning |

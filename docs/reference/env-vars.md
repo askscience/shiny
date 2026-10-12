@@ -70,6 +70,8 @@ the kiosk shell and the auth helper.
 | `QWEN_IMAGE_MODELS_DIR` | `data/qwen-image-models` | ✓ L | Qwen-Image 2.1 Turbo quants + shared Qwen3-VL encoder, VAE, TAE, vision tower. |
 | `Z_IMAGE_SD_CLI` | auto-discovered | ✓ | Explicit `sd-cli` (stable-diffusion.cpp) binary. |
 | `Z_IMAGE_CACHEDIT` | `0.30` | ✓ | Cache-DiT threshold; `0`/`off` disables the cache. |
+| `YUE2_MODELS_DIR` | `data/yue2-models` | ✓ L | YuE2 song weights + Oobleck VAE + v9 decoder companion + tokenizer. |
+| `YUE2_ENGINE` | auto-discovered | ✓ | Explicit `ace-server` (HOT-Step-CPP) binary for song generation. |
 
 ## Travel
 

@@ -14,6 +14,8 @@ pub mod supertonic;
 pub mod whisper;
 pub mod qwen_tts;
 pub mod image_gen;
+pub mod media;
+pub mod song_gen;
 pub mod artifacts;
 pub mod agent_tools;
 pub mod insights;

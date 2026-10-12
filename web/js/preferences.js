@@ -29,6 +29,7 @@ const VOICE_TTS_ENGINE_KEY = 'voice.tts_engine';
 const VOICE_QWEN_MODEL_KEY = 'voice.qwen_model';
 const IMAGE_MODEL_KEY = 'image.model';
 const IMAGE_QUALITY_KEY = 'image.quality';
+const MUSIC_QUALITY_KEY = 'music.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
@@ -589,6 +590,25 @@ export function setImageQuality(quality) {
   if (value === 'fast') localStorage.removeItem(key); // default is implicit
   else localStorage.setItem(key, value);
   persist(IMAGE_QUALITY_KEY, value);
+}
+
+/**
+ * Quality tier for the assistant's local song generation:
+ * 'q4' (Q4_K_M-imat, default) | 'q8' (Q8_0). The same key is read
+ * server-side from `user_preferences`, so the generate_song tool renders at
+ * the tier chosen here unless the request names one explicitly.
+ */
+export function getSongQuality() {
+  const v = localStorage.getItem(scopedKey(MUSIC_QUALITY_KEY));
+  return ['q4', 'q8'].includes(v) ? v : 'q4';
+}
+
+export function setSongQuality(quality) {
+  const value = ['q4', 'q8'].includes(quality) ? quality : 'q4';
+  const key = scopedKey(MUSIC_QUALITY_KEY);
+  if (value === 'q4') localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, value);
+  persist(MUSIC_QUALITY_KEY, value);
 }
 
 export function getSilenceTimeout() {

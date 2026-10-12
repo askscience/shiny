@@ -15,7 +15,7 @@ import { getAiName, getOllamaModel } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
-import { showImagePlaceholder, clearImagePlaceholder } from './textInput.js';
+import { showImagePlaceholder, clearImagePlaceholder, showSongPlaceholder, clearSongPlaceholder } from './textInput.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -379,6 +379,10 @@ function handleAgentStep(message) {
   if (typeof message === 'string' && message.startsWith('Rendering image')) {
     showImagePlaceholder();
   }
+  // The song tool does the same for the track.
+  if (typeof message === 'string' && message.startsWith('Composing the song')) {
+    showSongPlaceholder();
+  }
   setDockStep(message);
 }
 
@@ -486,14 +490,18 @@ export async function sendToAgent(message, mode, context) {
     // nothing sits above the voice bar while the assistant talks.
     clearDockStep();
     clearImagePlaceholder();
+    clearSongPlaceholder();
     setSphereState('speaking');
 
     // Voice modes: the answer is spoken and saved to the chat — it is NOT
     // echoed in a bubble. The voice bar reacting to the playback IS the feedback.
-    // A markdown image (the generate_image reply) belongs to the chat only —
-    // never read it aloud.
+    // A markdown image (the generate_image reply) or the song link
+    // (generate_song) belongs to the chat only — never read them aloud.
     try {
-      const spoken = (res.reply || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+      const spoken = (res.reply || '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/\[[^\]]*\]\(\/api\/songgen\/tracks\/[^)]*\)/g, '')
+        .trim();
       await speak(spoken, getVoiceLang());
     } catch (ttsErr) {
       window.dispatchEvent(new CustomEvent('app:toast', {
@@ -529,6 +537,7 @@ export async function sendToAgent(message, mode, context) {
     stopBargeInMonitor();
     clearDockStep();
     clearImagePlaceholder();
+    clearSongPlaceholder();
     setAgentAwaiting(false);
   }
 }

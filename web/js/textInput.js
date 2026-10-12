@@ -18,6 +18,7 @@ let isSending = false;
 let ignoreOutsideClick = false;
 let assistantBubble = null;
 let imagePlaceholder = null;
+let songPlaceholder = null;
 
 function isInsideComposeInput(target) {
   if (!target) return false;
@@ -103,17 +104,21 @@ function renderBubble(role, text) {
   bubble.appendChild(bubbleText);
   // Bubbles go above the composer so the input stays last.
   conversationEl.insertBefore(bubble, composer || null);
-  if (role === 'assistant') syncImageBlocks(bubble);
+  if (role === 'assistant') {
+    syncImageBlocks(bubble);
+    syncSongBlocks(bubble);
+  }
   scrollConversation();
   return bubble;
 }
 
 function clearConversation() {
   conversationEl
-    ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block')
+    ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block, :scope > .compose-song-block')
     .forEach((b) => b.remove());
   assistantBubble = null;
   imagePlaceholder = null;
+  songPlaceholder = null;
 }
 
 function startAssistantBubble() {
@@ -229,13 +234,183 @@ function syncImageBlocks(bubble) {
   bubble.classList.toggle('is-image-only', text.textContent.trim().length === 0);
 }
 
+/* ── Generated songs: their own block, not part of the answer ──────────────
+ * The assistant replies with a markdown link; the bubble keeps the prose and
+ * the track is lifted out into a standalone player (no panel, no border) —
+ * a round play button, the title and a slim seek bar.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const SONG_URL_PREFIX = '/api/songgen/tracks/';
+const songBlocks = new WeakMap(); // bubble -> Map(url -> block)
+let currentSong = null; // { audio, button }
+
+function fmtTime(secs) {
+  if (!Number.isFinite(secs) || secs < 0) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** Reserve the spot where the generated song will land (spinner + label). */
+export function showSongPlaceholder() {
+  if (!conversationEl || songPlaceholder) return;
+  const bubble = document.createElement('div');
+  bubble.className = 'compose-bubble compose-bubble--assistant compose-image-pending';
+  const inner = document.createElement('div');
+  inner.className = 'compose-bubble-text';
+  const spinner = document.createElement('span');
+  spinner.className = 'compose-image-spinner';
+  const label = document.createElement('span');
+  label.textContent = 'Composing your song — this can take several minutes…';
+  inner.append(spinner, label);
+  bubble.appendChild(inner);
+  conversationEl.insertBefore(bubble, composer || null);
+  scrollConversation();
+  songPlaceholder = bubble;
+}
+
+export function clearSongPlaceholder() {
+  songPlaceholder?.remove();
+  songPlaceholder = null;
+}
+
+function setSongPlaying(entry, playing) {
+  entry.button.replaceChildren(icon(playing ? 'ui/pause' : 'ui/play', { size: 16 }));
+  entry.button.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  entry.button.title = playing ? 'Pause' : 'Play';
+}
+
+function makeSongBlock(url, title) {
+  const block = document.createElement('div');
+  block.className = 'compose-song-block';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'compose-song-play';
+  button.setAttribute('aria-label', 'Play');
+  button.title = 'Play';
+
+  const main = document.createElement('div');
+  main.className = 'compose-song-main';
+  const name = document.createElement('span');
+  name.className = 'compose-song-title';
+  name.textContent = title || 'Song';
+  const track = document.createElement('div');
+  track.className = 'compose-song-track';
+  const fill = document.createElement('div');
+  fill.className = 'compose-song-fill';
+  track.appendChild(fill);
+  main.append(name, track);
+
+  const time = document.createElement('span');
+  time.className = 'compose-song-time';
+  time.textContent = '0:00';
+
+  // The source is fetched lazily — on the first press — and played from a
+  // blob URL: the same path the spoken replies use, and the only one that has
+  // never stalled this machine's webview. A plain `src=url` media element
+  // makes the renderer open a streaming HTTP fetch the moment the block is
+  // built (and again on every conversation re-render), which freezes the app
+  // page for the length of the fetch.
+  const audio = document.createElement('audio');
+  audio.preload = 'none';
+  audio.hidden = true;
+  let blobUrl = null;
+
+  const entry = { audio, button };
+  setSongPlaying(entry, false);
+
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) time.textContent = fmtTime(audio.duration);
+  });
+  audio.addEventListener('timeupdate', () => {
+    const d = audio.duration;
+    if (Number.isFinite(d) && d > 0) {
+      fill.style.width = `${(audio.currentTime / d) * 100}%`;
+      time.textContent = `${fmtTime(audio.currentTime)} / ${fmtTime(d)}`;
+    }
+  });
+  audio.addEventListener('ended', () => {
+    fill.style.width = '0%';
+    time.textContent = fmtTime(audio.duration);
+    setSongPlaying(entry, false);
+    if (currentSong?.audio === audio) currentSong = null;
+  });
+
+  button.addEventListener('click', async () => {
+    if (audio.paused) {
+      if (!blobUrl) {
+        button.disabled = true;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('Could not load the track');
+          blobUrl = URL.createObjectURL(await res.blob());
+        } catch (err) {
+          button.disabled = false;
+          window.dispatchEvent(new CustomEvent('app:toast', {
+            detail: { message: err?.message || 'Could not load the track', type: 'error' },
+          }));
+          return;
+        }
+        audio.src = blobUrl;
+        button.disabled = false;
+      }
+      if (currentSong && currentSong.audio !== audio) {
+        currentSong.audio.pause();
+        setSongPlaying(currentSong, false);
+      }
+      currentSong = entry;
+      void audio.play()
+        .then(() => setSongPlaying(entry, true))
+        .catch(() => setSongPlaying(entry, false));
+    } else {
+      audio.pause();
+      setSongPlaying(entry, false);
+    }
+  });
+
+  track.addEventListener('click', (event) => {
+    const rect = track.getBoundingClientRect();
+    if (!rect.width || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    audio.currentTime = ratio * audio.duration;
+  });
+
+  block.append(button, main, time, audio);
+  return block;
+}
+
+/** Pull generated tracks out of an answer bubble into their own player. */
+function syncSongBlocks(bubble) {
+  const text = bubble?.querySelector('.compose-bubble-text');
+  if (!text) return;
+  for (const link of text.querySelectorAll(`a[href^="${SONG_URL_PREFIX}"]`)) {
+    const url = link.getAttribute('href');
+    const title = (link.textContent || '').trim();
+    link.remove();
+    let blocks = songBlocks.get(bubble);
+    if (!blocks) {
+      blocks = new Map();
+      songBlocks.set(bubble, blocks);
+    }
+    if (blocks.has(url)) continue;
+    const block = makeSongBlock(url, title);
+    bubble.after(block);
+    blocks.set(url, block);
+  }
+  bubble.classList.toggle('is-song-only', text.textContent.trim().length === 0);
+}
+
 function streamAssistantBubble(text) {
   if (!assistantBubble) startAssistantBubble();
   if (!text) return; // keep the "…" indicator until real text arrives
   assistantBubble?.classList.remove('is-thinking');
   const t = assistantBubble?.querySelector('.compose-bubble-text');
   if (t) t.innerHTML = sanitizeHtml(renderMarkdown(text));
-  if (assistantBubble) syncImageBlocks(assistantBubble);
+  if (assistantBubble) {
+    syncImageBlocks(assistantBubble);
+    syncSongBlocks(assistantBubble);
+  }
   scrollConversation();
 }
 

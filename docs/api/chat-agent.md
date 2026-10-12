@@ -165,6 +165,26 @@ is on by default at threshold 0.30 — see [configuration](../configuration.md).
 
 ---
 
+## Song generation
+
+Local text-to-song with YuE2 (HOT-Step-CPP's `ace-server`). The assistant
+drives it with the core `generate_song` tool; these routes back Settings →
+Music and the audio endpoint the chat's track player embeds.
+
+| Method | Path | Body / query | Response |
+|---|---|---|---|
+| `GET` | `/api/songgen/status` | — | `{ success, data: { inventory, downloads } }` — engine path, per-tier presence, live download bytes. |
+| `POST` | `/api/songgen/download` | `{ "quality": "q4" \| "q8" \| "all" }` | `{ success, data: { status: "downloading" } }` — background; poll status. |
+| `GET` | `/api/songgen/tracks/:name` | — | The WAV itself (`audio/wav`; cookie or Bearer auth; range requests served as `206` windows). Files live in the user's Files home under `Music/Generated/`. |
+
+The default tier is `q4` (Q4_K_M-imat). One `ace-server` process runs per song
+(nothing stays resident), a render takes minutes, and without downloaded models
+the tool returns a `needs_download` result — the assistant asks in chat before
+fetching. The engine binary itself is a one-time install
+(`scripts/install-yue2-engine.sh` or `YUE2_ENGINE`).
+
+---
+
 ## Artifacts
 
 Saved artifact cards, per user. Payloads are tagged with the owning plugin's

@@ -281,6 +281,69 @@ body.compose-active #hud-transcript {
 .compose-image-action:disabled { opacity: 0.5; cursor: default; }
 .compose-bubble.is-image-only { display: none; }
 
+/* A generated song is its own element too — no panel, no border: a round
+   play button, the title, and a slim seek bar. */
+.compose-song-block {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 430px);
+  margin: 2px 0 10px;
+}
+.compose-song-play {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--bubble);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.compose-song-play:hover { color: var(--accent); }
+.compose-song-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.compose-song-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compose-song-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--glass-border);
+  cursor: pointer;
+  overflow: hidden;
+}
+.compose-song-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.compose-song-time {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.compose-bubble.is-song-only { display: none; }
+
 .compose-dock-field,
 #text-input-field {
   display: block;

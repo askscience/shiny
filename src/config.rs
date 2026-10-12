@@ -49,6 +49,11 @@ pub struct Config {
     /// Directory holding the Qwen-Image 2.1 Turbo weights (turbo quants + the
     /// shared Qwen3-VL encoder, VAE and TAEQI2.1 decoder).
     pub qwen_image_models_dir: String,
+    /// Directory holding the YuE2 song-generation weights (LM quants + VAE +
+    /// decoder companion + tokenizer).
+    pub yue2_models_dir: String,
+    /// Explicit ace-server (HOT-Step-CPP) binary; empty = auto-discover.
+    pub yue2_engine: Option<String>,
     pub web_dir: String,
     /// Writable per-user plugin directory: uploads land here.
     pub plugins_dir: String,
@@ -177,6 +182,11 @@ impl Config {
                 .filter(|v| !v.trim().is_empty()),
             qwen_image_models_dir: env::var("QWEN_IMAGE_MODELS_DIR")
                 .unwrap_or_else(|_| "data/qwen-image-models".into()),
+            yue2_models_dir: env::var("YUE2_MODELS_DIR")
+                .unwrap_or_else(|_| "data/yue2-models".into()),
+            yue2_engine: env::var("YUE2_ENGINE")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
             web_dir: env::var("WEB_DIR").unwrap_or_else(|_| "web".into()),
             plugins_dir: env::var("PLUGINS_DIR").unwrap_or_else(|_| "data/plugins".into()),
             system_plugins_dir: env::var("SYSTEM_PLUGINS_DIR")

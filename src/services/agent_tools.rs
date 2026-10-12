@@ -572,6 +572,131 @@ pub async fn execute_action(
                 }
             }
         }
+        "generate_song" => {
+            let style = param_str(params, "style")
+                .or_else(|| param_str(params, "prompt"))
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty())
+                .ok_or_else(|| AppError::BadRequest("style required".into()))?;
+            let lyrics = param_str(params, "lyrics").unwrap_or_default();
+            let title = param_str(params, "title")
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .unwrap_or_else(|| style.clone());
+            // Songs bleed wall time: the engine needs ~6 min of NAR per ~75 s
+            // of audio on this class of GPU, so the tool bounds the length.
+            let duration_secs = params
+                .get("duration")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(90)
+                .clamp(30, 300) as u32;
+            let seed = params.get("seed").and_then(|v| v.as_u64());
+            let allow_download = params.get("allow_download").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            let requested_quality = match param_str(params, "quality") {
+                Some(q) => q,
+                None => music_quality_pref(state, &traveler.id)
+                    .await
+                    .unwrap_or_else(|| crate::services::song_gen::DEFAULT_TIER.to_string()),
+            };
+            let Some(tier) = crate::services::song_gen::resolve_tier(&requested_quality) else {
+                return Err(AppError::BadRequest(format!(
+                    "unknown song quality '{requested_quality}' (use q4 or q8)"
+                )));
+            };
+
+            // The weights are useless without the engine binary — refuse with a
+            // setup hint instead of offering a download that cannot render.
+            if state.song_gen.engine().is_none() {
+                return Ok(ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({
+                        "error": "the song engine is not installed",
+                        "hint": "Tell the user the YuE2 engine (ace-server) is not installed; it is set up with scripts/install-yue2-engine.sh or the YUE2_ENGINE variable.",
+                    }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: Some("core".into()),
+                });
+            }
+
+            let mut missing = state.song_gen.missing_for(tier.key);
+            if !missing.is_empty() && allow_download {
+                if let Err(e) = state.song_gen.start_download(tier.key) {
+                    return Err(AppError::Internal(e));
+                }
+                let client = state.song_gen.clone();
+                let key = tier.key.to_string();
+                client
+                    .wait_for_ready(&key, crate::services::song_gen::DOWNLOAD_WAIT)
+                    .await;
+                missing = state.song_gen.missing_for(&key);
+            }
+            if !missing.is_empty() {
+                let bytes = state.song_gen.missing_bytes_for(tier.key);
+                ActionOutcome {
+                    action: action_key.clone(),
+                    result: "error".into(),
+                    data: json!({
+                        "error": "the song models are not downloaded yet",
+                        "needs_download": true,
+                        "missing": missing,
+                        "download_bytes": bytes,
+                        "download_size": crate::services::media::human_bytes(bytes),
+                        "hint": "Tell the user how large the download is and ask whether you should fetch it. Only after they agree, call generate_song again with allow_download=true and the same style.",
+                    }),
+                    artifact: None,
+                    extra_artifacts: vec![],
+                    owner: Some("core".into()),
+                }
+            } else {
+                let os_home = state.os_identity_for(traveler).map(|u| u.home);
+                let home = crate::services::media::files_home(&traveler.id, os_home.as_deref());
+                let req = crate::services::song_gen::SongRequest {
+                    style,
+                    lyrics,
+                    title: title.clone(),
+                    duration_secs,
+                    seed,
+                    quality: tier.key.to_string(),
+                    home,
+                };
+                let client = state.song_gen.clone();
+                let rendered = tokio::task::spawn_blocking(move || client.generate(&req))
+                    .await
+                    .map_err(|e| AppError::Internal(format!("song task panicked: {e}")))?;
+                match rendered {
+                    Ok(res) => ActionOutcome {
+                        action: action_key.clone(),
+                        result: "ok".into(),
+                        data: json!({
+                            "url": res.url,
+                            "file": res.file,
+                            "path": res.rel_path,
+                            "title": title,
+                            "quality": res.quality,
+                            "quant": res.quant,
+                            "duration_secs": (res.duration_secs * 10.0).round() / 10.0,
+                            "seconds": (res.seconds * 10.0).round() / 10.0,
+                            "size": crate::services::media::human_bytes(res.bytes),
+                            "hint": "End your reply with the track on its own line: [short title](<url>)",
+                        }),
+                        artifact: None,
+                        extra_artifacts: vec![],
+                        owner: Some("core".into()),
+                    },
+                    Err(e) => ActionOutcome {
+                        action: action_key.clone(),
+                        result: "error".into(),
+                        data: json!({ "error": e }),
+                        artifact: None,
+                        extra_artifacts: vec![],
+                        owner: Some("core".into()),
+                    },
+                }
+            }
+        }
         other => {
             tracing::warn!("Unknown agent action: {:?}", other);
             return Err(AppError::BadRequest(format!("Unknown action: {}", other)));
@@ -629,6 +754,21 @@ async fn image_model_pref(state: &AppState, user_id: &str) -> Option<String> {
     .flatten()
     .filter(|m| !m.trim().is_empty())?;
     crate::services::image_gen::resolve_family(&value).map(|f| f.id.to_string())
+}
+
+/// The user's saved song-quality preference (Settings → Music). Unknown values
+/// are ignored so a stale or hand-edited row can't break generation.
+async fn music_quality_pref(state: &AppState, user_id: &str) -> Option<String> {
+    let value = sqlx::query_scalar::<_, String>(
+        "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'music.quality'",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten()
+    .filter(|q| !q.trim().is_empty())?;
+    crate::services::song_gen::resolve_tier(&value).map(|t| t.key.to_string())
 }
 
 /// Normalize a workspace target: 1-based number or numeric string → 0-based

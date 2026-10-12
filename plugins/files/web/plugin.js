@@ -1070,7 +1070,12 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
     media.playsInline = true;
     media.poster = videoFrameUrl(entry.path, 1, 640);
   }
-  media.src = rawUrl(entry.path);
+  // Audio is fetched whole and played from a blob URL (see `loadAudio`) — the
+  // same path the spoken replies use. A local file played through the media
+  // element's own streaming pipeline stalls this webview for the length of the
+  // fetch; video keeps that pipeline deliberately (files can be large, and a
+  // streaming <video> is exactly what it is for).
+  if (!audio) media.src = rawUrl(entry.path);
 
   let duration = 0;
   let scrubbing = false;
@@ -1124,8 +1129,25 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   errorBox.className = 'files-player-error hidden';
 
   function togglePlay() {
+    if (audio && !media.getAttribute('src')) { void loadAudio(); return; }
     if (media.paused) media.play().catch(() => { /* codec unsupported */ });
     else media.pause();
+  }
+  let audioLoaded = false;
+  async function loadAudio() {
+    if (audioLoaded) return;
+    audioLoaded = true;
+    playBtn.disabled = true;
+    try {
+      const res = await fetch(rawUrl(entry.path));
+      if (!res.ok) throw new Error(`load failed (${res.status})`);
+      media.src = URL.createObjectURL(await res.blob());
+    } catch (_) {
+      // Fall back to streaming the file through the media pipeline.
+      media.src = rawUrl(entry.path);
+    } finally {
+      playBtn.disabled = false;
+    }
   }
   function toggleFullscreen() {
     if (document.fullscreenElement) document.exitFullscreen?.();
@@ -1194,6 +1216,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   // gesture, so if the first attempt is rejected we retry muted (always
   // allowed) and the user unmutes with the speaker button.
   function tryAutoplay() {
+    if (!media.getAttribute('src')) return;
     if (!media.paused) return;
     const started = media.play();
     if (started && typeof started.catch === 'function') {
@@ -1207,6 +1230,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   }
   media.addEventListener('loadeddata', tryAutoplay);
   media.addEventListener('canplay', tryAutoplay);
+  if (audio) void loadAudio();
   setTimeout(tryAutoplay, 0);
 
   // Duration from ffprobe so the timeline is correct before playback starts.

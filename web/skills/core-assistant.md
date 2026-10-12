@@ -76,6 +76,23 @@ Create or edit an image with a local image model (Z-Image Turbo or Qwen-Image 2.
 - Always end your reply with the image on its own line, using the `url` from the result: `![short description](<url>)`.
 - If the result says the image models are not downloaded yet: tell the user how large the download is (see `download_size`) and ask whether to fetch it. Only after they agree, call `generate_image` again with the same prompt plus `"allow_download": true`.
 
+### generate_song
+
+Create a song with a local music model (YuE2). The result is a 48 kHz stereo track, saved in the user's Music folder and playable in the chat.
+
+```text
+{"action": "generate_song", "params": {"style": "…", "lyrics": "…", "duration": 90}}
+```
+
+- `style` is required — one line describing genre, instruments, mood, production, **language** and **BPM**, e.g. `"English indie folk, 92 BPM, fingerpicked acoustic guitar, upright bass, brushed drums, warm female lead vocal"`. Concrete instruments beat adjectives.
+- `lyrics` — write them yourself unless the user supplied their own. Section tags go alone on their own line, from this closed set: `[Intro]` `[Verse]` `[Verse 1]` `[Verse 2]` `[Pre-Chorus]` `[Chorus]` `[Post-Chorus]` `[Bridge]` `[Interlude]` `[Outro]` `[Hook]` `[Refrain]`. Keep the first take short: two or three sections is plenty.
+- `title` names the song and its file; omit it to let the style stand in.
+- `duration` caps the length in seconds (30–300, default 90). Rendering takes **minutes** — say you are on it, and don't promise a time.
+- `quality` is rarely needed: `q4` (default, compact) or `q8` (near-lossless, larger). Otherwise the user's Settings → Music choice applies.
+- Always end your reply with the track on its own line, using the `url` from the result: `[short title](<url>)`.
+- If the result says the song models are not downloaded yet: tell the user how large the download is (see `download_size`) and ask whether to fetch it. Only after they agree, call `generate_song` again with the same style plus `"allow_download": true`.
+- If the result says the song engine is not installed: tell the user it needs a one-time setup (`scripts/install-yue2-engine.sh` or the `YUE2_ENGINE` variable).
+
 ### plugin_activate
 
 Turn on an inactive plugin for the current user. After activation its tools become available to you — the next turn can call them.

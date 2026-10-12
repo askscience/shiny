@@ -46,6 +46,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
+// Shared with the song generator — one implementation, see `services::media`.
+pub use crate::services::media::{files_home, human_bytes};
+
 /// One local image model family and everything needed to run it.
 pub struct ImageFamily {
     /// Stable id used by Settings, the `image.model` preference and the tool
@@ -198,14 +201,6 @@ pub struct GenerateResult {
     pub bytes: u64,
 }
 
-pub fn human_bytes(bytes: u64) -> String {
-    if bytes >= 1_000_000_000 {
-        format!("{:.1} GB", bytes as f64 / 1e9)
-    } else {
-        format!("{} MB", bytes / 1_000_000)
-    }
-}
-
 /// Resolve a user/model-supplied family: the id (`qwen-image-2.1`), the short
 /// name (`qwen`), or a loose spelling (`Z-Image`).
 pub fn resolve_family(input: &str) -> Option<&'static ImageFamily> {
@@ -235,26 +230,6 @@ pub fn quant_file(family: &ImageFamily, quant: &str) -> String {
     family.quant_pattern.replace("{}", quant)
 }
 
-/// The Files-sandbox home for a user — kept in lockstep with the Files plugin
-/// (`plugins/files/src/fs_util.rs`): the real OS home when bound, otherwise the
-/// virtual `~/.shiny/home/<id>`.
-pub fn files_home(user_id: &str, os_home: Option<&str>) -> PathBuf {
-    if let Some(home) = os_home.map(str::trim).filter(|h| !h.is_empty()) {
-        return PathBuf::from(home);
-    }
-    let cleaned: String = user_id
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
-        .take(64)
-        .collect();
-    let name = if cleaned.is_empty() { "default".to_string() } else { cleaned };
-    let os = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    os.join(".shiny").join("home").join(name)
-}
-
 fn resolve_sd_cli(hint: Option<String>) -> Option<PathBuf> {
     if let Some(hint) = hint.filter(|h| !h.trim().is_empty()) {
         return Some(PathBuf::from(hint));
@@ -273,39 +248,8 @@ fn resolve_sd_cli(hint: Option<String>) -> Option<PathBuf> {
     .find(|p| p.is_file())
 }
 
-/// True when an AMD GPU is present (vendor 0x1002 in DRM sysfs). The
-/// integer-dot workaround only matters for RADV, but the flag is harmless.
-fn amd_gpu_present() -> bool {
-    let Ok(entries) = std::fs::read_dir("/sys/class/drm") else { return false };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with("card") && !name.contains('-') {
-            if let Ok(vendor) = std::fs::read_to_string(entry.path().join("device/vendor")) {
-                if vendor.trim() == "0x1002" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
 fn output_name(prompt: &str) -> String {
-    let mut slug = String::new();
-    for c in prompt.chars() {
-        let c = c.to_ascii_lowercase();
-        if c.is_ascii_alphanumeric() {
-            slug.push(c);
-        } else if !slug.is_empty() && !slug.ends_with('-') {
-            slug.push('-');
-        }
-        if slug.len() >= 40 {
-            break;
-        }
-    }
-    let slug = slug.trim_matches('-');
-    let slug = if slug.is_empty() { "image" } else { slug };
-    format!("{}-{}.png", chrono::Local::now().format("%Y%m%d-%H%M%S"), slug)
+    crate::services::media::stamped_name(prompt, "image", "png")
 }
 
 impl ImageGenClient {
@@ -718,7 +662,9 @@ impl ImageGenClient {
             .arg("--steps").arg(req.steps.to_string())
             .arg("-s").arg(req.seed.to_string())
             .arg("-o").arg(&out);
-        if std::env::var_os("GGML_VK_DISABLE_INTEGER_DOT_PRODUCT").is_none() && amd_gpu_present() {
+        if std::env::var_os("GGML_VK_DISABLE_INTEGER_DOT_PRODUCT").is_none()
+            && crate::services::media::amd_gpu_present()
+        {
             cmd.env("GGML_VK_DISABLE_INTEGER_DOT_PRODUCT", "1");
         }
         cmd.stdin(Stdio::null()).stdout(log).stderr(log_err);

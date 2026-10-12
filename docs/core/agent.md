@@ -521,6 +521,7 @@ Known cores (selected):
 | `list_plugins` | `Plugins:` + `name (active\|inactive) — description` |
 | `show_plugin` | `Showing {name}` |
 | `generate_image` | falls through to the JSON payload (`url`, `path`, `seconds`, `hint`) — the model embeds the picture from `url` |
+| `generate_song` | falls through to the JSON payload (`url`, `path`, `duration_secs`, `hint`) — the model links the track from `url`, and the chat lifts it into a player |
 | `show_artifact`/`update_artifact` | `Updated {title}` |
 
 Unknown/plugin actions fall through to:
