@@ -15,7 +15,10 @@
 //                 page item is cut: a MultiEffect alpha mask for the visuals,
 //                 `enabled` for input (a disabled item passes the press to the
 //                 app view below, like an X Shape input region)
-//   visibility -- item visible (hidden tile, overview, launcher)
+//   visibility -- item visible (hidden tile, overview, launcher); hiding is
+//                 the shell's decision, freezing is the engine's (see the
+//                 lifecycleState binding in kPageQml: a hidden page playing
+//                 audio keeps running, an idle one is suspended)
 //
 // Scene: root -> [ appView (WebEngineView), pagesLayer -> page items, maskImage ]
 
@@ -532,6 +535,17 @@ WebEngineView {
     objectName: "pageView"
     visible: false
     backgroundColor: "#ffffff"
+    // Hiding a page must not suspend one the user can still hear: a Frozen
+    // page has most HTML task sources suspended, so audio and video stop (a
+    // background YouTube tab goes quiet). Whether a hidden page may be frozen
+    // is therefore the engine's call, not the shell's -- recommendedState
+    // stays Active while the page is playing audio or otherwise busy, and
+    // recentlyAudible is the same guard from the media side. Discarded is
+    // never taken: it would reload the page and lose its state.
+    lifecycleState: (!visible && !recentlyAudible
+                     && recommendedState !== WebEngineView.LifecycleState.Active)
+        ? WebEngineView.LifecycleState.Frozen
+        : WebEngineView.LifecycleState.Active
     onTitleChanged: shell.viewTitle(pageId, title)
     onUrlChanged: shell.viewUrl(pageId, url)
     onLoadingChanged: (info) => shell.viewLoad(pageId, info.status)
@@ -1179,9 +1193,13 @@ void peakd_qt_view_bounds(const char *id, int x, int y, int w, int h) {
 void peakd_qt_view_visible(const char *id, int visible) {
     if (!g_ctx) return;
     if (auto *view = qobject_cast<QQuickItem *>(g_ctx->children.value(QString::fromUtf8(id)))) {
+        // Visibility only. Whether hiding also freezes the page is the
+        // engine's call, not the shell's: the lifecycleState binding in
+        // kPageQml keeps a page the engine still needs running (audio, video,
+        // a busy page) and freezes the rest, so a background tab keeps
+        // playing instead of going silent. Writing lifecycleState here would
+        // fight that binding.
         view->setVisible(visible != 0);
-        // Hidden tabs cost nothing to keep alive; the page resumes on switch.
-        view->setProperty("lifecycleState", visible == 0 ? 1 /*Frozen*/ : 0 /*Active*/);
     }
 }
 

@@ -212,6 +212,13 @@ to drop it (that was the old white flash). The window therefore:
 - re-sends the mask on the way back from a hide, because a stale hole would
   otherwise clip the page once it moves.
 
+Hiding a page never suspends one the engine still needs: the shell freezes a
+hidden page only where `recommendedState` (and `recentlyAudible`) say it may, so
+a background tab that is playing audio in the "keep alive" sense — a YouTube tab
+you switched away from, a window left in another workspace — keeps playing
+exactly like a background tab in a normal browser. Idle hidden pages are still
+frozen (see `kPageQml` in `crates/peakd/shim/peakd.cpp`).
+
 `requestSync()` coalesces bursts into one sync per animation frame;
 `startBoundsSync()` adds a 250 ms fallback interval, a `ResizeObserver` on the
 frame wrapper, `MutationObserver`s on the tile grid and body class, and the

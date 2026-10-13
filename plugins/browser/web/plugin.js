@@ -434,8 +434,10 @@ function setActiveTab(id) {
   for (const t of tabs) {
     t.frameEl.classList.toggle('is-active', t.id === id);
     // Only the active tab's native view is shown; the rest stay alive (their
-    // history and cookies) but hidden. The active one goes through the shared
-    // sync so window occlusion/overlays are honoured too.
+    // history and cookies) but hidden — and keep playing when they are playing
+    // audio, because the shell freezes a hidden page only where the engine
+    // says it may. The active one goes through the shared sync so window
+    // occlusion/overlays are honoured too.
     if (nativeAvailable && t.id !== id) {
       nativeSend({ op: 'setVisible', id: t.id, visible: false });
     }
