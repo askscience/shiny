@@ -15,15 +15,23 @@ export default {
 
 ## Behaviour
 
-- Creates an xterm.js terminal (with the fit/webgl/canvas addons) bound to a PTY
-  session from `POST /api/terminal/sessions`.
-- Subscribes to `GET /api/terminal/stream` (SSE) for output, POSTs input and
-  resize.
-- The shell persists across closing/reopening the window and across page
-  reloads; on remount the recent output is replayed and the same session
-  reattached.
-- `terminalContextMenu()` contributes **Copy** / **Paste**, **New shell** /
-  **Clear scrollback** / **Kill session**.
+- Creates one xterm.js terminal per tab (with the fit/webgl/canvas addons), each
+  bound to its own PTY session from `POST /api/terminal/sessions`.
+- The window holds a single `GET /api/terminal/events` (SSE) connection for
+  every tab; frames carry their session id. Input and resize are POSTs; only
+  the active tab's host is visible.
+- The tabs live in the window's top bar: the strip itself is the merged window
+  bar (`data-window-bar`, the browser's arrangement), so the tabs and the
+  new-tab `+` sit next to the window controls. A tab is labelled with the
+  shell's OSC title, falling back to `Terminal 1`, `Terminal 2`…; its tooltip
+  names the shell and start directory.
+- Closing a tab (its X) terminates that shell; a shell that exits closes its
+  tab; closing the last tab opens a fresh shell.
+- The shells persist across closing/reopening the window and across page
+  reloads: the tab list and the active tab live in `sessionStorage`, and on
+  remount every session is reattached and its recent output replayed.
+- `terminalContextMenu()` contributes **Copy** / **Paste**, **New tab** /
+  **Clear scrollback** / **Close tab**.
 
 ## Clipboard
 

@@ -16,18 +16,19 @@ same user the Shiny server runs as.
 
 ## What it adds
 
-- A Terminal window with a persistent shell session.
+- A Terminal window with browser-style tabs — one persistent shell session per
+  tab, all streamed over a single SSE connection.
 - `/api/terminal/*` routes for session create/stream/input/resize/close
   ([routes.md](routes.md)).
 - Vendored xterm.js + addons (`addon-fit`, `addon-webgl`, `addon-canvas`) under
   `web/vendor/`.
 
 The plugin's agent tool is `terminal_exec`: the AI types a command into a
-persistent shell of its own (never the window's session, so the user's shell is
-never disturbed), waits for the shell to go quiet and gets the output back;
-`timed_out: true` means the command is still running and was left alone. The AI
-can also open the window with the core `show_plugin` tool, and the user types
-there directly.
+persistent shell of its own (never one of the window's shells, so the user's
+work is never disturbed), waits for the shell to go quiet and gets the output
+back; `timed_out: true` means the command is still running and was left alone.
+The AI can also open the window with the core `show_plugin` tool, and the user
+types there directly.
 
 ## Security
 

@@ -5,7 +5,9 @@
 //! base64 chunks on `GET /api/terminal/stream?session=...` so arbitrary bytes
 //! survive the text-only SSE framing.
 
+use std::collections::HashSet;
 use std::convert::Infallible;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -14,6 +16,7 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use base64::Engine as _;
 use bytes::Bytes;
+use futures::stream::SelectAll;
 use futures::StreamExt;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -33,6 +36,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     Some(match tag {
         "sessions" => create_session(ctx),
         "stream" => stream(),
+        "events" => events(),
         "input" => input(),
         "resize" => resize(),
         "close" => close(),
@@ -147,6 +151,132 @@ fn stream() -> RouteHandler {
         );
         let live = live.map(|event| Ok::<Bytes, Infallible>(Bytes::from(event.to_sse())));
         let stream = head.chain(live);
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache, no-transform")
+            .header(header::CONNECTION, "keep-alive")
+            .header("x-accel-buffering", "no")
+            .body(Body::from_stream(stream))
+            .map_err(|e| AppError::Internal(format!("sse response failed: {e}")))
+    })
+}
+
+/// One session's frames as a boxed stream, tagged with its id: `ready` always,
+/// then the pending scrollback (so a tab that just appeared is caught up), then
+/// the live feed.
+type FrameStream = Pin<Box<dyn futures::Stream<Item = Result<Bytes, Infallible>> + Send>>;
+
+fn session_frames(session: &Arc<Session>) -> FrameStream {
+    let id = session.id.clone();
+    let (snapshot, live, alive) = session.subscribe();
+    let mut head: Vec<String> = vec![session.ready_event().to_sse()];
+    if !snapshot.is_empty() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&snapshot);
+        head.push(Event::Out(encoded).to_sse_tagged(&id));
+    }
+    if !alive {
+        head.push(Event::Exit { code: None }.to_sse_tagged(&id));
+    }
+    let head = futures::stream::iter(
+        head.into_iter().map(|frame| Ok::<Bytes, Infallible>(Bytes::from(frame))),
+    );
+    let live = live.map(move |event| Ok::<Bytes, Infallible>(Bytes::from(event.to_sse_tagged(&id))));
+    Box::pin(head.chain(live))
+}
+
+fn push_session(all: &mut SelectAll<FrameStream>, seen: &mut HashSet<String>, session: &Arc<Session>) {
+    if session.agent || !seen.insert(session.id.clone()) {
+        return;
+    }
+    all.push(session_frames(session));
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct EventsQuery {
+    /// Session ids the window still shows; any the server no longer has
+    /// answers `gone`, so its tab can be dropped.
+    expect: Option<String>,
+}
+
+/// `GET /api/terminal/events?expect=...` — every session the window owns,
+/// multiplexed over one SSE response.
+///
+/// A browser allows only a handful of connections per origin (Chromium: six),
+/// and this app already holds long-lived streams of its own (the top-bar
+/// chips). One connection per tab ran the pool dry at the second tab: its
+/// stream queued behind the limit — no output — and its input POSTs queued
+/// behind it. One tagged stream per window keeps the terminal at a single
+/// connection no matter how many tabs are open.
+fn events() -> RouteHandler {
+    bridged_route(move |req: Request| async move {
+        let uid = user_id(&req)?;
+        let query: EventsQuery = take_query(req).await?;
+
+        // Watch before listing: a session created in between is then either in
+        // the list or announced (and `seen` tolerates both).
+        let watcher = pty::watch(&uid);
+        let mut all: SelectAll<FrameStream> = SelectAll::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        for session in pty::list_for(&uid) {
+            push_session(&mut all, &mut seen, &session);
+        }
+
+        let mut head: Vec<String> = Vec::new();
+        for id in query.expect.as_deref().unwrap_or("").split(',') {
+            let id = id.trim();
+            if id.is_empty() || seen.contains(id) || pty::get(id).is_some() {
+                continue;
+            }
+            head.push(format!(
+                "data: {}\n\n",
+                serde_json::json!({ "session": id, "type": "gone" })
+            ));
+        }
+
+        // Frames from every session, plus announcements of new ones. The
+        // announcements are collected first and applied at the top of the loop:
+        // pushing into `all` while the select below is polling it would be a
+        // second mutable borrow.
+        let merged = futures::stream::unfold(
+            (all, watcher, seen, Vec::<String>::new()),
+            |(mut all, mut watcher, mut seen, mut pending)| async move {
+                loop {
+                    for id in pending.drain(..) {
+                        if let Some(session) = pty::get(&id) {
+                            push_session(&mut all, &mut seen, &session);
+                        }
+                    }
+                    if all.is_empty() {
+                        match watcher.next().await {
+                            Some(id) => pending.push(id),
+                            None => return None,
+                        }
+                        continue;
+                    }
+                    futures::select! {
+                        item = all.next() => {
+                            if let Some(item) = item {
+                                return Some((item, (all, watcher, seen, pending)));
+                            }
+                        }
+                        maybe = watcher.next() => {
+                            match maybe {
+                                Some(id) => pending.push(id),
+                                None => return None,
+                            }
+                        }
+                    }
+                }
+            },
+        );
+
+        let head = futures::stream::iter(
+            head.into_iter().map(|frame| Ok::<Bytes, Infallible>(Bytes::from(frame))),
+        );
+        let stream = head.chain(merged);
 
         Response::builder()
             .status(StatusCode::OK)

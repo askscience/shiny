@@ -32,19 +32,30 @@ session registry directly — it does not go through the REST routes.
 ## PTY sessions
 
 `pty.rs` owns one pseudo-terminal per session: it spawns the login shell, pumps
-the master fd into a broadcast channel (consumed by the SSE `stream` route), and
-accepts input/resize/close from the other routes. Sessions are keyed by a
-session id the window receives from `POST /api/terminal/sessions`.
+the master fd into a broadcast channel (consumed by the SSE `events` route, and
+by `stream` for single-session clients), and accepts input/resize/close from the
+other routes. Sessions are keyed by a session id the window receives from
+`POST /api/terminal/sessions`.
 
-The window keeps its shell **alive while closed**: reopening the window (or
-reloading the page) replays the recent output and reattaches to the same
-session. "New shell" starts a fresh session; "Kill session" terminates the
-current one.
+The window keeps its shells **alive while closed**: the tab list and the active
+tab live in `sessionStorage`, and reopening the window (or reloading the page)
+replays each tab's recent output and reattaches to the same session. The strip
+is the window's top bar — one shell per tab. Closing a tab terminates that
+shell, a shell that exits (`exit`, a crash, a server restart) closes its own
+tab, and closing the last tab opens a fresh shell.
 
 ## Streaming
 
-`GET /api/terminal/stream` is an SSE stream of terminal output; input and resize
-are POSTs. This avoids WebSocket handling in the plugin while keeping the
+`GET /api/terminal/events` is one SSE response carrying every session the
+window owns, each frame tagged with its session id; input and resize are POSTs.
+One connection for all tabs is not an optimisation: a browser allows only a few
+connections per origin (Chromium: six) and the app already holds long-lived
+streams of its own, so a stream per tab starved the second tab — its frames
+never arrived and its keystrokes queued behind the limit. A tab created after
+the stream connected is announced from the session registry and picked up live;
+a session the window restored that no longer exists answers `gone`, so its tab
+is dropped. `GET /api/terminal/stream?session=…` remains as the single-session
+primitive. This avoids WebSocket handling in the plugin while keeping the
 interactive feel.
 
 ## Runtime

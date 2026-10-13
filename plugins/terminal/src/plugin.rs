@@ -36,6 +36,12 @@ fn route_specs() -> Vec<RouteSpec> {
             handler_tag: "stream".into(),
         },
         RouteSpec {
+            method: HttpMethod::Get,
+            path: "/api/terminal/events".into(),
+            auth: "auth".into(),
+            handler_tag: "events".into(),
+        },
+        RouteSpec {
             method: HttpMethod::Post,
             path: "/api/terminal/input".into(),
             auth: "auth".into(),

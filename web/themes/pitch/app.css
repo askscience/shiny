@@ -898,7 +898,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 /* ── Shared: unified plugin top bars ────────────────────────────
    Every plugin window's action row. One flat fill, one hairline. */
 .word-bar, .calc-bar, .impress-bar, .mail-bar,
-.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar, .terminal-bar,
+.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar,
 .radio-hero, .yt-hero, .browser-bar {
   background: var(--glass) !important;
   border-bottom: 1px solid var(--glass-border) !important;
@@ -922,7 +922,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 
 /* ── Shared: in-window tool buttons ───────────────────────────── */
 .word-tool, .calc-tool, .impress-tool, .mail-tool, .pdf-tool,
-.terminal-tool, .calculator-bar-btn, .calendar-nav-btn, .radio-t-btn,
+.calculator-bar-btn, .calendar-nav-btn, .radio-t-btn,
 .yt-category, .browser-menu-btn {
   background: transparent !important;
   border: 1px solid transparent !important;
@@ -931,7 +931,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   box-shadow: none !important;
 }
 .word-tool:hover, .calc-tool:hover, .impress-tool:hover, .mail-tool:hover,
-.pdf-tool:hover, .terminal-tool:hover, .calculator-bar-btn:hover,
+.pdf-tool:hover, .calculator-bar-btn:hover,
 .calendar-nav-btn:hover, .radio-t-btn:hover, .browser-menu-btn:hover {
   background: var(--glass-hover) !important;
   color: var(--text) !important;
@@ -946,7 +946,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 
 /* ── Shared: window titles + status lines ─────────────────────── */
 .word-title, .calc-title, .impress-title, .mail-title, .pdf-title,
-.terminal-title, .calendar-month-label, .studio-title, .browser-tab-text {
+.terminal-tab-text, .calendar-month-label, .studio-title, .browser-tab-text {
   font-family: var(--font-body) !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
@@ -1709,13 +1709,36 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 /* ── Terminal ───────────────────────────────────────────────────
    A terminal is a very dark flat field. It was already close; this
    aligns the remaining chrome and pulls its two hardcoded values
-   onto the canvas so they cannot drift from the theme. */
+   onto the canvas so they cannot drift from the theme. The tab strip
+   follows the browser's: same plate, classic squared-off tabs. */
 .terminal-tile {
   --terminal-bg: #000000;
   --terminal-fg: #d6dae0;
   background: #000 !important;
 }
-.terminal-title { color: var(--text-secondary) !important; font-weight: 500 !important; }
+.terminal-tabstrip {
+  background: var(--bg) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.terminal-tab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0 !important;
+  color: var(--muted) !important;
+}
+.terminal-tab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
+.terminal-tab.is-active {
+  background: var(--bg-elevated) !important;
+  border-color: var(--glass-border) !important;
+  color: var(--text) !important;
+}
+.terminal-newtab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-xs) !important;
+  color: var(--muted) !important;
+}
+.terminal-newtab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
 .terminal-status {
   background: var(--glass) !important;
   border-top: 1px solid var(--glass-border) !important;

@@ -4,52 +4,69 @@
  * A real login shell on the host, rendered with xterm.js. The server owns the
  * PTY (see plugins/terminal/src/pty.rs); this module is only the glass:
  *
- *   mount  → build the tile, load xterm from `vendor/`, create/reuse a session
- *   stream → `/api/terminal/stream` (SSE frames) carries output, read with a
- *            streaming fetch so the Bearer token goes in the header —
- *            `EventSource` cannot send headers, and its cookie-only auth
- *            breaks wherever the session cookie is missing (e.g. a kiosk
- *            webview that restores localStorage but not its cookie jar)
+ *   mount  → build the tile, load xterm from `vendor/`, restore the tab list
+ *            (one PTY session per tab) from `sessionStorage`
+ *   stream → one `/api/terminal/events` (SSE) response for the whole window,
+ *            with every session's frames tagged by id — a browser allows only
+ *            a handful of connections per origin (Chromium: six) and the app
+ *            already holds long-lived streams of its own, so a stream per tab
+ *            starved later tabs. Read with a streaming fetch so the Bearer
+ *            token goes in the header — `EventSource` cannot send headers,
+ *            and its cookie-only auth breaks wherever the session cookie is
+ *            missing (e.g. a kiosk webview that restores localStorage but not
+ *            its cookie jar)
  *   input  → keystrokes are POSTed to `/api/terminal/input`
  *   resize → the fit addon measures the window, `/api/terminal/resize` tells
  *            the PTY, so `top`, `vim` and friends get the right width
+ *   tabs   → the strip is the window's top bar (`data-window-bar`, like the
+ *            browser's): one tab per session, `+` opens another, a tab's X (or
+ *            its shell exiting) closes it, and the last tab closing respawns.
+ *            The label is the shell's OSC title, else `Terminal N`.
  *   render → WebGL where the platform allows it, else canvas, else the built-in
  *            DOM renderer (see `selectRenderer`) — an agent TUI redrawing in
  *            here is what makes the renderer choice matter
  *
- * Closing the window does NOT kill the shell: the session id lives in
- * `sessionStorage`, so reopening (or reloading the page) reattaches and
- * replays recent output. "Kill session" is the explicit way out.
+ * Closing the window does NOT kill the shells: the tab list lives in
+ * `sessionStorage`, so reopening (or reloading the page) reattaches every tab
+ * and replays recent output.
  */
 
-import { button, toast } from '../../ui/index.js';
+import { icon, iconButton, toast } from '../../ui/index.js';
 import { apiFetch, getToken } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
 
 export const TERMINAL_PLUGIN = 'terminal';
 
 const VENDOR = `/plugins/${TERMINAL_PLUGIN}/vendor`;
-const STORAGE_KEY = 'terminal.sessionId';
+const STORAGE_KEY = 'terminal.tabs';
+const LEGACY_STORAGE_KEY = 'terminal.sessionId';
+
+/** The strip's cap — the server also caps live PTY sessions per user. */
+const MAX_TABS = 8;
 
 let tileEl = null;
-let hostEl = null;
-let titleEl = null;
+let tabstripEl = null;
 let statusEl = null;
 
-let term = null;
-let fitAddon = null;
-let canvasAddon = null;
 let assetsPromise = null;
 
-let sessionId = null;
+/**
+ * The window's tabs. Each owns one xterm and one PTY session on the server;
+ * only the active one's host is visible. `activeTabId` always names one of
+ * them while the window is mounted.
+ */
+let tabs = [];
+let activeTabId = null;
+let tabSeq = 0;
+
+// One SSE response carries every tab's output (`/api/terminal/events`). A
+// browser allows only a handful of connections per origin — Chromium: six —
+// and this app already holds long-lived streams of its own (the top-bar
+// chips), so a stream per tab ran the pool dry at the second tab: its frames
+// never arrived and its input POSTs queued behind the limit. One tagged
+// stream per window cannot.
 let streamAbort = null;
 let reconnectTimer = null;
-let observer = null;
-let dead = false;
-
-let inputQueue = [];
-let flushTimer = null;
-let resizeTimer = null;
 
 // Output is coalesced before it reaches xterm. A TUI redraws continuously
 // (the agent UI writes ~60 times a second), and xterm repaints the grid for
@@ -57,11 +74,9 @@ let resizeTimer = null;
 // what costs a core on a large terminal. Merging the frames that arrive
 // inside one tick keeps the final state and roughly halves the repaints.
 const OUT_FLUSH_MS = 33;
-let outQueue = [];
-let outBytes = 0;
-let outTimer = null;
 
-let shell = { shell: '', cwd: '' };
+/** Reconnect delay after a dropped stream (matches EventSource's retry feel). */
+const RECONNECT_DELAY = 1500;
 
 /* ── assets ───────────────────────────────────────────────────── */
 
@@ -156,11 +171,10 @@ function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
 }
 
-/** Show the running shell in the bar. The window title bar already names the
- *  plugin, so this no longer repeats "Terminal". */
-function updateTitle() {
-  if (!titleEl) return;
-  titleEl.textContent = shell.shell ? shell.shell.replace('/bin/', '') : '';
+/** Update a tab's status line; only the active tab's text is on screen. */
+function updateTabStatus(tab, text) {
+  tab.status = text;
+  if (tab.id === activeTabId) setStatus(text);
 }
 
 /* ── tile DOM ─────────────────────────────────────────────────── */
@@ -170,77 +184,114 @@ function buildTile() {
   tileEl.className = 'tile terminal-tile';
   tileEl.dataset.plugin = TERMINAL_PLUGIN;
 
-  const bar = document.createElement('div');
-  bar.className = 'terminal-bar';
-  bar.dataset.windowBar = '';
-
-  titleEl = document.createElement('span');
-  titleEl.className = 'terminal-title';
-  titleEl.textContent = '';
-
-  const mkBtn = (iconName, title, onClick, danger = false) => {
-    const el = button({ icon: iconName, variant: 'ghost', onClick });
-    el.classList.add('ui-btn--icon', 'terminal-tool');
-    if (danger) el.classList.add('terminal-tool--danger');
-    el.title = title;
-    el.setAttribute('aria-label', title);
-    return el;
-  };
-  const newBtn = mkBtn('ui/plus', 'New shell', () => void restart());
-  const clearBtn = mkBtn('ui/trash', 'Clear scrollback', () => term?.clear());
-  const killBtn = mkBtn('ui/close', 'Kill session', () => void killSession(), true);
-
-  // Single top bar (Word/Calc convention): shell name + every action button.
-  bar.append(titleEl, newBtn, clearBtn, killBtn);
-
-  hostEl = document.createElement('div');
-  hostEl.className = 'terminal-host';
+  tabstripEl = buildTabStrip();
 
   statusEl = document.createElement('div');
   statusEl.className = 'terminal-status';
   statusEl.textContent = 'starting terminal…';
 
-  tileEl.append(bar, hostEl, statusEl);
+  tileEl.append(tabstripEl, statusEl);
   return tileEl;
 }
 
-/* ── terminal ─────────────────────────────────────────────────── */
+function buildTabStrip() {
+  const strip = document.createElement('div');
+  strip.className = 'terminal-tabstrip';
+  strip.setAttribute('role', 'tablist');
+  strip.setAttribute('aria-label', 'Terminal tabs');
+  // Nominate the strip as the window's top bar: the shared chrome folds it into
+  // the header row next to the close/fullscreen controls (see `data-window-bar`
+  // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
+  // and the centered "Terminal" label is dropped — the browser's arrangement.
+  strip.dataset.windowBar = '';
+  return strip;
+}
 
-async function initTerminal() {
-  if (term || !hostEl) return;
-  try {
-    await ensureAssets();
-  } catch (err) {
-    setStatus('could not load xterm.js');
-    toast('Terminal: xterm.js failed to load', { type: 'error' });
-    return;
+function activeTab() {
+  return tabs.find((t) => t.id === activeTabId) || null;
+}
+
+/** The tab's label: the shell's OSC title when it sets one, else its number. */
+function tabLabel(tab) {
+  return tab.title || `Terminal ${tab.seq}`;
+}
+
+/** The tab strip: one button per tab, plus a new-tab action. */
+function renderTabs() {
+  if (!tabstripEl) return;
+  const nodes = [];
+  for (const tab of tabs) {
+    const el = document.createElement('div');
+    el.className = 'terminal-tab' + (tab.id === activeTabId ? ' is-active' : '');
+    el.setAttribute('role', 'tab');
+    el.setAttribute('aria-selected', String(tab.id === activeTabId));
+
+    const label = document.createElement('button');
+    label.type = 'button';
+    label.className = 'terminal-tab-label';
+    const text = document.createElement('span');
+    text.className = 'terminal-tab-text';
+    text.textContent = tabLabel(tab);
+    label.appendChild(text);
+    label.title = tab.shell ? `${tab.shell} — ${tab.cwd}` : tabLabel(tab);
+    label.addEventListener('click', () => setActiveTab(tab.id));
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'terminal-tab-close';
+    close.setAttribute('aria-label', `Close ${tabLabel(tab)}`);
+    close.appendChild(icon('ui/close', { size: 12 }));
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+
+    el.append(label, close);
+    nodes.push(el);
   }
-  if (!hostEl || term) return;
+  const add = iconButton({
+    icon: 'ui/plus',
+    size: 'sm',
+    label: 'New tab',
+    onClick: () => void createTab({}),
+  });
+  add.classList.add('terminal-newtab');
+  nodes.push(add);
+  tabstripEl.replaceChildren(...nodes);
+}
 
-  term = new window.Terminal({
+/* ── per-tab terminal ─────────────────────────────────────────── */
+
+function createTerminalFor(tab) {
+  const term = new window.Terminal({
     cursorBlink: true,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     fontSize: 13,
     scrollback: 5000,
     theme: terminalTheme(),
   });
-  fitAddon = new window.FitAddon.FitAddon();
-  term.loadAddon(fitAddon);
-  term.open(hostEl);
-  selectRenderer();
+  tab.term = term;
+  tab.fitAddon = new window.FitAddon.FitAddon();
+  term.loadAddon(tab.fitAddon);
+  term.open(tab.hostEl);
+  selectRenderer(tab);
 
-  term.onData((data) => queueInput(data));
+  term.onData((data) => queueInput(tab, data));
   // Ctrl/Cmd+C and Ctrl/Cmd+V have to be decided by the terminal, not the
   // browser: without this, Ctrl+C is always a SIGINT (xterm sends \x03) and a
   // selection cannot be copied — xterm's WebGL selection is not a DOM
   // selection, so the browser's own copy would find nothing.
-  term.attachCustomKeyEventHandler(onTerminalKey);
+  term.attachCustomKeyEventHandler((event) => onTerminalKey(tab, event));
+  // The shell's own title escape (OSC 0/2) is the tab label.
+  term.onTitleChange((title) => {
+    tab.title = (title || '').trim();
+    renderTabs();
+  });
 
-  observer = new ResizeObserver(() => onHostResized());
-  observer.observe(hostEl);
+  tab.observer = new ResizeObserver(() => onHostResized(tab));
+  tab.observer.observe(tab.hostEl);
 
-  fit();
-  await attachSession();
+  fit(tab);
 }
 
 /**
@@ -248,13 +299,13 @@ async function initTerminal() {
  * no-op when the addon is missing or refuses to load — whatever renderer is
  * already active (the DOM one) stays in place.
  */
-function useCanvasRenderer() {
-  if (canvasAddon || !term || !window.CanvasAddon) return;
+function useCanvasRenderer(tab) {
+  if (tab.canvasAddon || !tab.term || !window.CanvasAddon) return;
   try {
-    canvasAddon = new window.CanvasAddon.CanvasAddon();
-    term.loadAddon(canvasAddon);
+    tab.canvasAddon = new window.CanvasAddon.CanvasAddon();
+    tab.term.loadAddon(tab.canvasAddon);
   } catch (_) {
-    canvasAddon = null; // keep the DOM renderer
+    tab.canvasAddon = null; // keep the DOM renderer
   }
 }
 
@@ -263,8 +314,8 @@ function useCanvasRenderer() {
  * then the built-in DOM renderer (see `ensureAssets`). A lost WebGL context
  * demotes to canvas rather than leaving a blank terminal.
  */
-function selectRenderer() {
-  if (!term) return;
+function selectRenderer(tab) {
+  if (!tab.term) return;
   if (window.WebglAddon) {
     try {
       const webgl = new window.WebglAddon.WebglAddon();
@@ -274,52 +325,53 @@ function selectRenderer() {
         } catch (_) {
           /* already disposed */
         }
-        useCanvasRenderer();
+        useCanvasRenderer(tab);
         console.info('terminal: WebGL context lost — renderer =',
-          canvasAddon ? 'canvas' : 'dom');
+          tab.canvasAddon ? 'canvas' : 'dom');
       });
-      term.loadAddon(webgl);
+      tab.term.loadAddon(webgl);
       console.info('terminal: renderer = webgl');
       return;
     } catch (err) {
       console.info('terminal: WebGL unavailable, trying canvas:', err?.message ?? err);
     }
   }
-  useCanvasRenderer();
-  console.info('terminal: renderer =', canvasAddon ? 'canvas' : 'dom');
+  useCanvasRenderer(tab);
+  console.info('terminal: renderer =', tab.canvasAddon ? 'canvas' : 'dom');
 }
 
-function fit() {
+function fit(tab) {
   try {
-    fitAddon?.fit();
+    tab.fitAddon?.fit();
   } catch (_) {
     /* hidden or zero-sized window — harmless */
   }
 }
 
-function onHostResized() {
-  fit();
-  if (!term || !sessionId) return;
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    if (!sessionId || dead) return;
-    void post('/api/terminal/resize', { session: sessionId, cols: term.cols, rows: term.rows }).catch(() => {});
+function onHostResized(tab) {
+  if (tab.id !== activeTabId) return; // hidden hosts measure 0×0
+  fit(tab);
+  if (!tab.term || !tab.sessionId) return;
+  window.clearTimeout(tab.resizeTimer);
+  tab.resizeTimer = window.setTimeout(() => {
+    if (!tab.sessionId || tab.id !== activeTabId) return;
+    void post('/api/terminal/resize', { session: tab.sessionId, cols: tab.term.cols, rows: tab.term.rows }).catch(() => {});
   }, 150);
 }
 
-function queueInput(data) {
-  inputQueue.push(data);
-  if (flushTimer) return;
-  flushTimer = setTimeout(() => void flushInput(), 8);
+function queueInput(tab, data) {
+  tab.inputQueue.push(data);
+  if (tab.flushTimer) return;
+  tab.flushTimer = setTimeout(() => void flushInput(tab), 8);
 }
 
-async function flushInput() {
-  flushTimer = null;
-  const data = inputQueue.join('');
-  inputQueue = [];
-  if (!data || !sessionId) return;
+async function flushInput(tab) {
+  tab.flushTimer = null;
+  const data = tab.inputQueue.join('');
+  tab.inputQueue = [];
+  if (!data || !tab.sessionId) return;
   try {
-    await post('/api/terminal/input', { session: sessionId, data });
+    await post('/api/terminal/input', { session: tab.sessionId, data });
   } catch (_) {
     /* the stream will report the session state */
   }
@@ -335,73 +387,275 @@ async function flushInput() {
  * Returning false tells xterm the key was handled: it must not reach the PTY,
  * which is what keeps a copy from interrupting the foreground process.
  */
-function onTerminalKey(event) {
+function onTerminalKey(tab, event) {
   if (event.type !== 'keydown') return true; // keypress repeats pass through
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return true;
   const key = (event.key || '').toLowerCase();
-  if (key === 'c') return copySelection() ? false : true;
+  if (key === 'c') return copySelection(tab) ? false : true;
   if (key === 'v') {
-    void pasteFromClipboard();
+    void pasteFromClipboard(tab);
     return false;
   }
   return true;
 }
 
-/** Copy the current xterm selection through the central clipboard service. */
-function copySelection() {
-  const selection = term?.getSelection?.() || '';
+/** Copy the tab's current xterm selection through the central clipboard service. */
+function copySelection(tab) {
+  const selection = tab?.term?.getSelection?.() || '';
   if (!selection) return false;
   void copyText(selection, { source: TERMINAL_PLUGIN });
   return true;
 }
 
 /**
- * Paste clipboard text into the shell. `term.paste` honours bracketed-paste
+ * Paste clipboard text into the tab's shell. `term.paste` honours bracketed-paste
  * mode (vim/tmux see a paste instead of a burst of typed keys) and flows
  * through `onData` like any other input.
  */
-async function pasteFromClipboard() {
+async function pasteFromClipboard(tab) {
   const text = await readClipboardText();
   if (!text) {
     toast('Clipboard unavailable', { type: 'error' });
     return;
   }
-  term?.paste(text);
+  tab?.term?.paste(text);
+}
+
+/* ── tabs ─────────────────────────────────────────────────────── */
+
+function createTab({ sessionId = null, activate = true } = {}) {
+  if (tabs.length >= MAX_TABS) {
+    toast(`Terminal: at most ${MAX_TABS} tabs`, { type: 'error' });
+    return null;
+  }
+  const seq = ++tabSeq;
+  const tab = {
+    id: `t${seq}`,
+    seq,
+    sessionId: null,
+    title: '',
+    shell: '',
+    cwd: '',
+    status: 'connecting…',
+    term: null,
+    fitAddon: null,
+    canvasAddon: null,
+    hostEl: null,
+    observer: null,
+    resizeTimer: null,
+    resyncing: false,
+    inputQueue: [],
+    flushTimer: null,
+    outQueue: [],
+    outBytes: 0,
+    outTimer: null,
+  };
+  tab.hostEl = document.createElement('div');
+  tab.hostEl.className = 'terminal-host';
+  tileEl.insertBefore(tab.hostEl, statusEl);
+  tabs.push(tab);
+  // Activate before opening the terminal: xterm measures its font from the
+  // live DOM, and a terminal opened inside a `display: none` host would
+  // measure 0×0 and then refuse to fit (see setActiveTab). With the tab
+  // activated first, the host is visible by the time xterm opens.
+  if (activate) setActiveTab(tab.id);
+  createTerminalFor(tab);
+  if (activate) {
+    onHostResized(tab);
+    tab.term?.focus?.();
+  } else {
+    renderTabs();
+  }
+  void attachSession(tab, sessionId);
+  return tab;
+}
+
+/** Tear a tab down: timers, observer, xterm, host. */
+function destroyTab(tab) {
+  if (tab.observer) {
+    tab.observer.disconnect();
+    tab.observer = null;
+  }
+  window.clearTimeout(tab.flushTimer);
+  window.clearTimeout(tab.resizeTimer);
+  if (tab.outTimer !== null) window.clearTimeout(tab.outTimer);
+  tab.flushTimer = null;
+  tab.resizeTimer = null;
+  tab.outTimer = null;
+  tab.inputQueue = [];
+  tab.outQueue = [];
+  tab.outBytes = 0;
+  try {
+    tab.term?.dispose();
+  } catch (_) {
+    /* already gone */
+  }
+  tab.term = null;
+  tab.fitAddon = null;
+  tab.canvasAddon = null;
+  tab.hostEl?.remove();
+  tab.hostEl = null;
+}
+
+function closeTab(id) {
+  const idx = tabs.findIndex((t) => t.id === id);
+  if (idx < 0) return;
+  const [tab] = tabs.splice(idx, 1);
+  const wasActive = activeTabId === id;
+  const session = tab.sessionId;
+  destroyTab(tab);
+  // Best-effort: end the shell server-side. A failure here cannot stop the tab
+  // from closing.
+  if (session) {
+    void post('/api/terminal/close', { session }).catch(() => {});
+  }
+
+  if (wasActive) {
+    activeTabId = null;
+    const next = tabs[idx] || tabs[idx - 1] || null;
+    if (next) {
+      setActiveTab(next.id);
+    } else {
+      // The window always keeps one shell: the last tab closing (its X, or a
+      // shell exiting) opens a fresh one.
+      renderTabs();
+      createTab({});
+      persist();
+      return;
+    }
+  } else {
+    renderTabs();
+  }
+  persist();
+}
+
+function setActiveTab(id) {
+  const tab = tabs.find((t) => t.id === id) || null;
+  if (!tab) return;
+  activeTabId = id;
+  for (const t of tabs) t.hostEl?.classList.toggle('is-active', t.id === id);
+  const term = tab.term;
+  if (term) {
+    // A terminal opened while its host was hidden never measured its font
+    // (xterm reads 0×0 from the unlaid-out DOM) and `FitAddon` then refuses to
+    // fit it — `proposeDimensions()` bails while `cell.width` is 0. `resize`
+    // with the current size makes xterm take the measurement when its size is
+    // invalid, and only then can fit() size it to the host.
+    try {
+      term.resize(term.cols, term.rows);
+    } catch (_) {
+      /* not opened yet */
+    }
+    fit(tab);
+    try {
+      term.refresh(0, (term.rows || 1) - 1);
+    } catch (_) {
+      /* refresh is best-effort */
+    }
+  }
+  onHostResized(tab);
+  setStatus(tab.status || '');
+  persist();
+  renderTabs();
+  // Clicking a tab (or the `+`) must leave the keyboard in the shell, like
+  // every terminal app — and renderTabs() just replaced the button that held
+  // focus. Focus after the rebuild so nothing steals it back.
+  term?.focus?.();
+}
+
+/* ── persistence ──────────────────────────────────────────────── */
+
+/** Remember which sessions the tabs hold, so a remount reattaches them. */
+function persist() {
+  const current = activeTab();
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ids: tabs.map((t) => t.sessionId).filter(Boolean),
+      active: current?.sessionId || null,
+    }));
+  } catch (_) {
+    /* storage full or blocked — the tabs just won't restore */
+  }
+}
+
+/** The stored tab list, migrating the pre-tabs single-session key. */
+function readStoredTabs() {
+  let stored = null;
+  try {
+    stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+  } catch (_) {
+    stored = null;
+  }
+  const ids = Array.isArray(stored?.ids)
+    ? stored.ids.filter((id) => typeof id === 'string' && id)
+    : [];
+  const active = typeof stored?.active === 'string' ? stored.active : null;
+  const legacy = sessionStorage.getItem(LEGACY_STORAGE_KEY);
+  if (legacy) {
+    sessionStorage.removeItem(LEGACY_STORAGE_KEY);
+    if (!ids.length) return { ids: [legacy], active: legacy };
+  }
+  return { ids, active };
+}
+
+async function restoreTabs() {
+  const { ids, active } = readStoredTabs();
+  for (const id of ids) {
+    if (!tileEl) return; // unmounted while restoring
+    createTab({ sessionId: id, activate: false });
+  }
+  if (!tabs.length) {
+    createTab({});
+    return;
+  }
+  const target = tabs.find((t) => t.sessionId === active) || tabs[0];
+  setActiveTab(target.id);
 }
 
 /* ── session lifecycle ────────────────────────────────────────── */
 
-async function attachSession() {
-  sessionId = sessionStorage.getItem(STORAGE_KEY) || null;
-
-  if (!sessionId) {
-    const dims = fitAddon?.proposeDimensions?.() || null;
-    try {
-      const res = await post('/api/terminal/sessions', {
-        cols: dims?.cols || term?.cols || 80,
-        rows: dims?.rows || term?.rows || 24,
-      });
-      sessionId = res?.data?.id || null;
-      if (sessionId) sessionStorage.setItem(STORAGE_KEY, sessionId);
-    } catch (err) {
-      setStatus('could not start a shell');
-      toast(err?.message || 'Terminal: could not start a shell', { type: 'error' });
+/** Give a tab a PTY: reattach to `stored`, or start a fresh shell. */
+async function attachSession(tab, stored = null) {
+  if (stored) {
+    tab.sessionId = stored;
+    updateTabStatus(tab, 'connecting…');
+    return; // the window stream replays it — or answers `gone`
+  }
+  const dims = tab.fitAddon?.proposeDimensions?.() || null;
+  let res;
+  try {
+    res = await post('/api/terminal/sessions', {
+      cols: dims?.cols || tab.term?.cols || 80,
+      rows: dims?.rows || tab.term?.rows || 24,
+    });
+  } catch (err) {
+    if (!tabs.includes(tab)) return; // closed while starting
+    toast(err?.message || 'Terminal: could not start a shell', { type: 'error' });
+    if (tabs.length > 1) {
+      closeTab(tab.id);
       return;
     }
-  }
-  if (!sessionId) {
-    setStatus('could not start a shell');
+    updateTabStatus(tab, 'could not start a shell');
     return;
   }
-  connect();
+  if (!tabs.includes(tab)) return;
+  tab.sessionId = res?.data?.id || null;
+  if (!tab.sessionId) {
+    updateTabStatus(tab, 'could not start a shell');
+    return;
+  }
+  updateTabStatus(tab, 'connecting…');
+  persist();
 }
 
-/* ── output stream ────────────────────────────────────────────── */
+function connect() {
+  stopStream();
+  const ctrl = new AbortController();
+  streamAbort = ctrl;
+  void runStream(ctrl);
+}
 
-/** Reconnect delay after a dropped stream (matches EventSource's retry feel). */
-const RECONNECT_DELAY = 1500;
-
-/** Close the current stream reader and cancel a pending reconnect. */
+/** Close the window stream and cancel a pending reconnect. */
 function stopStream() {
   window.clearTimeout(reconnectTimer);
   reconnectTimer = null;
@@ -416,18 +670,9 @@ function stopStream() {
   }
 }
 
-function connect() {
-  stopStream();
-  dead = false;
-  setStatus('connecting…');
-  const session = sessionId;
-  const ctrl = new AbortController();
-  streamAbort = ctrl;
-  void runStream(session, ctrl);
-}
-
 /**
- * Read the SSE frames off `/api/terminal/stream` with a streaming fetch.
+ * Read the window's SSE frames off `/api/terminal/events` with a streaming
+ * fetch — one connection for every tab (see `streamAbort`).
  * `EventSource` would be the obvious tool, but it cannot set an
  * `Authorization` header — and the session cookie it falls back on is not
  * always there (the kiosk webview keeps localStorage but not its cookies, so
@@ -435,43 +680,36 @@ function connect() {
  * `readyState === CLOSED`). A fetch body reader authenticates exactly like
  * every other call and reports real HTTP statuses.
  */
-async function runStream(session, ctrl) {
+async function runStream(ctrl) {
+  const expect = tabs.map((t) => t.sessionId).filter(Boolean).join(',');
   const token = getToken();
   let res;
   try {
-    res = await fetch(`/api/terminal/stream?session=${encodeURIComponent(session)}`, {
+    const query = expect ? `?expect=${encodeURIComponent(expect)}` : '';
+    res = await fetch(`/api/terminal/events${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       cache: 'no-store',
       signal: ctrl.signal,
     });
   } catch (_) {
-    if (ctrl.signal.aborted) return;
-    scheduleReconnect(session);
+    if (ctrl.signal.aborted || streamAbort !== ctrl) return;
+    scheduleReconnect();
     return;
   }
   if (ctrl.signal.aborted || streamAbort !== ctrl) return;
 
   if (!res.ok || !res.body) {
-    if (ctrl.signal.aborted) return;
-    if (res.status === 404) {
-      // The shell is gone server-side (server restarted, session closed):
-      // forget it so the next attempt starts a fresh one.
-      sessionId = null;
-      sessionStorage.removeItem(STORAGE_KEY);
-      dead = true;
-      setStatus('session unavailable — “New shell” to start one');
-      return;
-    }
+    if (ctrl.signal.aborted || streamAbort !== ctrl) return;
     if (res.status === 401) {
-      setStatus('session expired — sign in again');
-      scheduleReconnect(session, 5000);
+      const tab = activeTab();
+      if (tab) updateTabStatus(tab, 'session expired — sign in again');
+      scheduleReconnect(5000);
       return;
     }
-    scheduleReconnect(session);
+    scheduleReconnect();
     return;
   }
 
-  setStatus('connected');
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -490,7 +728,7 @@ async function runStream(session, ctrl) {
         start = end + 2;
         const line = frame.split('\n').find((l) => l.startsWith('data:'));
         if (line) handleFrame(line.slice(5).trim());
-        if (dead) {
+        if (!tileEl) {
           stopStream();
           return;
         }
@@ -500,22 +738,27 @@ async function runStream(session, ctrl) {
   } catch (_) {
     if (ctrl.signal.aborted) return;
   }
-  if (ctrl.signal.aborted || streamAbort !== ctrl || dead) return;
-  // The server closed the stream without an `exit` frame: network drop or a
-  // core restart. Reattach; the scrollback replay covers what was missed.
-  scheduleReconnect(session);
+  if (ctrl.signal.aborted || streamAbort !== ctrl || !tileEl) return;
+  // The server closed the stream without an exit for every tab: network drop
+  // or a core restart. Reattach; each session's replay refills its terminal.
+  scheduleReconnect();
 }
 
-function scheduleReconnect(session, delay = RECONNECT_DELAY) {
-  if (dead || !sessionId || sessionId !== session) return;
-  setStatus('reconnecting…');
+function scheduleReconnect(delay = RECONNECT_DELAY) {
+  if (!tileEl) return;
+  const tab = activeTab();
+  if (tab) updateTabStatus(tab, 'reconnecting…');
   window.clearTimeout(reconnectTimer);
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null;
-    if (!dead && sessionId === session) connect();
+    // The reconnected stream replays every session from the start; each tab
+    // resets itself in its `ready` handler, before the replay lands.
+    for (const t of tabs) t.resyncing = true;
+    connect();
   }, delay);
 }
 
+/** Dispatch one multiplexed frame to the tab that owns its session. */
 function handleFrame(data) {
   let msg;
   try {
@@ -523,74 +766,70 @@ function handleFrame(data) {
   } catch (_) {
     return;
   }
+  const session = msg.session;
+  if (!session) return;
+  if (msg.type === 'gone') {
+    // A session the window restored is gone server-side (server restart, the
+    // shell was killed): a tab lives only as long as its shell, so close it.
+    const tab = tabs.find((t) => t.sessionId === session);
+    if (tab) closeTab(tab.id);
+    return;
+  }
+  const tab = tabs.find((t) => t.sessionId === session);
+  if (!tab) return; // a session this window no longer shows
   if (msg.type === 'ready') {
-    shell = { shell: msg.shell || '', cwd: msg.cwd || '' };
-    updateTitle();
-    setStatus(`${msg.shell || 'shell'} — ${msg.cwd || ''}`);
-    onHostResized();
+    tab.shell = msg.shell || '';
+    tab.cwd = msg.cwd || '';
+    if (tab.resyncing) {
+      // Reconnect: the server is about to replay this session's scrollback
+      // from the start, so drop what the terminal already shows first.
+      tab.resyncing = false;
+      try {
+        tab.term?.reset();
+      } catch (_) {
+        /* reset is best-effort */
+      }
+    }
+    updateTabStatus(tab, 'connected');
+    renderTabs(); // the tooltip can name the shell now
+    onHostResized(tab);
   } else if (msg.type === 'out') {
-    queueOutput(b64ToBytes(msg.data));
+    queueOutput(tab, b64ToBytes(msg.data));
   } else if (msg.type === 'exit') {
-    dead = true;
-    flushOutput();
-    term?.write('\r\n\x1b[2m[session ended — “New shell” starts another]\x1b[0m\r\n');
-    setStatus('session ended');
+    // The shell is gone: a tab lives only as long as its shell. Closing the
+    // last tab opens a fresh one (see `closeTab`).
+    closeTab(tab.id);
   }
 }
 
-/** Buffer a chunk of shell output and schedule the coalesced write. */
-function queueOutput(bytes) {
-  outQueue.push(bytes);
-  outBytes += bytes.length;
-  if (outTimer === null) outTimer = window.setTimeout(flushOutput, OUT_FLUSH_MS);
+/** Buffer a chunk of a tab's output and schedule the coalesced write. */
+function queueOutput(tab, bytes) {
+  tab.outQueue.push(bytes);
+  tab.outBytes += bytes.length;
+  if (tab.outTimer === null) tab.outTimer = window.setTimeout(() => flushOutput(tab), OUT_FLUSH_MS);
 }
 
-/** Write everything buffered so far to xterm as a single chunk. */
-function flushOutput() {
-  if (outTimer !== null) {
-    window.clearTimeout(outTimer);
-    outTimer = null;
+/** Write everything buffered so far to the tab's terminal as a single chunk. */
+function flushOutput(tab) {
+  if (tab.outTimer !== null) {
+    window.clearTimeout(tab.outTimer);
+    tab.outTimer = null;
   }
-  if (!outQueue.length) return;
+  if (!tab.outQueue.length) return;
   let merged;
-  if (outQueue.length === 1) {
-    merged = outQueue[0];
+  if (tab.outQueue.length === 1) {
+    merged = tab.outQueue[0];
   } else {
-    merged = new Uint8Array(outBytes);
+    merged = new Uint8Array(tab.outBytes);
     let at = 0;
-    for (const chunk of outQueue) {
+    for (const chunk of tab.outQueue) {
       merged.set(chunk, at);
       at += chunk.length;
     }
   }
-  outQueue = [];
-  outBytes = 0;
-  term?.write(merged);
-}
-
-async function restart() {
-  await killSession({ quiet: true });
-  fit();
-  await attachSession();
-}
-
-async function killSession({ quiet = false } = {}) {
-  stopStream();
-  const id = sessionId;
-  sessionId = null;
-  dead = false;
-  sessionStorage.removeItem(STORAGE_KEY);
-  if (id) {
-    try {
-      await post('/api/terminal/close', { session: id });
-    } catch (err) {
-      if (!quiet) toast(err?.message || 'Terminal: could not close the session', { type: 'error' });
-    }
-  }
-  if (!quiet) {
-    term?.reset();
-    setStatus('session closed — “New shell” to start one');
-  }
+  tab.outQueue = [];
+  tab.outBytes = 0;
+  tab.term?.write(merged);
 }
 
 /* ── window surface contract ──────────────────────────────────── */
@@ -598,38 +837,32 @@ async function killSession({ quiet = false } = {}) {
 export function mountTerminalTile() {
   if (tileEl) return tileEl;
   buildTile();
-  void initTerminal();
+  void boot();
   return tileEl;
+}
+
+/** Load xterm (once) and restore the tab list. */
+async function boot() {
+  try {
+    await ensureAssets();
+  } catch (err) {
+    setStatus('could not load xterm.js');
+    toast('Terminal: xterm.js failed to load', { type: 'error' });
+    return;
+  }
+  if (!tileEl) return; // unmounted while loading
+  await restoreTabs();
+  if (tileEl) connect();
 }
 
 export function unmountTerminalTile() {
   stopStream();
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
-  clearTimeout(resizeTimer);
-  clearTimeout(flushTimer);
-  if (outTimer !== null) clearTimeout(outTimer);
-  resizeTimer = null;
-  flushTimer = null;
-  outTimer = null;
-  inputQueue = [];
-  outQueue = [];
-  outBytes = 0;
-  try {
-    term?.dispose();
-  } catch (_) {
-    /* already gone */
-  }
-  term = null;
-  fitAddon = null;
-  canvasAddon = null;
+  for (const tab of tabs) destroyTab(tab);
+  tabs = [];
+  activeTabId = null;
   tileEl = null;
-  hostEl = null;
-  titleEl = null;
+  tabstripEl = null;
   statusEl = null;
-  shell = { shell: '', cwd: '' };
 }
 
 export function getTerminalTileElement() {
@@ -639,32 +872,36 @@ export function getTerminalTileElement() {
 export function wireTerminalEvents() {
   /* Re-read the themed palette when the user changes appearance/theme. */
   window.addEventListener('appearance:change', () => {
-    if (!term) return;
-    term.options.theme = { ...term.options.theme, ...terminalTheme() };
+    for (const tab of tabs) {
+      if (!tab.term) continue;
+      tab.term.options.theme = { ...tab.term.options.theme, ...terminalTheme() };
+    }
   });
   /* A pick in the top-bar Clipboard menu with this window focused: paste it
-   * straight into the shell (the menu already put it on the OS clipboard). */
+   * straight into the active shell (the menu already put it on the OS clipboard). */
   window.addEventListener('clipboard:paste', (event) => {
     const { text, focused } = event.detail || {};
-    if (focused === TERMINAL_PLUGIN && text) term?.paste(text);
+    if (focused !== TERMINAL_PLUGIN || !text) return;
+    activeTab()?.term?.paste(text);
   });
 }
 
 export function terminalContextMenu() {
+  const tab = activeTab();
   return [
     {
       type: 'item',
       label: 'Copy',
       icon: 'ui/copy',
-      disabled: !term?.getSelection?.(),
-      onClick: () => copySelection(),
+      disabled: !tab?.term?.getSelection?.(),
+      onClick: () => copySelection(tab),
     },
-    { type: 'item', label: 'Paste', icon: 'ui/clipboard', onClick: () => void pasteFromClipboard() },
+    { type: 'item', label: 'Paste', icon: 'ui/clipboard', disabled: !tab, onClick: () => void pasteFromClipboard(tab) },
     { type: 'separator' },
-    { type: 'item', label: 'New shell', icon: 'ui/plus', onClick: () => void restart() },
-    { type: 'item', label: 'Clear scrollback', icon: 'ui/trash', onClick: () => term?.clear() },
+    { type: 'item', label: 'New tab', icon: 'ui/plus', onClick: () => void createTab({}) },
+    { type: 'item', label: 'Clear scrollback', icon: 'ui/trash', disabled: !tab, onClick: () => tab?.term?.clear() },
     { type: 'separator' },
-    { type: 'item', label: 'Kill session', icon: 'ui/close', danger: true, onClick: () => void killSession() },
+    { type: 'item', label: 'Close tab', icon: 'ui/close', danger: true, disabled: !tab, onClick: () => { if (tab) closeTab(tab.id); } },
   ];
 }
 

@@ -77,6 +77,23 @@ impl Event {
         };
         format!("data: {value}\n\n")
     }
+
+    /// Serialize for the multiplexed window stream
+    /// (`GET /api/terminal/events`), where every session's frames share one
+    /// response and each must name its session. `ready` already does.
+    pub fn to_sse_tagged(&self, session: &str) -> String {
+        let value = match self {
+            Event::Ready { .. } => return self.to_sse(),
+            Event::Out(data) => {
+                serde_json::json!({ "session": session, "type": "out", "data": data })
+            }
+            Event::Exit { code } => {
+                serde_json::json!({ "session": session, "type": "exit", "code": code })
+            }
+            Event::Ping => serde_json::json!({ "session": session, "type": "ping" }),
+        };
+        format!("data: {value}\n\n")
+    }
 }
 
 /// State guarded by one lock so subscribing is atomic with the scrollback
@@ -107,6 +124,30 @@ pub struct Session {
 
 static SESSIONS: LazyLock<Mutex<HashMap<String, Arc<Session>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Windows watching for new sessions, per user. The multiplexed window stream
+/// (`GET /api/terminal/events`) registers a receiver here so a session created
+/// after it connected — a new tab — is picked up without a reconnect.
+static WATCHERS: LazyLock<Mutex<HashMap<String, Vec<mpsc::UnboundedSender<String>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Register for the ids of the sessions this user creates from now on.
+/// Dropping the receiver unregisters it on the next notify.
+pub fn watch(user_id: &str) -> mpsc::UnboundedReceiver<String> {
+    let (tx, rx) = mpsc::unbounded();
+    if let Ok(mut watchers) = WATCHERS.lock() {
+        watchers.entry(user_id.to_string()).or_default().push(tx);
+    }
+    rx
+}
+
+fn notify_watchers(user_id: &str, session_id: &str) {
+    if let Ok(mut watchers) = WATCHERS.lock() {
+        if let Some(list) = watchers.get_mut(user_id) {
+            list.retain(|tx| tx.unbounded_send(session_id.to_string()).is_ok());
+        }
+    }
+}
 
 pub fn get(id: &str) -> Option<Arc<Session>> {
     SESSIONS.lock().ok()?.get(id).cloned()
@@ -284,6 +325,10 @@ fn spawn(user_id: &str, cols: u16, rows: u16, agent: bool) -> Result<Arc<Session
         .lock()
         .map_err(|_| AppError::Internal("session registry poisoned".into()))?
         .insert(id, session.clone());
+    if !agent {
+        // Let the multiplexed window stream subscribe to the new session.
+        notify_watchers(user_id, &session.id);
+    }
     Ok(session)
 }
 

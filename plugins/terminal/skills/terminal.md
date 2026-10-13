@@ -9,8 +9,8 @@ sandbox — commands run as the same user the Shiny server runs as.
 - `terminal_exec` — Run a shell command and return its output.
   params: `{ command: string }`
 
-The command runs in a persistent shell of its own (not the Terminal window's
-session), so successive calls share `cd`/environment state and nothing is ever
+The command runs in a persistent shell of its own (never the Terminal window's
+shells), so successive calls share `cd`/environment state and nothing is ever
 typed into a shell the user is working in. Use it for short, non-interactive
 commands when the user asks for something on the machine (`ls`, `cat`, `grep`,
 `df -h`, `git status`, …). It returns once the shell has been quiet for a
@@ -21,7 +21,8 @@ drive them.
 
 ## Window
 
-The window keeps its shell alive while it is closed: reopening the window (or
-reloading the page) replays the recent output and reattaches to the same
-session. "New shell" starts a fresh session, "Kill session" terminates the
-current one.
+The window keeps its shells alive while it is closed: the tab list lives in
+`sessionStorage`, and reopening the window (or reloading the page) replays each
+tab's recent output and reattaches to the same session. The tabs sit in the
+window's top bar (one shell each); closing a tab terminates its shell, a shell
+that exits closes its tab, and closing the last tab opens a fresh one.

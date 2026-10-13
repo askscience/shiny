@@ -4986,7 +4986,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
    padding). Bars wrap to a second row on narrow widths.
    ───────────────────────────────────────────────────────────── */
 .word-bar, .calc-bar, .impress-bar, .mail-bar,
-.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar, .terminal-bar {
+.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar {
   padding: 6px 10px;
   gap: 8px;
   flex-wrap: wrap;
@@ -5004,14 +5004,14 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 
 /* In-bar icon tools match Studio's 32px transport buttons. */
 .word-tool, .calc-tool, .impress-tool, .mail-tool,
-.calendar-nav-btn, .calculator-bar-btn, .pdf-tool, .terminal-tool {
+.calendar-nav-btn, .calculator-bar-btn, .pdf-tool {
   width: 32px;
   height: 32px;
 }
 
 /* ─────────────────────────────────────────────────────────────
    Terminal plugin — the host shell window (xterm.js surface).
-   Chrome (bar/status) follows the theme like every other window; the
+   Chrome (tab strip/status) follows the theme like every other window; the
    terminal surface itself keeps a dark palette by default, exposed as
    tokens so a theme can override it. The window surface ships DOM only —
    all styling lives here, keyed by the `terminal-*` prefix.
@@ -5024,38 +5024,91 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   --terminal-fg: #d8d8dc;
 }
 
-.terminal-bar {
+/* The strip is the window's top bar (`data-window-bar`), so it merges with
+   the window controls like the browser's — same geometry, terminal names. */
+.terminal-tabstrip {
+  flex: none;
   display: flex;
   align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid var(--glass-border);
   background: var(--glass);
 }
 
-.terminal-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
-  padding: 2px 0;
+/* Inside the merged header it drops its own plate and reads as a single row
+   with the close/fullscreen controls (core drops the duplicate border). */
+.tile-header--merged > .terminal-tabstrip {
+  height: 100%;
+  background: transparent;
 }
 
-.terminal-tool {
-  border-radius: 0;
+.terminal-tab {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 190px;
+  height: 26px;
+  padding: 0 4px 0 8px;
   border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  border-radius: 8px;
+  color: var(--text-secondary, var(--text));
+  transition: background var(--duration-fast, 120ms) var(--ease-out, ease),
+              border-color var(--duration-fast, 120ms) var(--ease-out, ease);
 }
-.terminal-tool:hover { background: var(--glass-hover); color: var(--text); }
-.terminal-tool--danger:hover { color: var(--error); border-color: var(--error); }
+
+.terminal-tab:hover {
+  background: var(--glass-hover, color-mix(in srgb, currentColor 8%, transparent));
+}
+
+.terminal-tab.is-active {
+  border-color: var(--glass-border);
+  background: var(--glass-strong, color-mix(in srgb, var(--surface) 80%, transparent));
+  color: var(--text);
+}
+
+.terminal-tab-label {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.terminal-tab-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.terminal-tab-close:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.terminal-newtab { flex: none; }
 
 .terminal-host {
   flex: 1;
@@ -5063,7 +5116,10 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   padding: 4px 6px 0;
   overflow: hidden;
   background: var(--terminal-bg);
+  display: none;
 }
+
+.terminal-host.is-active { display: block; }
 
 .terminal-status {
   padding: 4px 10px;
