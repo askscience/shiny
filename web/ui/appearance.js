@@ -182,11 +182,46 @@ export function applyAppearance({ accent = getAccent(), gradient = getGradient()
     `radial-gradient(ellipse 80% 60% at 20% 10%, ${rgba(stops[0], 0.13)} 0%, transparent 55%),` +
     `radial-gradient(ellipse 70% 50% at 80% 90%, ${rgba(tail, 0.1)} 0%, transparent 50%)`);
 
+  applyFocusSpectrum(root, accent);
+
   applyFont();
 
   const detail = { accent, gradient };
   window.dispatchEvent(new CustomEvent('appearance:change', { detail }));
   window.dispatchEvent(new CustomEvent('accent:change', { detail: { accent } })); // legacy
+}
+
+/**
+ * Focus mode paints the *whole* accent palette of the theme — not just the
+ * accent the user picked — so a focused window is unmistakable. Two variables
+ * carry it: `--focus-ring`, the window frame (a conic wheel, because a frame is
+ * a contour: it starts at the **bottom-left** corner and runs clockwise, and
+ * blends colour into colour rather than banding them), and `--focus-bar`, the
+ * same palette laid out straight for the tray underline. The chosen accent leads
+ * the wheel so the user's own colour is still part of it.
+ *
+ * Deliberately plain: the stops are literal angles and the wheel closes on its
+ * first colour, so nothing here depends on a `calc()` over an animated custom
+ * property. A frame whose background fails to parse is not a subtly wrong frame
+ * — it is no frame at all (measured: the animated-`calc()` version drew nothing).
+ */
+function applyFocusSpectrum(root, accent) {
+  const seen = new Set([String(accent).toLowerCase()]);
+  const palette = [accent];
+  for (const preset of accentPresets()) {
+    const value = String(preset?.value || '').trim();
+    if (!/^#[0-9a-f]{3,8}$/i.test(value) || seen.has(value.toLowerCase())) continue;
+    seen.add(value.toLowerCase());
+    palette.push(value);
+  }
+  if (palette.length < 2) return; // a theme with a single accent: keep --accent
+
+  const step = 360 / palette.length;
+  const stops = palette.map((c, i) => `${c} ${(i * step).toFixed(2)}deg`).join(', ');
+  const from = 225; // the bottom-left diagonal: 0deg is up, clockwise
+  root.style.setProperty('--focus-ring',
+    `conic-gradient(from ${from}deg, ${stops}, ${palette[0]} 360deg)`);
+  root.style.setProperty('--focus-bar', `linear-gradient(90deg, ${palette.join(', ')})`);
 }
 
 /** Write the global font onto :root, or clear the override for 'theme'. */

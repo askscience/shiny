@@ -12,6 +12,7 @@ Imports from core:
 ```js
 import { apiFetch } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
+import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
@@ -130,7 +131,7 @@ The Browser is one of the surfaces the central clipboard service
 
 | Global | Payload | Purpose |
 |---|---|---|
-| `window.__peakdViewEvent(event)` | `{ id, type, ... }` | Per-tab `title`, `url`, `load` (`phase: started/finished`), `new-window`; and non-tab `download` events (`applyDownload`) |
+| `window.__peakdViewEvent(event)` | `{ id, type, ... }` | Per-tab `title`, `url`, `load` (`phase: started/finished`), `new-window`, `context-menu` (`menu` = `{x,y,linkUrl,editable,selection}`); and non-tab `download` events (`applyDownload`) |
 | `window.__peakdShield(state)` | `{ enabled, blocked, rules }` | Updates the shield button title / `browserSettings` |
 | `window.__peakdDownloads(list)` | `Download[]` | Replaces the live downloads list (answer to `peakd:downloads:list`) |
 
@@ -158,7 +159,8 @@ The Browser is one of the surfaces the central clipboard service
 `peakd:view:` ops (parsed by `crates/peakd/src/browse.rs` `Command::parse`):
 `open` (`url`, `rect`, `visible`, `incognito`), `navigate`, `setBounds`,
 `setVisible`, `setMask` (`holes`), `back`, `forward`, `reload`, `close`,
-`focus`, `paste` (`text`).
+`focus`, `paste` (`text`), `action` (`verb` — one engine action on the page's
+focused element: `Cut` / `Copy` / `Paste` / `SelectAll`).
 
 ## API calls (`apiFetch`)
 
@@ -223,6 +225,19 @@ frozen (see `kPageQml` in `crates/peakd/shim/peakd.cpp`).
 `startBoundsSync()` adds a 250 ms fallback interval, a `ResizeObserver` on the
 frame wrapper, `MutationObserver`s on the tile grid and body class, and the
 window events listed above. `stopBoundsSync()` tears them all down.
+
+## Right-click inside a page
+
+A right-click in a page opens the app's own menu over the page — never a
+platform menu. The shell forwards the request as a `context-menu` view event
+(`{x, y, linkUrl, editable, selection}`; the position is local to the page item,
+so the plugin adds the frame origin and divides by `dpr`), and the plugin opens
+core's `openContextMenu()` at the cursor. The `.ctx-menu` mask hole keeps it
+visible and clickable (see above). Entries map back to `peakd:view:` commands:
+`back` / `forward` / `reload`, Copy Link Address through the clipboard service
+(so it lands in the top-bar history), and the edit verbs — Cut / Copy / Paste /
+SelectAll — via the generic `action` op. Only the active tab's page opens a
+menu.
 
 ## Gotchas
 

@@ -315,6 +315,7 @@ pub struct AgentContext {
     pub lang: String,
     pub ollama_model: Option<String>,
     pub workspaces_enabled: bool,   // false on a vertical phone-like screen
+    pub focused: Vec<String>,       // focus mode: only web_search + these plugins run
 }
 ```
 

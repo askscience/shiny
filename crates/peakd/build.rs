@@ -13,7 +13,7 @@ fn main() {
     // The shell is one Qt Quick scene: Quick/QuickWidgets host it, WebEngineQuick
     // renders the app view and the page views in it, WebEngineCore supplies the
     // profile/download/permission classes the shim configures. Widgets stay for
-    // the window, the menus and the file dialogs.
+    // the window and the file dialogs.
     const MODULES: &[&str] = &[
         "Qt6Core",
         "Qt6Gui",

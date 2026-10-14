@@ -194,6 +194,16 @@ assert.equal(tile.dataset.plugin, 'filmcraft', 'data-plugin must identify the wi
 // into the merged header, so assert on the property rather than on the key.
 const header = tile.children.find((c) => c.dataset.windowBar !== undefined);
 assert.ok(header, 'the tile needs a header carrying data-window-bar');
+// The bar must not wear core's chrome classes: reusing `tile-header*` made
+// core believe the window already had chrome, so FilmCraft shipped with no
+// close and no fullscreen button at all.
+assert.ok(
+  header.classList.contains('filmcraft-bar'),
+  'the bar carries the plugin\'s own prefix, not core chrome classes',
+);
+for (const name of ['tile-header', 'tile-header-title', 'tile-header-spacer']) {
+  assert.ok(!header.classList.contains(name), `the bar must not reuse core's \`${name}\` class`);
+}
 assert.ok(tile.classList.contains('filmcraft-tile'), 'the tile carries the plugin prefix for plugin.css');
 
 /* ── The stylesheet comes from the plugin's own path ───────────────────── */

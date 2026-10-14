@@ -48,6 +48,10 @@ impl ViewHost for QtHost {
         shim::view_paste(id, text);
     }
 
+    fn action(&mut self, id: &str, verb: &str) {
+        shim::view_action(id, verb);
+    }
+
     fn close(&mut self, id: &str) {
         shim::view_close(id);
     }

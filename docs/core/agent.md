@@ -28,7 +28,7 @@ and the REST reference in [Chat & agent API](../api/chat-agent.md).
 | HTTP entry points | `src/api/agent.rs` | `AgentRequest` parsing, system-prompt assembly, JSON + SSE handlers, stop handler, turn persistence. |
 | Run loop | `src/services/agent_runner.rs` | `run_agent`: iteration, cancellation, tool execution, artifacts, result assembly. |
 | Prompt shapes & labels | `src/services/agent_steps.rs` | Planning/continuation prompts, `describe_tool_step`, step/done/failed labels, `thinking_label`. |
-| Action parsing & dispatch | `src/services/agent_tools.rs` | `parse_actions`, `strip_action_blocks`, `execute_action`, core built-ins. |
+| Action parsing & dispatch | `src/services/agent_tools.rs` | `parse_actions`, `strip_action_blocks`, `execute_action`, core built-ins, the focus-mode scope. |
 | Cancellation | `src/services/agent_cancel.rs` | `TurnRegistry`, `CancelHandle`, `StopOutcome`, late-stop annotation. |
 | Provider resolution | `src/services/ai.rs` | `AiClient`, `ResolvedAi`, `resolve_for_user`. |
 | Providers | `src/services/openai.rs`, `crates/shiny-plugin-sdk/src/services.rs` | OpenAI-compatible and Ollama clients. |
@@ -100,7 +100,7 @@ stream itself; see [§9](#9-sse-vs-json-modes).
 | `ollama_model` | string? | Per-request model override (Ollama only). |
 | `stream` | bool? | Selects SSE vs JSON. |
 | `context` | object? | `{lat, lon, heading}` — live location. |
-| `desktop` | object? | `{active, workspaces:[{index, windows:[]}], workspaces_enabled}`. |
+| `desktop` | object? | `{active, workspaces:[{index, windows:[]}], workspaces_enabled, focused:[]}`. |
 | `conversation_id` | string? | Continue this thread; omit to start a new one. |
 | `voice` | bool (default `false`) | Spoken reply constraints. |
 | `turn_id` | string? | Client-generated id for stop/cancel. |
@@ -141,6 +141,7 @@ let ctx = AgentContext {
     lang: lang.clone(),
     ollama_model: requested_model.clone(),
     workspaces_enabled: body.desktop...workspaces_enabled.unwrap_or(true),
+    focused,   // focus mode: set from the same set the skills are scoped to
 };
 ```
 
@@ -182,7 +183,16 @@ not active they collapse to `No active trip` / `No recent diary entries`.
 
 ```rust
 let core_skill = load_core_skill();                       // web/skills/core-assistant.md
-let plugin_skill = state.plugins.skills_markdown_for(&installed);
+
+// Focus mode: the windows the user explicitly focused, intersected with the
+// active set. Non-empty narrows the skills to those plugins for this turn.
+let focused: BTreeSet<String> = body.desktop.as_ref()
+    .map(|d| d.focused.iter().filter(|n| installed.contains(*n)).cloned().collect())
+    .unwrap_or_default();
+let focus_mode = !focused.is_empty();
+let skill_scope = if focus_mode { &focused } else { &installed };
+
+let plugin_skill = state.plugins.skills_markdown_for(skill_scope);
 let skill = if plugin_skill.trim().is_empty() { core_skill }
             else { format!("{core_skill}\n\n---\n\n{plugin_skill}") };
 
@@ -197,7 +207,10 @@ let context_lines = state.plugins.context_lines_for(&installed);
   time (so edits are picked up without a restart), falling back to
   `"Use JSON action blocks."`.
 - `skills_markdown_for` concatenates each active plugin's `skills_md` fragment
-  plus every active tool's `doc_fragment()`.
+  plus every active tool's `doc_fragment()`. It takes any set, which is what
+  makes focus mode a one-argument change: with nothing focused the scope is the
+  whole active set (unchanged behaviour), otherwise it is exactly the focused
+  plugins — see [desktop.md § Focus mode](desktop.md#focus-mode).
 - `persona_concat_for` joins the active plugins' one-line persona fragments.
 - `context_lines_for` collects active plugins' arbitrary `context` lines
   (e.g. an "Active trip" line) and is rendered as a `## Context` addition.
@@ -222,7 +235,41 @@ into a `## Desktop (current layout)` section. On a vertical screen
 (`workspaces_enabled == false`) it says the desktop is a single column and the
 workspace tools do nothing. On a wide screen it lists `workspace N: windows…`
 and the active workspace, and advises moving windows into existing workspaces
-rather than creating empty ones.
+rather than creating empty ones. `plugin_windows_block` keeps `show_plugin`
+("bring the window to the front") distinct from focus mode.
+
+### 3.7 Focus-mode block
+
+`focus_state_line` always contributes one line to `## Context` —
+`Focus mode: ON — the user has focused: files` or `Focus mode: OFF …` — so the
+model never has to infer the state from the presence of a section (it used to
+guess, and once answered "focus mode is off" while a window was focused).
+
+When `focused` is non-empty, `focus_mode_block` additionally appends a
+`## Focus mode (ON)` section naming the focused plugins and telling the model:
+its tools are limited to them plus `web_search`; it must not call another
+plugin's tools (nor a desktop action) even though they look like progress; and it
+has no way to change the focus itself — only the user does. Its instructions are
+therefore to ask, in one short sentence, for the user to focus the plugin the
+request needs, and to suggest that only when it genuinely helps the work.
+
+The same set rides in `AgentContext.focused`, and `execute_action` enforces it
+(`focus_blocks_plugin` / `focus_blocks_core`):
+
+- a plugin tool is checked where the registry has named its owner, so **the
+  focused plugin's own tools always run** and another plugin's never do;
+- core actions are checked against an explicit desktop list
+  (`FOCUS_MODE_BLOCKED_CORE`); anything else fails open, and `web_search` plus the
+  plugin lifecycle are never blocked;
+- an invented tool name reaches its own "unknown action" error rather than being
+  blamed on focus mode.
+
+`tests/focus_mode_scope.rs` runs that against the real plugins (19 plugins, 331
+tools) and dispatches for real. Two of these paths exist because of measured
+failures: qwen3.5:4b reached for `show_plugin` on the unfocused plugin when only
+the prompt asked it not to, and gemma4:31b-cloud — with a focused Word plugin —
+was told "focus mode blocks Word" by a gate that had misread an invented tool
+name (`word_create_document`; Word's real tools are `doc_create` / `doc_write`).
 
 ---
 
@@ -589,6 +636,9 @@ The `## Tools` block is the concatenation of:
 1. `web/skills/core-assistant.md` (always-on core tools),
 2. each active plugin's `skills_md` (set with `builder.skills(...)`),
 3. every registered tool's `doc_fragment()`, deduplicated by tool name.
+
+In **focus mode** (the user focused plugin windows) 2 and 3 shrink to the focused
+plugins — see [desktop.md § Focus mode](desktop.md#focus-mode).
 
 A tool that returns no `doc_fragment` stays hidden. Deactivated plugins
 contribute nothing (no persona, skills or context lines).

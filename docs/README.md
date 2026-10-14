@@ -27,7 +27,7 @@ small number of areas; each area has its own index and cross-links.
 | [Agent](core/agent.md) | The Ollama agent loop, tool dispatch, system prompt, stops. |
 | [Chat](core/chat.md) | Conversations, message history, memory. |
 | [Voice](core/voice.md) | faster-whisper / Vosk STT, Supertonic / Qwen TTS, the voice bar. |
-| [Desktop](core/desktop.md) | Window manager, workspaces, layouts, HUD, launcher, gestures. |
+| [Desktop](core/desktop.md) | Window manager, workspaces, layouts, focus mode, HUD, launcher, gestures. |
 | [Web UI](core/web-ui.md) | The frontend module graph and UI component library. |
 | [Themes & icons](core/themes-icons.md) | Tokens, accent/gradient, selectable icon sets and KDE curation. |
 | [Data & auth](core/data-and-auth.md) | SQLite schema, migrations, users, tokens, Linux-user binding. |

@@ -31,6 +31,7 @@ fn agent_ctx() -> AgentContext {
         lang: "en".into(),
         ollama_model: None,
         workspaces_enabled: true,
+        focused: Vec::new(),
     }
 }
 

@@ -3,14 +3,21 @@
  *
  * One icon per installed plugin (active or inactive), sitting to the right of
  * the separator after the weather widget. Clicking an inactive icon activates
- * the plugin; clicking an active icon focuses its window (where it has one).
+ * the plugin; clicking an active icon brings its window to the front (where it
+ * has one). Neither touches focus mode — that is the eye button, the icon's
+ * right-click menu, or the AI.
  *
  * This replaces the old phone-only "open windows" switcher — the tray shows
  * every plugin, not just the ones currently open, and is visible at all sizes.
+ *
+ * Two states ride on an icon: `is-active` (the plugin is running — the accent
+ * plus the underline) and `is-focused` (focus mode, an explicit choice the user
+ * or the AI makes, possibly for several plugins — the accent plus a plate).
  */
 import { apiFetch } from './api.js';
 import { hudDivider } from './hudDivider.js';
 import { pluginIconEl } from './pluginIcon.js';
+import { isPluginFocused } from './desktop.js';
 
 const trayEl = document.getElementById('hud-plugins');
 
@@ -19,6 +26,13 @@ let activeSet = new Set(); // session-active names
 
 function label(name) {
   return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Accessible name for a tray icon — "active" (running) and "focused" (in focus
+ *  mode) are different states and both belong in it. */
+function trayLabel(name) {
+  const state = activeSet.has(name) ? 'active' : 'inactive';
+  return `${label(name)} (${state}${isPluginFocused(name) ? ', focused' : ''})`;
 }
 
 async function refresh() {
@@ -43,8 +57,9 @@ function buildButton(p) {
   btn.className = 'hud-plugin-btn';
   btn.dataset.plugin = p.name;
   btn.classList.toggle('is-active', active);
+  btn.classList.toggle('is-focused', isPluginFocused(p.name));
   btn.title = `${label(p.name)} — ${active ? 'active' : 'tap to activate'}`;
-  btn.setAttribute('aria-label', `${label(p.name)} (${active ? 'active' : 'inactive'})`);
+  btn.setAttribute('aria-label', trayLabel(p.name));
   btn.setAttribute('aria-pressed', String(active));
 
   btn.appendChild(pluginIconEl(p.name, { size: 24, fallback: 'ui/puzzle' }));
@@ -87,6 +102,17 @@ function render() {
   trayEl.classList.toggle('hidden', plugins.length === 0);
 }
 
+/** Focus mode is applied to the tray without a rebuild: the focused plugins'
+ *  glyphs wear the accent, like the window ring and the workspace dot. */
+function syncFocusFlags() {
+  if (!trayEl) return;
+  trayEl.querySelectorAll('button[data-plugin]').forEach((btn) => {
+    const name = btn.dataset.plugin;
+    btn.classList.toggle('is-focused', isPluginFocused(name));
+    btn.setAttribute('aria-label', trayLabel(name));
+  });
+}
+
 async function onClick(p, active) {
   if (active) {
     // Bring the plugin's window forward (no-op for tool-only plugins).
@@ -122,6 +148,8 @@ export async function openPlugin(name) {
 export function initHudPlugins() {
   if (!trayEl) return;
   window.addEventListener('plugins:changed', () => void refresh());
+  // Focus mode is a desktop state change — repaint the glyphs, don't refetch.
+  window.addEventListener('desktop:changed', syncFocusFlags);
   window.addEventListener('storage', (e) => {
     if (e.key === 'plugins.changed') void refresh();
   });

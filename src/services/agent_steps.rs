@@ -138,7 +138,19 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
         return format!("{action} failed: {err}");
     }
     if result != "ok" {
-        return format!("{action}: {result}");
+        // A refusal that explains itself — focus mode, a phone-only screen — has
+        // to reach the model: without the message it only sees the status word
+        // and cannot tell the user what to do instead.
+        let reason = data
+            .get("error")
+            .or_else(|| data.get("reason"))
+            .or_else(|| data.get("message"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty());
+        return match reason {
+            Some(r) => format!("{action} {result}: {r}"),
+            None => format!("{action}: {result}"),
+        };
     }
 
     match action {
@@ -773,6 +785,25 @@ mod tests {
         let step = describe_tool_step("plan_trip", "ok", &data);
         assert!(step.contains("4 guides"));
         assert!(!step.contains("9000"));
+    }
+
+    /// A step that was REFUSED (focus mode, a phone-only screen) must carry the
+    /// reason: the model has to be able to tell the user what to do instead.
+    #[test]
+    fn non_ok_steps_carry_their_reason() {
+        let refused = describe_tool_step(
+            "show_plugin",
+            "unavailable",
+            &json!({ "error": "focus mode is on: only web search and the focused plugins (files) can run this turn" }),
+        );
+        assert!(refused.contains("focus mode is on"), "{refused}");
+        assert!(refused.contains("files"), "{refused}");
+
+        let phone = describe_tool_step("workspace_create", "unavailable", &json!({ "reason": "workspaces are off on this screen" }));
+        assert!(phone.contains("workspaces are off on this screen"), "{phone}");
+
+        // No message: the status word alone is still better than nothing.
+        assert_eq!(describe_tool_step("calc_eval", "unavailable", &json!({})), "calc_eval: unavailable");
     }
 
     #[test]

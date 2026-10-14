@@ -48,6 +48,13 @@ colour and gradient. It writes the CSS custom properties and dispatches
 **`appearance:change`**, which repaints everything including the Leaflet map
 colours and the voice bar glow. Settings → Appearance exposes them.
 
+It also derives the **focus-mode palette** — `--focus-ring` (a conic wheel, the
+frame of a focused window) and `--focus-bar` (the tray underline) — from the
+theme's *whole* `accents` list rather than the one accent the user picked, so a
+focused window wears every colour the theme offers. Themes declare them in
+`theme.json`; see [`web/themes/README.md`](../../web/themes/README.md) for the
+contract and [desktop.md § Focus mode](desktop.md#focus-mode) for where it shows.
+
 ---
 
 ## The icon library

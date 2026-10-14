@@ -7,8 +7,8 @@
  *
  * The layout engine (workspaces, master/stack/windows, focus, fullscreen)
  * lives in desktop.js; this module owns the plugin-window DOM: mounting the
- * map/radio/word/youtube/calc tiles, the per-window title bar (close/fullscreen
- * controls), and the in-tile artifact sheets/overlay.
+ * map/radio/word/youtube/calc tiles, the per-window title bar (close/fullscreen/
+ * focus controls), and the in-tile artifact sheets/overlay.
  *
  * - Settings → Desktop sets the tiling layout; Settings → Plugin windows
  *   still chooses Tile vs Full screen per plugin.
@@ -24,6 +24,7 @@ import {
   applyLayout, renderWorkspaceBar,
   focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
   setSurfaceNamesProvider, isFocusOnlyChange, bumpZ, getWorkspacesList,
+  isPluginFocused, togglePluginFocus, reconcilePluginFocus, revealWindow,
 } from './desktop.js';
 import { toggleWindowFullscreen, setFullscreenSurfaceProvider, fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
 import { apiFetch } from './api.js';
@@ -93,27 +94,30 @@ function ensureCoreSurface(name) {
   return coreLoading.get(name);
 }
 
-/** Open (or focus) a built-in window. */
+/** Open (or bring forward) a built-in window. Opening one reveals it like any
+ *  other window; an explicit gesture on an already-open one brings it forward. */
 export function openCoreWindow(name) {
   if (!isCoreWindow(name)) return;
+  const alreadyOpen = coreOpen.has(name);
   coreOpen.add(name);
   void ensureCoreSurface(name).then(() => {
     renderTiles();
-    focusWindow(name);
+    if (alreadyOpen) focusWindow(name);
   });
 }
 
 /**
- * Open (or focus) a built-in window and ask it to show one of its sections.
- * Used by the battery quick menu's "Power settings" shortcut; a surface that
- * has no sections ignores the extra hint.
+ * Open (or bring forward) a built-in window and ask it to show one of its
+ * sections. Used by the battery quick menu's "Power settings" shortcut; a
+ * surface that has no sections ignores the extra hint.
  */
 export async function openCoreWindowSection(name, section) {
   if (!isCoreWindow(name)) return;
+  const alreadyOpen = coreOpen.has(name);
   coreOpen.add(name);
   await ensureCoreSurface(name);
   renderTiles();
-  focusWindow(name);
+  if (alreadyOpen) focusWindow(name);
   surfaceModules.get(name)?.selectSection?.(section);
 }
 
@@ -335,8 +339,8 @@ export function getPluginTile(name) {
   return surfaceModules.get(name)?.getElement?.() || null;
 }
 
-/** Add the shared window chrome (title bar + close/fullscreen controls) to a
- *  plugin window, once. The controls sit on the left as requested; the title
+/** Add the shared window chrome (title bar + close/fullscreen/focus controls) to
+ *  a plugin window, once. The controls sit on the left as requested; the title
  *  is centered and the header doubles as the drag handle in Windows layout. */
 function ensureWindowChrome(el, name) {
   if (!el) return;
@@ -346,10 +350,14 @@ function ensureWindowChrome(el, name) {
   // behind-content glow (it shows in the window chrome above the opaque map).
   installGlow(el, name);
 
-  if (el.querySelector(':scope > .tile-header')) return;
+  // The marker identifies injected chrome — not the styling class. A plugin
+  // bar that happens to reuse `tile-header` must not be able to suppress the
+  // close/fullscreen injection (FilmCraft shipped exactly that bug).
+  if (el.querySelector(':scope > [data-window-chrome]')) return;
 
   const header = document.createElement('header');
   header.className = 'tile-header';
+  header.dataset.windowChrome = '';
 
   const controls = document.createElement('span');
   controls.className = 'tile-header-controls';
@@ -380,7 +388,22 @@ function ensureWindowChrome(el, name) {
     toggleWindowFullscreen(name);
   });
 
-  controls.append(closeBtn, fullBtn);
+  const focusBtn = document.createElement('button');
+  focusBtn.type = 'button';
+  focusBtn.className = 'tile-header-btn tile-header-btn--focus';
+  focusBtn.title = 'Focus';
+  focusBtn.setAttribute('aria-label', `Focus ${pluginLabel(name)}`);
+  focusBtn.setAttribute('aria-pressed', 'false');
+  focusBtn.appendChild(icon('ui/eye', { size: 14 }));
+  focusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Focus mode: the AI's skills narrow to the focused plugins and the window
+    // ring, the tray glyph and the workspace dot wear the accent. Click again
+    // to unfocus. Never set automatically — see desktop.js.
+    togglePluginFocus(name);
+  });
+
+  controls.append(closeBtn, fullBtn, focusBtn);
 
   // A plugin window can nominate its top bar (`data-window-bar`) to merge with
   // the window controls, so the window shows one slim row — close, fullscreen,
@@ -414,16 +437,37 @@ function ensureWindowChrome(el, name) {
   el.appendChild(resize);
 }
 
-/** Reflect the current fullscreen state on a window's fullscreen button. */
+/** Reflect the current fullscreen and focus state on a window's controls. */
 function syncWindowChrome(el, name) {
-  const full = el?.querySelector(':scope > .tile-header .tile-header-btn--full');
-  if (!full) return;
-  const isFull = getFullscreen() === name;
-  full.classList.toggle('is-active', isFull);
-  full.title = isFull ? 'Exit full screen' : 'Full screen';
-  full.setAttribute('aria-label', isFull
-    ? `Exit full screen ${pluginLabel(name)}`
-    : `Full screen ${pluginLabel(name)}`);
+  if (!el) return;
+  const full = el.querySelector(':scope > .tile-header .tile-header-btn--full');
+  if (full) {
+    const isFull = getFullscreen() === name;
+    full.classList.toggle('is-active', isFull);
+    full.title = isFull ? 'Exit full screen' : 'Full screen';
+    full.setAttribute('aria-label', isFull
+      ? `Exit full screen ${pluginLabel(name)}`
+      : `Full screen ${pluginLabel(name)}`);
+  }
+
+  const focused = isPluginFocused(name);
+  el.classList.toggle('tile--plugin-focus', focused);
+  const focusBtn = el.querySelector(':scope > .tile-header .tile-header-btn--focus');
+  if (focusBtn) {
+    focusBtn.classList.toggle('is-active', focused);
+    focusBtn.setAttribute('aria-pressed', String(focused));
+    focusBtn.title = focused ? 'Unfocus' : 'Focus';
+    focusBtn.setAttribute('aria-label', `${focused ? 'Unfocus' : 'Focus'} ${pluginLabel(name)}`);
+  }
+}
+
+/** Re-apply the focus-mode chrome without re-tiling — the desktop hands us the
+ *  focus-only changes, which deliberately skip the layout pass. */
+function repaintWindowFocus() {
+  if (!grid) return;
+  grid.querySelectorAll(':scope > .tile').forEach((el) => {
+    syncWindowChrome(el, el.dataset.plugin || '');
+  });
 }
 
 /** Plugin names that already had a window at the previous render. A name that
@@ -439,6 +483,11 @@ function renderTiles() {
   // Names appearing for the first time are windows being opened now.
   const opening = names.filter((n) => !mountedNames.has(n));
   ensureWindows(names);
+  // A focused plugin whose window is gone (deactivated, or a stale saved entry)
+  // leaves focus mode here, where the window list is authoritative. Skipped
+  // while the list is still empty on the first render — pruning against that
+  // would wipe the restored focus set before the plugin set has loaded.
+  if (names.length) reconcilePluginFocus(names);
 
   // Give a window being opened the top of the stacking order *before* the
   // layout applies it, so one pass is enough.
@@ -518,11 +567,10 @@ function renderTiles() {
   window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
   resizeMapSoon();
 
-  // Focus the window that was just opened, after the layout has positioned it,
-  // so the user's new window is both on top and active. Done last and
-  // explicitly, rather than relying on which window the layout happened to
-  // touch last.
-  if (opening.length) focusWindow(opening[opening.length - 1]);
+  // A window being opened is raised (above, before the layout) but deliberately
+  // NOT focused. Focus mode is the user's explicit choice — the eye button, the
+  // tray menu, or the AI — so a new window never enters it, never takes the
+  // accent from the window being worked on, and never narrows the AI's skills.
 }
 
 /** Slide the visible windows into place after a workspace switch, coming from
@@ -566,6 +614,24 @@ function focusPlugin(name) {
   } else if (getFullscreen()) {
     clearFullscreen();
   }
+}
+
+/** Show a window that was just opened, without focusing it: put it on screen and
+ *  honour its "open full screen" preference. Neither the active window nor focus
+ *  mode is set here — both belong to the user (or the AI, explicitly). */
+function revealPlugin(name) {
+  if (!name || !surfacePlugins().includes(name)) return;
+
+  // Phone: one window at a time — switching is the whole gesture.
+  if (PHONE_QUERY.matches) {
+    activePhonePlugin = name;
+    renderTiles();
+    return;
+  }
+
+  revealWindow(name);
+  // The per-plugin "Full screen" preference still means "open fullscreen".
+  if (getPluginLayout(name) === 'full') toggleFullscreen(name, true);
 }
 
 function unfocus() {
@@ -704,8 +770,12 @@ export function initTileManager() {
   window.addEventListener('desktop:changed', (e) => {
     // A focus-only change has already repainted the focus classes; re-tiling
     // every window and rebuilding the workspace bar for it was the click
-    // latency. Nothing else on screen depends on which window has focus.
-    if (isFocusOnlyChange(e.detail)) return;
+    // latency. Nothing else on screen depends on which window has focus. Focus
+    // mode still needs its ring and the eye button refreshed.
+    if (isFocusOnlyChange(e.detail)) {
+      repaintWindowFocus();
+      return;
+    }
 
     const idx = activeWorkspaceIndex();
     renderTiles();
@@ -759,10 +829,10 @@ export function initTileManager() {
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
     if (!surfacePlugins().includes(activePhonePlugin)) activePhonePlugin = null;
     renderTiles();
-    // A plugin just opened from the tray — focus it so its window comes to
-    // the front (raises it in the floating Windows layout).
+    // A plugin just opened from the tray — show its window. It is raised but
+    // not focused: neither the active window nor focus mode changes on an open.
     const opened = e.detail?.opened;
-    if (opened) focusPlugin(opened);
+    if (opened) revealPlugin(opened);
   });
 }
 

@@ -13,6 +13,13 @@ pub struct AgentContext {
     /// clients (and tests) keep the wide-screen behaviour.
     #[serde(default = "workspaces_enabled_default")]
     pub workspaces_enabled: bool,
+    /// Plugins the user has focused. Empty = focus mode off and every active
+    /// plugin is available. Non-empty = the hard scope for this turn: only
+    /// `web_search` and these plugins' own tools run, refused in
+    /// `agent_tools::execute_action`. Only the user changes it. Defaults to
+    /// empty for older clients.
+    #[serde(default)]
+    pub focused: Vec<String>,
 }
 
 fn workspaces_enabled_default() -> bool {

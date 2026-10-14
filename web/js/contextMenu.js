@@ -5,16 +5,23 @@
  * right-click follows the same conventions as a real WM:
  *
  *   • Right-click anywhere in a plugin window (title bar OR content) → window
- *     menu (focus / fullscreen / move-to-workspace / the app's own actions /
- *     deactivate). Right-clicks inside text fields keep the native menu.
- *   • Right-click a plugin tray icon in the top bar → plugin menu (focus,
- *     fullscreen, activate / deactivate).
+ *     menu (focus mode / bring to front / fullscreen / move-to-workspace / the
+ *     app's own actions / deactivate).
+ *   • Right-click in a text field (anywhere in the app) → edit menu (cut /
+ *     copy / paste / select all).
+ *   • Right-click a plugin tray icon in the top bar → plugin menu (focus mode,
+ *     bring to front, fullscreen, activate / deactivate).
  *   • Right-click the top bar itself        → desktop menu.
  *   • Right-click the empty desktop         → desktop menu (new / remove
  *     workspace, switch workspace, layout mode).
  *   • Right-click a workspace dot           → workspace menu (new / remove).
  *   • Right-click the voice bar              → assistant menu (new chat, chat
  *     history, type a message, voice, settings).
+ *
+ * Any other right-click inside the shell is swallowed: it must never reach
+ * QtWebEngine, whose native Back/Forward/Reload menu has no place in the app.
+ * A right-click inside a Browser-plugin page opens this same menu over the
+ * page (the shell forwards the request; plugins/browser/web/plugin.js).
  *
  * On a touchscreen a long press opens the same menus (there is no right
  * button). The voice bar and the virtual keyboard keep their own press-and-hold, so
@@ -35,6 +42,7 @@ import {
   moveWindow, moveWindowByIndex, getWorkspacesList,
   activeWorkspaceIndex, getLayout, setLayout, getFocus, getFullscreen,
   workspacesEnabled, workspaceLock, workspaceLabel,
+  isPluginFocused, togglePluginFocus,
 } from './desktop.js';
 import { toggleWindowFullscreen } from './fullscreen.js';
 import {
@@ -48,6 +56,7 @@ import { openChatHistory } from './chatHistory.js';
 import { openTextInput } from './textInput.js';
 import { startListening, cancelListening, isListening } from './voice.js';
 import { getSphereState, waitForVoiceReady } from './sphere.js';
+import { readClipboardText } from './clipboard.js';
 import { getAiName, getWakeWord, setWakeWord } from './preferences.js';
 import { notifyMenuChange } from './menuState.js';
 
@@ -67,7 +76,10 @@ function wireGlobal() {
   document.addEventListener('keydown', onGlobalKeyDown, true);
   window.addEventListener('blur', closeAllMenus);
   window.addEventListener('resize', closeAllMenus);
-  window.addEventListener('scroll', closeAllMenus, true);
+  window.addEventListener('scroll', onGlobalScroll, true);
+  // A keyboard/AI-driven workspace switch (or a fullscreen toggle) moves the
+  // ground under an open menu; close it rather than leaving it stale.
+  window.addEventListener('desktop:changed', closeAllMenus);
 }
 
 function unwireGlobal() {
@@ -77,7 +89,14 @@ function unwireGlobal() {
   document.removeEventListener('keydown', onGlobalKeyDown, true);
   window.removeEventListener('blur', closeAllMenus);
   window.removeEventListener('resize', closeAllMenus);
-  window.removeEventListener('scroll', closeAllMenus, true);
+  window.removeEventListener('scroll', onGlobalScroll, true);
+  window.removeEventListener('desktop:changed', closeAllMenus);
+}
+
+/** A scroll elsewhere invalidates the menu's anchor; a scroll inside the menu
+ *  itself (long menus scroll) must not dismiss it. */
+function onGlobalScroll(e) {
+  if (!e.target?.closest?.(`.${MENU_CLS}`)) closeAllMenus();
 }
 
 function onGlobalPointerDown(e) {
@@ -151,14 +170,90 @@ export function openContextMenu(entries, x, y) {
   return openMenu(entries, x, y);
 }
 
-/** True for text-entry targets, where the browser's native menu (cut/copy/
- *  paste/undo) is more useful than ours. `isContentEditable` already accounts
- *  for an editable ancestor. */
-function isEditableTarget(el) {
+/** Text-like fields get the edit menu; a `<select>` is a picker, not a field. */
+function isTextField(el) {
   if (!el) return false;
-  const tag = el.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (el.tagName === 'TEXTAREA') return true;
+  if (el.tagName === 'INPUT') {
+    const type = (el.getAttribute('type') || 'text').toLowerCase();
+    return ['text', 'password', 'email', 'search', 'number', 'tel', 'url'].includes(type);
+  }
   return el.isContentEditable === true;
+}
+
+/** The current selection inside a field, for the edit menu's enable state. */
+function fieldSelection(el) {
+  if (typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number') {
+    return String(el.value ?? '').slice(el.selectionStart, el.selectionEnd);
+  }
+  const selection = window.getSelection?.();
+  return selection && el.contains(selection.anchorNode) ? selection.toString() : '';
+}
+
+/**
+ * Edit menu for a text field: cut / copy / paste / select all, in the app's
+ * own styling. The DOM commands keep the clipboard service in play (it
+ * captures the copy/cut events and records them), and paste reads the service
+ * so anything copied inside the app can be pasted back even where the async
+ * Clipboard API is unavailable.
+ */
+function editMenu(target) {
+  const selection = fieldSelection(target);
+  const locked = target.disabled === true || target.readOnly === true;
+  const focusTarget = () => target.focus({ preventScroll: true });
+  return [
+    {
+      type: 'item',
+      label: 'Cut',
+      disabled: locked || !selection,
+      onClick: () => {
+        focusTarget();
+        document.execCommand('cut');
+      },
+    },
+    {
+      type: 'item',
+      label: 'Copy',
+      icon: 'ui/copy',
+      disabled: !selection,
+      onClick: () => {
+        focusTarget();
+        document.execCommand('copy');
+      },
+    },
+    {
+      type: 'item',
+      label: 'Paste',
+      icon: 'ui/clipboard',
+      disabled: locked,
+      onClick: async () => {
+        const text = await readClipboardText();
+        if (!text) return;
+        focusTarget();
+        document.execCommand('insertText', false, text);
+      },
+    },
+    { type: 'separator' },
+    {
+      type: 'item',
+      label: 'Select All',
+      icon: 'ui/select-all',
+      onClick: () => {
+        focusTarget();
+        if (typeof target.select === 'function') {
+          target.select();
+          return;
+        }
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const selectionNow = window.getSelection?.();
+        if (selectionNow) {
+          selectionNow.removeAllRanges();
+          selectionNow.addRange(range);
+        }
+      },
+    },
+  ];
 }
 
 /** Entries an app contributes to its own window menu. A plugin's surface
@@ -183,6 +278,9 @@ function rowShell(text, danger) {
   item.className = MENU_CLS + '-item';
   if (danger) item.classList.add('is-danger');
   item.setAttribute('role', 'menuitem');
+  // Pressing a row must not blur what is behind the menu: the edit actions
+  // work on the target field's own focus and selection.
+  item.addEventListener('pointerdown', (e) => e.preventDefault());
 
   const check = document.createElement('span');
   check.className = 'ctx-menu-check';
@@ -364,7 +462,19 @@ function windowMenu(name, ctx = {}) {
     { type: 'heading', label: label(name) },
     {
       type: 'item',
-      label: 'Focus',
+      label: 'Focus plugin',
+      icon: 'ui/eye',
+      checked: isPluginFocused(name),
+      onClick: () => {
+        togglePluginFocus(name);
+        // Reveal it too: focusing a window that is on another workspace must
+        // not be an invisible state change.
+        window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name } }));
+      },
+    },
+    {
+      type: 'item',
+      label: 'Bring to front',
       icon: 'ui/monitor',
       checked: getFocus() === name,
       onClick: () => focusWindow(name),
@@ -411,7 +521,17 @@ function trayMenu(btn) {
     if (hasWindow) {
       items.push({
         type: 'item',
-        label: 'Focus window',
+        label: isPluginFocused(name) ? 'Unfocus plugin' : 'Focus plugin',
+        icon: 'ui/eye',
+        checked: isPluginFocused(name),
+        onClick: () => {
+          togglePluginFocus(name);
+          window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name } }));
+        },
+      });
+      items.push({
+        type: 'item',
+        label: 'Bring to front',
         icon: 'ui/monitor',
         onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name } })),
       });
@@ -606,9 +726,9 @@ const LONG_PRESS_MS = 450;      // a touch held this long opens the menu
 const LONG_PRESS_MOVE = 12;     // px of travel that turns the gesture into a scroll
 
 /**
- * Targets that keep their own press-and-hold, or need the browser's native
- * editing menu. The voice bar already owns the long press (it starts voice), and the
- * virtual keyboard repeats a held key.
+ * Targets that keep their own press-and-hold: the voice bar already owns the
+ * long press (it starts voice), the virtual keyboard repeats a held key, and a
+ * press-and-hold inside a text field is the platform's own text selection.
  */
 const LONG_PRESS_EXCLUDE = [
   '#sphere-container',
@@ -620,9 +740,6 @@ const LONG_PRESS_EXCLUDE = [
   '[contenteditable="true"]',
   '[data-no-longpress]',
 ].join(',');
-
-/** While set, the browser's own long-press menu is suppressed for touch. */
-let suppressNativeMenuUntil = 0;
 
 /**
  * Translate a touch long-press into a `contextmenu` event on the pressed
@@ -648,12 +765,6 @@ function wireLongPress() {
     node = null;
   };
 
-  // Suppress the browser's own callout/context menu for touch in general: we
-  // either open our own menu or the target opted out of the gesture entirely.
-  document.addEventListener('contextmenu', (e) => {
-    if (Date.now() < suppressNativeMenuUntil) e.preventDefault();
-  }, { capture: true });
-
   document.addEventListener('click', (e) => {
     if (!swallowClick) return;
     swallowClick = false;
@@ -665,7 +776,6 @@ function wireLongPress() {
     swallowClick = false;
     if (e.pointerType === 'mouse' || e.button !== 0) return;
     if (e.target?.closest?.(LONG_PRESS_EXCLUDE)) return;
-    suppressNativeMenuUntil = Date.now() + 1200;
     node = e.target;
     x = e.clientX;
     y = e.clientY;
@@ -706,6 +816,16 @@ export function initContextMenu() {
   app.addEventListener('contextmenu', (e) => {
     const target = e.target;
 
+    // Text fields → the edit menu. The shell draws every menu itself; the
+    // native Qt editing menu is gone (its entries were dead in the app view
+    // anyway — only a child page view could serve them).
+    if (isTextField(target)) {
+      e.preventDefault();
+      closeAllMenus();
+      openMenu(editMenu(target), e.clientX, e.clientY);
+      return;
+    }
+
     // Plugin tray icon (top bar) → plugin lifecycle menu.
     const tray = target.closest?.('.hud-plugin-btn');
     if (tray) {
@@ -727,11 +847,10 @@ export function initContextMenu() {
 
     // Anywhere in a plugin window — title bar OR content — → window menu,
     // extended with the app's own entries (surface `contextMenu()`).
-    // Text fields keep the native menu so cut/copy/paste still work.
     const tile = target.closest?.('.tile');
     if (tile) {
       const name = tile.dataset.plugin;
-      if (!name || isEditableTarget(target)) return;
+      if (!name) return;
       e.preventDefault();
       closeAllMenus();
       openMenu(
@@ -745,8 +864,10 @@ export function initContextMenu() {
     // Workspace dot → workspace menu.
     const dot = target.closest?.('.workspace-bar-dot');
     if (dot) {
-      const index = parseInt(dot.textContent, 10) - 1;
-      if (!Number.isInteger(index) || index < 0) return;
+      // The dot's order in the bar is the workspace index; a fullscreen-app
+      // dot shows an icon and has no number to parse.
+      const index = Array.prototype.indexOf.call(dot.parentElement?.children || [], dot);
+      if (index < 0) return;
       e.preventDefault();
       closeAllMenus();
       openMenu(workspaceDotMenu(index), e.clientX, e.clientY);
@@ -768,12 +889,19 @@ export function initContextMenu() {
 
     // Empty desktop only — #app itself is the hit target because the tile
     // grid is pointer-events:none and every other layer is chrome with its
-    // own pointer-events. Never hijack a right-click meant for another UI.
+    // own pointer-events.
     if (target === app) {
       e.preventDefault();
       closeAllMenus();
       openMenu(desktopMenu(), e.clientX, e.clientY);
+      return;
     }
+
+    // Anything else in the shell: swallow it, never show a menu. An unhandled
+    // contextmenu event is what used to raise QtWebEngine's own
+    // Back/Forward/Reload menu over the app — chat compose, overlays, modals,
+    // an open HUD popover, the tile overlay.
+    e.preventDefault();
   });
 
   // Touchscreens have no right button: a long press opens the same menus.

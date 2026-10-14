@@ -6,10 +6,11 @@
  * sits under an overlay is a layout, not a component, and the core UI library
  * has nothing to express it with.
  *
- * The controls are still core components — the header is `tile-header` with an
- * `iconButton`, the boot spinner is `spinner()` — so their metrics, focus ring
- * and accent come from `web/ui/ui.css` and the active theme. Nothing here
- * restyles a `.ui-btn` or `.ui-icon`. Every rule is scoped under
+ * The controls are still core components — the bar carries the host's
+ * close/fullscreen buttons (`data-window-bar`), the reload is an
+ * `iconButton`, the boot spinner is `spinner()` — so their metrics, focus
+ * ring and accent come from `web/ui/ui.css` and the active theme. Nothing
+ * here restyles a `.ui-btn` or `.ui-icon`. Every rule is scoped under
  * `.filmcraft-tile`, so it cannot reach another window.
  *
  * Loaded from plugin.js (`ensureStylesheet`): core does not auto-inject a
@@ -23,11 +24,21 @@
   --filmcraft-danger: #ff8a7a;
 }
 
-.filmcraft-tile .tile-header {
+/* The window bar. Marked `data-window-bar`, so the host merges the window
+   controls into it and the merged header paints the row's plate — the bar
+   itself paints no background. It supplies only its own layout: the status
+   line, the spacer, the reload button. */
+.filmcraft-bar {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  min-height: var(--tile-header-height, 36px);
+  padding: 0 10px 0 0;
 }
 
-/* The status line between the title and the spacer. */
+.filmcraft-bar-spacer { flex: 1; }
+
+/* The status line leading the bar, before the spacer. */
 .filmcraft-status {
   font-size: 11px;
   color: var(--text-dim, #8b8d93);

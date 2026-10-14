@@ -171,12 +171,81 @@ html[data-window-translucent="1"] .tile {
 /* A plugin window fills its grid cell; with a single plugin it takes the
    whole area but keeps the rounded frame (border + radius). */
 
-/* Focus is marked by the accent border in tiling layouts (below) and by
-   z-order in the floating Windows layout. There is deliberately no animation:
-   a scale pulse on every click reads as the window twitching, and it also
-   fights the drag, which positions the window with a transform. */
-#tile-grid:not(.tile-grid--windows) .tile--focused {
+/* The active window is marked by the accent border in tiling layouts (below)
+   and by z-order in the floating Windows layout. There is deliberately no
+   animation: a scale pulse on every click reads as the window twitching, and it
+   also fights the drag, which positions the window with a transform. A window
+   in focus mode is excluded — it wears the palette instead (see below). */
+#tile-grid:not(.tile-grid--windows) .tile--focused:not(.tile--plugin-focus) {
   border-color: var(--accent);
+}
+
+/* Focus mode — a deliberate, explicit choice (the eye button, the tray menu or
+   the AI), and several windows can carry it at once. Its frame is a 1px hairline
+   in the theme's WHOLE accent palette rather than the single accent the user
+   picked: `--focus-ring` (a conic wheel built in appearance.js from the swatches
+   of Settings → Appearance) starts at the bottom-left corner and blends through
+   every accent, so the colour is what marks focus.
+
+   Two layers, and the frame is the one that must not fail:
+   - `::before` is the frame itself: a plain gradient background plus a plain
+     opacity fade. Nothing animated or calculated, so it renders everywhere.
+   - `::after` is the entrance on top of it: a bright accent arc that laps the
+     contour twice and collapses to nothing. Pure enhancement — if the animated
+     custom properties are not available to the engine it simply never draws,
+     and the frame is still there. */
+@property --focus-sweep { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+@property --focus-arc { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+#tile-grid .tile--plugin-focus {
+  /* The palette frame paints the border itself; a solid border in front of it
+     would put a single colour where the whole point is all of them. */
+  border-color: transparent;
+}
+
+/* Both layers are the same 1px band just inside the tile's padding box (`.tile`
+   clips there, so the band cannot sit on the border itself). */
+#tile-grid .tile--plugin-focus::before,
+#tile-grid .tile--plugin-focus::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+#tile-grid .tile--plugin-focus::before {
+  background: var(--focus-ring, var(--accent));
+  animation: tile-focus-in 420ms var(--ease-out) 1 both;
+}
+
+#tile-grid .tile--plugin-focus::after {
+  background: conic-gradient(from var(--focus-sweep),
+    var(--accent) 0deg calc(var(--focus-arc)),
+    transparent calc(var(--focus-arc) + 0.5deg) 360deg);
+  animation: tile-focus-sweep 700ms var(--ease-out) 1 forwards;
+}
+
+@keyframes tile-focus-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* One calm lap: a 90deg highlight travels the contour once and thins to
+   nothing. Two fast laps on a 1px band read as a flicker, not an entrance. */
+@keyframes tile-focus-sweep {
+  from { --focus-sweep: 0deg; --focus-arc: 90deg; }
+  to { --focus-sweep: 360deg; --focus-arc: 0deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tile-grid .tile--plugin-focus::before { animation: none; }
+  #tile-grid .tile--plugin-focus::after { animation: none; background: none; }
 }
 
 /* ── Window chrome (title bar + controls) ─────────────────────
@@ -220,11 +289,11 @@ html[data-window-translucent="1"] .tile {
   pointer-events: none;
 }
 
-/* Right spacer keeps the centered title optically balanced with the two
+/* Right spacer keeps the centered title optically balanced with the three
    controls on the left. */
 .tile-header-spacer {
   flex: none;
-  width: 56px;
+  width: 84px;
 }
 
 /* Merged title bar — the window controls and the plugin's own top bar share a
@@ -249,6 +318,11 @@ html[data-window-translucent="1"] .tile {
   /* The controls already supply the left inset. */
   padding-left: 0;
   border-bottom: none;
+  /* The merged header paints the row's plate. A bar repainting `--glass`
+     over it stacks a second translucent layer — visible as a differently
+     toned patch beside the window controls in glass themes — so the bar
+     paints nothing here, exactly like the browser/terminal tab strips. */
+  background: transparent;
 }
 
 /* The header is `user-select: none`; merged bars host real inputs (document
@@ -286,6 +360,12 @@ html[data-window-translucent="1"] .tile {
 }
 
 .tile-header-btn--full.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Focus mode is on for this window: the eye wears the accent, like the border. */
+.tile-header-btn--focus.is-active {
   background: var(--accent-soft);
   color: var(--accent);
 }

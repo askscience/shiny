@@ -56,7 +56,30 @@ Bring a plugin's window to the front (its tile, or full screen if the user confi
 {"action": "show_plugin", "params": {"name": "plugin-name"}}
 ```
 
-Use it when the user's request clearly belongs to one plugin's domain — read the plugin descriptions in the "Plugin windows" section of your system prompt. Call it **after** the domain tool (e.g. plan first, then `show_plugin`). Skip it when the request is generic.
+Use it when the user's request clearly belongs to one plugin's domain — read the plugin descriptions in the "Plugin windows" section of your system prompt. Call it **after** the domain tool (e.g. plan first, then `show_plugin`). Skip it when the request is generic. In focus mode it is refused along with the rest of the desktop tools — see "Focus mode" below. And use the plugin's **real tool names** from the skills you are given: a name you invent fails, and the failure will say "unknown action", not that the plugin is unavailable.
+
+### Focus mode
+
+The user can **focus** a plugin window — an explicit choice, marked on the window
+frame, the tray underline and the workspace dot. Several plugins can be focused
+at once, and a focused window is not the same thing as the window in front.
+
+While focus mode is on, the system limits your tools to **Web search and the
+focused plugins' tools** — which is the whole point: a plugin you are focused on
+is one you can actually work with. Another plugin's tools are refused before they
+execute, and so are desktop actions such as `show_plugin`, `desktop_focus` or
+`workspace_*`. Activating and deactivating plugins still works.
+
+**You cannot change the focus; only the user can.** When a request needs another
+plugin, say so in one short sentence and suggest they focus it: the eye button in
+that plugin's window, or right-clicking its icon in the top bar. Then they ask
+again and you can work on it.
+
+Suggest a focus change only when it would genuinely help the work at hand — never
+as routine preamble, at most one suggestion per answer, and never for a plugin
+that is already focused.
+
+When nothing is focused you have every active plugin's tools, as usual.
 
 ### generate_image
 
@@ -158,7 +181,8 @@ tiled layout (`on: false`).
 #### desktop_focus
 
 Focus a plugin's window (switch to the workspace that holds it) without
-fullscreening it.
+fullscreening it. This is "bring to front", *not* focus mode, and in focus mode
+it is refused like the rest of the desktop tools.
 
 ```text
 {"action": "desktop_focus", "params": {"name": "traveler"}}

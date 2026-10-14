@@ -591,6 +591,8 @@ Mode: <mode>
 
 This guarantees that what the LLM sees about available tools is the union of what every installed plugin advertises. **A tool that doesn't surface a `doc_fragment` will not be revealed to the LLM** — use this to keep internal tools hidden.
 
+Item 2/3 come from the plugins **active for the session** — except in **focus mode**: when the user has focused plugin windows, the scope narrows to exactly those plugins for that turn and the prompt gains a `## Focus mode (ON)` block. Focus mode is enforced by `execute_action`, not by the prompt: a plugin tool is allowed when its owner is focused (so a focused plugin is always usable), core desktop actions are refused from an explicit list, and everything else fails open. Only the user changes the focus. See `docs/core/desktop.md` § Focus mode and `tests/focus_mode_scope.rs`.
+
 ### Persona fragment
 
 `builder.persona("a travel navigator AI")` adds a phrase inserted into `You are {ai_name}, {persona_concat}.` — multiple plugins concatenate with spaces. When no plugin supplies a persona, the default generic phrase is `"a helpful AI assistant"`.
@@ -993,7 +995,14 @@ inside the app resolves to a menu by context:
 | The top bar itself (HUD pill / workspace bar background) | Desktop menu (new/remove workspace, switch workspace, layout) |
 | A workspace dot | Workspace menu (new / remove) |
 | The empty desktop | Desktop menu |
-| A text field (`input` / `textarea` / `contenteditable`) | Left alone — the browser's native cut/copy/paste menu |
+| A text field (`input` / `textarea` / `contenteditable`) | Edit menu: Cut, Copy, Paste, Select All (core's own, through the clipboard service) |
+
+Any other right-click inside the shell is swallowed — the app never shows the
+platform's own menu (QtWebEngine's Back/Forward/Reload menu would otherwise
+appear over chat compose, overlays or an open HUD popover). A right-click
+inside a Browser-plugin **page** opens this same engine over the page: the
+shell forwards the request and the page side opens `openContextMenu()` at the
+cursor.
 
 **An app contributes its own entries.** A plugin's window surface may export a
 `contextMenu(ctx)` function. Core calls it when the window menu opens and
@@ -1447,10 +1456,13 @@ The top bar follows one convention (Studio sets the standard):
   `bar.dataset.windowBar = ''` (the `data-window-bar` attribute) and the host
   merges it with the window's close/fullscreen controls into a single row — no
   separate title bar, so the window spends one row of chrome instead of two.
-  The bar then supplies the row's background and the host adds the bottom
-  border. Windows whose top row is content rather than tools (the map, the
-  browser, files, an idle YouTube player) omit the marker and keep the centered
-  title bar.
+  The host paints the row's plate and bottom border: the bar must paint no
+  background of its own (a second glass layer over the header reads as a
+  differently toned patch beside the controls in glass themes), and its
+  classes must never reuse the core `tile-header*` names — injected chrome is
+  marked `data-window-chrome`, but a misnamed bar still takes the wrong
+  styling. Windows whose top row is content rather than tools (the map, files,
+  an idle YouTube player) omit the marker and keep the centered title bar.
 
 #### A window must not cache server-owned addresses
 

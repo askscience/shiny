@@ -608,6 +608,13 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Focus mode reaches the HUD: the dot of a workspace holding focused windows
+   wears the accent, so the bar under the plugin tray mirrors the window ring.
+   No plate — that stays the active workspace's own signal. */
+.workspace-bar-dot.is-focused {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .workspace-bar-btn {
   display: inline-flex;
@@ -765,6 +772,17 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 }
 
 .hud-plugin-btn.is-active .hud-plugin-line { opacity: 1; transform: scaleX(1); }
+
+/* Focus mode: no plate behind the glyph — the underline under it becomes the
+   theme's whole accent palette, the same frame the focused window wears. */
+.hud-plugin-btn.is-focused .hud-plugin-line {
+  /* Wider than the active underline so the colours have room to read. */
+  width: 22px;
+  margin-left: -11px;
+  background: var(--focus-bar, var(--accent));
+  opacity: 1;
+  transform: scaleX(1);
+}
 
 .hud-plugin-btn .ui-icon { display: inline-flex; }
 .hud-plugin-btn svg { width: 24px; height: 24px; }

@@ -163,7 +163,11 @@ for internal/helper tools.
 - **Migrations** (`migrations/00X_*.sql`) run once, host-side, at load; see
   [Migrations](migrations.md) for the immutability rule.
 - **Skills** (`skills/<name>.md`) is what the model reads about your tools; you
-  can also set it inline with `builder.skills(...)`.
+  can also set it inline with `builder.skills(...)`. It reaches the model only
+  while your plugin is active — and when the user has put a window in **focus
+  mode**, only the focused plugins' skills and tools are sent, and other plugins'
+  tools are refused before they run. So write the skill for the moment it is
+  read, and never assume it is always in the prompt.
 - **Web** (`web/plugin.js`, `web/icon.svg`) is the optional window surface; see
   [Window surface](#7-window-surface).
 

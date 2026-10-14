@@ -26,7 +26,6 @@
 
 #include "ipc_bridge.h"
 
-#include <QAction>
 #include <QApplication>
 #include <QClipboard>
 #include <QCoreApplication>
@@ -42,7 +41,6 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QMainWindow>
-#include <QMenu>
 #include <QMoveEvent>
 #include <QPainter>
 #include <QPalette>
@@ -454,9 +452,10 @@ Item {
         onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
         onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
         onContextMenuRequested: (request) => {
-            shell.contextMenu("main", request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
-            // QtWebEngine pops its own context menu for every request that stays
-            // unaccepted, so the shell's menu would come up twice.
+            // The app's own HTML menus own every right-click in the shell: the
+            // web side preventDefaults them, so a request arriving here is a
+            // renderer path the DOM did not cover. Accept it silently -- a
+            // native Qt menu must never appear over the app.
             request.accepted = true
         }
         onFileDialogRequested: (request) => shell.fileDialog(request.mode, request.acceptedMimeTypes, request.defaultFileName, request)
@@ -554,7 +553,11 @@ WebEngineView {
     onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
     onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
     onContextMenuRequested: (request) => {
-        shell.contextMenu(pageId, request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
+        // A menu over a page is the app's own menu too: the request goes to
+        // the web layer, which opens it over the native view (the mask holes
+        // keep it visible). position is local to this item, like the widgets
+        // QWebEngineView.
+        shell.pageContextMenu(pageId, request.position.x, request.position.y, request.linkUrl, request.isContentEditable, request.selectedText)
         request.accepted = true
     }
     onFileDialogRequested: (request) => shell.fileDialog(request.mode, request.acceptedMimeTypes, request.defaultFileName, request)
@@ -711,44 +714,22 @@ public:
         return is_app_origin(origin) && (capture || clipboard || geolocation);
     }
 
-    /// A context menu for a page: the actions the old widgets shim got from
-    /// `createStandardContextMenu()`, built here and popped over the scene.
-    Q_INVOKABLE void contextMenu(const QString &id, qreal x, qreal y, const QUrl &link_url,
-                                 bool editable, const QString &selection) {
-        if (!g_ctx || !g_ctx->scene) return;
-        auto *menu = new QMenu(g_ctx->scene);
-        QObject::connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
-        const auto add_action = [&](const QString &label, const char *action, bool enabled) {
-            QAction *item = menu->addAction(label);
-            item->setEnabled(enabled);
-            const QString view_id = id;
-            const QString verb = QString::fromLatin1(action);
-            QObject::connect(item, &QAction::triggered, menu, [view_id, verb]() {
-                QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
-                                          Q_ARG(QVariant, view_id), Q_ARG(QVariant, verb));
-            });
+    /// A context menu request from a page view: forwarded to the web layer,
+    /// which opens the app's own menu over the page (the mask holes keep it
+    /// visible and clickable). `x`/`y` are local to the view item -- the same
+    /// space as in the widgets QWebEngineView -- and the page side adds its
+    /// frame origin and divides by the device ratio before placing the menu.
+    Q_INVOKABLE void pageContextMenu(const QString &id, qreal x, qreal y, const QUrl &link_url,
+                                     bool editable, const QString &selection) {
+        const QJsonObject menu{
+            {QStringLiteral("x"), x},
+            {QStringLiteral("y"), y},
+            {QStringLiteral("linkUrl"), link_url.toString()},
+            {QStringLiteral("editable"), editable},
+            {QStringLiteral("selection"), selection},
         };
-        if (link_url.isValid() && !link_url.isEmpty()) {
-            QAction *copy_link = menu->addAction(QStringLiteral("Copy Link Address"));
-            const QUrl url = link_url;
-            QObject::connect(copy_link, &QAction::triggered, menu, [url]() {
-                QGuiApplication::clipboard()->setText(url.toString());
-            });
-            menu->addSeparator();
-        }
-        add_action(QStringLiteral("Back"), "Back", true);
-        add_action(QStringLiteral("Forward"), "Forward", true);
-        add_action(QStringLiteral("Reload"), "Reload", true);
-        menu->addSeparator();
-        if (editable) {
-            add_action(QStringLiteral("Cut"), "Cut", true);
-            add_action(QStringLiteral("Copy"), "Copy", !selection.isEmpty());
-            add_action(QStringLiteral("Paste"), "Paste", true);
-        } else {
-            add_action(QStringLiteral("Copy"), "Copy", !selection.isEmpty());
-        }
-        add_action(QStringLiteral("Select All"), "SelectAll", true);
-        menu->popup(g_ctx->scene->mapToGlobal(QPoint(qRound(x), qRound(y))));
+        emit_view(id, "context-menu",
+                  QString::fromUtf8(QJsonDocument(menu).toJson(QJsonDocument::Compact)));
     }
 
     /// The file pickers the app's plugins use (`web/js/files.js` pickFiles,
@@ -1319,6 +1300,19 @@ void peakd_qt_view_paste(const char *id, const char *text) {
     QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
                               Q_ARG(QVariant, QString::fromUtf8(id)),
                               Q_ARG(QVariant, QStringLiteral("Paste")));
+}
+
+// Run one named engine action on a page view (the app's context menu over a
+// page sends Cut / Copy / Paste / SelectAll; navigation keeps its own ops).
+// Same shape as the paste op: focus the view, then run the action through the
+// engine, so the page's own handlers still win.
+void peakd_qt_view_action(const char *id, const char *verb) {
+    if (!g_ctx || !verb) return;
+    if (!g_ctx->children.contains(QString::fromUtf8(id))) return;
+    peakd_qt_view_focus(id);
+    QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
+                              Q_ARG(QVariant, QString::fromUtf8(id)),
+                              Q_ARG(QVariant, QString::fromUtf8(verb)));
 }
 
 void peakd_qt_view_close(const char *id) {

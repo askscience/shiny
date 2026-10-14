@@ -20,6 +20,7 @@ import {
   getActiveWorkspaceId, setActiveWorkspaceId,
   getDesktopLayout, setDesktopLayout,
   getWindowsGeom, setWindowsGeom,
+  getPluginFocus as readPluginFocus, setPluginFocus as savePluginFocus,
 } from './preferences.js';
 import { toast, icon } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
@@ -29,6 +30,13 @@ let workspaces = [];      // [{ id, windows: [pluginName], focus, fullscreen }]
 let activeWs = null;      // active workspace id
 let focus = null;         // focused plugin name (cache of active workspace's)
 let fullscreen = null;    // fullscreen plugin name (cache of active workspace's)
+/** Plugins in "focus mode" — a deliberate choice, by the user or the AI, never
+ *  by an open, and several plugins can be focused at once. It paints the
+ *  palette frame, lights the tray underline and scopes the AI's plugin skills
+ *  to these plugins for the turn. Unlike `focus`/`fullscreen` it is NOT part of
+ *  a workspace: it is the working set, not a place on screen, so the AI knows
+ *  about it whichever workspace is up. */
+let focusedPlugins = new Set();
 
 let wsSeq = 0;
 
@@ -106,6 +114,9 @@ export function initDesktop() {
   windowGeom = getWindowsGeom();
   zSeq = Object.values(windowGeom).reduce((m, g) => Math.max(m, Number(g?.z) || 0), 0);
   loadActiveFocus();
+  // Focus mode is global, so it is restored from its own key rather than from a
+  // workspace. Pruned on the first render against whatever windows exist.
+  focusedPlugins = new Set(readPluginFocus());
   wireShortcuts();
   wireAgentActions();
   // Turning the screen switches the workspace system off or on. The media
@@ -332,13 +343,16 @@ export function workspaceLabel(wsOrIndex) {
 }
 
 /** Snapshot of the desktop sent to the AI on every request (1-based indices),
- *  so it knows which windows live in which workspace before reorganizing. */
+ *  so it knows which windows live in which workspace before reorganizing — and
+ *  which plugins the user has focused (`focused`), which decides whether the
+ *  turn runs in focus mode. */
 export function getDesktopSnapshot() {
   if (!workspacesEnabled()) {
     return {
       active: 1,
       workspaces: [{ index: 1, windows: everyWindow() }],
       workspaces_enabled: false,
+      focused: [...focusedPlugins],
     };
   }
   return {
@@ -348,6 +362,7 @@ export function getDesktopSnapshot() {
       windows: [...ws.windows],
     })),
     workspaces_enabled: true,
+    focused: [...focusedPlugins],
   };
 }
 
@@ -390,6 +405,22 @@ export function focusWindow(name) {
   notify('focus');
 }
 
+/** Bring a window on screen *without* making it the active (focused) one: switch
+ *  to the workspace that holds it. Used when a window opens — a new window must
+ *  show up, but the active-window accent belongs to a click and focus mode
+ *  belongs to the user. The stacking order of a window being opened is already
+ *  handled by `renderTiles`, which bumps it before the layout applies. */
+export function revealWindow(name) {
+  if (!name) return;
+  const ws = workspaces.find((w) => w.windows.includes(name));
+  if (!ws || ws.id === activeWs) return;
+  syncActiveFocus();
+  activeWs = ws.id;
+  loadActiveFocus();
+  persist();
+  notify();
+}
+
 export function cycleFocus(names, dir = 1) {
   const list = activeWindowNames(names);
   if (!list.length) { focus = null; syncActiveFocus(); persist(); notify(); return; }
@@ -411,6 +442,57 @@ export function clearFocus() {
   persist();
   repaintFocus();
   notify('focus');
+}
+
+/* ── Plugin focus mode ──────────────────────────────────────── */
+
+export function isPluginFocused(name) { return !!name && focusedPlugins.has(name); }
+
+/**
+ * Focus (or unfocus) a plugin's window: "focus mode", where the system limits the
+ * AI's tools to the focused plugins and the window/HUD wear the accent palette.
+ * Only the user sets it — the AI can just suggest it — and it is always a
+ * deliberate act: opening, clicking or fullscreening a window does not focus it.
+ * Several plugins can be focused at once.
+ */
+export function setPluginFocus(name, on = true) {
+  if (!name) return false;
+  if (focusedPlugins.has(name) === !!on) return false;
+  if (on) focusedPlugins.add(name); else focusedPlugins.delete(name);
+  savePluginFocus([...focusedPlugins]);
+  renderWorkspaceBar();
+  notify('focus');
+  return true;
+}
+
+export function togglePluginFocus(name) {
+  return setPluginFocus(name, !isPluginFocused(name));
+}
+
+/** A focus entry only lives while its window does: drop the ones whose plugin is
+ *  not in `openNames` (the plugins that still have a window — the caller knows,
+ *  and must not pass an empty list before the plugin set has loaded). Silent, so
+ *  a render pass can call it without causing one. */
+function prunePluginFocus(openNames) {
+  if (!focusedPlugins.size) return false;
+  const open = new Set(openNames || []);
+  let changed = false;
+  for (const name of [...focusedPlugins]) {
+    if (open.has(name)) continue;
+    focusedPlugins.delete(name);
+    changed = true;
+  }
+  return changed;
+}
+
+/** Prune focus entries whose window is gone (a plugin was deactivated) and
+ *  repaint the HUD/chrome if anything moved. */
+export function reconcilePluginFocus(openNames) {
+  if (!prunePluginFocus(openNames)) return false;
+  savePluginFocus([...focusedPlugins]);
+  renderWorkspaceBar();
+  notify('focus');
+  return true;
 }
 
 /** Toggle (or force) fullscreen for a window. Defaults to the focused one. */
@@ -1401,6 +1483,9 @@ export function renderWorkspaceBar() {
     dot.title = wsLabel;
     dot.setAttribute('aria-label', wsLabel);
     dot.classList.toggle('is-active', ws.id === activeWs);
+    // Focus mode is marked on the bar under the plugin tray: the dot of a
+    // workspace holding focused windows wears the accent.
+    dot.classList.toggle('is-focused', ws.windows.some((n) => focusedPlugins.has(n)));
     dot.addEventListener('click', () => {
       if (i !== activeWorkspaceIndex()) switchWorkspace(i);
     });

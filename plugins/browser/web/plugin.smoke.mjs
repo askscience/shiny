@@ -251,6 +251,10 @@ const openWithPlugin = async () => {};
 const pluginForFile = () => null;
 const revealInFiles = () => {};
 
+/** Captures core context-menu opens, so the page menu can be asserted. */
+const openedMenus = [];
+const openContextMenu = (entries, x, y) => { openedMenus.push({ entries, x, y }); };
+
 function findAll(root, predicate, out = []) {
   if (predicate(root)) out.push(root);
   for (const kid of root.children || []) findAll(kid, predicate, out);
@@ -274,6 +278,7 @@ const context = vm.createContext({
   themeMode: () => 'dark',
   openCoreWindow: () => {},
   copyText, readClipboardText,
+  openContextMenu,
   navigator: { clipboard: { writeText: () => Promise.resolve() } },
   URL, setTimeout, clearTimeout, setInterval, clearInterval,
   JSON, String, Number, Array, Object, Math, RegExp, parseInt, parseFloat, Error, Promise, Set, Map,
@@ -511,6 +516,61 @@ if (pasteListeners[0]) {
     viewCommands().filter((c) => c.op === 'paste').length === count,
   );
 }
+
+/* Right-click inside a page: the shell forwards the request, the window opens
+   core's own menu at the cursor (frame origin + position, scaled by dpr) and
+   routes the verbs back as `peakd:view` commands. */
+const activeTabId = viewCommands().filter((c) => c.op === 'open').pop()?.id;
+openedMenus.length = 0;
+windowStub.__peakdViewEvent({
+  type: 'context-menu',
+  id: activeTabId,
+  menu: { x: 10, y: 20, linkUrl: '', editable: false, selection: 'hello' },
+});
+const opened = openedMenus[0];
+check('a page right-click opens the core menu', openedMenus.length === 1);
+/* The rect shim reports left=40 / top=80 with devicePixelRatio 1. */
+check('the page menu sits at the cursor', opened?.x === 50 && opened?.y === 100, JSON.stringify({ x: opened?.x, y: opened?.y }));
+check(
+  'the page menu carries navigation + edit entries',
+  opened?.entries?.some((e) => e.label === 'Back')
+    && opened?.entries?.some((e) => e.label === 'Reload')
+    && opened?.entries?.some((e) => e.label === 'Select All')
+    && opened?.entries?.find((e) => e.label === 'Copy')?.disabled === false,
+  JSON.stringify(opened?.entries?.map((e) => e.label)),
+);
+const reloadsBefore = viewCommands().filter((c) => c.op === 'reload').length;
+opened?.entries?.find((e) => e.label === 'Reload')?.onClick?.();
+check(
+  'a page menu action reaches the shell',
+  viewCommands().filter((c) => c.op === 'reload').length > reloadsBefore,
+  JSON.stringify(lastView('reload')),
+);
+
+openedMenus.length = 0;
+windowStub.__peakdViewEvent({
+  type: 'context-menu',
+  id: activeTabId,
+  menu: { x: 1, y: 2, linkUrl: 'https://example.com/', editable: true, selection: '' },
+});
+const editableMenu = openedMenus[0];
+check(
+  'an editable page gets the edit verbs',
+  editableMenu?.entries?.some((e) => e.label === 'Cut')
+    && editableMenu?.entries?.some((e) => e.label === 'Paste'),
+  JSON.stringify(editableMenu?.entries?.map((e) => e.label)),
+);
+check('a link adds Copy Link Address', editableMenu?.entries?.[0]?.label === 'Copy Link Address');
+const actionsBefore = viewCommands().filter((c) => c.op === 'action').length;
+editableMenu?.entries?.find((e) => e.label === 'Cut')?.onClick?.();
+const action = lastView('action');
+check(
+  'an edit verb travels as an action command',
+  viewCommands().filter((c) => c.op === 'action').length > actionsBefore
+    && action?.verb === 'Cut'
+    && action?.id === activeTabId,
+  JSON.stringify(action),
+);
 
 mod.namespace.unmountBrowserTile?.();
 check('unmount is safe', true);

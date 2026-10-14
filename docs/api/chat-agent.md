@@ -31,13 +31,18 @@ Request:
   "conversation_id": "<uuid>",   // continue an existing thread
   "context": { "lat": 41.9, "lon": 12.5, "heading": 180 },
   "desktop": { "active": 1, "workspaces_enabled": true,
-               "workspaces": [ { "index": 1, "windows": ["word", "files"] } ] }
+               "workspaces": [ { "index": 1, "windows": ["word", "files"] } ],
+               "focused": ["word"] }
 }
 ```
 
 `desktop` lets the model reorganize windows without creating empty workspaces;
 `workspaces_enabled: false` marks a vertical/phone screen (one column, no
-workspaces).
+workspaces). `focused` lists the plugin windows the user has put in **focus
+mode**: while it is non-empty the turn is scoped to those plugins — only web
+search and their tools run, and a desktop action or another plugin's tool comes
+back as an `unavailable` outcome. Everything is available again when the list is
+empty. See [desktop.md § Focus mode](../core/desktop.md#focus-mode).
 
 JSON response (`AgentResponse`):
 
@@ -75,7 +80,8 @@ returns.
 Built per request by `prepare_agent`:
 
 - `web/skills/core-assistant.md` (always-on core tools), plus every active
-  plugin's skills markdown joined with `\n---\n`.
+  plugin's skills markdown joined with `\n---\n` — in focus mode, only the
+  focused plugins' (see the `desktop.focused` field above).
 - Persona: the concatenation of active plugins' persona fragments, or
   `a helpful AI assistant`.
 - `## Context`: user first name, location (or "unknown"), active trip, recent

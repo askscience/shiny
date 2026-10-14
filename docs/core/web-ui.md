@@ -35,8 +35,8 @@ The shell is split by concern. Grouped:
 
 | Module | Role |
 |---|---|
-| `desktop.js` | Desktop model: workspaces, layout, persistence. |
-| `tiles.js` | Tile grid, window chrome creation, `ensureWindowChrome`, glow wiring. |
+| `desktop.js` | Desktop model: workspaces, layout, persistence, focus mode. |
+| `tiles.js` | Tile grid, window chrome creation, `ensureWindowChrome`, the eye button, glow wiring. |
 | `fullscreen.js`, `fullscreenBubble.js` | Fullscreen handoff and the glass exit bubble. |
 | `overview.js` | Window overview (all open windows, live). |
 | `launcher.js` | Plugin/app grid launcher. |
@@ -50,7 +50,7 @@ The shell is split by concern. Grouped:
 | Module | Role |
 |---|---|
 | `hudLeft.js` | Clock + weather, left HUD. |
-| `hudPlugins.js` | Plugin tray, grouped by manifest `category`. |
+| `hudPlugins.js` | Plugin tray, grouped by manifest `category`; lights the focused plugins' underline. |
 | `hudAudio.js`, `audioMenu.js`, `audioShared.js` | Sound chip + menu. |
 | `hudBluetooth.js`, `bluetoothMenu.js`, `bluetoothShared.js` | Bluetooth chip + menu. |
 | `hudBattery.js`, `batteryMenu.js`, `batteryShared.js` | Battery chip + power quick menu. |

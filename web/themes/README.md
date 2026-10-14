@@ -79,7 +79,11 @@ can't be listed over HTTP.
 - **Accent slots** — `appearance.js` rewrites `--accent`, `--accent-2`,
   `--accent-soft`, `--accent-glow`, `--accent-contrast`, `--gradient-accent`,
   `--gradient-text`, `--gradient-mesh` at runtime from the user's choice.
-  Use them; never hardcode brand colors.
+  Use them; never hardcode brand colors. It also derives two focus-mode slots
+  from the **whole** `accents` list in your `theme.json`, not just the chosen
+  accent: `--focus-ring` (a conic wheel, for the frame of a focused window) and
+  `--focus-bar` (the same palette laid out straight, for the tray underline).
+  Declare at least two accents or the frame falls back to `--accent`.
 - **Semantic colors** — `--ok`, `--warn`, `--error` are functional, not
   decorative. Keep them legible.
 - **Icons** — always `stroke="currentColor"` (or `fill`), 24×24 viewBox,

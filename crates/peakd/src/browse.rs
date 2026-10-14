@@ -125,6 +125,13 @@ pub enum Command {
         id: String,
         text: String,
     },
+    /// Run one named engine action on the view's focused element: the app's
+    /// context menu over a page sends its edit verbs this way (Cut / Copy /
+    /// Paste / SelectAll). Navigation keeps its dedicated commands.
+    Action {
+        id: String,
+        verb: String,
+    },
 }
 
 impl Command {
@@ -181,6 +188,10 @@ impl Command {
                     .unwrap_or_default()
                     .to_string(),
             },
+            "action" => Self::Action {
+                id,
+                verb: value.get("verb")?.as_str()?.to_string(),
+            },
             _ => return None,
         })
     }
@@ -230,6 +241,14 @@ impl ViewBus {
             "url" => json!({ "id": id, "type": "url", "url": payload }),
             "new-window" => json!({ "id": id, "type": "new-window", "url": payload }),
             "load" => json!({ "id": id, "type": "load", "phase": payload }),
+            // A context menu request from a page: `payload` is the JSON the
+            // shim built (position, link, selection). Parsed here so the
+            // plugin receives an object.
+            "context-menu" => json!({
+                "id": id,
+                "type": "context-menu",
+                "menu": serde_json::from_str::<Value>(payload).unwrap_or(Value::Null),
+            }),
             other => json!({ "id": id, "type": other, "payload": payload }),
         }
     }
@@ -254,6 +273,7 @@ pub trait ViewHost {
     fn reload(&mut self, id: &str);
     fn focus(&mut self, id: &str);
     fn paste(&mut self, id: &str, text: &str);
+    fn action(&mut self, id: &str, verb: &str);
     fn close(&mut self, id: &str);
 }
 
@@ -357,6 +377,11 @@ impl<H: ViewHost> Views<H> {
             Command::Paste { id, text } => {
                 if self.live.contains(&id) {
                     self.host.paste(&id, &text);
+                }
+            }
+            Command::Action { id, verb } => {
+                if self.live.contains(&id) {
+                    self.host.action(&id, &verb);
                 }
             }
         }
@@ -464,6 +489,9 @@ mod tests {
         fn paste(&mut self, id: &str, text: &str) {
             self.calls.push(format!("paste {id} {text}"));
         }
+        fn action(&mut self, id: &str, verb: &str) {
+            self.calls.push(format!("action {id} {verb}"));
+        }
         fn close(&mut self, id: &str) {
             self.calls.push(format!("close {id}"));
         }
@@ -477,6 +505,7 @@ mod tests {
         ));
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"navigate","id":"t1","url":"https://b/"}"#));
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"paste","id":"t1","text":"clip"}"#));
+        assert!(bus.handle_ipc(r#"peakd:view:{"op":"action","id":"t1","verb":"Copy"}"#));
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"close","id":"t1"}"#));
         // A command for a closed view is dropped.
         assert!(bus.handle_ipc(r#"peakd:view:{"op":"back","id":"t1"}"#));
@@ -489,6 +518,7 @@ mod tests {
                 "create t1 https://a/ true false",
                 "navigate t1 https://b/",
                 "paste t1 clip",
+                "action t1 Copy",
                 "close t1",
             ]
         );
@@ -514,6 +544,27 @@ mod tests {
             Command::Paste { text, .. } => assert!(text.is_empty()),
             other => panic!("wrong command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_an_action_command() {
+        let value: Value =
+            serde_json::from_str(r#"{"op":"action","id":"t1","verb":"Copy"}"#).unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::Action { id, verb } => {
+                assert_eq!(id, "t1");
+                assert_eq!(verb, "Copy");
+            }
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_context_menu_event_carries_its_payload() {
+        let event = ViewBus::view_event("t1", "context-menu", r#"{"x":1,"y":2,"editable":true}"#);
+        assert_eq!(event["type"], "context-menu");
+        assert_eq!(event["menu"]["editable"], true);
+        assert_eq!(event["menu"]["x"], 1.0);
     }
 
     #[test]

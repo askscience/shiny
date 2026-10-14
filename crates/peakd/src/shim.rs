@@ -59,6 +59,7 @@ extern "C" {
     pub fn peakd_qt_view_reload(id: *const c_char);
     pub fn peakd_qt_view_focus(id: *const c_char);
     pub fn peakd_qt_view_paste(id: *const c_char, text: *const c_char);
+    pub fn peakd_qt_view_action(id: *const c_char, verb: *const c_char);
     pub fn peakd_qt_view_close(id: *const c_char);
     pub fn peakd_qt_set_filter_cb(cb: FilterCallback, userdata: *mut c_void);
     pub fn peakd_qt_set_ua_cb(cb: UaCallback, userdata: *mut c_void);
@@ -187,6 +188,12 @@ pub fn view_focus(id: &str) {
 pub fn view_paste(id: &str, text: &str) {
     let text = CString::new(text).unwrap_or_default();
     unsafe { peakd_qt_view_paste(cs(id).as_ptr(), text.as_ptr()) }
+}
+
+/// Run one named engine action on a page view's focused element (the app's
+/// context menu over a page: Cut / Copy / Paste / SelectAll).
+pub fn view_action(id: &str, verb: &str) {
+    unsafe { peakd_qt_view_action(cs(id).as_ptr(), cs(verb).as_ptr()) }
 }
 
 pub fn view_close(id: &str) {

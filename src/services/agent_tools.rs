@@ -49,11 +49,27 @@ pub async fn execute_action(
         }
     }
 
+    // Focus mode: desktop actions are refused while a window is focused, because
+    // they act on the desktop rather than on the plugin the user is working with.
+    // Two rules keep this from becoming a trap:
+    //   • only REAL core actions are checked — a tool name the model invented
+    //     must reach its own "unknown action" error, not be blamed on focus mode;
+    //   • web search and the plugin lifecycle stay available (see the list).
+    if focus_blocks_core(ctx, &action_key) {
+        return Ok(focus_core_refusal(ctx, &action_key));
+    }
+
     // Plugin registry takes priority — if a plugin claimed this action key,
     // dispatch to its `Tool::invoke`. The registry itself consults the per-user
     // activation set, so deactivated plugins refuse here.
     if state.plugins.tools().has(&action_key) {
         let owner = state.plugins.tools().owner_of(&action_key);
+        // Only a plugin that is not focused is refused — the focused plugins' own
+        // tools are exactly what focus mode is FOR. Checked here, where the owner
+        // is a real plugin name, so no invented tool name can be misread.
+        if focus_blocks_plugin(ctx, &owner) {
+            return Ok(focus_plugin_refusal(ctx, &owner));
+        }
         let plugin_ctx = state.plugin_ctx();
         let os_home = state.os_identity_for(traveler).map(|u| u.home);
         let outcome = state
@@ -789,6 +805,75 @@ fn workspace_target(v: &Value, default: &str) -> String {
     default.to_string()
 }
 
+/// Core actions focus mode refuses: they act on the desktop — other windows,
+/// workspaces — rather than on the plugin the user is focused on. The list is
+/// deliberately explicit, so a core tool that is not on it keeps working: it
+/// fails open, never locking the model out of something it needs.
+///
+/// Note what is NOT here: `web_search`, and the plugin lifecycle
+/// (`plugin_activate` / `plugin_deactivate`). Refusing activation was a real bug:
+/// with a plugin focused but not yet active, the model could not activate it and
+/// the focused plugin stayed unusable.
+const FOCUS_MODE_BLOCKED_CORE: &[&str] = &[
+    "show_plugin",
+    "desktop_focus",
+    "desktop_fullscreen",
+    "workspace_create",
+    "workspace_remove",
+    "workspace_switch",
+    "workspace_move",
+    "plugin_deactivate_all",
+];
+
+/// Whether focus mode blocks this core action. Public so the end-to-end test
+/// (`tests/focus_mode_scope.rs`) can check the rule against the real registry.
+pub fn focus_blocks_core(ctx: &AgentContext, action: &str) -> bool {
+    !ctx.focused.is_empty() && FOCUS_MODE_BLOCKED_CORE.contains(&action)
+}
+
+/// Whether focus mode blocks a plugin tool. Only called once the registry has
+/// confirmed it owns the action, so `owner` is a real plugin name.
+pub fn focus_blocks_plugin(ctx: &AgentContext, owner: &str) -> bool {
+    !ctx.focused.is_empty() && !ctx.focused.iter().any(|f| f == owner)
+}
+
+/// Refusal for a desktop action taken while a window is focused.
+fn focus_core_refusal(ctx: &AgentContext, action: &str) -> ActionOutcome {
+    let focused = ctx.focused.join(", ");
+    ActionOutcome {
+        action: action.into(),
+        result: "unavailable".into(),
+        data: json!({ "error": format!(
+            "focus mode is on (focused: {focused}), so '{action}' is unavailable this turn — it \
+             is a desktop action, not something the focused plugin does. Say so in one short \
+             sentence if it matters; web search and the {focused} tools work normally."
+        ), "focus_mode": true, "action_kind": "desktop" }),
+        artifact: None,
+        extra_artifacts: vec![],
+        owner: None,
+    }
+}
+
+/// Refusal for another plugin's tool. Only the USER changes the focus, so the
+/// message says what to suggest instead.
+fn focus_plugin_refusal(ctx: &AgentContext, owner: &str) -> ActionOutcome {
+    let focused = ctx.focused.join(", ");
+    ActionOutcome {
+        action: owner.into(),
+        result: "unavailable".into(),
+        data: json!({ "error": format!(
+            "focus mode is on and plugin '{owner}' is not focused (focused: {focused}), so its \
+             tools are unavailable this turn — only web search and the {focused} tools run. Say \
+             so in one short sentence and SUGGEST the user focuses {owner} — the eye button in \
+             its window, or right-clicking its icon in the top bar — if that is what the request \
+             needs; only they can change the focus."
+        ), "focus_mode": true, "suggest_focus": owner }),
+        artifact: None,
+        extra_artifacts: vec![],
+        owner: None,
+    }
+}
+
 /// Error outcome for a desktop-control tool whose plugin isn't installed or
 /// isn't active for this user. Returns `None` when the plugin is usable.
 async fn active_plugin_error(
@@ -847,7 +932,9 @@ fn normalize_action_name(raw: &str) -> String {
         "switch_workspace" | "goto_workspace" | "go_to_workspace" => "workspace_switch".into(),
         "fullscreen" | "make_fullscreen" | "fullscreen_plugin"
         | "toggle_fullscreen" => "desktop_fullscreen".into(),
-        "focus_window" | "focus_plugin" | "switch_focus" => "desktop_focus".into(),
+        // `focus_plugin` used to land here; focus mode is not something the model
+        // can set (only SUGGEST), so neither action claims it.
+        "focus_window" | "switch_focus" | "bring_to_front" => "desktop_focus".into(),
         "close_all_plugins" | "close_all" | "close_all_windows"
         | "deactivate_all" | "deactivate_all_plugins" => "plugin_deactivate_all".into(),
         "close_plugin" | "close_window" => "plugin_deactivate".into(),
@@ -951,4 +1038,78 @@ fn strip_balanced_braces(s: &str) -> String {
         out.push(c);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        focus_blocks_core, focus_blocks_plugin, focus_core_refusal, focus_plugin_refusal,
+        AgentContext,
+    };
+
+    fn ctx(focused: &[&str]) -> AgentContext {
+        AgentContext {
+            lat: None,
+            lon: None,
+            heading: None,
+            lang: "en".into(),
+            ollama_model: None,
+            workspaces_enabled: true,
+            focused: focused.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    /// The focused plugin's own tools MUST run — that is the entire point of
+    /// focus mode. Regression: an invented tool name resolved to "no owner",
+    /// which the old gate read as a core action and refused, so the model was
+    /// told focus mode blocked Word and it gave up instead of using `doc_create`.
+    #[test]
+    fn the_focused_plugins_tools_always_work() {
+        let off = ctx(&[]);
+        assert!(!focus_blocks_plugin(&off, "word"));
+        assert!(!focus_blocks_core(&off, "show_plugin"));
+
+        let on = ctx(&["word"]);
+        assert!(!focus_blocks_plugin(&on, "word"), "the focused plugin is the point");
+        assert!(focus_blocks_plugin(&on, "calculator"), "another plugin does not");
+
+        // Lifecycle and web search are never blocked: a focused plugin that is
+        // not active yet must still be activatable, or it stays unusable forever.
+        assert!(!focus_blocks_core(&on, "web_search"));
+        assert!(!focus_blocks_core(&on, "plugin_activate"));
+        assert!(!focus_blocks_core(&on, "plugin_deactivate"));
+
+        // Desktop actions are, while a window is focused.
+        assert!(focus_blocks_core(&on, "show_plugin"));
+        assert!(focus_blocks_core(&on, "desktop_focus"));
+        assert!(focus_blocks_core(&on, "workspace_switch"));
+
+        // A name nobody knows is NOT focus mode's business: it has to reach its
+        // own "unknown action" error so the model corrects the name instead of
+        // concluding that focus mode is locking it out.
+        assert!(!focus_blocks_core(&on, "word_create_document"));
+    }
+
+    #[test]
+    fn several_plugins_can_be_focused_and_the_refusal_suggests_one() {
+        let many = ctx(&["files", "word"]);
+        assert!(!focus_blocks_plugin(&many, "word"));
+        assert!(!focus_blocks_plugin(&many, "files"));
+        assert!(focus_blocks_plugin(&many, "calculator"));
+
+        let refusal = focus_plugin_refusal(&many, "calculator");
+        assert_eq!(refusal.result, "unavailable");
+        let msg = refusal.data.get("error").and_then(|v| v.as_str()).unwrap_or_default();
+        assert!(msg.contains("SUGGEST"), "{msg}");
+        assert!(msg.contains("calculator"), "{msg}");
+        assert!(msg.contains("files, word"), "names the current focus: {msg}");
+        // It must never tell the model to change the focus itself.
+        assert!(!msg.contains("plugin_focus"), "{msg}");
+
+        let core = focus_core_refusal(&many, "show_plugin");
+        let core_msg = core.data.get("error").and_then(|v| v.as_str()).unwrap_or_default();
+        assert!(core_msg.contains("desktop action"), "{core_msg}");
+        assert!(core_msg.contains("files, word"), "{core_msg}");
+        assert!(core_msg.contains("web search"), "says what still works: {core_msg}");
+    }
 }

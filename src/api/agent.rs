@@ -65,6 +65,12 @@ pub struct DesktopState {
     /// switched the workspace system off. Missing (older clients) means on.
     #[serde(default)]
     pub workspaces_enabled: Option<bool>,
+    /// Plugins whose windows the user has explicitly focused. Non-empty means
+    /// this turn runs in focus mode: the skills of these plugins — and only
+    /// theirs — enter the prompt. Missing (older clients) means "none focused",
+    /// which is the normal, unscoped mode.
+    #[serde(default)]
+    pub focused: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -220,6 +226,41 @@ fn desktop_state_block(desktop: Option<&DesktopState>) -> String {
     )
 }
 
+/// "## Focus mode" block — present only while the user has focused plugin
+/// windows. Focus mode is enforced in `agent_tools::execute_action`, so this
+/// block explains the rule the model is already under rather than asking for it.
+fn focus_mode_block(focused: &std::collections::BTreeSet<String>) -> String {
+    let list = focused.iter().cloned().collect::<Vec<_>>().join(", ");
+    format!(
+        "\n## Focus mode (ON)\n\
+         The user has focused: {list}. Only web search and the {list} tools run this turn: \
+         another plugin's tools, and the desktop actions (show_plugin, desktop_focus, \
+         workspace_*) are refused before they run.\n\
+         You cannot change the focus; only the user can.\n\
+         When the request needs another plugin: do NOT call a tool, not even web search — do \
+         not substitute a search for the plugin you cannot use. Answer in ONE short sentence \
+         asking the user to focus that plugin (the eye button in its window, or right-clicking \
+         its icon in the top bar), then wait for them.\n\
+         Suggest a focus change only when it genuinely helps the work at hand — never \
+         routinely, and at most once per answer.\n"
+    )
+}
+
+/// The one-line focus state at the top of `## Context`, so the model never has
+/// to infer whether focus mode is on from the presence of a section.
+fn focus_state_line(focused: &std::collections::BTreeSet<String>) -> String {
+    if focused.is_empty() {
+        "Focus mode: OFF — no plugin window is focused, so every active plugin is available.\n"
+            .to_string()
+    } else {
+        let list = focused.iter().cloned().collect::<Vec<_>>().join(", ");
+        format!(
+            "Focus mode: ON — the user has focused: {list}. Only web search and the {list} \
+             tools can run this turn; you cannot change this yourself.\n"
+        )
+    }
+}
+
 struct PreparedAgent {
     input: AgentRunInput,
     trip_id: Option<String>,
@@ -252,7 +293,7 @@ async fn prepare_agent(
         .filter(|s| !s.is_empty())
         .map(String::from);
 
-    let ctx = AgentContext {
+    let mut ctx = AgentContext {
         lat: ctx_body.lat,
         lon: ctx_body.lon,
         heading: ctx_body.heading,
@@ -263,6 +304,9 @@ async fn prepare_agent(
             .as_ref()
             .and_then(|d| d.workspaces_enabled)
             .unwrap_or(true),
+        // Filled in below, once the active set is known: the focus set is the
+        // focused windows intersected with it.
+        focused: Vec::new(),
     };
 
     // Per-user active plugin set FOR THIS SESSION — drives which plugins'
@@ -271,6 +315,27 @@ async fn prepare_agent(
     // fresh sign-in sees only what the user has turned on.
     let installed: std::collections::BTreeSet<String> =
         state.plugins.session_active_set(&traveler.id).await;
+
+    // Focus mode: the windows the user explicitly focused. It narrows this turn
+    // to those plugins' skills, so it only counts for plugins that are active —
+    // a stale focus entry must never widen or break the prompt.
+    let focused: std::collections::BTreeSet<String> = body
+        .desktop
+        .as_ref()
+        .map(|d| {
+            d.focused
+                .iter()
+                .filter(|n| installed.contains(*n))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    let focus_mode = !focused.is_empty();
+
+    // Focus mode *enforces* the scope, it does not just describe it: the plugin
+    // registry refuses any other plugin's tools while this is non-empty, so the
+    // prompt's promise and what the model can actually call are the same thing.
+    ctx.focused = focused.iter().cloned().collect();
 
     let traveler_active = installed.contains("traveler");
     let active_trip = if traveler_active {
@@ -292,8 +357,12 @@ async fn prepare_agent(
     // Skill markdown = the core assistant reference (always-on tools only)
     // PLUS whatever skills the user's active plugins advertise. Plugin-owned
     // domains (e.g. traveler) document their own tools via their skills.
+    //
+    // In focus mode the scope shrinks to the focused plugins: the AI gets what
+    // the work in front of the user needs and nothing else.
     let core_skill = load_core_skill();
-    let plugin_skill = state.plugins.skills_markdown_for(&installed);
+    let skill_scope = if focus_mode { &focused } else { &installed };
+    let plugin_skill = state.plugins.skills_markdown_for(skill_scope);
     let skill = if plugin_skill.trim().is_empty() {
         core_skill
     } else {
@@ -382,9 +451,10 @@ async fn prepare_agent(
              numbered workspaces (desktops). Active plugins:\n{}\n\
              When the request clearly belongs to a plugin's domain, call \
              {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
-             this focuses and opens its window. Use desktop_fullscreen to make it full screen, \
+             this brings its window to the front. Use desktop_fullscreen to make it full screen, \
              and workspace_create / workspace_remove / workspace_switch / workspace_move to \
-             manage desktops.\n",
+             manage desktops. Focus mode is separate: while a window is focused only web \
+             search and that plugin's tools run, and only the user changes it.\n",
             active_lines.join("\n")
         )
     } else {
@@ -393,7 +463,7 @@ async fn prepare_agent(
              Each active plugin has its own window. Active plugins:\n{}\n\
              When the request clearly belongs to a plugin's domain, call \
              {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
-             this focuses and opens its window. Use desktop_fullscreen to make it full screen. \
+             this brings its window to the front. Use desktop_fullscreen to make it full screen. \
              This screen is vertical, so there is ONE column and no workspaces: the \
              workspace_create / workspace_remove / workspace_switch / workspace_move tools do \
              nothing here — never call them, and never tell the user you did.\n",
@@ -404,9 +474,16 @@ async fn prepare_agent(
     let plugin_catalog_block = if catalog.is_empty() {
         "\n## Plugins\nNo plugins installed.".to_string()
     } else {
+        // In focus mode the catalog must not promise tools the registry will
+        // refuse: say plainly that only the focused plugins' tools work.
+        let active_label = if focus_mode {
+            "Active plugins (only the focused ones' tools work this turn):"
+        } else {
+            "Active plugins (tools available):"
+        };
         format!(
             "\n## Plugins\n\
-             Active plugins (tools available):\n{}\n\
+             {active_label}\n{}\n\
              Available (inactive) plugins — activate with \
              {{\"action\":\"plugin_activate\",\"params\":{{\"name\":\"<plugin>\"}}}} if the request \
              needs one; deactivate with plugin_deactivate when the user asks to turn one off:\n{}",
@@ -430,6 +507,11 @@ async fn prepare_agent(
         .join("; ");
 
     let desktop_block = desktop_state_block(body.desktop.as_ref());
+    // Focus mode is a property of this turn, not of the desktop layout: it rides
+    // with the focused windows the client just reported. The state line is
+    // always present — ON or OFF — so the model never has to infer it.
+    let focus_line = focus_state_line(&focused);
+    let focus_block = if focus_mode { focus_mode_block(&focused) } else { String::new() };
 
     // Conversation memory: resolve (or start) the thread and surface its recent
     // turns so the model remembers what was said earlier.
@@ -473,8 +555,8 @@ async fn prepare_agent(
          - Always include \"params\". Use {{}} when a tool has no parameters.\n\
          \n\
          ## Tools\n{skill}\n\n\
-         ## Context\nUser name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{plugin_catalog_block}{desktop_block}",
+         ## Context\n{focus_line}User name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
+         Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{focus_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
         lang_name = language_name(&lang),
@@ -484,6 +566,7 @@ async fn prepare_agent(
         voice_style = voice_style,
         long_form = LONG_FORM_BLOCK,
         skill = skill,
+        focus_line = focus_line,
         location_line = location_line,
         trip_line = trip_line,
         diary_line = diary_line,
@@ -491,6 +574,7 @@ async fn prepare_agent(
         mode = mode,
         history_block = history_block,
         plugin_windows_block = plugin_windows_block,
+        focus_block = focus_block,
         plugin_catalog_block = plugin_catalog_block,
         desktop_block = desktop_block,
     );
@@ -760,5 +844,45 @@ pub async fn handle_agent_dispatch(
     } else {
         let json = handle_agent(State(state), Extension(traveler), Json(body)).await?;
         Ok(json.into_response())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{focus_mode_block, focus_state_line};
+    use std::collections::BTreeSet;
+
+    fn set(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// The model used to answer "focus mode is off" while a window was focused:
+    /// the state has to be stated in every turn, ON and OFF alike.
+    #[test]
+    fn focus_state_line_always_states_the_mode() {
+        let off = focus_state_line(&BTreeSet::new());
+        assert!(off.starts_with("Focus mode: OFF"), "{off}");
+
+        let on = focus_state_line(&set(&["files"]));
+        assert!(on.starts_with("Focus mode: ON"), "{on}");
+        assert!(on.contains("files"), "{on}");
+        assert!(on.contains("web search"), "names the hard limit: {on}");
+    }
+
+    /// The block describes the rule the dispatch layer already enforces, and the
+    /// model is told it can only SUGGEST a focus change.
+    #[test]
+    fn focus_block_states_the_hard_scope_and_the_suggestion_only_rule() {
+        let block = focus_mode_block(&set(&["files", "word"]));
+        assert!(block.contains("## Focus mode (ON)"), "{block}");
+        assert!(block.contains("files, word"), "{block}");
+        assert!(block.contains("Only web search"), "{block}");
+        assert!(block.contains("You cannot change the focus"), "{block}");
+        assert!(block.contains("do NOT call a tool"), "{block}");
+        // No tool for the model to reach for: focus is the user's call.
+        assert!(!block.contains("plugin_focus"), "{block}");
+        assert!(!block.contains("plugin_unfocus"), "{block}");
+        // Never nag: suggestions are gated on being useful.
+        assert!(block.contains("genuinely helps"), "{block}");
     }
 }

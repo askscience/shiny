@@ -22,6 +22,7 @@
  */
 import { apiFetch } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
+import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
@@ -1799,6 +1800,78 @@ function onFrameMessage(event) {
 }
 
 /**
+ * A right-click inside a page: the shell forwards the request (position local
+ * to the view item, plus the link and selection state) and the app's own menu
+ * opens over the page — the mask hole keeps it visible and clickable. Page
+ * verbs travel back as `peakd:view` commands; Copy Link Address goes through
+ * the app's clipboard service, so it lands in the Clipboard menu like every
+ * other copy. Navigation uses the dedicated ops, the edit verbs the generic
+ * `action` op (only a native view can touch its page's DOM).
+ */
+function openPageContextMenu(tab, menu) {
+  if (!nativeAvailable || !menu || typeof menu !== 'object') return;
+  if (tab.id !== activeTabId || !tab.native) return;
+  const x = Number(menu.x);
+  const y = Number(menu.y);
+  const r = viewportRect();
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !r) return;
+
+  const dpr = r.dpr || 1;
+  const send = (op, extra) => nativeSend({ op, id: tab.id, ...extra });
+  const editable = menu.editable === true;
+  const entries = [];
+  if (menu.linkUrl) {
+    entries.push({
+      type: 'item',
+      label: 'Copy Link Address',
+      icon: 'ui/link',
+      onClick: () => void copyText(menu.linkUrl),
+    });
+    entries.push({ type: 'separator' });
+  }
+  entries.push(
+    { type: 'item', label: 'Back', icon: 'ui/arrow-left', onClick: () => send('back') },
+    { type: 'item', label: 'Forward', icon: 'ui/forward', onClick: () => send('forward') },
+    { type: 'item', label: 'Reload', icon: 'ui/refresh', onClick: () => send('reload') },
+    { type: 'separator' },
+  );
+  if (editable) {
+    entries.push(
+      { type: 'item', label: 'Cut', onClick: () => send('action', { verb: 'Cut' }) },
+      {
+        type: 'item',
+        label: 'Copy',
+        icon: 'ui/copy',
+        disabled: !menu.selection,
+        onClick: () => send('action', { verb: 'Copy' }),
+      },
+      {
+        type: 'item',
+        label: 'Paste',
+        icon: 'ui/clipboard',
+        onClick: () => send('action', { verb: 'Paste' }),
+      },
+    );
+  } else {
+    entries.push({
+      type: 'item',
+      label: 'Copy',
+      icon: 'ui/copy',
+      disabled: !menu.selection,
+      onClick: () => send('action', { verb: 'Copy' }),
+    });
+  }
+  entries.push({
+    type: 'item',
+    label: 'Select All',
+    icon: 'ui/select-all',
+    onClick: () => send('action', { verb: 'SelectAll' }),
+  });
+
+  openContextMenu(entries, r.x + x / dpr, r.y + y / dpr);
+}
+
+/**
  * Events from the shell about a native view: the child webview's URL, title and
  * load phase. The shell calls this on the main webview, naming the tab by id.
  *
@@ -1835,6 +1908,8 @@ window.__peakdViewEvent = function (event) {
     // A `target="_blank"` link in a native view: the shell refused to hand a
     // popup to the OS browser, so open it as a tab here.
     openInNewTab(tab, event.url);
+  } else if (event.type === 'context-menu') {
+    openPageContextMenu(tab, event.menu);
   }
 };
 
@@ -1845,6 +1920,9 @@ let boundsObserver = null;
 let tileObserver = null;
 let bodyObserver = null;
 let syncQueued = false;
+let menuSyncTimer = null;
+/** Core menus slide in with `hudMenuIn`; re-sync once they have landed. */
+const MENU_SETTLE_MS = 200;
 
 /**
  * Coalesce a burst of layout changes into one sync per frame.
@@ -1864,6 +1942,17 @@ function requestSync() {
     syncQueued = false;
     syncActiveNative();
   });
+}
+
+/**
+ * A menu opened or closed: re-evaluate the mask now, and once more after the
+ * slide-in animation has settled. Sampling the hole mid-animation leaves the
+ * menu's top edge clipped by the page until the 250 ms fallback tick.
+ */
+function onMenuChange() {
+  requestSync();
+  clearTimeout(menuSyncTimer);
+  menuSyncTimer = setTimeout(requestSync, MENU_SETTLE_MS);
 }
 
 function startBoundsSync() {
@@ -1901,7 +1990,7 @@ function startBoundsSync() {
   window.addEventListener('fullscreen:change', requestSync);
   // A core popup opening/closing changes what covers the page (it becomes a
   // hole in the view's mask), so re-evaluate on the shared menu signal.
-  window.addEventListener('menu:change', requestSync);
+  window.addEventListener('menu:change', onMenuChange);
 }
 
 function stopBoundsSync() {
@@ -1917,7 +2006,9 @@ function stopBoundsSync() {
   window.removeEventListener('desktop:changed', requestSync);
   window.removeEventListener('overlay:open', requestSync);
   window.removeEventListener('fullscreen:change', requestSync);
-  window.removeEventListener('menu:change', requestSync);
+  window.removeEventListener('menu:change', onMenuChange);
+  clearTimeout(menuSyncTimer);
+  menuSyncTimer = null;
 }
 
 /* ── AI-driven navigation ─────────────────────────────────────── */

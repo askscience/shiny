@@ -15,7 +15,8 @@ typedef void (*peakd_ipc_cb)(void *userdata, const char *body);
 
 /// View lifecycle. `id` is `main`, a child view id, or `window` (kind `move`,
 /// payload `x,y`). Kinds: `load` (`finished`/`failed`), `title`, `url`,
-/// `new-window`, `crashed`.
+/// `new-window`, `crashed`, `context-menu` (a page right-click; payload JSON
+/// `{x,y,linkUrl,editable,selection}`, position local to the view item).
 typedef void (*peakd_view_cb)(void *userdata, const char *id, const char *kind,
                               const char *payload);
 
@@ -85,6 +86,10 @@ void peakd_qt_view_focus(const char *id);
 /// Put `text` on the system clipboard and run the engine's Paste action on the
 /// view (the Clipboard menu picked an entry while a page had focus).
 void peakd_qt_view_paste(const char *id, const char *text);
+/// Run one named engine action on the view (the app's context menu over a page:
+/// Cut / Copy / Paste / SelectAll), through the engine's own action so the
+/// page's handlers still win.
+void peakd_qt_view_action(const char *id, const char *verb);
 void peakd_qt_view_close(const char *id);
 
 /// Ad filtering + the Google sign-in User-Agent override. Callbacks are global

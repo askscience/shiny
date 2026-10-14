@@ -14,6 +14,7 @@ const OPENAI_MODEL_KEY = 'ai.openai_model';
 const PLUGIN_LAYOUT_KEY = 'plugin.layout';
 const DESKTOP_WORKSPACES_KEY = 'desktop.workspaces';
 const DESKTOP_ACTIVE_KEY = 'desktop.active';
+const DESKTOP_FOCUS_KEY = 'desktop.plugin_focus';
 const DESKTOP_LAYOUT_KEY = 'desktop.layout';
 const DESKTOP_WINDOWS_KEY = 'desktop.windows';
 const DESKTOP_REMEMBER_KEY = 'session.remember';
@@ -252,6 +253,26 @@ export function setActiveWorkspaceId(id) {
   if (id) localStorage.setItem(key, id);
   else localStorage.removeItem(key);
   persist(DESKTOP_ACTIVE_KEY, id || '');
+}
+
+/**
+ * Plugins in focus mode. Deliberately NOT part of a workspace: focus is a
+ * working set ("what I am dealing with right now"), not a place on screen, and
+ * the AI has to know about it whichever workspace happens to be up. Reading
+ * returns [] in fresh mode, like the rest of the desktop state.
+ */
+export function getPluginFocus() {
+  if (!getRemember()) return [];
+  const raw = readJson(scopedKey(DESKTOP_FOCUS_KEY), null);
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((n) => typeof n === 'string' && n);
+}
+
+export function setPluginFocus(names) {
+  if (!getRemember()) return; // fresh mode: keep the desktop out of storage
+  const raw = JSON.stringify([...new Set(names || [])]);
+  localStorage.setItem(scopedKey(DESKTOP_FOCUS_KEY), raw);
+  persist(DESKTOP_FOCUS_KEY, raw);
 }
 
 /** Tiling layout config, merged over defaults. */

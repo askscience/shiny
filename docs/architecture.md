@@ -147,6 +147,8 @@ The heart of the app. Full detail in [agent](core/agent.md).
 2. [`agent_runner`](../src/services/agent_runner.rs) builds the **system
    prompt**: `web/skills/core-assistant.md` + active plugins' persona, skills
    markdown and context lines + the user's profile/location/trip/diary context.
+   When the user has focused plugin windows, the plugin half is narrowed to those
+   plugins and only their tools run ([focus mode](core/desktop.md#focus-mode)).
 3. The conversation history is loaded (or a conversation resumed) and sent to
    Ollama (or an OpenAI-compatible provider when the user configured one).
 4. The model may emit JSON action blocks; [`parse_actions`](../crates/shiny-plugin-sdk/src/tools.rs)

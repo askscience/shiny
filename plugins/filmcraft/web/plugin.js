@@ -293,19 +293,21 @@ export function mountTile() {
   tileEl.className = 'tile filmcraft-tile';
   tileEl.dataset.plugin = FILMCRAFT_PLUGIN;
 
+  // The window's top bar: `data-window-bar` makes the host merge the
+  // close/fullscreen controls into it. The classes are the plugin's own —
+  // reusing core's `tile-header*` names made the host take the bar for
+  // chrome it had already injected, so the window shipped with no close and
+  // no fullscreen button at all. No repeated title either: the merged row
+  // (and the window menu) already name the app.
   const bar = document.createElement('div');
-  bar.className = 'tile-header';
+  bar.className = 'filmcraft-bar';
   bar.dataset.windowBar = '';
-
-  const title = document.createElement('div');
-  title.className = 'tile-header-title';
-  title.textContent = 'FilmCraft';
 
   statusEl = document.createElement('div');
   statusEl.className = 'filmcraft-status';
 
   const spacer = document.createElement('div');
-  spacer.className = 'tile-header-spacer';
+  spacer.className = 'filmcraft-bar-spacer';
 
   const reloadBtn = iconButton({
     icon: 'ui/refresh',
@@ -313,7 +315,7 @@ export function mountTile() {
     onClick: () => location.reload(),
   });
 
-  bar.append(title, statusEl, spacer, reloadBtn);
+  bar.append(statusEl, spacer, reloadBtn);
 
   stageEl = document.createElement('div');
   stageEl.className = 'filmcraft-stage';

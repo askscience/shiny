@@ -895,11 +895,14 @@ body.overview-active .tile--overview { box-shadow: none !important; }
    of rules that assumed glass or a light canvas.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Shared: unified plugin top bars ────────────────────────────
-   Every plugin window's action row. One flat fill, one hairline. */
-.word-bar, .calc-bar, .impress-bar, .mail-bar,
-.calendar-bar, .calculator-bar, .pdf-bar, .studio-bar,
-.radio-hero, .yt-hero, .browser-bar {
+/* ── Shared: content bars outside the window chrome ─────────────
+   Only rows that are NOT the merged chrome row paint a plate. The
+   merged header already supplies it, so a bar that repaints the
+   same glass over it reads as a differently toned patch beside the
+   close/fullscreen controls. The chrome-row bars (word, calc,
+   impress, mail, calendar, calculator, pdf, studio, radio) paint
+   nothing — same as the browser and terminal tab strips. */
+.yt-hero, .browser-bar {
   background: var(--glass) !important;
   border-bottom: 1px solid var(--glass-border) !important;
 }
@@ -1517,7 +1520,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
    Artwork-driven already; drop the duration scrim's hardcoded white
    and the mask gradients' black. */
 .radio-tile { background: var(--bg-elevated) !important; }
-.radio-hero { background: var(--bg-elevated) !important; }
 .radio-hero-art--empty { background: var(--surface) !important; }
 .radio-hero-title {
   font-family: var(--font-display) !important;

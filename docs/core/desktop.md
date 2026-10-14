@@ -64,7 +64,8 @@ has `surface: true` are loaded. `refreshCatalog()`:
 `deactivatePlugin(name)` POSTs `/api/plugins/deactivate`, then writes the
 `plugins.changed` localStorage stamp and dispatches `plugins:changed`.
 `activatePlugin(name)` does the same against `/api/plugins/activate` and adds
-`detail.opened` so the desktop can focus (raise) the new window.
+`detail.opened` so the desktop can **reveal** the new window — switch to the
+workspace holding it — without focusing it (see [Focus mode](#focus-mode)).
 
 ### Core windows
 
@@ -80,7 +81,9 @@ export const CORE_WINDOWS = {
 They behave exactly like plugin surfaces once opened (tile, focus, fullscreen,
 workspaces, context menu) but are *opened/closed* instead of
 activated/deactivated. `openCoreWindow(name)` adds the name to `coreOpen`,
-lazily imports the module through `ensureCoreSurface()`, re-renders and focuses.
+lazily imports the module through `ensureCoreSurface()` and re-renders — focusing
+only when the window was **already open**, i.e. when the call is an explicit
+"bring it forward" rather than an open.
 `openCoreWindowSection(name, section)` additionally calls `selectSection()`.
 `closeCoreWindow(name)` exits fullscreen first (core windows have no
 `plugins:changed` signal), unmounts the surface and re-renders. Core windows are
@@ -93,12 +96,24 @@ restored window is never pruned from its saved workspace before it mounts.
 
 - the tier-0 **ambient glow** (`installGlow`, see [themes-icons.md](themes-icons.md));
 - a `.tile-header` holding `.tile-header-controls` — **close** (deactivate or
-  close a core window) and **full screen** (`toggleWindowFullscreen`);
+  close a core window), **full screen** (`toggleWindowFullscreen`) and **focus**
+  (`ui/eye` → `togglePluginFocus`, the focus-mode toggle; a core window takes
+  part in focus mode like any other);
 - a centered `.tile-header-title` (or, when the plugin nominates a top bar with
   `data-window-bar`, `tile-header--merged` merges the controls into that bar);
 - a `.tile-resize` grip (visible only in the Windows layout).
 
-`syncWindowChrome()` mirrors the in-app fullscreen state onto the full button.
+Injected chrome is marked `data-window-chrome` and the guard keys off that
+marker, not off the `.tile-header` class — a plugin bar that reuses the class
+name can no longer make the host believe chrome already exists and skip the
+close/fullscreen buttons. A merged bar drops its own background: the header
+paints the row's plate once, and a bar repainting glass over it reads as a
+differently toned patch beside the controls in glass themes.
+
+`syncWindowChrome()` mirrors the in-app fullscreen state onto the full button and
+the focus state onto the eye (`is-active`, `aria-pressed`, and the
+`tile--plugin-focus` class on the tile). `repaintWindowFocus()` re-applies just
+that chrome for a focus-only change, which deliberately skips the layout pass.
 The title bar doubles as the drag handle in Windows layout; `DRAG_IGNORE`
 keeps controls, inputs and ARIA roles from starting a drag.
 
@@ -120,10 +135,11 @@ restart). Classes on the grid select the layout:
 
 `renderTiles()` also detects newly-opened names (`opening`) and calls `bumpZ`
 *before* layout so a reopened window lands on top; toggles `tiles-active` on
-`<body>`; renders the workspace bar; re-emits `artifact:dock`; nudges Leaflet
-with `map:resize`; and focuses the last opened window. Workspace switches
-animate with `animateWorkspaceSlide(dir)` (Web Animations API, skipped under
-`prefers-reduced-motion`).
+`<body>`; renders the workspace bar; re-emits `artifact:dock`; and nudges Leaflet
+with `map:resize`. It does **not** focus the window it just opened — an open
+raises a window, it never chooses it (see [Focus mode](#focus-mode)). Workspace
+switches animate with `animateWorkspaceSlide(dir)` (Web Animations API, skipped
+under `prefers-reduced-motion`).
 
 ## Layouts
 
@@ -193,7 +209,7 @@ In Tiling mode an invisible overlay (`grid.__splitterLayer`) hosts drag handles:
 
 A workspace is `{ id, windows: [pluginName], focus, fullscreen, name? }`. The
 manager tracks `workspaces`, `activeWs`, and caches the active workspace's
-`focus` / `fullscreen`.
+`focus` / `fullscreen` (focus *mode* is global — see [Focus mode](#focus-mode)).
 
 - `ensureWindows(names)` migrates a first load (one workspace with everything),
   prunes deactivated surfaces, repairs the fullscreen rule and adds newly
@@ -222,24 +238,116 @@ manager tracks `workspaces`, `activeWs`, and caches the active workspace's
 | `switchWorkspace(dirOrIndex)` | `'next'`, `'prev'` or a 0-based index |
 | `moveWindow(name, toId)` | Move then focus; refuses into/out of a sealed workspace |
 | `moveWindowByIndex(name, idx)` | `idx` may be `'new'`; out-of-range auto-creates (capped at 9) |
-| `focusWindow(name)` | Focus, switching workspace if needed, and raise |
+| `focusWindow(name)` | Make it the **active** window, switching workspace if needed, and raise |
+| `revealWindow(name)` | Put it on screen (switch workspace) *without* making it active — the open path |
 | `cycleFocus(names, dir)` | Rotate focus through the active workspace |
 | `toggleFullscreen(name, force)` | In-app fullscreen state |
 | `isolateInNewWorkspace(name)` | Desktop half of real fullscreen; returns a token |
 | `restoreFromNewWorkspace(name, token)` | Undo the isolation, dropping the dedicated workspace |
+| `setPluginFocus(name, on)` | Add/remove a plugin from focus mode (see below) |
+| `togglePluginFocus(name)` | The eye button's action: on ⇄ off |
+| `isPluginFocused(name)` | Read the focus set |
+| `reconcilePluginFocus(openNames)` | Drop focus entries whose window is gone, then repaint |
 
 `getDesktopSnapshot()` (1-based indices) is sent to the AI on every request so
-it knows which windows live in which workspace; the identical `workspace_*` and
-`desktop_*` tools are applied back through `agent:actions`.
+it knows which windows live in which workspace — and, in `focused`, whether the
+turn runs in focus mode. The `workspace_*` and `desktop_*` tools are applied back
+through `agent:actions` (`wireAgentActions`); focus mode is not among them,
+because the AI cannot change it.
 
 ### Workspace bar
 
 `renderWorkspaceBar()` draws `#workspace-bar`: a `+` button, the dots, and a `−`
 button. Each dot is the workspace number, or the **app's own icon** for a
-dedicated fullscreen workspace (`.is-app`); the active dot carries `.is-active`.
-The bar is always visible on a wide screen (even with no windows, so workspaces
-can be created/managed) and hidden on a phone. It is re-rendered on every
-`desktop:changed` event.
+dedicated fullscreen workspace (`.is-app`); the active dot carries `.is-active`,
+and a dot whose workspace holds a focused window carries `.is-focused` (accent
+border + accent glyph — derived from the global focus set, not stored on the
+workspace). The bar is always visible on a wide screen (even with no windows, so
+workspaces can be created/managed) and hidden on a phone. It is re-rendered on
+every `desktop:changed` event.
+
+## Focus mode
+
+Two different things are called "focus", and they are deliberately separate:
+
+| | Active window | Focus mode |
+|---|---|---|
+| State | `focus`, a single name, per workspace | `focusedPlugins`, a set, **global** |
+| Set by | a click, a raise, fullscreen, "bring to front" | **only the user**: the eye button or the two context menus |
+| Class | `tile--focused` | `tile--plugin-focus` |
+| Means | which window is on top | which plugins the user is working with |
+
+**Focus mode is never automatic.** Opening a plugin, clicking its window and
+fullscreening it all leave the focus set alone — and the AI has no tool to change
+it either, only to suggest it. Several plugins can be focused at once.
+
+It is global rather than per workspace on purpose: it is a *working set*, not a
+place on screen, so the AI knows about it whichever workspace happens to be up.
+It is persisted on its own key (`desktop.plugin_focus` via
+`getPluginFocus`/`setPluginFocus` in `preferences.js`) and pruned against the
+window list in `renderTiles` — never against an empty list, which would wipe it
+before the plugin set has loaded. `reconcilePluginFocus(openNames)` is the only
+way in.
+
+Where it shows, all in the **theme's whole accent palette** rather than the
+single accent the user picked (the colour is what marks focus):
+
+- the window frame — `--focus-ring`, a conic wheel built in
+  `web/ui/appearance.js` from the swatches of Settings → Appearance. It starts at
+  the **bottom-left** corner and blends colour into colour; painted on
+  `.tile--plugin-focus::before` as a **1px** band, with the tile's own border
+  transparent so no single colour sits in front of it. Its stops are literal
+  angles, and nothing about the frame depends on `calc()` or on an animated custom
+  property resolving: a frame whose background fails to parse is not a subtly
+  wrong frame, it is no frame at all (that is exactly how it shipped invisible
+  once);
+- the entrance — a plain `tile-focus-in` fade on the frame itself, plus `::after`
+  on top of it: `tile-focus-sweep`, one calm lap over 700ms where a 90deg accent
+  highlight thins to nothing. Decoration only — if the animated custom properties
+  are unavailable the frame is still there;
+- the tray underline (`.hud-plugin-btn.is-focused .hud-plugin-line`) —
+  `--focus-bar`, the same palette laid out straight;
+- the workspace dot of any workspace holding a focused window
+  (`.workspace-bar-dot.is-focused`).
+
+Clicking the eye again unfocuses. The set reaches the backend in the `desktop`
+snapshot (`focused`), where it **scopes and enforces** the turn:
+
+- `prepare_agent` narrows the prompt's plugin skills to the focused plugins and
+  adds an always-present `Focus mode: ON|OFF` line to `## Context` plus a
+  `## Focus mode (ON)` block, so the model never has to infer the state;
+- `agent_tools::execute_action` enforces the scope, and it does so **surgically**:
+  - a **plugin tool** is checked at the dispatch point, where the registry has
+    already named its owner (`focus_blocks_plugin`): a focused plugin's own tools
+    always run — that is what focus mode is for — and another plugin's do not;
+  - **core actions** are checked against an explicit list of desktop actions
+    (`FOCUS_MODE_BLOCKED_CORE`: `show_plugin`, `desktop_focus`,
+    `desktop_fullscreen`, `workspace_*`, `plugin_deactivate_all`). The list is
+    explicit on purpose: any other core tool *fails open*, so the model can never
+    be locked out of something it needs. `web_search` and the plugin lifecycle
+    (`plugin_activate` / `plugin_deactivate`) are never blocked — refusing
+    activation deadlocked a focused-but-inactive plugin once already;
+  - a tool name the model **invented** is not focus mode's business: it reaches
+    its own "unknown action" error, so the model corrects the name instead of
+    concluding that focus mode is in its way (this is what made it tell the user
+    to leave focus mode while Word was focused);
+- only the user changes focus mode (the eye button, the two context menus). The
+  model can only SUGGEST it, which is what the refusal tells it to do.
+
+`tests/focus_mode_scope.rs` proves the rule against the real thing: it loads the
+cdylibs from `data/plugins`, asserts every registered tool names its owner, walks
+all of them (19 plugins, 331 tools) checking that each plugin's own tools pass
+while it is focused and another plugin's do not, and then dispatches for real —
+`doc_create` reaches the word plugin while word is focused, `calc_list` is
+refused while it is not.
+
+The AI's skills are scoped the same way, so what the prompt promises and what the
+dispatcher allows are the same set.
+
+With nothing focused the skills cover the whole active set, as before.
+`show_plugin` and `desktop_focus` are *not* focus mode — outside focus mode they
+only bring a window to the front, and inside it they are gated as described
+above.
 
 ## Keyboard shortcuts
 
@@ -389,6 +497,7 @@ and the `notify()` helper.
 | [`web/js/contextMenu.js`](../../web/js/contextMenu.js) | Right-click engine. |
 | [`web/js/hudLeft.js`](../../web/js/hudLeft.js), [`hudPlugins.js`](../../web/js/hudPlugins.js), [`hud*.js`](../../web/js) | HUD sections + chips. |
 | [`web/js/keyboard.js`](../../web/js/keyboard.js) | Virtual keyboard chrome. |
+| [`web/ui/appearance.js`](../../web/ui/appearance.js) | Accent/gradient, and the focus palette (`--focus-ring`, `--focus-bar`). |
 | [`web/js/settingsWindow.js`](../../web/js/settingsWindow.js), [`pluginsWindow.js`](../../web/js/pluginsWindow.js) | Built-in windows. |
 
 Related: [web UI](web-ui.md) · [themes & icons](themes-icons.md) ·
