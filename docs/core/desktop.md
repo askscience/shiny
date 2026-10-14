@@ -207,9 +207,11 @@ In Tiling mode an invisible overlay (`grid.__splitterLayer`) hosts drag handles:
 
 ## Workspaces
 
-A workspace is `{ id, windows: [pluginName], focus, fullscreen, name? }`. The
+A workspace is `{ id, windows: [pluginName], focus, fullscreen, name?, home? }`. The
 manager tracks `workspaces`, `activeWs`, and caches the active workspace's
 `focus` / `fullscreen` (focus *mode* is global — see [Focus mode](#focus-mode)).
+`home` is only on a dedicated fullscreen workspace: the workspace its window came
+from, so leaving fullscreen hands it back (see [Real fullscreen](#real-fullscreen-and-the-bubble)).
 
 - `ensureWindows(names)` migrates a first load (one workspace with everything),
   prunes deactivated surfaces, repairs the fullscreen rule and adds newly
@@ -219,10 +221,15 @@ manager tracks `workspaces`, `activeWs`, and caches the active workspace's
 - `reconcile()` enforces the **fullscreen rule**: a fullscreen app must live in
   a workspace by itself. A stray window that breaks the rule is moved to a
   shelter workspace; a fullscreen app whose workspace no longer holds it is
-  forgotten. It is idempotent and runs from every mutation and render.
+  forgotten; a dedicated workspace (`home`) whose window is gone is dropped.
+  Several workspaces may be sealed at once, one fullscreen window each. It is
+  idempotent and runs from every mutation and render.
 - `workspaceLock(ws)` returns the plugin that seals a workspace (its fullscreen
   app) or `null`. A sealed workspace accepts nothing else and its app cannot
-  leave, so no window can ever be tiled behind a fullscreen one.
+  leave, so no window can ever be tiled behind a fullscreen one. It holds for a
+  workspace that is not on screen too.
+- `hasFullscreenWindow()` is true while *any* workspace still holds a fullscreen
+  window — the condition fullscreen.js uses to keep real browser fullscreen.
 - `workspaceLabel(wsOrIndex)` names a workspace; a dedicated fullscreen
   workspace is just the app's name ("Youtube", not "Workspace 3 — Youtube").
 - `activeWindowNames(allNames)` lists the active workspace's still-existing
@@ -241,9 +248,9 @@ manager tracks `workspaces`, `activeWs`, and caches the active workspace's
 | `focusWindow(name)` | Make it the **active** window, switching workspace if needed, and raise |
 | `revealWindow(name)` | Put it on screen (switch workspace) *without* making it active — the open path |
 | `cycleFocus(names, dir)` | Rotate focus through the active workspace |
-| `toggleFullscreen(name, force)` | In-app fullscreen state |
-| `isolateInNewWorkspace(name)` | Desktop half of real fullscreen; returns a token |
-| `restoreFromNewWorkspace(name, token)` | Undo the isolation, dropping the dedicated workspace |
+| `toggleFullscreen(name, force)` | Low-level in-app fullscreen pointer (see `enterWindowFullscreen`) |
+| `isolateInNewWorkspace(name)` | Desktop half of fullscreen: a dedicated workspace that records `home`; returns its id |
+| `restoreFromNewWorkspace(name)` | Undo the isolation via `home`: hand the window back, drop the dedicated workspace |
 | `setPluginFocus(name, on)` | Add/remove a plugin from focus mode (see below) |
 | `togglePluginFocus(name)` | The eye button's action: on ⇄ off |
 | `isPluginFocused(name)` | Read the focus set |
@@ -377,21 +384,50 @@ AI through `desktop_fullscreen`, `desktop_focus`, `workspace_create`,
 `web/js/fullscreen.js` implements the user-facing fullscreen, which is more than
 the browser API. `enterWindowFullscreen(name)`:
 
-1. calls `isolateInNewWorkspace(name)` — a brand-new dedicated workspace;
-2. calls `toggleFullscreen(name, true)` — the in-app state, which doubles as the
-   fallback when the browser refuses the request;
-3. stores `session = { plugin, token }`, adds `body.fs-active`, announces
-   `fullscreen:change`, then requests real fullscreen on `document.documentElement`
-   **synchronously** from the user gesture (a rejection is not an error — the
-   in-app state stands).
+1. calls `isolateInNewWorkspace(name)` — a brand-new dedicated workspace, which
+   becomes the in-app fullscreen state (`ws.fullscreen`) and records `ws.home`;
+2. adds `body.fs-active` for the workspace on view and announces
+   `fullscreen:change`;
+3. requests real fullscreen on `document.documentElement` **synchronously** from
+   the user gesture — but only when the document is not fullscreen already. A
+   rejection is not an error: the state above *is* the effect, the browser
+   request only takes the OS chrome away with it.
+
+Every fullscreen window owns its own dedicated workspace (already a per-workspace
+field), so **any number of windows can hold fullscreen at once, one workspace
+each**. `body.fs-active` — the hidden top bar, the pinned `#tile-grid`, the
+missing title stripe, the bubble — follows the window that owns the workspace on
+view (a `desktop:changed` listener re-syncs it), so switching between those
+workspaces shows each full-bleed and gives the normal workspaces their chrome
+back. Real browser fullscreen is kept until `hasFullscreenWindow()` goes false,
+and entering a window while another is already fullscreen requests nothing at all:
+leaving and re-requesting is a race the browser always wins (the exit lands after
+the request, and the late `fullscreenchange` would tear down the new window —
+`onFullscreenChange()` therefore also ignores an exit it asked for itself).
+
+The two body classes look interchangeable and are not. `fs-active` is the
+workspace-scoped state — *this* workspace holds a fullscreen window — and it is
+the one every layout rule keys off: the `#tile-grid` inset, the side-docked bar
+(`data-bar-pos=left/right`), the resize grip and `wireWindowInteractions`' drag
+lock. `fullscreen-active` is only the browser's own fullscreen: the document has
+it, so it survives a workspace switch, and it must never take the chrome away —
+keying the grid inset off it left the windows of every other workspace sitting
+under their (visible) top bar. `web/js/tests/fullscreen.test.mjs` pins both halves
+of that split.
 
 While a top-docked fullscreen window is up, the top bar is away whatever
 `autohide_bar` says; it comes back from the top edge once the pointer insists
 there, and `#tile-grid` slides down by `--hud-header-total` so the app's own top
-bar is never covered. `exitWindowFullscreen()` leaves browser fullscreen, hands
-the workspace back via `restoreFromNewWorkspace`, and announces the change.
+bar is never covered. `exitWindowFullscreen()` acts on the window that owns the
+workspace on view: it hands the workspace back through
+`restoreFromNewWorkspace(name)` (which reads `ws.home`, so it also works after a
+reload) and leaves real fullscreen only when the last fullscreen window is gone.
 Escape, the button, and the browser's own exit all funnel through
-`onFullscreenChange()`.
+`onFullscreenChange()`; Escape ends the fullscreen of the window on screen and
+leaves the fullscreen windows of other workspaces alone. The AI's
+`desktop_fullscreen` reaches the same code through `app:fullscreen-window`, so the
+AI and the button can never disagree about what fullscreen means (and an AI action
+with no user gesture still gets the effect).
 
 The window gives up its own title-bar stripe (`body.fs-active .tile--full >
 .tile-header { display: none }`), except a *merged* bar that is really the

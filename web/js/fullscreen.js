@@ -1,42 +1,49 @@
 /**
  * fullscreen.js — real (browser) fullscreen for plugin windows.
  *
- * The window title bar's fullscreen button, the window/tray context menus and
- * Alt+Enter all come through here. Fullscreening a window does three things:
+ * The window title bar's fullscreen button, the window/tray context menus,
+ * Alt+Enter and the AI's `desktop_fullscreen` all come through here.
+ * Fullscreening a window does three things:
  *
  *   1. Moves it into a brand-new workspace, so the fullscreen app is isolated
  *      from the desktop it came from (desktop.js owns that half). That
  *      workspace is sealed while the app is fullscreen: nothing may be moved
- *      into it and the app may not be moved out of it.
- *   2. Puts the window into the desktop's fullscreen state and asks the
- *      browser for real fullscreen on the document. No user gesture (an AI
- *      action, or a browser that refuses) simply leaves the in-app fullscreen
- *      standing — never a broken state.
- *   3. Hides the chrome of the workspace it took over: the top bar goes away
- *      (even with `autohide_bar` off, one fullscreen app owns the screen) and
- *      comes back from the top edge once the pointer insists there. While it is
- *      up, the window slides down by the bar's height so the app's own top bar
- *      is never covered. The window gives up its own title-bar stripe; its
- *      close/exit-fullscreen controls move into a glass bubble on the left of
- *      the top bar (fullscreenBubble.js), so the way out rides the same
- *      top-edge reveal as the rest of the chrome. The other bar positions keep
- *      their desktop-wide behaviour.
+ *      into it and the app may not be moved out of it. Several windows can own
+ *      a screen this way at once, one workspace each, and each workspace
+ *      remembers where its window came from (`ws.home`) — so a window is handed
+ *      back to the right place even after a reload.
+ *   2. Gives the window the screen: the desktop's fullscreen state goes to it
+ *      and the chrome of the workspace it owns steps aside (`body.fs-active`) —
+ *      the top bar goes away (even with `autohide_bar` off, one fullscreen app
+ *      owns the screen) and comes back from the top edge once the pointer
+ *      insists there. While it is up, the window slides down by the bar's height
+ *      so the app's own top bar is never covered. The window gives up its own
+ *      title-bar stripe; its close/exit-fullscreen controls move into a glass
+ *      bubble on the left of the top bar (fullscreenBubble.js), so the way out
+ *      rides the same top-edge reveal as the rest of the chrome. The other bar
+ *      positions keep their desktop-wide behaviour.
+ *   3. Asks the browser for real fullscreen on the document. That request is the
+ *      enhancement, never the effect: one that is refused (an AI action, a
+ *      browser without the API) leaves the in-app fullscreen standing, and a
+ *      window fullscreened while the document already is requests nothing at all
+ *      — leaving and re-requesting is a race the browser always wins, which is
+ *      how two fullscreen windows used to fight over the screen. Real fullscreen
+ *      is only given up when the last fullscreen window leaves.
+ *
+ * Leaving fullscreen — the button again, Escape, or the browser's own exit —
+ * hands the window back to the workspace it came from and drops the dedicated
+ * one, so the desktop is exactly as it was. Escape ends the fullscreen of the
+ * window on screen; the fullscreen windows of other workspaces keep theirs.
  *
  * This module also owns the desktop-wide chrome reveal (Settings → Appearance
  * → Top bar & voice bar): bar position top/left/right/center, plus an independent
  * autohide switch for the bar and the voice bar. That behaviour is not
  * fullscreen-only — it
  * governs the whole desktop. fullscreen.css owns the actual hiding.
- *
- * A fullscreen app cannot be moved to another workspace while it is fullscreen,
- * so its dedicated (app-named) workspace stays its own until it leaves
- * fullscreen. Leaving fullscreen — the button again, Escape, or the browser's
- * own exit — hands the window back to the workspace it came from and drops the
- * dedicated one, so the desktop is exactly as it was.
  */
 import {
   getFocus, getFullscreen, toggleFullscreen, clearFullscreen,
-  isolateInNewWorkspace, restoreFromNewWorkspace,
+  isolateInNewWorkspace, restoreFromNewWorkspace, hasFullscreenWindow,
 } from './desktop.js';
 import { getImmersive, applyImmersive } from './preferences.js';
 import { isPluginActive } from './activePlugins.js';
@@ -50,7 +57,8 @@ const ENTER_HOLD_MS = 1600; // show the chrome briefly after entering
 
 const body = document.body;
 
-let session = null;             // { plugin, token } while a window is fullscreen
+let browserFullscreen = false;  // the browser's last reported state (edge detection)
+let ownExit = false;            // we asked the browser to leave; that exit is ours
 let surfaceProvider = () => []; // active window names (set by tiles.js)
 let initialized = false;
 let immersive = null;           // cached chrome settings (bar pos + autohide)
@@ -75,9 +83,18 @@ export function isAppFullscreen() {
   return !!(document.fullscreenElement || document.webkitFullscreenElement);
 }
 
-/** The plugin window we took fullscreen, or null. */
+/** True when the document root itself owns the screen: there is no fullscreen
+ *  request left to make (and a second one would be rejected). */
+function documentIsFullscreen() {
+  return (document.fullscreenElement || document.webkitFullscreenElement)
+    === document.documentElement;
+}
+
+/** The window that owns the screen of the workspace on view, or null. The
+ *  desktop's per-workspace fullscreen state is the truth; the browser's is only
+ *  an enhancement, so this needs no session of its own. */
 export function fullscreenWindow() {
-  return session?.plugin || null;
+  return getFullscreen();
 }
 
 export function setFullscreenSurfaceProvider(fn) {
@@ -109,66 +126,76 @@ function leaveFullscreen() {
 }
 
 /** Tell the chrome — and the fullscreen bubble — that the state changed.
- *  `fullscreen` is the browser's state, `plugin` the in-app session's. */
+ *  `fullscreen` is the browser's state, `plugin` the window on screen's. */
 function announce() {
   window.dispatchEvent(new CustomEvent('fullscreen:change', {
-    detail: { fullscreen: isAppFullscreen(), plugin: session?.plugin || null },
+    detail: { fullscreen: isAppFullscreen(), plugin: fullscreenWindow() },
   }));
 }
 
-/** The desktop half of leaving: give the window its workspace back. */
-function endSession(s) {
-  if (!s) return;
-  if (s.token) restoreFromNewWorkspace(s.plugin, s.token);
-  else clearFullscreen();
-  body.classList.remove('fs-active', 'fs-top', 'fs-orb');
+/**
+ * The chrome takeover follows the window that owns the workspace on view — never
+ * the browser's answer, which is only an enhancement. Switching to a workspace
+ * with no fullscreen window gives the desktop its chrome back.
+ */
+function syncFullscreenChrome() {
+  body.classList.toggle('fs-active', !!getFullscreen());
+  evalReveal();
 }
 
 export function enterWindowFullscreen(name) {
   if (!name) return false;
-  if (session) return session.plugin === name;
+  if (getFullscreen() === name) return true; // already owns this screen
 
-  // A brand-new workspace for the fullscreen app, then the tiled fullscreen
-  // state (which doubles as the fallback when the browser refuses).
-  const token = isolateInNewWorkspace(name);
-  toggleFullscreen(name, true);
-  session = { plugin: name, token };
-  // The in-app half of the state, independent of whether the browser grants
-  // the request: fullscreen.css keys the hidden/relocated chrome off this.
-  body.classList.add('fs-active');
-  // The in-app state is already live: show the top-bar bubble now, before the
-  // browser transition (or its refusal) round-trips through an event.
+  // A brand-new workspace for the fullscreen app, whose record doubles as the
+  // in-app fullscreen state. On a vertical phone screen there is no workspace
+  // system to isolate in, so the window simply fills the single column.
+  if (!isolateInNewWorkspace(name)) toggleFullscreen(name, true);
+  syncFullscreenChrome();
+  // The state is already live: show the top-bar bubble now, before the browser
+  // transition (or its refusal) round-trips through an event.
   announce();
+  holdReveal(ENTER_HOLD_MS);
+  nudgeResize();
 
-  // Must be called synchronously from the user gesture; browsers reject it
-  // otherwise. A rejection is not an error — the in-app fullscreen stands and
-  // the chrome simply keeps its normal, always-visible behaviour.
-  requestFullscreen(document.documentElement).catch(() => announce());
+  // Ask the browser for the real thing — but only when it does not have it
+  // already. A window fullscreened while the document is fullscreen needs no
+  // request at all, and leaving to re-request is a race the browser always wins:
+  // the exit lands after the request, which is how two fullscreen windows ended
+  // up fighting over the screen. Must be called synchronously from the user
+  // gesture; a rejection is not an error — the in-app fullscreen stands.
+  if (!documentIsFullscreen()) {
+    requestFullscreen(document.documentElement).catch(() => announce());
+  }
   return true;
 }
 
 export function exitWindowFullscreen() {
-  if (!session) {
-    if (getFullscreen()) clearFullscreen();
-    return false;
-  }
-  const s = session;
-  session = null;
-  if (isAppFullscreen()) void leaveFullscreen(); // fires fullscreenchange
+  const name = getFullscreen();
+  if (!name) return false;
+  // Hand the workspace back (a phone has none to hand back).
+  if (!restoreFromNewWorkspace(name)) clearFullscreen();
+  syncFullscreenChrome();
   dismissChrome();
-  endSession(s);
+  // Real fullscreen is only given up when the last fullscreen window leaves, so
+  // exiting one of several never drops another window's screen. `ownExit` marks
+  // the event that follows as ours: it must never touch a window fullscreened in
+  // the meantime (see `onFullscreenChange`).
+  if (!hasFullscreenWindow() && isAppFullscreen()) {
+    ownExit = true;
+    void leaveFullscreen();
+  }
   announce();
   nudgeResize();
   return true;
 }
 
-/** Toggle (or force) real fullscreen for a window. Defaults to the focused one
- *  and falls back to the first open window, matching the old Alt+Enter. */
+/** Toggle fullscreen for a window. Defaults to the focused one and falls back to
+ *  the first open window, matching the old Alt+Enter. */
 export function toggleWindowFullscreen(name) {
   if (name == null) name = getFocus() || surfaceProvider()[0] || null;
   if (!name) return false;
-  if (session && session.plugin === name) return exitWindowFullscreen(), false;
-  if (session) exitWindowFullscreen();
+  if (getFullscreen() === name) return exitWindowFullscreen(), false;
   return enterWindowFullscreen(name);
 }
 
@@ -304,21 +331,35 @@ function onPointerMove(e) {
 
 function onFullscreenChange() {
   const on = isAppFullscreen();
+  // Browsers fire the prefixed and the standard event for one transition (and may
+  // repeat it): only a real edge is a change, or the trailing event would act on
+  // a window fullscreened in the meantime.
+  if (on === browserFullscreen) return;
+  browserFullscreen = on;
   body.classList.toggle('fullscreen-active', on);
 
   if (on) {
+    ownExit = false; // the document is fullscreen again: a pending exit is moot
     announce();
     holdReveal(ENTER_HOLD_MS);
     nudgeResize();
     return;
   }
 
-  // Escape (or any other browser-side exit): leave the desktop the way we
-  // found it. `session` is null when we exited ourselves, so this runs once.
-  dismissChrome();
-  const s = session;
-  session = null;
-  endSession(s);
+  // The browser left fullscreen: Escape, the browser's own chrome, or our exit.
+  const mine = ownExit;
+  ownExit = false;
+  if (mine) {
+    // Already handled at the moment we asked, and a new window may own the
+    // screen by now — that one keeps its chrome.
+    if (!hasFullscreenWindow()) dismissChrome();
+  } else if (fullscreenWindow()) {
+    // Escape: the window on screen gives up its screen. The fullscreen windows of
+    // other workspaces keep theirs — they never depended on the browser.
+    exitWindowFullscreen();
+  } else {
+    dismissChrome();
+  }
   announce();
   nudgeResize();
 }
@@ -337,6 +378,7 @@ export function initFullscreen() {
   // the first reveal is ever evaluated.
   applyImmersive();
   immersive = getImmersive();
+  browserFullscreen = isAppFullscreen();
   // `fullscreenchange` is standard; the webkit alias covers older Safari.
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
@@ -344,6 +386,19 @@ export function initFullscreen() {
   window.addEventListener('resize', evalReveal);
   // Alt+Enter lives in desktop.js; it only announces the gesture.
   window.addEventListener('app:fullscreen-toggle', () => toggleWindowFullscreenActive());
+  // The AI's `desktop_fullscreen` asks for exactly what the window button does,
+  // so the AI and the user can never disagree about what fullscreen means. The
+  // request may lack the gesture the browser wants — the state does not depend
+  // on the browser's answer.
+  window.addEventListener('app:fullscreen-window', (e) => {
+    const { name, on } = e.detail || {};
+    if (!name) return;
+    if (on === false) {
+      if (fullscreenWindow() === name) exitWindowFullscreen();
+    } else if (fullscreenWindow() !== name) {
+      enterWindowFullscreen(name);
+    }
+  });
   // Settings changed (Settings page → Desktop): re-reveal under the new rules.
   window.addEventListener('desktop:immersive', (e) => {
     immersive = e.detail || getImmersive();
@@ -351,12 +406,26 @@ export function initFullscreen() {
   });
   // Alt-tabbing away is not a hover: put the chrome back out of the way.
   window.addEventListener('blur', dismissChrome);
+  // A workspace switch moves the takeover — and the bubble — to the window that
+  // owns the screen there, or gives the desktop its chrome back.
+  window.addEventListener('desktop:changed', () => {
+    syncFullscreenChrome();
+    announce();
+  });
   // A fullscreen app that gets deactivated (its window button, the tray, the
   // Plugins page) is gone: leaving fullscreen hands its workspace back rather
-  // than leaving the desktop sealed around an empty screen.
+  // than leaving the desktop sealed around an empty screen. A dedicated
+  // workspace whose window is deactivated off screen is dropped when the windows
+  // are reconciled (desktop.js).
   window.addEventListener('plugins:changed', () => {
-    if (session && !isPluginActive(session.plugin)) exitWindowFullscreen();
+    const name = fullscreenWindow();
+    if (name && !isPluginActive(name)) exitWindowFullscreen();
   });
+  // The state restored from storage is live by now (tiles.js — and with it
+  // initDesktop — runs first): take over the chrome for a workspace that came
+  // back fullscreen, and hand the bubble its window.
+  syncFullscreenChrome();
+  announce();
   // Show the chrome briefly on load, so an autohidden bar/voice bar is not a
   // mystery the first time the desktop appears.
   holdReveal(2600);

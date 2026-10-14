@@ -159,7 +159,15 @@ function wireAgentActions() {
       const d = a.data;
       switch (a.action) {
         case 'desktop_fullscreen':
-          if (d.plugin) toggleFullscreen(d.plugin, d.fullscreen !== false);
+          // Ask fullscreen.js for what the window button does — its own
+          // workspace, the chrome takeover, real fullscreen when the browser
+          // allows it. The desktop half lives here; the *effect* must not depend
+          // on the browser's answer, since an AI action carries no user gesture.
+          if (d.plugin) {
+            window.dispatchEvent(new CustomEvent('app:fullscreen-window', {
+              detail: { name: d.plugin, on: d.fullscreen !== false },
+            }));
+          }
           break;
         case 'desktop_focus':
           if (d.plugin) focusWindow(d.plugin);
@@ -196,13 +204,28 @@ function wireAgentActions() {
  *   • a fullscreen app whose workspace no longer holds it is forgotten;
  *   • a workspace that holds a fullscreen app holds NOTHING ELSE: every other
  *     window is moved out (to the workspace the fullscreen app came from, or
- *     to any ordinary workspace) and stays non-fullscreen.
+ *     to any ordinary workspace) and stays non-fullscreen. Several workspaces
+ *     may be sealed this way at once — one fullscreen window each;
+ *   • a dedicated fullscreen workspace (one with a `home`) left with no windows
+ *     at all is dropped.
  *
  * Idempotent, so it is safe to call from every mutation and every render.
  */
 function reconcile() {
   if (!workspacesEnabled() || !workspaces.length) return false;
   let changed = false;
+
+  // A dedicated fullscreen workspace whose window is gone (a deactivation, a
+  // prune during a render, or a leftover from an older build) is dropped rather
+  // than kept as an empty space named after an app that is no longer there.
+  if (workspaces.length > 1) {
+    const kept = workspaces.filter((w) => !(w.home && !w.windows.length));
+    if (kept.length !== workspaces.length) {
+      workspaces = kept;
+      changed = true;
+      if (!workspaces.some((w) => w.id === activeWs)) activeWs = workspaces[0].id;
+    }
+  }
 
   const locked = new Map();       // workspace id -> fullscreen plugin
   for (const ws of workspaces) {
@@ -327,6 +350,12 @@ export function workspaceLock(ws) {
   if (ws.fullscreen && ws.windows.includes(ws.fullscreen)) return ws.fullscreen;
   if (fullscreen && ws.id === activeWs && ws.windows.includes(fullscreen)) return fullscreen;
   return null;
+}
+
+/** True while any workspace still holds a fullscreen window, whichever one is on
+ *  screen. fullscreen.js keeps real browser fullscreen until this goes false. */
+export function hasFullscreenWindow() {
+  return workspaces.some((w) => w.fullscreen && w.windows.includes(w.fullscreen));
 }
 
 /** How a workspace is named: a dedicated fullscreen space is just the app. */
@@ -495,7 +524,11 @@ export function reconcilePluginFocus(openNames) {
   return true;
 }
 
-/** Toggle (or force) fullscreen for a window. Defaults to the focused one. */
+/** Toggle (or force) the in-app fullscreen pointer for a window — the low-level
+ *  state. The user-facing entry is `enterWindowFullscreen` (its own workspace,
+ *  the chrome takeover, the browser request) and the way out is
+ *  `exitWindowFullscreen` (hands the workspace back), both in fullscreen.js;
+ *  this setter alone would leave a workspace sealed around nothing. */
 export function toggleFullscreen(name, force) {
   if (name == null) name = focus;
   if (!name) return false;
@@ -508,6 +541,10 @@ export function toggleFullscreen(name, force) {
   return next;
 }
 
+/** Forget the in-app fullscreen pointer without handing the window anywhere. A
+ *  repair, not a way out of fullscreen: only for screens with no workspace
+ *  system (fullscreen.js use); everywhere else the workspace must be unsealed
+ *  and the window sent home through `restoreFromNewWorkspace`. */
 export function clearFullscreen() {
   fullscreen = null;
   syncActiveFocus();
@@ -516,19 +553,30 @@ export function clearFullscreen() {
 }
 
 /**
- * Move a window into a brand-new workspace and focus it there — the desktop
- * half of a real-fullscreen window (fullscreen.js does the browser half).
- * Returns a token for `restoreFromNewWorkspace`, or null when the window is
- * not on a workspace (vertical phone screens have no workspace system).
+ * Move a window into a brand-new dedicated workspace and make it that
+ * workspace's fullscreen window — the desktop half of a fullscreen window
+ * (fullscreen.js does the browser half, and the chrome).
+ *
+ * The new workspace remembers where the window came from (`ws.home`), and that
+ * record is persisted with the list, so leaving fullscreen hands the window back
+ * even after a reload. Several windows can own a workspace like this at once,
+ * one each. Returns the new workspace id, or null when the window has no
+ * workspace system to be isolated in (vertical phone screens).
  */
 export function isolateInNewWorkspace(name) {
   if (!workspacesEnabled() || !name) return null;
-  const fromId = activeWsObj()?.id || null;
+  // Where the window lives is where it is handed back to: the workspace holding
+  // it, which is not necessarily the one on screen (the AI can fullscreen
+  // either, and the user may have moved on since).
+  const home = workspaces.find((w) => w.windows.includes(name))?.id
+    || activeWsObj()?.id
+    || null;
   syncActiveFocus();
   const ws = pushWorkspace();
   // The dedicated space is named after the app it holds, so the workspace
   // switcher says "Youtube" instead of a bare number.
   ws.name = label(name);
+  ws.home = home;
   for (const w of workspaces) {
     if (w.id === ws.id) continue;
     w.windows = w.windows.filter((x) => x !== name);
@@ -538,23 +586,24 @@ export function isolateInNewWorkspace(name) {
   ws.windows = [name];
   activeWs = ws.id;
   focus = name;
-  fullscreen = null;
+  fullscreen = name;
   syncActiveFocus();
   persist();
   notify();
-  return { workspaceId: ws.id, fromId };
+  return ws.id;
 }
 
 /**
- * Undo `isolateInNewWorkspace`: take the window out of whichever workspace it
- * is in now (its dedicated one, or one it was moved to while fullscreen), hand
- * it back to the workspace it came from, and drop the dedicated workspace when
- * it is left empty.
+ * Undo `isolateInNewWorkspace`: take the window out of whichever workspace it is
+ * in now (its dedicated one, or one it was moved to while fullscreen), hand it
+ * back to the workspace it came from, and drop the dedicated workspace when it
+ * is left empty. The home is read from the workspace itself, so this works for
+ * every fullscreen window and survives a reload.
  */
-export function restoreFromNewWorkspace(name, token) {
-  if (!token || !name) return false;
-  const dedicated = workspaces.find((w) => w.id === token.workspaceId) || null;
-  const from = workspaces.find((w) => w.id === token.fromId) || null;
+export function restoreFromNewWorkspace(name) {
+  if (!workspacesEnabled() || !name) return false;
+  const dedicated = workspaces.find((w) => w.windows.includes(name)) || null;
+  const from = workspaces.find((w) => w.id === dedicated?.home) || null;
   for (const w of workspaces) {
     w.windows = w.windows.filter((x) => x !== name);
     if (w.focus === name) w.focus = null;
@@ -919,9 +968,12 @@ function wireWindowInteractions(el, name) {
   el.__windowWired = true;
 
   const windowsMode = () => getDesktopLayout().mode === 'windows';
-  // A fullscreen window owns the screen: dragging/resizing would fight the
-  // fullscreen geometry (fullscreen.js drives it, and CSS pins the chrome).
-  const locked = () => document.body.classList.contains('fullscreen-active');
+  // A fullscreen window owns the screen *of its own workspace*: dragging or
+  // resizing would fight the fullscreen geometry (fullscreen.js drives it, and
+  // CSS pins the chrome). `fs-active` is that workspace-scoped state — the
+  // browser's own fullscreen says nothing about the workspace on view, so
+  // floating windows stay draggable on a normal one.
+  const locked = () => document.body.classList.contains('fs-active');
 
   // Clicking anywhere on the window raises it to the front (windows mode only).
   el.addEventListener('pointerdown', () => {

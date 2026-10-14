@@ -80,8 +80,9 @@ html[data-bar-pos='right'][data-autohide-bar='1'] body.fs-top #hud-header {
 /* A fullscreen window owns the screen of its workspace: the top bar goes away
    there whatever the desktop-wide autohide preference says, and comes back
    from the top edge like a docked bar. The left/right docks and every other
-   workspace keep that preference. `fs-active` is the in-app fullscreen state,
-   independent of whether the browser granted real fullscreen.
+   workspace keep that preference. `fs-active` is the in-app fullscreen state of
+   the workspace on view — fullscreen.js moves it with the workspace, and it
+   holds whether or not the browser granted real fullscreen.
 
    `!important` is load-bearing: with autohide off the bar carries the app's
    entrance animation (`hudFadeIn`, fill mode `both`). An animation's filled
@@ -220,13 +221,14 @@ html[data-bar-pos='center'] .hud-header-main {
 
 /* ── Desktop layout: make room for a side-docked bar ────────── */
 
-/* A side dock takes the side, not the top band. */
-html[data-bar-pos='left'] body:not(.fullscreen-active) #tile-grid {
+/* A side dock takes the side, not the top band. Scoped to the workspace on
+   view: only a fullscreen window there takes the side of the screen too. */
+html[data-bar-pos='left'] body:not(.fs-active) #tile-grid {
   top: max(8px, env(safe-area-inset-top));
   left: calc(var(--hud-bar-height) + 32px);
 }
 
-html[data-bar-pos='right'] body:not(.fullscreen-active) #tile-grid {
+html[data-bar-pos='right'] body:not(.fs-active) #tile-grid {
   top: max(8px, env(safe-area-inset-top));
   right: calc(var(--hud-bar-height) + 32px);
 }
@@ -267,37 +269,31 @@ html[data-autohide-orb='1'] body.fs-orb #hud-transcript {
 }
 
 /* Text mode and a live voice turn need the dock, so on the open desktop the
-   voice bar stays up for them rather than hiding mid-conversation. In real
-   fullscreen the composer lives inside the thread, so the bar can stay away. */
-html[data-autohide-orb='1'] body:not(.fullscreen-active).compose-active #chrome-bottom,
-html[data-autohide-orb='1'] body:not(.fullscreen-active).agent-awaiting #chrome-bottom {
+   voice bar stays up for them rather than hiding mid-conversation. In a
+   fullscreen workspace the composer lives inside the thread, so the bar can stay
+   away there — but only there: the browser's own fullscreen says nothing about
+   the workspace on view. */
+html[data-autohide-orb='1'] body:not(.fs-active).compose-active #chrome-bottom,
+html[data-autohide-orb='1'] body:not(.fs-active).agent-awaiting #chrome-bottom {
   opacity: 1;
   visibility: visible;
   transform: translate(-50%, 0);
 }
 
-html[data-autohide-orb='1'] body:not(.fullscreen-active).agent-awaiting #hud-transcript {
+html[data-autohide-orb='1'] body:not(.fs-active).agent-awaiting #hud-transcript {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
-/* ── Fullscreen: the window owns the screen ─────────────────── */
+/* ── Fullscreen: the window owns the screen ───────────────────
 
-body.fullscreen-active #tile-grid {
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  gap: 0;
-}
-
-body.fullscreen-active #tile-grid .tile--full {
-  border: none;
-  border-radius: 0;
-}
-
-/* Real fullscreen is not required for the takeover: the in-app state does the
-   same, so a browser that refuses the Fullscreen API still loses the top band. */
+   `fs-active` is the workspace-scoped state: the workspace on view holds a
+   fullscreen window. It — never `fullscreen-active`, which is only the browser's
+   own state and stays set while you visit the other workspaces — is what gives a
+   window the whole screen. Real fullscreen is not required, so a browser that
+   refuses the Fullscreen API still loses the top band; and a normal workspace
+   keeps its own inset (and its top bar) while another workspace's window is
+   fullscreen. */
 body.fs-active #tile-grid {
   top: 0;
   left: 0;
@@ -311,8 +307,8 @@ body.fs-active #tile-grid .tile--full {
   border-radius: 0;
 }
 
-/* The grip belongs to the floating desktop, not to a fullscreen window. */
-body.fullscreen-active .tile-resize,
+/* The grip belongs to the floating desktop, not to a fullscreen window — and it
+   only goes away on the workspace that actually holds one. */
 body.fs-active .tile-resize { display: none; }
 
 /* ── A fullscreen window loses its own stripe ─────────────────

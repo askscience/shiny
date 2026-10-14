@@ -22,11 +22,14 @@ import { getPluginLayout } from './preferences.js';
 import {
   initDesktop, ensureWindows, activeWindowNames, activeWorkspaceIndex,
   applyLayout, renderWorkspaceBar,
-  focusWindow, toggleFullscreen, clearFullscreen, clearFocus, getFullscreen,
+  focusWindow, clearFullscreen, clearFocus, getFullscreen,
   setSurfaceNamesProvider, isFocusOnlyChange, bumpZ, getWorkspacesList,
   isPluginFocused, togglePluginFocus, reconcilePluginFocus, revealWindow,
 } from './desktop.js';
-import { toggleWindowFullscreen, setFullscreenSurfaceProvider, fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
+import {
+  toggleWindowFullscreen, enterWindowFullscreen, exitWindowFullscreen,
+  setFullscreenSurfaceProvider, fullscreenWindow,
+} from './fullscreen.js';
 import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import {
@@ -128,7 +131,6 @@ export function closeCoreWindow(name) {
   // browser fullscreen. Plugin windows do this through `plugins:changed`;
   // built-in windows have no such signal, so do it here.
   if (fullscreenWindow() === name) exitWindowFullscreen();
-  else if (getFullscreen() === name) clearFullscreen();
   coreOpen.delete(name);
   surfaceModules.get(name)?.unmount?.();
   surfaceModules.delete(name);
@@ -607,12 +609,17 @@ function focusPlugin(name) {
 
   focusWindow(name);
 
-  // The per-plugin "Full screen" preference still means "open fullscreen".
-  // Otherwise clear any fullscreen so we return to the tiled layout.
+  // The per-plugin "Full screen" preference still means "open fullscreen" — the
+  // real one, with the window's own workspace. The in-app pointer alone would
+  // leave a workspace sealed around a window that no longer owns it.
+  const fs = getFullscreen();
   if (getPluginLayout(name) === 'full') {
-    toggleFullscreen(name, true);
-  } else if (getFullscreen()) {
-    clearFullscreen();
+    enterWindowFullscreen(name);
+  } else if (fs && fs !== name) {
+    // Focusing another window clears this workspace's fullscreen so we return to
+    // the tiled layout — never the fullscreen window itself: a click on it must
+    // not throw the screen away.
+    exitWindowFullscreen();
   }
 }
 
@@ -631,7 +638,7 @@ function revealPlugin(name) {
 
   revealWindow(name);
   // The per-plugin "Full screen" preference still means "open fullscreen".
-  if (getPluginLayout(name) === 'full') toggleFullscreen(name, true);
+  if (getPluginLayout(name) === 'full') enterWindowFullscreen(name);
 }
 
 function unfocus() {
