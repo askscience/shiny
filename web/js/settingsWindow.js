@@ -56,6 +56,7 @@ import {
   getPowerMode, setPowerMode, getAutoPowerSaver, setAutoPowerSaver,
   getLowPowerAi, setLowPowerAi, getEffectivePowerMode,
   getEffectiveSttEngine, getEffectiveTtsEngine, getPowerBatteryStatus,
+  getLinkPlugin, setLinkPlugin,
 } from './preferences.js';
 import { POWER_MODES, powerModeLabel, powerModeHint, describeEngines } from './powerShared.js';
 import { TOUCHBAR_ACTIONS } from './touchbarShared.js';
@@ -65,6 +66,7 @@ import { saveKnownUser, renderAvatarEl, readAvatarFile } from './userProfiles.js
 import { getBackground, setBackground, renderBackgroundPresets } from './background.js';
 import { pickFiles } from './files.js';
 import { copyText } from './clipboard.js';
+import { linkCatalog, linkPlugins, resolveLinkPlugin } from './linkRouter.js';
 
 export const SETTINGS_WINDOW = 'settings';
 
@@ -1892,12 +1894,13 @@ function buildBrowser() {
 
   void (async () => {
     let settings = { search_engine: 'duckduckgo', adblock: true, downloads_dir: '' };
-    try {
-      const res = await apiFetch('/api/browser/settings');
-      settings = { ...settings, ...(res?.data || {}) };
-    } catch (_) {
-      /* the defaults stand in */
-    }
+    // The link handler is a core preference, not a browser-plugin setting, and
+    // its candidates come from the installed plugins — fetch both alongside.
+    const [settingsRes, catalog] = await Promise.all([
+      apiFetch('/api/browser/settings').catch(() => null),
+      linkCatalog(),
+    ]);
+    settings = { ...settings, ...(settingsRes?.data || {}) };
 
     const engine = select({
       value: settings.search_engine,
@@ -1957,10 +1960,37 @@ function buildBrowser() {
         : 'Downloads are saved to your Downloads folder.',
     );
 
+    // Which plugin opens links: the browser (default) or any installed plugin
+    // declaring the `open-urls` capability. The stored choice is shown only
+    // while that plugin is installed — the router falls back to the default.
+    const label = (name) => name.charAt(0).toUpperCase() + name.slice(1);
+    const names = linkPlugins(catalog).map((p) => p.name);
+    const fallback = resolveLinkPlugin(catalog);
+    const stored = getLinkPlugin();
+    const links = names.length
+      ? select({
+        value: names.includes(stored) ? stored : fallback,
+        options: names.map((name) => ({
+          value: name,
+          label: name === fallback ? `${label(name)} (default)` : label(name),
+        })),
+        onChange: (value) => {
+          setLinkPlugin(value);
+          toast('Link handler saved');
+        },
+      })
+      : null;
+    const linksHint = names.length
+      ? 'Links clicked anywhere — chat, mail, documents — open in this plugin.'
+      : 'No plugin that can open links is installed.';
+
     holder.replaceChildren(
       heading('Search'),
       engine,
       el('p', 'settings-hint', 'Used when you type words instead of an address. A self-hosted SearXNG (SEARXNG_URL) takes precedence when configured.'),
+      heading('Links'),
+      ...(links ? [links] : []),
+      el('p', 'settings-hint', linksHint),
       heading('Privacy'),
       adblock,
       heading('Storage'),

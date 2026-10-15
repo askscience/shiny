@@ -37,6 +37,7 @@ import { initOverview } from './overview.js';
 import { initLauncher } from './launcher.js';
 import { initGestures } from './gestures.js';
 import { initContextMenu } from './contextMenu.js';
+import { initLinkRouter } from './linkRouter.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
@@ -150,6 +151,7 @@ async function initApp() {
   initLauncher();    // three-finger swipe down: the plugin launcher
   initGestures();    // the trackpad:gesture vocabulary the peakd shell sends (Linux)
   initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
+  initLinkRouter();  // every link opens in the browser plugin (kiosk only)
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
 
   await applyTravelerActivation();

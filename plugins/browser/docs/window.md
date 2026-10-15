@@ -14,6 +14,7 @@ import { apiFetch } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
 import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
+import { onOpenUrl } from '../../js/linkRouter.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
 ```
@@ -67,6 +68,7 @@ Attaches, once:
 | Event | Handler |
 |---|---|
 | `artifact:saved` (on `window`) | `onArtifactSaved` — an AI-created `browser_page` artifact navigates the active tab |
+| `url:open` (via core `onOpenUrl`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
 | `clipboard:paste` (on `window`) | `onClipboardPaste` — a pick in the top-bar Clipboard menu pastes into the focused page (see Clipboard below) |
 | `message` (on `window`) | `onFrameMessage` — the sandboxed home shelf's `browser:open-card` / `browser:refresh-news` |
 | `theme:change` | `pushSettings` — keeps pages' `prefers-color-scheme` in step with the app theme |
@@ -123,6 +125,7 @@ The Browser is one of the surfaces the central clipboard service
 | Event | Source | Effect |
 |---|---|---|
 | `artifact:saved` | core artifact store | `onArtifactSaved` navigates to `art.narrative` (falls back to `payload.url`/`params.url`/`title`) for `artifact_type === 'browser_page'` |
+| `url:open` | core link router (`web/js/linkRouter.js`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
 | `message` | sandboxed home shelf | `browser:open-card` → `news/click` POST + navigate; `browser:refresh-news` → reload the shelf |
 | `theme:change` | core theme | `pushSettings()` |
 | `resize`, `desktop:changed`, `overlay:open`, `fullscreen:change`, `menu:change` | core | `requestSync()` for native-view bounds/mask |
@@ -252,6 +255,11 @@ menu.
 - **`artifact:saved` is the AI navigation path.** The URL lives in `narrative`;
   `payload.url`, `params.url` and `title` are legacy fallbacks. Editing this
   path can silently break AI-driven opens.
+- **Links from the app arrive before the tile exists.** This window is the
+  default link handler (`open-urls`): core imports and wires the module, then
+  mounts the tile. A `url:open` handled while `tileEl` is null is parked in
+  `pendingCoreOpen` and drained at the end of `mountBrowserTile` — `createTab`
+  needs the frame wrapper, so it cannot run earlier.
 - **The engine list is duplicated** in `SEARCH_ENGINES` for menu labels only;
   the server (`plugins/browser/src/settings.rs`) is the source of truth for the
   actual search URL.

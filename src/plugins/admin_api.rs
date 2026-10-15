@@ -29,6 +29,9 @@ struct PluginListEntry {
     hud: bool,
     /// Grouping category declared in `plugin.toml` (e.g. "Office", "Media").
     category: Option<String>,
+    /// Capabilities declared in `plugin.toml` (e.g. "open-urls"), used by the
+    /// frontend to let the user pick a handler (the link handler, …).
+    capabilities: Vec<String>,
 }
 
 /// GET /api/plugins — every authenticated user sees the same installed list
@@ -60,6 +63,7 @@ pub async fn list(
                 .unwrap_or(false);
             PluginListEntry {
                 category: state.plugins.category_for(&m.name),
+                capabilities: state.plugins.capabilities_for(&m.name),
                 name: m.name,
                 version: m.version.to_string(),
                 api_level: m.api_level,

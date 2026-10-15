@@ -104,6 +104,11 @@ Key rules:
   the tools do not have a user and use `DEFAULT_SEARCH_ENGINE`.
 - Incognito navigations skip the history insert but still create a session.
 - `format == "text"` is the legacy text path; the tool uses `browser_read`.
+- Links clicked **outside** a page (chat, mail, documents) are routed by core
+  (`web/js/linkRouter.js`) to the user's link-handler plugin — `browser` by
+  default, via its `open-urls` capability — which hands the URL over as a
+  `url:open` event and opens a new tab, exactly like an in-page `target="_blank"`
+  link.
 
 ### 2. In-page navigation (`POST /api/browser/history/record`)
 

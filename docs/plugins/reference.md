@@ -171,6 +171,7 @@ req.params.require_f64("lat")?
 | `author` | string | no | Attribution. |
 | `summary` | string | no | "What this plugin adds". |
 | `category` | string | no | Tray grouping (`Office`, `Media`, `Travel`, `System`, …). |
+| `capabilities` | string[] | no | Declared capabilities. `"open-urls"` makes the plugin a link-handler candidate (the `browser` plugin is the default). Host-side key, like `category` — not part of the SDK `Manifest`. |
 | `migrations_dir` | string | no | Default `migrations`. |
 | `skills_dir` | string | no | Default `skills`. |
 | `web_dir` | string | no | Default `web`. |

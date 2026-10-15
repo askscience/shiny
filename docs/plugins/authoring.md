@@ -51,6 +51,7 @@ migrations_dir = "migrations"   # optional; default "migrations"
 skills_dir = "skills"           # optional; default "skills"
 web_dir = "web"                 # optional; default "web"
 category = "Office"             # optional tray grouping
+capabilities = ["open-urls"]    # optional; makes this a link-handler candidate
 ```
 
 See the [manifest reference](reference.md#manifest-plugin-toml) for every field.
@@ -291,6 +292,8 @@ boolean when the file exists.
 - [ ] `web/icon.svg` follows the plugin icon style, or an `apps/<name>` mapping exists.
 - [ ] Window surfaces have a smoke test (`node --check web/plugin.js`; see
       `plugins/browser/web/plugin.smoke.mjs`).
+- [ ] A link-handler plugin declares `capabilities = ["open-urls"]` and
+      registers with `onOpenUrl()` from `web/js/linkRouter.js`.
 - [ ] `cargo check` passes; install via `/api/plugins/install` and `GET /api/plugins` returns it.
 
 ---

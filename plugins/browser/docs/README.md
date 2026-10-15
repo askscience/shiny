@@ -19,6 +19,7 @@ news recommender, and it runs the **server half** of the shared ad-block engine
 |---|---|
 | Plugin name | `browser` |
 | Category | `Web` |
+| Capabilities | `open-urls` — the default link handler for the whole app |
 | Version | `0.1.0` |
 | `api_level` | `1` |
 | `entry_symbol` | `shiny_plugin_entry` |
@@ -44,6 +45,7 @@ migrations_dir = "migrations"
 skills_dir = "skills"
 web_dir = "web"
 category = "Web"
+capabilities = ["open-urls"]
 ```
 
 `BrowserPlugin::manifest()` returns the same fields in Rust
@@ -61,6 +63,7 @@ and `target_triple`/`signature` = `None`.
 | REST routes | 22 routes under `/api/browser/*`, all `auth` |
 | Migrations | `002`–`006` creating `peakd_history`, `browser_settings`, `browser_downloads`, `browser_bookmarks` |
 | Window surface | `web/plugin.js` + `web/plugin.css` + `web/icon.svg`, served at `/plugins/browser/` |
+| Link handler | `capabilities = ["open-urls"]` — the default target of core's `web/js/linkRouter.js`; links clicked anywhere in the app open here as new tabs (see [`window.md`](window.md)) |
 | `on_load` work | Idempotent schema repairs (`history`, `settings`, `downloads`, `bookmarks`) and a background ad-filter load |
 | Persona/window identity | `data-plugin="browser"`, route namespace `browser`, artifact owner `browser` |
 

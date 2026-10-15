@@ -17,6 +17,7 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { externalLinkUrl, isKiosk, openUrl } from '../../js/linkRouter.js';
 
 export const MAIL_PLUGIN = 'mail';
 
@@ -77,6 +78,8 @@ let statusDot = null;
 let foldersEl = null;
 let listEl = null;
 let readerEl = null;
+/** The reader's HTML-message frame, or null when the message is plain text. */
+let readerFrameEl = null;
 let bodyEl = null;
 let searchInputEl = null;
 let searchTimer = null;
@@ -729,11 +732,17 @@ function renderMessage(msg) {
 
   const content = h('div', 'mail-reader-content');
   const hasHtml = !!msg.html && msg.html.trim();
+  readerFrameEl = null;
   if (hasHtml) {
     const frame = document.createElement('iframe');
-    frame.sandbox = '';
-    frame.srcdoc = msg.html;
+    // In the kiosk the frame gets the click bridge (`mailFrameDocument`) so a
+    // link opens in the browser plugin instead of loading in this pane; in a
+    // normal browser the raw message renders exactly as before.
+    const kiosk = isKiosk();
+    frame.sandbox = kiosk ? 'allow-scripts' : '';
+    frame.srcdoc = kiosk ? mailFrameDocument(msg.html) : msg.html;
     content.appendChild(frame);
+    readerFrameEl = frame;
   } else {
     content.appendChild(h('div', 'mail-reader-body', msg.text || '(empty message)'));
   }
@@ -747,6 +756,53 @@ function renderMessage(msg) {
     }
     readerEl.appendChild(atts);
   }
+}
+
+/* ── Reader frame links ─────────────────────────────────────── */
+
+/**
+ * The click bridge for the reader's HTML frame.
+ *
+ * The frame cannot reach the app (that is the point of the sandbox), so a link
+ * in an HTML mail would otherwise load inside the pane, not in the browser. The
+ * email's own script would be the easy bridge, but mail HTML is attacker
+ * content: every script tag, inline handler and non-navigable href is stripped
+ * first, so the frame still runs nothing but the bridge — and it never gains
+ * `allow-same-origin`, `allow-popups`, `allow-forms` or `allow-top-navigation`.
+ */
+const LINK_BRIDGE_SRC = `document.addEventListener('click', (e) => {
+  const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a) return;
+  e.preventDefault();
+  parent.postMessage({ type: 'mail:open-link', url: a.href }, '*');
+}, true);`;
+
+function mailFrameDocument(html) {
+  const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html');
+  for (const el of doc.querySelectorAll('script, iframe, object, embed')) el.remove();
+  for (const el of doc.querySelectorAll('*')) {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.toLowerCase().startsWith('on')) el.removeAttribute(attr.name);
+    }
+  }
+  for (const a of doc.querySelectorAll('a[href]')) {
+    if (!/^(https?:|mailto:|#|\/)/i.test((a.getAttribute('href') || '').trim())) {
+      a.removeAttribute('href');
+    }
+  }
+  const bridge = doc.createElement('script');
+  bridge.textContent = LINK_BRIDGE_SRC;
+  doc.body.appendChild(bridge);
+  return doc.documentElement.outerHTML;
+}
+
+/** A link was clicked in the reader's sandboxed frame (see above). */
+function onReaderFrameMessage(event) {
+  if (!readerFrameEl || event.source !== readerFrameEl.contentWindow) return;
+  const data = event.data;
+  if (!data || typeof data !== 'object' || data.type !== 'mail:open-link') return;
+  const url = externalLinkUrl(String(data.url || ''));
+  if (url) void openUrl(url);
 }
 
 /* ── Compose ────────────────────────────────────────────────── */
@@ -1065,6 +1121,7 @@ export function unmountMailTile() {
   closeAccountMenu();
   composeModal?.close();
   settingsModal?.close();
+  window.removeEventListener('message', onReaderFrameMessage);
   tileEl?.remove();
   tileEl = null;
   barAccountBtn = null;
@@ -1073,6 +1130,7 @@ export function unmountMailTile() {
   foldersEl = null;
   listEl = null;
   readerEl = null;
+  readerFrameEl = null;
   bodyEl = null;
 }
 
@@ -1121,6 +1179,8 @@ export function wireMailEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('agent:actions', onAgentActions);
+  // Links clicked inside the reader's sandboxed frame (the bridge above).
+  window.addEventListener('message', onReaderFrameMessage);
 }
 
 /** Entries core splices into this window's right-click menu (PLUGINS.md §19).

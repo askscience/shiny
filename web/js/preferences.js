@@ -12,6 +12,7 @@ const OPENAI_BASE_URL_KEY = 'ai.openai_base_url';
 const OPENAI_API_KEY_KEY = 'ai.openai_api_key';
 const OPENAI_MODEL_KEY = 'ai.openai_model';
 const PLUGIN_LAYOUT_KEY = 'plugin.layout';
+const LINK_PLUGIN_KEY = 'link.plugin';
 const DESKTOP_WORKSPACES_KEY = 'desktop.workspaces';
 const DESKTOP_ACTIVE_KEY = 'desktop.active';
 const DESKTOP_FOCUS_KEY = 'desktop.plugin_focus';
@@ -206,6 +207,23 @@ export function setPluginLayout(name, mode) {
   if (mode === 'full') localStorage.setItem(key, 'full');
   else localStorage.removeItem(key);
   persist(`${PLUGIN_LAYOUT_KEY}.${name}`, mode === 'full' ? 'full' : '');
+}
+
+/**
+ * Which plugin opens links clicked anywhere in the kiosk: the `browser` plugin
+ * (default) or another installed plugin declaring the `open-urls` capability.
+ * Resolved at click time, so a change applies with the next link.
+ */
+export function getLinkPlugin() {
+  return localStorage.getItem(scopedKey(LINK_PLUGIN_KEY)) || 'browser';
+}
+
+export function setLinkPlugin(name) {
+  const trimmed = (name || 'browser').trim() || 'browser';
+  const key = scopedKey(LINK_PLUGIN_KEY);
+  if (trimmed !== 'browser') localStorage.setItem(key, trimmed);
+  else localStorage.removeItem(key);
+  persist(LINK_PLUGIN_KEY, trimmed === 'browser' ? '' : trimmed);
 }
 
 /* ── Desktop manager (workspaces + tiling layout) ───────────── */

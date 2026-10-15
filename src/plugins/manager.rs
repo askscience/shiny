@@ -217,6 +217,11 @@ impl PluginManager {
         self.inner.loader.category_for(name)
     }
 
+    /// Capabilities for one installed plugin (declared in its `plugin.toml`).
+    pub fn capabilities_for(&self, name: &str) -> Vec<String> {
+        self.inner.loader.capabilities_for(name)
+    }
+
     /// All installed plugins' routes: `(plugin_name, spec, handler)`.
     pub fn routes(&self) -> Vec<(String, RouteSpec, RouteHandler)> {
         let mut out = Vec::new();

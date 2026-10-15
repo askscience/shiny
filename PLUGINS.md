@@ -269,6 +269,7 @@ migrations_dir = "migrations"
 skills_dir = "skills"
 web_dir = "web"
 category = "Demo"                             # optional grouping hint — see §19
+capabilities = ["open-urls"]                  # optional declared capabilities — see §19
 # signature = "<hex ed25519>"                  # optional; see §12
 ```
 
@@ -285,6 +286,7 @@ Fields:
 | `author` | string | no | attribution |
 | `summary` | string | no | used by admin UI to say "what this plugin adds" |
 | `category` | string | no | grouping hint for the top-bar tray (e.g. `Office`, `Media`, `Travel`, `System`) — see §19 |
+| `capabilities` | string[] | no | declared capabilities, e.g. `["open-urls"]` makes the plugin a candidate link handler — see §19 |
 | `migrations_dir` | string | no | default `"migrations"` |
 | `skills_dir` | string | no | default `"skills"` |
 | `web_dir` | string | no | default `"web"` |
@@ -704,7 +706,11 @@ Bearer (any logged-in user). Returns installed plugins, each with the caller's o
 {
   "success": true,
   "data": [
-    { "name": "hello", "version": "0.1.0", "api_level": 1, "description": "Demo plugin..." }
+    {
+      "name": "hello", "version": "0.1.0", "api_level": 1,
+      "description": "Demo plugin...", "summary": "...", "enabled": true,
+      "surface": true, "hud": false, "category": "Demo", "capabilities": []
+    }
   ]
 }
 ```
@@ -854,9 +860,10 @@ Before publishing a plugin:
 | `plugins/calculator/` | **Self-contained** — `calculator_*` tools, its own `calculator_history` table (`migrations/`), the `/api/calculator/eval` routes (`RouteSpec`), and the Calculator window (`web/plugin.js`) all in the plugin folder. One dependency-free scientific expression evaluator (`src/eval.rs`) is shared by the AI tool and the window, so both always agree. |
 | `plugins/image/` | **Self-contained** — `image_*` tools (4), its own `images` table (`migrations/`), the `/api/images` routes (`RouteSpec`, 8, including the look-preview strip), and the Image window (`web/plugin.js` + `web/editor.js` + `web/api.js`) all in the plugin folder. A **minimal photo editor**: window bar + borderless canvas + bottom dock — a filmstrip of 16 curated looks (each previewed on the open image, no labels) and 8 adjustment sliders with live preview, centre-fill tracks and one-click tone actions — built from the core UI library with no plugin CSS, plus a DOM-shim smoke test (`web/plugin.smoke.mjs`). One shared Rust engine (`src/ops.rs`) powers the window's live sliders and the AI tools: tone/colour (`src/adjust.rs`), blur/sharpen/vignette (`src/filter.rs`), the 16 looks (`src/looks.rs`, built on photon-rs duotone/halftone/oil/pixelize plus film-style recipes) and document geometry. Single-image documents: `images.bytes` holds the current pixels and `images.original` the upload (the `reset` target); migration 006 drops the historical layer table. |
 | `plugins/studio/` | **Self-contained** — `studio_*` tools, its own `studio_tracks` table (`migrations/`), the `/api/studio` routes (`RouteSpec`, incl. `GET /:id/audio` serving WAV bytes), and the Studio window (`web/plugin.js`) all in the plugin folder. Patterns (explicit `x..x` rhythms + Euclidean fills, voice kinds kick/snare/hat/bass/pluck/lead, plus swing/accent/velocity groove) render to WAV by its own offline DSP engine (`src/engine.rs` + `src/voices.rs` + `src/wav.rs`), built on `fundsp` for band-limited oscillators and filters with a `rustysynth` SoundFont sampler for user-supplied sampled instruments; the window is an Ableton/Bitwig-style DAW — Arranger timeline + Clip Launcher, a detail panel (Editor step-grid/piano-roll, Devices, Mixer), DAW keyboard shortcuts (Space/⌘S/⌘E/Del), ruler-click play start, piano-key audition and live scope/spectrum meters. |
-| `plugins/browser/` | **Self-contained** — the in-app **Browser**: `browser_open`/`browser_search`/`browser_read` tools, `/api/browser/*` routes (`state`, `navigate`, `history`, `news`, `news/click`, `preview`, `settings`, `filter`, `filter/refresh`, `downloads`, `downloads/event`, `downloads/remove`, `downloads/clear`, sessions), its own `peakd_history` + `browser_settings` + `browser_downloads` tables (`migrations/`), the window (`web/plugin.js`), and the **whole filtering engine** (`crates/shiny-filter` + `crates/shiny-filter-core`). The window renders each tab in a **native child web view** owned by the shell (`crates/peakd` on Linux, `crates/peakd-mac` on macOS) at the page's true origin — no iframe, no filtering proxy in the page path. Ad blocking is **in-process**: the server compiles EasyList/EasyPrivacy into a cache the shell restores, and a `QWebEngineUrlRequestInterceptor` asks the engine per request; a **shield toggle** on the right of the toolbar turns it on/off live (persisted per user). The toolbar also has a **downloads manager** (every download from every site, with progress, pause/resume/cancel/retry/open, saved into the user's Files `Downloads`) and **incognito** tabs backed by an off-the-record profile. Google sign-in works via a per-host Firefox User-Agent override for `accounts.google.com`. Its `about:home` surface is a **related-news shelf ranked from what the user searches for** (`src/news.rs`): a decayed profile over `peakd_history` (typed searches weigh more than URL visits, `news_click` more still, and the word pairs of real queries are kept track of) → each interest searched as the *phrase the user typed*, not one word out of it → the same search engine the address bar uses → score by relevance, freshness tier, publisher and cross-interest overlap, with junk hosts, non-article URLs and one-publisher dominance filtered out → thumbnail cards. There is **no core fallback**: the browser, its filtering engine and its news shelf exist only when this plugin is installed. |
+| `plugins/browser/` | **Self-contained** — the in-app **Browser**: `browser_open`/`browser_search`/`browser_read` tools, `/api/browser/*` routes (`state`, `navigate`, `history`, `news`, `news/click`, `preview`, `settings`, `filter`, `filter/refresh`, `downloads`, `downloads/event`, `downloads/remove`, `downloads/clear`, sessions), its own `peakd_history` + `browser_settings` + `browser_downloads` tables (`migrations/`), the window (`web/plugin.js`), and the **whole filtering engine** (`crates/shiny-filter` + `crates/shiny-filter-core`). The window renders each tab in a **native child web view** owned by the shell (`crates/peakd` on Linux, `crates/peakd-mac` on macOS) at the page's true origin — no iframe, no filtering proxy in the page path. Ad blocking is **in-process**: the server compiles EasyList/EasyPrivacy into a cache the shell restores, and a `QWebEngineUrlRequestInterceptor` asks the engine per request; a **shield toggle** on the right of the toolbar turns it on/off live (persisted per user). The toolbar also has a **downloads manager** (every download from every site, with progress, pause/resume/cancel/retry/open, saved into the user's Files `Downloads`) and **incognito** tabs backed by an off-the-record profile. Google sign-in works via a per-host Firefox User-Agent override for `accounts.google.com`. Its `about:home` surface is a **related-news shelf ranked from what the user searches for** (`src/news.rs`): a decayed profile over `peakd_history` (typed searches weigh more than URL visits, `news_click` more still, and the word pairs of real queries are kept track of) → each interest searched as the *phrase the user typed*, not one word out of it → the same search engine the address bar uses → score by relevance, freshness tier, publisher and cross-interest overlap, with junk hosts, non-article URLs and one-publisher dominance filtered out → thumbnail cards. There is **no core fallback**: the browser, its filtering engine and its news shelf exist only when this plugin is installed. It is also the **default link handler** (`capabilities = ["open-urls"]`, §19): an `http(s)` link clicked anywhere in the app opens here as a new tab, unless the user picks another plugin that declares the capability in Settings → Browser → Links. |
 | `plugins/files/` | **Self-contained** — a GNOME-style file browser over the user's home. Owns no database: each account's home is `$HOME/.shiny/home/<user-id>/` with the classic folders, provisioned by the `on_user_registered` hook (wired through `src/plugins/{loader,manager}.rs` + `src/api/auth.rs`) and lazily on first use. With `SHINY_LINUX_USERS=true` and `SHINY_HOME_MODE=real` the same browser operates on the account's **real Linux home** instead (core passes the resolved OS home as `x-shiny-os-home` on routes and `ToolRequest::os_home` for tools; classic folders are created only when missing). `file_*` tools + `/api/files/*` routes (`list`, `read`, `text`, `raw` with byte ranges, `thumb`, `download`, `upload`, `write`, `mkdir`, `rename`, `delete`→Trash, `restore`, `empty-trash`, `search`), a window (`web/plugin.js`) with lazy thumbnails (server-cached image PNG via `photon-rs`, PDF via vendored PDF.js, **video frames via server-side `ffmpeg`** — not a host `<video>`/QuickTime decode, so the same frame appears on macOS and Linux — text minis) and a Sushi-style Space quick-look with an app-styled streaming video player (byte-ranged from `/raw`, no re-encode), plus a `.Trash`. Deletes are recoverable; `fs_util::resolve` sandboxes every path to the user's home. Other apps save their exports here through the shared `/js/files.js` helper (`saveOrDownload`), which POSTs to `/api/files/upload` instead of triggering a browser download. **Double-clicking** a file opens it in the owning app (`/js/files.js` `openWithPlugin`/`onOpenFromFiles` — Word/Calc/Impress/PDF/Image); **Space** opens the quick-look. The quick-look renders Office documents through `/api/files/render` (`.odt`→HTML via the SDK, `.ods`→cell grid, `.odp`→slide data), not a raw text dump. |
 | `web/js/files.js` | Shared desktop-save helper for every plugin window: `saveOrDownload(blob, {name, dir, app})` writes an export into the user's home via `/api/files/upload` and falls back to a browser download when the Files plugin is not installed. |
+| `web/js/linkRouter.js` | Kiosk link routing: one delegated click listener routes app-drawn `http(s)` links to the user's link-handler plugin (`link.plugin` preference, `browser` default, any `open-urls` candidate otherwise) with the `openUrl`/`onOpenUrl` hand-off — see §19 "Opening links". |
 | `src/plugins/loader.rs` | dlopen + cdylib scanner + symbol resolution. |
 | `src/plugins/registry.rs` | `ToolRegistry` — the action key → `Arc<dyn Tool>` map. |
 | `src/plugins/manager.rs` | `PluginManager` — aggregates contributions, persona, skills. |
@@ -982,6 +989,36 @@ export default {
 `unmount()` on deactivation. Window styles live in core's `web/css/tiles.css`
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
 plugins build DOM only, never ship CSS.
+
+### Opening links (`open-urls`)
+
+In the kiosk the shell refuses page popups on purpose (a link must never leave
+the shell), so core routes app-drawn links itself: `web/js/linkRouter.js`
+installs one delegated click listener and sends every external `http(s)` click
+to the user's **link handler** — the `browser` plugin by default, or any
+installed plugin that declares `capabilities = ["open-urls"]` and ships a
+window (the choice lives in Settings → Browser → Links, preference
+`link.plugin`). Same-origin, `#`, relative and `mailto:` links keep their
+default behaviour, and outside the kiosk the router is inert.
+
+A plugin becomes a link handler with three things:
+
+```toml
+# plugin.toml
+capabilities = ["open-urls"]
+```
+
+```js
+// web/plugin.js — inside wireEvents()
+import { onOpenUrl } from '../../js/linkRouter.js';
+onOpenUrl('my-browser', (url) => openMyWindow(url));
+```
+
+Core activates the plugin, reveals its window (raised, deliberately not
+focused — like every other "open with plugin") and then dispatches a `url:open`
+window event with `{ plugin, url }`. `onOpenUrl` drains a hand-off that arrived
+before the window existed (`window.__pendingUrlOpen`), so a link clicked while
+the plugin is still mounting is not lost.
 
 ### Context menus (right-click)
 

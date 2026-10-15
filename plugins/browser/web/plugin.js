@@ -24,6 +24,7 @@ import { apiFetch } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
 import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
+import { onOpenUrl } from '../../js/linkRouter.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
 
@@ -295,6 +296,11 @@ let lastNativeHoles = null;
 let tabs = [];
 let activeTabId = null;
 let tabSeq = 0;
+/** A URL handed over by the core link router before the window mounted.
+ *  The module is imported (and wired) a moment before the tile exists, and
+ *  `createTab` needs the frame wrapper — so the open waits for mount instead
+ *  of being dropped. */
+let pendingCoreOpen = null;
 
 let wired = false;
 
@@ -1767,6 +1773,18 @@ function openInNewTab(_from, url) {
   createTab({ url });
 }
 
+/**
+ * A link clicked anywhere in the app: core activates this window and hands the
+ * URL over (see `web/js/linkRouter.js`), so it opens as a new tab — exactly
+ * like a `target="_blank"` link inside a page. The tile may not exist yet
+ * (module load precedes mount, and `createTab` needs the frame wrapper), so a
+ * pre-mount hand-off waits for `mountBrowserTile` instead of being dropped.
+ */
+function openCoreUrl(url) {
+  if (!tileEl) { pendingCoreOpen = url; return; }
+  openInNewTab(null, url);
+}
+
 /* ── Link preview ─────────────────────────────────────────────── */
 
 /**
@@ -2169,6 +2187,12 @@ export function mountBrowserTile() {
   startBoundsSync();
   // One tab, on its home surface.
   createTab({});
+  // A link clicked before this window mounted now has somewhere to go.
+  if (pendingCoreOpen) {
+    const url = pendingCoreOpen;
+    pendingCoreOpen = null;
+    openInNewTab(null, url);
+  }
   // Settings (shield, search engine, colour scheme), downloads and bookmarks.
   void loadSettings();
   void loadDownloads();
@@ -2220,6 +2244,8 @@ export function wireBrowserEvents() {
   if (wired) return;
   wired = true;
   window.addEventListener('artifact:saved', onArtifactSaved);
+  // Links clicked anywhere in the app (core hands over `url:open`).
+  onOpenUrl(BROWSER_PLUGIN, openCoreUrl);
   // A pick in the top-bar Clipboard menu → paste into the focused page.
   window.addEventListener('clipboard:paste', onClipboardPaste);
   // The home shelf talks back through postMessage (card clicks, refresh).

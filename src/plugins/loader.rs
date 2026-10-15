@@ -18,6 +18,10 @@ pub struct LoadedPlugin {
     /// Kept separate from `Manifest` so adding it doesn't change the plugin
     /// ABI (the `manifest()` trait method returns `&Manifest` across dlopen).
     pub category: Option<String>,
+    /// Capabilities declared in `plugin.toml` (e.g. "open-urls"), same ABI
+    /// reason as `category`: the frontend resolves features like the link
+    /// handler from these declarations instead of hardcoding plugin names.
+    pub capabilities: Vec<String>,
     /// `Arc` (not `Box`) so lifecycle hooks (`on_load`/`on_unload`) can be
     /// awaited without holding the loader lock.
     pub plugin: Arc<dyn Plugin>,
@@ -29,12 +33,33 @@ pub struct LoadedPlugin {
 unsafe impl Send for LoadedPlugin {}
 unsafe impl Sync for LoadedPlugin {}
 
-/// Only the `category` key of a plugin.toml — parsed independently so the
-/// category can be read from disk without touching the `Manifest` ABI.
+/// Only the host-side hint keys of a plugin.toml — parsed independently so
+/// they can be read from disk without touching the `Manifest` ABI.
 #[derive(serde::Deserialize)]
-struct ManifestCategory {
+struct ManifestExtras {
     #[serde(default)]
     category: Option<String>,
+    #[serde(default)]
+    capabilities: Vec<String>,
+}
+
+/// Trimmed, empty-dropped host extras for one manifest. These keys are hints,
+/// so a missing or malformed extras block yields nothing rather than an error.
+fn parse_extras(manifest_text: &str) -> (Option<String>, Vec<String>) {
+    let extras = toml::from_str::<ManifestExtras>(manifest_text).ok();
+    let category = extras
+        .as_ref()
+        .and_then(|e| e.category.clone())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let capabilities = extras
+        .map(|e| e.capabilities)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    (category, capabilities)
 }
 
 pub struct Loader {
@@ -137,6 +162,15 @@ impl Loader {
             .and_then(|p| p.category.clone())
     }
 
+    /// Capabilities declared in one loaded plugin's `plugin.toml` (empty when
+    /// it declares none).
+    pub fn capabilities_for(&self, name: &str) -> Vec<String> {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .map(|p| p.capabilities.clone())
+            .unwrap_or_default()
+    }
+
     pub fn has(&self, name: &str) -> bool {
         self.loaded.read().iter().any(|p| p.manifest.name == name)
     }
@@ -164,13 +198,9 @@ impl Loader {
             .map_err(|e| AppError::BadRequest(format!("Invalid plugin.toml: {}", e)))?;
         validate_plugin_name(&manifest.name)?;
 
-        // Category is a frontend grouping hint, read from the same toml but
-        // kept out of `Manifest` to preserve the plugin ABI.
-        let category = toml::from_str::<ManifestCategory>(&manifest_text)
-            .ok()
-            .and_then(|c| c.category)
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
+        // Category and capabilities are host-side hints, read from the same
+        // toml but kept out of `Manifest` to preserve the plugin ABI.
+        let (category, capabilities) = parse_extras(&manifest_text);
 
         if manifest.api_level > shiny_plugin_sdk::CORE_API_LEVEL {
             return Err(AppError::BadRequest(format!(
@@ -288,6 +318,7 @@ impl Loader {
         let loaded = LoadedPlugin {
             manifest: manifest.clone(),
             category,
+            capabilities,
             plugin,
             ctx: ctx.clone(),
             library,
@@ -527,6 +558,21 @@ mod tests {
             assert!(validate_plugin_name(bad).is_err(), "{bad:?} should be rejected");
         }
         assert!(validate_plugin_name(&"a".repeat(65)).is_err());
+    }
+
+    /// `capabilities` is a host-side hint parsed from the same toml as
+    /// `category`; absent or blank entries must never reach the API.
+    #[test]
+    fn host_extras_carry_capabilities() {
+        let (category, capabilities) = parse_extras(
+            "name = \"alt-browser\"\ncapabilities = [\"open-urls\", \"  \", \" media \"]\ncategory = \" Web \"\n",
+        );
+        assert_eq!(category.as_deref(), Some("Web"));
+        assert_eq!(capabilities, vec!["open-urls".to_string(), "media".to_string()]);
+
+        let (category, capabilities) = parse_extras("name = \"legacy\"\n");
+        assert!(category.is_none());
+        assert!(capabilities.is_empty());
     }
 
     /// Regression: `Path::join` with an absolute path *replaces* the base, so

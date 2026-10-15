@@ -20,6 +20,8 @@ so list/read/search are instant.
 - 14 `/api/mail/*` routes ([routes.md](routes.md)).
 - The Mail window: accounts, folders, message list, reader/composer
   ([window.md](window.md)).
+- Links inside HTML messages open in the browser plugin (the sandboxed reader
+  frame carries a click bridge — see [window.md](window.md)).
 - A **"New mail"** notification when the unread count grows.
 
 ## Credentials

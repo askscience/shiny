@@ -251,6 +251,10 @@ const openWithPlugin = async () => {};
 const pluginForFile = () => null;
 const revealInFiles = () => {};
 
+/** Core's link-router registration, captured so hand-offs can be driven. */
+const linkHandlers = {};
+const onOpenUrl = (plugin, handler) => { linkHandlers[plugin] = handler; };
+
 /** Captures core context-menu opens, so the page menu can be asserted. */
 const openedMenus = [];
 const openContextMenu = (entries, x, y) => { openedMenus.push({ entries, x, y }); };
@@ -273,6 +277,7 @@ const moduleSource = source
 const context = vm.createContext({
   console, document: documentStub, window: windowStub,
   apiFetch, icon, iconButton, searchBar, openWithPlugin, pluginForFile, revealInFiles,
+  onOpenUrl,
   // Imported by the window from the core UI library; stubbed so mount() and the
   // settings/theming paths can run without the real shell.
   themeMode: () => 'dark',
@@ -572,8 +577,38 @@ check(
   JSON.stringify(action),
 );
 
+/* Links clicked anywhere in the app: core activates this window and hands the
+   URL over (`url:open`), and it opens as a new tab. The hand-off can arrive
+   before the tile exists (module load precedes mount), so it must wait for
+   mount instead of being dropped. */
+check('the window registers as a core link handler', typeof linkHandlers.browser === 'function');
+const linksBefore = calls.navigate.length;
+linkHandlers.browser('https://links.example/story');
+await tick(60);
+check(
+  'a link from core opens in a new tab',
+  calls.navigate.length > linksBefore
+    && calls.navigate.some((n) => n.input === 'https://links.example/story'),
+  JSON.stringify(calls.navigate.slice(-2)),
+);
+
 mod.namespace.unmountBrowserTile?.();
 check('unmount is safe', true);
+
+/* No tile: the URL waits for mount. */
+const lateBefore = calls.navigate.length;
+linkHandlers.browser('https://links.example/late');
+await tick(20);
+check('a pre-mount link is held, not dropped', calls.navigate.length === lateBefore);
+mod.namespace.mountBrowserTile();
+await tick(60);
+check(
+  'a pre-mount link opens once the window mounts',
+  calls.navigate.length > lateBefore
+    && calls.navigate.some((n) => n.input === 'https://links.example/late'),
+  JSON.stringify(calls.navigate.slice(-2)),
+);
+mod.namespace.unmountBrowserTile?.();
 
 if (failures.length) {
   console.error(`\n${failures.length} failure(s):`);

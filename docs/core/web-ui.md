@@ -43,6 +43,7 @@ The shell is split by concern. Grouped:
 | `viewport.js` | Viewport/scale handling. |
 | `gestures.js` | Maps `trackpad:gesture` events onto the desktop. |
 | `contextMenu.js` | The single right-click menu engine. |
+| `linkRouter.js` | Kiosk link routing: sends external link clicks to the chosen link-handler plugin (see below). |
 | `menuState.js` | Shared menu state helpers. |
 
 ### HUD & host panels
@@ -144,6 +145,29 @@ prefix.
 > **Development gotcha:** the app serves the **installed** copy at
 > `data/plugins/<name>/web/`, not `plugins/<name>/web/`. Copy (or reinstall)
 > after editing, or the browser keeps loading the stale file.
+
+---
+
+## Link routing (kiosk)
+
+The shell refuses page popups on purpose — a link must never leave the kiosk —
+so app-drawn links (`target="_blank"` anchors from markdown, document previews,
+mail, help text) used to be dead: the popup request came back as a `new-window`
+event for the `main` view and matched no browser tab. `web/js/linkRouter.js`
+now intercepts those clicks first: `initLinkRouter()` (called from `app.js`,
+kiosk-only) installs one delegated click listener, and every external `http(s)`
+link is handed to the user's **link handler** — the `browser` plugin by default,
+or any installed plugin that declares the `open-urls` capability (Settings →
+Browser → Links, preference `link.plugin`).
+
+The hand-off mirrors the Files integration: core activates the target, reveals
+its window (raised, not focused), sets `window.__pendingUrlOpen` and dispatches
+`url:open` `{ plugin, url }`; the plugin registers with `onOpenUrl(plugin,
+handler)` from its `wireEvents`. Same-origin, `#`, relative and `mailto:` clicks
+keep their default behaviour, and in a normal desktop browser the router is
+inert (there the anchor's own `target="_blank"` is the right behaviour). Mail's
+HTML messages render in a sandboxed frame that cannot reach the app, so their
+frame carries a click bridge of its own (see `plugins/mail/web/plugin.js`).
 
 ---
 
