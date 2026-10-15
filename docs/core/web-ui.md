@@ -66,7 +66,8 @@ The shell is split by concern. Grouped:
 |---|---|
 | `agent.js` | Drives `/api/agent` (JSON + SSE), renders replies. |
 | `chatHistory.js` | Conversation list + message bubbles. |
-| `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, typed input, the sphere. |
+| `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, close), the sphere. |
+| `thinkToggle.js` | Chat head's brain button + voice-bar menu entry: Ollama thinking on/off, gated by the model's capability (`GET /api/ai/thinking`). |
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
 | `files.js` | `saveOrDownload` / `openWithPlugin` desktop integration. |
 | `api.js`, `auth.js`, `session.js` | Fetch wrapper, auth, session bootstrap. |

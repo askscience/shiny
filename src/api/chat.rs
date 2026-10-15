@@ -29,6 +29,10 @@ pub struct ChatHistoryEntry {
     pub role: String,
     pub content: String,
     pub timestamp: Option<String>,
+    /// The assistant's reasoning trace for a thinking model, when one was
+    /// recorded with the reply. Absent on every other row.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +147,7 @@ pub async fn history(
             role,
             content,
             timestamp: ts,
+            thinking: None,
         })
         .collect();
 
@@ -235,11 +240,11 @@ pub async fn conversation_messages(
     Extension(traveler): Extension<Traveler>,
     axum::extract::Path(path): axum::extract::Path<ConversationPath>,
 ) -> Result<Json<ChatHistoryResponse>, AppError> {
-    let entries = sqlx::query_as::<_, (String, String, Option<String>)>(
+    let entries = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
         // `system` rows are invisible notes written for the model (e.g. "the
         // user stopped this reply"). They belong in the agent's history and
         // must never show up as a bubble in the user's chat.
-        "SELECT role, content, timestamp FROM chat_messages \
+        "SELECT role, content, timestamp, thinking FROM chat_messages \
          WHERE conversation_id = ?1 AND traveler_id = ?2 AND role != 'system' \
          ORDER BY timestamp ASC, rowid ASC",
     )
@@ -251,10 +256,11 @@ pub async fn conversation_messages(
 
     let data: Vec<ChatHistoryEntry> = entries
         .into_iter()
-        .map(|(role, content, timestamp)| ChatHistoryEntry {
+        .map(|(role, content, timestamp, thinking)| ChatHistoryEntry {
             role,
             content,
             timestamp,
+            thinking: thinking.filter(|t| !t.trim().is_empty()),
         })
         .collect();
 

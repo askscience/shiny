@@ -31,7 +31,8 @@ Browser (web/)                              shiny (core binary)
 - **faster-whisper** streaming STT (local sidecar; Vosk in-browser fallback) and
   **Supertonic 3** TTS (optional **Qwen3-TTS**).
 - Resumable conversations, Markdown replies, artifact dock, GNOME-style
-  notifications, web search.
+  notifications, web search, and a thinking toggle for Ollama reasoning models
+  whose trace is shown per reply (folded, and saved with the conversation).
 - Agent actions for plugins and the desktop (`plugin_*`, `workspace_*`,
   `desktop_*`, `show_plugin`).
 

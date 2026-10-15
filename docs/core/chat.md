@@ -16,11 +16,16 @@ and [`008_chat_indexes.sql`](../../migrations/008_chat_indexes.sql).
 | Table | Columns (essence) |
 |---|---|
 | `chat_conversations` | `id`, `traveler_id`, `title`, `created_at`, `updated_at` |
-| `chat_messages` | `id`, `traveler_id`, `conversation_id`, `role`, `content`, `timestamp` |
+| `chat_messages` | `id`, `traveler_id`, `conversation_id`, `role`, `content`, `thinking`, `timestamp` |
 
 `role` is `user`, `assistant` or `system`. **`system` rows are invisible notes**
 written for the model; the conversation list/detail endpoints filter them out, so
 the user never sees them as bubbles.
+
+`thinking` (on assistant rows) is the reasoning trace a thinking model produced
+for that reply, when thinking was on. It is returned by
+`GET /api/chat/conversations/:id` and rendered as a collapsed "Thinking"
+disclosure above the answer — the same fold the live turn shows.
 
 ---
 
@@ -96,4 +101,10 @@ adds the indexes that keep conversation lookups fast.
 
 [`web/js/chatHistory.js`](../../web/js/chatHistory.js) renders the conversation
 list and message bubbles, and [`web/js/agent.js`](../../web/js/agent.js) drives
-the streaming turns. See [web UI](web-ui.md).
+the streaming turns. The compose panel itself is
+[`web/js/textInput.js`](../../web/js/textInput.js): the pending bubble's spinner
+plus live step line, the collapsed "Thinking" fold, generated-image/song blocks,
+and the close button. [`web/js/thinkToggle.js`](../../web/js/thinkToggle.js) owns
+the chat head's brain button (and the voice-bar menu entry) — it shows
+`ui/brain` while thinking is on and the slashed `ui/brain-off` when it is off,
+and disables itself for a model that cannot think. See [web UI](web-ui.md).

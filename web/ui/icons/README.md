@@ -88,6 +88,14 @@ The Slot-Beauty folder's six blues are the fallback palette (`FOLDER_BLUES`).
 4. The icon is now available as `ui/chart` from every set that ships it; names a
    set omits fall back to the theme/base automatically.
 
+**In-house glyphs** skip the mapping entirely: draw the SVG into
+`web/ui/icons/<group>/` and run `convert.py --index`. The file must honour the
+same contract the converter's output does — one `viewBox="0 0 24 24"`, `fill="none"`,
+`stroke="currentColor"`, no `<style>`, no hard-coded hex — or the test below
+fails. `ui/mic`, `ui/mic-off`, `ui/eye`, `ui/brain`, `ui/brain-off` and the
+whole `artifacts/` + `insights/` groups were added this way; they live in the
+base catalog only, and every set/theme falls back to them.
+
 ## Rules the converter enforces
 
 - **Strips the embedded `<style>`** (KDE symbolic SVGs carry a global
@@ -128,3 +136,6 @@ Both curated sets are **GPL-3.0** — the same license as this project:
   `assets/iconsets/LICENSE-Slot-Plasma-Themes`.
 - Infinity (Breeze-derived), © the Infinity/KDE authors — license vendored at
   `assets/iconsets/Infinity/LICENSE`.
+
+`ui/brain` derives from [Lucide](https://lucide.dev/icons/brain) (ISC license);
+`ui/brain-off` adds the repo's usual slash to it, the way `ui/mic-off` does.

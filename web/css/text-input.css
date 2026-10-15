@@ -208,29 +208,56 @@ body.compose-active #hud-transcript {
 .compose-bubble-text td { border: 1px solid var(--glass-border); padding: 4px 8px; }
 .compose-bubble-text img { max-width: 100%; border-radius: 8px; }
 
-.compose-bubble.is-thinking .compose-bubble-text {
-  color: var(--muted);
-  font-family: var(--font-display);
-  letter-spacing: 0.04em;
-  animation: composePulse 1.4s ease-in-out infinite;
-}
-
-.compose-image-pending .compose-bubble-text {
+/* ── Waiting bubbles: the wheel + one live line ──────────────
+   The pending answer bubble uses the same widget as the image and song
+   placeholders — the line next to the wheel is the agent's current step. */
+.compose-pending .compose-bubble-text { color: var(--muted); }
+.compose-pending-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--muted);
 }
-.compose-image-spinner {
+.compose-spinner {
   width: 16px;
   height: 16px;
   flex: none;
   border-radius: 50%;
   border: 2px solid var(--glass-border);
   border-top-color: var(--accent);
-  animation: composeImageSpin 0.9s linear infinite;
+  animation: composeSpin 0.9s linear infinite;
 }
-@keyframes composeImageSpin { to { transform: rotate(360deg); } }
+@keyframes composeSpin { to { transform: rotate(360deg); } }
+
+/* ── Chain of thought ────────────────────────────────────────
+   Folded above its answer, closed by default so the trace never crowds the
+   chat until the user opens it. */
+.compose-cot {
+  max-width: 100%;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.compose-cot-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.compose-cot-summary::-webkit-details-marker { display: none; }
+.compose-cot-summary .ui-icon { color: var(--muted); }
+.compose-cot[open] .compose-cot-summary { margin-bottom: 4px; }
+.compose-cot-body {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  border-left: 1px solid var(--glass-border);
+  padding: 2px 0 2px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.compose-cot-body::-webkit-scrollbar { display: none; }
 
 /* A generated image is its own element — never inside the answer bubble: no
    panel, no border, rounded corners, actions appear on hover. */
@@ -386,13 +413,15 @@ body.compose-active #hud-transcript {
 /* ── Composer: field + send + stop, inside the conversation ── */
 
 /* The chat-history button sits at the top-right of the chat it switches
-   between, styled like the chat surface itself rather than the desktop HUD. */
+   between, styled like the chat surface itself rather than the desktop HUD.
+   The thinking toggle and the close button are its peers. */
 .compose-head {
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
   justify-content: flex-end;
+  gap: 6px;
   padding-bottom: 2px;
 }
 
@@ -426,6 +455,18 @@ body.compose-active #hud-transcript {
 
 .compose-chats-btn:active { transform: scale(0.94); }
 .compose-chats-btn svg { width: 17px; height: 17px; }
+
+/* The thinking toggle when the model/provider cannot think: visible, but
+   clearly not a choice the user can make here. */
+.compose-chats-btn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.compose-chats-btn[disabled]:hover {
+  background: var(--surface);
+  border-color: var(--glass-border);
+  color: var(--text-secondary);
+}
 
 /* The composer is a direct child of the thread; `sticky` keeps it pinned to
    the bottom edge of the panel once the bubbles scroll past it. */
@@ -482,11 +523,6 @@ body.compose-awaiting .compose-composer .compose-send {
 .compose-send:active { transform: scale(0.94); }
 .compose-send .ui-icon { width: 16px; height: 16px; }
 
-@keyframes composePulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
-
 @keyframes composeBubbleIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -506,8 +542,5 @@ body.compose-awaiting .compose-composer .compose-send {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .compose-bubble.is-thinking .compose-bubble-text {
-    animation: none;
-    opacity: 0.7;
-  }
+  .compose-spinner { animation-duration: 2.4s; }
 }

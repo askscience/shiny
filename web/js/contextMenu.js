@@ -16,7 +16,7 @@
  *     workspace, switch workspace, layout mode).
  *   • Right-click a workspace dot           → workspace menu (new / remove).
  *   • Right-click the voice bar              → assistant menu (new chat, chat
- *     history, type a message, voice, settings).
+ *     history, type a message, thinking on/off, close chat, voice, settings).
  *
  * Any other right-click inside the shell is swallowed: it must never reach
  * QtWebEngine, whose native Back/Forward/Reload menu has no place in the app.
@@ -53,11 +53,12 @@ import { refreshGpsPosition } from './map.js';
 import { setIcon, toast } from '../ui/index.js';
 import { newChat, stopActiveTurn, isTurnActive } from './agent.js';
 import { openChatHistory } from './chatHistory.js';
-import { openTextInput } from './textInput.js';
+import { openTextInput, closeChat, isTextInputOpen } from './textInput.js';
 import { startListening, cancelListening, isListening } from './voice.js';
 import { getSphereState, waitForVoiceReady } from './sphere.js';
 import { readClipboardText } from './clipboard.js';
-import { getAiName, getWakeWord, setWakeWord } from './preferences.js';
+import { getAiName, getWakeWord, setWakeWord, getThink, setThink } from './preferences.js';
+import { canThink } from './thinkToggle.js';
 import { notifyMenuChange } from './menuState.js';
 
 /* ── Popup engine ─────────────────────────────────────────────── */
@@ -685,6 +686,22 @@ function orbMenu() {
     },
     { type: 'item', label: 'Chat history', icon: 'ui/list', onClick: () => openChatHistory() },
     { type: 'item', label: 'Type a message', icon: 'ui/message-circle', onClick: () => openTextInput() },
+    {
+      // The brain toggle: same switch (and same glyphs) as the chat head.
+      type: 'item',
+      label: canThink() ? 'Thinking' : 'Thinking — unavailable for this model',
+      icon: getThink() && canThink() ? 'ui/brain' : 'ui/brain-off',
+      checked: getThink(),
+      disabled: !canThink(),
+      onClick: () => setThink(!getThink()),
+    },
+    {
+      type: 'item',
+      label: 'Close chat',
+      icon: 'ui/close',
+      disabled: !isTextInputOpen(),
+      onClick: () => closeChat(),
+    },
     { type: 'separator' },
     {
       type: 'submenu',

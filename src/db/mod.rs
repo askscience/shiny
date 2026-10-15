@@ -104,6 +104,20 @@ pub async fn run_migrations(conn: &mut SqliteConnection) -> Result<(), AppError>
             .await?;
     }
 
+    // Reasoning traces of thinking models are stored with their reply so the
+    // chat can show them again after a reload.
+    let has_thinking: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('chat_messages') WHERE name = 'thinking'",
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(AppError::Database)?;
+    if has_thinking == 0 {
+        sqlx::raw_sql("ALTER TABLE chat_messages ADD COLUMN thinking TEXT")
+            .execute(&mut *conn)
+            .await?;
+    }
+
     let migration8 = include_str!("../../migrations/008_chat_indexes.sql");
     sqlx::raw_sql(migration8).execute(&mut *conn).await?;
 

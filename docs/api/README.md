@@ -79,7 +79,7 @@ into a header by core so a plugin's own axum can read them.
 | Fonts | `GET /api/fonts` |
 | Chat | `POST /api/chat`, `GET /api/chat/history`, `/api/chat/conversations…` |
 | Agent | `POST /api/agent`, `POST /api/agent/stop` |
-| AI models | `GET /api/ai/models`, `GET /api/ollama/models` |
+| AI models | `GET /api/ai/models`, `GET /api/ai/thinking`, `GET /api/ollama/models` |
 | Search | `POST /api/search` |
 | Artifacts | `GET`/`POST /api/artifacts`, `GET`/`PUT /api/artifacts/:id` |
 | Insights | `GET /api/insights/context` |

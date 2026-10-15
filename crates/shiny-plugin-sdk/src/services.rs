@@ -4,6 +4,7 @@
 //! one canonical implementation; the binary constructs them once at startup
 //! and hands clones (via `PluginCtx`) to each plugin's `register()`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
@@ -154,6 +155,11 @@ struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
+    /// Ollama's reasoning switch: `true` asks a thinking model for its trace,
+    /// `false` turns it off. Omitted entirely when `None`, which lets the
+    /// model apply its own default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    think: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,6 +170,25 @@ struct ChatResponse {
 #[derive(Debug, Deserialize)]
 struct ChatMessageResponse {
     content: String,
+    /// The reasoning trace a thinking model emits next to (not inside) the
+    /// answer. Absent for every other model.
+    #[serde(default)]
+    thinking: Option<String>,
+}
+
+/// One chat reply: the answer plus the model's reasoning trace, when it
+/// produced one.
+#[derive(Debug, Clone)]
+pub struct ChatOutcome {
+    pub content: String,
+    pub thinking: Option<String>,
+}
+
+/// Whether a model can emit a separate reasoning trace (`think`), read once
+/// per model from Ollama's `/api/show`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ThinkingSupport {
+    pub supported: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -183,6 +208,9 @@ pub struct OllamaClient {
     client: reqwest::Client,
     base_url: String,
     model: String,
+    /// Per-model thinking capability from `/api/show`, resolved once per model
+    /// per process (the answer cannot change while Ollama is running).
+    think_cache: Arc<tokio::sync::RwLock<HashMap<String, ThinkingSupport>>>,
 }
 
 impl OllamaClient {
@@ -191,6 +219,7 @@ impl OllamaClient {
             client: timeout_client(Duration::from_secs(120)),
             base_url,
             model,
+            think_cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
 
@@ -199,6 +228,20 @@ impl OllamaClient {
         messages: Vec<(String, String)>,
         model: Option<&str>,
     ) -> Result<String, AppError> {
+        Ok(self.chat_ex(messages, model, None).await?.content)
+    }
+
+    /// Chat with Ollama's `think` switch. `None` omits the field (the model's
+    /// own default applies), `Some(false)` asks for no reasoning, and
+    /// `Some(true)` asks for a trace — callers should gate `Some(true)` on
+    /// [`Self::thinking_support`], since models without the capability may
+    /// reject the request.
+    pub async fn chat_ex(
+        &self,
+        messages: Vec<(String, String)>,
+        model: Option<&str>,
+        think: Option<bool>,
+    ) -> Result<ChatOutcome, AppError> {
         let msgs: Vec<ChatMessage> = messages
             .into_iter()
             .map(|(role, content)| ChatMessage { role, content })
@@ -208,6 +251,7 @@ impl OllamaClient {
             model: self.resolve_model(model).to_string(),
             messages: msgs,
             stream: false,
+            think,
         };
 
         let resp = self
@@ -236,7 +280,68 @@ impl OllamaClient {
             AppError::Internal(format!("Failed to parse Ollama response: {}", e))
         })?;
 
-        Ok(data.message.content)
+        Ok(ChatOutcome {
+            content: data.message.content,
+            thinking: data.message.thinking.filter(|t| !t.trim().is_empty()),
+        })
+    }
+
+    /// Whether `model` supports thinking, from `/api/show` — cached per model.
+    /// A failed probe reports "unsupported" and is not cached, so the next
+    /// attempt retries.
+    pub async fn thinking_support(&self, model: Option<&str>) -> ThinkingSupport {
+        let key = self.resolve_model(model).to_string();
+        if let Some(hit) = self.think_cache.read().await.get(&key).copied() {
+            return hit;
+        }
+        match self.fetch_thinking_support(&key).await {
+            Some(support) => {
+                self.think_cache.write().await.insert(key, support);
+                support
+            }
+            None => ThinkingSupport::default(),
+        }
+    }
+
+    async fn fetch_thinking_support(&self, model: &str) -> Option<ThinkingSupport> {
+        #[derive(Deserialize)]
+        struct ShowResponse {
+            /// Newer Ollama: `{ "values": [...], "default": ... }`. Values can
+            /// be booleans (`true`/`false`) or model-defined level strings;
+            /// `[false]` means the model cannot think.
+            #[serde(default)]
+            thinking: Option<ShowThinking>,
+            /// Older Ollama: capability tags (e.g. "thinking").
+            #[serde(default)]
+            capabilities: Vec<String>,
+        }
+        #[derive(Deserialize)]
+        struct ShowThinking {
+            #[serde(default)]
+            values: Vec<serde_json::Value>,
+        }
+
+        let resp = self
+            .client
+            .post(format!("{}/api/show", self.base_url))
+            .json(&serde_json::json!({ "model": model }))
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let data: ShowResponse = resp.json().await.ok()?;
+
+        let supported = match &data.thinking {
+            Some(t) => {
+                !t.values.is_empty()
+                    && !(t.values.len() == 1
+                        && t.values[0] == serde_json::Value::Bool(false))
+            }
+            None => data.capabilities.iter().any(|c| c == "thinking"),
+        };
+        Some(ThinkingSupport { supported })
     }
 
     pub async fn generate(

@@ -48,6 +48,8 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/arrow-up.svg) | `ui/arrow-up` | `— in-house` |
 | ![](ui/blur.svg) | `ui/blur` | `— in-house` |
 | ![](ui/bold.svg) | `ui/bold` | `— in-house` |
+| ![](ui/brain.svg) | `ui/brain` | `— in-house` |
+| ![](ui/brain-off.svg) | `ui/brain-off` | `— in-house` |
 | ![](ui/brightness.svg) | `ui/brightness` | `— in-house` |
 | ![](ui/brush.svg) | `ui/brush` | `— in-house` |
 | ![](ui/burn.svg) | `ui/burn` | `— in-house` |

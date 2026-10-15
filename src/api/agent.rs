@@ -22,6 +22,11 @@ pub struct AgentRequest {
     pub lang: Option<String>,
     pub ai_name: Option<String>,
     pub ollama_model: Option<String>,
+    /// Ollama's reasoning switch for this turn. `true` asks a thinking model
+    /// for its reasoning trace (streamed as `thinking` events), `false` turns
+    /// it off, omitted leaves the model's own default. Ignored by OpenAI, and
+    /// downgraded to the model default when the model cannot think.
+    pub think: Option<bool>,
     pub stream: Option<bool>,
     pub context: Option<AgentContextBody>,
     /// Client-side desktop layout (workspaces + which window is where), so the
@@ -89,6 +94,10 @@ pub struct AgentResponse {
     pub artifacts: Vec<serde_json::Value>,
     pub actions_taken: Vec<ActionTaken>,
     pub steps: Vec<String>,
+    /// The model's reasoning trace for the turn (empty for non-thinking
+    /// models/turns). Also streamed live as `thinking` events.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub thinking: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub navigation: Option<NavigationSession>,
     /// Plugin the AI chose to surface in a window (via show_plugin).
@@ -117,6 +126,8 @@ pub struct ActionTaken {
 #[serde(tag = "type", rename_all = "lowercase")]
 enum AgentStreamEvent {
     Step { message: String },
+    /// Reasoning trace of a thinking model, one block per tool-loop iteration.
+    Thinking { message: String },
     Done { data: AgentResponse },
     Error { message: String },
 }
@@ -593,6 +604,7 @@ async fn prepare_agent(
             plugins_hint,
             history,
             voice,
+            think: body.think,
             ctx,
         },
     })
@@ -614,6 +626,7 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
             })
             .collect(),
         steps: result.steps,
+        thinking: result.thinking,
         navigation: result.navigation,
         focus_plugin: result.focus_plugin,
         open_file: result.open_file,
@@ -653,6 +666,7 @@ pub async fn handle_agent(
         model.as_deref(),
         prepared.input,
         cancel.clone(),
+        |_| {},
         |_| {},
     )
     .await?;
@@ -697,6 +711,7 @@ async fn finish_turn(
 
     let stopped = result.interrupted || cancel.is_some_and(|c| c.is_cancelled());
     let note = stopped.then_some(chat_memory::INTERRUPTED_NOTE);
+    let thinking = (!result.thinking.trim().is_empty()).then_some(result.thinking.as_str());
 
     let _ = chat_memory::save_turn_with_note(
         &state.pool,
@@ -706,6 +721,7 @@ async fn finish_turn(
         user_message,
         &result.reply,
         note,
+        thinking,
     )
     .await;
 
@@ -794,6 +810,9 @@ pub async fn handle_agent_stream(
             input,
             cancel.clone(),
             |msg| emit(AgentStreamEvent::Step {
+                message: msg.to_string(),
+            }),
+            |msg| emit(AgentStreamEvent::Thinking {
                 message: msg.to_string(),
             }),
         )

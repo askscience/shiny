@@ -90,12 +90,14 @@ pub async fn save_turn(
         user_message,
         assistant_reply,
         None,
+        None,
     )
     .await
 }
 
 /// Same as [`save_turn`], plus an optional invisible `system` note describing
-/// how the turn ended (e.g. the user stopped it).
+/// how the turn ended (e.g. the user stopped it) and the assistant's optional
+/// reasoning trace, stored with the reply so the chat can show it again.
 pub async fn save_turn_with_note(
     pool: &SqlitePool,
     ai: &AiClient,
@@ -104,6 +106,7 @@ pub async fn save_turn_with_note(
     user_message: &str,
     assistant_reply: &str,
     note: Option<&str>,
+    assistant_thinking: Option<&str>,
 ) -> Result<(), AppError> {
     sqlx::query(
         "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
@@ -121,13 +124,14 @@ pub async fn save_turn_with_note(
     // bubble in the history would be noise, so only the note is written.
     if !assistant_reply.trim().is_empty() {
         sqlx::query(
-            "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
-             VALUES (?1, ?2, ?3, 'assistant', ?4, datetime('now'))",
+            "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, thinking, timestamp) \
+             VALUES (?1, ?2, ?3, 'assistant', ?4, ?5, datetime('now'))",
         )
         .bind(uuid::Uuid::new_v4().to_string())
         .bind(traveler_id)
         .bind(conversation_id)
         .bind(assistant_reply)
+        .bind(assistant_thinking)
         .execute(pool)
         .await
         .map_err(AppError::Database)?;

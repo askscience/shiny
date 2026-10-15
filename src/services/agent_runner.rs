@@ -78,6 +78,10 @@ pub struct AgentRunInput {
     /// True when the request came from speech (STT) and the reply is spoken
     /// back (TTS) — the reply must then be conversational prose, not markdown.
     pub voice: bool,
+    /// Ollama's `think` switch for this turn: `Some(true)` asks a thinking
+    /// model for its reasoning trace, `Some(false)` turns it off, `None`
+    /// leaves the model's own default in place.
+    pub think: Option<bool>,
     pub ctx: AgentContext,
 }
 
@@ -103,6 +107,9 @@ pub struct AgentRunResult {
     /// File the AI asked the frontend to open (generate_image `open`).
     pub open_file: Option<Value>,
     pub steps: Vec<String>,
+    /// The model's reasoning trace for this turn (every thinking block of the
+    /// tool loop, joined). Empty unless thinking was on and the model has it.
+    pub thinking: String,
     /// True when the user stopped this turn before it finished. The reply (if
     /// any) is a partial answer, and the caller records an invisible note so
     /// the model understands why the turn looks truncated next time.
@@ -110,7 +117,7 @@ pub struct AgentRunResult {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn run_agent<F>(
+pub async fn run_agent<F, G>(
     state: &AppState,
     traveler: &Traveler,
     trip_id: Option<&str>,
@@ -119,9 +126,11 @@ pub async fn run_agent<F>(
     input: AgentRunInput,
     cancel: Option<crate::services::agent_cancel::CancelHandle>,
     mut on_step: F,
+    mut on_thinking: G,
 ) -> Result<AgentRunResult, AppError>
 where
     F: FnMut(&str),
+    G: FnMut(&str),
 {
     let mut artifacts: Vec<Value> = Vec::new();
     let mut actions_taken: Vec<ActionTaken> = Vec::new();
@@ -131,6 +140,7 @@ where
     let mut produced_owners: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut injected_skills: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut completed_steps: Vec<String> = Vec::new();
+    let mut thinking_log = String::new();
     let mut final_reply = String::new();
     let mut interrupted = false;
 
@@ -166,17 +176,27 @@ where
         // Dropping the in-flight request is the point of the whole feature: a
         // local model that keeps generating blocks the *next* question, so a
         // stopped turn must abandon the call, not just ignore its answer.
-        let response = match &cancel {
+        let outcome = match &cancel {
             Some(handle) => tokio::select! {
                 biased;
                 _ = handle.cancelled() => {
                     interrupted = true;
                     break;
                 }
-                result = ai.chat(messages, model) => result?,
+                result = ai.chat_ex(messages, model, input.think) => result?,
             },
-            None => ai.chat(messages, model).await?,
+            None => ai.chat_ex(messages, model, input.think).await?,
         };
+        // A thinking model narrates before it answers: keep every block of the
+        // tool loop, hand each one to the UI as it arrives.
+        if let Some(trace) = outcome.thinking.as_deref() {
+            if !thinking_log.is_empty() {
+                thinking_log.push_str("\n\n");
+            }
+            thinking_log.push_str(trace);
+            on_thinking(trace);
+        }
+        let response = outcome.content;
         // Full transparency: log what the model actually emitted so failures
         // (e.g. "the AI isn't writing to calc") are visible in data/shiny.log.
         tracing::info!(
@@ -367,6 +387,7 @@ where
         focus_plugin,
         open_file,
         steps: completed_steps,
+        thinking: thinking_log,
         interrupted,
     })
 }

@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use shiny_plugin_sdk::services::{ChatOutcome, ThinkingSupport};
 use sqlx::SqlitePool;
 
 use crate::errors::AppError;
@@ -35,6 +36,47 @@ impl AiClient {
         match self {
             AiClient::Ollama(c) => c.chat(messages, model).await,
             AiClient::OpenAi(c) => c.chat(messages, model).await,
+        }
+    }
+
+    /// Chat, returning the answer plus the model's reasoning trace. Only
+    /// Ollama thinking models produce a trace, and only when `think` is on.
+    pub async fn chat_ex(
+        &self,
+        messages: Vec<(String, String)>,
+        model: Option<&str>,
+        think: Option<bool>,
+    ) -> Result<ChatOutcome, AppError> {
+        match self {
+            AiClient::Ollama(c) => {
+                // Enforced here, not only in the UI: a model without thinking
+                // metadata may reject `think: true` outright, so an explicit
+                // request for it is downgraded to the model default instead of
+                // failing the turn.
+                let think = match think {
+                    Some(true) if !c.thinking_support(model).await.supported => {
+                        tracing::warn!(
+                            "thinking was requested but the selected model does not support it; \
+                             continuing without"
+                        );
+                        None
+                    }
+                    other => other,
+                };
+                c.chat_ex(messages, model, think).await
+            }
+            AiClient::OpenAi(c) => Ok(ChatOutcome {
+                content: c.chat(messages, model).await?,
+                thinking: None,
+            }),
+        }
+    }
+
+    /// Whether the resolved provider/model can emit a reasoning trace.
+    pub async fn thinking_support(&self, model: Option<&str>) -> ThinkingSupport {
+        match self {
+            AiClient::Ollama(c) => c.thinking_support(model).await,
+            AiClient::OpenAi(_) => ThinkingSupport::default(),
         }
     }
 

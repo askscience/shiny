@@ -25,6 +25,7 @@ Request:
   "lang": "en",                  // reply language (ISO-639-1)
   "ai_name": "Shiny",            // persona name
   "ollama_model": "llama3",      // optional per-request model (Ollama only)
+  "think": true,                 // Ollama reasoning switch (thinking models)
   "stream": false,
   "voice": false,                // true ⇒ spoken prose, no markdown
   "turn_id": "<uuid>",           // client id, for /api/agent/stop
@@ -68,12 +69,16 @@ JSON response (`AgentResponse`):
 
 ```jsonc
 { "type": "step", "message": "Searching the web…" }
+{ "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
 { "type": "done", "data": { /* the full AgentResponse */ } }
 { "type": "error", "message": "…" }
 ```
 
 The stream sends keep-alives. The final `done` carries everything the JSON mode
-returns.
+returns; `AgentResponse.thinking` holds the turn's full trace (saved with the
+reply, so the chat can fold it under the answer again later).
+
+No thinking model — or thinking off — means no `thinking` events.
 
 ### System prompt assembly
 
@@ -147,6 +152,7 @@ AI summary. Returns results as `{ success, data: … }`.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/ai/models` | Models from the user's resolved provider (Ollama or OpenAI). |
+| `GET` | `/api/ai/thinking` | Whether the resolved provider/model can emit a reasoning trace: `{provider, model, supported}`. Gates the chat's brain button and the voice-bar menu. |
 | `GET` | `/api/ollama/models` | Ollama's `/api/tags` list, sorted. |
 
 ---

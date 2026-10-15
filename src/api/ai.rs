@@ -25,6 +25,22 @@ pub struct AiModelsData {
     pub available: bool,
 }
 
+#[derive(Serialize)]
+pub struct AiThinkingResponse {
+    pub success: bool,
+    pub data: AiThinkingData,
+}
+
+#[derive(Serialize)]
+pub struct AiThinkingData {
+    pub provider: String,
+    /// The model this answer refers to: the user's choice when set, else the
+    /// provider default.
+    pub model: String,
+    /// True when the model can emit a separate reasoning trace (`think`).
+    pub supported: bool,
+}
+
 pub async fn list_models(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
@@ -50,6 +66,35 @@ pub async fn list_models(
             models,
             default,
             available,
+        },
+    }))
+}
+
+/// Whether the resolved provider + model can emit a reasoning trace. Gates the
+/// brain toggle in the chat and the voice-bar menu; the agent re-checks the
+/// same capability before every turn, so the UI is never the only guard.
+pub async fn thinking(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+) -> Result<Json<AiThinkingResponse>, AppError> {
+    let ai = state.resolve_ai(&traveler.id).await;
+    let provider = if ai.client.is_openai() {
+        "openai"
+    } else {
+        "ollama"
+    };
+    let model = ai
+        .model
+        .clone()
+        .unwrap_or_else(|| ai.client.default_model().to_string());
+    let supported = ai.client.thinking_support(ai.model.as_deref()).await.supported;
+
+    Ok(Json(AiThinkingResponse {
+        success: true,
+        data: AiThinkingData {
+            provider: provider.to_string(),
+            model,
+            supported,
         },
     }))
 }

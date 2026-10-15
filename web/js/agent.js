@@ -11,7 +11,7 @@ import { setSphereState } from './sphere.js';
 import { refreshActiveTrip } from './gps.js';
 import { loadActiveRoute } from './map.js';
 import { startNavigator, isNavigatorActive } from './navigator.js';
-import { getAiName, getOllamaModel } from './preferences.js';
+import { getAiName, getOllamaModel, getThink } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
@@ -162,6 +162,9 @@ function buildAgentBody(message, mode, context, voice = false, turnId = null) {
   if (turnId) body.turn_id = turnId;
   const model = getOllamaModel();
   if (model) body.ollama_model = model;
+  // The brain toggle: ask a thinking model for its reasoning trace (the core
+  // downgrades this to the model default when the model cannot think).
+  body.think = getThink();
   const conversation = currentConversationId();
   if (conversation) body.conversation_id = conversation;
   return body;
@@ -294,7 +297,7 @@ export async function removeConversation(id) {
   }
 }
 
-async function readAgentStream(res, onStep) {
+async function readAgentStream(res, onStep, onThinking) {
   if (!res.body) {
     throw new ApiError('Agent stream unavailable', 500);
   }
@@ -324,6 +327,8 @@ async function readAgentStream(res, onStep) {
 
       if (event.type === 'step' && event.message) {
         onStep?.(event.message);
+      } else if (event.type === 'thinking' && event.message) {
+        onThinking?.(event.message);
       } else if (event.type === 'done') {
         return event.data;
       } else if (event.type === 'error') {
@@ -335,7 +340,7 @@ async function readAgentStream(res, onStep) {
   throw new ApiError('Agent stream ended unexpectedly', 500);
 }
 
-async function requestAgent(body, onStep, signal) {
+async function requestAgent(body, onStep, signal, onThinking) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -357,7 +362,7 @@ async function requestAgent(body, onStep, signal) {
       const text = await res.text();
       throw new ApiError(text || res.statusText, res.status);
     }
-    return readAgentStream(res, onStep);
+    return readAgentStream(res, onStep, onThinking);
   }
 
   const text = await res.text();
@@ -543,7 +548,7 @@ export async function sendToAgent(message, mode, context) {
 }
 
 /** Text compose mode: streams reply into compose panel */
-export async function sendToAgentCompose(message, context, { onStream, onDone, onError, onStopped }) {
+export async function sendToAgentCompose(message, context, { onStream, onDone, onError, onStopped, onThinking }) {
   onStream?.('');
   setAgentAwaiting(true);
   setSphereState('processing');
@@ -557,6 +562,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
       buildAgentBody(message, 'single', context, false, turn.id),
       handleAgentStep,
       turn.controller.signal,
+      onThinking,
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting

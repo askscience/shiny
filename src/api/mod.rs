@@ -494,6 +494,7 @@ pub fn build_router(state: AppState) -> Router {
         // stop button in text mode).
         .route("/api/agent/stop", post(agent::handle_agent_stop))
         .route("/api/ai/models", get(ai::list_models))
+        .route("/api/ai/thinking", get(ai::thinking))
         .route("/api/ollama/models", get(ollama::list_models))
         .route("/api/insights/context", get(insights::context))
         .route("/api/artifacts", get(artifacts::list).post(artifacts::create))

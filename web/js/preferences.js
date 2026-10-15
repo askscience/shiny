@@ -7,6 +7,7 @@ import { voiceForEngine } from './voiceShared.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
+const AI_THINK_KEY = 'ai.think';
 const OLLAMA_MODEL_KEY = 'ai.ollama_model';
 const OPENAI_BASE_URL_KEY = 'ai.openai_base_url';
 const OPENAI_API_KEY_KEY = 'ai.openai_api_key';
@@ -126,6 +127,27 @@ export function setOllamaModel(model) {
   if (trimmed) localStorage.setItem(key, trimmed);
   else localStorage.removeItem(key);
   persist(OLLAMA_MODEL_KEY, trimmed);
+  // The thinking capability is per model — every surface that shows the
+  // brain toggle re-resolves it against the new one.
+  window.dispatchEvent(new CustomEvent('ai:settings'));
+}
+
+/**
+ * Thinking mode (Ollama thinking models): let the model emit its reasoning
+ * trace. ON by default — that is what the model does anyway; the toggle
+ * exists to turn it OFF for faster answers. Only ever sent when the model
+ * actually supports it (GET /api/ai/thinking gates the button).
+ */
+export function getThink() {
+  return localStorage.getItem(scopedKey(AI_THINK_KEY)) !== 'false';
+}
+
+export function setThink(on) {
+  const key = scopedKey(AI_THINK_KEY);
+  const value = on ? 'true' : 'false';
+  localStorage.setItem(key, value);
+  persist(AI_THINK_KEY, value);
+  window.dispatchEvent(new CustomEvent('ai:settings'));
 }
 
 /** Which AI provider answers the assistant: 'ollama' (default) or 'openai'. */
@@ -139,6 +161,8 @@ export function setAiProvider(provider) {
   if (trimmed && trimmed !== 'ollama') localStorage.setItem(key, trimmed);
   else localStorage.removeItem(key);
   persist(AI_PROVIDER_KEY, trimmed === 'ollama' ? '' : trimmed);
+  // Only Ollama exposes the thinking capability.
+  window.dispatchEvent(new CustomEvent('ai:settings'));
 }
 
 export function getOpenAiBaseUrl() {

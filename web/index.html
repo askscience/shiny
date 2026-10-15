@@ -227,10 +227,18 @@
         <!-- Chat history lives with the conversation it switches between: the
              top-right of the chat panel, not the desktop top bar. -->
         <div class="compose-head">
+          <!-- The thinking toggle: brain = the model's reasoning is on, the
+               slashed brain = off. Disabled when the model cannot think. -->
+          <button type="button" id="compose-think-btn" class="compose-chats-btn" aria-pressed="true" title="Thinking" aria-label="Thinking">
+            <span data-icon="ui/brain" data-icon-size="17" aria-hidden="true"></span>
+          </button>
           <button type="button" id="chat-history-btn" class="compose-chats-btn" title="Chats" aria-label="Chats">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
+          </button>
+          <button type="button" id="compose-close-btn" class="compose-chats-btn" title="Close chat" aria-label="Close chat">
+            <span data-icon="ui/close" data-icon-size="17" aria-hidden="true"></span>
           </button>
         </div>
         <!-- The composer is the one and only text input: field, send and stop

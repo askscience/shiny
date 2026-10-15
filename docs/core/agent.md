@@ -82,10 +82,10 @@ pub async fn handle_agent_dispatch(
 | Mode | Handler | Transport |
 |---|---|---|
 | `stream: false` / omitted | `handle_agent` | One `application/json` response. |
-| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` events then `done`/`error`. |
+| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events then `done`/`error`. |
 
 The frontend always sets `stream: true` (`web/js/agent.js`) and parses the SSE
-stream itself; see [§9](#9-sse-vs-json-modes).
+stream itself; the transport modes are the two rows above.
 
 ### Request shape
 
@@ -98,6 +98,7 @@ stream itself; see [§9](#9-sse-vs-json-modes).
 | `lang` | string? | ISO language code; defaults to `"en"`. Converted to a language name for the prompt. |
 | `ai_name` | string? | Assistant persona name; defaults to `"Shiny"`. |
 | `ollama_model` | string? | Per-request model override (Ollama only). |
+| `think` | bool? | Ollama's reasoning switch. `true` asks a thinking model for its trace (streamed as `thinking` events, saved with the reply); `false` turns thinking off; omitted leaves the model's default. Downgraded to the default when the model cannot think; ignored by OpenAI. |
 | `stream` | bool? | Selects SSE vs JSON. |
 | `context` | object? | `{lat, lon, heading}` — live location. |
 | `desktop` | object? | `{active, workspaces:[{index, windows:[]}], workspaces_enabled, focused:[]}`. |
@@ -304,6 +305,7 @@ pub struct AgentRunResult {
     pub navigation: Option<NavigationSession>,
     pub focus_plugin: Option<String>,
     pub steps: Vec<String>,      // full LLM-facing notes
+    pub thinking: String,        // reasoning trace, joined; empty when off
     pub interrupted: bool,
 }
 ```
@@ -328,7 +330,10 @@ for iteration in 0..MAX_TOOL_STEPS {
     let size = messages_char_count(&messages);
     if size > 200_000 { tracing::warn!("Agent prompt very large …"); }
 
-    let response = /* ai.chat(messages, model), cancel-aware */;
+    let outcome = /* ai.chat_ex(messages, model, input.think), cancel-aware */;
+    let response = outcome.content;
+    // outcome.thinking (a thinking model's trace) is appended to the turn's
+    // trace and handed to on_thinking; absent for every other model.
 
     let actions = parse_actions(&response);
     if actions.is_empty() {
@@ -351,20 +356,25 @@ Key behaviours:
 - A prompt over 200 000 characters logs a warning but still proceeds ("slim
   context" is a debugging aid, not a hard cap).
 - `on_step` is the callback that powers SSE `step` events and the dock status
-  line.
+  line; `on_thinking` carries the reasoning trace blocks (SSE `thinking`
+  events) of each model call when thinking is on.
 
 ### 4.2 The cancellation-aware model call
 
 ```rust
-let response = match &cancel {
+let outcome = match &cancel {
     Some(handle) => tokio::select! {
         biased;
         _ = handle.cancelled() => { interrupted = true; break; }
-        result = ai.chat(messages, model) => result?,
+        result = ai.chat_ex(messages, model, input.think) => result?,
     },
-    None => ai.chat(messages, model).await?,
+    None => ai.chat_ex(messages, model, input.think).await?,
 };
 ```
+
+`chat_ex` is the thinking-aware form of `chat`: it returns a `ChatOutcome`
+(`content` + optional `thinking`), and the runner folds every trace block into
+the turn's `thinking` while forwarding it to `on_thinking`.
 
 A local model that keeps generating blocks the next question, so a stopped turn
 must **abandon** the in-flight HTTP call, not merely ignore its answer.
@@ -629,6 +639,14 @@ per-request `ollama_model` overrides the persisted model for Ollama; the OpenAI
 client bakes its model in. `GET /api/ai/models` lists the resolved provider's
 models; `GET /api/ollama/models` reads Ollama's `/api/tags`.
 
+**Thinking.** `AiClient::chat_ex` carries Ollama's `think` switch and returns
+the reply plus its reasoning trace; `AiClient::thinking_support` reads the
+model's capability from Ollama's `/api/show` (cached per model in the SDK
+client). Before a `Some(true)` reaches Ollama it is checked against that
+capability and downgraded to the model default when the model cannot think, so
+the request never fails on it. `GET /api/ai/thinking` exposes the same check to
+the UI, which gates the chat's brain button and the voice-bar menu entry.
+
 ## 9. Skills markdown assembly
 
 The `## Tools` block is the concatenation of:
@@ -651,7 +669,7 @@ contribute nothing (no persona, skills or context lines).
 | [`src/services/agent_steps.rs`](../../src/services/agent_steps.rs) | Continuation prompt, `describe_tool_step`, voice/long-form blocks. |
 | [`src/services/agent_tools.rs`](../../src/services/agent_tools.rs) | Core built-in actions, `AgentContext`, active-trip fetch. |
 | [`src/services/agent_cancel.rs`](../../src/services/agent_cancel.rs) | `TurnRegistry` / stop semantics. |
-| [`src/services/ai.rs`](../../src/services/ai.rs) | Provider resolution. |
+| [`src/services/ai.rs`](../../src/services/ai.rs) | Provider resolution; `chat_ex` (answer + reasoning trace) and `thinking_support`. |
 | [`src/api/agent.rs`](../../src/api/agent.rs) | System-prompt assembly, JSON/SSE handlers, stop. |
 | [`src/plugins/registry.rs`](../../src/plugins/registry.rs) | Tool dispatch + activation gate. |
 | [`crates/shiny-plugin-sdk/src/tools.rs`](../../crates/shiny-plugin-sdk/src/tools.rs) | `parse_actions`, `strip_action_blocks`, `bridged`. |

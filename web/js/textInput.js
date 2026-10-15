@@ -11,6 +11,7 @@ const stopBtn = document.getElementById('compose-stop');
 // conversation. It is not moved around: field, send and stop live here always.
 const composer = document.getElementById('compose-composer');
 const sendBtn = document.getElementById('compose-send');
+const closeBtn = document.getElementById('compose-close-btn');
 
 let onSubmitCallback = null;
 let isOpen = false;
@@ -88,7 +89,7 @@ function renderMarkdown(text) {
   return escapeText(text);
 }
 
-function renderBubble(role, text) {
+function renderBubble(role, text, thinking = '') {
   if (!conversationEl) return null;
   const bubble = document.createElement('div');
   bubble.className = `compose-bubble compose-bubble--${role}`;
@@ -102,14 +103,84 @@ function renderBubble(role, text) {
     bubbleText.textContent = text || '';
   }
   bubble.appendChild(bubbleText);
-  // Bubbles go above the composer so the input stays last.
-  conversationEl.insertBefore(bubble, composer || null);
   if (role === 'assistant') {
+    // A saved reasoning trace folds above the answer, closed by default.
+    if (thinking) bubble.insertBefore(makeCot(thinking), bubbleText);
     syncImageBlocks(bubble);
     syncSongBlocks(bubble);
   }
+  // Bubbles go above the composer so the input stays last.
+  conversationEl.insertBefore(bubble, composer || null);
   scrollConversation();
   return bubble;
+}
+
+/* ── Waiting bubbles: the wheel + one live line ─────────────────────────────
+ * Every "the assistant is working" bubble is the same widget: the spinner the
+ * image/song placeholders use, next to one line of text. A pending answer
+ * starts with "Thinking…" and the line then swaps to the agent's live step
+ * (the same labels the voice bar shows in its pill) via the `agent:step`
+ * event. The image and song placeholders are the same widget with a fixed
+ * label — never a second, drifted copy of the markup.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+function makePendingBubble(labelText) {
+  if (!conversationEl) return null;
+  const bubble = document.createElement('div');
+  bubble.className = 'compose-bubble compose-bubble--assistant compose-pending';
+  const inner = document.createElement('div');
+  inner.className = 'compose-bubble-text';
+  const row = document.createElement('div');
+  row.className = 'compose-pending-row';
+  const spinner = document.createElement('span');
+  spinner.className = 'compose-spinner';
+  const label = document.createElement('span');
+  label.className = 'compose-pending-label';
+  label.textContent = labelText || '';
+  row.append(spinner, label);
+  inner.appendChild(row);
+  bubble.appendChild(inner);
+  conversationEl.insertBefore(bubble, composer || null);
+  scrollConversation();
+  return { bubble, label };
+}
+
+/** The wait is over: the bubble becomes a normal answer bubble. */
+function clearPendingRow(bubble) {
+  if (!bubble) return;
+  bubble.querySelector('.compose-pending-row')?.remove();
+  bubble.classList.remove('compose-pending');
+}
+
+/** The model's reasoning trace: a "Thinking" disclosure, closed by default so
+ *  it stays out of the way until the user opens it. */
+function makeCot(initial = '') {
+  const details = document.createElement('details');
+  details.className = 'compose-cot';
+  const summary = document.createElement('summary');
+  summary.className = 'compose-cot-summary';
+  summary.append(icon('ui/brain', { size: 13 }), document.createTextNode('Thinking'));
+  const body = document.createElement('div');
+  body.className = 'compose-cot-body';
+  body.textContent = initial;
+  details.append(summary, body);
+  return details;
+}
+
+/** Append one block of the reasoning trace, creating the disclosure on the
+ *  first block. Plain textNode/`textContent` — model output never parses. */
+function showThinking(text) {
+  if (!text) return;
+  if (!assistantBubble) startAssistantBubble();
+  if (!assistantBubble) return;
+  let details = assistantBubble.querySelector('.compose-cot');
+  if (!details) {
+    details = makeCot();
+    assistantBubble.insertBefore(details, assistantBubble.firstChild);
+  }
+  const body = details.querySelector('.compose-cot-body');
+  body.textContent = body.textContent ? `${body.textContent}\n\n${text}` : text;
+  scrollConversation();
 }
 
 function clearConversation() {
@@ -122,26 +193,14 @@ function clearConversation() {
 }
 
 function startAssistantBubble() {
-  assistantBubble = renderBubble('assistant', '…');
-  assistantBubble?.classList.add('is-thinking');
+  assistantBubble = makePendingBubble('Thinking…')?.bubble || null;
 }
 
 /** Reserve the spot where a generated image will land (spinner + label). */
 export function showImagePlaceholder() {
-  if (!conversationEl || imagePlaceholder) return;
-  const bubble = document.createElement('div');
-  bubble.className = 'compose-bubble compose-bubble--assistant compose-image-pending';
-  const inner = document.createElement('div');
-  inner.className = 'compose-bubble-text';
-  const spinner = document.createElement('span');
-  spinner.className = 'compose-image-spinner';
-  const label = document.createElement('span');
-  label.textContent = 'Painting your image — this can take a few minutes…';
-  inner.append(spinner, label);
-  bubble.appendChild(inner);
-  conversationEl.insertBefore(bubble, composer || null);
-  scrollConversation();
-  imagePlaceholder = bubble;
+  if (imagePlaceholder) return;
+  imagePlaceholder =
+    makePendingBubble('Painting your image — this can take a few minutes…')?.bubble || null;
 }
 
 export function clearImagePlaceholder() {
@@ -253,20 +312,9 @@ function fmtTime(secs) {
 
 /** Reserve the spot where the generated song will land (spinner + label). */
 export function showSongPlaceholder() {
-  if (!conversationEl || songPlaceholder) return;
-  const bubble = document.createElement('div');
-  bubble.className = 'compose-bubble compose-bubble--assistant compose-image-pending';
-  const inner = document.createElement('div');
-  inner.className = 'compose-bubble-text';
-  const spinner = document.createElement('span');
-  spinner.className = 'compose-image-spinner';
-  const label = document.createElement('span');
-  label.textContent = 'Composing your song — this can take several minutes…';
-  inner.append(spinner, label);
-  bubble.appendChild(inner);
-  conversationEl.insertBefore(bubble, composer || null);
-  scrollConversation();
-  songPlaceholder = bubble;
+  if (songPlaceholder) return;
+  songPlaceholder =
+    makePendingBubble('Composing your song — this can take several minutes…')?.bubble || null;
 }
 
 export function clearSongPlaceholder() {
@@ -403,8 +451,8 @@ function syncSongBlocks(bubble) {
 
 function streamAssistantBubble(text) {
   if (!assistantBubble) startAssistantBubble();
-  if (!text) return; // keep the "…" indicator until real text arrives
-  assistantBubble?.classList.remove('is-thinking');
+  if (!text) return; // keep the wheel + step line until real text arrives
+  clearPendingRow(assistantBubble);
   const t = assistantBubble?.querySelector('.compose-bubble-text');
   if (t) t.innerHTML = sanitizeHtml(renderMarkdown(text));
   if (assistantBubble) {
@@ -421,7 +469,7 @@ async function loadConversation() {
   if (!id) return;
   const entries = await loadConversationMessages(id).catch(() => []);
   for (const m of entries) {
-    renderBubble(m.role === 'user' ? 'user' : 'assistant', m.content);
+    renderBubble(m.role === 'user' ? 'user' : 'assistant', m.content, m.thinking || '');
   }
   scrollConversation();
 }
@@ -459,9 +507,29 @@ export function initTextInput(onSubmit) {
     else closeTextInput();
   });
 
+  // The live step line next to the wheel: the same labels the voice bar shows
+  // in its pill (dockStep re-broadcasts every step as `agent:step`).
+  window.addEventListener('agent:step', (e) => {
+    if (!isSending || !assistantBubble) return;
+    const msg = e?.detail?.message;
+    if (!msg) return;
+    const label = assistantBubble.querySelector('.compose-pending-label');
+    if (label && label.textContent !== msg) {
+      label.textContent = msg;
+      scrollConversation();
+    }
+  });
+
   stopBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     stopActiveTurn('button');
+  });
+
+  // Close is decisive: a running answer is stopped (the core records the
+  // interruption) before the panel slides away.
+  closeBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeChat();
   });
 
   // The send button submits the same way Enter does.
@@ -522,6 +590,13 @@ export function isComposeAwaiting() {
   return isSending;
 }
 
+/** Close the chat from anywhere (head button, voice-bar menu): a running
+ *  answer is stopped first, so the panel never outlives a half-live turn. */
+export function closeChat() {
+  if (isSending) stopActiveTurn('close');
+  closeTextInput(true);
+}
+
 export function isTextInputOpen() {
   return isOpen;
 }
@@ -548,6 +623,9 @@ async function submitTextInput() {
 
   try {
     await onSubmitCallback?.(text, {
+      onThinking: (chunk) => {
+        showThinking(chunk);
+      },
       onStream: (partial) => {
         streamAssistantBubble(partial);
       },
@@ -563,7 +641,7 @@ async function submitTextInput() {
         // Keep whatever arrived; the core has recorded the interruption, so
         // the thread stays coherent for the next question.
         if (assistantBubble) {
-          assistantBubble.classList.remove('is-thinking');
+          clearPendingRow(assistantBubble);
           const t = assistantBubble.querySelector('.compose-bubble-text');
           if (t && !t.textContent.trim()) t.textContent = '';
           assistantBubble.classList.add('is-stopped');

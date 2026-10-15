@@ -41,6 +41,7 @@ import { initLinkRouter } from './linkRouter.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
+import { initThinkToggle } from './thinkToggle.js';
 import { initTouchBar } from './touchbar.js';
 import { reloadUserSession } from './session.js';
 import { loadUserPreferences, getWakeWord } from './preferences.js';
@@ -126,6 +127,7 @@ async function initApp() {
   initArtifactDock();
   initTextInput(submitTextToAgent);
   initChatHistory(); // core chat history panel (new chat / resume old chats)
+  initThinkToggle(); // brain button: Ollama thinking on/off, capability-gated
   initHudClock(); // core chrome — works with zero plugins
   initClockMenu(); // clock popover: location time + the calendar month
   initWeatherMenu(); // weather popover: current + the next five days
