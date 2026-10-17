@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Taulukkolaskin — taulukot tallennetaan avoimina soluruudukoina ja niitä voi muokata Calc-ikkunassa",
+  "plugin.calc.meta.summary": "Calc: luo, muokkaa ja laske taulukoilla",
+  "plugin.calc.meta.category": "Toimisto",
+
+  "plugin.calc.bar.spreadsheets": "Taulukot",
+
+  "plugin.calc.toolbar.newSheet": "Uusi taulukko",
+  "plugin.calc.toolbar.importOds": "Tuo .ods",
+  "plugin.calc.toolbar.importCsv": "Tuo CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Tallenna Asiakirjat-kansioon",
+  "plugin.calc.toolbar.saveNow": "Tallenna nyt",
+  "plugin.calc.toolbar.deleteSheet": "Poista taulukko",
+
+  "plugin.calc.menu.noSheets": "Ei vielä taulukoita",
+
+  "plugin.calc.sheet.untitled": "Nimetön",
+  "plugin.calc.sheet.importedCsv": "Tuotu CSV",
+
+  "plugin.calc.formula.placeholder": "Arvo tai kaava (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Tallennetaan…",
+  "plugin.calc.status.dirty": "Tallentamattomia muutoksia",
+  "plugin.calc.status.saved.one": "Tallennettu {time} · {count} solu",
+  "plugin.calc.status.saved.other": "Tallennettu {time} · {count} solua",
+
+  "plugin.calc.dialog.delete": "Poistetaanko \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Tallennus epäonnistui",
+  "plugin.calc.toast.openFailed": "Taulukkoa ei voitu avata",
+  "plugin.calc.toast.createFailed": "Taulukkoa ei voitu luoda",
+  "plugin.calc.toast.deleteFailed": "Taulukkoa ei voitu poistaa",
+  "plugin.calc.toast.imported": "Tuotu {name}",
+  "plugin.calc.toast.importOdsFailed": "Tuonti epäonnistui — onko tämä kelvollinen .ods-tiedosto?",
+  "plugin.calc.toast.importCsvFailed": "Tuonti epäonnistui — onko tämä kelvollinen CSV-tiedosto?",
+  "plugin.calc.toast.openFileFailed": "Tiedostoa ei voitu avata"
+}

@@ -1,0 +1,30 @@
+{
+  "plugin.terminal.meta.description": "Pravi Linux terminal unutar aplikacije — prijavna ljuska temeljena na PTY-ju u vlastitom prozoru",
+  "plugin.terminal.meta.summary": "Terminal: prava ljuska preko PTY-ja, prikazana pomoću xterm.js",
+  "plugin.terminal.meta.category": "Sustav",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Nova kartica",
+  "plugin.terminal.tab.close": "Zatvori {name}",
+  "plugin.terminal.tabs.label": "Kartice terminala",
+
+  "plugin.terminal.status.starting": "pokretanje terminala…",
+  "plugin.terminal.status.connecting": "povezivanje…",
+  "plugin.terminal.status.reconnecting": "ponovno povezivanje…",
+  "plugin.terminal.status.connected": "povezano",
+  "plugin.terminal.status.startFailed": "nije moguće pokrenuti ljusku",
+  "plugin.terminal.status.expired": "sesija je istekla — prijavite se ponovno",
+  "plugin.terminal.status.xtermFailed": "nije moguće učitati xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: najviše {count} kartica",
+  "plugin.terminal.toast.tabLimit.few": "Terminal: najviše {count} kartice",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: najviše {count} kartica",
+  "plugin.terminal.toast.startFailed": "Terminal: nije moguće pokrenuti ljusku",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js se nije uspio učitati",
+  "plugin.terminal.toast.clipboardUnavailable": "Međuspremnik nije dostupan",
+
+  "plugin.terminal.ctx.copy": "Kopiraj",
+  "plugin.terminal.ctx.paste": "Zalijepi",
+  "plugin.terminal.ctx.clearScrollback": "Očisti povijest ispisa",
+  "plugin.terminal.ctx.closeTab": "Zatvori karticu"
+}

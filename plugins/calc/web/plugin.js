@@ -19,6 +19,7 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const CALC_PLUGIN = 'calc';
@@ -85,7 +86,7 @@ async function fetchSheet(id) {
   return res?.data;
 }
 
-async function createSheet(title = 'Untitled') {
+async function createSheet(title = t('plugin.calc.sheet.untitled', null, 'Untitled')) {
   const res = await apiFetch('/api/spreadsheets', {
     method: 'POST',
     body: JSON.stringify({ title }),
@@ -375,16 +376,16 @@ function updateGlow() {
 function setStatus(mode) {
   if (!statusEl) return;
   const now = new Date();
-  const t = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (mode === 'saving') {
-    statusEl.textContent = 'Saving…';
+    statusEl.textContent = t('plugin.calc.status.saving', null, 'Saving…');
     saveDot?.classList.add('is-active');
   } else if (mode === 'dirty') {
-    statusEl.textContent = 'Unsaved changes';
+    statusEl.textContent = t('plugin.calc.status.dirty', null, 'Unsaved changes');
     saveDot?.classList.add('is-active');
   } else {
     const n = current?.cells.size || 0;
-    statusEl.textContent = `Saved ${t} · ${n} ${n === 1 ? 'cell' : 'cells'}`;
+    statusEl.textContent = tp('plugin.calc.status.saved', n, { time });
     saveDot?.classList.remove('is-active');
   }
 }
@@ -410,7 +411,7 @@ async function persist() {
   } catch (e) {
     dirty = true;
     setStatus('dirty');
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
@@ -458,7 +459,7 @@ async function openSheet(sheet) {
     setStatus('saved');
     updateGlow();
   } catch (e) {
-    toast(e.message || 'Could not open spreadsheet', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.openFailed', null, 'Could not open spreadsheet'), { type: 'error' });
   }
 }
 
@@ -474,13 +475,13 @@ async function newSheet() {
     await refreshSheets();
     await openSheet(created);
   } catch (e) {
-    toast(e.message || 'Could not create spreadsheet', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.createFailed', null, 'Could not create spreadsheet'), { type: 'error' });
   }
 }
 
 async function removeCurrent() {
   if (!current) return;
-  if (!window.confirm(`Delete "${current.title}"?`)) return;
+  if (!window.confirm(t('plugin.calc.dialog.delete', { title: current.title }, 'Delete "{title}"?'))) return;
   try {
     await deleteSheet(current.id);
     current = null;
@@ -488,7 +489,7 @@ async function removeCurrent() {
     await openNewest();
     updateGlow();
   } catch (e) {
-    toast(e.message || 'Could not delete spreadsheet', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.deleteFailed', null, 'Could not delete spreadsheet'), { type: 'error' });
   }
 }
 
@@ -534,7 +535,7 @@ function renderSheetMenuItems() {
   if (!sheets.length) {
     const empty = document.createElement('div');
     empty.className = 'calc-sheet-menu-empty';
-    empty.textContent = 'No spreadsheets yet';
+    empty.textContent = t('plugin.calc.menu.noSheets', null, 'No spreadsheets yet');
     sheetMenuPopup.appendChild(empty);
   } else {
     sheets.forEach((sheet) => {
@@ -585,11 +586,11 @@ function renderSheetMenuItems() {
     });
     foot.appendChild(item);
   };
-  footItem('ui/plus', 'New spreadsheet', false, () => void newSheet());
-  footItem('ui/download', 'Import .ods', false, pickOdsFile);
-  footItem('ui/download', 'Import CSV', false, pickCsvFile);
-  footItem('ui/save', 'Save to Documents', false, () => void exportOds());
-  footItem('ui/trash', 'Delete spreadsheet', true, () => void removeCurrent());
+  footItem('ui/plus', t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), false, () => void newSheet());
+  footItem('ui/download', t('plugin.calc.toolbar.importOds', null, 'Import .ods'), false, pickOdsFile);
+  footItem('ui/download', t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), false, pickCsvFile);
+  footItem('ui/save', t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), false, () => void exportOds());
+  footItem('ui/trash', t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), true, () => void removeCurrent());
   sheetMenuPopup.appendChild(foot);
 }
 
@@ -633,11 +634,11 @@ async function importOds(file) {
   form.append('file', file);
   try {
     await apiFetch('/api/spreadsheets/import', { method: 'POST', body: form });
-    toast(`Imported ${file.name}`, { type: 'info' });
+    toast(t('plugin.calc.toast.imported', { name: file.name }, 'Imported {name}'), { type: 'info' });
     await refreshSheets();
     await openNewest();
   } catch (e) {
-    toast(e.message || 'Import failed — is this a valid .ods file?', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.importOdsFailed', null, 'Import failed — is this a valid .ods file?'), { type: 'error' });
   }
 }
 
@@ -650,7 +651,7 @@ async function exportOds() {
     );
     await saveOrDownload(blob, { name: `${current.title || 'spreadsheet'}.ods`, dir: 'Documents', app: 'Calc' });
   } catch (e) {
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
@@ -700,13 +701,13 @@ async function importCsv(file) {
         cells[cellRef(r + 1, c)] = v;
       });
     });
-    const created = await createSheet(file.name.replace(/\.csv$/i, '') || 'Imported CSV');
+    const created = await createSheet(file.name.replace(/\.csv$/i, '') || t('plugin.calc.sheet.importedCsv', null, 'Imported CSV'));
     await saveSheet(created.id, created.title, cells);
     await refreshSheets();
     await openSheet({ ...created, cells });
-    toast(`Imported ${file.name}`, { type: 'info' });
+    toast(t('plugin.calc.toast.imported', { name: file.name }, 'Imported {name}'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Import failed — is this a valid CSV file?', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.importCsvFailed', null, 'Import failed — is this a valid CSV file?'), { type: 'error' });
   }
 }
 
@@ -892,7 +893,7 @@ export function mountCalcTile() {
   sheetMenuBtn.className = 'calc-sheet-btn';
   sheetMenuBtn.setAttribute('aria-haspopup', 'menu');
   sheetMenuBtn.setAttribute('aria-expanded', 'false');
-  sheetMenuBtn.title = 'Spreadsheets';
+  sheetMenuBtn.title = t('plugin.calc.bar.spreadsheets', null, 'Spreadsheets');
   const sheetIcon = document.createElement('span');
   sheetIcon.className = 'calc-sheet-btn-icon';
   sheetMenuBtn.appendChild(sheetIcon);
@@ -906,7 +907,7 @@ export function mountCalcTile() {
   titleInput = document.createElement('input');
   titleInput.className = 'calc-title';
   titleInput.type = 'text';
-  titleInput.placeholder = 'Untitled';
+  titleInput.placeholder = t('plugin.calc.sheet.untitled', null, 'Untitled');
   titleInput.maxLength = 120;
   titleInput.autocomplete = 'off';
   titleInput.addEventListener('change', () => {
@@ -930,11 +931,11 @@ export function mountCalcTile() {
   bar.append(
     sheetMenuBtn,
     titleInput,
-    toolBtn('ui/plus', 'New spreadsheet', () => void newSheet()),
-    toolBtn('ui/download', 'Import .ods', pickOdsFile),
-    toolBtn('ui/save', 'Save to Documents', () => void exportOds()),
-    toolBtn('ui/save', 'Save now', () => void persist()),
-    toolBtn('ui/trash', 'Delete spreadsheet', () => void removeCurrent(), true),
+    toolBtn('ui/plus', t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), () => void newSheet()),
+    toolBtn('ui/download', t('plugin.calc.toolbar.importOds', null, 'Import .ods'), pickOdsFile),
+    toolBtn('ui/save', t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), () => void exportOds()),
+    toolBtn('ui/save', t('plugin.calc.toolbar.saveNow', null, 'Save now'), () => void persist()),
+    toolBtn('ui/trash', t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), () => void removeCurrent(), true),
     saveDot,
   );
   tileEl.appendChild(bar);
@@ -948,7 +949,7 @@ export function mountCalcTile() {
   formulaInputEl = document.createElement('input');
   formulaInputEl.className = 'calc-formula-input';
   formulaInputEl.type = 'text';
-  formulaInputEl.placeholder = 'Value or formula (=SUM(A1:A5))';
+  formulaInputEl.placeholder = t('plugin.calc.formula.placeholder', null, 'Value or formula (=SUM(A1:A5))');
   formulaInputEl.autocomplete = 'off';
   formulaInputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -1096,7 +1097,7 @@ async function importFromFiles(path, name) {
     const file = await fileFromHome(path, name, 'application/vnd.oasis.opendocument.spreadsheet');
     await importOds(file);
   } catch (e) {
-    toast(e.message || 'Could not open file', { type: 'error' });
+    toast(e.message || t('plugin.calc.toast.openFileFailed', null, 'Could not open file'), { type: 'error' });
   }
 }
 
@@ -1119,11 +1120,11 @@ export function wireCalcEvents() {
 export function calcContextMenu(ctx) {
   const hasSheet = !!current;
   return [
-    { type: 'item', label: 'New spreadsheet', icon: 'ui/plus', onClick: () => void newSheet() },
-    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasSheet || !dirty, onClick: () => void persist() },
-    { type: 'item', label: 'Save to Documents', icon: 'ui/save', disabled: !hasSheet, onClick: () => void exportOds() },
+    { type: 'item', label: t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), icon: 'ui/plus', onClick: () => void newSheet() },
+    { type: 'item', label: t('plugin.calc.toolbar.saveNow', null, 'Save now'), icon: 'ui/save', disabled: !hasSheet || !dirty, onClick: () => void persist() },
+    { type: 'item', label: t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), icon: 'ui/save', disabled: !hasSheet, onClick: () => void exportOds() },
     { type: 'separator' },
-    { type: 'item', label: 'Delete spreadsheet', icon: 'ui/trash', danger: true, disabled: !hasSheet, onClick: () => void removeCurrent() },
+    { type: 'item', label: t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), icon: 'ui/trash', danger: true, disabled: !hasSheet, onClick: () => void removeCurrent() },
   ];
 }
 

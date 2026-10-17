@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Επιστημονικός υπολογιστής — αξιολόγηση αριθμητικών και επιστημονικών παραστάσεων στο παράθυρο του Υπολογιστή",
+  "plugin.calculator.meta.summary": "Υπολογιστής: βασικά και επιστημονικά μαθηματικά",
+  "plugin.calculator.meta.category": "Γραφείο",
+
+  "plugin.calculator.display.error": "Σφάλμα",
+
+  "plugin.calculator.toolbar.history": "Ιστορικό",
+  "plugin.calculator.toolbar.scientific": "Επιστημονική λειτουργία",
+  "plugin.calculator.toolbar.clearHistory": "Εκκαθάριση ιστορικού",
+
+  "plugin.calculator.menu.equals": "Ίσον",
+  "plugin.calculator.menu.clearAll": "Εκκαθάριση όλων",
+
+  "plugin.calculator.history.reuse": "Επαναχρήση αυτού του αποτελέσματος",
+
+  "plugin.calculator.empty.noHistory": "Δεν υπάρχει ιστορικό",
+  "plugin.calculator.empty.noHistoryBody": "Οι υπολογισμοί που εκτελείτε εδώ ή ζητάτε από την AI εμφανίζονται παρακάτω.",
+
+  "plugin.calculator.toast.evaluateFailed": "Δεν ήταν δυνατή η αξιολόγηση",
+  "plugin.calculator.toast.historyFailed": "Δεν ήταν δυνατή η φόρτωση του ιστορικού",
+  "plugin.calculator.toast.historyCleared": "Το ιστορικό εκκαθαρίστηκε",
+  "plugin.calculator.toast.clearFailed": "Δεν ήταν δυνατή η εκκαθάριση του ιστορικού"
+}

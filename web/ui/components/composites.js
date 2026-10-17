@@ -8,6 +8,7 @@
 import { icon } from '../icon.js';
 import { button } from './button.js';
 import { stat } from './data.js';
+import { t } from '../../js/i18n.js';
 
 /* ── Artifact → themed icon mapping ─────────────────────────── */
 
@@ -27,12 +28,18 @@ const THEME_ICONS = {
   culture: 'artifacts/culture',
 };
 
-const THEME_LABELS = {
-  overview: 'Journey',
-  nightlife: 'After dark',
-  food: 'Eat & drink',
-  culture: 'Culture',
+const THEME_LABEL_KEYS = {
+  overview: 'artifact.theme.overview',
+  nightlife: 'artifact.theme.nightlife',
+  food: 'artifact.theme.food',
+  culture: 'artifact.theme.culture',
 };
+
+/** The catalogue label for an artifact theme, or '' when it has none. */
+function themeLabel(theme) {
+  const key = THEME_LABEL_KEYS[theme];
+  return key ? t(key) : '';
+}
 
 const PLAN_TYPES = new Set(['travel_plan', 'tour_plan']);
 
@@ -58,9 +65,8 @@ export function iconForArtifact(item) {
 
 export function labelForArtifact(item) {
   const type = item?.type || item?.artifact_type || 'site_info';
-  return item?.theme && THEME_LABELS[item.theme]
-    ? `${THEME_LABELS[item.theme]}: ${item.title || type}`
-    : (item?.title || type);
+  const theme = themeLabel(item?.theme);
+  return theme ? `${theme}: ${item.title || type}` : (item?.title || type);
 }
 
 /* ── Dock button ────────────────────────────────────────────── */
@@ -114,7 +120,7 @@ export function insightCard(o = {}) {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'ui-insight-close';
-    close.setAttribute('aria-label', 'Dismiss');
+    close.setAttribute('aria-label', t('common.dismiss'));
     close.textContent = '×';
     close.addEventListener('click', () => o.onDismiss(el));
     el.appendChild(close);
@@ -171,7 +177,7 @@ function normalizeDays(artifact) {
       const story = sec.value?.trim() || '';
       days.push({
         day: parseInt(m[2], 10),
-        title: sec.label.replace(dayRe, '').trim() || `Day ${m[2]}`,
+        title: sec.label.replace(dayRe, '').trim() || t('artifact.day', { n: m[2] }),
         story: isBulletList(story) ? null : story,
         items: isBulletList(story) ? bulletItems(story) : [],
       });
@@ -185,7 +191,8 @@ function normalizeDays(artifact) {
 }
 
 function eyebrowFor(artifact) {
-  if (artifact.theme && THEME_LABELS[artifact.theme]) return THEME_LABELS[artifact.theme];
+  const theme = themeLabel(artifact.theme);
+  if (theme) return theme;
   return (artifact.type || 'guide').replace(/_/g, ' ');
 }
 
@@ -218,8 +225,8 @@ function hero(artifact) {
     const stats = document.createElement('div');
     stats.className = 'ui-artifact-stats';
     stats.append(
-      stat({ value: String(Math.round(artifact.route.distance_km)), unit: 'km', label: 'Distance' }),
-      stat({ value: String(Math.round(artifact.route.duration_min)), unit: 'min', label: 'Drive' }),
+      stat({ value: String(Math.round(artifact.route.distance_km)), unit: 'km', label: t('artifact.distance') }),
+      stat({ value: String(Math.round(artifact.route.duration_min)), unit: 'min', label: t('artifact.drive') }),
     );
     el.appendChild(stats);
   }
@@ -240,7 +247,7 @@ function dayBlock(day, index) {
   body.className = 'ui-artifact-day-body';
   const title = document.createElement('h2');
   title.className = 'ui-artifact-day-title';
-  title.textContent = day.title || `Day ${day.day}`;
+  title.textContent = day.title || t('artifact.day', { n: day.day });
   body.appendChild(title);
 
   if (day.story) {
@@ -289,7 +296,7 @@ function buildBody(artifact, body) {
 
   const days = normalizeDays(artifact);
   if (days.length) {
-    if (isPlan) body.appendChild(sectionHead(days.length === 1 ? 'Your day' : 'Day by day'));
+    if (isPlan) body.appendChild(sectionHead(days.length === 1 ? t('artifact.yourDay') : t('artifact.dayByDay')));
     const list = document.createElement('div');
     list.className = 'ui-artifact-days';
     days.forEach((day, i) => list.appendChild(dayBlock(day, i)));
@@ -334,7 +341,7 @@ export function artifactPanel(artifact, o = {}) {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'ui-artifact-close glass-blur';
-    close.setAttribute('aria-label', 'Close');
+    close.setAttribute('aria-label', t('common.close'));
     close.textContent = '×';
     close.addEventListener('click', o.onClose);
     el.appendChild(close);
@@ -358,7 +365,7 @@ export function artifactPanel(artifact, o = {}) {
   // for and could not explain.
   if (o.onNavigate && isMapArtifact(artifact)) {
     actions.appendChild(button({
-      label: artifact.coordinates ? 'Show route on map' : 'Map',
+      label: artifact.coordinates ? t('artifact.showRoute') : t('artifact.map'),
       variant: 'ghost',
       icon: 'artifacts/route',
       onClick: () => o.onNavigate(artifact),

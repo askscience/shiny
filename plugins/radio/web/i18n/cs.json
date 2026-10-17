@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetové rádio přes Radio Browser — vyhledávejte stanice a přehrávejte je v okně Rádio",
+  "plugin.radio.meta.summary": "Internetové rádio: hledání a přehrávání stanic (Radio Browser)",
+  "plugin.radio.meta.category": "Média",
+
+  "plugin.radio.notify.nowPlaying": "Právě hraje",
+  "plugin.radio.toast.streamRefused": "Stream se odmítl přehrát — zkuste jinou stanici",
+
+  "plugin.radio.status.pickStation": "Vyberte stanici",
+  "plugin.radio.status.streaming": "Streamuji",
+
+  "plugin.radio.empty.noStations": "Nenalezeny žádné stanice",
+  "plugin.radio.empty.noMatch": "Nic neodpovídá “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser není dostupný",
+  "plugin.radio.error.tryAgain": "Zkuste to za chvíli znovu",
+
+  "plugin.radio.fallback.station": "Stanice",
+  "plugin.radio.search.placeholder": "Stanice nebo žánry…",
+
+  "plugin.radio.menu.play": "Přehrát",
+  "plugin.radio.menu.pause": "Pozastavit",
+  "plugin.radio.menu.stop": "Zastavit",
+  "plugin.radio.menu.refresh": "Obnovit stanice"
+}

@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Presentations",
+  "plugin.impress.toolbar.titlePlaceholder": "Untitled",
+  "plugin.impress.toolbar.theme": "Theme",
+  "plugin.impress.toolbar.present": "Present",
+  "plugin.impress.toolbar.newDeck": "New presentation",
+  "plugin.impress.toolbar.importOdp": "Import .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Save to Documents",
+  "plugin.impress.toolbar.saveNow": "Save now",
+  "plugin.impress.toolbar.deleteDeck": "Delete presentation",
+
+  "plugin.impress.menu.empty": "No presentations yet",
+  "plugin.impress.menu.newDeck": "New presentation",
+  "plugin.impress.menu.importOdp": "Import .odp",
+  "plugin.impress.menu.saveToDocuments": "Save to Documents",
+  "plugin.impress.menu.deleteDeck": "Delete presentation",
+
+  "plugin.impress.ctx.newDeck": "New presentation",
+  "plugin.impress.ctx.addSlide": "Add slide",
+  "plugin.impress.ctx.saveNow": "Save now",
+  "plugin.impress.ctx.present": "Present",
+  "plugin.impress.ctx.stopPresenting": "Stop presenting",
+  "plugin.impress.ctx.deleteDeck": "Delete presentation",
+
+  "plugin.impress.status.saving": "Saving…",
+  "plugin.impress.status.unsaved": "Unsaved changes",
+  "plugin.impress.status.saved.one": "Saved {time} · {count} slide",
+  "plugin.impress.status.saved.other": "Saved {time} · {count} slides",
+
+  "plugin.impress.empty.noDeck": "No presentation",
+  "plugin.impress.empty.noDeckBody": "Create one, or ask the AI to build a deck",
+
+  "plugin.impress.inspector.layout": "Layout",
+  "plugin.impress.inspector.transition": "Transition",
+  "plugin.impress.inspector.bullets": "Bullets",
+  "plugin.impress.inspector.speakerNotes": "Speaker notes",
+  "plugin.impress.inspector.hint": "Click any text on the slide to edit it directly.",
+  "plugin.impress.inspector.applyAll": "Apply this transition and bullet build to every slide",
+  "plugin.impress.inspector.applyAllLabel": "Apply to all slides",
+
+  "plugin.impress.ops.addSlide": "Add slide",
+  "plugin.impress.ops.moveUp": "Move up",
+  "plugin.impress.ops.moveDown": "Move down",
+  "plugin.impress.ops.deleteSlide": "Delete slide",
+
+  "plugin.impress.transition.none": "None",
+  "plugin.impress.transition.fade": "Fade",
+  "plugin.impress.transition.slide": "Slide",
+  "plugin.impress.transition.push": "Push",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "All at once",
+  "plugin.impress.reveal.bullets": "One by one",
+
+  "plugin.impress.slide.addText": "Add text",
+  "plugin.impress.slide.addTitle": "Add a title",
+  "plugin.impress.slide.addSubtitle": "Add a subtitle",
+  "plugin.impress.slide.attribution": "Attribution",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Back to the editor",
+  "plugin.impress.present.fullScreen": "Full screen",
+  "plugin.impress.present.exitFullScreen": "Exit full screen",
+  "plugin.impress.present.blocked": "Full screen was blocked by the browser",
+
+  "plugin.impress.dialog.deleteDeck": "Delete \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Save failed",
+  "plugin.impress.toast.openFailed": "Could not open presentation",
+  "plugin.impress.toast.createFailed": "Could not create presentation",
+  "plugin.impress.toast.deleteFailed": "Could not delete presentation",
+  "plugin.impress.toast.imported": "Imported {name}",
+  "plugin.impress.toast.importFailed": "Import failed — is this a valid .odp file?",
+  "plugin.impress.toast.openFileFailed": "Could not open file",
+
+  "plugin.impress.meta.description": "Presentation builder — decks stored as slides and exported as open .odp files",
+  "plugin.impress.meta.summary": "Impress: build, edit and present OpenDocument (.odp) slide decks",
+  "plugin.impress.meta.category": "Office"
+}

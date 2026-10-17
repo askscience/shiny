@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalender — planeeri, loetle ja korralda sündmusi Kalendri aknas",
+  "plugin.calendar.meta.summary": "Kalender: sündmuste planeerimine ja korraldamine",
+  "plugin.calendar.meta.category": "Kontor",
+
+  "plugin.calendar.month.january": "Jaanuar",
+  "plugin.calendar.month.february": "Veebruar",
+  "plugin.calendar.month.march": "Märts",
+  "plugin.calendar.month.april": "Aprill",
+  "plugin.calendar.month.may": "Mai",
+  "plugin.calendar.month.june": "Juuni",
+  "plugin.calendar.month.july": "Juuli",
+  "plugin.calendar.month.august": "August",
+  "plugin.calendar.month.september": "September",
+  "plugin.calendar.month.october": "Oktoober",
+  "plugin.calendar.month.november": "November",
+  "plugin.calendar.month.december": "Detsember",
+
+  "plugin.calendar.grid.sun": "P",
+  "plugin.calendar.grid.mon": "E",
+  "plugin.calendar.grid.tue": "T",
+  "plugin.calendar.grid.wed": "K",
+  "plugin.calendar.grid.thu": "N",
+  "plugin.calendar.grid.fri": "R",
+  "plugin.calendar.grid.sat": "L",
+
+  "plugin.calendar.event.allDay": "Kogu päev",
+
+  "plugin.calendar.toolbar.previousMonth": "Eelmine kuu",
+  "plugin.calendar.toolbar.nextMonth": "Järgmine kuu",
+  "plugin.calendar.toolbar.today": "Täna",
+  "plugin.calendar.toolbar.newEvent": "Uus sündmus",
+
+  "plugin.calendar.ctx.refresh": "Värskenda",
+
+  "plugin.calendar.detail.edit": "Muuda",
+  "plugin.calendar.detail.delete": "Kustuta",
+
+  "plugin.calendar.empty.noEvents": "Sündmusi pole",
+  "plugin.calendar.empty.noEventsBody": "Midagi pole planeeritud. Lisa sündmus või palu AI-l see planeerida.",
+
+  "plugin.calendar.dialog.title": "Sündmus",
+  "plugin.calendar.dialog.editTitle": "Muuda sündmust",
+  "plugin.calendar.dialog.titleField": "Pealkiri",
+  "plugin.calendar.dialog.titlePlaceholder": "nt meeskonna hommikukoosolek",
+  "plugin.calendar.dialog.dateField": "Kuupäev",
+  "plugin.calendar.dialog.startTimeField": "Algusaeg",
+  "plugin.calendar.dialog.endTimeField": "Lõpuaeg",
+  "plugin.calendar.dialog.locationField": "Asukoht",
+  "plugin.calendar.dialog.locationPlaceholder": "Asukoht (valikuline)",
+  "plugin.calendar.dialog.notesField": "Märkmed",
+  "plugin.calendar.dialog.notesPlaceholder": "Märkmed (valikuline)",
+  "plugin.calendar.dialog.cancel": "Loobu",
+  "plugin.calendar.dialog.save": "Salvesta sündmus",
+
+  "plugin.calendar.toast.titleRequired": "Pealkiri on nõutav",
+  "plugin.calendar.toast.dateRequired": "Kuupäev on nõutav",
+  "plugin.calendar.toast.updated": "Sündmus uuendatud",
+  "plugin.calendar.toast.scheduled": "Sündmus planeeritud",
+  "plugin.calendar.toast.deleted": "Sündmus kustutatud",
+  "plugin.calendar.toast.loadFailed": "Sündmusi ei saanud laadida",
+  "plugin.calendar.toast.saveFailed": "Sündmust ei saanud salvestada",
+  "plugin.calendar.toast.deleteFailed": "Sündmust ei saanud kustutada",
+
+  "plugin.calendar.confirm.deleteEvent": "Kustutada \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Sündmus algab peagi"
+}

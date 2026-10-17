@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Vetenskaplig räknare — beräkna aritmetiska och vetenskapliga uttryck i Kalkylator-fönstret",
+  "plugin.calculator.meta.summary": "Kalkylator: grundläggande och vetenskaplig matematik",
+  "plugin.calculator.meta.category": "Kontor",
+
+  "plugin.calculator.display.error": "Fel",
+
+  "plugin.calculator.toolbar.history": "Historik",
+  "plugin.calculator.toolbar.scientific": "Vetenskaplig",
+  "plugin.calculator.toolbar.clearHistory": "Rensa historiken",
+
+  "plugin.calculator.menu.equals": "Lika med",
+  "plugin.calculator.menu.clearAll": "Rensa allt",
+
+  "plugin.calculator.history.reuse": "Återanvänd resultatet",
+
+  "plugin.calculator.empty.noHistory": "Ingen historik",
+  "plugin.calculator.empty.noHistoryBody": "Beräkningar du gör här eller ber AI:n om visas nedan.",
+
+  "plugin.calculator.toast.evaluateFailed": "Kunde inte beräkna",
+  "plugin.calculator.toast.historyFailed": "Kunde inte läsa in historiken",
+  "plugin.calculator.toast.historyCleared": "Historiken rensad",
+  "plugin.calculator.toast.clearFailed": "Kunde inte rensa historiken"
+}

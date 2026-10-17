@@ -68,17 +68,30 @@ JSON response (`AgentResponse`):
 `type`:
 
 ```jsonc
-{ "type": "step", "message": "Searching the web…" }
+{ "type": "step", "message": "Searching the web…", "key": "step.searchingWeb" }
 { "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
 { "type": "done", "data": { /* the full AgentResponse */ } }
 { "type": "error", "message": "…" }
 ```
+
+A `step` carries the catalogue `key` (and `params` when the message has
+placeholders) next to the English `message`; the client renders
+`t(key, params, message)` so the bubble follows the user's interface language
+(see [interface language](../core/i18n.md)). Plugin tools that do not opt in
+send `message` only.
 
 The stream sends keep-alives. The final `done` carries everything the JSON mode
 returns; `AgentResponse.thinking` holds the turn's full trace (saved with the
 reply, so the chat can fold it under the answer again later).
 
 No thinking model — or thinking off — means no `thinking` events.
+
+### Language
+
+Send `Accept-Language: <code>` (the frontend sends the user's interface
+language on every request). Server-produced user-facing text — error messages,
+plugin descriptions in `/api/plugins` — is translated for that language when a
+catalogue ships it, and stays English otherwise.
 
 ### System prompt assembly
 

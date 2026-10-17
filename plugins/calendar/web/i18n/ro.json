@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Calendar — planifică, listează și organizează evenimente în fereastra Calendar",
+  "plugin.calendar.meta.summary": "Calendar: planifică și organizează evenimente",
+  "plugin.calendar.meta.category": "Birou",
+
+  "plugin.calendar.month.january": "Ianuarie",
+  "plugin.calendar.month.february": "Februarie",
+  "plugin.calendar.month.march": "Martie",
+  "plugin.calendar.month.april": "Aprilie",
+  "plugin.calendar.month.may": "Mai",
+  "plugin.calendar.month.june": "Iunie",
+  "plugin.calendar.month.july": "Iulie",
+  "plugin.calendar.month.august": "August",
+  "plugin.calendar.month.september": "Septembrie",
+  "plugin.calendar.month.october": "Octombrie",
+  "plugin.calendar.month.november": "Noiembrie",
+  "plugin.calendar.month.december": "Decembrie",
+
+  "plugin.calendar.grid.sun": "Dum",
+  "plugin.calendar.grid.mon": "Lun",
+  "plugin.calendar.grid.tue": "Mar",
+  "plugin.calendar.grid.wed": "Mie",
+  "plugin.calendar.grid.thu": "Joi",
+  "plugin.calendar.grid.fri": "Vin",
+  "plugin.calendar.grid.sat": "Sâm",
+
+  "plugin.calendar.event.allDay": "Toată ziua",
+
+  "plugin.calendar.toolbar.previousMonth": "Luna precedentă",
+  "plugin.calendar.toolbar.nextMonth": "Luna următoare",
+  "plugin.calendar.toolbar.today": "Astăzi",
+  "plugin.calendar.toolbar.newEvent": "Eveniment nou",
+
+  "plugin.calendar.ctx.refresh": "Reîmprospătează",
+
+  "plugin.calendar.detail.edit": "Editează",
+  "plugin.calendar.detail.delete": "Șterge",
+
+  "plugin.calendar.empty.noEvents": "Niciun eveniment",
+  "plugin.calendar.empty.noEventsBody": "Nimic programat. Adaugă un eveniment sau cere AI-ului să programeze unul.",
+
+  "plugin.calendar.dialog.title": "Eveniment",
+  "plugin.calendar.dialog.editTitle": "Editează evenimentul",
+  "plugin.calendar.dialog.titleField": "Titlu",
+  "plugin.calendar.dialog.titlePlaceholder": "de ex. Ședință de echipă",
+  "plugin.calendar.dialog.dateField": "Dată",
+  "plugin.calendar.dialog.startTimeField": "Ora de început",
+  "plugin.calendar.dialog.endTimeField": "Ora de sfârșit",
+  "plugin.calendar.dialog.locationField": "Locație",
+  "plugin.calendar.dialog.locationPlaceholder": "Locație (opțional)",
+  "plugin.calendar.dialog.notesField": "Note",
+  "plugin.calendar.dialog.notesPlaceholder": "Note (opțional)",
+  "plugin.calendar.dialog.cancel": "Anulează",
+  "plugin.calendar.dialog.save": "Salvează evenimentul",
+
+  "plugin.calendar.toast.titleRequired": "Titlul este obligatoriu",
+  "plugin.calendar.toast.dateRequired": "Data este obligatorie",
+  "plugin.calendar.toast.updated": "Eveniment actualizat",
+  "plugin.calendar.toast.scheduled": "Eveniment programat",
+  "plugin.calendar.toast.deleted": "Eveniment șters",
+  "plugin.calendar.toast.loadFailed": "Evenimentele nu au putut fi încărcate",
+  "plugin.calendar.toast.saveFailed": "Evenimentul nu a putut fi salvat",
+  "plugin.calendar.toast.deleteFailed": "Evenimentul nu a putut fi șters",
+
+  "plugin.calendar.confirm.deleteEvent": "Ștergi \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Un eveniment începe în curând"
+}

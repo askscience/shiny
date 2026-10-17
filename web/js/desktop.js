@@ -25,6 +25,7 @@ import {
 import { toast, icon } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { isMobilePortrait, MOBILE_PORTRAIT_QUERY } from './viewport.js';
+import { t } from './i18n.js';
 
 let workspaces = [];      // [{ id, windows: [pluginName], focus, fullscreen }]
 let activeWs = null;      // active workspace id
@@ -368,7 +369,9 @@ export function workspaceLabel(wsOrIndex) {
   // "Workspace 3 — Youtube".
   const locked = workspaceLock(ws);
   if (locked) return label(locked);
-  return ws.name ? `Workspace ${i + 1} — ${ws.name}` : `Workspace ${i + 1}`;
+  return ws.name
+    ? t('desktop.workspaceNamed', { n: i + 1, name: ws.name }, `Workspace ${i + 1} — ${ws.name}`)
+    : t('ctx.workspaceNumber', { n: i + 1 });
 }
 
 /** Snapshot of the desktop sent to the AI on every request (1-based indices),
@@ -670,7 +673,7 @@ export function createWorkspace() {
 export function removeWorkspace() {
   if (!workspacesEnabled()) return false;
   if (workspaces.length <= 1) {
-    toast('Can\u2019t remove the last workspace', { type: 'error' });
+    toast(t('desktop.lastWorkspace', null, 'Can\u2019t remove the last workspace'), { type: 'error' });
     return false;
   }
   const idx = activeWorkspaceIndex();
@@ -748,7 +751,8 @@ export function moveWindow(name, toId) {
   if (wasFullscreen) fullscreen = name;
   syncActiveFocus();
   persist();
-  toast(`Moved ${label(name)} to workspace ${activeWorkspaceIndex() + 1}`, { type: 'info' });
+  toast(t('desktop.movedToWorkspace', { name: label(name), n: activeWorkspaceIndex() + 1 },
+    `Moved ${label(name)} to workspace ${activeWorkspaceIndex() + 1}`), { type: 'info' });
   notify();
   return true;
 }
@@ -1547,16 +1551,16 @@ export function renderWorkspaceBar() {
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'workspace-bar-btn';
-  add.title = 'New workspace';
-  add.setAttribute('aria-label', 'New workspace');
+  add.title = t('ctx.newWorkspace');
+  add.setAttribute('aria-label', t('ctx.newWorkspace'));
   add.appendChild(icon('ui/plus', { size: 14 }));
   add.addEventListener('click', () => createWorkspace());
 
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'workspace-bar-btn';
-  del.title = 'Remove workspace';
-  del.setAttribute('aria-label', 'Remove workspace');
+  del.title = t('ctx.removeWorkspace');
+  del.setAttribute('aria-label', t('ctx.removeWorkspace'));
   del.disabled = workspaces.length <= 1;
   del.appendChild(icon('ui/minus', { size: 14 }));
   del.addEventListener('click', () => removeWorkspace());

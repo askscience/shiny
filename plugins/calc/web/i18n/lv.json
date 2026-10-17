@@ -1,0 +1,38 @@
+{
+  "plugin.calc.meta.description": "Izklājlapu kalkulators — izklājlapas glabājas kā atvērti šūnu režģi, rediģējami Calc logā",
+  "plugin.calc.meta.summary": "Calc: veidot, rediģēt un aprēķināt izklājlapas",
+  "plugin.calc.meta.category": "Birojs",
+
+  "plugin.calc.bar.spreadsheets": "Izklājlapas",
+
+  "plugin.calc.toolbar.newSheet": "Jauna izklājlapa",
+  "plugin.calc.toolbar.importOds": "Importēt .ods",
+  "plugin.calc.toolbar.importCsv": "Importēt CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Saglabāt mapē Dokumenti",
+  "plugin.calc.toolbar.saveNow": "Saglabāt tagad",
+  "plugin.calc.toolbar.deleteSheet": "Dzēst izklājlapu",
+
+  "plugin.calc.menu.noSheets": "Vēl nav izklājlapu",
+
+  "plugin.calc.sheet.untitled": "Bez nosaukuma",
+  "plugin.calc.sheet.importedCsv": "Importēts CSV",
+
+  "plugin.calc.formula.placeholder": "Vērtība vai formula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Saglabā…",
+  "plugin.calc.status.dirty": "Nesaglabātas izmaiņas",
+  "plugin.calc.status.saved.zero": "Saglabāts {time} · {count} šūnu",
+  "plugin.calc.status.saved.one": "Saglabāts {time} · {count} šūna",
+  "plugin.calc.status.saved.other": "Saglabāts {time} · {count} šūnas",
+
+  "plugin.calc.dialog.delete": "Dzēst \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Saglabāšana neizdevās",
+  "plugin.calc.toast.openFailed": "Nevarēja atvērt izklājlapu",
+  "plugin.calc.toast.createFailed": "Nevarēja izveidot izklājlapu",
+  "plugin.calc.toast.deleteFailed": "Nevarēja dzēst izklājlapu",
+  "plugin.calc.toast.imported": "Importēts {name}",
+  "plugin.calc.toast.importOdsFailed": "Importēšana neizdevās — vai šis ir derīgs .ods fails?",
+  "plugin.calc.toast.importCsvFailed": "Importēšana neizdevās — vai šis ir derīgs CSV fails?",
+  "plugin.calc.toast.openFileFailed": "Nevarēja atvērt failu"
+}

@@ -1,0 +1,82 @@
+{
+  "plugin.impress.toolbar.presentations": "Láithreoireachtaí",
+  "plugin.impress.toolbar.titlePlaceholder": "Gan teideal",
+  "plugin.impress.toolbar.theme": "Téama",
+  "plugin.impress.toolbar.present": "Láithrigh",
+  "plugin.impress.toolbar.newDeck": "Láithreoireacht nua",
+  "plugin.impress.toolbar.importOdp": "Iompórtáil .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Sábháil i nDoiciméid",
+  "plugin.impress.toolbar.saveNow": "Sábháil anois",
+  "plugin.impress.toolbar.deleteDeck": "Scrios an láithreoireacht",
+
+  "plugin.impress.menu.empty": "Níl aon láithreoireacht ann fós",
+  "plugin.impress.menu.newDeck": "Láithreoireacht nua",
+  "plugin.impress.menu.importOdp": "Iompórtáil .odp",
+  "plugin.impress.menu.saveToDocuments": "Sábháil i nDoiciméid",
+  "plugin.impress.menu.deleteDeck": "Scrios an láithreoireacht",
+
+  "plugin.impress.ctx.newDeck": "Láithreoireacht nua",
+  "plugin.impress.ctx.addSlide": "Cuir sleamhnán leis",
+  "plugin.impress.ctx.saveNow": "Sábháil anois",
+  "plugin.impress.ctx.present": "Láithrigh",
+  "plugin.impress.ctx.stopPresenting": "Stop an láithriú",
+  "plugin.impress.ctx.deleteDeck": "Scrios an láithreoireacht",
+
+  "plugin.impress.status.saving": "Á sábháil…",
+  "plugin.impress.status.unsaved": "Athruithe gan sábháil",
+  "plugin.impress.status.saved.one": "Sábháilte {time} · {count} sleamhnán",
+  "plugin.impress.status.saved.two": "Sábháilte {time} · {count} shleamhnán",
+  "plugin.impress.status.saved.few": "Sábháilte {time} · {count} shleamhnán",
+  "plugin.impress.status.saved.many": "Sábháilte {time} · {count} sleamhnán",
+  "plugin.impress.status.saved.other": "Sábháilte {time} · {count} sleamhnáin",
+
+  "plugin.impress.empty.noDeck": "Gan láithreoireacht",
+  "plugin.impress.empty.noDeckBody": "Cruthaigh ceann, nó iarr ar an AI deic a thógáil",
+
+  "plugin.impress.inspector.layout": "Leagan amach",
+  "plugin.impress.inspector.transition": "Aistriú",
+  "plugin.impress.inspector.bullets": "Urchair",
+  "plugin.impress.inspector.speakerNotes": "Nótaí an chainteora",
+  "plugin.impress.inspector.hint": "Cliceáil aon téacs ar an sleamhnán chun é a chur in eagar go díreach.",
+  "plugin.impress.inspector.applyAll": "Cuir an t-aistriú seo agus tógáil na n-urchar i bhfeidhm ar gach sleamhnán",
+  "plugin.impress.inspector.applyAllLabel": "Cuir i bhfeidhm ar gach sleamhnán",
+
+  "plugin.impress.ops.addSlide": "Cuir sleamhnán leis",
+  "plugin.impress.ops.moveUp": "Bog suas",
+  "plugin.impress.ops.moveDown": "Bog síos",
+  "plugin.impress.ops.deleteSlide": "Scrios an sleamhnán",
+
+  "plugin.impress.transition.none": "Aon cheann",
+  "plugin.impress.transition.fade": "Céaladh",
+  "plugin.impress.transition.slide": "Sleamhnú",
+  "plugin.impress.transition.push": "Brú",
+  "plugin.impress.transition.zoom": "Zúmáil",
+
+  "plugin.impress.reveal.all": "Uile ag an am céanna",
+  "plugin.impress.reveal.bullets": "Ceann ar cheann",
+
+  "plugin.impress.slide.addText": "Cuir téacs leis",
+  "plugin.impress.slide.addTitle": "Cuir teideal leis",
+  "plugin.impress.slide.addSubtitle": "Cuir foshtheideal leis",
+  "plugin.impress.slide.attribution": "Creidiúint",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Ar ais chuig an eagarthóir",
+  "plugin.impress.present.fullScreen": "Lánscáileán",
+  "plugin.impress.present.exitFullScreen": "Scoir de lánscáileán",
+  "plugin.impress.present.blocked": "Chuir an brabhsálaí bac ar an lánscáileán",
+
+  "plugin.impress.dialog.deleteDeck": "Scrios \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Theip ar an sábháil",
+  "plugin.impress.toast.openFailed": "Níorbh fhéidir an láithreoireacht a oscailt",
+  "plugin.impress.toast.createFailed": "Níorbh fhéidir an láithreoireacht a chruthú",
+  "plugin.impress.toast.deleteFailed": "Níorbh fhéidir an láithreoireacht a scriosadh",
+  "plugin.impress.toast.imported": "Iompórtáladh {name}",
+  "plugin.impress.toast.importFailed": "Theip ar an iompórtáil — an comhad .odp bailí é seo?",
+  "plugin.impress.toast.openFileFailed": "Níorbh fhéidir an comhad a oscailt",
+
+  "plugin.impress.meta.description": "Tógálaí láithreoireachtaí — stóráiltear deiceanna mar shleamhnáin agus easpórtáiltear iad mar chomhaid .odp oscailte",
+  "plugin.impress.meta.summary": "Impress: tóg, cuir in eagar agus láithrigh deiceanna sleamhnán OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Oifig"
+}

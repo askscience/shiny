@@ -23,6 +23,7 @@ import { describeEngines, powerModeHint, powerModeLabel, POWER_MODES } from './p
 import {
   batteryIconName, chipLabel, chipPercent, chipStateClass, timeLabel,
 } from './batteryShared.js';
+import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-battery');
 
@@ -106,7 +107,7 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup battery-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Battery and power');
+  popup.setAttribute('aria-label', t('battery.title'));
 
   const head = document.createElement('div');
   head.className = 'battery-menu-head';
@@ -160,8 +161,8 @@ function render() {
 
   if (!status || !status.available || !status.present) {
     body.appendChild(emptyState({
-      title: 'No battery on this machine',
-      body: 'Power management is only available on a laptop.',
+      title: t('battery.none'),
+      body: t('battery.noneBody'),
     }));
     return;
   }
@@ -177,15 +178,15 @@ function renderHead() {
   if (!headTitle || !headIcon) return;
   const available = status && status.available && status.present;
   headTitle.textContent = available
-    ? `Battery ${chipPercent(status) || ''}`.trim()
-    : 'Battery';
+    ? t('battery.headWithPercent', { percent: chipPercent(status) }).trim()
+    : t('battery.label');
   void setIcon(headIcon, available ? batteryIconName(status) : 'hud/battery-4', { size: 18 });
   const state = available ? chipStateClass(status) : '';
   headIcon.classList.toggle('is-charging', state === 'is-charging');
   headIcon.classList.toggle('is-low', state === 'is-low');
 
   const bits = available
-    ? [chipLabel(status), timeLabel(status), status.ac_online === true ? 'plugged in' : null]
+    ? [chipLabel(status), timeLabel(status), status.ac_online === true ? t('battery.pluggedIn') : null]
     : [];
   headHint.textContent = bits.filter(Boolean).join(' · ');
 }
@@ -200,7 +201,7 @@ function section(title, children) {
 function powerModeSection() {
   const row = el('div', 'power-mode-row');
   row.setAttribute('role', 'radiogroup');
-  row.setAttribute('aria-label', 'Power mode');
+  row.setAttribute('aria-label', t('power.mode'));
   for (const mode of POWER_MODES) {
     const active = getPowerMode() === mode;
     const btn = el('button', `power-mode-btn${active ? ' is-active' : ''}`, powerModeLabel(mode));
@@ -214,25 +215,25 @@ function powerModeSection() {
     });
     row.appendChild(btn);
   }
-  return section('Power mode', [row]);
+  return section(t('power.mode'), [row]);
 }
 
 function switchesSection() {
   const auto = toggleRow({
-    label: 'Automatic Power Saver',
-    hint: 'Low power on battery or below 20%.',
+    label: t('power.autoSaver'),
+    hint: t('power.autoSaverHint'),
     checked: getAutoPowerSaver(),
     onChange: (on) => { setAutoPowerSaver(on); render(); },
   });
 
   const lowAi = toggleRow({
-    label: 'Low-power AI',
-    hint: 'Vosk + Supertonic instead of Whisper / Qwen.',
+    label: t('power.lowAi'),
+    hint: t('power.lowAiHint'),
     checked: getLowPowerAi(),
     onChange: (on) => { setLowPowerAi(on); render(); },
   });
 
-  return section('AI & battery', [auto, lowAi]);
+  return section(t('power.aiSection'), [auto, lowAi]);
 }
 
 function summarySection() {
@@ -241,16 +242,16 @@ function summarySection() {
   const line = el('div', 'battery-menu-summary');
   line.textContent = effective === 'saver'
     ? (saver
-      ? `Power Saver active — ${describeEngines(getEffectiveSttEngine(), getEffectiveTtsEngine())}`
-      : 'Power Saver active — AI engines unchanged')
-    : `${powerModeLabel(effective)} — full-quality AI`;
+      ? t('power.saverWithEngines', { engines: describeEngines(getEffectiveSttEngine(), getEffectiveTtsEngine()) })
+      : t('power.saverUnchanged'))
+    : t('power.modeFullAi', { mode: powerModeLabel(effective) });
   return section(null, [line]);
 }
 
 function settingsAction() {
   const actions = el('div', 'battery-menu-actions');
   actions.appendChild(button({
-    label: 'Power settings',
+    label: t('power.settings'),
     icon: 'ui/settings',
     variant: 'quiet',
     size: 'sm',

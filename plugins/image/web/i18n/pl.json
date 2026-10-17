@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Edytor zdjęć — korekta tonów i kolorów, rozmycie, wyostrzanie i winieta oraz efekty filmowe jednym kliknięciem w oknie Obrazów",
+  "plugin.image.meta.summary": "Edytor zdjęć: korekty i efekty filmowe",
+  "plugin.image.meta.category": "Media",
+
+  "plugin.image.toolbar.menu": "Menu",
+  "plugin.image.toolbar.fitToggle": "Przełącz dopasowanie / rzeczywisty rozmiar",
+
+  "plugin.image.dial.brightness": "Jasność",
+  "plugin.image.dial.contrast": "Kontrast",
+  "plugin.image.dial.exposure": "Ekspozycja",
+  "plugin.image.dial.vibrance": "Żywość",
+  "plugin.image.dial.saturation": "Nasycenie",
+  "plugin.image.dial.blur": "Rozmycie",
+  "plugin.image.dial.sharpen": "Wyostrzanie",
+  "plugin.image.dial.vignette": "Winieta",
+
+  "plugin.image.oneClick.autoTone": "Automatyczny ton",
+  "plugin.image.oneClick.autoContrast": "Automatyczny kontrast",
+  "plugin.image.oneClick.invert": "Odwróć",
+  "plugin.image.oneClick.grayscale": "Czarno-białe",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Przywróć",
+  "plugin.image.oneClick.revertTitle": "Przywróć oryginalny obraz",
+
+  "plugin.image.empty.title": "Brak otwartego obrazu",
+  "plugin.image.empty.body": "Otwórz lub przeciągnij zdjęcie, aby rozpocząć.",
+  "plugin.image.empty.open": "Otwórz obraz",
+
+  "plugin.image.menu.file": "Plik",
+  "plugin.image.menu.image": "Obraz",
+  "plugin.image.menu.view": "Widok",
+  "plugin.image.menu.open": "Otwórz…",
+  "plugin.image.menu.saveCopy": "Zapisz kopię…",
+  "plugin.image.menu.delete": "Usuń obraz",
+  "plugin.image.menu.rotateLeft": "Obróć w lewo",
+  "plugin.image.menu.rotateRight": "Obróć w prawo",
+  "plugin.image.menu.flipH": "Odbij w poziomie",
+  "plugin.image.menu.flipV": "Odbij w pionie",
+  "plugin.image.menu.revert": "Przywróć oryginał",
+  "plugin.image.menu.zoomIn": "Powiększ",
+  "plugin.image.menu.zoomOut": "Pomniejsz",
+  "plugin.image.menu.fit": "Dopasuj",
+  "plugin.image.menu.actualSize": "Rzeczywisty rozmiar",
+
+  "plugin.image.ctx.open": "Otwórz obraz…",
+
+  "plugin.image.dialog.deleteConfirm": "Usunąć „{title}”?",
+  "plugin.image.dialog.thisImage": "ten obraz",
+
+  "plugin.image.toast.openFirst": "Najpierw otwórz obraz",
+  "plugin.image.toast.opened": "Otwarto {title}",
+  "plugin.image.toast.editFailed": "Edycja nie powiodła się",
+  "plugin.image.toast.operationFailed": "Operacja nie powiodła się",
+  "plugin.image.toast.renderFailed": "Nie udało się wyrenderować obrazu",
+  "plugin.image.toast.uploadFailed": "Wgrywanie nie powiodło się",
+  "plugin.image.toast.saveFailed": "Zapisywanie nie powiodło się",
+  "plugin.image.toast.deleted": "Obraz usunięty",
+  "plugin.image.toast.deleteFailed": "Nie udało się usunąć obrazu",
+  "plugin.image.toast.reverted": "Przywrócono oryginalne piksele",
+  "plugin.image.toast.openFailed": "Nie udało się otworzyć pliku",
+
+  "plugin.image.error.emptyFile": "ten plik jest pusty",
+  "plugin.image.error.notAnImage": "„{name}” nie jest obrazem, który edytor może otworzyć",
+  "plugin.image.error.unnamedFile": "plik"
+}

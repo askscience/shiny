@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Έλεγχος και εγκατάσταση ενημερώσεων συστήματος και Ollama σε κάθε μεγάλη διανομή Linux",
+  "plugin.updates.meta.summary": "Ενημερώσεις: ένα παράθυρο (και ένδειξη στο HUD) για ενημερώσεις συστήματος και Ollama",
+  "plugin.updates.meta.category": "Σύστημα",
+
+  "plugin.updates.tab.updates": "Ενημερώσεις",
+  "plugin.updates.tab.history": "Ιστορικό",
+
+  "plugin.updates.toolbar.sections": "Ενότητες",
+  "plugin.updates.toolbar.check": "Έλεγχος για ενημερώσεις",
+
+  "plugin.updates.status.checking": "Έλεγχος για ενημερώσεις…",
+  "plugin.updates.status.thisSystem": "αυτό το σύστημα",
+  "plugin.updates.status.unavailableOnSystem": "Οι ενημερώσεις δεν είναι διαθέσιμες σε αυτό το σύστημα",
+  "plugin.updates.status.unavailable": "Οι ενημερώσεις δεν είναι διαθέσιμες",
+  "plugin.updates.status.upToDate": "Όλα είναι ενημερωμένα · {where}",
+  "plugin.updates.status.available.one": "{count} διαθέσιμη ενημέρωση · {where}",
+  "plugin.updates.status.available.other": "{count} διαθέσιμες ενημερώσεις · {where}",
+  "plugin.updates.status.working": "Σε εξέλιξη…",
+  "plugin.updates.status.finished": "Η ενημέρωση ολοκληρώθηκε",
+  "plugin.updates.status.failed": "Η ενημέρωση απέτυχε",
+  "plugin.updates.status.upToDateBody": "Το σύστημά σας είναι ενημερωμένο.",
+  "plugin.updates.status.incomplete": "Η ενημέρωση δεν ολοκληρώθηκε. Ανοίξτε τις Ενημερώσεις για λεπτομέρειες.",
+  "plugin.updates.status.couldNot": "Δεν ήταν δυνατή η ενέργεια: {label}",
+  "plugin.updates.status.noJobId": "Ο διακομιστής δεν επέστρεψε αναγνωριστικό εργασίας",
+  "plugin.updates.status.lostConnection": "Χάθηκε η σύνδεση με την εργασία",
+  "plugin.updates.status.jobDisappeared": "Η εργασία εξαφανίστηκε",
+
+  "plugin.updates.action.refresh": "Ανανέωση λιστών",
+  "plugin.updates.action.installing": "Εγκατάσταση…",
+  "plugin.updates.action.install.one": "Εγκατάσταση {count} ενημέρωσης",
+  "plugin.updates.action.install.other": "Εγκατάσταση {count} ενημερώσεων",
+  "plugin.updates.action.details": "Λεπτομέρειες",
+  "plugin.updates.action.hideDetails": "Απόκρυψη λεπτομερειών",
+
+  "plugin.updates.empty.upToDate": "Ενημερωμένο",
+  "plugin.updates.empty.noUpdates": "Δεν εκκρεμούν ενημερώσεις συστήματος.",
+  "plugin.updates.empty.noActivity": "Δεν υπάρχει δραστηριότητα ακόμη",
+  "plugin.updates.empty.noActivityBody": "Οι ενημερώσεις που εγκαθιστάτε θα εμφανίζονται εδώ.",
+
+  "plugin.updates.ollama.version": " · έκδοση {version}",
+  "plugin.updates.ollama.installed": "Εγκατεστημένο{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Δεν είναι εγκατεστημένο (ή δεν βρέθηκε στο PATH)",
+  "plugin.updates.ollama.service": "Υπηρεσία: {name}",
+  "plugin.updates.ollama.install": "Εγκατάσταση του Ollama",
+  "plugin.updates.ollama.update": "Ενημέρωση του Ollama",
+
+  "plugin.updates.history.system": "σύστημα",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Δεν ήταν δυνατός ο έλεγχος για ενημερώσεις",
+  "plugin.updates.notify.serviceUnavailable": "Η υπηρεσία ενημερώσεων δεν είναι διαθέσιμη.",
+  "plugin.updates.notify.busy": "Μια ενημέρωση εκτελείται ήδη",
+  "plugin.updates.notify.busyBody": "Περιμένετε να ολοκληρωθεί η τρέχουσα ενημέρωση.",
+
+  "plugin.updates.dialog.installTitle": "Εγκατάσταση ενημερώσεων",
+  "plugin.updates.dialog.installRights.one": "Η εγκατάσταση {count} ενημέρωσης απαιτεί δικαιώματα διαχειριστή.",
+  "plugin.updates.dialog.installRights.other": "Η εγκατάσταση {count} ενημερώσεων απαιτεί δικαιώματα διαχειριστή.",
+  "plugin.updates.dialog.refreshRights": "Η ανανέωση των μεταδεδομένων πακέτων (π.χ. {cmd}) απαιτεί δικαιώματα διαχειριστή.",
+  "plugin.updates.dialog.ollamaMessage": "Εκτελεί τον επίσημο εγκαταστάτη. Το Ollama σταματά κατά την ενημέρωση και παραμένει σταματημένο (η επανεκκίνησή του στα μέσα της συνεδρίας μπορεί να κολλήσει την GPU)· ξεκινήστε το ξανά ή κάντε επανεκκίνηση για να χρησιμοποιήσετε τη νέα έκδοση.",
+  "plugin.updates.dialog.passwordField": "Κωδικός πρόσβασης διαχειριστή",
+  "plugin.updates.dialog.passwordPlaceholder": "κωδικός sudo",
+  "plugin.updates.dialog.passwordHint": "Χρησιμοποιείται μία φορά για την εκτέλεση της εντολής με sudo. Δεν αποθηκεύεται ποτέ.",
+  "plugin.updates.dialog.cancel": "Άκυρο",
+  "plugin.updates.dialog.continue": "Συνέχεια",
+
+  "plugin.updates.label.installing": "Εγκατάσταση ενημερώσεων",
+  "plugin.updates.label.refreshing": "Ανανέωση λιστών",
+  "plugin.updates.label.updatingOllama": "Ενημέρωση του Ollama",
+
+  "plugin.updates.hud.available.one": "{count} διαθέσιμη ενημέρωση",
+  "plugin.updates.hud.available.other": "{count} διαθέσιμες ενημερώσεις",
+  "plugin.updates.hud.upToDate": "Το σύστημα είναι ενημερωμένο",
+  "plugin.updates.hud.notifyTitle": "Διαθέσιμες ενημερώσεις",
+  "plugin.updates.hud.notifyBody.one": "{count} ενημέρωση έτοιμη για εγκατάσταση",
+  "plugin.updates.hud.notifyBody.other": "{count} ενημερώσεις έτοιμες για εγκατάσταση"
+}

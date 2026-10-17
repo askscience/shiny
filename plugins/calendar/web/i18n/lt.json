@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalendorius — planuokite, peržiūrėkite ir tvarkykite įvykius Kalendoriaus lange",
+  "plugin.calendar.meta.summary": "Kalendorius: planuokite ir tvarkykite įvykius",
+  "plugin.calendar.meta.category": "Biuras",
+
+  "plugin.calendar.month.january": "Sausis",
+  "plugin.calendar.month.february": "Vasaris",
+  "plugin.calendar.month.march": "Kovas",
+  "plugin.calendar.month.april": "Balandis",
+  "plugin.calendar.month.may": "Gegužė",
+  "plugin.calendar.month.june": "Birželis",
+  "plugin.calendar.month.july": "Liepa",
+  "plugin.calendar.month.august": "Rugpjūtis",
+  "plugin.calendar.month.september": "Rugsėjis",
+  "plugin.calendar.month.october": "Spalis",
+  "plugin.calendar.month.november": "Lapkritis",
+  "plugin.calendar.month.december": "Gruodis",
+
+  "plugin.calendar.grid.sun": "Sk",
+  "plugin.calendar.grid.mon": "Pr",
+  "plugin.calendar.grid.tue": "An",
+  "plugin.calendar.grid.wed": "Tr",
+  "plugin.calendar.grid.thu": "Kt",
+  "plugin.calendar.grid.fri": "Pn",
+  "plugin.calendar.grid.sat": "Št",
+
+  "plugin.calendar.event.allDay": "Visą dieną",
+
+  "plugin.calendar.toolbar.previousMonth": "Ankstesnis mėnuo",
+  "plugin.calendar.toolbar.nextMonth": "Kitas mėnuo",
+  "plugin.calendar.toolbar.today": "Šiandien",
+  "plugin.calendar.toolbar.newEvent": "Naujas įvykis",
+
+  "plugin.calendar.ctx.refresh": "Atnaujinti",
+
+  "plugin.calendar.detail.edit": "Redaguoti",
+  "plugin.calendar.detail.delete": "Ištrinti",
+
+  "plugin.calendar.empty.noEvents": "Nėra įvykių",
+  "plugin.calendar.empty.noEventsBody": "Niekas nesuplanuota. Pridėkite įvykį arba paprašykite DI jį suplanuoti.",
+
+  "plugin.calendar.dialog.title": "Įvykis",
+  "plugin.calendar.dialog.editTitle": "Redaguoti įvykį",
+  "plugin.calendar.dialog.titleField": "Pavadinimas",
+  "plugin.calendar.dialog.titlePlaceholder": "pvz., komandos pasitarimas",
+  "plugin.calendar.dialog.dateField": "Data",
+  "plugin.calendar.dialog.startTimeField": "Pradžios laikas",
+  "plugin.calendar.dialog.endTimeField": "Pabaigos laikas",
+  "plugin.calendar.dialog.locationField": "Vieta",
+  "plugin.calendar.dialog.locationPlaceholder": "Vieta (nebūtina)",
+  "plugin.calendar.dialog.notesField": "Pastabos",
+  "plugin.calendar.dialog.notesPlaceholder": "Pastabos (nebūtina)",
+  "plugin.calendar.dialog.cancel": "Atšaukti",
+  "plugin.calendar.dialog.save": "Išsaugoti įvykį",
+
+  "plugin.calendar.toast.titleRequired": "Būtinas pavadinimas",
+  "plugin.calendar.toast.dateRequired": "Būtina data",
+  "plugin.calendar.toast.updated": "Įvykis atnaujintas",
+  "plugin.calendar.toast.scheduled": "Įvykis suplanuotas",
+  "plugin.calendar.toast.deleted": "Įvykis ištrintas",
+  "plugin.calendar.toast.loadFailed": "Nepavyko įkelti įvykių",
+  "plugin.calendar.toast.saveFailed": "Nepavyko išsaugoti įvykio",
+  "plugin.calendar.toast.deleteFailed": "Nepavyko ištrinti įvykio",
+
+  "plugin.calendar.confirm.deleteEvent": "Ištrinti “{title}”?",
+
+  "plugin.calendar.notify.eventSoon": "Įvykis netrukus prasidės"
+}

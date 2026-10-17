@@ -4,6 +4,7 @@ import { normalizeTouchBarSetting } from './touchbarShared.js';
 import { normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
 import { effectivePowerMode, normalizePowerMode } from './powerShared.js';
 import { voiceForEngine } from './voiceShared.js';
+import { getLocalePreference, setLocalePreference, refreshLocaleFromStorage } from './i18n.js';
 
 const AI_NAME_KEY = 'ai.name';
 const AI_PROVIDER_KEY = 'ai.provider';
@@ -34,6 +35,7 @@ const IMAGE_MODEL_KEY = 'image.model';
 const IMAGE_QUALITY_KEY = 'image.quality';
 const MUSIC_QUALITY_KEY = 'music.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
+const UI_LOCALE_KEY = 'ui.locale';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
 function scopedKey(base) {
@@ -103,6 +105,9 @@ export async function loadUserPreferences() {
   applyDesktopGap();
   applyImmersive();
   applyHudChips();
+  // The interface language may have just arrived from the server; re-apply it
+  // (i18n.js owns the value, this is only the persistence side of it).
+  await refreshLocaleFromStorage();
 }
 
 export function getAiName() {
@@ -861,6 +866,23 @@ export function setTouchBarEnabled(mode) {
   persist(TOUCHBAR_KEY, value === 'auto' ? '' : value);
   // The runtime listens for this so a change applies without a reload.
   window.dispatchEvent(new CustomEvent('touchbar:settings'));
+}
+
+/* ── Interface language (per-user, server-backed) ──────────────
+ * The value itself lives in i18n.js (it has to be readable before any other
+ * module boots, and applied without one); this is only its persistence:
+ * `''` means "automatic" (follow the system language).
+ * ─────────────────────────────────────────────────────────────── */
+
+/** The chosen interface language, or '' when following the system language. */
+export function getUiLocale() {
+  return getLocalePreference();
+}
+
+export function setUiLocale(code) {
+  const value = (code || '').trim();
+  setLocalePreference(value);
+  persist(UI_LOCALE_KEY, value);
 }
 
 function clamp(n, min, max) {

@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Tarkista ja asenna järjestelmän ja Ollaman päivitykset kaikilla tärkeimmillä Linux-jakeluilla",
+  "plugin.updates.meta.summary": "Päivitykset: yksi ikkuna (ja HUD-merkintä) järjestelmän ja Ollaman päivityksille",
+  "plugin.updates.meta.category": "Järjestelmä",
+
+  "plugin.updates.tab.updates": "Päivitykset",
+  "plugin.updates.tab.history": "Historia",
+
+  "plugin.updates.toolbar.sections": "Osiot",
+  "plugin.updates.toolbar.check": "Tarkista päivitykset",
+
+  "plugin.updates.status.checking": "Tarkistetaan päivityksiä…",
+  "plugin.updates.status.thisSystem": "tämä järjestelmä",
+  "plugin.updates.status.unavailableOnSystem": "Päivitykset eivät ole käytettävissä tässä järjestelmässä",
+  "plugin.updates.status.unavailable": "Päivitykset eivät ole käytettävissä",
+  "plugin.updates.status.upToDate": "Kaikki on ajan tasalla · {where}",
+  "plugin.updates.status.available.one": "{count} päivitys saatavilla · {where}",
+  "plugin.updates.status.available.other": "{count} päivitystä saatavilla · {where}",
+  "plugin.updates.status.working": "Työskennellään…",
+  "plugin.updates.status.finished": "Päivitys valmis",
+  "plugin.updates.status.failed": "Päivitys epäonnistui",
+  "plugin.updates.status.upToDateBody": "Järjestelmäsi on ajan tasalla.",
+  "plugin.updates.status.incomplete": "Päivitys ei mennyt loppuun. Avaa Päivitykset saadaksesi lisätietoja.",
+  "plugin.updates.status.couldNot": "Epäonnistui: {label}",
+  "plugin.updates.status.noJobId": "Palvelin ei palauttanut työn tunnistetta",
+  "plugin.updates.status.lostConnection": "Yhteys työhön katkesi",
+  "plugin.updates.status.jobDisappeared": "Työ katosi",
+
+  "plugin.updates.action.refresh": "Päivitä luettelot",
+  "plugin.updates.action.installing": "Asennetaan…",
+  "plugin.updates.action.install.one": "Asenna {count} päivitys",
+  "plugin.updates.action.install.other": "Asenna {count} päivitystä",
+  "plugin.updates.action.details": "Tiedot",
+  "plugin.updates.action.hideDetails": "Piilota tiedot",
+
+  "plugin.updates.empty.upToDate": "Ajan tasalla",
+  "plugin.updates.empty.noUpdates": "Järjestelmäpäivityksiä ei ole odottamassa.",
+  "plugin.updates.empty.noActivity": "Ei vielä toimintaa",
+  "plugin.updates.empty.noActivityBody": "Asentamasi päivitykset luetellaan täällä.",
+
+  "plugin.updates.ollama.version": " · versio {version}",
+  "plugin.updates.ollama.installed": "Asennettu{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Ei asennettu (tai ei löydy PATH-polulta)",
+  "plugin.updates.ollama.service": "Palvelu: {name}",
+  "plugin.updates.ollama.install": "Asenna Ollama",
+  "plugin.updates.ollama.update": "Päivitä Ollama",
+
+  "plugin.updates.history.system": "järjestelmä",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Päivityksiä ei voitu tarkistaa",
+  "plugin.updates.notify.serviceUnavailable": "Päivityspalvelu ei ole käytettävissä.",
+  "plugin.updates.notify.busy": "Päivitys on jo käynnissä",
+  "plugin.updates.notify.busyBody": "Odota, että nykyinen päivitys päättyy.",
+
+  "plugin.updates.dialog.installTitle": "Asenna päivitykset",
+  "plugin.updates.dialog.installRights.one": "{count} päivityksen asentaminen vaatii järjestelmänvalvojan oikeudet.",
+  "plugin.updates.dialog.installRights.other": "{count} päivityksen asentaminen vaatii järjestelmänvalvojan oikeudet.",
+  "plugin.updates.dialog.refreshRights": "Pakettien metatietojen päivittäminen (esim. {cmd}) vaatii järjestelmänvalvojan oikeudet.",
+  "plugin.updates.dialog.ollamaMessage": "Suorittaa virallisen asentajan. Ollama pysäytetään päivityksen ajaksi eikä sitä käynnistetä uudelleen kesken istunnon (uudelleenkäynnistys voi jumittaa näytönohjaimen); käynnistä se uudelleen tai käynnistä laite uudelleen käyttääksesi uutta versiota.",
+  "plugin.updates.dialog.passwordField": "Järjestelmänvalvojan salasana",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo-salasana",
+  "plugin.updates.dialog.passwordHint": "Käytetään kerran komennon suorittamiseen sudolla. Sitä ei koskaan tallenneta.",
+  "plugin.updates.dialog.cancel": "Peruuta",
+  "plugin.updates.dialog.continue": "Jatka",
+
+  "plugin.updates.label.installing": "Päivitysten asennus",
+  "plugin.updates.label.refreshing": "Listojen päivitys",
+  "plugin.updates.label.updatingOllama": "Ollaman päivitys",
+
+  "plugin.updates.hud.available.one": "{count} päivitys saatavilla",
+  "plugin.updates.hud.available.other": "{count} päivitystä saatavilla",
+  "plugin.updates.hud.upToDate": "Järjestelmä ajan tasalla",
+  "plugin.updates.hud.notifyTitle": "Päivityksiä saatavilla",
+  "plugin.updates.hud.notifyBody.one": "{count} päivitys valmiina asennettavaksi",
+  "plugin.updates.hud.notifyBody.other": "{count} päivitystä valmiina asennettavaksi"
+}

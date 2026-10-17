@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Most szól",
+  "plugin.youtube.hero.untitled": "YouTube-videó",
+  "plugin.youtube.hero.back": "Vissza",
+  "plugin.youtube.hero.backLabel": "Vissza a YouTube-kereséshez",
+  "plugin.youtube.player.title": "YouTube-lejátszó",
+
+  "plugin.youtube.search.placeholder": "Keresés a YouTube-on…",
+
+  "plugin.youtube.grid.upNext": "Következik",
+  "plugin.youtube.grid.becauseYouWatched": "Következik · mert ezt nézte meg: „{title}”",
+  "plugin.youtube.grid.forYou": "Önnek ajánlott",
+  "plugin.youtube.grid.showAll": "Összes megjelenítése: {category}",
+  "plugin.youtube.grid.untitled": "Videó",
+
+  "plugin.youtube.empty.noResults": "Nem található videó",
+  "plugin.youtube.empty.noMatch": "Nincs találat erre: „{term}”.",
+  "plugin.youtube.empty.searchTitle": "Keresés a YouTube-on",
+  "plugin.youtube.empty.searchBody": "Írjon be felül — vagy kérje meg az AI-t, hogy keressen egy videót.",
+  "plugin.youtube.empty.unavailableTitle": "A keresés nem érhető el",
+  "plugin.youtube.empty.retry": "Próbálja újra egy pillanat múlva",
+
+  "plugin.youtube.category.watched": "{count}× megnézve",
+  "plugin.youtube.category.generic": "Kategória",
+
+  "plugin.youtube.menu.search": "Keresés",
+  "plugin.youtube.menu.home": "Kezdőlap",
+  "plugin.youtube.menu.refresh": "Találatok frissítése",
+  "plugin.youtube.menu.back": "Vissza",
+
+  "plugin.youtube.meta.description": "YouTube-videók nézése a YouTube-ablakban — az AI képes a YouTube-on keresni és videókat lejátszani",
+  "plugin.youtube.meta.summary": "YouTube: AI-keresés és lejátszás a YouTube-ablakban",
+  "plugin.youtube.meta.category": "Média"
+}

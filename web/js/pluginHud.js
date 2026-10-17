@@ -12,8 +12,10 @@
  * uninstalled. The plugin owns its DOM.
  */
 import { apiFetch } from './api.js';
+import { loadPluginCatalog } from './i18n.js';
 
 const modules = new Map(); // plugin name -> hud module
+const hudUrls = new Map(); // plugin name -> the module's URL (for catalog reloads)
 let started = false;
 
 async function refresh() {
@@ -41,15 +43,22 @@ async function refresh() {
   for (const p of plugins) {
     if (!p.hud || modules.has(p.name)) continue;
     try {
-      const mod = await import(`../plugins/${p.name}/hud.js`);
+      const moduleUrl = new URL(`../plugins/${p.name}/hud.js`, import.meta.url);
+      await loadPluginCatalog(moduleUrl);
+      const mod = await import(moduleUrl.href);
       const api = mod.default || mod;
       api.install?.({ plugin: p.name });
       modules.set(p.name, api);
+      hudUrls.set(p.name, moduleUrl);
     } catch (err) {
       console.warn(`plugin hud '${p.name}' failed to load`, err);
     }
   }
 }
+
+window.addEventListener('locale:change', () => {
+  for (const url of hudUrls.values()) void loadPluginCatalog(url);
+});
 
 export function initPluginHud() {
   void refresh();

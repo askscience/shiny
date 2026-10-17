@@ -11,6 +11,7 @@
 
 import { apiFetch } from './api.js';
 import { notifyMenuChange } from './menuState.js';
+import { t } from './i18n.js';
 import {
   badge, button, emptyState, icon, iconButton, input, listItem, modal,
   spinner, toast, toggle,
@@ -112,7 +113,7 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup network-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Network');
+  popup.setAttribute('aria-label', t('hud.network'));
 
   const head = document.createElement('div');
   head.className = 'network-head';
@@ -123,7 +124,7 @@ function ensurePopup() {
   title.className = 'network-head-title';
   title.appendChild(icon('ui/network', { size: 15 }));
   const label = document.createElement('span');
-  label.textContent = 'Wi-Fi';
+  label.textContent = t('net.wifi');
   title.appendChild(label);
   wifiHint = document.createElement('div');
   wifiHint.className = 'network-head-hint';
@@ -134,7 +135,7 @@ function ensurePopup() {
   let scanBtn;
   scanBtn = iconButton({
     icon: 'ui/refresh',
-    label: 'Scan for networks',
+    label: t('net.scan'),
     variant: 'quiet',
     size: 'sm',
     onClick: () => void scan(scanBtn),
@@ -172,7 +173,7 @@ async function scan(buttonEl) {
     setTimeout(() => { void refresh(); buttonEl?.setLoading?.(false); }, 2500);
   } catch (err) {
     buttonEl?.setLoading?.(false);
-    toast(err.message || 'Scan failed', { type: 'error' });
+    toast(err.message || t('net.scanFailed'), { type: 'error' });
   }
 }
 
@@ -180,9 +181,9 @@ async function setWifiPower(enabled) {
   wifiToggle.disabled = true;
   try {
     await apiFetch('/api/network/wifi-power', { method: 'POST', body: JSON.stringify({ enabled }) });
-    toast(enabled ? 'Wi-Fi on' : 'Wi-Fi off');
+    toast(enabled ? t('net.wifiOn') : t('net.wifiOff'));
   } catch (err) {
-    toast(err.message || 'Could not change Wi-Fi', { type: 'error' });
+    toast(err.message || t('net.wifiPowerFailed'), { type: 'error' });
     wifiToggle.setChecked(!enabled, { silent: true });
   } finally {
     await refresh();
@@ -201,9 +202,9 @@ async function connect(net, password) {
         password: password || undefined,
       }),
     });
-    toast(`Connected to ${net.ssid}`);
+    toast(t('net.connectedTo', { ssid: net.ssid }));
   } catch (err) {
-    toast(err.message || `Could not connect to ${net.ssid}`, { type: 'error' });
+    toast(err.message || t('net.connectFailedTo', { ssid: net.ssid }), { type: 'error' });
   } finally {
     connecting = null;
     await refresh();
@@ -213,9 +214,9 @@ async function connect(net, password) {
 async function disconnect() {
   try {
     await apiFetch('/api/network/disconnect', { method: 'POST', body: '{}' });
-    toast('Disconnected');
+    toast(t('net.disconnected'));
   } catch (err) {
-    toast(err.message || 'Could not disconnect', { type: 'error' });
+    toast(err.message || t('net.disconnectFailed'), { type: 'error' });
   } finally {
     await refresh();
   }
@@ -227,9 +228,9 @@ async function forget(profile) {
       method: 'POST',
       body: JSON.stringify({ uuid: profile.uuid }),
     });
-    toast(`Forgot ${profile.ssid || profile.id}`);
+    toast(t('net.forgot', { ssid: profile.ssid || profile.id }));
   } catch (err) {
-    toast(err.message || 'Could not forget the network', { type: 'error' });
+    toast(err.message || t('net.forgetFailed'), { type: 'error' });
   } finally {
     await refresh();
   }
@@ -244,7 +245,7 @@ function enterprise(net) {
 function onNetworkClick(net) {
   if (connecting) return;
   if (enterprise(net)) {
-    toast('Enterprise networks need a username and certificate — not supported yet');
+    toast(t('net.enterprise'));
     return;
   }
   if (net.secured && !net.known) {
@@ -258,23 +259,23 @@ function onNetworkClick(net) {
 function askPassword(net) {
   const field = input({
     type: 'password',
-    placeholder: 'Password',
+    placeholder: t('common.password'),
     autocomplete: 'off',
     autocapitalize: 'off',
   });
   const error = document.createElement('p');
   error.className = 'ui-subtitle network-error hidden';
 
-  const dialog = modal({ title: `Connect to ${net.ssid}`, body: [field, error] });
+  const dialog = modal({ title: t('net.connectTo', { ssid: net.ssid }), body: [field, error] });
 
-  const cancel = button({ label: 'Cancel', variant: 'quiet', onClick: () => dialog.close() });
+  const cancel = button({ label: t('common.cancel'), variant: 'quiet', onClick: () => dialog.close() });
   const join = button({
-    label: 'Connect',
+    label: t('net.connect'),
     icon: 'ui/network',
     onClick: async () => {
       const password = field.value;
       if (!password) {
-        error.textContent = 'Enter the password first.';
+        error.textContent = t('net.enterPassword');
         error.classList.remove('hidden');
         return;
       }
@@ -298,12 +299,12 @@ function askPassword(net) {
 
 function confirmForget(profile) {
   const dialog = modal({
-    title: `Forget ${profile.ssid || profile.id}?`,
-    body: ['The saved password will be deleted. You can re-enter it next time you connect.'],
+    title: t('net.forgetConfirmTitle', { name: profile.ssid || profile.id }),
+    body: [t('net.forgetConfirmBody')],
   });
-  const cancel = button({ label: 'Cancel', variant: 'quiet', onClick: () => dialog.close() });
+  const cancel = button({ label: t('common.cancel'), variant: 'quiet', onClick: () => dialog.close() });
   const confirm = button({
-    label: 'Forget',
+    label: t('common.forget'),
     variant: 'danger',
     onClick: () => { dialog.close(); void forget(profile); },
   });
@@ -321,7 +322,7 @@ function render() {
   body.textContent = '';
 
   if (!status) {
-    body.appendChild(emptyState({ title: 'Loading network state…' }));
+    body.appendChild(emptyState({ title: t('net.loading') }));
     return;
   }
 
@@ -335,21 +336,21 @@ function render() {
   }
   if (wifiHint) {
     wifiHint.textContent = !s.available
-      ? (s.reason || 'NetworkManager is not available')
+      ? (s.reason || t('net.nmUnavailable'))
       : !wifi.present
-        ? 'No Wi-Fi hardware'
+        ? t('net.noWifiHardware')
         : wifi.hardware_enabled === false
-          ? 'Disabled by the hardware switch'
+          ? t('net.hardwareSwitch')
           : wifi.enabled
             ? (wifi.interfaces || []).join(', ')
-            : 'Wi-Fi is off';
+            : t('net.wifiOffHint');
   }
 
   if (!s.available) {
     body.appendChild(emptyState({
       icon: 'ui/warning',
-      title: 'Network panel unavailable',
-      body: s.reason || 'NetworkManager is not reachable.',
+      title: t('net.unavailable'),
+      body: s.reason || t('net.nmUnreachable'),
     }));
     return;
   }
@@ -389,12 +390,12 @@ function connectionSection(s) {
   const link = s.connection;
   const wrap = document.createElement('div');
   wrap.className = 'network-card';
-  wrap.appendChild(sectionTitle('Connected'));
+  wrap.appendChild(sectionTitle(t('net.connected')));
 
   if (!link) {
     const idle = document.createElement('div');
     idle.className = 'network-idle';
-    idle.textContent = 'Not connected';
+    idle.textContent = t('net.notConnected');
     wrap.appendChild(idle);
     return wrap;
   }
@@ -405,7 +406,7 @@ function connectionSection(s) {
     link.band,
     link.ip4,
     link.speed_mbps ? `${link.speed_mbps} Mb/s` : null,
-    link.managed === false ? 'system-managed' : null,
+    link.managed === false ? t('net.systemManaged') : null,
   ].filter(Boolean);
 
   const trailing = document.createElement('span');
@@ -422,7 +423,7 @@ function connectionSection(s) {
       size: 18,
       className: 'network-leading',
     }),
-    title: isWifi ? (link.ssid || 'Wi-Fi') : 'Ethernet',
+    title: isWifi ? (link.ssid || t('net.wifi')) : t('net.ethernet'),
     subtitle: subtitleBits.join(' · '),
     trailing,
   }));
@@ -431,7 +432,7 @@ function connectionSection(s) {
   actions.className = 'ui-row network-actions';
   if (isWifi) {
     actions.appendChild(button({
-      label: 'Disconnect',
+      label: t('net.disconnect'),
       variant: 'quiet',
       size: 'sm',
       icon: 'ui/close',
@@ -440,7 +441,7 @@ function connectionSection(s) {
     const profile = (s.saved || []).find((p) => p.ssid === link.ssid);
     if (profile) {
       actions.appendChild(button({
-        label: 'Forget',
+        label: t('common.forget'),
         variant: 'danger',
         size: 'sm',
         icon: 'ui/trash',
@@ -448,7 +449,7 @@ function connectionSection(s) {
       }));
     }
   } else {
-    actions.appendChild(badge('Wired', { tone: 'ok' }));
+    actions.appendChild(badge(t('net.wired'), { tone: 'ok' }));
   }
   wrap.appendChild(actions);
   return wrap;
@@ -459,14 +460,14 @@ function networksSection(s) {
   const networks = s.networks || [];
   const header = document.createElement('div');
   header.className = 'network-section-head';
-  header.appendChild(sectionTitle('Available networks'));
+  header.appendChild(sectionTitle(t('net.available')));
   if (networks.length) header.appendChild(badge(String(networks.length)));
   wrap.appendChild(header);
 
   if (!networks.length) {
     const empty = document.createElement('div');
     empty.className = 'network-idle';
-    empty.textContent = 'No networks found — try scanning again.';
+    empty.textContent = t('net.noneFound');
     wrap.appendChild(empty);
     return wrap;
   }
@@ -474,14 +475,14 @@ function networksSection(s) {
   const listEl = document.createElement('div');
   listEl.className = 'ui-list';
   for (const net of networks) {
-    const bits = [net.security || 'Open', net.band].filter(Boolean);
-    if (net.active) bits.unshift('Connected');
-    else if (net.known) bits.unshift('Known');
-    if (net.hidden || !net.ssid) bits.unshift('hidden');
+    const bits = [net.security || t('net.open'), net.band].filter(Boolean);
+    if (net.active) bits.unshift(t('net.connected'));
+    else if (net.known) bits.unshift(t('net.known'));
+    if (net.hidden || !net.ssid) bits.unshift(t('net.hidden'));
 
     listEl.appendChild(listItem({
       leading: icon(`hud/wifi-${net.level}`, { size: 17, className: 'network-leading' }),
-      title: net.ssid || 'Hidden network',
+      title: net.ssid || t('net.hiddenNetwork'),
       subtitle: bits.join(' · '),
       trailing: strengthTrailing(net),
       onClick: () => onNetworkClick(net),
@@ -493,7 +494,7 @@ function networksSection(s) {
 
 function savedSection(saved, s) {
   const wrap = document.createElement('div');
-  wrap.appendChild(sectionTitle('Saved networks'));
+  wrap.appendChild(sectionTitle(t('net.saved')));
   const listEl = document.createElement('div');
   listEl.className = 'ui-list';
   for (const profile of saved) {
@@ -501,7 +502,7 @@ function savedSection(saved, s) {
     trailing.className = 'network-trailing';
     trailing.appendChild(iconButton({
       icon: 'ui/trash',
-      label: `Forget ${profile.ssid}`,
+      label: t('net.forgetName', { name: profile.ssid }),
       variant: 'quiet',
       size: 'sm',
       onClick: () => confirmForget(profile),
@@ -509,7 +510,7 @@ function savedSection(saved, s) {
     listEl.appendChild(listItem({
       leading: icon('ui/lock', { size: 15, className: 'network-leading' }),
       title: profile.ssid || profile.id,
-      subtitle: profile.autoconnect ? 'Connects automatically' : 'Manual connection',
+      subtitle: profile.autoconnect ? t('net.autoconnect') : t('net.manual'),
       trailing,
       onClick: () => {
         const net = (s.networks || []).find((n) => n.ssid === profile.ssid)
@@ -525,7 +526,7 @@ function savedSection(saved, s) {
 /** Wired interfaces + any kernel link NetworkManager does not list. */
 function linksSection(s) {
   const wrap = document.createElement('div');
-  wrap.appendChild(sectionTitle('Wired'));
+  wrap.appendChild(sectionTitle(t('net.wired')));
   const listEl = document.createElement('div');
   listEl.className = 'ui-list';
 
@@ -536,7 +537,7 @@ function linksSection(s) {
       wired.state,
       wired.ip4,
       wired.speed_mbps ? `${wired.speed_mbps} Mb/s` : null,
-      wired.managed === false ? 'system-managed' : null,
+      wired.managed === false ? t('net.systemManaged') : null,
     ].filter(Boolean);
     listEl.appendChild(listItem({
       leading: icon('hud/ethernet', { size: 17, className: 'network-leading' }),
@@ -547,11 +548,11 @@ function linksSection(s) {
   for (const link of s.links || []) {
     if (seen.has(link.interface) || link.wireless) continue;
     const bits = [
-      link.up ? 'up' : 'down',
+      link.up ? t('net.up') : t('net.down'),
       link.ip4,
-      link.default_route ? 'default route' : null,
+      link.default_route ? t('net.defaultRoute') : null,
       link.speed_mbps ? `${link.speed_mbps} Mb/s` : null,
-      'system-managed',
+      t('net.systemManaged'),
     ].filter(Boolean);
     listEl.appendChild(listItem({
       leading: icon('hud/ethernet', { size: 17, className: 'network-leading' }),

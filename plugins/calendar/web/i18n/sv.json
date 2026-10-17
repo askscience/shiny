@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalender — schemalägg, lista och organisera händelser i Kalender-fönstret",
+  "plugin.calendar.meta.summary": "Kalender: schemalägg och organisera händelser",
+  "plugin.calendar.meta.category": "Kontor",
+
+  "plugin.calendar.month.january": "januari",
+  "plugin.calendar.month.february": "februari",
+  "plugin.calendar.month.march": "mars",
+  "plugin.calendar.month.april": "april",
+  "plugin.calendar.month.may": "maj",
+  "plugin.calendar.month.june": "juni",
+  "plugin.calendar.month.july": "juli",
+  "plugin.calendar.month.august": "augusti",
+  "plugin.calendar.month.september": "september",
+  "plugin.calendar.month.october": "oktober",
+  "plugin.calendar.month.november": "november",
+  "plugin.calendar.month.december": "december",
+
+  "plugin.calendar.grid.sun": "sön",
+  "plugin.calendar.grid.mon": "mån",
+  "plugin.calendar.grid.tue": "tis",
+  "plugin.calendar.grid.wed": "ons",
+  "plugin.calendar.grid.thu": "tors",
+  "plugin.calendar.grid.fri": "fre",
+  "plugin.calendar.grid.sat": "lör",
+
+  "plugin.calendar.event.allDay": "Heldag",
+
+  "plugin.calendar.toolbar.previousMonth": "Föregående månad",
+  "plugin.calendar.toolbar.nextMonth": "Nästa månad",
+  "plugin.calendar.toolbar.today": "I dag",
+  "plugin.calendar.toolbar.newEvent": "Ny händelse",
+
+  "plugin.calendar.ctx.refresh": "Uppdatera",
+
+  "plugin.calendar.detail.edit": "Redigera",
+  "plugin.calendar.detail.delete": "Ta bort",
+
+  "plugin.calendar.empty.noEvents": "Inga händelser",
+  "plugin.calendar.empty.noEventsBody": "Inget planerat. Lägg till en händelse eller be AI:n schemalägga en.",
+
+  "plugin.calendar.dialog.title": "Händelse",
+  "plugin.calendar.dialog.editTitle": "Redigera händelse",
+  "plugin.calendar.dialog.titleField": "Rubrik",
+  "plugin.calendar.dialog.titlePlaceholder": "t.ex. Teamavstämning",
+  "plugin.calendar.dialog.dateField": "Datum",
+  "plugin.calendar.dialog.startTimeField": "Starttid",
+  "plugin.calendar.dialog.endTimeField": "Sluttid",
+  "plugin.calendar.dialog.locationField": "Plats",
+  "plugin.calendar.dialog.locationPlaceholder": "Plats (valfritt)",
+  "plugin.calendar.dialog.notesField": "Anteckningar",
+  "plugin.calendar.dialog.notesPlaceholder": "Anteckningar (valfritt)",
+  "plugin.calendar.dialog.cancel": "Avbryt",
+  "plugin.calendar.dialog.save": "Spara händelse",
+
+  "plugin.calendar.toast.titleRequired": "Rubrik krävs",
+  "plugin.calendar.toast.dateRequired": "Datum krävs",
+  "plugin.calendar.toast.updated": "Händelsen uppdaterad",
+  "plugin.calendar.toast.scheduled": "Händelsen schemalagd",
+  "plugin.calendar.toast.deleted": "Händelsen borttagen",
+  "plugin.calendar.toast.loadFailed": "Kunde inte läsa in händelser",
+  "plugin.calendar.toast.saveFailed": "Kunde inte spara händelsen",
+  "plugin.calendar.toast.deleteFailed": "Kunde inte ta bort händelsen",
+
+  "plugin.calendar.confirm.deleteEvent": "Ta bort \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Händelse börjar snart"
+}

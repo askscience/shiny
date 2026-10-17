@@ -556,51 +556,67 @@ fn cell_ref_order(cell_ref: &str) -> (u32, u32) {
     (row, col)
 }
 
-pub fn step_label_for_action(action: &str) -> &'static str {
+/// A UI status line: the catalogue key the web client resolves, plus the
+/// English `text` it falls back to (also what tests and logs read). Keys live
+/// in `web/i18n/*.json` under the `step.` namespace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepText {
+    pub key: &'static str,
+    pub text: &'static str,
+}
+
+impl StepText {
+    const fn new(key: &'static str, text: &'static str) -> Self {
+        Self { key, text }
+    }
+}
+
+pub fn step_label_for_action(action: &str) -> StepText {
     match action {
-        "plan_trip" => "Planning your trip…",
-        "navigate_to" => "Starting navigation…",
-        "web_search" => "Searching the web…",
-        "create_trip" => "Creating trip…",
-        "start_trip" => "Starting trip…",
-        "end_trip" => "Ending trip…",
-        "list_trips" => "Loading trips…",
-        "generate_diary" => "Writing diary…",
-        "show_artifact" | "update_artifact" => "Updating guide…",
-        "show_plugin" => "Opening plugin…",
-        "generate_image" => "Rendering image…",
-        "generate_song" => "Composing the song…",
-        "plugin_activate" => "Activating plugin…",
-        "plugin_deactivate" => "Deactivating plugin…",
-        "plugin_deactivate_all" => "Closing all plugins…",
-        "list_plugins" => "Checking plugins…",
-        "desktop_fullscreen" => "Fullscreening…",
-        "desktop_focus" => "Focusing window…",
-        "workspace_create" => "New workspace…",
-        "workspace_remove" => "Removing workspace…",
-        "workspace_switch" => "Switching workspace…",
-        "workspace_move" => "Moving window…",
-        "youtube_search" => "Searching YouTube…",
-        "youtube_play" => "Playing on YouTube…",
-        "calc_create" => "Creating spreadsheet…",
-        "calc_write" => "Writing cells…",
-        "calc_clear" => "Clearing spreadsheet…",
-        "calc_read" => "Reading spreadsheet…",
-        "calc_list" => "Listing spreadsheets…",
-        "calc_delete" => "Deleting spreadsheet…",
-        "slide_create" => "Building slides…",
-        "slide_write" => "Writing slides…",
-        "slide_edit" => "Editing slides…",
-        "slide_read" => "Reading slides…",
-        "slide_list" => "Listing presentations…",
-        "slide_delete" => "Deleting presentation…",
-        _ => "Working…",
+        "plan_trip" => StepText::new("step.planningTrip", "Planning your trip…"),
+        "navigate_to" => StepText::new("step.startingNavigation", "Starting navigation…"),
+        "web_search" => StepText::new("step.searchingWeb", "Searching the web…"),
+        "create_trip" => StepText::new("step.creatingTrip", "Creating trip…"),
+        "start_trip" => StepText::new("step.startingTrip", "Starting trip…"),
+        "end_trip" => StepText::new("step.endingTrip", "Ending trip…"),
+        "list_trips" => StepText::new("step.loadingTrips", "Loading trips…"),
+        "generate_diary" => StepText::new("step.writingDiary", "Writing diary…"),
+        "show_artifact" | "update_artifact" => StepText::new("step.updatingGuide", "Updating guide…"),
+        "show_plugin" => StepText::new("step.openingPlugin", "Opening plugin…"),
+        "generate_image" => StepText::new("step.renderingImage", "Rendering image…"),
+        "generate_song" => StepText::new("step.composingSong", "Composing the song…"),
+        "plugin_activate" => StepText::new("step.activatingPlugin", "Activating plugin…"),
+        "plugin_deactivate" => StepText::new("step.deactivatingPlugin", "Deactivating plugin…"),
+        "plugin_deactivate_all" => StepText::new("step.closingAllPlugins", "Closing all plugins…"),
+        "list_plugins" => StepText::new("step.checkingPlugins", "Checking plugins…"),
+        "desktop_fullscreen" => StepText::new("step.fullscreening", "Fullscreening…"),
+        "desktop_focus" => StepText::new("step.focusingWindow", "Focusing window…"),
+        "workspace_create" => StepText::new("step.newWorkspace", "New workspace…"),
+        "workspace_remove" => StepText::new("step.removingWorkspace", "Removing workspace…"),
+        "workspace_switch" => StepText::new("step.switchingWorkspace", "Switching workspace…"),
+        "workspace_move" => StepText::new("step.movingWindow", "Moving window…"),
+        "youtube_search" => StepText::new("step.searchingYoutube", "Searching YouTube…"),
+        "youtube_play" => StepText::new("step.playingYoutube", "Playing on YouTube…"),
+        "calc_create" => StepText::new("step.creatingSpreadsheet", "Creating spreadsheet…"),
+        "calc_write" => StepText::new("step.writingCells", "Writing cells…"),
+        "calc_clear" => StepText::new("step.clearingSpreadsheet", "Clearing spreadsheet…"),
+        "calc_read" => StepText::new("step.readingSpreadsheet", "Reading spreadsheet…"),
+        "calc_list" => StepText::new("step.listingSpreadsheets", "Listing spreadsheets…"),
+        "calc_delete" => StepText::new("step.deletingSpreadsheet", "Deleting spreadsheet…"),
+        "slide_create" => StepText::new("step.buildingSlides", "Building slides…"),
+        "slide_write" => StepText::new("step.writingSlides", "Writing slides…"),
+        "slide_edit" => StepText::new("step.editingSlides", "Editing slides…"),
+        "slide_read" => StepText::new("step.readingSlides", "Reading slides…"),
+        "slide_list" => StepText::new("step.listingPresentations", "Listing presentations…"),
+        "slide_delete" => StepText::new("step.deletingPresentation", "Deleting presentation…"),
+        "workspaces_unavailable" => StepText::new("step.workspacesUnavailable", "Workspaces are unavailable on this screen"),
+        _ => StepText::new("step.working", "Working…"),
     }
 }
 
 /// Stable-per-action pick from a small phrase list, so a given tool keeps the
 /// same personality across runs instead of flickering between quips.
-fn stable_pick(action: &str, labels: &'static [&'static str]) -> &'static str {
+fn stable_pick(action: &str, labels: &'static [StepText]) -> StepText {
     let mut h: u32 = 2166136261;
     for b in action.as_bytes() {
         h ^= *b as u32;
@@ -609,92 +625,94 @@ fn stable_pick(action: &str, labels: &'static [&'static str]) -> &'static str {
     labels[(h as usize) % labels.len()]
 }
 
-/// Rotating opener shown the instant a request starts. The UI is voice-first,
-/// so it stays short, human and a little playful — never a status code.
-pub fn thinking_label() -> &'static str {
+/// Rotating openers: the UI is voice-first, so they stay short, human and a
+/// little playful — never a status code.
+const THINKING_LABELS: &[StepText] = &[
+    StepText::new("step.thinking.1", "Thinking…"),
+    StepText::new("step.thinking.2", "On it…"),
+    StepText::new("step.thinking.3", "Brewing…"),
+    StepText::new("step.thinking.4", "Digging in…"),
+    StepText::new("step.thinking.5", "Working on it…"),
+    StepText::new("step.thinking.6", "Hold that thought…"),
+    StepText::new("step.thinking.7", "Cooking…"),
+    StepText::new("step.thinking.8", "Let me see…"),
+];
+
+/// Fallback "done" quips for actions without a line of their own.
+const DONE_QUIPS: &[StepText] = &[
+    StepText::new("step.quip.allSet", "All set"),
+    StepText::new("step.quip.doneAndDusted", "Done and dusted"),
+    StepText::new("step.quip.easyPeasy", "Easy peasy"),
+    StepText::new("step.quip.considerItDone", "Consider it done"),
+    StepText::new("step.quip.sorted", "Sorted"),
+    StepText::new("step.quip.taDa", "Ta-da"),
+    StepText::new("step.quip.noSweat", "No sweat"),
+    StepText::new("step.quip.andDone", "And… done"),
+];
+
+/// Short, friendly failure lines.
+const FAILED_LABELS: &[StepText] = &[
+    StepText::new("step.failed.didntWork", "That didn't work"),
+    StepText::new("step.failed.hitASnag", "Hit a snag"),
+    StepText::new("step.failed.slipped", "That one slipped"),
+    StepText::new("step.failed.couldntPullOff", "Couldn't pull that off"),
+];
+
+/// Rotating opener shown the instant a request starts.
+pub fn thinking_label() -> StepText {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    const LABELS: &[&str] = &[
-        "Thinking…",
-        "On it…",
-        "Brewing…",
-        "Digging in…",
-        "Working on it…",
-        "Hold that thought…",
-        "Cooking…",
-        "Let me see…",
-    ];
-    LABELS[NEXT.fetch_add(1, Ordering::Relaxed) % LABELS.len()]
+    THINKING_LABELS[NEXT.fetch_add(1, Ordering::Relaxed) % THINKING_LABELS.len()]
 }
 
 /// Human "finished" line for the UI bubble. The model still receives the FULL
 /// tool note (`describe_tool_step`) — this is only what the user reads, so it
 /// must never be raw JSON. Plugin tools answer with their own `Tool::humanize`;
 /// this map covers the core actions and the fallback.
-pub fn done_label_for_action(action: &str) -> &'static str {
+pub fn done_label_for_action(action: &str) -> StepText {
     match action {
-        "plan_trip" => "Trip's ready",
-        "navigate_to" => "On our way",
-        "web_search" => "Found it",
-        "create_trip" => "Trip created",
-        "start_trip" => "Trip started",
-        "end_trip" => "Trip wrapped",
-        "list_trips" => "Trips listed",
-        "generate_diary" => "Diary written",
-        "show_artifact" | "update_artifact" => "Card ready",
-        "show_plugin" => "Window open",
-        "generate_image" => "Image ready",
-        "generate_song" => "Song ready",
-        "plugin_activate" => "Plugin on",
-        "plugin_deactivate" => "Plugin off",
-        "plugin_deactivate_all" => "All closed",
-        "list_plugins" => "Plugins listed",
-        "desktop_fullscreen" => "Full screen",
-        "desktop_focus" => "Focused",
-        "workspace_create" => "Workspace made",
-        "workspace_remove" => "Workspace gone",
-        "workspace_switch" => "Switched",
-        "workspace_move" => "Window moved",
-        "youtube_search" => "Found videos",
-        "youtube_play" => "Now playing",
-        "calc_create" => "Sheet ready",
-        "calc_write" => "Cells written",
-        "calc_clear" => "Sheet cleared",
-        "calc_read" => "Sheet read",
-        "calc_list" => "Sheets listed",
-        "calc_delete" => "Sheet gone",
-        "slide_create" => "Deck ready",
-        "slide_write" => "Slides written",
-        "slide_edit" => "Slides edited",
-        "slide_read" => "Deck read",
-        "slide_list" => "Decks listed",
-        "slide_delete" => "Deck gone",
-        _ => stable_pick(
-            action,
-            &[
-                "All set",
-                "Done and dusted",
-                "Easy peasy",
-                "Consider it done",
-                "Sorted",
-                "Ta-da",
-                "No sweat",
-                "And… done",
-            ],
-        ),
+        "plan_trip" => StepText::new("step.done.planTrip", "Trip's ready"),
+        "navigate_to" => StepText::new("step.done.navigateTo", "On our way"),
+        "web_search" => StepText::new("step.done.webSearch", "Found it"),
+        "create_trip" => StepText::new("step.done.createTrip", "Trip created"),
+        "start_trip" => StepText::new("step.done.startTrip", "Trip started"),
+        "end_trip" => StepText::new("step.done.endTrip", "Trip wrapped"),
+        "list_trips" => StepText::new("step.done.listTrips", "Trips listed"),
+        "generate_diary" => StepText::new("step.done.generateDiary", "Diary written"),
+        "show_artifact" | "update_artifact" => StepText::new("step.done.updateArtifact", "Card ready"),
+        "show_plugin" => StepText::new("step.done.showPlugin", "Window open"),
+        "generate_image" => StepText::new("step.done.generateImage", "Image ready"),
+        "generate_song" => StepText::new("step.done.generateSong", "Song ready"),
+        "plugin_activate" => StepText::new("step.done.pluginActivate", "Plugin on"),
+        "plugin_deactivate" => StepText::new("step.done.pluginDeactivate", "Plugin off"),
+        "plugin_deactivate_all" => StepText::new("step.done.pluginDeactivateAll", "All closed"),
+        "list_plugins" => StepText::new("step.done.listPlugins", "Plugins listed"),
+        "desktop_fullscreen" => StepText::new("step.done.desktopFullscreen", "Full screen"),
+        "desktop_focus" => StepText::new("step.done.desktopFocus", "Focused"),
+        "workspace_create" => StepText::new("step.done.workspaceCreate", "Workspace made"),
+        "workspace_remove" => StepText::new("step.done.workspaceRemove", "Workspace gone"),
+        "workspace_switch" => StepText::new("step.done.workspaceSwitch", "Switched"),
+        "workspace_move" => StepText::new("step.done.workspaceMove", "Window moved"),
+        "youtube_search" => StepText::new("step.done.youtubeSearch", "Found videos"),
+        "youtube_play" => StepText::new("step.done.youtubePlay", "Now playing"),
+        "calc_create" => StepText::new("step.done.calcCreate", "Sheet ready"),
+        "calc_write" => StepText::new("step.done.calcWrite", "Cells written"),
+        "calc_clear" => StepText::new("step.done.calcClear", "Sheet cleared"),
+        "calc_read" => StepText::new("step.done.calcRead", "Sheet read"),
+        "calc_list" => StepText::new("step.done.calcList", "Sheets listed"),
+        "calc_delete" => StepText::new("step.done.calcDelete", "Sheet gone"),
+        "slide_create" => StepText::new("step.done.slideCreate", "Deck ready"),
+        "slide_write" => StepText::new("step.done.slideWrite", "Slides written"),
+        "slide_edit" => StepText::new("step.done.slideEdit", "Slides edited"),
+        "slide_read" => StepText::new("step.done.slideRead", "Deck read"),
+        "slide_list" => StepText::new("step.done.slideList", "Decks listed"),
+        "slide_delete" => StepText::new("step.done.slideDelete", "Deck gone"),
+        _ => stable_pick(action, DONE_QUIPS),
     }
 }
 
 /// Short, friendly failure line for the UI bubble.
-pub fn failed_label_for_action(action: &str) -> &'static str {
-    stable_pick(
-        action,
-        &[
-            "That didn't work",
-            "Hit a snag",
-            "That one slipped",
-            "Couldn't pull that off",
-        ],
-    )
+pub fn failed_label_for_action(action: &str) -> StepText {
+    stable_pick(action, FAILED_LABELS)
 }
 
 pub fn messages_char_count(messages: &[(String, String)]) -> usize {
@@ -755,14 +773,88 @@ mod tests {
 
     #[test]
     fn ui_step_labels_are_human_and_never_json() {
-        assert_eq!(done_label_for_action("web_search"), "Found it");
-        assert_eq!(done_label_for_action("plugin_activate"), "Plugin on");
+        assert_eq!(done_label_for_action("web_search").text, "Found it");
+        assert_eq!(done_label_for_action("plugin_activate").text, "Plugin on");
         // Unknown/plugin actions get a short, STABLE quip — no JSON, no
         // machine identifiers leaking into the speech bubble.
         let quip = done_label_for_action("studio_catalog");
-        assert!(!quip.contains('{') && !quip.contains('_'), "raw action leaked: {quip}");
+        assert!(!quip.text.contains('{') && !quip.text.contains('_'), "raw action leaked: {}", quip.text);
         assert_eq!(quip, done_label_for_action("studio_catalog"));
-        assert!(!failed_label_for_action("studio_catalog").contains('_'));
+        assert!(!failed_label_for_action("studio_catalog").text.contains('_'));
+    }
+
+    #[test]
+    fn ui_step_keys_are_unique_catalogue_keys() {
+        // Every key must exist in the reference catalogue (web/i18n/en.json)
+        // with exactly this English — a typo would otherwise show the raw key
+        // in the status bubble.
+        let path = format!("{}/web/i18n/en.json", env!("CARGO_MANIFEST_DIR"));
+        let en: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).expect("web/i18n/en.json is readable"),
+        )
+        .expect("en.json parses");
+        let catalogue = |step: StepText| {
+            assert_eq!(
+                en.get(step.key).and_then(|v| v.as_str()),
+                Some(step.text),
+                "catalogue entry for {}",
+                step.key
+            );
+        };
+
+        let mut labels: Vec<StepText> = Vec::new();
+        let actions = [
+            "plan_trip", "navigate_to", "web_search", "create_trip", "start_trip", "end_trip",
+            "list_trips", "generate_diary", "show_artifact", "update_artifact", "show_plugin",
+            "generate_image", "generate_song", "plugin_activate", "plugin_deactivate",
+            "plugin_deactivate_all", "list_plugins", "desktop_fullscreen", "desktop_focus",
+            "workspace_create", "workspace_remove", "workspace_switch", "workspace_move",
+            "youtube_search", "youtube_play", "calc_create", "calc_write", "calc_clear", "calc_read",
+            "calc_list", "calc_delete", "slide_create", "slide_write", "slide_edit", "slide_read",
+            "slide_list", "slide_delete", "workspaces_unavailable", "something_unknown",
+        ];
+        for action in actions {
+            let step = step_label_for_action(action);
+            let done = done_label_for_action(action);
+            assert!(step.key.starts_with("step."), "{action}: {}", step.key);
+            assert!(done.key.starts_with("step."), "{action}: {}", done.key);
+            assert!(!step.text.is_empty() && !done.text.is_empty(), "{action}: empty text");
+            catalogue(step);
+            catalogue(done);
+            labels.push(step);
+            labels.push(done);
+        }
+        labels.extend(THINKING_LABELS.iter().chain(DONE_QUIPS).chain(FAILED_LABELS).copied());
+        for label in [thinking_label(), thinking_label()] {
+            assert!(label.key.starts_with("step.thinking."), "{}", label.key);
+        }
+
+        // Same key ⇒ same text (aliases like show_artifact/update_artifact
+        // share a label on purpose), and inside the step namespace no two keys
+        // hide behind one English — the server's error translator maps an
+        // English message back to a key, so an ambiguous value is a bug.
+        let mut by_key: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+        let mut by_text: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+        for label in labels {
+            match by_key.get(label.key) {
+                Some(text) => assert_eq!(*text, label.text, "key {} carries two texts", label.key),
+                None => {
+                    by_key.insert(label.key, label.text);
+                }
+            }
+            if label.key != "step.working" {
+                match by_text.get(label.text) {
+                    Some(key) => assert_eq!(
+                        *key, label.key,
+                        "English {:?} maps to both {} and {}",
+                        label.text, key, label.key
+                    ),
+                    None => {
+                        by_text.insert(label.text, label.key);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -771,7 +863,7 @@ mod tests {
         let second = thinking_label();
         assert_ne!(first, second, "the opener should rotate between runs");
         for label in [first, second] {
-            assert!(label.chars().count() <= 24, "too long for the bubble: {label}");
+            assert!(label.text.chars().count() <= 24, "too long for the bubble: {}", label.text);
         }
     }
 
@@ -885,7 +977,7 @@ mod tests {
     fn youtube_play_step_mentions_title() {
         let step = describe_tool_step("youtube_play", "ok", &json!({ "video_id": "abc", "title": "Rick Astley - Never Gonna Give You Up" }));
         assert!(step.contains("Playing Rick Astley"), "play note: {step}");
-        assert_eq!(step_label_for_action("youtube_play"), "Playing on YouTube…");
+        assert_eq!(step_label_for_action("youtube_play").text, "Playing on YouTube…");
     }
 
     #[test]

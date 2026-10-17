@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Skutočný linuxový terminál v aplikácii — prihlasovací shell cez PTY vo vlastnom okne",
+  "plugin.terminal.meta.summary": "Terminál: skutočný shell cez PTY, vykreslený pomocou xterm.js",
+  "plugin.terminal.meta.category": "Systém",
+
+  "plugin.terminal.tab.label": "Terminál {n}",
+  "plugin.terminal.tab.new": "Nová karta",
+  "plugin.terminal.tab.close": "Zavrieť {name}",
+  "plugin.terminal.tabs.label": "Karty terminálu",
+
+  "plugin.terminal.status.starting": "spúšťa sa terminál…",
+  "plugin.terminal.status.connecting": "pripája sa…",
+  "plugin.terminal.status.reconnecting": "obnovuje sa pripojenie…",
+  "plugin.terminal.status.connected": "pripojené",
+  "plugin.terminal.status.startFailed": "nepodarilo sa spustiť shell",
+  "plugin.terminal.status.expired": "relácia vypršala — prihláste sa znova",
+  "plugin.terminal.status.xtermFailed": "nepodarilo sa načítať xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminál: najviac {count} karta",
+  "plugin.terminal.toast.tabLimit.few": "Terminál: najviac {count} karty",
+  "plugin.terminal.toast.tabLimit.many": "Terminál: najviac {count} karty",
+  "plugin.terminal.toast.tabLimit.other": "Terminál: najviac {count} kariet",
+  "plugin.terminal.toast.startFailed": "Terminál: nepodarilo sa spustiť shell",
+  "plugin.terminal.toast.xtermFailed": "Terminál: xterm.js sa nepodarilo načítať",
+  "plugin.terminal.toast.clipboardUnavailable": "Schránka nie je dostupná",
+
+  "plugin.terminal.ctx.copy": "Kopírovať",
+  "plugin.terminal.ctx.paste": "Vložiť",
+  "plugin.terminal.ctx.clearScrollback": "Vymazať históriu posúvania",
+  "plugin.terminal.ctx.closeTab": "Zavrieť kartu"
+}

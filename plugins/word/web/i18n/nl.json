@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Documenten",
+  "plugin.word.toolbar.titlePlaceholder": "Zonder titel",
+  "plugin.word.toolbar.newDocument": "Nieuw document",
+  "plugin.word.toolbar.importOdt": ".odt importeren",
+  "plugin.word.toolbar.saveToDocuments": "Opslaan in Documenten",
+  "plugin.word.toolbar.saveNow": "Nu opslaan",
+  "plugin.word.toolbar.deleteDocument": "Document verwijderen",
+  "plugin.word.toolbar.bold": "Vet",
+  "plugin.word.toolbar.italic": "Cursief",
+  "plugin.word.toolbar.underline": "Onderstrepen",
+  "plugin.word.toolbar.heading": "Kop",
+  "plugin.word.toolbar.bulletList": "Opsomming",
+  "plugin.word.toolbar.font": "Lettertype",
+  "plugin.word.toolbar.fontHint": "Lettertype — geldt voor de selectie, of voor het hele document als er niets is geselecteerd",
+
+  "plugin.word.status.saving": "Opslaan…",
+  "plugin.word.status.unsaved": "Niet-opgeslagen wijzigingen",
+  "plugin.word.status.saved.one": "Opgeslagen {time} · {count} woord",
+  "plugin.word.status.saved.other": "Opgeslagen {time} · {count} woorden",
+
+  "plugin.word.menu.empty": "Nog geen documenten",
+  "plugin.word.menu.newDocument": "Nieuw document",
+  "plugin.word.menu.importOdt": ".odt importeren",
+  "plugin.word.menu.saveToDocuments": "Opslaan in Documenten",
+  "plugin.word.menu.deleteDocument": "Document verwijderen",
+
+  "plugin.word.ctx.newDocument": "Nieuw document",
+  "plugin.word.ctx.saveNow": "Nu opslaan",
+  "plugin.word.ctx.saveToDocuments": "Opslaan in Documenten",
+  "plugin.word.ctx.bold": "Vet",
+  "plugin.word.ctx.italic": "Cursief",
+  "plugin.word.ctx.heading": "Kop",
+  "plugin.word.ctx.list": "Lijst",
+  "plugin.word.ctx.deleteDocument": "Document verwijderen",
+
+  "plugin.word.dialog.deleteDoc": "\"{title}\" verwijderen?",
+
+  "plugin.word.toast.saveFailed": "Opslaan mislukt",
+  "plugin.word.toast.openFailed": "Kon het document niet openen",
+  "plugin.word.toast.createFailed": "Kon het document niet aanmaken",
+  "plugin.word.toast.deleteFailed": "Kon het document niet verwijderen",
+  "plugin.word.toast.imported": "{name} geïmporteerd",
+  "plugin.word.toast.importFailed": "Importeren mislukt — is dit een geldig .odt-bestand?",
+  "plugin.word.toast.openFileFailed": "Kon het bestand niet openen",
+
+  "plugin.word.meta.description": "Eenvoudige tekstverwerker — documenten worden opgeslagen als open .odt-bestanden",
+  "plugin.word.meta.summary": "Tekstverwerker: OpenDocument-documenten (.odt) maken, bewerken en lezen",
+  "plugin.word.meta.category": "Kantoor"
+}

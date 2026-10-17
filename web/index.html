@@ -32,12 +32,15 @@
        installed-theme index is cached by listThemes() for the check here.
        Lives in its own file so the CSP can forbid inline scripts. -->
   <script src="/js/early-theme.js"></script>
+  <!-- Tag <html> with the stored interface language before first paint; the
+       catalogs are fetched by js/i18n.js while the splash still covers the app. -->
+  <script src="/js/early-i18n.js"></script>
 </head>
 <body>
   <!-- Boot splash: the PEAK'D! mark with an accent-coloured glitch. Painted
        before any module runs and faded out by js/bootScreen.js once the app
        (or the sign-in screen) is ready. Follows the theme's accent tokens. -->
-  <div id="boot-screen" class="boot-screen" role="status" aria-label="Loading PEAK'D!">
+  <div id="boot-screen" class="boot-screen" role="status" aria-label="Loading PEAK'D!" data-i18n-aria-label="boot.loading">
     <div class="boot-scan" aria-hidden="true"></div>
     <div class="boot-logo" aria-hidden="true">
       <span class="boot-logo__layer boot-logo__crear app-icon"></span>
@@ -63,12 +66,12 @@
       </div>
 
       <div id="login-step-pick">
-        <p class="login-step-label">Who&rsquo;s signing in?</p>
-        <div id="profile-picker" class="profile-picker" role="list" aria-label="Saved profiles"></div>
+        <p class="login-step-label" data-i18n="login.whoIsSigningIn">Who&rsquo;s signing in?</p>
+        <div id="profile-picker" class="profile-picker" role="list" aria-label="Saved profiles" data-i18n-aria-label="login.savedProfiles"></div>
       </div>
 
       <div id="login-step-password" class="hidden">
-        <button type="button" id="login-back-pick" class="login-back ui-btn ui-btn--quiet ui-btn--sm">← Back</button>
+        <button type="button" id="login-back-pick" class="login-back ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.back">← Back</button>
         <div class="profile-selected">
           <div id="login-selected-avatar" class="profile-avatar"></div>
           <span id="login-selected-name" class="profile-selected-name"></span>
@@ -76,24 +79,24 @@
         <!-- Shown only when signing in with a typed username (no saved
              profile on this device), so the field can never be silently
              ignored. -->
-        <input type="text" id="login-username" class="ui-input hidden" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false">
-        <input type="password" id="login-password" class="ui-input" placeholder="Password" autocomplete="current-password">
-        <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block">Sign In</button>
-        <button type="button" id="login-to-register" class="login-link ui-btn ui-btn--quiet ui-btn--sm hidden">New here? Create a profile</button>
+        <input type="text" id="login-username" class="ui-input hidden" placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <input type="password" id="login-password" class="ui-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="current-password">
+        <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.signIn">Sign In</button>
+        <button type="button" id="login-to-register" class="login-link ui-btn ui-btn--quiet ui-btn--sm hidden" data-i18n="login.createProfileLink">New here? Create a profile</button>
       </div>
 
       <div id="login-step-register" class="hidden">
-        <button type="button" id="login-back-from-register" class="login-back ui-btn ui-btn--quiet ui-btn--sm">← Back</button>
-        <p class="login-step-label">Create your profile</p>
+        <button type="button" id="login-back-from-register" class="login-back ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.back">← Back</button>
+        <p class="login-step-label" data-i18n="login.createProfile">Create your profile</p>
         <label class="profile-avatar-upload">
           <input type="file" id="register-avatar" accept="image/*" hidden>
           <div id="register-avatar-preview" class="profile-avatar profile-avatar--placeholder profile-avatar--large">+</div>
-          <span class="profile-avatar-label">Add photo</span>
+          <span class="profile-avatar-label" data-i18n="login.addPhoto">Add photo</span>
         </label>
-        <input type="text" id="register-username" class="ui-input" placeholder="Username" autocomplete="username" autocapitalize="off">
-        <input type="password" id="register-password" class="ui-input" placeholder="Password" autocomplete="new-password">
-        <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block">Create Account</button>
-        <button type="button" id="register-to-login" class="login-link ui-btn ui-btn--quiet ui-btn--sm">Already have a profile? Sign in</button>
+        <input type="text" id="register-username" class="ui-input" placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off">
+        <input type="password" id="register-password" class="ui-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="new-password">
+        <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.createAccount">Create Account</button>
+        <button type="button" id="register-to-login" class="login-link ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.haveProfile">Already have a profile? Sign in</button>
       </div>
 
       <p id="login-error" class="app-error hidden"></p>
@@ -111,68 +114,68 @@
 
     <div id="map-vignette" aria-hidden="true"></div>
 
-    <div id="insight-cards" class="hidden" aria-live="polite" aria-label="Destination insights"></div>
+    <div id="insight-cards" class="hidden" aria-live="polite" aria-label="Destination insights" data-i18n-aria-label="hud.insights"></div>
 
-    <header id="hud-header" aria-label="Status and controls">
+    <header id="hud-header" aria-label="Status and controls" data-i18n-aria-label="hud.statusAndControls">
       <!-- Fullscreen a window and its title-bar stripe is replaced by this
            bubble (fullscreenBubble.js): app name + close / exit-fullscreen,
            same glass pill as the workspace switcher. -->
-      <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Fullscreen window"></div>
+      <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Fullscreen window" data-i18n-aria-label="hud.fullscreenWindow"></div>
       <div class="hud-header-main">
         <!-- Group separators (clock | weather | tray | status chips | actions)
              are mounted by js/hudDivider.js — one element, one style. -->
         <!-- Clock and weather are the bar's two popover triggers: the clock
              opens the location time + the calendar's month, the weather chip
              the 5-day forecast. -->
-        <button type="button" class="hud-clock" aria-haspopup="dialog" aria-expanded="false" title="Time and calendar">
+        <button type="button" class="hud-clock" aria-haspopup="dialog" aria-expanded="false" title="Time and calendar" data-i18n-title="hud.timeCalendar">
           <span class="hud-clock-text" aria-live="polite">
             <span id="hud-clock-time">--:--</span>
             <span id="hud-clock-date"></span>
           </span>
         </button>
-        <button type="button" class="hud-meteo" id="hud-meteo" title="Weather at your position" aria-haspopup="dialog" aria-expanded="false">
+        <button type="button" class="hud-meteo" id="hud-meteo" title="Weather at your position" data-i18n-title="hud.weather" aria-haspopup="dialog" aria-expanded="false">
           <span id="hud-meteo-icon" data-icon="insights/weather-cloud" aria-hidden="true"></span>
           <span id="hud-meteo-temp">—°</span>
           <span id="hud-meteo-label">…</span>
         </button>
-        <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins"></div>
-        <div id="hud-saved-trips" class="empty" aria-label="Saved places"></div>
+        <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins" data-i18n-aria-label="hud.plugins"></div>
+        <div id="hud-saved-trips" class="empty" aria-label="Saved places" data-i18n-aria-label="hud.savedPlaces"></div>
         <div id="hud-top">
-          <button type="button" id="hud-audio" class="hud-audio hidden" title="Sound" aria-label="Sound">
+          <button type="button" id="hud-audio" class="hud-audio hidden" title="Sound" data-i18n-title="hud.sound" aria-label="Sound" data-i18n-aria-label="hud.sound">
             <span class="hud-audio-icon" id="hud-audio-icon" aria-hidden="true"></span>
             <span class="hud-audio-label" id="hud-audio-label"></span>
             <span class="hud-audio-pct" id="hud-audio-pct"></span>
           </button>
-          <button type="button" id="hud-network" class="hud-network hidden" title="Network" aria-label="Network status">
+          <button type="button" id="hud-network" class="hud-network hidden" title="Network" data-i18n-title="hud.network" aria-label="Network status" data-i18n-aria-label="hud.networkStatus">
             <span class="hud-network-icon" id="hud-network-icon" aria-hidden="true"></span>
             <span class="hud-network-label" id="hud-network-label"></span>
             <span class="hud-network-pct" id="hud-network-pct"></span>
           </button>
-          <button type="button" id="hud-bluetooth" class="hud-bluetooth hidden" title="Bluetooth" aria-label="Bluetooth">
+          <button type="button" id="hud-bluetooth" class="hud-bluetooth hidden" title="Bluetooth" data-i18n-title="hud.bluetooth" aria-label="Bluetooth" data-i18n-aria-label="hud.bluetooth">
             <span class="hud-bluetooth-icon" id="hud-bluetooth-icon" aria-hidden="true"></span>
             <span class="hud-bluetooth-label" id="hud-bluetooth-label"></span>
             <span class="hud-bluetooth-pct" id="hud-bluetooth-pct"></span>
           </button>
-          <button type="button" id="hud-battery" class="hud-battery hidden" title="Battery" aria-label="Battery" aria-haspopup="dialog" aria-expanded="false">
+          <button type="button" id="hud-battery" class="hud-battery hidden" title="Battery" data-i18n-title="hud.battery" aria-label="Battery" data-i18n-aria-label="hud.battery" aria-haspopup="dialog" aria-expanded="false">
             <span class="hud-battery-icon" id="hud-battery-icon" aria-hidden="true"></span>
             <span class="hud-battery-label" id="hud-battery-label"></span>
             <span class="hud-battery-pct" id="hud-battery-pct"></span>
           </button>
-          <button type="button" id="hud-clipboard" class="icon-btn" title="Clipboard" aria-label="Clipboard history" aria-haspopup="dialog" aria-expanded="false">
+          <button type="button" id="hud-clipboard" class="icon-btn" title="Clipboard" data-i18n-title="hud.clipboard" aria-label="Clipboard history" data-i18n-aria-label="hud.clipboardHistory" aria-haspopup="dialog" aria-expanded="false">
             <span data-icon="ui/clipboard" data-icon-size="20" aria-hidden="true"></span>
           </button>
-          <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+          <button type="button" id="settings-btn" class="icon-btn" title="Settings" data-i18n-title="hud.settings" aria-label="Settings" data-i18n-aria-label="hud.settings">
             <span data-icon="ui/settings" data-icon-size="20" aria-hidden="true"></span>
           </button>
-          <button type="button" id="plugins-btn" class="icon-btn" title="Plugins" aria-label="Plugins">
+          <button type="button" id="plugins-btn" class="icon-btn" title="Plugins" data-i18n-title="hud.plugins" aria-label="Plugins" data-i18n-aria-label="hud.plugins">
             <span data-icon="ui/puzzle" data-icon-size="20" aria-hidden="true"></span>
           </button>
-          <button type="button" id="hud-power" class="icon-btn" title="Power" aria-label="Power" aria-haspopup="dialog" aria-expanded="false">
+          <button type="button" id="hud-power" class="icon-btn" title="Power" data-i18n-title="hud.power" aria-label="Power" data-i18n-aria-label="hud.power" aria-haspopup="dialog" aria-expanded="false">
             <span class="hud-power-icon" id="hud-power-icon" aria-hidden="true"></span>
           </button>
         </div>
       </div>
-      <div id="workspace-bar" class="workspace-bar hidden" role="tablist" aria-label="Workspaces"></div>
+      <div id="workspace-bar" class="workspace-bar hidden" role="tablist" aria-label="Workspaces" data-i18n-aria-label="hud.workspaces"></div>
     </header>
 
     <div id="nav-puck" class="hidden" aria-hidden="true">
@@ -181,26 +184,26 @@
       </svg>
     </div>
 
-    <div id="nav-hud" class="hidden" aria-live="polite" aria-label="Navigation">
+    <div id="nav-hud" class="hidden" aria-live="polite" aria-label="Navigation" data-i18n-aria-label="hud.navigation">
       <div id="nav-strip" class="nav-strip">
         <div class="nav-strip-body">
-          <p id="nav-instruction" class="nav-strip-instruction">Continue on route</p>
+          <p id="nav-instruction" class="nav-strip-instruction" data-i18n="nav.continue">Continue on route</p>
           <p id="nav-meta" class="nav-strip-meta">—</p>
         </div>
-        <button type="button" id="nav-exit" class="nav-exit-btn" aria-label="End navigation">&times;</button>
+        <button type="button" id="nav-exit" class="nav-exit-btn" aria-label="End navigation" data-i18n-aria-label="nav.end">&times;</button>
       </div>
-      <div id="nav-speed-chip" class="nav-speed-chip" aria-label="Current speed">
+      <div id="nav-speed-chip" class="nav-speed-chip" aria-label="Current speed" data-i18n-aria-label="nav.speed">
         <span id="nav-speed-value" class="nav-speed-value">0</span>
         <span class="nav-speed-unit">km/h</span>
       </div>
     </div>
 
     <div id="travel-panel-backdrop" class="hidden" aria-hidden="true"></div>
-    <div id="travel-panel" class="hidden" aria-label="Travel details"></div>
+    <div id="travel-panel" class="hidden" aria-label="Travel details" data-i18n-aria-label="hud.travelDetails"></div>
 
-    <div id="tile-overlay" class="tile-overlay hidden" aria-label="Plugin window">
+    <div id="tile-overlay" class="tile-overlay hidden" aria-label="Plugin window" data-i18n-aria-label="hud.window">
       <div class="tile-overlay-head">
-        <button type="button" id="tile-overlay-back" class="tile-overlay-back" aria-label="Back">
+        <button type="button" id="tile-overlay-back" class="tile-overlay-back" aria-label="Back" data-i18n-aria-label="common.back">
           <span data-icon="ui/arrow-left" aria-hidden="true"></span>
         </button>
         <span id="tile-overlay-title" class="tile-overlay-title"></span>
@@ -212,11 +215,11 @@
          a coloured shadow that rises from it and swells with the voice. The
          status pill (artifact dock) sits above it, never below. -->
     <div id="chrome-bottom">
-      <div id="artifact-dock" class="hidden" aria-label="Saved cards">
+      <div id="artifact-dock" class="hidden" aria-label="Saved cards" data-i18n-aria-label="hud.savedCards">
         <div id="artifact-dock-icons"></div>
         <div id="artifact-dock-step" class="artifact-dock-step hidden" aria-live="polite"></div>
       </div>
-      <button type="button" id="sphere-container" aria-label="Voice assistant">
+      <button type="button" id="sphere-container" aria-label="Voice assistant" data-i18n-aria-label="hud.voiceAssistant">
         <span class="voice-glow" aria-hidden="true"></span>
         <span class="voice-lip" aria-hidden="true"></span>
       </button>
@@ -229,26 +232,26 @@
         <div class="compose-head">
           <!-- The thinking toggle: brain = the model's reasoning is on, the
                slashed brain = off. Disabled when the model cannot think. -->
-          <button type="button" id="compose-think-btn" class="compose-chats-btn" aria-pressed="true" title="Thinking" aria-label="Thinking">
+          <button type="button" id="compose-think-btn" class="compose-chats-btn" aria-pressed="true" title="Thinking" data-i18n-title="chat.thinking" aria-label="Thinking" data-i18n-aria-label="chat.thinking">
             <span data-icon="ui/brain" data-icon-size="17" aria-hidden="true"></span>
           </button>
-          <button type="button" id="chat-history-btn" class="compose-chats-btn" title="Chats" aria-label="Chats">
+          <button type="button" id="chat-history-btn" class="compose-chats-btn" title="Chats" data-i18n-title="chat.chats" aria-label="Chats" data-i18n-aria-label="chat.chats">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </button>
-          <button type="button" id="compose-close-btn" class="compose-chats-btn" title="Close chat" aria-label="Close chat">
+          <button type="button" id="compose-close-btn" class="compose-chats-btn" title="Close chat" data-i18n-title="chat.close" aria-label="Close chat" data-i18n-aria-label="chat.close">
             <span data-icon="ui/close" data-icon-size="17" aria-hidden="true"></span>
           </button>
         </div>
         <!-- The composer is the one and only text input: field, send and stop
              live at the bottom of the conversation, never in the voice dock. -->
         <div id="compose-composer" class="compose-composer">
-          <textarea id="text-input-field" class="compose-dock-field" rows="1" placeholder="Ask anything…" autocomplete="off" enterkeyhint="send"></textarea>
-          <button type="button" id="compose-send" class="compose-send" aria-label="Send" title="Send">
+          <textarea id="text-input-field" class="compose-dock-field" rows="1" placeholder="Ask anything…" data-i18n-placeholder="chat.askAnything" autocomplete="off" enterkeyhint="send"></textarea>
+          <button type="button" id="compose-send" class="compose-send" aria-label="Send" data-i18n-aria-label="chat.send" title="Send" data-i18n-title="chat.send">
             <span data-icon="ui/send" data-icon-size="16" aria-hidden="true"></span>
           </button>
-          <button type="button" id="compose-stop" class="compose-stop" aria-label="Stop the answer" title="Stop"></button>
+          <button type="button" id="compose-stop" class="compose-stop" aria-label="Stop the answer" data-i18n-aria-label="chat.stopAnswer" title="Stop" data-i18n-title="chat.stop"></button>
         </div>
       </div>
     </div>
@@ -260,7 +263,7 @@
     <!-- Plugin launcher (three-finger swipe down): every installed plugin as a
          full-screen icon grid over the blurred desktop — macOS Launchpad /
          GNOME app grid, not a dialog. Drawn by launcher.js. -->
-    <div id="plugin-launcher" class="plugin-launcher hidden" role="dialog" aria-modal="true" aria-label="Plugins">
+    <div id="plugin-launcher" class="plugin-launcher hidden" role="dialog" aria-modal="true" aria-label="Plugins" data-i18n-aria-label="hud.plugins">
       <div id="plugin-launcher-grid" class="plugin-launcher-grid"></div>
     </div>
 

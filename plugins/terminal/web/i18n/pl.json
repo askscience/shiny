@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Prawdziwy terminal Linuksa w aplikacji — powłoka logowania oparta na PTY w osobnym oknie",
+  "plugin.terminal.meta.summary": "Terminal: prawdziwa powłoka przez PTY, renderowana za pomocą xterm.js",
+  "plugin.terminal.meta.category": "System",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Nowa karta",
+  "plugin.terminal.tab.close": "Zamknij {name}",
+  "plugin.terminal.tabs.label": "Karty terminala",
+
+  "plugin.terminal.status.starting": "uruchamianie terminala…",
+  "plugin.terminal.status.connecting": "łączenie…",
+  "plugin.terminal.status.reconnecting": "ponowne łączenie…",
+  "plugin.terminal.status.connected": "połączono",
+  "plugin.terminal.status.startFailed": "nie udało się uruchomić powłoki",
+  "plugin.terminal.status.expired": "sesja wygasła — zaloguj się ponownie",
+  "plugin.terminal.status.xtermFailed": "nie udało się wczytać xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: co najwyżej {count} karta",
+  "plugin.terminal.toast.tabLimit.few": "Terminal: co najwyżej {count} karty",
+  "plugin.terminal.toast.tabLimit.many": "Terminal: co najwyżej {count} kart",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: co najwyżej {count} karty",
+  "plugin.terminal.toast.startFailed": "Terminal: nie udało się uruchomić powłoki",
+  "plugin.terminal.toast.xtermFailed": "Terminal: nie udało się wczytać xterm.js",
+  "plugin.terminal.toast.clipboardUnavailable": "Schowek niedostępny",
+
+  "plugin.terminal.ctx.copy": "Kopiuj",
+  "plugin.terminal.ctx.paste": "Wklej",
+  "plugin.terminal.ctx.clearScrollback": "Wyczyść bufor przewijania",
+  "plugin.terminal.ctx.closeTab": "Zamknij kartę"
+}

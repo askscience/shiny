@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Dokumendid",
+  "plugin.word.toolbar.titlePlaceholder": "Pealkirjata",
+  "plugin.word.toolbar.newDocument": "Uus dokument",
+  "plugin.word.toolbar.importOdt": "Impordi .odt",
+  "plugin.word.toolbar.saveToDocuments": "Salvesta kausta Dokumendid",
+  "plugin.word.toolbar.saveNow": "Salvesta kohe",
+  "plugin.word.toolbar.deleteDocument": "Kustuta dokument",
+  "plugin.word.toolbar.bold": "Paks kiri",
+  "plugin.word.toolbar.italic": "Kaldkiri",
+  "plugin.word.toolbar.underline": "Allakriipsutus",
+  "plugin.word.toolbar.heading": "Pealkiri",
+  "plugin.word.toolbar.bulletList": "Punktloend",
+  "plugin.word.toolbar.font": "Font",
+  "plugin.word.toolbar.fontHint": "Font — rakendub valikule või, kui midagi pole valitud, kogu dokumendile",
+
+  "plugin.word.status.saving": "Salvestamine…",
+  "plugin.word.status.unsaved": "Salvestamata muudatused",
+  "plugin.word.status.saved.one": "Salvestatud {time} · {count} sõna",
+  "plugin.word.status.saved.other": "Salvestatud {time} · {count} sõna",
+
+  "plugin.word.menu.empty": "Dokumente veel pole",
+  "plugin.word.menu.newDocument": "Uus dokument",
+  "plugin.word.menu.importOdt": "Impordi .odt",
+  "plugin.word.menu.saveToDocuments": "Salvesta kausta Dokumendid",
+  "plugin.word.menu.deleteDocument": "Kustuta dokument",
+
+  "plugin.word.ctx.newDocument": "Uus dokument",
+  "plugin.word.ctx.saveNow": "Salvesta kohe",
+  "plugin.word.ctx.saveToDocuments": "Salvesta kausta Dokumendid",
+  "plugin.word.ctx.bold": "Paks kiri",
+  "plugin.word.ctx.italic": "Kaldkiri",
+  "plugin.word.ctx.heading": "Pealkiri",
+  "plugin.word.ctx.list": "Loend",
+  "plugin.word.ctx.deleteDocument": "Kustuta dokument",
+
+  "plugin.word.dialog.deleteDoc": "Kustutada \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Salvestamine ebaõnnestus",
+  "plugin.word.toast.openFailed": "Dokumenti ei saanud avada",
+  "plugin.word.toast.createFailed": "Dokumenti ei saanud luua",
+  "plugin.word.toast.deleteFailed": "Dokumenti ei saanud kustutada",
+  "plugin.word.toast.imported": "Imporditud {name}",
+  "plugin.word.toast.importFailed": "Import ebaõnnestus — kas see on korrektne .odt-fail?",
+  "plugin.word.toast.openFileFailed": "Faili ei saanud avada",
+
+  "plugin.word.meta.description": "Lihtne tekstiredaktor — dokumendid salvestatakse avatud .odt-failidena",
+  "plugin.word.meta.summary": "Tekstiredaktor: OpenDocument (.odt) dokumentide loomine, muutmine ja lugemine",
+  "plugin.word.meta.category": "Kontor"
+}

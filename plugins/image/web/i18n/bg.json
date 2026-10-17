@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Редактор на снимки — корекции на тона и цветовете, замъгляване/изостряне/винетка и филмови ефекти с едно щракване в прозореца Изображение",
+  "plugin.image.meta.summary": "Редактор на снимки: корекции и филмови ефекти",
+  "plugin.image.meta.category": "Медия",
+
+  "plugin.image.toolbar.menu": "Меню",
+  "plugin.image.toolbar.fitToggle": "Превключи напасване / реален размер",
+
+  "plugin.image.dial.brightness": "Яркост",
+  "plugin.image.dial.contrast": "Контраст",
+  "plugin.image.dial.exposure": "Експозиция",
+  "plugin.image.dial.vibrance": "Живост",
+  "plugin.image.dial.saturation": "Наситеност",
+  "plugin.image.dial.blur": "Замъгляване",
+  "plugin.image.dial.sharpen": "Изостряне",
+  "plugin.image.dial.vignette": "Винетка",
+
+  "plugin.image.oneClick.autoTone": "Автоматичен тон",
+  "plugin.image.oneClick.autoContrast": "Автоматичен контраст",
+  "plugin.image.oneClick.invert": "Инвертирай",
+  "plugin.image.oneClick.grayscale": "Ч/Б",
+  "plugin.image.oneClick.sepia": "Сепия",
+  "plugin.image.oneClick.revert": "Върни",
+  "plugin.image.oneClick.revertTitle": "Върни първоначалното изображение",
+
+  "plugin.image.empty.title": "Няма отворено изображение",
+  "plugin.image.empty.body": "Отворете или пуснете снимка, за да започнете.",
+  "plugin.image.empty.open": "Отвори изображение",
+
+  "plugin.image.menu.file": "Файл",
+  "plugin.image.menu.image": "Изображение",
+  "plugin.image.menu.view": "Изглед",
+  "plugin.image.menu.open": "Отвори…",
+  "plugin.image.menu.saveCopy": "Запази копие…",
+  "plugin.image.menu.delete": "Изтрий изображението",
+  "plugin.image.menu.rotateLeft": "Завърти наляво",
+  "plugin.image.menu.rotateRight": "Завърти надясно",
+  "plugin.image.menu.flipH": "Обърни хоризонтално",
+  "plugin.image.menu.flipV": "Обърни вертикално",
+  "plugin.image.menu.revert": "Върни към оригинала",
+  "plugin.image.menu.zoomIn": "Увеличи",
+  "plugin.image.menu.zoomOut": "Намали",
+  "plugin.image.menu.fit": "Напасни",
+  "plugin.image.menu.actualSize": "Реален размер",
+
+  "plugin.image.ctx.open": "Отвори изображение…",
+
+  "plugin.image.dialog.deleteConfirm": "Да се изтрие ли “{title}”?",
+  "plugin.image.dialog.thisImage": "това изображение",
+
+  "plugin.image.toast.openFirst": "Първо отворете изображение",
+  "plugin.image.toast.opened": "Отворено {title}",
+  "plugin.image.toast.editFailed": "Редактирането не успя",
+  "plugin.image.toast.operationFailed": "Операцията не успя",
+  "plugin.image.toast.renderFailed": "Изображението не можа да се изобрази",
+  "plugin.image.toast.uploadFailed": "Качването не успя",
+  "plugin.image.toast.saveFailed": "Запазването не успя",
+  "plugin.image.toast.deleted": "Изображението е изтрито",
+  "plugin.image.toast.deleteFailed": "Изображението не можа да се изтрие",
+  "plugin.image.toast.reverted": "Върнато към оригиналните пиксели",
+  "plugin.image.toast.openFailed": "Файлът не можа да се отвори",
+
+  "plugin.image.error.emptyFile": "този файл е празен",
+  "plugin.image.error.notAnImage": "“{name}” не е изображение, което редакторът може да отвори",
+  "plugin.image.error.unnamedFile": "файл"
+}

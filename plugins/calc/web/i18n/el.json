@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Υπολογιστικό φύλλο — φύλλα αποθηκευμένα ως ανοιχτά πλέγματα κελιών, επεξεργάσιμα στο παράθυρο του Calc",
+  "plugin.calc.meta.summary": "Calc: δημιουργία, επεξεργασία και υπολογισμός υπολογιστικών φύλλων",
+  "plugin.calc.meta.category": "Γραφείο",
+
+  "plugin.calc.bar.spreadsheets": "Υπολογιστικά φύλλα",
+
+  "plugin.calc.toolbar.newSheet": "Νέο υπολογιστικό φύλλο",
+  "plugin.calc.toolbar.importOds": "Εισαγωγή .ods",
+  "plugin.calc.toolbar.importCsv": "Εισαγωγή CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Αποθήκευση στα Έγγραφα",
+  "plugin.calc.toolbar.saveNow": "Άμεση αποθήκευση",
+  "plugin.calc.toolbar.deleteSheet": "Διαγραφή υπολογιστικού φύλλου",
+
+  "plugin.calc.menu.noSheets": "Δεν υπάρχουν υπολογιστικά φύλλα ακόμη",
+
+  "plugin.calc.sheet.untitled": "Χωρίς τίτλο",
+  "plugin.calc.sheet.importedCsv": "Εισαγόμενο CSV",
+
+  "plugin.calc.formula.placeholder": "Τιμή ή τύπος (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Αποθήκευση…",
+  "plugin.calc.status.dirty": "Μη αποθηκευμένες αλλαγές",
+  "plugin.calc.status.saved.one": "Αποθηκεύτηκε {time} · {count} κελί",
+  "plugin.calc.status.saved.other": "Αποθηκεύτηκε {time} · {count} κελιά",
+
+  "plugin.calc.dialog.delete": "Διαγραφή του \"{title}\";",
+
+  "plugin.calc.toast.saveFailed": "Η αποθήκευση απέτυχε",
+  "plugin.calc.toast.openFailed": "Δεν ήταν δυνατό το άνοιγμα του υπολογιστικού φύλλου",
+  "plugin.calc.toast.createFailed": "Δεν ήταν δυνατή η δημιουργία υπολογιστικού φύλλου",
+  "plugin.calc.toast.deleteFailed": "Δεν ήταν δυνατή η διαγραφή του υπολογιστικού φύλλου",
+  "plugin.calc.toast.imported": "Εισήχθη το {name}",
+  "plugin.calc.toast.importOdsFailed": "Η εισαγωγή απέτυχε — είναι έγκυρο αρχείο .ods;",
+  "plugin.calc.toast.importCsvFailed": "Η εισαγωγή απέτυχε — είναι έγκυρο αρχείο CSV;",
+  "plugin.calc.toast.openFileFailed": "Δεν ήταν δυνατό το άνοιγμα του αρχείου"
+}

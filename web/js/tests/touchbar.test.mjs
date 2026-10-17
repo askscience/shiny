@@ -12,9 +12,10 @@
  *
  * Run:  node web/js/tests/touchbar.test.mjs
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import './helpers/i18n.mjs';   // catalogs, so actionLabel() resolves
 import {
   TOUCHBAR_ACTIONS,
   actionForEvent,
@@ -138,16 +139,34 @@ check(
 
 /* ── The native macOS buttons ───────────────────────────────── */
 
-const rust = readFileSync(here('../../../crates/peakd-mac/src/touchbar.rs'), 'utf8');
-const rustButtons = [...rust.matchAll(/\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/g)]
-  .map((m) => ({ action: m[1], label: m[2] }));
+// Both sides resolve the same catalogue keys (`touchbar.<action>.label`), so
+// the native bar and the Settings preview can never show different words for
+// one button. The catalogue may still be a staging file while a translation
+// pass is in flight.
+const catalogKeys = new Set(
+  ['../../../web/i18n/en.json', '../../../web/i18n/_staging-mac.json']
+    .map((p) => here(p))
+    .filter((p) => existsSync(p))
+    .flatMap((p) => Object.keys(JSON.parse(readFileSync(p, 'utf8')))),
+);
 
-check('the native bar has every button', rustButtons.length === TOUCHBAR_ACTIONS.length);
+const rust = readFileSync(here('../../../crates/peakd-mac/src/touchbar.rs'), 'utf8');
+const rustActions = [...rust.matchAll(/touchbar\.([a-z-]+)\.label/g)].map((m) => m[1]);
+
+check(
+  'the native bar has every button',
+  rustActions.length === TOUCHBAR_ACTIONS.length,
+  `${rustActions.length} of ${TOUCHBAR_ACTIONS.length}`,
+);
 check(
   'the native bar matches action and order',
-  rustButtons.every((b, i) => b.action === TOUCHBAR_ACTIONS[i].action
-    && b.label === TOUCHBAR_ACTIONS[i].label),
-  JSON.stringify(rustButtons),
+  rustActions.every((action, i) => action === TOUCHBAR_ACTIONS[i].action),
+  JSON.stringify(rustActions),
+);
+check(
+  'every label has a catalogue entry (web and native share the keys)',
+  TOUCHBAR_ACTIONS.every((a) => catalogKeys.has(a.labelKey)),
+  TOUCHBAR_ACTIONS.filter((a) => !catalogKeys.has(a.labelKey)).map((a) => a.labelKey).join(', '),
 );
 
 if (failures) {

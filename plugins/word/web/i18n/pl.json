@@ -1,0 +1,52 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenty",
+  "plugin.word.toolbar.titlePlaceholder": "Bez tytułu",
+  "plugin.word.toolbar.newDocument": "Nowy dokument",
+  "plugin.word.toolbar.importOdt": "Importuj .odt",
+  "plugin.word.toolbar.saveToDocuments": "Zapisz w Dokumentach",
+  "plugin.word.toolbar.saveNow": "Zapisz teraz",
+  "plugin.word.toolbar.deleteDocument": "Usuń dokument",
+  "plugin.word.toolbar.bold": "Pogrubienie",
+  "plugin.word.toolbar.italic": "Kursywa",
+  "plugin.word.toolbar.underline": "Podkreślenie",
+  "plugin.word.toolbar.heading": "Nagłówek",
+  "plugin.word.toolbar.bulletList": "Lista punktowana",
+  "plugin.word.toolbar.font": "Czcionka",
+  "plugin.word.toolbar.fontHint": "Czcionka — stosowana do zaznaczenia lub do całego dokumentu, gdy nic nie jest zaznaczone",
+
+  "plugin.word.status.saving": "Zapisywanie…",
+  "plugin.word.status.unsaved": "Niezapisane zmiany",
+  "plugin.word.status.saved.one": "Zapisano {time} · {count} słowo",
+  "plugin.word.status.saved.few": "Zapisano {time} · {count} słowa",
+  "plugin.word.status.saved.many": "Zapisano {time} · {count} słów",
+  "plugin.word.status.saved.other": "Zapisano {time} · {count} słowa",
+
+  "plugin.word.menu.empty": "Brak dokumentów",
+  "plugin.word.menu.newDocument": "Nowy dokument",
+  "plugin.word.menu.importOdt": "Importuj .odt",
+  "plugin.word.menu.saveToDocuments": "Zapisz w Dokumentach",
+  "plugin.word.menu.deleteDocument": "Usuń dokument",
+
+  "plugin.word.ctx.newDocument": "Nowy dokument",
+  "plugin.word.ctx.saveNow": "Zapisz teraz",
+  "plugin.word.ctx.saveToDocuments": "Zapisz w Dokumentach",
+  "plugin.word.ctx.bold": "Pogrubienie",
+  "plugin.word.ctx.italic": "Kursywa",
+  "plugin.word.ctx.heading": "Nagłówek",
+  "plugin.word.ctx.list": "Lista",
+  "plugin.word.ctx.deleteDocument": "Usuń dokument",
+
+  "plugin.word.dialog.deleteDoc": "Usunąć „{title}”?",
+
+  "plugin.word.toast.saveFailed": "Zapisywanie nie powiodło się",
+  "plugin.word.toast.openFailed": "Nie udało się otworzyć dokumentu",
+  "plugin.word.toast.createFailed": "Nie udało się utworzyć dokumentu",
+  "plugin.word.toast.deleteFailed": "Nie udało się usunąć dokumentu",
+  "plugin.word.toast.imported": "Zaimportowano {name}",
+  "plugin.word.toast.importFailed": "Import nie powiódł się — czy to prawidłowy plik .odt?",
+  "plugin.word.toast.openFileFailed": "Nie udało się otworzyć pliku",
+
+  "plugin.word.meta.description": "Prosty edytor tekstu — dokumenty zapisywane jako otwarte pliki .odt",
+  "plugin.word.meta.summary": "Edytor tekstu: twórz, edytuj i czytaj dokumenty OpenDocument (.odt)",
+  "plugin.word.meta.category": "Biuro"
+}

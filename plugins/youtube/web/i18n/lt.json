@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Dabar leidžiama",
+  "plugin.youtube.hero.untitled": "YouTube vaizdo įrašas",
+  "plugin.youtube.hero.back": "Atgal",
+  "plugin.youtube.hero.backLabel": "Grįžti į YouTube paiešką",
+  "plugin.youtube.player.title": "YouTube leistuvas",
+
+  "plugin.youtube.search.placeholder": "Ieškoti YouTube…",
+
+  "plugin.youtube.grid.upNext": "Toliau",
+  "plugin.youtube.grid.becauseYouWatched": "Toliau · nes žiūrėjote “{title}”",
+  "plugin.youtube.grid.forYou": "Jums",
+  "plugin.youtube.grid.showAll": "Rodyti viską: {category}",
+  "plugin.youtube.grid.untitled": "Vaizdo įrašas",
+
+  "plugin.youtube.empty.noResults": "Nerasta vaizdo įrašų",
+  "plugin.youtube.empty.noMatch": "Nieko nerasta pagal “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Ieškoti YouTube",
+  "plugin.youtube.empty.searchBody": "Įrašykite viršuje — arba paprašykite DI rasti vaizdo įrašą.",
+  "plugin.youtube.empty.unavailableTitle": "Paieška nepasiekiama",
+  "plugin.youtube.empty.retry": "Bandykite dar kartą po akimirkos",
+
+  "plugin.youtube.category.watched": "Žiūrėta {count}×",
+  "plugin.youtube.category.generic": "Kategorija",
+
+  "plugin.youtube.menu.search": "Ieškoti",
+  "plugin.youtube.menu.home": "Pradžia",
+  "plugin.youtube.menu.refresh": "Atnaujinti rezultatus",
+  "plugin.youtube.menu.back": "Atgal",
+
+  "plugin.youtube.meta.description": "Žiūrėkite YouTube vaizdo įrašus YouTube lange — DI gali ieškoti YouTube ir leisti vaizdo įrašus",
+  "plugin.youtube.meta.summary": "YouTube: DI paieška ir paleidimas YouTube lange",
+  "plugin.youtube.meta.category": "Medija"
+}

@@ -126,6 +126,43 @@ Exec=$(pwd)/${BIN}
 Terminal=false
 Categories=Network;WebBrowser;
 DESK
+
+    # Localized metadata comes from the UI catalogues — the same files the app
+    # serves — so a new language needs no edit here:
+    #   app.name / app.desktopComment  → the .desktop entry
+    #   app.micUsage / app.cameraUsage → macOS permission prompts (.lproj)
+    python3 - "$DESKTOP" "${APP:-}" <<'PY'
+import glob, json, os, sys
+
+desktop_path, app_path = sys.argv[1], sys.argv[2]
+lines = []
+resources = os.path.join(app_path, "Contents", "Resources") if app_path else ""
+for path in sorted(glob.glob("web/i18n/*.json")):
+    code = os.path.basename(path)[:-5]
+    if code == "index":
+        continue
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    name = data.get("app.name")
+    comment = data.get("app.desktopComment")
+    if code != "en":
+        if name:
+            lines.append(f"Name[{code}]={name}")
+        if comment:
+            lines.append(f"Comment[{code}]={comment}")
+    mic, cam = data.get("app.micUsage"), data.get("app.cameraUsage")
+    if resources and os.path.isdir(resources) and (mic or cam):
+        lproj = os.path.join(resources, f"{code}.lproj")
+        os.makedirs(lproj, exist_ok=True)
+        with open(os.path.join(lproj, "InfoPlist.strings"), "w", encoding="utf-8") as fh:
+            if mic:
+                fh.write(f'"NSMicrophoneUsageDescription" = "{mic}";\n')
+            if cam:
+                fh.write(f'"NSCameraUsageDescription" = "{cam}";\n')
+with open(desktop_path, "a", encoding="utf-8") as fh:
+    for line in lines:
+        fh.write(line + "\n")
+PY
     chmod +x "$DESKTOP"
     echo "==> built $DESKTOP (binary: $BIN)"
     if [ "$RUN" = "1" ]; then

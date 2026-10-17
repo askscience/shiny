@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Календар — плануйте, переглядайте та впорядковуйте події у вікні «Календар»",
+  "plugin.calendar.meta.summary": "Календар: планування та впорядкування подій",
+  "plugin.calendar.meta.category": "Офіс",
+
+  "plugin.calendar.month.january": "Січень",
+  "plugin.calendar.month.february": "Лютий",
+  "plugin.calendar.month.march": "Березень",
+  "plugin.calendar.month.april": "Квітень",
+  "plugin.calendar.month.may": "Травень",
+  "plugin.calendar.month.june": "Червень",
+  "plugin.calendar.month.july": "Липень",
+  "plugin.calendar.month.august": "Серпень",
+  "plugin.calendar.month.september": "Вересень",
+  "plugin.calendar.month.october": "Жовтень",
+  "plugin.calendar.month.november": "Листопад",
+  "plugin.calendar.month.december": "Грудень",
+
+  "plugin.calendar.grid.sun": "Нд",
+  "plugin.calendar.grid.mon": "Пн",
+  "plugin.calendar.grid.tue": "Вт",
+  "plugin.calendar.grid.wed": "Ср",
+  "plugin.calendar.grid.thu": "Чт",
+  "plugin.calendar.grid.fri": "Пт",
+  "plugin.calendar.grid.sat": "Сб",
+
+  "plugin.calendar.event.allDay": "Увесь день",
+
+  "plugin.calendar.toolbar.previousMonth": "Попередній місяць",
+  "plugin.calendar.toolbar.nextMonth": "Наступний місяць",
+  "plugin.calendar.toolbar.today": "Сьогодні",
+  "plugin.calendar.toolbar.newEvent": "Нова подія",
+
+  "plugin.calendar.ctx.refresh": "Оновити",
+
+  "plugin.calendar.detail.edit": "Редагувати",
+  "plugin.calendar.detail.delete": "Видалити",
+
+  "plugin.calendar.empty.noEvents": "Немає подій",
+  "plugin.calendar.empty.noEventsBody": "Нічого не заплановано. Додайте подію або попросіть ШІ запланувати її.",
+
+  "plugin.calendar.dialog.title": "Подія",
+  "plugin.calendar.dialog.editTitle": "Редагувати подію",
+  "plugin.calendar.dialog.titleField": "Назва",
+  "plugin.calendar.dialog.titlePlaceholder": "напр. Ранкова нарада",
+  "plugin.calendar.dialog.dateField": "Дата",
+  "plugin.calendar.dialog.startTimeField": "Час початку",
+  "plugin.calendar.dialog.endTimeField": "Час завершення",
+  "plugin.calendar.dialog.locationField": "Місце",
+  "plugin.calendar.dialog.locationPlaceholder": "Місце (необов'язково)",
+  "plugin.calendar.dialog.notesField": "Нотатки",
+  "plugin.calendar.dialog.notesPlaceholder": "Нотатки (необов'язково)",
+  "plugin.calendar.dialog.cancel": "Скасувати",
+  "plugin.calendar.dialog.save": "Зберегти подію",
+
+  "plugin.calendar.toast.titleRequired": "Потрібна назва",
+  "plugin.calendar.toast.dateRequired": "Потрібна дата",
+  "plugin.calendar.toast.updated": "Подію оновлено",
+  "plugin.calendar.toast.scheduled": "Подію заплановано",
+  "plugin.calendar.toast.deleted": "Подію видалено",
+  "plugin.calendar.toast.loadFailed": "Не вдалося завантажити події",
+  "plugin.calendar.toast.saveFailed": "Не вдалося зберегти подію",
+  "plugin.calendar.toast.deleteFailed": "Не вдалося видалити подію",
+
+  "plugin.calendar.confirm.deleteEvent": "Видалити \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Подія скоро почнеться"
+}

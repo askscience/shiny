@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Rendszer- és Ollama-frissítések ellenőrzése és telepítése minden nagyobb Linux-disztribúción",
+  "plugin.updates.meta.summary": "Frissítések: egy ablak (és HUD-jelző) a rendszer- és Ollama-frissítésekhez",
+  "plugin.updates.meta.category": "Rendszer",
+
+  "plugin.updates.tab.updates": "Frissítések",
+  "plugin.updates.tab.history": "Előzmények",
+
+  "plugin.updates.toolbar.sections": "Szakaszok",
+  "plugin.updates.toolbar.check": "Frissítések keresése",
+
+  "plugin.updates.status.checking": "Frissítések keresése…",
+  "plugin.updates.status.thisSystem": "ez a rendszer",
+  "plugin.updates.status.unavailableOnSystem": "A frissítések nem érhetők el ezen a rendszeren",
+  "plugin.updates.status.unavailable": "A frissítések nem érhetők el",
+  "plugin.updates.status.upToDate": "Minden naprakész · {where}",
+  "plugin.updates.status.available.one": "{count} frissítés érhető el · {where}",
+  "plugin.updates.status.available.other": "{count} frissítés érhető el · {where}",
+  "plugin.updates.status.working": "Dolgozom…",
+  "plugin.updates.status.finished": "A frissítés befejeződött",
+  "plugin.updates.status.failed": "A frissítés nem sikerült",
+  "plugin.updates.status.upToDateBody": "A rendszere naprakész.",
+  "plugin.updates.status.incomplete": "A frissítés nem fejeződött be. Nyissa meg a Frissítéseket a részletekért.",
+  "plugin.updates.status.couldNot": "Nem sikerült: {label}",
+  "plugin.updates.status.noJobId": "A kiszolgáló nem adott vissza feladatazonosítót",
+  "plugin.updates.status.lostConnection": "Megszakadt a kapcsolat a feladattal",
+  "plugin.updates.status.jobDisappeared": "A feladat eltűnt",
+
+  "plugin.updates.action.refresh": "Listák frissítése",
+  "plugin.updates.action.installing": "Telepítés…",
+  "plugin.updates.action.install.one": "{count} frissítés telepítése",
+  "plugin.updates.action.install.other": "{count} frissítés telepítése",
+  "plugin.updates.action.details": "Részletek",
+  "plugin.updates.action.hideDetails": "Részletek elrejtése",
+
+  "plugin.updates.empty.upToDate": "Naprakész",
+  "plugin.updates.empty.noUpdates": "Nincs várakozó rendszerfrissítés.",
+  "plugin.updates.empty.noActivity": "Még nincs tevékenység",
+  "plugin.updates.empty.noActivityBody": "A telepített frissítések itt jelennek meg.",
+
+  "plugin.updates.ollama.version": " · {version} verzió",
+  "plugin.updates.ollama.installed": "Telepítve{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Nincs telepítve (vagy nem található a PATH-on)",
+  "plugin.updates.ollama.service": "Szolgáltatás: {name}",
+  "plugin.updates.ollama.install": "Ollama telepítése",
+  "plugin.updates.ollama.update": "Ollama frissítése",
+
+  "plugin.updates.history.system": "rendszer",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Nem sikerült frissítéseket keresni",
+  "plugin.updates.notify.serviceUnavailable": "A frissítési szolgáltatás nem érhető el.",
+  "plugin.updates.notify.busy": "Már fut egy frissítés",
+  "plugin.updates.notify.busyBody": "Várja meg, amíg a jelenlegi frissítés befejeződik.",
+
+  "plugin.updates.dialog.installTitle": "Frissítések telepítése",
+  "plugin.updates.dialog.installRights.one": "{count} frissítés telepítéséhez rendszergazdai jogok szükségesek.",
+  "plugin.updates.dialog.installRights.other": "{count} frissítés telepítéséhez rendszergazdai jogok szükségesek.",
+  "plugin.updates.dialog.refreshRights": "A csomagmetaadatok frissítéséhez (pl. {cmd}) rendszergazdai jogok szükségesek.",
+  "plugin.updates.dialog.ollamaMessage": "A hivatalos telepítőt futtatja. Az Ollama a frissítés alatt leáll, és leállítva is marad (a munkamenet közbeni újraindítás lefagyaszthatja a GPU-t); indítsa el újra, vagy indítsa újra a gépet az új verzió használatához.",
+  "plugin.updates.dialog.passwordField": "Rendszergazdai jelszó",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo jelszó",
+  "plugin.updates.dialog.passwordHint": "Egyszer használjuk a parancs sudo-val való futtatásához. Soha nem tároljuk.",
+  "plugin.updates.dialog.cancel": "Mégse",
+  "plugin.updates.dialog.continue": "Folytatás",
+
+  "plugin.updates.label.installing": "Frissítések telepítése",
+  "plugin.updates.label.refreshing": "Listák frissítése",
+  "plugin.updates.label.updatingOllama": "Az Ollama frissítése",
+
+  "plugin.updates.hud.available.one": "{count} frissítés érhető el",
+  "plugin.updates.hud.available.other": "{count} frissítés érhető el",
+  "plugin.updates.hud.upToDate": "A rendszer naprakész",
+  "plugin.updates.hud.notifyTitle": "Frissítések érhetők el",
+  "plugin.updates.hud.notifyBody.one": "{count} frissítés telepítésre kész",
+  "plugin.updates.hud.notifyBody.other": "{count} frissítés telepítésre kész"
+}

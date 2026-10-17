@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Истински Linux терминал в приложението — обвивка за вписване, базирана на PTY, в собствен прозорец",
+  "plugin.terminal.meta.summary": "Терминал: истинска обвивка през PTY, изобразена с xterm.js",
+  "plugin.terminal.meta.category": "Системни",
+
+  "plugin.terminal.tab.label": "Терминал {n}",
+  "plugin.terminal.tab.new": "Нов раздел",
+  "plugin.terminal.tab.close": "Затвори {name}",
+  "plugin.terminal.tabs.label": "Раздели на терминала",
+
+  "plugin.terminal.status.starting": "стартиране на терминала…",
+  "plugin.terminal.status.connecting": "свързване…",
+  "plugin.terminal.status.reconnecting": "повторно свързване…",
+  "plugin.terminal.status.connected": "свързан",
+  "plugin.terminal.status.startFailed": "обвивката не можа да се стартира",
+  "plugin.terminal.status.expired": "сесията изтече — впишете се отново",
+  "plugin.terminal.status.xtermFailed": "xterm.js не можа да се зареди",
+
+  "plugin.terminal.toast.tabLimit.one": "Терминал: най-много {count} раздел",
+  "plugin.terminal.toast.tabLimit.other": "Терминал: най-много {count} раздела",
+  "plugin.terminal.toast.startFailed": "Терминал: обвивката не можа да се стартира",
+  "plugin.terminal.toast.xtermFailed": "Терминал: xterm.js не можа да се зареди",
+  "plugin.terminal.toast.clipboardUnavailable": "Клипбордът е недостъпен",
+
+  "plugin.terminal.ctx.copy": "Копирай",
+  "plugin.terminal.ctx.paste": "Постави",
+  "plugin.terminal.ctx.clearScrollback": "Изчисти историята на изхода",
+  "plugin.terminal.ctx.closeTab": "Затвори раздела"
+}

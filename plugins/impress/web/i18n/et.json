@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Esitlused",
+  "plugin.impress.toolbar.titlePlaceholder": "Pealkirjata",
+  "plugin.impress.toolbar.theme": "Teema",
+  "plugin.impress.toolbar.present": "Esitle",
+  "plugin.impress.toolbar.newDeck": "Uus esitlus",
+  "plugin.impress.toolbar.importOdp": "Impordi .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Salvesta kausta Dokumendid",
+  "plugin.impress.toolbar.saveNow": "Salvesta kohe",
+  "plugin.impress.toolbar.deleteDeck": "Kustuta esitlus",
+
+  "plugin.impress.menu.empty": "Esitlusi veel pole",
+  "plugin.impress.menu.newDeck": "Uus esitlus",
+  "plugin.impress.menu.importOdp": "Impordi .odp",
+  "plugin.impress.menu.saveToDocuments": "Salvesta kausta Dokumendid",
+  "plugin.impress.menu.deleteDeck": "Kustuta esitlus",
+
+  "plugin.impress.ctx.newDeck": "Uus esitlus",
+  "plugin.impress.ctx.addSlide": "Lisa slaid",
+  "plugin.impress.ctx.saveNow": "Salvesta kohe",
+  "plugin.impress.ctx.present": "Esitle",
+  "plugin.impress.ctx.stopPresenting": "Lõpeta esitlemine",
+  "plugin.impress.ctx.deleteDeck": "Kustuta esitlus",
+
+  "plugin.impress.status.saving": "Salvestamine…",
+  "plugin.impress.status.unsaved": "Salvestamata muudatused",
+  "plugin.impress.status.saved.one": "Salvestatud {time} · {count} slaid",
+  "plugin.impress.status.saved.other": "Salvestatud {time} · {count} slaidi",
+
+  "plugin.impress.empty.noDeck": "Esitlust pole",
+  "plugin.impress.empty.noDeckBody": "Loo üks või palu AI-l esitlus koostada",
+
+  "plugin.impress.inspector.layout": "Paigutus",
+  "plugin.impress.inspector.transition": "Üleminek",
+  "plugin.impress.inspector.bullets": "Punktid",
+  "plugin.impress.inspector.speakerNotes": "Kõneleja märkmed",
+  "plugin.impress.inspector.hint": "Klõpsa slaidil mis tahes tekstil, et seda otse muuta.",
+  "plugin.impress.inspector.applyAll": "Rakenda see üleminek ja punktide ilmumine kõikidele slaididele",
+  "plugin.impress.inspector.applyAllLabel": "Rakenda kõikidele slaididele",
+
+  "plugin.impress.ops.addSlide": "Lisa slaid",
+  "plugin.impress.ops.moveUp": "Liiguta üles",
+  "plugin.impress.ops.moveDown": "Liiguta alla",
+  "plugin.impress.ops.deleteSlide": "Kustuta slaid",
+
+  "plugin.impress.transition.none": "Puudub",
+  "plugin.impress.transition.fade": "Hajumine",
+  "plugin.impress.transition.slide": "Libisemine",
+  "plugin.impress.transition.push": "Tõuge",
+  "plugin.impress.transition.zoom": "Suum",
+
+  "plugin.impress.reveal.all": "Kõik korraga",
+  "plugin.impress.reveal.bullets": "Ükshaaval",
+
+  "plugin.impress.slide.addText": "Lisa tekst",
+  "plugin.impress.slide.addTitle": "Lisa pealkiri",
+  "plugin.impress.slide.addSubtitle": "Lisa alapealkiri",
+  "plugin.impress.slide.attribution": "Allikas",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Tagasi redaktorisse",
+  "plugin.impress.present.fullScreen": "Täisekraan",
+  "plugin.impress.present.exitFullScreen": "Välju täisekraanilt",
+  "plugin.impress.present.blocked": "Brauser blokeeris täisekraani",
+
+  "plugin.impress.dialog.deleteDeck": "Kustutada \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Salvestamine ebaõnnestus",
+  "plugin.impress.toast.openFailed": "Esitlust ei saanud avada",
+  "plugin.impress.toast.createFailed": "Esitlust ei saanud luua",
+  "plugin.impress.toast.deleteFailed": "Esitlust ei saanud kustutada",
+  "plugin.impress.toast.imported": "Imporditud {name}",
+  "plugin.impress.toast.importFailed": "Import ebaõnnestus — kas see on korrektne .odp-fail?",
+  "plugin.impress.toast.openFileFailed": "Faili ei saanud avada",
+
+  "plugin.impress.meta.description": "Esitluste koostaja — esitlused salvestatakse slaididena ja eksporditakse avatud .odp-failidena",
+  "plugin.impress.meta.summary": "Impress: OpenDocument (.odp) slaidiesitluste loomine, muutmine ja esitlemine",
+  "plugin.impress.meta.category": "Kontor"
+}

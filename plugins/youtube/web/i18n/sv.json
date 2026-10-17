@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Spelar nu",
+  "plugin.youtube.hero.untitled": "YouTube-video",
+  "plugin.youtube.hero.back": "Tillbaka",
+  "plugin.youtube.hero.backLabel": "Tillbaka till YouTube-sökningen",
+  "plugin.youtube.player.title": "YouTube-spelare",
+
+  "plugin.youtube.search.placeholder": "Sök på YouTube…",
+
+  "plugin.youtube.grid.upNext": "Härnäst",
+  "plugin.youtube.grid.becauseYouWatched": "Härnäst · eftersom du tittade på “{title}”",
+  "plugin.youtube.grid.forYou": "För dig",
+  "plugin.youtube.grid.showAll": "Visa alla {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Inga videor hittades",
+  "plugin.youtube.empty.noMatch": "Inget matchade “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Sök på YouTube",
+  "plugin.youtube.empty.searchBody": "Skriv ovan — eller be AI:n hitta en video.",
+  "plugin.youtube.empty.unavailableTitle": "Sökningen är inte tillgänglig",
+  "plugin.youtube.empty.retry": "Försök igen om en stund",
+
+  "plugin.youtube.category.watched": "Tittad {count}×",
+  "plugin.youtube.category.generic": "Kategori",
+
+  "plugin.youtube.menu.search": "Sök",
+  "plugin.youtube.menu.home": "Hem",
+  "plugin.youtube.menu.refresh": "Uppdatera resultaten",
+  "plugin.youtube.menu.back": "Tillbaka",
+
+  "plugin.youtube.meta.description": "Titta på YouTube-videor i YouTube-fönstret — AI:n kan söka på YouTube och spela videor",
+  "plugin.youtube.meta.summary": "YouTube: AI-sökning och uppspelning i YouTube-fönstret",
+  "plugin.youtube.meta.category": "Media"
+}

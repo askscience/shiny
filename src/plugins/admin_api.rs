@@ -37,7 +37,10 @@ struct PluginListEntry {
 /// GET /api/plugins — every authenticated user sees the same installed list
 /// but with their own activation flags. Uses the same session-aware
 /// activation semantics as `/api/plugins/active` and tool invocation, so
-/// `enabled` never disagrees with what the agent can actually call.
+/// `enabled` never disagrees with what the agent can actually call. The
+/// description/summary/category come from the plugin's catalogue for the
+/// caller's language when it ships one (`web/i18n/<code>.json`), else the
+/// `plugin.toml` text.
 pub async fn list(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
@@ -51,24 +54,43 @@ pub async fn list(
             let enabled = active.contains(&m.name);
             // A user override lives in the writable dir, a system plugin in
             // the read-only baseline; the surface check follows whichever won.
-            let surface = state
+            let plugin_web_dir = state
                 .plugins
                 .plugin_dir_for(&m.name)
-                .map(|dir| dir.join(&m.web_dir).join("plugin.js").is_file())
+                .map(|dir| dir.join(&m.web_dir));
+            let surface = plugin_web_dir
+                .as_ref()
+                .map(|dir| dir.join("plugin.js").is_file())
                 .unwrap_or(false);
-            let hud = state
-                .plugins
-                .plugin_dir_for(&m.name)
-                .map(|dir| dir.join(&m.web_dir).join("hud.js").is_file())
+            let hud = plugin_web_dir
+                .as_ref()
+                .map(|dir| dir.join("hud.js").is_file())
                 .unwrap_or(false);
+            let (description, summary, category) = match &plugin_web_dir {
+                Some(dir) => (
+                    crate::i18n::plugin_meta(&m.name, dir, "description", m.description.clone()),
+                    crate::i18n::plugin_meta(&m.name, dir, "summary", m.summary.clone()),
+                    crate::i18n::plugin_meta(
+                        &m.name,
+                        dir,
+                        "category",
+                        state.plugins.category_for(&m.name),
+                    ),
+                ),
+                None => (
+                    m.description,
+                    m.summary,
+                    state.plugins.category_for(&m.name),
+                ),
+            };
             PluginListEntry {
-                category: state.plugins.category_for(&m.name),
+                category,
                 capabilities: state.plugins.capabilities_for(&m.name),
                 name: m.name,
                 version: m.version.to_string(),
                 api_level: m.api_level,
-                description: m.description,
-                summary: m.summary,
+                description,
+                summary,
                 enabled,
                 surface,
                 hud,

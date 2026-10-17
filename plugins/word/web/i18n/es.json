@@ -1,0 +1,51 @@
+{
+  "plugin.word.toolbar.documents": "Documentos",
+  "plugin.word.toolbar.titlePlaceholder": "Sin título",
+  "plugin.word.toolbar.newDocument": "Documento nuevo",
+  "plugin.word.toolbar.importOdt": "Importar .odt",
+  "plugin.word.toolbar.saveToDocuments": "Guardar en Documentos",
+  "plugin.word.toolbar.saveNow": "Guardar ahora",
+  "plugin.word.toolbar.deleteDocument": "Eliminar el documento",
+  "plugin.word.toolbar.bold": "Negrita",
+  "plugin.word.toolbar.italic": "Cursiva",
+  "plugin.word.toolbar.underline": "Subrayado",
+  "plugin.word.toolbar.heading": "Encabezado",
+  "plugin.word.toolbar.bulletList": "Lista con viñetas",
+  "plugin.word.toolbar.font": "Fuente",
+  "plugin.word.toolbar.fontHint": "Fuente — se aplica a la selección o a todo el documento cuando no hay nada seleccionado",
+
+  "plugin.word.status.saving": "Guardando…",
+  "plugin.word.status.unsaved": "Cambios sin guardar",
+  "plugin.word.status.saved.one": "Guardado {time} · {count} palabra",
+  "plugin.word.status.saved.many": "Guardado {time} · {count} palabras",
+  "plugin.word.status.saved.other": "Guardado {time} · {count} palabras",
+
+  "plugin.word.menu.empty": "Aún no hay documentos",
+  "plugin.word.menu.newDocument": "Documento nuevo",
+  "plugin.word.menu.importOdt": "Importar .odt",
+  "plugin.word.menu.saveToDocuments": "Guardar en Documentos",
+  "plugin.word.menu.deleteDocument": "Eliminar el documento",
+
+  "plugin.word.ctx.newDocument": "Documento nuevo",
+  "plugin.word.ctx.saveNow": "Guardar ahora",
+  "plugin.word.ctx.saveToDocuments": "Guardar en Documentos",
+  "plugin.word.ctx.bold": "Negrita",
+  "plugin.word.ctx.italic": "Cursiva",
+  "plugin.word.ctx.heading": "Encabezado",
+  "plugin.word.ctx.list": "Lista",
+  "plugin.word.ctx.deleteDocument": "Eliminar el documento",
+
+  "plugin.word.dialog.deleteDoc": "¿Eliminar \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Error al guardar",
+  "plugin.word.toast.openFailed": "No se ha podido abrir el documento",
+  "plugin.word.toast.createFailed": "No se ha podido crear el documento",
+  "plugin.word.toast.deleteFailed": "No se ha podido eliminar el documento",
+  "plugin.word.toast.imported": "Se ha importado {name}",
+  "plugin.word.toast.importFailed": "La importación ha fallado — ¿es un archivo .odt válido?",
+  "plugin.word.toast.openFileFailed": "No se ha podido abrir el archivo",
+
+  "plugin.word.meta.description": "Procesador de textos sencillo — los documentos se guardan como archivos .odt abiertos",
+  "plugin.word.meta.summary": "Procesador de textos: crea, edita y lee documentos OpenDocument (.odt)",
+  "plugin.word.meta.category": "Ofimática"
+}

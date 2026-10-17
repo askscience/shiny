@@ -22,8 +22,10 @@
  * runtime, the Settings preview, the `tiny-dfr` TOML and the Node tests be
  * checked against a single source of truth (`tests/touchbar.test.mjs`).
  *
- * Nothing here touches the DOM, so Node can import it directly.
+ * Nothing here touches the DOM, so Node can import it directly (with the i18n
+ * harness for the labels).
  */
+import { t } from './i18n.js';
 
 /** The modifier set every Touch Bar combo carries. */
 export const TOUCHBAR_MODIFIERS = { ctrlKey: true, altKey: true, shiftKey: true };
@@ -31,27 +33,30 @@ export const TOUCHBAR_MODIFIERS = { ctrlKey: true, altKey: true, shiftKey: true 
 /**
  * The buttons, in Touch Bar order.
  *
- *  - `action` — the name both transports dispatch.
- *  - `label`  — the Settings label (the bar shows an icon).
- *  - `icon`   — the tiny-dfr icon name (`shiny_*` is ours, shipped in
- *               `scripts/touchbar/icons/`; anything else is a tiny-dfr built-in).
- *  - `code`   — the DOM `KeyboardEvent.code` the page listens for.
- *  - `combo`  — the uinput keys tiny-dfr presses (names from input-linux).
+ *  - `action`   — the name both transports dispatch (never translated: it is
+ *                 the wire protocol).
+ *  - `labelKey` — the catalogue key of the Settings label; `label` is its
+ *                 English fallback. The native bar (`crates/peakd-mac`) reads
+ *                 the same keys, so both sides always show the same word.
+ *  - `icon`     — the tiny-dfr icon name (`shiny_*` is ours, shipped in
+ *                 `scripts/touchbar/icons/`; anything else is a tiny-dfr built-in).
+ *  - `code`     — the DOM `KeyboardEvent.code` the page listens for.
+ *  - `combo`    — the uinput keys tiny-dfr presses (names from input-linux).
  */
 export const TOUCHBAR_ACTIONS = [
-  { action: 'talk', label: 'Ask', icon: 'shiny_talk', code: 'Digit1', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num1'] },
-  { action: 'stop', label: 'Stop', icon: 'shiny_stop', code: 'Digit2', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num2'] },
-  { action: 'mute', label: 'Mute', icon: 'volume_off', code: 'Digit3', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num3'] },
-  { action: 'volume-down', label: 'Vol-', icon: 'volume_down', code: 'Digit4', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num4'] },
-  { action: 'volume-up', label: 'Vol+', icon: 'volume_up', code: 'Digit5', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num5'] },
-  { action: 'screen-down', label: 'Scr-', icon: 'brightness_low', code: 'Comma', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Comma'] },
-  { action: 'screen-up', label: 'Scr+', icon: 'brightness_high', code: 'Period', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Dot'] },
-  { action: 'workspace-prev', label: 'Prev', icon: 'fast_rewind', code: 'Digit6', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num6'] },
-  { action: 'workspace-next', label: 'Next', icon: 'fast_forward', code: 'Digit7', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num7'] },
-  { action: 'kbd-backlight-down', label: 'Kbd-', icon: 'backlight_low', code: 'Minus', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Minus'] },
-  { action: 'kbd-backlight-up', label: 'Kbd+', icon: 'backlight_high', code: 'Equal', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Equal'] },
-  { action: 'keyboard', label: 'Keys', icon: 'shiny_keyboard', code: 'Digit8', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num8'] },
-  { action: 'settings', label: 'Setup', icon: 'shiny_settings', code: 'Digit9', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num9'] },
+  { action: 'talk', labelKey: 'touchbar.talk.label', label: 'Ask', icon: 'shiny_talk', code: 'Digit1', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num1'] },
+  { action: 'stop', labelKey: 'touchbar.stop.label', label: 'Stop', icon: 'shiny_stop', code: 'Digit2', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num2'] },
+  { action: 'mute', labelKey: 'touchbar.mute.label', label: 'Mute', icon: 'volume_off', code: 'Digit3', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num3'] },
+  { action: 'volume-down', labelKey: 'touchbar.volume-down.label', label: 'Vol-', icon: 'volume_down', code: 'Digit4', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num4'] },
+  { action: 'volume-up', labelKey: 'touchbar.volume-up.label', label: 'Vol+', icon: 'volume_up', code: 'Digit5', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num5'] },
+  { action: 'screen-down', labelKey: 'touchbar.screen-down.label', label: 'Scr-', icon: 'brightness_low', code: 'Comma', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Comma'] },
+  { action: 'screen-up', labelKey: 'touchbar.screen-up.label', label: 'Scr+', icon: 'brightness_high', code: 'Period', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Dot'] },
+  { action: 'workspace-prev', labelKey: 'touchbar.workspace-prev.label', label: 'Prev', icon: 'fast_rewind', code: 'Digit6', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num6'] },
+  { action: 'workspace-next', labelKey: 'touchbar.workspace-next.label', label: 'Next', icon: 'fast_forward', code: 'Digit7', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num7'] },
+  { action: 'kbd-backlight-down', labelKey: 'touchbar.kbd-backlight-down.label', label: 'Kbd-', icon: 'backlight_low', code: 'Minus', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Minus'] },
+  { action: 'kbd-backlight-up', labelKey: 'touchbar.kbd-backlight-up.label', label: 'Kbd+', icon: 'backlight_high', code: 'Equal', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Equal'] },
+  { action: 'keyboard', labelKey: 'touchbar.keyboard.label', label: 'Keys', icon: 'shiny_keyboard', code: 'Digit8', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num8'] },
+  { action: 'settings', labelKey: 'touchbar.settings.label', label: 'Setup', icon: 'shiny_settings', code: 'Digit9', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num9'] },
 ];
 
 const BY_CODE = new Map(TOUCHBAR_ACTIONS.map((entry) => [entry.code, entry.action]));
@@ -89,7 +94,9 @@ export function comboForAction(action) {
 
 /** Human label for an action (falls back to the raw name). */
 export function actionLabel(action) {
-  return BY_ACTION.get(action)?.label || action;
+  const entry = BY_ACTION.get(action);
+  if (!entry) return action;
+  return t(entry.labelKey, null, entry.label);
 }
 
 /**

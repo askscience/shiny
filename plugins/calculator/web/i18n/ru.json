@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Научный калькулятор — вычисляйте арифметические и научные выражения в окне Калькулятор",
+  "plugin.calculator.meta.summary": "Калькулятор: обычные и научные вычисления",
+  "plugin.calculator.meta.category": "Офис",
+
+  "plugin.calculator.display.error": "Ошибка",
+
+  "plugin.calculator.toolbar.history": "История",
+  "plugin.calculator.toolbar.scientific": "Научный",
+  "plugin.calculator.toolbar.clearHistory": "Очистить историю",
+
+  "plugin.calculator.menu.equals": "Равно",
+  "plugin.calculator.menu.clearAll": "Очистить всё",
+
+  "plugin.calculator.history.reuse": "Повторно использовать этот результат",
+
+  "plugin.calculator.empty.noHistory": "Истории нет",
+  "plugin.calculator.empty.noHistoryBody": "Вычисления, сделанные здесь или запрошенные у ИИ, появятся ниже.",
+
+  "plugin.calculator.toast.evaluateFailed": "Не удалось вычислить",
+  "plugin.calculator.toast.historyFailed": "Не удалось загрузить историю",
+  "plugin.calculator.toast.historyCleared": "История очищена",
+  "plugin.calculator.toast.clearFailed": "Не удалось очистить историю"
+}

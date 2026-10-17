@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Spreadsheet-rekenmachine — bladen worden opgeslagen als open celerasters, te bewerken in het Calc-venster",
+  "plugin.calc.meta.summary": "Calc: spreadsheets maken, bewerken en berekenen",
+  "plugin.calc.meta.category": "Kantoor",
+
+  "plugin.calc.bar.spreadsheets": "Spreadsheets",
+
+  "plugin.calc.toolbar.newSheet": "Nieuwe spreadsheet",
+  "plugin.calc.toolbar.importOds": ".ods importeren",
+  "plugin.calc.toolbar.importCsv": "CSV importeren",
+  "plugin.calc.toolbar.saveToDocuments": "Opslaan in Documenten",
+  "plugin.calc.toolbar.saveNow": "Nu opslaan",
+  "plugin.calc.toolbar.deleteSheet": "Spreadsheet verwijderen",
+
+  "plugin.calc.menu.noSheets": "Nog geen spreadsheets",
+
+  "plugin.calc.sheet.untitled": "Zonder titel",
+  "plugin.calc.sheet.importedCsv": "Geïmporteerde CSV",
+
+  "plugin.calc.formula.placeholder": "Waarde of formule (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Opslaan…",
+  "plugin.calc.status.dirty": "Niet-opgeslagen wijzigingen",
+  "plugin.calc.status.saved.one": "Opgeslagen {time} · {count} cel",
+  "plugin.calc.status.saved.other": "Opgeslagen {time} · {count} cellen",
+
+  "plugin.calc.dialog.delete": "\"{title}\" verwijderen?",
+
+  "plugin.calc.toast.saveFailed": "Opslaan mislukt",
+  "plugin.calc.toast.openFailed": "Kon de spreadsheet niet openen",
+  "plugin.calc.toast.createFailed": "Kon de spreadsheet niet aanmaken",
+  "plugin.calc.toast.deleteFailed": "Kon de spreadsheet niet verwijderen",
+  "plugin.calc.toast.imported": "{name} geïmporteerd",
+  "plugin.calc.toast.importOdsFailed": "Importeren mislukt — is dit een geldig .ods-bestand?",
+  "plugin.calc.toast.importCsvFailed": "Importeren mislukt — is dit een geldig CSV-bestand?",
+  "plugin.calc.toast.openFileFailed": "Kon het bestand niet openen"
+}

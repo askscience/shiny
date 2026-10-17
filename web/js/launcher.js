@@ -14,6 +14,7 @@
  */
 import { apiFetch } from './api.js';
 import { pluginIconEl } from './pluginIcon.js';
+import { t } from './i18n.js';
 
 let panel = null;
 let grid = null;
@@ -52,7 +53,11 @@ async function choose(p) {
     });
   } catch (err) {
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: err.message || `Could not activate ${label(p.name)}`, type: 'error' },
+      detail: {
+        message: err.message || t('launcher.activateFailed', { name: label(p.name) },
+          `Could not activate ${label(p.name)}`),
+        type: 'error',
+      },
     }));
     return;
   }
@@ -69,18 +74,21 @@ function render() {
   if (!plugins.length) {
     const empty = document.createElement('p');
     empty.className = 'launcher-empty';
-    empty.textContent = 'No plugins installed';
+    empty.textContent = t('launcher.noPlugins', null, 'No plugins installed');
     grid.appendChild(empty);
     return;
   }
   for (const p of plugins) {
     const isActive = active.has(p.name);
+    const displayName = label(p.name);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'launcher-item';
     btn.classList.toggle('is-active', isActive);
-    btn.title = p.description || label(p.name);
-    btn.setAttribute('aria-label', `${label(p.name)}${isActive ? ' (open)' : ''}`);
+    btn.title = p.description || displayName;
+    btn.setAttribute('aria-label', isActive
+      ? t('launcher.openItem', { name: displayName }, `${displayName} (open)`)
+      : displayName);
 
     const iconWrap = document.createElement('span');
     iconWrap.className = 'launcher-item-icon';

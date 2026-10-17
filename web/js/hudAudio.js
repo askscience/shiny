@@ -18,6 +18,7 @@ import { apiFetch, getToken } from './api.js';
 import { setIcon } from '../ui/index.js';
 import { toggleAudioMenu } from './audioMenu.js';
 import { currentSink, nodeIcon } from './audioShared.js';
+import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-audio');
 const iconEl = document.getElementById('hud-audio-icon');
@@ -128,9 +129,9 @@ function apply(status) {
   chipEl.classList.remove('hidden', 'is-muted', 'is-active');
   setIcon(iconEl, nodeIcon(sink, 'sink'), { size: 20 });
 
-  const label = sink.nick || sink.description || 'Sound';
+  const label = sink.nick || sink.description || t('hud.sound');
   labelEl.textContent = label;
-  pctEl.textContent = sink.muted ? 'Muted' : `${sink.volume_percent}%`;
+  pctEl.textContent = sink.muted ? t('audio.muted') : `${sink.volume_percent}%`;
   chipEl.classList.add(sink.muted ? 'is-muted' : 'is-active');
 
   const bits = [
@@ -140,5 +141,5 @@ function apply(status) {
     sink.active_port,
   ].filter(Boolean);
   chipEl.title = bits.join(' — ');
-  chipEl.setAttribute('aria-label', `Sound: ${bits.join(', ')}`);
+  chipEl.setAttribute('aria-label', t('hud.soundAria', { details: bits.join(', ') }));
 }

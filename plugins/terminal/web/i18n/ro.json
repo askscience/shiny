@@ -1,0 +1,30 @@
+{
+  "plugin.terminal.meta.description": "Un terminal Linux real în aplicație — un shell de autentificare bazat pe PTY, în propria fereastră",
+  "plugin.terminal.meta.summary": "Terminal: un shell real prin PTY, redat cu xterm.js",
+  "plugin.terminal.meta.category": "Sistem",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Filă nouă",
+  "plugin.terminal.tab.close": "Închide {name}",
+  "plugin.terminal.tabs.label": "File de terminal",
+
+  "plugin.terminal.status.starting": "se pornește terminalul…",
+  "plugin.terminal.status.connecting": "se conectează…",
+  "plugin.terminal.status.reconnecting": "se reconectează…",
+  "plugin.terminal.status.connected": "conectat",
+  "plugin.terminal.status.startFailed": "un shell nu a putut fi pornit",
+  "plugin.terminal.status.expired": "sesiunea a expirat — autentifică-te din nou",
+  "plugin.terminal.status.xtermFailed": "xterm.js nu a putut fi încărcat",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: cel mult {count} filă",
+  "plugin.terminal.toast.tabLimit.few": "Terminal: cel mult {count} file",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: cel mult {count} de file",
+  "plugin.terminal.toast.startFailed": "Terminal: un shell nu a putut fi pornit",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js nu a putut fi încărcat",
+  "plugin.terminal.toast.clipboardUnavailable": "Clipboardul nu este disponibil",
+
+  "plugin.terminal.ctx.copy": "Copiază",
+  "plugin.terminal.ctx.paste": "Lipește",
+  "plugin.terminal.ctx.clearScrollback": "Golește istoricul de derulare",
+  "plugin.terminal.ctx.closeTab": "Închide fila"
+}

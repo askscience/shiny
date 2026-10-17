@@ -284,6 +284,9 @@ const context = vm.createContext({
   openCoreWindow: () => {},
   copyText, readClipboardText,
   openContextMenu,
+  // The i18n runtime: resolve to the inline English fallback, as the catalog does.
+  t: (key, params, fallback) => fallback ?? key,
+  tp: (key, count, params, fallback) => fallback ?? key,
   navigator: { clipboard: { writeText: () => Promise.resolve() } },
   URL, setTimeout, clearTimeout, setInterval, clearInterval,
   JSON, String, Number, Array, Object, Math, RegExp, parseInt, parseFloat, Error, Promise, Set, Map,

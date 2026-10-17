@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Qed jindaqq issa",
+  "plugin.youtube.hero.untitled": "Video ta' YouTube",
+  "plugin.youtube.hero.back": "Lura",
+  "plugin.youtube.hero.backLabel": "Lura għat-tfittxija fuq YouTube",
+  "plugin.youtube.player.title": "Plejer ta' YouTube",
+
+  "plugin.youtube.search.placeholder": "Fittex fuq YouTube…",
+
+  "plugin.youtube.grid.upNext": "Li jmiss",
+  "plugin.youtube.grid.becauseYouWatched": "Li jmiss · għax rajt “{title}”",
+  "plugin.youtube.grid.forYou": "Għalik",
+  "plugin.youtube.grid.showAll": "Uri kollha {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Ma nstab ebda video",
+  "plugin.youtube.empty.noMatch": "Xejn ma jaqbel ma' “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Fittex fuq YouTube",
+  "plugin.youtube.empty.searchBody": "Ikteb hawn fuq — jew itlob lill-AI ssib video.",
+  "plugin.youtube.empty.unavailableTitle": "It-tfittxija mhix disponibbli",
+  "plugin.youtube.empty.retry": "Erġa' pprova bejn ftit",
+
+  "plugin.youtube.category.watched": "Rait {count}×",
+  "plugin.youtube.category.generic": "Kategorija",
+
+  "plugin.youtube.menu.search": "Fittex",
+  "plugin.youtube.menu.home": "Home",
+  "plugin.youtube.menu.refresh": "Aġġorna r-riżultati",
+  "plugin.youtube.menu.back": "Lura",
+
+  "plugin.youtube.meta.description": "Ara l-videos ta' YouTube fit-tieqa YouTube — l-AI tista' tfittex fuq YouTube u tdoqq il-videos",
+  "plugin.youtube.meta.summary": "YouTube: tfittxija u daqq bl-AI fit-tieqa YouTube",
+  "plugin.youtube.meta.category": "Midja"
+}

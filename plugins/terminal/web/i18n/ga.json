@@ -1,0 +1,32 @@
+{
+  "plugin.terminal.meta.description": "Fíorteirminéal Linux taobh istigh den aip — blaosc logála isteach ar thacaíocht PTY ina fuinneog féin",
+  "plugin.terminal.meta.summary": "Teirminéal: fíor-bhlaosc thar PTY, rindreáilte le xterm.js",
+  "plugin.terminal.meta.category": "Córas",
+
+  "plugin.terminal.tab.label": "Teirminéal {n}",
+  "plugin.terminal.tab.new": "Cluaisín nua",
+  "plugin.terminal.tab.close": "Dún {name}",
+  "plugin.terminal.tabs.label": "Cluaisíní teirminéil",
+
+  "plugin.terminal.status.starting": "teirminéal á thosú…",
+  "plugin.terminal.status.connecting": "ag ceangal…",
+  "plugin.terminal.status.reconnecting": "ag athcheangal…",
+  "plugin.terminal.status.connected": "ceangailte",
+  "plugin.terminal.status.startFailed": "níorbh fhéidir blaosc a thosú",
+  "plugin.terminal.status.expired": "chuaigh an seisiún in éag — sínigh isteach arís",
+  "plugin.terminal.status.xtermFailed": "níorbh fhéidir xterm.js a lódáil",
+
+  "plugin.terminal.toast.tabLimit.one": "Teirminéal: {count} cluaisín ar a mhéad",
+  "plugin.terminal.toast.tabLimit.two": "Teirminéal: {count} chluaisín ar a mhéad",
+  "plugin.terminal.toast.tabLimit.few": "Teirminéal: {count} chluaisín ar a mhéad",
+  "plugin.terminal.toast.tabLimit.many": "Teirminéal: {count} gcluaisín ar a mhéad",
+  "plugin.terminal.toast.tabLimit.other": "Teirminéal: {count} cluaisíní ar a mhéad",
+  "plugin.terminal.toast.startFailed": "Teirminéal: níorbh fhéidir blaosc a thosú",
+  "plugin.terminal.toast.xtermFailed": "Teirminéal: theip ar xterm.js a lódáil",
+  "plugin.terminal.toast.clipboardUnavailable": "Gearrthaisce gan fáil",
+
+  "plugin.terminal.ctx.copy": "Cóipeáil",
+  "plugin.terminal.ctx.paste": "Greamaigh",
+  "plugin.terminal.ctx.clearScrollback": "Glan an scrollú siar",
+  "plugin.terminal.ctx.closeTab": "Dún an cluaisín"
+}

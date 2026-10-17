@@ -1,0 +1,81 @@
+{
+  "plugin.impress.toolbar.presentations": "Презентации",
+  "plugin.impress.toolbar.titlePlaceholder": "Без названия",
+  "plugin.impress.toolbar.theme": "Тема",
+  "plugin.impress.toolbar.present": "Показ",
+  "plugin.impress.toolbar.newDeck": "Новая презентация",
+  "plugin.impress.toolbar.importOdp": "Импорт .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Сохранить в Документы",
+  "plugin.impress.toolbar.saveNow": "Сохранить сейчас",
+  "plugin.impress.toolbar.deleteDeck": "Удалить презентацию",
+
+  "plugin.impress.menu.empty": "Презентаций пока нет",
+  "plugin.impress.menu.newDeck": "Новая презентация",
+  "plugin.impress.menu.importOdp": "Импорт .odp",
+  "plugin.impress.menu.saveToDocuments": "Сохранить в Документы",
+  "plugin.impress.menu.deleteDeck": "Удалить презентацию",
+
+  "plugin.impress.ctx.newDeck": "Новая презентация",
+  "plugin.impress.ctx.addSlide": "Добавить слайд",
+  "plugin.impress.ctx.saveNow": "Сохранить сейчас",
+  "plugin.impress.ctx.present": "Показ",
+  "plugin.impress.ctx.stopPresenting": "Остановить показ",
+  "plugin.impress.ctx.deleteDeck": "Удалить презентацию",
+
+  "plugin.impress.status.saving": "Сохранение…",
+  "plugin.impress.status.unsaved": "Несохранённые изменения",
+  "plugin.impress.status.saved.one": "Сохранено {time} · {count} слайд",
+  "plugin.impress.status.saved.few": "Сохранено {time} · {count} слайда",
+  "plugin.impress.status.saved.many": "Сохранено {time} · {count} слайдов",
+  "plugin.impress.status.saved.other": "Сохранено {time} · {count} слайдов",
+
+  "plugin.impress.empty.noDeck": "Нет презентации",
+  "plugin.impress.empty.noDeckBody": "Создайте её или попросите ИИ собрать презентацию",
+
+  "plugin.impress.inspector.layout": "Раскладка",
+  "plugin.impress.inspector.transition": "Переход",
+  "plugin.impress.inspector.bullets": "Маркеры",
+  "plugin.impress.inspector.speakerNotes": "Заметки докладчика",
+  "plugin.impress.inspector.hint": "Нажмите на любой текст на слайде, чтобы изменить его напрямую.",
+  "plugin.impress.inspector.applyAll": "Применить этот переход и появление маркеров ко всем слайдам",
+  "plugin.impress.inspector.applyAllLabel": "Применить ко всем слайдам",
+
+  "plugin.impress.ops.addSlide": "Добавить слайд",
+  "plugin.impress.ops.moveUp": "Переместить выше",
+  "plugin.impress.ops.moveDown": "Переместить ниже",
+  "plugin.impress.ops.deleteSlide": "Удалить слайд",
+
+  "plugin.impress.transition.none": "Нет",
+  "plugin.impress.transition.fade": "Затухание",
+  "plugin.impress.transition.slide": "Сдвиг",
+  "plugin.impress.transition.push": "Вытеснение",
+  "plugin.impress.transition.zoom": "Масштабирование",
+
+  "plugin.impress.reveal.all": "Все сразу",
+  "plugin.impress.reveal.bullets": "По одному",
+
+  "plugin.impress.slide.addText": "Добавить текст",
+  "plugin.impress.slide.addTitle": "Добавить заголовок",
+  "plugin.impress.slide.addSubtitle": "Добавить подзаголовок",
+  "plugin.impress.slide.attribution": "Источник",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Назад в редактор",
+  "plugin.impress.present.fullScreen": "Во весь экран",
+  "plugin.impress.present.exitFullScreen": "Выйти из полноэкранного режима",
+  "plugin.impress.present.blocked": "Браузер заблокировал полноэкранный режим",
+
+  "plugin.impress.dialog.deleteDeck": "Удалить “{title}”?",
+
+  "plugin.impress.toast.saveFailed": "Не удалось сохранить",
+  "plugin.impress.toast.openFailed": "Не удалось открыть презентацию",
+  "plugin.impress.toast.createFailed": "Не удалось создать презентацию",
+  "plugin.impress.toast.deleteFailed": "Не удалось удалить презентацию",
+  "plugin.impress.toast.imported": "Импортировано: {name}",
+  "plugin.impress.toast.importFailed": "Не удалось импортировать — это точно файл .odp?",
+  "plugin.impress.toast.openFileFailed": "Не удалось открыть файл",
+
+  "plugin.impress.meta.description": "Конструктор презентаций — презентации хранятся в виде слайдов и экспортируются в открытые файлы .odp",
+  "plugin.impress.meta.summary": "Impress: создание, редактирование и показ слайдов OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Офис"
+}

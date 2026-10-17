@@ -2,6 +2,7 @@ import { setSphereState } from './sphere.js';
 import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
 import { icon } from '../ui/index.js';
+import { t } from './i18n.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
@@ -153,13 +154,17 @@ function clearPendingRow(bubble) {
 }
 
 /** The model's reasoning trace: a "Thinking" disclosure, closed by default so
- *  it stays out of the way until the user opens it. */
+ *  it stays out of the way until the user opens it. The arrow beside the label
+ *  turns down as the trace opens (see .compose-cot-arrow). */
 function makeCot(initial = '') {
   const details = document.createElement('details');
   details.className = 'compose-cot';
   const summary = document.createElement('summary');
   summary.className = 'compose-cot-summary';
-  summary.append(icon('ui/brain', { size: 13 }), document.createTextNode('Thinking'));
+  summary.append(
+    icon('ui/chevron-right', { size: 13, className: 'compose-cot-arrow' }),
+    document.createTextNode(t('chat.thinking', null, 'Thinking')),
+  );
   const body = document.createElement('div');
   body.className = 'compose-cot-body';
   body.textContent = initial;
@@ -193,14 +198,15 @@ function clearConversation() {
 }
 
 function startAssistantBubble() {
-  assistantBubble = makePendingBubble('Thinking…')?.bubble || null;
+  assistantBubble = makePendingBubble(t('chat.thinkingPending', null, 'Thinking…'))?.bubble || null;
 }
 
 /** Reserve the spot where a generated image will land (spinner + label). */
 export function showImagePlaceholder() {
   if (imagePlaceholder) return;
   imagePlaceholder =
-    makePendingBubble('Painting your image — this can take a few minutes…')?.bubble || null;
+    makePendingBubble(t('chat.imagePending', null,
+      'Painting your image — this can take a few minutes…'))?.bubble || null;
 }
 
 export function clearImagePlaceholder() {
@@ -224,7 +230,7 @@ function makeImageBlock(src, name, alt) {
 
   const img = document.createElement('img');
   img.src = src;
-  img.alt = alt || 'Generated image';
+  img.alt = alt || t('chat.generatedImage', null, 'Generated image');
   img.loading = 'lazy';
   img.decoding = 'async';
 
@@ -234,8 +240,8 @@ function makeImageBlock(src, name, alt) {
   const open = document.createElement('button');
   open.type = 'button';
   open.className = 'compose-image-action';
-  open.title = 'Open in the Image editor';
-  open.setAttribute('aria-label', 'Open in the Image editor');
+  open.title = t('chat.openInImageEditor', null, 'Open in the Image editor');
+  open.setAttribute('aria-label', t('chat.openInImageEditor', null, 'Open in the Image editor'));
   open.appendChild(icon('ui/magic-wand', { size: 16 }));
   open.addEventListener('click', () => {
     import('./files.js')
@@ -246,20 +252,23 @@ function makeImageBlock(src, name, alt) {
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'compose-image-action';
-  save.title = 'Save to Pictures';
-  save.setAttribute('aria-label', 'Save to Pictures');
+  save.title = t('chat.saveToPictures', null, 'Save to Pictures');
+  save.setAttribute('aria-label', t('chat.saveToPictures', null, 'Save to Pictures'));
   save.appendChild(icon('ui/save', { size: 16 }));
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
       const res = await fetch(src);
-      if (!res.ok) throw new Error('Could not load the image');
+      if (!res.ok) throw new Error(t('chat.imageLoadFailed', null, 'Could not load the image'));
       const blob = await res.blob();
       const m = await import('./files.js');
       await m.saveOrDownload(blob, { name, dir: 'Pictures', app: 'Image' });
     } catch (e) {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: e?.message || 'Could not save the image', type: 'error' },
+        detail: {
+          message: e?.message || t('chat.imageSaveFailed', null, 'Could not save the image'),
+          type: 'error',
+        },
       }));
     } finally {
       save.disabled = false;
@@ -314,7 +323,8 @@ function fmtTime(secs) {
 export function showSongPlaceholder() {
   if (songPlaceholder) return;
   songPlaceholder =
-    makePendingBubble('Composing your song — this can take several minutes…')?.bubble || null;
+    makePendingBubble(t('chat.songPending', null,
+      'Composing your song — this can take several minutes…'))?.bubble || null;
 }
 
 export function clearSongPlaceholder() {
@@ -324,8 +334,8 @@ export function clearSongPlaceholder() {
 
 function setSongPlaying(entry, playing) {
   entry.button.replaceChildren(icon(playing ? 'ui/pause' : 'ui/play', { size: 16 }));
-  entry.button.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-  entry.button.title = playing ? 'Pause' : 'Play';
+  entry.button.setAttribute('aria-label', playing ? t('chat.pause', null, 'Pause') : t('chat.play', null, 'Play'));
+  entry.button.title = playing ? t('chat.pause', null, 'Pause') : t('chat.play', null, 'Play');
 }
 
 function makeSongBlock(url, title) {
@@ -335,14 +345,14 @@ function makeSongBlock(url, title) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'compose-song-play';
-  button.setAttribute('aria-label', 'Play');
-  button.title = 'Play';
+  button.setAttribute('aria-label', t('chat.play', null, 'Play'));
+  button.title = t('chat.play', null, 'Play');
 
   const main = document.createElement('div');
   main.className = 'compose-song-main';
   const name = document.createElement('span');
   name.className = 'compose-song-title';
-  name.textContent = title || 'Song';
+  name.textContent = title || t('chat.song', null, 'Song');
   const track = document.createElement('div');
   track.className = 'compose-song-track';
   const fill = document.createElement('div');
@@ -391,12 +401,15 @@ function makeSongBlock(url, title) {
         button.disabled = true;
         try {
           const res = await fetch(url);
-          if (!res.ok) throw new Error('Could not load the track');
+          if (!res.ok) throw new Error(t('chat.songLoadFailed', null, 'Could not load the track'));
           blobUrl = URL.createObjectURL(await res.blob());
         } catch (err) {
           button.disabled = false;
           window.dispatchEvent(new CustomEvent('app:toast', {
-            detail: { message: err?.message || 'Could not load the track', type: 'error' },
+            detail: {
+              message: err?.message || t('chat.songLoadFailed', null, 'Could not load the track'),
+              type: 'error',
+            },
           }));
           return;
         }
@@ -650,7 +663,7 @@ async function submitTextInput() {
       },
     });
   } catch (e) {
-    streamAssistantBubble(e.message || 'Something went wrong');
+    streamAssistantBubble(e.message || t('chat.somethingWentWrong', null, 'Something went wrong'));
     finishSending();
   }
 }

@@ -1,0 +1,30 @@
+{
+  "plugin.terminal.meta.description": "Un vrai terminal Linux dans l'application — un shell de connexion adossé à un PTY, dans sa propre fenêtre",
+  "plugin.terminal.meta.summary": "Terminal : un vrai shell via un PTY, affiché avec xterm.js",
+  "plugin.terminal.meta.category": "Système",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Nouvel onglet",
+  "plugin.terminal.tab.close": "Fermer {name}",
+  "plugin.terminal.tabs.label": "Onglets du terminal",
+
+  "plugin.terminal.status.starting": "démarrage du terminal…",
+  "plugin.terminal.status.connecting": "connexion…",
+  "plugin.terminal.status.reconnecting": "reconnexion…",
+  "plugin.terminal.status.connected": "connecté",
+  "plugin.terminal.status.startFailed": "impossible de démarrer un shell",
+  "plugin.terminal.status.expired": "session expirée — reconnectez-vous",
+  "plugin.terminal.status.xtermFailed": "impossible de charger xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal : {count} onglet au maximum",
+  "plugin.terminal.toast.tabLimit.other": "Terminal : {count} onglets au maximum",
+  "plugin.terminal.toast.tabLimit.many": "Terminal : {count} onglets au maximum",
+  "plugin.terminal.toast.startFailed": "Terminal : impossible de démarrer un shell",
+  "plugin.terminal.toast.xtermFailed": "Terminal : échec du chargement de xterm.js",
+  "plugin.terminal.toast.clipboardUnavailable": "Presse-papiers indisponible",
+
+  "plugin.terminal.ctx.copy": "Copier",
+  "plugin.terminal.ctx.paste": "Coller",
+  "plugin.terminal.ctx.clearScrollback": "Effacer le défilement",
+  "plugin.terminal.ctx.closeTab": "Fermer l'onglet"
+}

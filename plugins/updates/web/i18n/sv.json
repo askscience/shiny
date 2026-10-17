@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Sök efter och installera system- och Ollama-uppdateringar på alla stora Linux-distributioner",
+  "plugin.updates.meta.summary": "Uppdateringar: ett fönster (och ett HUD-chip) för system- och Ollama-uppdateringar",
+  "plugin.updates.meta.category": "System",
+
+  "plugin.updates.tab.updates": "Uppdateringar",
+  "plugin.updates.tab.history": "Historik",
+
+  "plugin.updates.toolbar.sections": "Sektioner",
+  "plugin.updates.toolbar.check": "Sök efter uppdateringar",
+
+  "plugin.updates.status.checking": "Söker efter uppdateringar…",
+  "plugin.updates.status.thisSystem": "det här systemet",
+  "plugin.updates.status.unavailableOnSystem": "Uppdateringar är inte tillgängliga i det här systemet",
+  "plugin.updates.status.unavailable": "Uppdateringar är inte tillgängliga",
+  "plugin.updates.status.upToDate": "Allt är uppdaterat · {where}",
+  "plugin.updates.status.available.one": "{count} uppdatering tillgänglig · {where}",
+  "plugin.updates.status.available.other": "{count} uppdateringar tillgängliga · {where}",
+  "plugin.updates.status.working": "Arbetar…",
+  "plugin.updates.status.finished": "Uppdateringen klar",
+  "plugin.updates.status.failed": "Uppdateringen misslyckades",
+  "plugin.updates.status.upToDateBody": "Ditt system är uppdaterat.",
+  "plugin.updates.status.incomplete": "Uppdateringen slutfördes inte. Öppna Uppdateringar för mer information.",
+  "plugin.updates.status.couldNot": "Kunde inte {label}",
+  "plugin.updates.status.noJobId": "Servern returnerade inget jobb-id",
+  "plugin.updates.status.lostConnection": "Tappade anslutningen till jobbet",
+  "plugin.updates.status.jobDisappeared": "Jobbet försvann",
+
+  "plugin.updates.action.refresh": "Uppdatera listorna",
+  "plugin.updates.action.installing": "Installerar…",
+  "plugin.updates.action.install.one": "Installera {count} uppdatering",
+  "plugin.updates.action.install.other": "Installera {count} uppdateringar",
+  "plugin.updates.action.details": "Information",
+  "plugin.updates.action.hideDetails": "Dölj information",
+
+  "plugin.updates.empty.upToDate": "Uppdaterat",
+  "plugin.updates.empty.noUpdates": "Inga systemuppdateringar väntar.",
+  "plugin.updates.empty.noActivity": "Ingen aktivitet än",
+  "plugin.updates.empty.noActivityBody": "Uppdateringar du installerar listas här.",
+
+  "plugin.updates.ollama.version": " · version {version}",
+  "plugin.updates.ollama.installed": "Installerat{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Inte installerat (eller hittas inte i PATH)",
+  "plugin.updates.ollama.service": "Tjänst: {name}",
+  "plugin.updates.ollama.install": "Installera Ollama",
+  "plugin.updates.ollama.update": "Uppdatera Ollama",
+
+  "plugin.updates.history.system": "system",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Kunde inte söka efter uppdateringar",
+  "plugin.updates.notify.serviceUnavailable": "Uppdateringstjänsten är inte tillgänglig.",
+  "plugin.updates.notify.busy": "En uppdatering körs redan",
+  "plugin.updates.notify.busyBody": "Vänta tills den aktuella uppdateringen är klar.",
+
+  "plugin.updates.dialog.installTitle": "Installera uppdateringar",
+  "plugin.updates.dialog.installRights.one": "Att installera {count} uppdatering kräver administratörsrättigheter.",
+  "plugin.updates.dialog.installRights.other": "Att installera {count} uppdateringar kräver administratörsrättigheter.",
+  "plugin.updates.dialog.refreshRights": "Att uppdatera paketmetadata (t.ex. {cmd}) kräver administratörsrättigheter.",
+  "plugin.updates.dialog.ollamaMessage": "Kör det officiella installationsprogrammet. Ollama stoppas under uppdateringen och lämnas stoppat (att starta om det mitt i en session kan hänga GPU:n); starta det igen eller starta om datorn för att använda den nya versionen.",
+  "plugin.updates.dialog.passwordField": "Administratörslösenord",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo-lösenord",
+  "plugin.updates.dialog.passwordHint": "Används en gång för att köra kommandot med sudo. Det sparas aldrig.",
+  "plugin.updates.dialog.cancel": "Avbryt",
+  "plugin.updates.dialog.continue": "Fortsätt",
+
+  "plugin.updates.label.installing": "Installerar uppdateringar",
+  "plugin.updates.label.refreshing": "Uppdaterar listor",
+  "plugin.updates.label.updatingOllama": "Uppdaterar Ollama",
+
+  "plugin.updates.hud.available.one": "{count} uppdatering tillgänglig",
+  "plugin.updates.hud.available.other": "{count} uppdateringar tillgängliga",
+  "plugin.updates.hud.upToDate": "Systemet är uppdaterat",
+  "plugin.updates.hud.notifyTitle": "Uppdateringar tillgängliga",
+  "plugin.updates.hud.notifyBody.one": "{count} uppdatering redo att installera",
+  "plugin.updates.hud.notifyBody.other": "{count} uppdateringar redo att installera"
+}

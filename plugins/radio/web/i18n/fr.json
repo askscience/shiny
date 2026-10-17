@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Radio Internet via Radio Browser — recherchez des stations et écoutez-les dans la fenêtre Radio",
+  "plugin.radio.meta.summary": "Radio Internet : rechercher et écouter des stations (Radio Browser)",
+  "plugin.radio.meta.category": "Médias",
+
+  "plugin.radio.notify.nowPlaying": "Lecture en cours",
+  "plugin.radio.toast.streamRefused": "Impossible de lire le flux — essayez une autre station",
+
+  "plugin.radio.status.pickStation": "Choisissez une station",
+  "plugin.radio.status.streaming": "Diffusion en cours",
+
+  "plugin.radio.empty.noStations": "Aucune station trouvée",
+  "plugin.radio.empty.noMatch": "Rien ne correspond à “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser inaccessible",
+  "plugin.radio.error.tryAgain": "Réessayez dans un instant",
+
+  "plugin.radio.fallback.station": "Station",
+  "plugin.radio.search.placeholder": "Stations ou genres…",
+
+  "plugin.radio.menu.play": "Lire",
+  "plugin.radio.menu.pause": "Pause",
+  "plugin.radio.menu.stop": "Arrêter",
+  "plugin.radio.menu.refresh": "Actualiser les stations"
+}

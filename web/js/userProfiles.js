@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 const KEY = 'knownUsers';
 const MAX_USERS = 8;
 
@@ -50,23 +52,23 @@ export function renderAvatarEl(el, { name, avatar }) {
 
 export async function readAvatarFile(file, maxSize = 256) {
   if (!file?.type?.startsWith('image/')) {
-    throw new Error('Choose an image file');
+    throw new Error(t('profile.chooseImage', null, 'Choose an image file'));
   }
   if (file.size > 8 * 1024 * 1024) {
-    throw new Error('Image must be under 8 MB');
+    throw new Error(t('profile.imageTooLarge', null, 'Image must be under 8 MB'));
   }
 
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.onerror = () => reject(new Error(t('profile.readFailed', null, 'Could not read image')));
     reader.readAsDataURL(file);
   });
 
   const img = await new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Invalid image'));
+    image.onerror = () => reject(new Error(t('profile.invalidImage', null, 'Invalid image')));
     image.src = dataUrl;
   });
 

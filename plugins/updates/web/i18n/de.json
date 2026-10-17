@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "System- und Ollama-Updates unter allen wichtigen Linux-Distributionen prüfen und installieren",
+  "plugin.updates.meta.summary": "Updates: ein Fenster (und HUD-Chip) für System- und Ollama-Updates",
+  "plugin.updates.meta.category": "System",
+
+  "plugin.updates.tab.updates": "Updates",
+  "plugin.updates.tab.history": "Verlauf",
+
+  "plugin.updates.toolbar.sections": "Bereiche",
+  "plugin.updates.toolbar.check": "Nach Updates suchen",
+
+  "plugin.updates.status.checking": "Nach Updates wird gesucht…",
+  "plugin.updates.status.thisSystem": "dieses System",
+  "plugin.updates.status.unavailableOnSystem": "Updates sind auf diesem System nicht verfügbar",
+  "plugin.updates.status.unavailable": "Updates nicht verfügbar",
+  "plugin.updates.status.upToDate": "Alles ist auf dem neuesten Stand · {where}",
+  "plugin.updates.status.available.one": "{count} Update verfügbar · {where}",
+  "plugin.updates.status.available.other": "{count} Updates verfügbar · {where}",
+  "plugin.updates.status.working": "Wird ausgeführt…",
+  "plugin.updates.status.finished": "Update abgeschlossen",
+  "plugin.updates.status.failed": "Update fehlgeschlagen",
+  "plugin.updates.status.upToDateBody": "Ihr System ist auf dem neuesten Stand.",
+  "plugin.updates.status.incomplete": "Das Update wurde nicht abgeschlossen. Öffnen Sie Updates für Details.",
+  "plugin.updates.status.couldNot": "Fehlgeschlagen: {label}",
+  "plugin.updates.status.noJobId": "Der Server hat keine Job-ID zurückgegeben",
+  "plugin.updates.status.lostConnection": "Verbindung zum Auftrag verloren",
+  "plugin.updates.status.jobDisappeared": "Der Auftrag ist verschwunden",
+
+  "plugin.updates.action.refresh": "Listen aktualisieren",
+  "plugin.updates.action.installing": "Wird installiert…",
+  "plugin.updates.action.install.one": "{count} Update installieren",
+  "plugin.updates.action.install.other": "{count} Updates installieren",
+  "plugin.updates.action.details": "Details",
+  "plugin.updates.action.hideDetails": "Details ausblenden",
+
+  "plugin.updates.empty.upToDate": "Auf dem neuesten Stand",
+  "plugin.updates.empty.noUpdates": "Es warten keine Systemupdates.",
+  "plugin.updates.empty.noActivity": "Noch keine Aktivität",
+  "plugin.updates.empty.noActivityBody": "Installierte Updates werden hier aufgelistet.",
+
+  "plugin.updates.ollama.version": " · Version {version}",
+  "plugin.updates.ollama.installed": "Installiert{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Nicht installiert (oder nicht im PATH gefunden)",
+  "plugin.updates.ollama.service": "Dienst: {name}",
+  "plugin.updates.ollama.install": "Ollama installieren",
+  "plugin.updates.ollama.update": "Ollama aktualisieren",
+
+  "plugin.updates.history.system": "System",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Es konnte nicht nach Updates gesucht werden",
+  "plugin.updates.notify.serviceUnavailable": "Der Update-Dienst ist nicht verfügbar.",
+  "plugin.updates.notify.busy": "Ein Update läuft bereits",
+  "plugin.updates.notify.busyBody": "Warten Sie, bis das aktuelle Update abgeschlossen ist.",
+
+  "plugin.updates.dialog.installTitle": "Updates installieren",
+  "plugin.updates.dialog.installRights.one": "Die Installation von {count} Update erfordert Administratorrechte.",
+  "plugin.updates.dialog.installRights.other": "Die Installation von {count} Updates erfordert Administratorrechte.",
+  "plugin.updates.dialog.refreshRights": "Das Aktualisieren der Paketmetadaten (z. B. {cmd}) erfordert Administratorrechte.",
+  "plugin.updates.dialog.ollamaMessage": "Führt den offiziellen Installer aus. Ollama wird während des Updates gestoppt und bleibt gestoppt (ein Neustart mitten in der Sitzung kann die GPU blockieren); starten Sie es erneut oder starten Sie den Rechner neu, um die neue Version zu nutzen.",
+  "plugin.updates.dialog.passwordField": "Administratorpasswort",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo-Passwort",
+  "plugin.updates.dialog.passwordHint": "Wird einmalig verwendet, um den Befehl mit sudo auszuführen. Es wird nie gespeichert.",
+  "plugin.updates.dialog.cancel": "Abbrechen",
+  "plugin.updates.dialog.continue": "Fortfahren",
+
+  "plugin.updates.label.installing": "Updates werden installiert",
+  "plugin.updates.label.refreshing": "Listen werden aktualisiert",
+  "plugin.updates.label.updatingOllama": "Ollama wird aktualisiert",
+
+  "plugin.updates.hud.available.one": "{count} Update verfügbar",
+  "plugin.updates.hud.available.other": "{count} Updates verfügbar",
+  "plugin.updates.hud.upToDate": "System aktuell",
+  "plugin.updates.hud.notifyTitle": "Updates verfügbar",
+  "plugin.updates.hud.notifyBody.one": "{count} Update bereit zur Installation",
+  "plugin.updates.hud.notifyBody.other": "{count} Updates bereit zur Installation"
+}

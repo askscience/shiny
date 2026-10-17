@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetinis radijas per Radio Browser — ieškokite stočių ir leiskite jas Radijo lange",
+  "plugin.radio.meta.summary": "Internetinis radijas: ieškokite ir leiskite stotis (Radio Browser)",
+  "plugin.radio.meta.category": "Medija",
+
+  "plugin.radio.notify.nowPlaying": "Dabar leidžiama",
+  "plugin.radio.toast.streamRefused": "Srauto paleisti nepavyko — bandykite kitą stotį",
+
+  "plugin.radio.status.pickStation": "Pasirinkite stotį",
+  "plugin.radio.status.streaming": "Transliuojama",
+
+  "plugin.radio.empty.noStations": "Nerasta stočių",
+  "plugin.radio.empty.noMatch": "Nieko nerasta pagal “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser nepasiekiamas",
+  "plugin.radio.error.tryAgain": "Bandykite dar kartą po akimirkos",
+
+  "plugin.radio.fallback.station": "Stotis",
+  "plugin.radio.search.placeholder": "Stotys arba žanrai…",
+
+  "plugin.radio.menu.play": "Leisti",
+  "plugin.radio.menu.pause": "Pristabdyti",
+  "plugin.radio.menu.stop": "Stabdyti",
+  "plugin.radio.menu.refresh": "Atnaujinti stotis"
+}

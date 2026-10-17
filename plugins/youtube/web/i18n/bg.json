@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "В момента се гледа",
+  "plugin.youtube.hero.untitled": "Видео в YouTube",
+  "plugin.youtube.hero.back": "Назад",
+  "plugin.youtube.hero.backLabel": "Обратно към търсенето в YouTube",
+  "plugin.youtube.player.title": "YouTube плейър",
+
+  "plugin.youtube.search.placeholder": "Търсене в YouTube…",
+
+  "plugin.youtube.grid.upNext": "Следва",
+  "plugin.youtube.grid.becauseYouWatched": "Следва · защото гледахте “{title}”",
+  "plugin.youtube.grid.forYou": "За вас",
+  "plugin.youtube.grid.showAll": "Покажи всички {category}",
+  "plugin.youtube.grid.untitled": "Видео",
+
+  "plugin.youtube.empty.noResults": "Не са намерени видеа",
+  "plugin.youtube.empty.noMatch": "Нищо не отговаря на “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Търсене в YouTube",
+  "plugin.youtube.empty.searchBody": "Въведете отгоре — или помолете ИИ да намери видео.",
+  "plugin.youtube.empty.unavailableTitle": "Търсенето е недостъпно",
+  "plugin.youtube.empty.retry": "Опитайте отново след малко",
+
+  "plugin.youtube.category.watched": "Гледано {count}×",
+  "plugin.youtube.category.generic": "Категория",
+
+  "plugin.youtube.menu.search": "Търсене",
+  "plugin.youtube.menu.home": "Начало",
+  "plugin.youtube.menu.refresh": "Опресни резултатите",
+  "plugin.youtube.menu.back": "Назад",
+
+  "plugin.youtube.meta.description": "Гледайте видеа от YouTube в прозореца YouTube — ИИ може да търси в YouTube и да пуска видеа",
+  "plugin.youtube.meta.summary": "YouTube: търсене с ИИ и възпроизвеждане в прозореца YouTube",
+  "plugin.youtube.meta.category": "Медия"
+}

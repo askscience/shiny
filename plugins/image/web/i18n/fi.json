@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Valokuvankäsittely — sävyn ja värin säädöt, sumennus/terävöinti/vinjetti ja yhden napautuksen filmisävyt Image-ikkunassa",
+  "plugin.image.meta.summary": "Valokuvankäsittely: säädöt ja filmisävyt",
+  "plugin.image.meta.category": "Media",
+
+  "plugin.image.toolbar.menu": "Valikko",
+  "plugin.image.toolbar.fitToggle": "Vaihda sovitus / todellinen koko",
+
+  "plugin.image.dial.brightness": "Kirkkaus",
+  "plugin.image.dial.contrast": "Kontrasti",
+  "plugin.image.dial.exposure": "Valotus",
+  "plugin.image.dial.vibrance": "Eloisuus",
+  "plugin.image.dial.saturation": "Kylläisyys",
+  "plugin.image.dial.blur": "Sumennus",
+  "plugin.image.dial.sharpen": "Terävöinti",
+  "plugin.image.dial.vignette": "Vinjetti",
+
+  "plugin.image.oneClick.autoTone": "Automaattinen sävy",
+  "plugin.image.oneClick.autoContrast": "Automaattinen kontrasti",
+  "plugin.image.oneClick.invert": "Käänteisvärit",
+  "plugin.image.oneClick.grayscale": "M/V",
+  "plugin.image.oneClick.sepia": "Seepia",
+  "plugin.image.oneClick.revert": "Palauta",
+  "plugin.image.oneClick.revertTitle": "Palauta alkuperäinen kuva",
+
+  "plugin.image.empty.title": "Ei avointa kuvaa",
+  "plugin.image.empty.body": "Avaa kuva tai pudota se tähän aloittaaksesi.",
+  "plugin.image.empty.open": "Avaa kuva",
+
+  "plugin.image.menu.file": "Tiedosto",
+  "plugin.image.menu.image": "Kuva",
+  "plugin.image.menu.view": "Näkymä",
+  "plugin.image.menu.open": "Avaa…",
+  "plugin.image.menu.saveCopy": "Tallenna kopio…",
+  "plugin.image.menu.delete": "Poista kuva",
+  "plugin.image.menu.rotateLeft": "Kierrä vasemmalle",
+  "plugin.image.menu.rotateRight": "Kierrä oikealle",
+  "plugin.image.menu.flipH": "Käännä vaakasuunnassa",
+  "plugin.image.menu.flipV": "Käännä pystysuunnassa",
+  "plugin.image.menu.revert": "Palauta alkuperäiseksi",
+  "plugin.image.menu.zoomIn": "Suurenna",
+  "plugin.image.menu.zoomOut": "Pienennä",
+  "plugin.image.menu.fit": "Sovita",
+  "plugin.image.menu.actualSize": "Todellinen koko",
+
+  "plugin.image.ctx.open": "Avaa kuva…",
+
+  "plugin.image.dialog.deleteConfirm": "Poistetaanko \"{title}\"?",
+  "plugin.image.dialog.thisImage": "tämä kuva",
+
+  "plugin.image.toast.openFirst": "Avaa ensin kuva",
+  "plugin.image.toast.opened": "Avattu {title}",
+  "plugin.image.toast.editFailed": "Muokkaus epäonnistui",
+  "plugin.image.toast.operationFailed": "Toiminto epäonnistui",
+  "plugin.image.toast.renderFailed": "Kuvaa ei voitu renderöidä",
+  "plugin.image.toast.uploadFailed": "Lataus epäonnistui",
+  "plugin.image.toast.saveFailed": "Tallennus epäonnistui",
+  "plugin.image.toast.deleted": "Kuva poistettu",
+  "plugin.image.toast.deleteFailed": "Kuvaa ei voitu poistaa",
+  "plugin.image.toast.reverted": "Palautettu alkuperäisiin pikseleihin",
+  "plugin.image.toast.openFailed": "Tiedostoa ei voitu avata",
+
+  "plugin.image.error.emptyFile": "tiedosto on tyhjä",
+  "plugin.image.error.notAnImage": "“{name}” ei ole kuva, jonka muokkain voi avata",
+  "plugin.image.error.unnamedFile": "tiedosto"
+}

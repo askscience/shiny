@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Arvutustabeliredaktor — tabelid salvestatakse avatud lahtrivõrgustikuna ja neid saab muuta Calc aknas",
+  "plugin.calc.meta.summary": "Calc: arvutustabelite loomine, muutmine ja arvutamine",
+  "plugin.calc.meta.category": "Kontor",
+
+  "plugin.calc.bar.spreadsheets": "Arvutustabelid",
+
+  "plugin.calc.toolbar.newSheet": "Uus arvutustabel",
+  "plugin.calc.toolbar.importOds": "Impordi .ods",
+  "plugin.calc.toolbar.importCsv": "Impordi CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Salvesta kausta Dokumendid",
+  "plugin.calc.toolbar.saveNow": "Salvesta kohe",
+  "plugin.calc.toolbar.deleteSheet": "Kustuta arvutustabel",
+
+  "plugin.calc.menu.noSheets": "Arvutustabeleid veel pole",
+
+  "plugin.calc.sheet.untitled": "Pealkirjata",
+  "plugin.calc.sheet.importedCsv": "Imporditud CSV",
+
+  "plugin.calc.formula.placeholder": "Väärtus või valem (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Salvestamine…",
+  "plugin.calc.status.dirty": "Salvestamata muudatused",
+  "plugin.calc.status.saved.one": "Salvestatud {time} · {count} lahter",
+  "plugin.calc.status.saved.other": "Salvestatud {time} · {count} lahtrit",
+
+  "plugin.calc.dialog.delete": "Kustutada \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Salvestamine ebaõnnestus",
+  "plugin.calc.toast.openFailed": "Arvutustabelit ei saanud avada",
+  "plugin.calc.toast.createFailed": "Arvutustabelit ei saanud luua",
+  "plugin.calc.toast.deleteFailed": "Arvutustabelit ei saanud kustutada",
+  "plugin.calc.toast.imported": "Imporditud {name}",
+  "plugin.calc.toast.importOdsFailed": "Import ebaõnnestus — kas see on korrektne .ods-fail?",
+  "plugin.calc.toast.importCsvFailed": "Import ebaõnnestus — kas see on korrektne CSV-fail?",
+  "plugin.calc.toast.openFileFailed": "Faili ei saanud avada"
+}

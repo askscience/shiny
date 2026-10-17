@@ -19,6 +19,9 @@ fn main() {
 }
 
 #[cfg(target_os = "linux")]
+mod i18n;
+
+#[cfg(target_os = "linux")]
 mod linux {
     use std::path::PathBuf;
     use std::process::{Child, Command, Stdio};
@@ -28,6 +31,8 @@ mod linux {
 
     use gtk::prelude::*;
     use serde_json::Value;
+
+    use crate::i18n::{fill, language, load, tr};
 
     const APP_ID: &str = "computer.shiny.ServerMode";
 
@@ -83,10 +88,12 @@ mod linux {
         let base = base_url();
         let token = session_token().unwrap_or_default();
         let client = client();
+        // The window's strings, in the session language (English on any failure).
+        let strings = load(&client, &base, &language());
 
         let window = gtk::ApplicationWindow::builder()
             .application(app)
-            .title("Shiny — Server mode")
+            .title(&tr(&strings, "servermode.title", "Shiny — Server mode"))
             .default_width(560)
             .default_height(620)
             .build();
@@ -97,17 +104,22 @@ mod linux {
         root.set_margin_start(24);
         root.set_margin_end(24);
 
-        let title = gtk::Label::new(Some("Server mode"));
+        let heading = tr(&strings, "servermode.heading", "Server mode");
+        let title = gtk::Label::new(Some(&heading));
         title.set_halign(gtk::Align::Start);
-        title.set_markup("<span size='x-large' weight='bold'>Server mode</span>");
+        title.set_markup(&format!("<span size='x-large' weight='bold'>{heading}</span>"));
         root.pack_start(&title, false, false, 0);
 
-        let status = gtk::Label::new(Some("Starting…"));
+        let status = gtk::Label::new(Some(&tr(&strings, "servermode.starting", "Starting…")));
         status.set_halign(gtk::Align::Start);
         status.set_line_wrap(true);
         root.pack_start(&status, false, false, 0);
 
-        let link_title = gtk::Label::new(Some("Connection link"));
+        let link_title = gtk::Label::new(Some(&tr(
+            &strings,
+            "servermode.connectionLink",
+            "Connection link",
+        )));
         link_title.set_halign(gtk::Align::Start);
         root.pack_start(&link_title, false, false, 4);
 
@@ -123,11 +135,15 @@ mod linux {
         root.pack_start(&qr, false, false, 0);
 
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let reveal = gtk::Button::with_label("Reveal link");
-        let copy = gtk::Button::with_label("Copy");
-        let rotate = gtk::Button::with_label("Rotate key");
-        let pair = gtk::Button::with_label("Pair device");
-        let forget = gtk::Button::with_label("Forget devices");
+        let reveal = gtk::Button::with_label(&tr(&strings, "servermode.revealLink", "Reveal link"));
+        let copy = gtk::Button::with_label(&tr(&strings, "servermode.copy", "Copy"));
+        let rotate = gtk::Button::with_label(&tr(&strings, "servermode.rotateKey", "Rotate key"));
+        let pair = gtk::Button::with_label(&tr(&strings, "servermode.pairDevice", "Pair device"));
+        let forget = gtk::Button::with_label(&tr(
+            &strings,
+            "servermode.forgetDevices",
+            "Forget devices",
+        ));
         buttons.pack_start(&reveal, false, false, 0);
         buttons.pack_start(&copy, false, false, 0);
         buttons.pack_start(&rotate, false, false, 0);
@@ -140,24 +156,35 @@ mod linux {
 
         // Allow Terminal
         let term_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let term_label = gtk::Label::new(Some("Allow Terminal from remote clients"));
+        let term_label = gtk::Label::new(Some(&tr(
+            &strings,
+            "servermode.allowTerminal",
+            "Allow Terminal from remote clients",
+        )));
         term_label.set_halign(gtk::Align::Start);
         term_label.set_hexpand(true);
         let term_switch = gtk::Switch::new();
         term_row.pack_start(&term_label, true, true, 0);
         term_row.pack_end(&term_switch, false, false, 0);
         root.pack_start(&term_row, false, false, 0);
-        let term_hint = gtk::Label::new(Some(
-            "The Terminal is a real shell on this machine. Off by default.",
-        ));
+        let term_hint_text = tr(
+            &strings,
+            "servermode.terminalHint",
+            "Off by default — enable only for devices you trust.",
+        );
+        let term_hint = gtk::Label::new(Some(&term_hint_text));
         term_hint.set_halign(gtk::Align::Start);
         term_hint.set_line_wrap(true);
-        term_hint.set_markup("<small>Off by default — enable only for devices you trust.</small>");
+        term_hint.set_markup(&format!("<small>{term_hint_text}</small>"));
         root.pack_start(&term_hint, false, false, 0);
 
         // Autostart
         let auto_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let auto_label = gtk::Label::new(Some("Autostart server mode on login"));
+        let auto_label = gtk::Label::new(Some(&tr(
+            &strings,
+            "servermode.autostart",
+            "Autostart server mode on login",
+        )));
         auto_label.set_halign(gtk::Align::Start);
         auto_label.set_hexpand(true);
         let auto_switch = gtk::Switch::new();
@@ -168,7 +195,11 @@ mod linux {
         // Public URL over Tailscale Funnel: the same app, reachable from any
         // browser at an https://…ts.net URL. Kept alongside the Iroh link.
         let ts_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let ts_label = gtk::Label::new(Some("Public URL (Tailscale Funnel)"));
+        let ts_label = gtk::Label::new(Some(&tr(
+            &strings,
+            "servermode.publicUrl",
+            "Public URL (Tailscale Funnel)",
+        )));
         ts_label.set_halign(gtk::Align::Start);
         ts_label.set_hexpand(true);
         let ts_switch = gtk::Switch::new();
@@ -177,12 +208,15 @@ mod linux {
         ts_row.set_visible(false);
         root.pack_start(&ts_row, false, false, 0);
 
-        let ts_hint = gtk::Label::new(Some(
+        let ts_hint_text = tr(
+            &strings,
+            "servermode.publicUrlHint",
             "Open it in any browser, on any device — no app or port forwarding.",
-        ));
+        );
+        let ts_hint = gtk::Label::new(Some(&ts_hint_text));
         ts_hint.set_halign(gtk::Align::Start);
         ts_hint.set_line_wrap(true);
-        ts_hint.set_markup("<small>Open it in any browser, on any device — no app or port forwarding.</small>");
+        ts_hint.set_markup(&format!("<small>{ts_hint_text}</small>"));
         ts_hint.set_visible(false);
         root.pack_start(&ts_hint, false, false, 0);
 
@@ -195,7 +229,7 @@ mod linux {
         let ts_url = gtk::Entry::new();
         ts_url.set_editable(false);
         ts_url.set_hexpand(true);
-        let ts_copy = gtk::Button::with_label("Copy URL");
+        let ts_copy = gtk::Button::with_label(&tr(&strings, "servermode.copyUrl", "Copy URL"));
         ts_url_row.pack_start(&ts_url, true, true, 0);
         ts_url_row.pack_start(&ts_copy, false, false, 0);
         ts_url_row.set_visible(false);
@@ -203,7 +237,7 @@ mod linux {
 
         root.pack_start(&gtk::Separator::new(gtk::Orientation::Horizontal), false, false, 6);
 
-        let stop = gtk::Button::with_label("Stop server");
+        let stop = gtk::Button::with_label(&tr(&strings, "servermode.stopServer", "Stop server"));
         stop.set_hexpand(false);
         root.pack_start(&stop, false, false, 0);
 
@@ -225,6 +259,7 @@ mod linux {
 
         // Fetch + render status.
         {
+            let strings = strings.clone();
             let status = status.clone();
             let ticket = ticket.clone();
             let qr = qr.clone();
@@ -261,13 +296,30 @@ mod linux {
                     let pairing = value.get("pairing").and_then(Value::as_bool).unwrap_or(false);
 
                     if enabled {
-                        let mut line =
-                            format!("On — {id}… · {conns} connection(s) · {bytes} bytes");
+                        let mut line = fill(
+                            &tr(
+                                &strings,
+                                "servermode.statusOn",
+                                "On — {id} · {connections} connection(s) · {bytes} bytes",
+                            ),
+                            &[
+                                ("id", &id),
+                                ("connections", &conns.to_string()),
+                                ("bytes", &bytes.to_string()),
+                            ],
+                        );
                         if paired > 0 {
-                            line.push_str(&format!(" · {paired} paired"));
+                            line.push_str(&fill(
+                                &tr(&strings, "servermode.statusPaired", " · {count} paired"),
+                                &[("count", &paired.to_string())],
+                            ));
                         }
                         if pairing {
-                            line.push_str(" · pairing…");
+                            line.push_str(&tr(
+                                &strings,
+                                "servermode.statusPairing",
+                                " · pairing…",
+                            ));
                         }
                         status.set_text(&line);
                         *current_ticket.borrow_mut() = t.clone();
@@ -276,7 +328,7 @@ mod linux {
                             load_qr(&client_for_status, &base_for_status, &token_for_status, &qr);
                         }
                     } else {
-                        status.set_text("Off");
+                        status.set_text(&tr(&strings, "servermode.statusOff", "Off"));
                     }
 
                     // Tailscale Funnel state (independent of the Iroh toggle).
@@ -296,11 +348,18 @@ mod linux {
                     let mut ts_line = if !ts_installed {
                         String::new()
                     } else if !ts_up {
-                        "Installed, not connected — run `tailscale up`.".to_string()
+                        tr(
+                            &strings,
+                            "servermode.tsInstalled",
+                            "Installed, not connected — run `tailscale up`.",
+                        )
                     } else if ts_on {
-                        format!("On — {ts_url_str}")
+                        fill(
+                            &tr(&strings, "servermode.tsOn", "On — {url}"),
+                            &[("url", ts_url_str)],
+                        )
                     } else {
-                        "Off.".to_string()
+                        tr(&strings, "servermode.tsOff", "Off.")
                     };
                     if !ts_err.is_empty() {
                         ts_line.push_str(&format!(" ({ts_err})"));
@@ -319,6 +378,7 @@ mod linux {
 
         // Reveal
         {
+            let strings = strings.clone();
             let revealed = revealed.clone();
             let ticket = ticket.clone();
             let qr = qr.clone();
@@ -331,13 +391,13 @@ mod linux {
                 let mut r = revealed.borrow_mut();
                 *r = !*r;
                 if *r {
-                    reveal_btn.set_label("Hide link");
+                    reveal_btn.set_label(&tr(&strings, "servermode.hideLink", "Hide link"));
                     ticket.set_visible(true);
                     qr.set_visible(true);
                     ticket.set_text(&current_ticket.borrow());
                     load_qr(&client, &base, &token, &qr);
                 } else {
-                    reveal_btn.set_label("Reveal link");
+                    reveal_btn.set_label(&tr(&strings, "servermode.revealLink", "Reveal link"));
                     ticket.set_visible(false);
                     qr.set_visible(false);
                 }
@@ -355,6 +415,7 @@ mod linux {
 
         // Rotate
         {
+            let strings = strings.clone();
             let client = client.clone();
             let base = base.clone();
             let token = token.clone();
@@ -364,12 +425,13 @@ mod linux {
                     .post(format!("{base}/api/remote/rotate"))
                     .bearer_auth(&token)
                     .send();
-                status.set_text("Rotating…");
+                status.set_text(&tr(&strings, "servermode.rotating", "Rotating…"));
             });
         }
 
         // Pair the next device
         {
+            let strings = strings.clone();
             let client = client.clone();
             let base = base.clone();
             let token = token.clone();
@@ -379,12 +441,20 @@ mod linux {
                     .post(format!("{base}/api/remote/pair"))
                     .bearer_auth(&token)
                     .send();
-                status.set_text("Pairing open for 120s — connect from the new device now");
+                status.set_text(&fill(
+                    &tr(
+                        &strings,
+                        "servermode.pairingOpen",
+                        "Pairing open for {seconds}s — connect from the new device now",
+                    ),
+                    &[("seconds", "120")],
+                ));
             });
         }
 
         // Forget paired devices
         {
+            let strings = strings.clone();
             let client = client.clone();
             let base = base.clone();
             let token = token.clone();
@@ -394,7 +464,7 @@ mod linux {
                     .post(format!("{base}/api/remote/unpair"))
                     .bearer_auth(&token)
                     .send();
-                status.set_text("Forgot paired devices");
+                status.set_text(&tr(&strings, "servermode.forgotDevices", "Forgot paired devices"));
             });
         }
 
@@ -431,6 +501,7 @@ mod linux {
 
         // Tailscale Funnel on/off.
         {
+            let strings = strings.clone();
             let client = client.clone();
             let base = base.clone();
             let token = token.clone();
@@ -449,10 +520,10 @@ mod linux {
                     .post(format!("{base}{path}"))
                     .bearer_auth(&token)
                     .send();
-                status.set_text(if on {
-                    "Enabling public URL…"
+                status.set_text(&if on {
+                    tr(&strings, "servermode.enablingPublic", "Enabling public URL…")
                 } else {
-                    "Disabling public URL…"
+                    tr(&strings, "servermode.disablingPublic", "Disabling public URL…")
                 });
                 gtk::glib::Propagation::Proceed
             });

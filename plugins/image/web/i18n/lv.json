@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotoattēlu redaktors — toņa un krāsu korekcijas, aizmiglošana/asinošana/vignete un viena pieskāriena filmu efekti Attēla logā",
+  "plugin.image.meta.summary": "Fotoattēlu redaktors: korekcijas un filmu efekti",
+  "plugin.image.meta.category": "Mediji",
+
+  "plugin.image.toolbar.menu": "Izvēlne",
+  "plugin.image.toolbar.fitToggle": "Pārslēgt ietilpināšanu / faktisko izmēru",
+
+  "plugin.image.dial.brightness": "Spilgtums",
+  "plugin.image.dial.contrast": "Kontrasts",
+  "plugin.image.dial.exposure": "Ekspozīcija",
+  "plugin.image.dial.vibrance": "Dzīvīgums",
+  "plugin.image.dial.saturation": "Piesātinājums",
+  "plugin.image.dial.blur": "Aizmiglojums",
+  "plugin.image.dial.sharpen": "Asināšana",
+  "plugin.image.dial.vignette": "Vignete",
+
+  "plugin.image.oneClick.autoTone": "Automātiskais tonis",
+  "plugin.image.oneClick.autoContrast": "Automātiskais kontrasts",
+  "plugin.image.oneClick.invert": "Invertēt",
+  "plugin.image.oneClick.grayscale": "Melnbalts",
+  "plugin.image.oneClick.sepia": "Sēpija",
+  "plugin.image.oneClick.revert": "Atgriezt",
+  "plugin.image.oneClick.revertTitle": "Atjaunot sākotnējo augšupielādi",
+
+  "plugin.image.empty.title": "Nav atvērts neviens attēls",
+  "plugin.image.empty.body": "Atveriet vai ievelciet attēlu, lai sāktu.",
+  "plugin.image.empty.open": "Atvērt attēlu",
+
+  "plugin.image.menu.file": "Fails",
+  "plugin.image.menu.image": "Attēls",
+  "plugin.image.menu.view": "Skats",
+  "plugin.image.menu.open": "Atvērt…",
+  "plugin.image.menu.saveCopy": "Saglabāt kopiju…",
+  "plugin.image.menu.delete": "Dzēst attēlu",
+  "plugin.image.menu.rotateLeft": "Pagriezt pa kreisi",
+  "plugin.image.menu.rotateRight": "Pagriezt pa labi",
+  "plugin.image.menu.flipH": "Apgriezt horizontāli",
+  "plugin.image.menu.flipV": "Apgriezt vertikāli",
+  "plugin.image.menu.revert": "Atgriezt pie sākotnējā",
+  "plugin.image.menu.zoomIn": "Tuvināt",
+  "plugin.image.menu.zoomOut": "Tālināt",
+  "plugin.image.menu.fit": "Ietilpināt",
+  "plugin.image.menu.actualSize": "Faktiskais izmērs",
+
+  "plugin.image.ctx.open": "Atvērt attēlu…",
+
+  "plugin.image.dialog.deleteConfirm": "Dzēst \"{title}\"?",
+  "plugin.image.dialog.thisImage": "šo attēlu",
+
+  "plugin.image.toast.openFirst": "Vispirms atveriet attēlu",
+  "plugin.image.toast.opened": "Atvērts {title}",
+  "plugin.image.toast.editFailed": "Rediģēšana neizdevās",
+  "plugin.image.toast.operationFailed": "Darbība neizdevās",
+  "plugin.image.toast.renderFailed": "Nevarēja attēlot attēlu",
+  "plugin.image.toast.uploadFailed": "Augšupielāde neizdevās",
+  "plugin.image.toast.saveFailed": "Saglabāšana neizdevās",
+  "plugin.image.toast.deleted": "Attēls dzēsts",
+  "plugin.image.toast.deleteFailed": "Nevarēja dzēst attēlu",
+  "plugin.image.toast.reverted": "Atgriezts pie sākotnējiem pikseļiem",
+  "plugin.image.toast.openFailed": "Nevarēja atvērt failu",
+
+  "plugin.image.error.emptyFile": "šis fails ir tukšs",
+  "plugin.image.error.notAnImage": "“{name}” nav attēls, ko redaktors var atvērt",
+  "plugin.image.error.unnamedFile": "fails"
+}

@@ -1,0 +1,38 @@
+{
+  "plugin.calc.meta.description": "Calculadora de hojas de cálculo — las hojas se guardan como cuadrículas de celdas abiertas y se editan en la ventana de Calc",
+  "plugin.calc.meta.summary": "Calc: crea, edita y calcula con hojas de cálculo",
+  "plugin.calc.meta.category": "Ofimática",
+
+  "plugin.calc.bar.spreadsheets": "Hojas de cálculo",
+
+  "plugin.calc.toolbar.newSheet": "Nueva hoja de cálculo",
+  "plugin.calc.toolbar.importOds": "Importar .ods",
+  "plugin.calc.toolbar.importCsv": "Importar CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Guardar en Documentos",
+  "plugin.calc.toolbar.saveNow": "Guardar ahora",
+  "plugin.calc.toolbar.deleteSheet": "Eliminar la hoja de cálculo",
+
+  "plugin.calc.menu.noSheets": "Aún no hay hojas de cálculo",
+
+  "plugin.calc.sheet.untitled": "Sin título",
+  "plugin.calc.sheet.importedCsv": "CSV importado",
+
+  "plugin.calc.formula.placeholder": "Valor o fórmula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Guardando…",
+  "plugin.calc.status.dirty": "Cambios sin guardar",
+  "plugin.calc.status.saved.one": "Guardado {time} · {count} celda",
+  "plugin.calc.status.saved.many": "Guardado {time} · {count} celdas",
+  "plugin.calc.status.saved.other": "Guardado {time} · {count} celdas",
+
+  "plugin.calc.dialog.delete": "¿Eliminar \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Error al guardar",
+  "plugin.calc.toast.openFailed": "No se ha podido abrir la hoja de cálculo",
+  "plugin.calc.toast.createFailed": "No se ha podido crear la hoja de cálculo",
+  "plugin.calc.toast.deleteFailed": "No se ha podido eliminar la hoja de cálculo",
+  "plugin.calc.toast.imported": "Se ha importado {name}",
+  "plugin.calc.toast.importOdsFailed": "La importación ha fallado — ¿es un archivo .ods válido?",
+  "plugin.calc.toast.importCsvFailed": "La importación ha fallado — ¿es un archivo CSV válido?",
+  "plugin.calc.toast.openFileFailed": "No se ha podido abrir el archivo"
+}

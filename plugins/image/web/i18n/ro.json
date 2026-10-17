@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Editor foto — ajustări de ton și culoare, estompare/ascuțire/vignetă și filtre film cu un singur clic în fereastra Imagini",
+  "plugin.image.meta.summary": "Editor foto: ajustări și filtre film",
+  "plugin.image.meta.category": "Media",
+
+  "plugin.image.toolbar.menu": "Meniu",
+  "plugin.image.toolbar.fitToggle": "Comută potrivirea / dimensiunea reală",
+
+  "plugin.image.dial.brightness": "Luminozitate",
+  "plugin.image.dial.contrast": "Contrast",
+  "plugin.image.dial.exposure": "Expunere",
+  "plugin.image.dial.vibrance": "Vibranță",
+  "plugin.image.dial.saturation": "Saturație",
+  "plugin.image.dial.blur": "Estompare",
+  "plugin.image.dial.sharpen": "Ascuțire",
+  "plugin.image.dial.vignette": "Vignetă",
+
+  "plugin.image.oneClick.autoTone": "Ton automat",
+  "plugin.image.oneClick.autoContrast": "Contrast automat",
+  "plugin.image.oneClick.invert": "Inversează",
+  "plugin.image.oneClick.grayscale": "Alb-negru",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Revino",
+  "plugin.image.oneClick.revertTitle": "Restaurează imaginea încărcată originală",
+
+  "plugin.image.empty.title": "Nicio imagine deschisă",
+  "plugin.image.empty.body": "Deschide sau trage o imagine pentru a începe.",
+  "plugin.image.empty.open": "Deschide imagine",
+
+  "plugin.image.menu.file": "Fișier",
+  "plugin.image.menu.image": "Imagine",
+  "plugin.image.menu.view": "Vizualizare",
+  "plugin.image.menu.open": "Deschide…",
+  "plugin.image.menu.saveCopy": "Salvează o copie…",
+  "plugin.image.menu.delete": "Șterge imaginea",
+  "plugin.image.menu.rotateLeft": "Rotește la stânga",
+  "plugin.image.menu.rotateRight": "Rotește la dreapta",
+  "plugin.image.menu.flipH": "Întoarce orizontal",
+  "plugin.image.menu.flipV": "Întoarce vertical",
+  "plugin.image.menu.revert": "Revino la original",
+  "plugin.image.menu.zoomIn": "Mărește",
+  "plugin.image.menu.zoomOut": "Micșorează",
+  "plugin.image.menu.fit": "Potrivește",
+  "plugin.image.menu.actualSize": "Dimensiune reală",
+
+  "plugin.image.ctx.open": "Deschide imaginea…",
+
+  "plugin.image.dialog.deleteConfirm": "Ștergi \"{title}\"?",
+  "plugin.image.dialog.thisImage": "această imagine",
+
+  "plugin.image.toast.openFirst": "Deschide mai întâi o imagine",
+  "plugin.image.toast.opened": "Am deschis {title}",
+  "plugin.image.toast.editFailed": "Editarea a eșuat",
+  "plugin.image.toast.operationFailed": "Operațiunea a eșuat",
+  "plugin.image.toast.renderFailed": "Imaginea nu a putut fi randată",
+  "plugin.image.toast.uploadFailed": "Încărcarea a eșuat",
+  "plugin.image.toast.saveFailed": "Salvarea a eșuat",
+  "plugin.image.toast.deleted": "Imagine ștearsă",
+  "plugin.image.toast.deleteFailed": "Imaginea nu a putut fi ștearsă",
+  "plugin.image.toast.reverted": "Revenit la pixelii originali",
+  "plugin.image.toast.openFailed": "Fișierul nu a putut fi deschis",
+
+  "plugin.image.error.emptyFile": "acel fișier este gol",
+  "plugin.image.error.notAnImage": "“{name}” nu este o imagine pe care editorul o poate deschide",
+  "plugin.image.error.unnamedFile": "fișier"
+}

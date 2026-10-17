@@ -1,0 +1,52 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenty",
+  "plugin.word.toolbar.titlePlaceholder": "Bez názvu",
+  "plugin.word.toolbar.newDocument": "Nový dokument",
+  "plugin.word.toolbar.importOdt": "Importovať .odt",
+  "plugin.word.toolbar.saveToDocuments": "Uložiť do Dokumentov",
+  "plugin.word.toolbar.saveNow": "Uložiť teraz",
+  "plugin.word.toolbar.deleteDocument": "Odstrániť dokument",
+  "plugin.word.toolbar.bold": "Tučné",
+  "plugin.word.toolbar.italic": "Kurzíva",
+  "plugin.word.toolbar.underline": "Podčiarknuté",
+  "plugin.word.toolbar.heading": "Nadpis",
+  "plugin.word.toolbar.bulletList": "Odrážkový zoznam",
+  "plugin.word.toolbar.font": "Písmo",
+  "plugin.word.toolbar.fontHint": "Písmo — použije sa na výber alebo na celý dokument, ak nič nie je vybrané",
+
+  "plugin.word.status.saving": "Ukladá sa…",
+  "plugin.word.status.unsaved": "Neuložené zmeny",
+  "plugin.word.status.saved.one": "Uložené {time} · {count} slovo",
+  "plugin.word.status.saved.few": "Uložené {time} · {count} slová",
+  "plugin.word.status.saved.many": "Uložené {time} · {count} slova",
+  "plugin.word.status.saved.other": "Uložené {time} · {count} slov",
+
+  "plugin.word.menu.empty": "Zatiaľ žiadne dokumenty",
+  "plugin.word.menu.newDocument": "Nový dokument",
+  "plugin.word.menu.importOdt": "Importovať .odt",
+  "plugin.word.menu.saveToDocuments": "Uložiť do Dokumentov",
+  "plugin.word.menu.deleteDocument": "Odstrániť dokument",
+
+  "plugin.word.ctx.newDocument": "Nový dokument",
+  "plugin.word.ctx.saveNow": "Uložiť teraz",
+  "plugin.word.ctx.saveToDocuments": "Uložiť do Dokumentov",
+  "plugin.word.ctx.bold": "Tučné",
+  "plugin.word.ctx.italic": "Kurzíva",
+  "plugin.word.ctx.heading": "Nadpis",
+  "plugin.word.ctx.list": "Zoznam",
+  "plugin.word.ctx.deleteDocument": "Odstrániť dokument",
+
+  "plugin.word.dialog.deleteDoc": "Odstrániť \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Uloženie zlyhalo",
+  "plugin.word.toast.openFailed": "Nepodarilo sa otvoriť dokument",
+  "plugin.word.toast.createFailed": "Nepodarilo sa vytvoriť dokument",
+  "plugin.word.toast.deleteFailed": "Nepodarilo sa odstrániť dokument",
+  "plugin.word.toast.imported": "Importované: {name}",
+  "plugin.word.toast.importFailed": "Import zlyhal — je to platný súbor .odt?",
+  "plugin.word.toast.openFileFailed": "Nepodarilo sa otvoriť súbor",
+
+  "plugin.word.meta.description": "Jednoduchý textový editor — dokumenty uložené ako otvorené súbory .odt",
+  "plugin.word.meta.summary": "Textový editor: vytváranie, úprava a čítanie dokumentov OpenDocument (.odt)",
+  "plugin.word.meta.category": "Kancelária"
+}

@@ -1,4 +1,4 @@
-import { apiFetch, getVoiceLang } from './api.js';
+import { apiFetch, getVoiceLang, getVoiceLangExplicit } from './api.js';
 import { cleanTranscript } from './transcriptGuard.js';
 import { setSphereState, setVoiceReady } from './sphere.js';
 import {
@@ -6,6 +6,7 @@ import {
   getWhisperModel, getEffectiveSttEngine, getEffectiveTtsEngine,
 } from './preferences.js';
 import { ENGINE_DEFAULT_VOICE } from './voiceShared.js';
+import { t } from './i18n.js';
 
 /* Wake mode: the long-press arms the wake listener and it stays armed until
  * the wake phrase is heard or the user taps to cancel. There is deliberately no
@@ -88,8 +89,8 @@ let whisperPendingDownload = false;
  */
 let whisperRetry = false;
 let whisperRecoveryTimer = null;
-/** Power Saver swapped the STT engine while a session was live; apply after. */
-let pendingPowerRefresh = false;
+/** An engine/language change arrived while a session was live; apply after. */
+let pendingReconfigure = false;
 let reconfiguringVoice = false;
 let voicePreparing = false;
 
@@ -238,7 +239,7 @@ function armSilenceTimer() {
     cancelListening();
     setSphereState('idle');
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: "Didn't catch that", type: 'info' },
+      detail: { message: t('voice.didntCatchThat', null, "Didn't catch that"), type: 'info' },
     }));
     window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
   }, getSilenceTimeout());
@@ -252,7 +253,7 @@ function armWakeCommandTimer() {
     cancelListening();
     setSphereState('idle');
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: "Didn't catch that", type: 'info' },
+      detail: { message: t('voice.didntCatchThat', null, "Didn't catch that"), type: 'info' },
     }));
     window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
   }, WAKE_COMMAND_TIMEOUT_MS);
@@ -490,7 +491,7 @@ async function finalizeWhisper() {
   }
   setSphereState('idle');
   window.dispatchEvent(new CustomEvent('app:toast', {
-    detail: { message: "Didn't catch that", type: 'info' },
+    detail: { message: t('voice.didntCatchThat', null, "Didn't catch that"), type: 'info' },
   }));
   window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
 }
@@ -498,8 +499,9 @@ async function finalizeWhisper() {
 function whisperFailed(e) {
   console.warn('Faster-whisper STT failed:', e);
   const message = /not running|not responding|Failed to fetch|502/i.test(e?.message || '')
-    ? 'Faster Whisper is not responding — pick Vosk in Settings → Voice'
-    : (e?.message || 'Speech recognition failed');
+    ? t('voice.whisperNotResponding', null,
+      'Faster Whisper is not responding — pick Vosk in Settings → Voice')
+    : (e?.message || t('voice.recognitionFailed', null, 'Speech recognition failed'));
   if (!listening) return;
   stopListening();
   setSphereState('idle');
@@ -593,7 +595,10 @@ async function ensureWhisperReady(lang, initial) {
     if (whisperModel !== 'tiny' && hasWhisperModel(status, 'tiny')) {
       whisperModel = 'tiny';
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: 'Small model not downloaded — using Tiny', type: 'info' },
+        detail: {
+          message: t('voice.smallModelFallback', null, 'Small model not downloaded — using Tiny'),
+          type: 'info',
+        },
       }));
     } else {
       // Fresh checkout: fetch the bundled tiny model rather than going silent.
@@ -668,10 +673,16 @@ export async function prepareVoice() {
     setVoiceReady(true);
     setSphereState('error');
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: 'Voice unavailable — you can still double-tap to type', type: 'error' },
+      detail: {
+        message: t('voice.unavailable', null, 'Voice unavailable — you can still double-tap to type'),
+        type: 'error',
+      },
     }));
   } finally {
     voicePreparing = false;
+    // An engine/language change that arrived while this prepare was in flight
+    // re-runs now (no-op when the prepare read the new values already).
+    if (pendingReconfigure) maybeReconfigureVoice();
   }
 }
 
@@ -703,8 +714,8 @@ async function prepareVoiceInner() {
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: {
           message: whisperPendingDownload
-            ? 'Faster Whisper model is downloading — using Vosk for now'
-            : 'Faster Whisper unavailable — using Vosk',
+            ? t('voice.whisperDownloading', null, 'Faster Whisper model is downloading — using Vosk for now')
+            : t('voice.whisperUnavailable', null, 'Faster Whisper unavailable — using Vosk'),
           type: 'info',
         },
       }));
@@ -727,7 +738,7 @@ async function prepareVoiceInner() {
         }, VOSK_DOWNLOAD_TIMEOUT_MS);
       } catch (e) {
         window.dispatchEvent(new CustomEvent('app:toast', {
-          detail: { message: 'Voice model download failed', type: 'error' },
+          detail: { message: t('voice.modelDownloadFailed', null, 'Voice model download failed'), type: 'error' },
         }));
         setVoiceReady(true);
         setSphereState('error');
@@ -739,7 +750,7 @@ async function prepareVoiceInner() {
       await initVosk(sttLang);
     } catch (e) {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: 'Speech model failed to load', type: 'error' },
+        detail: { message: t('voice.modelLoadFailed', null, 'Speech model failed to load'), type: 'error' },
       }));
       setVoiceReady(true);
       setSphereState('error');
@@ -794,7 +805,8 @@ export async function startListening(mode) {
       try {
         await initVosk(sttLang);
       } catch (_) {
-        throw new Error('Speech model failed to load — pick another engine in Settings → Voice');
+        throw new Error(t('voice.modelLoadFailedHint', null,
+          'Speech model failed to load — pick another engine in Settings → Voice'));
       }
       setSphereState(mode === 'single' ? 'listening' : 'conversation');
     }
@@ -915,12 +927,12 @@ export async function startListening(mode) {
 
 function normalizeMicError(e) {
   if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-    return 'Microphone access denied';
+    return t('voice.micAccessDenied', null, 'Microphone access denied');
   }
   if (e.name === 'NotFoundError' || /not be found/i.test(e.message || '')) {
-    return 'No microphone found';
+    return t('voice.micNotFound', null, 'No microphone found');
   }
-  return e.message || 'Microphone unavailable';
+  return e.message || t('ctx.microphoneUnavailable', null, 'Microphone unavailable');
 }
 
 export function stopListening() {
@@ -958,36 +970,40 @@ export function stopListening() {
   mediaStream = null;
   recognizer = null;
 
-  // Power Saver may have swapped the STT engine mid-session; re-resolve now
-  // that the microphone is closed.
-  if (pendingPowerRefresh) maybeReconfigureForPower();
+  // Power Saver or a language change may have arrived mid-session; re-resolve
+  // now that the microphone is closed.
+  if (pendingReconfigure) maybeReconfigureVoice();
 }
 
 /**
- * Re-resolve the speech engines after a power-mode change. The TTS engine is
- * read per reply, so only STT needs re-initialising — and only when idle, with
- * a retry flagged until the current session ends.
+ * Re-resolve the speech engines after a power-mode change or an interface
+ * language change. The TTS engine is read per reply, so only STT needs
+ * re-initialising — and only when idle, with a retry flagged until the current
+ * session ends. The voice language follows the interface language unless the
+ * user picked a separate one in Settings (see getVoiceLang()).
  */
-function maybeReconfigureForPower() {
-  // A prepare already in flight read the freshest effective mode; don't stack
-  // a second one behind it.
-  if (voicePreparing) return;
-  if (listening || document.body.classList.contains('orb-speaking')) {
-    pendingPowerRefresh = true;
+function maybeReconfigureVoice() {
+  const engineStale = getEffectiveSttEngine() !== sttEngine;
+  const langStale = !getVoiceLangExplicit() && getVoiceLang() !== voiceLang;
+  if (!engineStale && !langStale) {
+    pendingReconfigure = false;
     return;
   }
-  const want = getEffectiveSttEngine();
-  if (want === sttEngine) {
-    pendingPowerRefresh = false;
+  // A live session gets the new setup once it ends; a prepare already in
+  // flight re-checks from prepareVoice()'s completion path (the staleness
+  // check above makes that a no-op when it read the new values already).
+  if (listening || document.body.classList.contains('orb-speaking') || voicePreparing) {
+    pendingReconfigure = true;
     return;
   }
   if (reconfiguringVoice) return;
-  pendingPowerRefresh = false;
+  pendingReconfigure = false;
   reconfiguringVoice = true;
   prepareVoice().finally(() => { reconfiguringVoice = false; });
 }
 
-window.addEventListener('power:changed', maybeReconfigureForPower);
+window.addEventListener('power:changed', maybeReconfigureVoice);
+window.addEventListener('locale:change', maybeReconfigureVoice);
 
 export function cancelListening() {
   stopListening();
@@ -1077,11 +1093,11 @@ export async function speak(text, lang) {
   } catch (e) {
     console.warn('TTS failed:', e);
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: 'Voice playback unavailable', type: 'error' },
+      detail: { message: t('voice.playbackUnavailable', null, 'Voice playback unavailable'), type: 'error' },
     }));
   } finally {
     document.body.classList.remove('orb-speaking');
-    if (pendingPowerRefresh) maybeReconfigureForPower();
+    if (pendingReconfigure) maybeReconfigureVoice();
   }
 }
 
@@ -1105,7 +1121,7 @@ export function stopSpeaking() {
     try { stop(); } catch (_) {}
   }
   document.body.classList.remove('orb-speaking');
-  if (pendingPowerRefresh) maybeReconfigureForPower();
+  if (pendingReconfigure) maybeReconfigureVoice();
   return wasPlaying;
 }
 

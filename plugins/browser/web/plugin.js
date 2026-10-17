@@ -24,6 +24,7 @@ import { apiFetch } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
 import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
+import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
@@ -338,7 +339,7 @@ function tabTitle(tab) {
       /* fall through to the placeholder */
     }
   }
-  return 'New tab';
+  return t('plugin.browser.tabs.newTab', null, 'New tab');
 }
 
 /**
@@ -485,13 +486,19 @@ function renderTabs() {
     text.className = 'browser-tab-text';
     text.textContent = tabTitle(tab);
     label.appendChild(text);
-    label.title = tab.incognito ? `Incognito — ${tab.url || 'New tab'}` : (tab.url || 'New tab');
+    const tabName = tab.url || t('plugin.browser.tabs.newTab', null, 'New tab');
+    label.title = tab.incognito
+      ? t('plugin.browser.tabs.incognito', { url: tabName }, `Incognito — ${tabName}`)
+      : tabName;
     label.addEventListener('click', () => setActiveTab(tab.id));
 
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'browser-tab-close';
-    close.setAttribute('aria-label', `Close ${tabTitle(tab)}`);
+    close.setAttribute(
+      'aria-label',
+      t('plugin.browser.tabs.close', { title: tabTitle(tab) }, `Close ${tabTitle(tab)}`),
+    );
     close.appendChild(icon('ui/close', { size: 12 }));
     close.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -504,7 +511,7 @@ function renderTabs() {
   const add = iconButton({
     icon: 'ui/plus',
     size: 'sm',
-    label: 'New tab',
+    label: t('plugin.browser.tabs.newTab', null, 'New tab'),
     onClick: () => createTab({}),
   });
   add.classList.add('browser-newtab');
@@ -589,7 +596,7 @@ async function navigateTo(input, { tab = activeTab() } = {}) {
   const value = String(input || '').trim();
   if (!value || !tab) return;
 
-  if (tab.id === activeTabId) setStatus('Loading…');
+  if (tab.id === activeTabId) setStatus(t('plugin.browser.status.loading', null, 'Loading…'));
   let data;
   try {
     const res = await apiFetch('/api/browser/navigate', {
@@ -602,11 +609,15 @@ async function navigateTo(input, { tab = activeTab() } = {}) {
     });
     data = res?.data;
   } catch (_) {
-    if (tab.id === activeTabId) setStatus('Could not open that page');
+    if (tab.id === activeTabId) {
+      setStatus(t('plugin.browser.status.openFailed', null, 'Could not open that page'));
+    }
     return;
   }
   if (!data?.url) {
-    if (tab.id === activeTabId) setStatus('Could not open that page');
+    if (tab.id === activeTabId) {
+      setStatus(t('plugin.browser.status.openFailed', null, 'Could not open that page'));
+    }
     return;
   }
 
@@ -641,7 +652,7 @@ function buildTabStrip() {
   const strip = document.createElement('div');
   strip.className = 'browser-tabstrip';
   strip.setAttribute('role', 'tablist');
-  strip.setAttribute('aria-label', 'Tabs');
+  strip.setAttribute('aria-label', t('plugin.browser.tabs.label', null, 'Tabs'));
   // Nominate the strip as the window's top bar: the shared chrome folds it into
   // the header row next to the close/fullscreen controls (see `data-window-bar`
   // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
@@ -662,13 +673,13 @@ function buildToolbar() {
   backBtn = iconButton({
     icon: 'ui/arrow-left',
     size: 'sm',
-    label: 'Back',
+    label: t('plugin.browser.toolbar.back', null, 'Back'),
     onClick: () => go(-1),
   });
   forwardBtn = iconButton({
     icon: 'ui/arrow-left',
     size: 'sm',
-    label: 'Forward',
+    label: t('plugin.browser.toolbar.forward', null, 'Forward'),
     onClick: () => go(1),
   });
   backBtn.classList.add('browser-nav', 'browser-nav--back');
@@ -677,13 +688,13 @@ function buildToolbar() {
   const reloadBtn = iconButton({
     icon: 'ui/refresh',
     size: 'sm',
-    label: 'Reload',
+    label: t('plugin.browser.toolbar.reload', null, 'Reload'),
     onClick: () => reload(),
   });
   const homeBtn = iconButton({
     icon: 'ui/launcher',
     size: 'sm',
-    label: 'Home',
+    label: t('plugin.browser.toolbar.home', null, 'Home'),
     onClick: () => goHome(),
   });
 
@@ -692,13 +703,18 @@ function buildToolbar() {
   // search box that also accepts a URL.
   addressEl = document.createElement('form');
   addressEl.className = 'browser-address';
-  const search = searchBar({ placeholder: 'Search or enter an address' });
+  const search = searchBar({
+    placeholder: t('plugin.browser.toolbar.address', null, 'Search or enter an address'),
+  });
   const input = search.input;
   // `searchBar` is a div, so the browser's own submit gesture needs wiring:
   // Enter in a form input fires `submit`, which we intercept.
   input.setAttribute('autocomplete', 'off');
   input.setAttribute('spellcheck', 'false');
-  input.setAttribute('aria-label', 'Search or enter an address');
+  input.setAttribute(
+    'aria-label',
+    t('plugin.browser.toolbar.address', null, 'Search or enter an address'),
+  );
   input.setAttribute('enterkeyhint', 'go');
   addressEl.appendChild(search);
   addressEl.addEventListener('submit', (e) => {
@@ -715,7 +731,7 @@ function buildToolbar() {
   shieldBtn = iconButton({
     icon: 'ui/shield',
     size: 'sm',
-    label: 'Ad blocking',
+    label: t('plugin.browser.shield.label', null, 'Ad blocking'),
     onClick: () => toggleShield(),
   });
   shieldBtn.classList.add('browser-shield');
@@ -723,7 +739,7 @@ function buildToolbar() {
   downloadsBtn = iconButton({
     icon: 'ui/download',
     size: 'sm',
-    label: 'Downloads',
+    label: t('plugin.browser.downloads.title', null, 'Downloads'),
     onClick: () => toggleDownloadsPanel(),
   });
   downloadsBtn.classList.add('browser-downloads-btn');
@@ -731,7 +747,7 @@ function buildToolbar() {
   incognitoBtn = iconButton({
     icon: 'ui/incognito',
     size: 'sm',
-    label: 'New incognito tab',
+    label: t('plugin.browser.tabs.newIncognito', null, 'New incognito tab'),
     onClick: () => createTab({ incognito: true }),
   });
   incognitoBtn.classList.add('browser-incognito');
@@ -741,7 +757,7 @@ function buildToolbar() {
   bookmarkBtn = iconButton({
     icon: 'ui/star',
     size: 'sm',
-    label: 'Bookmark this page',
+    label: t('plugin.browser.bookmarks.add', null, 'Bookmark this page'),
     onClick: () => toggleBookmark(),
   });
   bookmarkBtn.classList.add('browser-bookmark');
@@ -749,7 +765,7 @@ function buildToolbar() {
   menuBtn = iconButton({
     icon: 'ui/more',
     size: 'sm',
-    label: 'Browser menu',
+    label: t('plugin.browser.menu.title', null, 'Browser menu'),
     onClick: () => toggleBrowserMenu(),
   });
   menuBtn.classList.add('browser-menu-btn');
@@ -897,8 +913,11 @@ function updateShield() {
   shieldBtn.setAttribute('aria-pressed', String(on));
   const blocked = browserSettings.blocked;
   shieldBtn.title = on
-    ? `Ad blocking: on${typeof blocked === 'number' ? ` — ${blocked} blocked` : ''}`
-    : 'Ad blocking: off';
+    ? (typeof blocked === 'number'
+      ? tp('plugin.browser.shield.onBlocked', blocked, null,
+        `Ad blocking: on — ${blocked} blocked`)
+      : t('plugin.browser.shield.on', null, 'Ad blocking: on'))
+    : t('plugin.browser.shield.off', null, 'Ad blocking: off');
   shieldBtn.setAttribute('aria-label', shieldBtn.title);
 }
 
@@ -913,11 +932,11 @@ function buildDownloadsPanel() {
   head.className = 'browser-downloads-head';
   const title = document.createElement('span');
   title.className = 'browser-downloads-title';
-  title.textContent = 'Downloads';
+  title.textContent = t('plugin.browser.downloads.title', null, 'Downloads');
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.className = 'browser-downloads-clear';
-  clear.textContent = 'Clear finished';
+  clear.textContent = t('plugin.browser.downloads.clearFinished', null, 'Clear finished');
   clear.addEventListener('click', () => downloadAction('', 'clear'));
   head.append(title, clear);
 
@@ -1027,10 +1046,32 @@ function openDownload(d) {
 
 function formatBytes(n) {
   const value = Number(n) || 0;
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (value < 1024) return t('plugin.browser.downloads.size.b', { value }, `${value} B`);
+  if (value < 1024 * 1024) {
+    const kb = (value / 1024).toFixed(0);
+    return t('plugin.browser.downloads.size.kb', { value: kb }, `${kb} KB`);
+  }
+  if (value < 1024 * 1024 * 1024) {
+    const mb = (value / (1024 * 1024)).toFixed(1);
+    return t('plugin.browser.downloads.size.mb', { value: mb }, `${mb} MB`);
+  }
+  const gb = (value / (1024 * 1024 * 1024)).toFixed(2);
+  return t('plugin.browser.downloads.size.gb', { value: gb }, `${gb} GB`);
+}
+
+/** Catalog keys for the download-state tokens the shell reports. */
+const DOWNLOAD_STATE_KEYS = {
+  requested: 'plugin.browser.downloads.state.requested',
+  downloading: 'plugin.browser.downloads.state.downloading',
+  paused: 'plugin.browser.downloads.state.paused',
+  completed: 'plugin.browser.downloads.state.completed',
+  cancelled: 'plugin.browser.downloads.state.cancelled',
+  interrupted: 'plugin.browser.downloads.state.interrupted',
+};
+
+/** The label for a download's state token (the token itself when unknown). */
+function downloadStateLabel(state) {
+  return DOWNLOAD_STATE_KEYS[state] ? t(DOWNLOAD_STATE_KEYS[state], null, state) : (state || '');
 }
 
 function isActiveDownload(state) {
@@ -1046,14 +1087,14 @@ function downloadRow(d) {
   info.className = 'browser-download-info';
   const name = document.createElement('div');
   name.className = 'browser-download-name';
-  name.textContent = d.file || d.url || 'download';
+  name.textContent = d.file || d.url || t('plugin.browser.downloads.untitled', null, 'download');
   name.title = d.path || d.url || '';
   const meta = document.createElement('div');
   meta.className = 'browser-download-meta';
   const total = Number(d.total) || 0;
   const received = Number(d.received) || 0;
   const sizeText = total ? `${formatBytes(received)} / ${formatBytes(total)}` : formatBytes(received);
-  meta.textContent = [d.host, d.state, sizeText].filter(Boolean).join(' · ');
+  meta.textContent = [d.host, downloadStateLabel(d.state), sizeText].filter(Boolean).join(' · ');
   info.append(name, meta);
 
   if (isActiveDownload(d.state)) {
@@ -1074,26 +1115,28 @@ function downloadRow(d) {
     actions.appendChild(iconButton({
       icon: d.state === 'paused' ? 'ui/play' : 'ui/pause',
       size: 'sm',
-      label: d.state === 'paused' ? 'Resume' : 'Pause',
+      label: d.state === 'paused'
+        ? t('plugin.browser.downloads.resume', null, 'Resume')
+        : t('plugin.browser.downloads.pause', null, 'Pause'),
       onClick: () => downloadAction(d.id, d.state === 'paused' ? 'resume' : 'pause'),
     }));
     actions.appendChild(iconButton({
       icon: 'ui/close',
       size: 'sm',
-      label: 'Cancel',
+      label: t('plugin.browser.downloads.cancel', null, 'Cancel'),
       onClick: () => downloadAction(d.id, 'cancel'),
     }));
   } else if (d.state === 'completed') {
     actions.appendChild(iconButton({
       icon: 'ui/folder-open',
       size: 'sm',
-      label: 'Open',
+      label: t('plugin.browser.downloads.open', null, 'Open'),
       onClick: () => openDownload(d),
     }));
     actions.appendChild(iconButton({
       icon: 'ui/trash',
       size: 'sm',
-      label: 'Remove',
+      label: t('plugin.browser.downloads.remove', null, 'Remove'),
       onClick: () => downloadAction(d.id, 'remove'),
     }));
   } else {
@@ -1101,14 +1144,14 @@ function downloadRow(d) {
       actions.appendChild(iconButton({
         icon: 'ui/refresh',
         size: 'sm',
-        label: 'Retry',
+        label: t('plugin.browser.downloads.retry', null, 'Retry'),
         onClick: () => navigateTo(d.url),
       }));
     }
     actions.appendChild(iconButton({
       icon: 'ui/trash',
       size: 'sm',
-      label: 'Remove',
+      label: t('plugin.browser.downloads.remove', null, 'Remove'),
       onClick: () => downloadAction(d.id, 'remove'),
     }));
   }
@@ -1122,7 +1165,7 @@ function renderDownloads() {
   if (!downloads.length) {
     const empty = document.createElement('div');
     empty.className = 'browser-downloads-empty';
-    empty.textContent = 'No downloads yet';
+    empty.textContent = t('plugin.browser.downloads.empty', null, 'No downloads yet');
     downloadsListEl.replaceChildren(empty);
   } else {
     downloadsListEl.replaceChildren(...downloads.map(downloadRow));
@@ -1207,11 +1250,11 @@ function labelSpan(text) {
 function buildBrowserMenu() {
   const menu = popover('browser-menu');
   menu.setAttribute('role', 'menu');
-  menu.setAttribute('aria-label', 'Browser menu');
+  menu.setAttribute('aria-label', t('plugin.browser.menu.title', null, 'Browser menu'));
 
   const heading = document.createElement('div');
   heading.className = 'browser-popover-heading';
-  heading.textContent = 'Search engine';
+  heading.textContent = t('plugin.browser.menu.searchEngine', null, 'Search engine');
   menu.appendChild(heading);
 
   const engines = document.createElement('div');
@@ -1231,16 +1274,16 @@ function buildBrowserMenu() {
 
   menu.append(
     popoverSeparator(),
-    menuItem('ui/history', 'History', () => {
+    menuItem('ui/history', t('plugin.browser.history.title', null, 'History'), () => {
       closeBrowserMenu();
       openHistoryPanel();
     }),
-    menuItem('ui/star', 'Bookmarks', () => {
+    menuItem('ui/star', t('plugin.browser.bookmarks.title', null, 'Bookmarks'), () => {
       closeBrowserMenu();
       openBookmarksPanel();
     }),
     popoverSeparator(),
-    menuItem('ui/settings', 'Settings', () => {
+    menuItem('ui/settings', t('plugin.browser.menu.settings', null, 'Settings'), () => {
       closeBrowserMenu();
       openCoreWindow('settings');
     }),
@@ -1299,15 +1342,15 @@ function closeAllBrowserPanels() {
 function buildHistoryPanel() {
   const panel = popover('browser-history');
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'History');
+  panel.setAttribute('aria-label', t('plugin.browser.history.title', null, 'History'));
 
   const head = document.createElement('div');
   head.className = 'browser-popover-head';
-  head.append(labelSpan('History'));
+  head.append(labelSpan(t('plugin.browser.history.title', null, 'History')));
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.className = 'browser-popover-action';
-  clear.textContent = 'Clear';
+  clear.textContent = t('plugin.browser.history.clear', null, 'Clear');
   clear.addEventListener('click', () => void clearHistory());
   head.appendChild(clear);
 
@@ -1350,7 +1393,9 @@ async function clearHistory() {
 }
 
 function historyLabel(entry) {
-  if (entry.query) return `Search — ${entry.query}`;
+  if (entry.query) {
+    return t('plugin.browser.history.search', { query: entry.query }, `Search — ${entry.query}`);
+  }
   try {
     return new URL(entry.url).hostname.replace(/^www\./, '') || entry.url;
   } catch (_) {
@@ -1363,7 +1408,7 @@ function renderHistory() {
   if (!history.length) {
     const empty = document.createElement('div');
     empty.className = 'browser-popover-empty';
-    empty.textContent = 'No history yet';
+    empty.textContent = t('plugin.browser.history.empty', null, 'No history yet');
     historyListEl.replaceChildren(empty);
     return;
   }
@@ -1394,11 +1439,11 @@ function renderHistory() {
 function buildBookmarksPanel() {
   const panel = popover('browser-bookmarks');
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'Bookmarks');
+  panel.setAttribute('aria-label', t('plugin.browser.bookmarks.title', null, 'Bookmarks'));
 
   const head = document.createElement('div');
   head.className = 'browser-popover-head';
-  head.append(labelSpan('Bookmarks'));
+  head.append(labelSpan(t('plugin.browser.bookmarks.title', null, 'Bookmarks')));
 
   const list = document.createElement('div');
   list.className = 'browser-popover-list';
@@ -1434,7 +1479,11 @@ function renderBookmarks() {
   if (!bookmarks.length) {
     const empty = document.createElement('div');
     empty.className = 'browser-popover-empty';
-    empty.textContent = 'No bookmarks yet — use the ☆ in the toolbar';
+    empty.textContent = t(
+      'plugin.browser.bookmarks.empty',
+      null,
+      'No bookmarks yet — use the ☆ in the toolbar',
+    );
     bookmarksListEl.replaceChildren(empty);
     return;
   }
@@ -1458,7 +1507,7 @@ function renderBookmarks() {
     const remove = iconButton({
       icon: 'ui/trash',
       size: 'sm',
-      label: 'Remove bookmark',
+      label: t('plugin.browser.bookmarks.remove', null, 'Remove bookmark'),
       onClick: () => void removeBookmark(bookmark),
     });
     remove.classList.add('browser-popover-remove');
@@ -1476,7 +1525,9 @@ function updateBookmarkButton() {
   const tab = activeTab();
   const on = !!tab && isBookmarked(tab.url);
   bookmarkBtn.classList.toggle('is-on', on);
-  const label = on ? 'Remove bookmark' : 'Bookmark this page';
+  const label = on
+    ? t('plugin.browser.bookmarks.remove', null, 'Remove bookmark')
+    : t('plugin.browser.bookmarks.add', null, 'Bookmark this page');
   bookmarkBtn.title = label;
   bookmarkBtn.setAttribute('aria-label', label);
 }
@@ -1573,13 +1624,19 @@ function homeDocument(news) {
   const topics = Array.isArray(news?.topics) ? news.topics : [];
   const payload = JSON.stringify({ cards, topics }).replace(/<\//g, '<\\/');
   const personal = news?.personalized && cards.length;
+  const brand = t('plugin.browser.home.brandNote', null, 'filtered by the ad blocker');
+  const hint = t('plugin.browser.home.hint', null,
+    'Type an address or a search above. Pages load through the ad blocker.');
+  const recent = t('plugin.browser.home.recentSearches', null, 'Because of your recent searches');
+  const refresh = t('plugin.browser.home.refresh', null, 'Refresh');
+  const refreshing = t('plugin.browser.home.refreshing', null, 'Refreshing…');
 
   const shelf = personal
     ? `<div class="chips">${topics
         .map((t) => `<span class="chip">${escapeHtml(t)}</span>`)
         .join('')}</div>
-       <div class="head"><span class="eyebrow">Because of your recent searches</span>
-         <button type="button" class="again" data-refresh>Refresh</button></div>
+       <div class="head"><span class="eyebrow">${recent}</span>
+         <button type="button" class="again" data-refresh>${refresh}</button></div>
        <div class="cards">${cards.map(cardHtml).join('')}</div>`
     : emptyShelf(news);
 
@@ -1628,8 +1685,8 @@ function homeDocument(news) {
   .empty .s{font-size:.85rem;line-height:1.55;opacity:.7}
 </style></head><body>
 <div class="home">
-  <div class="brand"><b>Browser</b><span>filtered by the ad blocker</span></div>
-  <p class="hint">Type an address or a search above. Pages load through the ad blocker.</p>
+  <div class="brand"><b>Browser</b><span>${brand}</span></div>
+  <p class="hint">${hint}</p>
   <div id="shelf">${shelf}</div>
 </div>
 <scr${'ipt'} id="home-data" type="application/json">${payload}</scr${'ipt'}>
@@ -1657,7 +1714,7 @@ function homeDocument(news) {
     var again = event.target && event.target.closest ? event.target.closest('[data-refresh]') : null;
     if (again) {
       again.disabled = true;
-      again.textContent = 'Refreshing…';
+      again.textContent = '${refreshing}';
       try { parent.postMessage({ type: 'browser:refresh-news' }, '*'); } catch (e) {}
     }
   });
@@ -1696,10 +1753,11 @@ function cardHtml(card, index) {
 function emptyShelf(news) {
   const reason = news?.error ? escapeHtml(news.error) : '';
   const body = news?.personalized === false && !reason
-    ? 'Search for a few things and this page fills up with news about them.'
-    : reason || 'Nothing to show yet — try refreshing.';
+    ? t('plugin.browser.home.emptyBody', null,
+      'Search for a few things and this page fills up with news about them.')
+    : reason || t('plugin.browser.home.emptyRetry', null, 'Nothing to show yet — try refreshing.');
   return `<div class="empty">
-    <div class="t">No stories yet</div>
+    <div class="t">${t('plugin.browser.home.emptyTitle', null, 'No stories yet')}</div>
     <div class="s">${body}</div>
   </div>`;
 }
@@ -1723,7 +1781,7 @@ async function showHome(tab) {
   tab.historyIndex = -1;
   if (tab.id === activeTabId) {
     if (addressEl) addressEl.input.value = '';
-    setStatus('Loading recommendations…');
+    setStatus(t('plugin.browser.status.loadingRecommendations', null, 'Loading recommendations…'));
   }
   // The idle surface must not be same-origin with the app shell (it is
   // rendered from server data), so it is sandboxed without allow-same-origin.
@@ -1738,7 +1796,10 @@ async function showHome(tab) {
   try {
     news = await fetchNews();
   } catch (_) {
-    news = { cards: [], topics: [], personalized: false, error: 'Could not load recommendations' };
+    news = {
+      cards: [], topics: [], personalized: false,
+      error: t('plugin.browser.home.loadFailed', null, 'Could not load recommendations'),
+    };
   }
   // Re-check: the user may have navigated this tab while the shelf was in
   // flight.
@@ -1841,31 +1902,50 @@ function openPageContextMenu(tab, menu) {
   if (menu.linkUrl) {
     entries.push({
       type: 'item',
-      label: 'Copy Link Address',
+      label: t('plugin.browser.pageMenu.copyLink', null, 'Copy Link Address'),
       icon: 'ui/link',
       onClick: () => void copyText(menu.linkUrl),
     });
     entries.push({ type: 'separator' });
   }
   entries.push(
-    { type: 'item', label: 'Back', icon: 'ui/arrow-left', onClick: () => send('back') },
-    { type: 'item', label: 'Forward', icon: 'ui/forward', onClick: () => send('forward') },
-    { type: 'item', label: 'Reload', icon: 'ui/refresh', onClick: () => send('reload') },
+    {
+      type: 'item',
+      label: t('plugin.browser.toolbar.back', null, 'Back'),
+      icon: 'ui/arrow-left',
+      onClick: () => send('back'),
+    },
+    {
+      type: 'item',
+      label: t('plugin.browser.toolbar.forward', null, 'Forward'),
+      icon: 'ui/forward',
+      onClick: () => send('forward'),
+    },
+    {
+      type: 'item',
+      label: t('plugin.browser.toolbar.reload', null, 'Reload'),
+      icon: 'ui/refresh',
+      onClick: () => send('reload'),
+    },
     { type: 'separator' },
   );
   if (editable) {
     entries.push(
-      { type: 'item', label: 'Cut', onClick: () => send('action', { verb: 'Cut' }) },
       {
         type: 'item',
-        label: 'Copy',
+        label: t('plugin.browser.pageMenu.cut', null, 'Cut'),
+        onClick: () => send('action', { verb: 'Cut' }),
+      },
+      {
+        type: 'item',
+        label: t('plugin.browser.pageMenu.copy', null, 'Copy'),
         icon: 'ui/copy',
         disabled: !menu.selection,
         onClick: () => send('action', { verb: 'Copy' }),
       },
       {
         type: 'item',
-        label: 'Paste',
+        label: t('plugin.browser.pageMenu.paste', null, 'Paste'),
         icon: 'ui/clipboard',
         onClick: () => send('action', { verb: 'Paste' }),
       },
@@ -1873,7 +1953,7 @@ function openPageContextMenu(tab, menu) {
   } else {
     entries.push({
       type: 'item',
-      label: 'Copy',
+      label: t('plugin.browser.pageMenu.copy', null, 'Copy'),
       icon: 'ui/copy',
       disabled: !menu.selection,
       onClick: () => send('action', { verb: 'Copy' }),
@@ -1881,7 +1961,7 @@ function openPageContextMenu(tab, menu) {
   }
   entries.push({
     type: 'item',
-    label: 'Select All',
+    label: t('plugin.browser.pageMenu.selectAll', null, 'Select All'),
     icon: 'ui/select-all',
     onClick: () => send('action', { verb: 'SelectAll' }),
   });
@@ -1920,7 +2000,7 @@ window.__peakdViewEvent = function (event) {
         updateBookmarkButton();
       }
     } else if (event.phase === 'started' && tab.id === activeTabId) {
-      setStatus('Loading…');
+      setStatus(t('plugin.browser.status.loading', null, 'Loading…'));
     }
   } else if (event.type === 'new-window' && typeof event.url === 'string' && event.url) {
     // A `target="_blank"` link in a native view: the shell refused to hand a
@@ -2085,37 +2165,39 @@ export function browserContextMenu() {
   return [
     {
       type: 'item',
-      label: 'New tab',
+      label: t('plugin.browser.tabs.newTab', null, 'New tab'),
       icon: 'ui/plus',
       onClick: () => createTab({}),
     },
     {
       type: 'item',
-      label: 'New incognito tab',
+      label: t('plugin.browser.tabs.newIncognito', null, 'New incognito tab'),
       icon: 'ui/incognito',
       onClick: () => createTab({ incognito: true }),
     },
     {
       type: 'item',
-      label: 'Downloads',
+      label: t('plugin.browser.downloads.title', null, 'Downloads'),
       icon: 'ui/download',
       onClick: () => toggleDownloadsPanel(),
     },
     {
       type: 'item',
-      label: 'History',
+      label: t('plugin.browser.history.title', null, 'History'),
       icon: 'ui/history',
       onClick: () => void openHistoryPanel(),
     },
     {
       type: 'item',
-      label: 'Bookmarks',
+      label: t('plugin.browser.bookmarks.title', null, 'Bookmarks'),
       icon: 'ui/star',
       onClick: () => void openBookmarksPanel(),
     },
     {
       type: 'item',
-      label: isBookmarked(activeTab()?.url) ? 'Remove bookmark' : 'Bookmark this page',
+      label: isBookmarked(activeTab()?.url)
+        ? t('plugin.browser.bookmarks.remove', null, 'Remove bookmark')
+        : t('plugin.browser.bookmarks.add', null, 'Bookmark this page'),
       icon: 'ui/star',
       disabled: !activeTab()?.url,
       onClick: () => void toggleBookmark(),
@@ -2123,34 +2205,34 @@ export function browserContextMenu() {
     {
       // The central clipboard service records this like any other copy.
       type: 'item',
-      label: 'Copy page address',
+      label: t('plugin.browser.ctx.copyAddress', null, 'Copy page address'),
       icon: 'ui/copy',
       disabled: !activeTab()?.url,
       onClick: () => void copyText(activeTab()?.url || '', { source: BROWSER_PLUGIN }),
     },
     {
       type: 'item',
-      label: 'Paste and go',
+      label: t('plugin.browser.ctx.pasteAndGo', null, 'Paste and go'),
       icon: 'ui/clipboard',
       onClick: () => void pasteAndGo(),
     },
     {
       type: 'item',
-      label: 'Focus address bar',
+      label: t('plugin.browser.ctx.focusAddress', null, 'Focus address bar'),
       icon: 'ui/search',
       disabled: !addressEl,
       onClick: () => addressEl?.input?.focus(),
     },
     {
       type: 'item',
-      label: 'Reload',
+      label: t('plugin.browser.toolbar.reload', null, 'Reload'),
       icon: 'ui/loop',
       disabled: !frameWrapEl,
       onClick: () => reload(),
     },
     {
       type: 'item',
-      label: 'Home',
+      label: t('plugin.browser.toolbar.home', null, 'Home'),
       icon: 'ui/launcher',
       disabled: !tileEl,
       onClick: () => void showHome(activeTab()),

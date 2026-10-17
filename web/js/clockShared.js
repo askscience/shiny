@@ -4,9 +4,10 @@
  *
  * Dates the calendar plugin stores ("YYYY-MM-DD" in the server's local zone)
  * are handled as plain strings; only display formatting goes through Intl.
- * Kept import-free on purpose: `web/js/tests/clockShared.test.mjs` loads it in
- * Node with no DOM.
+ * `web/js/tests/clockShared.test.mjs` loads it in Node with the i18n harness
+ * (no DOM).
  */
+import { t } from './i18n.js';
 
 export function pad2(n) {
   return String(n).padStart(2, '0');
@@ -86,7 +87,7 @@ export function groupEventsByDate(events) {
 
 /** The plugin's time column: "All day", "09:30–10:00", "09:30" or "—". */
 export function formatEventTime(ev) {
-  if (ev?.all_day) return 'All day';
+  if (ev?.all_day) return t('clock.allDay');
   if (ev?.start_time && ev?.end_time) return `${ev.start_time}–${ev.end_time}`;
   if (ev?.start_time) return ev.start_time;
   return '—';

@@ -1,0 +1,39 @@
+{
+  "plugin.calc.meta.description": "Табличный калькулятор — таблицы хранятся как открытые сетки ячеек и редактируются в окне Calc",
+  "plugin.calc.meta.summary": "Calc: создание, редактирование и вычисления в таблицах",
+  "plugin.calc.meta.category": "Офис",
+
+  "plugin.calc.bar.spreadsheets": "Таблицы",
+
+  "plugin.calc.toolbar.newSheet": "Новая таблица",
+  "plugin.calc.toolbar.importOds": "Импорт .ods",
+  "plugin.calc.toolbar.importCsv": "Импорт CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Сохранить в Документы",
+  "plugin.calc.toolbar.saveNow": "Сохранить сейчас",
+  "plugin.calc.toolbar.deleteSheet": "Удалить таблицу",
+
+  "plugin.calc.menu.noSheets": "Таблиц пока нет",
+
+  "plugin.calc.sheet.untitled": "Без названия",
+  "plugin.calc.sheet.importedCsv": "Импортированный CSV",
+
+  "plugin.calc.formula.placeholder": "Значение или формула (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Сохранение…",
+  "plugin.calc.status.dirty": "Несохранённые изменения",
+  "plugin.calc.status.saved.one": "Сохранено {time} · {count} ячейка",
+  "plugin.calc.status.saved.few": "Сохранено {time} · {count} ячейки",
+  "plugin.calc.status.saved.many": "Сохранено {time} · {count} ячеек",
+  "plugin.calc.status.saved.other": "Сохранено {time} · {count} ячеек",
+
+  "plugin.calc.dialog.delete": "Удалить “{title}”?",
+
+  "plugin.calc.toast.saveFailed": "Не удалось сохранить",
+  "plugin.calc.toast.openFailed": "Не удалось открыть таблицу",
+  "plugin.calc.toast.createFailed": "Не удалось создать таблицу",
+  "plugin.calc.toast.deleteFailed": "Не удалось удалить таблицу",
+  "plugin.calc.toast.imported": "Импортировано: {name}",
+  "plugin.calc.toast.importOdsFailed": "Не удалось импортировать — это точно файл .ods?",
+  "plugin.calc.toast.importCsvFailed": "Не удалось импортировать — это точно файл CSV?",
+  "plugin.calc.toast.openFileFailed": "Не удалось открыть файл"
+}

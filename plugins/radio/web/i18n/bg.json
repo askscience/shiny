@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Интернет радио чрез Radio Browser — търсете станции и ги слушайте в прозореца Радио",
+  "plugin.radio.meta.summary": "Интернет радио: търсене и слушане на станции (Radio Browser)",
+  "plugin.radio.meta.category": "Медия",
+
+  "plugin.radio.notify.nowPlaying": "В момента звучи",
+  "plugin.radio.toast.streamRefused": "Потокът отказа да се пусне — опитайте друга станция",
+
+  "plugin.radio.status.pickStation": "Изберете станция",
+  "plugin.radio.status.streaming": "Излъчване",
+
+  "plugin.radio.empty.noStations": "Не са намерени станции",
+  "plugin.radio.empty.noMatch": "Нищо не отговаря на “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser е недостъпен",
+  "plugin.radio.error.tryAgain": "Опитайте отново след малко",
+
+  "plugin.radio.fallback.station": "Станция",
+  "plugin.radio.search.placeholder": "Станции или жанрове…",
+
+  "plugin.radio.menu.play": "Пусни",
+  "plugin.radio.menu.pause": "Пауза",
+  "plugin.radio.menu.stop": "Спри",
+  "plugin.radio.menu.refresh": "Опресни станциите"
+}

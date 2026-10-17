@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotoredigerare — ton- och färgjusteringar, oskärpa/skärpa/vignett och filmlookar med ett tryck i Bild-fönstret",
+  "plugin.image.meta.summary": "Fotoredigerare: justeringar och filmlookar",
+  "plugin.image.meta.category": "Media",
+
+  "plugin.image.toolbar.menu": "Meny",
+  "plugin.image.toolbar.fitToggle": "Växla mellan anpassad och verklig storlek",
+
+  "plugin.image.dial.brightness": "Ljusstyrka",
+  "plugin.image.dial.contrast": "Kontrast",
+  "plugin.image.dial.exposure": "Exponering",
+  "plugin.image.dial.vibrance": "Livfullhet",
+  "plugin.image.dial.saturation": "Mättnad",
+  "plugin.image.dial.blur": "Oskärpa",
+  "plugin.image.dial.sharpen": "Skärpa",
+  "plugin.image.dial.vignette": "Vignett",
+
+  "plugin.image.oneClick.autoTone": "Autoton",
+  "plugin.image.oneClick.autoContrast": "Autokontrast",
+  "plugin.image.oneClick.invert": "Invertera",
+  "plugin.image.oneClick.grayscale": "S/V",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Återställ",
+  "plugin.image.oneClick.revertTitle": "Återställ den ursprungliga uppladdningen",
+
+  "plugin.image.empty.title": "Ingen bild öppen",
+  "plugin.image.empty.body": "Öppna eller släpp in en bild för att börja.",
+  "plugin.image.empty.open": "Öppna bild",
+
+  "plugin.image.menu.file": "Arkiv",
+  "plugin.image.menu.image": "Bild",
+  "plugin.image.menu.view": "Visa",
+  "plugin.image.menu.open": "Öppna…",
+  "plugin.image.menu.saveCopy": "Spara en kopia…",
+  "plugin.image.menu.delete": "Ta bort bild",
+  "plugin.image.menu.rotateLeft": "Rotera vänster",
+  "plugin.image.menu.rotateRight": "Rotera höger",
+  "plugin.image.menu.flipH": "Vänd vågrätt",
+  "plugin.image.menu.flipV": "Vänd lodrätt",
+  "plugin.image.menu.revert": "Återställ till original",
+  "plugin.image.menu.zoomIn": "Zooma in",
+  "plugin.image.menu.zoomOut": "Zooma ut",
+  "plugin.image.menu.fit": "Anpassa",
+  "plugin.image.menu.actualSize": "Verklig storlek",
+
+  "plugin.image.ctx.open": "Öppna bild…",
+
+  "plugin.image.dialog.deleteConfirm": "Ta bort \"{title}\"?",
+  "plugin.image.dialog.thisImage": "den här bilden",
+
+  "plugin.image.toast.openFirst": "Öppna en bild först",
+  "plugin.image.toast.opened": "Öppnade {title}",
+  "plugin.image.toast.editFailed": "Redigeringen misslyckades",
+  "plugin.image.toast.operationFailed": "Åtgärden misslyckades",
+  "plugin.image.toast.renderFailed": "Kunde inte rendera bilden",
+  "plugin.image.toast.uploadFailed": "Uppladdningen misslyckades",
+  "plugin.image.toast.saveFailed": "Sparandet misslyckades",
+  "plugin.image.toast.deleted": "Bilden borttagen",
+  "plugin.image.toast.deleteFailed": "Kunde inte ta bort bilden",
+  "plugin.image.toast.reverted": "Återställd till originalpixlarna",
+  "plugin.image.toast.openFailed": "Kunde inte öppna filen",
+
+  "plugin.image.error.emptyFile": "den filen är tom",
+  "plugin.image.error.notAnImage": "“{name}” är inte en bild som redigeraren kan öppna",
+  "plugin.image.error.unnamedFile": "fil"
+}

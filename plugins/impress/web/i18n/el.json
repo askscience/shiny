@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Παρουσιάσεις",
+  "plugin.impress.toolbar.titlePlaceholder": "Χωρίς τίτλο",
+  "plugin.impress.toolbar.theme": "Θέμα",
+  "plugin.impress.toolbar.present": "Παρουσίαση",
+  "plugin.impress.toolbar.newDeck": "Νέα παρουσίαση",
+  "plugin.impress.toolbar.importOdp": "Εισαγωγή .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Αποθήκευση στα Έγγραφα",
+  "plugin.impress.toolbar.saveNow": "Άμεση αποθήκευση",
+  "plugin.impress.toolbar.deleteDeck": "Διαγραφή παρουσίασης",
+
+  "plugin.impress.menu.empty": "Δεν υπάρχουν παρουσιάσεις ακόμη",
+  "plugin.impress.menu.newDeck": "Νέα παρουσίαση",
+  "plugin.impress.menu.importOdp": "Εισαγωγή .odp",
+  "plugin.impress.menu.saveToDocuments": "Αποθήκευση στα Έγγραφα",
+  "plugin.impress.menu.deleteDeck": "Διαγραφή παρουσίασης",
+
+  "plugin.impress.ctx.newDeck": "Νέα παρουσίαση",
+  "plugin.impress.ctx.addSlide": "Προσθήκη διαφάνειας",
+  "plugin.impress.ctx.saveNow": "Άμεση αποθήκευση",
+  "plugin.impress.ctx.present": "Παρουσίαση",
+  "plugin.impress.ctx.stopPresenting": "Διακοπή παρουσίασης",
+  "plugin.impress.ctx.deleteDeck": "Διαγραφή παρουσίασης",
+
+  "plugin.impress.status.saving": "Αποθήκευση…",
+  "plugin.impress.status.unsaved": "Μη αποθηκευμένες αλλαγές",
+  "plugin.impress.status.saved.one": "Αποθηκεύτηκε {time} · {count} διαφάνεια",
+  "plugin.impress.status.saved.other": "Αποθηκεύτηκε {time} · {count} διαφάνειες",
+
+  "plugin.impress.empty.noDeck": "Δεν υπάρχει παρουσίαση",
+  "plugin.impress.empty.noDeckBody": "Δημιουργήστε μία ή ζητήστε από την AI να φτιάξει μια παρουσίαση",
+
+  "plugin.impress.inspector.layout": "Διάταξη",
+  "plugin.impress.inspector.transition": "Μετάβαση",
+  "plugin.impress.inspector.bullets": "Κουκκίδες",
+  "plugin.impress.inspector.speakerNotes": "Σημειώσεις ομιλητή",
+  "plugin.impress.inspector.hint": "Κάντε κλικ σε οποιοδήποτε κείμενο της διαφάνειας για άμεση επεξεργασία.",
+  "plugin.impress.inspector.applyAll": "Εφαρμογή αυτής της μετάβασης και της ακολουθίας κουκκίδων σε κάθε διαφάνεια",
+  "plugin.impress.inspector.applyAllLabel": "Εφαρμογή σε όλες τις διαφάνειες",
+
+  "plugin.impress.ops.addSlide": "Προσθήκη διαφάνειας",
+  "plugin.impress.ops.moveUp": "Μετακίνηση πάνω",
+  "plugin.impress.ops.moveDown": "Μετακίνηση κάτω",
+  "plugin.impress.ops.deleteSlide": "Διαγραφή διαφάνειας",
+
+  "plugin.impress.transition.none": "Καμία",
+  "plugin.impress.transition.fade": "Ξεθώριασμα",
+  "plugin.impress.transition.slide": "Ολίσθηση",
+  "plugin.impress.transition.push": "Ώθηση",
+  "plugin.impress.transition.zoom": "Ζουμ",
+
+  "plugin.impress.reveal.all": "Όλα μαζί",
+  "plugin.impress.reveal.bullets": "Ένα ένα",
+
+  "plugin.impress.slide.addText": "Προσθήκη κειμένου",
+  "plugin.impress.slide.addTitle": "Προσθήκη τίτλου",
+  "plugin.impress.slide.addSubtitle": "Προσθήκη υπότιτλου",
+  "plugin.impress.slide.attribution": "Αναφορά",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Επιστροφή στον επεξεργαστή",
+  "plugin.impress.present.fullScreen": "Πλήρης οθόνη",
+  "plugin.impress.present.exitFullScreen": "Έξοδος από πλήρη οθόνη",
+  "plugin.impress.present.blocked": "Η πλήρης οθόνη αποκλείστηκε από τον περιηγητή",
+
+  "plugin.impress.dialog.deleteDeck": "Διαγραφή του \"{title}\";",
+
+  "plugin.impress.toast.saveFailed": "Η αποθήκευση απέτυχε",
+  "plugin.impress.toast.openFailed": "Δεν ήταν δυνατό το άνοιγμα της παρουσίασης",
+  "plugin.impress.toast.createFailed": "Δεν ήταν δυνατή η δημιουργία παρουσίασης",
+  "plugin.impress.toast.deleteFailed": "Δεν ήταν δυνατή η διαγραφή της παρουσίασης",
+  "plugin.impress.toast.imported": "Εισήχθη το {name}",
+  "plugin.impress.toast.importFailed": "Η εισαγωγή απέτυχε — είναι έγκυρο αρχείο .odp;",
+  "plugin.impress.toast.openFileFailed": "Δεν ήταν δυνατό το άνοιγμα του αρχείου",
+
+  "plugin.impress.meta.description": "Δημιουργός παρουσιάσεων — οι παρουσιάσεις αποθηκεύονται ως διαφάνειες και εξάγονται ως ανοιχτά αρχεία .odp",
+  "plugin.impress.meta.summary": "Impress: δημιουργία, επεξεργασία και προβολή παρουσιάσεων OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Γραφείο"
+}

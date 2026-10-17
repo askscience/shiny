@@ -64,7 +64,11 @@ packages needed for that: `qml6-module-qtquick`, `qml6-module-qtquick-effects`
 and `qml6-module-qtwebengine`. Ad blocking runs **in-process**: the server compiles
 EasyList/EasyPrivacy into a cache the shell restores, and a
 `QWebEngineUrlRequestInterceptor` asks the engine per request. There is no
-filter proxy in the page path.
+filter proxy in the page path. The one thing a filter list cannot reach —
+YouTube's video ads, which are served from the video's own URL shape — is a
+document-start script the shell injects into every frame
+(`crates/peakd/js/youtube-ads.js`); it follows the same shield toggle and is
+Linux-shell only.
 
 The QtWebEngine profile (cookies, local storage, cache) lives under
 `data/peakd/qtwebengine/` (`--data-dir` moves it; storage in `storage/`, HTTP

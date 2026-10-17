@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Raidió idirlín trí Radio Browser — cuardaigh stáisiúin agus seinn iad i bhfuinneog an Raidió",
+  "plugin.radio.meta.summary": "Raidió idirlín: cuardaigh agus seinn stáisiúin (Radio Browser)",
+  "plugin.radio.meta.category": "Meáin",
+
+  "plugin.radio.notify.nowPlaying": "Á sheinm anois",
+  "plugin.radio.toast.streamRefused": "Dhiúltaigh an sruth seinm — bain triail as stáisiún eile",
+
+  "plugin.radio.status.pickStation": "Roghnaigh stáisiún",
+  "plugin.radio.status.streaming": "Á shruthú",
+
+  "plugin.radio.empty.noStations": "Níor aimsíodh aon stáisiún",
+  "plugin.radio.empty.noMatch": "Níor tháinig aon rud le “{term}”.",
+
+  "plugin.radio.error.unreachable": "Níl Radio Browser inrochtana",
+  "plugin.radio.error.tryAgain": "Bain triail eile as ar ball",
+
+  "plugin.radio.fallback.station": "Stáisiún",
+  "plugin.radio.search.placeholder": "Stáisiúin nó seánraí…",
+
+  "plugin.radio.menu.play": "Seinn",
+  "plugin.radio.menu.pause": "Sos",
+  "plugin.radio.menu.stop": "Stad",
+  "plugin.radio.menu.refresh": "Athnuaigh na stáisiúin"
+}

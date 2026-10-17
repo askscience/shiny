@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Teaduslik kalkulaator — arvuta aritmeetilisi ja teaduslikke avaldisi Kalkulaatori aknas",
+  "plugin.calculator.meta.summary": "Kalkulaator: lihtne ja teaduslik matemaatika",
+  "plugin.calculator.meta.category": "Kontor",
+
+  "plugin.calculator.display.error": "Viga",
+
+  "plugin.calculator.toolbar.history": "Ajalugu",
+  "plugin.calculator.toolbar.scientific": "Teaduslik",
+  "plugin.calculator.toolbar.clearHistory": "Tühjenda ajalugu",
+
+  "plugin.calculator.menu.equals": "Võrdub",
+  "plugin.calculator.menu.clearAll": "Tühjenda kõik",
+
+  "plugin.calculator.history.reuse": "Kasuta seda tulemust uuesti",
+
+  "plugin.calculator.empty.noHistory": "Ajalugu pole",
+  "plugin.calculator.empty.noHistoryBody": "Siin tehtud või AI-lt küsitud arvutused ilmuvad all.",
+
+  "plugin.calculator.toast.evaluateFailed": "Ei saanud arvutada",
+  "plugin.calculator.toast.historyFailed": "Ajalugu ei saanud laadida",
+  "plugin.calculator.toast.historyCleared": "Ajalugu tühjendatud",
+  "plugin.calculator.toast.clearFailed": "Ajalugu ei saanud tühjendada"
+}

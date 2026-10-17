@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Επεξεργαστής φωτογραφιών — ρυθμίσεις τόνου και χρώματος, θόλωση/όξυνση/βινιέτα και κινηματογραφικά φίλτρα με ένα πάτημα στο παράθυρο της Εικόνας",
+  "plugin.image.meta.summary": "Επεξεργαστής φωτογραφιών: ρυθμίσεις και φίλτρα",
+  "plugin.image.meta.category": "Πολυμέσα",
+
+  "plugin.image.toolbar.menu": "Μενού",
+  "plugin.image.toolbar.fitToggle": "Εναλλαγή προσαρμογής / πραγματικού μεγέθους",
+
+  "plugin.image.dial.brightness": "Φωτεινότητα",
+  "plugin.image.dial.contrast": "Αντίθεση",
+  "plugin.image.dial.exposure": "Έκθεση",
+  "plugin.image.dial.vibrance": "Ζωντανότητα",
+  "plugin.image.dial.saturation": "Κορεσμός",
+  "plugin.image.dial.blur": "Θόλωση",
+  "plugin.image.dial.sharpen": "Όξυνση",
+  "plugin.image.dial.vignette": "Βινιέτα",
+
+  "plugin.image.oneClick.autoTone": "Αυτόματος τόνος",
+  "plugin.image.oneClick.autoContrast": "Αυτόματη αντίθεση",
+  "plugin.image.oneClick.invert": "Αντιστροφή",
+  "plugin.image.oneClick.grayscale": "Α/Μ",
+  "plugin.image.oneClick.sepia": "Σέπια",
+  "plugin.image.oneClick.revert": "Επαναφορά",
+  "plugin.image.oneClick.revertTitle": "Επαναφορά του αρχικού αρχείου",
+
+  "plugin.image.empty.title": "Δεν υπάρχει ανοιχτή εικόνα",
+  "plugin.image.empty.body": "Ανοίξτε ή σύρετε μια φωτογραφία για να ξεκινήσετε.",
+  "plugin.image.empty.open": "Άνοιγμα εικόνας",
+
+  "plugin.image.menu.file": "Αρχείο",
+  "plugin.image.menu.image": "Εικόνα",
+  "plugin.image.menu.view": "Προβολή",
+  "plugin.image.menu.open": "Άνοιγμα…",
+  "plugin.image.menu.saveCopy": "Αποθήκευση αντιγράφου…",
+  "plugin.image.menu.delete": "Διαγραφή εικόνας",
+  "plugin.image.menu.rotateLeft": "Περιστροφή αριστερά",
+  "plugin.image.menu.rotateRight": "Περιστροφή δεξιά",
+  "plugin.image.menu.flipH": "Οριζόντια αναστροφή",
+  "plugin.image.menu.flipV": "Κατακόρυφη αναστροφή",
+  "plugin.image.menu.revert": "Επαναφορά στο αρχικό",
+  "plugin.image.menu.zoomIn": "Μεγέθυνση",
+  "plugin.image.menu.zoomOut": "Σμίκρυνση",
+  "plugin.image.menu.fit": "Προσαρμογή",
+  "plugin.image.menu.actualSize": "Πραγματικό μέγεθος",
+
+  "plugin.image.ctx.open": "Άνοιγμα εικόνας…",
+
+  "plugin.image.dialog.deleteConfirm": "Διαγραφή του \"{title}\";",
+  "plugin.image.dialog.thisImage": "αυτή η εικόνα",
+
+  "plugin.image.toast.openFirst": "Ανοίξτε πρώτα μια εικόνα",
+  "plugin.image.toast.opened": "Άνοιξε το {title}",
+  "plugin.image.toast.editFailed": "Η επεξεργασία απέτυχε",
+  "plugin.image.toast.operationFailed": "Η ενέργεια απέτυχε",
+  "plugin.image.toast.renderFailed": "Δεν ήταν δυνατή η απόδοση της εικόνας",
+  "plugin.image.toast.uploadFailed": "Η μεταφόρτωση απέτυχε",
+  "plugin.image.toast.saveFailed": "Η αποθήκευση απέτυχε",
+  "plugin.image.toast.deleted": "Η εικόνα διαγράφηκε",
+  "plugin.image.toast.deleteFailed": "Δεν ήταν δυνατή η διαγραφή της εικόνας",
+  "plugin.image.toast.reverted": "Έγινε επαναφορά στα αρχικά pixel",
+  "plugin.image.toast.openFailed": "Δεν ήταν δυνατό το άνοιγμα του αρχείου",
+
+  "plugin.image.error.emptyFile": "αυτό το αρχείο είναι κενό",
+  "plugin.image.error.notAnImage": "Το “{name}” δεν είναι εικόνα που μπορεί να ανοίξει ο επεξεργαστής",
+  "plugin.image.error.unnamedFile": "αρχείο"
+}

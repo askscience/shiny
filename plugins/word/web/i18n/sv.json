@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Dokument",
+  "plugin.word.toolbar.titlePlaceholder": "Namnlös",
+  "plugin.word.toolbar.newDocument": "Nytt dokument",
+  "plugin.word.toolbar.importOdt": "Importera .odt",
+  "plugin.word.toolbar.saveToDocuments": "Spara i Dokument",
+  "plugin.word.toolbar.saveNow": "Spara nu",
+  "plugin.word.toolbar.deleteDocument": "Ta bort dokument",
+  "plugin.word.toolbar.bold": "Fet",
+  "plugin.word.toolbar.italic": "Kursiv",
+  "plugin.word.toolbar.underline": "Understruken",
+  "plugin.word.toolbar.heading": "Rubrik",
+  "plugin.word.toolbar.bulletList": "Punktlista",
+  "plugin.word.toolbar.font": "Typsnitt",
+  "plugin.word.toolbar.fontHint": "Typsnitt — gäller markeringen, eller hela dokumentet när inget är markerat",
+
+  "plugin.word.status.saving": "Sparar…",
+  "plugin.word.status.unsaved": "Osparade ändringar",
+  "plugin.word.status.saved.one": "Sparat {time} · {count} ord",
+  "plugin.word.status.saved.other": "Sparat {time} · {count} ord",
+
+  "plugin.word.menu.empty": "Inga dokument än",
+  "plugin.word.menu.newDocument": "Nytt dokument",
+  "plugin.word.menu.importOdt": "Importera .odt",
+  "plugin.word.menu.saveToDocuments": "Spara i Dokument",
+  "plugin.word.menu.deleteDocument": "Ta bort dokument",
+
+  "plugin.word.ctx.newDocument": "Nytt dokument",
+  "plugin.word.ctx.saveNow": "Spara nu",
+  "plugin.word.ctx.saveToDocuments": "Spara i Dokument",
+  "plugin.word.ctx.bold": "Fet",
+  "plugin.word.ctx.italic": "Kursiv",
+  "plugin.word.ctx.heading": "Rubrik",
+  "plugin.word.ctx.list": "Lista",
+  "plugin.word.ctx.deleteDocument": "Ta bort dokument",
+
+  "plugin.word.dialog.deleteDoc": "Ta bort \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Sparandet misslyckades",
+  "plugin.word.toast.openFailed": "Kunde inte öppna dokumentet",
+  "plugin.word.toast.createFailed": "Kunde inte skapa dokumentet",
+  "plugin.word.toast.deleteFailed": "Kunde inte ta bort dokumentet",
+  "plugin.word.toast.imported": "Importerade {name}",
+  "plugin.word.toast.importFailed": "Importen misslyckades — är det här en giltig .odt-fil?",
+  "plugin.word.toast.openFileFailed": "Kunde inte öppna filen",
+
+  "plugin.word.meta.description": "Enkel ordbehandlare — dokument sparas som öppna .odt-filer",
+  "plugin.word.meta.summary": "Ordbehandlare: skapa, redigera och läs OpenDocument-dokument (.odt)",
+  "plugin.word.meta.category": "Kontor"
+}

@@ -1,6 +1,7 @@
 //! Shared agent execution loop with step callbacks.
 
 use serde_json::{Value, json};
+use shiny_plugin_sdk::tools::UiText;
 
 use crate::api::AppState;
 use crate::errors::AppError;
@@ -35,32 +36,49 @@ fn shorten_for_ui(msg: &str) -> String {
     format!("{}…", cut.trim_end())
 }
 
-/// Human, UI-facing label for a tool about to run: the plugin's own
-/// `Tool::step_label` when it has one, else core's action map.
-fn ui_step_label(state: &AppState, action: &str) -> String {
-    let label = if state.plugins.tools().has(action) {
-        state.plugins.tools().step_label(action)
-    } else {
-        step_label_for_action(action).to_string()
-    };
-    shorten_for_ui(&label)
+/// Human, UI-facing status line for a tool about to run: the plugin's own keyed
+/// `Tool::step_ui` when it has one, else its `step_label`, else core's map. The
+/// web client translates the key and falls back to the English text.
+fn ui_step(state: &AppState, action: &str) -> UiText {
+    if state.plugins.tools().has(action) {
+        if let Some(mut ui) = state.plugins.tools().step_ui(action) {
+            ui.text = shorten_for_ui(&ui.text);
+            return ui;
+        }
+        let label = state.plugins.tools().step_label(action);
+        return UiText::new(shorten_for_ui(&label));
+    }
+    let step = step_label_for_action(action);
+    UiText::keyed(step.key, step.text)
 }
 
 /// Human, UI-facing "done" line for a finished tool. Plugin tools answer with
-/// their own `Tool::humanize` (short by convention); core actions fall back to
-/// the built-in phrases. A JSON-looking result is rejected rather than shown.
-fn ui_done_label(state: &AppState, action: &str, result: &str, data: &Value) -> String {
+/// their own keyed `Tool::done_ui`, then their `humanize` (short by convention);
+/// core actions fall back to the built-in phrases. A JSON-looking result is
+/// rejected rather than shown.
+fn ui_done(state: &AppState, action: &str, result: &str, data: &Value) -> UiText {
     if result != "ok" {
-        return failed_label_for_action(action).to_string();
+        let step = failed_label_for_action(action);
+        return UiText::keyed(step.key, step.text);
     }
     if state.plugins.tools().has(action) {
+        if let Some(mut ui) = state.plugins.tools().done_ui(action, result, data) {
+            let trimmed = ui.text.trim();
+            // A keyed line may carry `{placeholders}`; an unkeyed one must not
+            // look like JSON.
+            if ui.key.is_some() || (!trimmed.is_empty() && !trimmed.contains('{')) {
+                ui.text = shorten_for_ui(trimmed);
+                return ui;
+            }
+        }
         let human = state.plugins.tools().humanize(action, result, data);
         let human = human.trim();
         if !human.is_empty() && !human.contains('{') {
-            return shorten_for_ui(human);
+            return UiText::new(shorten_for_ui(human));
         }
     }
-    done_label_for_action(action).to_string()
+    let step = done_label_for_action(action);
+    UiText::keyed(step.key, step.text)
 }
 
 pub struct AgentRunInput {
@@ -129,7 +147,7 @@ pub async fn run_agent<F, G>(
     mut on_thinking: G,
 ) -> Result<AgentRunResult, AppError>
 where
-    F: FnMut(&str),
+    F: FnMut(&UiText),
     G: FnMut(&str),
 {
     let mut artifacts: Vec<Value> = Vec::new();
@@ -144,7 +162,8 @@ where
     let mut final_reply = String::new();
     let mut interrupted = false;
 
-    on_step(thinking_label());
+    let think = thinking_label();
+    on_step(&UiText::keyed(think.key, think.text));
 
     for iteration in 0..MAX_TOOL_STEPS {
         if turn_stopped(&cancel) {
@@ -243,11 +262,12 @@ where
             // than claiming a workspace was created.
             if action.starts_with("workspace_") && !input.ctx.workspaces_enabled {
                 tracing::info!("Refusing {action}: workspaces are off on this screen");
-                on_step("Workspaces are unavailable on this screen");
+                let step = step_label_for_action("workspaces_unavailable");
+                on_step(&UiText::keyed(step.key, step.text));
                 continue;
             }
 
-            on_step(&ui_step_label(state, &action));
+            on_step(&ui_step(state, &action));
 
             match execute_action(state, traveler, &input.ctx, &action, &params).await {
             Ok(outcome) => {
@@ -345,7 +365,7 @@ where
                 completed_steps.push(note.clone());
                 // The model gets the full note above; the bubble gets a short
                 // human line (never the raw payload).
-                on_step(&ui_done_label(state, &outcome.action, &outcome.result, &outcome.data));
+                on_step(&ui_done(state, &outcome.action, &outcome.result, &outcome.data));
             }
             Err(e) => {
                 actions_taken.push(ActionTaken {
@@ -355,7 +375,8 @@ where
                 });
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
                 completed_steps.push(note.clone());
-                on_step(failed_label_for_action(&action));
+                let step = failed_label_for_action(&action);
+                on_step(&UiText::keyed(step.key, step.text));
             }
             }
         }

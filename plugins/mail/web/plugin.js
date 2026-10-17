@@ -17,56 +17,57 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 import { externalLinkUrl, isKiosk, openUrl } from '../../js/linkRouter.js';
 
 export const MAIL_PLUGIN = 'mail';
 
 const PROVIDER_HELP = {
   gmail: {
-    text: 'Gmail no longer accepts your normal password from third-party apps. Turn on IMAP, enable 2-Step Verification, then create an App Password and paste it in the password field. (New Google Workspace setups may require OAuth2 instead — this first version uses app passwords.)',
+    textKey: 'plugin.mail.provider.gmail.text',
     links: [
-      { label: 'Gmail IMAP/SMTP settings', href: 'https://support.google.com/mail/answer/7126229' },
-      { label: 'Create an app password', href: 'https://myaccount.google.com/apppasswords' },
+      { labelKey: 'plugin.mail.provider.gmail.imapLabel', href: 'https://support.google.com/mail/answer/7126229' },
+      { labelKey: 'plugin.mail.provider.gmail.appPasswordLabel', href: 'https://myaccount.google.com/apppasswords' },
     ],
   },
   outlook: {
-    text: 'Personal Outlook.com accounts use an app password (turn on two-step verification first, then generate it in your Microsoft account security). Work/school Microsoft 365 accounts now require OAuth2 (Modern Auth), which this first version does not support yet — use a personal account for now.',
+    textKey: 'plugin.mail.provider.outlook.text',
     links: [
-      { label: 'Outlook POP/IMAP/SMTP settings', href: 'https://support.microsoft.com/en-us/office/pop-imap-and-smtp-settings-for-outlook-com-d088b986-291d-42b8-9564-9c414e2aa040' },
+      { labelKey: 'plugin.mail.provider.outlook.settingsLabel', href: 'https://support.microsoft.com/en-us/office/pop-imap-and-smtp-settings-for-outlook-com-d088b986-291d-42b8-9564-9c414e2aa040' },
     ],
   },
   yahoo: {
-    text: 'Yahoo requires an app password. Enable two-step verification (or Account Key), then generate an app password in Account security and use it as the password here.',
+    textKey: 'plugin.mail.provider.yahoo.text',
     links: [
-      { label: 'Yahoo app passwords', href: 'https://help.yahoo.com/kb/SLN4075.html' },
+      { labelKey: 'plugin.mail.provider.yahoo.appPasswordsLabel', href: 'https://help.yahoo.com/kb/SLN4075.html' },
     ],
   },
   icloud: {
-    text: 'iCloud requires an app-specific password — your Apple ID password won’t work. Create one at appleid.apple.com (Sign-In & Security → App-Specific Passwords) and make sure iCloud Mail is enabled on your device.',
+    textKey: 'plugin.mail.provider.icloud.text',
     links: [
-      { label: 'iCloud app-specific passwords', href: 'https://support.apple.com/en-us/102525' },
+      { labelKey: 'plugin.mail.provider.icloud.appPasswordsLabel', href: 'https://support.apple.com/en-us/102525' },
     ],
   },
   zoho: {
-    text: 'Zoho Mail: enable IMAP in Settings → Mail Accounts → IMAP Access, then sign in with your full email and your Zoho password — or an app password if two-factor authentication is on.',
+    textKey: 'plugin.mail.provider.zoho.text',
     links: [
-      { label: 'Zoho Mail app settings', href: 'https://www.zoho.com/mail/help/zoho-mail-apps.html' },
+      { labelKey: 'plugin.mail.provider.zoho.settingsLabel', href: 'https://www.zoho.com/mail/help/zoho-mail-apps.html' },
     ],
   },
   fastmail: {
-    text: 'Fastmail works with an app password (Settings → Password & Security → App Passwords) rather than your login password.',
+    textKey: 'plugin.mail.provider.fastmail.text',
     links: [
-      { label: 'Fastmail SMTP/IMAP settings', href: 'https://www.fastmail.com/help/technical/smtp.html' },
+      { labelKey: 'plugin.mail.provider.fastmail.settingsLabel', href: 'https://www.fastmail.com/help/technical/smtp.html' },
     ],
   },
   proton: {
-    text: 'Proton Mail has no direct IMAP — install Proton Mail Bridge, then add it here as a custom account on 127.0.0.1 (IMAP port 1143, SMTP port 1025) with your Proton credentials.',
+    textKey: 'plugin.mail.provider.proton.text',
     links: [
-      { label: 'Proton Mail Bridge', href: 'https://proton.me/support/mail-bridge' },
+      { labelKey: 'plugin.mail.provider.proton.bridgeLabel', href: 'https://proton.me/support/mail-bridge' },
     ],
   },
   custom: {
-    text: 'Use your provider’s IMAP and SMTP server addresses, ports and security. Most providers now require an app password or OAuth2 instead of your normal password.',
+    textKey: 'plugin.mail.provider.custom.text',
     links: [],
   },
 };
@@ -234,7 +235,7 @@ async function refreshStatus({ keepFolder = false } = {}) {
     presets = s?.presets || [];
     configured = !!s?.configured;
   } catch (e) {
-    toast(e.message || 'Could not load mail status', { type: 'error' });
+    toast(e.message || t('plugin.mail.toast.statusFailed', null, 'Could not load mail status'), { type: 'error' });
     return;
   }
   setStatus(configured ? 'ok' : 'off');
@@ -254,9 +255,9 @@ async function syncNow() {
   if (!account) return;
   try {
     const r = await syncMail(account.id, currentFolder);
-    toast(`Mail synced — ${r?.new ?? 0} new, ${r?.total ?? 0} cached`, { type: 'info' });
+    toast(t('plugin.mail.toast.synced', { new: r?.new ?? 0, cached: r?.total ?? 0 }, 'Mail synced — {new} new, {cached} cached'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Mail sync failed', { type: 'error' });
+    toast(e.message || t('plugin.mail.toast.syncFailed', null, 'Mail sync failed'), { type: 'error' });
   }
   await refreshStatus({ keepFolder: true });
 }
@@ -277,7 +278,7 @@ function onSearch(query) {
       messages = r?.messages || [];
       renderMessages();
     } catch (e) {
-      toast(e.message || 'Search failed', { type: 'error' });
+      toast(e.message || t('plugin.mail.toast.searchFailed', null, 'Search failed'), { type: 'error' });
     }
   }, 300);
 }
@@ -294,7 +295,7 @@ async function loadFolders() {
     renderFolders();
     await loadMessages();
   } catch (e) {
-    toast(e.message || 'Could not load folders', { type: 'error' });
+    toast(e.message || t('plugin.mail.toast.foldersFailed', null, 'Could not load folders'), { type: 'error' });
   }
 }
 
@@ -318,7 +319,7 @@ async function loadMessages() {
     messages = r?.messages || [];
     renderMessages();
   } catch (e) {
-    toast(e.message || 'Could not load messages', { type: 'error' });
+    toast(e.message || t('plugin.mail.toast.messagesFailed', null, 'Could not load messages'), { type: 'error' });
   } finally {
     busy = false;
   }
@@ -333,7 +334,7 @@ async function openMessage(id) {
   currentMessage = null;
   renderMessages();
   readerEl.textContent = '';
-  readerEl.appendChild(emptyState({ title: 'Loading…' }));
+  readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.loading', null, 'Loading…') }));
   try {
     const full = await fetchMessage(account.id, currentFolder, id);
     if (token !== openToken) return; // a newer open won
@@ -349,7 +350,7 @@ async function openMessage(id) {
   } catch (e) {
     if (token !== openToken) return;
     readerEl.textContent = '';
-    readerEl.appendChild(emptyState({ title: 'Could not open message', body: e.message }));
+    readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.openFailed', null, 'Could not open message'), body: e.message }));
   }
 }
 
@@ -373,7 +374,7 @@ function toolbarButton(iconName, label, onClick, danger = false) {
 
 function renderBar() {
   const account = pickAccount();
-  barAccountLabel.textContent = account ? (account.label || account.email) : 'No account';
+  barAccountLabel.textContent = account ? (account.label || account.email) : t('plugin.mail.bar.noAccount', null, 'No account');
   barAccountBtn.setAttribute('aria-expanded', String(accountPopupOpen));
 }
 
@@ -409,7 +410,7 @@ function openAccountMenu() {
   ensureAccountMenu();
   accountPopup.innerHTML = '';
   if (!accounts.length) {
-    const empty = h('div', 'mail-account-menu-empty', 'No accounts yet');
+    const empty = h('div', 'mail-account-menu-empty', t('plugin.mail.menu.noAccounts', null, 'No accounts yet'));
     accountPopup.appendChild(empty);
   } else {
     for (const a of accounts) {
@@ -421,7 +422,10 @@ function openAccountMenu() {
       item.appendChild(icon);
       void setIcon(icon, 'ui/mail', { size: 14 });
       const label = h('span', 'mail-account-menu-label', a.label || a.email);
-      const badge = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, a.verified ? 'connected' : 'not verified');
+      const badgeText = a.verified
+        ? t('plugin.mail.status.connected', null, 'connected')
+        : t('plugin.mail.status.notVerified', null, 'not verified');
+      const badge = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, badgeText);
       item.append(icon, label, badge);
       item.addEventListener('click', () => {
         closeAccountMenu();
@@ -434,7 +438,7 @@ function openAccountMenu() {
     }
   }
   const foot = h('div', 'mail-account-menu-foot');
-  const manage = button({ icon: 'ui/settings', label: 'Mail accounts', variant: 'ghost', size: 'sm', onClick: () => { closeAccountMenu(); openSettings(); } });
+  const manage = button({ icon: 'ui/settings', label: t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), variant: 'ghost', size: 'sm', onClick: () => { closeAccountMenu(); openSettings(); } });
   manage.classList.add('ui-btn--icon');
   foot.appendChild(manage);
   accountPopup.appendChild(foot);
@@ -466,8 +470,8 @@ function render() {
   searchInputEl = document.createElement('input');
   searchInputEl.type = 'search';
   searchInputEl.className = 'mail-search-input';
-  searchInputEl.placeholder = 'Search cached mail…';
-  searchInputEl.setAttribute('aria-label', 'Search mail');
+  searchInputEl.placeholder = t('plugin.mail.search.placeholder', null, 'Search cached mail…');
+  searchInputEl.setAttribute('aria-label', t('plugin.mail.search.label', null, 'Search mail'));
   searchInputEl.addEventListener('input', () => onSearch(searchInputEl.value));
   searchBar.appendChild(searchInputEl);
   listPane.appendChild(searchBar);
@@ -476,7 +480,7 @@ function render() {
 
   const readerPane = h('div', 'mail-reader');
   readerEl = readerPane;
-  readerEl.appendChild(emptyState({ title: 'Select a message', body: 'Pick a message to read it here.' }));
+  readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.selectTitle', null, 'Select a message'), body: t('plugin.mail.empty.selectBody', null, 'Pick a message to read it here.') }));
   bodyEl.append(foldersPane, listPane, readerPane);
   renderFolders();
   renderMessages();
@@ -486,11 +490,11 @@ function renderSetup(root) {
   const wrap = h('div', 'mail-onboarding');
   const intro = h('div', 'mail-help');
   if (!accounts.length) {
-    intro.appendChild(h('h3', null, 'Connect your mail account'));
-    intro.appendChild(h('p', null, 'Choose your provider and add your account. Provider instructions appear at the bottom of the form and disappear once the account is verified.'));
+    intro.appendChild(h('h3', null, t('plugin.mail.setup.connectTitle', null, 'Connect your mail account')));
+    intro.appendChild(h('p', null, t('plugin.mail.setup.connectBody', null, 'Choose your provider and add your account. Provider instructions appear at the bottom of the form and disappear once the account is verified.')));
   } else {
-    intro.appendChild(h('h3', null, 'Verify your mail account'));
-    intro.appendChild(h('p', null, 'Your account is saved but the connection test hasn’t succeeded yet. Press Test connection below, or read the provider instructions at the bottom.'));
+    intro.appendChild(h('h3', null, t('plugin.mail.setup.verifyTitle', null, 'Verify your mail account')));
+    intro.appendChild(h('p', null, t('plugin.mail.setup.verifyBody', null, 'Your account is saved but the connection test hasn’t succeeded yet. Press Test connection below, or read the provider instructions at the bottom.')));
   }
   wrap.appendChild(intro);
   wrap.appendChild(buildAccountForm({ onboarding: !accounts.length }));
@@ -512,7 +516,9 @@ function defaultPresets() {
 /** The add-account form: provider + email + password, optional custom servers. */
 function buildAccountForm({ onboarding }) {
   const form = h('div', 'mail-account-form');
-  form.appendChild(h('h4', null, onboarding ? 'Add your first account' : 'Add another account'));
+  form.appendChild(h('h4', null, onboarding
+    ? t('plugin.mail.form.addFirst', null, 'Add your first account')
+    : t('plugin.mail.form.addAnother', null, 'Add another account')));
 
   const providerSel = select({
     options: (presets.length ? presets : defaultPresets()).map((p) => ({ value: p.provider, label: p.label })),
@@ -532,42 +538,42 @@ function buildAccountForm({ onboarding }) {
     }
     updateHelp(providerSel.select.value);
   });
-  form.appendChild(field({ label: 'Provider', control: providerSel }));
+  form.appendChild(field({ label: t('plugin.mail.form.provider', null, 'Provider'), control: providerSel }));
 
-  const emailInput = input({ type: 'email', placeholder: 'you@example.com', autocomplete: 'username' });
-  form.appendChild(field({ label: 'Email', control: emailInput }));
+  const emailInput = input({ type: 'email', placeholder: t('plugin.mail.form.emailPlaceholder', null, 'you@example.com'), autocomplete: 'username' });
+  form.appendChild(field({ label: t('plugin.mail.form.email', null, 'Email'), control: emailInput }));
 
-  const userInput = input({ type: 'text', placeholder: 'Usually your full email', autocomplete: 'username' });
-  form.appendChild(field({ label: 'Username (optional)', control: userInput }));
+  const userInput = input({ type: 'text', placeholder: t('plugin.mail.form.usernamePlaceholder', null, 'Usually your full email'), autocomplete: 'username' });
+  form.appendChild(field({ label: t('plugin.mail.form.username', null, 'Username (optional)'), control: userInput }));
 
-  const passInput = input({ type: 'password', placeholder: 'Password or app password', autocomplete: 'current-password' });
-  form.appendChild(field({ label: 'Password', control: passInput }));
+  const passInput = input({ type: 'password', placeholder: t('plugin.mail.form.passwordPlaceholder', null, 'Password or app password'), autocomplete: 'current-password' });
+  form.appendChild(field({ label: t('plugin.mail.form.password', null, 'Password'), control: passInput }));
 
-  const imapHost = input({ placeholder: 'imap.example.com' });
+  const imapHost = input({ placeholder: t('plugin.mail.form.imapHostPlaceholder', null, 'imap.example.com') });
   const imapPort = input({ type: 'number', value: '993', placeholder: '993' });
   const imapSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
-  form.appendChild(field({ label: 'IMAP server', control: imapHost }));
+  form.appendChild(field({ label: t('plugin.mail.form.imapServer', null, 'IMAP server'), control: imapHost }));
   const imapRow = h('div', 'ui-row');
   imapRow.style.gap = '8px';
-  imapRow.append(field({ label: 'Port', control: imapPort }), field({ label: 'Security', control: imapSec }));
+  imapRow.append(field({ label: t('plugin.mail.form.port', null, 'Port'), control: imapPort }), field({ label: t('plugin.mail.form.security', null, 'Security'), control: imapSec }));
   form.appendChild(imapRow);
 
-  const smtpHost = input({ placeholder: 'smtp.example.com' });
+  const smtpHost = input({ placeholder: t('plugin.mail.form.smtpHostPlaceholder', null, 'smtp.example.com') });
   const smtpPort = input({ type: 'number', value: '465', placeholder: '465' });
   const smtpSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
-  form.appendChild(field({ label: 'SMTP server', control: smtpHost }));
+  form.appendChild(field({ label: t('plugin.mail.form.smtpServer', null, 'SMTP server'), control: smtpHost }));
   const smtpRow = h('div', 'ui-row');
   smtpRow.style.gap = '8px';
-  smtpRow.append(field({ label: 'Port', control: smtpPort }), field({ label: 'Security', control: smtpSec }));
+  smtpRow.append(field({ label: t('plugin.mail.form.port', null, 'Port'), control: smtpPort }), field({ label: t('plugin.mail.form.security', null, 'Security'), control: smtpSec }));
   form.appendChild(smtpRow);
 
   const actions = h('div', 'mail-compose-actions');
   const statusLine = h('span', 'mail-account-row-email');
   statusLine.style.flex = '1';
-  const testBtn = button({ label: 'Test connection', variant: 'ghost', size: 'sm' });
-  testBtn.setAttribute('aria-label', 'Test connection');
-  const addBtn = button({ label: 'Add account', variant: 'primary', size: 'sm' });
-  addBtn.setAttribute('aria-label', 'Add account');
+  const testBtn = button({ label: t('plugin.mail.form.testConnection', null, 'Test connection'), variant: 'ghost', size: 'sm' });
+  testBtn.setAttribute('aria-label', t('plugin.mail.form.testConnection', null, 'Test connection'));
+  const addBtn = button({ label: t('plugin.mail.form.addAccount', null, 'Add account'), variant: 'primary', size: 'sm' });
+  addBtn.setAttribute('aria-label', t('plugin.mail.form.addAccount', null, 'Add account'));
   actions.append(statusLine, testBtn, addBtn);
   form.appendChild(actions);
 
@@ -580,9 +586,9 @@ function buildAccountForm({ onboarding }) {
     helpEl.textContent = '';
     const label = h('strong', null, (p?.label || provider) + ': ');
     helpEl.appendChild(label);
-    helpEl.appendChild(document.createTextNode(helpText.text + ' '));
+    helpEl.appendChild(document.createTextNode(t(helpText.textKey) + ' '));
     for (const link of helpText.links || []) {
-      const a = h('a', null, link.label);
+      const a = h('a', null, t(link.labelKey));
       a.href = link.href;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
@@ -608,16 +614,16 @@ function buildAccountForm({ onboarding }) {
 
   testBtn.addEventListener('click', async () => {
     testBtn.disabled = true;
-    statusLine.textContent = 'Testing…';
+    statusLine.textContent = t('plugin.mail.status.testing', null, 'Testing…');
     try {
       const r = await testAccount(collect());
       if (r?.ok) {
-        statusLine.textContent = '✓ Connected';
-        toast('Connection works — provider configured', { type: 'info' });
+        statusLine.textContent = t('plugin.mail.status.connectedCheck', null, '✓ Connected');
+        toast(t('plugin.mail.toast.connectionWorks', null, 'Connection works — provider configured'), { type: 'info' });
         await refreshStatus();
       } else {
-        statusLine.textContent = `✗ ${r?.error || 'Connection failed'}`;
-        toast(r?.error || 'Connection failed', { type: 'error' });
+        statusLine.textContent = `✗ ${r?.error || t('plugin.mail.status.connectionFailed', null, 'Connection failed')}`;
+        toast(r?.error || t('plugin.mail.status.connectionFailed', null, 'Connection failed'), { type: 'error' });
       }
     } catch (e) {
       statusLine.textContent = `✗ ${e.message}`;
@@ -631,19 +637,19 @@ function buildAccountForm({ onboarding }) {
     const payload = collect();
     payload.test = true;
     if (!payload.email || !payload.password) {
-      toast('Email and password are required', { type: 'error' });
+      toast(t('plugin.mail.toast.credentialsRequired', null, 'Email and password are required'), { type: 'error' });
       return;
     }
     addBtn.disabled = true;
-    statusLine.textContent = 'Adding…';
+    statusLine.textContent = t('plugin.mail.status.adding', null, 'Adding…');
     try {
       const created = await createAccount(payload);
       if (created?.verified) {
-        toast(`Account ${created.email} connected`, { type: 'info' });
+        toast(t('plugin.mail.toast.accountConnected', { email: created.email }, 'Account {email} connected'), { type: 'info' });
         await refreshStatus({ keepFolder: true });
       } else {
-        statusLine.textContent = `Added but not verified — ${created?.last_error || 'test failed'}`;
-        toast('Account added, but the connection test failed — check the provider help', { type: 'error' });
+        statusLine.textContent = t('plugin.mail.status.addedUnverified', { error: created?.last_error || t('plugin.mail.status.testFailed', null, 'test failed') }, 'Added but not verified — {error}');
+        toast(t('plugin.mail.toast.accountAddedUnverified', null, 'Account added, but the connection test failed — check the provider help'), { type: 'error' });
         await refreshStatus({ keepFolder: true });
       }
     } catch (e) {
@@ -694,7 +700,10 @@ function renderMessages() {
   if (!listEl) return;
   listEl.textContent = '';
   if (!messages.length) {
-    listEl.appendChild(emptyState({ title: 'No messages', body: `Nothing in ${currentFolder}.` }));
+    listEl.appendChild(emptyState({
+      title: t('plugin.mail.empty.noMessages', null, 'No messages'),
+      body: t('plugin.mail.empty.nothingIn', { folder: currentFolder }, 'Nothing in {folder}.'),
+    }));
     return;
   }
   for (const m of messages) {
@@ -704,9 +713,9 @@ function renderMessages() {
     if (!m.seen) item.classList.add('is-unread');
     const head = h('div', 'mail-item-head');
     head.appendChild(h('span', 'mail-item-dot'));
-    head.appendChild(h('span', 'mail-item-from', m.from || 'Unknown'));
+    head.appendChild(h('span', 'mail-item-from', m.from || t('plugin.mail.list.unknownSender', null, 'Unknown')));
     head.appendChild(h('span', 'mail-item-time', fmtWhen(m.date)));
-    const subject = h('div', 'mail-item-subject', m.subject || '(no subject)');
+    const subject = h('div', 'mail-item-subject', m.subject || t('plugin.mail.list.noSubject', null, '(no subject)'));
     const snippet = h('div', 'mail-item-snippet', m.snippet || '');
     item.append(head, subject, snippet);
     item.addEventListener('click', () => void openMessage(m.id));
@@ -717,15 +726,17 @@ function renderMessages() {
 function renderMessage(msg) {
   if (!readerEl) return;
   readerEl.textContent = '';
-  const subject = h('h2', 'mail-reader-subject', msg.subject || '(no subject)');
+  const subject = h('h2', 'mail-reader-subject', msg.subject || t('plugin.mail.list.noSubject', null, '(no subject)'));
   const from = (msg.from || []).join(', ');
   const to = (msg.to || []).join(', ');
-  const meta = h('p', 'mail-reader-meta', `From: ${from || '—'}${to ? `\nTo: ${to}` : ''}${msg.date ? `\n${fmtWhen(msg.date)}` : ''}`);
+  const fromLine = t('plugin.mail.reader.from', { from: from || '—' }, 'From: {from}');
+  const toLine = to ? `\n${t('plugin.mail.reader.to', { to }, 'To: {to}')}` : '';
+  const meta = h('p', 'mail-reader-meta', `${fromLine}${toLine}${msg.date ? `\n${fmtWhen(msg.date)}` : ''}`);
 
   const actions = h('div', 'mail-reader-actions');
-  const replyBtn = button({ icon: 'ui/reply', label: 'Reply', variant: 'ghost', size: 'sm', onClick: () => openReply(msg) });
-  const fwdBtn = button({ icon: 'ui/forward', label: 'Forward', variant: 'ghost', size: 'sm', onClick: () => openForward(msg) });
-  const delBtn = button({ icon: 'ui/trash', label: 'Delete', variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
+  const replyBtn = button({ icon: 'ui/reply', label: t('plugin.mail.reader.reply', null, 'Reply'), variant: 'ghost', size: 'sm', onClick: () => openReply(msg) });
+  const fwdBtn = button({ icon: 'ui/forward', label: t('plugin.mail.reader.forward', null, 'Forward'), variant: 'ghost', size: 'sm', onClick: () => openForward(msg) });
+  const delBtn = button({ icon: 'ui/trash', label: t('plugin.mail.reader.delete', null, 'Delete'), variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
   actions.append(replyBtn, fwdBtn, delBtn);
 
   readerEl.append(subject, meta, actions);
@@ -744,14 +755,14 @@ function renderMessage(msg) {
     content.appendChild(frame);
     readerFrameEl = frame;
   } else {
-    content.appendChild(h('div', 'mail-reader-body', msg.text || '(empty message)'));
+    content.appendChild(h('div', 'mail-reader-body', msg.text || t('plugin.mail.reader.emptyBody', null, '(empty message)')));
   }
   readerEl.appendChild(content);
 
   if (msg.attachments && msg.attachments.length) {
     const atts = h('div', 'mail-attachments');
     for (const att of msg.attachments) {
-      const chip = h('span', 'mail-attachment', `${att.filename || 'attachment'} · ${fmtSize(att.size)}`);
+      const chip = h('span', 'mail-attachment', `${att.filename || t('plugin.mail.reader.attachment', null, 'attachment')} · ${fmtSize(att.size)}`);
       atts.appendChild(chip);
     }
     readerEl.appendChild(atts);
@@ -809,33 +820,41 @@ function onReaderFrameMessage(event) {
 
 function openCompose(prefill = {}) {
   if (!pickAccount()) {
-    toast('Add and verify a mail account first', { type: 'error' });
+    toast(t('plugin.mail.toast.addAccountFirst', null, 'Add and verify a mail account first'), { type: 'error' });
     return;
   }
   if (!composeModal) {
-    composeTo = input({ placeholder: 'recipient@example.com' });
-    composeCc = input({ placeholder: 'cc@example.com' });
-    composeBcc = input({ placeholder: 'bcc@example.com' });
-    composeSubject = input({ placeholder: 'Subject' });
-    composeBody = textarea({ placeholder: 'Write your message…', rows: 12 });
+    composeTo = input({ placeholder: t('plugin.mail.compose.toPlaceholder', null, 'recipient@example.com') });
+    composeCc = input({ placeholder: t('plugin.mail.compose.ccPlaceholder', null, 'cc@example.com') });
+    composeBcc = input({ placeholder: t('plugin.mail.compose.bccPlaceholder', null, 'bcc@example.com') });
+    composeSubject = input({ placeholder: t('plugin.mail.compose.subject', null, 'Subject') });
+    composeBody = textarea({ placeholder: t('plugin.mail.compose.bodyPlaceholder', null, 'Write your message…'), rows: 12 });
     composeBody.classList.add('mail-compose-body');
-    composeFrom = h('p', 'mail-account-row-email', 'From: ');
+    composeFrom = h('p', 'mail-account-row-email', t('plugin.mail.compose.from', { email: '' }, 'From: {email}'));
     const actions = h('div', 'mail-compose-actions');
-    const sendBtn = button({ icon: 'ui/send', label: 'Send', variant: 'primary', size: 'sm' });
-    const closeBtn = button({ label: 'Discard', variant: 'ghost', size: 'sm' });
+    const sendBtn = button({ icon: 'ui/send', label: t('plugin.mail.compose.send', null, 'Send'), variant: 'primary', size: 'sm' });
+    const closeBtn = button({ label: t('plugin.mail.compose.discard', null, 'Discard'), variant: 'ghost', size: 'sm' });
     actions.append(sendBtn, closeBtn);
 
     composeModal = modal({
-      title: 'New message',
+      title: t('plugin.mail.compose.title', null, 'New message'),
       wide: true,
-      body: [composeFrom, field({ label: 'To', control: composeTo }), field({ label: 'Cc', control: composeCc }), field({ label: 'Bcc', control: composeBcc }), field({ label: 'Subject', control: composeSubject }), field({ label: 'Message', control: composeBody }), actions],
+      body: [
+        composeFrom,
+        field({ label: t('plugin.mail.compose.to', null, 'To'), control: composeTo }),
+        field({ label: t('plugin.mail.compose.cc', null, 'Cc'), control: composeCc }),
+        field({ label: t('plugin.mail.compose.bcc', null, 'Bcc'), control: composeBcc }),
+        field({ label: t('plugin.mail.compose.subject', null, 'Subject'), control: composeSubject }),
+        field({ label: t('plugin.mail.compose.message', null, 'Message'), control: composeBody }),
+        actions,
+      ],
     });
     closeBtn.addEventListener('click', () => composeModal.close());
 
     sendBtn.addEventListener('click', async () => {
       const to = parseAddresses(composeTo.value);
       if (!to.length) {
-        toast('At least one recipient required', { type: 'error' });
+        toast(t('plugin.mail.toast.recipientRequired', null, 'At least one recipient required'), { type: 'error' });
         return;
       }
       sendBtn.disabled = true;
@@ -848,10 +867,10 @@ function openCompose(prefill = {}) {
           subject: composeSubject.value.trim(),
           body: composeBody.value,
         });
-        toast('Message sent', { type: 'info' });
+        toast(t('plugin.mail.toast.sent', null, 'Message sent'), { type: 'info' });
         composeModal.close();
       } catch (e) {
-        toast(e.message || 'Send failed', { type: 'error' });
+        toast(e.message || t('plugin.mail.toast.sendFailed', null, 'Send failed'), { type: 'error' });
       } finally {
         sendBtn.disabled = false;
       }
@@ -863,7 +882,7 @@ function openCompose(prefill = {}) {
   composeBcc.value = prefill.bcc || '';
   composeSubject.value = prefill.subject || '';
   composeBody.value = prefill.body || '';
-  composeFrom.textContent = `From: ${pickAccount().email}`;
+  composeFrom.textContent = t('plugin.mail.compose.from', { email: pickAccount().email }, 'From: {email}');
   composeModal.open();
 }
 
@@ -871,14 +890,14 @@ function openReply(msg) {
   const toEmail = (msg.from_addresses && msg.from_addresses[0] && msg.from_addresses[0].email) || '';
   openCompose({
     to: toEmail,
-    subject: `Re: ${msg.subject || ''}`,
+    subject: t('plugin.mail.compose.replySubject', { subject: msg.subject || '' }, 'Re: {subject}'),
     body: quotedBody(msg),
   });
 }
 
 function openForward(msg) {
   openCompose({
-    subject: `Fwd: ${msg.subject || ''}`,
+    subject: t('plugin.mail.compose.forwardSubject', { subject: msg.subject || '' }, 'Fwd: {subject}'),
     body: quotedBody(msg),
   });
 }
@@ -886,18 +905,18 @@ function openForward(msg) {
 async function deleteCurrent(msg) {
   const account = pickAccount();
   if (!account) return;
-  if (!window.confirm(`Delete this message from ${currentFolder}?`)) return;
+  if (!window.confirm(t('plugin.mail.dialog.delete', { folder: currentFolder }, 'Delete this message from {folder}?'))) return;
   try {
     await deleteMessage(account.id, currentFolder, msg.id);
-    toast('Message deleted', { type: 'info' });
+    toast(t('plugin.mail.toast.deleted', null, 'Message deleted'), { type: 'info' });
     currentMessage = null;
     selectedMessageId = null;
     setTileGlow(tileEl, null);
     readerEl.textContent = '';
-    readerEl.appendChild(emptyState({ title: 'Select a message', body: 'Pick a message to read it here.' }));
+    readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.selectTitle', null, 'Select a message'), body: t('plugin.mail.empty.selectBody', null, 'Pick a message to read it here.') }));
     await loadMessages();
   } catch (e) {
-    toast(e.message || 'Delete failed', { type: 'error' });
+    toast(e.message || t('plugin.mail.toast.deleteFailed', null, 'Delete failed'), { type: 'error' });
   }
 }
 
@@ -919,11 +938,11 @@ function openSettings() {
     list.style.gap = '8px';
     const form = buildAccountForm({ onboarding: false });
     const actions = h('div', 'mail-compose-actions');
-    const doneBtn = button({ label: 'Done', variant: 'primary', size: 'sm' });
+    const doneBtn = button({ label: t('plugin.mail.settings.done', null, 'Done'), variant: 'primary', size: 'sm' });
     actions.appendChild(doneBtn);
 
     settingsModal = modal({
-      title: 'Mail accounts',
+      title: t('plugin.mail.settings.title', null, 'Mail accounts'),
       wide: true,
       body: [list, form, actions],
     });
@@ -931,7 +950,7 @@ function openSettings() {
     settingsModal.el.addEventListener('open', () => {
       list.textContent = '';
       if (!accounts.length) {
-        list.appendChild(h('p', 'mail-account-row-email', 'No accounts yet.'));
+        list.appendChild(h('p', 'mail-account-row-email', t('plugin.mail.settings.noAccounts', null, 'No accounts yet.')));
       }
       for (const a of accounts) {
         const row = h('div', 'mail-account-row');
@@ -940,20 +959,27 @@ function openSettings() {
         meta.style.gap = '2px';
         meta.appendChild(h('div', 'mail-account-row-label', a.label || a.email));
         meta.appendChild(h('div', 'mail-account-row-email', a.email));
-        const badge = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, a.verified ? 'connected' : a.last_error ? 'failed' : 'not tested');
-        const testBtn = button({ label: 'Test', variant: 'ghost', size: 'sm' });
-        testBtn.title = 'Test connection';
+        const badgeText = a.verified
+          ? t('plugin.mail.status.connected', null, 'connected')
+          : a.last_error
+            ? t('plugin.mail.status.failed', null, 'failed')
+            : t('plugin.mail.status.notTested', null, 'not tested');
+        const badge = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, badgeText);
+        const testBtn = button({ label: t('plugin.mail.settings.test', null, 'Test'), variant: 'ghost', size: 'sm' });
+        testBtn.title = t('plugin.mail.form.testConnection', null, 'Test connection');
         const delBtn = button({ icon: 'ui/trash', variant: 'ghost', size: 'sm' });
-        delBtn.title = 'Remove account';
+        delBtn.title = t('plugin.mail.settings.removeAccount', null, 'Remove account');
         delBtn.classList.add('ui-btn--icon', 'mail-tool--danger');
         row.append(meta, badge, testBtn, delBtn);
         testBtn.addEventListener('click', async () => {
           testBtn.disabled = true;
           try {
             const r = await testAccount({ id: a.id });
-            badge.textContent = r?.ok ? 'connected' : (r?.error || 'failed');
+            badge.textContent = r?.ok
+              ? t('plugin.mail.status.connected', null, 'connected')
+              : (r?.error || t('plugin.mail.status.failed', null, 'failed'));
             badge.classList.toggle('is-ok', !!r?.ok);
-            if (r?.ok) toast(`${a.email} connected`, { type: 'info' });
+            if (r?.ok) toast(t('plugin.mail.toast.emailConnected', { email: a.email }, '{email} connected'), { type: 'info' });
             await refreshStatus({ keepFolder: true });
           } catch (e) {
             toast(e.message, { type: 'error' });
@@ -962,7 +988,7 @@ function openSettings() {
           }
         });
         delBtn.addEventListener('click', async () => {
-          if (!window.confirm(`Remove mail account ${a.email}?`)) return;
+          if (!window.confirm(t('plugin.mail.dialog.removeAccount', { email: a.email }, 'Remove mail account {email}?'))) return;
           try {
             await deleteAccount(a.id);
             if (currentAccount?.id === a.id) currentAccount = null;
@@ -1039,8 +1065,8 @@ async function checkNewMail() {
       const delta = unread - lastUnreadTotal;
       notify({
         app: 'Mail',
-        title: 'New mail',
-        body: `${delta} new message${delta === 1 ? '' : 's'} in ${account.email || currentFolder}`,
+        title: t('plugin.mail.notify.title', null, 'New mail'),
+        body: tp('plugin.mail.notify.newMail', delta, { where: account.email || currentFolder }),
         icon: 'ui/mail',
         plugin: MAIL_PLUGIN,
         urgency: 'normal',
@@ -1080,11 +1106,11 @@ export function mountMailTile() {
   barAccountBtn.className = 'mail-account-btn';
   barAccountBtn.setAttribute('aria-haspopup', 'menu');
   barAccountBtn.setAttribute('aria-expanded', 'false');
-  barAccountBtn.title = 'Accounts';
+  barAccountBtn.title = t('plugin.mail.bar.accounts', null, 'Accounts');
   const icon = h('span', 'mail-account-btn-icon');
   barAccountBtn.appendChild(icon);
   void setIcon(icon, 'ui/mail', { size: 15 });
-  barAccountLabel = h('span', 'mail-account-btn-label', 'No account');
+  barAccountLabel = h('span', 'mail-account-btn-label', t('plugin.mail.bar.noAccount', null, 'No account'));
   const chevron = h('span', 'mail-account-btn-chevron');
   barAccountBtn.appendChild(chevron);
   void setIcon(chevron, 'ui/chevron-down', { size: 12 });
@@ -1099,9 +1125,9 @@ export function mountMailTile() {
   bar.append(
     barAccountBtn,
     title,
-    toolbarButton('ui/plus', 'New message', openCompose),
-    toolbarButton('ui/refresh', 'Sync mail', () => void syncNow()),
-    toolbarButton('ui/settings', 'Mail accounts', openSettings),
+    toolbarButton('ui/plus', t('plugin.mail.toolbar.newMessage', null, 'New message'), openCompose),
+    toolbarButton('ui/refresh', t('plugin.mail.toolbar.sync', null, 'Sync mail'), () => void syncNow()),
+    toolbarButton('ui/settings', t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), openSettings),
     statusDot,
   );
   tileEl.appendChild(bar);
@@ -1165,7 +1191,7 @@ function onAgentActions(e) {
       await openMessage(id);
     })();
   } else if (sent) {
-    toast('Message sent', { type: 'info' });
+    toast(t('plugin.mail.toast.sent', null, 'Message sent'), { type: 'info' });
     void refreshStatus({ keepFolder: true });
     // Re-check shortly after: the delivered copy can take a moment to land.
     window.setTimeout(() => void refreshStatus({ keepFolder: true }), 2500);
@@ -1190,11 +1216,11 @@ export function mailContextMenu() {
   const message = currentMessage;
   const unread = messages.filter((m) => !m.seen);
   return [
-    { type: 'item', label: 'New message', icon: 'ui/plus', disabled: !account, onClick: () => openCompose() },
-    { type: 'item', label: 'Sync mail', icon: 'ui/refresh', disabled: !account, onClick: () => void syncNow() },
+    { type: 'item', label: t('plugin.mail.toolbar.newMessage', null, 'New message'), icon: 'ui/plus', disabled: !account, onClick: () => openCompose() },
+    { type: 'item', label: t('plugin.mail.toolbar.sync', null, 'Sync mail'), icon: 'ui/refresh', disabled: !account, onClick: () => void syncNow() },
     {
       type: 'item',
-      label: 'Mark all read',
+      label: t('plugin.mail.ctx.markAllRead', null, 'Mark all read'),
       icon: 'ui/check',
       disabled: !account || !unread.length,
       onClick: () => {
@@ -1206,8 +1232,8 @@ export function mailContextMenu() {
       },
     },
     { type: 'separator' },
-    { type: 'item', label: 'Reply', icon: 'ui/reply', disabled: !message, onClick: () => openReply(message) },
-    { type: 'item', label: 'Delete message', icon: 'ui/trash', danger: true, disabled: !message, onClick: () => void deleteCurrent(message) },
+    { type: 'item', label: t('plugin.mail.reader.reply', null, 'Reply'), icon: 'ui/reply', disabled: !message, onClick: () => openReply(message) },
+    { type: 'item', label: t('plugin.mail.ctx.deleteMessage', null, 'Delete message'), icon: 'ui/trash', danger: true, disabled: !message, onClick: () => void deleteCurrent(message) },
   ];
 }
 

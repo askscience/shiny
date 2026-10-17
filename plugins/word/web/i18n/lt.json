@@ -1,0 +1,52 @@
+{
+  "plugin.word.toolbar.documents": "Dokumentai",
+  "plugin.word.toolbar.titlePlaceholder": "Be pavadinimo",
+  "plugin.word.toolbar.newDocument": "Naujas dokumentas",
+  "plugin.word.toolbar.importOdt": "Importuoti .odt",
+  "plugin.word.toolbar.saveToDocuments": "Išsaugoti į Dokumentus",
+  "plugin.word.toolbar.saveNow": "Išsaugoti dabar",
+  "plugin.word.toolbar.deleteDocument": "Ištrinti dokumentą",
+  "plugin.word.toolbar.bold": "Paryškintas",
+  "plugin.word.toolbar.italic": "Pasviręs",
+  "plugin.word.toolbar.underline": "Pabrauktas",
+  "plugin.word.toolbar.heading": "Antraštė",
+  "plugin.word.toolbar.bulletList": "Ženklelių sąrašas",
+  "plugin.word.toolbar.font": "Šriftas",
+  "plugin.word.toolbar.fontHint": "Šriftas — taikomas pažymėtai sričiai arba visam dokumentui, kai nieko nepažymėta",
+
+  "plugin.word.status.saving": "Išsaugoma…",
+  "plugin.word.status.unsaved": "Neišsaugoti pakeitimai",
+  "plugin.word.status.saved.one": "Išsaugota {time} · {count} žodis",
+  "plugin.word.status.saved.few": "Išsaugota {time} · {count} žodžiai",
+  "plugin.word.status.saved.many": "Išsaugota {time} · {count} žodžių",
+  "plugin.word.status.saved.other": "Išsaugota {time} · {count} žodžio",
+
+  "plugin.word.menu.empty": "Dar nėra dokumentų",
+  "plugin.word.menu.newDocument": "Naujas dokumentas",
+  "plugin.word.menu.importOdt": "Importuoti .odt",
+  "plugin.word.menu.saveToDocuments": "Išsaugoti į Dokumentus",
+  "plugin.word.menu.deleteDocument": "Ištrinti dokumentą",
+
+  "plugin.word.ctx.newDocument": "Naujas dokumentas",
+  "plugin.word.ctx.saveNow": "Išsaugoti dabar",
+  "plugin.word.ctx.saveToDocuments": "Išsaugoti į Dokumentus",
+  "plugin.word.ctx.bold": "Paryškintas",
+  "plugin.word.ctx.italic": "Pasviręs",
+  "plugin.word.ctx.heading": "Antraštė",
+  "plugin.word.ctx.list": "Sąrašas",
+  "plugin.word.ctx.deleteDocument": "Ištrinti dokumentą",
+
+  "plugin.word.dialog.deleteDoc": "Ištrinti “{title}”?",
+
+  "plugin.word.toast.saveFailed": "Išsaugoti nepavyko",
+  "plugin.word.toast.openFailed": "Nepavyko atidaryti dokumento",
+  "plugin.word.toast.createFailed": "Nepavyko sukurti dokumento",
+  "plugin.word.toast.deleteFailed": "Nepavyko ištrinti dokumento",
+  "plugin.word.toast.imported": "Importuota {name}",
+  "plugin.word.toast.importFailed": "Importavimas nepavyko — ar tai galiojantis .odt failas?",
+  "plugin.word.toast.openFileFailed": "Nepavyko atidaryti failo",
+
+  "plugin.word.meta.description": "Paprasta tekstų rengyklė — dokumentai saugomi kaip atviri .odt failai",
+  "plugin.word.meta.summary": "Tekstų rengyklė: kurkite, redaguokite ir skaitykite OpenDocument (.odt) dokumentus",
+  "plugin.word.meta.category": "Biuras"
+}

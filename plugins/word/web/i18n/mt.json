@@ -1,0 +1,53 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenti",
+  "plugin.word.toolbar.titlePlaceholder": "Bla titlu",
+  "plugin.word.toolbar.newDocument": "Dokument ġdid",
+  "plugin.word.toolbar.importOdt": "Importa .odt",
+  "plugin.word.toolbar.saveToDocuments": "Salva fid-Dokumenti",
+  "plugin.word.toolbar.saveNow": "Salva issa",
+  "plugin.word.toolbar.deleteDocument": "Ħassar id-dokument",
+  "plugin.word.toolbar.bold": "Bold",
+  "plugin.word.toolbar.italic": "Italic",
+  "plugin.word.toolbar.underline": "Sottolinja",
+  "plugin.word.toolbar.heading": "Titlu",
+  "plugin.word.toolbar.bulletList": "Lista tal-punti",
+  "plugin.word.toolbar.font": "Font",
+  "plugin.word.toolbar.fontHint": "Font — japplika għall-għażla, jew għad-dokument kollu meta ma jkunx hemm għażla",
+
+  "plugin.word.status.saving": "Qed jiġi salvat…",
+  "plugin.word.status.unsaved": "Bidliet mhux salvati",
+  "plugin.word.status.saved.one": "Salvat {time} · {count} kelma",
+  "plugin.word.status.saved.two": "Salvat {time} · {count} kliem",
+  "plugin.word.status.saved.few": "Salvat {time} · {count} kliem",
+  "plugin.word.status.saved.many": "Salvat {time} · {count}-il kelma",
+  "plugin.word.status.saved.other": "Salvat {time} · {count} kelma",
+
+  "plugin.word.menu.empty": "Għad m'hemmx dokumenti",
+  "plugin.word.menu.newDocument": "Dokument ġdid",
+  "plugin.word.menu.importOdt": "Importa .odt",
+  "plugin.word.menu.saveToDocuments": "Salva fid-Dokumenti",
+  "plugin.word.menu.deleteDocument": "Ħassar id-dokument",
+
+  "plugin.word.ctx.newDocument": "Dokument ġdid",
+  "plugin.word.ctx.saveNow": "Salva issa",
+  "plugin.word.ctx.saveToDocuments": "Salva fid-Dokumenti",
+  "plugin.word.ctx.bold": "Bold",
+  "plugin.word.ctx.italic": "Italic",
+  "plugin.word.ctx.heading": "Titlu",
+  "plugin.word.ctx.list": "Lista",
+  "plugin.word.ctx.deleteDocument": "Ħassar id-dokument",
+
+  "plugin.word.dialog.deleteDoc": "Ħassar \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Ma setax jiġi salvat",
+  "plugin.word.toast.openFailed": "Id-dokument ma setax jinfetaħ",
+  "plugin.word.toast.createFailed": "Id-dokument ma setax jinħoloq",
+  "plugin.word.toast.deleteFailed": "Id-dokument ma setax jitħassar",
+  "plugin.word.toast.imported": "Ġie importat {name}",
+  "plugin.word.toast.importFailed": "L-importazzjoni falliet — dan huwa fajl .odt validu?",
+  "plugin.word.toast.openFileFailed": "Il-fajl ma setax jinfetaħ",
+
+  "plugin.word.meta.description": "Proċessur tal-kliem sempliċi — dokumenti maħżuna bħala fajls .odt miftuħa",
+  "plugin.word.meta.summary": "Proċessur tal-kliem: oħloq, editja u aqra dokumenti OpenDocument (.odt)",
+  "plugin.word.meta.category": "Uffiċċju"
+}

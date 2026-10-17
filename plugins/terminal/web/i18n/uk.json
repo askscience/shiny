@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Справжній термінал Linux усередині застосунку — оболонка входу на основі PTY в окремому вікні",
+  "plugin.terminal.meta.summary": "Термінал: справжня оболонка через PTY, яку відображає xterm.js",
+  "plugin.terminal.meta.category": "Система",
+
+  "plugin.terminal.tab.label": "Термінал {n}",
+  "plugin.terminal.tab.new": "Нова вкладка",
+  "plugin.terminal.tab.close": "Закрити {name}",
+  "plugin.terminal.tabs.label": "Вкладки термінала",
+
+  "plugin.terminal.status.starting": "запуск термінала…",
+  "plugin.terminal.status.connecting": "під'єднання…",
+  "plugin.terminal.status.reconnecting": "повторне під'єднання…",
+  "plugin.terminal.status.connected": "під'єднано",
+  "plugin.terminal.status.startFailed": "не вдалося запустити оболонку",
+  "plugin.terminal.status.expired": "сесія завершилася — увійдіть знову",
+  "plugin.terminal.status.xtermFailed": "не вдалося завантажити xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Термінал: щонайбільше {count} вкладка",
+  "plugin.terminal.toast.tabLimit.few": "Термінал: щонайбільше {count} вкладки",
+  "plugin.terminal.toast.tabLimit.many": "Термінал: щонайбільше {count} вкладок",
+  "plugin.terminal.toast.tabLimit.other": "Термінал: щонайбільше {count} вкладки",
+  "plugin.terminal.toast.startFailed": "Термінал: не вдалося запустити оболонку",
+  "plugin.terminal.toast.xtermFailed": "Термінал: не вдалося завантажити xterm.js",
+  "plugin.terminal.toast.clipboardUnavailable": "Буфер обміну недоступний",
+
+  "plugin.terminal.ctx.copy": "Копіювати",
+  "plugin.terminal.ctx.paste": "Вставити",
+  "plugin.terminal.ctx.clearScrollback": "Очистити історію прокрутки",
+  "plugin.terminal.ctx.closeTab": "Закрити вкладку"
+}

@@ -3,6 +3,7 @@
  *   node web/js/tests/weatherShared.test.mjs
  */
 
+import './helpers/i18n.mjs';   // catalogs, so t() resolves the English labels
 import {
   forecastDayLabel, roundTemp, tempText, weatherIconStem, weatherLabel,
 } from '../weatherShared.js';

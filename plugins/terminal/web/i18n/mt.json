@@ -1,0 +1,32 @@
+{
+  "plugin.terminal.meta.description": "Terminal Linux veru ġewwa l-app — shell tal-login ibbażat fuq PTY fit-tieqa tiegħu stess",
+  "plugin.terminal.meta.summary": "Terminal: shell veru fuq PTY, irrenderjat b'xterm.js",
+  "plugin.terminal.meta.category": "Sistema",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Tab ġdid",
+  "plugin.terminal.tab.close": "Agħlaq {name}",
+  "plugin.terminal.tabs.label": "Tabs tat-terminal",
+
+  "plugin.terminal.status.starting": "qed jinbeda t-terminal…",
+  "plugin.terminal.status.connecting": "qed jikkonnettja…",
+  "plugin.terminal.status.reconnecting": "qed jerġa' jikkonnettja…",
+  "plugin.terminal.status.connected": "konness",
+  "plugin.terminal.status.startFailed": "ma setax jinbeda shell",
+  "plugin.terminal.status.expired": "is-sessjoni skadiet — erġa' idħol",
+  "plugin.terminal.status.xtermFailed": "xterm.js ma setax jitgħabba",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: massimu {count} tab",
+  "plugin.terminal.toast.tabLimit.two": "Terminal: massimu {count} tabs",
+  "plugin.terminal.toast.tabLimit.few": "Terminal: massimu {count} tabs",
+  "plugin.terminal.toast.tabLimit.many": "Terminal: massimu {count}-il tab",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: massimu {count} tab",
+  "plugin.terminal.toast.startFailed": "Terminal: ma setax jinbeda shell",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js ma setax jitgħabba",
+  "plugin.terminal.toast.clipboardUnavailable": "Il-clipboard mhux disponibbli",
+
+  "plugin.terminal.ctx.copy": "Ikkopja",
+  "plugin.terminal.ctx.paste": "Ippejstja",
+  "plugin.terminal.ctx.clearScrollback": "Ħassar l-istorja tal-iskrolljar",
+  "plugin.terminal.ctx.closeTab": "Agħlaq it-tab"
+}

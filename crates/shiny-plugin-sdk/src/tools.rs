@@ -69,9 +69,65 @@ pub trait Tool: Send + Sync {
         None
     }
 
+    /// Translatable form of [`Tool::step_label`]: return a keyed [`UiText`] and
+    /// the status bubble follows the user's interface language. `None` (the
+    /// default) keeps `step_label()`'s English — so this is additive and
+    /// existing tools need no change.
+    fn step_ui(&self) -> Option<UiText> {
+        None
+    }
+
+    /// Translatable form of [`Tool::humanize`] for the "done" line, same
+    /// contract: `None` falls back to `humanize()`.
+    fn done_ui(&self, result: &str, data: &Value) -> Option<UiText> {
+        let _ = (result, data);
+        None
+    }
+
     /// Run the tool. Implementations should be cheap; long operations should
     /// yield to the executor (the runtime is async by default).
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError>;
+}
+
+/// Machine-translatable UI text a tool hands to the host for the status bubble:
+/// the catalogue `key` the web client resolves, the `params` filling its
+/// `{placeholders}`, and the English `text` — what the client shows when the key
+/// is unknown (no catalogue, or a language that does not have it yet).
+///
+/// The key is **relative to the plugin** (`steps.listing`); the host prefixes
+/// it with `plugin.<name>.` before it goes on the wire, so plugin catalogues
+/// (`web/i18n/<code>.json`) can use the same fully-qualified keys everywhere.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct UiText {
+    pub key: Option<String>,
+    pub params: serde_json::Map<String, serde_json::Value>,
+    pub text: String,
+}
+
+impl UiText {
+    /// English only, no catalogue key: the UI shows `text` as-is.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            key: None,
+            params: serde_json::Map::new(),
+            text: text.into(),
+        }
+    }
+
+    /// A catalogue key plus the English fallback.
+    pub fn keyed(key: impl Into<String>, text: impl Into<String>) -> Self {
+        Self {
+            key: Some(key.into()),
+            params: serde_json::Map::new(),
+            text: text.into(),
+        }
+    }
+
+    /// Fill one `{name}` placeholder of the keyed message.
+    pub fn param(mut self, name: &str, value: impl Into<serde_json::Value>) -> Self {
+        self.params.insert(name.to_string(), value.into());
+        self
+    }
 }
 
 /// Builder the plugin writes into during `Plugin::register`.
@@ -278,6 +334,8 @@ impl Tool for BridgedTool {
     fn step_label(&self) -> &str { self.0.step_label() }
     fn humanize(&self, result: &str, data: &Value) -> String { self.0.humanize(result, data) }
     fn doc_fragment(&self) -> Option<&str> { self.0.doc_fragment() }
+    fn step_ui(&self) -> Option<UiText> { self.0.step_ui() }
+    fn done_ui(&self, result: &str, data: &Value) -> Option<UiText> { self.0.done_ui(result, data) }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let inner = self.0.clone();

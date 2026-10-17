@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Документи",
+  "plugin.word.toolbar.titlePlaceholder": "Без заглавие",
+  "plugin.word.toolbar.newDocument": "Нов документ",
+  "plugin.word.toolbar.importOdt": "Импортирай .odt",
+  "plugin.word.toolbar.saveToDocuments": "Запази в “Документи”",
+  "plugin.word.toolbar.saveNow": "Запази сега",
+  "plugin.word.toolbar.deleteDocument": "Изтрий документа",
+  "plugin.word.toolbar.bold": "Получер",
+  "plugin.word.toolbar.italic": "Курсив",
+  "plugin.word.toolbar.underline": "Подчертаване",
+  "plugin.word.toolbar.heading": "Заглавие",
+  "plugin.word.toolbar.bulletList": "Списък с точки",
+  "plugin.word.toolbar.font": "Шрифт",
+  "plugin.word.toolbar.fontHint": "Шрифт — прилага се към селекцията или към целия документ, когато нищо не е избрано",
+
+  "plugin.word.status.saving": "Запазване…",
+  "plugin.word.status.unsaved": "Незапазени промени",
+  "plugin.word.status.saved.one": "Запазено {time} · {count} дума",
+  "plugin.word.status.saved.other": "Запазено {time} · {count} думи",
+
+  "plugin.word.menu.empty": "Още няма документи",
+  "plugin.word.menu.newDocument": "Нов документ",
+  "plugin.word.menu.importOdt": "Импортирай .odt",
+  "plugin.word.menu.saveToDocuments": "Запази в “Документи”",
+  "plugin.word.menu.deleteDocument": "Изтрий документа",
+
+  "plugin.word.ctx.newDocument": "Нов документ",
+  "plugin.word.ctx.saveNow": "Запази сега",
+  "plugin.word.ctx.saveToDocuments": "Запази в “Документи”",
+  "plugin.word.ctx.bold": "Получер",
+  "plugin.word.ctx.italic": "Курсив",
+  "plugin.word.ctx.heading": "Заглавие",
+  "plugin.word.ctx.list": "Списък",
+  "plugin.word.ctx.deleteDocument": "Изтрий документа",
+
+  "plugin.word.dialog.deleteDoc": "Да се изтрие ли “{title}”?",
+
+  "plugin.word.toast.saveFailed": "Запазването не успя",
+  "plugin.word.toast.openFailed": "Документът не можа да се отвори",
+  "plugin.word.toast.createFailed": "Документът не можа да се създаде",
+  "plugin.word.toast.deleteFailed": "Документът не можа да се изтрие",
+  "plugin.word.toast.imported": "Импортирано: {name}",
+  "plugin.word.toast.importFailed": "Импортирането не успя — това валиден .odt файл ли е?",
+  "plugin.word.toast.openFileFailed": "Файлът не можа да се отвори",
+
+  "plugin.word.meta.description": "Опростен текстов процесор — документите се съхраняват като отворени .odt файлове",
+  "plugin.word.meta.summary": "Текстов процесор: създаване, редактиране и четене на документи OpenDocument (.odt)",
+  "plugin.word.meta.category": "Офис"
+}

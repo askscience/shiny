@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalendář — plánujte, vypisujte a organizujte události v okně Kalendář",
+  "plugin.calendar.meta.summary": "Kalendář: plánování a organizace událostí",
+  "plugin.calendar.meta.category": "Kancelář",
+
+  "plugin.calendar.month.january": "Leden",
+  "plugin.calendar.month.february": "Únor",
+  "plugin.calendar.month.march": "Březen",
+  "plugin.calendar.month.april": "Duben",
+  "plugin.calendar.month.may": "Květen",
+  "plugin.calendar.month.june": "Červen",
+  "plugin.calendar.month.july": "Červenec",
+  "plugin.calendar.month.august": "Srpen",
+  "plugin.calendar.month.september": "Září",
+  "plugin.calendar.month.october": "Říjen",
+  "plugin.calendar.month.november": "Listopad",
+  "plugin.calendar.month.december": "Prosinec",
+
+  "plugin.calendar.grid.sun": "Ne",
+  "plugin.calendar.grid.mon": "Po",
+  "plugin.calendar.grid.tue": "Út",
+  "plugin.calendar.grid.wed": "St",
+  "plugin.calendar.grid.thu": "Čt",
+  "plugin.calendar.grid.fri": "Pá",
+  "plugin.calendar.grid.sat": "So",
+
+  "plugin.calendar.event.allDay": "Celý den",
+
+  "plugin.calendar.toolbar.previousMonth": "Předchozí měsíc",
+  "plugin.calendar.toolbar.nextMonth": "Další měsíc",
+  "plugin.calendar.toolbar.today": "Dnes",
+  "plugin.calendar.toolbar.newEvent": "Nová událost",
+
+  "plugin.calendar.ctx.refresh": "Obnovit",
+
+  "plugin.calendar.detail.edit": "Upravit",
+  "plugin.calendar.detail.delete": "Smazat",
+
+  "plugin.calendar.empty.noEvents": "Žádné události",
+  "plugin.calendar.empty.noEventsBody": "Nic naplánováno. Přidejte událost nebo požádejte AI, ať nějakou naplánuje.",
+
+  "plugin.calendar.dialog.title": "Událost",
+  "plugin.calendar.dialog.editTitle": "Upravit událost",
+  "plugin.calendar.dialog.titleField": "Název",
+  "plugin.calendar.dialog.titlePlaceholder": "např. Týmová porada",
+  "plugin.calendar.dialog.dateField": "Datum",
+  "plugin.calendar.dialog.startTimeField": "Čas začátku",
+  "plugin.calendar.dialog.endTimeField": "Čas konce",
+  "plugin.calendar.dialog.locationField": "Místo",
+  "plugin.calendar.dialog.locationPlaceholder": "Místo (nepovinné)",
+  "plugin.calendar.dialog.notesField": "Poznámky",
+  "plugin.calendar.dialog.notesPlaceholder": "Poznámky (nepovinné)",
+  "plugin.calendar.dialog.cancel": "Zrušit",
+  "plugin.calendar.dialog.save": "Uložit událost",
+
+  "plugin.calendar.toast.titleRequired": "Název je povinný",
+  "plugin.calendar.toast.dateRequired": "Datum je povinné",
+  "plugin.calendar.toast.updated": "Událost upravena",
+  "plugin.calendar.toast.scheduled": "Událost naplánována",
+  "plugin.calendar.toast.deleted": "Událost smazána",
+  "plugin.calendar.toast.loadFailed": "Události se nepodařilo načíst",
+  "plugin.calendar.toast.saveFailed": "Událost se nepodařilo uložit",
+  "plugin.calendar.toast.deleteFailed": "Událost se nepodařilo smazat",
+
+  "plugin.calendar.confirm.deleteEvent": "Smazat “{title}”?",
+
+  "plugin.calendar.notify.eventSoon": "Událost brzy začíná"
+}

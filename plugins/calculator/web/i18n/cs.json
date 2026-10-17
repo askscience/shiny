@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Vědecká kalkulačka — počítá aritmetické a vědecké výrazy v okně Kalkulačka",
+  "plugin.calculator.meta.summary": "Kalkulačka: základní i vědecké výpočty",
+  "plugin.calculator.meta.category": "Kancelář",
+
+  "plugin.calculator.display.error": "Chyba",
+
+  "plugin.calculator.toolbar.history": "Historie",
+  "plugin.calculator.toolbar.scientific": "Vědecká",
+  "plugin.calculator.toolbar.clearHistory": "Vymazat historii",
+
+  "plugin.calculator.menu.equals": "Rovná se",
+  "plugin.calculator.menu.clearAll": "Vymazat vše",
+
+  "plugin.calculator.history.reuse": "Použít tento výsledek",
+
+  "plugin.calculator.empty.noHistory": "Žádná historie",
+  "plugin.calculator.empty.noHistoryBody": "Výpočty, které zde spustíte nebo o které požádáte AI, se objeví níže.",
+
+  "plugin.calculator.toast.evaluateFailed": "Výpočet se nezdařil",
+  "plugin.calculator.toast.historyFailed": "Historii se nepodařilo načíst",
+  "plugin.calculator.toast.historyCleared": "Historie vymazána",
+  "plugin.calculator.toast.clearFailed": "Historii se nepodařilo vymazat"
+}

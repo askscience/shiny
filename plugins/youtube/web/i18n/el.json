@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Αναπαράγεται τώρα",
+  "plugin.youtube.hero.untitled": "Βίντεο YouTube",
+  "plugin.youtube.hero.back": "Πίσω",
+  "plugin.youtube.hero.backLabel": "Πίσω στην αναζήτηση YouTube",
+  "plugin.youtube.player.title": "Αναπαραγωγέας YouTube",
+
+  "plugin.youtube.search.placeholder": "Αναζήτηση στο YouTube…",
+
+  "plugin.youtube.grid.upNext": "Επόμενο",
+  "plugin.youtube.grid.becauseYouWatched": "Επόμενο · επειδή είδατε το “{title}”",
+  "plugin.youtube.grid.forYou": "Για εσάς",
+  "plugin.youtube.grid.showAll": "Εμφάνιση όλων: {category}",
+  "plugin.youtube.grid.untitled": "Βίντεο",
+
+  "plugin.youtube.empty.noResults": "Δεν βρέθηκαν βίντεο",
+  "plugin.youtube.empty.noMatch": "Τίποτε δεν ταιριάζει με “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Αναζήτηση στο YouTube",
+  "plugin.youtube.empty.searchBody": "Πληκτρολογήστε παραπάνω — ή ζητήστε από την AI να βρει ένα βίντεο.",
+  "plugin.youtube.empty.unavailableTitle": "Η αναζήτηση δεν είναι διαθέσιμη",
+  "plugin.youtube.empty.retry": "Δοκιμάστε ξανά σε λίγο",
+
+  "plugin.youtube.category.watched": "Προβλήθηκε {count}×",
+  "plugin.youtube.category.generic": "Κατηγορία",
+
+  "plugin.youtube.menu.search": "Αναζήτηση",
+  "plugin.youtube.menu.home": "Αρχική",
+  "plugin.youtube.menu.refresh": "Ανανέωση αποτελεσμάτων",
+  "plugin.youtube.menu.back": "Πίσω",
+
+  "plugin.youtube.meta.description": "Παρακολουθήστε βίντεο YouTube στο παράθυρο του YouTube — η AI μπορεί να αναζητήσει στο YouTube και να αναπαράγει βίντεο",
+  "plugin.youtube.meta.summary": "YouTube: αναζήτηση με AI και αναπαραγωγή στο παράθυρο του YouTube",
+  "plugin.youtube.meta.category": "Πολυμέσα"
+}

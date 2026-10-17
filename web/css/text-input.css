@@ -247,6 +247,10 @@ body.compose-active #hud-transcript {
 }
 .compose-cot-summary::-webkit-details-marker { display: none; }
 .compose-cot-summary .ui-icon { color: var(--muted); }
+/* The disclosure arrow: points at the trace while closed, turns to point
+   down at it once the user opens the chain of thought. */
+.compose-cot-arrow { transition: transform var(--duration-fast) var(--ease-out); }
+.compose-cot[open] .compose-cot-arrow { transform: rotate(90deg); }
 .compose-cot[open] .compose-cot-summary { margin-bottom: 4px; }
 .compose-cot-body {
   white-space: pre-wrap;

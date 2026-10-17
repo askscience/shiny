@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Lecture en cours",
+  "plugin.youtube.hero.untitled": "Vidéo YouTube",
+  "plugin.youtube.hero.back": "Retour",
+  "plugin.youtube.hero.backLabel": "Revenir à la recherche YouTube",
+  "plugin.youtube.player.title": "Lecteur YouTube",
+
+  "plugin.youtube.search.placeholder": "Rechercher sur YouTube…",
+
+  "plugin.youtube.grid.upNext": "À suivre",
+  "plugin.youtube.grid.becauseYouWatched": "À suivre · parce que vous avez regardé “{title}”",
+  "plugin.youtube.grid.forYou": "Pour vous",
+  "plugin.youtube.grid.showAll": "Afficher tout : {category}",
+  "plugin.youtube.grid.untitled": "Vidéo",
+
+  "plugin.youtube.empty.noResults": "Aucune vidéo trouvée",
+  "plugin.youtube.empty.noMatch": "Rien ne correspond à “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Rechercher sur YouTube",
+  "plugin.youtube.empty.searchBody": "Tapez ci-dessus — ou demandez à l'IA de trouver une vidéo.",
+  "plugin.youtube.empty.unavailableTitle": "Recherche indisponible",
+  "plugin.youtube.empty.retry": "Réessayez dans un instant",
+
+  "plugin.youtube.category.watched": "Regardée {count}×",
+  "plugin.youtube.category.generic": "Catégorie",
+
+  "plugin.youtube.menu.search": "Rechercher",
+  "plugin.youtube.menu.home": "Accueil",
+  "plugin.youtube.menu.refresh": "Actualiser les résultats",
+  "plugin.youtube.menu.back": "Retour",
+
+  "plugin.youtube.meta.description": "Regardez des vidéos YouTube dans la fenêtre YouTube — l'IA peut chercher sur YouTube et lancer la lecture",
+  "plugin.youtube.meta.summary": "YouTube : recherche et lecture assistées par l'IA dans la fenêtre YouTube",
+  "plugin.youtube.meta.category": "Médias"
+}

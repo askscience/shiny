@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Настоящий терминал Linux внутри приложения — входная оболочка на PTY в собственном окне",
+  "plugin.terminal.meta.summary": "Терминал: настоящая оболочка поверх PTY, отображаемая через xterm.js",
+  "plugin.terminal.meta.category": "Система",
+
+  "plugin.terminal.tab.label": "Терминал {n}",
+  "plugin.terminal.tab.new": "Новая вкладка",
+  "plugin.terminal.tab.close": "Закрыть {name}",
+  "plugin.terminal.tabs.label": "Вкладки терминала",
+
+  "plugin.terminal.status.starting": "запуск терминала…",
+  "plugin.terminal.status.connecting": "подключение…",
+  "plugin.terminal.status.reconnecting": "переподключение…",
+  "plugin.terminal.status.connected": "подключено",
+  "plugin.terminal.status.startFailed": "не удалось запустить оболочку",
+  "plugin.terminal.status.expired": "сеанс истёк — войдите снова",
+  "plugin.terminal.status.xtermFailed": "не удалось загрузить xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Терминал: не более {count} вкладки",
+  "plugin.terminal.toast.tabLimit.few": "Терминал: не более {count} вкладок",
+  "plugin.terminal.toast.tabLimit.many": "Терминал: не более {count} вкладок",
+  "plugin.terminal.toast.tabLimit.other": "Терминал: не более {count} вкладок",
+  "plugin.terminal.toast.startFailed": "Терминал: не удалось запустить оболочку",
+  "plugin.terminal.toast.xtermFailed": "Терминал: не удалось загрузить xterm.js",
+  "plugin.terminal.toast.clipboardUnavailable": "Буфер обмена недоступен",
+
+  "plugin.terminal.ctx.copy": "Копировать",
+  "plugin.terminal.ctx.paste": "Вставить",
+  "plugin.terminal.ctx.clearScrollback": "Очистить историю вывода",
+  "plugin.terminal.ctx.closeTab": "Закрыть вкладку"
+}

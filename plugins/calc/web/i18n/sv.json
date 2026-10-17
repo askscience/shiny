@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Kalkylbladsräknare — blad sparas som öppna cellrutnät och kan redigeras i Calc-fönstret",
+  "plugin.calc.meta.summary": "Calc: skapa, redigera och räkna med kalkylblad",
+  "plugin.calc.meta.category": "Kontor",
+
+  "plugin.calc.bar.spreadsheets": "Kalkylblad",
+
+  "plugin.calc.toolbar.newSheet": "Nytt kalkylblad",
+  "plugin.calc.toolbar.importOds": "Importera .ods",
+  "plugin.calc.toolbar.importCsv": "Importera CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Spara i Dokument",
+  "plugin.calc.toolbar.saveNow": "Spara nu",
+  "plugin.calc.toolbar.deleteSheet": "Ta bort kalkylblad",
+
+  "plugin.calc.menu.noSheets": "Inga kalkylblad än",
+
+  "plugin.calc.sheet.untitled": "Namnlös",
+  "plugin.calc.sheet.importedCsv": "Importerad CSV",
+
+  "plugin.calc.formula.placeholder": "Värde eller formel (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Sparar…",
+  "plugin.calc.status.dirty": "Osparade ändringar",
+  "plugin.calc.status.saved.one": "Sparat {time} · {count} cell",
+  "plugin.calc.status.saved.other": "Sparat {time} · {count} celler",
+
+  "plugin.calc.dialog.delete": "Ta bort \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Sparandet misslyckades",
+  "plugin.calc.toast.openFailed": "Kunde inte öppna kalkylbladet",
+  "plugin.calc.toast.createFailed": "Kunde inte skapa kalkylbladet",
+  "plugin.calc.toast.deleteFailed": "Kunde inte ta bort kalkylbladet",
+  "plugin.calc.toast.imported": "Importerade {name}",
+  "plugin.calc.toast.importOdsFailed": "Importen misslyckades — är det här en giltig .ods-fil?",
+  "plugin.calc.toast.importCsvFailed": "Importen misslyckades — är det här en giltig CSV-fil?",
+  "plugin.calc.toast.openFileFailed": "Kunde inte öppna filen"
+}

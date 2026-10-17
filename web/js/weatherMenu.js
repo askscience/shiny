@@ -11,6 +11,7 @@
 
 import { emptyState, setIcon } from '../ui/index.js';
 import { notifyMenuChange } from './menuState.js';
+import { getLocale, t } from './i18n.js';
 import {
   forecastDayLabel, tempText, weatherIconStem, weatherLabel,
 } from './weatherShared.js';
@@ -107,14 +108,14 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup weather-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Weather forecast');
+  popup.setAttribute('aria-label', t('weather.forecastTitle'));
 
   const head = el('div', 'weather-menu-head');
   headIconEl = el('span', 'weather-menu-head-icon');
   void setIcon(headIconEl, 'insights/weather-cloud', { size: 30 });
   const main = el('div', 'weather-menu-head-main');
   tempEl = el('div', 'weather-menu-temp', '—°');
-  labelEl = el('div', 'weather-menu-label', 'Locating…');
+  labelEl = el('div', 'weather-menu-label', t('weather.locating'));
   main.append(tempEl, labelEl);
   head.append(headIconEl, main);
 
@@ -122,8 +123,8 @@ function ensurePopup() {
 
   emptyEl = emptyState({
     icon: 'insights/weather-sun',
-    title: 'Waiting for a location fix',
-    body: 'The forecast appears once the shell knows where you are.',
+    title: t('weather.waitingFix'),
+    body: t('weather.waitingFixBody'),
   });
 
   daysEl = el('div', 'weather-menu-days');
@@ -152,10 +153,10 @@ function render() {
 
   if (!days.length) {
     const error = getWeatherError();
-    if (state) setEmpty('Forecast unavailable', 'No daily forecast came back for this position.');
-    else if (error === 'Location unavailable') setEmpty('Location unavailable', 'The shell could not get a position fix for this device.');
-    else if (error) setEmpty('Weather unavailable', 'Open-Meteo could not be reached from here.');
-    else setEmpty('Waiting for a location fix', 'The forecast appears once the shell knows where you are.');
+    if (state) setEmpty(t('weather.unavailable'), t('weather.unavailableBody'));
+    else if (error === 'location') setEmpty(t('weather.locationUnavailable'), t('weather.locationUnavailableBody'));
+    else if (error) setEmpty(t('weather.offline'), t('weather.offlineBody'));
+    else setEmpty(t('weather.waitingFix'), t('weather.waitingFixBody'));
     return;
   }
 
@@ -166,7 +167,7 @@ function render() {
   tempEl.textContent = tempText(state.current.temp);
   labelEl.textContent = weatherLabel(state.current.code);
 
-  const locale = navigator.language || 'en-US';
+  const locale = getLocale();
   state.daily.forEach((day, index) => {
     const row = el('div', 'weather-day');
     const iconEl = el('span', 'weather-day-icon');

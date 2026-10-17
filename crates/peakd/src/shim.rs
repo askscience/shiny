@@ -32,7 +32,9 @@ extern "C" {
         userdata: *mut c_void,
     ) -> i32;
     pub fn peakd_qt_inject_script(name: *const c_char, source: *const c_char);
+    pub fn peakd_qt_set_filter_scripts(on: i32);
     pub fn peakd_qt_set_window(title: *const c_char, width: i32, height: i32);
+    pub fn peakd_qt_set_strings(strings_json: *const c_char);
     pub fn peakd_qt_quit();
     pub fn peakd_qt_main_load(url: *const c_char);
     pub fn peakd_qt_main_zoom(factor: f64);
@@ -77,6 +79,16 @@ pub fn inject_script(name: &str, source: &str) {
     unsafe { peakd_qt_inject_script(cs(name).as_ptr(), cs(source).as_ptr()) }
 }
 
+/// Include (or leave out) the ad-filter scriptlets — currently the YouTube one —
+/// in every view's document-start collection, and re-apply the collection to the
+/// live views.
+///
+/// The collection is read when a document is created, so a change here lands on
+/// the next navigation of an already-open tab and immediately on new ones.
+pub fn set_filter_scripts(on: bool) {
+    unsafe { peakd_qt_set_filter_scripts(i32::from(on)) }
+}
+
 pub fn set_window(title: &str, width: f64, height: f64) {
     unsafe {
         peakd_qt_set_window(
@@ -85,6 +97,12 @@ pub fn set_window(title: &str, width: f64, height: f64) {
             height.round() as i32,
         )
     }
+}
+
+/// Hand the C++ side its strings (file-dialog titles, name filters) as one
+/// `{ "key": "text" }` JSON map; unknown keys keep the literals in `peakd.cpp`.
+pub fn set_strings(strings_json: &str) {
+    unsafe { peakd_qt_set_strings(cs(strings_json).as_ptr()) }
 }
 
 pub fn quit() {

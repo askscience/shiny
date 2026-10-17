@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Bemutatók",
+  "plugin.impress.toolbar.titlePlaceholder": "Névtelen",
+  "plugin.impress.toolbar.theme": "Téma",
+  "plugin.impress.toolbar.present": "Előadás",
+  "plugin.impress.toolbar.newDeck": "Új bemutató",
+  "plugin.impress.toolbar.importOdp": ".odp importálása",
+  "plugin.impress.toolbar.saveToDocuments": "Mentés a Dokumentumok mappába",
+  "plugin.impress.toolbar.saveNow": "Mentés most",
+  "plugin.impress.toolbar.deleteDeck": "Bemutató törlése",
+
+  "plugin.impress.menu.empty": "Még nincsenek bemutatók",
+  "plugin.impress.menu.newDeck": "Új bemutató",
+  "plugin.impress.menu.importOdp": ".odp importálása",
+  "plugin.impress.menu.saveToDocuments": "Mentés a Dokumentumok mappába",
+  "plugin.impress.menu.deleteDeck": "Bemutató törlése",
+
+  "plugin.impress.ctx.newDeck": "Új bemutató",
+  "plugin.impress.ctx.addSlide": "Dia hozzáadása",
+  "plugin.impress.ctx.saveNow": "Mentés most",
+  "plugin.impress.ctx.present": "Előadás",
+  "plugin.impress.ctx.stopPresenting": "Előadás befejezése",
+  "plugin.impress.ctx.deleteDeck": "Bemutató törlése",
+
+  "plugin.impress.status.saving": "Mentés…",
+  "plugin.impress.status.unsaved": "Nem mentett módosítások",
+  "plugin.impress.status.saved.one": "Mentve {time} · {count} dia",
+  "plugin.impress.status.saved.other": "Mentve {time} · {count} dia",
+
+  "plugin.impress.empty.noDeck": "Nincs bemutató",
+  "plugin.impress.empty.noDeckBody": "Hozzon létre egyet, vagy kérje meg az AI-t, hogy készítsen diasort",
+
+  "plugin.impress.inspector.layout": "Elrendezés",
+  "plugin.impress.inspector.transition": "Átmenet",
+  "plugin.impress.inspector.bullets": "Felsorolásjelek",
+  "plugin.impress.inspector.speakerNotes": "Előadói jegyzetek",
+  "plugin.impress.inspector.hint": "Kattintson a dián lévő szövegre a közvetlen szerkesztéshez.",
+  "plugin.impress.inspector.applyAll": "Az átmenet és a felsorolás felépítésének alkalmazása minden diára",
+  "plugin.impress.inspector.applyAllLabel": "Alkalmazás minden diára",
+
+  "plugin.impress.ops.addSlide": "Dia hozzáadása",
+  "plugin.impress.ops.moveUp": "Mozgatás feljebb",
+  "plugin.impress.ops.moveDown": "Mozgatás lejjebb",
+  "plugin.impress.ops.deleteSlide": "Dia törlése",
+
+  "plugin.impress.transition.none": "Nincs",
+  "plugin.impress.transition.fade": "Elhalványulás",
+  "plugin.impress.transition.slide": "Csúszás",
+  "plugin.impress.transition.push": "Tolás",
+  "plugin.impress.transition.zoom": "Nagyítás",
+
+  "plugin.impress.reveal.all": "Egyszerre",
+  "plugin.impress.reveal.bullets": "Egyenként",
+
+  "plugin.impress.slide.addText": "Szöveg hozzáadása",
+  "plugin.impress.slide.addTitle": "Cím hozzáadása",
+  "plugin.impress.slide.addSubtitle": "Alcím hozzáadása",
+  "plugin.impress.slide.attribution": "Forrásmegjelölés",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Vissza a szerkesztőbe",
+  "plugin.impress.present.fullScreen": "Teljes képernyő",
+  "plugin.impress.present.exitFullScreen": "Kilépés a teljes képernyőből",
+  "plugin.impress.present.blocked": "A böngésző blokkolta a teljes képernyőt",
+
+  "plugin.impress.dialog.deleteDeck": "Törli a(z) „{title}” bemutatót?",
+
+  "plugin.impress.toast.saveFailed": "A mentés nem sikerült",
+  "plugin.impress.toast.openFailed": "Nem sikerült megnyitni a bemutatót",
+  "plugin.impress.toast.createFailed": "Nem sikerült létrehozni a bemutatót",
+  "plugin.impress.toast.deleteFailed": "Nem sikerült törölni a bemutatót",
+  "plugin.impress.toast.imported": "{name} importálva",
+  "plugin.impress.toast.importFailed": "Az importálás nem sikerült — érvényes .odp fájl ez?",
+  "plugin.impress.toast.openFileFailed": "Nem sikerült megnyitni a fájlt",
+
+  "plugin.impress.meta.description": "Bemutatókészítő — a diasorok diák formájában tárolódnak, és nyílt .odp fájlként exportálhatók",
+  "plugin.impress.meta.summary": "Impress: OpenDocument (.odp) diasorok készítése, szerkesztése és előadása",
+  "plugin.impress.meta.category": "Iroda"
+}

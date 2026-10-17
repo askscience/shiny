@@ -15,21 +15,32 @@ the next reload.
    from `localStorage` (`ui.theme.name`), validates it against the cached theme
    index, sets `data-theme` on `<html>`, and points `#theme-tokens` /
    `#theme-components` at the right CSS — before first paint, to avoid a flash.
+   [`early-i18n.js`](../../web/js/early-i18n.js) tags the same element with the
+   stored interface language (`lang`, `data-locale`, `dir`) in the same pass.
 2. The **boot splash** (`#boot-screen`) is painted; `web/js/bootScreen.js` fades
    it once the app or the sign-in screen is ready. A 15 s timeout is the safety
    net.
-3. `web/js/app.js` (module entry) boots: session/auth, preferences, theme
-   loader, UI library, then the desktop shell.
+3. `web/js/app.js` (module entry) boots: interface language
+   (`initI18n()` — see [interface language](i18n.md)), session/auth,
+   preferences, theme loader, UI library, then the desktop shell.
 4. `web/js/bootScreen.js`, `web/js/session.js` and `web/js/auth.js` decide
-   between the **sign-in screen** and the **desktop**.
+   between the **sign-in screen** and the desktop.
 5. Active plugins are loaded dynamically (see below) and their window surfaces
    mounted.
+
 
 ---
 
 ## Module map (`web/js/`)
 
 The shell is split by concern. Grouped:
+
+### Language
+
+| Module | Role |
+|---|---|
+| `i18n.js` | Translation runtime: `web/i18n/*.json` catalogs, `t()`/`tp()`, `data-i18n*`, `<html lang>`/`dir`, `locale:change`. See [interface language](i18n.md). |
+| `early-i18n.js` | Tags `<html>` with the stored interface language before first paint. |
 
 ### Desktop & windows
 

@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotoredaktor — tooni- ja värvikohandused, hägustus/teravustamine/vignett ja ühe puutega filmistiilid Pildi aknas",
+  "plugin.image.meta.summary": "Fotoredaktor: kohandused ja filmistiilid",
+  "plugin.image.meta.category": "Meedia",
+
+  "plugin.image.toolbar.menu": "Menüü",
+  "plugin.image.toolbar.fitToggle": "Vaheta sobivuse ja tegeliku suuruse vahel",
+
+  "plugin.image.dial.brightness": "Heledus",
+  "plugin.image.dial.contrast": "Kontrast",
+  "plugin.image.dial.exposure": "Säritus",
+  "plugin.image.dial.vibrance": "Värviküllasus",
+  "plugin.image.dial.saturation": "Küllastus",
+  "plugin.image.dial.blur": "Hägustus",
+  "plugin.image.dial.sharpen": "Teravustamine",
+  "plugin.image.dial.vignette": "Vignett",
+
+  "plugin.image.oneClick.autoTone": "Automaatne toon",
+  "plugin.image.oneClick.autoContrast": "Automaatne kontrast",
+  "plugin.image.oneClick.invert": "Inverteeri",
+  "plugin.image.oneClick.grayscale": "M/V",
+  "plugin.image.oneClick.sepia": "Seepia",
+  "plugin.image.oneClick.revert": "Taasta",
+  "plugin.image.oneClick.revertTitle": "Taasta algne üleslaaditud pilt",
+
+  "plugin.image.empty.title": "Ühtegi pilti pole avatud",
+  "plugin.image.empty.body": "Alustamiseks ava pilt või lohista see siia.",
+  "plugin.image.empty.open": "Ava pilt",
+
+  "plugin.image.menu.file": "Fail",
+  "plugin.image.menu.image": "Pilt",
+  "plugin.image.menu.view": "Vaade",
+  "plugin.image.menu.open": "Ava…",
+  "plugin.image.menu.saveCopy": "Salvesta koopia…",
+  "plugin.image.menu.delete": "Kustuta pilt",
+  "plugin.image.menu.rotateLeft": "Pööra vasakule",
+  "plugin.image.menu.rotateRight": "Pööra paremale",
+  "plugin.image.menu.flipH": "Peegelda horisontaalselt",
+  "plugin.image.menu.flipV": "Peegelda vertikaalselt",
+  "plugin.image.menu.revert": "Taasta algne",
+  "plugin.image.menu.zoomIn": "Suurenda",
+  "plugin.image.menu.zoomOut": "Vähenda",
+  "plugin.image.menu.fit": "Mahuta",
+  "plugin.image.menu.actualSize": "Tegelik suurus",
+
+  "plugin.image.ctx.open": "Ava pilt…",
+
+  "plugin.image.dialog.deleteConfirm": "Kustutada \"{title}\"?",
+  "plugin.image.dialog.thisImage": "see pilt",
+
+  "plugin.image.toast.openFirst": "Ava esmalt pilt",
+  "plugin.image.toast.opened": "Avatud {title}",
+  "plugin.image.toast.editFailed": "Muutmine ebaõnnestus",
+  "plugin.image.toast.operationFailed": "Toiming ebaõnnestus",
+  "plugin.image.toast.renderFailed": "Pilti ei saanud kuvada",
+  "plugin.image.toast.uploadFailed": "Üleslaadimine ebaõnnestus",
+  "plugin.image.toast.saveFailed": "Salvestamine ebaõnnestus",
+  "plugin.image.toast.deleted": "Pilt kustutatud",
+  "plugin.image.toast.deleteFailed": "Pilti ei saanud kustutada",
+  "plugin.image.toast.reverted": "Algsed pikslid taastatud",
+  "plugin.image.toast.openFailed": "Faili ei saanud avada",
+
+  "plugin.image.error.emptyFile": "see fail on tühi",
+  "plugin.image.error.notAnImage": "“{name}” ei ole pilt, mida redaktor saab avada",
+  "plugin.image.error.unnamedFile": "fail"
+}

@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Photo editor — tone and colour adjustments, blur/sharpen/vignette and one-tap film looks in the Image window",
+  "plugin.image.meta.summary": "Photo editor: adjustments and film looks",
+  "plugin.image.meta.category": "Media",
+
+  "plugin.image.toolbar.menu": "Menu",
+  "plugin.image.toolbar.fitToggle": "Toggle fit / actual size",
+
+  "plugin.image.dial.brightness": "Brightness",
+  "plugin.image.dial.contrast": "Contrast",
+  "plugin.image.dial.exposure": "Exposure",
+  "plugin.image.dial.vibrance": "Vibrance",
+  "plugin.image.dial.saturation": "Saturation",
+  "plugin.image.dial.blur": "Blur",
+  "plugin.image.dial.sharpen": "Sharpen",
+  "plugin.image.dial.vignette": "Vignette",
+
+  "plugin.image.oneClick.autoTone": "Auto tone",
+  "plugin.image.oneClick.autoContrast": "Auto contrast",
+  "plugin.image.oneClick.invert": "Invert",
+  "plugin.image.oneClick.grayscale": "B&W",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Revert",
+  "plugin.image.oneClick.revertTitle": "Restore the original upload",
+
+  "plugin.image.empty.title": "No image open",
+  "plugin.image.empty.body": "Open or drop a picture to start.",
+  "plugin.image.empty.open": "Open image",
+
+  "plugin.image.menu.file": "File",
+  "plugin.image.menu.image": "Image",
+  "plugin.image.menu.view": "View",
+  "plugin.image.menu.open": "Open…",
+  "plugin.image.menu.saveCopy": "Save a Copy…",
+  "plugin.image.menu.delete": "Delete image",
+  "plugin.image.menu.rotateLeft": "Rotate left",
+  "plugin.image.menu.rotateRight": "Rotate right",
+  "plugin.image.menu.flipH": "Flip horizontal",
+  "plugin.image.menu.flipV": "Flip vertical",
+  "plugin.image.menu.revert": "Revert to original",
+  "plugin.image.menu.zoomIn": "Zoom in",
+  "plugin.image.menu.zoomOut": "Zoom out",
+  "plugin.image.menu.fit": "Fit",
+  "plugin.image.menu.actualSize": "Actual size",
+
+  "plugin.image.ctx.open": "Open image…",
+
+  "plugin.image.dialog.deleteConfirm": "Delete \"{title}\"?",
+  "plugin.image.dialog.thisImage": "this image",
+
+  "plugin.image.toast.openFirst": "Open an image first",
+  "plugin.image.toast.opened": "Opened {title}",
+  "plugin.image.toast.editFailed": "Edit failed",
+  "plugin.image.toast.operationFailed": "Operation failed",
+  "plugin.image.toast.renderFailed": "Could not render image",
+  "plugin.image.toast.uploadFailed": "Upload failed",
+  "plugin.image.toast.saveFailed": "Save failed",
+  "plugin.image.toast.deleted": "Image deleted",
+  "plugin.image.toast.deleteFailed": "Could not delete image",
+  "plugin.image.toast.reverted": "Reverted to the original pixels",
+  "plugin.image.toast.openFailed": "Could not open file",
+
+  "plugin.image.error.emptyFile": "that file is empty",
+  "plugin.image.error.notAnImage": "“{name}” is not an image the editor can open",
+  "plugin.image.error.unnamedFile": "file"
+}

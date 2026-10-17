@@ -16,6 +16,7 @@ import { isCoreWindow, coreWindowTitle } from './coreWindows.js';
 import { closeCoreWindow, deactivatePlugin } from './tiles.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
 import { icon } from '../ui/index.js';
+import { t } from './i18n.js';
 
 let bubble = null;
 let initialized = false;
@@ -41,10 +42,13 @@ function build(name) {
 
   // Minimal chrome: just the two controls (deactivate / close and exit
   // fullscreen) — no app icon, so the left of the bar stays uncluttered.
+  const shown = pluginLabel(name);
   const close = makeButton(
     'fullscreen-bubble-btn--close',
     'ui/close',
-    core ? `Close ${pluginLabel(name)}` : `Deactivate ${pluginLabel(name)}`,
+    core
+      ? t('desktop.closeWindow', { name: shown }, `Close ${shown}`)
+      : t('desktop.deactivateWindow', { name: shown }, `Deactivate ${shown}`),
   );
   close.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -58,7 +62,8 @@ function build(name) {
     void deactivatePlugin(name);
   });
 
-  const exit = makeButton('fullscreen-bubble-btn--exit', 'ui/compress', `Exit full screen ${pluginLabel(name)}`);
+  const exit = makeButton('fullscreen-bubble-btn--exit', 'ui/compress',
+    t('desktop.exitFullscreenFor', { name: shown }, `Exit full screen ${shown}`));
   exit.addEventListener('click', (e) => {
     e.stopPropagation();
     exitWindowFullscreen();

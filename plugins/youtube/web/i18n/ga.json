@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Á sheinm anois",
+  "plugin.youtube.hero.untitled": "Físeán YouTube",
+  "plugin.youtube.hero.back": "Ar ais",
+  "plugin.youtube.hero.backLabel": "Ar ais chuig cuardach YouTube",
+  "plugin.youtube.player.title": "Seinnteoir YouTube",
+
+  "plugin.youtube.search.placeholder": "Cuardaigh YouTube…",
+
+  "plugin.youtube.grid.upNext": "An chéad rud eile",
+  "plugin.youtube.grid.becauseYouWatched": "An chéad rud eile · toisc gur fhéach tú ar “{title}”",
+  "plugin.youtube.grid.forYou": "Duitse",
+  "plugin.youtube.grid.showAll": "Taispeáin gach {category}",
+  "plugin.youtube.grid.untitled": "Físeán",
+
+  "plugin.youtube.empty.noResults": "Níor aimsíodh aon fhíseán",
+  "plugin.youtube.empty.noMatch": "Níor tháinig aon rud le “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Cuardaigh YouTube",
+  "plugin.youtube.empty.searchBody": "Clóscríobh thuas — nó iarr ar an AI físeán a aimsiú.",
+  "plugin.youtube.empty.unavailableTitle": "Cuardach gan fáil",
+  "plugin.youtube.empty.retry": "Bain triail eile as ar ball",
+
+  "plugin.youtube.category.watched": "Féachta {count}×",
+  "plugin.youtube.category.generic": "Catagóir",
+
+  "plugin.youtube.menu.search": "Cuardach",
+  "plugin.youtube.menu.home": "Baile",
+  "plugin.youtube.menu.refresh": "Athnuaigh na torthaí",
+  "plugin.youtube.menu.back": "Ar ais",
+
+  "plugin.youtube.meta.description": "Féach ar fhíseáin YouTube i bhfuinneog YouTube — is féidir leis an AI cuardach a dhéanamh ar YouTube agus físeáin a sheinm",
+  "plugin.youtube.meta.summary": "YouTube: cuardach agus seinm le AI i bhfuinneog YouTube",
+  "plugin.youtube.meta.category": "Meáin"
+}

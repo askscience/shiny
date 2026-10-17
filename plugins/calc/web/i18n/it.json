@@ -1,0 +1,38 @@
+{
+  "plugin.calc.meta.description": "Foglio di calcolo — fogli salvati come griglie di celle aperte, modificabili nella finestra Calc",
+  "plugin.calc.meta.summary": "Calc: crea, modifica e calcola con i fogli di calcolo",
+  "plugin.calc.meta.category": "Ufficio",
+
+  "plugin.calc.bar.spreadsheets": "Fogli di calcolo",
+
+  "plugin.calc.toolbar.newSheet": "Nuovo foglio di calcolo",
+  "plugin.calc.toolbar.importOds": "Importa .ods",
+  "plugin.calc.toolbar.importCsv": "Importa CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Salva in Documenti",
+  "plugin.calc.toolbar.saveNow": "Salva ora",
+  "plugin.calc.toolbar.deleteSheet": "Elimina foglio di calcolo",
+
+  "plugin.calc.menu.noSheets": "Ancora nessun foglio di calcolo",
+
+  "plugin.calc.sheet.untitled": "Senza titolo",
+  "plugin.calc.sheet.importedCsv": "CSV importato",
+
+  "plugin.calc.formula.placeholder": "Valore o formula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Salvataggio…",
+  "plugin.calc.status.dirty": "Modifiche non salvate",
+  "plugin.calc.status.saved.one": "Salvato {time} · {count} cella",
+  "plugin.calc.status.saved.other": "Salvato {time} · {count} celle",
+  "plugin.calc.status.saved.many": "Salvato {time} · {count} celle",
+
+  "plugin.calc.dialog.delete": "Eliminare \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Salvataggio non riuscito",
+  "plugin.calc.toast.openFailed": "Impossibile aprire il foglio di calcolo",
+  "plugin.calc.toast.createFailed": "Impossibile creare il foglio di calcolo",
+  "plugin.calc.toast.deleteFailed": "Impossibile eliminare il foglio di calcolo",
+  "plugin.calc.toast.imported": "{name} importato",
+  "plugin.calc.toast.importOdsFailed": "Importazione non riuscita — è un file .ods valido?",
+  "plugin.calc.toast.importCsvFailed": "Importazione non riuscita — è un file CSV valido?",
+  "plugin.calc.toast.openFileFailed": "Impossibile aprire il file"
+}

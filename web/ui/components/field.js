@@ -1,6 +1,7 @@
 /** field — form controls: input, textarea, select, toggle, slider, checkbox, search. */
 
 import { icon } from '../icon.js';
+import { t } from '../../js/i18n.js';
 
 /** Label + control + hint wrapper. */
 export function field({ label, hint, control, htmlFor } = {}) {
@@ -290,7 +291,7 @@ export function searchBar(o = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'ui-search';
   wrap.appendChild(icon('ui/search'));
-  const el = input({ placeholder: o.placeholder || 'Search…', value: o.value, onInput: o.onInput });
+  const el = input({ placeholder: o.placeholder || t('common.search'), value: o.value, onInput: o.onInput });
   wrap.appendChild(el);
   wrap.input = el;
   return wrap;

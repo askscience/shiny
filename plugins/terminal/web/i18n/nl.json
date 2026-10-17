@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Een echte Linux-terminal in de app — een op een PTY gebaseerde inlogshell in een eigen venster",
+  "plugin.terminal.meta.summary": "Terminal: een echte shell via een PTY, weergegeven met xterm.js",
+  "plugin.terminal.meta.category": "Systeem",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Nieuw tabblad",
+  "plugin.terminal.tab.close": "{name} sluiten",
+  "plugin.terminal.tabs.label": "Terminaltabbladen",
+
+  "plugin.terminal.status.starting": "terminal starten…",
+  "plugin.terminal.status.connecting": "verbinden…",
+  "plugin.terminal.status.reconnecting": "opnieuw verbinden…",
+  "plugin.terminal.status.connected": "verbonden",
+  "plugin.terminal.status.startFailed": "kon geen shell starten",
+  "plugin.terminal.status.expired": "sessie verlopen — meld je opnieuw aan",
+  "plugin.terminal.status.xtermFailed": "kon xterm.js niet laden",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: maximaal {count} tabblad",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: maximaal {count} tabbladen",
+  "plugin.terminal.toast.startFailed": "Terminal: kon geen shell starten",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js kon niet worden geladen",
+  "plugin.terminal.toast.clipboardUnavailable": "Klembord niet beschikbaar",
+
+  "plugin.terminal.ctx.copy": "Kopiëren",
+  "plugin.terminal.ctx.paste": "Plakken",
+  "plugin.terminal.ctx.clearScrollback": "Terugscrollgeschiedenis wissen",
+  "plugin.terminal.ctx.closeTab": "Tabblad sluiten"
+}

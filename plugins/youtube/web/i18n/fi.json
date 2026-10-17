@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Toistetaan",
+  "plugin.youtube.hero.untitled": "YouTube-video",
+  "plugin.youtube.hero.back": "Takaisin",
+  "plugin.youtube.hero.backLabel": "Takaisin YouTube-hakuun",
+  "plugin.youtube.player.title": "YouTube-soitin",
+
+  "plugin.youtube.search.placeholder": "Hae YouTubesta…",
+
+  "plugin.youtube.grid.upNext": "Seuraavaksi",
+  "plugin.youtube.grid.becauseYouWatched": "Seuraavaksi · koska katsoit “{title}”",
+  "plugin.youtube.grid.forYou": "Sinulle",
+  "plugin.youtube.grid.showAll": "Näytä kaikki {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Videoita ei löytynyt",
+  "plugin.youtube.empty.noMatch": "Mikään ei vastannut hakua “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Hae YouTubesta",
+  "plugin.youtube.empty.searchBody": "Kirjoita yläpuolelle — tai pyydä tekoälyä etsimään video.",
+  "plugin.youtube.empty.unavailableTitle": "Haku ei ole käytettävissä",
+  "plugin.youtube.empty.retry": "Yritä hetken kuluttua uudelleen",
+
+  "plugin.youtube.category.watched": "Katsottu {count}×",
+  "plugin.youtube.category.generic": "Luokka",
+
+  "plugin.youtube.menu.search": "Haku",
+  "plugin.youtube.menu.home": "Koti",
+  "plugin.youtube.menu.refresh": "Päivitä tulokset",
+  "plugin.youtube.menu.back": "Takaisin",
+
+  "plugin.youtube.meta.description": "Katso YouTube-videoita YouTube-ikkunassa — tekoäly voi hakea YouTubesta ja toistaa videoita",
+  "plugin.youtube.meta.summary": "YouTube: tekoälyhaku ja toisto YouTube-ikkunassa",
+  "plugin.youtube.meta.category": "Media"
+}

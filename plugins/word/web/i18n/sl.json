@@ -1,0 +1,52 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenti",
+  "plugin.word.toolbar.titlePlaceholder": "Neimenovano",
+  "plugin.word.toolbar.newDocument": "Nov dokument",
+  "plugin.word.toolbar.importOdt": "Uvozi .odt",
+  "plugin.word.toolbar.saveToDocuments": "Shrani v Dokumente",
+  "plugin.word.toolbar.saveNow": "Shrani zdaj",
+  "plugin.word.toolbar.deleteDocument": "Izbriši dokument",
+  "plugin.word.toolbar.bold": "Krepko",
+  "plugin.word.toolbar.italic": "Ležeče",
+  "plugin.word.toolbar.underline": "Podčrtano",
+  "plugin.word.toolbar.heading": "Naslov",
+  "plugin.word.toolbar.bulletList": "Alineje",
+  "plugin.word.toolbar.font": "Pisava",
+  "plugin.word.toolbar.fontHint": "Pisava — velja za izbor ali za celoten dokument, kadar ni nič izbrano",
+
+  "plugin.word.status.saving": "Shranjevanje…",
+  "plugin.word.status.unsaved": "Neshranjene spremembe",
+  "plugin.word.status.saved.one": "Shranjeno {time} · {count} beseda",
+  "plugin.word.status.saved.two": "Shranjeno {time} · {count} besedi",
+  "plugin.word.status.saved.few": "Shranjeno {time} · {count} besede",
+  "plugin.word.status.saved.other": "Shranjeno {time} · {count} besed",
+
+  "plugin.word.menu.empty": "Ni še dokumentov",
+  "plugin.word.menu.newDocument": "Nov dokument",
+  "plugin.word.menu.importOdt": "Uvozi .odt",
+  "plugin.word.menu.saveToDocuments": "Shrani v Dokumente",
+  "plugin.word.menu.deleteDocument": "Izbriši dokument",
+
+  "plugin.word.ctx.newDocument": "Nov dokument",
+  "plugin.word.ctx.saveNow": "Shrani zdaj",
+  "plugin.word.ctx.saveToDocuments": "Shrani v Dokumente",
+  "plugin.word.ctx.bold": "Krepko",
+  "plugin.word.ctx.italic": "Ležeče",
+  "plugin.word.ctx.heading": "Naslov",
+  "plugin.word.ctx.list": "Seznam",
+  "plugin.word.ctx.deleteDocument": "Izbriši dokument",
+
+  "plugin.word.dialog.deleteDoc": "Izbrišem \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Shranjevanje ni uspelo",
+  "plugin.word.toast.openFailed": "Dokumenta ni bilo mogoče odpreti",
+  "plugin.word.toast.createFailed": "Dokumenta ni bilo mogoče ustvariti",
+  "plugin.word.toast.deleteFailed": "Dokumenta ni bilo mogoče izbrisati",
+  "plugin.word.toast.imported": "Uvoženo {name}",
+  "plugin.word.toast.importFailed": "Uvoz ni uspel — je to veljavna datoteka .odt?",
+  "plugin.word.toast.openFileFailed": "Datoteke ni bilo mogoče odpreti",
+
+  "plugin.word.meta.description": "Preprost urejevalnik besedil — dokumenti so shranjeni kot odprte datoteke .odt",
+  "plugin.word.meta.summary": "Urejevalnik besedil: ustvarjajte, urejajte in berite dokumente OpenDocument (.odt)",
+  "plugin.word.meta.category": "Pisarna"
+}

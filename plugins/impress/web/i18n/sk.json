@@ -1,0 +1,81 @@
+{
+  "plugin.impress.toolbar.presentations": "Prezentácie",
+  "plugin.impress.toolbar.titlePlaceholder": "Bez názvu",
+  "plugin.impress.toolbar.theme": "Téma",
+  "plugin.impress.toolbar.present": "Prezentovať",
+  "plugin.impress.toolbar.newDeck": "Nová prezentácia",
+  "plugin.impress.toolbar.importOdp": "Importovať .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Uložiť do Dokumentov",
+  "plugin.impress.toolbar.saveNow": "Uložiť teraz",
+  "plugin.impress.toolbar.deleteDeck": "Odstrániť prezentáciu",
+
+  "plugin.impress.menu.empty": "Zatiaľ žiadne prezentácie",
+  "plugin.impress.menu.newDeck": "Nová prezentácia",
+  "plugin.impress.menu.importOdp": "Importovať .odp",
+  "plugin.impress.menu.saveToDocuments": "Uložiť do Dokumentov",
+  "plugin.impress.menu.deleteDeck": "Odstrániť prezentáciu",
+
+  "plugin.impress.ctx.newDeck": "Nová prezentácia",
+  "plugin.impress.ctx.addSlide": "Pridať snímku",
+  "plugin.impress.ctx.saveNow": "Uložiť teraz",
+  "plugin.impress.ctx.present": "Prezentovať",
+  "plugin.impress.ctx.stopPresenting": "Ukončiť prezentovanie",
+  "plugin.impress.ctx.deleteDeck": "Odstrániť prezentáciu",
+
+  "plugin.impress.status.saving": "Ukladá sa…",
+  "plugin.impress.status.unsaved": "Neuložené zmeny",
+  "plugin.impress.status.saved.one": "Uložené {time} · {count} snímka",
+  "plugin.impress.status.saved.few": "Uložené {time} · {count} snímky",
+  "plugin.impress.status.saved.many": "Uložené {time} · {count} snímky",
+  "plugin.impress.status.saved.other": "Uložené {time} · {count} snímok",
+
+  "plugin.impress.empty.noDeck": "Žiadna prezentácia",
+  "plugin.impress.empty.noDeckBody": "Vytvorte ju alebo požiadajte AI, aby zostavila prezentáciu",
+
+  "plugin.impress.inspector.layout": "Rozloženie",
+  "plugin.impress.inspector.transition": "Prechod",
+  "plugin.impress.inspector.bullets": "Odrážky",
+  "plugin.impress.inspector.speakerNotes": "Poznámky prednášajúceho",
+  "plugin.impress.inspector.hint": "Kliknutím na ľubovoľný text na snímke ho upravíte priamo.",
+  "plugin.impress.inspector.applyAll": "Použiť tento prechod a zobrazenie odrážok na všetky snímky",
+  "plugin.impress.inspector.applyAllLabel": "Použiť na všetky snímky",
+
+  "plugin.impress.ops.addSlide": "Pridať snímku",
+  "plugin.impress.ops.moveUp": "Presunúť nahor",
+  "plugin.impress.ops.moveDown": "Presunúť nadol",
+  "plugin.impress.ops.deleteSlide": "Odstrániť snímku",
+
+  "plugin.impress.transition.none": "Žiadny",
+  "plugin.impress.transition.fade": "Zoslabnutie",
+  "plugin.impress.transition.slide": "Posun",
+  "plugin.impress.transition.push": "Vtlačenie",
+  "plugin.impress.transition.zoom": "Priblíženie",
+
+  "plugin.impress.reveal.all": "Všetko naraz",
+  "plugin.impress.reveal.bullets": "Postupne",
+
+  "plugin.impress.slide.addText": "Pridať text",
+  "plugin.impress.slide.addTitle": "Pridať nadpis",
+  "plugin.impress.slide.addSubtitle": "Pridať podnadpis",
+  "plugin.impress.slide.attribution": "Uvedenie zdroja",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Späť do editora",
+  "plugin.impress.present.fullScreen": "Celá obrazovka",
+  "plugin.impress.present.exitFullScreen": "Ukončiť celú obrazovku",
+  "plugin.impress.present.blocked": "Prehliadač zablokoval celú obrazovku",
+
+  "plugin.impress.dialog.deleteDeck": "Odstrániť \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Uloženie zlyhalo",
+  "plugin.impress.toast.openFailed": "Nepodarilo sa otvoriť prezentáciu",
+  "plugin.impress.toast.createFailed": "Nepodarilo sa vytvoriť prezentáciu",
+  "plugin.impress.toast.deleteFailed": "Nepodarilo sa odstrániť prezentáciu",
+  "plugin.impress.toast.imported": "Importované: {name}",
+  "plugin.impress.toast.importFailed": "Import zlyhal — je to platný súbor .odp?",
+  "plugin.impress.toast.openFileFailed": "Nepodarilo sa otvoriť súbor",
+
+  "plugin.impress.meta.description": "Tvorba prezentácií — prezentácie uložené ako snímky a exportované ako otvorené súbory .odp",
+  "plugin.impress.meta.summary": "Impress: vytvárajte, upravujte a prezentujte snímky OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Kancelária"
+}

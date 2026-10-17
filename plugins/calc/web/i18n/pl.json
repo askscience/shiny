@@ -1,0 +1,39 @@
+{
+  "plugin.calc.meta.description": "Kalkulator arkuszy — arkusze zapisywane jako otwarte siatki komórek, edytowalne w oknie Calc",
+  "plugin.calc.meta.summary": "Calc: twórz, edytuj i licz na arkuszach kalkulacyjnych",
+  "plugin.calc.meta.category": "Biuro",
+
+  "plugin.calc.bar.spreadsheets": "Arkusze",
+
+  "plugin.calc.toolbar.newSheet": "Nowy arkusz",
+  "plugin.calc.toolbar.importOds": "Importuj .ods",
+  "plugin.calc.toolbar.importCsv": "Importuj CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Zapisz w Dokumentach",
+  "plugin.calc.toolbar.saveNow": "Zapisz teraz",
+  "plugin.calc.toolbar.deleteSheet": "Usuń arkusz",
+
+  "plugin.calc.menu.noSheets": "Brak arkuszy",
+
+  "plugin.calc.sheet.untitled": "Bez tytułu",
+  "plugin.calc.sheet.importedCsv": "Zaimportowany CSV",
+
+  "plugin.calc.formula.placeholder": "Wartość lub formuła (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Zapisywanie…",
+  "plugin.calc.status.dirty": "Niezapisane zmiany",
+  "plugin.calc.status.saved.one": "Zapisano {time} · {count} komórka",
+  "plugin.calc.status.saved.few": "Zapisano {time} · {count} komórki",
+  "plugin.calc.status.saved.many": "Zapisano {time} · {count} komórek",
+  "plugin.calc.status.saved.other": "Zapisano {time} · {count} komórki",
+
+  "plugin.calc.dialog.delete": "Usunąć „{title}”?",
+
+  "plugin.calc.toast.saveFailed": "Zapisywanie nie powiodło się",
+  "plugin.calc.toast.openFailed": "Nie udało się otworzyć arkusza",
+  "plugin.calc.toast.createFailed": "Nie udało się utworzyć arkusza",
+  "plugin.calc.toast.deleteFailed": "Nie udało się usunąć arkusza",
+  "plugin.calc.toast.imported": "Zaimportowano {name}",
+  "plugin.calc.toast.importOdsFailed": "Import nie powiódł się — czy to prawidłowy plik .ods?",
+  "plugin.calc.toast.importCsvFailed": "Import nie powiódł się — czy to prawidłowy plik CSV?",
+  "plugin.calc.toast.openFileFailed": "Nie udało się otworzyć pliku"
+}

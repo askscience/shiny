@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Διαδικτυακό ραδιόφωνο μέσω Radio Browser — αναζήτηση σταθμών και αναπαραγωγή τους στο παράθυρο του Ραδιοφώνου",
+  "plugin.radio.meta.summary": "Διαδικτυακό ραδιόφωνο: αναζήτηση και αναπαραγωγή σταθμών (Radio Browser)",
+  "plugin.radio.meta.category": "Πολυμέσα",
+
+  "plugin.radio.notify.nowPlaying": "Αναπαράγεται τώρα",
+  "plugin.radio.toast.streamRefused": "Δεν ήταν δυνατή η αναπαραγωγή της ροής — δοκιμάστε άλλο σταθμό",
+
+  "plugin.radio.status.pickStation": "Επιλέξτε σταθμό",
+  "plugin.radio.status.streaming": "Σε αναπαραγωγή",
+
+  "plugin.radio.empty.noStations": "Δεν βρέθηκαν σταθμοί",
+  "plugin.radio.empty.noMatch": "Τίποτε δεν ταιριάζει με “{term}”.",
+
+  "plugin.radio.error.unreachable": "Το Radio Browser δεν είναι προσβάσιμο",
+  "plugin.radio.error.tryAgain": "Δοκιμάστε ξανά σε λίγο",
+
+  "plugin.radio.fallback.station": "Σταθμός",
+  "plugin.radio.search.placeholder": "Σταθμοί ή είδη…",
+
+  "plugin.radio.menu.play": "Αναπαραγωγή",
+  "plugin.radio.menu.pause": "Παύση",
+  "plugin.radio.menu.stop": "Διακοπή",
+  "plugin.radio.menu.refresh": "Ανανέωση σταθμών"
+}

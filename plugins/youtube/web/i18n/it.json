@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "In riproduzione",
+  "plugin.youtube.hero.untitled": "Video di YouTube",
+  "plugin.youtube.hero.back": "Indietro",
+  "plugin.youtube.hero.backLabel": "Torna alla ricerca su YouTube",
+  "plugin.youtube.player.title": "Lettore YouTube",
+
+  "plugin.youtube.search.placeholder": "Cerca su YouTube…",
+
+  "plugin.youtube.grid.upNext": "Prossimi video",
+  "plugin.youtube.grid.becauseYouWatched": "Prossimi video · perché hai guardato “{title}”",
+  "plugin.youtube.grid.forYou": "Per te",
+  "plugin.youtube.grid.showAll": "Mostra tutti i {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Nessun video trovato",
+  "plugin.youtube.empty.noMatch": "Nessun risultato per “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Cerca su YouTube",
+  "plugin.youtube.empty.searchBody": "Scrivi qui sopra — o chiedi all'AI di trovare un video.",
+  "plugin.youtube.empty.unavailableTitle": "Ricerca non disponibile",
+  "plugin.youtube.empty.retry": "Riprova tra un momento",
+
+  "plugin.youtube.category.watched": "Guardato {count}×",
+  "plugin.youtube.category.generic": "Categoria",
+
+  "plugin.youtube.menu.search": "Cerca",
+  "plugin.youtube.menu.home": "Home",
+  "plugin.youtube.menu.refresh": "Aggiorna i risultati",
+  "plugin.youtube.menu.back": "Indietro",
+
+  "plugin.youtube.meta.description": "Guarda video di YouTube nella finestra YouTube — l'AI può cercare su YouTube e riprodurre i video",
+  "plugin.youtube.meta.summary": "YouTube: ricerca e riproduzione con l'AI nella finestra YouTube",
+  "plugin.youtube.meta.category": "Media"
+}

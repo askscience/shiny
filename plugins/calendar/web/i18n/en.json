@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Calendar — schedule, list and organize events in the Calendar window",
+  "plugin.calendar.meta.summary": "Calendar: schedule and organize events",
+  "plugin.calendar.meta.category": "Office",
+
+  "plugin.calendar.month.january": "January",
+  "plugin.calendar.month.february": "February",
+  "plugin.calendar.month.march": "March",
+  "plugin.calendar.month.april": "April",
+  "plugin.calendar.month.may": "May",
+  "plugin.calendar.month.june": "June",
+  "plugin.calendar.month.july": "July",
+  "plugin.calendar.month.august": "August",
+  "plugin.calendar.month.september": "September",
+  "plugin.calendar.month.october": "October",
+  "plugin.calendar.month.november": "November",
+  "plugin.calendar.month.december": "December",
+
+  "plugin.calendar.grid.sun": "Sun",
+  "plugin.calendar.grid.mon": "Mon",
+  "plugin.calendar.grid.tue": "Tue",
+  "plugin.calendar.grid.wed": "Wed",
+  "plugin.calendar.grid.thu": "Thu",
+  "plugin.calendar.grid.fri": "Fri",
+  "plugin.calendar.grid.sat": "Sat",
+
+  "plugin.calendar.event.allDay": "All day",
+
+  "plugin.calendar.toolbar.previousMonth": "Previous month",
+  "plugin.calendar.toolbar.nextMonth": "Next month",
+  "plugin.calendar.toolbar.today": "Today",
+  "plugin.calendar.toolbar.newEvent": "New event",
+
+  "plugin.calendar.ctx.refresh": "Refresh",
+
+  "plugin.calendar.detail.edit": "Edit",
+  "plugin.calendar.detail.delete": "Delete",
+
+  "plugin.calendar.empty.noEvents": "No events",
+  "plugin.calendar.empty.noEventsBody": "Nothing scheduled. Add an event or ask the AI to schedule one.",
+
+  "plugin.calendar.dialog.title": "Event",
+  "plugin.calendar.dialog.editTitle": "Edit event",
+  "plugin.calendar.dialog.titleField": "Title",
+  "plugin.calendar.dialog.titlePlaceholder": "e.g. Team standup",
+  "plugin.calendar.dialog.dateField": "Date",
+  "plugin.calendar.dialog.startTimeField": "Start time",
+  "plugin.calendar.dialog.endTimeField": "End time",
+  "plugin.calendar.dialog.locationField": "Location",
+  "plugin.calendar.dialog.locationPlaceholder": "Location (optional)",
+  "plugin.calendar.dialog.notesField": "Notes",
+  "plugin.calendar.dialog.notesPlaceholder": "Notes (optional)",
+  "plugin.calendar.dialog.cancel": "Cancel",
+  "plugin.calendar.dialog.save": "Save event",
+
+  "plugin.calendar.toast.titleRequired": "Title is required",
+  "plugin.calendar.toast.dateRequired": "Date is required",
+  "plugin.calendar.toast.updated": "Event updated",
+  "plugin.calendar.toast.scheduled": "Event scheduled",
+  "plugin.calendar.toast.deleted": "Event deleted",
+  "plugin.calendar.toast.loadFailed": "Could not load events",
+  "plugin.calendar.toast.saveFailed": "Could not save event",
+  "plugin.calendar.toast.deleteFailed": "Could not delete event",
+
+  "plugin.calendar.confirm.deleteEvent": "Delete \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Event starting soon"
+}

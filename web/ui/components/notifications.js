@@ -15,6 +15,7 @@
  */
 
 import { icon } from '../icon.js';
+import { t } from '../../js/i18n.js';
 
 const URGENCY_TIMEOUT = { low: 4000, normal: 7000, critical: 0 };
 
@@ -26,7 +27,7 @@ function ensureContainer() {
   container = document.createElement('div');
   container.className = 'ui-notification-container';
   container.setAttribute('aria-live', 'assertive');
-  container.setAttribute('aria-label', 'Notifications');
+  container.setAttribute('aria-label', t('ui.notifications'));
   document.body.appendChild(container);
   return container;
 }
@@ -124,7 +125,7 @@ export function notify(opts = {}) {
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'ui-notification-close';
-  close.setAttribute('aria-label', 'Dismiss notification');
+  close.setAttribute('aria-label', t('ui.dismissNotification'));
   close.textContent = '\u00d7';
   close.addEventListener('click', (e) => {
     e.stopPropagation();

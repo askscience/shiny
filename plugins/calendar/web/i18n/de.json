@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalender — Termine im Kalender-Fenster planen, auflisten und organisieren",
+  "plugin.calendar.meta.summary": "Kalender: Termine planen und organisieren",
+  "plugin.calendar.meta.category": "Office",
+
+  "plugin.calendar.month.january": "Januar",
+  "plugin.calendar.month.february": "Februar",
+  "plugin.calendar.month.march": "März",
+  "plugin.calendar.month.april": "April",
+  "plugin.calendar.month.may": "Mai",
+  "plugin.calendar.month.june": "Juni",
+  "plugin.calendar.month.july": "Juli",
+  "plugin.calendar.month.august": "August",
+  "plugin.calendar.month.september": "September",
+  "plugin.calendar.month.october": "Oktober",
+  "plugin.calendar.month.november": "November",
+  "plugin.calendar.month.december": "Dezember",
+
+  "plugin.calendar.grid.sun": "So",
+  "plugin.calendar.grid.mon": "Mo",
+  "plugin.calendar.grid.tue": "Di",
+  "plugin.calendar.grid.wed": "Mi",
+  "plugin.calendar.grid.thu": "Do",
+  "plugin.calendar.grid.fri": "Fr",
+  "plugin.calendar.grid.sat": "Sa",
+
+  "plugin.calendar.event.allDay": "Ganztägig",
+
+  "plugin.calendar.toolbar.previousMonth": "Vorheriger Monat",
+  "plugin.calendar.toolbar.nextMonth": "Nächster Monat",
+  "plugin.calendar.toolbar.today": "Heute",
+  "plugin.calendar.toolbar.newEvent": "Neuer Termin",
+
+  "plugin.calendar.ctx.refresh": "Aktualisieren",
+
+  "plugin.calendar.detail.edit": "Bearbeiten",
+  "plugin.calendar.detail.delete": "Löschen",
+
+  "plugin.calendar.empty.noEvents": "Keine Termine",
+  "plugin.calendar.empty.noEventsBody": "Nichts geplant. Fügen Sie einen Termin hinzu oder bitten Sie die KI, einen zu planen.",
+
+  "plugin.calendar.dialog.title": "Termin",
+  "plugin.calendar.dialog.editTitle": "Termin bearbeiten",
+  "plugin.calendar.dialog.titleField": "Titel",
+  "plugin.calendar.dialog.titlePlaceholder": "z. B. Team-Meeting",
+  "plugin.calendar.dialog.dateField": "Datum",
+  "plugin.calendar.dialog.startTimeField": "Startzeit",
+  "plugin.calendar.dialog.endTimeField": "Endzeit",
+  "plugin.calendar.dialog.locationField": "Ort",
+  "plugin.calendar.dialog.locationPlaceholder": "Ort (optional)",
+  "plugin.calendar.dialog.notesField": "Notizen",
+  "plugin.calendar.dialog.notesPlaceholder": "Notizen (optional)",
+  "plugin.calendar.dialog.cancel": "Abbrechen",
+  "plugin.calendar.dialog.save": "Termin speichern",
+
+  "plugin.calendar.toast.titleRequired": "Titel ist erforderlich",
+  "plugin.calendar.toast.dateRequired": "Datum ist erforderlich",
+  "plugin.calendar.toast.updated": "Termin aktualisiert",
+  "plugin.calendar.toast.scheduled": "Termin geplant",
+  "plugin.calendar.toast.deleted": "Termin gelöscht",
+  "plugin.calendar.toast.loadFailed": "Die Termine konnten nicht geladen werden",
+  "plugin.calendar.toast.saveFailed": "Der Termin konnte nicht gespeichert werden",
+  "plugin.calendar.toast.deleteFailed": "Der Termin konnte nicht gelöscht werden",
+
+  "plugin.calendar.confirm.deleteEvent": "„{title}“ löschen?",
+
+  "plugin.calendar.notify.eventSoon": "Ein Termin beginnt bald"
+}

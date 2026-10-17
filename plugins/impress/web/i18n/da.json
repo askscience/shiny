@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Præsentationer",
+  "plugin.impress.toolbar.titlePlaceholder": "Uden titel",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Præsentér",
+  "plugin.impress.toolbar.newDeck": "Ny præsentation",
+  "plugin.impress.toolbar.importOdp": "Importér .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Gem i Dokumenter",
+  "plugin.impress.toolbar.saveNow": "Gem nu",
+  "plugin.impress.toolbar.deleteDeck": "Slet præsentation",
+
+  "plugin.impress.menu.empty": "Ingen præsentationer endnu",
+  "plugin.impress.menu.newDeck": "Ny præsentation",
+  "plugin.impress.menu.importOdp": "Importér .odp",
+  "plugin.impress.menu.saveToDocuments": "Gem i Dokumenter",
+  "plugin.impress.menu.deleteDeck": "Slet præsentation",
+
+  "plugin.impress.ctx.newDeck": "Ny præsentation",
+  "plugin.impress.ctx.addSlide": "Tilføj dias",
+  "plugin.impress.ctx.saveNow": "Gem nu",
+  "plugin.impress.ctx.present": "Præsentér",
+  "plugin.impress.ctx.stopPresenting": "Stop præsentationen",
+  "plugin.impress.ctx.deleteDeck": "Slet præsentation",
+
+  "plugin.impress.status.saving": "Gemmer…",
+  "plugin.impress.status.unsaved": "Ikke-gemte ændringer",
+  "plugin.impress.status.saved.one": "Gemt {time} · {count} dias",
+  "plugin.impress.status.saved.other": "Gemt {time} · {count} dias",
+
+  "plugin.impress.empty.noDeck": "Ingen præsentation",
+  "plugin.impress.empty.noDeckBody": "Opret en, eller bed AI'en om at bygge et oplæg",
+
+  "plugin.impress.inspector.layout": "Layout",
+  "plugin.impress.inspector.transition": "Overgang",
+  "plugin.impress.inspector.bullets": "Punkttegn",
+  "plugin.impress.inspector.speakerNotes": "Talenoter",
+  "plugin.impress.inspector.hint": "Klik på en vilkårlig tekst på et dias for at redigere den direkte.",
+  "plugin.impress.inspector.applyAll": "Anvend denne overgang og punktopbygning på alle dias",
+  "plugin.impress.inspector.applyAllLabel": "Anvend på alle dias",
+
+  "plugin.impress.ops.addSlide": "Tilføj dias",
+  "plugin.impress.ops.moveUp": "Flyt op",
+  "plugin.impress.ops.moveDown": "Flyt ned",
+  "plugin.impress.ops.deleteSlide": "Slet dias",
+
+  "plugin.impress.transition.none": "Ingen",
+  "plugin.impress.transition.fade": "Ton ud",
+  "plugin.impress.transition.slide": "Glid",
+  "plugin.impress.transition.push": "Skub",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "Alle på én gang",
+  "plugin.impress.reveal.bullets": "Én ad gangen",
+
+  "plugin.impress.slide.addText": "Tilføj tekst",
+  "plugin.impress.slide.addTitle": "Tilføj en titel",
+  "plugin.impress.slide.addSubtitle": "Tilføj en undertitel",
+  "plugin.impress.slide.attribution": "Kildeangivelse",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Tilbage til editoren",
+  "plugin.impress.present.fullScreen": "Fuldskærm",
+  "plugin.impress.present.exitFullScreen": "Forlad fuldskærm",
+  "plugin.impress.present.blocked": "Browseren blokerede fuldskærm",
+
+  "plugin.impress.dialog.deleteDeck": "Slet \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Gemningen mislykkedes",
+  "plugin.impress.toast.openFailed": "Kunne ikke åbne præsentationen",
+  "plugin.impress.toast.createFailed": "Kunne ikke oprette præsentationen",
+  "plugin.impress.toast.deleteFailed": "Kunne ikke slette præsentationen",
+  "plugin.impress.toast.imported": "Importede {name}",
+  "plugin.impress.toast.importFailed": "Importen mislykkedes — er det en gyldig .odp-fil?",
+  "plugin.impress.toast.openFileFailed": "Kunne ikke åbne filen",
+
+  "plugin.impress.meta.description": "Præsentationsværktøj — oplæg gemt som dias og eksporteret som åbne .odp-filer",
+  "plugin.impress.meta.summary": "Impress: byg, redigér og præsentér OpenDocument-oplæg (.odp)",
+  "plugin.impress.meta.category": "Kontor"
+}

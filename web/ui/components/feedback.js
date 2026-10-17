@@ -1,6 +1,7 @@
 /** feedback — toast, spinner, skeleton, progress, empty state, badge. */
 
 import { icon } from '../icon.js';
+import { t } from '../../js/i18n.js';
 
 let toastContainer = null;
 
@@ -43,7 +44,7 @@ export function spinner({ size = 18 } = {}) {
   const el = document.createElement('span');
   el.className = 'ui-spinner';
   el.style.width = el.style.height = `${size}px`;
-  el.setAttribute('aria-label', 'Loading');
+  el.setAttribute('aria-label', t('common.loading'));
   return el;
 }
 
@@ -83,7 +84,7 @@ export function emptyState(o = {}) {
   }
   const title = document.createElement('p');
   title.className = 'ui-empty-title';
-  title.textContent = o.title || 'Nothing here yet';
+  title.textContent = o.title || t('ui.nothingHere');
   el.appendChild(title);
   if (o.body) {
     const body = document.createElement('p');

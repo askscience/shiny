@@ -1,0 +1,81 @@
+{
+  "plugin.impress.toolbar.presentations": "Prezentacje",
+  "plugin.impress.toolbar.titlePlaceholder": "Bez tytułu",
+  "plugin.impress.toolbar.theme": "Motyw",
+  "plugin.impress.toolbar.present": "Prezentuj",
+  "plugin.impress.toolbar.newDeck": "Nowa prezentacja",
+  "plugin.impress.toolbar.importOdp": "Importuj .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Zapisz w Dokumentach",
+  "plugin.impress.toolbar.saveNow": "Zapisz teraz",
+  "plugin.impress.toolbar.deleteDeck": "Usuń prezentację",
+
+  "plugin.impress.menu.empty": "Brak prezentacji",
+  "plugin.impress.menu.newDeck": "Nowa prezentacja",
+  "plugin.impress.menu.importOdp": "Importuj .odp",
+  "plugin.impress.menu.saveToDocuments": "Zapisz w Dokumentach",
+  "plugin.impress.menu.deleteDeck": "Usuń prezentację",
+
+  "plugin.impress.ctx.newDeck": "Nowa prezentacja",
+  "plugin.impress.ctx.addSlide": "Dodaj slajd",
+  "plugin.impress.ctx.saveNow": "Zapisz teraz",
+  "plugin.impress.ctx.present": "Prezentuj",
+  "plugin.impress.ctx.stopPresenting": "Zakończ prezentowanie",
+  "plugin.impress.ctx.deleteDeck": "Usuń prezentację",
+
+  "plugin.impress.status.saving": "Zapisywanie…",
+  "plugin.impress.status.unsaved": "Niezapisane zmiany",
+  "plugin.impress.status.saved.one": "Zapisano {time} · {count} slajd",
+  "plugin.impress.status.saved.few": "Zapisano {time} · {count} slajdy",
+  "plugin.impress.status.saved.many": "Zapisano {time} · {count} slajdów",
+  "plugin.impress.status.saved.other": "Zapisano {time} · {count} slajdu",
+
+  "plugin.impress.empty.noDeck": "Brak prezentacji",
+  "plugin.impress.empty.noDeckBody": "Utwórz ją lub poproś AI o zbudowanie pokazu",
+
+  "plugin.impress.inspector.layout": "Układ",
+  "plugin.impress.inspector.transition": "Przejście",
+  "plugin.impress.inspector.bullets": "Punkty",
+  "plugin.impress.inspector.speakerNotes": "Notatki prelegenta",
+  "plugin.impress.inspector.hint": "Kliknij dowolny tekst na slajdzie, aby edytować go bezpośrednio.",
+  "plugin.impress.inspector.applyAll": "Zastosuj to przejście i budowanie punktów do każdego slajdu",
+  "plugin.impress.inspector.applyAllLabel": "Zastosuj do wszystkich slajdów",
+
+  "plugin.impress.ops.addSlide": "Dodaj slajd",
+  "plugin.impress.ops.moveUp": "Przenieś w górę",
+  "plugin.impress.ops.moveDown": "Przenieś w dół",
+  "plugin.impress.ops.deleteSlide": "Usuń slajd",
+
+  "plugin.impress.transition.none": "Brak",
+  "plugin.impress.transition.fade": "Przenikanie",
+  "plugin.impress.transition.slide": "Przesunięcie",
+  "plugin.impress.transition.push": "Wypychanie",
+  "plugin.impress.transition.zoom": "Powiększenie",
+
+  "plugin.impress.reveal.all": "Wszystkie naraz",
+  "plugin.impress.reveal.bullets": "Jeden po drugim",
+
+  "plugin.impress.slide.addText": "Dodaj tekst",
+  "plugin.impress.slide.addTitle": "Dodaj tytuł",
+  "plugin.impress.slide.addSubtitle": "Dodaj podtytuł",
+  "plugin.impress.slide.attribution": "Źródło",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Powrót do edytora",
+  "plugin.impress.present.fullScreen": "Pełny ekran",
+  "plugin.impress.present.exitFullScreen": "Wyjdź z pełnego ekranu",
+  "plugin.impress.present.blocked": "Przeglądarka zablokowała tryb pełnoekranowy",
+
+  "plugin.impress.dialog.deleteDeck": "Usunąć „{title}”?",
+
+  "plugin.impress.toast.saveFailed": "Zapisywanie nie powiodło się",
+  "plugin.impress.toast.openFailed": "Nie udało się otworzyć prezentacji",
+  "plugin.impress.toast.createFailed": "Nie udało się utworzyć prezentacji",
+  "plugin.impress.toast.deleteFailed": "Nie udało się usunąć prezentacji",
+  "plugin.impress.toast.imported": "Zaimportowano {name}",
+  "plugin.impress.toast.importFailed": "Import nie powiódł się — czy to prawidłowy plik .odp?",
+  "plugin.impress.toast.openFileFailed": "Nie udało się otworzyć pliku",
+
+  "plugin.impress.meta.description": "Kreator prezentacji — pokazy zapisywane jako slajdy i eksportowane jako otwarte pliki .odp",
+  "plugin.impress.meta.summary": "Impress: twórz, edytuj i prezentuj pokazy slajdów OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Biuro"
+}

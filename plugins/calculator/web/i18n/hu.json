@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Tudományos számológép — számtani és tudományos kifejezések kiértékelése a Számológép ablakban",
+  "plugin.calculator.meta.summary": "Számológép: alapvető és tudományos matematika",
+  "plugin.calculator.meta.category": "Iroda",
+
+  "plugin.calculator.display.error": "Hiba",
+
+  "plugin.calculator.toolbar.history": "Előzmények",
+  "plugin.calculator.toolbar.scientific": "Tudományos",
+  "plugin.calculator.toolbar.clearHistory": "Előzmények törlése",
+
+  "plugin.calculator.menu.equals": "Egyenlő",
+  "plugin.calculator.menu.clearAll": "Összes törlése",
+
+  "plugin.calculator.history.reuse": "Az eredmény újrafelhasználása",
+
+  "plugin.calculator.empty.noHistory": "Nincs előzmény",
+  "plugin.calculator.empty.noHistoryBody": "Az itt végzett vagy az AI-tól kért számítások alább jelennek meg.",
+
+  "plugin.calculator.toast.evaluateFailed": "Nem sikerült kiértékelni",
+  "plugin.calculator.toast.historyFailed": "Nem sikerült betölteni az előzményeket",
+  "plugin.calculator.toast.historyCleared": "Előzmények törölve",
+  "plugin.calculator.toast.clearFailed": "Nem sikerült törölni az előzményeket"
+}

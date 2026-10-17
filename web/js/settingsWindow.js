@@ -5,7 +5,8 @@
  * sections are fewer and broader than the old standalone page:
  *
  *   Account    — photo + display name
- *   Appearance — theme, accent, gradient, window surface, top bar, background
+ *   Appearance — theme, accent, gradient, interface language, window surface,
+ *                top bar, background
  *   Desktop    — tiling layout
  *   Browser    — default search engine, ad blocking, history
  *   Assistant  — name, provider, model
@@ -19,7 +20,7 @@
  * save is the profile (name/avatar), which is a server round-trip.
  */
 import {
-  apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, getTraveler,
+  apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, clearVoiceLang, getTraveler,
   logoutSession,
 } from './api.js';
 import { openCoreWindow } from './tiles.js';
@@ -34,6 +35,7 @@ import {
 } from '../ui/index.js';
 import { refreshPluginIcons } from './pluginIcon.js';
 import { listFonts } from './fonts.js';
+import { getAvailableLocales, t, tp } from './i18n.js';
 import {
   getAiName, setAiName, getAiProvider, setAiProvider,
   getOllamaModel, setOllamaModel,
@@ -57,6 +59,7 @@ import {
   getLowPowerAi, setLowPowerAi, getEffectivePowerMode,
   getEffectiveSttEngine, getEffectiveTtsEngine, getPowerBatteryStatus,
   getLinkPlugin, setLinkPlugin,
+  getUiLocale, setUiLocale,
 } from './preferences.js';
 import { POWER_MODES, powerModeLabel, powerModeHint, describeEngines } from './powerShared.js';
 import { TOUCHBAR_ACTIONS } from './touchbarShared.js';
@@ -74,10 +77,13 @@ const NEUMORPHIC_DARK = 'neumorphic';
 const NEUMORPHIC_LIGHT = 'neumorphic-light';
 const BASE_DARK = 'noir';
 const BASE_LIGHT = 'light';
-const WHISPER_MODEL_LABEL = { tiny: 'Tiny', small: 'Small' };
+const WHISPER_MODEL_LABEL = {
+  tiny: 'settings.voice.whisper.model.tiny',
+  small: 'settings.voice.whisper.model.small',
+};
 const QWEN_MODEL_LABEL = {
-  '0.6b-customvoice': '0.6B CustomVoice',
-  '1.7b-customvoice': '1.7B CustomVoice',
+  '0.6b-customvoice': 'settings.voice.qwen.model.06b',
+  '1.7b-customvoice': 'settings.voice.qwen.model.17b',
 };
 
 let tileEl = null;
@@ -190,11 +196,11 @@ function buildAccentSwatches(container) {
 
   const custom = el('label', 'swatch swatch--custom');
   custom.dataset.accent = 'custom';
-  custom.title = 'Custom accent';
+  custom.title = t('settings.appearance.customAccent', null, 'Custom accent');
   custom.appendChild(el('span', null, '+'));
   const color = input({ type: 'color' });
   color.value = presets.some((p) => p.value === current) ? presets[0]?.value || '#ffffff' : current;
-  color.setAttribute('aria-label', 'Custom accent color');
+  color.setAttribute('aria-label', t('settings.appearance.customAccentColor', null, 'Custom accent color'));
   on(color, 'input', () => {
     setAccent(color.value);
     applyAppearance();
@@ -240,17 +246,17 @@ function markActive(container, isActive) {
 function buildBackgroundControls() {
   const mode = select({
     options: [
-      { value: 'none', label: 'None (default mesh)' },
-      { value: 'gradient', label: 'Gradient' },
-      { value: 'image', label: 'Image' },
-      { value: 'animated', label: 'Animated' },
+      { value: 'none', label: t('settings.appearance.background.none', null, 'None (default mesh)') },
+      { value: 'gradient', label: t('settings.appearance.background.gradient', null, 'Gradient') },
+      { value: 'image', label: t('settings.appearance.background.image', null, 'Image') },
+      { value: 'animated', label: t('settings.appearance.background.animated', null, 'Animated') },
     ],
     onChange: (value) => {
       setBackground({ mode: value });
       syncBackground();
     },
   });
-  const gradientNote = el('div', 'settings-hint hidden', 'Gradient uses your Appearance gradient — change it under Appearance.');
+  const gradientNote = el('div', 'settings-hint hidden', t('settings.appearance.background.gradientNote', null, 'Gradient uses your Appearance gradient — change it under Appearance.'));
 
   const presetGrid = el('div', 'bg-preset-grid');
   presetGrid.setAttribute('role', 'radiogroup');
@@ -258,8 +264,8 @@ function buildBackgroundControls() {
     const [file] = await pickFiles({ accept: 'image/*' });
     if (file) void uploadBackground(file, syncBackground);
   };
-  const uploadBtn = button({ label: 'Upload your own…', variant: 'quiet', size: 'sm' });
-  const removeBtn = button({ label: 'Remove photo', variant: 'danger', size: 'sm' });
+  const uploadBtn = button({ label: t('settings.appearance.background.upload', null, 'Upload your own…'), variant: 'quiet', size: 'sm' });
+  const removeBtn = button({ label: t('settings.appearance.background.remove', null, 'Remove photo'), variant: 'danger', size: 'sm' });
   removeBtn.classList.add('hidden');
   const imageRow = el('div', 'background-image-row');
   imageRow.append(uploadBtn, removeBtn);
@@ -270,13 +276,13 @@ function buildBackgroundControls() {
 
   const animSelect = select({
     options: [
-      { value: 'aurora', label: 'Aurora drift' },
-      { value: 'shimmer', label: 'Shimmer' },
+      { value: 'aurora', label: t('settings.appearance.background.aurora', null, 'Aurora drift') },
+      { value: 'shimmer', label: t('settings.appearance.background.shimmer', null, 'Shimmer') },
     ],
     onChange: (value) => setBackground({ animation: value }),
   });
   const animControls = el('div', 'hidden');
-  animControls.append(field('Animation', animSelect));
+  animControls.append(field(t('settings.appearance.background.animation', null, 'Animation'), animSelect));
 
   const syncBackground = () => {
     const bg = getBackground();
@@ -288,8 +294,8 @@ function buildBackgroundControls() {
     removeBtn.classList.toggle('hidden', !bg.url);
     imageHint.textContent = bg.mode === 'image'
       ? (bg.url
-        ? 'Your photo is dimmed so the interface stays readable.'
-        : 'Built-in wallpapers. Pick one, or upload your own image — it is dimmed so the interface stays readable.')
+        ? t('settings.appearance.background.photoHint', null, 'Your photo is dimmed so the interface stays readable.')
+        : t('settings.appearance.background.wallpaperHint', null, 'Built-in wallpapers. Pick one, or upload your own image — it is dimmed so the interface stays readable.'))
       : '';
 
     renderBackgroundPresets(presetGrid, {
@@ -306,7 +312,7 @@ function buildBackgroundControls() {
 
   syncBackground();
   return [
-    field('Type', mode),
+    field(t('settings.appearance.background.type', null, 'Type'), mode),
     gradientNote,
     imageControls,
     animControls,
@@ -315,11 +321,11 @@ function buildBackgroundControls() {
 
 async function uploadBackground(file, sync) {
   if (!file.type?.startsWith('image/')) {
-    toast('Choose an image file', { type: 'error' });
+    toast(t('settings.appearance.background.chooseImage', null, 'Choose an image file'), { type: 'error' });
     return;
   }
   if (file.size > 12 * 1024 * 1024) {
-    toast('Image must be under 12 MB', { type: 'error' });
+    toast(t('settings.appearance.background.tooLarge', null, 'Image must be under 12 MB'), { type: 'error' });
     return;
   }
   try {
@@ -328,9 +334,9 @@ async function uploadBackground(file, sync) {
     await apiFetch('/api/background', { method: 'POST', body: form });
     setBackground({ mode: 'image', url: `/api/background?v=${Date.now()}`, preset: null });
     sync();
-    toast('Background image updated', { type: 'info' });
+    toast(t('settings.appearance.background.updated', null, 'Background image updated'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not upload image', { type: 'error' });
+    toast(e.message || t('settings.appearance.background.uploadFailed', null, 'Could not upload image'), { type: 'error' });
   }
 }
 
@@ -340,7 +346,7 @@ async function removeBackgroundImage(sync) {
   } catch (_) { /* 404 or transient — proceed */ }
   setBackground({ mode: 'image', url: null, preset: null });
   sync();
-  toast('Background image removed', { type: 'info' });
+  toast(t('settings.appearance.background.removed', null, 'Background image removed'), { type: 'info' });
 }
 
 /* ── Account ────────────────────────────────────────────────── */
@@ -360,7 +366,7 @@ function buildAccount() {
   avatarInput.hidden = true;
 
   const upload = el('label', 'profile-avatar-upload');
-  upload.append(avatarInput, avatarPreview, el('span', 'profile-avatar-label', 'Change photo'));
+  upload.append(avatarInput, avatarPreview, el('span', 'profile-avatar-label', t('settings.account.changePhoto', null, 'Change photo')));
 
   const nameInput = input({
     value: traveler?.name || '',
@@ -381,7 +387,7 @@ function buildAccount() {
   });
 
   const saveBtn = button({
-    label: 'Save profile',
+    label: t('settings.account.save', null, 'Save profile'),
     variant: 'primary',
     size: 'sm',
     onClick: async () => {
@@ -390,7 +396,7 @@ function buildAccount() {
       if (name && name !== traveler?.name) body.name = name;
       if (pendingAvatar !== undefined) body.avatar = pendingAvatar;
       if (!Object.keys(body).length) {
-        toast('Nothing to save', { type: 'info' });
+        toast(t('settings.account.nothingToSave', null, 'Nothing to save'), { type: 'info' });
         return;
       }
       try {
@@ -399,10 +405,10 @@ function buildAccount() {
           localStorage.setItem('traveler', JSON.stringify(res.data));
           saveKnownUser(res.data);
           pendingAvatar = undefined;
-          toast('Profile saved', { type: 'info' });
+          toast(t('settings.account.saved', null, 'Profile saved'), { type: 'info' });
         }
       } catch (e) {
-        toast(e.message || 'Could not save profile', { type: 'error' });
+        toast(e.message || t('settings.account.saveFailed', null, 'Could not save profile'), { type: 'error' });
       }
     },
   });
@@ -412,7 +418,7 @@ function buildAccount() {
 
   return [
     upload,
-    field('Display name', nameInput),
+    field(t('settings.account.displayName', null, 'Display name'), nameInput),
     row,
   ];
 }
@@ -427,7 +433,7 @@ function buildAssistant() {
   });
   const nameHint = el('p', 'settings-hint');
   const syncNameHint = () => {
-    nameHint.textContent = `Say “Hey, ${getAiName()}” to activate voice on long press.`;
+    nameHint.textContent = t('settings.assistant.nameHint', { name: getAiName() }, `Say “Hey, ${getAiName()}” to activate voice on long press.`);
   };
   syncNameHint();
   on(nameInput, 'input', () => {
@@ -437,8 +443,8 @@ function buildAssistant() {
 
   const provider = select({
     options: [
-      { value: 'ollama', label: 'Ollama (local)' },
-      { value: 'openai', label: 'OpenAI-compatible endpoint' },
+      { value: 'ollama', label: t('settings.assistant.providerOllama', null, 'Ollama (local)') },
+      { value: 'openai', label: t('settings.assistant.providerOpenai', null, 'OpenAI-compatible endpoint') },
     ],
     onChange: async (value) => {
       setAiProvider(value);
@@ -449,24 +455,24 @@ function buildAssistant() {
   });
 
   const model = select({ onChange: (value) => { setOllamaModel(value); void flushPreferencesNow(); } });
-  const modelHint = el('p', 'settings-hint', 'Models from your local Ollama server.');
+  const modelHint = el('p', 'settings-hint', t('settings.assistant.modelsHint', null, 'Models from your local Ollama server.'));
 
   const baseUrl = input({ value: getOpenAiBaseUrl(), placeholder: 'https://api.openai.com/v1', autocomplete: 'off' });
   const apiKey = input({ type: 'password', value: getOpenAiApiKey(), placeholder: 'sk-…', autocomplete: 'off' });
   const openaiModel = input({ value: getOpenAiModel(), placeholder: 'gpt-4o-mini', autocomplete: 'off' });
-  const openaiHint = el('p', 'settings-hint', 'The exact model name your endpoint expects.');
+  const openaiHint = el('p', 'settings-hint', t('settings.assistant.openaiModelHint', null, 'The exact model name your endpoint expects.'));
   on(baseUrl, 'input', () => setOpenAiBaseUrl(baseUrl.value));
   on(apiKey, 'input', () => setOpenAiApiKey(apiKey.value));
   on(openaiModel, 'input', () => setOpenAiModel(openaiModel.value));
 
   const ollamaFields = el('div');
-  ollamaFields.append(field('AI model', model, { id: model.select.id }), modelHint);
+  ollamaFields.append(field(t('settings.assistant.aiModel', null, 'AI model'), model, { id: model.select.id }), modelHint);
 
   const openaiFields = el('div', 'hidden');
   openaiFields.append(
-    field('Endpoint base URL', baseUrl),
-    field('API key', apiKey),
-    field('Model', openaiModel),
+    field(t('settings.assistant.baseUrl', null, 'Endpoint base URL'), baseUrl),
+    field(t('settings.assistant.apiKey', null, 'API key'), apiKey),
+    field(t('settings.assistant.model', null, 'Model'), openaiModel),
     openaiHint,
   );
 
@@ -490,7 +496,7 @@ function buildAssistant() {
       serverDefaultModel = fallback || '';
 
       model.setOptions([
-        { value: '', label: serverDefaultModel ? `Default (${serverDefaultModel})` : 'Default (server)' },
+        { value: '', label: serverDefaultModel ? t('settings.assistant.defaultModel', { model: serverDefaultModel }, `Default (${serverDefaultModel})`) : t('common.defaultServer', null, 'Default (server)') },
         ...models.map((n) => ({ value: n, label: n })),
       ]);
       const stored = getOllamaModel();
@@ -499,31 +505,33 @@ function buildAssistant() {
       if (who === 'openai') {
         modelHint.textContent = '';
         openaiHint.textContent = available
-          ? (models.length ? `${models.length} model(s) found at the endpoint.` : 'Endpoint reachable.')
-          : 'Could not reach the endpoint yet — check the base URL and API key.';
+          ? (models.length
+            ? tp('settings.assistant.modelsFound', models.length, null, `${models.length} model(s) found at the endpoint.`)
+            : t('settings.assistant.endpointReachable', null, 'Endpoint reachable.'))
+          : t('settings.assistant.endpointUnreachable', null, 'Could not reach the endpoint yet — check the base URL and API key.');
       } else {
-        openaiHint.textContent = 'The exact model name your endpoint expects.';
+        openaiHint.textContent = t('settings.assistant.openaiModelHint', null, 'The exact model name your endpoint expects.');
         modelHint.textContent = !available
-          ? 'Ollama is offline — using the server default model.'
+          ? t('settings.assistant.ollamaOffline', null, 'Ollama is offline — using the server default model.')
           : (!models.length
-            ? 'No models found in Ollama. Pull one with: ollama pull llama3.2'
-            : 'Models from your local Ollama server.');
+            ? t('settings.assistant.noModels', null, 'No models found in Ollama. Pull one with: ollama pull llama3.2')
+            : t('settings.assistant.modelsHint', null, 'Models from your local Ollama server.'));
       }
     } catch (e) {
       if (seq !== modelRequest) return;
-      model.setOptions([{ value: '', label: 'Default (server)' }]);
+      model.setOptions([{ value: '', label: t('common.defaultServer', null, 'Default (server)') }]);
       modelHint.textContent = e.status === 404
-        ? 'Model list unavailable — restart the server, then reopen Settings.'
-        : 'Could not load models — using the server default.';
+        ? t('settings.assistant.modelsUnavailable', null, 'Model list unavailable — restart the server, then reopen Settings.')
+        : t('settings.assistant.modelsLoadFailed', null, 'Could not load models — using the server default.');
     }
   }
   void loadAiModels();
 
   return [
-    field('Assistant name', nameInput),
+    field(t('settings.assistant.name', null, 'Assistant name'), nameInput),
     nameHint,
-    field('AI provider', provider, {
-      hint: 'Ollama runs entirely on this device. An OpenAI-compatible endpoint works with OpenAI, OpenRouter, LM Studio, vLLM and other servers.',
+    field(t('settings.assistant.provider', null, 'AI provider'), provider, {
+      hint: t('settings.assistant.providerHint', null, 'Ollama runs entirely on this device. An OpenAI-compatible endpoint works with OpenAI, OpenRouter, LM Studio, vLLM and other servers.'),
     }),
     ollamaFields,
     openaiFields,
@@ -533,28 +541,33 @@ function buildAssistant() {
 /* ── Voice ──────────────────────────────────────────────────── */
 
 function buildVoice() {
-  const lang = select({ onChange: (value) => setVoiceLang(value) });
-  const langHint = el('p', 'settings-hint', 'Controls speech recognition, spoken replies and the language the assistant writes in.');
+  // Empty value = follow the interface language (the default). Picking a code
+  // stores an explicit voice language that then stays put across interface
+  // language changes.
+  const lang = select({
+    onChange: (value) => (value ? setVoiceLang(value) : clearVoiceLang()),
+  });
+  const langHint = el('p', 'settings-hint', t('settings.voice.language.hint'));
 
   const engine = select({
     options: [
-      { value: 'whisper', label: 'Faster Whisper (recommended)' },
-      { value: 'vosk', label: 'Vosk (in-browser)' },
+      { value: 'whisper', label: t('settings.voice.sttEngine.whisper', null, 'Faster Whisper (recommended)') },
+      { value: 'vosk', label: t('settings.voice.sttEngine.vosk', null, 'Vosk (in-browser)') },
     ],
     onChange: (value) => {
       setSttEngine(value);
       updateWhisperUI();
       if (value === 'whisper' && whisperStatus?.whisper !== 'ready') {
-        toast('Faster Whisper is not running — voice will use Vosk', { type: 'info' });
+        toast(t('settings.voice.whisperNotRunning', null, 'Faster Whisper is not running — voice will use Vosk'), { type: 'info' });
       }
     },
   });
-  const engineHint = el('p', 'settings-hint', 'Faster Whisper runs on the machine hosting PEAK\u2019D! and streams words while you speak — noticeably more accurate than Vosk. Vosk runs entirely in this browser.');
+  const engineHint = el('p', 'settings-hint', t('settings.voice.sttEngineHint', null, 'Faster Whisper runs on the machine hosting PEAK\u2019D! and streams words while you speak — noticeably more accurate than Vosk. Vosk runs entirely in this browser.'));
 
   const whisperModel = select({
     options: [
-      { value: 'tiny', label: 'Tiny — included (~75 MB)' },
-      { value: 'small', label: 'Small — download (~480 MB)' },
+      { value: 'tiny', label: t('settings.voice.whisper.option.tiny', null, 'Tiny — included (~75 MB)') },
+      { value: 'small', label: t('settings.voice.whisper.option.small', null, 'Small — download (~480 MB)') },
     ],
     onChange: (value) => {
       setWhisperModel(value);
@@ -562,12 +575,12 @@ function buildVoice() {
     },
   });
   const whisperHint = el('p', 'settings-hint');
-  const whisperDownload = button({ label: 'Download', variant: 'quiet', size: 'sm' });
+  const whisperDownload = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
   whisperDownload.classList.add('hidden');
   const whisperRow = el('div', 'whisper-model-row');
   whisperRow.append(whisperHint, whisperDownload);
   const whisperFields = el('div');
-  whisperFields.append(field('Whisper model', whisperModel), whisperRow);
+  whisperFields.append(field(t('settings.voice.whisperModel', null, 'Whisper model'), whisperModel), whisperRow);
 
   let whisperStatus = null;
   let whisperStatusLoaded = false;
@@ -580,38 +593,41 @@ function buildVoice() {
 
     const info = whisperStatus?.whisper_models?.[current];
     const download = whisperStatus?.whisper_downloads?.[current];
-    const label = WHISPER_MODEL_LABEL[current] || current;
+    const label = t(WHISPER_MODEL_LABEL[current], null, current);
 
     if (whisperStatus && whisperStatus.whisper !== 'ready') {
-      whisperHint.textContent = 'Faster Whisper is not running on this machine — voice falls back to Vosk until it is started (./voice/start_whisper.sh).';
+      whisperHint.textContent = t('settings.voice.whisperMissing', null, 'Faster Whisper is not running on this machine — voice falls back to Vosk until it is started (./voice/start_whisper.sh).');
       whisperDownload.classList.add('hidden');
       return;
     }
     if (!whisperStatus) {
       whisperHint.textContent = whisperStatusLoaded
-        ? 'Could not check the speech service.'
-        : 'Checking the speech service…';
+        ? t('settings.voice.speechCheckFailed', null, 'Could not check the speech service.')
+        : t('settings.voice.speechChecking', null, 'Checking the speech service…');
       whisperDownload.classList.add('hidden');
       return;
     }
     if (info?.present) {
-      whisperHint.textContent = `${label} model ready${info.loaded ? ' and loaded' : ''}${current === 'tiny' ? ' (default)' : ''}.`;
+      const note = current === 'tiny' ? t('settings.voice.defaultNote', null, ' (default)') : '';
+      whisperHint.textContent = info.loaded
+        ? t('settings.voice.whisper.readyLoaded', { model: label, note }, `${label} model ready and loaded${note}.`)
+        : t('settings.voice.whisper.ready', { model: label, note }, `${label} model ready${note}.`);
       whisperDownload.classList.add('hidden');
       return;
     }
     if (download?.status === 'downloading') {
       const pct = download.total ? Math.round((download.bytes / download.total) * 100) : 0;
-      whisperHint.textContent = `Downloading the ${label.toLowerCase()} model… ${pct}%`;
+      whisperHint.textContent = t('common.downloadingModel', { model: label.toLowerCase(), percent: pct }, `Downloading the ${label.toLowerCase()} model… ${pct}%`);
       whisperDownload.classList.add('hidden');
       return;
     }
     if (download?.status === 'error') {
-      whisperHint.textContent = download.error || 'Download failed.';
+      whisperHint.textContent = download.error || t('common.downloadFailed', null, 'Download failed.');
       whisperDownload.classList.remove('hidden');
       whisperDownload.disabled = false;
       return;
     }
-    whisperHint.textContent = `${label} model is not downloaded yet — voice uses Tiny until you download it.`;
+    whisperHint.textContent = t('settings.voice.whisper.notDownloaded', { model: label }, `${label} model is not downloaded yet — voice uses Tiny until you download it.`);
     whisperDownload.classList.remove('hidden');
     whisperDownload.disabled = false;
   }
@@ -626,7 +642,10 @@ function buildVoice() {
       if (present || state === 'error') {
         clearInterval(whisperPoll);
         whisperPoll = null;
-        if (present) toast(`${WHISPER_MODEL_LABEL[current] || current} model ready`, { type: 'info' });
+        if (present) {
+          const label = t(WHISPER_MODEL_LABEL[current], null, current);
+          toast(t('settings.voice.whisper.readyToast', { model: label }, `${label} model ready`), { type: 'info' });
+        }
       }
     }, 1500);
     cleanups.push(() => { clearInterval(whisperPoll); whisperPoll = null; });
@@ -640,17 +659,17 @@ function buildVoice() {
         method: 'POST',
         body: JSON.stringify({ model: current }),
       });
-      toast(`Downloading the ${current} model in the background…`, { type: 'info' });
+      toast(t('settings.voice.whisper.downloadingBackground', { model: current }, `Downloading the ${current} model in the background…`), { type: 'info' });
       pollWhisperDownload();
     } catch (e) {
-      toast(e.message || 'Could not start the download', { type: 'error' });
+      toast(e.message || t('common.downloadStartFailed', null, 'Could not start the download'), { type: 'error' });
       whisperDownload.disabled = false;
     }
   });
 
   const ttsVoice = select({
     options: [
-      { value: '', label: 'Default (server)' },
+      { value: '', label: t('common.defaultServer', null, 'Default (server)') },
       ...voicesForEngine(getTtsEngine()).map((v) => ({ value: v, label: v })),
     ],
     onChange: (value) => {
@@ -662,22 +681,22 @@ function buildVoice() {
   // ── Speech output engine ────────────────────────────────────
   const ttsEngine = select({
     options: [
-      { value: 'supertonic', label: 'Supertonic (default)' },
-      { value: 'qwen', label: 'Qwen3-TTS (experimental)' },
+      { value: 'supertonic', label: t('settings.voice.ttsEngine.supertonic', null, 'Supertonic (default)') },
+      { value: 'qwen', label: t('settings.voice.ttsEngine.qwen', null, 'Qwen3-TTS (experimental)') },
     ],
     onChange: (value) => {
       setTtsEngine(value);
       updateTtsUI();
       if (value === 'qwen' && qwenStatus && qwenStatus.qwen !== 'ready') {
-        toast('Qwen3-TTS is not running — Supertonic will keep speaking', { type: 'info' });
+        toast(t('settings.voice.qwenNotRunning', null, 'Qwen3-TTS is not running — Supertonic will keep speaking'), { type: 'info' });
       }
     },
   });
 
   const qwenModel = select({
     options: [
-      { value: '0.6b-customvoice', label: '0.6B CustomVoice — recommended (~605 MB)' },
-      { value: '1.7b-customvoice', label: '1.7B CustomVoice — better (~1.2 GB)' },
+      { value: '0.6b-customvoice', label: t('settings.voice.qwen.option.06b', null, '0.6B CustomVoice — recommended (~605 MB)') },
+      { value: '1.7b-customvoice', label: t('settings.voice.qwen.option.17b', null, '1.7B CustomVoice — better (~1.2 GB)') },
     ],
     onChange: (value) => {
       setQwenModel(value);
@@ -685,18 +704,18 @@ function buildVoice() {
     },
   });
   const qwenHint = el('p', 'settings-hint');
-  const qwenDownload = button({ label: 'Download', variant: 'quiet', size: 'sm' });
+  const qwenDownload = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
   qwenDownload.classList.add('hidden');
   // Reload the sidecar after any pause (and for troubleshooting): kills the
   // process holding the port and re-runs the idempotent launcher.
-  const qwenReload = button({ label: 'Reload', variant: 'quiet', size: 'sm' });
+  const qwenReload = button({ label: t('settings.voice.reload', null, 'Reload'), variant: 'quiet', size: 'sm' });
   on(qwenReload, 'click', async () => {
     qwenReload.disabled = true;
     try {
       await apiFetch('/api/voice/qwen/restart', { method: 'POST' });
-      toast('Restarting Qwen3-TTS…', { type: 'info' });
+      toast(t('settings.voice.qwenRestarting', null, 'Restarting Qwen3-TTS…'), { type: 'info' });
     } catch (e) {
-      toast(e.message || 'Could not restart Qwen3-TTS', { type: 'error' });
+      toast(e.message || t('settings.voice.qwenRestartFailed', null, 'Could not restart Qwen3-TTS'), { type: 'error' });
     } finally {
       setTimeout(() => { qwenReload.disabled = false; }, 1500);
     }
@@ -704,7 +723,7 @@ function buildVoice() {
   const qwenRow = el('div', 'whisper-model-row');
   qwenRow.append(qwenHint, qwenDownload, qwenReload);
   const qwenFields = el('div');
-  qwenFields.append(field('Qwen model', qwenModel), qwenRow);
+  qwenFields.append(field(t('settings.voice.qwenModel', null, 'Qwen model'), qwenModel), qwenRow);
 
   let qwenStatus = null;
   let qwenPoll = null;
@@ -723,7 +742,7 @@ function buildVoice() {
     qwenFields.classList.toggle('hidden', engine !== 'qwen');
 
     ttsVoice.setOptions([
-      { value: '', label: 'Default (server)' },
+      { value: '', label: t('common.defaultServer', null, 'Default (server)') },
       ...voicesForEngine(engine).map((v) => ({ value: v, label: v })),
     ]);
     const current = getTtsVoice(engine);
@@ -737,34 +756,34 @@ function buildVoice() {
     qwenModel.select.value = current;
     const info = qwenStatus?.qwen_models?.[current];
     const download = qwenStatus?.qwen_downloads?.[current];
-    const label = QWEN_MODEL_LABEL[current] || current;
+    const label = t(QWEN_MODEL_LABEL[current], null, current);
 
     if (!qwenStatus) {
-      qwenHint.textContent = 'Checking the speech service…';
+      qwenHint.textContent = t('settings.voice.speechChecking', null, 'Checking the speech service…');
       qwenDownload.classList.add('hidden');
       return;
     }
     if (info?.present) {
-      qwenHint.textContent =
-        `${label} model ready${current === '0.6b-customvoice' ? ' (default)' : ''}`
-        + (qwenStatus.qwen === 'ready' ? '.' : ' — start the engine to use it.');
+      const note = current === '0.6b-customvoice' ? t('settings.voice.defaultNote', null, ' (default)') : '';
+      qwenHint.textContent = qwenStatus.qwen === 'ready'
+        ? t('settings.voice.qwen.ready', { model: label, note }, `${label} model ready${note}.`)
+        : t('settings.voice.qwen.readyStopped', { model: label, note }, `${label} model ready${note} — start the engine to use it.`);
       qwenDownload.classList.add('hidden');
       return;
     }
     if (download?.status === 'downloading') {
       const pct = download.total ? Math.round((download.bytes / download.total) * 100) : 0;
-      qwenHint.textContent = `Downloading the ${label} model… ${pct}%`;
+      qwenHint.textContent = t('common.downloadingModel', { model: label, percent: pct }, `Downloading the ${label} model… ${pct}%`);
       qwenDownload.classList.add('hidden');
       return;
     }
     if (download?.status === 'error') {
-      qwenHint.textContent = download.error || 'Download failed.';
+      qwenHint.textContent = download.error || t('common.downloadFailed', null, 'Download failed.');
       qwenDownload.classList.remove('hidden');
       qwenDownload.disabled = false;
       return;
     }
-    qwenHint.textContent =
-      `${label} model is not downloaded yet — download it to use Qwen3-TTS.`;
+    qwenHint.textContent = t('settings.voice.qwen.notDownloaded', { model: label }, `${label} model is not downloaded yet — download it to use Qwen3-TTS.`);
     qwenDownload.classList.remove('hidden');
     qwenDownload.disabled = false;
   }
@@ -795,7 +814,10 @@ function buildVoice() {
       if (present || state === 'error') {
         clearInterval(qwenPoll);
         qwenPoll = null;
-        if (present) toast(`${QWEN_MODEL_LABEL[current] || current} model ready`, { type: 'info' });
+        if (present) {
+          const label = t(QWEN_MODEL_LABEL[current], null, current);
+          toast(t('settings.voice.qwen.readyToast', { model: label }, `${label} model ready`), { type: 'info' });
+        }
       }
     }, 1500);
     cleanups.push(() => { clearInterval(qwenPoll); qwenPoll = null; });
@@ -809,10 +831,11 @@ function buildVoice() {
         method: 'POST',
         body: JSON.stringify({ model: current }),
       });
-      toast(`Downloading ${QWEN_MODEL_LABEL[current] || current} in the background…`, { type: 'info' });
+      const label = t(QWEN_MODEL_LABEL[current], null, current);
+      toast(t('settings.voice.qwen.downloadingBackground', { model: label }, `Downloading ${label} in the background…`), { type: 'info' });
       pollQwenDownload();
     } catch (e) {
-      toast(e.message || 'Could not start the download', { type: 'error' });
+      toast(e.message || t('common.downloadStartFailed', null, 'Could not start the download'), { type: 'error' });
       qwenDownload.disabled = false;
     }
   });
@@ -824,15 +847,15 @@ function buildVoice() {
       setTtsSpeed(value);
     },
   });
-  const speed = sliderField('Speech speed', `${getTtsSpeed().toFixed(1)}×`, speedControl);
+  const speed = sliderField(t('settings.voice.speechSpeed', null, 'Speech speed'), `${getTtsSpeed().toFixed(1)}×`, speedControl);
 
   const silence = select({
     options: [
-      { value: '4000', label: '4 seconds' },
-      { value: '6000', label: '6 seconds' },
-      { value: '8000', label: '8 seconds' },
-      { value: '12000', label: '12 seconds' },
-      { value: '20000', label: '20 seconds' },
+      { value: '4000', label: t('settings.voice.seconds', { count: 4 }, '4 seconds') },
+      { value: '6000', label: t('settings.voice.seconds', { count: 6 }, '6 seconds') },
+      { value: '8000', label: t('settings.voice.seconds', { count: 8 }, '8 seconds') },
+      { value: '12000', label: t('settings.voice.seconds', { count: 12 }, '12 seconds') },
+      { value: '20000', label: t('settings.voice.seconds', { count: 20 }, '20 seconds') },
     ],
     onChange: (value) => setSilenceTimeout(Number(value)),
   });
@@ -842,8 +865,8 @@ function buildVoice() {
   }
 
   const wake = toggleRow({
-    label: 'Wake word',
-    hint: 'Long-press listens for “Hey…” before a command; when off it just listens.',
+    label: t('settings.voice.wakeWord', null, 'Wake word'),
+    hint: t('settings.voice.wakeWordHint', null, 'Long-press listens for “Hey…” before a command; when off it just listens.'),
     checked: getWakeWord(),
     onChange: (checked) => setWakeWord(checked),
   });
@@ -853,19 +876,22 @@ function buildVoice() {
   void (async () => {
     try {
       const res = await apiFetch('/api/voice/languages');
-      lang.setOptions(res.data.map((l) => ({
-        value: l.code,
-        label: `${l.code.toUpperCase()}${l.vosk_available ? '' : ' (TTS only)'}`,
-      })));
+      lang.setOptions([
+        { value: '', label: t('settings.voice.language.auto') },
+        ...res.data.map((l) => ({
+          value: l.code,
+          label: `${l.code.toUpperCase()}${l.vosk_available ? '' : t('settings.voice.ttsOnly', null, ' (TTS only)')}`,
+        })),
+      ]);
+      // The stored value is the *override*; the empty option means "follow the
+      // interface language", which getVoiceLang() resolves at use time.
       const explicit = getVoiceLangExplicit();
-      const resolved = explicit || getVoiceLang();
       const codes = res.data.map((l) => l.code);
-      const chosen = codes.includes(resolved) ? resolved : 'en';
-      lang.select.value = chosen;
-      if (!explicit) setVoiceLang(chosen);
+      if (explicit && codes.includes(explicit)) lang.select.value = explicit;
+      else lang.select.value = codes.includes(getVoiceLang()) ? '' : 'en';
     } catch (_) {
-      lang.setOptions([{ value: 'en', label: 'EN' }]);
-      lang.select.value = 'en';
+      lang.setOptions([{ value: '', label: t('settings.voice.language.auto') }, { value: 'en', label: 'EN' }]);
+      lang.select.value = '';
     }
   })();
 
@@ -873,22 +899,26 @@ function buildVoice() {
   void refreshVoiceStatus();
 
   return [
-    field('Language', lang),
+    field(t('settings.voice.language'), lang),
     langHint,
-    heading('Speech recognition'),
-    field('Engine', engine),
+    heading(t('settings.voice.sttHeading', null, 'Speech recognition')),
+    field(t('settings.voice.sttEngine', null, 'Engine'), engine),
     engineHint,
     whisperFields,
-    heading('Speech output'),
-    field('Engine', ttsEngine, {
-      hint: 'Supertonic is bundled and always available. Qwen3-TTS sounds more natural, '
+    heading(t('settings.voice.ttsHeading', null, 'Speech output')),
+    field(t('settings.voice.ttsEngine', null, 'Engine'), ttsEngine, {
+      hint: t('settings.voice.ttsEngineHint', null, 'Supertonic is bundled and always available. Qwen3-TTS sounds more natural, '
         + 'runs on your GPU through Vulkan when one is available, and needs a one-time '
-        + 'build plus a model download.',
+        + 'build plus a model download.'),
     }),
     qwenFields,
-    field('Voice', ttsVoice, { hint: 'The voice used for spoken replies.' }),
+    field(t('settings.voice.voice', null, 'Voice'), ttsVoice, {
+      hint: t('settings.voice.voiceHint', null, 'The voice used for spoken replies.'),
+    }),
     speed.wrap,
-    field('Stop listening after', silence, { hint: 'How long to wait for speech before canceling a tap-to-talk input.' }),
+    field(t('settings.voice.stopListening', null, 'Stop listening after'), silence, {
+      hint: t('settings.voice.stopListeningHint', null, 'How long to wait for speech before canceling a tap-to-talk input.'),
+    }),
     wake,
   ];
 }
@@ -898,35 +928,35 @@ function buildVoice() {
 /* ── Images (local image generation) ────────────────────────── */
 
 const IMAGE_QUALITY_BLURB = {
-  fast: 'smallest and fastest — leaves room for voice',
-  balanced: 'a bit more detail',
-  high: 'crisp text and fine texture, slower to load',
-  max: 'near-lossless, the largest download',
+  fast: 'settings.images.quality.fast.blurb',
+  balanced: 'settings.images.quality.balanced.blurb',
+  high: 'settings.images.quality.high.blurb',
+  max: 'settings.images.quality.max.blurb',
 };
 
 const IMAGE_MODELS = [
   {
     value: 'z-image',
-    label: 'Z-Image Turbo',
-    hint: 'Z-Image Turbo runs locally and stays light — the default. Larger tiers render with more detail and need more memory and disk.',
+    labelKey: 'settings.images.model.zImage',
+    hintKey: 'settings.images.model.zImage.hint',
   },
   {
     value: 'qwen-image-2.1',
-    label: 'Qwen-Image 2.1 Turbo',
-    hint: 'Qwen-Image 2.1 renders text and fine detail better, on an 8-step schedule. Heavier than Z-Image, and the weights are under the Qwen Research License — non-commercial use.',
+    labelKey: 'settings.images.model.qwenImage',
+    hintKey: 'settings.images.model.qwenImage.hint',
   },
 ];
 
 const IMAGE_QUALITY_OPTIONS = [
-  { value: 'fast', label: 'Fast — recommended' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'high', label: 'High' },
-  { value: 'max', label: 'Max' },
+  { value: 'fast', labelKey: 'settings.images.quality.fast' },
+  { value: 'balanced', labelKey: 'settings.images.quality.balanced' },
+  { value: 'high', labelKey: 'settings.images.quality.high' },
+  { value: 'max', labelKey: 'settings.images.quality.max' },
 ];
 
 function buildImage() {
   const model = select({
-    options: IMAGE_MODELS.map((m) => ({ value: m.value, label: m.label })),
+    options: IMAGE_MODELS.map((m) => ({ value: m.value, label: t(m.labelKey) })),
     onChange: (value) => {
       setImageModel(value);
       updateImageUI();
@@ -935,7 +965,7 @@ function buildImage() {
   model.select.value = getImageModel();
 
   const quality = select({
-    options: IMAGE_QUALITY_OPTIONS,
+    options: IMAGE_QUALITY_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) })),
     onChange: (value) => {
       setImageQuality(value);
       updateImageUI();
@@ -944,7 +974,7 @@ function buildImage() {
 
   const modelHint = el('p', 'settings-hint');
   const hint = el('p', 'settings-hint');
-  const download = button({ label: 'Download', variant: 'quiet', size: 'sm' });
+  const download = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
   download.classList.add('hidden');
   const row = el('div', 'whisper-model-row');
   row.append(hint, download);
@@ -960,7 +990,8 @@ function buildImage() {
   const baseFor = (id) => status?.downloads?.[id]?.base || null;
   const describe = (id, key) => {
     const info = infoFor(id, key);
-    return info ? `${info.quant} · ${info.size} · ${IMAGE_QUALITY_BLURB[key] || ''}` : '';
+    const blurb = IMAGE_QUALITY_BLURB[key];
+    return info ? `${info.quant} · ${info.size} · ${blurb ? t(blurb) : ''}` : '';
   };
 
   function updateImageUI() {
@@ -968,43 +999,43 @@ function buildImage() {
     const current = getImageQuality();
     model.select.value = currentModel;
     quality.select.value = current;
-    modelHint.textContent = modelDef(currentModel).hint;
+    modelHint.textContent = t(modelDef(currentModel).hintKey);
     const info = infoFor(currentModel, current);
     const base = baseFor(currentModel);
 
     if (!status) {
       hint.textContent = statusLoaded
-        ? 'Could not check the image models.'
-        : 'Checking the image models…';
+        ? t('settings.images.checkFailed', null, 'Could not check the image models.')
+        : t('settings.images.checking', null, 'Checking the image models…');
       download.classList.add('hidden');
       return;
     }
     if (!status.inventory?.sd_cli) {
-      hint.textContent = 'Local image generation is unavailable: the sd-cli binary was not found (set Z_IMAGE_SD_CLI).';
+      hint.textContent = t('settings.images.unavailable', null, 'Local image generation is unavailable: the sd-cli binary was not found (set Z_IMAGE_SD_CLI).');
       download.classList.add('hidden');
       return;
     }
     if (base?.status === 'downloading') {
       const pct = base.total ? Math.round((base.bytes / base.total) * 100) : 0;
-      hint.textContent = `Downloading the shared model files… ${pct}%`;
+      hint.textContent = t('common.downloadingShared', { percent: pct }, `Downloading the shared model files… ${pct}%`);
       download.classList.add('hidden');
       return;
     }
     const dl = downloadFor(currentModel, current);
     if (dl?.status === 'downloading') {
       const pct = dl.total ? Math.round((dl.bytes / dl.total) * 100) : 0;
-      hint.textContent = `Downloading the ${current} model… ${pct}%`;
+      hint.textContent = t('common.downloadingModel', { model: current, percent: pct }, `Downloading the ${current} model… ${pct}%`);
       download.classList.add('hidden');
       return;
     }
     if (dl?.status === 'error') {
-      hint.textContent = dl.error || 'Download failed.';
+      hint.textContent = dl.error || t('common.downloadFailed', null, 'Download failed.');
       download.classList.remove('hidden');
       download.disabled = false;
       return;
     }
     if (info?.ready) {
-      hint.textContent = `Ready — ${describe(currentModel, current)}. Images run locally on this machine; larger sizes take minutes.`;
+      hint.textContent = t('settings.images.ready', { details: describe(currentModel, current) }, `Ready — ${describe(currentModel, current)}. Images run locally on this machine; larger sizes take minutes.`);
       download.classList.add('hidden');
       return;
     }
@@ -1013,7 +1044,7 @@ function buildImage() {
       if (!shared.present) missing.push(shared.label);
     }
     if (!info?.present) missing.push(describe(currentModel, current) || current);
-    hint.textContent = `Not downloaded yet — ${missing.join(', ')}. The assistant asks before fetching.`;
+    hint.textContent = t('common.notDownloaded', { missing: missing.join(', ') }, `Not downloaded yet — ${missing.join(', ')}. The assistant asks before fetching.`);
     download.classList.remove('hidden');
     download.disabled = false;
   }
@@ -1040,7 +1071,7 @@ function buildImage() {
       if (infoFor(currentModel, current)?.ready || state === 'error') {
         clearInterval(poll);
         poll = null;
-        if (infoFor(currentModel, current)?.ready) toast('Image model ready', { type: 'info' });
+        if (infoFor(currentModel, current)?.ready) toast(t('settings.images.modelReady', null, 'Image model ready'), { type: 'info' });
       }
     }, 1500);
   }
@@ -1054,10 +1085,10 @@ function buildImage() {
         method: 'POST',
         body: JSON.stringify({ model: currentModel, quality: current }),
       });
-      toast('Downloading image models in the background…', { type: 'info' });
+      toast(t('settings.images.downloadingBackground', null, 'Downloading image models in the background…'), { type: 'info' });
       pollDownload();
     } catch (e) {
-      toast(e.message || 'Could not start the download', { type: 'error' });
+      toast(e.message || t('common.downloadStartFailed', null, 'Could not start the download'), { type: 'error' });
       download.disabled = false;
     }
   });
@@ -1065,11 +1096,11 @@ function buildImage() {
   refreshImageStatus();
   cleanups.push(() => { clearInterval(poll); poll = null; });
 
-  const modelField = field('Model', model);
+  const modelField = field(t('settings.images.model', null, 'Model'), model);
   modelField.appendChild(modelHint);
   return [
     modelField,
-    field('Quality model', quality),
+    field(t('common.qualityModel', null, 'Quality model'), quality),
     row,
   ];
 }
@@ -1077,18 +1108,18 @@ function buildImage() {
 /* ── Music (local song generation) ──────────────────────────── */
 
 const SONG_QUALITY_BLURB = {
-  q4: 'the compact tier — the usual choice for 8 GB cards',
-  q8: 'near-lossless, a larger download',
+  q4: 'settings.music.quality.q4.blurb',
+  q8: 'settings.music.quality.q8.blurb',
 };
 
 const SONG_QUALITY_OPTIONS = [
-  { value: 'q4', label: 'Compact — recommended' },
-  { value: 'q8', label: 'Studio' },
+  { value: 'q4', labelKey: 'settings.music.quality.q4' },
+  { value: 'q8', labelKey: 'settings.music.quality.q8' },
 ];
 
 function buildMusic() {
   const quality = select({
-    options: SONG_QUALITY_OPTIONS,
+    options: SONG_QUALITY_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) })),
     onChange: (value) => {
       setSongQuality(value);
       updateMusicUI();
@@ -1096,7 +1127,7 @@ function buildMusic() {
   });
 
   const hint = el('p', 'settings-hint');
-  const download = button({ label: 'Download', variant: 'quiet', size: 'sm' });
+  const download = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
   download.classList.add('hidden');
   const row = el('div', 'whisper-model-row');
   row.append(hint, download);
@@ -1110,7 +1141,8 @@ function buildMusic() {
   const baseFor = () => status?.downloads?.base || null;
   const describe = (key) => {
     const info = infoFor(key);
-    return info ? `${info.quant} · ${info.size} · ${SONG_QUALITY_BLURB[key] || ''}` : '';
+    const blurb = SONG_QUALITY_BLURB[key];
+    return info ? `${info.quant} · ${info.size} · ${blurb ? t(blurb) : ''}` : '';
   };
 
   function updateMusicUI() {
@@ -1121,37 +1153,37 @@ function buildMusic() {
 
     if (!status) {
       hint.textContent = statusLoaded
-        ? 'Could not check the song models.'
-        : 'Checking the song models…';
+        ? t('settings.music.checkFailed', null, 'Could not check the song models.')
+        : t('settings.music.checking', null, 'Checking the song models…');
       download.classList.add('hidden');
       return;
     }
     if (!status.inventory?.engine) {
-      hint.textContent = 'Local song generation is unavailable: the ace-server engine was not found (set YUE2_ENGINE or run scripts/install-yue2-engine.sh).';
+      hint.textContent = t('settings.music.unavailable', null, 'Local song generation is unavailable: the ace-server engine was not found (set YUE2_ENGINE or run scripts/install-yue2-engine.sh).');
       download.classList.add('hidden');
       return;
     }
     if (base?.status === 'downloading') {
       const pct = base.total ? Math.round((base.bytes / base.total) * 100) : 0;
-      hint.textContent = `Downloading the shared model files… ${pct}%`;
+      hint.textContent = t('common.downloadingShared', { percent: pct }, `Downloading the shared model files… ${pct}%`);
       download.classList.add('hidden');
       return;
     }
     const dl = downloadFor(current);
     if (dl?.status === 'downloading') {
       const pct = dl.total ? Math.round((dl.bytes / dl.total) * 100) : 0;
-      hint.textContent = `Downloading the ${current} model… ${pct}%`;
+      hint.textContent = t('common.downloadingModel', { model: current, percent: pct }, `Downloading the ${current} model… ${pct}%`);
       download.classList.add('hidden');
       return;
     }
     if (dl?.status === 'error') {
-      hint.textContent = dl.error || 'Download failed.';
+      hint.textContent = dl.error || t('common.downloadFailed', null, 'Download failed.');
       download.classList.remove('hidden');
       download.disabled = false;
       return;
     }
     if (info?.ready) {
-      hint.textContent = `Ready — ${describe(current)}. Songs render locally and take several minutes.`;
+      hint.textContent = t('settings.music.ready', { details: describe(current) }, `Ready — ${describe(current)}. Songs render locally and take several minutes.`);
       download.classList.add('hidden');
       return;
     }
@@ -1160,7 +1192,7 @@ function buildMusic() {
       if (!shared.present) missing.push(shared.label);
     }
     if (!info?.present) missing.push(describe(current) || current);
-    hint.textContent = `Not downloaded yet — ${missing.join(', ')}. The assistant asks before fetching.`;
+    hint.textContent = t('common.notDownloaded', { missing: missing.join(', ') }, `Not downloaded yet — ${missing.join(', ')}. The assistant asks before fetching.`);
     download.classList.remove('hidden');
     download.disabled = false;
   }
@@ -1186,7 +1218,7 @@ function buildMusic() {
       if (infoFor(current)?.ready || state === 'error') {
         clearInterval(poll);
         poll = null;
-        if (infoFor(current)?.ready) toast('Song model ready', { type: 'info' });
+        if (infoFor(current)?.ready) toast(t('settings.music.modelReady', null, 'Song model ready'), { type: 'info' });
       }
     }, 1500);
   }
@@ -1199,10 +1231,10 @@ function buildMusic() {
         method: 'POST',
         body: JSON.stringify({ quality: current }),
       });
-      toast('Downloading the song models in the background…', { type: 'info' });
+      toast(t('settings.music.downloadingBackground', null, 'Downloading the song models in the background…'), { type: 'info' });
       pollDownload();
     } catch (e) {
-      toast(e.message || 'Could not start the download', { type: 'error' });
+      toast(e.message || t('common.downloadStartFailed', null, 'Could not start the download'), { type: 'error' });
       download.disabled = false;
     }
   });
@@ -1210,8 +1242,8 @@ function buildMusic() {
   refreshMusicStatus();
   cleanups.push(() => { clearInterval(poll); poll = null; });
 
-  const qualityField = field('Quality model', quality);
-  qualityField.appendChild(el('p', 'settings-hint', 'YuE2 turns style + lyrics into a 48 kHz stereo song on this machine.'));
+  const qualityField = field(t('common.qualityModel', null, 'Quality model'), quality);
+  qualityField.appendChild(el('p', 'settings-hint', t('settings.music.hint', null, 'YuE2 turns style + lyrics into a 48 kHz stereo song on this machine.')));
   return [qualityField, row];
 }
 
@@ -1224,13 +1256,13 @@ function buildPower() {
     },
   });
   mode.select.value = getPowerMode();
-  const modeField = field('Power mode', mode);
+  const modeField = field(t('power.mode'), mode);
   const modeHint = el('p', 'settings-hint', powerModeHint(getPowerMode()));
   modeField.appendChild(modeHint);
 
   const auto = toggleRow({
-    label: 'Automatic Power Saver',
-    hint: 'In Balanced, switch to Power Saver when on battery or below 20%.',
+    label: t('power.autoSaver'),
+    hint: t('settings.power.autoSaverHint', null, 'In Balanced, switch to Power Saver when on battery or below 20%.'),
     checked: getAutoPowerSaver(),
     onChange: (on) => {
       setAutoPowerSaver(on);
@@ -1239,9 +1271,9 @@ function buildPower() {
   });
 
   const lowAi = toggleRow({
-    label: 'Low-power AI',
-    hint: 'Let Power Saver use Vosk for speech recognition and Supertonic for replies '
-      + 'instead of faster-whisper and Qwen3-TTS.',
+    label: t('power.lowAi'),
+    hint: t('settings.power.lowAiHint', null, 'Let Power Saver use Vosk for speech recognition and Supertonic for replies '
+      + 'instead of faster-whisper and Qwen3-TTS.'),
     checked: getLowPowerAi(),
     onChange: (on) => {
       setLowPowerAi(on);
@@ -1255,17 +1287,17 @@ function buildPower() {
     const status = getPowerBatteryStatus();
     const battery = status && status.available
       ? [
-        status.percent != null ? `${status.percent}%` : 'Battery',
+        status.percent != null ? `${status.percent}%` : t('battery.label'),
         status.state || null,
-        status.ac_online === true ? 'plugged in' : null,
+        status.ac_online === true ? t('settings.power.pluggedIn', null, 'plugged in') : null,
       ].filter(Boolean).join(' · ')
-      : 'No battery on this machine';
+      : t('battery.none');
     const effective = getEffectivePowerMode();
     const engines = describeEngines(getEffectiveSttEngine(), getEffectiveTtsEngine());
     modeHint.textContent = powerModeHint(getPowerMode());
     summary.textContent = effective === 'saver'
-      ? `${battery}. Power Saver is in force — ${engines}.`
-      : `${battery}. ${powerModeLabel(effective)} — full-quality AI (${engines}).`;
+      ? t('settings.power.summary.saver', { battery, engines }, `${battery}. Power Saver is in force — ${engines}.`)
+      : t('settings.power.summary.mode', { battery, mode: powerModeLabel(effective), engines }, `${battery}. ${powerModeLabel(effective)} — full-quality AI (${engines}).`);
   }
   refreshPowerSummary();
   on(window, 'power:settings', refreshPowerSummary);
@@ -1276,16 +1308,16 @@ function buildPower() {
     modeField,
     auto,
     lowAi,
-    heading('Display'),
+    heading(t('common.display', null, 'Display')),
     backlightField(
-      'Screen brightness',
+      t('settings.power.screenBrightness', null, 'Screen brightness'),
       '/api/screen/brightness',
-      'This machine does not expose a writable panel backlight to the app.',
+      t('settings.power.screenBacklightUnavailable', null, 'This machine does not expose a writable panel backlight to the app.'),
     ),
     backlightField(
-      'Keyboard backlight',
+      t('settings.power.keyboardBacklight', null, 'Keyboard backlight'),
       '/api/keyboard/backlight',
-      'This machine does not expose a writable keyboard backlight to the app.',
+      t('settings.power.keyboardBacklightUnavailable', null, 'This machine does not expose a writable keyboard backlight to the app.'),
     ),
   ];
 }
@@ -1320,7 +1352,7 @@ function backlightField(label, endpoint, unavailableHint) {
       const s = res?.data;
       if (!s || !s.available || s.percent == null) {
         control.disabled = true;
-        value.textContent = 'Unavailable';
+        value.textContent = t('settings.power.unavailable', null, 'Unavailable');
         wrap.appendChild(el('p', 'settings-hint', unavailableHint));
         return;
       }
@@ -1328,11 +1360,11 @@ function backlightField(label, endpoint, unavailableHint) {
       value.textContent = `${s.percent}%`;
       if (s.writable === false) {
         control.disabled = true;
-        wrap.appendChild(el('p', 'settings-hint', 'The app cannot write this backlight on this machine.'));
+        wrap.appendChild(el('p', 'settings-hint', t('settings.power.backlightReadOnly', null, 'The app cannot write this backlight on this machine.')));
       }
     } catch (_) {
       control.disabled = true;
-      value.textContent = 'Unavailable';
+      value.textContent = t('settings.power.unavailable', null, 'Unavailable');
       wrap.appendChild(el('p', 'settings-hint', unavailableHint));
     }
   })();
@@ -1347,9 +1379,9 @@ function buildDesktop() {
 
   const mode = select({
     options: [
-      { value: 'master', label: 'Tiling' },
-      { value: 'columns', label: 'Columns' },
-      { value: 'windows', label: 'Windows' },
+      { value: 'master', label: t('settings.desktop.mode.tiling', null, 'Tiling') },
+      { value: 'columns', label: t('settings.desktop.mode.columns', null, 'Columns') },
+      { value: 'windows', label: t('settings.desktop.mode.windows', null, 'Windows') },
     ],
     onChange: (value) => {
       setDesktopLayout({ ...getDesktopLayout(), mode: value });
@@ -1360,10 +1392,10 @@ function buildDesktop() {
 
   const orientation = select({
     options: [
-      { value: 'left', label: 'Left' },
-      { value: 'right', label: 'Right' },
-      { value: 'top', label: 'Top' },
-      { value: 'bottom', label: 'Bottom' },
+      { value: 'left', label: t('common.left', null, 'Left') },
+      { value: 'right', label: t('common.right', null, 'Right') },
+      { value: 'top', label: t('common.top', null, 'Top') },
+      { value: 'bottom', label: t('common.bottom', null, 'Bottom') },
     ],
     onChange: (value) => setDesktopLayout({ ...getDesktopLayout(), orientation: value }),
   });
@@ -1376,7 +1408,7 @@ function buildDesktop() {
       setDesktopLayout({ ...getDesktopLayout(), master_ratio: value / 100 });
     },
   });
-  const ratio = sliderField('Master size', `${Math.round(layout.master_ratio * 100)}%`, ratioControl);
+  const ratio = sliderField(t('settings.desktop.masterSize', null, 'Master size'), `${Math.round(layout.master_ratio * 100)}%`, ratioControl);
 
   const gapControl = slider({
     min: 0, max: 40, step: 2, value: layout.gap,
@@ -1385,11 +1417,11 @@ function buildDesktop() {
       setLayout({ gap: value });
     },
   });
-  const gap = sliderField('Gap', `${layout.gap}px`, gapControl);
-  gap.wrap.appendChild(el('p', 'settings-hint', 'Window gaps — and the frame around them: the top bar\u2019s margins, the space to the workspace switcher and the window-to-screen edges.'));
+  const gap = sliderField(t('settings.desktop.gap', null, 'Gap'), `${layout.gap}px`, gapControl);
+  gap.wrap.appendChild(el('p', 'settings-hint', t('settings.desktop.gapHint', null, 'Window gaps — and the frame around them: the top bar\u2019s margins, the space to the workspace switcher and the window-to-screen edges.')));
 
   const tilingControls = el('div', 'settings-tiling-controls');
-  tilingControls.append(field('Master side', orientation), ratio.wrap, gap.wrap);
+  tilingControls.append(field(t('settings.desktop.masterSide', null, 'Master side'), orientation), ratio.wrap, gap.wrap);
 
   const syncTilingControls = () => {
     tilingControls.classList.toggle('hidden', mode.select.value === 'windows');
@@ -1397,11 +1429,11 @@ function buildDesktop() {
   syncTilingControls();
 
   const shortcuts = el('p', 'settings-hint');
-  shortcuts.innerHTML = 'Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.';
+  shortcuts.innerHTML = t('settings.desktop.shortcuts', null, 'Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.');
 
   return [
-    field('Layout', mode, {
-      hint: 'Tiling snaps windows into workspaces; Windows floats them as draggable, resizable desktop windows.',
+    field(t('settings.desktop.layout', null, 'Layout'), mode, {
+      hint: t('settings.desktop.layoutHint', null, 'Tiling snaps windows into workspaces; Windows floats them as draggable, resizable desktop windows.'),
     }),
     tilingControls,
     shortcuts,
@@ -1419,7 +1451,7 @@ function buildWindowSurfaceControls() {
       setDesktopSurface({ title_height: value });
     },
   });
-  const title = sliderField('Title bar height', `${surface.title_height}px`, titleControl);
+  const title = sliderField(t('settings.appearance.titleBarHeight', null, 'Title bar height'), `${surface.title_height}px`, titleControl);
 
   const radiusControl = slider({
     min: 0, max: 32, step: 1, value: surface.window_radius,
@@ -1428,7 +1460,7 @@ function buildWindowSurfaceControls() {
       setDesktopSurface({ window_radius: value });
     },
   });
-  const radius = sliderField('Window corners', `${surface.window_radius}px`, radiusControl);
+  const radius = sliderField(t('settings.appearance.windowCorners', null, 'Window corners'), `${surface.window_radius}px`, radiusControl);
 
   const opacityControl = slider({
     min: 60, max: 100, step: 1, value: surface.window_opacity,
@@ -1437,7 +1469,7 @@ function buildWindowSurfaceControls() {
       setDesktopSurface({ window_opacity: value });
     },
   });
-  const opacity = sliderField('Window opacity', `${surface.window_opacity}%`, opacityControl);
+  const opacity = sliderField(t('settings.appearance.windowOpacity', null, 'Window opacity'), `${surface.window_opacity}%`, opacityControl);
 
   const blurControl = slider({
     min: 0, max: 24, step: 1, value: surface.glass_blur,
@@ -1446,24 +1478,24 @@ function buildWindowSurfaceControls() {
       setDesktopSurface({ glass_blur: value });
     },
   });
-  const blur = sliderField('Glass blur', `${surface.glass_blur}px`, blurControl);
+  const blur = sliderField(t('settings.appearance.glassBlur', null, 'Glass blur'), `${surface.glass_blur}px`, blurControl);
 
   const background = toggleRow({
-    label: 'Blurred window background',
-    hint: 'The soft blurred mirror behind a window — its photo, PDF page, artwork or the accent glow. Turn off for flat, fully opaque-looking windows.',
+    label: t('settings.appearance.windowBackground', null, 'Blurred window background'),
+    hint: t('settings.appearance.windowBackgroundHint', null, 'The soft blurred mirror behind a window — its photo, PDF page, artwork or the accent glow. Turn off for flat, fully opaque-looking windows.'),
     checked: surface.window_background,
     onChange: (checked) => setDesktopSurface({ window_background: checked }),
   });
 
   const shadow = toggleRow({
-    label: 'Window shadows',
-    hint: 'Give windows a soft drop shadow instead of a flat hairline.',
+    label: t('settings.appearance.windowShadows', null, 'Window shadows'),
+    hint: t('settings.appearance.windowShadowsHint', null, 'Give windows a soft drop shadow instead of a flat hairline.'),
     checked: surface.window_shadow,
     onChange: (checked) => setDesktopSurface({ window_shadow: checked }),
   });
 
   return [
-    heading('Window surface'),
+    heading(t('settings.appearance.windowSurface', null, 'Window surface')),
     title.wrap,
     radius.wrap,
     opacity.wrap,
@@ -1476,32 +1508,32 @@ function buildWindowSurfaceControls() {
 function buildTopBarControls() {
   const immersive = getImmersive();
   const autohideBar = toggleRow({
-    label: 'Autohide the top bar',
-    hint: 'Slide the top bar away until the pointer reaches the edge it docks to.',
+    label: t('settings.appearance.autohideBar', null, 'Autohide the top bar'),
+    hint: t('settings.appearance.autohideBarHint', null, 'Slide the top bar away until the pointer reaches the edge it docks to.'),
     checked: immersive.autohide_bar,
     onChange: (checked) => setImmersive({ autohide_bar: checked }),
   });
   const barPosition = select({
     options: [
-      { value: 'top', label: 'Top' },
-      { value: 'left', label: 'Left' },
-      { value: 'right', label: 'Right' },
-      { value: 'center', label: 'Center' },
+      { value: 'top', label: t('common.top', null, 'Top') },
+      { value: 'left', label: t('common.left', null, 'Left') },
+      { value: 'right', label: t('common.right', null, 'Right') },
+      { value: 'center', label: t('common.center', null, 'Center') },
     ],
     onChange: (value) => setImmersive({ bar_position: value }),
   });
   barPosition.select.value = immersive.bar_position;
   const autohideOrb = toggleRow({
-    label: 'Autohide the voice bar',
-    hint: 'Slide the voice bar away until the pointer reaches the bottom centre.',
+    label: t('settings.appearance.autohideOrb', null, 'Autohide the voice bar'),
+    hint: t('settings.appearance.autohideOrbHint', null, 'Slide the voice bar away until the pointer reaches the bottom centre.'),
     checked: immersive.autohide_orb,
     onChange: (checked) => setImmersive({ autohide_orb: checked }),
   });
 
   return [
-    heading('Top bar & voice bar'),
+    heading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar')),
     autohideBar,
-    field('Top bar position', barPosition),
+    field(t('settings.appearance.topBarPosition', null, 'Top bar position'), barPosition),
     autohideOrb,
   ];
 }
@@ -1512,21 +1544,21 @@ function buildTopBarControls() {
 function buildHudChipControls() {
   const chips = getHudChips();
   const names = toggleRow({
-    label: 'Device names',
-    hint: 'Show the device or network name in the sound, network, Bluetooth and battery buttons.',
+    label: t('settings.appearance.deviceNames', null, 'Device names'),
+    hint: t('settings.appearance.deviceNamesHint', null, 'Show the device or network name in the sound, network, Bluetooth and battery buttons.'),
     checked: chips.name,
     onChange: (checked) => setHudChips({ name: checked }),
   });
   const percent = toggleRow({
-    label: 'Percentages',
-    hint: 'Show volume, signal and battery numbers. Turn both off for icon-only buttons.',
+    label: t('settings.appearance.percentages', null, 'Percentages'),
+    hint: t('settings.appearance.percentagesHint', null, 'Show volume, signal and battery numbers. Turn both off for icon-only buttons.'),
     checked: chips.percent,
     onChange: (checked) => setHudChips({ percent: checked }),
   });
 
   return [
-    heading('Host status chips'),
-    el('p', 'settings-hint', 'Choose what the sound, network, Bluetooth and battery buttons in the top bar show.'),
+    heading(t('settings.appearance.hostStatusChips', null, 'Host status chips')),
+    el('p', 'settings-hint', t('settings.appearance.hostStatusChipsHint', null, 'Choose what the sound, network, Bluetooth and battery buttons in the top bar show.')),
     names,
     percent,
   ];
@@ -1535,15 +1567,29 @@ function buildHudChipControls() {
 /* ── System ─────────────────────────────────────────────────── */
 
 function buildSystem() {
+  // Interface language. Applied live: the window re-renders itself through its
+  // `locale:change` listener, so the new language is visible on the spot.
+  const locale = select({
+    options: [
+      { value: '', label: t('settings.system.interfaceLanguage.auto', null, 'Automatic (system)') },
+      ...getAvailableLocales().map((l) => ({ value: l.code, label: l.name || l.code })),
+    ],
+    value: getUiLocale(),
+    onChange: (value) => setUiLocale(value),
+  });
+  const localeField = field(t('settings.system.interfaceLanguage', null, 'Interface language'), locale, {
+    hint: t('settings.system.interfaceLanguage.hint', null, 'Applies to the interface — menus, window chrome and labels — and to the voice (speech recognition and replies) unless a different one is chosen under Voice.'),
+  });
+
   const remember = toggleRow({
-    label: 'Remember my workspace',
-    hint: 'Restore your windows, layout and workspaces from last time.',
+    label: t('settings.system.remember', null, 'Remember my workspace'),
+    hint: t('settings.system.rememberHint', null, 'Restore your windows, layout and workspaces from last time.'),
     checked: getRemember(),
     onChange: (checked) => setRemember(checked),
   });
 
   const logoutBtn = button({
-    label: 'Log out',
+    label: t('settings.system.logOut', null, 'Log out'),
     variant: 'danger',
     onClick: async () => {
       try {
@@ -1561,14 +1607,15 @@ function buildSystem() {
       window.location.href = '/';
     },
   });
-  const logoutHint = el('p', 'settings-hint', 'Logging out returns you to the sign-in screen. Your plugins and chats stay as you set them.');
+  const logoutHint = el('p', 'settings-hint', t('settings.system.logOutHint', null, 'Logging out returns you to the sign-in screen. Your plugins and chats stay as you set them.'));
   const actions = el('div', 'settings-inline-actions');
   actions.appendChild(logoutBtn);
 
   return [
+    localeField,
     remember,
-    el('p', 'settings-hint', 'On: your windows, layout and workspaces come back exactly as you left them. Off: each sign-in starts with a clean desktop.'),
-    heading('Session'),
+    el('p', 'settings-hint', t('settings.system.rememberBody', null, 'On: your windows, layout and workspaces come back exactly as you left them. Off: each sign-in starts with a clean desktop.')),
+    heading(t('settings.system.session', null, 'Session')),
     actions,
     logoutHint,
   ];
@@ -1579,9 +1626,9 @@ function buildSystem() {
 function buildTouchBar() {
   const mode = select({
     options: [
-      { value: 'auto', label: 'Automatic' },
-      { value: 'on', label: 'Always on' },
-      { value: 'off', label: 'Off' },
+      { value: 'auto', label: t('settings.touchbar.mode.auto', null, 'Automatic') },
+      { value: 'on', label: t('settings.touchbar.mode.on', null, 'Always on') },
+      { value: 'off', label: t('settings.touchbar.mode.off', null, 'Off') },
     ],
     onChange: (value) => {
       setTouchBarEnabled(value);
@@ -1599,19 +1646,19 @@ function buildTouchBar() {
     const setting = getTouchBarEnabled();
     if (host) {
       state.textContent = setting === 'off'
-        ? 'A Touch Bar is present, but input is turned off.'
-        : 'A Touch Bar is present and its buttons are active.';
+        ? t('settings.touchbar.presentOff', null, 'A Touch Bar is present, but input is turned off.')
+        : t('settings.touchbar.presentOn', null, 'A Touch Bar is present and its buttons are active.');
     } else if (setting === 'on') {
-      state.textContent = 'No Touch Bar detected, but the buttons are forced on — press Ctrl+Alt+Shift with 1–9 or the − = , . keys to try them.';
+      state.textContent = t('settings.touchbar.forcedOn', null, 'No Touch Bar detected, but the buttons are forced on — press Ctrl+Alt+Shift with 1–9 or the − = , . keys to try them.');
     } else {
-      state.textContent = 'No Touch Bar detected on this machine. The buttons stay dormant, so a normal PC is unaffected.';
+      state.textContent = t('settings.touchbar.notDetected', null, 'No Touch Bar detected on this machine. The buttons stay dormant, so a normal PC is unaffected.');
     }
     buttons.textContent = TOUCHBAR_ACTIONS
       .map((entry) => `${entry.label} (${entry.code})`)
       .join(' · ');
     install.textContent = host
-      ? 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh installs this row through tiny-dfr.'
-      : 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh puts this row on the bar through tiny-dfr.';
+      ? t('settings.touchbar.installHost', null, 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh installs this row through tiny-dfr.')
+      : t('settings.touchbar.install', null, 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh puts this row on the bar through tiny-dfr.');
   }
 
   refreshTouchBarHint();
@@ -1619,9 +1666,11 @@ function buildTouchBar() {
   on(window, 'touchbar:settings', refreshTouchBarHint);
 
   return [
-    field('Touch Bar', mode, { hint: 'Show the assistant controls on a MacBook Touch Bar. Automatic only uses the bar when this machine has one.' }),
+    field(t('settings.touchbar.setting', null, 'Touch Bar'), mode, {
+      hint: t('settings.touchbar.settingHint', null, 'Show the assistant controls on a MacBook Touch Bar. Automatic only uses the bar when this machine has one.'),
+    }),
     state,
-    heading('Buttons'),
+    heading(t('settings.touchbar.buttons', null, 'Buttons')),
     buttons,
     install,
   ];
@@ -1643,65 +1692,65 @@ function buildRemote() {
   let revealed = false;
 
   const serverToggle = toggleRow({
-    label: 'Server',
-    hint: 'Let your other devices reach this desktop over Iroh — end-to-end encrypted, no port forwarding. The link changes every time you start or stop.',
+    label: t('settings.remote.server', null, 'Server'),
+    hint: t('settings.remote.serverHint', null, 'Let your other devices reach this desktop over Iroh — end-to-end encrypted, no port forwarding. The link changes every time you start or stop.'),
     checked: false,
     onChange: setEnabled,
   });
 
   const terminalToggle = toggleRow({
-    label: 'Allow Terminal from remote clients',
-    hint: 'The Terminal is a real shell on this machine. Off by default; enable it only for devices you trust.',
+    label: t('settings.remote.allowTerminal', null, 'Allow Terminal from remote clients'),
+    hint: t('settings.remote.allowTerminalHint', null, 'The Terminal is a real shell on this machine. Off by default; enable it only for devices you trust.'),
     checked: getRemoteAllowTerminal(),
     onChange: (on) => { setRemoteAllowTerminal(on); },
   });
 
-  const statusLine = el('p', 'settings-hint', 'Reading…');
+  const statusLine = el('p', 'settings-hint', t('settings.remote.reading', null, 'Reading…'));
   const ticketEl = el('code', 'remote-ticket');
   const qrEl = el('img', 'remote-qr');
-  qrEl.alt = 'Connection QR code';
+  qrEl.alt = t('settings.remote.qrAlt', null, 'Connection QR code');
 
   const revealBtn = button({
-    label: 'Reveal link',
+    label: t('settings.remote.revealLink', null, 'Reveal link'),
     variant: 'ghost',
     onClick: () => { revealed = !revealed; render(); },
   });
   const copyBtn = button({
-    label: 'Copy',
+    label: t('common.copy'),
     variant: 'ghost',
     onClick: async () => {
       if (!state.ticket) return;
       // Copies go through the central service so they land in the history.
       const ok = await copyText(state.ticket, { source: 'settings' });
-      toast(ok ? 'Link copied' : 'Could not copy the link', ok ? undefined : { type: 'error' });
+      toast(ok ? t('settings.remote.linkCopied', null, 'Link copied') : t('settings.remote.copyFailed', null, 'Could not copy the link'), ok ? undefined : { type: 'error' });
     },
   });
-  const rotateBtn = button({ label: 'Rotate key', variant: 'danger', onClick: rotate });
-  const pairBtn = button({ label: 'Pair a new device', variant: 'ghost', onClick: pair });
-  const unpairBtn = button({ label: 'Forget devices', variant: 'quiet', onClick: unpair });
+  const rotateBtn = button({ label: t('settings.remote.rotateKey', null, 'Rotate key'), variant: 'danger', onClick: rotate });
+  const pairBtn = button({ label: t('settings.remote.pairDevice', null, 'Pair a new device'), variant: 'ghost', onClick: pair });
+  const unpairBtn = button({ label: t('settings.remote.forgetDevices', null, 'Forget devices'), variant: 'quiet', onClick: unpair });
 
   const actions = el('div', 'settings-inline-actions');
   actions.append(revealBtn, copyBtn, rotateBtn, pairBtn, unpairBtn);
 
   const linkBox = el('div', 'remote-link');
   linkBox.append(ticketEl, qrEl);
-  const linkHint = el('p', 'settings-hint', 'On another device: peakd --iroh <link> opens the app in a window. To use a plain browser instead, turn on the public URL below.');
+  const linkHint = el('p', 'settings-hint', t('settings.remote.linkHint', null, 'On another device: peakd --iroh <link> opens the app in a window. To use a plain browser instead, turn on the public URL below.'));
 
   // ── Tailscale Funnel: a normal https:// URL for any browser ──────────
   const tsToggle = toggleRow({
-    label: 'Public URL (Tailscale Funnel)',
-    hint: 'Serve the app at an https://…ts.net URL through Tailscale — open it in any browser, on any device, no app or port forwarding. Free; needs Tailscale installed and signed in.',
+    label: t('settings.remote.publicUrl', null, 'Public URL (Tailscale Funnel)'),
+    hint: t('settings.remote.publicUrlHint', null, 'Serve the app at an https://…ts.net URL through Tailscale — open it in any browser, on any device, no app or port forwarding. Free; needs Tailscale installed and signed in.'),
     checked: false,
     onChange: setTailscale,
   });
-  const tsMissing = el('p', 'settings-hint', 'Tailscale is not installed on this machine.');
+  const tsMissing = el('p', 'settings-hint', t('settings.remote.tailscaleMissing', null, 'Tailscale is not installed on this machine.'));
   const tsStatus = el('p', 'settings-hint', '');
   const tsUrlEl = el('code', 'remote-ticket');
   const tsQrEl = el('img', 'remote-qr');
-  tsQrEl.alt = 'Tailscale URL QR code';
+  tsQrEl.alt = t('settings.remote.tailscaleQrAlt', null, 'Tailscale URL QR code');
   const tsUrlBox = el('div', 'remote-link');
   tsUrlBox.append(tsUrlEl, tsQrEl);
-  const tsCopyBtn = button({ label: 'Copy URL', variant: 'ghost', onClick: copyTailscale });
+  const tsCopyBtn = button({ label: t('settings.remote.copyUrl', null, 'Copy URL'), variant: 'ghost', onClick: copyTailscale });
   const tsActions = el('div', 'settings-inline-actions');
   tsActions.append(tsCopyBtn);
 
@@ -1722,19 +1771,20 @@ function buildRemote() {
     serverToggle.toggle.setChecked(state.enabled, { silent: true });
     renderTailscale();
     if (!state.enabled) {
-      statusLine.textContent = 'Off. This desktop is reachable only on this machine.';
+      statusLine.textContent = t('settings.remote.offLocalOnly', null, 'Off. This desktop is reachable only on this machine.');
       linkBox.classList.add('hidden');
       actions.classList.add('hidden');
       return;
     }
     const id = state.endpointId ? `${state.endpointId.slice(0, 12)}…` : '';
-    let line = `On — ${id} · ${state.connections} connection${state.connections === 1 ? '' : 's'} · ${formatBytes(state.bytes)}`;
-    if (state.paired > 0) line += ` · ${state.paired} paired device${state.paired === 1 ? '' : 's'}`;
-    if (state.pairing) line += ' · pairing for the next device…';
+    const connections = tp('settings.remote.connections', state.connections, null, `${state.connections} connection${state.connections === 1 ? '' : 's'}`);
+    let line = t('settings.remote.statusOn', { id, connections, bytes: formatBytes(state.bytes) }, `On — ${id} · ${connections} · ${formatBytes(state.bytes)}`);
+    if (state.paired > 0) line += ` · ${tp('settings.remote.paired', state.paired, null, `${state.paired} paired device${state.paired === 1 ? '' : 's'}`)}`;
+    if (state.pairing) line += ` · ${t('settings.remote.pairing', null, 'pairing for the next device…')}`;
     statusLine.textContent = line;
     linkBox.classList.remove('hidden');
     actions.classList.remove('hidden');
-    revealBtn.textContent = revealed ? 'Hide link' : 'Reveal link';
+    revealBtn.textContent = revealed ? t('settings.remote.hideLink', null, 'Hide link') : t('settings.remote.revealLink', null, 'Reveal link');
     if (revealed) {
       ticketEl.textContent = state.ticket || '';
       qrEl.src = `/api/remote/qr?t=${Date.now()}`;
@@ -1752,7 +1802,7 @@ function buildRemote() {
     tsMissing.classList.toggle('hidden', installed);
     tsToggle.classList.toggle('hidden', !installed);
     if (!installed) {
-      tsStatus.textContent = ts && ts.error ? `Tailscale: ${ts.error}` : '';
+      tsStatus.textContent = ts && ts.error ? t('settings.remote.tailscaleError', { error: ts.error }, `Tailscale: ${ts.error}`) : '';
       tsUrlBox.classList.add('hidden');
       tsActions.classList.add('hidden');
       return;
@@ -1760,10 +1810,10 @@ function buildRemote() {
     const on = !!ts.funnel;
     tsToggle.toggle.setChecked(on, { silent: true });
     let line;
-    if (!ts.up) line = 'Installed, but not connected — run `tailscale up` on this machine.';
-    else if (on) line = `On — ${ts.hostname || 'this device'}`;
-    else line = 'Off. The app is reachable only locally and over Iroh.';
-    if (ts.error) line += ` (${ts.error})`;
+    if (!ts.up) line = t('settings.remote.tailscaleDown', null, 'Installed, but not connected — run `tailscale up` on this machine.');
+    else if (on) line = t('settings.remote.tailscaleOn', { host: ts.hostname || t('settings.remote.thisDevice', null, 'this device') }, `On — ${ts.hostname || 'this device'}`);
+    else line = t('settings.remote.tailscaleOff', null, 'Off. The app is reachable only locally and over Iroh.');
+    if (ts.error) line += t('settings.remote.errorNote', { error: ts.error }, ` (${ts.error})`);
     tsStatus.textContent = line;
     if (on && ts.url) {
       tsUrlEl.textContent = ts.url;
@@ -1782,11 +1832,11 @@ function buildRemote() {
         method: 'POST',
         authRedirect: false,
       });
-      toast(on ? 'Tailscale Funnel on' : 'Tailscale Funnel off');
+      toast(on ? t('settings.remote.funnelOn', null, 'Tailscale Funnel on') : t('settings.remote.funnelOff', null, 'Tailscale Funnel off'));
       await refresh();
     } catch (e) {
       tsToggle.toggle.setChecked(!on, { silent: true });
-      toast(e.message || 'Could not change Tailscale Funnel', { type: 'error' });
+      toast(e.message || t('settings.remote.funnelFailed', null, 'Could not change Tailscale Funnel'), { type: 'error' });
     }
   }
 
@@ -1794,7 +1844,7 @@ function buildRemote() {
     const url = state.tailscale && state.tailscale.url;
     if (!url) return;
     const ok = await copyText(url, { source: 'settings' });
-    toast(ok ? 'URL copied' : 'Could not copy the URL', ok ? undefined : { type: 'error' });
+    toast(ok ? t('settings.remote.urlCopied', null, 'URL copied') : t('settings.remote.urlCopyFailed', null, 'Could not copy the URL'), ok ? undefined : { type: 'error' });
   }
 
   async function refresh() {
@@ -1817,10 +1867,10 @@ function buildRemote() {
       } else {
         apply({ enabled: false });
       }
-      toast(on ? 'Server mode on' : 'Server mode off');
+      toast(on ? t('settings.remote.serverOn', null, 'Server mode on') : t('settings.remote.serverOff', null, 'Server mode off'));
     } catch (e) {
       serverToggle.toggle.setChecked(!on, { silent: true });
-      toast(e.message || 'Could not change server mode', { type: 'error' });
+      toast(e.message || t('settings.remote.serverFailed', null, 'Could not change server mode'), { type: 'error' });
     }
   }
 
@@ -1829,29 +1879,29 @@ function buildRemote() {
       apply(await apiFetch('/api/remote/rotate', { method: 'POST', authRedirect: false }));
       revealed = false;
       render();
-      toast('New link generated');
+      toast(t('settings.remote.newLink', null, 'New link generated'));
     } catch (e) {
-      toast(e.message || 'Could not rotate the link', { type: 'error' });
+      toast(e.message || t('settings.remote.rotateFailed', null, 'Could not rotate the link'), { type: 'error' });
     }
   }
 
   async function pair() {
     try {
       const res = await apiFetch('/api/remote/pair', { method: 'POST', authRedirect: false });
-      toast(`Pairing open for ${res?.seconds || 120}s — connect from the new device now`);
+      toast(t('settings.remote.pairingOpen', { seconds: res?.seconds || 120 }, `Pairing open for ${res?.seconds || 120}s — connect from the new device now`));
       refresh();
     } catch (e) {
-      toast(e.message || 'Could not start pairing', { type: 'error' });
+      toast(e.message || t('settings.remote.pairFailed', null, 'Could not start pairing'), { type: 'error' });
     }
   }
 
   async function unpair() {
     try {
       const res = await apiFetch('/api/remote/unpair', { method: 'POST', authRedirect: false });
-      toast(`Forgot ${res?.removed ?? 0} paired device(s)`);
+      toast(tp('settings.remote.forgotDevices', res?.removed ?? 0, null, `Forgot ${res?.removed ?? 0} paired device(s)`));
       refresh();
     } catch (e) {
-      toast(e.message || 'Could not forget devices', { type: 'error' });
+      toast(e.message || t('settings.remote.forgetFailed', null, 'Could not forget devices'), { type: 'error' });
     }
   }
 
@@ -1869,13 +1919,13 @@ function buildRemote() {
     linkBox,
     linkHint,
     actions,
-    heading('Public URL (Tailscale)'),
+    heading(t('settings.remote.publicUrlHeading', null, 'Public URL (Tailscale)')),
     tsMissing,
     tsToggle,
     tsStatus,
     tsUrlBox,
     tsActions,
-    heading('Remote control'),
+    heading(t('settings.remote.remoteControl', null, 'Remote control')),
     terminalToggle,
   ];
 }
@@ -1890,7 +1940,7 @@ function buildRemote() {
  */
 function buildBrowser() {
   const holder = el('div', 'settings-browser');
-  holder.appendChild(el('p', 'settings-hint', 'Loading browser settings…'));
+  holder.appendChild(el('p', 'settings-hint', t('settings.browser.loading', null, 'Loading browser settings…')));
 
   void (async () => {
     let settings = { search_engine: 'duckduckgo', adblock: true, downloads_dir: '' };
@@ -1905,24 +1955,24 @@ function buildBrowser() {
     const engine = select({
       value: settings.search_engine,
       options: [
-        { value: 'duckduckgo', label: 'DuckDuckGo (default)' },
-        { value: 'brave', label: 'Brave Search' },
-        { value: 'google', label: 'Google' },
-        { value: 'bing', label: 'Bing' },
+        { value: 'duckduckgo', label: t('settings.browser.engine.duckduckgo', null, 'DuckDuckGo (default)') },
+        { value: 'brave', label: t('settings.browser.engine.brave', null, 'Brave Search') },
+        { value: 'google', label: t('settings.browser.engine.google', null, 'Google') },
+        { value: 'bing', label: t('settings.browser.engine.bing', null, 'Bing') },
       ],
       onChange: (value) => {
         void apiFetch('/api/browser/settings', {
           method: 'POST',
           body: JSON.stringify({ search_engine: value }),
         })
-          .then(() => toast('Search engine saved'))
-          .catch(() => toast('Could not save the search engine', { type: 'error' }));
+          .then(() => toast(t('settings.browser.engineSaved', null, 'Search engine saved')))
+          .catch(() => toast(t('settings.browser.engineSaveFailed', null, 'Could not save the search engine'), { type: 'error' }));
       },
     });
 
     const adblock = toggleRow({
-      label: 'Block ads and trackers',
-      hint: 'The Browser window filters page requests through the shell.',
+      label: t('settings.browser.adblock', null, 'Block ads and trackers'),
+      hint: t('settings.browser.adblockHint', null, 'The Browser window filters page requests through the shell.'),
       checked: settings.adblock !== false,
       onChange: (checked) => {
         void apiFetch('/api/browser/settings', {
@@ -1933,19 +1983,19 @@ function buildBrowser() {
     });
 
     const open = button({
-      label: 'Open Browser',
+      label: t('settings.browser.open', null, 'Open Browser'),
       variant: 'ghost',
       onClick: () => openCoreWindow('browser'),
     });
     const clear = button({
-      label: 'Clear history',
+      label: t('settings.browser.clearHistory', null, 'Clear history'),
       variant: 'ghost',
       onClick: async () => {
         try {
           await apiFetch('/api/browser/history/clear', { method: 'POST' });
-          toast('Browsing history cleared');
+          toast(t('settings.browser.historyCleared', null, 'Browsing history cleared'));
         } catch (_) {
-          toast('Could not clear history', { type: 'error' });
+          toast(t('settings.browser.clearFailed', null, 'Could not clear history'), { type: 'error' });
         }
       },
     });
@@ -1956,8 +2006,8 @@ function buildBrowser() {
       'p',
       'settings-hint',
       settings.downloads_dir
-        ? `Downloads are saved to ${settings.downloads_dir}`
-        : 'Downloads are saved to your Downloads folder.',
+        ? t('settings.browser.downloadsDir', { path: settings.downloads_dir }, `Downloads are saved to ${settings.downloads_dir}`)
+        : t('settings.browser.downloadsDefault', null, 'Downloads are saved to your Downloads folder.'),
     );
 
     // Which plugin opens links: the browser (default) or any installed plugin
@@ -1972,30 +2022,30 @@ function buildBrowser() {
         value: names.includes(stored) ? stored : fallback,
         options: names.map((name) => ({
           value: name,
-          label: name === fallback ? `${label(name)} (default)` : label(name),
+          label: name === fallback ? t('settings.browser.linkPluginDefault', { name: label(name) }, `${label(name)} (default)`) : label(name),
         })),
         onChange: (value) => {
           setLinkPlugin(value);
-          toast('Link handler saved');
+          toast(t('settings.browser.linkHandlerSaved', null, 'Link handler saved'));
         },
       })
       : null;
     const linksHint = names.length
-      ? 'Links clicked anywhere — chat, mail, documents — open in this plugin.'
-      : 'No plugin that can open links is installed.';
+      ? t('settings.browser.linksHint', null, 'Links clicked anywhere — chat, mail, documents — open in this plugin.')
+      : t('settings.browser.noLinkPlugin', null, 'No plugin that can open links is installed.');
 
     holder.replaceChildren(
-      heading('Search'),
+      heading(t('settings.browser.search', null, 'Search')),
       engine,
-      el('p', 'settings-hint', 'Used when you type words instead of an address. A self-hosted SearXNG (SEARXNG_URL) takes precedence when configured.'),
-      heading('Links'),
+      el('p', 'settings-hint', t('settings.browser.searchHint', null, 'Used when you type words instead of an address. A self-hosted SearXNG (SEARXNG_URL) takes precedence when configured.')),
+      heading(t('settings.browser.links', null, 'Links')),
       ...(links ? [links] : []),
       el('p', 'settings-hint', linksHint),
-      heading('Privacy'),
+      heading(t('settings.browser.privacy', null, 'Privacy')),
       adblock,
-      heading('Storage'),
+      heading(t('settings.browser.storage', null, 'Storage')),
       storage,
-      heading('Actions'),
+      heading(t('settings.browser.actions', null, 'Actions')),
       actions,
     );
   })();
@@ -2013,25 +2063,29 @@ function mountSettings() {
 
   const windowEl = el('div', 'settings-window');
   const nav = el('nav', 'settings-nav');
-  nav.setAttribute('aria-label', 'Settings sections');
+  nav.setAttribute('aria-label', t('settings.nav.sections', null, 'Settings sections'));
   const panels = el('div', 'settings-panels');
 
   const sections = [
-    { id: 'account', label: 'Account', icon: 'ui/user', build: buildAccount },
-    { id: 'appearance', label: 'Appearance', icon: 'ui/droplet', build: buildAppearancePanel },
-    { id: 'desktop', label: 'Desktop', icon: 'ui/monitor', build: buildDesktop },
-    { id: 'browser', label: 'Browser', icon: 'ui/launcher', build: buildBrowser },
-    { id: 'assistant', label: 'Assistant', icon: 'ui/message-circle', build: buildAssistant },
-    { id: 'voice', label: 'Voice', icon: 'ui/mic', build: buildVoice },
-    { id: 'images', label: 'Images', icon: 'ui/image', build: buildImage },
-    { id: 'music', label: 'Music', icon: 'ui/music', build: buildMusic },
-    { id: 'power', label: 'Power', icon: 'ui/power', build: buildPower },
-    { id: 'touchbar', label: 'Touch Bar', icon: 'ui/keyboard', build: buildTouchBar },
-    { id: 'remote', label: 'Remote', icon: 'ui/network', build: buildRemote },
-    { id: 'system', label: 'System', icon: 'ui/power', build: buildSystem },
+    { id: 'account', labelKey: 'settings.section.account', icon: 'ui/user', build: buildAccount },
+    { id: 'appearance', labelKey: 'settings.section.appearance', icon: 'ui/droplet', build: buildAppearancePanel },
+    { id: 'desktop', labelKey: 'settings.section.desktop', icon: 'ui/monitor', build: buildDesktop },
+    { id: 'browser', labelKey: 'settings.section.browser', icon: 'ui/launcher', build: buildBrowser },
+    { id: 'assistant', labelKey: 'settings.section.assistant', icon: 'ui/message-circle', build: buildAssistant },
+    { id: 'voice', labelKey: 'settings.section.voice', icon: 'ui/mic', build: buildVoice },
+    { id: 'images', labelKey: 'settings.section.images', icon: 'ui/image', build: buildImage },
+    { id: 'music', labelKey: 'settings.section.music', icon: 'ui/music', build: buildMusic },
+    { id: 'power', labelKey: 'settings.section.power', icon: 'ui/power', build: buildPower },
+    { id: 'touchbar', labelKey: 'settings.section.touchbar', icon: 'ui/keyboard', build: buildTouchBar },
+    { id: 'remote', labelKey: 'settings.section.remote', icon: 'ui/network', build: buildRemote },
+    { id: 'system', labelKey: 'settings.section.system', icon: 'ui/power', build: buildSystem },
   ];
 
+  let activePanel = pendingSection || 'account';
+  pendingSection = null;
+
   const show = (id) => {
+    activePanel = id;
     nav.querySelectorAll('.settings-nav-item').forEach((item) => {
       item.classList.toggle('is-active', item.dataset.panelTarget === id);
     });
@@ -2040,24 +2094,41 @@ function mountSettings() {
     });
   };
 
-  for (const section of sections) {
-    const btn = el('button', 'settings-nav-item');
-    btn.type = 'button';
-    btn.dataset.panelTarget = section.id;
-    const ring = el('span', 'settings-nav-icon');
-    ring.appendChild(icon(section.icon, { size: 20 }));
-    btn.append(ring, el('span', 'settings-nav-label', section.label));
-    on(btn, 'click', () => show(section.id));
-    nav.appendChild(btn);
+  // Picking another interface language re-renders the whole window in it. The
+  // builders register their listeners through on(), which appends to the
+  // module-wide cleanups list; the mark lets a re-render drop exactly its own
+  // entries again, so listeners never stack up across languages.
+  const onLocaleChange = () => render();
+  window.addEventListener('locale:change', onLocaleChange);
+  cleanups.push(() => window.removeEventListener('locale:change', onLocaleChange));
+  const mark = cleanups.length;
 
-    panels.appendChild(panel(section.id, section.icon, section.label, section.build()));
+  function render() {
+    for (const dispose of cleanups.splice(mark)) {
+      try { dispose(); } catch (_) { /* ignore */ }
+    }
+    nav.textContent = '';
+    panels.textContent = '';
+    for (const section of sections) {
+      const btn = el('button', 'settings-nav-item');
+      btn.type = 'button';
+      btn.dataset.panelTarget = section.id;
+      const ring = el('span', 'settings-nav-icon');
+      ring.appendChild(icon(section.icon, { size: 20 }));
+      const label = t(section.labelKey);
+      btn.append(ring, el('span', 'settings-nav-label', label));
+      on(btn, 'click', () => show(section.id));
+      nav.appendChild(btn);
+
+      panels.appendChild(panel(section.id, section.icon, label, section.build()));
+    }
+    show(activePanel);
   }
 
+  render();
   windowEl.append(nav, panels);
   tileEl.appendChild(windowEl);
   selectSectionFn = show;
-  show(pendingSection || 'account');
-  pendingSection = null;
   return tileEl;
 }
 
@@ -2071,8 +2142,8 @@ function buildAppearancePanel() {
     },
   });
   const neumorphic = toggleRow({
-    label: 'Neumorphic soft UI',
-    hint: 'Soft extruded-plastic surfaces with subtle dual shadows, in dark and light.',
+    label: t('settings.appearance.neumorphic', null, 'Neumorphic soft UI'),
+    hint: t('settings.appearance.neumorphicHint', null, 'Soft extruded-plastic surfaces with subtle dual shadows, in dark and light.'),
     checked: isNeumorphicTheme(getActiveTheme()),
     onChange: () => void toggleNeumorphic(),
   });
@@ -2086,14 +2157,14 @@ function buildAppearancePanel() {
     },
   });
   iconset.select.value = getIconsetChoice();
-  const iconsetField = field('Icon set', iconset, {
+  const iconsetField = field(t('settings.appearance.iconset', null, 'Icon set'), iconset, {
     hint: iconsetOptions().find((o) => o.value === getIconsetChoice())?.hint
-      || 'Infinity is coloured; Slot-Beauty is the monochrome line set. Themes may still override individual icons.',
+      || t('settings.appearance.iconsetHint', null, 'Infinity is coloured; Slot-Beauty is the monochrome line set. Themes may still override individual icons.'),
   });
 
   const tintIcons = toggleRow({
-    label: 'Accent-tinted icons',
-    hint: 'Recolour the set’s artwork (folders, app and file icons) to your accent. Off keeps each set’s native colours.',
+    label: t('settings.appearance.tintedIcons', null, 'Accent-tinted icons'),
+    hint: t('settings.appearance.tintedIconsHint', null, 'Recolour the set’s artwork (folders, app and file icons) to your accent. Off keeps each set’s native colours.'),
     checked: tintEnabled(),
     onChange: (checked) => {
       setTint(checked);
@@ -2115,7 +2186,7 @@ function buildAppearancePanel() {
   const customControls = el('div', 'gradient-custom-controls');
   customControls.append(stopA, stopB, angle);
   const custom = el('details', 'gradient-custom');
-  custom.appendChild(el('summary', null, 'Custom gradient'));
+  custom.appendChild(el('summary', null, t('settings.appearance.customGradient', null, 'Custom gradient')));
   custom.appendChild(customControls);
 
   function applyCustomGradient() {
@@ -2140,13 +2211,13 @@ function buildAppearancePanel() {
     if (current !== FONT_THEME && !values.includes(current)) values.unshift(current);
     font.setOptions([
       ...values.map((f) => ({ value: f, label: f })),
-      { value: FONT_THEME, label: 'Theme default' },
+      { value: FONT_THEME, label: t('settings.appearance.themeDefault', null, 'Theme default') },
     ]);
     font.select.value = getFont();
   });
   font.select.value = getFont();
-  const fontField = field('Global font', font, {
-    hint: 'Every installed system font is listed. "Theme default" restores the active theme’s own fonts.',
+  const fontField = field(t('settings.appearance.globalFont', null, 'Global font'), font, {
+    hint: t('settings.appearance.globalFontHint', null, 'Every installed system font is listed. "Theme default" restores the active theme’s own fonts.'),
   });
 
   const backgroundChildren = buildBackgroundControls();
@@ -2157,10 +2228,13 @@ function buildAppearancePanel() {
   // Interface scale: a host setting, applied by the kiosk shell as page zoom.
   // Changing it re-lays-out the page, so the Terminal re-fits automatically.
   const scale = select({
-    options: SCALE_OPTIONS,
+    options: SCALE_OPTIONS.map((o) => ({
+      value: o.value,
+      label: o.value === 'auto' ? t('settings.appearance.scale.auto', null, o.label) : o.label,
+    })),
     onChange: (value) => void applyScale(value),
   });
-  const scaleField = field('Interface scale', scale);
+  const scaleField = field(t('settings.appearance.interfaceScale', null, 'Interface scale'), scale);
   const scaleHint = el('p', 'settings-hint');
   scaleField.appendChild(scaleHint);
 
@@ -2173,12 +2247,14 @@ function buildAppearancePanel() {
       const pct = typeof resolved === 'number' && Number.isFinite(resolved)
         ? Math.round(resolved * 100) : null;
       const dpi = data?.dpi;
-      const applied = pct
-        ? `The shell applies ${pct}%${typeof dpi === 'number' && dpi > 0 ? ` on this ${Math.round(dpi)}-DPI panel` : ''}. `
+      const panel = typeof dpi === 'number' && dpi > 0
+        ? t('settings.appearance.scale.panel', { dpi: Math.round(dpi) }, ` on this ${Math.round(dpi)}-DPI panel`)
         : '';
-      scaleHint.textContent = `${applied}Scales the whole desktop. Auto follows this panel's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`;
+      scaleHint.textContent = pct
+        ? t('settings.appearance.scale.applied', { percent: pct, panel }, `The shell applies ${pct}%${panel}. Scales the whole desktop. Auto follows this panel's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`)
+        : t('settings.appearance.scale.hint', null, `Scales the whole desktop. Auto follows this panel's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`);
     } catch (_) {
-      scaleHint.textContent = 'Could not read the current scale.';
+      scaleHint.textContent = t('settings.appearance.scale.readFailed', null, 'Could not read the current scale.');
     }
   }
 
@@ -2186,9 +2262,9 @@ function buildAppearancePanel() {
     try {
       await setDisplayScale(value);
       await refreshScale();
-      toast('Interface scale updated');
+      toast(t('settings.appearance.scale.updated', null, 'Interface scale updated'));
     } catch (err) {
-      toast(err?.message || 'Could not change the interface scale', { type: 'error' });
+      toast(err?.message || t('settings.appearance.scale.updateFailed', null, 'Could not change the interface scale'), { type: 'error' });
       void refreshScale();
     }
   }
@@ -2231,21 +2307,21 @@ function buildAppearancePanel() {
   });
 
   return [
-    field('Theme', theme),
+    field(t('settings.appearance.theme', null, 'Theme'), theme),
     iconsetField,
     tintIcons,
     neumorphic,
-    field('Accent', accentSwatches),
-    field('Gradient', gradientSwatches),
+    field(t('settings.appearance.accent', null, 'Accent'), accentSwatches),
+    field(t('settings.appearance.gradient', null, 'Gradient'), gradientSwatches),
     custom,
     fontField,
-    heading('Display'),
+    heading(t('common.display', null, 'Display')),
     scaleField,
     ...windowSurfaceChildren,
     ...topBarChildren,
     ...hudChipChildren,
-    heading('Background'),
-    el('p', 'settings-hint', 'The full-screen backdrop behind the desktop — the default mesh, your gradient, a photo, or a subtle animation.'),
+    heading(t('settings.appearance.background.heading', null, 'Background')),
+    el('p', 'settings-hint', t('settings.appearance.background.hint', null, 'The full-screen backdrop behind the desktop — the default mesh, your gradient, a photo, or a subtle animation.')),
     ...backgroundChildren,
   ];
 }

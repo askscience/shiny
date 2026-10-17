@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Πραγματικό τερματικό Linux μέσα στην εφαρμογή — κέλυφος σύνδεσης με υποστήριξη PTY σε δικό του παράθυρο",
+  "plugin.terminal.meta.summary": "Τερματικό: πραγματικό κέλυφος μέσω PTY, με απόδοση από το xterm.js",
+  "plugin.terminal.meta.category": "Σύστημα",
+
+  "plugin.terminal.tab.label": "Τερματικό {n}",
+  "plugin.terminal.tab.new": "Νέα καρτέλα",
+  "plugin.terminal.tab.close": "Κλείσιμο {name}",
+  "plugin.terminal.tabs.label": "Καρτέλες τερματικού",
+
+  "plugin.terminal.status.starting": "εκκίνηση τερματικού…",
+  "plugin.terminal.status.connecting": "σύνδεση…",
+  "plugin.terminal.status.reconnecting": "επανασύνδεση…",
+  "plugin.terminal.status.connected": "συνδεδεμένο",
+  "plugin.terminal.status.startFailed": "δεν ήταν δυνατή η εκκίνηση κελύφους",
+  "plugin.terminal.status.expired": "η συνεδρία έληξε — συνδεθείτε ξανά",
+  "plugin.terminal.status.xtermFailed": "δεν ήταν δυνατή η φόρτωση του xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Τερματικό: το πολύ {count} καρτέλα",
+  "plugin.terminal.toast.tabLimit.other": "Τερματικό: το πολύ {count} καρτέλες",
+  "plugin.terminal.toast.startFailed": "Τερματικό: δεν ήταν δυνατή η εκκίνηση κελύφους",
+  "plugin.terminal.toast.xtermFailed": "Τερματικό: η φόρτωση του xterm.js απέτυχε",
+  "plugin.terminal.toast.clipboardUnavailable": "Το πρόχειρο δεν είναι διαθέσιμο",
+
+  "plugin.terminal.ctx.copy": "Αντιγραφή",
+  "plugin.terminal.ctx.paste": "Επικόλληση",
+  "plugin.terminal.ctx.clearScrollback": "Εκκαθάριση ιστορικού κύλισης",
+  "plugin.terminal.ctx.closeTab": "Κλείσιμο καρτέλας"
+}

@@ -1,0 +1,39 @@
+{
+  "plugin.calc.meta.description": "Табличний калькулятор — таблиці зберігаються як відкриті сітки клітинок, які можна редагувати у вікні Calc",
+  "plugin.calc.meta.summary": "Calc: створюйте, редагуйте та обчислюйте таблиці",
+  "plugin.calc.meta.category": "Офіс",
+
+  "plugin.calc.bar.spreadsheets": "Таблиці",
+
+  "plugin.calc.toolbar.newSheet": "Нова таблиця",
+  "plugin.calc.toolbar.importOds": "Імпорт .ods",
+  "plugin.calc.toolbar.importCsv": "Імпорт CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Зберегти в Документи",
+  "plugin.calc.toolbar.saveNow": "Зберегти зараз",
+  "plugin.calc.toolbar.deleteSheet": "Видалити таблицю",
+
+  "plugin.calc.menu.noSheets": "Ще немає таблиць",
+
+  "plugin.calc.sheet.untitled": "Без назви",
+  "plugin.calc.sheet.importedCsv": "Імпортований CSV",
+
+  "plugin.calc.formula.placeholder": "Значення або формула (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Збереження…",
+  "plugin.calc.status.dirty": "Незбережені зміни",
+  "plugin.calc.status.saved.one": "Збережено {time} · {count} клітинка",
+  "plugin.calc.status.saved.few": "Збережено {time} · {count} клітинки",
+  "plugin.calc.status.saved.many": "Збережено {time} · {count} клітинок",
+  "plugin.calc.status.saved.other": "Збережено {time} · {count} клітинки",
+
+  "plugin.calc.dialog.delete": "Видалити \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Не вдалося зберегти",
+  "plugin.calc.toast.openFailed": "Не вдалося відкрити таблицю",
+  "plugin.calc.toast.createFailed": "Не вдалося створити таблицю",
+  "plugin.calc.toast.deleteFailed": "Не вдалося видалити таблицю",
+  "plugin.calc.toast.imported": "Імпортовано {name}",
+  "plugin.calc.toast.importOdsFailed": "Імпорт не вдався — можливо, це некоректний .ods-файл?",
+  "plugin.calc.toast.importCsvFailed": "Імпорт не вдався — можливо, це некоректний CSV-файл?",
+  "plugin.calc.toast.openFileFailed": "Не вдалося відкрити файл"
+}

@@ -17,6 +17,7 @@ import { notifyMenuChange } from './menuState.js';
 import { setIcon } from '../ui/index.js';
 import { tempText, weatherIconStem, weatherLabel } from './weatherShared.js';
 import { formatLocationDate, formatLocationTime } from './clockShared.js';
+import { getLocale, t } from './i18n.js';
 
 const clockEl = document.querySelector('.hud-clock');
 const clockTimeEl = document.getElementById('hud-clock-time');
@@ -40,13 +41,18 @@ const WEATHER_TTL_MS = 10 * 60 * 1000;
 let weatherState = null;
 /** IANA zone of the located place — the clock follows it, not the OS. */
 let locationTimeZone = null;
-/** Why there is nothing to show yet ('Location unavailable', …); null when fine. */
+/** Why there is nothing to show yet ('location' | 'offline'); null when fine. */
 let weatherError = null;
+
+/** The chip/menu text for a failure code (the code itself is locale-free). */
+function weatherErrorText(code) {
+  return code === 'location' ? t('weather.locationUnavailable') : t('weather.offline');
+}
 
 /** Time and date of the located place (the OS zone until one is known). */
 function formatClock() {
   const now = new Date();
-  const locale = navigator.language || 'en-US';
+  const locale = getLocale();
   if (clockTimeEl) {
     clockTimeEl.textContent = formatLocationTime(now, locationTimeZone, locale);
   }
@@ -72,7 +78,7 @@ function markWeatherUnavailable(reason) {
   window.dispatchEvent(new CustomEvent('weather:update', { detail: weatherState }));
   if (weatherState) return;
   if (meteoTempEl) meteoTempEl.textContent = '—';
-  if (meteoLabelEl) meteoLabelEl.textContent = reason;
+  if (meteoLabelEl) meteoLabelEl.textContent = weatherErrorText(reason);
   meteoEl?.classList.add('unavailable');
 }
 
@@ -113,7 +119,7 @@ async function refreshLocalWeather(lat, lon) {
     locationTimeZone = weatherState.timezone;
     weatherError = null;
     if (clockEl && locationTimeZone) {
-      clockEl.title = `Time in ${locationTimeZone} — click for the calendar`;
+      clockEl.title = t('hud.timeInZone', { zone: locationTimeZone });
     }
 
     if (meteoIconEl) {
@@ -121,7 +127,9 @@ async function refreshLocalWeather(lat, lon) {
     }
     if (meteoTempEl) meteoTempEl.textContent = tempText(weatherState.current.temp);
     if (meteoLabelEl) meteoLabelEl.textContent = weatherLabel(code);
-    meteoEl.title = `Weather at your position${locationTimeZone ? ` — ${locationTimeZone}` : ''}`;
+    meteoEl.title = locationTimeZone
+      ? t('hud.weatherZone', { zone: locationTimeZone })
+      : t('hud.weather');
     meteoEl.classList.remove('unavailable');
     lastWeatherKey = key;
     lastWeatherAt = now;
@@ -130,7 +138,7 @@ async function refreshLocalWeather(lat, lon) {
   } catch {
     // A later refresh keeps the last good reading; only the first failure has
     // nothing to show, and it must say so instead of leaving an empty chip.
-    markWeatherUnavailable('Weather unavailable');
+    markWeatherUnavailable('offline');
   } finally {
     meteoEl.classList.remove('loading');
   }
@@ -147,7 +155,7 @@ function ensureMenuPopup() {
   menuPopup = document.createElement('div');
   menuPopup.className = 'ui-hud-menu-popup hidden';
   menuPopup.setAttribute('role', 'menu');
-  menuPopup.setAttribute('aria-label', 'Saved places');
+  menuPopup.setAttribute('aria-label', t('hud.savedPlaces'));
   document.body.appendChild(menuPopup);
 }
 
@@ -202,7 +210,7 @@ function renderMenuItems() {
   if (!destinations.length) {
     const empty = document.createElement('div');
     empty.className = 'ui-hud-menu-empty';
-    empty.textContent = 'No saved places yet';
+    empty.textContent = t('hud.noSavedPlaces');
     menuPopup.appendChild(empty);
     return;
   }
@@ -242,7 +250,7 @@ function buildTripMenuTrigger(destinations, active) {
   const label = document.createElement('span');
   label.className = 'ui-hud-menu-label';
   const activeDest = destinations.find((d) => d.key === active);
-  label.textContent = activeDest?.label || 'Trips';
+  label.textContent = activeDest?.label || t('hud.trips');
   trigger.appendChild(label);
 
   const chevron = document.createElement('span');
@@ -296,14 +304,14 @@ function onPositionUpdate() {
 /** One geolocation fix straight from the browser — no map/plugin needed. */
 function refreshWeatherAtCurrentPosition() {
   if (!navigator.geolocation) {
-    markWeatherUnavailable('Location unavailable');
+    markWeatherUnavailable('location');
     return;
   }
   navigator.geolocation.getCurrentPosition(
     (pos) => void refreshLocalWeather(pos.coords.latitude, pos.coords.longitude),
     // A denied permission (the shell's policy) or a missing position source
     // lands here: the chip has to name that instead of sitting silent at "—°".
-    () => markWeatherUnavailable('Location unavailable'),
+    () => markWeatherUnavailable('location'),
     { maximumAge: WEATHER_TTL_MS, timeout: 12000 },
   );
 }
@@ -331,7 +339,7 @@ export function initHudClock() {
   if (clockInited) return;
   clockInited = true;
 
-  if (clockEl) clockEl.title = 'Time and calendar';
+  if (clockEl) clockEl.title = t('hud.timeCalendar');
   formatClock();
   clockTimer = setInterval(formatClock, 1000);
 

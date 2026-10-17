@@ -1,0 +1,51 @@
+{
+  "plugin.word.toolbar.documents": "Documente",
+  "plugin.word.toolbar.titlePlaceholder": "Fără titlu",
+  "plugin.word.toolbar.newDocument": "Document nou",
+  "plugin.word.toolbar.importOdt": "Importă .odt",
+  "plugin.word.toolbar.saveToDocuments": "Salvează în Documente",
+  "plugin.word.toolbar.saveNow": "Salvează acum",
+  "plugin.word.toolbar.deleteDocument": "Șterge documentul",
+  "plugin.word.toolbar.bold": "Aldin",
+  "plugin.word.toolbar.italic": "Cursiv",
+  "plugin.word.toolbar.underline": "Subliniere",
+  "plugin.word.toolbar.heading": "Titlu",
+  "plugin.word.toolbar.bulletList": "Listă cu puncte",
+  "plugin.word.toolbar.font": "Font",
+  "plugin.word.toolbar.fontHint": "Font — se aplică selecției sau întregului document când nimic nu este selectat",
+
+  "plugin.word.status.saving": "Se salvează…",
+  "plugin.word.status.unsaved": "Modificări nesalvate",
+  "plugin.word.status.saved.one": "Salvat {time} · {count} cuvânt",
+  "plugin.word.status.saved.few": "Salvat {time} · {count} cuvinte",
+  "plugin.word.status.saved.other": "Salvat {time} · {count} de cuvinte",
+
+  "plugin.word.menu.empty": "Încă niciun document",
+  "plugin.word.menu.newDocument": "Document nou",
+  "plugin.word.menu.importOdt": "Importă .odt",
+  "plugin.word.menu.saveToDocuments": "Salvează în Documente",
+  "plugin.word.menu.deleteDocument": "Șterge documentul",
+
+  "plugin.word.ctx.newDocument": "Document nou",
+  "plugin.word.ctx.saveNow": "Salvează acum",
+  "plugin.word.ctx.saveToDocuments": "Salvează în Documente",
+  "plugin.word.ctx.bold": "Aldin",
+  "plugin.word.ctx.italic": "Cursiv",
+  "plugin.word.ctx.heading": "Titlu",
+  "plugin.word.ctx.list": "Listă",
+  "plugin.word.ctx.deleteDocument": "Șterge documentul",
+
+  "plugin.word.dialog.deleteDoc": "Ștergi \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Salvarea a eșuat",
+  "plugin.word.toast.openFailed": "Documentul nu a putut fi deschis",
+  "plugin.word.toast.createFailed": "Documentul nu a putut fi creat",
+  "plugin.word.toast.deleteFailed": "Documentul nu a putut fi șters",
+  "plugin.word.toast.imported": "Am importat {name}",
+  "plugin.word.toast.importFailed": "Importul a eșuat — este acesta un fișier .odt valid?",
+  "plugin.word.toast.openFileFailed": "Fișierul nu a putut fi deschis",
+
+  "plugin.word.meta.description": "Procesor de text simplu — documentele sunt stocate ca fișiere .odt deschise",
+  "plugin.word.meta.summary": "Procesor de text: creează, editează și citește documente OpenDocument (.odt)",
+  "plugin.word.meta.category": "Birou"
+}

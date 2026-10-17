@@ -1,0 +1,39 @@
+{
+  "plugin.calc.meta.description": "Skaičiuoklė — lentelės saugomos kaip atviri langelių tinkleliai, redaguojami Calc lange",
+  "plugin.calc.meta.summary": "Calc: kurkite, redaguokite ir skaičiuokite skaičiuoklėmis",
+  "plugin.calc.meta.category": "Biuras",
+
+  "plugin.calc.bar.spreadsheets": "Skaičiuoklės",
+
+  "plugin.calc.toolbar.newSheet": "Nauja skaičiuoklė",
+  "plugin.calc.toolbar.importOds": "Importuoti .ods",
+  "plugin.calc.toolbar.importCsv": "Importuoti CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Išsaugoti į Dokumentus",
+  "plugin.calc.toolbar.saveNow": "Išsaugoti dabar",
+  "plugin.calc.toolbar.deleteSheet": "Ištrinti skaičiuoklę",
+
+  "plugin.calc.menu.noSheets": "Dar nėra skaičiuoklių",
+
+  "plugin.calc.sheet.untitled": "Be pavadinimo",
+  "plugin.calc.sheet.importedCsv": "Importuota CSV",
+
+  "plugin.calc.formula.placeholder": "Reikšmė arba formulė (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Išsaugoma…",
+  "plugin.calc.status.dirty": "Neišsaugoti pakeitimai",
+  "plugin.calc.status.saved.one": "Išsaugota {time} · {count} langelis",
+  "plugin.calc.status.saved.few": "Išsaugota {time} · {count} langeliai",
+  "plugin.calc.status.saved.many": "Išsaugota {time} · {count} langelių",
+  "plugin.calc.status.saved.other": "Išsaugota {time} · {count} langelio",
+
+  "plugin.calc.dialog.delete": "Ištrinti “{title}”?",
+
+  "plugin.calc.toast.saveFailed": "Išsaugoti nepavyko",
+  "plugin.calc.toast.openFailed": "Nepavyko atidaryti skaičiuoklės",
+  "plugin.calc.toast.createFailed": "Nepavyko sukurti skaičiuoklės",
+  "plugin.calc.toast.deleteFailed": "Nepavyko ištrinti skaičiuoklės",
+  "plugin.calc.toast.imported": "Importuota {name}",
+  "plugin.calc.toast.importOdsFailed": "Importavimas nepavyko — ar tai galiojantis .ods failas?",
+  "plugin.calc.toast.importCsvFailed": "Importavimas nepavyko — ar tai galiojantis CSV failas?",
+  "plugin.calc.toast.openFileFailed": "Nepavyko atidaryti failo"
+}

@@ -3,6 +3,7 @@
  *   node web/js/tests/clockShared.test.mjs
  */
 
+import './helpers/i18n.mjs';   // catalogs, so t() resolves the English labels
 import {
   buildMonthCells, formatEventTime, formatLocationDate, formatLocationTime,
   groupEventsByDate, isoDate, isoDayLabel, monthKey, monthLabel, pad2, shiftMonth,

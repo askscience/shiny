@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Reproduciendo",
+  "plugin.youtube.hero.untitled": "Vídeo de YouTube",
+  "plugin.youtube.hero.back": "Atrás",
+  "plugin.youtube.hero.backLabel": "Volver a la búsqueda de YouTube",
+  "plugin.youtube.player.title": "Reproductor de YouTube",
+
+  "plugin.youtube.search.placeholder": "Buscar en YouTube…",
+
+  "plugin.youtube.grid.upNext": "A continuación",
+  "plugin.youtube.grid.becauseYouWatched": "A continuación · porque has visto “{title}”",
+  "plugin.youtube.grid.forYou": "Para ti",
+  "plugin.youtube.grid.showAll": "Mostrar todo: {category}",
+  "plugin.youtube.grid.untitled": "Vídeo",
+
+  "plugin.youtube.empty.noResults": "No se han encontrado vídeos",
+  "plugin.youtube.empty.noMatch": "Nada coincide con “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Buscar en YouTube",
+  "plugin.youtube.empty.searchBody": "Escribe arriba — o pídele a la IA que busque un vídeo.",
+  "plugin.youtube.empty.unavailableTitle": "Búsqueda no disponible",
+  "plugin.youtube.empty.retry": "Inténtalo de nuevo en un momento",
+
+  "plugin.youtube.category.watched": "Visto {count} veces",
+  "plugin.youtube.category.generic": "Categoría",
+
+  "plugin.youtube.menu.search": "Buscar",
+  "plugin.youtube.menu.home": "Inicio",
+  "plugin.youtube.menu.refresh": "Actualizar los resultados",
+  "plugin.youtube.menu.back": "Atrás",
+
+  "plugin.youtube.meta.description": "Ve vídeos de YouTube en la ventana de YouTube — la IA puede buscar en YouTube y reproducir vídeos",
+  "plugin.youtube.meta.summary": "YouTube: búsqueda con IA y reproducción en la ventana de YouTube",
+  "plugin.youtube.meta.category": "Multimedia"
+}

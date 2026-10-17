@@ -15,6 +15,7 @@
 import { apiFetch } from './api.js';
 import { button, emptyState, icon, modal, setIcon, toast } from '../ui/index.js';
 import { notifyMenuChange } from './menuState.js';
+import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-power');
 const iconEl = document.getElementById('hud-power-icon');
@@ -22,37 +23,42 @@ const iconEl = document.getElementById('hud-power-icon');
 /**
  * The three actions, in menu order. `id` is both the menu key and the last
  * segment of the endpoint (`/api/power/<id>`); `allows` reads the status flag.
+ * Labels are catalogue keys, resolved at render time — the table is built at
+ * import, before the catalogs exist.
  */
 const ACTIONS = [
   {
     id: 'reboot',
-    label: 'Restart',
-    detail: 'Reboot the machine',
+    labelKey: 'power.restart',
+    detailKey: 'power.restartDetail',
+    failKey: 'power.restartFailed',
     icon: 'ui/refresh',
     allows: (s) => s.can_reboot,
     confirm: {
-      title: 'Restart this machine?',
-      body: 'It will reboot now — save any open work first.',
-      action: 'Restart',
+      titleKey: 'power.restartConfirmTitle',
+      bodyKey: 'power.restartConfirmBody',
+      actionKey: 'power.restart',
     },
   },
   {
     id: 'off',
-    label: 'Power off',
-    detail: 'Shut the machine down',
+    labelKey: 'power.powerOff',
+    detailKey: 'power.powerOffDetail',
+    failKey: 'power.powerOffFailed',
     icon: 'ui/power',
     allows: (s) => s.can_power_off,
     danger: true,
     confirm: {
-      title: 'Power off this machine?',
-      body: 'It will shut down now — save any open work first.',
-      action: 'Power off',
+      titleKey: 'power.powerOffConfirmTitle',
+      bodyKey: 'power.powerOffConfirmBody',
+      actionKey: 'power.powerOff',
     },
   },
   {
     id: 'suspend',
-    label: 'Suspend',
-    detail: 'Sleep until you wake the machine',
+    labelKey: 'power.suspend',
+    detailKey: 'power.suspendDetail',
+    failKey: 'power.suspendFailed',
     icon: 'ui/suspend',
     allows: (s) => s.can_suspend,
   },
@@ -139,11 +145,11 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup power-menu hidden';
   popup.setAttribute('role', 'menu');
-  popup.setAttribute('aria-label', 'Power');
+  popup.setAttribute('aria-label', t('hud.power'));
 
   const head = document.createElement('div');
   head.className = 'power-menu-head';
-  head.append(icon('ui/power', { size: 14 }), el('span', 'power-menu-title', 'Power'));
+  head.append(icon('ui/power', { size: 14 }), el('span', 'power-menu-title', t('hud.power')));
 
   body = document.createElement('div');
   body.className = 'power-menu-body';
@@ -167,7 +173,7 @@ async function refresh() {
     const res = await apiFetch('/api/power/status', { authRedirect: false });
     status = res?.data || null;
   } catch (_) {
-    status = { available: false, reason: 'Could not read the power options.' };
+    status = { available: false, reason: t('power.readFailed') };
   }
   render();
 }
@@ -177,9 +183,9 @@ async function run(action) {
   try {
     await apiFetch(`/api/power/${action.id}`, { method: 'POST', body: '{}' });
     // A reboot or shutdown tears the session down; the toast is best-effort.
-    toast(`${action.label} requested`);
+    toast(t('power.requested', { action: t(action.labelKey) }));
   } catch (err) {
-    toast(err.message || `Could not ${action.label.toLowerCase()} the machine`, { type: 'error' });
+    toast(err.message || t(action.failKey), { type: 'error' });
   } finally {
     busy = null;
   }
@@ -192,14 +198,14 @@ function render() {
   body.textContent = '';
 
   if (!status) {
-    body.appendChild(emptyState({ title: 'Reading power options…' }));
+    body.appendChild(emptyState({ title: t('power.reading') }));
     return;
   }
   if (!status.available) {
     body.appendChild(emptyState({
       icon: 'ui/warning',
-      title: 'Power menu unavailable',
-      body: status.reason || 'logind is not reachable.',
+      title: t('power.unavailable'),
+      body: status.reason || t('power.logindUnreachable'),
     }));
     return;
   }
@@ -216,9 +222,9 @@ function actionRow(action) {
   row.type = 'button';
   row.className = 'ui-hud-menu-item';
   row.disabled = disabled;
-  row.title = allowed ? action.detail : 'Not available on this machine';
+  row.title = allowed ? t(action.detailKey) : t('power.notAvailable');
   if (!allowed) row.setAttribute('aria-disabled', 'true');
-  row.append(icon(action.icon, { size: 16 }), el('span', 'ui-hud-menu-item-label', action.label));
+  row.append(icon(action.icon, { size: 16 }), el('span', 'ui-hud-menu-item-label', t(action.labelKey)));
   row.addEventListener('click', () => onAction(action));
   return row;
 }
@@ -231,12 +237,12 @@ function onAction(action) {
 
 function confirmAction(action) {
   const dialog = modal({
-    title: action.confirm.title,
-    body: [el('p', 'ui-subtitle', action.confirm.body)],
+    title: t(action.confirm.titleKey),
+    body: [el('p', 'ui-subtitle', t(action.confirm.bodyKey))],
   });
-  const cancel = button({ label: 'Cancel', variant: 'quiet', onClick: () => dialog.close() });
+  const cancel = button({ label: t('common.cancel'), variant: 'quiet', onClick: () => dialog.close() });
   const confirm = button({
-    label: action.confirm.action,
+    label: t(action.confirm.actionKey),
     variant: action.danger ? 'danger' : 'primary',
     onClick: () => {
       dialog.close();

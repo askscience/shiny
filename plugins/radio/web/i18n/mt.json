@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Radju tal-internet permezz ta' Radio Browser — fittex stazzjonijiet u doqqhom fit-tieqa Radju",
+  "plugin.radio.meta.summary": "Radju tal-internet: fittex u doqq stazzjonijiet (Radio Browser)",
+  "plugin.radio.meta.category": "Midja",
+
+  "plugin.radio.notify.nowPlaying": "Qed jindaqq issa",
+  "plugin.radio.toast.streamRefused": "L-istream ma riedx jindaqq — ipprova stazzjon ieħor",
+
+  "plugin.radio.status.pickStation": "Agħżel stazzjon",
+  "plugin.radio.status.streaming": "Qed jistrimja",
+
+  "plugin.radio.empty.noStations": "Ma nstab ebda stazzjon",
+  "plugin.radio.empty.noMatch": "Xejn ma jaqbel ma' “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser mhux aċċessibbli",
+  "plugin.radio.error.tryAgain": "Erġa' pprova bejn ftit",
+
+  "plugin.radio.fallback.station": "Stazzjon",
+  "plugin.radio.search.placeholder": "Stazzjonijiet jew ġeneri…",
+
+  "plugin.radio.menu.play": "Ilgħab",
+  "plugin.radio.menu.pause": "Pawża",
+  "plugin.radio.menu.stop": "Waqqaf",
+  "plugin.radio.menu.refresh": "Aġġorna l-istazzjonijiet"
+}

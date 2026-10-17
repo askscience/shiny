@@ -1,0 +1,81 @@
+{
+  "plugin.impress.meta.description": "Конструктор презентацій — презентації зберігаються як слайди та експортуються у відкриті файли .odp",
+  "plugin.impress.meta.summary": "Impress: створюйте, редагуйте й показуйте презентації OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Офіс",
+
+  "plugin.impress.toolbar.presentations": "Презентації",
+  "plugin.impress.toolbar.titlePlaceholder": "Без назви",
+  "plugin.impress.toolbar.theme": "Тема",
+  "plugin.impress.toolbar.present": "Показувати",
+  "plugin.impress.toolbar.newDeck": "Нова презентація",
+  "plugin.impress.toolbar.importOdp": "Імпорт .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Зберегти в Документи",
+  "plugin.impress.toolbar.saveNow": "Зберегти зараз",
+  "plugin.impress.toolbar.deleteDeck": "Видалити презентацію",
+
+  "plugin.impress.menu.empty": "Ще немає презентацій",
+  "plugin.impress.menu.newDeck": "Нова презентація",
+  "plugin.impress.menu.importOdp": "Імпорт .odp",
+  "plugin.impress.menu.saveToDocuments": "Зберегти в Документи",
+  "plugin.impress.menu.deleteDeck": "Видалити презентацію",
+
+  "plugin.impress.ctx.newDeck": "Нова презентація",
+  "plugin.impress.ctx.addSlide": "Додати слайд",
+  "plugin.impress.ctx.saveNow": "Зберегти зараз",
+  "plugin.impress.ctx.present": "Показувати",
+  "plugin.impress.ctx.stopPresenting": "Припинити показ",
+  "plugin.impress.ctx.deleteDeck": "Видалити презентацію",
+
+  "plugin.impress.status.saving": "Збереження…",
+  "plugin.impress.status.unsaved": "Незбережені зміни",
+  "plugin.impress.status.saved.one": "Збережено {time} · {count} слайд",
+  "plugin.impress.status.saved.few": "Збережено {time} · {count} слайди",
+  "plugin.impress.status.saved.many": "Збережено {time} · {count} слайдів",
+  "plugin.impress.status.saved.other": "Збережено {time} · {count} слайда",
+
+  "plugin.impress.empty.noDeck": "Немає презентації",
+  "plugin.impress.empty.noDeckBody": "Створіть її або попросіть ШІ зібрати презентацію",
+
+  "plugin.impress.inspector.layout": "Макет",
+  "plugin.impress.inspector.transition": "Перехід",
+  "plugin.impress.inspector.bullets": "Маркери",
+  "plugin.impress.inspector.speakerNotes": "Нотатки доповідача",
+  "plugin.impress.inspector.hint": "Натисніть будь-який текст на слайді, щоб редагувати його напряму.",
+  "plugin.impress.inspector.applyAll": "Застосувати цей перехід і появу маркерів до всіх слайдів",
+  "plugin.impress.inspector.applyAllLabel": "Застосувати до всіх слайдів",
+
+  "plugin.impress.ops.addSlide": "Додати слайд",
+  "plugin.impress.ops.moveUp": "Перемістити вгору",
+  "plugin.impress.ops.moveDown": "Перемістити вниз",
+  "plugin.impress.ops.deleteSlide": "Видалити слайд",
+
+  "plugin.impress.transition.none": "Немає",
+  "plugin.impress.transition.fade": "Затемнення",
+  "plugin.impress.transition.slide": "Зсув",
+  "plugin.impress.transition.push": "Витискання",
+  "plugin.impress.transition.zoom": "Масштабування",
+
+  "plugin.impress.reveal.all": "Усе одразу",
+  "plugin.impress.reveal.bullets": "Один за одним",
+
+  "plugin.impress.slide.addText": "Додати текст",
+  "plugin.impress.slide.addTitle": "Додати заголовок",
+  "plugin.impress.slide.addSubtitle": "Додати підзаголовок",
+  "plugin.impress.slide.attribution": "Авторство",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Назад до редактора",
+  "plugin.impress.present.fullScreen": "На весь екран",
+  "plugin.impress.present.exitFullScreen": "Вийти з повноекранного режиму",
+  "plugin.impress.present.blocked": "Браузер заблокував повноекранний режим",
+
+  "plugin.impress.dialog.deleteDeck": "Видалити \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Не вдалося зберегти",
+  "plugin.impress.toast.openFailed": "Не вдалося відкрити презентацію",
+  "plugin.impress.toast.createFailed": "Не вдалося створити презентацію",
+  "plugin.impress.toast.deleteFailed": "Не вдалося видалити презентацію",
+  "plugin.impress.toast.imported": "Імпортовано {name}",
+  "plugin.impress.toast.importFailed": "Імпорт не вдався — можливо, це некоректний .odp-файл?",
+  "plugin.impress.toast.openFileFailed": "Не вдалося відкрити файл"
+}

@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Calculator științific — evaluează expresii aritmetice și științifice în fereastra Calculator",
+  "plugin.calculator.meta.summary": "Calculator: matematică de bază și științifică",
+  "plugin.calculator.meta.category": "Birou",
+
+  "plugin.calculator.display.error": "Eroare",
+
+  "plugin.calculator.toolbar.history": "Istoric",
+  "plugin.calculator.toolbar.scientific": "Științific",
+  "plugin.calculator.toolbar.clearHistory": "Golește istoricul",
+
+  "plugin.calculator.menu.equals": "Egal",
+  "plugin.calculator.menu.clearAll": "Golește tot",
+
+  "plugin.calculator.history.reuse": "Refolosește acest rezultat",
+
+  "plugin.calculator.empty.noHistory": "Niciun istoric",
+  "plugin.calculator.empty.noHistoryBody": "Calculele pe care le faci aici sau le ceri AI-ului apar mai jos.",
+
+  "plugin.calculator.toast.evaluateFailed": "Expresia nu a putut fi evaluată",
+  "plugin.calculator.toast.historyFailed": "Istoricul nu a putut fi încărcat",
+  "plugin.calculator.toast.historyCleared": "Istoric golit",
+  "plugin.calculator.toast.clearFailed": "Istoricul nu a putut fi golit"
+}

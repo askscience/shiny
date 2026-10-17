@@ -1,0 +1,39 @@
+{
+  "plugin.calc.meta.description": "Preglednični kalkulator — preglednice so shranjene kot odprte mreže celic, urejljive v oknu Calc",
+  "plugin.calc.meta.summary": "Calc: ustvarjajte, urejajte in računajte s preglednicami",
+  "plugin.calc.meta.category": "Pisarna",
+
+  "plugin.calc.bar.spreadsheets": "Preglednice",
+
+  "plugin.calc.toolbar.newSheet": "Nova preglednica",
+  "plugin.calc.toolbar.importOds": "Uvozi .ods",
+  "plugin.calc.toolbar.importCsv": "Uvozi CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Shrani v Dokumente",
+  "plugin.calc.toolbar.saveNow": "Shrani zdaj",
+  "plugin.calc.toolbar.deleteSheet": "Izbriši preglednico",
+
+  "plugin.calc.menu.noSheets": "Ni še preglednic",
+
+  "plugin.calc.sheet.untitled": "Neimenovano",
+  "plugin.calc.sheet.importedCsv": "Uvoženi CSV",
+
+  "plugin.calc.formula.placeholder": "Vrednost ali formula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Shranjevanje…",
+  "plugin.calc.status.dirty": "Neshranjene spremembe",
+  "plugin.calc.status.saved.one": "Shranjeno {time} · {count} celica",
+  "plugin.calc.status.saved.two": "Shranjeno {time} · {count} celici",
+  "plugin.calc.status.saved.few": "Shranjeno {time} · {count} celice",
+  "plugin.calc.status.saved.other": "Shranjeno {time} · {count} celic",
+
+  "plugin.calc.dialog.delete": "Izbrišem \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Shranjevanje ni uspelo",
+  "plugin.calc.toast.openFailed": "Preglednice ni bilo mogoče odpreti",
+  "plugin.calc.toast.createFailed": "Preglednice ni bilo mogoče ustvariti",
+  "plugin.calc.toast.deleteFailed": "Preglednice ni bilo mogoče izbrisati",
+  "plugin.calc.toast.imported": "Uvoženo {name}",
+  "plugin.calc.toast.importOdsFailed": "Uvoz ni uspel — je to veljavna datoteka .ods?",
+  "plugin.calc.toast.importCsvFailed": "Uvoz ni uspel — je to veljavna datoteka CSV?",
+  "plugin.calc.toast.openFileFailed": "Datoteke ni bilo mogoče odpreti"
+}

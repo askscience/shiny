@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Odtwarzanie",
+  "plugin.youtube.hero.untitled": "Film YouTube",
+  "plugin.youtube.hero.back": "Wstecz",
+  "plugin.youtube.hero.backLabel": "Powrót do wyszukiwania w YouTube",
+  "plugin.youtube.player.title": "Odtwarzacz YouTube",
+
+  "plugin.youtube.search.placeholder": "Szukaj w YouTube…",
+
+  "plugin.youtube.grid.upNext": "Następne",
+  "plugin.youtube.grid.becauseYouWatched": "Następne · ponieważ obejrzano „{title}”",
+  "plugin.youtube.grid.forYou": "Dla Ciebie",
+  "plugin.youtube.grid.showAll": "Pokaż wszystkie: {category}",
+  "plugin.youtube.grid.untitled": "Film",
+
+  "plugin.youtube.empty.noResults": "Nie znaleziono filmów",
+  "plugin.youtube.empty.noMatch": "Nic nie pasuje do „{term}”.",
+  "plugin.youtube.empty.searchTitle": "Szukaj w YouTube",
+  "plugin.youtube.empty.searchBody": "Wpisz zapytanie powyżej — lub poproś AI o znalezienie filmu.",
+  "plugin.youtube.empty.unavailableTitle": "Wyszukiwanie niedostępne",
+  "plugin.youtube.empty.retry": "Spróbuj ponownie za chwilę",
+
+  "plugin.youtube.category.watched": "Obejrzano {count}×",
+  "plugin.youtube.category.generic": "Kategoria",
+
+  "plugin.youtube.menu.search": "Szukaj",
+  "plugin.youtube.menu.home": "Strona główna",
+  "plugin.youtube.menu.refresh": "Odśwież wyniki",
+  "plugin.youtube.menu.back": "Wstecz",
+
+  "plugin.youtube.meta.description": "Oglądaj filmy YouTube w oknie YouTube — AI może wyszukiwać i odtwarzać filmy",
+  "plugin.youtube.meta.summary": "YouTube: wyszukiwanie i odtwarzanie z pomocą AI w oknie YouTube",
+  "plugin.youtube.meta.category": "Media"
+}

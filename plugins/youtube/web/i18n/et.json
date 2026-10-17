@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Praegu esitab",
+  "plugin.youtube.hero.untitled": "YouTube'i video",
+  "plugin.youtube.hero.back": "Tagasi",
+  "plugin.youtube.hero.backLabel": "Tagasi YouTube'i otsingusse",
+  "plugin.youtube.player.title": "YouTube'i pleier",
+
+  "plugin.youtube.search.placeholder": "Otsi YouTube'ist…",
+
+  "plugin.youtube.grid.upNext": "Järgmine",
+  "plugin.youtube.grid.becauseYouWatched": "Järgmine · kuna vaatasid “{title}”",
+  "plugin.youtube.grid.forYou": "Sulle",
+  "plugin.youtube.grid.showAll": "Näita kõiki: {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Videoid ei leitud",
+  "plugin.youtube.empty.noMatch": "Ükski video ei vastanud otsingule “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Otsi YouTube'ist",
+  "plugin.youtube.empty.searchBody": "Kirjuta ülal — või palu AI-l video üles leida.",
+  "plugin.youtube.empty.unavailableTitle": "Otsing pole saadaval",
+  "plugin.youtube.empty.retry": "Proovi hetke pärast uuesti",
+
+  "plugin.youtube.category.watched": "Vaadatud {count}×",
+  "plugin.youtube.category.generic": "Kategooria",
+
+  "plugin.youtube.menu.search": "Otsi",
+  "plugin.youtube.menu.home": "Avaleht",
+  "plugin.youtube.menu.refresh": "Värskenda tulemusi",
+  "plugin.youtube.menu.back": "Tagasi",
+
+  "plugin.youtube.meta.description": "Vaata YouTube'i videoid YouTube'i aknas — AI saab YouTube'ist otsida ja videoid esitada",
+  "plugin.youtube.meta.summary": "YouTube: AI-otsing ja esitamine YouTube'i aknas",
+  "plugin.youtube.meta.category": "Meedia"
+}

@@ -10,6 +10,7 @@
 
 import { apiFetch } from './api.js';
 import { notifyMenuChange } from './menuState.js';
+import { t } from './i18n.js';
 import {
   badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle,
 } from '../ui/index.js';
@@ -109,7 +110,7 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup bluetooth-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Bluetooth');
+  popup.setAttribute('aria-label', t('hud.bluetooth'));
 
   const head = document.createElement('div');
   head.className = 'bluetooth-head';
@@ -120,7 +121,7 @@ function ensurePopup() {
   title.className = 'bluetooth-head-title';
   title.appendChild(icon('hud/bluetooth', { size: 15 }));
   const label = document.createElement('span');
-  label.textContent = 'Bluetooth';
+  label.textContent = t('bluetooth.label');
   title.appendChild(label);
   powerHint = document.createElement('div');
   powerHint.className = 'bluetooth-head-hint';
@@ -130,7 +131,7 @@ function ensurePopup() {
 
   scanBtn = iconButton({
     icon: 'ui/refresh',
-    label: 'Scan for devices',
+    label: t('bt.scan'),
     variant: 'quiet',
     size: 'sm',
     onClick: () => void scan(),
@@ -167,9 +168,9 @@ async function setPower(enabled) {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     });
-    toast(enabled ? 'Bluetooth on' : 'Bluetooth off');
+    toast(enabled ? t('bt.on') : t('bluetooth.off'));
   } catch (err) {
-    toast(err.message || 'Could not change Bluetooth', { type: 'error' });
+    toast(err.message || t('bt.powerFailed'), { type: 'error' });
     powerToggle.setChecked(!enabled, { silent: true });
   } finally {
     await refresh();
@@ -183,7 +184,7 @@ async function scan() {
     setTimeout(() => { void refresh(); scanBtn?.setLoading?.(false); }, 3000);
   } catch (err) {
     scanBtn?.setLoading?.(false);
-    toast(err.message || 'Scan failed', { type: 'error' });
+    toast(err.message || t('bt.scanFailed'), { type: 'error' });
   }
 }
 
@@ -206,39 +207,39 @@ async function run(action, id, { ok, fail }) {
 
 function pair(device) {
   void run('pair', device.id, {
-    ok: `Connected to ${device.name}`,
-    fail: `Could not pair with ${device.name}`,
+    ok: t('bt.connectedTo', { name: device.name }),
+    fail: t('bt.pairFailed', { name: device.name }),
   });
 }
 
 function connect(device) {
   void run('connect', device.id, {
-    ok: `Connected to ${device.name}`,
-    fail: `Could not connect to ${device.name}`,
+    ok: t('bt.connectedTo', { name: device.name }),
+    fail: t('bt.connectFailed', { name: device.name }),
   });
 }
 
 function disconnect(device) {
   void run('disconnect', device.id, {
-    ok: `Disconnected from ${device.name}`,
-    fail: `Could not disconnect ${device.name}`,
+    ok: t('bt.disconnectedFrom', { name: device.name }),
+    fail: t('bt.disconnectFailed', { name: device.name }),
   });
 }
 
 function confirmForget(device) {
   const dialog = modal({
-    title: `Forget ${device.name}?`,
-    body: ['The pairing will be removed. You can pair it again later.'],
+    title: t('bt.forgetConfirmTitle', { name: device.name }),
+    body: [t('bt.forgetConfirmBody')],
   });
-  const cancel = button({ label: 'Cancel', variant: 'quiet', onClick: () => dialog.close() });
+  const cancel = button({ label: t('common.cancel'), variant: 'quiet', onClick: () => dialog.close() });
   const confirm = button({
-    label: 'Forget',
+    label: t('common.forget'),
     variant: 'danger',
     onClick: () => {
       dialog.close();
       void run('forget', device.id, {
-        ok: `Forgot ${device.name}`,
-        fail: `Could not forget ${device.name}`,
+        ok: t('bt.forgot', { name: device.name }),
+        fail: t('bt.forgetFailed', { name: device.name }),
       });
     },
   });
@@ -263,38 +264,38 @@ function render() {
   if (scanBtn) scanBtn.disabled = !s?.available || !s?.present || !s?.powered;
   if (powerHint) {
     powerHint.textContent = !s
-      ? 'Reading Bluetooth state…'
+      ? t('bt.reading')
       : !s.available
-        ? (s.reason || 'BlueZ is not available')
+        ? (s.reason || t('bt.bluezUnavailable'))
         : !s.present
-          ? 'No Bluetooth hardware'
+          ? t('bt.noHardware')
           : !s.powered
-            ? 'Bluetooth is off'
+            ? t('bluetooth.off')
             : s.discovering
-              ? 'Searching for devices…'
-              : s.adapter || 'Ready';
+              ? t('bt.searching')
+              : s.adapter || t('bt.ready');
   }
 
   if (!s) {
-    body.appendChild(emptyState({ title: 'Loading Bluetooth state…' }));
+    body.appendChild(emptyState({ title: t('bt.loading') }));
     return;
   }
   if (!s.available) {
     body.appendChild(emptyState({
       icon: 'ui/warning',
-      title: 'Bluetooth panel unavailable',
-      body: s.reason || 'BlueZ is not reachable.',
+      title: t('bt.unavailable'),
+      body: s.reason || t('bt.bluezUnreachable'),
     }));
     return;
   }
   if (!s.present) {
-    body.appendChild(emptyState({ title: 'No Bluetooth hardware' }));
+    body.appendChild(emptyState({ title: t('bt.noHardware') }));
     return;
   }
   if (!s.powered) {
     body.appendChild(emptyState({
-      title: 'Bluetooth is off',
-      body: 'Turn it on to pair headphones, keyboards and other devices.',
+      title: t('bluetooth.off'),
+      body: t('bt.turnOnBody'),
     }));
     return;
   }
@@ -304,9 +305,9 @@ function render() {
   const paired = devices.filter((d) => d.paired && !d.connected);
   const nearby = devices.filter((d) => !d.paired && !d.connected && !d.blocked);
 
-  body.appendChild(deviceSection('Connected', connected, 'connected'));
-  body.appendChild(deviceSection('Paired', paired, 'connect'));
-  body.appendChild(deviceSection('Nearby', nearby, 'pair', s.discovering ? 'searching' : null));
+  body.appendChild(deviceSection(t('bt.connected'), connected, 'connected'));
+  body.appendChild(deviceSection(t('bt.paired'), paired, 'connect'));
+  body.appendChild(deviceSection(t('bt.nearby'), nearby, 'pair', s.discovering ? 'searching' : null));
 
   requestAnimationFrame(() => reposition());
 }
@@ -333,12 +334,12 @@ function deviceSection(title, devices, action, mode = null) {
     const empty = document.createElement('div');
     empty.className = 'bluetooth-idle';
     empty.textContent = mode === 'searching'
-      ? 'Searching…'
-      : title === 'Connected'
-        ? 'No device connected'
-        : title === 'Paired'
-          ? 'No paired devices yet'
-          : 'No devices found — scan again.';
+      ? t('bt.searching')
+      : action === 'connected'
+        ? t('bt.noneConnected')
+        : action === 'connect'
+          ? t('bt.nonePaired')
+          : t('bt.noneFound');
     wrap.appendChild(empty);
     if (mode === 'searching') wrap.classList.add('is-searching');
     return wrap;
@@ -349,7 +350,7 @@ function deviceSection(title, devices, action, mode = null) {
   for (const device of devices) {
     const isBusy = busy === device.id;
     const bits = [
-      device.connected ? 'Connected' : null,
+      device.connected ? t('bt.connected') : null,
       device.address,
       signalLabel(device),
     ].filter(Boolean);
@@ -362,7 +363,7 @@ function deviceSection(title, devices, action, mode = null) {
       if (batteryLabel(device)) trailing.appendChild(batteryTag(device));
       trailing.appendChild(iconButton({
         icon: 'ui/close',
-        label: `Disconnect ${device.name}`,
+        label: t('bt.disconnectName', { name: device.name }),
         variant: 'quiet',
         size: 'sm',
         onClick: (event) => { event.stopPropagation(); disconnect(device); },
@@ -371,7 +372,7 @@ function deviceSection(title, devices, action, mode = null) {
       if (batteryLabel(device)) trailing.appendChild(batteryTag(device));
       trailing.appendChild(iconButton({
         icon: 'ui/trash',
-        label: `Forget ${device.name}`,
+        label: t('bt.forgetName', { name: device.name }),
         variant: 'quiet',
         size: 'sm',
         onClick: (event) => { event.stopPropagation(); confirmForget(device); },

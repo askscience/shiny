@@ -60,6 +60,7 @@ import { readClipboardText } from './clipboard.js';
 import { getAiName, getWakeWord, setWakeWord, getThink, setThink } from './preferences.js';
 import { canThink } from './thinkToggle.js';
 import { notifyMenuChange } from './menuState.js';
+import { t } from './i18n.js';
 
 /* ── Popup engine ─────────────────────────────────────────────── */
 
@@ -205,7 +206,7 @@ function editMenu(target) {
   return [
     {
       type: 'item',
-      label: 'Cut',
+      label: t('common.cut'),
       disabled: locked || !selection,
       onClick: () => {
         focusTarget();
@@ -214,7 +215,7 @@ function editMenu(target) {
     },
     {
       type: 'item',
-      label: 'Copy',
+      label: t('common.copy'),
       icon: 'ui/copy',
       disabled: !selection,
       onClick: () => {
@@ -224,7 +225,7 @@ function editMenu(target) {
     },
     {
       type: 'item',
-      label: 'Paste',
+      label: t('common.paste'),
       icon: 'ui/clipboard',
       disabled: locked,
       onClick: async () => {
@@ -237,7 +238,7 @@ function editMenu(target) {
     { type: 'separator' },
     {
       type: 'item',
-      label: 'Select All',
+      label: t('common.selectAll'),
       icon: 'ui/select-all',
       onClick: () => {
         focusTarget();
@@ -405,7 +406,7 @@ function moveToWorkspaceItems(name) {
     if (locked) {
       items.push({
         type: 'item',
-        label: `${workspaceLabel(ws)} (full screen)`,
+        label: t('ctx.workspaceFullScreen', { name: workspaceLabel(ws) }),
         disabled: true,
       });
       return;
@@ -420,7 +421,7 @@ function moveToWorkspaceItems(name) {
   items.push({ type: 'separator' });
   items.push({
     type: 'item',
-    label: 'New workspace',
+    label: t('ctx.newWorkspace'),
     icon: 'ui/plus',
     onClick: () => moveWindowByIndex(name, 'new'),
   });
@@ -433,7 +434,7 @@ function travelerMenuItems() {
   return [
     {
       type: 'item',
-      label: 'Center on my position',
+      label: t('ctx.centerOnPosition'),
       icon: 'ui/pin',
       onClick: () => void refreshGpsPosition(),
     },
@@ -449,13 +450,13 @@ function windowMenu(name, ctx = {}) {
   const moveItem = isFull
     ? {
       type: 'item',
-      label: 'Move to workspace',
+      label: t('ctx.moveToWorkspace'),
       icon: 'ui/grid',
       disabled: true,
     }
     : {
       type: 'submenu',
-      label: 'Move to workspace',
+      label: t('ctx.moveToWorkspace'),
       icon: 'ui/grid',
       items: moveToWorkspaceItems(name),
     };
@@ -463,7 +464,7 @@ function windowMenu(name, ctx = {}) {
     { type: 'heading', label: label(name) },
     {
       type: 'item',
-      label: 'Focus plugin',
+      label: t('ctx.focusPlugin'),
       icon: 'ui/eye',
       checked: isPluginFocused(name),
       onClick: () => {
@@ -475,14 +476,14 @@ function windowMenu(name, ctx = {}) {
     },
     {
       type: 'item',
-      label: 'Bring to front',
+      label: t('ctx.bringToFront'),
       icon: 'ui/monitor',
       checked: getFocus() === name,
       onClick: () => focusWindow(name),
     },
     {
       type: 'item',
-      label: isFull ? 'Exit full screen' : 'Full screen',
+      label: isFull ? t('ctx.exitFullscreen') : t('ctx.fullscreen'),
       icon: 'ui/expand',
       checked: isFull,
       onClick: () => toggleWindowFullscreen(name),
@@ -494,14 +495,14 @@ function windowMenu(name, ctx = {}) {
     ...(isCoreWindow(name)
       ? [{
         type: 'item',
-        label: 'Close',
+        label: t('common.close'),
         icon: 'ui/close',
         danger: true,
         onClick: () => closeCoreWindow(name),
       }]
       : [{
         type: 'item',
-        label: 'Deactivate',
+        label: t('ctx.deactivate'),
         icon: 'ui/close',
         danger: true,
         onClick: () => void deactivatePlugin(name),
@@ -522,7 +523,7 @@ function trayMenu(btn) {
     if (hasWindow) {
       items.push({
         type: 'item',
-        label: isPluginFocused(name) ? 'Unfocus plugin' : 'Focus plugin',
+        label: isPluginFocused(name) ? t('ctx.unfocusPlugin') : t('ctx.focusPlugin'),
         icon: 'ui/eye',
         checked: isPluginFocused(name),
         onClick: () => {
@@ -532,13 +533,13 @@ function trayMenu(btn) {
       });
       items.push({
         type: 'item',
-        label: 'Bring to front',
+        label: t('ctx.bringToFront'),
         icon: 'ui/monitor',
         onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name } })),
       });
       items.push({
         type: 'item',
-        label: getFullscreen() === name ? 'Exit full screen' : 'Full screen',
+        label: getFullscreen() === name ? t('ctx.exitFullscreen') : t('ctx.fullscreen'),
         icon: 'ui/expand',
         checked: getFullscreen() === name,
         onClick: () => toggleWindowFullscreen(name),
@@ -547,7 +548,7 @@ function trayMenu(btn) {
     items.push({ type: 'separator' });
     items.push({
       type: 'item',
-      label: 'Deactivate',
+      label: t('ctx.deactivate'),
       icon: 'ui/close',
       danger: true,
       onClick: () => void deactivatePlugin(name),
@@ -555,7 +556,7 @@ function trayMenu(btn) {
   } else {
     items.push({
       type: 'item',
-      label: 'Activate',
+      label: t('ctx.activate'),
       icon: 'ui/plus',
       onClick: () => void activatePlugin(name),
     });
@@ -578,7 +579,7 @@ function exitFullscreenItem() {
   if (!fs) return [];
   return [{
     type: 'item',
-    label: `Exit full screen (${label(fs)})`,
+    label: t('ctx.exitFullscreenFor', { name: label(fs) }),
     icon: 'ui/expand',
     onClick: () => toggleWindowFullscreen(fs),
   }];
@@ -587,35 +588,35 @@ function exitFullscreenItem() {
 function layoutItems() {
   const mode = getLayout().mode;
   return [
-    { type: 'item', label: 'Columns', checked: mode === 'columns', onClick: () => setLayout({ mode: 'columns' }) },
-    { type: 'item', label: 'Tiling', checked: mode === 'master', onClick: () => setLayout({ mode: 'master' }) },
-    { type: 'item', label: 'Windows', checked: mode === 'windows', onClick: () => setLayout({ mode: 'windows' }) },
+    { type: 'item', label: t('ctx.layoutColumns'), checked: mode === 'columns', onClick: () => setLayout({ mode: 'columns' }) },
+    { type: 'item', label: t('ctx.layoutTiling'), checked: mode === 'master', onClick: () => setLayout({ mode: 'master' }) },
+    { type: 'item', label: t('ctx.layoutWindows'), checked: mode === 'windows', onClick: () => setLayout({ mode: 'windows' }) },
   ];
 }
 
 function desktopMenu() {
-  const layout = { type: 'submenu', label: 'Layout', icon: 'ui/arranger', items: layoutItems() };
+  const layout = { type: 'submenu', label: t('ctx.layout'), icon: 'ui/arranger', items: layoutItems() };
   const exitFs = exitFullscreenItem();
   // A vertical screen is one column and one workspace, so the switcher has
   // nothing to offer — the layout menu is all that is left.
   if (!workspacesEnabled()) {
-    return [{ type: 'heading', label: 'Desktop' }, ...exitFs, layout];
+    return [{ type: 'heading', label: t('ctx.desktop') }, ...exitFs, layout];
   }
   const wss = getWorkspacesList();
   return [
-    { type: 'heading', label: 'Desktop' },
+    { type: 'heading', label: t('ctx.desktop') },
     ...exitFs,
     ...(exitFs.length ? [{ type: 'separator' }] : []),
-    { type: 'item', label: 'New workspace', icon: 'ui/plus', onClick: () => createWorkspace() },
+    { type: 'item', label: t('ctx.newWorkspace'), icon: 'ui/plus', onClick: () => createWorkspace() },
     {
       type: 'item',
-      label: 'Remove workspace',
+      label: t('ctx.removeWorkspace'),
       icon: 'ui/minus',
       disabled: wss.length <= 1,
       onClick: () => removeWorkspace(),
     },
     { type: 'separator' },
-    { type: 'submenu', label: 'Switch to workspace', icon: 'ui/grid', items: switchWorkspaceItems() },
+    { type: 'submenu', label: t('ctx.switchToWorkspace'), icon: 'ui/grid', items: switchWorkspaceItems() },
     layout,
   ];
 }
@@ -624,12 +625,12 @@ function workspaceDotMenu(index) {
   const wss = getWorkspacesList();
   const ws = wss[index];
   return [
-    { type: 'heading', label: workspaceLabel(ws) || `Workspace ${index + 1}` },
+    { type: 'heading', label: workspaceLabel(ws) || t('ctx.workspaceNumber', { n: index + 1 }) },
     ...exitFullscreenItem(),
-    { type: 'item', label: 'New workspace', icon: 'ui/plus', onClick: () => createWorkspace() },
+    { type: 'item', label: t('ctx.newWorkspace'), icon: 'ui/plus', onClick: () => createWorkspace() },
     {
       type: 'item',
-      label: 'Remove workspace',
+      label: t('ctx.removeWorkspace'),
       icon: 'ui/minus',
       disabled: wss.length <= 1,
       onClick: () => {
@@ -653,12 +654,12 @@ async function orbListen() {
     // A menu click during the cold-login warm-up is held like a tap on the bar:
     // listen as soon as the recognizer is ready.
     if (getSphereState() !== 'warming') {
-      toast('Voice is unavailable — you can still type to the assistant', { type: 'info' });
+      toast(t('ctx.voiceUnavailable'), { type: 'info' });
       return;
     }
-    toast('Voice is warming up — listening starts when it is ready', { type: 'info' });
+    toast(t('ctx.voiceWarming'), { type: 'info' });
     if (!(await waitForVoiceReady())) {
-      toast('Voice is still warming up — try again in a moment', { type: 'info' });
+      toast(t('ctx.voiceStillWarming'), { type: 'info' });
       return;
     }
     if (isListening()) return;
@@ -667,7 +668,7 @@ async function orbListen() {
   try {
     await startListening('single');
   } catch (e) {
-    toast(e.message || 'Microphone unavailable', { type: 'error' });
+    toast(e.message || t('ctx.microphoneUnavailable'), { type: 'error' });
   }
 }
 
@@ -677,19 +678,19 @@ function orbMenu() {
     { type: 'heading', label: getAiName() },
     {
       type: 'item',
-      label: 'New chat',
+      label: t('chat.newChat'),
       icon: 'ui/plus',
       onClick: () => {
         newChat();
-        toast('Started a new chat', { type: 'info' });
+        toast(t('ctx.chatStarted'), { type: 'info' });
       },
     },
-    { type: 'item', label: 'Chat history', icon: 'ui/list', onClick: () => openChatHistory() },
-    { type: 'item', label: 'Type a message', icon: 'ui/message-circle', onClick: () => openTextInput() },
+    { type: 'item', label: t('chat.history'), icon: 'ui/list', onClick: () => openChatHistory() },
+    { type: 'item', label: t('chat.typeMessage'), icon: 'ui/message-circle', onClick: () => openTextInput() },
     {
       // The brain toggle: same switch (and same glyphs) as the chat head.
       type: 'item',
-      label: canThink() ? 'Thinking' : 'Thinking — unavailable for this model',
+      label: canThink() ? t('chat.thinking') : t('chat.thinkingUnavailable'),
       icon: getThink() && canThink() ? 'ui/brain' : 'ui/brain-off',
       checked: getThink(),
       disabled: !canThink(),
@@ -697,7 +698,7 @@ function orbMenu() {
     },
     {
       type: 'item',
-      label: 'Close chat',
+      label: t('chat.close'),
       icon: 'ui/close',
       disabled: !isTextInputOpen(),
       onClick: () => closeChat(),
@@ -705,19 +706,19 @@ function orbMenu() {
     { type: 'separator' },
     {
       type: 'submenu',
-      label: 'Voice',
+      label: t('voice.label'),
       icon: 'ui/mic',
       items: [
         {
           type: 'item',
-          label: 'Listen now',
+          label: t('ctx.listenNow'),
           icon: 'ui/mic',
           disabled: isListening(),
           onClick: () => void orbListen(),
         },
         {
           type: 'item',
-          label: 'Stop listening',
+          label: t('ctx.stopListening'),
           icon: 'ui/stop',
           disabled: !isListening(),
           onClick: () => cancelListening(),
@@ -725,7 +726,7 @@ function orbMenu() {
         { type: 'separator' },
         {
           type: 'item',
-          label: 'Wake word',
+          label: t('ctx.wakeWord'),
           icon: 'ui/mic',
           checked: getWakeWord(),
           onClick: () => setWakeWord(!getWakeWord()),
@@ -733,7 +734,7 @@ function orbMenu() {
       ],
     },
     { type: 'separator' },
-    { type: 'item', label: 'Settings', icon: 'ui/settings', onClick: () => openCoreWindow('settings') },
+    { type: 'item', label: t('hud.settings'), icon: 'ui/settings', onClick: () => openCoreWindow('settings') },
   ];
 }
 

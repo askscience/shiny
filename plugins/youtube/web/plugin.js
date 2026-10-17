@@ -15,6 +15,7 @@
  * whatever the grid showed before (`lastResults`).
  */
 import { apiFetch } from '../../js/api.js';
+import { t } from '../../js/i18n.js';
 import {
   setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl, glowFromImageUrl,
 } from '../../ui/index.js';
@@ -72,7 +73,7 @@ function renderHero() {
 
   if (playing) {
     if (infoTitleEl) {
-      infoTitleEl.textContent = current.title || 'Now playing';
+      infoTitleEl.textContent = current.title || t('plugin.youtube.hero.nowPlaying', null, 'Now playing');
       infoTitleEl.title = current.title || '';
     }
     if (infoSubEl) infoSubEl.textContent = current.channel || 'YouTube';
@@ -113,7 +114,7 @@ function playVideo(v) {
   if (!tileEl || !frameEl) return; // focus mounts synchronously
   current = {
     video_id: v.video_id,
-    title: v.title || 'YouTube video',
+    title: v.title || t('plugin.youtube.hero.untitled', null, 'YouTube video'),
     channel: v.channel || '',
     thumbnail: v.thumbnail || thumbFor(v.video_id),
   };
@@ -143,7 +144,9 @@ async function loadSuggestions(v) {
     if (!list.length) return;
     const based = res?.data?.based_on?.title;
     renderGrid(list, null, {
-      label: based && based !== v.title ? `Up next · because you watched “${based}”` : 'Up next',
+      label: based && based !== v.title
+        ? t('plugin.youtube.grid.becauseYouWatched', { title: based }, `Up next · because you watched “${based}”`)
+        : t('plugin.youtube.grid.upNext', null, 'Up next'),
     });
   } catch (_) { /* suggestions are optional — keep the current grid */ }
 }
@@ -201,7 +204,7 @@ function videoCell(v, idx) {
   meta.className = 'yt-cell-meta';
   const name = document.createElement('span');
   name.className = 'yt-cell-name';
-  name.textContent = v.title || 'Video';
+  name.textContent = v.title || t('plugin.youtube.grid.untitled', null, 'Video');
   meta.appendChild(name);
   if (v.channel) {
     const channel = document.createElement('span');
@@ -245,8 +248,16 @@ function renderGrid(results, term, { label = '' } = {}) {
     const wrap = document.createElement('div');
     wrap.className = 'yt-grid-status';
     wrap.appendChild(term
-      ? emptyState({ icon: 'ui/search', title: 'No videos found', body: `Nothing matched “${term}”.` })
-      : emptyState({ icon: 'ui/youtube', title: 'Search YouTube', body: 'Type above — or ask the AI to find a video.' }));
+      ? emptyState({
+        icon: 'ui/search',
+        title: t('plugin.youtube.empty.noResults', null, 'No videos found'),
+        body: t('plugin.youtube.empty.noMatch', { term }, `Nothing matched “${term}”.`),
+      })
+      : emptyState({
+        icon: 'ui/youtube',
+        title: t('plugin.youtube.empty.searchTitle', null, 'Search YouTube'),
+        body: t('plugin.youtube.empty.searchBody', null, 'Type above — or ask the AI to find a video.'),
+      }));
     gridEl.appendChild(wrap);
     return;
   }
@@ -274,8 +285,8 @@ async function runSearch(text) {
     wrap.className = 'yt-grid-status';
     wrap.appendChild(emptyState({
       icon: 'ui/warning',
-      title: 'Search unavailable',
-      body: e.message || 'Try again in a moment',
+      title: t('plugin.youtube.empty.unavailableTitle', null, 'Search unavailable'),
+      body: e.message || t('plugin.youtube.empty.retry', null, 'Try again in a moment'),
     }));
     gridEl.appendChild(wrap);
   }
@@ -318,7 +329,9 @@ function renderCategories(cats) {
     chip.type = 'button';
     chip.className = 'yt-category';
     chip.textContent = titleCase(name);
-    chip.title = c?.count ? `Watched ${c.count}×` : 'Category';
+    chip.title = c?.count
+      ? t('plugin.youtube.category.watched', { count: c.count }, `Watched ${c.count}×`)
+      : t('plugin.youtube.category.generic', null, 'Category');
     chip.addEventListener('click', () => void openCategory(name));
     categoriesEl.appendChild(chip);
   }
@@ -327,7 +340,7 @@ function renderCategories(cats) {
 /** The idle homepage: a shelf of videos per category, most-watched first. */
 async function loadHomepage() {
   if (!tileEl || current) return;
-  renderGrid(null, null, { label: 'For you' }); // spinner while shelves load
+  renderGrid(null, null, { label: t('plugin.youtube.grid.forYou', null, 'For you') }); // spinner while shelves load
   const [cats, home] = await Promise.all([
     apiFetch('/api/youtube/categories?limit=20').catch(() => null),
     apiFetch('/api/youtube/home?per_category=12&max_categories=20').catch(() => null),
@@ -339,14 +352,14 @@ async function loadHomepage() {
     renderHome(sections);
   } else {
     const list = resultList(home);
-    renderGrid(list, null, { label: 'For you' });
+    renderGrid(list, null, { label: t('plugin.youtube.grid.forYou', null, 'For you') });
   }
 }
 
 /** Category shelves — a clickable label plus one row of videos per category. */
 function renderHome(sections) {
   if (!gridEl) return;
-  setGridLabel('For you');
+  setGridLabel(t('plugin.youtube.grid.forYou', null, 'For you'));
   gridEl.classList.add('yt-grid--shelves');
   gridEl.innerHTML = '';
   for (const section of sections) {
@@ -359,7 +372,8 @@ function renderHome(sections) {
     head.type = 'button';
     head.className = 'yt-section-title';
     head.textContent = `${titleCase(section.category)} · ${videos.length}`;
-    head.title = `Show all ${titleCase(section.category)}`;
+    head.title = t('plugin.youtube.grid.showAll', { category: titleCase(section.category) },
+      `Show all ${titleCase(section.category)}`);
     head.addEventListener('click', () => void openCategory(section.category));
 
     const row = document.createElement('div');
@@ -423,7 +437,7 @@ function onArtifactSaved(e) {
   if (!id) return;
   const video = {
     video_id: id,
-    title: play?.params?.title || art.title || 'Video',
+    title: play?.params?.title || art.title || t('plugin.youtube.grid.untitled', null, 'Video'),
     channel: art.subtitle?.split('·')[0]?.trim() || '',
     duration: art.subtitle?.split('·')[1]?.trim() || '',
     thumbnail: play?.params?.thumbnail || thumbFor(id),
@@ -465,7 +479,7 @@ export function mountYoutubeTile() {
   frameEl.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture');
   frameEl.setAttribute('allowfullscreen', 'true');
   frameEl.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-  frameEl.setAttribute('title', 'YouTube player');
+  frameEl.setAttribute('title', t('plugin.youtube.player.title', null, 'YouTube player'));
   playerWrapEl.appendChild(frameEl);
 
   infoEl = document.createElement('div');
@@ -480,8 +494,8 @@ export function mountYoutubeTile() {
   const backBtn = document.createElement('button');
   backBtn.type = 'button';
   backBtn.className = 'yt-hero-back';
-  backBtn.title = 'Back';
-  backBtn.setAttribute('aria-label', 'Back to YouTube search');
+  backBtn.title = t('plugin.youtube.hero.back', null, 'Back');
+  backBtn.setAttribute('aria-label', t('plugin.youtube.hero.backLabel', null, 'Back to YouTube search'));
   void setIcon(backBtn, 'ui/close', { size: 15 });
   backBtn.addEventListener('click', reset);
   infoEl.append(infoText, backBtn);
@@ -490,7 +504,7 @@ export function mountYoutubeTile() {
   tileEl.appendChild(heroEl);
 
   /* Search */
-  searchEl = searchBar({ placeholder: 'Search YouTube…' });
+  searchEl = searchBar({ placeholder: t('plugin.youtube.search.placeholder', null, 'Search YouTube…') });
   let searchTimer = null;
   searchEl.input.addEventListener('input', (e) => {
     window.clearTimeout(searchTimer);
@@ -567,11 +581,11 @@ export function getYoutubeTileElement() {
 export function youtubeContextMenu() {
   const playing = !!current;
   return [
-    { type: 'item', label: 'Search', icon: 'ui/search', disabled: !searchEl, onClick: () => searchEl?.input?.focus() },
-    { type: 'item', label: 'Home', icon: 'ui/youtube', disabled: !tileEl || playing, onClick: () => void loadHomepage() },
-    { type: 'item', label: 'Refresh results', icon: 'ui/refresh', disabled: !tileEl, onClick: () => void runSearch(searchEl?.input?.value || '') },
+    { type: 'item', label: t('plugin.youtube.menu.search', null, 'Search'), icon: 'ui/search', disabled: !searchEl, onClick: () => searchEl?.input?.focus() },
+    { type: 'item', label: t('plugin.youtube.menu.home', null, 'Home'), icon: 'ui/youtube', disabled: !tileEl || playing, onClick: () => void loadHomepage() },
+    { type: 'item', label: t('plugin.youtube.menu.refresh', null, 'Refresh results'), icon: 'ui/refresh', disabled: !tileEl, onClick: () => void runSearch(searchEl?.input?.value || '') },
     { type: 'separator' },
-    { type: 'item', label: 'Back', icon: 'ui/close', disabled: !playing, onClick: () => reset() },
+    { type: 'item', label: t('plugin.youtube.menu.back', null, 'Back'), icon: 'ui/close', disabled: !playing, onClick: () => reset() },
   ];
 }
 

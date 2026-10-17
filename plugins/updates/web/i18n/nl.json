@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Systeem- en Ollama-updates controleren en installeren op elke grote Linux-distributie",
+  "plugin.updates.meta.summary": "Updates: één venster (en HUD-chip) voor systeem- en Ollama-updates",
+  "plugin.updates.meta.category": "Systeem",
+
+  "plugin.updates.tab.updates": "Updates",
+  "plugin.updates.tab.history": "Geschiedenis",
+
+  "plugin.updates.toolbar.sections": "Secties",
+  "plugin.updates.toolbar.check": "Naar updates zoeken",
+
+  "plugin.updates.status.checking": "Naar updates zoeken…",
+  "plugin.updates.status.thisSystem": "dit systeem",
+  "plugin.updates.status.unavailableOnSystem": "Updates zijn niet beschikbaar op dit systeem",
+  "plugin.updates.status.unavailable": "Updates niet beschikbaar",
+  "plugin.updates.status.upToDate": "Alles is bijgewerkt · {where}",
+  "plugin.updates.status.available.one": "{count} update beschikbaar · {where}",
+  "plugin.updates.status.available.other": "{count} updates beschikbaar · {where}",
+  "plugin.updates.status.working": "Bezig…",
+  "plugin.updates.status.finished": "Update voltooid",
+  "plugin.updates.status.failed": "Update mislukt",
+  "plugin.updates.status.upToDateBody": "Je systeem is bijgewerkt.",
+  "plugin.updates.status.incomplete": "De update is niet voltooid. Open Updates voor details.",
+  "plugin.updates.status.couldNot": "{label} mislukt",
+  "plugin.updates.status.noJobId": "De server gaf geen taak-id terug",
+  "plugin.updates.status.lostConnection": "Verbinding met de taak verloren",
+  "plugin.updates.status.jobDisappeared": "De taak is verdwenen",
+
+  "plugin.updates.action.refresh": "Lijsten vernieuwen",
+  "plugin.updates.action.installing": "Installeren…",
+  "plugin.updates.action.install.one": "{count} update installeren",
+  "plugin.updates.action.install.other": "{count} updates installeren",
+  "plugin.updates.action.details": "Details",
+  "plugin.updates.action.hideDetails": "Details verbergen",
+
+  "plugin.updates.empty.upToDate": "Bijgewerkt",
+  "plugin.updates.empty.noUpdates": "Er wachten geen systeemupdates.",
+  "plugin.updates.empty.noActivity": "Nog geen activiteit",
+  "plugin.updates.empty.noActivityBody": "Updates die je installeert, verschijnen hier.",
+
+  "plugin.updates.ollama.version": " · versie {version}",
+  "plugin.updates.ollama.installed": "Geïnstalleerd{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Niet geïnstalleerd (of niet gevonden in PATH)",
+  "plugin.updates.ollama.service": "Service: {name}",
+  "plugin.updates.ollama.install": "Ollama installeren",
+  "plugin.updates.ollama.update": "Ollama bijwerken",
+
+  "plugin.updates.history.system": "systeem",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Kon niet naar updates zoeken",
+  "plugin.updates.notify.serviceUnavailable": "De updatedienst is niet beschikbaar.",
+  "plugin.updates.notify.busy": "Er loopt al een update",
+  "plugin.updates.notify.busyBody": "Wacht tot de huidige update klaar is.",
+
+  "plugin.updates.dialog.installTitle": "Updates installeren",
+  "plugin.updates.dialog.installRights.one": "Voor het installeren van {count} update zijn beheerdersrechten nodig.",
+  "plugin.updates.dialog.installRights.other": "Voor het installeren van {count} updates zijn beheerdersrechten nodig.",
+  "plugin.updates.dialog.refreshRights": "Voor het vernieuwen van pakketmetadata (bv. {cmd}) zijn beheerdersrechten nodig.",
+  "plugin.updates.dialog.ollamaMessage": "Voert de officiële installer uit. Ollama wordt tijdens de update gestopt en blijft gestopt (het midden in een sessie herstarten kan de GPU laten hangen); start het opnieuw of herstart de machine om de nieuwe versie te gebruiken.",
+  "plugin.updates.dialog.passwordField": "Beheerderswachtwoord",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo-wachtwoord",
+  "plugin.updates.dialog.passwordHint": "Wordt één keer gebruikt om het commando met sudo uit te voeren. Het wordt nooit opgeslagen.",
+  "plugin.updates.dialog.cancel": "Annuleren",
+  "plugin.updates.dialog.continue": "Doorgaan",
+
+  "plugin.updates.label.installing": "Updates installeren",
+  "plugin.updates.label.refreshing": "Lijsten vernieuwen",
+  "plugin.updates.label.updatingOllama": "Ollama bijwerken",
+
+  "plugin.updates.hud.available.one": "{count} update beschikbaar",
+  "plugin.updates.hud.available.other": "{count} updates beschikbaar",
+  "plugin.updates.hud.upToDate": "Systeem bijgewerkt",
+  "plugin.updates.hud.notifyTitle": "Updates beschikbaar",
+  "plugin.updates.hud.notifyBody.one": "{count} update klaar om te installeren",
+  "plugin.updates.hud.notifyBody.other": "{count} updates klaar om te installeren"
+}

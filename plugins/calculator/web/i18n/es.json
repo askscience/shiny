@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Calculadora científica — evalúa expresiones aritméticas y científicas en la ventana de la calculadora",
+  "plugin.calculator.meta.summary": "Calculadora: matemáticas básicas y científicas",
+  "plugin.calculator.meta.category": "Ofimática",
+
+  "plugin.calculator.display.error": "Error",
+
+  "plugin.calculator.toolbar.history": "Historial",
+  "plugin.calculator.toolbar.scientific": "Científica",
+  "plugin.calculator.toolbar.clearHistory": "Borrar el historial",
+
+  "plugin.calculator.menu.equals": "Igual",
+  "plugin.calculator.menu.clearAll": "Borrar todo",
+
+  "plugin.calculator.history.reuse": "Reutilizar este resultado",
+
+  "plugin.calculator.empty.noHistory": "No hay historial",
+  "plugin.calculator.empty.noHistoryBody": "Los cálculos que hagas aquí o le pidas a la IA aparecerán abajo.",
+
+  "plugin.calculator.toast.evaluateFailed": "No se ha podido evaluar",
+  "plugin.calculator.toast.historyFailed": "No se ha podido cargar el historial",
+  "plugin.calculator.toast.historyCleared": "Historial borrado",
+  "plugin.calculator.toast.clearFailed": "No se ha podido borrar el historial"
+}

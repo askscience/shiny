@@ -36,6 +36,7 @@ import {
   artifactPanel, icon, installGlow, refreshGlow, createRim, setGlow, glowFromDrawable,
 } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
+import { loadPluginCatalog } from './i18n.js';
 
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 
@@ -53,6 +54,14 @@ let overlayTitle = null;
 
 let pluginCatalog = new Map(); // name -> { description }
 let surfaceModules = new Map(); // name -> plugin.js surface module
+const surfaceUrls = new Map(); // name -> the module's URL (for catalog reloads)
+
+// Switching the interface language reloads every mounted plugin's catalog, so
+// the next render of its window is already translated (open windows pick it up
+// when they are rebuilt).
+window.addEventListener('locale:change', () => {
+  for (const url of surfaceUrls.values()) void loadPluginCatalog(url);
+});
 let mapTileEl = null;          // the tile hosting the map DOM
 let mapRimEl = null;           // the map's on-top ambient rim glow
 let mapGlowTimer = null;       // debounce for the map glow sample
@@ -169,8 +178,13 @@ async function refreshCatalog() {
         // proxy (the kiosk), where the module URL lives under `/p/…`.
         // A root-absolute `/plugins/…` would resolve to the proxy origin
         // instead of the app and the window would never mount (kiosk bug).
-        const mod = await import(`../plugins/${p.name}/plugin.js`);
+        const moduleUrl = new URL(`../plugins/${p.name}/plugin.js`, import.meta.url);
+        // The plugin's translations first, so strings resolved while the
+        // module graph evaluates are already in the user's language.
+        await loadPluginCatalog(moduleUrl);
+        const mod = await import(moduleUrl.href);
         surfaceModules.set(p.name, mod.default || mod);
+        surfaceUrls.set(p.name, moduleUrl);
         surfaceModules.get(p.name)?.wireEvents?.();
         wiredAny = true;
       } catch (err) {

@@ -17,6 +17,7 @@ import {
 } from './desktop.js';
 import { toggleWindowFullscreenActive } from './fullscreen.js';
 import { setIcon } from '../ui/index.js';
+import { t } from './i18n.js';
 
 export const KEYBOARD_PLUGIN = 'keyboard';
 
@@ -385,12 +386,17 @@ function renderDesktopRow() {
     });
     row.appendChild(b);
   };
-  btn('\u2922', 'Fullscreen (Alt+Enter)', () => toggleWindowFullscreenActive());
-  btn('\u25C0', 'Previous workspace (Alt+,)', () => switchWorkspace('prev'));
-  btn('\u25B6', 'Next workspace (Alt+.)', () => switchWorkspace('next'));
-  btn('+', 'New workspace (Alt+N)', () => createWorkspace());
-  btn('\u2212', 'Remove workspace (Alt+Shift+N)', () => removeWorkspace());
-  btn('\u25C7', 'Focus next window (Alt+L)', () => cycleFocusActive(1));
+  btn('\u2922', t('kb.fullscreen', null, 'Fullscreen (Alt+Enter)'),
+    () => toggleWindowFullscreenActive());
+  btn('\u25C0', t('kb.prevWorkspace', null, 'Previous workspace (Alt+,)'),
+    () => switchWorkspace('prev'));
+  btn('\u25B6', t('kb.nextWorkspace', null, 'Next workspace (Alt+.)'),
+    () => switchWorkspace('next'));
+  btn('+', t('kb.newWorkspace', null, 'New workspace (Alt+N)'), () => createWorkspace());
+  btn('\u2212', t('kb.removeWorkspace', null, 'Remove workspace (Alt+Shift+N)'),
+    () => removeWorkspace());
+  btn('\u25C7', t('kb.focusWindow', null, 'Focus next window (Alt+L)'),
+    () => cycleFocusActive(1));
   return row;
 }
 
@@ -567,8 +573,8 @@ function createHudButton() {
   hudBtn.type = 'button';
   hudBtn.id = 'hud-keyboard-btn';
   hudBtn.className = 'icon-btn';
-  hudBtn.title = 'Keyboard';
-  hudBtn.setAttribute('aria-label', 'Keyboard');
+  hudBtn.title = t('kb.toggle', null, 'Keyboard');
+  hudBtn.setAttribute('aria-label', t('kb.toggle', null, 'Keyboard'));
   hudBtn.setAttribute('aria-pressed', 'false');
   void setIcon(hudBtn, 'ui/keyboard', { size: 18 });
   hudBtn.addEventListener('click', () => {
@@ -605,7 +611,7 @@ function mount() {
   bar = document.createElement('div');
   bar.id = 'keyboard-bar';
   bar.setAttribute('role', 'group');
-  bar.setAttribute('aria-label', 'Virtual keyboard');
+  bar.setAttribute('aria-label', t('kb.virtualKeyboard', null, 'Virtual keyboard'));
   rowsEl = document.createElement('div');
   rowsEl.className = 'keyboard-rows';
   bar.appendChild(rowsEl);

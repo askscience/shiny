@@ -20,26 +20,32 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-/// The buttons, in bar order: `(action, label)`.
+use crate::i18n::Strings;
+
+/// The buttons, in bar order: `(action, catalogue key)`.
+///
+/// The action is the wire protocol with the page (`web/js/touchbarShared.js`)
+/// and is never translated; the label the bar shows comes from the embedded
+/// catalogue (`i18n.rs`), so this table names the key rather than the text.
 ///
 /// This must match `TOUCHBAR_ACTIONS` in `web/js/touchbarShared.js` — the Node
 /// test `web/js/tests/touchbar.test.mjs` parses this constant and fails if the
 /// two drift apart.
 #[allow(dead_code)]
 pub const BUTTONS: &[(&str, &str)] = &[
-    ("talk", "Ask"),
-    ("stop", "Stop"),
-    ("mute", "Mute"),
-    ("volume-down", "Vol-"),
-    ("volume-up", "Vol+"),
-    ("screen-down", "Scr-"),
-    ("screen-up", "Scr+"),
-    ("workspace-prev", "Prev"),
-    ("workspace-next", "Next"),
-    ("kbd-backlight-down", "Kbd-"),
-    ("kbd-backlight-up", "Kbd+"),
-    ("keyboard", "Keys"),
-    ("settings", "Setup"),
+    ("talk", "touchbar.talk.label"),
+    ("stop", "touchbar.stop.label"),
+    ("mute", "touchbar.mute.label"),
+    ("volume-down", "touchbar.volume-down.label"),
+    ("volume-up", "touchbar.volume-up.label"),
+    ("screen-down", "touchbar.screen-down.label"),
+    ("screen-up", "touchbar.screen-up.label"),
+    ("workspace-prev", "touchbar.workspace-prev.label"),
+    ("workspace-next", "touchbar.workspace-next.label"),
+    ("kbd-backlight-down", "touchbar.kbd-backlight-down.label"),
+    ("kbd-backlight-up", "touchbar.kbd-backlight-up.label"),
+    ("keyboard", "touchbar.keyboard.label"),
+    ("settings", "touchbar.settings.label"),
 ];
 
 /// Actions produced by a native Touch Bar, drained on the event-loop thread.
@@ -149,18 +155,23 @@ pub struct TouchBarHandle {
 pub struct TouchBarHandle;
 
 /// Put a native Touch Bar on the kiosk window, if this is macOS.
+///
+/// The labels come from `strings` — the session language's catalogue — while the
+/// action ids stay untranslated.
 #[cfg(target_os = "macos")]
 pub fn install(
     window: &tao::window::Window,
     bridge: TouchBarBridge,
+    strings: &Strings,
 ) -> Option<TouchBarHandle> {
-    macos::install(window, bridge)
+    macos::install(window, bridge, strings)
 }
 
 #[cfg(not(target_os = "macos"))]
 pub fn install(
     _window: &tao::window::Window,
     _bridge: TouchBarBridge,
+    _strings: &Strings,
 ) -> Option<TouchBarHandle> {
     None
 }
@@ -168,6 +179,7 @@ pub fn install(
 #[cfg(target_os = "macos")]
 mod macos {
     use super::{TouchBarBridge, TouchBarHandle, BUTTONS};
+    use crate::i18n::Strings;
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
     use objc2::{define_class, msg_send, sel, AnyThread, DefinedClass, MainThreadMarker};
@@ -221,6 +233,7 @@ mod macos {
     pub(super) fn install(
         window: &tao::window::Window,
         bridge: TouchBarBridge,
+        strings: &Strings,
     ) -> Option<TouchBarHandle> {
         let mtm = MainThreadMarker::new()?;
 
@@ -239,9 +252,11 @@ mod macos {
 
         let mut identifiers: Vec<Retained<NSString>> = Vec::with_capacity(BUTTONS.len());
         let mut items: Vec<Retained<NSTouchBarItem>> = Vec::with_capacity(BUTTONS.len());
-        for (action, label) in BUTTONS {
+        for &(action, key) in BUTTONS {
+            // Only the visible title is translated; the identifier (and so the
+            // action the page receives) is the same in every language.
             let identifier = NSString::from_str(&format!("{IDENTIFIER_PREFIX}{action}"));
-            let title = NSString::from_str(label);
+            let title = NSString::from_str(strings.get(key));
             let item = unsafe {
                 NSButtonTouchBarItem::buttonTouchBarItemWithIdentifier_title_target_action(
                     &identifier,
@@ -267,5 +282,27 @@ mod macos {
             _bar: bar,
             _target: target,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BUTTONS;
+    use std::collections::HashSet;
+
+    #[test]
+    fn buttons_pair_an_action_with_a_catalogued_label() {
+        assert_eq!(BUTTONS.len(), 13);
+        let actions: HashSet<&str> = BUTTONS.iter().map(|(action, _)| *action).collect();
+        assert_eq!(actions.len(), BUTTONS.len(), "action ids must be unique");
+        for (action, key) in BUTTONS {
+            // The bar shows the catalogue's text for `key`; a key with no
+            // English fallback would render blank inside a partial catalogue.
+            assert!(
+                key.starts_with("touchbar.") && key.ends_with(".label"),
+                "{action} -> {key}"
+            );
+            assert!(!crate::i18n::english(key).is_empty(), "{key} has no text");
+        }
     }
 }

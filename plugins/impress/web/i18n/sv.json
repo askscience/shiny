@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Presentationer",
+  "plugin.impress.toolbar.titlePlaceholder": "Namnlös",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Presentera",
+  "plugin.impress.toolbar.newDeck": "Ny presentation",
+  "plugin.impress.toolbar.importOdp": "Importera .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Spara i Dokument",
+  "plugin.impress.toolbar.saveNow": "Spara nu",
+  "plugin.impress.toolbar.deleteDeck": "Ta bort presentation",
+
+  "plugin.impress.menu.empty": "Inga presentationer än",
+  "plugin.impress.menu.newDeck": "Ny presentation",
+  "plugin.impress.menu.importOdp": "Importera .odp",
+  "plugin.impress.menu.saveToDocuments": "Spara i Dokument",
+  "plugin.impress.menu.deleteDeck": "Ta bort presentation",
+
+  "plugin.impress.ctx.newDeck": "Ny presentation",
+  "plugin.impress.ctx.addSlide": "Lägg till bild",
+  "plugin.impress.ctx.saveNow": "Spara nu",
+  "plugin.impress.ctx.present": "Presentera",
+  "plugin.impress.ctx.stopPresenting": "Sluta presentera",
+  "plugin.impress.ctx.deleteDeck": "Ta bort presentation",
+
+  "plugin.impress.status.saving": "Sparar…",
+  "plugin.impress.status.unsaved": "Osparade ändringar",
+  "plugin.impress.status.saved.one": "Sparat {time} · {count} bild",
+  "plugin.impress.status.saved.other": "Sparat {time} · {count} bilder",
+
+  "plugin.impress.empty.noDeck": "Ingen presentation",
+  "plugin.impress.empty.noDeckBody": "Skapa en, eller be AI:n bygga ett bildspel",
+
+  "plugin.impress.inspector.layout": "Layout",
+  "plugin.impress.inspector.transition": "Övergång",
+  "plugin.impress.inspector.bullets": "Punkter",
+  "plugin.impress.inspector.speakerNotes": "Talarnoteringar",
+  "plugin.impress.inspector.hint": "Klicka på en text på bilden för att redigera den direkt.",
+  "plugin.impress.inspector.applyAll": "Använd den här övergången och punktuppbyggnaden på alla bilder",
+  "plugin.impress.inspector.applyAllLabel": "Använd på alla bilder",
+
+  "plugin.impress.ops.addSlide": "Lägg till bild",
+  "plugin.impress.ops.moveUp": "Flytta upp",
+  "plugin.impress.ops.moveDown": "Flytta ner",
+  "plugin.impress.ops.deleteSlide": "Ta bort bild",
+
+  "plugin.impress.transition.none": "Ingen",
+  "plugin.impress.transition.fade": "Tona",
+  "plugin.impress.transition.slide": "Glid",
+  "plugin.impress.transition.push": "Tryck",
+  "plugin.impress.transition.zoom": "Zooma",
+
+  "plugin.impress.reveal.all": "Alla på en gång",
+  "plugin.impress.reveal.bullets": "En i taget",
+
+  "plugin.impress.slide.addText": "Lägg till text",
+  "plugin.impress.slide.addTitle": "Lägg till en rubrik",
+  "plugin.impress.slide.addSubtitle": "Lägg till en underrubrik",
+  "plugin.impress.slide.attribution": "Upphovsuppgift",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Tillbaka till redigeraren",
+  "plugin.impress.present.fullScreen": "Fullskärm",
+  "plugin.impress.present.exitFullScreen": "Lämna fullskärm",
+  "plugin.impress.present.blocked": "Fullskärm blockerades av webbläsaren",
+
+  "plugin.impress.dialog.deleteDeck": "Ta bort \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Sparandet misslyckades",
+  "plugin.impress.toast.openFailed": "Kunde inte öppna presentationen",
+  "plugin.impress.toast.createFailed": "Kunde inte skapa presentationen",
+  "plugin.impress.toast.deleteFailed": "Kunde inte ta bort presentationen",
+  "plugin.impress.toast.imported": "Importerade {name}",
+  "plugin.impress.toast.importFailed": "Importen misslyckades — är det här en giltig .odp-fil?",
+  "plugin.impress.toast.openFileFailed": "Kunde inte öppna filen",
+
+  "plugin.impress.meta.description": "Presentationsbyggare — bildspel sparas som bilder och exporteras som öppna .odp-filer",
+  "plugin.impress.meta.summary": "Impress: bygg, redigera och presentera bildspel i OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Kontor"
+}

@@ -8,7 +8,7 @@ use shiny_plugin_sdk::context::AgentContext;
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
-use shiny_plugin_sdk::tools::{Tool, ToolRequest, normalize_action_name};
+use shiny_plugin_sdk::tools::{Tool, ToolRequest, UiText, normalize_action_name};
 use serde_json::Value;
 
 use std::collections::BTreeSet;
@@ -186,6 +186,44 @@ impl ToolRegistry {
         } else {
             "Working…".to_string()
         }
+    }
+
+    /// Catalogue-key prefix for an action's owner (`plugin.<name>.`), or empty
+    /// for core built-ins.
+    fn key_prefix(&self, normalized_action: &str) -> String {
+        let owner = self.owner.read();
+        match owner.get(normalized_action) {
+            Some(name) if !name.is_empty() => format!("plugin.{name}."),
+            _ => String::new(),
+        }
+    }
+
+    /// Translatable step line for an action, when its tool offers one
+    /// (`Tool::step_ui`). The tool's relative key gets the owner prefix.
+    pub fn step_ui(&self, action: &str) -> Option<UiText> {
+        let normalized = normalize_action_name(action);
+        let prefix = self.key_prefix(&normalized);
+        let map = self.tools.read();
+        let tool = map.get(&normalized)?;
+        let mut ui = tool.step_ui()?;
+        if let Some(key) = ui.key.take() {
+            ui.key = Some(format!("{prefix}{key}"));
+        }
+        Some(ui)
+    }
+
+    /// Translatable "done" line for an action, when its tool offers one
+    /// (`Tool::done_ui`).
+    pub fn done_ui(&self, action: &str, result: &str, data: &Value) -> Option<UiText> {
+        let normalized = normalize_action_name(action);
+        let prefix = self.key_prefix(&normalized);
+        let map = self.tools.read();
+        let tool = map.get(&normalized)?;
+        let mut ui = tool.done_ui(result, data)?;
+        if let Some(key) = ui.key.take() {
+            ui.key = Some(format!("{prefix}{key}"));
+        }
+        Some(ui)
     }
 
     /// Build the human-readable "completed" note for a result.

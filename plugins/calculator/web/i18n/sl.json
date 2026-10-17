@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Znanstveni kalkulator — izračunajte aritmetične in znanstvene izraze v oknu Kalkulator",
+  "plugin.calculator.meta.summary": "Kalkulator: osnovna in znanstvena matematika",
+  "plugin.calculator.meta.category": "Pisarna",
+
+  "plugin.calculator.display.error": "Napaka",
+
+  "plugin.calculator.toolbar.history": "Zgodovina",
+  "plugin.calculator.toolbar.scientific": "Znanstveno",
+  "plugin.calculator.toolbar.clearHistory": "Počisti zgodovino",
+
+  "plugin.calculator.menu.equals": "Je enako",
+  "plugin.calculator.menu.clearAll": "Počisti vse",
+
+  "plugin.calculator.history.reuse": "Ponovno uporabi ta rezultat",
+
+  "plugin.calculator.empty.noHistory": "Ni zgodovine",
+  "plugin.calculator.empty.noHistoryBody": "Izračuni, ki jih izvedete tukaj ali zahtevate od umetne inteligence, se prikažejo spodaj.",
+
+  "plugin.calculator.toast.evaluateFailed": "Izraza ni bilo mogoče izračunati",
+  "plugin.calculator.toast.historyFailed": "Zgodovine ni bilo mogoče naložiti",
+  "plugin.calculator.toast.historyCleared": "Zgodovina počiščena",
+  "plugin.calculator.toast.clearFailed": "Zgodovine ni bilo mogoče počistiti"
+}

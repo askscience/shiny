@@ -11,6 +11,7 @@ import {
   currentConversationId, setCurrentConversation, newChat,
   listConversations, loadConversationMessages, removeConversation,
 } from './agent.js';
+import { t } from './i18n.js';
 
 let panel = null;
 let view = 'list'; // 'list' | 'messages'
@@ -42,19 +43,24 @@ function renderList() {
   panel.body.textContent = '';
 
   const head = h('div', 'chat-history-head');
-  const title = h('h3', 'chat-history-title', 'Chats');
-  const newBtn = button({ icon: 'ui/plus', label: 'New chat', variant: 'primary', size: 'sm' });
+  const title = h('h3', 'chat-history-title', t('chat.chats', null, 'Chats'));
+  const newBtn = button({
+    icon: 'ui/plus', label: t('chat.newChat', null, 'New chat'), variant: 'primary', size: 'sm',
+  });
   newBtn.addEventListener('click', () => {
     newChat();
     panel.close();
-    toast('Started a new chat', { type: 'info' });
+    toast(t('ctx.chatStarted', null, 'Started a new chat'), { type: 'info' });
   });
   head.append(title, newBtn);
   panel.body.appendChild(head);
 
   const list = h('div', 'chat-history-list');
   if (!conversations.length) {
-    list.appendChild(emptyState({ title: 'No chats yet', body: "Your conversations with PEAK'D! will appear here." }));
+    list.appendChild(emptyState({
+      title: t('chat.noChatsYet', null, 'No chats yet'),
+      body: t('chat.historyEmptyBody', null, "Your conversations with PEAK'D! will appear here."),
+    }));
     panel.body.appendChild(list);
     return;
   }
@@ -66,7 +72,7 @@ function renderList() {
     if (c.id === current) row.classList.add('is-active');
 
     const meta = h('div', 'chat-history-meta');
-    meta.appendChild(h('div', 'chat-history-item-title', c.title || 'New chat'));
+    meta.appendChild(h('div', 'chat-history-item-title', c.title || t('chat.newChat', null, 'New chat')));
     meta.appendChild(h('div', 'chat-history-item-preview', c.preview || ''));
     row.appendChild(meta);
 
@@ -74,15 +80,15 @@ function renderList() {
     right.appendChild(h('span', 'chat-history-item-time', fmtWhen(c.updated_at)));
     const del = h('button', 'chat-history-del');
     del.type = 'button';
-    del.title = 'Delete chat';
+    del.title = t('chat.deleteChat', null, 'Delete chat');
     const ic = h('span', 'chat-history-del-icon');
     del.appendChild(ic);
     void setIcon(ic, 'ui/trash', { size: 14 });
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!window.confirm('Delete this chat?')) return;
+      if (!window.confirm(t('chat.deleteChatConfirm', null, 'Delete this chat?'))) return;
       if (await removeConversation(c.id)) {
-        toast('Chat deleted', { type: 'info' });
+        toast(t('chat.deleted', null, 'Chat deleted'), { type: 'info' });
         await refreshList();
       }
     });
@@ -100,22 +106,26 @@ async function openMessages(c) {
   view = 'messages';
   panel.body.textContent = '';
 
-  const back = button({ icon: 'ui/arrow-left', label: 'Back', variant: 'ghost', size: 'sm' });
+  const back = button({
+    icon: 'ui/arrow-left', label: t('common.back', null, 'Back'), variant: 'ghost', size: 'sm',
+  });
   back.classList.add('ui-btn--icon');
   back.addEventListener('click', () => { renderList(); });
 
-  const cont = button({ label: 'Continue this chat', variant: 'primary', size: 'sm' });
+  const cont = button({
+    label: t('chat.continueChat', null, 'Continue this chat'), variant: 'primary', size: 'sm',
+  });
   cont.addEventListener('click', () => {
     setCurrentConversation(c.id);
     panel.close();
-    toast('Resumed chat', { type: 'info' });
+    toast(t('chat.resumed', null, 'Resumed chat'), { type: 'info' });
   });
 
   const head = h('div', 'chat-history-head');
-  const t = h('div', 'chat-history-meta');
-  t.appendChild(h('div', 'chat-history-title', c.title || 'New chat'));
-  t.appendChild(back);
-  head.appendChild(t);
+  const meta = h('div', 'chat-history-meta');
+  meta.appendChild(h('div', 'chat-history-title', c.title || t('chat.newChat', null, 'New chat')));
+  meta.appendChild(back);
+  head.appendChild(meta);
   head.appendChild(cont);
   panel.body.appendChild(head);
 
@@ -125,11 +135,15 @@ async function openMessages(c) {
   // now would stack the message view on top of the list.
   if (token !== renderToken) return;
   if (!entries.length) {
-    msgs.appendChild(emptyState({ title: 'No messages', body: 'Say something to start.' }));
+    msgs.appendChild(emptyState({
+      title: t('chat.noMessages', null, 'No messages'),
+      body: t('chat.noMessagesBody', null, 'Say something to start.'),
+    }));
   }
   for (const m of entries) {
     const bubble = h('div', `chat-history-bubble chat-history-bubble--${m.role}`);
-    bubble.appendChild(h('div', 'chat-history-bubble-role', m.role === 'user' ? 'You' : "PEAK'D!"));
+    const role = m.role === 'user' ? t('chat.you', null, 'You') : "PEAK'D!";
+    bubble.appendChild(h('div', 'chat-history-bubble-role', role));
     bubble.appendChild(h('div', 'chat-history-bubble-text', m.content));
     msgs.appendChild(bubble);
   }

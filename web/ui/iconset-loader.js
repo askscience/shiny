@@ -12,23 +12,25 @@
  */
 
 import { themeMode } from './theme-loader.js';
+import { t } from '../js/i18n.js';
 
 const KEY = 'ui.iconset.name';
 const TINT_KEY = 'ui.tint.icons';
 const DEFAULT_CHOICE = 'infinity';
 
-/** Choices shown in Settings → Appearance. `auto` picks a dir per theme mode. */
+/** Choices shown in Settings → Appearance. `auto` picks a dir per theme mode.
+ *  Labels live in the catalogue (the table is built at import, before it loads). */
 const OPTIONS = [
   {
     value: 'infinity',
-    label: 'Infinity (coloured)',
-    hint: 'The Infinity icon theme — coloured folders and app icons, auto light/dark.',
+    labelKey: 'ui.iconset.infinity.label',
+    hintKey: 'ui.iconset.infinity.hint',
     auto: { light: 'infinity', dark: 'infinity-dark' },
   },
   {
     value: 'base',
-    label: 'Slot-Beauty (monochrome)',
-    hint: 'The KDE Slot-Beauty line-icon set the app was originally built on.',
+    labelKey: 'ui.iconset.slotBeauty.label',
+    hintKey: 'ui.iconset.slotBeauty.hint',
   },
 ];
 
@@ -62,7 +64,11 @@ export function initIconLoader() {
 }
 
 export function iconsetOptions() {
-  return OPTIONS.map(({ value, label, hint }) => ({ value, label, hint }));
+  return OPTIONS.map(({ value, labelKey, hintKey }) => ({
+    value,
+    label: t(labelKey),
+    hint: t(hintKey),
+  }));
 }
 
 export function getIconsetChoice() {

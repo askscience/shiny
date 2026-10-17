@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Kalkulator naukowy — obliczaj wyrażenia arytmetyczne i naukowe w oknie Kalkulatora",
+  "plugin.calculator.meta.summary": "Kalkulator: matematyka podstawowa i naukowa",
+  "plugin.calculator.meta.category": "Biuro",
+
+  "plugin.calculator.display.error": "Błąd",
+
+  "plugin.calculator.toolbar.history": "Historia",
+  "plugin.calculator.toolbar.scientific": "Naukowy",
+  "plugin.calculator.toolbar.clearHistory": "Wyczyść historię",
+
+  "plugin.calculator.menu.equals": "Równa się",
+  "plugin.calculator.menu.clearAll": "Wyczyść wszystko",
+
+  "plugin.calculator.history.reuse": "Użyj ponownie tego wyniku",
+
+  "plugin.calculator.empty.noHistory": "Brak historii",
+  "plugin.calculator.empty.noHistoryBody": "Obliczenia wykonane tutaj lub zlecone AI pojawią się poniżej.",
+
+  "plugin.calculator.toast.evaluateFailed": "Nie udało się obliczyć",
+  "plugin.calculator.toast.historyFailed": "Nie udało się wczytać historii",
+  "plugin.calculator.toast.historyCleared": "Wyczyszczono historię",
+  "plugin.calculator.toast.clearFailed": "Nie udało się wyczyścić historii"
+}

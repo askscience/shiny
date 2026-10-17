@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Editur tar-ritratti — aġġustamenti tat-ton u tal-kulur, ċaflis/ħeffa/vinjetta u stili tal-film b'tapta waħda fit-tieqa Immaġni",
+  "plugin.image.meta.summary": "Editur tar-ritratti: aġġustamenti u stili tal-film",
+  "plugin.image.meta.category": "Midja",
+
+  "plugin.image.toolbar.menu": "Menu",
+  "plugin.image.toolbar.fitToggle": "Ibdel bejn adatta / daqs reali",
+
+  "plugin.image.dial.brightness": "Luminożità",
+  "plugin.image.dial.contrast": "Kuntrast",
+  "plugin.image.dial.exposure": "Espożizzjoni",
+  "plugin.image.dial.vibrance": "Vibranza",
+  "plugin.image.dial.saturation": "Saturazzjoni",
+  "plugin.image.dial.blur": "Ċaflis",
+  "plugin.image.dial.sharpen": "Ħeffa",
+  "plugin.image.dial.vignette": "Vinjetta",
+
+  "plugin.image.oneClick.autoTone": "Ton awtomatiku",
+  "plugin.image.oneClick.autoContrast": "Kuntrast awtomatiku",
+  "plugin.image.oneClick.invert": "Inverti",
+  "plugin.image.oneClick.grayscale": "B&W",
+  "plugin.image.oneClick.sepia": "Sepja",
+  "plugin.image.oneClick.revert": "Erġa' lura",
+  "plugin.image.oneClick.revertTitle": "Erġa' ġib it-tlugħ oriġinali",
+
+  "plugin.image.empty.title": "Ebda immaġni miftuħa",
+  "plugin.image.empty.body": "Iftaħ jew ġib ritratt biex tibda.",
+  "plugin.image.empty.open": "Iftaħ immaġni",
+
+  "plugin.image.menu.file": "Fajl",
+  "plugin.image.menu.image": "Immaġni",
+  "plugin.image.menu.view": "Veduta",
+  "plugin.image.menu.open": "Iftaħ…",
+  "plugin.image.menu.saveCopy": "Salva kopja…",
+  "plugin.image.menu.delete": "Ħassar l-immaġni",
+  "plugin.image.menu.rotateLeft": "Dawwar lejn ix-xellug",
+  "plugin.image.menu.rotateRight": "Dawwar lejn il-lemin",
+  "plugin.image.menu.flipH": "Iqlib orizzontalment",
+  "plugin.image.menu.flipV": "Iqlib vertikalment",
+  "plugin.image.menu.revert": "Erġa' lura għall-oriġinali",
+  "plugin.image.menu.zoomIn": "Kabbar",
+  "plugin.image.menu.zoomOut": "Ċekken",
+  "plugin.image.menu.fit": "Adatta",
+  "plugin.image.menu.actualSize": "Daqs reali",
+
+  "plugin.image.ctx.open": "Iftaħ immaġni…",
+
+  "plugin.image.dialog.deleteConfirm": "Ħassar \"{title}\"?",
+  "plugin.image.dialog.thisImage": "din l-immaġni",
+
+  "plugin.image.toast.openFirst": "Iftaħ immaġni l-ewwel",
+  "plugin.image.toast.opened": "Infetħet {title}",
+  "plugin.image.toast.editFailed": "L-editjar falla",
+  "plugin.image.toast.operationFailed": "L-operazzjoni falliet",
+  "plugin.image.toast.renderFailed": "L-immaġni ma setgħetx tiġi rrenderjata",
+  "plugin.image.toast.uploadFailed": "It-tlugħ falla",
+  "plugin.image.toast.saveFailed": "Ma setax jiġi salvat",
+  "plugin.image.toast.deleted": "L-immaġni tħassret",
+  "plugin.image.toast.deleteFailed": "L-immaġni ma setgħetx titħassar",
+  "plugin.image.toast.reverted": "Reġgħet lura għall-pixels oriġinali",
+  "plugin.image.toast.openFailed": "Il-fajl ma setax jinfetaħ",
+
+  "plugin.image.error.emptyFile": "dak il-fajl huwa vojt",
+  "plugin.image.error.notAnImage": "“{name}” mhux immaġni li l-editur jista' jiftaħ",
+  "plugin.image.error.unnamedFile": "fajl"
+}

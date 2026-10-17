@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Έγγραφα",
+  "plugin.word.toolbar.titlePlaceholder": "Χωρίς τίτλο",
+  "plugin.word.toolbar.newDocument": "Νέο έγγραφο",
+  "plugin.word.toolbar.importOdt": "Εισαγωγή .odt",
+  "plugin.word.toolbar.saveToDocuments": "Αποθήκευση στα Έγγραφα",
+  "plugin.word.toolbar.saveNow": "Άμεση αποθήκευση",
+  "plugin.word.toolbar.deleteDocument": "Διαγραφή εγγράφου",
+  "plugin.word.toolbar.bold": "Έντονα",
+  "plugin.word.toolbar.italic": "Πλάγια",
+  "plugin.word.toolbar.underline": "Υπογράμμιση",
+  "plugin.word.toolbar.heading": "Επικεφαλίδα",
+  "plugin.word.toolbar.bulletList": "Λίστα με κουκκίδες",
+  "plugin.word.toolbar.font": "Γραμματοσειρά",
+  "plugin.word.toolbar.fontHint": "Γραμματοσειρά — εφαρμόζεται στην επιλογή ή σε ολόκληρο το έγγραφο όταν δεν υπάρχει επιλογή",
+
+  "plugin.word.status.saving": "Αποθήκευση…",
+  "plugin.word.status.unsaved": "Μη αποθηκευμένες αλλαγές",
+  "plugin.word.status.saved.one": "Αποθηκεύτηκε {time} · {count} λέξη",
+  "plugin.word.status.saved.other": "Αποθηκεύτηκε {time} · {count} λέξεις",
+
+  "plugin.word.menu.empty": "Δεν υπάρχουν έγγραφα ακόμη",
+  "plugin.word.menu.newDocument": "Νέο έγγραφο",
+  "plugin.word.menu.importOdt": "Εισαγωγή .odt",
+  "plugin.word.menu.saveToDocuments": "Αποθήκευση στα Έγγραφα",
+  "plugin.word.menu.deleteDocument": "Διαγραφή εγγράφου",
+
+  "plugin.word.ctx.newDocument": "Νέο έγγραφο",
+  "plugin.word.ctx.saveNow": "Άμεση αποθήκευση",
+  "plugin.word.ctx.saveToDocuments": "Αποθήκευση στα Έγγραφα",
+  "plugin.word.ctx.bold": "Έντονα",
+  "plugin.word.ctx.italic": "Πλάγια",
+  "plugin.word.ctx.heading": "Επικεφαλίδα",
+  "plugin.word.ctx.list": "Λίστα",
+  "plugin.word.ctx.deleteDocument": "Διαγραφή εγγράφου",
+
+  "plugin.word.dialog.deleteDoc": "Διαγραφή του \"{title}\";",
+
+  "plugin.word.toast.saveFailed": "Η αποθήκευση απέτυχε",
+  "plugin.word.toast.openFailed": "Δεν ήταν δυνατό το άνοιγμα του εγγράφου",
+  "plugin.word.toast.createFailed": "Δεν ήταν δυνατή η δημιουργία εγγράφου",
+  "plugin.word.toast.deleteFailed": "Δεν ήταν δυνατή η διαγραφή του εγγράφου",
+  "plugin.word.toast.imported": "Εισήχθη το {name}",
+  "plugin.word.toast.importFailed": "Η εισαγωγή απέτυχε — είναι έγκυρο αρχείο .odt;",
+  "plugin.word.toast.openFileFailed": "Δεν ήταν δυνατό το άνοιγμα του αρχείου",
+
+  "plugin.word.meta.description": "Απλός επεξεργαστής κειμένου — έγγραφα αποθηκευμένα ως ανοιχτά αρχεία .odt",
+  "plugin.word.meta.summary": "Επεξεργαστής κειμένου: δημιουργία, επεξεργασία και ανάγνωση εγγράφων OpenDocument (.odt)",
+  "plugin.word.meta.category": "Γραφείο"
+}

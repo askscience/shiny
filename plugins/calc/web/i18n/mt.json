@@ -1,0 +1,40 @@
+{
+  "plugin.calc.meta.description": "Kalkulatur ta' spreadsheets — folji maħżuna bħala grilji ta' ċelloli miftuħa, editabbli fit-tieqa Calc",
+  "plugin.calc.meta.summary": "Calc: oħloq, editja u kkalkula bi spreadsheets",
+  "plugin.calc.meta.category": "Uffiċċju",
+
+  "plugin.calc.bar.spreadsheets": "Spreadsheets",
+
+  "plugin.calc.toolbar.newSheet": "Spreadsheet ġdid",
+  "plugin.calc.toolbar.importOds": "Importa .ods",
+  "plugin.calc.toolbar.importCsv": "Importa CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Salva fid-Dokumenti",
+  "plugin.calc.toolbar.saveNow": "Salva issa",
+  "plugin.calc.toolbar.deleteSheet": "Ħassar l-ispreadsheet",
+
+  "plugin.calc.menu.noSheets": "Għad m'hemmx spreadsheets",
+
+  "plugin.calc.sheet.untitled": "Bla titlu",
+  "plugin.calc.sheet.importedCsv": "CSV importat",
+
+  "plugin.calc.formula.placeholder": "Valur jew formula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Qed jiġi salvat…",
+  "plugin.calc.status.dirty": "Bidliet mhux salvati",
+  "plugin.calc.status.saved.one": "Salvat {time} · {count} ċellola",
+  "plugin.calc.status.saved.two": "Salvat {time} · {count} ċelloli",
+  "plugin.calc.status.saved.few": "Salvat {time} · {count} ċelloli",
+  "plugin.calc.status.saved.many": "Salvat {time} · {count}-il ċellola",
+  "plugin.calc.status.saved.other": "Salvat {time} · {count} ċellola",
+
+  "plugin.calc.dialog.delete": "Ħassar \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Ma setax jiġi salvat",
+  "plugin.calc.toast.openFailed": "L-ispreadsheet ma setax jinfetaħ",
+  "plugin.calc.toast.createFailed": "L-ispreadsheet ma setax jinħoloq",
+  "plugin.calc.toast.deleteFailed": "L-ispreadsheet ma setax jitħassar",
+  "plugin.calc.toast.imported": "Ġie importat {name}",
+  "plugin.calc.toast.importOdsFailed": "L-importazzjoni falliet — dan huwa fajl .ods validu?",
+  "plugin.calc.toast.importCsvFailed": "L-importazzjoni falliet — dan huwa fajl CSV validu?",
+  "plugin.calc.toast.openFileFailed": "Il-fajl ma setax jinfetaħ"
+}

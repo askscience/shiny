@@ -1,0 +1,30 @@
+{
+  "plugin.terminal.meta.description": "Un terminal Linux real dentro de la aplicación — un shell de inicio de sesión respaldado por un PTY en su propia ventana",
+  "plugin.terminal.meta.summary": "Terminal: un shell real sobre un PTY, representado con xterm.js",
+  "plugin.terminal.meta.category": "Sistema",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Pestaña nueva",
+  "plugin.terminal.tab.close": "Cerrar {name}",
+  "plugin.terminal.tabs.label": "Pestañas del terminal",
+
+  "plugin.terminal.status.starting": "iniciando el terminal…",
+  "plugin.terminal.status.connecting": "conectando…",
+  "plugin.terminal.status.reconnecting": "volviendo a conectar…",
+  "plugin.terminal.status.connected": "conectado",
+  "plugin.terminal.status.startFailed": "no se ha podido iniciar un shell",
+  "plugin.terminal.status.expired": "la sesión ha caducado — inicia sesión de nuevo",
+  "plugin.terminal.status.xtermFailed": "no se ha podido cargar xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: como máximo {count} pestaña",
+  "plugin.terminal.toast.tabLimit.many": "Terminal: como máximo {count} pestañas",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: como máximo {count} pestañas",
+  "plugin.terminal.toast.startFailed": "Terminal: no se ha podido iniciar un shell",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js no se ha podido cargar",
+  "plugin.terminal.toast.clipboardUnavailable": "Portapapeles no disponible",
+
+  "plugin.terminal.ctx.copy": "Copiar",
+  "plugin.terminal.ctx.paste": "Pegar",
+  "plugin.terminal.ctx.clearScrollback": "Borrar el historial de desplazamiento",
+  "plugin.terminal.ctx.closeTab": "Cerrar la pestaña"
+}

@@ -3,6 +3,7 @@
  * Sound menu (`audioMenu.js`), so a node's icon and label are decided in
  * exactly one place and the chip can never disagree with the menu.
  */
+import { t } from './i18n.js';
 
 /** The node a panel speaks for: the default one, else the first. */
 export function currentNode(nodes, defaultName) {
@@ -43,6 +44,6 @@ export function nodeSubtitle(node) {
   return [
     node?.card,
     node?.active_port,
-    (node?.state || '').toUpperCase() === 'RUNNING' ? 'in use' : null,
+    (node?.state || '').toUpperCase() === 'RUNNING' ? t('audio.inUse') : null,
   ].filter(Boolean).join(' · ');
 }

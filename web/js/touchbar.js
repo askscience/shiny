@@ -25,6 +25,7 @@ import { currentSink } from './audioShared.js';
 import { toast } from '../ui/index.js';
 import { getTouchBarEnabled } from './preferences.js';
 import { actionForEvent, isTouchBarActive } from './touchbarShared.js';
+import { t } from './i18n.js';
 
 let handlers = {};
 let installed = false;
@@ -135,7 +136,8 @@ export async function dispatchTouchBarAction(action) {
         return undefined;
     }
   } catch (err) {
-    toast(err?.message || 'Touch Bar action failed', { type: 'error' });
+    toast(err?.message || t('touchbar.actionFailed', null, 'Touch Bar action failed'),
+      { type: 'error' });
   }
 }
 

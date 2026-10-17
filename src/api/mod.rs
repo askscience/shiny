@@ -418,9 +418,25 @@ async fn host_remote_gate(
     next.run(req).await
 }
 
+/// Resolve the caller's interface language (`Accept-Language`) and run the
+/// request with it in scope: error rendering and plugin metadata read it.
+async fn locale_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let locale = crate::i18n::locale_from(req.headers());
+    crate::i18n::scope(locale, next.run(req)).await
+}
+
 pub fn build_router(state: AppState) -> Router {
     let web_dir = state.config.web_dir.clone();
     let vosk_models_dir = state.config.vosk_models_dir.clone();
+
+    // Server-side i18n: point the catalogue loader at the served directory and
+    // the installed plugins, and install the translator the SDK's error
+    // renderer calls into.
+    crate::i18n::init(&web_dir, &state.config.plugins_dir);
+    shiny_plugin_sdk::errors::set_message_translator(crate::i18n::translate_current);
 
     let public_routes = Router::new()
         .route("/api/auth/register", post(auth::register))
@@ -579,6 +595,10 @@ pub fn build_router(state: AppState) -> Router {
         .merge(protected_routes)
         .merge(build_plugin_routes(&state))
         .fallback_service(static_files)
+        // Every response runs with the caller's interface language in scope
+        // (`Accept-Language`, sent by apiFetch), so error messages and plugin
+        // metadata come back translated.
+        .layer(axum::middleware::from_fn(locale_middleware))
         // The UI is same-origin and never needs CORS. The previous
         // `CorsLayer::permissive()` emitted `Access-Control-Allow-Origin: *`,
         // letting any website read this server's responses (and turning a

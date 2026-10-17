@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Zdaj se predvaja",
+  "plugin.youtube.hero.untitled": "Videoposnetek YouTube",
+  "plugin.youtube.hero.back": "Nazaj",
+  "plugin.youtube.hero.backLabel": "Nazaj na iskanje po YouTubu",
+  "plugin.youtube.player.title": "Predvajalnik YouTube",
+
+  "plugin.youtube.search.placeholder": "Iskanje na YouTubu…",
+
+  "plugin.youtube.grid.upNext": "Naslednje",
+  "plugin.youtube.grid.becauseYouWatched": "Naslednje · ker ste gledali “{title}”",
+  "plugin.youtube.grid.forYou": "Za vas",
+  "plugin.youtube.grid.showAll": "Pokaži vse: {category}",
+  "plugin.youtube.grid.untitled": "Videoposnetek",
+
+  "plugin.youtube.empty.noResults": "Ni najdenih videoposnetkov",
+  "plugin.youtube.empty.noMatch": "Nič se ne ujema z “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Iskanje po YouTubu",
+  "plugin.youtube.empty.searchBody": "Vnesite zgoraj — ali prosite umetno inteligenco, naj poišče videoposnetek.",
+  "plugin.youtube.empty.unavailableTitle": "Iskanje ni na voljo",
+  "plugin.youtube.empty.retry": "Poskusite znova čez trenutek",
+
+  "plugin.youtube.category.watched": "Gledano {count}×",
+  "plugin.youtube.category.generic": "Kategorija",
+
+  "plugin.youtube.menu.search": "Iskanje",
+  "plugin.youtube.menu.home": "Domov",
+  "plugin.youtube.menu.refresh": "Osveži zadetke",
+  "plugin.youtube.menu.back": "Nazaj",
+
+  "plugin.youtube.meta.description": "Glejte videoposnetke YouTube v oknu YouTube — umetna inteligenca lahko išče po YouTubu in predvaja videoposnetke",
+  "plugin.youtube.meta.summary": "YouTube: iskanje z umetno inteligenco in predvajanje v oknu YouTube",
+  "plugin.youtube.meta.category": "Predstavnost"
+}

@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Läuft jetzt",
+  "plugin.youtube.hero.untitled": "YouTube-Video",
+  "plugin.youtube.hero.back": "Zurück",
+  "plugin.youtube.hero.backLabel": "Zurück zur YouTube-Suche",
+  "plugin.youtube.player.title": "YouTube-Player",
+
+  "plugin.youtube.search.placeholder": "YouTube durchsuchen…",
+
+  "plugin.youtube.grid.upNext": "Als Nächstes",
+  "plugin.youtube.grid.becauseYouWatched": "Als Nächstes · weil Sie „{title}“ angesehen haben",
+  "plugin.youtube.grid.forYou": "Für Sie",
+  "plugin.youtube.grid.showAll": "Alle {category} anzeigen",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Keine Videos gefunden",
+  "plugin.youtube.empty.noMatch": "Nichts passte zu „{term}“.",
+  "plugin.youtube.empty.searchTitle": "YouTube durchsuchen",
+  "plugin.youtube.empty.searchBody": "Geben Sie oben etwas ein — oder bitten Sie die KI, ein Video zu finden.",
+  "plugin.youtube.empty.unavailableTitle": "Suche nicht verfügbar",
+  "plugin.youtube.empty.retry": "Versuchen Sie es gleich noch einmal",
+
+  "plugin.youtube.category.watched": "{count}× angesehen",
+  "plugin.youtube.category.generic": "Kategorie",
+
+  "plugin.youtube.menu.search": "Suche",
+  "plugin.youtube.menu.home": "Startseite",
+  "plugin.youtube.menu.refresh": "Ergebnisse aktualisieren",
+  "plugin.youtube.menu.back": "Zurück",
+
+  "plugin.youtube.meta.description": "YouTube-Videos im YouTube-Fenster ansehen — die KI kann YouTube durchsuchen und Videos abspielen",
+  "plugin.youtube.meta.summary": "YouTube: KI-Suche und Wiedergabe im YouTube-Fenster",
+  "plugin.youtube.meta.category": "Medien"
+}

@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Научен калкулатор — изчислявайте аритметични и научни изрази в прозореца Калкулатор",
+  "plugin.calculator.meta.summary": "Калкулатор: основни и научни изчисления",
+  "plugin.calculator.meta.category": "Офис",
+
+  "plugin.calculator.display.error": "Грешка",
+
+  "plugin.calculator.toolbar.history": "История",
+  "plugin.calculator.toolbar.scientific": "Научен",
+  "plugin.calculator.toolbar.clearHistory": "Изчисти историята",
+
+  "plugin.calculator.menu.equals": "Равно",
+  "plugin.calculator.menu.clearAll": "Изчисти всичко",
+
+  "plugin.calculator.history.reuse": "Използвай отново този резултат",
+
+  "plugin.calculator.empty.noHistory": "Няма история",
+  "plugin.calculator.empty.noHistoryBody": "Изчисленията, които правите тук или поискате от ИИ, се появяват по-долу.",
+
+  "plugin.calculator.toast.evaluateFailed": "Изчислението не успя",
+  "plugin.calculator.toast.historyFailed": "Историята не можа да се зареди",
+  "plugin.calculator.toast.historyCleared": "Историята е изчистена",
+  "plugin.calculator.toast.clearFailed": "Историята не можа да се изчисти"
+}

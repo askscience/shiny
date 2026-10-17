@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Naptár — események ütemezése, listázása és rendszerezése a Naptár ablakban",
+  "plugin.calendar.meta.summary": "Naptár: események ütemezése és rendszerezése",
+  "plugin.calendar.meta.category": "Iroda",
+
+  "plugin.calendar.month.january": "január",
+  "plugin.calendar.month.february": "február",
+  "plugin.calendar.month.march": "március",
+  "plugin.calendar.month.april": "április",
+  "plugin.calendar.month.may": "május",
+  "plugin.calendar.month.june": "június",
+  "plugin.calendar.month.july": "július",
+  "plugin.calendar.month.august": "augusztus",
+  "plugin.calendar.month.september": "szeptember",
+  "plugin.calendar.month.october": "október",
+  "plugin.calendar.month.november": "november",
+  "plugin.calendar.month.december": "december",
+
+  "plugin.calendar.grid.sun": "Vas",
+  "plugin.calendar.grid.mon": "Hét",
+  "plugin.calendar.grid.tue": "Ked",
+  "plugin.calendar.grid.wed": "Sze",
+  "plugin.calendar.grid.thu": "Csüt",
+  "plugin.calendar.grid.fri": "Pén",
+  "plugin.calendar.grid.sat": "Szo",
+
+  "plugin.calendar.event.allDay": "Egész napos",
+
+  "plugin.calendar.toolbar.previousMonth": "Előző hónap",
+  "plugin.calendar.toolbar.nextMonth": "Következő hónap",
+  "plugin.calendar.toolbar.today": "Ma",
+  "plugin.calendar.toolbar.newEvent": "Új esemény",
+
+  "plugin.calendar.ctx.refresh": "Frissítés",
+
+  "plugin.calendar.detail.edit": "Szerkesztés",
+  "plugin.calendar.detail.delete": "Törlés",
+
+  "plugin.calendar.empty.noEvents": "Nincsenek események",
+  "plugin.calendar.empty.noEventsBody": "Nincs ütemezett esemény. Adjon hozzá egyet, vagy kérje meg az AI-t, hogy ütemezzen be egyet.",
+
+  "plugin.calendar.dialog.title": "Esemény",
+  "plugin.calendar.dialog.editTitle": "Esemény szerkesztése",
+  "plugin.calendar.dialog.titleField": "Cím",
+  "plugin.calendar.dialog.titlePlaceholder": "pl. Csapatmegbeszélés",
+  "plugin.calendar.dialog.dateField": "Dátum",
+  "plugin.calendar.dialog.startTimeField": "Kezdés időpontja",
+  "plugin.calendar.dialog.endTimeField": "Befejezés időpontja",
+  "plugin.calendar.dialog.locationField": "Helyszín",
+  "plugin.calendar.dialog.locationPlaceholder": "Helyszín (nem kötelező)",
+  "plugin.calendar.dialog.notesField": "Jegyzetek",
+  "plugin.calendar.dialog.notesPlaceholder": "Jegyzetek (nem kötelező)",
+  "plugin.calendar.dialog.cancel": "Mégse",
+  "plugin.calendar.dialog.save": "Esemény mentése",
+
+  "plugin.calendar.toast.titleRequired": "A cím megadása kötelező",
+  "plugin.calendar.toast.dateRequired": "A dátum megadása kötelező",
+  "plugin.calendar.toast.updated": "Esemény frissítve",
+  "plugin.calendar.toast.scheduled": "Esemény ütemezve",
+  "plugin.calendar.toast.deleted": "Esemény törölve",
+  "plugin.calendar.toast.loadFailed": "Nem sikerült betölteni az eseményeket",
+  "plugin.calendar.toast.saveFailed": "Nem sikerült menteni az eseményt",
+  "plugin.calendar.toast.deleteFailed": "Nem sikerült törölni az eseményt",
+
+  "plugin.calendar.confirm.deleteEvent": "Törli a(z) „{title}” eseményt?",
+
+  "plugin.calendar.notify.eventSoon": "Hamarosan kezdődik egy esemény"
+}

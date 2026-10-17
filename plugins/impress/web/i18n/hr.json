@@ -1,0 +1,80 @@
+{
+  "plugin.impress.toolbar.presentations": "Prezentacije",
+  "plugin.impress.toolbar.titlePlaceholder": "Bez naslova",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Prezentiraj",
+  "plugin.impress.toolbar.newDeck": "Nova prezentacija",
+  "plugin.impress.toolbar.importOdp": "Uvezi .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Spremi u Dokumente",
+  "plugin.impress.toolbar.saveNow": "Spremi odmah",
+  "plugin.impress.toolbar.deleteDeck": "Izbriši prezentaciju",
+
+  "plugin.impress.menu.empty": "Još nema prezentacija",
+  "plugin.impress.menu.newDeck": "Nova prezentacija",
+  "plugin.impress.menu.importOdp": "Uvezi .odp",
+  "plugin.impress.menu.saveToDocuments": "Spremi u Dokumente",
+  "plugin.impress.menu.deleteDeck": "Izbriši prezentaciju",
+
+  "plugin.impress.ctx.newDeck": "Nova prezentacija",
+  "plugin.impress.ctx.addSlide": "Dodaj slajd",
+  "plugin.impress.ctx.saveNow": "Spremi odmah",
+  "plugin.impress.ctx.present": "Prezentiraj",
+  "plugin.impress.ctx.stopPresenting": "Zaustavi prezentiranje",
+  "plugin.impress.ctx.deleteDeck": "Izbriši prezentaciju",
+
+  "plugin.impress.status.saving": "Spremanje…",
+  "plugin.impress.status.unsaved": "Nespremljene promjene",
+  "plugin.impress.status.saved.one": "Spremljeno {time} · {count} slajd",
+  "plugin.impress.status.saved.few": "Spremljeno {time} · {count} slajda",
+  "plugin.impress.status.saved.other": "Spremljeno {time} · {count} slajdova",
+
+  "plugin.impress.empty.noDeck": "Nema prezentacije",
+  "plugin.impress.empty.noDeckBody": "Stvorite je ili zamolite AI da sastavi prezentaciju",
+
+  "plugin.impress.inspector.layout": "Raspored",
+  "plugin.impress.inspector.transition": "Prijelaz",
+  "plugin.impress.inspector.bullets": "Nabrojane točke",
+  "plugin.impress.inspector.speakerNotes": "Bilješke za govornika",
+  "plugin.impress.inspector.hint": "Kliknite bilo koji tekst na slajdu da ga izravno uredite.",
+  "plugin.impress.inspector.applyAll": "Primijeni ovaj prijelaz i nabrajanje na svaki slajd",
+  "plugin.impress.inspector.applyAllLabel": "Primijeni na sve slajdove",
+
+  "plugin.impress.ops.addSlide": "Dodaj slajd",
+  "plugin.impress.ops.moveUp": "Pomakni gore",
+  "plugin.impress.ops.moveDown": "Pomakni dolje",
+  "plugin.impress.ops.deleteSlide": "Izbriši slajd",
+
+  "plugin.impress.transition.none": "Ništa",
+  "plugin.impress.transition.fade": "Postupno",
+  "plugin.impress.transition.slide": "Klizanje",
+  "plugin.impress.transition.push": "Guranje",
+  "plugin.impress.transition.zoom": "Zum",
+
+  "plugin.impress.reveal.all": "Sve odjednom",
+  "plugin.impress.reveal.bullets": "Jedno po jedno",
+
+  "plugin.impress.slide.addText": "Dodaj tekst",
+  "plugin.impress.slide.addTitle": "Dodaj naslov",
+  "plugin.impress.slide.addSubtitle": "Dodaj podnaslov",
+  "plugin.impress.slide.attribution": "Autorstvo",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Natrag na uređivač",
+  "plugin.impress.present.fullScreen": "Cijeli zaslon",
+  "plugin.impress.present.exitFullScreen": "Izađi iz cijelog zaslona",
+  "plugin.impress.present.blocked": "Preglednik je blokirao cijeli zaslon",
+
+  "plugin.impress.dialog.deleteDeck": "Izbrisati \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Spremanje nije uspjelo",
+  "plugin.impress.toast.openFailed": "Nije moguće otvoriti prezentaciju",
+  "plugin.impress.toast.createFailed": "Nije moguće stvoriti prezentaciju",
+  "plugin.impress.toast.deleteFailed": "Nije moguće izbrisati prezentaciju",
+  "plugin.impress.toast.imported": "Uvezeno: {name}",
+  "plugin.impress.toast.importFailed": "Uvoz nije uspio — je li ovo ispravna .odp datoteka?",
+  "plugin.impress.toast.openFileFailed": "Nije moguće otvoriti datoteku",
+
+  "plugin.impress.meta.description": "Sastavljač prezentacija — prezentacije se spremaju kao slajdovi i izvoze u otvorene .odp datoteke",
+  "plugin.impress.meta.summary": "Impress: sastavljajte, uređujte i prezentirajte OpenDocument (.odp) prezentacije",
+  "plugin.impress.meta.category": "Ured"
+}

@@ -1,0 +1,30 @@
+{
+  "plugin.terminal.meta.description": "Un vero terminale Linux dentro l'app — una shell di login su PTY nella sua finestra",
+  "plugin.terminal.meta.summary": "Terminal: una vera shell su PTY, renderizzata con xterm.js",
+  "plugin.terminal.meta.category": "Sistema",
+
+  "plugin.terminal.tab.label": "Terminale {n}",
+  "plugin.terminal.tab.new": "Nuova scheda",
+  "plugin.terminal.tab.close": "Chiudi {name}",
+  "plugin.terminal.tabs.label": "Schede del terminale",
+
+  "plugin.terminal.status.starting": "avvio del terminale…",
+  "plugin.terminal.status.connecting": "connessione…",
+  "plugin.terminal.status.reconnecting": "riconnessione…",
+  "plugin.terminal.status.connected": "connesso",
+  "plugin.terminal.status.startFailed": "impossibile avviare una shell",
+  "plugin.terminal.status.expired": "sessione scaduta — accedi di nuovo",
+  "plugin.terminal.status.xtermFailed": "impossibile caricare xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: al massimo {count} scheda",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: al massimo {count} schede",
+  "plugin.terminal.toast.tabLimit.many": "Terminal: al massimo {count} schede",
+  "plugin.terminal.toast.startFailed": "Terminal: impossibile avviare una shell",
+  "plugin.terminal.toast.xtermFailed": "Terminal: caricamento di xterm.js non riuscito",
+  "plugin.terminal.toast.clipboardUnavailable": "Appunti non disponibili",
+
+  "plugin.terminal.ctx.copy": "Copia",
+  "plugin.terminal.ctx.paste": "Incolla",
+  "plugin.terminal.ctx.clearScrollback": "Cancella la cronologia di scorrimento",
+  "plugin.terminal.ctx.closeTab": "Chiudi scheda"
+}

@@ -18,6 +18,7 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const IMPRESS_PLUGIN = 'impress';
@@ -38,9 +39,16 @@ const LAYOUTS = ['title', 'section', 'content', 'two-column', 'quote', 'blank'];
 const TRANSITIONS = ['none', 'fade', 'slide', 'push', 'zoom'];
 const REVEALS = ['all', 'bullets'];
 const TRANSITION_LABELS = {
-  none: 'None', fade: 'Fade', slide: 'Slide', push: 'Push', zoom: 'Zoom',
+  none: { labelKey: 'plugin.impress.transition.none' },
+  fade: { labelKey: 'plugin.impress.transition.fade' },
+  slide: { labelKey: 'plugin.impress.transition.slide' },
+  push: { labelKey: 'plugin.impress.transition.push' },
+  zoom: { labelKey: 'plugin.impress.transition.zoom' },
 };
-const REVEAL_LABELS = { all: 'All at once', bullets: 'One by one' };
+const REVEAL_LABELS = {
+  all: { labelKey: 'plugin.impress.reveal.all' },
+  bullets: { labelKey: 'plugin.impress.reveal.bullets' },
+};
 
 let tileEl = null;
 let deckMenuBtn = null;
@@ -176,8 +184,12 @@ function slideEl(slide, theme, editable = false) {
       if (multiline) node.dataset.multiline = '1';
       node.setAttribute('role', 'textbox');
       const placeholder = field === 'body'
-        ? (slide.layout === 'blank' ? 'Add text' : '')
-        : ({ title: 'Add a title', subtitle: 'Add a subtitle', attribution: 'Attribution' }[field] || '');
+        ? (slide.layout === 'blank' ? t('plugin.impress.slide.addText', null, 'Add text') : '')
+        : ({
+          title: t('plugin.impress.slide.addTitle', null, 'Add a title'),
+          subtitle: t('plugin.impress.slide.addSubtitle', null, 'Add a subtitle'),
+          attribution: t('plugin.impress.slide.attribution', null, 'Attribution'),
+        }[field] || '');
       if (placeholder) node.dataset.placeholder = placeholder;
       wireTextField(node);
     }
@@ -319,7 +331,7 @@ function renderStrip() {
     const mini = slideEl(slide, current.theme);
     mini.classList.add('impress-thumb-slide');
     item.append(num, mini);
-    item.title = `${i + 1}. ${slide.title || slide.layout}`;
+    item.title = t('plugin.impress.strip.thumbTitle', { n: i + 1, title: slide.title || slide.layout }, `${i + 1}. ${slide.title || slide.layout}`);
     item.addEventListener('click', () => selectSlide(i));
     items.push(item);
   });
@@ -402,15 +414,15 @@ function scheduleThumbRefresh() {
 function setStatus(mode) {
   if (!statusEl) return;
   const now = new Date();
-  const t = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (mode === 'saving') {
-    statusEl.textContent = 'Saving…';
+    statusEl.textContent = t('plugin.impress.status.saving', null, 'Saving…');
     saveDot?.classList.add('is-active');
   } else if (mode === 'dirty') {
-    statusEl.textContent = 'Unsaved changes';
+    statusEl.textContent = t('plugin.impress.status.unsaved', null, 'Unsaved changes');
     saveDot?.classList.add('is-active');
   } else {
-    statusEl.textContent = `Saved ${t} · ${slideCount()} ${slideCount() === 1 ? 'slide' : 'slides'}`;
+    statusEl.textContent = tp('plugin.impress.status.saved', slideCount(), { time }, `Saved ${time} · ${slideCount()} slides`);
     saveDot?.classList.remove('is-active');
   }
 }
@@ -438,7 +450,7 @@ async function persist() {
   } catch (e) {
     dirty = true;
     setStatus('dirty');
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
@@ -484,7 +496,7 @@ async function openDeck(deck) {
     setStatus('saved');
     updateGlow();
   } catch (e) {
-    toast(e.message || 'Could not open presentation', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.openFailed', null, 'Could not open presentation'), { type: 'error' });
   }
 }
 
@@ -500,13 +512,13 @@ async function newDeck() {
     await refreshDecks();
     await openDeck(created);
   } catch (e) {
-    toast(e.message || 'Could not create presentation', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.createFailed', null, 'Could not create presentation'), { type: 'error' });
   }
 }
 
 async function removeCurrent() {
   if (!current) return;
-  if (!window.confirm(`Delete "${current.title}"?`)) return;
+  if (!window.confirm(t('plugin.impress.dialog.deleteDeck', { title: current.title }, `Delete "${current.title}"?`))) return;
   try {
     await deleteDeck(current.id);
     current = null;
@@ -514,7 +526,7 @@ async function removeCurrent() {
     await refreshDecks();
     await openNewest();
   } catch (e) {
-    toast(e.message || 'Could not delete presentation', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.deleteFailed', null, 'Could not delete presentation'), { type: 'error' });
   }
 }
 
@@ -567,7 +579,7 @@ function renderDeckMenuItems() {
   if (!deckMenuPopup) return;
   deckMenuPopup.innerHTML = '';
   if (!decks.length) {
-    const empty = h('div', 'impress-deck-menu-empty', 'No presentations yet');
+    const empty = h('div', 'impress-deck-menu-empty', t('plugin.impress.menu.empty', null, 'No presentations yet'));
     deckMenuPopup.appendChild(empty);
   } else {
     decks.forEach((deck) => {
@@ -607,10 +619,10 @@ function renderDeckMenuItems() {
     });
     foot.appendChild(item);
   };
-  footItem('ui/plus', 'New presentation', false, () => void newDeck());
-  footItem('ui/download', 'Import .odp', false, pickOdpFile);
-  footItem('ui/save', 'Save to Documents', false, () => void exportOdp());
-  footItem('ui/trash', 'Delete presentation', true, () => void removeCurrent());
+  footItem('ui/plus', t('plugin.impress.menu.newDeck', null, 'New presentation'), false, () => void newDeck());
+  footItem('ui/download', t('plugin.impress.menu.importOdp', null, 'Import .odp'), false, pickOdpFile);
+  footItem('ui/save', t('plugin.impress.menu.saveToDocuments', null, 'Save to Documents'), false, () => void exportOdp());
+  footItem('ui/trash', t('plugin.impress.menu.deleteDeck', null, 'Delete presentation'), true, () => void removeCurrent());
   deckMenuPopup.appendChild(foot);
 }
 
@@ -645,11 +657,11 @@ async function importOdp(file) {
   form.append('file', file);
   try {
     await apiFetch('/api/presentations/import', { method: 'POST', body: form });
-    toast(`Imported ${file.name}`, { type: 'info' });
+    toast(t('plugin.impress.toast.imported', { name: file.name }, `Imported ${file.name}`), { type: 'info' });
     await refreshDecks();
     await openNewest();
   } catch (e) {
-    toast(e.message || 'Import failed — is this a valid .odp file?', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.importFailed', null, 'Import failed — is this a valid .odp file?'), { type: 'error' });
   }
 }
 
@@ -662,7 +674,7 @@ async function exportOdp() {
     );
     await saveOrDownload(blob, { name: `${current.title || 'presentation'}.odp`, dir: 'Documents', app: 'Impress' });
   } catch (e) {
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
@@ -748,8 +760,8 @@ function buildPresentControls() {
     controls.appendChild(btn);
     return btn;
   };
-  control('ui/arrow-left', 'Back to the editor', stopPresent);
-  presentFullBtn = control('ui/expand', 'Full screen', togglePresentFullscreen);
+  control('ui/arrow-left', t('plugin.impress.present.backToEditor', null, 'Back to the editor'), stopPresent);
+  presentFullBtn = control('ui/expand', t('plugin.impress.present.fullScreen', null, 'Full screen'), togglePresentFullscreen);
   syncPresentFullBtn();
   return controls;
 }
@@ -813,7 +825,7 @@ async function togglePresentFullscreen() {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await presentEl.requestFullscreen({ navigationUI: 'hide' });
   } catch (_) {
-    toast('Full screen was blocked by the browser', { type: 'info' });
+    toast(t('plugin.impress.present.blocked', null, 'Full screen was blocked by the browser'), { type: 'info' });
   }
   syncPresentFullBtn();
 }
@@ -822,8 +834,12 @@ function syncPresentFullBtn() {
   if (!presentFullBtn) return;
   const full = !!document.fullscreenElement;
   presentFullBtn.classList.toggle('is-active', full);
-  presentFullBtn.title = full ? 'Exit full screen' : 'Full screen';
-  presentFullBtn.setAttribute('aria-label', full ? 'Exit full screen' : 'Full screen');
+  presentFullBtn.title = full
+    ? t('plugin.impress.present.exitFullScreen', null, 'Exit full screen')
+    : t('plugin.impress.present.fullScreen', null, 'Full screen');
+  presentFullBtn.setAttribute('aria-label', full
+    ? t('plugin.impress.present.exitFullScreen', null, 'Exit full screen')
+    : t('plugin.impress.present.fullScreen', null, 'Full screen'));
 }
 
 function renderPresent() {
@@ -917,7 +933,7 @@ export function mountImpressTile() {
   deckMenuBtn.className = 'impress-deck-btn';
   deckMenuBtn.setAttribute('aria-haspopup', 'menu');
   deckMenuBtn.setAttribute('aria-expanded', 'false');
-  deckMenuBtn.title = 'Presentations';
+  deckMenuBtn.title = t('plugin.impress.toolbar.presentations', null, 'Presentations');
   const deckIcon = h('span', 'impress-deck-btn-icon');
   deckMenuBtn.appendChild(deckIcon);
   void setIcon(deckIcon, 'ui/present', { size: 15 });
@@ -929,7 +945,7 @@ export function mountImpressTile() {
   titleInput = document.createElement('input');
   titleInput.className = 'impress-title';
   titleInput.type = 'text';
-  titleInput.placeholder = 'Untitled';
+  titleInput.placeholder = t('plugin.impress.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
   titleInput.autocomplete = 'off';
   titleInput.addEventListener('change', () => {
@@ -941,7 +957,7 @@ export function mountImpressTile() {
 
   themeSelect = document.createElement('select');
   themeSelect.className = 'impress-theme';
-  themeSelect.title = 'Theme';
+  themeSelect.title = t('plugin.impress.toolbar.theme', null, 'Theme');
   for (const t of THEMES) {
     const opt = document.createElement('option');
     opt.value = t;
@@ -961,18 +977,18 @@ export function mountImpressTile() {
   saveDot = h('span', 'impress-save-dot');
   saveDot.setAttribute('aria-hidden', 'true');
 
-  presentBtn = toolbarButton('ui/play', 'Present', startPresent);
+  presentBtn = toolbarButton('ui/play', t('plugin.impress.toolbar.present', null, 'Present'), startPresent);
 
   // Single top bar (Studio-style): deck menu + title + theme + action buttons.
   bar.append(
     deckMenuBtn,
     titleInput,
     themeSelect,
-    toolbarButton('ui/plus', 'New presentation', () => void newDeck()),
-    toolbarButton('ui/download', 'Import .odp', pickOdpFile),
-    toolbarButton('ui/save', 'Save to Documents', () => void exportOdp()),
-    toolbarButton('ui/save', 'Save now', () => void persist()),
-    toolbarButton('ui/trash', 'Delete presentation', () => void removeCurrent(), true),
+    toolbarButton('ui/plus', t('plugin.impress.toolbar.newDeck', null, 'New presentation'), () => void newDeck()),
+    toolbarButton('ui/download', t('plugin.impress.toolbar.importOdp', null, 'Import .odp'), pickOdpFile),
+    toolbarButton('ui/save', t('plugin.impress.toolbar.saveToDocuments', null, 'Save to Documents'), () => void exportOdp()),
+    toolbarButton('ui/save', t('plugin.impress.toolbar.saveNow', null, 'Save now'), () => void persist()),
+    toolbarButton('ui/trash', t('plugin.impress.toolbar.deleteDeck', null, 'Delete presentation'), () => void removeCurrent(), true),
     presentBtn,
     saveDot,
   );
@@ -986,7 +1002,10 @@ export function mountImpressTile() {
   const stageWrap = h('div', 'impress-stage-wrap');
   stageWrapEl = stageWrap;
   stageEl = h('div', 'impress-stage');
-  stageEl.appendChild(emptyState({ title: 'No presentation', body: 'Create one, or ask the AI to build a deck' }));
+  stageEl.appendChild(emptyState({
+    title: t('plugin.impress.empty.noDeck', null, 'No presentation'),
+    body: t('plugin.impress.empty.noDeckBody', null, 'Create one, or ask the AI to build a deck'),
+  }));
   stageWrap.appendChild(stageEl);
 
   const inspector = buildInspector();
@@ -1022,7 +1041,7 @@ export function mountImpressTile() {
 function buildInspector() {
   const panel = h('div', 'impress-inspector');
 
-  const layoutField = field('Layout', () => {
+  const layoutField = field(t('plugin.impress.inspector.layout', null, 'Layout'), () => {
     layoutSelect = document.createElement('select');
     layoutSelect.className = 'impress-field-input';
     for (const l of LAYOUTS) {
@@ -1053,7 +1072,7 @@ function buildInspector() {
     for (const value of options) {
       const opt = document.createElement('option');
       opt.value = value;
-      opt.textContent = labels[value] || value;
+      opt.textContent = labels[value] ? t(labels[value].labelKey) : value;
       select.appendChild(opt);
     }
     select.addEventListener('change', () => onChange(select.value));
@@ -1062,7 +1081,7 @@ function buildInspector() {
     return { wrap, select };
   };
 
-  const transitionField = animField('Transition', TRANSITIONS, TRANSITION_LABELS, (value) => {
+  const transitionField = animField(t('plugin.impress.inspector.transition', null, 'Transition'), TRANSITIONS, TRANSITION_LABELS, (value) => {
     if (!current) return;
     current.slides[selIndex].transition = value;
     markDirty();
@@ -1070,7 +1089,7 @@ function buildInspector() {
   transitionSelect = transitionField.select;
   animation.appendChild(transitionField.wrap);
 
-  const revealField = animField('Bullets', REVEALS, REVEAL_LABELS, (value) => {
+  const revealField = animField(t('plugin.impress.inspector.bullets', null, 'Bullets'), REVEALS, REVEAL_LABELS, (value) => {
     if (!current) return;
     current.slides[selIndex].reveal = value;
     markDirty();
@@ -1086,14 +1105,14 @@ function buildInspector() {
     onClick: () => applyAnimationToAll(),
   });
   applyAll.classList.add('ui-btn--icon', 'impress-anim-apply');
-  applyAll.title = 'Apply this transition and bullet build to every slide';
-  applyAll.setAttribute('aria-label', 'Apply to all slides');
+  applyAll.title = t('plugin.impress.inspector.applyAll', null, 'Apply this transition and bullet build to every slide');
+  applyAll.setAttribute('aria-label', t('plugin.impress.inspector.applyAllLabel', null, 'Apply to all slides'));
   animation.appendChild(applyAll);
 
   panel.appendChild(animation);
 
   // Speaker notes are the one field that has no on-slide home.
-  fieldNotes = buildField('Speaker notes', 'textarea');
+  fieldNotes = buildField(t('plugin.impress.inspector.speakerNotes', null, 'Speaker notes'), 'textarea');
   const notesInput = fieldNotes.querySelector('textarea');
   notesInput.rows = 3;
   notesInput.style.resize = 'none';
@@ -1105,7 +1124,7 @@ function buildInspector() {
   panel.appendChild(fieldNotes);
 
   // Hint + slide operations.
-  panel.appendChild(h('p', 'impress-hint', 'Click any text on the slide to edit it directly.'));
+  panel.appendChild(h('p', 'impress-hint', t('plugin.impress.inspector.hint', null, 'Click any text on the slide to edit it directly.')));
 
   const ops = h('div', 'impress-ops');
   const opBtn = (iconName, label, onClick, danger = false) => {
@@ -1117,10 +1136,10 @@ function buildInspector() {
     return btn;
   };
   ops.append(
-    opBtn('ui/plus', 'Add slide', addSlide),
-    opBtn('ui/chevron-left', 'Move up', () => moveSlide(-1)),
-    opBtn('ui/chevron-right', 'Move down', () => moveSlide(1)),
-    opBtn('ui/trash', 'Delete slide', removeSlide, true),
+    opBtn('ui/plus', t('plugin.impress.ops.addSlide', null, 'Add slide'), addSlide),
+    opBtn('ui/chevron-left', t('plugin.impress.ops.moveUp', null, 'Move up'), () => moveSlide(-1)),
+    opBtn('ui/chevron-right', t('plugin.impress.ops.moveDown', null, 'Move down'), () => moveSlide(1)),
+    opBtn('ui/trash', t('plugin.impress.ops.deleteSlide', null, 'Delete slide'), removeSlide, true),
   );
   panel.appendChild(ops);
 
@@ -1276,7 +1295,7 @@ async function importFromFiles(path, name) {
     const file = await fileFromHome(path, name, 'application/vnd.oasis.opendocument.presentation');
     await importOdp(file);
   } catch (e) {
-    toast(e.message || 'Could not open file', { type: 'error' });
+    toast(e.message || t('plugin.impress.toast.openFileFailed', null, 'Could not open file'), { type: 'error' });
   }
 }
 
@@ -1300,19 +1319,19 @@ export function impressContextMenu(ctx) {
   const hasDeck = !!current;
   const presenting = presentIndex >= 0;
   return [
-    { type: 'item', label: 'New presentation', icon: 'ui/plus', onClick: () => void newDeck() },
-    { type: 'item', label: 'Add slide', icon: 'ui/plus', disabled: !hasDeck, onClick: () => addSlide() },
-    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasDeck || !dirty, onClick: () => void persist() },
+    { type: 'item', label: t('plugin.impress.ctx.newDeck', null, 'New presentation'), icon: 'ui/plus', onClick: () => void newDeck() },
+    { type: 'item', label: t('plugin.impress.ctx.addSlide', null, 'Add slide'), icon: 'ui/plus', disabled: !hasDeck, onClick: () => addSlide() },
+    { type: 'item', label: t('plugin.impress.ctx.saveNow', null, 'Save now'), icon: 'ui/save', disabled: !hasDeck || !dirty, onClick: () => void persist() },
     { type: 'separator' },
     {
       type: 'item',
-      label: presenting ? 'Stop presenting' : 'Present',
+      label: presenting ? t('plugin.impress.ctx.stopPresenting', null, 'Stop presenting') : t('plugin.impress.ctx.present', null, 'Present'),
       icon: 'ui/present',
       disabled: !hasDeck,
       onClick: () => (presenting ? stopPresent() : startPresent()),
     },
     { type: 'separator' },
-    { type: 'item', label: 'Delete presentation', icon: 'ui/trash', danger: true, disabled: !hasDeck, onClick: () => void removeCurrent() },
+    { type: 'item', label: t('plugin.impress.ctx.deleteDeck', null, 'Delete presentation'), icon: 'ui/trash', danger: true, disabled: !hasDeck, onClick: () => void removeCurrent() },
   ];
 }
 

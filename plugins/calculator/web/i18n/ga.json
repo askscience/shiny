@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Áireamhán eolaíoch — ríomh sloinn uimhríochta agus eolaíocha i bhfuinneog an Áireamháin",
+  "plugin.calculator.meta.summary": "Áireamhán: matamaitic bhunúsach agus eolaíoch",
+  "plugin.calculator.meta.category": "Oifig",
+
+  "plugin.calculator.display.error": "Earráid",
+
+  "plugin.calculator.toolbar.history": "Stair",
+  "plugin.calculator.toolbar.scientific": "Eolaíoch",
+  "plugin.calculator.toolbar.clearHistory": "Glan an stair",
+
+  "plugin.calculator.menu.equals": "Cothrom le",
+  "plugin.calculator.menu.clearAll": "Glan uile",
+
+  "plugin.calculator.history.reuse": "Athúsáid an toradh seo",
+
+  "plugin.calculator.empty.noHistory": "Níl aon stair ann",
+  "plugin.calculator.empty.noHistoryBody": "Taispeánfar thíos na ríomhaireachtaí a dhéanann tú anseo nó a iarrann tú ar an AI.",
+
+  "plugin.calculator.toast.evaluateFailed": "Níorbh fhéidir é a ríomh",
+  "plugin.calculator.toast.historyFailed": "Níorbh fhéidir an stair a lódáil",
+  "plugin.calculator.toast.historyCleared": "Glanadh an stair",
+  "plugin.calculator.toast.clearFailed": "Níorbh fhéidir an stair a ghlanadh"
+}

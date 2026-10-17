@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Check and install system + Ollama updates across every major Linux distribution",
+  "plugin.updates.meta.summary": "Updates: one window (and HUD chip) for system and Ollama updates",
+  "plugin.updates.meta.category": "System",
+
+  "plugin.updates.tab.updates": "Updates",
+  "plugin.updates.tab.history": "History",
+
+  "plugin.updates.toolbar.sections": "Sections",
+  "plugin.updates.toolbar.check": "Check for updates",
+
+  "plugin.updates.status.checking": "Checking for updates…",
+  "plugin.updates.status.thisSystem": "this system",
+  "plugin.updates.status.unavailableOnSystem": "Updates are unavailable on this system",
+  "plugin.updates.status.unavailable": "Updates unavailable",
+  "plugin.updates.status.upToDate": "Everything is up to date · {where}",
+  "plugin.updates.status.available.one": "{count} update available · {where}",
+  "plugin.updates.status.available.other": "{count} updates available · {where}",
+  "plugin.updates.status.working": "Working…",
+  "plugin.updates.status.finished": "Update finished",
+  "plugin.updates.status.failed": "Update failed",
+  "plugin.updates.status.upToDateBody": "Your system is up to date.",
+  "plugin.updates.status.incomplete": "The update did not complete. Open Updates for details.",
+  "plugin.updates.status.couldNot": "Could not {label}",
+  "plugin.updates.status.noJobId": "The server did not return a job id",
+  "plugin.updates.status.lostConnection": "Lost the job connection",
+  "plugin.updates.status.jobDisappeared": "The job disappeared",
+
+  "plugin.updates.action.refresh": "Refresh lists",
+  "plugin.updates.action.installing": "Installing…",
+  "plugin.updates.action.install.one": "Install {count} Update",
+  "plugin.updates.action.install.other": "Install {count} Updates",
+  "plugin.updates.action.details": "Details",
+  "plugin.updates.action.hideDetails": "Hide details",
+
+  "plugin.updates.empty.upToDate": "Up to date",
+  "plugin.updates.empty.noUpdates": "No system updates are waiting.",
+  "plugin.updates.empty.noActivity": "No activity yet",
+  "plugin.updates.empty.noActivityBody": "Updates you install will be listed here.",
+
+  "plugin.updates.ollama.version": " · version {version}",
+  "plugin.updates.ollama.installed": "Installed{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Not installed (or not found on PATH)",
+  "plugin.updates.ollama.service": "Service: {name}",
+  "plugin.updates.ollama.install": "Install Ollama",
+  "plugin.updates.ollama.update": "Update Ollama",
+
+  "plugin.updates.history.system": "system",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Could not check for updates",
+  "plugin.updates.notify.serviceUnavailable": "The update service is unavailable.",
+  "plugin.updates.notify.busy": "An update is already running",
+  "plugin.updates.notify.busyBody": "Wait for the current update to finish.",
+
+  "plugin.updates.dialog.installTitle": "Install updates",
+  "plugin.updates.dialog.installRights.one": "Installing {count} update requires administrator rights.",
+  "plugin.updates.dialog.installRights.other": "Installing {count} updates requires administrator rights.",
+  "plugin.updates.dialog.refreshRights": "Refreshing package metadata (e.g. {cmd}) requires administrator rights.",
+  "plugin.updates.dialog.ollamaMessage": "Runs the official installer. Ollama is stopped during the update and left stopped (restarting it mid-session can hang the GPU); start it again or reboot to use the new version.",
+  "plugin.updates.dialog.passwordField": "Administrator password",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo password",
+  "plugin.updates.dialog.passwordHint": "Used once to run the command with sudo. It is never stored.",
+  "plugin.updates.dialog.cancel": "Cancel",
+  "plugin.updates.dialog.continue": "Continue",
+
+  "plugin.updates.label.installing": "Installing updates",
+  "plugin.updates.label.refreshing": "Refreshing lists",
+  "plugin.updates.label.updatingOllama": "Updating Ollama",
+
+  "plugin.updates.hud.available.one": "{count} update available",
+  "plugin.updates.hud.available.other": "{count} updates available",
+  "plugin.updates.hud.upToDate": "System up to date",
+  "plugin.updates.hud.notifyTitle": "Updates available",
+  "plugin.updates.hud.notifyBody.one": "{count} update ready to install",
+  "plugin.updates.hud.notifyBody.other": "{count} updates ready to install"
+}

@@ -22,6 +22,7 @@ import {
   extractDestinationFromMessage,
   agentFailedNavigation,
 } from './navigationApi.js';
+import { getLocale, t, tp } from './i18n.js';
 
 const TRIP_ACTIONS = new Set(['create_trip', 'start_trip', 'end_trip']);
 
@@ -35,14 +36,17 @@ async function syncTripsAfterAgent(res) {
   const tripAction = res.actions_taken.find((a) => TRIP_ACTIONS.has(a.action));
   if (tripAction?.result === 'error') {
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: 'Trip action failed', type: 'error' },
+      detail: { message: t('agent.tripActionFailed', null, 'Trip action failed'), type: 'error' },
     }));
     return;
   }
 
   if (trip?.name) {
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: `Active trip: ${trip.name}`, type: 'info' },
+      detail: {
+        message: t('agent.activeTrip', { name: trip.name }, `Active trip: ${trip.name}`),
+        type: 'info',
+      },
     }));
   }
 }
@@ -83,7 +87,8 @@ async function ingestAgentArtifacts(artifacts) {
   if (artifacts.length > 1) {
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: {
-        message: `${artifacts.length} guides ready — tap an icon below`,
+        message: tp('chat.artifactCount', artifacts.length, null,
+          `${artifacts.length} guides ready — tap an icon below`),
         type: 'info',
       },
     }));
@@ -110,7 +115,11 @@ async function handleNavigation(res, userMessage, context) {
     const started = await startNavigator(res.navigation);
     if (started) {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: `Navigating to ${res.navigation.destination}`, type: 'info' },
+        detail: {
+          message: t('agent.navigatingTo', { destination: res.navigation.destination },
+            `Navigating to ${res.navigation.destination}`),
+          type: 'info',
+        },
       }));
     }
     return started;
@@ -134,7 +143,11 @@ async function handleNavigation(res, userMessage, context) {
     const started = await startNavigator(session);
     if (started) {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: `Navigating to ${session.destination}`, type: 'info' },
+        detail: {
+          message: t('agent.navigatingTo', { destination: session.destination },
+            `Navigating to ${session.destination}`),
+          type: 'info',
+        },
       }));
     }
     return started;
@@ -299,7 +312,7 @@ export async function removeConversation(id) {
 
 async function readAgentStream(res, onStep, onThinking) {
   if (!res.body) {
-    throw new ApiError('Agent stream unavailable', 500);
+    throw new ApiError(t('agent.streamUnavailable', null, 'Agent stream unavailable'), 500);
   }
 
   const reader = res.body.getReader();
@@ -326,24 +339,26 @@ async function readAgentStream(res, onStep, onThinking) {
       }
 
       if (event.type === 'step' && event.message) {
-        onStep?.(event.message);
+        onStep?.({ key: event.key, params: event.params, message: event.message });
       } else if (event.type === 'thinking' && event.message) {
         onThinking?.(event.message);
       } else if (event.type === 'done') {
         return event.data;
       } else if (event.type === 'error') {
-        throw new ApiError(event.message || 'Agent failed', 500);
+        throw new ApiError(event.message || t('agent.failed', null, 'Agent failed'), 500);
       }
     }
   }
 
-  throw new ApiError('Agent stream ended unexpectedly', 500);
+  throw new ApiError(t('agent.streamEnded', null, 'Agent stream ended unexpectedly'), 500);
 }
 
 async function requestAgent(body, onStep, signal, onThinking) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+  // Streamed errors are rendered server-side too: tell it our language.
+  headers['Accept-Language'] = getLocale();
 
   const res = await fetch('/api/agent', {
     method: 'POST',
@@ -353,7 +368,7 @@ async function requestAgent(body, onStep, signal, onThinking) {
   });
 
   if (res.status === 401) {
-    throw new ApiError('Session expired — please sign in again', 401);
+    throw new ApiError(t('agent.sessionExpired', null, 'Session expired — please sign in again'), 401);
   }
 
   const contentType = res.headers.get('content-type') || '';
@@ -379,16 +394,24 @@ async function requestAgent(body, onStep, signal, onThinking) {
   return data;
 }
 
-function handleAgentStep(message) {
+/**
+ * A status line from the run: either an SSE step (`{ key, params, message }`)
+ * or a local string. The key, when present, is the catalogue entry to show —
+ * `message` stays the English fallback. The image/song tools are recognised by
+ * their key (the English prefix is a backstop for a server without keys).
+ */
+function handleAgentStep(step) {
+  const { key, params, message } = typeof step === 'string' ? { message: step } : (step || {});
+  if (typeof message !== 'string') return;
   // The image tool reserves a visible slot for the picture that is coming.
-  if (typeof message === 'string' && message.startsWith('Rendering image')) {
+  if (key === 'step.renderingImage' || message.startsWith('Rendering image')) {
     showImagePlaceholder();
   }
   // The song tool does the same for the track.
-  if (typeof message === 'string' && message.startsWith('Composing the song')) {
+  if (key === 'step.composingSong' || message.startsWith('Composing the song')) {
     showSongPlaceholder();
   }
-  setDockStep(message);
+  setDockStep(key ? t(key, params, message) : message);
 }
 
 /** The AI chose a plugin window to surface (show_plugin tool). */
@@ -455,7 +478,7 @@ let replyToken = 0;
 export async function sendToAgent(message, mode, context) {
   setAgentAwaiting(true);
   setSphereState('processing');
-  handleAgentStep('Thinking…');
+  handleAgentStep(t('chat.thinkingPending', null, 'Thinking…'));
 
   const turn = beginTurn();
   // Keep the microphone open while the assistant works: speaking over it is
@@ -510,7 +533,10 @@ export async function sendToAgent(message, mode, context) {
       await speak(spoken, getVoiceLang());
     } catch (ttsErr) {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: ttsErr?.message || 'Voice playback unavailable', type: 'error' },
+        detail: {
+          message: ttsErr?.message || t('voice.playbackUnavailable', null, 'Voice playback unavailable'),
+          type: 'error',
+        },
       }));
     }
     if (activeTurn === turn) setSphereState('idle');
@@ -520,7 +546,7 @@ export async function sendToAgent(message, mode, context) {
     // The user stopped it: not an error, and the core has already recorded it.
     if (e?.name === 'AbortError' || activeTurn !== turn) return null;
     setSphereState('error');
-    const msg = e.message || 'Agent unavailable';
+    const msg = e.message || t('agent.unavailable', null, 'Agent unavailable');
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: { message: msg, type: 'error' },
     }));
@@ -552,7 +578,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
   onStream?.('');
   setAgentAwaiting(true);
   setSphereState('processing');
-  handleAgentStep('Thinking…');
+  handleAgentStep(t('chat.thinkingPending', null, 'Thinking…'));
 
   const turn = beginTurn();
   turn.handlers.onStopped = onStopped;
@@ -591,7 +617,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     return res;
   } catch (e) {
     if (e?.name === 'AbortError' || activeTurn !== turn) return null;
-    const msg = e.message || 'Agent unavailable';
+    const msg = e.message || t('agent.unavailable', null, 'Agent unavailable');
     setSphereState('error');
     setTimeout(() => setSphereState('idle'), 2000);
     onError?.(msg);

@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Speelt nu",
+  "plugin.youtube.hero.untitled": "YouTube-video",
+  "plugin.youtube.hero.back": "Terug",
+  "plugin.youtube.hero.backLabel": "Terug naar YouTube zoeken",
+  "plugin.youtube.player.title": "YouTube-speler",
+
+  "plugin.youtube.search.placeholder": "YouTube doorzoeken…",
+
+  "plugin.youtube.grid.upNext": "Hierna",
+  "plugin.youtube.grid.becauseYouWatched": "Hierna · omdat je naar “{title}” hebt gekeken",
+  "plugin.youtube.grid.forYou": "Voor jou",
+  "plugin.youtube.grid.showAll": "Alle {category} tonen",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Geen video's gevonden",
+  "plugin.youtube.empty.noMatch": "Niets gevonden voor “{term}”.",
+  "plugin.youtube.empty.searchTitle": "YouTube doorzoeken",
+  "plugin.youtube.empty.searchBody": "Typ hierboven — of vraag de AI een video te zoeken.",
+  "plugin.youtube.empty.unavailableTitle": "Zoeken niet beschikbaar",
+  "plugin.youtube.empty.retry": "Probeer het zo opnieuw",
+
+  "plugin.youtube.category.watched": "{count}× bekeken",
+  "plugin.youtube.category.generic": "Categorie",
+
+  "plugin.youtube.menu.search": "Zoeken",
+  "plugin.youtube.menu.home": "Startpagina",
+  "plugin.youtube.menu.refresh": "Resultaten vernieuwen",
+  "plugin.youtube.menu.back": "Terug",
+
+  "plugin.youtube.meta.description": "Bekijk YouTube-video's in het YouTube-venster — de AI kan YouTube doorzoeken en video's afspelen",
+  "plugin.youtube.meta.summary": "YouTube: zoeken en afspelen met de AI in het YouTube-venster",
+  "plugin.youtube.meta.category": "Media"
+}

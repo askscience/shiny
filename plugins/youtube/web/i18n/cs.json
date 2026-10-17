@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Právě hraje",
+  "plugin.youtube.hero.untitled": "Video na YouTube",
+  "plugin.youtube.hero.back": "Zpět",
+  "plugin.youtube.hero.backLabel": "Zpět na hledání na YouTube",
+  "plugin.youtube.player.title": "Přehrávač YouTube",
+
+  "plugin.youtube.search.placeholder": "Hledat na YouTube…",
+
+  "plugin.youtube.grid.upNext": "Následuje",
+  "plugin.youtube.grid.becauseYouWatched": "Následuje · protože jste sledovali “{title}”",
+  "plugin.youtube.grid.forYou": "Pro vás",
+  "plugin.youtube.grid.showAll": "Zobrazit vše: {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Nenalezena žádná videa",
+  "plugin.youtube.empty.noMatch": "Nic neodpovídá “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Hledat na YouTube",
+  "plugin.youtube.empty.searchBody": "Pište výše — nebo požádejte AI, ať video najde.",
+  "plugin.youtube.empty.unavailableTitle": "Hledání není dostupné",
+  "plugin.youtube.empty.retry": "Zkuste to za chvíli znovu",
+
+  "plugin.youtube.category.watched": "Zhlédnuto {count}×",
+  "plugin.youtube.category.generic": "Kategorie",
+
+  "plugin.youtube.menu.search": "Hledat",
+  "plugin.youtube.menu.home": "Domů",
+  "plugin.youtube.menu.refresh": "Obnovit výsledky",
+  "plugin.youtube.menu.back": "Zpět",
+
+  "plugin.youtube.meta.description": "Sledujte videa na YouTube v okně YouTube — AI umí na YouTube hledat a přehrávat videa",
+  "plugin.youtube.meta.summary": "YouTube: hledání a přehrávání s pomocí AI v okně YouTube",
+  "plugin.youtube.meta.category": "Média"
+}

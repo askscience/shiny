@@ -1,0 +1,38 @@
+{
+  "plugin.calc.meta.description": "Kalkulator proračunskih tablica — tablice se spremaju kao otvorene mreže ćelija, koje se uređuju u prozoru Calc",
+  "plugin.calc.meta.summary": "Calc: stvarajte, uređujte i računajte s proračunskim tablicama",
+  "plugin.calc.meta.category": "Ured",
+
+  "plugin.calc.bar.spreadsheets": "Proračunske tablice",
+
+  "plugin.calc.toolbar.newSheet": "Nova proračunska tablica",
+  "plugin.calc.toolbar.importOds": "Uvezi .ods",
+  "plugin.calc.toolbar.importCsv": "Uvezi CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Spremi u Dokumente",
+  "plugin.calc.toolbar.saveNow": "Spremi odmah",
+  "plugin.calc.toolbar.deleteSheet": "Izbriši proračunsku tablicu",
+
+  "plugin.calc.menu.noSheets": "Još nema proračunskih tablica",
+
+  "plugin.calc.sheet.untitled": "Bez naslova",
+  "plugin.calc.sheet.importedCsv": "Uvezeni CSV",
+
+  "plugin.calc.formula.placeholder": "Vrijednost ili formula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Spremanje…",
+  "plugin.calc.status.dirty": "Nespremljene promjene",
+  "plugin.calc.status.saved.one": "Spremljeno {time} · {count} ćelija",
+  "plugin.calc.status.saved.few": "Spremljeno {time} · {count} ćelije",
+  "plugin.calc.status.saved.other": "Spremljeno {time} · {count} ćelija",
+
+  "plugin.calc.dialog.delete": "Izbrisati \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Spremanje nije uspjelo",
+  "plugin.calc.toast.openFailed": "Nije moguće otvoriti proračunsku tablicu",
+  "plugin.calc.toast.createFailed": "Nije moguće stvoriti proračunsku tablicu",
+  "plugin.calc.toast.deleteFailed": "Nije moguće izbrisati proračunsku tablicu",
+  "plugin.calc.toast.imported": "Uvezeno: {name}",
+  "plugin.calc.toast.importOdsFailed": "Uvoz nije uspio — je li ovo ispravna .ods datoteka?",
+  "plugin.calc.toast.importCsvFailed": "Uvoz nije uspio — je li ovo ispravna CSV datoteka?",
+  "plugin.calc.toast.openFileFailed": "Nije moguće otvoriti datoteku"
+}

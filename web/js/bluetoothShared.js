@@ -3,9 +3,10 @@
  * (`hudBluetooth.js`) and the Bluetooth menu (`bluetoothMenu.js`), so the two
  * can never disagree about what the status means.
  *
- * Import-free on purpose: `web/js/tests/bluetoothShared.test.mjs` loads it in
- * Node with no DOM.
+ * Labels go through i18n.js; `web/js/tests/bluetoothShared.test.mjs` loads both
+ * in Node with the i18n harness (no DOM).
  */
+import { t } from './i18n.js';
 
 /** The device currently connected, if any. */
 export function connectedDevice(status) {
@@ -23,13 +24,13 @@ export function chipIconName(status) {
 
 /** The chip's short label. */
 export function chipLabel(status) {
-  if (!status || !status.available) return 'Bluetooth';
-  if (!status.present) return 'No Bluetooth';
-  if (!status.powered) return 'Bluetooth off';
+  if (!status || !status.available) return t('bluetooth.label');
+  if (!status.present) return t('bluetooth.none');
+  if (!status.powered) return t('bluetooth.off');
   const device = connectedDevice(status);
-  if (device) return device.name || device.address || 'Connected';
-  if (status.discovering) return 'Searching…';
-  return 'Bluetooth';
+  if (device) return device.name || device.address || t('bluetooth.connected');
+  if (status.discovering) return t('bluetooth.searching');
+  return t('bluetooth.label');
 }
 
 /** The icon for one device row. Audio devices reuse the headphones glyph. */

@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Wetenschappelijke rekenmachine — rekenkundige en wetenschappelijke expressies uitrekenen in het Rekenmachine-venster",
+  "plugin.calculator.meta.summary": "Rekenmachine: eenvoudige en wetenschappelijke wiskunde",
+  "plugin.calculator.meta.category": "Kantoor",
+
+  "plugin.calculator.display.error": "Fout",
+
+  "plugin.calculator.toolbar.history": "Geschiedenis",
+  "plugin.calculator.toolbar.scientific": "Wetenschappelijk",
+  "plugin.calculator.toolbar.clearHistory": "Geschiedenis wissen",
+
+  "plugin.calculator.menu.equals": "Is gelijk aan",
+  "plugin.calculator.menu.clearAll": "Alles wissen",
+
+  "plugin.calculator.history.reuse": "Dit resultaat hergebruiken",
+
+  "plugin.calculator.empty.noHistory": "Geen geschiedenis",
+  "plugin.calculator.empty.noHistoryBody": "Berekeningen die je hier uitvoert of aan de AI vraagt, verschijnen hieronder.",
+
+  "plugin.calculator.toast.evaluateFailed": "Kon niet berekenen",
+  "plugin.calculator.toast.historyFailed": "Kon de geschiedenis niet laden",
+  "plugin.calculator.toast.historyCleared": "Geschiedenis gewist",
+  "plugin.calculator.toast.clearFailed": "Kon de geschiedenis niet wissen"
+}

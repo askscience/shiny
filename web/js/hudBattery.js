@@ -20,6 +20,7 @@ import { apiFetch, getToken } from './api.js';
 import { setIcon } from '../ui/index.js';
 import { setPowerBatteryStatus } from './preferences.js';
 import { toggleBatteryMenu } from './batteryMenu.js';
+import { t } from './i18n.js';
 import {
   batteryIconName, chipLabel, chipPercent, chipStateClass, timeLabel,
 } from './batteryShared.js';
@@ -141,7 +142,7 @@ function apply(status) {
     chipLabel(status),
     status.percent != null ? `${status.percent}%` : null,
     timeLabel(status),
-    status.ac_online === true ? 'AC connected' : null,
+    status.ac_online === true ? t('battery.acConnected') : null,
     status.status || null,
   ].filter(Boolean);
   chipEl.title = bits.join(' — ');

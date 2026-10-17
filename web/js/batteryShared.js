@@ -1,10 +1,12 @@
 /**
  * batteryShared.js — pure helpers for the top-bar battery chip (`hudBattery.js`).
  *
- * Kept import-free on purpose: `web/js/tests/batteryShared.test.mjs` loads it in
- * Node with no DOM. The server computes a coarse `level` (0–4) too; the two use
- * the same thresholds so a stray `percent` can never disagree with the glyph.
+ * The server computes a coarse `level` (0–4) too; the two use the same
+ * thresholds so a stray `percent` can never disagree with the glyph. Labels go
+ * through i18n.js; `web/js/tests/batteryShared.test.mjs` loads both in Node with
+ * the i18n harness (no DOM).
  */
+import { t } from './i18n.js';
 
 /** Map a percentage to the chip's 0–4 icon bucket (mirrors the Rust service). */
 export function batteryLevel(percent) {
@@ -30,13 +32,13 @@ export function batteryIconName(status) {
 
 /** The chip's short label — the charging state, else a neutral "Battery". */
 export function chipLabel(status) {
-  if (!status || !status.available) return 'Battery';
+  if (!status || !status.available) return t('battery.label');
   switch (status.state) {
-    case 'charging': return 'Charging';
-    case 'full': return 'Full';
-    case 'discharging': return 'On battery';
-    case 'idle': return 'Plugged in';
-    default: return 'Battery';
+    case 'charging': return t('battery.charging');
+    case 'full': return t('battery.full');
+    case 'discharging': return t('battery.onBattery');
+    case 'idle': return t('battery.pluggedIn');
+    default: return t('battery.label');
   }
 }
 
@@ -69,12 +71,12 @@ export function isLow(status) {
 export function formatDuration(seconds) {
   if (seconds == null || !Number.isFinite(Number(seconds)) || seconds <= 0) return '';
   const mins = Math.round(Number(seconds) / 60);
-  if (mins < 1) return '<1 min';
+  if (mins < 1) return t('duration.underMinute');
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  if (h === 0) return `${m} min`;
-  if (m === 0) return `${h} h`;
-  return `${h} h ${m} min`;
+  if (h === 0) return t('duration.minutes', { m });
+  if (m === 0) return t('duration.hours', { h });
+  return t('duration.hoursMinutes', { h, m });
 }
 
 /** A "2 h 5 min left" / "1 h 10 min to full" line, or '' when unknown. */
@@ -82,11 +84,11 @@ export function timeLabel(status) {
   if (!status || !status.available) return '';
   if (status.state === 'discharging') {
     const left = formatDuration(status.time_to_empty_secs);
-    return left ? `${left} left` : '';
+    return left ? t('battery.timeLeft', { duration: left }) : '';
   }
   if (status.state === 'charging') {
     const full = formatDuration(status.time_to_full_secs);
-    return full ? `${full} to full` : '';
+    return full ? t('battery.timeToFull', { duration: full }) : '';
   }
   return '';
 }

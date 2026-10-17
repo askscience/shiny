@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Календарь — планируйте, просматривайте и упорядочивайте события в окне Календарь",
+  "plugin.calendar.meta.summary": "Календарь: планирование и упорядочивание событий",
+  "plugin.calendar.meta.category": "Офис",
+
+  "plugin.calendar.month.january": "Январь",
+  "plugin.calendar.month.february": "Февраль",
+  "plugin.calendar.month.march": "Март",
+  "plugin.calendar.month.april": "Апрель",
+  "plugin.calendar.month.may": "Май",
+  "plugin.calendar.month.june": "Июнь",
+  "plugin.calendar.month.july": "Июль",
+  "plugin.calendar.month.august": "Август",
+  "plugin.calendar.month.september": "Сентябрь",
+  "plugin.calendar.month.october": "Октябрь",
+  "plugin.calendar.month.november": "Ноябрь",
+  "plugin.calendar.month.december": "Декабрь",
+
+  "plugin.calendar.grid.sun": "Вс",
+  "plugin.calendar.grid.mon": "Пн",
+  "plugin.calendar.grid.tue": "Вт",
+  "plugin.calendar.grid.wed": "Ср",
+  "plugin.calendar.grid.thu": "Чт",
+  "plugin.calendar.grid.fri": "Пт",
+  "plugin.calendar.grid.sat": "Сб",
+
+  "plugin.calendar.event.allDay": "Весь день",
+
+  "plugin.calendar.toolbar.previousMonth": "Предыдущий месяц",
+  "plugin.calendar.toolbar.nextMonth": "Следующий месяц",
+  "plugin.calendar.toolbar.today": "Сегодня",
+  "plugin.calendar.toolbar.newEvent": "Новое событие",
+
+  "plugin.calendar.ctx.refresh": "Обновить",
+
+  "plugin.calendar.detail.edit": "Изменить",
+  "plugin.calendar.detail.delete": "Удалить",
+
+  "plugin.calendar.empty.noEvents": "Нет событий",
+  "plugin.calendar.empty.noEventsBody": "Ничего не запланировано. Добавьте событие или попросите ИИ запланировать его.",
+
+  "plugin.calendar.dialog.title": "Событие",
+  "plugin.calendar.dialog.editTitle": "Изменить событие",
+  "plugin.calendar.dialog.titleField": "Название",
+  "plugin.calendar.dialog.titlePlaceholder": "напр. планёрка команды",
+  "plugin.calendar.dialog.dateField": "Дата",
+  "plugin.calendar.dialog.startTimeField": "Время начала",
+  "plugin.calendar.dialog.endTimeField": "Время окончания",
+  "plugin.calendar.dialog.locationField": "Место",
+  "plugin.calendar.dialog.locationPlaceholder": "Место (необязательно)",
+  "plugin.calendar.dialog.notesField": "Заметки",
+  "plugin.calendar.dialog.notesPlaceholder": "Заметки (необязательно)",
+  "plugin.calendar.dialog.cancel": "Отмена",
+  "plugin.calendar.dialog.save": "Сохранить событие",
+
+  "plugin.calendar.toast.titleRequired": "Нужно указать название",
+  "plugin.calendar.toast.dateRequired": "Нужно указать дату",
+  "plugin.calendar.toast.updated": "Событие обновлено",
+  "plugin.calendar.toast.scheduled": "Событие запланировано",
+  "plugin.calendar.toast.deleted": "Событие удалено",
+  "plugin.calendar.toast.loadFailed": "Не удалось загрузить события",
+  "plugin.calendar.toast.saveFailed": "Не удалось сохранить событие",
+  "plugin.calendar.toast.deleteFailed": "Не удалось удалить событие",
+
+  "plugin.calendar.confirm.deleteEvent": "Удалить “{title}”?",
+
+  "plugin.calendar.notify.eventSoon": "Событие скоро начнётся"
+}

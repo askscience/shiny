@@ -11,16 +11,24 @@
  */
 
 import { apiFetch } from './api.js';
+import { t } from './i18n.js';
+
+/** One scale choice; `label` resolves in the active language when it is read. */
+const scaleOption = (value, labelKey, english) => ({
+  value,
+  labelKey,
+  get label() { return t(labelKey, null, english); },
+});
 
 /** Choices offered in Settings. `auto` follows the panel's pixel density. */
 export const SCALE_OPTIONS = [
-  { value: 'auto', label: 'Auto (match the display)' },
-  { value: '1', label: '100%' },
-  { value: '1.25', label: '125%' },
-  { value: '1.5', label: '150%' },
-  { value: '1.75', label: '175%' },
-  { value: '2', label: '200%' },
-  { value: '2.5', label: '250%' },
+  scaleOption('auto', 'display.auto', 'Auto (match the display)'),
+  scaleOption('1', 'display.scale.100', '100%'),
+  scaleOption('1.25', 'display.scale.125', '125%'),
+  scaleOption('1.5', 'display.scale.150', '150%'),
+  scaleOption('1.75', 'display.scale.175', '175%'),
+  scaleOption('2', 'display.scale.200', '200%'),
+  scaleOption('2.5', 'display.scale.250', '250%'),
 ];
 
 export async function getDisplayScale() {

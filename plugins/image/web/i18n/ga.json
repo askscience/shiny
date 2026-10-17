@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Eagarthóir grianghraf — coigeartuithe toin agus datha, doiléiriú, géarú agus vinigéad, chomh maith le cuma scannáin aon-tapála i bhfuinneog na hÍomhá",
+  "plugin.image.meta.summary": "Eagarthóir grianghraf: coigeartuithe agus cuma scannáin",
+  "plugin.image.meta.category": "Meáin",
+
+  "plugin.image.toolbar.menu": "Roghchlár",
+  "plugin.image.toolbar.fitToggle": "Scoránaigh oiriúnú / fíormhéid",
+
+  "plugin.image.dial.brightness": "Gile",
+  "plugin.image.dial.contrast": "Codarsnacht",
+  "plugin.image.dial.exposure": "Nochtadh",
+  "plugin.image.dial.vibrance": "Beocht",
+  "plugin.image.dial.saturation": "Sáithiú",
+  "plugin.image.dial.blur": "Doiléiriú",
+  "plugin.image.dial.sharpen": "Géarú",
+  "plugin.image.dial.vignette": "Vinigéad",
+
+  "plugin.image.oneClick.autoTone": "Ton uathoibríoch",
+  "plugin.image.oneClick.autoContrast": "Codarsnacht uathoibríoch",
+  "plugin.image.oneClick.invert": "Aisiompaigh",
+  "plugin.image.oneClick.grayscale": "Dubh is geal",
+  "plugin.image.oneClick.sepia": "Seipia",
+  "plugin.image.oneClick.revert": "Aisigh",
+  "plugin.image.oneClick.revertTitle": "Cuir an chéad uaslódáil ar ais",
+
+  "plugin.image.empty.title": "Níl aon íomhá oscailte",
+  "plugin.image.empty.body": "Oscail pictiúr nó scaoil isteach é chun tosú.",
+  "plugin.image.empty.open": "Oscail íomhá",
+
+  "plugin.image.menu.file": "Comhad",
+  "plugin.image.menu.image": "Íomhá",
+  "plugin.image.menu.view": "Amharc",
+  "plugin.image.menu.open": "Oscail…",
+  "plugin.image.menu.saveCopy": "Sábháil cóip…",
+  "plugin.image.menu.delete": "Scrios an íomhá",
+  "plugin.image.menu.rotateLeft": "Rothlaigh ar chlé",
+  "plugin.image.menu.rotateRight": "Rothlaigh ar dheis",
+  "plugin.image.menu.flipH": "Smeach go cothrománach",
+  "plugin.image.menu.flipV": "Smeach go hingearach",
+  "plugin.image.menu.revert": "Fill ar an mbuníomhá",
+  "plugin.image.menu.zoomIn": "Zúmáil isteach",
+  "plugin.image.menu.zoomOut": "Zúmáil amach",
+  "plugin.image.menu.fit": "Oiriúnaigh",
+  "plugin.image.menu.actualSize": "Fíormhéid",
+
+  "plugin.image.ctx.open": "Oscail íomhá…",
+
+  "plugin.image.dialog.deleteConfirm": "Scrios \"{title}\"?",
+  "plugin.image.dialog.thisImage": "an íomhá seo",
+
+  "plugin.image.toast.openFirst": "Oscail íomhá ar dtús",
+  "plugin.image.toast.opened": "Osclaíodh {title}",
+  "plugin.image.toast.editFailed": "Theip ar an eagarthóireacht",
+  "plugin.image.toast.operationFailed": "Theip ar an oibríocht",
+  "plugin.image.toast.renderFailed": "Níorbh fhéidir an íomhá a rindreáil",
+  "plugin.image.toast.uploadFailed": "Theip ar an uaslódáil",
+  "plugin.image.toast.saveFailed": "Theip ar an sábháil",
+  "plugin.image.toast.deleted": "Scriosadh an íomhá",
+  "plugin.image.toast.deleteFailed": "Níorbh fhéidir an íomhá a scriosadh",
+  "plugin.image.toast.reverted": "Fillte ar na bunphicteilíní",
+  "plugin.image.toast.openFailed": "Níorbh fhéidir an comhad a oscailt",
+
+  "plugin.image.error.emptyFile": "tá an comhad sin folamh",
+  "plugin.image.error.notAnImage": "níl “{name}” ina íomhá ar féidir leis an eagarthóir a oscailt",
+  "plugin.image.error.unnamedFile": "comhad"
+}

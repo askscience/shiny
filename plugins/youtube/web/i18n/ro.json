@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Se redă acum",
+  "plugin.youtube.hero.untitled": "Videoclip YouTube",
+  "plugin.youtube.hero.back": "Înapoi",
+  "plugin.youtube.hero.backLabel": "Înapoi la căutarea YouTube",
+  "plugin.youtube.player.title": "Player YouTube",
+
+  "plugin.youtube.search.placeholder": "Caută pe YouTube…",
+
+  "plugin.youtube.grid.upNext": "Urmează",
+  "plugin.youtube.grid.becauseYouWatched": "Urmează · pentru că ai vizionat “{title}”",
+  "plugin.youtube.grid.forYou": "Pentru tine",
+  "plugin.youtube.grid.showAll": "Arată toate {category}",
+  "plugin.youtube.grid.untitled": "Videoclip",
+
+  "plugin.youtube.empty.noResults": "Niciun videoclip găsit",
+  "plugin.youtube.empty.noMatch": "Nimic nu se potrivește cu “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Caută pe YouTube",
+  "plugin.youtube.empty.searchBody": "Scrie mai sus — sau cere AI-ului să găsească un videoclip.",
+  "plugin.youtube.empty.unavailableTitle": "Căutarea nu este disponibilă",
+  "plugin.youtube.empty.retry": "Încearcă din nou într-o clipă",
+
+  "plugin.youtube.category.watched": "Vizionat de {count}×",
+  "plugin.youtube.category.generic": "Categorie",
+
+  "plugin.youtube.menu.search": "Caută",
+  "plugin.youtube.menu.home": "Acasă",
+  "plugin.youtube.menu.refresh": "Reîmprospătează rezultatele",
+  "plugin.youtube.menu.back": "Înapoi",
+
+  "plugin.youtube.meta.description": "Vizionează videoclipuri YouTube în fereastra YouTube — AI-ul poate căuta pe YouTube și poate reda videoclipuri",
+  "plugin.youtube.meta.summary": "YouTube: căutare și redare prin AI în fereastra YouTube",
+  "plugin.youtube.meta.category": "Media"
+}

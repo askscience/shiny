@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotószerkesztő — tónus- és színkorrekciók, elmosás/élesítés/vinnyetta és egykattintásos filmhangulatok a Kép ablakban",
+  "plugin.image.meta.summary": "Fotószerkesztő: korrekciók és filmhangulatok",
+  "plugin.image.meta.category": "Média",
+
+  "plugin.image.toolbar.menu": "Menü",
+  "plugin.image.toolbar.fitToggle": "Illesztés / tényleges méret váltása",
+
+  "plugin.image.dial.brightness": "Fényerő",
+  "plugin.image.dial.contrast": "Kontraszt",
+  "plugin.image.dial.exposure": "Expozíció",
+  "plugin.image.dial.vibrance": "Élénkség",
+  "plugin.image.dial.saturation": "Telítettség",
+  "plugin.image.dial.blur": "Elmosás",
+  "plugin.image.dial.sharpen": "Élesítés",
+  "plugin.image.dial.vignette": "Vinnyetta",
+
+  "plugin.image.oneClick.autoTone": "Automatikus tónus",
+  "plugin.image.oneClick.autoContrast": "Automatikus kontraszt",
+  "plugin.image.oneClick.invert": "Invertálás",
+  "plugin.image.oneClick.grayscale": "Fekete-fehér",
+  "plugin.image.oneClick.sepia": "Szépia",
+  "plugin.image.oneClick.revert": "Visszaállítás",
+  "plugin.image.oneClick.revertTitle": "Az eredeti feltöltés visszaállítása",
+
+  "plugin.image.empty.title": "Nincs megnyitott kép",
+  "plugin.image.empty.body": "Nyisson meg vagy dobjon be egy képet a kezdéshez.",
+  "plugin.image.empty.open": "Kép megnyitása",
+
+  "plugin.image.menu.file": "Fájl",
+  "plugin.image.menu.image": "Kép",
+  "plugin.image.menu.view": "Nézet",
+  "plugin.image.menu.open": "Megnyitás…",
+  "plugin.image.menu.saveCopy": "Másolat mentése…",
+  "plugin.image.menu.delete": "Kép törlése",
+  "plugin.image.menu.rotateLeft": "Forgatás balra",
+  "plugin.image.menu.rotateRight": "Forgatás jobbra",
+  "plugin.image.menu.flipH": "Vízszintes tükrözés",
+  "plugin.image.menu.flipV": "Függőleges tükrözés",
+  "plugin.image.menu.revert": "Visszaállítás az eredetire",
+  "plugin.image.menu.zoomIn": "Nagyítás",
+  "plugin.image.menu.zoomOut": "Kicsinyítés",
+  "plugin.image.menu.fit": "Illesztés",
+  "plugin.image.menu.actualSize": "Tényleges méret",
+
+  "plugin.image.ctx.open": "Kép megnyitása…",
+
+  "plugin.image.dialog.deleteConfirm": "Törli a(z) „{title}” képet?",
+  "plugin.image.dialog.thisImage": "ezt a képet",
+
+  "plugin.image.toast.openFirst": "Először nyisson meg egy képet",
+  "plugin.image.toast.opened": "{title} megnyitva",
+  "plugin.image.toast.editFailed": "A szerkesztés nem sikerült",
+  "plugin.image.toast.operationFailed": "A művelet nem sikerült",
+  "plugin.image.toast.renderFailed": "Nem sikerült megjeleníteni a képet",
+  "plugin.image.toast.uploadFailed": "A feltöltés nem sikerült",
+  "plugin.image.toast.saveFailed": "A mentés nem sikerült",
+  "plugin.image.toast.deleted": "Kép törölve",
+  "plugin.image.toast.deleteFailed": "Nem sikerült törölni a képet",
+  "plugin.image.toast.reverted": "Visszaállítva az eredeti képpontokra",
+  "plugin.image.toast.openFailed": "Nem sikerült megnyitni a fájlt",
+
+  "plugin.image.error.emptyFile": "ez a fájl üres",
+  "plugin.image.error.notAnImage": "A(z) „{name}” nem olyan kép, amelyet a szerkesztő meg tud nyitni",
+  "plugin.image.error.unnamedFile": "fájl"
+}

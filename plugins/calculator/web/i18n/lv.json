@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Zinātniskais kalkulators — aprēķiniet aritmētiskas un zinātniskas izteiksmes Kalkulatora logā",
+  "plugin.calculator.meta.summary": "Kalkulators: vienkārša un zinātniska matemātika",
+  "plugin.calculator.meta.category": "Birojs",
+
+  "plugin.calculator.display.error": "Kļūda",
+
+  "plugin.calculator.toolbar.history": "Vēsture",
+  "plugin.calculator.toolbar.scientific": "Zinātniskais",
+  "plugin.calculator.toolbar.clearHistory": "Notīrīt vēsturi",
+
+  "plugin.calculator.menu.equals": "Vienāds",
+  "plugin.calculator.menu.clearAll": "Notīrīt visu",
+
+  "plugin.calculator.history.reuse": "Izmantot šo rezultātu vēlreiz",
+
+  "plugin.calculator.empty.noHistory": "Nav vēstures",
+  "plugin.calculator.empty.noHistoryBody": "Aprēķini, ko veicat šeit vai lūdzat MI, parādīsies zemāk.",
+
+  "plugin.calculator.toast.evaluateFailed": "Nevarēja aprēķināt",
+  "plugin.calculator.toast.historyFailed": "Nevarēja ielādēt vēsturi",
+  "plugin.calculator.toast.historyCleared": "Vēsture notīrīta",
+  "plugin.calculator.toast.clearFailed": "Nevarēja notīrīt vēsturi"
+}

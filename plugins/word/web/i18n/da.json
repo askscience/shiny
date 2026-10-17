@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenter",
+  "plugin.word.toolbar.titlePlaceholder": "Uden titel",
+  "plugin.word.toolbar.newDocument": "Nyt dokument",
+  "plugin.word.toolbar.importOdt": "Importér .odt",
+  "plugin.word.toolbar.saveToDocuments": "Gem i Dokumenter",
+  "plugin.word.toolbar.saveNow": "Gem nu",
+  "plugin.word.toolbar.deleteDocument": "Slet dokument",
+  "plugin.word.toolbar.bold": "Fed",
+  "plugin.word.toolbar.italic": "Kursiv",
+  "plugin.word.toolbar.underline": "Understreg",
+  "plugin.word.toolbar.heading": "Overskrift",
+  "plugin.word.toolbar.bulletList": "Punktliste",
+  "plugin.word.toolbar.font": "Skrifttype",
+  "plugin.word.toolbar.fontHint": "Skrifttype — gælder markeringen eller hele dokumentet, når intet er markeret",
+
+  "plugin.word.status.saving": "Gemmer…",
+  "plugin.word.status.unsaved": "Ikke-gemte ændringer",
+  "plugin.word.status.saved.one": "Gemt {time} · {count} ord",
+  "plugin.word.status.saved.other": "Gemt {time} · {count} ord",
+
+  "plugin.word.menu.empty": "Ingen dokumenter endnu",
+  "plugin.word.menu.newDocument": "Nyt dokument",
+  "plugin.word.menu.importOdt": "Importér .odt",
+  "plugin.word.menu.saveToDocuments": "Gem i Dokumenter",
+  "plugin.word.menu.deleteDocument": "Slet dokument",
+
+  "plugin.word.ctx.newDocument": "Nyt dokument",
+  "plugin.word.ctx.saveNow": "Gem nu",
+  "plugin.word.ctx.saveToDocuments": "Gem i Dokumenter",
+  "plugin.word.ctx.bold": "Fed",
+  "plugin.word.ctx.italic": "Kursiv",
+  "plugin.word.ctx.heading": "Overskrift",
+  "plugin.word.ctx.list": "Liste",
+  "plugin.word.ctx.deleteDocument": "Slet dokument",
+
+  "plugin.word.dialog.deleteDoc": "Slet \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Gemningen mislykkedes",
+  "plugin.word.toast.openFailed": "Kunne ikke åbne dokumentet",
+  "plugin.word.toast.createFailed": "Kunne ikke oprette dokumentet",
+  "plugin.word.toast.deleteFailed": "Kunne ikke slette dokumentet",
+  "plugin.word.toast.imported": "Importede {name}",
+  "plugin.word.toast.importFailed": "Importen mislykkedes — er det en gyldig .odt-fil?",
+  "plugin.word.toast.openFileFailed": "Kunne ikke åbne filen",
+
+  "plugin.word.meta.description": "Enkel tekstbehandling — dokumenter gemt som åbne .odt-filer",
+  "plugin.word.meta.summary": "Tekstbehandling: opret, redigér og læs OpenDocument-dokumenter (.odt)",
+  "plugin.word.meta.category": "Kontor"
+}

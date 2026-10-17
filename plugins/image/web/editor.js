@@ -17,6 +17,7 @@
 import { button, setIcon, toast, emptyState } from '../../../ui/index.js';
 import { openContextMenu } from '../../../js/contextMenu.js';
 import { saveOrDownload, pickFiles, onOpenFromFiles } from '../../../js/files.js';
+import { t } from '../../../js/i18n.js';
 import * as api from './api.js';
 
 export const PLUGIN_NAME = 'image';
@@ -29,22 +30,22 @@ export const PLUGIN_NAME = 'image';
  * Units mirror `DIAL_ORDER`/`dial_op` in `src/doc.rs`.
  */
 const ADJUST_DIALS = [
-  { key: 'brightness', label: 'Brightness', min: -100, max: 100, step: 1 },
-  { key: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1 },
-  { key: 'exposure', label: 'Exposure', min: -2, max: 2, step: 0.05 },
-  { key: 'vibrance', label: 'Vibrance', min: -100, max: 100, step: 1 },
-  { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
-  { key: 'blur', label: 'Blur', min: 0, max: 20, step: 1 },
-  { key: 'sharpen', label: 'Sharpen', min: 0, max: 200, step: 5 },
-  { key: 'vignette', label: 'Vignette', min: 0, max: 100, step: 1 },
+  { key: 'brightness', label: 'Brightness', labelKey: 'plugin.image.dial.brightness', min: -100, max: 100, step: 1 },
+  { key: 'contrast', label: 'Contrast', labelKey: 'plugin.image.dial.contrast', min: -100, max: 100, step: 1 },
+  { key: 'exposure', label: 'Exposure', labelKey: 'plugin.image.dial.exposure', min: -2, max: 2, step: 0.05 },
+  { key: 'vibrance', label: 'Vibrance', labelKey: 'plugin.image.dial.vibrance', min: -100, max: 100, step: 1 },
+  { key: 'saturation', label: 'Saturation', labelKey: 'plugin.image.dial.saturation', min: -100, max: 100, step: 1 },
+  { key: 'blur', label: 'Blur', labelKey: 'plugin.image.dial.blur', min: 0, max: 20, step: 1 },
+  { key: 'sharpen', label: 'Sharpen', labelKey: 'plugin.image.dial.sharpen', min: 0, max: 200, step: 5 },
+  { key: 'vignette', label: 'Vignette', labelKey: 'plugin.image.dial.vignette', min: 0, max: 100, step: 1 },
 ];
 
 const ONE_CLICKS = [
-  ['auto_tone', 'Auto tone'],
-  ['auto_contrast', 'Auto contrast'],
-  ['invert', 'Invert'],
-  ['grayscale', 'B&W'],
-  ['sepia', 'Sepia'],
+  ['auto_tone', 'plugin.image.oneClick.autoTone', 'Auto tone'],
+  ['auto_contrast', 'plugin.image.oneClick.autoContrast', 'Auto contrast'],
+  ['invert', 'plugin.image.oneClick.invert', 'Invert'],
+  ['grayscale', 'plugin.image.oneClick.grayscale', 'B&W'],
+  ['sepia', 'plugin.image.oneClick.sepia', 'Sepia'],
 ];
 
 /* ── State ──────────────────────────────────────────────────────── */
@@ -96,13 +97,13 @@ export function buildWorkspace() {
   /* Application bar: menu + document title + zoom. */
   const appbar = el('div', 'image-appbar');
   appbar.dataset.windowBar = '';
-  const menuBtn = iconButton('ui/list', 'Menu', (e) => openMainMenu(e.currentTarget));
+  const menuBtn = iconButton('ui/list', t('plugin.image.toolbar.menu', null, 'Menu'), (e) => openMainMenu(e.currentTarget));
   const appTitle = el('span', 'image-appbar-title');
   S.els.appTitle = appTitle;
   const appRight = el('div', 'image-appbar-right');
   const zoomChip = el('button', 'image-zoom-chip');
   zoomChip.type = 'button';
-  zoomChip.title = 'Toggle fit / actual size';
+  zoomChip.title = t('plugin.image.toolbar.fitToggle', null, 'Toggle fit / actual size');
   zoomChip.addEventListener('click', () => (S.fit ? setZoom(1) : zoomToFit()));
   S.els.zoomChip = zoomChip;
   appRight.appendChild(zoomChip);
@@ -270,8 +271,9 @@ function dialSvg() {
 
 function buildDial(spec) {
   const wrap = el('div', 'image-dial');
+  const label = t(spec.labelKey, null, spec.label);
   wrap.setAttribute('role', 'slider');
-  wrap.setAttribute('aria-label', spec.label);
+  wrap.setAttribute('aria-label', label);
   wrap.setAttribute('aria-valuemin', String(spec.min));
   wrap.setAttribute('aria-valuemax', String(spec.max));
   wrap.tabIndex = 0;
@@ -280,7 +282,7 @@ function buildDial(spec) {
   const { svg, arc } = dialSvg();
   const valueEl = el('span', 'image-dial-value', '0');
   knob.append(svg, valueEl);
-  const labelEl = el('span', 'image-dial-label', spec.label);
+  const labelEl = el('span', 'image-dial-label', label);
   wrap.append(knob, labelEl);
 
   const span = spec.max - spec.min;
@@ -394,15 +396,15 @@ function buildAdjustBody() {
   wrap.appendChild(grid);
 
   const actions = el('div', 'image-oneclicks');
-  for (const [op, label] of ONE_CLICKS) {
-    const b = el('button', 'image-oneclick', label);
+  for (const [op, key, label] of ONE_CLICKS) {
+    const b = el('button', 'image-oneclick', t(key, null, label));
     b.type = 'button';
     b.addEventListener('click', () => void applyOp({ op }));
     actions.appendChild(b);
   }
-  const revert = el('button', 'image-oneclick image-oneclick--revert', 'Revert');
+  const revert = el('button', 'image-oneclick image-oneclick--revert', t('plugin.image.oneClick.revert', null, 'Revert'));
   revert.type = 'button';
-  revert.title = 'Restore the original upload';
+  revert.title = t('plugin.image.oneClick.revertTitle', null, 'Restore the original upload');
   revert.addEventListener('click', () => void resetCurrent());
   actions.appendChild(revert);
   wrap.appendChild(actions);
@@ -472,8 +474,12 @@ function renderEmptyState() {
     area.appendChild(empty);
   }
   empty.textContent = '';
-  empty.appendChild(emptyState({ icon: 'ui/image', title: 'No image open', body: 'Open or drop a picture to start.' }));
-  const open = button({ label: 'Open image', onClick: () => void pickFile() });
+  empty.appendChild(emptyState({
+    icon: 'ui/image',
+    title: t('plugin.image.empty.title', null, 'No image open'),
+    body: t('plugin.image.empty.body', null, 'Open or drop a picture to start.'),
+  }));
+  const open = button({ label: t('plugin.image.empty.open', null, 'Open image'), onClick: () => void pickFile() });
   open.classList.add('image-empty-open');
   empty.appendChild(open);
 }
@@ -581,7 +587,7 @@ async function send(body, { commit }) {
 /** Queue a destructive operation batch (one-clicks, geometry, AI). */
 export function queueOp(op, { commit = true } = {}) {
   if (!S.doc) {
-    toast('Open an image first', { type: 'error' });
+    toast(t('plugin.image.toast.openFirst', null, 'Open an image first'), { type: 'error' });
     return;
   }
   S.pending = { body: { operations: Array.isArray(op) ? op : [op] }, commit };
@@ -591,7 +597,7 @@ export function queueOp(op, { commit = true } = {}) {
 /** Queue a dial-settings update (`{brightness: 30}` — merged server-side). */
 export function queueSettings(update, { commit = true } = {}) {
   if (!S.doc) {
-    toast('Open an image first', { type: 'error' });
+    toast(t('plugin.image.toast.openFirst', null, 'Open an image first'), { type: 'error' });
     return;
   }
   S.pending = { body: { settings: update }, commit };
@@ -606,7 +612,7 @@ async function pump() {
   try {
     await send(body, { commit });
   } catch (e) {
-    toast(e.message || 'Edit failed', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.editFailed', null, 'Edit failed'), { type: 'error' });
   } finally {
     S.applying = false;
     if (S.pending) void pump();
@@ -616,14 +622,14 @@ async function pump() {
 /** Run one operation (or a batch) to completion, awaiting the result. */
 export async function applyOp(op, { commit = true } = {}) {
   if (!S.doc) {
-    toast('Open an image first', { type: 'error' });
+    toast(t('plugin.image.toast.openFirst', null, 'Open an image first'), { type: 'error' });
     return;
   }
   const operations = Array.isArray(op) ? op : [op];
   try {
     await send({ operations }, { commit });
   } catch (e) {
-    toast(e.message || 'Operation failed', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.operationFailed', null, 'Operation failed'), { type: 'error' });
   }
 }
 
@@ -635,7 +641,7 @@ export async function reloadComposite() {
     const { w, h, buf } = await api.fetchRender(S.doc.image_id);
     plotRaw(w, h, buf);
   } catch (e) {
-    toast(e.message || 'Could not render image', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.renderFailed', null, 'Could not render image'), { type: 'error' });
   }
 }
 
@@ -699,9 +705,9 @@ export async function uploadFile(file) {
     await refreshImages();
     // The create response carries no look table; fetch the full metadata.
     if (!(await openImageById(created.image_id))) await openImage(created);
-    toast(`Opened ${created.title}`, { type: 'info' });
+    toast(t('plugin.image.toast.opened', { title: created.title }, 'Opened {title}'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Upload failed', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.uploadFailed', null, 'Upload failed'), { type: 'error' });
   }
 }
 
@@ -715,27 +721,28 @@ export async function downloadCurrent() {
       app: 'Image',
     });
   } catch (e) {
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
 export async function deleteCurrent(imageId = S.doc?.image_id, title = S.doc?.title) {
   if (!imageId) return;
-  if (!window.confirm(`Delete "${title || 'this image'}"?`)) return;
+  const name = title || t('plugin.image.dialog.thisImage', null, 'this image');
+  if (!window.confirm(t('plugin.image.dialog.deleteConfirm', { title: name }, 'Delete "{title}"?'))) return;
   try {
     await api.deleteImage(imageId);
     if (S.doc?.image_id === imageId) S.doc = null;
     await openNewest();
-    toast('Image deleted', { type: 'info' });
+    toast(t('plugin.image.toast.deleted', null, 'Image deleted'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not delete image', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.deleteFailed', null, 'Could not delete image'), { type: 'error' });
   }
 }
 
 export async function resetCurrent() {
   if (!S.doc) return;
   await applyOp({ op: 'reset' });
-  toast('Reverted to the original pixels', { type: 'info' });
+  toast(t('plugin.image.toast.reverted', null, 'Reverted to the original pixels'), { type: 'info' });
 }
 
 export async function rotateCurrent(dir) {
@@ -796,25 +803,25 @@ export function openMainMenu(anchor) {
 function buildMenu() {
   const hasDoc = !!S.doc;
   return [
-    { type: 'heading', label: 'File' },
-    { type: 'item', label: 'Open…', icon: 'ui/upload', onClick: () => void pickFile() },
-    { type: 'item', label: 'Save a Copy…', icon: 'ui/save', disabled: !hasDoc, onClick: () => void downloadCurrent() },
+    { type: 'heading', label: t('plugin.image.menu.file', null, 'File') },
+    { type: 'item', label: t('plugin.image.menu.open', null, 'Open…'), icon: 'ui/upload', onClick: () => void pickFile() },
+    { type: 'item', label: t('plugin.image.menu.saveCopy', null, 'Save a Copy…'), icon: 'ui/save', disabled: !hasDoc, onClick: () => void downloadCurrent() },
     { type: 'separator' },
-    { type: 'item', label: 'Delete image', icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void deleteCurrent() },
+    { type: 'item', label: t('plugin.image.menu.delete', null, 'Delete image'), icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void deleteCurrent() },
     { type: 'separator' },
-    { type: 'heading', label: 'Image' },
-    { type: 'item', label: 'Rotate left', icon: 'ui/rotate-left', disabled: !hasDoc, onClick: () => void rotateCurrent('left') },
-    { type: 'item', label: 'Rotate right', icon: 'ui/rotate-right', disabled: !hasDoc, onClick: () => void rotateCurrent('right') },
-    { type: 'item', label: 'Flip horizontal', icon: 'ui/flip-h', disabled: !hasDoc, onClick: () => void flipCurrent('horizontal') },
-    { type: 'item', label: 'Flip vertical', icon: 'ui/flip-v', disabled: !hasDoc, onClick: () => void flipCurrent('vertical') },
+    { type: 'heading', label: t('plugin.image.menu.image', null, 'Image') },
+    { type: 'item', label: t('plugin.image.menu.rotateLeft', null, 'Rotate left'), icon: 'ui/rotate-left', disabled: !hasDoc, onClick: () => void rotateCurrent('left') },
+    { type: 'item', label: t('plugin.image.menu.rotateRight', null, 'Rotate right'), icon: 'ui/rotate-right', disabled: !hasDoc, onClick: () => void rotateCurrent('right') },
+    { type: 'item', label: t('plugin.image.menu.flipH', null, 'Flip horizontal'), icon: 'ui/flip-h', disabled: !hasDoc, onClick: () => void flipCurrent('horizontal') },
+    { type: 'item', label: t('plugin.image.menu.flipV', null, 'Flip vertical'), icon: 'ui/flip-v', disabled: !hasDoc, onClick: () => void flipCurrent('vertical') },
     { type: 'separator' },
-    { type: 'item', label: 'Revert to original', icon: 'ui/refresh', disabled: !hasDoc, onClick: () => void resetCurrent() },
+    { type: 'item', label: t('plugin.image.menu.revert', null, 'Revert to original'), icon: 'ui/refresh', disabled: !hasDoc, onClick: () => void resetCurrent() },
     { type: 'separator' },
-    { type: 'heading', label: 'View' },
-    { type: 'item', label: 'Zoom in', icon: 'ui/zoom-in', onClick: () => setZoom(S.zoom * 1.15) },
-    { type: 'item', label: 'Zoom out', icon: 'ui/zoom-out', onClick: () => setZoom(S.zoom / 1.15) },
-    { type: 'item', label: 'Fit', onClick: zoomToFit },
-    { type: 'item', label: 'Actual size', onClick: () => setZoom(1) },
+    { type: 'heading', label: t('plugin.image.menu.view', null, 'View') },
+    { type: 'item', label: t('plugin.image.menu.zoomIn', null, 'Zoom in'), icon: 'ui/zoom-in', onClick: () => setZoom(S.zoom * 1.15) },
+    { type: 'item', label: t('plugin.image.menu.zoomOut', null, 'Zoom out'), icon: 'ui/zoom-out', onClick: () => setZoom(S.zoom / 1.15) },
+    { type: 'item', label: t('plugin.image.menu.fit', null, 'Fit'), onClick: zoomToFit },
+    { type: 'item', label: t('plugin.image.menu.actualSize', null, 'Actual size'), onClick: () => setZoom(1) },
   ];
 }
 
@@ -831,17 +838,18 @@ export async function importFromFiles(path, name) {
   try {
     if (!S.tile) mountEditor();
     const blob = await api.blobFromHome(path);
-    if (!blob || blob.size === 0) throw new Error('that file is empty');
+    if (!blob || blob.size === 0) throw new Error(t('plugin.image.error.emptyFile', null, 'that file is empty'));
     const type = blob.type || '';
     const ext = String(name || '').toLowerCase().split('.').pop();
     const knownImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext);
     if (type && !type.startsWith('image/') && !knownImage) {
-      throw new Error(`“${name || 'file'}” is not an image the editor can open`);
+      const label = name || t('plugin.image.error.unnamedFile', null, 'file');
+      throw new Error(t('plugin.image.error.notAnImage', { name: label }, '“{name}” is not an image the editor can open'));
     }
     const file = new File([blob], name || 'image', { type: type || 'image/png' });
     await uploadFile(file);
   } catch (e) {
-    toast(e.message || 'Could not open file', { type: 'error' });
+    toast(e.message || t('plugin.image.toast.openFailed', null, 'Could not open file'), { type: 'error' });
   }
 }
 
@@ -869,10 +877,10 @@ function onAgentActions(e) {
 export function editorContextMenu() {
   const hasDoc = !!S.doc;
   return [
-    { type: 'item', label: 'Open image…', icon: 'ui/upload', onClick: () => void pickFile() },
-    { type: 'item', label: 'Revert to original', icon: 'ui/refresh', disabled: !hasDoc, onClick: () => void resetCurrent() },
+    { type: 'item', label: t('plugin.image.ctx.open', null, 'Open image…'), icon: 'ui/upload', onClick: () => void pickFile() },
+    { type: 'item', label: t('plugin.image.menu.revert', null, 'Revert to original'), icon: 'ui/refresh', disabled: !hasDoc, onClick: () => void resetCurrent() },
     { type: 'separator' },
-    { type: 'item', label: 'Delete image', icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void deleteCurrent() },
+    { type: 'item', label: t('plugin.image.menu.delete', null, 'Delete image'), icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void deleteCurrent() },
   ];
 }
 

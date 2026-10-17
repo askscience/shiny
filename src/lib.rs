@@ -1,5 +1,6 @@
 pub mod config;
 pub mod errors;
+pub mod i18n;
 pub mod db;
 pub mod models;
 pub mod auth;

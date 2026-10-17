@@ -1,0 +1,52 @@
+{
+  "plugin.word.toolbar.documents": "Документы",
+  "plugin.word.toolbar.titlePlaceholder": "Без названия",
+  "plugin.word.toolbar.newDocument": "Новый документ",
+  "plugin.word.toolbar.importOdt": "Импорт .odt",
+  "plugin.word.toolbar.saveToDocuments": "Сохранить в Документы",
+  "plugin.word.toolbar.saveNow": "Сохранить сейчас",
+  "plugin.word.toolbar.deleteDocument": "Удалить документ",
+  "plugin.word.toolbar.bold": "Полужирный",
+  "plugin.word.toolbar.italic": "Курсив",
+  "plugin.word.toolbar.underline": "Подчёркнутый",
+  "plugin.word.toolbar.heading": "Заголовок",
+  "plugin.word.toolbar.bulletList": "Маркированный список",
+  "plugin.word.toolbar.font": "Шрифт",
+  "plugin.word.toolbar.fontHint": "Шрифт — применяется к выделению, а если ничего не выделено, ко всему документу",
+
+  "plugin.word.status.saving": "Сохранение…",
+  "plugin.word.status.unsaved": "Несохранённые изменения",
+  "plugin.word.status.saved.one": "Сохранено {time} · {count} слово",
+  "plugin.word.status.saved.few": "Сохранено {time} · {count} слова",
+  "plugin.word.status.saved.many": "Сохранено {time} · {count} слов",
+  "plugin.word.status.saved.other": "Сохранено {time} · {count} слов",
+
+  "plugin.word.menu.empty": "Документов пока нет",
+  "plugin.word.menu.newDocument": "Новый документ",
+  "plugin.word.menu.importOdt": "Импорт .odt",
+  "plugin.word.menu.saveToDocuments": "Сохранить в Документы",
+  "plugin.word.menu.deleteDocument": "Удалить документ",
+
+  "plugin.word.ctx.newDocument": "Новый документ",
+  "plugin.word.ctx.saveNow": "Сохранить сейчас",
+  "plugin.word.ctx.saveToDocuments": "Сохранить в Документы",
+  "plugin.word.ctx.bold": "Полужирный",
+  "plugin.word.ctx.italic": "Курсив",
+  "plugin.word.ctx.heading": "Заголовок",
+  "plugin.word.ctx.list": "Список",
+  "plugin.word.ctx.deleteDocument": "Удалить документ",
+
+  "plugin.word.dialog.deleteDoc": "Удалить “{title}”?",
+
+  "plugin.word.toast.saveFailed": "Не удалось сохранить",
+  "plugin.word.toast.openFailed": "Не удалось открыть документ",
+  "plugin.word.toast.createFailed": "Не удалось создать документ",
+  "plugin.word.toast.deleteFailed": "Не удалось удалить документ",
+  "plugin.word.toast.imported": "Импортировано: {name}",
+  "plugin.word.toast.importFailed": "Не удалось импортировать — это точно файл .odt?",
+  "plugin.word.toast.openFileFailed": "Не удалось открыть файл",
+
+  "plugin.word.meta.description": "Простой текстовый процессор — документы хранятся как открытые файлы .odt",
+  "plugin.word.meta.summary": "Текстовый процессор: создание, редактирование и чтение документов OpenDocument (.odt)",
+  "plugin.word.meta.category": "Офис"
+}

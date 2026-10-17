@@ -1,0 +1,38 @@
+{
+  "plugin.calc.meta.description": "Tableur — des feuilles stockées au format ouvert sous forme de grilles de cellules, modifiables dans la fenêtre Calc",
+  "plugin.calc.meta.summary": "Calc : créer, modifier et calculer avec des tableurs",
+  "plugin.calc.meta.category": "Bureau",
+
+  "plugin.calc.bar.spreadsheets": "Tableurs",
+
+  "plugin.calc.toolbar.newSheet": "Nouveau tableur",
+  "plugin.calc.toolbar.importOds": "Importer un .ods",
+  "plugin.calc.toolbar.importCsv": "Importer un CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Enregistrer dans Documents",
+  "plugin.calc.toolbar.saveNow": "Enregistrer maintenant",
+  "plugin.calc.toolbar.deleteSheet": "Supprimer le tableur",
+
+  "plugin.calc.menu.noSheets": "Aucun tableur pour l'instant",
+
+  "plugin.calc.sheet.untitled": "Sans titre",
+  "plugin.calc.sheet.importedCsv": "CSV importé",
+
+  "plugin.calc.formula.placeholder": "Valeur ou formule (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Enregistrement…",
+  "plugin.calc.status.dirty": "Modifications non enregistrées",
+  "plugin.calc.status.saved.one": "Enregistré {time} · {count} cellule",
+  "plugin.calc.status.saved.other": "Enregistré {time} · {count} cellules",
+  "plugin.calc.status.saved.many": "Enregistré {time} · {count} cellules",
+
+  "plugin.calc.dialog.delete": "Supprimer \"{title}\" ?",
+
+  "plugin.calc.toast.saveFailed": "Échec de l'enregistrement",
+  "plugin.calc.toast.openFailed": "Impossible d'ouvrir le tableur",
+  "plugin.calc.toast.createFailed": "Impossible de créer le tableur",
+  "plugin.calc.toast.deleteFailed": "Impossible de supprimer le tableur",
+  "plugin.calc.toast.imported": "{name} importé",
+  "plugin.calc.toast.importOdsFailed": "Échec de l'import — ce fichier .ods est-il valide ?",
+  "plugin.calc.toast.importCsvFailed": "Échec de l'import — ce fichier CSV est-il valide ?",
+  "plugin.calc.toast.openFileFailed": "Impossible d'ouvrir le fichier"
+}

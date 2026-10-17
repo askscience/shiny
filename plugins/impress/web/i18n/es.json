@@ -1,0 +1,80 @@
+{
+  "plugin.impress.toolbar.presentations": "Presentaciones",
+  "plugin.impress.toolbar.titlePlaceholder": "Sin título",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Presentar",
+  "plugin.impress.toolbar.newDeck": "Nueva presentación",
+  "plugin.impress.toolbar.importOdp": "Importar .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Guardar en Documentos",
+  "plugin.impress.toolbar.saveNow": "Guardar ahora",
+  "plugin.impress.toolbar.deleteDeck": "Eliminar la presentación",
+
+  "plugin.impress.menu.empty": "Aún no hay presentaciones",
+  "plugin.impress.menu.newDeck": "Nueva presentación",
+  "plugin.impress.menu.importOdp": "Importar .odp",
+  "plugin.impress.menu.saveToDocuments": "Guardar en Documentos",
+  "plugin.impress.menu.deleteDeck": "Eliminar la presentación",
+
+  "plugin.impress.ctx.newDeck": "Nueva presentación",
+  "plugin.impress.ctx.addSlide": "Añadir diapositiva",
+  "plugin.impress.ctx.saveNow": "Guardar ahora",
+  "plugin.impress.ctx.present": "Presentar",
+  "plugin.impress.ctx.stopPresenting": "Dejar de presentar",
+  "plugin.impress.ctx.deleteDeck": "Eliminar la presentación",
+
+  "plugin.impress.status.saving": "Guardando…",
+  "plugin.impress.status.unsaved": "Cambios sin guardar",
+  "plugin.impress.status.saved.one": "Guardado {time} · {count} diapositiva",
+  "plugin.impress.status.saved.many": "Guardado {time} · {count} diapositivas",
+  "plugin.impress.status.saved.other": "Guardado {time} · {count} diapositivas",
+
+  "plugin.impress.empty.noDeck": "No hay ninguna presentación",
+  "plugin.impress.empty.noDeckBody": "Crea una o pídele a la IA que arme una presentación",
+
+  "plugin.impress.inspector.layout": "Disposición",
+  "plugin.impress.inspector.transition": "Transición",
+  "plugin.impress.inspector.bullets": "Viñetas",
+  "plugin.impress.inspector.speakerNotes": "Notas del orador",
+  "plugin.impress.inspector.hint": "Haz clic en cualquier texto de la diapositiva para editarlo directamente.",
+  "plugin.impress.inspector.applyAll": "Aplica esta transición y esta aparición de viñetas a todas las diapositivas",
+  "plugin.impress.inspector.applyAllLabel": "Aplicar a todas las diapositivas",
+
+  "plugin.impress.ops.addSlide": "Añadir diapositiva",
+  "plugin.impress.ops.moveUp": "Subir",
+  "plugin.impress.ops.moveDown": "Bajar",
+  "plugin.impress.ops.deleteSlide": "Eliminar la diapositiva",
+
+  "plugin.impress.transition.none": "Ninguna",
+  "plugin.impress.transition.fade": "Fundido",
+  "plugin.impress.transition.slide": "Deslizamiento",
+  "plugin.impress.transition.push": "Empuje",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "Todas a la vez",
+  "plugin.impress.reveal.bullets": "Una a una",
+
+  "plugin.impress.slide.addText": "Añadir texto",
+  "plugin.impress.slide.addTitle": "Añadir un título",
+  "plugin.impress.slide.addSubtitle": "Añadir un subtítulo",
+  "plugin.impress.slide.attribution": "Atribución",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Volver al editor",
+  "plugin.impress.present.fullScreen": "Pantalla completa",
+  "plugin.impress.present.exitFullScreen": "Salir de pantalla completa",
+  "plugin.impress.present.blocked": "El navegador ha bloqueado la pantalla completa",
+
+  "plugin.impress.dialog.deleteDeck": "¿Eliminar \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Error al guardar",
+  "plugin.impress.toast.openFailed": "No se ha podido abrir la presentación",
+  "plugin.impress.toast.createFailed": "No se ha podido crear la presentación",
+  "plugin.impress.toast.deleteFailed": "No se ha podido eliminar la presentación",
+  "plugin.impress.toast.imported": "Se ha importado {name}",
+  "plugin.impress.toast.importFailed": "La importación ha fallado — ¿es un archivo .odp válido?",
+  "plugin.impress.toast.openFileFailed": "No se ha podido abrir el archivo",
+
+  "plugin.impress.meta.description": "Creador de presentaciones — las presentaciones se guardan como diapositivas y se exportan como archivos .odp abiertos",
+  "plugin.impress.meta.summary": "Impress: crea, edita y presenta presentaciones de diapositivas OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Ofimática"
+}

@@ -3,9 +3,9 @@
  * modes, how the battery status selects the *effective* mode, and which "light"
  * AI engines Power Saver prefers.
  *
- * Kept import-free on purpose: `web/js/tests/powerShared.test.mjs` loads it in
- * Node with no DOM. `preferences.js` owns the stored values; this module only
- * decides what they mean.
+ * Kept dependency-light: `web/js/tests/powerShared.test.mjs` loads it in Node
+ * with the i18n harness (no DOM). `preferences.js` owns the stored values; this
+ * module only decides what they mean.
  *
  * Power modes (the classic laptop choice):
  *   performance — never drop to low power; the AI uses whatever you configured.
@@ -16,6 +16,7 @@
  * no faster-whisper sidecar) and Supertonic (bundled, no GPU) instead of
  * faster-whisper and Qwen3-TTS.
  */
+import { t } from './i18n.js';
 
 /** The three modes, best-experience first. */
 export const POWER_MODES = ['performance', 'balanced', 'saver'];
@@ -31,9 +32,9 @@ export function normalizePowerMode(value) {
 /** The short label for a mode. */
 export function powerModeLabel(mode) {
   switch (normalizePowerMode(mode)) {
-    case 'performance': return 'Performance';
-    case 'saver': return 'Power Saver';
-    default: return 'Balanced';
+    case 'performance': return t('power.performance');
+    case 'saver': return t('power.saver');
+    default: return t('power.balanced');
   }
 }
 
@@ -41,11 +42,11 @@ export function powerModeLabel(mode) {
 export function powerModeHint(mode) {
   switch (normalizePowerMode(mode)) {
     case 'performance':
-      return 'Full quality. Never switches to low power, even on battery.';
+      return t('power.hint.performance');
     case 'saver':
-      return 'Always prefer low power — lighter AI and less draining.';
+      return t('power.hint.saver');
     default:
-      return 'Full quality on wall power, low power on battery or below 20%.';
+      return t('power.hint.balanced');
   }
 }
 

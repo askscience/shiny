@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Mokslinis skaičiuotuvas — apskaičiuokite aritmetines ir mokslines išraiškas Skaičiuotuvo lange",
+  "plugin.calculator.meta.summary": "Skaičiuotuvas: paprasta ir mokslinė matematika",
+  "plugin.calculator.meta.category": "Biuras",
+
+  "plugin.calculator.display.error": "Klaida",
+
+  "plugin.calculator.toolbar.history": "Istorija",
+  "plugin.calculator.toolbar.scientific": "Mokslinis",
+  "plugin.calculator.toolbar.clearHistory": "Išvalyti istoriją",
+
+  "plugin.calculator.menu.equals": "Lygu",
+  "plugin.calculator.menu.clearAll": "Išvalyti viską",
+
+  "plugin.calculator.history.reuse": "Naudoti šį rezultatą dar kartą",
+
+  "plugin.calculator.empty.noHistory": "Nėra istorijos",
+  "plugin.calculator.empty.noHistoryBody": "Skaičiavimai, kuriuos atliekate čia arba pavedate DI, atsiras žemiau.",
+
+  "plugin.calculator.toast.evaluateFailed": "Nepavyko apskaičiuoti",
+  "plugin.calculator.toast.historyFailed": "Nepavyko įkelti istorijos",
+  "plugin.calculator.toast.historyCleared": "Istorija išvalyta",
+  "plugin.calculator.toast.clearFailed": "Nepavyko išvalyti istorijos"
+}

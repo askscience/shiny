@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Féilire — sceidealú, liostáil agus eagrú imeachtaí i bhfuinneog an Fhéilire",
+  "plugin.calendar.meta.summary": "Féilire: sceidealú agus eagrú imeachtaí",
+  "plugin.calendar.meta.category": "Oifig",
+
+  "plugin.calendar.month.january": "Eanáir",
+  "plugin.calendar.month.february": "Feabhra",
+  "plugin.calendar.month.march": "Márta",
+  "plugin.calendar.month.april": "Aibreán",
+  "plugin.calendar.month.may": "Bealtaine",
+  "plugin.calendar.month.june": "Meitheamh",
+  "plugin.calendar.month.july": "Iúil",
+  "plugin.calendar.month.august": "Lúnasa",
+  "plugin.calendar.month.september": "Meán Fómhair",
+  "plugin.calendar.month.october": "Deireadh Fómhair",
+  "plugin.calendar.month.november": "Samhain",
+  "plugin.calendar.month.december": "Nollaig",
+
+  "plugin.calendar.grid.sun": "Domh",
+  "plugin.calendar.grid.mon": "Luan",
+  "plugin.calendar.grid.tue": "Máirt",
+  "plugin.calendar.grid.wed": "Céad",
+  "plugin.calendar.grid.thu": "Déar",
+  "plugin.calendar.grid.fri": "Aoine",
+  "plugin.calendar.grid.sat": "Sath",
+
+  "plugin.calendar.event.allDay": "An lá ar fad",
+
+  "plugin.calendar.toolbar.previousMonth": "An mhí roimhe seo",
+  "plugin.calendar.toolbar.nextMonth": "An mhí seo chugainn",
+  "plugin.calendar.toolbar.today": "Inniu",
+  "plugin.calendar.toolbar.newEvent": "Imeacht nua",
+
+  "plugin.calendar.ctx.refresh": "Athnuaigh",
+
+  "plugin.calendar.detail.edit": "Cuir in eagar",
+  "plugin.calendar.detail.delete": "Scrios",
+
+  "plugin.calendar.empty.noEvents": "Níl aon imeacht ann",
+  "plugin.calendar.empty.noEventsBody": "Níl aon rud sceidealaithe. Cuir imeacht leis nó iarr ar an AI ceann a sceidealú.",
+
+  "plugin.calendar.dialog.title": "Imeacht",
+  "plugin.calendar.dialog.editTitle": "Cuir an t-imeacht in eagar",
+  "plugin.calendar.dialog.titleField": "Teideal",
+  "plugin.calendar.dialog.titlePlaceholder": "m.sh. Cruinniú foirne",
+  "plugin.calendar.dialog.dateField": "Dáta",
+  "plugin.calendar.dialog.startTimeField": "Am tosaithe",
+  "plugin.calendar.dialog.endTimeField": "Am críochnaithe",
+  "plugin.calendar.dialog.locationField": "Suíomh",
+  "plugin.calendar.dialog.locationPlaceholder": "Suíomh (roghnach)",
+  "plugin.calendar.dialog.notesField": "Nótaí",
+  "plugin.calendar.dialog.notesPlaceholder": "Nótaí (roghnach)",
+  "plugin.calendar.dialog.cancel": "Cealaigh",
+  "plugin.calendar.dialog.save": "Sábháil an t-imeacht",
+
+  "plugin.calendar.toast.titleRequired": "Teastaíonn teideal",
+  "plugin.calendar.toast.dateRequired": "Teastaíonn dáta",
+  "plugin.calendar.toast.updated": "Nuashonraíodh an t-imeacht",
+  "plugin.calendar.toast.scheduled": "Sceidealaíodh an t-imeacht",
+  "plugin.calendar.toast.deleted": "Scriosadh an t-imeacht",
+  "plugin.calendar.toast.loadFailed": "Níorbh fhéidir imeachtaí a lódáil",
+  "plugin.calendar.toast.saveFailed": "Níorbh fhéidir an t-imeacht a shábháil",
+  "plugin.calendar.toast.deleteFailed": "Níorbh fhéidir an t-imeacht a scriosadh",
+
+  "plugin.calendar.confirm.deleteEvent": "Scrios \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Imeacht ag tosú gan mhoill"
+}

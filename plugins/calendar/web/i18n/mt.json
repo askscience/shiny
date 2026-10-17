@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalendarju — ippjana, elenka u organizza avvenimenti fit-tieqa Kalendarju",
+  "plugin.calendar.meta.summary": "Kalendarju: ippjana u organizza avvenimenti",
+  "plugin.calendar.meta.category": "Uffiċċju",
+
+  "plugin.calendar.month.january": "Jannar",
+  "plugin.calendar.month.february": "Frar",
+  "plugin.calendar.month.march": "Marzu",
+  "plugin.calendar.month.april": "April",
+  "plugin.calendar.month.may": "Mejju",
+  "plugin.calendar.month.june": "Ġunju",
+  "plugin.calendar.month.july": "Lulju",
+  "plugin.calendar.month.august": "Awwissu",
+  "plugin.calendar.month.september": "Settembru",
+  "plugin.calendar.month.october": "Ottubru",
+  "plugin.calendar.month.november": "Novembru",
+  "plugin.calendar.month.december": "Diċembru",
+
+  "plugin.calendar.grid.sun": "Ħad",
+  "plugin.calendar.grid.mon": "Tne",
+  "plugin.calendar.grid.tue": "Tli",
+  "plugin.calendar.grid.wed": "Erb",
+  "plugin.calendar.grid.thu": "Ħam",
+  "plugin.calendar.grid.fri": "Ġim",
+  "plugin.calendar.grid.sat": "Sib",
+
+  "plugin.calendar.event.allDay": "Il-ġurnata kollha",
+
+  "plugin.calendar.toolbar.previousMonth": "Ix-xahar li għadda",
+  "plugin.calendar.toolbar.nextMonth": "Ix-xahar li jmiss",
+  "plugin.calendar.toolbar.today": "Illum",
+  "plugin.calendar.toolbar.newEvent": "Avveniment ġdid",
+
+  "plugin.calendar.ctx.refresh": "Aġġorna",
+
+  "plugin.calendar.detail.edit": "Editja",
+  "plugin.calendar.detail.delete": "Ħassar",
+
+  "plugin.calendar.empty.noEvents": "Ebda avveniment",
+  "plugin.calendar.empty.noEventsBody": "Xejn skedat. Żid avveniment jew itlob lill-AI tiskeda wieħed.",
+
+  "plugin.calendar.dialog.title": "Avveniment",
+  "plugin.calendar.dialog.editTitle": "Editja l-avveniment",
+  "plugin.calendar.dialog.titleField": "Titlu",
+  "plugin.calendar.dialog.titlePlaceholder": "eż. Laqgħa tat-tim",
+  "plugin.calendar.dialog.dateField": "Data",
+  "plugin.calendar.dialog.startTimeField": "Ħin tal-bidu",
+  "plugin.calendar.dialog.endTimeField": "Ħin tat-tmiem",
+  "plugin.calendar.dialog.locationField": "Post",
+  "plugin.calendar.dialog.locationPlaceholder": "Post (mhux obbligatorju)",
+  "plugin.calendar.dialog.notesField": "Noti",
+  "plugin.calendar.dialog.notesPlaceholder": "Noti (mhux obbligatorji)",
+  "plugin.calendar.dialog.cancel": "Ikkanċella",
+  "plugin.calendar.dialog.save": "Salva l-avveniment",
+
+  "plugin.calendar.toast.titleRequired": "It-titlu huwa meħtieġ",
+  "plugin.calendar.toast.dateRequired": "Id-data hija meħtieġa",
+  "plugin.calendar.toast.updated": "L-avveniment ġie aġġornat",
+  "plugin.calendar.toast.scheduled": "L-avveniment ġie skedat",
+  "plugin.calendar.toast.deleted": "L-avveniment tħassar",
+  "plugin.calendar.toast.loadFailed": "L-avvenimenti ma setgħux jitgħabbew",
+  "plugin.calendar.toast.saveFailed": "L-avveniment ma setax jiġi salvat",
+  "plugin.calendar.toast.deleteFailed": "L-avveniment ma setax jitħassar",
+
+  "plugin.calendar.confirm.deleteEvent": "Ħassar \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Avveniment li jibda dalwaqt"
+}

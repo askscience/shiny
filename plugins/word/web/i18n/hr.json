@@ -1,0 +1,51 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenti",
+  "plugin.word.toolbar.titlePlaceholder": "Bez naslova",
+  "plugin.word.toolbar.newDocument": "Novi dokument",
+  "plugin.word.toolbar.importOdt": "Uvezi .odt",
+  "plugin.word.toolbar.saveToDocuments": "Spremi u Dokumente",
+  "plugin.word.toolbar.saveNow": "Spremi odmah",
+  "plugin.word.toolbar.deleteDocument": "Izbriši dokument",
+  "plugin.word.toolbar.bold": "Podebljano",
+  "plugin.word.toolbar.italic": "Kurziv",
+  "plugin.word.toolbar.underline": "Podcrtano",
+  "plugin.word.toolbar.heading": "Naslov",
+  "plugin.word.toolbar.bulletList": "Nabrojani popis",
+  "plugin.word.toolbar.font": "Font",
+  "plugin.word.toolbar.fontHint": "Font — primjenjuje se na odabir, ili na cijeli dokument kad ništa nije odabrano",
+
+  "plugin.word.status.saving": "Spremanje…",
+  "plugin.word.status.unsaved": "Nespremljene promjene",
+  "plugin.word.status.saved.one": "Spremljeno {time} · {count} riječ",
+  "plugin.word.status.saved.few": "Spremljeno {time} · {count} riječi",
+  "plugin.word.status.saved.other": "Spremljeno {time} · {count} riječi",
+
+  "plugin.word.menu.empty": "Još nema dokumenata",
+  "plugin.word.menu.newDocument": "Novi dokument",
+  "plugin.word.menu.importOdt": "Uvezi .odt",
+  "plugin.word.menu.saveToDocuments": "Spremi u Dokumente",
+  "plugin.word.menu.deleteDocument": "Izbriši dokument",
+
+  "plugin.word.ctx.newDocument": "Novi dokument",
+  "plugin.word.ctx.saveNow": "Spremi odmah",
+  "plugin.word.ctx.saveToDocuments": "Spremi u Dokumente",
+  "plugin.word.ctx.bold": "Podebljano",
+  "plugin.word.ctx.italic": "Kurziv",
+  "plugin.word.ctx.heading": "Naslov",
+  "plugin.word.ctx.list": "Popis",
+  "plugin.word.ctx.deleteDocument": "Izbriši dokument",
+
+  "plugin.word.dialog.deleteDoc": "Izbrisati \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Spremanje nije uspjelo",
+  "plugin.word.toast.openFailed": "Nije moguće otvoriti dokument",
+  "plugin.word.toast.createFailed": "Nije moguće stvoriti dokument",
+  "plugin.word.toast.deleteFailed": "Nije moguće izbrisati dokument",
+  "plugin.word.toast.imported": "Uvezeno: {name}",
+  "plugin.word.toast.importFailed": "Uvoz nije uspio — je li ovo ispravna .odt datoteka?",
+  "plugin.word.toast.openFileFailed": "Nije moguće otvoriti datoteku",
+
+  "plugin.word.meta.description": "Jednostavan tekstualni procesor — dokumenti se spremaju kao otvorene .odt datoteke",
+  "plugin.word.meta.summary": "Tekstualni procesor: stvaranje, uređivanje i čitanje OpenDocument (.odt) dokumenata",
+  "plugin.word.meta.category": "Ured"
+}

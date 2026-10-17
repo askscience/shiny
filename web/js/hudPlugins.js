@@ -18,6 +18,7 @@ import { apiFetch } from './api.js';
 import { hudDivider } from './hudDivider.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { isPluginFocused } from './desktop.js';
+import { t } from './i18n.js';
 
 const trayEl = document.getElementById('hud-plugins');
 
@@ -58,7 +59,9 @@ function buildButton(p) {
   btn.dataset.plugin = p.name;
   btn.classList.toggle('is-active', active);
   btn.classList.toggle('is-focused', isPluginFocused(p.name));
-  btn.title = `${label(p.name)} — ${active ? 'active' : 'tap to activate'}`;
+  btn.title = active
+    ? t('hud.pluginActive', { name: label(p.name) }, `${label(p.name)} — active`)
+    : t('hud.pluginInactive', { name: label(p.name) }, `${label(p.name)} — tap to activate`);
   btn.setAttribute('aria-label', trayLabel(p.name));
   btn.setAttribute('aria-pressed', String(active));
 
@@ -84,7 +87,7 @@ function render() {
   const groups = [];
   const index = new Map();
   for (const p of plugins) {
-    const cat = (p.category || '').trim() || 'Other';
+    const cat = (p.category || '').trim() || t('plugins.categoryOther');
     let g = index.get(cat);
     if (!g) {
       g = { category: cat, items: [] };
@@ -126,7 +129,7 @@ async function onClick(p, active) {
     });
   } catch (err) {
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: err.message || `Could not activate ${label(p.name)}`, type: 'error' },
+      detail: { message: err.message || t('plugins.activateFailed', { name: label(p.name) }), type: 'error' },
     }));
     return;
   }

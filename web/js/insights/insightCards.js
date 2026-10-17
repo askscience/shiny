@@ -6,6 +6,7 @@
 import { apiFetch } from '../api.js';
 import { getOllamaModel } from '../preferences.js';
 import { setDockStep, clearDockStep } from '../dockStep.js';
+import { t } from '../i18n.js';
 import { insightCard, reveal } from '../../ui/index.js';
 import {
   setInsightCards,
@@ -70,7 +71,7 @@ export async function loadContextInsights(destination, lat, lon) {
   if (!destination || lat == null || lon == null) return;
   const token = ++insightFetchToken;
 
-  setDockStep('Loading local insights…');
+  setDockStep(t('insights.loading', null, 'Loading local insights…'));
 
   try {
     const q = new URLSearchParams({
@@ -80,7 +81,7 @@ export async function loadContextInsights(destination, lat, lon) {
     });
     const model = getOllamaModel();
     if (model) q.set('ollama_model', model);
-    setDockStep('Researching events & places…');
+    setDockStep(t('insights.researching', null, 'Researching events & places…'));
     const res = await apiFetch(`/api/insights/context?${q}`);
     if (token !== insightFetchToken) return; // a newer context won
     setInsightCards(destination, res.data || []);

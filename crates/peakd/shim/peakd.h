@@ -51,8 +51,18 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
 /// Must be called before `peakd_qt_run`.
 void peakd_qt_inject_script(const char *name, const char *source);
 
+/// Include the ad-filter scriptlets in every view's script collection, and
+/// re-apply the collections of the views that already exist. Safe to call
+/// before `peakd_qt_run` (it only records the state until the scene is up).
+void peakd_qt_set_filter_scripts(int on);
+
 /// Window title and size for `peakd_qt_run` (defaults when unset).
 void peakd_qt_set_window(const char *title, int width, int height);
+
+/// The shell's own strings (file-dialog titles, name filters) as one
+/// `{ "key": "text" }` JSON map from the shared catalogues; keys that are
+/// absent keep the English literals compiled in here.
+void peakd_qt_set_strings(const char *strings_json);
 
 /// Leave the event loop. The caller decides the process status afterwards.
 void peakd_qt_quit(void);

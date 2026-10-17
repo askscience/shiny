@@ -33,6 +33,7 @@
 
 import { icon, iconButton, toast } from '../../ui/index.js';
 import { apiFetch, getToken } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
 
 export const TERMINAL_PLUGIN = 'terminal';
@@ -188,7 +189,7 @@ function buildTile() {
 
   statusEl = document.createElement('div');
   statusEl.className = 'terminal-status';
-  statusEl.textContent = 'starting terminal…';
+  statusEl.textContent = t('plugin.terminal.status.starting', null, 'starting terminal…');
 
   tileEl.append(tabstripEl, statusEl);
   return tileEl;
@@ -198,7 +199,7 @@ function buildTabStrip() {
   const strip = document.createElement('div');
   strip.className = 'terminal-tabstrip';
   strip.setAttribute('role', 'tablist');
-  strip.setAttribute('aria-label', 'Terminal tabs');
+  strip.setAttribute('aria-label', t('plugin.terminal.tabs.label', null, 'Terminal tabs'));
   // Nominate the strip as the window's top bar: the shared chrome folds it into
   // the header row next to the close/fullscreen controls (see `data-window-bar`
   // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
@@ -213,7 +214,7 @@ function activeTab() {
 
 /** The tab's label: the shell's OSC title when it sets one, else its number. */
 function tabLabel(tab) {
-  return tab.title || `Terminal ${tab.seq}`;
+  return tab.title || t('plugin.terminal.tab.label', { n: tab.seq }, 'Terminal {n}');
 }
 
 /** The tab strip: one button per tab, plus a new-tab action. */
@@ -239,7 +240,7 @@ function renderTabs() {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'terminal-tab-close';
-    close.setAttribute('aria-label', `Close ${tabLabel(tab)}`);
+    close.setAttribute('aria-label', t('plugin.terminal.tab.close', { name: tabLabel(tab) }, 'Close {name}'));
     close.appendChild(icon('ui/close', { size: 12 }));
     close.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -252,7 +253,7 @@ function renderTabs() {
   const add = iconButton({
     icon: 'ui/plus',
     size: 'sm',
-    label: 'New tab',
+    label: t('plugin.terminal.tab.new', null, 'New tab'),
     onClick: () => void createTab({}),
   });
   add.classList.add('terminal-newtab');
@@ -415,7 +416,7 @@ function copySelection(tab) {
 async function pasteFromClipboard(tab) {
   const text = await readClipboardText();
   if (!text) {
-    toast('Clipboard unavailable', { type: 'error' });
+    toast(t('plugin.terminal.toast.clipboardUnavailable', null, 'Clipboard unavailable'), { type: 'error' });
     return;
   }
   tab?.term?.paste(text);
@@ -425,7 +426,7 @@ async function pasteFromClipboard(tab) {
 
 function createTab({ sessionId = null, activate = true } = {}) {
   if (tabs.length >= MAX_TABS) {
-    toast(`Terminal: at most ${MAX_TABS} tabs`, { type: 'error' });
+    toast(tp('plugin.terminal.toast.tabLimit', MAX_TABS), { type: 'error' });
     return null;
   }
   const seq = ++tabSeq;
@@ -436,7 +437,7 @@ function createTab({ sessionId = null, activate = true } = {}) {
     title: '',
     shell: '',
     cwd: '',
-    status: 'connecting…',
+    status: t('plugin.terminal.status.connecting', null, 'connecting…'),
     term: null,
     fitAddon: null,
     canvasAddon: null,
@@ -618,7 +619,7 @@ async function restoreTabs() {
 async function attachSession(tab, stored = null) {
   if (stored) {
     tab.sessionId = stored;
-    updateTabStatus(tab, 'connecting…');
+    updateTabStatus(tab, t('plugin.terminal.status.connecting', null, 'connecting…'));
     return; // the window stream replays it — or answers `gone`
   }
   const dims = tab.fitAddon?.proposeDimensions?.() || null;
@@ -630,21 +631,21 @@ async function attachSession(tab, stored = null) {
     });
   } catch (err) {
     if (!tabs.includes(tab)) return; // closed while starting
-    toast(err?.message || 'Terminal: could not start a shell', { type: 'error' });
+    toast(err?.message || t('plugin.terminal.toast.startFailed', null, 'Terminal: could not start a shell'), { type: 'error' });
     if (tabs.length > 1) {
       closeTab(tab.id);
       return;
     }
-    updateTabStatus(tab, 'could not start a shell');
+    updateTabStatus(tab, t('plugin.terminal.status.startFailed', null, 'could not start a shell'));
     return;
   }
   if (!tabs.includes(tab)) return;
   tab.sessionId = res?.data?.id || null;
   if (!tab.sessionId) {
-    updateTabStatus(tab, 'could not start a shell');
+    updateTabStatus(tab, t('plugin.terminal.status.startFailed', null, 'could not start a shell'));
     return;
   }
-  updateTabStatus(tab, 'connecting…');
+  updateTabStatus(tab, t('plugin.terminal.status.connecting', null, 'connecting…'));
   persist();
 }
 
@@ -702,7 +703,7 @@ async function runStream(ctrl) {
     if (ctrl.signal.aborted || streamAbort !== ctrl) return;
     if (res.status === 401) {
       const tab = activeTab();
-      if (tab) updateTabStatus(tab, 'session expired — sign in again');
+      if (tab) updateTabStatus(tab, t('plugin.terminal.status.expired', null, 'session expired — sign in again'));
       scheduleReconnect(5000);
       return;
     }
@@ -747,7 +748,7 @@ async function runStream(ctrl) {
 function scheduleReconnect(delay = RECONNECT_DELAY) {
   if (!tileEl) return;
   const tab = activeTab();
-  if (tab) updateTabStatus(tab, 'reconnecting…');
+  if (tab) updateTabStatus(tab, t('plugin.terminal.status.reconnecting', null, 'reconnecting…'));
   window.clearTimeout(reconnectTimer);
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null;
@@ -790,7 +791,7 @@ function handleFrame(data) {
         /* reset is best-effort */
       }
     }
-    updateTabStatus(tab, 'connected');
+    updateTabStatus(tab, t('plugin.terminal.status.connected', null, 'connected'));
     renderTabs(); // the tooltip can name the shell now
     onHostResized(tab);
   } else if (msg.type === 'out') {
@@ -846,8 +847,8 @@ async function boot() {
   try {
     await ensureAssets();
   } catch (err) {
-    setStatus('could not load xterm.js');
-    toast('Terminal: xterm.js failed to load', { type: 'error' });
+    setStatus(t('plugin.terminal.status.xtermFailed', null, 'could not load xterm.js'));
+    toast(t('plugin.terminal.toast.xtermFailed', null, 'Terminal: xterm.js failed to load'), { type: 'error' });
     return;
   }
   if (!tileEl) return; // unmounted while loading
@@ -891,17 +892,17 @@ export function terminalContextMenu() {
   return [
     {
       type: 'item',
-      label: 'Copy',
+      label: t('plugin.terminal.ctx.copy', null, 'Copy'),
       icon: 'ui/copy',
       disabled: !tab?.term?.getSelection?.(),
       onClick: () => copySelection(tab),
     },
-    { type: 'item', label: 'Paste', icon: 'ui/clipboard', disabled: !tab, onClick: () => void pasteFromClipboard(tab) },
+    { type: 'item', label: t('plugin.terminal.ctx.paste', null, 'Paste'), icon: 'ui/clipboard', disabled: !tab, onClick: () => void pasteFromClipboard(tab) },
     { type: 'separator' },
-    { type: 'item', label: 'New tab', icon: 'ui/plus', onClick: () => void createTab({}) },
-    { type: 'item', label: 'Clear scrollback', icon: 'ui/trash', disabled: !tab, onClick: () => tab?.term?.clear() },
+    { type: 'item', label: t('plugin.terminal.tab.new', null, 'New tab'), icon: 'ui/plus', onClick: () => void createTab({}) },
+    { type: 'item', label: t('plugin.terminal.ctx.clearScrollback', null, 'Clear scrollback'), icon: 'ui/trash', disabled: !tab, onClick: () => tab?.term?.clear() },
     { type: 'separator' },
-    { type: 'item', label: 'Close tab', icon: 'ui/close', danger: true, disabled: !tab, onClick: () => { if (tab) closeTab(tab.id); } },
+    { type: 'item', label: t('plugin.terminal.ctx.closeTab', null, 'Close tab'), icon: 'ui/close', danger: true, disabled: !tab, onClick: () => { if (tab) closeTab(tab.id); } },
   ];
 }
 

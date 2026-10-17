@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Radio pe internet prin Radio Browser — caută posturi și redă-le în fereastra Radio",
+  "plugin.radio.meta.summary": "Radio pe internet: caută și redă posturi (Radio Browser)",
+  "plugin.radio.meta.category": "Media",
+
+  "plugin.radio.notify.nowPlaying": "Se redă acum",
+  "plugin.radio.toast.streamRefused": "Fluxul a refuzat să pornească — încearcă alt post",
+
+  "plugin.radio.status.pickStation": "Alege un post",
+  "plugin.radio.status.streaming": "Se transmite",
+
+  "plugin.radio.empty.noStations": "Niciun post găsit",
+  "plugin.radio.empty.noMatch": "Nimic nu se potrivește cu “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser nu poate fi contactat",
+  "plugin.radio.error.tryAgain": "Încearcă din nou într-o clipă",
+
+  "plugin.radio.fallback.station": "Post",
+  "plugin.radio.search.placeholder": "Posturi sau genuri…",
+
+  "plugin.radio.menu.play": "Redă",
+  "plugin.radio.menu.pause": "Pauză",
+  "plugin.radio.menu.stop": "Oprește",
+  "plugin.radio.menu.refresh": "Reîmprospătează posturile"
+}

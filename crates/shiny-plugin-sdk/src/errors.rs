@@ -1,10 +1,30 @@
 //! Plugin-visible error type. Same wire shape as the core AppError.
 
 use std::fmt;
+use std::sync::OnceLock;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
+
+/// Host-installed message translator. The `shiny` core registers one that maps
+/// an English user-facing message to the caller's interface language; without a
+/// host (a plugin exercised standalone, tests) messages pass through unchanged.
+static TRANSLATOR: OnceLock<fn(&str) -> String> = OnceLock::new();
+
+/// Install the process-wide translator. First call wins.
+pub fn set_message_translator(translator: fn(&str) -> String) {
+    let _ = TRANSLATOR.set(translator);
+}
+
+/// Localize a user-facing message (identity when no translator is installed).
+pub fn translate(message: impl Into<String>) -> String {
+    let message = message.into();
+    match TRANSLATOR.get() {
+        Some(translate) => translate(&message),
+        None => message,
+    }
+}
 
 #[derive(Debug)]
 pub enum AppError {
@@ -52,7 +72,7 @@ impl IntoResponse for AppError {
             Json(ErrorResponse {
                 success: false,
                 data: None,
-                error: message,
+                error: translate(message),
             }),
         )
             .into_response()

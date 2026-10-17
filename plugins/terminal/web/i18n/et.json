@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Tõeline Linuxi terminal rakenduse sees — PTY-l põhinev sisselogimiskest oma aknas",
+  "plugin.terminal.meta.summary": "Terminal: tõeline kest PTY kaudu, kuvatud xterm.js abil",
+  "plugin.terminal.meta.category": "Süsteem",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Uus vaheleht",
+  "plugin.terminal.tab.close": "Sulge {name}",
+  "plugin.terminal.tabs.label": "Terminali vahelehed",
+
+  "plugin.terminal.status.starting": "terminali käivitamine…",
+  "plugin.terminal.status.connecting": "ühendumine…",
+  "plugin.terminal.status.reconnecting": "taasühendumine…",
+  "plugin.terminal.status.connected": "ühendatud",
+  "plugin.terminal.status.startFailed": "kesta ei saanud käivitada",
+  "plugin.terminal.status.expired": "seanss aegus — logi uuesti sisse",
+  "plugin.terminal.status.xtermFailed": "xterm.js ei saanud laadida",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: kõige rohkem {count} vaheleht",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: kõige rohkem {count} vahelehte",
+  "plugin.terminal.toast.startFailed": "Terminal: kesta ei saanud käivitada",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js ei saanud laadida",
+  "plugin.terminal.toast.clipboardUnavailable": "Lõikelaud pole saadaval",
+
+  "plugin.terminal.ctx.copy": "Kopeeri",
+  "plugin.terminal.ctx.paste": "Kleebi",
+  "plugin.terminal.ctx.clearScrollback": "Tühjenda kerimisajalugu",
+  "plugin.terminal.ctx.closeTab": "Sulge vaheleht"
+}

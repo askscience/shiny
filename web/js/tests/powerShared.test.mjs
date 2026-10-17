@@ -3,6 +3,7 @@
  *   node web/js/tests/powerShared.test.mjs
  */
 
+import './helpers/i18n.mjs';   // catalogs, so t() resolves the English labels
 import {
   batteryTriggersSaver, describeEngines, effectivePowerMode, isLowBattery,
   isOnBattery, lowPowerEngines, normalizePowerMode, powerModeHint,

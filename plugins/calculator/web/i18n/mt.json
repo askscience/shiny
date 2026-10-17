@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Kalkulatur xjentifiku — ikkalkula espressjonijiet aritmetiċi u xjentifiċi fit-tieqa Kalkulatur",
+  "plugin.calculator.meta.summary": "Kalkulatur: matematika bażika u xjentifika",
+  "plugin.calculator.meta.category": "Uffiċċju",
+
+  "plugin.calculator.display.error": "Żball",
+
+  "plugin.calculator.toolbar.history": "Kronoloġija",
+  "plugin.calculator.toolbar.scientific": "Xjentifiku",
+  "plugin.calculator.toolbar.clearHistory": "Ħassar il-kronoloġija",
+
+  "plugin.calculator.menu.equals": "Ugwali",
+  "plugin.calculator.menu.clearAll": "Ħassar kollox",
+
+  "plugin.calculator.history.reuse": "Erġa' uża dan ir-riżultat",
+
+  "plugin.calculator.empty.noHistory": "Ebda kronoloġija",
+  "plugin.calculator.empty.noHistoryBody": "Il-kalkoli li tagħmel hawn jew li titlob lill-AI għalihom jidhru hawn taħt.",
+
+  "plugin.calculator.toast.evaluateFailed": "Ma setax jiġi kkalkulat",
+  "plugin.calculator.toast.historyFailed": "Il-kronoloġija ma setgħetx titgħabba",
+  "plugin.calculator.toast.historyCleared": "Il-kronoloġija tħassret",
+  "plugin.calculator.toast.clearFailed": "Il-kronoloġija ma setgħetx titħassar"
+}

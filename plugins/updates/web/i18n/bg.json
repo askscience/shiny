@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Проверявайте и инсталирайте актуализации на системата + Ollama за всяка основна Linux дистрибуция",
+  "plugin.updates.meta.summary": "Актуализации: един прозорец (и индикатор в HUD) за системни актуализации и актуализации на Ollama",
+  "plugin.updates.meta.category": "Системни",
+
+  "plugin.updates.tab.updates": "Актуализации",
+  "plugin.updates.tab.history": "История",
+
+  "plugin.updates.toolbar.sections": "Раздели",
+  "plugin.updates.toolbar.check": "Провери за актуализации",
+
+  "plugin.updates.status.checking": "Проверка за актуализации…",
+  "plugin.updates.status.thisSystem": "тази система",
+  "plugin.updates.status.unavailableOnSystem": "Актуализациите не са налични на тази система",
+  "plugin.updates.status.unavailable": "Актуализациите са недостъпни",
+  "plugin.updates.status.upToDate": "Всичко е актуално · {where}",
+  "plugin.updates.status.available.one": "{count} налична актуализация · {where}",
+  "plugin.updates.status.available.other": "{count} налични актуализации · {where}",
+  "plugin.updates.status.working": "Работя…",
+  "plugin.updates.status.finished": "Актуализацията завърши",
+  "plugin.updates.status.failed": "Актуализацията не успя",
+  "plugin.updates.status.upToDateBody": "Системата ви е актуална.",
+  "plugin.updates.status.incomplete": "Актуализацията не завърши. Отворете “Актуализации” за подробности.",
+  "plugin.updates.status.couldNot": "Неуспешно: {label}",
+  "plugin.updates.status.noJobId": "Сървърът не върна идентификатор на задача",
+  "plugin.updates.status.lostConnection": "Връзката със задачата се загуби",
+  "plugin.updates.status.jobDisappeared": "Задачата изчезна",
+
+  "plugin.updates.action.refresh": "Опресни списъците",
+  "plugin.updates.action.installing": "Инсталиране…",
+  "plugin.updates.action.install.one": "Инсталирай {count} актуализация",
+  "plugin.updates.action.install.other": "Инсталирай {count} актуализации",
+  "plugin.updates.action.details": "Подробности",
+  "plugin.updates.action.hideDetails": "Скрий подробностите",
+
+  "plugin.updates.empty.upToDate": "Актуално",
+  "plugin.updates.empty.noUpdates": "Няма чакащи системни актуализации.",
+  "plugin.updates.empty.noActivity": "Още няма активност",
+  "plugin.updates.empty.noActivityBody": "Инсталираните от вас актуализации ще се показват тук.",
+
+  "plugin.updates.ollama.version": " · версия {version}",
+  "plugin.updates.ollama.installed": "Инсталиран{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Не е инсталиран (или не е намерен в PATH)",
+  "plugin.updates.ollama.service": "Услуга: {name}",
+  "plugin.updates.ollama.install": "Инсталирай Ollama",
+  "plugin.updates.ollama.update": "Актуализирай Ollama",
+
+  "plugin.updates.history.system": "система",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Проверката за актуализации не успя",
+  "plugin.updates.notify.serviceUnavailable": "Услугата за актуализации е недостъпна.",
+  "plugin.updates.notify.busy": "Вече се изпълнява актуализация",
+  "plugin.updates.notify.busyBody": "Изчакайте текущата актуализация да завърши.",
+
+  "plugin.updates.dialog.installTitle": "Инсталиране на актуализации",
+  "plugin.updates.dialog.installRights.one": "Инсталирането на {count} актуализация изисква администраторски права.",
+  "plugin.updates.dialog.installRights.other": "Инсталирането на {count} актуализации изисква администраторски права.",
+  "plugin.updates.dialog.refreshRights": "Опресняването на метаданните на пакетите (напр. {cmd}) изисква администраторски права.",
+  "plugin.updates.dialog.ollamaMessage": "Изпълнява официалния инсталатор. Ollama се спира по време на актуализацията и остава спрян (рестартирането му по средата на сесията може да блокира GPU); стартирайте го отново или рестартирайте, за да използвате новата версия.",
+  "plugin.updates.dialog.passwordField": "Администраторска парола",
+  "plugin.updates.dialog.passwordPlaceholder": "парола за sudo",
+  "plugin.updates.dialog.passwordHint": "Използва се веднъж за изпълнение на командата със sudo. Не се запазва.",
+  "plugin.updates.dialog.cancel": "Отказ",
+  "plugin.updates.dialog.continue": "Продължи",
+
+  "plugin.updates.label.installing": "Инсталиране на актуализации",
+  "plugin.updates.label.refreshing": "Опресняване на списъците",
+  "plugin.updates.label.updatingOllama": "Актуализиране на Ollama",
+
+  "plugin.updates.hud.available.one": "{count} налична актуализация",
+  "plugin.updates.hud.available.other": "{count} налични актуализации",
+  "plugin.updates.hud.upToDate": "Системата е актуална",
+  "plugin.updates.hud.notifyTitle": "Налични актуализации",
+  "plugin.updates.hud.notifyBody.one": "{count} актуализация е готова за инсталиране",
+  "plugin.updates.hud.notifyBody.other": "{count} актуализации са готови за инсталиране"
+}

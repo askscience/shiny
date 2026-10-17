@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Tikras Linux terminalas programoje — prisijungimo apvalkalas per PTY atskirame lange",
+  "plugin.terminal.meta.summary": "Terminalas: tikras apvalkalas per PTY, atvaizduojamas su xterm.js",
+  "plugin.terminal.meta.category": "Sistema",
+
+  "plugin.terminal.tab.label": "Terminalas {n}",
+  "plugin.terminal.tab.new": "Nauja kortelė",
+  "plugin.terminal.tab.close": "Uždaryti {name}",
+  "plugin.terminal.tabs.label": "Terminalo kortelės",
+
+  "plugin.terminal.status.starting": "paleidžiamas terminalas…",
+  "plugin.terminal.status.connecting": "jungiamasi…",
+  "plugin.terminal.status.reconnecting": "jungiamasi iš naujo…",
+  "plugin.terminal.status.connected": "prisijungta",
+  "plugin.terminal.status.startFailed": "nepavyko paleisti apvalkalo",
+  "plugin.terminal.status.expired": "seansas baigėsi — prisijunkite iš naujo",
+  "plugin.terminal.status.xtermFailed": "nepavyko įkelti xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminalas: ne daugiau kaip {count} kortelė",
+  "plugin.terminal.toast.tabLimit.few": "Terminalas: ne daugiau kaip {count} kortelės",
+  "plugin.terminal.toast.tabLimit.many": "Terminalas: ne daugiau kaip {count} kortelių",
+  "plugin.terminal.toast.tabLimit.other": "Terminalas: ne daugiau kaip {count} kortelės",
+  "plugin.terminal.toast.startFailed": "Terminalas: nepavyko paleisti apvalkalo",
+  "plugin.terminal.toast.xtermFailed": "Terminalas: nepavyko įkelti xterm.js",
+  "plugin.terminal.toast.clipboardUnavailable": "Iškarpinė nepasiekiama",
+
+  "plugin.terminal.ctx.copy": "Kopijuoti",
+  "plugin.terminal.ctx.paste": "Įklijuoti",
+  "plugin.terminal.ctx.clearScrollback": "Išvalyti slinkties istoriją",
+  "plugin.terminal.ctx.closeTab": "Uždaryti kortelę"
+}

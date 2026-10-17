@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Kontrolli ja paigalda süsteemi + Ollama uuendusi kõikides peamistes Linuxi distributsioonides",
+  "plugin.updates.meta.summary": "Uuendused: üks aken (ja HUD-i märgis) süsteemi ja Ollama uuenduste jaoks",
+  "plugin.updates.meta.category": "Süsteem",
+
+  "plugin.updates.tab.updates": "Uuendused",
+  "plugin.updates.tab.history": "Ajalugu",
+
+  "plugin.updates.toolbar.sections": "Jaotised",
+  "plugin.updates.toolbar.check": "Kontrolli uuendusi",
+
+  "plugin.updates.status.checking": "Uuenduste kontrollimine…",
+  "plugin.updates.status.thisSystem": "see süsteem",
+  "plugin.updates.status.unavailableOnSystem": "Uuendused pole selles süsteemis saadaval",
+  "plugin.updates.status.unavailable": "Uuendused pole saadaval",
+  "plugin.updates.status.upToDate": "Kõik on ajakohased · {where}",
+  "plugin.updates.status.available.one": "{count} uuendus saadaval · {where}",
+  "plugin.updates.status.available.other": "{count} uuendust saadaval · {where}",
+  "plugin.updates.status.working": "Töötan…",
+  "plugin.updates.status.finished": "Uuendamine lõpetatud",
+  "plugin.updates.status.failed": "Uuendamine ebaõnnestus",
+  "plugin.updates.status.upToDateBody": "Sinu süsteem on ajakohane.",
+  "plugin.updates.status.incomplete": "Uuendamine ei lõppenud. Üksikasjade saamiseks ava Uuendused.",
+  "plugin.updates.status.couldNot": "Ei õnnestunud: {label}",
+  "plugin.updates.status.noJobId": "Server ei tagastanud töö ID-d",
+  "plugin.updates.status.lostConnection": "Tööühendus katkes",
+  "plugin.updates.status.jobDisappeared": "Töö kadus",
+
+  "plugin.updates.action.refresh": "Värskenda loendeid",
+  "plugin.updates.action.installing": "Paigaldamine…",
+  "plugin.updates.action.install.one": "Paigalda {count} uuendus",
+  "plugin.updates.action.install.other": "Paigalda {count} uuendust",
+  "plugin.updates.action.details": "Üksikasjad",
+  "plugin.updates.action.hideDetails": "Peida üksikasjad",
+
+  "plugin.updates.empty.upToDate": "Ajakohane",
+  "plugin.updates.empty.noUpdates": "Süsteemiuuendusi ei oota.",
+  "plugin.updates.empty.noActivity": "Tegevust veel pole",
+  "plugin.updates.empty.noActivityBody": "Paigaldatud uuendused loetletakse siin.",
+
+  "plugin.updates.ollama.version": " · versioon {version}",
+  "plugin.updates.ollama.installed": "Paigaldatud{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Pole paigaldatud (või ei leidu PATH-is)",
+  "plugin.updates.ollama.service": "Teenus: {name}",
+  "plugin.updates.ollama.install": "Paigalda Ollama",
+  "plugin.updates.ollama.update": "Uuenda Ollama",
+
+  "plugin.updates.history.system": "süsteem",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Uuendusi ei saanud kontrollida",
+  "plugin.updates.notify.serviceUnavailable": "Uuendusteenus pole saadaval.",
+  "plugin.updates.notify.busy": "Uuendamine on juba käimas",
+  "plugin.updates.notify.busyBody": "Oota, kuni praegune uuendamine lõpeb.",
+
+  "plugin.updates.dialog.installTitle": "Paigalda uuendused",
+  "plugin.updates.dialog.installRights.one": "{count} uuenduse paigaldamine nõuab administraatori õigusi.",
+  "plugin.updates.dialog.installRights.other": "{count} uuenduse paigaldamine nõuab administraatori õigusi.",
+  "plugin.updates.dialog.refreshRights": "Paketihalduri metaandmete värskendamine (nt {cmd}) nõuab administraatori õigusi.",
+  "plugin.updates.dialog.ollamaMessage": "Käivitab ametliku paigaldaja. Ollama peatatakse uuendamise ajaks ja jäetakse peatatuks (selle taaskäivitamine seansi keskel võib GPU kinni jooksutada); uue versiooni kasutamiseks käivita see uuesti või taaskäivita arvuti.",
+  "plugin.updates.dialog.passwordField": "Administraatori parool",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo parool",
+  "plugin.updates.dialog.passwordHint": "Kasutatakse üks kord käsu käivitamiseks sudoga. Seda ei salvestata kunagi.",
+  "plugin.updates.dialog.cancel": "Loobu",
+  "plugin.updates.dialog.continue": "Jätka",
+
+  "plugin.updates.label.installing": "Uuenduste paigaldamine",
+  "plugin.updates.label.refreshing": "Loendite värskendamine",
+  "plugin.updates.label.updatingOllama": "Ollama uuendamine",
+
+  "plugin.updates.hud.available.one": "{count} uuendus saadaval",
+  "plugin.updates.hud.available.other": "{count} uuendust saadaval",
+  "plugin.updates.hud.upToDate": "Süsteem on ajakohane",
+  "plugin.updates.hud.notifyTitle": "Uuendused saadaval",
+  "plugin.updates.hud.notifyBody.one": "{count} uuendus on paigaldamiseks valmis",
+  "plugin.updates.hud.notifyBody.other": "{count} uuendust on paigaldamiseks valmis"
+}

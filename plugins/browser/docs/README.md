@@ -123,7 +123,7 @@ drops the stale `browser_history` table.
 | `src/routes.rs` | All 22 handlers, `normalize_input`/`Target`, query helpers, download-dir resolution |
 | `src/tools/mod.rs` | `browser_open`, `browser_search`, `browser_read`, `page_artifact`, `resolve_target` |
 | `src/fetch.rs` | Page → readable text (`text`, `html_to_text`, `ACCEPT_HTML`) |
-| `src/filter.rs` | Server half of the ad-filter engine (`get`, `rules`, `ensure_loaded`, `reload`, `document_blocked`) |
+| `src/filter.rs` | Server half of the ad-filter engine (`get`, `rules`, `extra_filters`, `ensure_loaded`, `reload`, `document_blocked`) |
 | `src/history.rs` | History read/write, schema repair, `HistoryRow`, migration tests |
 | `src/settings.rs` | Per-user settings, `SEARCH_ENGINES`, `search_url` |
 | `src/downloads.rs` | Download upsert/list/remove/clear |

@@ -3,6 +3,7 @@
  *   node web/js/tests/batteryShared.test.mjs
  */
 
+import './helpers/i18n.mjs';   // catalogs, so t() resolves the English labels
 import {
   batteryIconName, batteryLevel, chipLabel, chipPercent, chipStateClass,
   formatDuration, isLow, timeLabel,

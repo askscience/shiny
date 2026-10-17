@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Editor de fotos — ajustes de tono y color, desenfoque, enfoque y viñeta, y estilos de película con un solo toque en la ventana de Imagen",
+  "plugin.image.meta.summary": "Editor de fotos: ajustes y estilos de película",
+  "plugin.image.meta.category": "Multimedia",
+
+  "plugin.image.toolbar.menu": "Menú",
+  "plugin.image.toolbar.fitToggle": "Alternar entre ajustar y tamaño real",
+
+  "plugin.image.dial.brightness": "Brillo",
+  "plugin.image.dial.contrast": "Contraste",
+  "plugin.image.dial.exposure": "Exposición",
+  "plugin.image.dial.vibrance": "Intensidad",
+  "plugin.image.dial.saturation": "Saturación",
+  "plugin.image.dial.blur": "Desenfoque",
+  "plugin.image.dial.sharpen": "Enfoque",
+  "plugin.image.dial.vignette": "Viñeta",
+
+  "plugin.image.oneClick.autoTone": "Tono automático",
+  "plugin.image.oneClick.autoContrast": "Contraste automático",
+  "plugin.image.oneClick.invert": "Invertir",
+  "plugin.image.oneClick.grayscale": "ByN",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Restaurar",
+  "plugin.image.oneClick.revertTitle": "Restaura la imagen original que se subió",
+
+  "plugin.image.empty.title": "No hay ninguna imagen abierta",
+  "plugin.image.empty.body": "Abre una imagen o arrástrala aquí para empezar.",
+  "plugin.image.empty.open": "Abrir imagen",
+
+  "plugin.image.menu.file": "Archivo",
+  "plugin.image.menu.image": "Imagen",
+  "plugin.image.menu.view": "Vista",
+  "plugin.image.menu.open": "Abrir…",
+  "plugin.image.menu.saveCopy": "Guardar una copia…",
+  "plugin.image.menu.delete": "Eliminar la imagen",
+  "plugin.image.menu.rotateLeft": "Girar a la izquierda",
+  "plugin.image.menu.rotateRight": "Girar a la derecha",
+  "plugin.image.menu.flipH": "Voltear horizontalmente",
+  "plugin.image.menu.flipV": "Voltear verticalmente",
+  "plugin.image.menu.revert": "Restaurar el original",
+  "plugin.image.menu.zoomIn": "Acercar",
+  "plugin.image.menu.zoomOut": "Alejar",
+  "plugin.image.menu.fit": "Ajustar",
+  "plugin.image.menu.actualSize": "Tamaño real",
+
+  "plugin.image.ctx.open": "Abrir imagen…",
+
+  "plugin.image.dialog.deleteConfirm": "¿Eliminar \"{title}\"?",
+  "plugin.image.dialog.thisImage": "esta imagen",
+
+  "plugin.image.toast.openFirst": "Abre antes una imagen",
+  "plugin.image.toast.opened": "Se ha abierto {title}",
+  "plugin.image.toast.editFailed": "La edición ha fallado",
+  "plugin.image.toast.operationFailed": "La operación ha fallado",
+  "plugin.image.toast.renderFailed": "No se ha podido representar la imagen",
+  "plugin.image.toast.uploadFailed": "La subida ha fallado",
+  "plugin.image.toast.saveFailed": "Error al guardar",
+  "plugin.image.toast.deleted": "Imagen eliminada",
+  "plugin.image.toast.deleteFailed": "No se ha podido eliminar la imagen",
+  "plugin.image.toast.reverted": "Se ha restaurado a los píxeles originales",
+  "plugin.image.toast.openFailed": "No se ha podido abrir el archivo",
+
+  "plugin.image.error.emptyFile": "ese archivo está vacío",
+  "plugin.image.error.notAnImage": "“{name}” no es una imagen que el editor pueda abrir",
+  "plugin.image.error.unnamedFile": "archivo"
+}

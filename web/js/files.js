@@ -9,6 +9,7 @@
  */
 import { apiFetch } from './api.js';
 import { toast } from '../ui/index.js';
+import { t } from './i18n.js';
 
 /** Sensible default folder per content kind. */
 export const FILES_FOLDER = {
@@ -73,7 +74,9 @@ export async function saveOrDownload(blob, { name, dir = FILES_FOLDER.document, 
   const filename = safeFileName(name);
   const res = await saveToFiles(blob, { name: filename, dir });
   if (res.ok) {
-    toast(app ? `${app} saved to ${res.path}` : `Saved to ${res.path}`, { type: 'ok' });
+    toast(app
+      ? t('files.appSavedTo', { app, path: res.path }, `${app} saved to ${res.path}`)
+      : t('files.savedTo', { path: res.path }, `Saved to ${res.path}`), { type: 'ok' });
     return res.path;
   }
   downloadBlob(blob, filename);

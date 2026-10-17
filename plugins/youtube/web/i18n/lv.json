@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Tagad atskaņo",
+  "plugin.youtube.hero.untitled": "YouTube video",
+  "plugin.youtube.hero.back": "Atpakaļ",
+  "plugin.youtube.hero.backLabel": "Atpakaļ uz YouTube meklēšanu",
+  "plugin.youtube.player.title": "YouTube atskaņotājs",
+
+  "plugin.youtube.search.placeholder": "Meklēt YouTube…",
+
+  "plugin.youtube.grid.upNext": "Tālāk",
+  "plugin.youtube.grid.becauseYouWatched": "Tālāk · jo skatījāties “{title}”",
+  "plugin.youtube.grid.forYou": "Jums",
+  "plugin.youtube.grid.showAll": "Rādīt visu: {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Nav atrasts neviens video",
+  "plugin.youtube.empty.noMatch": "Nekas neatbilst “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Meklēt YouTube",
+  "plugin.youtube.empty.searchBody": "Rakstiet augšā — vai palūdziet MI atrast video.",
+  "plugin.youtube.empty.unavailableTitle": "Meklēšana nav pieejama",
+  "plugin.youtube.empty.retry": "Mēģiniet vēlreiz pēc brīža",
+
+  "plugin.youtube.category.watched": "Skatīts {count}×",
+  "plugin.youtube.category.generic": "Kategorija",
+
+  "plugin.youtube.menu.search": "Meklēt",
+  "plugin.youtube.menu.home": "Sākums",
+  "plugin.youtube.menu.refresh": "Atjaunināt rezultātus",
+  "plugin.youtube.menu.back": "Atpakaļ",
+
+  "plugin.youtube.meta.description": "Skatieties YouTube video YouTube logā — MI var meklēt YouTube un atskaņot video",
+  "plugin.youtube.meta.summary": "YouTube: MI meklēšana un atskaņošana YouTube logā",
+  "plugin.youtube.meta.category": "Mediji"
+}

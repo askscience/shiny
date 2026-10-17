@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Urejevalnik fotografij — prilagajanje tonov in barv, zameglitev/ostrenje/vinjeta in filmski videzi z enim dotikom v oknu Slika",
+  "plugin.image.meta.summary": "Urejevalnik fotografij: prilagoditve in filmski videzi",
+  "plugin.image.meta.category": "Predstavnost",
+
+  "plugin.image.toolbar.menu": "Meni",
+  "plugin.image.toolbar.fitToggle": "Preklopi med prilagoditvijo in dejansko velikostjo",
+
+  "plugin.image.dial.brightness": "Svetlost",
+  "plugin.image.dial.contrast": "Kontrast",
+  "plugin.image.dial.exposure": "Osvetlitev",
+  "plugin.image.dial.vibrance": "Živahnost",
+  "plugin.image.dial.saturation": "Nasičenost",
+  "plugin.image.dial.blur": "Zameglitev",
+  "plugin.image.dial.sharpen": "Ostrenje",
+  "plugin.image.dial.vignette": "Vinjeta",
+
+  "plugin.image.oneClick.autoTone": "Samodejni ton",
+  "plugin.image.oneClick.autoContrast": "Samodejni kontrast",
+  "plugin.image.oneClick.invert": "Negativ",
+  "plugin.image.oneClick.grayscale": "ČB",
+  "plugin.image.oneClick.sepia": "Sepija",
+  "plugin.image.oneClick.revert": "Povrni",
+  "plugin.image.oneClick.revertTitle": "Obnovi prvotno naloženo sliko",
+
+  "plugin.image.empty.title": "Ni odprte slike",
+  "plugin.image.empty.body": "Odprite ali spustite sliko za začetek.",
+  "plugin.image.empty.open": "Odpri sliko",
+
+  "plugin.image.menu.file": "Datoteka",
+  "plugin.image.menu.image": "Slika",
+  "plugin.image.menu.view": "Pogled",
+  "plugin.image.menu.open": "Odpri…",
+  "plugin.image.menu.saveCopy": "Shrani kopijo…",
+  "plugin.image.menu.delete": "Izbriši sliko",
+  "plugin.image.menu.rotateLeft": "Zavrti v levo",
+  "plugin.image.menu.rotateRight": "Zavrti v desno",
+  "plugin.image.menu.flipH": "Zrcali vodoravno",
+  "plugin.image.menu.flipV": "Zrcali navpično",
+  "plugin.image.menu.revert": "Povrni na izvirnik",
+  "plugin.image.menu.zoomIn": "Povečaj",
+  "plugin.image.menu.zoomOut": "Pomanjšaj",
+  "plugin.image.menu.fit": "Prilagodi",
+  "plugin.image.menu.actualSize": "Dejanska velikost",
+
+  "plugin.image.ctx.open": "Odpri sliko…",
+
+  "plugin.image.dialog.deleteConfirm": "Izbrišem \"{title}\"?",
+  "plugin.image.dialog.thisImage": "to sliko",
+
+  "plugin.image.toast.openFirst": "Najprej odprite sliko",
+  "plugin.image.toast.opened": "Odprto {title}",
+  "plugin.image.toast.editFailed": "Urejanje ni uspelo",
+  "plugin.image.toast.operationFailed": "Dejanje ni uspelo",
+  "plugin.image.toast.renderFailed": "Slike ni bilo mogoče upodobiti",
+  "plugin.image.toast.uploadFailed": "Nalaganje ni uspelo",
+  "plugin.image.toast.saveFailed": "Shranjevanje ni uspelo",
+  "plugin.image.toast.deleted": "Slika izbrisana",
+  "plugin.image.toast.deleteFailed": "Slike ni bilo mogoče izbrisati",
+  "plugin.image.toast.reverted": "Povrnjeno na izvirne slikovne pike",
+  "plugin.image.toast.openFailed": "Datoteke ni bilo mogoče odpreti",
+
+  "plugin.image.error.emptyFile": "ta datoteka je prazna",
+  "plugin.image.error.notAnImage": "“{name}” ni slika, ki bi jo urejevalnik lahko odprl",
+  "plugin.image.error.unnamedFile": "datoteka"
+}

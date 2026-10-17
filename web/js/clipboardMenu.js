@@ -22,6 +22,7 @@ import { history, removeHistoryEntry, clearHistory, copyText } from './clipboard
 import { previewText, relativeTime } from './clipboardShared.js';
 import { notifyMenuChange } from './menuState.js';
 import { getFocus } from './desktop.js';
+import { t, tp } from './i18n.js';
 
 let popup = null;
 let bodyEl = null;
@@ -104,7 +105,7 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup clipboard-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Clipboard history');
+  popup.setAttribute('aria-label', t('hud.clipboardHistory'));
 
   const head = document.createElement('div');
   head.className = 'clipboard-head';
@@ -114,14 +115,14 @@ function ensurePopup() {
   title.className = 'clipboard-head-title';
   title.appendChild(icon('ui/clipboard', { size: 15 }));
   const label = document.createElement('span');
-  label.textContent = 'Clipboard';
+  label.textContent = t('hud.clipboard');
   title.appendChild(label);
   headCountEl = document.createElement('div');
   headCountEl.className = 'clipboard-head-hint';
   meta.append(title, headCountEl);
   clearBtn = iconButton({
     icon: 'ui/trash',
-    label: 'Clear the clipboard history',
+    label: t('clip.clear'),
     variant: 'quiet',
     size: 'sm',
     onClick: () => clearHistory(),
@@ -142,7 +143,8 @@ function ensurePopup() {
 /* ── Rendering ─────────────────────────────────────────────── */
 
 function sourceLabel(source) {
-  if (!source || source === 'app') return 'Desktop';
+  if (!source || source === 'app') return t('clip.sourceDesktop');
+  // Anything else is a plugin or app name — a proper noun, shown as-is.
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
@@ -151,7 +153,7 @@ function render() {
   const rows = history();
 
   headCountEl.textContent = rows.length
-    ? `${rows.length} item${rows.length === 1 ? '' : 's'} · Ctrl+Shift+V`
+    ? tp('clip.count', rows.length, { shortcut: 'Ctrl+Shift+V' })
     : 'Ctrl+Shift+V';
   clearBtn.disabled = !rows.length;
 
@@ -159,8 +161,8 @@ function render() {
   if (!rows.length) {
     bodyEl.appendChild(emptyState({
       icon: 'ui/clipboard',
-      title: 'Nothing copied yet',
-      body: 'Text you copy anywhere in the app lands here.',
+      title: t('clip.nothing'),
+      body: t('clip.nothingBody'),
     }));
     return;
   }
@@ -170,7 +172,7 @@ function render() {
 function buildRow(entry, index) {
   const remove = iconButton({
     icon: 'ui/close',
-    label: 'Remove from history',
+    label: t('clip.removeEntry'),
     variant: 'quiet',
     size: 'sm',
     onClick: (event) => {

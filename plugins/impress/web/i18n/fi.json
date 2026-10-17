@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Esitykset",
+  "plugin.impress.toolbar.titlePlaceholder": "Nimetön",
+  "plugin.impress.toolbar.theme": "Teema",
+  "plugin.impress.toolbar.present": "Esitä",
+  "plugin.impress.toolbar.newDeck": "Uusi esitys",
+  "plugin.impress.toolbar.importOdp": "Tuo .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Tallenna Asiakirjat-kansioon",
+  "plugin.impress.toolbar.saveNow": "Tallenna nyt",
+  "plugin.impress.toolbar.deleteDeck": "Poista esitys",
+
+  "plugin.impress.menu.empty": "Ei vielä esityksiä",
+  "plugin.impress.menu.newDeck": "Uusi esitys",
+  "plugin.impress.menu.importOdp": "Tuo .odp",
+  "plugin.impress.menu.saveToDocuments": "Tallenna Asiakirjat-kansioon",
+  "plugin.impress.menu.deleteDeck": "Poista esitys",
+
+  "plugin.impress.ctx.newDeck": "Uusi esitys",
+  "plugin.impress.ctx.addSlide": "Lisää dia",
+  "plugin.impress.ctx.saveNow": "Tallenna nyt",
+  "plugin.impress.ctx.present": "Esitä",
+  "plugin.impress.ctx.stopPresenting": "Lopeta esitys",
+  "plugin.impress.ctx.deleteDeck": "Poista esitys",
+
+  "plugin.impress.status.saving": "Tallennetaan…",
+  "plugin.impress.status.unsaved": "Tallentamattomia muutoksia",
+  "plugin.impress.status.saved.one": "Tallennettu {time} · {count} dia",
+  "plugin.impress.status.saved.other": "Tallennettu {time} · {count} diaa",
+
+  "plugin.impress.empty.noDeck": "Ei esitystä",
+  "plugin.impress.empty.noDeckBody": "Luo esitys tai pyydä tekoälyä rakentamaan se",
+
+  "plugin.impress.inspector.layout": "Asettelu",
+  "plugin.impress.inspector.transition": "Siirtymä",
+  "plugin.impress.inspector.bullets": "Luettelomerkit",
+  "plugin.impress.inspector.speakerNotes": "Puhujan muistiinpanot",
+  "plugin.impress.inspector.hint": "Napsauta dian tekstiä muokataksesi sitä suoraan.",
+  "plugin.impress.inspector.applyAll": "Käytä tätä siirtymää ja luettelomerkkien rakentumista kaikkiin dioihin",
+  "plugin.impress.inspector.applyAllLabel": "Käytä kaikkiin dioihin",
+
+  "plugin.impress.ops.addSlide": "Lisää dia",
+  "plugin.impress.ops.moveUp": "Siirrä ylös",
+  "plugin.impress.ops.moveDown": "Siirrä alas",
+  "plugin.impress.ops.deleteSlide": "Poista dia",
+
+  "plugin.impress.transition.none": "Ei mitään",
+  "plugin.impress.transition.fade": "Häivytys",
+  "plugin.impress.transition.slide": "Liuku",
+  "plugin.impress.transition.push": "Työntö",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "Kaikki kerralla",
+  "plugin.impress.reveal.bullets": "Yksi kerrallaan",
+
+  "plugin.impress.slide.addText": "Lisää teksti",
+  "plugin.impress.slide.addTitle": "Lisää otsikko",
+  "plugin.impress.slide.addSubtitle": "Lisää alaotsikko",
+  "plugin.impress.slide.attribution": "Tekijätiedot",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Takaisin editoriin",
+  "plugin.impress.present.fullScreen": "Koko näyttö",
+  "plugin.impress.present.exitFullScreen": "Poistu koko näytöstä",
+  "plugin.impress.present.blocked": "Selain esti koko näytön",
+
+  "plugin.impress.dialog.deleteDeck": "Poistetaanko \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Tallennus epäonnistui",
+  "plugin.impress.toast.openFailed": "Esitystä ei voitu avata",
+  "plugin.impress.toast.createFailed": "Esitystä ei voitu luoda",
+  "plugin.impress.toast.deleteFailed": "Esitystä ei voitu poistaa",
+  "plugin.impress.toast.imported": "Tuotu {name}",
+  "plugin.impress.toast.importFailed": "Tuonti epäonnistui — onko tämä kelvollinen .odp-tiedosto?",
+  "plugin.impress.toast.openFileFailed": "Tiedostoa ei voitu avata",
+
+  "plugin.impress.meta.description": "Esitysten rakentaja — esitykset tallennetaan dioina ja viedään avoimina .odp-tiedostoina",
+  "plugin.impress.meta.summary": "Impress: rakenna, muokkaa ja esitä OpenDocument (.odp) -dioja",
+  "plugin.impress.meta.category": "Toimisto"
+}

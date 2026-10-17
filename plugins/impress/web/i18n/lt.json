@@ -1,0 +1,81 @@
+{
+  "plugin.impress.toolbar.presentations": "Pateiktys",
+  "plugin.impress.toolbar.titlePlaceholder": "Be pavadinimo",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Pristatyti",
+  "plugin.impress.toolbar.newDeck": "Nauja pateiktis",
+  "plugin.impress.toolbar.importOdp": "Importuoti .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Išsaugoti į Dokumentus",
+  "plugin.impress.toolbar.saveNow": "Išsaugoti dabar",
+  "plugin.impress.toolbar.deleteDeck": "Ištrinti pateiktį",
+
+  "plugin.impress.menu.empty": "Dar nėra pateikčių",
+  "plugin.impress.menu.newDeck": "Nauja pateiktis",
+  "plugin.impress.menu.importOdp": "Importuoti .odp",
+  "plugin.impress.menu.saveToDocuments": "Išsaugoti į Dokumentus",
+  "plugin.impress.menu.deleteDeck": "Ištrinti pateiktį",
+
+  "plugin.impress.ctx.newDeck": "Nauja pateiktis",
+  "plugin.impress.ctx.addSlide": "Pridėti skaidrę",
+  "plugin.impress.ctx.saveNow": "Išsaugoti dabar",
+  "plugin.impress.ctx.present": "Pristatyti",
+  "plugin.impress.ctx.stopPresenting": "Baigti pristatymą",
+  "plugin.impress.ctx.deleteDeck": "Ištrinti pateiktį",
+
+  "plugin.impress.status.saving": "Išsaugoma…",
+  "plugin.impress.status.unsaved": "Neišsaugoti pakeitimai",
+  "plugin.impress.status.saved.one": "Išsaugota {time} · {count} skaidrė",
+  "plugin.impress.status.saved.few": "Išsaugota {time} · {count} skaidrės",
+  "plugin.impress.status.saved.many": "Išsaugota {time} · {count} skaidrių",
+  "plugin.impress.status.saved.other": "Išsaugota {time} · {count} skaidrės",
+
+  "plugin.impress.empty.noDeck": "Nėra pateikties",
+  "plugin.impress.empty.noDeckBody": "Sukurkite ją arba paprašykite DI sudėlioti pateiktį",
+
+  "plugin.impress.inspector.layout": "Išdėstymas",
+  "plugin.impress.inspector.transition": "Perėjimas",
+  "plugin.impress.inspector.bullets": "Ženkleliai",
+  "plugin.impress.inspector.speakerNotes": "Pranešėjo pastabos",
+  "plugin.impress.inspector.hint": "Spustelėkite bet kurį skaidrės tekstą, kad galėtumėte jį redaguoti tiesiogiai.",
+  "plugin.impress.inspector.applyAll": "Taikyti šį perėjimą ir ženklelių atskleidimą visoms skaidrėms",
+  "plugin.impress.inspector.applyAllLabel": "Taikyti visoms skaidrėms",
+
+  "plugin.impress.ops.addSlide": "Pridėti skaidrę",
+  "plugin.impress.ops.moveUp": "Kelti aukštyn",
+  "plugin.impress.ops.moveDown": "Kelti žemyn",
+  "plugin.impress.ops.deleteSlide": "Ištrinti skaidrę",
+
+  "plugin.impress.transition.none": "Nėra",
+  "plugin.impress.transition.fade": "Išblukimas",
+  "plugin.impress.transition.slide": "Slydimas",
+  "plugin.impress.transition.push": "Stūmimas",
+  "plugin.impress.transition.zoom": "Priartinimas",
+
+  "plugin.impress.reveal.all": "Visi iš karto",
+  "plugin.impress.reveal.bullets": "Po vieną",
+
+  "plugin.impress.slide.addText": "Pridėti tekstą",
+  "plugin.impress.slide.addTitle": "Pridėti pavadinimą",
+  "plugin.impress.slide.addSubtitle": "Pridėti paantraštę",
+  "plugin.impress.slide.attribution": "Autorystė",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Grįžti į rengyklę",
+  "plugin.impress.present.fullScreen": "Visas ekranas",
+  "plugin.impress.present.exitFullScreen": "Išeiti iš viso ekrano",
+  "plugin.impress.present.blocked": "Naršyklė užblokavo viso ekrano režimą",
+
+  "plugin.impress.dialog.deleteDeck": "Ištrinti “{title}”?",
+
+  "plugin.impress.toast.saveFailed": "Išsaugoti nepavyko",
+  "plugin.impress.toast.openFailed": "Nepavyko atidaryti pateikties",
+  "plugin.impress.toast.createFailed": "Nepavyko sukurti pateikties",
+  "plugin.impress.toast.deleteFailed": "Nepavyko ištrinti pateikties",
+  "plugin.impress.toast.imported": "Importuota {name}",
+  "plugin.impress.toast.importFailed": "Importavimas nepavyko — ar tai galiojantis .odp failas?",
+  "plugin.impress.toast.openFileFailed": "Nepavyko atidaryti failo",
+
+  "plugin.impress.meta.description": "Pateikčių kūrimo įrankis — pateiktys saugomos kaip skaidrės ir eksportuojamos kaip atviri .odp failai",
+  "plugin.impress.meta.summary": "Impress: kurkite, redaguokite ir pristatykite OpenDocument (.odp) skaidrių pateiktis",
+  "plugin.impress.meta.category": "Biuras"
+}

@@ -16,6 +16,7 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 import { listFonts } from '../../js/fonts.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
@@ -41,9 +42,9 @@ let docMenuPopup = null;
 let docMenuOpen = false;
 
 const EXEC_COMMANDS = [
-  { key: 'bold', command: 'bold', icon: 'ui/bold', label: 'Bold' },
-  { key: 'italic', command: 'italic', icon: 'ui/italic', label: 'Italic' },
-  { key: 'underline', command: 'underline', icon: 'ui/underline', label: 'Underline' },
+  { key: 'bold', command: 'bold', icon: 'ui/bold', labelKey: 'plugin.word.toolbar.bold' },
+  { key: 'italic', command: 'italic', icon: 'ui/italic', labelKey: 'plugin.word.toolbar.italic' },
+  { key: 'underline', command: 'underline', icon: 'ui/underline', labelKey: 'plugin.word.toolbar.underline' },
 ];
 
 /* ── API ────────────────────────────────────────────────────── */
@@ -85,16 +86,16 @@ async function deleteDoc(id) {
 function setStatus(mode) {
   if (!statusEl) return;
   const now = new Date();
-  const t = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (mode === 'saving') {
-    statusEl.textContent = 'Saving…';
+    statusEl.textContent = t('plugin.word.status.saving', null, 'Saving…');
     saveDot?.classList.add('is-active');
   } else if (mode === 'dirty') {
-    statusEl.textContent = 'Unsaved changes';
+    statusEl.textContent = t('plugin.word.status.unsaved', null, 'Unsaved changes');
     saveDot?.classList.add('is-active');
   } else {
     const words = wordCount();
-    statusEl.textContent = `Saved ${t} · ${words} ${words === 1 ? 'word' : 'words'}`;
+    statusEl.textContent = tp('plugin.word.status.saved', words, { time }, `Saved ${time} · ${words} words`);
     saveDot?.classList.remove('is-active');
   }
 }
@@ -145,7 +146,7 @@ async function persist() {
   } catch (e) {
     dirty = true;
     setStatus('dirty');
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
@@ -162,7 +163,7 @@ async function openDoc(doc) {
     setStatus('saved');
     updateGlow();
   } catch (e) {
-    toast(e.message || 'Could not open document', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.openFailed', null, 'Could not open document'), { type: 'error' });
   }
 }
 
@@ -178,13 +179,13 @@ async function newDocument() {
     await refreshDocs();
     await openDoc(created);
   } catch (e) {
-    toast(e.message || 'Could not create document', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.createFailed', null, 'Could not create document'), { type: 'error' });
   }
 }
 
 async function removeCurrent() {
   if (!currentDoc) return;
-  if (!window.confirm(`Delete "${currentDoc.title}"?`)) return;
+  if (!window.confirm(t('plugin.word.dialog.deleteDoc', { title: currentDoc.title }, `Delete "${currentDoc.title}"?`))) return;
   try {
     await deleteDoc(currentDoc.id);
     currentDoc = null;
@@ -192,7 +193,7 @@ async function removeCurrent() {
     await openNewest();
     updateGlow();
   } catch (e) {
-    toast(e.message || 'Could not delete document', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.deleteFailed', null, 'Could not delete document'), { type: 'error' });
   }
 }
 
@@ -237,7 +238,7 @@ function renderDocMenuItems() {
   if (!docs.length) {
     const empty = document.createElement('div');
     empty.className = 'word-doc-menu-empty';
-    empty.textContent = 'No documents yet';
+    empty.textContent = t('plugin.word.menu.empty', null, 'No documents yet');
     docMenuPopup.appendChild(empty);
   } else {
     docs.forEach((doc) => {
@@ -290,10 +291,10 @@ function renderDocMenuItems() {
     });
     foot.appendChild(item);
   };
-  footItem('ui/plus', 'New document', false, () => void newDocument());
-  footItem('ui/download', 'Import .odt', false, pickOdtFile);
-  footItem('ui/save', 'Save to Documents', false, () => void exportCurrent());
-  footItem('ui/trash', 'Delete document', true, () => void removeCurrent());
+  footItem('ui/plus', t('plugin.word.menu.newDocument', null, 'New document'), false, () => void newDocument());
+  footItem('ui/download', t('plugin.word.menu.importOdt', null, 'Import .odt'), false, pickOdtFile);
+  footItem('ui/save', t('plugin.word.menu.saveToDocuments', null, 'Save to Documents'), false, () => void exportCurrent());
+  footItem('ui/trash', t('plugin.word.menu.deleteDocument', null, 'Delete document'), true, () => void removeCurrent());
   docMenuPopup.appendChild(foot);
 }
 
@@ -475,11 +476,11 @@ async function importOdt(file) {
   form.append('file', file);
   try {
     await apiFetch('/api/documents/import', { method: 'POST', body: form });
-    toast(`Imported ${file.name}`, { type: 'info' });
+    toast(t('plugin.word.toast.imported', { name: file.name }, `Imported ${file.name}`), { type: 'info' });
     await refreshDocs();
     await openNewest();
   } catch (e) {
-    toast(e.message || 'Import failed — is this a valid .odt file?', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.importFailed', null, 'Import failed — is this a valid .odt file?'), { type: 'error' });
   }
 }
 
@@ -492,7 +493,7 @@ async function exportCurrent() {
     );
     await saveOrDownload(blob, { name: `${currentDoc.title || 'document'}.odt`, dir: 'Documents', app: 'Word' });
   } catch (e) {
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
@@ -525,7 +526,7 @@ export function mountWordTile() {
   docMenuBtn.className = 'word-doc-btn';
   docMenuBtn.setAttribute('aria-haspopup', 'menu');
   docMenuBtn.setAttribute('aria-expanded', 'false');
-  docMenuBtn.title = 'Documents';
+  docMenuBtn.title = t('plugin.word.toolbar.documents', null, 'Documents');
   const docIcon = document.createElement('span');
   docIcon.className = 'word-doc-btn-icon';
   docMenuBtn.appendChild(docIcon);
@@ -539,7 +540,7 @@ export function mountWordTile() {
   titleInput = document.createElement('input');
   titleInput.className = 'word-title';
   titleInput.type = 'text';
-  titleInput.placeholder = 'Untitled';
+  titleInput.placeholder = t('plugin.word.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
   titleInput.autocomplete = 'off';
   titleInput.addEventListener('change', () => {
@@ -550,22 +551,22 @@ export function mountWordTile() {
   // export, (save), delete.
   const newBtn = button({ icon: 'ui/plus', variant: 'ghost', onClick: () => void newDocument() });
   newBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  newBtn.title = 'New document';
-  newBtn.setAttribute('aria-label', 'New document');
+  newBtn.title = t('plugin.word.toolbar.newDocument', null, 'New document');
+  newBtn.setAttribute('aria-label', t('plugin.word.toolbar.newDocument', null, 'New document'));
   const importBtn = button({ icon: 'ui/download', variant: 'ghost', onClick: pickOdtFile });
   importBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  importBtn.title = 'Import .odt';
-  importBtn.setAttribute('aria-label', 'Import .odt');
+  importBtn.title = t('plugin.word.toolbar.importOdt', null, 'Import .odt');
+  importBtn.setAttribute('aria-label', t('plugin.word.toolbar.importOdt', null, 'Import .odt'));
   const exportBtn = button({ icon: 'ui/upload', variant: 'ghost', onClick: () => void exportCurrent() });
   exportBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  exportBtn.title = 'Save to Documents';
-  exportBtn.setAttribute('aria-label', 'Save to Documents');
-  const saveBtn = toolbarButton('save', 'ui/save', 'Save now', () => void persist());
+  exportBtn.title = t('plugin.word.toolbar.saveToDocuments', null, 'Save to Documents');
+  exportBtn.setAttribute('aria-label', t('plugin.word.toolbar.saveToDocuments', null, 'Save to Documents'));
+  const saveBtn = toolbarButton('save', 'ui/save', t('plugin.word.toolbar.saveNow', null, 'Save now'), () => void persist());
   saveBtn.classList.add('word-tool--secondary');
   const delBtn = button({ icon: 'ui/trash', variant: 'ghost', onClick: () => void removeCurrent() });
   delBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--danger', 'word-tool--secondary');
-  delBtn.title = 'Delete document';
-  delBtn.setAttribute('aria-label', 'Delete document');
+  delBtn.title = t('plugin.word.toolbar.deleteDocument', null, 'Delete document');
+  delBtn.setAttribute('aria-label', t('plugin.word.toolbar.deleteDocument', null, 'Delete document'));
 
   saveDot = document.createElement('span');
   saveDot.className = 'word-save-dot';
@@ -573,12 +574,13 @@ export function mountWordTile() {
 
   // Font picker — populated from the host's installed fonts.
   fontSelect = select({
-    options: [{ value: '', label: 'Font' }],
+    options: [{ value: '', label: t('plugin.word.toolbar.font', null, 'Font') }],
     onChange: onFontChange,
   });
   fontSelect.classList.add('word-font');
-  fontSelect.select.title = 'Font — applies to the selection, or the whole document when nothing is selected';
-  fontSelect.select.setAttribute('aria-label', 'Font');
+  fontSelect.select.title = t('plugin.word.toolbar.fontHint', null,
+    'Font — applies to the selection, or the whole document when nothing is selected');
+  fontSelect.select.setAttribute('aria-label', t('plugin.word.toolbar.font', null, 'Font'));
   void listFonts().then((families) => {
     fontSelect?.setOptions(families.map((f) => ({ value: f, label: f })));
     syncFontSelect();
@@ -588,11 +590,11 @@ export function mountWordTile() {
   bar.append(
     docMenuBtn,
     titleInput,
-    toolbarButton('bold', 'ui/bold', 'Bold', () => exec('bold')),
-    toolbarButton('italic', 'ui/italic', 'Italic', () => exec('italic')),
-    toolbarButton('underline', 'ui/underline', 'Underline', () => exec('underline')),
-    toolbarButton('heading', 'ui/heading', 'Heading', toggleHeading),
-    toolbarButton('list', 'ui/list', 'Bullet list', toggleList),
+    toolbarButton('bold', 'ui/bold', t('plugin.word.toolbar.bold', null, 'Bold'), () => exec('bold')),
+    toolbarButton('italic', 'ui/italic', t('plugin.word.toolbar.italic', null, 'Italic'), () => exec('italic')),
+    toolbarButton('underline', 'ui/underline', t('plugin.word.toolbar.underline', null, 'Underline'), () => exec('underline')),
+    toolbarButton('heading', 'ui/heading', t('plugin.word.toolbar.heading', null, 'Heading'), toggleHeading),
+    toolbarButton('list', 'ui/list', t('plugin.word.toolbar.bulletList', null, 'Bullet list'), toggleList),
     fontSelect,
     newBtn, importBtn, exportBtn, saveBtn, delBtn, saveDot,
   );
@@ -688,7 +690,7 @@ async function importFromFiles(path, name) {
     const file = await fileFromHome(path, name, 'application/vnd.oasis.opendocument.text');
     await importOdt(file);
   } catch (e) {
-    toast(e.message || 'Could not open file', { type: 'error' });
+    toast(e.message || t('plugin.word.toast.openFileFailed', null, 'Could not open file'), { type: 'error' });
   }
 }
 
@@ -711,16 +713,16 @@ export function wireWordEvents() {
 export function wordContextMenu() {
   const hasDoc = !!currentDoc;
   return [
-    { type: 'item', label: 'New document', icon: 'ui/plus', onClick: () => void newDocument() },
-    { type: 'item', label: 'Save now', icon: 'ui/save', disabled: !hasDoc, onClick: () => void persist() },
-    { type: 'item', label: 'Save to Documents', icon: 'ui/save', disabled: !hasDoc, onClick: () => void exportCurrent() },
+    { type: 'item', label: t('plugin.word.ctx.newDocument', null, 'New document'), icon: 'ui/plus', onClick: () => void newDocument() },
+    { type: 'item', label: t('plugin.word.ctx.saveNow', null, 'Save now'), icon: 'ui/save', disabled: !hasDoc, onClick: () => void persist() },
+    { type: 'item', label: t('plugin.word.ctx.saveToDocuments', null, 'Save to Documents'), icon: 'ui/save', disabled: !hasDoc, onClick: () => void exportCurrent() },
     { type: 'separator' },
-    { type: 'item', label: 'Bold', icon: 'ui/bold', disabled: !hasDoc, onClick: () => exec('bold') },
-    { type: 'item', label: 'Italic', icon: 'ui/italic', disabled: !hasDoc, onClick: () => exec('italic') },
-    { type: 'item', label: 'Heading', icon: 'ui/heading', disabled: !hasDoc, onClick: () => toggleHeading() },
-    { type: 'item', label: 'List', icon: 'ui/list', disabled: !hasDoc, onClick: () => toggleList() },
+    { type: 'item', label: t('plugin.word.ctx.bold', null, 'Bold'), icon: 'ui/bold', disabled: !hasDoc, onClick: () => exec('bold') },
+    { type: 'item', label: t('plugin.word.ctx.italic', null, 'Italic'), icon: 'ui/italic', disabled: !hasDoc, onClick: () => exec('italic') },
+    { type: 'item', label: t('plugin.word.ctx.heading', null, 'Heading'), icon: 'ui/heading', disabled: !hasDoc, onClick: () => toggleHeading() },
+    { type: 'item', label: t('plugin.word.ctx.list', null, 'List'), icon: 'ui/list', disabled: !hasDoc, onClick: () => toggleList() },
     { type: 'separator' },
-    { type: 'item', label: 'Delete document', icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void removeCurrent() },
+    { type: 'item', label: t('plugin.word.ctx.deleteDocument', null, 'Delete document'), icon: 'ui/trash', danger: true, disabled: !hasDoc, onClick: () => void removeCurrent() },
   ];
 }
 

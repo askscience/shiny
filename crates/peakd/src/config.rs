@@ -19,6 +19,10 @@ pub struct PeakdConfig {
     /// App mode: no address bar, no chrome — a kiosk window for PEAK'D! itself.
     pub app_mode: bool,
     pub window_title: String,
+    /// Interface language for the shell's own strings (file dialogs, name
+    /// filters): `--lang`, else `PEAKD_LANG`, else `LC_ALL`/`LC_MESSAGES`/`LANG`,
+    /// else English. The web UI follows the per-user `ui.locale` preference.
+    pub lang: String,
     pub width: f64,
     pub height: f64,
     /// Open with devtools (Chromium's remote debugging on loopback).
@@ -87,6 +91,7 @@ impl PeakdConfig {
             app_origin,
             app_mode: false,
             window_title: "PEAK'D!".into(),
+            lang: default_lang(),
             width: 1280.0,
             height: 860.0,
             devtools: env_flag("PEAKD_DEVTOOLS"),
@@ -207,6 +212,12 @@ impl PeakdConfig {
                         i += 1;
                     }
                 }
+                "--lang" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.lang = v.trim().to_string();
+                        i += 1;
+                    }
+                }
                 "--size" => {
                     if let Some(v) = args.get(i + 1) {
                         if let Some((w, h)) = v.split_once('x') {
@@ -241,6 +252,24 @@ impl PeakdConfig {
 
         cfg
     }
+}
+
+/// The shell's language for its own strings: `PEAKD_LANG`, else the session
+/// locale (`LC_ALL` → `LC_MESSAGES` → `LANG`), else English. `en_US.UTF-8`
+/// becomes `en-us`; resolution to a shipped catalogue happens in `i18n.rs`.
+fn default_lang() -> String {
+    for key in ["PEAKD_LANG", "LC_ALL", "LC_MESSAGES", "LANG"] {
+        let Ok(value) = env::var(key) else { continue };
+        let value = value.trim();
+        // POSIX: an empty value means "unset", and C/POSIX mean English.
+        if value.is_empty() || value == "C" || value == "POSIX" {
+            continue;
+        }
+        let code = value.split('.').next().unwrap_or(value);
+        let code = code.split('@').next().unwrap_or(code);
+        return code.replace('_', "-").to_lowercase();
+    }
+    "en".to_string()
 }
 
 /// Where the QtWebEngine profile lives when `PEAKD_DATA_DIR` is unset.
@@ -393,10 +422,13 @@ OPTIONS:
         --benchmark-settle <N>   Seconds to wait for the app to boot (default 12)
         --benchmark-output <P>   Also write the JSON report to P
         --title <TITLE>  Window title
+        --lang <CODE>    Interface language for the shell's own strings
+                         (default: $LC_ALL/$LC_MESSAGES/$LANG)
         --size <WxH>     Window size (default 1280x860)
     -h, --help           Show this help
 
 ENVIRONMENT:
+    PEAKD_LANG               Interface language for the shell's own strings
     PEAKD_APP_ORIGIN         Origin of the PEAK'D! app (default {DEFAULT_APP_ORIGIN})
     PEAKD_IROH       Iroh ticket to dial instead of the local app origin
     PEAKD_DATA_DIR   QtWebEngine profile location

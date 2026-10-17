@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Зараз відтворюється",
+  "plugin.youtube.hero.untitled": "Відео YouTube",
+  "plugin.youtube.hero.back": "Назад",
+  "plugin.youtube.hero.backLabel": "Назад до пошуку на YouTube",
+  "plugin.youtube.player.title": "Програвач YouTube",
+
+  "plugin.youtube.search.placeholder": "Пошук на YouTube…",
+
+  "plugin.youtube.grid.upNext": "Далі",
+  "plugin.youtube.grid.becauseYouWatched": "Далі · бо ви дивилися “{title}”",
+  "plugin.youtube.grid.forYou": "Для вас",
+  "plugin.youtube.grid.showAll": "Показати всі: {category}",
+  "plugin.youtube.grid.untitled": "Відео",
+
+  "plugin.youtube.empty.noResults": "Відео не знайдено",
+  "plugin.youtube.empty.noMatch": "Нічого не відповідає “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Пошук на YouTube",
+  "plugin.youtube.empty.searchBody": "Введіть запит вище — або попросіть ШІ знайти відео.",
+  "plugin.youtube.empty.unavailableTitle": "Пошук недоступний",
+  "plugin.youtube.empty.retry": "Спробуйте за мить",
+
+  "plugin.youtube.category.watched": "Переглянуто {count}×",
+  "plugin.youtube.category.generic": "Категорія",
+
+  "plugin.youtube.menu.search": "Пошук",
+  "plugin.youtube.menu.home": "Головна",
+  "plugin.youtube.menu.refresh": "Оновити результати",
+  "plugin.youtube.menu.back": "Назад",
+
+  "plugin.youtube.meta.description": "Дивіться відео YouTube у вікні YouTube — ШІ може шукати на YouTube і відтворювати відео",
+  "plugin.youtube.meta.summary": "YouTube: пошук за допомогою ШІ та відтворення у вікні YouTube",
+  "plugin.youtube.meta.category": "Медіа"
+}

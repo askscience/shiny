@@ -13,6 +13,7 @@ import { isPluginActive } from './activePlugins.js';
 import { openArtifactInTile } from './tiles.js';
 import { dockButton, iconForArtifact, labelForArtifact } from '../ui/index.js';
 import { artifactBelongsTo as belongsTo } from './artifactStore.js';
+import { t, tp } from './i18n.js';
 
 const panel = document.getElementById('travel-panel');
 const backdrop = document.getElementById('travel-panel-backdrop');
@@ -140,11 +141,17 @@ export async function openSavedArtifact(id) {
     if (e.status === 404) {
       removeSummary(id);
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: 'That guide is no longer saved — plan the trip again', type: 'error' },
+        detail: {
+          message: t('artifacts.gone', null, 'That guide is no longer saved — plan the trip again'),
+          type: 'error',
+        },
       }));
     } else {
       window.dispatchEvent(new CustomEvent('app:toast', {
-        detail: { message: e.message || 'Could not load saved card', type: 'error' },
+        detail: {
+          message: e.message || t('artifacts.loadFailed', null, 'Could not load saved card'),
+          type: 'error',
+        },
       }));
     }
   }
@@ -225,7 +232,7 @@ export function renderArtifactDock(artifacts) {
   if (overflow > 0) {
     iconsEl.appendChild(dockButton({
       text: `+${overflow}`,
-      label: `${overflow} more saved cards`,
+      label: tp('artifacts.moreSaved', overflow, null, `${overflow} more saved cards`),
       onClick: () => openSavedArtifact(list[MAX_VISIBLE].id),
     }));
   }

@@ -16,12 +16,19 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t } from '../../js/i18n.js';
 
 export const CALENDAR_PLUGIN = 'calendar';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_KEYS = ['plugin.calendar.grid.sun', 'plugin.calendar.grid.mon', 'plugin.calendar.grid.tue',
+  'plugin.calendar.grid.wed', 'plugin.calendar.grid.thu', 'plugin.calendar.grid.fri', 'plugin.calendar.grid.sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_KEYS = ['plugin.calendar.month.january', 'plugin.calendar.month.february', 'plugin.calendar.month.march',
+  'plugin.calendar.month.april', 'plugin.calendar.month.may', 'plugin.calendar.month.june',
+  'plugin.calendar.month.july', 'plugin.calendar.month.august', 'plugin.calendar.month.september',
+  'plugin.calendar.month.october', 'plugin.calendar.month.november', 'plugin.calendar.month.december'];
 
 let tileEl = null;
 let barEl = null;
@@ -62,7 +69,7 @@ function parseIso(iso) {
 }
 
 function monthLabel() {
-  return `${MONTHS[viewMonth]} ${viewYear}`;
+  return `${t(MONTH_KEYS[viewMonth], null, MONTHS[viewMonth])} ${viewYear}`;
 }
 
 function eventsOn(date) {
@@ -73,7 +80,7 @@ function eventsOn(date) {
 }
 
 function fmtTime(ev) {
-  if (ev.all_day) return 'All day';
+  if (ev.all_day) return t('plugin.calendar.event.allDay', null, 'All day');
   if (ev.start_time && ev.end_time) return `${ev.start_time}–${ev.end_time}`;
   if (ev.start_time) return ev.start_time;
   return '—';
@@ -125,12 +132,12 @@ function renderBar() {
 
 function renderWeekdays() {
   weekdaysEl.textContent = '';
-  for (const wd of WEEKDAYS) {
+  WEEKDAYS.forEach((wd, i) => {
     const el = document.createElement('div');
     el.className = 'calendar-weekday';
-    el.textContent = wd;
+    el.textContent = t(WEEKDAY_KEYS[i], null, wd);
     weekdaysEl.appendChild(el);
-  }
+  });
 }
 
 function renderGrid() {
@@ -192,12 +199,15 @@ function renderDetail() {
   if (!detailEl || !detailHeadEl) return;
   const dayEvents = eventsOn(selectedDate);
   const d = parseIso(selectedDate);
-  const label = `${MONTHS[d.month]} ${d.day}, ${d.year}`;
+  const label = `${t(MONTH_KEYS[d.month], null, MONTHS[d.month])} ${d.day}, ${d.year}`;
   detailHeadEl.textContent = label;
 
   detailEl.textContent = '';
   if (!dayEvents.length) {
-    detailEl.appendChild(emptyState({ title: 'No events', body: 'Nothing scheduled. Add an event or ask the AI to schedule one.' }));
+    detailEl.appendChild(emptyState({
+      title: t('plugin.calendar.empty.noEvents', null, 'No events'),
+      body: t('plugin.calendar.empty.noEventsBody', null, 'Nothing scheduled. Add an event or ask the AI to schedule one.'),
+    }));
     return;
   }
   for (const ev of dayEvents) {
@@ -225,11 +235,12 @@ function renderDetail() {
 
     const actions = document.createElement('div');
     actions.className = 'calendar-detail-actions';
-    const editBtn = button({ label: 'Edit', variant: 'ghost', size: 'sm', onClick: () => openEdit(ev) });
-    editBtn.title = 'Edit';
+    const editLabel = t('plugin.calendar.detail.edit', null, 'Edit');
+    const editBtn = button({ label: editLabel, variant: 'ghost', size: 'sm', onClick: () => openEdit(ev) });
+    editBtn.title = editLabel;
     const delBtn = button({ icon: 'ui/trash', variant: 'ghost', size: 'sm', onClick: () => removeEvent(ev) });
     delBtn.classList.add('ui-btn--icon', 'calendar-tool--danger');
-    delBtn.title = 'Delete';
+    delBtn.title = t('plugin.calendar.detail.delete', null, 'Delete');
     actions.append(editBtn, delBtn);
 
     row.append(time, main, actions);
@@ -252,7 +263,7 @@ async function loadEvents() {
   try {
     events = await apiList(`${viewYear}-${pad(viewMonth + 1)}`);
   } catch (e) {
-    toast(e.message || 'Could not load events', { type: 'error' });
+    toast(e.message || t('plugin.calendar.toast.loadFailed', null, 'Could not load events'), { type: 'error' });
   } finally {
     busy = false;
   }
@@ -282,33 +293,33 @@ function gotoToday() {
 
 function ensureModal() {
   if (eventModal) return;
-  titleInput = input({ placeholder: 'e.g. Team standup', maxlength: 200 });
+  titleInput = input({ placeholder: t('plugin.calendar.dialog.titlePlaceholder', null, 'e.g. Team standup'), maxlength: 200 });
   dateInput = input({ type: 'date' });
   startInput = input({ type: 'time' });
   endInput = input({ type: 'time' });
-  allDayRow = toggleRow({ label: 'All day' });
-  locInput = input({ placeholder: 'Location (optional)', maxlength: 500 });
-  descInput = textarea({ placeholder: 'Notes (optional)', rows: 3 });
+  allDayRow = toggleRow({ label: t('plugin.calendar.event.allDay', null, 'All day') });
+  locInput = input({ placeholder: t('plugin.calendar.dialog.locationPlaceholder', null, 'Location (optional)'), maxlength: 500 });
+  descInput = textarea({ placeholder: t('plugin.calendar.dialog.notesPlaceholder', null, 'Notes (optional)'), rows: 3 });
 
   const actions = document.createElement('div');
   actions.className = 'ui-row';
   actions.style.justifyContent = 'flex-end';
   actions.style.gap = '8px';
-  const cancelBtn = button({ label: 'Cancel', variant: 'ghost', size: 'sm' });
-  const saveBtn = button({ label: 'Save event', variant: 'primary', size: 'sm' });
+  const cancelBtn = button({ label: t('plugin.calendar.dialog.cancel', null, 'Cancel'), variant: 'ghost', size: 'sm' });
+  const saveBtn = button({ label: t('plugin.calendar.dialog.save', null, 'Save event'), variant: 'primary', size: 'sm' });
   actions.append(cancelBtn, saveBtn);
 
   eventModal = modal({
-    title: 'Event',
+    title: t('plugin.calendar.dialog.title', null, 'Event'),
     wide: true,
     body: [
-      field({ label: 'Title', control: titleInput }),
-      field({ label: 'Date', control: dateInput }),
-      field({ label: 'Start time', control: startInput }),
-      field({ label: 'End time', control: endInput }),
+      field({ label: t('plugin.calendar.dialog.titleField', null, 'Title'), control: titleInput }),
+      field({ label: t('plugin.calendar.dialog.dateField', null, 'Date'), control: dateInput }),
+      field({ label: t('plugin.calendar.dialog.startTimeField', null, 'Start time'), control: startInput }),
+      field({ label: t('plugin.calendar.dialog.endTimeField', null, 'End time'), control: endInput }),
       allDayRow,
-      field({ label: 'Location', control: locInput }),
-      field({ label: 'Notes', control: descInput }),
+      field({ label: t('plugin.calendar.dialog.locationField', null, 'Location'), control: locInput }),
+      field({ label: t('plugin.calendar.dialog.notesField', null, 'Notes'), control: descInput }),
       actions,
     ],
   });
@@ -320,7 +331,7 @@ function ensureModal() {
 function openNew() {
   ensureModal();
   editingId = null;
-  eventModal.card.querySelector('h2').textContent = 'New event';
+  eventModal.card.querySelector('h2').textContent = t('plugin.calendar.toolbar.newEvent', null, 'New event');
   titleInput.value = '';
   dateInput.value = selectedDate;
   startInput.value = '';
@@ -334,7 +345,7 @@ function openNew() {
 function openEdit(ev) {
   ensureModal();
   editingId = ev.event_id;
-  eventModal.card.querySelector('h2').textContent = 'Edit event';
+  eventModal.card.querySelector('h2').textContent = t('plugin.calendar.dialog.editTitle', null, 'Edit event');
   titleInput.value = ev.title || '';
   dateInput.value = ev.date || '';
   startInput.value = ev.start_time || '';
@@ -355,8 +366,8 @@ async function saveFromModal() {
     location: locInput.value.trim(),
     description: descInput.value.trim(),
   };
-  if (!payload.title) { toast('Title is required', { type: 'error' }); return; }
-  if (!payload.date) { toast('Date is required', { type: 'error' }); return; }
+  if (!payload.title) { toast(t('plugin.calendar.toast.titleRequired', null, 'Title is required'), { type: 'error' }); return; }
+  if (!payload.date) { toast(t('plugin.calendar.toast.dateRequired', null, 'Date is required'), { type: 'error' }); return; }
 
   try {
     if (editingId) await apiUpdate(editingId, payload);
@@ -367,21 +378,21 @@ async function saveFromModal() {
     viewMonth = p.month;
     selectedDate = payload.date;
     await loadEvents();
-    toast(editingId ? 'Event updated' : 'Event scheduled', { type: 'info' });
+    toast(editingId ? t('plugin.calendar.toast.updated', null, 'Event updated') : t('plugin.calendar.toast.scheduled', null, 'Event scheduled'), { type: 'info' });
     editingId = null;
   } catch (e) {
-    toast(e.message || 'Could not save event', { type: 'error' });
+    toast(e.message || t('plugin.calendar.toast.saveFailed', null, 'Could not save event'), { type: 'error' });
   }
 }
 
 async function removeEvent(ev) {
-  if (!window.confirm(`Delete "${ev.title}"?`)) return;
+  if (!window.confirm(t('plugin.calendar.confirm.deleteEvent', { title: ev.title }, 'Delete "{title}"?'))) return;
   try {
     await apiDelete(ev.event_id);
     await loadEvents();
-    toast('Event deleted', { type: 'info' });
+    toast(t('plugin.calendar.toast.deleted', null, 'Event deleted'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not delete event', { type: 'error' });
+    toast(e.message || t('plugin.calendar.toast.deleteFailed', null, 'Could not delete event'), { type: 'error' });
   }
 }
 
@@ -416,7 +427,7 @@ async function checkUpcomingEvents() {
       notifiedKeys.add(key);
       notify({
         app: 'Calendar',
-        title: 'Event starting soon',
+        title: t('plugin.calendar.notify.eventSoon', null, 'Event starting soon'),
         body: `${ev.title} · ${ev.start_time}${ev.location ? ` · ${ev.location}` : ''}`,
         icon: 'ui/calendar',
         plugin: CALENDAR_PLUGIN,
@@ -454,20 +465,20 @@ export function mountCalendarTile() {
 
   const prevBtn = button({ icon: 'ui/chevron-left', variant: 'ghost', size: 'sm', onClick: () => changeMonth(-1) });
   prevBtn.classList.add('ui-btn--icon', 'calendar-nav-btn');
-  prevBtn.title = 'Previous month';
+  prevBtn.title = t('plugin.calendar.toolbar.previousMonth', null, 'Previous month');
 
   monthLabelEl = document.createElement('div');
   monthLabelEl.className = 'calendar-month-label';
 
   const nextBtn = button({ icon: 'ui/chevron-right', variant: 'ghost', size: 'sm', onClick: () => changeMonth(1) });
   nextBtn.classList.add('ui-btn--icon', 'calendar-nav-btn');
-  nextBtn.title = 'Next month';
+  nextBtn.title = t('plugin.calendar.toolbar.nextMonth', null, 'Next month');
 
   const spacer = document.createElement('div');
   spacer.className = 'calendar-bar-spacer';
 
-  const todayBtn = button({ label: 'Today', variant: 'ghost', size: 'sm', onClick: gotoToday });
-  const newBtn = button({ icon: 'ui/plus', label: 'New event', variant: 'primary', size: 'sm', onClick: openNew });
+  const todayBtn = button({ label: t('plugin.calendar.toolbar.today', null, 'Today'), variant: 'ghost', size: 'sm', onClick: gotoToday });
+  const newBtn = button({ icon: 'ui/plus', label: t('plugin.calendar.toolbar.newEvent', null, 'New event'), variant: 'primary', size: 'sm', onClick: openNew });
 
   barEl.append(prevBtn, monthLabelEl, nextBtn, spacer, todayBtn, newBtn);
   tileEl.appendChild(barEl);
@@ -553,12 +564,12 @@ export function wireCalendarEvents() {
  *  Core supplies the surrounding separators + window management. */
 export function calendarContextMenu() {
   return [
-    { type: 'item', label: 'New event', icon: 'ui/plus', onClick: () => openNew() },
-    { type: 'item', label: 'Today', icon: 'ui/calendar', onClick: () => gotoToday() },
-    { type: 'item', label: 'Refresh', icon: 'ui/refresh', onClick: () => void loadEvents() },
+    { type: 'item', label: t('plugin.calendar.toolbar.newEvent', null, 'New event'), icon: 'ui/plus', onClick: () => openNew() },
+    { type: 'item', label: t('plugin.calendar.toolbar.today', null, 'Today'), icon: 'ui/calendar', onClick: () => gotoToday() },
+    { type: 'item', label: t('plugin.calendar.ctx.refresh', null, 'Refresh'), icon: 'ui/refresh', onClick: () => void loadEvents() },
     { type: 'separator' },
-    { type: 'item', label: 'Previous month', icon: 'ui/chevron-left', onClick: () => changeMonth(-1) },
-    { type: 'item', label: 'Next month', icon: 'ui/chevron-right', onClick: () => changeMonth(1) },
+    { type: 'item', label: t('plugin.calendar.toolbar.previousMonth', null, 'Previous month'), icon: 'ui/chevron-left', onClick: () => changeMonth(-1) },
+    { type: 'item', label: t('plugin.calendar.toolbar.nextMonth', null, 'Next month'), icon: 'ui/chevron-right', onClick: () => changeMonth(1) },
   ];
 }
 

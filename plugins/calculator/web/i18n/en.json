@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Scientific calculator — evaluate arithmetic and scientific expressions in the Calculator window",
+  "plugin.calculator.meta.summary": "Calculator: basic and scientific math",
+  "plugin.calculator.meta.category": "Office",
+
+  "plugin.calculator.display.error": "Error",
+
+  "plugin.calculator.toolbar.history": "History",
+  "plugin.calculator.toolbar.scientific": "Scientific",
+  "plugin.calculator.toolbar.clearHistory": "Clear history",
+
+  "plugin.calculator.menu.equals": "Equals",
+  "plugin.calculator.menu.clearAll": "Clear all",
+
+  "plugin.calculator.history.reuse": "Reuse this result",
+
+  "plugin.calculator.empty.noHistory": "No history",
+  "plugin.calculator.empty.noHistoryBody": "Calculations you run here or ask the AI for appear below.",
+
+  "plugin.calculator.toast.evaluateFailed": "Could not evaluate",
+  "plugin.calculator.toast.historyFailed": "Could not load history",
+  "plugin.calculator.toast.historyCleared": "History cleared",
+  "plugin.calculator.toast.clearFailed": "Could not clear history"
+}

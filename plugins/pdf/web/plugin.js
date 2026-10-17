@@ -16,6 +16,7 @@ import {
 } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const PDF_PLUGIN = 'pdf';
@@ -263,7 +264,7 @@ async function paintEditOverlay(pageElNow) {
   try {
     runs = await fetchTextRuns(currentPage);
   } catch (e) {
-    toast(e.message || 'Could not read the page text', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.readTextFailed', null, 'Could not read the page text'), { type: 'error' });
     return;
   }
   editRuns = runs;
@@ -357,11 +358,11 @@ function showEditBar(run, box) {
   const apply = document.createElement('button');
   apply.type = 'button';
   apply.className = 'pdf-edit-apply';
-  apply.textContent = 'Apply changes';
+  apply.textContent = t('plugin.pdf.edit.apply', null, 'Apply changes');
   const cancel = document.createElement('button');
   cancel.type = 'button';
   cancel.className = 'pdf-edit-cancel';
-  cancel.textContent = 'Cancel';
+  cancel.textContent = t('plugin.pdf.edit.cancel', null, 'Cancel');
   bar.append(apply, cancel);
 
   cancel.addEventListener('click', () => {
@@ -381,7 +382,7 @@ function showEditBar(run, box) {
 async function applyRunEdit({ run, box }) {
   const newText = box.textContent;
   if (newText === run.text) {
-    toast('No changes to apply', { type: 'info' });
+    toast(t('plugin.pdf.toast.noChanges', null, 'No changes to apply'), { type: 'info' });
     closeRunEditor();
     return;
   }
@@ -399,9 +400,9 @@ async function applyRunEdit({ run, box }) {
     await renderThumbs();
     await renderMain();
     showSaved();
-    toast('Page text updated', { type: 'info' });
+    toast(t('plugin.pdf.toast.pageTextUpdated', null, 'Page text updated'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not apply the edit', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.editFailed', null, 'Could not apply the edit'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -451,7 +452,7 @@ function placeTextBox(pageElNow, ev) {
   box.contentEditable = 'true';
   box.style.left = `${localX}px`;
   box.style.top = `${localY}px`;
-  box.dataset.placeholder = 'Type here…';
+  box.dataset.placeholder = t('plugin.pdf.edit.typeHere', null, 'Type here…');
   pageElNow.appendChild(box);
 
   // PDF origin is bottom-left, and the room we have below the click point is
@@ -490,23 +491,23 @@ function showAddTextBar(box) {
     box.style.fontWeight = addTextFmt.bold ? '700' : '400';
     box.style.fontStyle = addTextFmt.italic ? 'italic' : 'normal';
     box.style.color = addTextFmt.color;
-    sizeLabel.textContent = `${addTextFmt.size} pt`;
+    sizeLabel.textContent = t('plugin.pdf.edit.points', { size: addTextFmt.size }, `${addTextFmt.size} pt`);
   };
 
-  const boldBtn = pill('B', 'Bold', addTextFmt.bold, (b) => {
+  const boldBtn = pill(t('plugin.pdf.edit.boldShort', null, 'B'), t('plugin.pdf.edit.bold', null, 'Bold'), addTextFmt.bold, (b) => {
     addTextFmt.bold = !addTextFmt.bold; b.classList.toggle('is-on', addTextFmt.bold); sync();
   });
-  const italBtn = pill('I', 'Italic', addTextFmt.italic, (b) => {
+  const italBtn = pill(t('plugin.pdf.edit.italicShort', null, 'I'), t('plugin.pdf.edit.italic', null, 'Italic'), addTextFmt.italic, (b) => {
     addTextFmt.italic = !addTextFmt.italic; b.classList.toggle('is-on', addTextFmt.italic); sync();
   });
   sep();
 
   const sizeLabel = document.createElement('span');
   sizeLabel.className = 'pdf-edit-label';
-  const minus = pill('A−', 'Smaller', false, () => {
+  const minus = pill(t('plugin.pdf.edit.smallerShort', null, 'A−'), t('plugin.pdf.edit.smaller', null, 'Smaller'), false, () => {
     addTextFmt.size = Math.max(4, Math.round((addTextFmt.size - 1) * 10) / 10); sync();
   });
-  const plus = pill('A+', 'Larger', false, () => {
+  const plus = pill(t('plugin.pdf.edit.largerShort', null, 'A+'), t('plugin.pdf.edit.larger', null, 'Larger'), false, () => {
     addTextFmt.size = Math.min(144, Math.round((addTextFmt.size + 1) * 10) / 10); sync();
   });
   bar.append(sizeLabel, minus, plus);
@@ -515,7 +516,7 @@ function showAddTextBar(box) {
   const colorInput = document.createElement('input');
   colorInput.type = 'color';
   colorInput.className = 'pdf-edit-color';
-  colorInput.title = 'Text colour';
+  colorInput.title = t('plugin.pdf.edit.textColour', null, 'Text colour');
   colorInput.value = addTextFmt.color;
   colorInput.addEventListener('input', () => { addTextFmt.color = colorInput.value; sync(); });
   bar.appendChild(colorInput);
@@ -524,11 +525,11 @@ function showAddTextBar(box) {
   const apply = document.createElement('button');
   apply.type = 'button';
   apply.className = 'pdf-edit-apply';
-  apply.textContent = 'Add text';
+  apply.textContent = t('plugin.pdf.edit.addText', null, 'Add text');
   const cancel = document.createElement('button');
   cancel.type = 'button';
   cancel.className = 'pdf-edit-cancel';
-  cancel.textContent = 'Cancel';
+  cancel.textContent = t('plugin.pdf.edit.cancel', null, 'Cancel');
   bar.append(apply, cancel);
   cancel.addEventListener('click', () => void renderMain());
   apply.addEventListener('click', () => void commitAddText(box));
@@ -547,7 +548,7 @@ function showAddTextBar(box) {
 async function commitAddText(box) {
   const text = (box.textContent || '').trim();
   if (!text) {
-    toast('Type some text first', { type: 'info' });
+    toast(t('plugin.pdf.toast.typeSomeText', null, 'Type some text first'), { type: 'info' });
     return;
   }
   if (!addTextPos || !currentPdf) return;
@@ -564,9 +565,9 @@ async function commitAddText(box) {
     await renderThumbs();
     await renderMain();
     showSaved();
-    toast('Text added', { type: 'info' });
+    toast(t('plugin.pdf.toast.textAdded', null, 'Text added'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not add the text', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.addTextFailed', null, 'Could not add the text'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -650,9 +651,9 @@ function setBusy(on) {
 
 function showSaved() {
   const now = new Date();
-  const t = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const n = currentPdf?.page_count ?? 0;
-  setStatus(`Saved ${t} · ${n} ${n === 1 ? 'page' : 'pages'}`);
+  setStatus(tp('plugin.pdf.status.saved', n, { time }, `Saved ${time} · ${n} pages`));
   setBusy(false);
 }
 
@@ -682,7 +683,11 @@ async function paintCurrentPage() {
   canvasEl.innerHTML = '';
   if (currentPdf.page_count === 0) {
     setTileGlow(tileEl, null);
-    canvasEl.appendChild(emptyState({ icon: 'ui/doc', title: 'Empty PDF', body: 'This document has no pages.' }));
+    canvasEl.appendChild(emptyState({
+      icon: 'ui/doc',
+      title: t('plugin.pdf.empty.emptyPdf', null, 'Empty PDF'),
+      body: t('plugin.pdf.empty.emptyPdfBody', null, 'This document has no pages.'),
+    }));
     return;
   }
 
@@ -702,7 +707,7 @@ async function paintCurrentPage() {
     canvasEl.innerHTML = '';
     canvasEl.appendChild(emptyState({
       icon: 'ui/warning',
-      title: 'Could not render page',
+      title: t('plugin.pdf.empty.renderFailed', null, 'Could not render page'),
       body: e.message || '',
     }));
     setBusy(false);
@@ -716,7 +721,7 @@ async function paintCurrentPage() {
   el.style.width = `${viewport.width}px`;
   el.style.height = `${viewport.height}px`;
   el.setAttribute('role', 'img');
-  el.setAttribute('aria-label', `Page ${currentPage + 1}`);
+  el.setAttribute('aria-label', t('plugin.pdf.page.label', { page: currentPage + 1 }, `Page ${currentPage + 1}`));
 
   const canvas = document.createElement('canvas');
   const dpr = window.devicePixelRatio || 1;
@@ -842,8 +847,8 @@ async function renderThumbs() {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'pdf-thumb-del';
-    del.title = 'Delete page';
-    del.setAttribute('aria-label', `Delete page ${i + 1}`);
+    del.title = t('plugin.pdf.rail.deletePage', null, 'Delete page');
+    del.setAttribute('aria-label', t('plugin.pdf.rail.deletePageAria', { page: i + 1 }, `Delete page ${i + 1}`));
     del.appendChild(icon('ui/close', { size: 11 }));
     del.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -853,7 +858,7 @@ async function renderThumbs() {
     const img = document.createElement('img');
     img.className = 'pdf-thumb-img';
     img.loading = 'lazy';
-    img.alt = `Page ${i + 1}`;
+    img.alt = t('plugin.pdf.page.label', { page: i + 1 }, `Page ${i + 1}`);
     img.draggable = false;
     // Two passes: a low-res pass so the rail fills immediately, then a sharper
     // one — all served from the already-loaded document, no server round-trip.
@@ -930,7 +935,7 @@ async function openDoc(doc) {
     await renderMain();
     showSaved();
   } catch (e) {
-    toast(e.message || 'Could not open PDF', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.openFailed', null, 'Could not open PDF'), { type: 'error' });
   }
 }
 
@@ -954,8 +959,8 @@ async function openNewest() {
       canvasEl.innerHTML = '';
       canvasEl.appendChild(emptyState({
         icon: 'ui/doc',
-        title: 'No PDFs yet',
-        body: 'Import a .pdf or create a new one to get started.',
+        title: t('plugin.pdf.empty.noPdfs', null, 'No PDFs yet'),
+        body: t('plugin.pdf.empty.noPdfsBody', null, 'Import a .pdf or create a new one to get started.'),
       }));
     }
     updateNav();
@@ -968,9 +973,9 @@ async function newPdf() {
     const created = await createPdf();
     await refreshDocs();
     await openDoc(created);
-    toast('Created new PDF', { type: 'info' });
+    toast(t('plugin.pdf.toast.created', null, 'Created new PDF'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not create PDF', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.createFailed', null, 'Could not create PDF'), { type: 'error' });
   }
 }
 
@@ -985,9 +990,9 @@ async function importPdf(file) {
     const imported = await importPdfFile(file);
     await refreshDocs();
     await openDoc(imported);
-    toast(`Imported ${file.name}`, { type: 'info' });
+    toast(t('plugin.pdf.toast.imported', { name: file.name }, `Imported ${file.name}`), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Import failed — is this a valid .pdf file?', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.importFailed', null, 'Import failed — is this a valid .pdf file?'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -1001,13 +1006,13 @@ async function exportCurrent() {
     );
     await saveOrDownload(blob, { name: `${currentPdf.title || 'document'}.pdf`, dir: 'Documents', app: 'PDF' });
   } catch (e) {
-    toast(e.message || 'Save failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.saveFailed', null, 'Save failed'), { type: 'error' });
   }
 }
 
 async function removeCurrent() {
   if (!currentPdf) return;
-  if (!window.confirm(`Delete "${currentPdf.title}"?`)) return;
+  if (!window.confirm(t('plugin.pdf.dialog.deleteDoc', { title: currentPdf.title }, `Delete "${currentPdf.title}"?`))) return;
   try {
     await deletePdf(currentPdf.pdf_id);
     dropPdfDoc();
@@ -1015,7 +1020,7 @@ async function removeCurrent() {
     await refreshDocs();
     await openNewest();
   } catch (e) {
-    toast(e.message || 'Could not delete PDF', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.deleteFailed', null, 'Could not delete PDF'), { type: 'error' });
   }
 }
 
@@ -1030,7 +1035,7 @@ async function rotateCurrent(delta) {
     await renderMain();
     showSaved();
   } catch (e) {
-    toast(e.message || 'Rotate failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.rotateFailed', null, 'Rotate failed'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -1046,7 +1051,7 @@ async function applyReorder(order, focusPage) {
     await renderMain();
     showSaved();
   } catch (e) {
-    toast(e.message || 'Reorder failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.reorderFailed', null, 'Reorder failed'), { type: 'error' });
     setBusy(false);
     await renderThumbs();
   }
@@ -1055,10 +1060,10 @@ async function applyReorder(order, focusPage) {
 async function removePage(page) {
   if (!currentPdf) return;
   if (currentPdf.page_count <= 1) {
-    toast('Cannot delete the only page', { type: 'error' });
+    toast(t('plugin.pdf.toast.onlyPage', null, 'Cannot delete the only page'), { type: 'error' });
     return;
   }
-  if (!window.confirm(`Delete page ${page + 1}?`)) return;
+  if (!window.confirm(t('plugin.pdf.dialog.deletePage', { page: page + 1 }, `Delete page ${page + 1}?`))) return;
   setBusy(true);
   try {
     await deletePages([page]);
@@ -1069,7 +1074,7 @@ async function removePage(page) {
     await renderMain();
     showSaved();
   } catch (e) {
-    toast(e.message || 'Could not delete page', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.deletePageFailed', null, 'Could not delete page'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -1084,9 +1089,9 @@ async function doMerge(otherId) {
     await renderThumbs();
     await renderMain();
     showSaved();
-    toast('Merged PDF', { type: 'info' });
+    toast(t('plugin.pdf.toast.merged', null, 'Merged PDF'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Merge failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.mergeFailed', null, 'Merge failed'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -1184,13 +1189,13 @@ function attachSelection(el) {
 }
 
 const ANNOT_LABELS = {
-  highlight: 'Highlight',
-  underline: 'Underline',
-  strikeout: 'Strikeout',
-  squiggly: 'Squiggly',
-  note: 'Note',
-  free_text: 'Text box',
-  link: 'Link',
+  highlight: { labelKey: 'plugin.pdf.annot.highlight' },
+  underline: { labelKey: 'plugin.pdf.annot.underline' },
+  strikeout: { labelKey: 'plugin.pdf.annot.strikeout' },
+  squiggly: { labelKey: 'plugin.pdf.annot.squiggly' },
+  note: { labelKey: 'plugin.pdf.annot.note' },
+  free_text: { labelKey: 'plugin.pdf.annot.textBox' },
+  link: { labelKey: 'plugin.pdf.annot.link' },
 };
 
 function ensureAnnotBar() {
@@ -1234,21 +1239,21 @@ function showAnnotBar(rect) {
       if (t != null && t.trim()) void doAnnotate(kind, t.trim());
     });
   };
-  mk('Highlight', () => void doAnnotate('highlight', ''));
-  mk('Underline', () => void doAnnotate('underline', ''));
-  mk('Strikeout', () => void doAnnotate('strikeout', ''));
-  mk('Squiggly', () => void doAnnotate('squiggly', ''));
-  mkText('Note', 'Note text:', 'note', picked);
-  mkText('Text box', 'Text to place on the page:', 'free_text', picked);
-  mk('Link', () => {
-    const t = window.prompt('Link URL:');
-    if (t != null && t.trim()) void doAnnotate('link', t.trim());
+  mk(t(ANNOT_LABELS.highlight.labelKey, null, 'Highlight'), () => void doAnnotate('highlight', ''));
+  mk(t(ANNOT_LABELS.underline.labelKey, null, 'Underline'), () => void doAnnotate('underline', ''));
+  mk(t(ANNOT_LABELS.strikeout.labelKey, null, 'Strikeout'), () => void doAnnotate('strikeout', ''));
+  mk(t(ANNOT_LABELS.squiggly.labelKey, null, 'Squiggly'), () => void doAnnotate('squiggly', ''));
+  mkText(t(ANNOT_LABELS.note.labelKey, null, 'Note'), t('plugin.pdf.dialog.noteText', null, 'Note text:'), 'note', picked);
+  mkText(t(ANNOT_LABELS.free_text.labelKey, null, 'Text box'), t('plugin.pdf.dialog.textToPlace', null, 'Text to place on the page:'), 'free_text', picked);
+  mk(t(ANNOT_LABELS.link.labelKey, null, 'Link'), () => {
+    const url = window.prompt(t('plugin.pdf.dialog.linkUrl', null, 'Link URL:'));
+    if (url != null && url.trim()) void doAnnotate('link', url.trim());
   });
   if (picked) {
-    mk('Find & replace…', () => {
-      const old = window.prompt('Find text:', picked);
+    mk(t('plugin.pdf.annot.findReplace', null, 'Find & replace…'), () => {
+      const old = window.prompt(t('plugin.pdf.dialog.findText', null, 'Find text:'), picked);
       if (old == null || !old.trim()) return;
-      const nw = window.prompt(`Replace "${old.trim()}" with:`, '');
+      const nw = window.prompt(t('plugin.pdf.dialog.replaceWith', { text: old.trim() }, `Replace "${old.trim()}" with:`), '');
       if (nw == null) return;
       void doReplaceText(old.trim(), nw);
     });
@@ -1257,7 +1262,7 @@ function showAnnotBar(rect) {
   close.type = 'button';
   close.className = 'pdf-annot-btn pdf-annot-btn--close';
   close.textContent = '×';
-  close.setAttribute('aria-label', 'Cancel');
+  close.setAttribute('aria-label', t('plugin.pdf.annot.cancel', null, 'Cancel'));
   close.addEventListener('click', hideAnnotBar);
   annotBar.appendChild(close);
   annotBar.classList.remove('hidden');
@@ -1280,18 +1285,19 @@ async function doAnnotate(kind, text) {
     await renderThumbs();
     await renderMain();
     showSaved();
-    toast(`${ANNOT_LABELS[kind] || kind} added`, { type: 'info' });
+    const label = ANNOT_LABELS[kind] ? t(ANNOT_LABELS[kind].labelKey, null, kind) : kind;
+    toast(t('plugin.pdf.toast.annotAdded', { kind: label }, `${label} added`), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Annotation failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.annotFailed', null, 'Annotation failed'), { type: 'error' });
     setBusy(false);
   }
 }
 
 function promptFindReplace() {
   if (!currentPdf) return;
-  const old = window.prompt('Find text:', '');
+  const old = window.prompt(t('plugin.pdf.dialog.findText', null, 'Find text:'), '');
   if (old == null || !old.trim()) return;
-  const nw = window.prompt(`Replace "${old.trim()}" with:`, '');
+  const nw = window.prompt(t('plugin.pdf.dialog.replaceWith', { text: old.trim() }, `Replace "${old.trim()}" with:`), '');
   if (nw == null) return;
   void doReplaceText(old.trim(), nw);
 }
@@ -1305,18 +1311,18 @@ async function doReplaceText(oldText, newText) {
     await renderMain();
     showSaved();
     const n = res?.replaced ?? 0;
-    toast(`Replaced ${n} ${n === 1 ? 'spot' : 'spots'}`, { type: 'info' });
+    toast(tp('plugin.pdf.toast.replaced', n, null, `Replaced ${n} spots`), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Replace failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.replaceFailed', null, 'Replace failed'), { type: 'error' });
     setBusy(false);
   }
 }
 
 function promptWatermark() {
   if (!currentPdf) return;
-  const t = window.prompt('Watermark text:', 'DRAFT');
-  if (t == null || !t.trim()) return;
-  void doWatermark(t.trim());
+  const text = window.prompt(t('plugin.pdf.dialog.watermarkText', null, 'Watermark text:'), t('plugin.pdf.dialog.watermarkDefault', null, 'DRAFT'));
+  if (text == null || !text.trim()) return;
+  void doWatermark(text.trim());
 }
 
 async function doWatermark(text) {
@@ -1327,9 +1333,9 @@ async function doWatermark(text) {
     await renderThumbs();
     await renderMain();
     showSaved();
-    toast('Watermark applied', { type: 'info' });
+    toast(t('plugin.pdf.toast.watermarkApplied', null, 'Watermark applied'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Watermark failed', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.watermarkFailed', null, 'Watermark failed'), { type: 'error' });
     setBusy(false);
   }
 }
@@ -1417,14 +1423,16 @@ function renderDocMenuItems() {
     const others = docs.filter((d) => d.pdf_id !== currentPdf?.pdf_id);
     const head = document.createElement('div');
     head.className = 'pdf-doc-menu-empty';
-    head.textContent = others.length ? 'Merge into this PDF:' : 'No other PDFs to merge';
+    head.textContent = others.length
+      ? t('plugin.pdf.menu.mergeInto', null, 'Merge into this PDF:')
+      : t('plugin.pdf.menu.noOthersToMerge', null, 'No other PDFs to merge');
     docMenuPopup.appendChild(head);
     others.forEach((d) => {
       docMenuPopup.appendChild(docMenuItem(d.title, 'ui/loop', { time: formatWhen(d.updated_at), onClick: () => void doMerge(d.pdf_id) }));
     });
     const foot = document.createElement('div');
     foot.className = 'pdf-doc-menu-foot';
-    foot.appendChild(docMenuItem('Back', 'ui/arrow-left', { onClick: () => { menuMode = 'default'; openDocMenu(); } }));
+    foot.appendChild(docMenuItem(t('plugin.pdf.menu.back', null, 'Back'), 'ui/arrow-left', { onClick: () => { menuMode = 'default'; openDocMenu(); } }));
     docMenuPopup.appendChild(foot);
     return;
   }
@@ -1432,7 +1440,7 @@ function renderDocMenuItems() {
   if (!docs.length) {
     const empty = document.createElement('div');
     empty.className = 'pdf-doc-menu-empty';
-    empty.textContent = 'No PDFs yet';
+    empty.textContent = t('plugin.pdf.menu.empty', null, 'No PDFs yet');
     docMenuPopup.appendChild(empty);
   } else {
     docs.forEach((d) => {
@@ -1446,13 +1454,13 @@ function renderDocMenuItems() {
 
   const foot = document.createElement('div');
   foot.className = 'pdf-doc-menu-foot';
-  foot.appendChild(docMenuItem('New PDF', 'ui/plus', { onClick: () => void newPdf() }));
-  foot.appendChild(docMenuItem('Import .pdf', 'ui/download', { onClick: pickPdfFile }));
-  foot.appendChild(docMenuItem('Save to Documents', 'ui/save', { onClick: () => void exportCurrent() }));
-  foot.appendChild(docMenuItem('Merge from…', 'ui/loop', { onClick: () => { menuMode = 'merge'; openDocMenu(); } }));
-  foot.appendChild(docMenuItem('Find & replace…', 'ui/search', { onClick: promptFindReplace }));
-  foot.appendChild(docMenuItem('Watermark…', 'ui/info', { onClick: promptWatermark }));
-  foot.appendChild(docMenuItem('Delete PDF', 'ui/trash', { danger: true, onClick: () => void removeCurrent() }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.newPdf', null, 'New PDF'), 'ui/plus', { onClick: () => void newPdf() }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.importPdf', null, 'Import .pdf'), 'ui/download', { onClick: pickPdfFile }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.saveToDocuments', null, 'Save to Documents'), 'ui/save', { onClick: () => void exportCurrent() }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.mergeFrom', null, 'Merge from…'), 'ui/loop', { onClick: () => { menuMode = 'merge'; openDocMenu(); } }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.findReplace', null, 'Find & replace…'), 'ui/search', { onClick: promptFindReplace }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.watermark', null, 'Watermark…'), 'ui/info', { onClick: promptWatermark }));
+  foot.appendChild(docMenuItem(t('plugin.pdf.menu.deletePdf', null, 'Delete PDF'), 'ui/trash', { danger: true, onClick: () => void removeCurrent() }));
   docMenuPopup.appendChild(foot);
 }
 
@@ -1511,7 +1519,7 @@ export function mountPdfTile() {
   docMenuBtn.className = 'pdf-doc-btn';
   docMenuBtn.setAttribute('aria-haspopup', 'menu');
   docMenuBtn.setAttribute('aria-expanded', 'false');
-  docMenuBtn.title = 'PDFs';
+  docMenuBtn.title = t('plugin.pdf.toolbar.documents', null, 'PDFs');
   const docIcon = document.createElement('span');
   docIcon.className = 'pdf-doc-btn-icon';
   docMenuBtn.appendChild(docIcon);
@@ -1525,7 +1533,7 @@ export function mountPdfTile() {
   titleInput = document.createElement('input');
   titleInput.className = 'pdf-title';
   titleInput.type = 'text';
-  titleInput.placeholder = 'Untitled';
+  titleInput.placeholder = t('plugin.pdf.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
   titleInput.autocomplete = 'off';
   titleInput.addEventListener('change', () => {
@@ -1533,41 +1541,41 @@ export function mountPdfTile() {
   });
 
   /* Page nav */
-  const prevBtn = toolbarButton('ui/chevron-left', 'Previous page', () => gotoPage(-1));
+  const prevBtn = toolbarButton('ui/chevron-left', t('plugin.pdf.toolbar.previousPage', null, 'Previous page'), () => gotoPage(-1));
   pageLabelEl = document.createElement('span');
   pageLabelEl.className = 'pdf-page-label';
-  const nextBtn = toolbarButton('ui/chevron-right', 'Next page', () => gotoPage(1));
+  const nextBtn = toolbarButton('ui/chevron-right', t('plugin.pdf.toolbar.nextPage', null, 'Next page'), () => gotoPage(1));
 
   /* Zoom */
-  const zoomOut = toolbarButton('ui/minus', 'Zoom out', () => zoomBy(-1));
+  const zoomOut = toolbarButton('ui/minus', t('plugin.pdf.toolbar.zoomOut', null, 'Zoom out'), () => zoomBy(-1));
   zoomLabelEl = document.createElement('span');
   zoomLabelEl.className = 'pdf-zoom-label';
-  const zoomIn = toolbarButton('ui/plus', 'Zoom in', () => zoomBy(1));
+  const zoomIn = toolbarButton('ui/plus', t('plugin.pdf.toolbar.zoomIn', null, 'Zoom in'), () => zoomBy(1));
 
   /* Rotate */
-  const rotLeft = toolbarButton('ui/rotate-left', 'Rotate page counter-clockwise', () => void rotateCurrent(-90));
-  const rotRight = toolbarButton('ui/rotate-right', 'Rotate page clockwise', () => void rotateCurrent(90));
+  const rotLeft = toolbarButton('ui/rotate-left', t('plugin.pdf.toolbar.rotateLeft', null, 'Rotate page counter-clockwise'), () => void rotateCurrent(-90));
+  const rotRight = toolbarButton('ui/rotate-right', t('plugin.pdf.toolbar.rotateRight', null, 'Rotate page clockwise'), () => void rotateCurrent(90));
 
   /* Edit text in place */
   // The two text tools sit together, so their icons have to be obviously
   // different: `+` was already taken by New PDF and made "add text" invisible.
-  editToggleBtn = toolbarButton('ui/bold', 'Change text — click a line to retype it',
+  editToggleBtn = toolbarButton('ui/bold', t('plugin.pdf.toolbar.editText', null, 'Change text — click a line to retype it'),
     () => void toggleEditMode());
   editToggleBtn.classList.add('pdf-tool--edit');
   editToggleBtn.setAttribute('aria-pressed', 'false');
 
   /* Add text — click the page to place a formatted text box. Unlike the line
      editor above, this can apply size, weight and colour. */
-  addTextBtn = toolbarButton('ui/list', 'Add text — pick size, bold and colour',
+  addTextBtn = toolbarButton('ui/list', t('plugin.pdf.toolbar.addText', null, 'Add text — pick size, bold and colour'),
     () => void toggleAddText());
   addTextBtn.classList.add('pdf-tool--addtext');
   addTextBtn.setAttribute('aria-pressed', 'false');
 
   /* File actions */
-  const newBtn = toolbarButton('ui/plus', 'New PDF', () => void newPdf());
-  const importBtn = toolbarButton('ui/download', 'Import .pdf', pickPdfFile);
-  const exportBtn = toolbarButton('ui/save', 'Save to Documents', () => void exportCurrent());
-  const delBtn = toolbarButton('ui/trash', 'Delete PDF', () => void removeCurrent());
+  const newBtn = toolbarButton('ui/plus', t('plugin.pdf.toolbar.newPdf', null, 'New PDF'), () => void newPdf());
+  const importBtn = toolbarButton('ui/download', t('plugin.pdf.toolbar.importPdf', null, 'Import .pdf'), pickPdfFile);
+  const exportBtn = toolbarButton('ui/save', t('plugin.pdf.toolbar.saveToDocuments', null, 'Save to Documents'), () => void exportCurrent());
+  const delBtn = toolbarButton('ui/trash', t('plugin.pdf.toolbar.deletePdf', null, 'Delete PDF'), () => void removeCurrent());
   delBtn.classList.add('pdf-tool--danger');
 
   saveDot = document.createElement('span');
@@ -1589,7 +1597,7 @@ export function mountPdfTile() {
 
   railEl = document.createElement('div');
   railEl.className = 'pdf-rail';
-  railEl.setAttribute('aria-label', 'Pages');
+  railEl.setAttribute('aria-label', t('plugin.pdf.rail.pages', null, 'Pages'));
 
   canvasEl = document.createElement('div');
   canvasEl.className = 'pdf-canvas';
@@ -1679,7 +1687,7 @@ async function importFromFiles(path, name) {
     const file = await fileFromHome(path, name, 'application/pdf');
     await importPdf(file);
   } catch (e) {
-    toast(e.message || 'Could not open file', { type: 'error' });
+    toast(e.message || t('plugin.pdf.toast.openFileFailed', null, 'Could not open file'), { type: 'error' });
   }
 }
 
@@ -1702,24 +1710,24 @@ export function pdfContextMenu(ctx) {
   const hasPdf = !!currentPdf;
   const pages = currentPdf?.page_count ?? 0;
   return [
-    { type: 'item', label: 'New PDF', icon: 'ui/plus', onClick: () => void newPdf() },
-    { type: 'item', label: 'Import .pdf', icon: 'ui/download', onClick: pickPdfFile },
-    { type: 'item', label: 'Save to Documents', icon: 'ui/save', disabled: !hasPdf, onClick: () => void exportCurrent() },
+    { type: 'item', label: t('plugin.pdf.ctx.newPdf', null, 'New PDF'), icon: 'ui/plus', onClick: () => void newPdf() },
+    { type: 'item', label: t('plugin.pdf.ctx.importPdf', null, 'Import .pdf'), icon: 'ui/download', onClick: pickPdfFile },
+    { type: 'item', label: t('plugin.pdf.ctx.saveToDocuments', null, 'Save to Documents'), icon: 'ui/save', disabled: !hasPdf, onClick: () => void exportCurrent() },
     { type: 'separator' },
     {
       type: 'submenu',
-      label: 'Page',
+      label: t('plugin.pdf.ctx.page', null, 'Page'),
       icon: 'ui/doc',
       items: [
-        { type: 'item', label: 'Previous page', icon: 'ui/chevron-left', disabled: !hasPdf || currentPage <= 0, onClick: () => gotoPage(-1) },
-        { type: 'item', label: 'Next page', icon: 'ui/chevron-right', disabled: !hasPdf || currentPage >= pages - 1, onClick: () => gotoPage(1) },
+        { type: 'item', label: t('plugin.pdf.ctx.previousPage', null, 'Previous page'), icon: 'ui/chevron-left', disabled: !hasPdf || currentPage <= 0, onClick: () => gotoPage(-1) },
+        { type: 'item', label: t('plugin.pdf.ctx.nextPage', null, 'Next page'), icon: 'ui/chevron-right', disabled: !hasPdf || currentPage >= pages - 1, onClick: () => gotoPage(1) },
         { type: 'separator' },
-        { type: 'item', label: 'Rotate left', icon: 'ui/rotate-left', disabled: !hasPdf, onClick: () => void rotateCurrent(-90) },
-        { type: 'item', label: 'Rotate right', icon: 'ui/rotate-right', disabled: !hasPdf, onClick: () => void rotateCurrent(90) },
+        { type: 'item', label: t('plugin.pdf.ctx.rotateLeft', null, 'Rotate left'), icon: 'ui/rotate-left', disabled: !hasPdf, onClick: () => void rotateCurrent(-90) },
+        { type: 'item', label: t('plugin.pdf.ctx.rotateRight', null, 'Rotate right'), icon: 'ui/rotate-right', disabled: !hasPdf, onClick: () => void rotateCurrent(90) },
       ],
     },
     { type: 'separator' },
-    { type: 'item', label: 'Delete PDF', icon: 'ui/trash', danger: true, disabled: !hasPdf, onClick: () => void removeCurrent() },
+    { type: 'item', label: t('plugin.pdf.ctx.deletePdf', null, 'Delete PDF'), icon: 'ui/trash', danger: true, disabled: !hasPdf, onClick: () => void removeCurrent() },
   ];
 }
 

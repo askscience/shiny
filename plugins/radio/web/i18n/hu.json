@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetes rádió a Radio Browseren keresztül — állomások keresése és lejátszása a Rádió ablakban",
+  "plugin.radio.meta.summary": "Internetes rádió: állomások keresése és lejátszása (Radio Browser)",
+  "plugin.radio.meta.category": "Média",
+
+  "plugin.radio.notify.nowPlaying": "Most szól",
+  "plugin.radio.toast.streamRefused": "A stream nem volt lejátszható — próbáljon másik állomást",
+
+  "plugin.radio.status.pickStation": "Válasszon állomást",
+  "plugin.radio.status.streaming": "Streamelés",
+
+  "plugin.radio.empty.noStations": "Nem található állomás",
+  "plugin.radio.empty.noMatch": "Nincs találat erre: „{term}”.",
+
+  "plugin.radio.error.unreachable": "A Radio Browser nem érhető el",
+  "plugin.radio.error.tryAgain": "Próbálja újra egy pillanat múlva",
+
+  "plugin.radio.fallback.station": "Állomás",
+  "plugin.radio.search.placeholder": "Állomások vagy műfajok…",
+
+  "plugin.radio.menu.play": "Lejátszás",
+  "plugin.radio.menu.pause": "Szünet",
+  "plugin.radio.menu.stop": "Leállítás",
+  "plugin.radio.menu.refresh": "Állomások frissítése"
+}

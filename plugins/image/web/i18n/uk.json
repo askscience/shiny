@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Фоторедактор — корекція тону й кольору, розмиття/різкість/віньєтування та плівкові фільтри в один дотик у вікні «Зображення»",
+  "plugin.image.meta.summary": "Фоторедактор: корекції та плівкові фільтри",
+  "plugin.image.meta.category": "Медіа",
+
+  "plugin.image.toolbar.menu": "Меню",
+  "plugin.image.toolbar.fitToggle": "Перемкнути вписування / фактичний розмір",
+
+  "plugin.image.dial.brightness": "Яскравість",
+  "plugin.image.dial.contrast": "Контраст",
+  "plugin.image.dial.exposure": "Експозиція",
+  "plugin.image.dial.vibrance": "Соковитість",
+  "plugin.image.dial.saturation": "Насиченість",
+  "plugin.image.dial.blur": "Розмиття",
+  "plugin.image.dial.sharpen": "Різкість",
+  "plugin.image.dial.vignette": "Віньєтування",
+
+  "plugin.image.oneClick.autoTone": "Автотон",
+  "plugin.image.oneClick.autoContrast": "Автоконтраст",
+  "plugin.image.oneClick.invert": "Інвертувати",
+  "plugin.image.oneClick.grayscale": "Ч/Б",
+  "plugin.image.oneClick.sepia": "Сепія",
+  "plugin.image.oneClick.revert": "Повернути",
+  "plugin.image.oneClick.revertTitle": "Відновити початкове зображення",
+
+  "plugin.image.empty.title": "Зображення не відкрито",
+  "plugin.image.empty.body": "Відкрийте або перетягніть зображення, щоб почати.",
+  "plugin.image.empty.open": "Відкрити зображення",
+
+  "plugin.image.menu.file": "Файл",
+  "plugin.image.menu.image": "Зображення",
+  "plugin.image.menu.view": "Вигляд",
+  "plugin.image.menu.open": "Відкрити…",
+  "plugin.image.menu.saveCopy": "Зберегти копію…",
+  "plugin.image.menu.delete": "Видалити зображення",
+  "plugin.image.menu.rotateLeft": "Повернути ліворуч",
+  "plugin.image.menu.rotateRight": "Повернути праворуч",
+  "plugin.image.menu.flipH": "Віддзеркалити горизонтально",
+  "plugin.image.menu.flipV": "Віддзеркалити вертикально",
+  "plugin.image.menu.revert": "Повернути до оригіналу",
+  "plugin.image.menu.zoomIn": "Збільшити",
+  "plugin.image.menu.zoomOut": "Зменшити",
+  "plugin.image.menu.fit": "Вписати",
+  "plugin.image.menu.actualSize": "Фактичний розмір",
+
+  "plugin.image.ctx.open": "Відкрити зображення…",
+
+  "plugin.image.dialog.deleteConfirm": "Видалити \"{title}\"?",
+  "plugin.image.dialog.thisImage": "це зображення",
+
+  "plugin.image.toast.openFirst": "Спершу відкрийте зображення",
+  "plugin.image.toast.opened": "Відкрито {title}",
+  "plugin.image.toast.editFailed": "Не вдалося відредагувати",
+  "plugin.image.toast.operationFailed": "Операція не вдалася",
+  "plugin.image.toast.renderFailed": "Не вдалося відобразити зображення",
+  "plugin.image.toast.uploadFailed": "Завантаження не вдалося",
+  "plugin.image.toast.saveFailed": "Не вдалося зберегти",
+  "plugin.image.toast.deleted": "Зображення видалено",
+  "plugin.image.toast.deleteFailed": "Не вдалося видалити зображення",
+  "plugin.image.toast.reverted": "Повернуто до оригінальних пікселів",
+  "plugin.image.toast.openFailed": "Не вдалося відкрити файл",
+
+  "plugin.image.error.emptyFile": "цей файл порожній",
+  "plugin.image.error.notAnImage": "“{name}” не є зображенням, яке може відкрити редактор",
+  "plugin.image.error.unnamedFile": "файл"
+}

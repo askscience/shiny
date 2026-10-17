@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "En riktig Linux-terminal i appen — ett PTY-baserat inloggningsskal i ett eget fönster",
+  "plugin.terminal.meta.summary": "Terminal: ett riktigt skal över en PTY, renderat med xterm.js",
+  "plugin.terminal.meta.category": "System",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Ny flik",
+  "plugin.terminal.tab.close": "Stäng {name}",
+  "plugin.terminal.tabs.label": "Terminalflikar",
+
+  "plugin.terminal.status.starting": "startar terminalen…",
+  "plugin.terminal.status.connecting": "ansluter…",
+  "plugin.terminal.status.reconnecting": "återansluter…",
+  "plugin.terminal.status.connected": "ansluten",
+  "plugin.terminal.status.startFailed": "kunde inte starta ett skal",
+  "plugin.terminal.status.expired": "sessionen har gått ut — logga in igen",
+  "plugin.terminal.status.xtermFailed": "kunde inte läsa in xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: högst {count} flik",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: högst {count} flikar",
+  "plugin.terminal.toast.startFailed": "Terminal: kunde inte starta ett skal",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js kunde inte läsas in",
+  "plugin.terminal.toast.clipboardUnavailable": "Urklipp är inte tillgängligt",
+
+  "plugin.terminal.ctx.copy": "Kopiera",
+  "plugin.terminal.ctx.paste": "Klistra in",
+  "plugin.terminal.ctx.clearScrollback": "Rensa rullningshistoriken",
+  "plugin.terminal.ctx.closeTab": "Stäng fliken"
+}

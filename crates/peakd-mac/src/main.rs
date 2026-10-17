@@ -19,6 +19,7 @@ mod bench;
 mod browse;
 mod config;
 mod display;
+mod i18n;
 mod touchbar;
 
 use std::net::{TcpStream, ToSocketAddrs};
@@ -258,6 +259,12 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
     // The single-use auto-login token rides only on the initial navigation; it
     // is never logged and never placed in argv.
     let nav_url = boot_url(&cfg.start_url, cfg.boot_token.as_deref());
+    // The shell's own strings — the Touch Bar labels — in the session language:
+    // `--lang`, else `PEAKD_LANG`, else the locale environment, else English.
+    // The web UI follows the per-user `ui.locale` preference instead, and the
+    // bar's action ids stay untranslated (they are the wire protocol).
+    let strings = i18n::strings(&cfg.lang);
+    println!("peakd: shell language {}", strings.lang());
     // Typed with the benchmark's step enum so one loop serves both a normal
     // session (where the variant is never sent) and a benchmark run.
     let event_loop = bench::event_loop();
@@ -374,7 +381,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
 
     // Put a native Touch Bar on the kiosk window (macOS; a no-op elsewhere).
     let touchbar_handle = if cfg.touchbar {
-        touchbar::install(&window, touchbar_bridge.clone())
+        touchbar::install(&window, touchbar_bridge.clone(), &strings)
     } else {
         None
     };

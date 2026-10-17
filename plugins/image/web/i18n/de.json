@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotoeditor — Ton- und Farbanpassungen, Weichzeichnen/Schärfen/Vignette und Film-Looks per Klick im Bild-Fenster",
+  "plugin.image.meta.summary": "Fotoeditor: Anpassungen und Film-Looks",
+  "plugin.image.meta.category": "Medien",
+
+  "plugin.image.toolbar.menu": "Menü",
+  "plugin.image.toolbar.fitToggle": "Zwischen Anpassen und Originalgröße wechseln",
+
+  "plugin.image.dial.brightness": "Helligkeit",
+  "plugin.image.dial.contrast": "Kontrast",
+  "plugin.image.dial.exposure": "Belichtung",
+  "plugin.image.dial.vibrance": "Dynamik",
+  "plugin.image.dial.saturation": "Sättigung",
+  "plugin.image.dial.blur": "Weichzeichnen",
+  "plugin.image.dial.sharpen": "Schärfen",
+  "plugin.image.dial.vignette": "Vignette",
+
+  "plugin.image.oneClick.autoTone": "Auto-Ton",
+  "plugin.image.oneClick.autoContrast": "Auto-Kontrast",
+  "plugin.image.oneClick.invert": "Invertieren",
+  "plugin.image.oneClick.grayscale": "Schwarzweiß",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Zurücksetzen",
+  "plugin.image.oneClick.revertTitle": "Das ursprünglich hochgeladene Bild wiederherstellen",
+
+  "plugin.image.empty.title": "Kein Bild geöffnet",
+  "plugin.image.empty.body": "Öffnen Sie ein Bild oder ziehen Sie eines hierher.",
+  "plugin.image.empty.open": "Bild öffnen",
+
+  "plugin.image.menu.file": "Datei",
+  "plugin.image.menu.image": "Bild",
+  "plugin.image.menu.view": "Ansicht",
+  "plugin.image.menu.open": "Öffnen…",
+  "plugin.image.menu.saveCopy": "Kopie speichern…",
+  "plugin.image.menu.delete": "Bild löschen",
+  "plugin.image.menu.rotateLeft": "Nach links drehen",
+  "plugin.image.menu.rotateRight": "Nach rechts drehen",
+  "plugin.image.menu.flipH": "Horizontal spiegeln",
+  "plugin.image.menu.flipV": "Vertikal spiegeln",
+  "plugin.image.menu.revert": "Auf das Original zurücksetzen",
+  "plugin.image.menu.zoomIn": "Vergrößern",
+  "plugin.image.menu.zoomOut": "Verkleinern",
+  "plugin.image.menu.fit": "Anpassen",
+  "plugin.image.menu.actualSize": "Originalgröße",
+
+  "plugin.image.ctx.open": "Bild öffnen…",
+
+  "plugin.image.dialog.deleteConfirm": "„{title}“ löschen?",
+  "plugin.image.dialog.thisImage": "dieses Bild",
+
+  "plugin.image.toast.openFirst": "Öffnen Sie zuerst ein Bild",
+  "plugin.image.toast.opened": "{title} geöffnet",
+  "plugin.image.toast.editFailed": "Die Bearbeitung ist fehlgeschlagen",
+  "plugin.image.toast.operationFailed": "Der Vorgang ist fehlgeschlagen",
+  "plugin.image.toast.renderFailed": "Das Bild konnte nicht gerendert werden",
+  "plugin.image.toast.uploadFailed": "Der Upload ist fehlgeschlagen",
+  "plugin.image.toast.saveFailed": "Speichern fehlgeschlagen",
+  "plugin.image.toast.deleted": "Bild gelöscht",
+  "plugin.image.toast.deleteFailed": "Das Bild konnte nicht gelöscht werden",
+  "plugin.image.toast.reverted": "Auf die ursprünglichen Pixel zurückgesetzt",
+  "plugin.image.toast.openFailed": "Die Datei konnte nicht geöffnet werden",
+
+  "plugin.image.error.emptyFile": "diese Datei ist leer",
+  "plugin.image.error.notAnImage": "„{name}“ ist kein Bild, das der Editor öffnen kann",
+  "plugin.image.error.unnamedFile": "Datei"
+}

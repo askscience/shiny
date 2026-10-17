@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetradio Radio Browserin kautta — hae asemia ja toista niitä Radio-ikkunassa",
+  "plugin.radio.meta.summary": "Internetradio: hae ja toista asemia (Radio Browser)",
+  "plugin.radio.meta.category": "Media",
+
+  "plugin.radio.notify.nowPlaying": "Toistetaan",
+  "plugin.radio.toast.streamRefused": "Suoratoistoa ei voitu toistaa — kokeile toista asemaa",
+
+  "plugin.radio.status.pickStation": "Valitse asema",
+  "plugin.radio.status.streaming": "Suoratoisto",
+
+  "plugin.radio.empty.noStations": "Asemia ei löytynyt",
+  "plugin.radio.empty.noMatch": "Mikään ei vastannut hakua “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser ei ole tavoitettavissa",
+  "plugin.radio.error.tryAgain": "Yritä hetken kuluttua uudelleen",
+
+  "plugin.radio.fallback.station": "Asema",
+  "plugin.radio.search.placeholder": "Asemia tai tyylilajeja…",
+
+  "plugin.radio.menu.play": "Toista",
+  "plugin.radio.menu.pause": "Keskeytä",
+  "plugin.radio.menu.stop": "Pysäytä",
+  "plugin.radio.menu.refresh": "Päivitä asemat"
+}

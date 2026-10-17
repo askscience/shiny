@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Ein echtes Linux-Terminal in der App — eine PTY-gestützte Login-Shell in einem eigenen Fenster",
+  "plugin.terminal.meta.summary": "Terminal: eine echte Shell über ein PTY, dargestellt mit xterm.js",
+  "plugin.terminal.meta.category": "System",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Neuer Tab",
+  "plugin.terminal.tab.close": "{name} schließen",
+  "plugin.terminal.tabs.label": "Terminal-Tabs",
+
+  "plugin.terminal.status.starting": "Terminal wird gestartet…",
+  "plugin.terminal.status.connecting": "Verbindung wird hergestellt…",
+  "plugin.terminal.status.reconnecting": "Verbindung wird wiederhergestellt…",
+  "plugin.terminal.status.connected": "verbunden",
+  "plugin.terminal.status.startFailed": "die Shell konnte nicht gestartet werden",
+  "plugin.terminal.status.expired": "Sitzung abgelaufen — melden Sie sich erneut an",
+  "plugin.terminal.status.xtermFailed": "xterm.js konnte nicht geladen werden",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: höchstens {count} Tab",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: höchstens {count} Tabs",
+  "plugin.terminal.toast.startFailed": "Terminal: die Shell konnte nicht gestartet werden",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js konnte nicht geladen werden",
+  "plugin.terminal.toast.clipboardUnavailable": "Zwischenablage nicht verfügbar",
+
+  "plugin.terminal.ctx.copy": "Kopieren",
+  "plugin.terminal.ctx.paste": "Einfügen",
+  "plugin.terminal.ctx.clearScrollback": "Bildschirmpuffer löschen",
+  "plugin.terminal.ctx.closeTab": "Tab schließen"
+}

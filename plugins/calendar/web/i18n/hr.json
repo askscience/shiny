@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalendar — planirajte, popisujte i organizirajte događaje u prozoru Kalendar",
+  "plugin.calendar.meta.summary": "Kalendar: planirajte i organizirajte događaje",
+  "plugin.calendar.meta.category": "Ured",
+
+  "plugin.calendar.month.january": "Siječanj",
+  "plugin.calendar.month.february": "Veljača",
+  "plugin.calendar.month.march": "Ožujak",
+  "plugin.calendar.month.april": "Travanj",
+  "plugin.calendar.month.may": "Svibanj",
+  "plugin.calendar.month.june": "Lipanj",
+  "plugin.calendar.month.july": "Srpanj",
+  "plugin.calendar.month.august": "Kolovoz",
+  "plugin.calendar.month.september": "Rujan",
+  "plugin.calendar.month.october": "Listopad",
+  "plugin.calendar.month.november": "Studeni",
+  "plugin.calendar.month.december": "Prosinac",
+
+  "plugin.calendar.grid.sun": "Ned",
+  "plugin.calendar.grid.mon": "Pon",
+  "plugin.calendar.grid.tue": "Uto",
+  "plugin.calendar.grid.wed": "Sri",
+  "plugin.calendar.grid.thu": "Čet",
+  "plugin.calendar.grid.fri": "Pet",
+  "plugin.calendar.grid.sat": "Sub",
+
+  "plugin.calendar.event.allDay": "Cijeli dan",
+
+  "plugin.calendar.toolbar.previousMonth": "Prethodni mjesec",
+  "plugin.calendar.toolbar.nextMonth": "Sljedeći mjesec",
+  "plugin.calendar.toolbar.today": "Danas",
+  "plugin.calendar.toolbar.newEvent": "Novi događaj",
+
+  "plugin.calendar.ctx.refresh": "Osvježi",
+
+  "plugin.calendar.detail.edit": "Uredi",
+  "plugin.calendar.detail.delete": "Izbriši",
+
+  "plugin.calendar.empty.noEvents": "Nema događaja",
+  "plugin.calendar.empty.noEventsBody": "Ništa nije zakazano. Dodajte događaj ili zamolite AI da ga zakaže.",
+
+  "plugin.calendar.dialog.title": "Događaj",
+  "plugin.calendar.dialog.editTitle": "Uredi događaj",
+  "plugin.calendar.dialog.titleField": "Naslov",
+  "plugin.calendar.dialog.titlePlaceholder": "npr. Sastanak tima",
+  "plugin.calendar.dialog.dateField": "Datum",
+  "plugin.calendar.dialog.startTimeField": "Vrijeme početka",
+  "plugin.calendar.dialog.endTimeField": "Vrijeme završetka",
+  "plugin.calendar.dialog.locationField": "Mjesto",
+  "plugin.calendar.dialog.locationPlaceholder": "Mjesto (nije obavezno)",
+  "plugin.calendar.dialog.notesField": "Bilješke",
+  "plugin.calendar.dialog.notesPlaceholder": "Bilješke (nije obavezno)",
+  "plugin.calendar.dialog.cancel": "Odustani",
+  "plugin.calendar.dialog.save": "Spremi događaj",
+
+  "plugin.calendar.toast.titleRequired": "Naslov je obavezan",
+  "plugin.calendar.toast.dateRequired": "Datum je obavezan",
+  "plugin.calendar.toast.updated": "Događaj ažuriran",
+  "plugin.calendar.toast.scheduled": "Događaj zakazan",
+  "plugin.calendar.toast.deleted": "Događaj izbrisan",
+  "plugin.calendar.toast.loadFailed": "Nije moguće učitati događaje",
+  "plugin.calendar.toast.saveFailed": "Nije moguće spremiti događaj",
+  "plugin.calendar.toast.deleteFailed": "Nije moguće izbrisati događaj",
+
+  "plugin.calendar.confirm.deleteEvent": "Izbrisati \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Događaj počinje uskoro"
+}

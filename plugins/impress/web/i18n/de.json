@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Präsentationen",
+  "plugin.impress.toolbar.titlePlaceholder": "Ohne Titel",
+  "plugin.impress.toolbar.theme": "Thema",
+  "plugin.impress.toolbar.present": "Präsentieren",
+  "plugin.impress.toolbar.newDeck": "Neue Präsentation",
+  "plugin.impress.toolbar.importOdp": ".odp importieren",
+  "plugin.impress.toolbar.saveToDocuments": "In Dokumente speichern",
+  "plugin.impress.toolbar.saveNow": "Jetzt speichern",
+  "plugin.impress.toolbar.deleteDeck": "Präsentation löschen",
+
+  "plugin.impress.menu.empty": "Noch keine Präsentationen",
+  "plugin.impress.menu.newDeck": "Neue Präsentation",
+  "plugin.impress.menu.importOdp": ".odp importieren",
+  "plugin.impress.menu.saveToDocuments": "In Dokumente speichern",
+  "plugin.impress.menu.deleteDeck": "Präsentation löschen",
+
+  "plugin.impress.ctx.newDeck": "Neue Präsentation",
+  "plugin.impress.ctx.addSlide": "Folie hinzufügen",
+  "plugin.impress.ctx.saveNow": "Jetzt speichern",
+  "plugin.impress.ctx.present": "Präsentieren",
+  "plugin.impress.ctx.stopPresenting": "Präsentation beenden",
+  "plugin.impress.ctx.deleteDeck": "Präsentation löschen",
+
+  "plugin.impress.status.saving": "Wird gespeichert…",
+  "plugin.impress.status.unsaved": "Ungespeicherte Änderungen",
+  "plugin.impress.status.saved.one": "Gespeichert {time} · {count} Folie",
+  "plugin.impress.status.saved.other": "Gespeichert {time} · {count} Folien",
+
+  "plugin.impress.empty.noDeck": "Keine Präsentation",
+  "plugin.impress.empty.noDeckBody": "Erstellen Sie eine oder bitten Sie die KI, eine Präsentation zu erstellen",
+
+  "plugin.impress.inspector.layout": "Layout",
+  "plugin.impress.inspector.transition": "Übergang",
+  "plugin.impress.inspector.bullets": "Aufzählungspunkte",
+  "plugin.impress.inspector.speakerNotes": "Notizen für Referenten",
+  "plugin.impress.inspector.hint": "Klicken Sie auf einen Text auf der Folie, um ihn direkt zu bearbeiten.",
+  "plugin.impress.inspector.applyAll": "Diesen Übergang und den Aufbau der Aufzählungspunkte auf jede Folie anwenden",
+  "plugin.impress.inspector.applyAllLabel": "Auf alle Folien anwenden",
+
+  "plugin.impress.ops.addSlide": "Folie hinzufügen",
+  "plugin.impress.ops.moveUp": "Nach oben",
+  "plugin.impress.ops.moveDown": "Nach unten",
+  "plugin.impress.ops.deleteSlide": "Folie löschen",
+
+  "plugin.impress.transition.none": "Ohne",
+  "plugin.impress.transition.fade": "Überblenden",
+  "plugin.impress.transition.slide": "Gleiten",
+  "plugin.impress.transition.push": "Schieben",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "Alle auf einmal",
+  "plugin.impress.reveal.bullets": "Nacheinander",
+
+  "plugin.impress.slide.addText": "Text hinzufügen",
+  "plugin.impress.slide.addTitle": "Titel hinzufügen",
+  "plugin.impress.slide.addSubtitle": "Untertitel hinzufügen",
+  "plugin.impress.slide.attribution": "Quellenangabe",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Zurück zum Editor",
+  "plugin.impress.present.fullScreen": "Vollbild",
+  "plugin.impress.present.exitFullScreen": "Vollbild beenden",
+  "plugin.impress.present.blocked": "Vollbild wurde vom Browser blockiert",
+
+  "plugin.impress.dialog.deleteDeck": "„{title}“ löschen?",
+
+  "plugin.impress.toast.saveFailed": "Speichern fehlgeschlagen",
+  "plugin.impress.toast.openFailed": "Die Präsentation konnte nicht geöffnet werden",
+  "plugin.impress.toast.createFailed": "Die Präsentation konnte nicht erstellt werden",
+  "plugin.impress.toast.deleteFailed": "Die Präsentation konnte nicht gelöscht werden",
+  "plugin.impress.toast.imported": "{name} importiert",
+  "plugin.impress.toast.importFailed": "Import fehlgeschlagen — ist dies eine gültige .odp-Datei?",
+  "plugin.impress.toast.openFileFailed": "Die Datei konnte nicht geöffnet werden",
+
+  "plugin.impress.meta.description": "Präsentationsprogramm — Präsentationen werden als Folien gespeichert und als offene .odp-Dateien exportiert",
+  "plugin.impress.meta.summary": "Impress: OpenDocument-Folienpräsentationen (.odp) erstellen, bearbeiten und präsentieren",
+  "plugin.impress.meta.category": "Office"
+}

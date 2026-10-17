@@ -1,0 +1,81 @@
+{
+  "plugin.impress.toolbar.presentations": "Predstavitve",
+  "plugin.impress.toolbar.titlePlaceholder": "Neimenovano",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Predvajaj",
+  "plugin.impress.toolbar.newDeck": "Nova predstavitev",
+  "plugin.impress.toolbar.importOdp": "Uvozi .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Shrani v Dokumente",
+  "plugin.impress.toolbar.saveNow": "Shrani zdaj",
+  "plugin.impress.toolbar.deleteDeck": "Izbriši predstavitev",
+
+  "plugin.impress.menu.empty": "Ni še predstavitev",
+  "plugin.impress.menu.newDeck": "Nova predstavitev",
+  "plugin.impress.menu.importOdp": "Uvozi .odp",
+  "plugin.impress.menu.saveToDocuments": "Shrani v Dokumente",
+  "plugin.impress.menu.deleteDeck": "Izbriši predstavitev",
+
+  "plugin.impress.ctx.newDeck": "Nova predstavitev",
+  "plugin.impress.ctx.addSlide": "Dodaj prosojnico",
+  "plugin.impress.ctx.saveNow": "Shrani zdaj",
+  "plugin.impress.ctx.present": "Predvajaj",
+  "plugin.impress.ctx.stopPresenting": "Ustavi predstavitev",
+  "plugin.impress.ctx.deleteDeck": "Izbriši predstavitev",
+
+  "plugin.impress.status.saving": "Shranjevanje…",
+  "plugin.impress.status.unsaved": "Neshranjene spremembe",
+  "plugin.impress.status.saved.one": "Shranjeno {time} · {count} prosojnica",
+  "plugin.impress.status.saved.two": "Shranjeno {time} · {count} prosojnici",
+  "plugin.impress.status.saved.few": "Shranjeno {time} · {count} prosojnice",
+  "plugin.impress.status.saved.other": "Shranjeno {time} · {count} prosojnic",
+
+  "plugin.impress.empty.noDeck": "Ni predstavitve",
+  "plugin.impress.empty.noDeckBody": "Ustvarite jo ali prosite umetno inteligenco, naj sestavi predstavitev",
+
+  "plugin.impress.inspector.layout": "Postavitev",
+  "plugin.impress.inspector.transition": "Prehod",
+  "plugin.impress.inspector.bullets": "Alineje",
+  "plugin.impress.inspector.speakerNotes": "Opombe govorca",
+  "plugin.impress.inspector.hint": "Kliknite poljubno besedilo na prosojnici in ga uredite neposredno.",
+  "plugin.impress.inspector.applyAll": "Uporabi ta prehod in razkritje alinej za vse prosojnice",
+  "plugin.impress.inspector.applyAllLabel": "Uporabi za vse prosojnice",
+
+  "plugin.impress.ops.addSlide": "Dodaj prosojnico",
+  "plugin.impress.ops.moveUp": "Premakni gor",
+  "plugin.impress.ops.moveDown": "Premakni dol",
+  "plugin.impress.ops.deleteSlide": "Izbriši prosojnico",
+
+  "plugin.impress.transition.none": "Brez",
+  "plugin.impress.transition.fade": "Postopno",
+  "plugin.impress.transition.slide": "Drsenje",
+  "plugin.impress.transition.push": "Potiskanje",
+  "plugin.impress.transition.zoom": "Povečava",
+
+  "plugin.impress.reveal.all": "Vse naenkrat",
+  "plugin.impress.reveal.bullets": "Ena za drugo",
+
+  "plugin.impress.slide.addText": "Dodaj besedilo",
+  "plugin.impress.slide.addTitle": "Dodaj naslov",
+  "plugin.impress.slide.addSubtitle": "Dodaj podnaslov",
+  "plugin.impress.slide.attribution": "Navedba vira",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Nazaj v urejevalnik",
+  "plugin.impress.present.fullScreen": "Celoten zaslon",
+  "plugin.impress.present.exitFullScreen": "Zapri celoten zaslon",
+  "plugin.impress.present.blocked": "Brskalnik je blokiral celoten zaslon",
+
+  "plugin.impress.dialog.deleteDeck": "Izbrišem \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Shranjevanje ni uspelo",
+  "plugin.impress.toast.openFailed": "Predstavitve ni bilo mogoče odpreti",
+  "plugin.impress.toast.createFailed": "Predstavitve ni bilo mogoče ustvariti",
+  "plugin.impress.toast.deleteFailed": "Predstavitve ni bilo mogoče izbrisati",
+  "plugin.impress.toast.imported": "Uvoženo {name}",
+  "plugin.impress.toast.importFailed": "Uvoz ni uspel — je to veljavna datoteka .odp?",
+  "plugin.impress.toast.openFileFailed": "Datoteke ni bilo mogoče odpreti",
+
+  "plugin.impress.meta.description": "Graditelj predstavitev — predstavitve so shranjene kot prosojnice in izvožene kot odprte datoteke .odp",
+  "plugin.impress.meta.summary": "Impress: sestavljajte, urejajte in predvajajte predstavitve OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Pisarna"
+}

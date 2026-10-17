@@ -1,6 +1,7 @@
 /** overlay — modal, sheet, tooltip. Focus stays simple: Esc + backdrop close. */
 
 import { iconButton } from './button.js';
+import { t } from '../../js/i18n.js';
 
 function wireDismiss(root, close) {
   root.addEventListener('click', (e) => { if (e.target === root) close(); });
@@ -31,7 +32,7 @@ export function modal(o = {}) {
     head.appendChild(h);
     if (o.closable !== false) {
       head.appendChild(iconButton({
-        icon: 'ui/close', label: 'Close', variant: 'quiet', size: 'sm',
+        icon: 'ui/close', label: t('common.close'), variant: 'quiet', size: 'sm',
         onClick: () => api.close(),
       }));
     }

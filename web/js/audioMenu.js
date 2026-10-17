@@ -19,6 +19,7 @@ import {
 } from '../ui/index.js';
 import { currentNode, nodeIcon, nodeLabel, nodeSubtitle } from './audioShared.js';
 import { notifyMenuChange } from './menuState.js';
+import { t } from './i18n.js';
 
 const POLL_MS = 2000;
 const VOLUME_DEBOUNCE_MS = 120;
@@ -120,7 +121,7 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup audio-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Sound');
+  popup.setAttribute('aria-label', t('hud.sound'));
 
   const head = document.createElement('div');
   head.className = 'audio-head';
@@ -130,7 +131,7 @@ function ensurePopup() {
   title.className = 'audio-head-title';
   title.appendChild(icon('ui/volume', { size: 15 }));
   const label = document.createElement('span');
-  label.textContent = 'Sound';
+  label.textContent = t('hud.sound');
   title.appendChild(label);
   hintEl = document.createElement('div');
   hintEl.className = 'audio-head-hint';
@@ -140,16 +141,16 @@ function ensurePopup() {
   bodyEl = document.createElement('div');
   bodyEl.className = 'audio-body';
 
-  loadingEl = emptyState({ title: 'Loading sound state…' });
+  loadingEl = emptyState({ title: t('audio.loading') });
   errorEl = emptyState({
     icon: 'ui/warning',
-    title: 'Sound panel unavailable',
-    body: 'PipeWire is not reachable.',
+    title: t('audio.unavailable'),
+    body: t('audio.pipewireUnreachable'),
   });
   errorEl.classList.add('hidden');
 
-  refs.sink = buildSection('Output', 'sink');
-  refs.source = buildSection('Input', 'source');
+  refs.sink = buildSection(t('audio.output'), 'sink');
+  refs.source = buildSection(t('audio.input'), 'source');
 
   bodyEl.append(loadingEl, errorEl, refs.sink.card, refs.source.card);
   popup.append(head, bodyEl);
@@ -169,7 +170,7 @@ function buildSection(label, target) {
   if (target === 'sink') {
     head.appendChild(iconButton({
       icon: 'ui/play',
-      label: 'Play a test sound',
+      label: t('audio.playTestSound'),
       variant: 'quiet',
       size: 'sm',
       onClick: playTest,
@@ -194,7 +195,7 @@ function buildSection(label, target) {
   controls.className = 'audio-controls';
   const muteBtn = iconButton({
     icon: target === 'source' ? 'ui/mic-off' : 'hud/volume-muted',
-    label: target === 'source' ? 'Mute microphone' : 'Mute output',
+    label: target === 'source' ? t('audio.muteMic') : t('audio.muteOutput'),
     variant: 'quiet',
     size: 'sm',
     onClick: () => void toggleMute(target),
@@ -209,7 +210,7 @@ function buildSection(label, target) {
     value: 0,
     onInput: (value) => onVolumeInput(target, value),
   });
-  range.setAttribute('aria-label', target === 'source' ? 'Input volume' : 'Output volume');
+  range.setAttribute('aria-label', target === 'source' ? t('audio.inputVolume') : t('audio.outputVolume'));
   range.addEventListener('change', () => void commitVolume(target));
   controls.append(muteBtn, range);
 
@@ -255,9 +256,9 @@ function render(force = false) {
   refs.source.card.classList.toggle('hidden', !available);
 
   if (!available) {
-    hintEl.textContent = status.reason || 'PipeWire is not available';
+    hintEl.textContent = status.reason || t('audio.pipewireNotAvailable');
     const text = errorEl.querySelector('.ui-subtitle');
-    if (text) text.textContent = status.reason || 'PipeWire is not reachable.';
+    if (text) text.textContent = status.reason || t('audio.pipewireUnreachable');
     return;
   }
 
@@ -284,8 +285,8 @@ function updateSection(ref, target, nodes, defaultName) {
 
   if (!node) {
     setIcon(ref.iconEl, nodeIcon(null, target), { size: 18 });
-    ref.titleEl.textContent = target === 'sink' ? 'No output devices' : 'No input devices';
-    ref.subEl.textContent = 'PipeWire reports none';
+    ref.titleEl.textContent = target === 'sink' ? t('audio.noOutputs') : t('audio.noInputs');
+    ref.subEl.textContent = t('audio.pipewireNone');
     ref.pctEl.textContent = '';
     ref.listEl.classList.add('hidden');
     return;
@@ -294,15 +295,15 @@ function updateSection(ref, target, nodes, defaultName) {
   setIcon(ref.iconEl, nodeIcon(node, target), { size: 18 });
   ref.titleEl.textContent = nodeLabel(node);
   ref.subEl.textContent = nodeSubtitle(node);
-  ref.pctEl.textContent = node.muted ? 'Muted' : `${node.volume_percent}%`;
+  ref.pctEl.textContent = node.muted ? t('audio.muted') : `${node.volume_percent}%`;
   ref.pctEl.classList.toggle('is-over', !node.muted && node.volume_percent > 100);
   // The server tells us the ceiling: 150 % normally, more for the T2 speaker
   // DSP. Input stays at 100 % so a boosted microphone cannot clip the capture.
   ref.range.max = String(target === 'sink' ? (node.max_volume || 150) : 100);
   setButtonIcon(ref.muteBtn, nodeIcon(node, target));
   ref.muteBtn.setAttribute('aria-label', node.muted
-    ? (target === 'source' ? 'Unmute microphone' : 'Unmute output')
-    : (target === 'source' ? 'Mute microphone' : 'Mute output'));
+    ? (target === 'source' ? t('audio.unmuteMic') : t('audio.unmuteOutput'))
+    : (target === 'source' ? t('audio.muteMic') : t('audio.muteOutput')));
   if (!dragging) ref.range.value = String(node.volume_percent);
 
   renderDeviceList(ref, target, nodes);
@@ -369,7 +370,7 @@ async function pushVolume(target, percent) {
       body: JSON.stringify({ target, id: node.id, percent }),
     });
   } catch (err) {
-    toast(err.message || 'Could not set the volume', { type: 'error' });
+    toast(err.message || t('audio.setVolumeFailed'), { type: 'error' });
   }
 }
 
@@ -382,7 +383,7 @@ async function toggleMute(target) {
       body: JSON.stringify({ target, id: node.id, muted: !node.muted }),
     });
   } catch (err) {
-    toast(err.message || 'Could not change the mute state', { type: 'error' });
+    toast(err.message || t('audio.setMuteFailed'), { type: 'error' });
   } finally {
     await refresh(true);
   }
@@ -394,9 +395,12 @@ async function setDefault(target, node) {
       method: 'POST',
       body: JSON.stringify({ target, id: node.id }),
     });
-    toast(`${target === 'sink' ? 'Output' : 'Input'}: ${nodeLabel(node)}`);
+    toast(t('audio.switched', {
+      target: target === 'sink' ? t('audio.output') : t('audio.input'),
+      name: nodeLabel(node),
+    }));
   } catch (err) {
-    toast(err.message || 'Could not switch the device', { type: 'error' });
+    toast(err.message || t('audio.switchFailed'), { type: 'error' });
   } finally {
     await refresh(true);
   }
@@ -420,6 +424,6 @@ function playTest() {
     osc.start(now);
     osc.stop(now + 0.55);
   } catch (_) {
-    toast('Could not play a test sound', { type: 'error' });
+    toast(t('audio.testSoundFailed'), { type: 'error' });
   }
 }

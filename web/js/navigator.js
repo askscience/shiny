@@ -15,6 +15,7 @@ import {
 import { setHighFrequencyGps } from './gps.js';
 import { clearArtifacts } from './artifacts.js';
 import { clearInsightCards } from './insights/insightStore.js';
+import { t } from './i18n.js';
 
 const navHud = document.getElementById('nav-hud');
 const instructionEl = document.getElementById('nav-instruction');
@@ -125,8 +126,12 @@ function stepIndexForDistance(traveled) {
 }
 
 function formatDistance(m) {
-  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
-  return `${Math.round(m)} m`;
+  if (m >= 1000) {
+    const km = (m / 1000).toFixed(1);
+    return t('nav.distanceKm', { value: km }, `${km} km`);
+  }
+  const meters = Math.round(m);
+  return t('nav.distanceM', { value: meters }, `${meters} m`);
 }
 
 function formatDuration(sec) {
@@ -134,9 +139,11 @@ function formatDuration(sec) {
   if (min >= 60) {
     const h = Math.floor(min / 60);
     const m = min % 60;
-    return m ? `${h} h ${m} min` : `${h} h`;
+    return m
+      ? t('duration.hoursMinutes', { h, m })
+      : t('duration.hours', { h });
   }
-  return `${min} min`;
+  return t('duration.minutes', { m: min });
 }
 
 function updateBanner() {
@@ -149,7 +156,9 @@ function updateBanner() {
 
   const step = steps[currentStepIdx];
   const instruction = step?.instruction?.trim()
-    || (remainingM < ARRIVAL_RADIUS_M ? 'You have arrived' : 'Continue on route');
+    || (remainingM < ARRIVAL_RADIUS_M
+      ? t('nav.arrived', null, 'You have arrived')
+      : t('nav.continue'));
 
   if (instructionEl) instructionEl.textContent = instruction;
   if (metaEl) {
@@ -207,7 +216,7 @@ function onGpsUpdate({ lat, lon, heading, speed }) {
 
   const destDist = haversineM(lat, lon, session.to_lat, session.to_lon);
   if (destDist <= ARRIVAL_RADIUS_M) {
-    if (instructionEl) instructionEl.textContent = 'You have arrived';
+    if (instructionEl) instructionEl.textContent = t('nav.arrived', null, 'You have arrived');
     if (metaEl) metaEl.textContent = session.destination;
     updateNavigatorCamera({
       lat,
@@ -277,7 +286,7 @@ export async function startNavigator(nav) {
   window.dispatchEvent(new CustomEvent('artifact:dock'));
 
   session = {
-    destination: nav.destination || 'Destination',
+    destination: nav.destination || t('nav.destination', null, 'Destination'),
     to_lat: nav.to_lat,
     to_lon: nav.to_lon,
     geometry: nav.geometry,
@@ -329,7 +338,7 @@ export function initNavigator() {
   exitBtn?.addEventListener('click', () => {
     stopNavigator();
     window.dispatchEvent(new CustomEvent('app:toast', {
-      detail: { message: 'Navigation ended', type: 'info' },
+      detail: { message: t('nav.ended', null, 'Navigation ended'), type: 'info' },
     }));
   });
 

@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Kalendārs — plānojiet, uzskaitiet un organizējiet notikumus Kalendāra logā",
+  "plugin.calendar.meta.summary": "Kalendārs: plānot un organizēt notikumus",
+  "plugin.calendar.meta.category": "Birojs",
+
+  "plugin.calendar.month.january": "Janvāris",
+  "plugin.calendar.month.february": "Februāris",
+  "plugin.calendar.month.march": "Marts",
+  "plugin.calendar.month.april": "Aprīlis",
+  "plugin.calendar.month.may": "Maijs",
+  "plugin.calendar.month.june": "Jūnijs",
+  "plugin.calendar.month.july": "Jūlijs",
+  "plugin.calendar.month.august": "Augusts",
+  "plugin.calendar.month.september": "Septembris",
+  "plugin.calendar.month.october": "Oktobris",
+  "plugin.calendar.month.november": "Novembris",
+  "plugin.calendar.month.december": "Decembris",
+
+  "plugin.calendar.grid.sun": "Sv",
+  "plugin.calendar.grid.mon": "Pr",
+  "plugin.calendar.grid.tue": "Ot",
+  "plugin.calendar.grid.wed": "Tr",
+  "plugin.calendar.grid.thu": "Ce",
+  "plugin.calendar.grid.fri": "Pk",
+  "plugin.calendar.grid.sat": "Se",
+
+  "plugin.calendar.event.allDay": "Visu dienu",
+
+  "plugin.calendar.toolbar.previousMonth": "Iepriekšējais mēnesis",
+  "plugin.calendar.toolbar.nextMonth": "Nākamais mēnesis",
+  "plugin.calendar.toolbar.today": "Šodien",
+  "plugin.calendar.toolbar.newEvent": "Jauns notikums",
+
+  "plugin.calendar.ctx.refresh": "Atjaunināt",
+
+  "plugin.calendar.detail.edit": "Rediģēt",
+  "plugin.calendar.detail.delete": "Dzēst",
+
+  "plugin.calendar.empty.noEvents": "Nav notikumu",
+  "plugin.calendar.empty.noEventsBody": "Nekas nav ieplānots. Pievienojiet notikumu vai palūdziet MI to ieplānot.",
+
+  "plugin.calendar.dialog.title": "Notikums",
+  "plugin.calendar.dialog.editTitle": "Rediģēt notikumu",
+  "plugin.calendar.dialog.titleField": "Nosaukums",
+  "plugin.calendar.dialog.titlePlaceholder": "piem. Komandas sapulce",
+  "plugin.calendar.dialog.dateField": "Datums",
+  "plugin.calendar.dialog.startTimeField": "Sākuma laiks",
+  "plugin.calendar.dialog.endTimeField": "Beigu laiks",
+  "plugin.calendar.dialog.locationField": "Atrašanās vieta",
+  "plugin.calendar.dialog.locationPlaceholder": "Atrašanās vieta (neobligāta)",
+  "plugin.calendar.dialog.notesField": "Piezīmes",
+  "plugin.calendar.dialog.notesPlaceholder": "Piezīmes (neobligātas)",
+  "plugin.calendar.dialog.cancel": "Atcelt",
+  "plugin.calendar.dialog.save": "Saglabāt notikumu",
+
+  "plugin.calendar.toast.titleRequired": "Nosaukums ir obligāts",
+  "plugin.calendar.toast.dateRequired": "Datums ir obligāts",
+  "plugin.calendar.toast.updated": "Notikums atjaunināts",
+  "plugin.calendar.toast.scheduled": "Notikums ieplānots",
+  "plugin.calendar.toast.deleted": "Notikums dzēsts",
+  "plugin.calendar.toast.loadFailed": "Nevarēja ielādēt notikumus",
+  "plugin.calendar.toast.saveFailed": "Nevarēja saglabāt notikumu",
+  "plugin.calendar.toast.deleteFailed": "Nevarēja dzēst notikumu",
+
+  "plugin.calendar.confirm.deleteEvent": "Dzēst \"{title}\"?",
+
+  "plugin.calendar.notify.eventSoon": "Notikums sāksies drīz"
+}

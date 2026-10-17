@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Interneta radio, izmantojot Radio Browser — meklējiet stacijas un atskaņojiet tās Radio logā",
+  "plugin.radio.meta.summary": "Interneta radio: meklēt un atskaņot stacijas (Radio Browser)",
+  "plugin.radio.meta.category": "Mediji",
+
+  "plugin.radio.notify.nowPlaying": "Tagad atskaņo",
+  "plugin.radio.toast.streamRefused": "Straume atteicās atskaņot — mēģiniet citu staciju",
+
+  "plugin.radio.status.pickStation": "Izvēlieties staciju",
+  "plugin.radio.status.streaming": "Straumē",
+
+  "plugin.radio.empty.noStations": "Nav atrasta neviena stacija",
+  "plugin.radio.empty.noMatch": "Nekas neatbilst “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser nav sasniedzams",
+  "plugin.radio.error.tryAgain": "Mēģiniet vēlreiz pēc brīža",
+
+  "plugin.radio.fallback.station": "Stacija",
+  "plugin.radio.search.placeholder": "Stacijas vai žanri…",
+
+  "plugin.radio.menu.play": "Atskaņot",
+  "plugin.radio.menu.pause": "Pauzēt",
+  "plugin.radio.menu.stop": "Apturēt",
+  "plugin.radio.menu.refresh": "Atjaunināt stacijas"
+}

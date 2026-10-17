@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetiraadio Radio Browseri kaudu — otsi jaamu ja esita neid Raadio aknas",
+  "plugin.radio.meta.summary": "Internetiraadio: jaamade otsimine ja esitamine (Radio Browser)",
+  "plugin.radio.meta.category": "Meedia",
+
+  "plugin.radio.notify.nowPlaying": "Praegu esitab",
+  "plugin.radio.toast.streamRefused": "Voo esitamine ebaõnnestus — proovi teist jaama",
+
+  "plugin.radio.status.pickStation": "Vali jaam",
+  "plugin.radio.status.streaming": "Voogedastus",
+
+  "plugin.radio.empty.noStations": "Jaamu ei leitud",
+  "plugin.radio.empty.noMatch": "Ükski jaam ei vastanud otsingule “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser pole kättesaadav",
+  "plugin.radio.error.tryAgain": "Proovi hetke pärast uuesti",
+
+  "plugin.radio.fallback.station": "Jaam",
+  "plugin.radio.search.placeholder": "Jaamad või žanrid…",
+
+  "plugin.radio.menu.play": "Esita",
+  "plugin.radio.menu.pause": "Paus",
+  "plugin.radio.menu.stop": "Peata",
+  "plugin.radio.menu.refresh": "Värskenda jaamu"
+}

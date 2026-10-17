@@ -1,0 +1,52 @@
+{
+  "plugin.word.meta.description": "Простий текстовий процесор — документи зберігаються як відкриті файли .odt",
+  "plugin.word.meta.summary": "Текстовий процесор: створюйте, редагуйте та читайте документи OpenDocument (.odt)",
+  "plugin.word.meta.category": "Офіс",
+
+  "plugin.word.toolbar.documents": "Документи",
+  "plugin.word.toolbar.titlePlaceholder": "Без назви",
+  "plugin.word.toolbar.newDocument": "Новий документ",
+  "plugin.word.toolbar.importOdt": "Імпорт .odt",
+  "plugin.word.toolbar.saveToDocuments": "Зберегти в Документи",
+  "plugin.word.toolbar.saveNow": "Зберегти зараз",
+  "plugin.word.toolbar.deleteDocument": "Видалити документ",
+  "plugin.word.toolbar.bold": "Жирний",
+  "plugin.word.toolbar.italic": "Курсив",
+  "plugin.word.toolbar.underline": "Підкреслений",
+  "plugin.word.toolbar.heading": "Заголовок",
+  "plugin.word.toolbar.bulletList": "Маркований список",
+  "plugin.word.toolbar.font": "Шрифт",
+  "plugin.word.toolbar.fontHint": "Шрифт — застосовується до виділення або до всього документа, якщо нічого не виділено",
+
+  "plugin.word.status.saving": "Збереження…",
+  "plugin.word.status.unsaved": "Незбережені зміни",
+  "plugin.word.status.saved.one": "Збережено {time} · {count} слово",
+  "plugin.word.status.saved.few": "Збережено {time} · {count} слова",
+  "plugin.word.status.saved.many": "Збережено {time} · {count} слів",
+  "plugin.word.status.saved.other": "Збережено {time} · {count} слова",
+
+  "plugin.word.menu.empty": "Ще немає документів",
+  "plugin.word.menu.newDocument": "Новий документ",
+  "plugin.word.menu.importOdt": "Імпорт .odt",
+  "plugin.word.menu.saveToDocuments": "Зберегти в Документи",
+  "plugin.word.menu.deleteDocument": "Видалити документ",
+
+  "plugin.word.ctx.newDocument": "Новий документ",
+  "plugin.word.ctx.saveNow": "Зберегти зараз",
+  "plugin.word.ctx.saveToDocuments": "Зберегти в Документи",
+  "plugin.word.ctx.bold": "Жирний",
+  "plugin.word.ctx.italic": "Курсив",
+  "plugin.word.ctx.heading": "Заголовок",
+  "plugin.word.ctx.list": "Список",
+  "plugin.word.ctx.deleteDocument": "Видалити документ",
+
+  "plugin.word.dialog.deleteDoc": "Видалити \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Не вдалося зберегти",
+  "plugin.word.toast.openFailed": "Не вдалося відкрити документ",
+  "plugin.word.toast.createFailed": "Не вдалося створити документ",
+  "plugin.word.toast.deleteFailed": "Не вдалося видалити документ",
+  "plugin.word.toast.imported": "Імпортовано {name}",
+  "plugin.word.toast.importFailed": "Імпорт не вдався — можливо, це некоректний .odt-файл?",
+  "plugin.word.toast.openFileFailed": "Не вдалося відкрити файл"
+}

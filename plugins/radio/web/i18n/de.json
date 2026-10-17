@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetradio über Radio Browser — Sender suchen und im Radio-Fenster abspielen",
+  "plugin.radio.meta.summary": "Internetradio: Sender suchen und abspielen (Radio Browser)",
+  "plugin.radio.meta.category": "Medien",
+
+  "plugin.radio.notify.nowPlaying": "Läuft jetzt",
+  "plugin.radio.toast.streamRefused": "Der Stream ließ sich nicht abspielen — versuchen Sie einen anderen Sender",
+
+  "plugin.radio.status.pickStation": "Sender auswählen",
+  "plugin.radio.status.streaming": "Stream läuft",
+
+  "plugin.radio.empty.noStations": "Keine Sender gefunden",
+  "plugin.radio.empty.noMatch": "Nichts passte zu „{term}“.",
+
+  "plugin.radio.error.unreachable": "Radio Browser ist nicht erreichbar",
+  "plugin.radio.error.tryAgain": "Versuchen Sie es gleich noch einmal",
+
+  "plugin.radio.fallback.station": "Sender",
+  "plugin.radio.search.placeholder": "Sender oder Genres…",
+
+  "plugin.radio.menu.play": "Wiedergabe",
+  "plugin.radio.menu.pause": "Pause",
+  "plugin.radio.menu.stop": "Stopp",
+  "plugin.radio.menu.refresh": "Sender aktualisieren"
+}

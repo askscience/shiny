@@ -125,7 +125,16 @@ pub struct ActionTaken {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum AgentStreamEvent {
-    Step { message: String },
+    /// A status line: `message` is the English text, `key`/`params` the
+    /// catalogue entry the web client translates (absent when the line has no
+    /// catalogue entry, e.g. a plugin tool's plain-English label).
+    Step {
+        message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        params: Option<serde_json::Value>,
+    },
     /// Reasoning trace of a thinking model, one block per tool-loop iteration.
     Thinking { message: String },
     Done { data: AgentResponse },
@@ -159,6 +168,7 @@ fn language_name(code: &str) -> String {
         "et" => "Estonian",
         "fi" => "Finnish",
         "fr" => "French",
+        "ga" => "Irish",
         "hi" => "Hindi",
         "hr" => "Croatian",
         "hu" => "Hungarian",
@@ -168,6 +178,7 @@ fn language_name(code: &str) -> String {
         "ko" => "Korean",
         "lt" => "Lithuanian",
         "lv" => "Latvian",
+        "mt" => "Maltese",
         "nl" => "Dutch",
         "pl" => "Polish",
         "pt" => "Portuguese",
@@ -809,8 +820,10 @@ pub async fn handle_agent_stream(
             model.as_deref(),
             input,
             cancel.clone(),
-            |msg| emit(AgentStreamEvent::Step {
-                message: msg.to_string(),
+            |step| emit(AgentStreamEvent::Step {
+                message: step.text.clone(),
+                key: step.key.clone(),
+                params: (!step.params.is_empty()).then(|| serde_json::Value::Object(step.params.clone())),
             }),
             |msg| emit(AgentStreamEvent::Thinking {
                 message: msg.to_string(),
@@ -840,7 +853,7 @@ pub async fn handle_agent_stream(
                     state.agent_turns.finish(id);
                 }
                 emit(AgentStreamEvent::Error {
-                    message: e.to_string(),
+                    message: crate::i18n::translate_current(&e.to_string()),
                 })
             }
         }

@@ -10,8 +10,18 @@
  */
 
 import { getGradient, gradientToCss, themeMode } from '../ui/index.js';
+import { t } from './i18n.js';
 
 const BG_KEY = 'ui.background';
+
+/** One built-in wallpaper; `label` resolves in the active language when read. */
+const makePreset = (id, labelKey, english, src, dim) => ({
+  id,
+  labelKey,
+  src,
+  dim,
+  get label() { return t(labelKey, null, english); },
+});
 
 /**
  * Built-in wallpapers, shipped in /backgrounds.
@@ -26,11 +36,11 @@ const BG_KEY = 'ui.background';
  * one. Only the labels and files changed in the rebrand.
  */
 export const BACKGROUND_PRESETS = [
-  { id: 'split',  label: 'Swirl',     src: '/backgrounds/swirl.svg',   dim: 0.12 },
-  { id: 'grid',   label: 'Lattice',   src: '/backgrounds/lattice.svg', dim: 0.12 },
-  { id: 'halo',   label: 'Halo',      src: '/backgrounds/halo.svg',    dim: 0.05 },
-  { id: 'offset', label: 'Ripple',    src: '/backgrounds/ripple.svg',  dim: 0.18 },
-  { id: 'paper',  label: 'Parchment', src: '/backgrounds/paper.svg',   dim: 0.55 },
+  makePreset('split',  'background.preset.swirl',     'Swirl',     '/backgrounds/swirl.svg',   0.12),
+  makePreset('grid',   'background.preset.lattice',   'Lattice',   '/backgrounds/lattice.svg', 0.12),
+  makePreset('halo',   'background.preset.halo',      'Halo',      '/backgrounds/halo.svg',    0.05),
+  makePreset('offset', 'background.preset.ripple',    'Ripple',    '/backgrounds/ripple.svg',  0.18),
+  makePreset('paper',  'background.preset.parchment', 'Parchment', '/backgrounds/paper.svg',   0.55),
 ];
 
 /**
@@ -210,7 +220,8 @@ export function renderBackgroundPresets(container, { onSelect, onUpload } = {}) 
     const active = activeId === preset.id;
     const btn = tile(active);
     btn.dataset.preset = preset.id;
-    btn.setAttribute('aria-label', `${preset.label} wallpaper`);
+    btn.setAttribute('aria-label',
+      t('background.presetAria', { name: preset.label }, `${preset.label} wallpaper`));
     btn.style.backgroundImage = `url("${preset.src}")`;
     btn.querySelector('.bg-preset-label').textContent = preset.label;
     btn.addEventListener('click', () => onSelect?.(preset));
@@ -222,13 +233,13 @@ export function renderBackgroundPresets(container, { onSelect, onUpload } = {}) 
   custom.dataset.action = 'upload';
   custom.classList.add('bg-preset--upload');
   if (hasPhoto) {
-    custom.setAttribute('aria-label', 'Your own image');
+    custom.setAttribute('aria-label', t('background.ownImage', null, 'Your own image'));
     custom.style.backgroundImage = `url("${bg.url}")`;
-    custom.querySelector('.bg-preset-label').textContent = 'Your image';
+    custom.querySelector('.bg-preset-label').textContent = t('background.yourImage', null, 'Your image');
   } else {
     custom.classList.add('bg-preset--empty');
-    custom.setAttribute('aria-label', 'Use your own image');
-    custom.querySelector('.bg-preset-label').textContent = 'Your image';
+    custom.setAttribute('aria-label', t('background.useOwnImage', null, 'Use your own image'));
+    custom.querySelector('.bg-preset-label').textContent = t('background.yourImage', null, 'Your image');
   }
   custom.addEventListener('click', () => onUpload?.());
   container.appendChild(custom);

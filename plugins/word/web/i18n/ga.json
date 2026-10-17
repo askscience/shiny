@@ -1,0 +1,53 @@
+{
+  "plugin.word.toolbar.documents": "Doiciméid",
+  "plugin.word.toolbar.titlePlaceholder": "Gan teideal",
+  "plugin.word.toolbar.newDocument": "Doiciméad nua",
+  "plugin.word.toolbar.importOdt": "Iompórtáil .odt",
+  "plugin.word.toolbar.saveToDocuments": "Sábháil i nDoiciméid",
+  "plugin.word.toolbar.saveNow": "Sábháil anois",
+  "plugin.word.toolbar.deleteDocument": "Scrios an doiciméad",
+  "plugin.word.toolbar.bold": "Trom",
+  "plugin.word.toolbar.italic": "Iodálach",
+  "plugin.word.toolbar.underline": "Folíne",
+  "plugin.word.toolbar.heading": "Ceannteideal",
+  "plugin.word.toolbar.bulletList": "Liosta urchar",
+  "plugin.word.toolbar.font": "Cló",
+  "plugin.word.toolbar.fontHint": "Cló — cuirtear i bhfeidhm ar an roghnú, nó ar an doiciméad iomlán nuair nach bhfuil aon rud roghnaithe",
+
+  "plugin.word.status.saving": "Á sábháil…",
+  "plugin.word.status.unsaved": "Athruithe gan sábháil",
+  "plugin.word.status.saved.one": "Sábháilte {time} · {count} focal",
+  "plugin.word.status.saved.two": "Sábháilte {time} · {count} fhocal",
+  "plugin.word.status.saved.few": "Sábháilte {time} · {count} fhocal",
+  "plugin.word.status.saved.many": "Sábháilte {time} · {count} bhfocal",
+  "plugin.word.status.saved.other": "Sábháilte {time} · {count} focail",
+
+  "plugin.word.menu.empty": "Níl aon doiciméad ann fós",
+  "plugin.word.menu.newDocument": "Doiciméad nua",
+  "plugin.word.menu.importOdt": "Iompórtáil .odt",
+  "plugin.word.menu.saveToDocuments": "Sábháil i nDoiciméid",
+  "plugin.word.menu.deleteDocument": "Scrios an doiciméad",
+
+  "plugin.word.ctx.newDocument": "Doiciméad nua",
+  "plugin.word.ctx.saveNow": "Sábháil anois",
+  "plugin.word.ctx.saveToDocuments": "Sábháil i nDoiciméid",
+  "plugin.word.ctx.bold": "Trom",
+  "plugin.word.ctx.italic": "Iodálach",
+  "plugin.word.ctx.heading": "Ceannteideal",
+  "plugin.word.ctx.list": "Liosta",
+  "plugin.word.ctx.deleteDocument": "Scrios an doiciméad",
+
+  "plugin.word.dialog.deleteDoc": "Scrios \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Theip ar an sábháil",
+  "plugin.word.toast.openFailed": "Níorbh fhéidir an doiciméad a oscailt",
+  "plugin.word.toast.createFailed": "Níorbh fhéidir an doiciméad a chruthú",
+  "plugin.word.toast.deleteFailed": "Níorbh fhéidir an doiciméad a scriosadh",
+  "plugin.word.toast.imported": "Iompórtáladh {name}",
+  "plugin.word.toast.importFailed": "Theip ar an iompórtáil — an comhad .odt bailí é seo?",
+  "plugin.word.toast.openFileFailed": "Níorbh fhéidir an comhad a oscailt",
+
+  "plugin.word.meta.description": "Próiseálaí focal simplí — stóráiltear doiciméid mar chomhaid .odt oscailte",
+  "plugin.word.meta.summary": "Próiseálaí focal: cruthaigh, cuir in eagar agus léigh doiciméid OpenDocument (.odt)",
+  "plugin.word.meta.category": "Oifig"
+}

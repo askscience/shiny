@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Táblázatkezelő — a munkalapok nyílt cellarácsokként tárolódnak, a Calc ablakban szerkeszthetők",
+  "plugin.calc.meta.summary": "Calc: táblázatok létrehozása, szerkesztése és számítása",
+  "plugin.calc.meta.category": "Iroda",
+
+  "plugin.calc.bar.spreadsheets": "Táblázatok",
+
+  "plugin.calc.toolbar.newSheet": "Új táblázat",
+  "plugin.calc.toolbar.importOds": ".ods importálása",
+  "plugin.calc.toolbar.importCsv": "CSV importálása",
+  "plugin.calc.toolbar.saveToDocuments": "Mentés a Dokumentumok mappába",
+  "plugin.calc.toolbar.saveNow": "Mentés most",
+  "plugin.calc.toolbar.deleteSheet": "Táblázat törlése",
+
+  "plugin.calc.menu.noSheets": "Még nincsenek táblázatok",
+
+  "plugin.calc.sheet.untitled": "Névtelen",
+  "plugin.calc.sheet.importedCsv": "Importált CSV",
+
+  "plugin.calc.formula.placeholder": "Érték vagy képlet (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Mentés…",
+  "plugin.calc.status.dirty": "Nem mentett módosítások",
+  "plugin.calc.status.saved.one": "Mentve {time} · {count} cella",
+  "plugin.calc.status.saved.other": "Mentve {time} · {count} cella",
+
+  "plugin.calc.dialog.delete": "Törli a(z) „{title}” táblázatot?",
+
+  "plugin.calc.toast.saveFailed": "A mentés nem sikerült",
+  "plugin.calc.toast.openFailed": "Nem sikerült megnyitni a táblázatot",
+  "plugin.calc.toast.createFailed": "Nem sikerült létrehozni a táblázatot",
+  "plugin.calc.toast.deleteFailed": "Nem sikerült törölni a táblázatot",
+  "plugin.calc.toast.imported": "{name} importálva",
+  "plugin.calc.toast.importOdsFailed": "Az importálás nem sikerült — érvényes .ods fájl ez?",
+  "plugin.calc.toast.importCsvFailed": "Az importálás nem sikerült — érvényes CSV fájl ez?",
+  "plugin.calc.toast.openFileFailed": "Nem sikerült megnyitni a fájlt"
+}

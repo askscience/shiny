@@ -1,0 +1,80 @@
+{
+  "plugin.impress.toolbar.presentations": "Prezentācijas",
+  "plugin.impress.toolbar.titlePlaceholder": "Bez nosaukuma",
+  "plugin.impress.toolbar.theme": "Tēma",
+  "plugin.impress.toolbar.present": "Demonstrēt",
+  "plugin.impress.toolbar.newDeck": "Jauna prezentācija",
+  "plugin.impress.toolbar.importOdp": "Importēt .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Saglabāt mapē Dokumenti",
+  "plugin.impress.toolbar.saveNow": "Saglabāt tagad",
+  "plugin.impress.toolbar.deleteDeck": "Dzēst prezentāciju",
+
+  "plugin.impress.menu.empty": "Vēl nav prezentāciju",
+  "plugin.impress.menu.newDeck": "Jauna prezentācija",
+  "plugin.impress.menu.importOdp": "Importēt .odp",
+  "plugin.impress.menu.saveToDocuments": "Saglabāt mapē Dokumenti",
+  "plugin.impress.menu.deleteDeck": "Dzēst prezentāciju",
+
+  "plugin.impress.ctx.newDeck": "Jauna prezentācija",
+  "plugin.impress.ctx.addSlide": "Pievienot slaidu",
+  "plugin.impress.ctx.saveNow": "Saglabāt tagad",
+  "plugin.impress.ctx.present": "Demonstrēt",
+  "plugin.impress.ctx.stopPresenting": "Pārtraukt demonstrēšanu",
+  "plugin.impress.ctx.deleteDeck": "Dzēst prezentāciju",
+
+  "plugin.impress.status.saving": "Saglabā…",
+  "plugin.impress.status.unsaved": "Nesaglabātas izmaiņas",
+  "plugin.impress.status.saved.zero": "Saglabāts {time} · {count} slaidu",
+  "plugin.impress.status.saved.one": "Saglabāts {time} · {count} slaids",
+  "plugin.impress.status.saved.other": "Saglabāts {time} · {count} slaidi",
+
+  "plugin.impress.empty.noDeck": "Nav prezentācijas",
+  "plugin.impress.empty.noDeckBody": "Izveidojiet vienu vai palūdziet MI to izveidot",
+
+  "plugin.impress.inspector.layout": "Izkārtojums",
+  "plugin.impress.inspector.transition": "Pāreja",
+  "plugin.impress.inspector.bullets": "Aizzīmes",
+  "plugin.impress.inspector.speakerNotes": "Lektora piezīmes",
+  "plugin.impress.inspector.hint": "Noklikšķiniet uz jebkura teksta slaidā, lai to rediģētu tieši.",
+  "plugin.impress.inspector.applyAll": "Piemērot šo pāreju un aizzīmju parādīšanos visiem slaidiem",
+  "plugin.impress.inspector.applyAllLabel": "Piemērot visiem slaidiem",
+
+  "plugin.impress.ops.addSlide": "Pievienot slaidu",
+  "plugin.impress.ops.moveUp": "Pārvietot uz augšu",
+  "plugin.impress.ops.moveDown": "Pārvietot uz leju",
+  "plugin.impress.ops.deleteSlide": "Dzēst slaidu",
+
+  "plugin.impress.transition.none": "Nav",
+  "plugin.impress.transition.fade": "Izzūdoša",
+  "plugin.impress.transition.slide": "Bīdīšana",
+  "plugin.impress.transition.push": "Iestūmšana",
+  "plugin.impress.transition.zoom": "Tuvināšana",
+
+  "plugin.impress.reveal.all": "Visi uzreiz",
+  "plugin.impress.reveal.bullets": "Pa vienam",
+
+  "plugin.impress.slide.addText": "Pievienot tekstu",
+  "plugin.impress.slide.addTitle": "Pievienot virsrakstu",
+  "plugin.impress.slide.addSubtitle": "Pievienot apakšvirsrakstu",
+  "plugin.impress.slide.attribution": "Atsauce",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Atpakaļ pie redaktora",
+  "plugin.impress.present.fullScreen": "Pilnekrāns",
+  "plugin.impress.present.exitFullScreen": "Iziet no pilnekrāna",
+  "plugin.impress.present.blocked": "Pārlūks bloķēja pilnekrāna režīmu",
+
+  "plugin.impress.dialog.deleteDeck": "Dzēst \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Saglabāšana neizdevās",
+  "plugin.impress.toast.openFailed": "Nevarēja atvērt prezentāciju",
+  "plugin.impress.toast.createFailed": "Nevarēja izveidot prezentāciju",
+  "plugin.impress.toast.deleteFailed": "Nevarēja dzēst prezentāciju",
+  "plugin.impress.toast.imported": "Importēts {name}",
+  "plugin.impress.toast.importFailed": "Importēšana neizdevās — vai šis ir derīgs .odp fails?",
+  "plugin.impress.toast.openFileFailed": "Nevarēja atvērt failu",
+
+  "plugin.impress.meta.description": "Prezentāciju veidotājs — prezentācijas glabājas kā slaidi un tiek eksportētas kā atvērti .odp faili",
+  "plugin.impress.meta.summary": "Impress: veidot, rediģēt un demonstrēt OpenDocument (.odp) slaidu prezentācijas",
+  "plugin.impress.meta.category": "Birojs"
+}

@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotoredigering — justering af toner og farver, slør/skarphed/vignettering og filmeffekter med ét tryk i Billede-vinduet",
+  "plugin.image.meta.summary": "Fotoredigering: justeringer og filmeffekter",
+  "plugin.image.meta.category": "Medier",
+
+  "plugin.image.toolbar.menu": "Menu",
+  "plugin.image.toolbar.fitToggle": "Skift mellem tilpas og faktisk størrelse",
+
+  "plugin.image.dial.brightness": "Lysstyrke",
+  "plugin.image.dial.contrast": "Kontrast",
+  "plugin.image.dial.exposure": "Eksponering",
+  "plugin.image.dial.vibrance": "Livlighed",
+  "plugin.image.dial.saturation": "Mætning",
+  "plugin.image.dial.blur": "Slør",
+  "plugin.image.dial.sharpen": "Skarphed",
+  "plugin.image.dial.vignette": "Vignettering",
+
+  "plugin.image.oneClick.autoTone": "Auto-tone",
+  "plugin.image.oneClick.autoContrast": "Auto-kontrast",
+  "plugin.image.oneClick.invert": "Invertér",
+  "plugin.image.oneClick.grayscale": "S/H",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Gendan",
+  "plugin.image.oneClick.revertTitle": "Gendan den oprindelige upload",
+
+  "plugin.image.empty.title": "Intet billede åbent",
+  "plugin.image.empty.body": "Åbn eller slip et billede for at begynde.",
+  "plugin.image.empty.open": "Åbn billede",
+
+  "plugin.image.menu.file": "Filer",
+  "plugin.image.menu.image": "Billede",
+  "plugin.image.menu.view": "Visning",
+  "plugin.image.menu.open": "Åbn…",
+  "plugin.image.menu.saveCopy": "Gem en kopi…",
+  "plugin.image.menu.delete": "Slet billede",
+  "plugin.image.menu.rotateLeft": "Rotér mod venstre",
+  "plugin.image.menu.rotateRight": "Rotér mod højre",
+  "plugin.image.menu.flipH": "Spejlvend vandret",
+  "plugin.image.menu.flipV": "Spejlvend lodret",
+  "plugin.image.menu.revert": "Gendan til originalen",
+  "plugin.image.menu.zoomIn": "Zoom ind",
+  "plugin.image.menu.zoomOut": "Zoom ud",
+  "plugin.image.menu.fit": "Tilpas",
+  "plugin.image.menu.actualSize": "Faktisk størrelse",
+
+  "plugin.image.ctx.open": "Åbn billede…",
+
+  "plugin.image.dialog.deleteConfirm": "Slet \"{title}\"?",
+  "plugin.image.dialog.thisImage": "dette billede",
+
+  "plugin.image.toast.openFirst": "Åbn et billede først",
+  "plugin.image.toast.opened": "Åbnede {title}",
+  "plugin.image.toast.editFailed": "Redigeringen mislykkedes",
+  "plugin.image.toast.operationFailed": "Handlingen mislykkedes",
+  "plugin.image.toast.renderFailed": "Kunne ikke gengive billedet",
+  "plugin.image.toast.uploadFailed": "Upload mislykkedes",
+  "plugin.image.toast.saveFailed": "Gemningen mislykkedes",
+  "plugin.image.toast.deleted": "Billedet er slettet",
+  "plugin.image.toast.deleteFailed": "Kunne ikke slette billedet",
+  "plugin.image.toast.reverted": "Gendannet til de oprindelige pixels",
+  "plugin.image.toast.openFailed": "Kunne ikke åbne filen",
+
+  "plugin.image.error.emptyFile": "filen er tom",
+  "plugin.image.error.notAnImage": "“{name}” er ikke et billede, som editoren kan åbne",
+  "plugin.image.error.unnamedFile": "fil"
+}

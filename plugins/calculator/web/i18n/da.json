@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Videnskabelig lommeregner — udregn aritmetiske og videnskabelige udtryk i Lommeregner-vinduet",
+  "plugin.calculator.meta.summary": "Lommeregner: almindelig og videnskabelig matematik",
+  "plugin.calculator.meta.category": "Kontor",
+
+  "plugin.calculator.display.error": "Fejl",
+
+  "plugin.calculator.toolbar.history": "Historik",
+  "plugin.calculator.toolbar.scientific": "Videnskabelig",
+  "plugin.calculator.toolbar.clearHistory": "Ryd historik",
+
+  "plugin.calculator.menu.equals": "Er lig med",
+  "plugin.calculator.menu.clearAll": "Ryd alt",
+
+  "plugin.calculator.history.reuse": "Brug dette resultat igen",
+
+  "plugin.calculator.empty.noHistory": "Ingen historik",
+  "plugin.calculator.empty.noHistoryBody": "Beregninger, du laver her, eller beder AI'en om, vises nedenfor.",
+
+  "plugin.calculator.toast.evaluateFailed": "Kunne ikke beregne",
+  "plugin.calculator.toast.historyFailed": "Kunne ikke indlæse historikken",
+  "plugin.calculator.toast.historyCleared": "Historikken er ryddet",
+  "plugin.calculator.toast.clearFailed": "Kunne ikke rydde historikken"
+}

@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Oikea Linux-pääte sovelluksen sisällä — PTY-pohjainen kirjautumistulkki omassa ikkunassaan",
+  "plugin.terminal.meta.summary": "Pääte: oikea komentotulkki PTY:n kautta, renderöity xterm.js:llä",
+  "plugin.terminal.meta.category": "Järjestelmä",
+
+  "plugin.terminal.tab.label": "Pääte {n}",
+  "plugin.terminal.tab.new": "Uusi välilehti",
+  "plugin.terminal.tab.close": "Sulje {name}",
+  "plugin.terminal.tabs.label": "Päätteen välilehdet",
+
+  "plugin.terminal.status.starting": "käynnistetään päätettä…",
+  "plugin.terminal.status.connecting": "yhdistetään…",
+  "plugin.terminal.status.reconnecting": "yhdistetään uudelleen…",
+  "plugin.terminal.status.connected": "yhdistetty",
+  "plugin.terminal.status.startFailed": "komentotulkkia ei voitu käynnistää",
+  "plugin.terminal.status.expired": "istunto vanhentui — kirjaudu uudelleen",
+  "plugin.terminal.status.xtermFailed": "xterm.js:ää ei voitu ladata",
+
+  "plugin.terminal.toast.tabLimit.one": "Pääte: enintään {count} välilehti",
+  "plugin.terminal.toast.tabLimit.other": "Pääte: enintään {count} välilehteä",
+  "plugin.terminal.toast.startFailed": "Pääte: komentotulkkia ei voitu käynnistää",
+  "plugin.terminal.toast.xtermFailed": "Pääte: xterm.js:n lataus epäonnistui",
+  "plugin.terminal.toast.clipboardUnavailable": "Leikepöytä ei ole käytettävissä",
+
+  "plugin.terminal.ctx.copy": "Kopioi",
+  "plugin.terminal.ctx.paste": "Liitä",
+  "plugin.terminal.ctx.clearScrollback": "Tyhjennä vierityshistoria",
+  "plugin.terminal.ctx.closeTab": "Sulje välilehti"
+}

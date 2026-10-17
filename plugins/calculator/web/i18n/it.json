@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Calcolatrice scientifica — valuta espressioni aritmetiche e scientifiche nella finestra Calculator",
+  "plugin.calculator.meta.summary": "Calculator: matematica di base e scientifica",
+  "plugin.calculator.meta.category": "Ufficio",
+
+  "plugin.calculator.display.error": "Errore",
+
+  "plugin.calculator.toolbar.history": "Cronologia",
+  "plugin.calculator.toolbar.scientific": "Scientifica",
+  "plugin.calculator.toolbar.clearHistory": "Cancella cronologia",
+
+  "plugin.calculator.menu.equals": "Uguale",
+  "plugin.calculator.menu.clearAll": "Cancella tutto",
+
+  "plugin.calculator.history.reuse": "Riutilizza questo risultato",
+
+  "plugin.calculator.empty.noHistory": "Nessuna cronologia",
+  "plugin.calculator.empty.noHistoryBody": "I calcoli che fai qui o chiedi all'AI compaiono qui sotto.",
+
+  "plugin.calculator.toast.evaluateFailed": "Impossibile calcolare",
+  "plugin.calculator.toast.historyFailed": "Impossibile caricare la cronologia",
+  "plugin.calculator.toast.historyCleared": "Cronologia cancellata",
+  "plugin.calculator.toast.clearFailed": "Impossibile cancellare la cronologia"
+}

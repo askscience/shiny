@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "En rigtig Linux-terminal i appen — et login-shell med PTY i sit eget vindue",
+  "plugin.terminal.meta.summary": "Terminal: et rigtigt shell over en PTY, gengivet med xterm.js",
+  "plugin.terminal.meta.category": "System",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Ny fane",
+  "plugin.terminal.tab.close": "Luk {name}",
+  "plugin.terminal.tabs.label": "Terminalfaner",
+
+  "plugin.terminal.status.starting": "starter terminal…",
+  "plugin.terminal.status.connecting": "opretter forbindelse…",
+  "plugin.terminal.status.reconnecting": "genopretter forbindelse…",
+  "plugin.terminal.status.connected": "forbundet",
+  "plugin.terminal.status.startFailed": "kunne ikke starte et shell",
+  "plugin.terminal.status.expired": "sessionen er udløbet — log ind igen",
+  "plugin.terminal.status.xtermFailed": "kunne ikke indlæse xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: højst {count} fane",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: højst {count} faner",
+  "plugin.terminal.toast.startFailed": "Terminal: kunne ikke starte et shell",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js kunne ikke indlæses",
+  "plugin.terminal.toast.clipboardUnavailable": "Udklipsholderen er utilgængelig",
+
+  "plugin.terminal.ctx.copy": "Kopiér",
+  "plugin.terminal.ctx.paste": "Sæt ind",
+  "plugin.terminal.ctx.clearScrollback": "Ryd rullehistorik",
+  "plugin.terminal.ctx.closeTab": "Luk fane"
+}

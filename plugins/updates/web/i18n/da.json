@@ -1,0 +1,77 @@
+{
+  "plugin.updates.meta.description": "Tjek og installér system- og Ollama-opdateringer på alle større Linux-distributioner",
+  "plugin.updates.meta.summary": "Opdateringer: ét vindue (og HUD-mærkat) til system- og Ollama-opdateringer",
+  "plugin.updates.meta.category": "System",
+
+  "plugin.updates.tab.updates": "Opdateringer",
+  "plugin.updates.tab.history": "Historik",
+
+  "plugin.updates.toolbar.sections": "Afsnit",
+  "plugin.updates.toolbar.check": "Søg efter opdateringer",
+
+  "plugin.updates.status.checking": "Søger efter opdateringer…",
+  "plugin.updates.status.thisSystem": "dette system",
+  "plugin.updates.status.unavailableOnSystem": "Opdateringer er ikke tilgængelige på dette system",
+  "plugin.updates.status.unavailable": "Opdateringer er utilgængelige",
+  "plugin.updates.status.upToDate": "Alt er opdateret · {where}",
+  "plugin.updates.status.available.one": "{count} opdatering tilgængelig · {where}",
+  "plugin.updates.status.available.other": "{count} opdateringer tilgængelige · {where}",
+  "plugin.updates.status.working": "Arbejder…",
+  "plugin.updates.status.finished": "Opdateringen er fuldført",
+  "plugin.updates.status.failed": "Opdateringen mislykkedes",
+  "plugin.updates.status.upToDateBody": "Dit system er opdateret.",
+  "plugin.updates.status.incomplete": "Opdateringen blev ikke fuldført. Åbn Opdateringer for detaljer.",
+  "plugin.updates.status.couldNot": "Kunne ikke {label}",
+  "plugin.updates.status.noJobId": "Serveren returnerede ikke et job-id",
+  "plugin.updates.status.lostConnection": "Mistede forbindelsen til jobbet",
+  "plugin.updates.status.jobDisappeared": "Jobbet forsvandt",
+
+  "plugin.updates.action.refresh": "Opdatér lister",
+  "plugin.updates.action.installing": "Installerer…",
+  "plugin.updates.action.install.one": "Installér {count} opdatering",
+  "plugin.updates.action.install.other": "Installér {count} opdateringer",
+  "plugin.updates.action.details": "Detaljer",
+  "plugin.updates.action.hideDetails": "Skjul detaljer",
+
+  "plugin.updates.empty.upToDate": "Opdateret",
+  "plugin.updates.empty.noUpdates": "Ingen systemopdateringer venter.",
+  "plugin.updates.empty.noActivity": "Ingen aktivitet endnu",
+  "plugin.updates.empty.noActivityBody": "Opdateringer, du installerer, vises her.",
+
+  "plugin.updates.ollama.version": " · version {version}",
+  "plugin.updates.ollama.installed": "Installeret{version}{path}",
+  "plugin.updates.ollama.notInstalled": "Ikke installeret (eller ikke fundet i PATH)",
+  "plugin.updates.ollama.service": "Tjeneste: {name}",
+  "plugin.updates.ollama.install": "Installér Ollama",
+  "plugin.updates.ollama.update": "Opdatér Ollama",
+
+  "plugin.updates.history.system": "system",
+  "plugin.updates.history.entry": "{action} · {manager}",
+
+  "plugin.updates.notify.checkFailed": "Kunne ikke søge efter opdateringer",
+  "plugin.updates.notify.serviceUnavailable": "Opdateringstjenesten er utilgængelig.",
+  "plugin.updates.notify.busy": "Der kører allerede en opdatering",
+  "plugin.updates.notify.busyBody": "Vent på, at den aktuelle opdatering er færdig.",
+
+  "plugin.updates.dialog.installTitle": "Installér opdateringer",
+  "plugin.updates.dialog.installRights.one": "Installation af {count} opdatering kræver administratorrettigheder.",
+  "plugin.updates.dialog.installRights.other": "Installation af {count} opdateringer kræver administratorrettigheder.",
+  "plugin.updates.dialog.refreshRights": "Opdatering af pakkemetadata (f.eks. {cmd}) kræver administratorrettigheder.",
+  "plugin.updates.dialog.ollamaMessage": "Kører det officielle installationsprogram. Ollama stoppes under opdateringen og efterlades stoppet (genstart midt i en session kan låse GPU'en); start det igen, eller genstart computeren for at bruge den nye version.",
+  "plugin.updates.dialog.passwordField": "Administratoradgangskode",
+  "plugin.updates.dialog.passwordPlaceholder": "sudo-adgangskode",
+  "plugin.updates.dialog.passwordHint": "Bruges én gang til at køre kommandoen med sudo. Den gemmes aldrig.",
+  "plugin.updates.dialog.cancel": "Annuller",
+  "plugin.updates.dialog.continue": "Fortsæt",
+
+  "plugin.updates.label.installing": "Installerer opdateringer",
+  "plugin.updates.label.refreshing": "Opdaterer lister",
+  "plugin.updates.label.updatingOllama": "Opdaterer Ollama",
+
+  "plugin.updates.hud.available.one": "{count} opdatering tilgængelig",
+  "plugin.updates.hud.available.other": "{count} opdateringer tilgængelige",
+  "plugin.updates.hud.upToDate": "Systemet er opdateret",
+  "plugin.updates.hud.notifyTitle": "Opdateringer tilgængelige",
+  "plugin.updates.hud.notifyBody.one": "{count} opdatering klar til installation",
+  "plugin.updates.hud.notifyBody.other": "{count} opdateringer klar til installation"
+}

@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetski radio putem Radio Browsera — pretražite postaje i reproducirajte ih u prozoru Radio",
+  "plugin.radio.meta.summary": "Internetski radio: pretraživanje i reprodukcija postaja (Radio Browser)",
+  "plugin.radio.meta.category": "Mediji",
+
+  "plugin.radio.notify.nowPlaying": "Sada se reproducira",
+  "plugin.radio.toast.streamRefused": "Prijenos se odbio pokrenuti — pokušajte drugu postaju",
+
+  "plugin.radio.status.pickStation": "Odaberite postaju",
+  "plugin.radio.status.streaming": "Prijenos",
+
+  "plugin.radio.empty.noStations": "Nema pronađenih postaja",
+  "plugin.radio.empty.noMatch": "Ništa ne odgovara pojmu “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser nije dostupan",
+  "plugin.radio.error.tryAgain": "Pokušajte ponovno za trenutak",
+
+  "plugin.radio.fallback.station": "Postaja",
+  "plugin.radio.search.placeholder": "Postaje ili žanrovi…",
+
+  "plugin.radio.menu.play": "Reproduciraj",
+  "plugin.radio.menu.pause": "Pauza",
+  "plugin.radio.menu.stop": "Zaustavi",
+  "plugin.radio.menu.refresh": "Osvježi postaje"
+}

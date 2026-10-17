@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "Valódi Linux-terminál az alkalmazásban — PTY-alapú bejelentkezési shell a saját ablakában",
+  "plugin.terminal.meta.summary": "Terminál: valódi shell PTY-n keresztül, xterm.js-szel megjelenítve",
+  "plugin.terminal.meta.category": "Rendszer",
+
+  "plugin.terminal.tab.label": "{n}. terminál",
+  "plugin.terminal.tab.new": "Új lap",
+  "plugin.terminal.tab.close": "{name} bezárása",
+  "plugin.terminal.tabs.label": "Terminállapok",
+
+  "plugin.terminal.status.starting": "terminál indítása…",
+  "plugin.terminal.status.connecting": "kapcsolódás…",
+  "plugin.terminal.status.reconnecting": "újrakapcsolódás…",
+  "plugin.terminal.status.connected": "csatlakoztatva",
+  "plugin.terminal.status.startFailed": "nem sikerült shellt indítani",
+  "plugin.terminal.status.expired": "a munkamenet lejárt — jelentkezzen be újra",
+  "plugin.terminal.status.xtermFailed": "nem sikerült betölteni az xterm.js-t",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminál: legfeljebb {count} lap",
+  "plugin.terminal.toast.tabLimit.other": "Terminál: legfeljebb {count} lap",
+  "plugin.terminal.toast.startFailed": "Terminál: nem sikerült shellt indítani",
+  "plugin.terminal.toast.xtermFailed": "Terminál: az xterm.js betöltése nem sikerült",
+  "plugin.terminal.toast.clipboardUnavailable": "A vágólap nem érhető el",
+
+  "plugin.terminal.ctx.copy": "Másolás",
+  "plugin.terminal.ctx.paste": "Beillesztés",
+  "plugin.terminal.ctx.clearScrollback": "Visszagörgetés törlése",
+  "plugin.terminal.ctx.closeTab": "Lap bezárása"
+}

@@ -1,0 +1,82 @@
+{
+  "plugin.impress.toolbar.presentations": "Preżentazzjonijiet",
+  "plugin.impress.toolbar.titlePlaceholder": "Bla titlu",
+  "plugin.impress.toolbar.theme": "Tema",
+  "plugin.impress.toolbar.present": "Ippreżenta",
+  "plugin.impress.toolbar.newDeck": "Preżentazzjoni ġdida",
+  "plugin.impress.toolbar.importOdp": "Importa .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Salva fid-Dokumenti",
+  "plugin.impress.toolbar.saveNow": "Salva issa",
+  "plugin.impress.toolbar.deleteDeck": "Ħassar il-preżentazzjoni",
+
+  "plugin.impress.menu.empty": "Għad m'hemmx preżentazzjonijiet",
+  "plugin.impress.menu.newDeck": "Preżentazzjoni ġdida",
+  "plugin.impress.menu.importOdp": "Importa .odp",
+  "plugin.impress.menu.saveToDocuments": "Salva fid-Dokumenti",
+  "plugin.impress.menu.deleteDeck": "Ħassar il-preżentazzjoni",
+
+  "plugin.impress.ctx.newDeck": "Preżentazzjoni ġdida",
+  "plugin.impress.ctx.addSlide": "Żid slide",
+  "plugin.impress.ctx.saveNow": "Salva issa",
+  "plugin.impress.ctx.present": "Ippreżenta",
+  "plugin.impress.ctx.stopPresenting": "Waqqaf il-preżentazzjoni",
+  "plugin.impress.ctx.deleteDeck": "Ħassar il-preżentazzjoni",
+
+  "plugin.impress.status.saving": "Qed jiġi salvat…",
+  "plugin.impress.status.unsaved": "Bidliet mhux salvati",
+  "plugin.impress.status.saved.one": "Salvat {time} · {count} slide",
+  "plugin.impress.status.saved.two": "Salvat {time} · {count} slides",
+  "plugin.impress.status.saved.few": "Salvat {time} · {count} slides",
+  "plugin.impress.status.saved.many": "Salvat {time} · {count}-il slide",
+  "plugin.impress.status.saved.other": "Salvat {time} · {count} slide",
+
+  "plugin.impress.empty.noDeck": "Ebda preżentazzjoni",
+  "plugin.impress.empty.noDeckBody": "Oħloq waħda, jew itlob lill-AI tibni preżentazzjoni",
+
+  "plugin.impress.inspector.layout": "Tqassim",
+  "plugin.impress.inspector.transition": "Transizzjoni",
+  "plugin.impress.inspector.bullets": "Punti",
+  "plugin.impress.inspector.speakerNotes": "Noti tal-kelliem",
+  "plugin.impress.inspector.hint": "Agħfas kwalunkwe test fuq is-slide biex teditjah direttament.",
+  "plugin.impress.inspector.applyAll": "Applika din it-transizzjoni u l-bini tal-punti għal kull slide",
+  "plugin.impress.inspector.applyAllLabel": "Applika għal kull slide",
+
+  "plugin.impress.ops.addSlide": "Żid slide",
+  "plugin.impress.ops.moveUp": "Ċaqlaq 'il fuq",
+  "plugin.impress.ops.moveDown": "Ċaqlaq 'l isfel",
+  "plugin.impress.ops.deleteSlide": "Ħassar is-slide",
+
+  "plugin.impress.transition.none": "Xejn",
+  "plugin.impress.transition.fade": "Fade",
+  "plugin.impress.transition.slide": "Slide",
+  "plugin.impress.transition.push": "Imbuttar",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "Kollha f'daqqa",
+  "plugin.impress.reveal.bullets": "Wieħed wieħed",
+
+  "plugin.impress.slide.addText": "Żid test",
+  "plugin.impress.slide.addTitle": "Żid titlu",
+  "plugin.impress.slide.addSubtitle": "Żid sottotitlu",
+  "plugin.impress.slide.attribution": "Attribuzzjoni",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Lura għall-editur",
+  "plugin.impress.present.fullScreen": "Skrin sħiħ",
+  "plugin.impress.present.exitFullScreen": "Oħroġ mill-skrin sħiħ",
+  "plugin.impress.present.blocked": "Il-browser imblokka l-iskrin sħiħ",
+
+  "plugin.impress.dialog.deleteDeck": "Ħassar \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Ma setax jiġi salvat",
+  "plugin.impress.toast.openFailed": "Il-preżentazzjoni ma setgħetx tinfetaħ",
+  "plugin.impress.toast.createFailed": "Il-preżentazzjoni ma setgħetx tinħoloq",
+  "plugin.impress.toast.deleteFailed": "Il-preżentazzjoni ma setgħetx titħassar",
+  "plugin.impress.toast.imported": "Ġie importat {name}",
+  "plugin.impress.toast.importFailed": "L-importazzjoni falliet — dan huwa fajl .odp validu?",
+  "plugin.impress.toast.openFileFailed": "Il-fajl ma setax jinfetaħ",
+
+  "plugin.impress.meta.description": "Kreatur ta' preżentazzjonijiet — il-preżentazzjonijiet jinħażnu bħala slides u jiġu esportati bħala fajls .odp miftuħa",
+  "plugin.impress.meta.summary": "Impress: ibni, editja u ppreżenta preżentazzjonijiet OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Uffiċċju"
+}

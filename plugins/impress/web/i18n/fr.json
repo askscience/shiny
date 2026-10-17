@@ -1,0 +1,80 @@
+{
+  "plugin.impress.toolbar.presentations": "Présentations",
+  "plugin.impress.toolbar.titlePlaceholder": "Sans titre",
+  "plugin.impress.toolbar.theme": "Thème",
+  "plugin.impress.toolbar.present": "Présenter",
+  "plugin.impress.toolbar.newDeck": "Nouvelle présentation",
+  "plugin.impress.toolbar.importOdp": "Importer un .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Enregistrer dans Documents",
+  "plugin.impress.toolbar.saveNow": "Enregistrer maintenant",
+  "plugin.impress.toolbar.deleteDeck": "Supprimer la présentation",
+
+  "plugin.impress.menu.empty": "Aucune présentation pour l'instant",
+  "plugin.impress.menu.newDeck": "Nouvelle présentation",
+  "plugin.impress.menu.importOdp": "Importer un .odp",
+  "plugin.impress.menu.saveToDocuments": "Enregistrer dans Documents",
+  "plugin.impress.menu.deleteDeck": "Supprimer la présentation",
+
+  "plugin.impress.ctx.newDeck": "Nouvelle présentation",
+  "plugin.impress.ctx.addSlide": "Ajouter une diapositive",
+  "plugin.impress.ctx.saveNow": "Enregistrer maintenant",
+  "plugin.impress.ctx.present": "Présenter",
+  "plugin.impress.ctx.stopPresenting": "Arrêter la présentation",
+  "plugin.impress.ctx.deleteDeck": "Supprimer la présentation",
+
+  "plugin.impress.status.saving": "Enregistrement…",
+  "plugin.impress.status.unsaved": "Modifications non enregistrées",
+  "plugin.impress.status.saved.one": "Enregistré {time} · {count} diapositive",
+  "plugin.impress.status.saved.other": "Enregistré {time} · {count} diapositives",
+  "plugin.impress.status.saved.many": "Enregistré {time} · {count} diapositives",
+
+  "plugin.impress.empty.noDeck": "Aucune présentation",
+  "plugin.impress.empty.noDeckBody": "Créez-en une, ou demandez à l'IA de construire un diaporama",
+
+  "plugin.impress.inspector.layout": "Disposition",
+  "plugin.impress.inspector.transition": "Transition",
+  "plugin.impress.inspector.bullets": "Puces",
+  "plugin.impress.inspector.speakerNotes": "Notes du présentateur",
+  "plugin.impress.inspector.hint": "Cliquez sur n'importe quel texte de la diapositive pour le modifier directement.",
+  "plugin.impress.inspector.applyAll": "Appliquer cette transition et cette apparition des puces à toutes les diapositives",
+  "plugin.impress.inspector.applyAllLabel": "Appliquer à toutes les diapositives",
+
+  "plugin.impress.ops.addSlide": "Ajouter une diapositive",
+  "plugin.impress.ops.moveUp": "Déplacer vers le haut",
+  "plugin.impress.ops.moveDown": "Déplacer vers le bas",
+  "plugin.impress.ops.deleteSlide": "Supprimer la diapositive",
+
+  "plugin.impress.transition.none": "Aucune",
+  "plugin.impress.transition.fade": "Fondu",
+  "plugin.impress.transition.slide": "Glissement",
+  "plugin.impress.transition.push": "Poussée",
+  "plugin.impress.transition.zoom": "Zoom",
+
+  "plugin.impress.reveal.all": "Toutes d'un coup",
+  "plugin.impress.reveal.bullets": "Une par une",
+
+  "plugin.impress.slide.addText": "Ajouter du texte",
+  "plugin.impress.slide.addTitle": "Ajouter un titre",
+  "plugin.impress.slide.addSubtitle": "Ajouter un sous-titre",
+  "plugin.impress.slide.attribution": "Attribution",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Revenir à l'éditeur",
+  "plugin.impress.present.fullScreen": "Plein écran",
+  "plugin.impress.present.exitFullScreen": "Quitter le plein écran",
+  "plugin.impress.present.blocked": "Le plein écran a été bloqué par le navigateur",
+
+  "plugin.impress.dialog.deleteDeck": "Supprimer \"{title}\" ?",
+
+  "plugin.impress.toast.saveFailed": "Échec de l'enregistrement",
+  "plugin.impress.toast.openFailed": "Impossible d'ouvrir la présentation",
+  "plugin.impress.toast.createFailed": "Impossible de créer la présentation",
+  "plugin.impress.toast.deleteFailed": "Impossible de supprimer la présentation",
+  "plugin.impress.toast.imported": "{name} importé",
+  "plugin.impress.toast.importFailed": "Échec de l'import — ce fichier .odp est-il valide ?",
+  "plugin.impress.toast.openFileFailed": "Impossible d'ouvrir le fichier",
+
+  "plugin.impress.meta.description": "Créateur de présentations — des diaporamas en diapositives exportés au format ouvert .odp",
+  "plugin.impress.meta.summary": "Impress : créer, modifier et présenter des diaporamas OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Bureau"
+}

@@ -1,0 +1,38 @@
+{
+  "plugin.calc.meta.description": "Editor de foi de calcul — foile sunt stocate ca grile de celule deschise, editabile în fereastra Calc",
+  "plugin.calc.meta.summary": "Calc: creează, editează și calculează cu foi de calcul",
+  "plugin.calc.meta.category": "Birou",
+
+  "plugin.calc.bar.spreadsheets": "Foi de calcul",
+
+  "plugin.calc.toolbar.newSheet": "Foaie de calcul nouă",
+  "plugin.calc.toolbar.importOds": "Importă .ods",
+  "plugin.calc.toolbar.importCsv": "Importă CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Salvează în Documente",
+  "plugin.calc.toolbar.saveNow": "Salvează acum",
+  "plugin.calc.toolbar.deleteSheet": "Șterge foaia de calcul",
+
+  "plugin.calc.menu.noSheets": "Încă nicio foaie de calcul",
+
+  "plugin.calc.sheet.untitled": "Fără titlu",
+  "plugin.calc.sheet.importedCsv": "CSV importat",
+
+  "plugin.calc.formula.placeholder": "Valoare sau formulă (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Se salvează…",
+  "plugin.calc.status.dirty": "Modificări nesalvate",
+  "plugin.calc.status.saved.one": "Salvat {time} · {count} celulă",
+  "plugin.calc.status.saved.few": "Salvat {time} · {count} celule",
+  "plugin.calc.status.saved.other": "Salvat {time} · {count} de celule",
+
+  "plugin.calc.dialog.delete": "Ștergi \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Salvarea a eșuat",
+  "plugin.calc.toast.openFailed": "Foaia de calcul nu a putut fi deschisă",
+  "plugin.calc.toast.createFailed": "Foaia de calcul nu a putut fi creată",
+  "plugin.calc.toast.deleteFailed": "Foaia de calcul nu a putut fi ștearsă",
+  "plugin.calc.toast.imported": "Am importat {name}",
+  "plugin.calc.toast.importOdsFailed": "Importul a eșuat — este acesta un fișier .ods valid?",
+  "plugin.calc.toast.importCsvFailed": "Importul a eșuat — este acesta un fișier CSV valid?",
+  "plugin.calc.toast.openFileFailed": "Fișierul nu a putut fi deschis"
+}

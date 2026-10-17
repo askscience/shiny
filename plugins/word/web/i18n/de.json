@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Dokumente",
+  "plugin.word.toolbar.titlePlaceholder": "Ohne Titel",
+  "plugin.word.toolbar.newDocument": "Neues Dokument",
+  "plugin.word.toolbar.importOdt": ".odt importieren",
+  "plugin.word.toolbar.saveToDocuments": "In Dokumente speichern",
+  "plugin.word.toolbar.saveNow": "Jetzt speichern",
+  "plugin.word.toolbar.deleteDocument": "Dokument löschen",
+  "plugin.word.toolbar.bold": "Fett",
+  "plugin.word.toolbar.italic": "Kursiv",
+  "plugin.word.toolbar.underline": "Unterstrichen",
+  "plugin.word.toolbar.heading": "Überschrift",
+  "plugin.word.toolbar.bulletList": "Aufzählung",
+  "plugin.word.toolbar.font": "Schriftart",
+  "plugin.word.toolbar.fontHint": "Schriftart — gilt für die Auswahl oder, wenn nichts ausgewählt ist, für das gesamte Dokument",
+
+  "plugin.word.status.saving": "Wird gespeichert…",
+  "plugin.word.status.unsaved": "Ungespeicherte Änderungen",
+  "plugin.word.status.saved.one": "Gespeichert {time} · {count} Wort",
+  "plugin.word.status.saved.other": "Gespeichert {time} · {count} Wörter",
+
+  "plugin.word.menu.empty": "Noch keine Dokumente",
+  "plugin.word.menu.newDocument": "Neues Dokument",
+  "plugin.word.menu.importOdt": ".odt importieren",
+  "plugin.word.menu.saveToDocuments": "In Dokumente speichern",
+  "plugin.word.menu.deleteDocument": "Dokument löschen",
+
+  "plugin.word.ctx.newDocument": "Neues Dokument",
+  "plugin.word.ctx.saveNow": "Jetzt speichern",
+  "plugin.word.ctx.saveToDocuments": "In Dokumente speichern",
+  "plugin.word.ctx.bold": "Fett",
+  "plugin.word.ctx.italic": "Kursiv",
+  "plugin.word.ctx.heading": "Überschrift",
+  "plugin.word.ctx.list": "Liste",
+  "plugin.word.ctx.deleteDocument": "Dokument löschen",
+
+  "plugin.word.dialog.deleteDoc": "„{title}“ löschen?",
+
+  "plugin.word.toast.saveFailed": "Speichern fehlgeschlagen",
+  "plugin.word.toast.openFailed": "Das Dokument konnte nicht geöffnet werden",
+  "plugin.word.toast.createFailed": "Das Dokument konnte nicht erstellt werden",
+  "plugin.word.toast.deleteFailed": "Das Dokument konnte nicht gelöscht werden",
+  "plugin.word.toast.imported": "{name} importiert",
+  "plugin.word.toast.importFailed": "Import fehlgeschlagen — ist dies eine gültige .odt-Datei?",
+  "plugin.word.toast.openFileFailed": "Die Datei konnte nicht geöffnet werden",
+
+  "plugin.word.meta.description": "Einfache Textverarbeitung — Dokumente werden als offene .odt-Dateien gespeichert",
+  "plugin.word.meta.summary": "Textverarbeitung: OpenDocument-Dokumente (.odt) erstellen, bearbeiten und lesen",
+  "plugin.word.meta.category": "Office"
+}

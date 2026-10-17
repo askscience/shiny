@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Pravi terminal Linux v aplikaciji — prijavna lupina prek PTY v lastnem oknu",
+  "plugin.terminal.meta.summary": "Terminal: prava lupina prek PTY, upodobljena z xterm.js",
+  "plugin.terminal.meta.category": "Sistem",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "Nov zavihek",
+  "plugin.terminal.tab.close": "Zapri {name}",
+  "plugin.terminal.tabs.label": "Zavihki terminala",
+
+  "plugin.terminal.status.starting": "zaganjanje terminala…",
+  "plugin.terminal.status.connecting": "povezovanje…",
+  "plugin.terminal.status.reconnecting": "ponovno povezovanje…",
+  "plugin.terminal.status.connected": "povezano",
+  "plugin.terminal.status.startFailed": "lupine ni bilo mogoče zagnati",
+  "plugin.terminal.status.expired": "seja je potekla — prijavite se znova",
+  "plugin.terminal.status.xtermFailed": "xterm.js ni bilo mogoče naložiti",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: največ {count} zavihek",
+  "plugin.terminal.toast.tabLimit.two": "Terminal: največ {count} zavihka",
+  "plugin.terminal.toast.tabLimit.few": "Terminal: največ {count} zavihki",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: največ {count} zavihkov",
+  "plugin.terminal.toast.startFailed": "Terminal: lupine ni bilo mogoče zagnati",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js se ni naložil",
+  "plugin.terminal.toast.clipboardUnavailable": "Odložišče ni na voljo",
+
+  "plugin.terminal.ctx.copy": "Kopiraj",
+  "plugin.terminal.ctx.paste": "Prilepi",
+  "plugin.terminal.ctx.clearScrollback": "Počisti zgodovino izpisa",
+  "plugin.terminal.ctx.closeTab": "Zapri zavihek"
+}

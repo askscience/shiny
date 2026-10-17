@@ -1,0 +1,31 @@
+{
+  "plugin.terminal.meta.description": "Skutečný linuxový terminál uvnitř aplikace — přihlašovací shell postavený na PTY ve vlastním okně",
+  "plugin.terminal.meta.summary": "Terminál: skutečný shell přes PTY, vykreslovaný pomocí xterm.js",
+  "plugin.terminal.meta.category": "Systém",
+
+  "plugin.terminal.tab.label": "Terminál {n}",
+  "plugin.terminal.tab.new": "Nový tab",
+  "plugin.terminal.tab.close": "Zavřít {name}",
+  "plugin.terminal.tabs.label": "Taby terminálu",
+
+  "plugin.terminal.status.starting": "spouštím terminál…",
+  "plugin.terminal.status.connecting": "připojuji…",
+  "plugin.terminal.status.reconnecting": "znovu připojuji…",
+  "plugin.terminal.status.connected": "připojeno",
+  "plugin.terminal.status.startFailed": "shell se nepodařilo spustit",
+  "plugin.terminal.status.expired": "relace vypršela — přihlaste se znovu",
+  "plugin.terminal.status.xtermFailed": "xterm.js se nepodařilo načíst",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminál: nejvýše {count} tab",
+  "plugin.terminal.toast.tabLimit.few": "Terminál: nejvýše {count} taby",
+  "plugin.terminal.toast.tabLimit.many": "Terminál: nejvýše {count} tabu",
+  "plugin.terminal.toast.tabLimit.other": "Terminál: nejvýše {count} tabů",
+  "plugin.terminal.toast.startFailed": "Terminál: shell se nepodařilo spustit",
+  "plugin.terminal.toast.xtermFailed": "Terminál: xterm.js se nepodařilo načíst",
+  "plugin.terminal.toast.clipboardUnavailable": "Schránka není dostupná",
+
+  "plugin.terminal.ctx.copy": "Kopírovat",
+  "plugin.terminal.ctx.paste": "Vložit",
+  "plugin.terminal.ctx.clearScrollback": "Vymazat historii rolování",
+  "plugin.terminal.ctx.closeTab": "Zavřít tab"
+}

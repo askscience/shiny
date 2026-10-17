@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Asiakirjat",
+  "plugin.word.toolbar.titlePlaceholder": "Nimetön",
+  "plugin.word.toolbar.newDocument": "Uusi asiakirja",
+  "plugin.word.toolbar.importOdt": "Tuo .odt",
+  "plugin.word.toolbar.saveToDocuments": "Tallenna Asiakirjat-kansioon",
+  "plugin.word.toolbar.saveNow": "Tallenna nyt",
+  "plugin.word.toolbar.deleteDocument": "Poista asiakirja",
+  "plugin.word.toolbar.bold": "Lihavointi",
+  "plugin.word.toolbar.italic": "Kursivointi",
+  "plugin.word.toolbar.underline": "Alleviivaus",
+  "plugin.word.toolbar.heading": "Otsikko",
+  "plugin.word.toolbar.bulletList": "Luettelomerkkilista",
+  "plugin.word.toolbar.font": "Fontti",
+  "plugin.word.toolbar.fontHint": "Fontti — koskee valintaa tai koko asiakirjaa, kun mitään ei ole valittuna",
+
+  "plugin.word.status.saving": "Tallennetaan…",
+  "plugin.word.status.unsaved": "Tallentamattomia muutoksia",
+  "plugin.word.status.saved.one": "Tallennettu {time} · {count} sana",
+  "plugin.word.status.saved.other": "Tallennettu {time} · {count} sanaa",
+
+  "plugin.word.menu.empty": "Ei vielä asiakirjoja",
+  "plugin.word.menu.newDocument": "Uusi asiakirja",
+  "plugin.word.menu.importOdt": "Tuo .odt",
+  "plugin.word.menu.saveToDocuments": "Tallenna Asiakirjat-kansioon",
+  "plugin.word.menu.deleteDocument": "Poista asiakirja",
+
+  "plugin.word.ctx.newDocument": "Uusi asiakirja",
+  "plugin.word.ctx.saveNow": "Tallenna nyt",
+  "plugin.word.ctx.saveToDocuments": "Tallenna Asiakirjat-kansioon",
+  "plugin.word.ctx.bold": "Lihavointi",
+  "plugin.word.ctx.italic": "Kursivointi",
+  "plugin.word.ctx.heading": "Otsikko",
+  "plugin.word.ctx.list": "Luettelo",
+  "plugin.word.ctx.deleteDocument": "Poista asiakirja",
+
+  "plugin.word.dialog.deleteDoc": "Poistetaanko \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Tallennus epäonnistui",
+  "plugin.word.toast.openFailed": "Asiakirjaa ei voitu avata",
+  "plugin.word.toast.createFailed": "Asiakirjaa ei voitu luoda",
+  "plugin.word.toast.deleteFailed": "Asiakirjaa ei voitu poistaa",
+  "plugin.word.toast.imported": "Tuotu {name}",
+  "plugin.word.toast.importFailed": "Tuonti epäonnistui — onko tämä kelvollinen .odt-tiedosto?",
+  "plugin.word.toast.openFileFailed": "Tiedostoa ei voitu avata",
+
+  "plugin.word.meta.description": "Yksinkertainen tekstinkäsittely — asiakirjat tallennetaan avoimina .odt-tiedostoina",
+  "plugin.word.meta.summary": "Tekstinkäsittely: luo, muokkaa ja lue OpenDocument (.odt) -asiakirjoja",
+  "plugin.word.meta.category": "Toimisto"
+}

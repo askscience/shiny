@@ -12,6 +12,8 @@
 //! * [`display`] — interface scale files and the DPI-derived `auto` choice.
 //! * [`gestures`] — evdev three-finger swipes.
 //! * [`shim`] — the C ABI in `shim/peakd_qt.h`.
+//! * [`youtube`] — the document-start scriptlet for YouTube's video ads, which
+//!   a filter list cannot reach.
 
 mod bench;
 mod browse;
@@ -21,7 +23,9 @@ mod downloads;
 mod filter;
 mod gestures;
 mod host;
+mod i18n;
 mod shim;
+mod youtube;
 
 use std::ffi::{c_char, c_void, CStr};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -166,6 +170,7 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
             if let Some(on) = value.get("adblock").and_then(|v| v.as_bool()) {
                 filter::set_enabled(on);
+                shim::set_filter_scripts(on);
             }
             if let Some(dir) = value.get("downloadsDir").and_then(|v| v.as_str()) {
                 downloads::set_dir(dir);
@@ -182,6 +187,7 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
             if let Some(on) = value.get("enabled").and_then(|v| v.as_bool()) {
                 filter::set_enabled(on);
+                shim::set_filter_scripts(on);
             }
         }
         push_shield();
@@ -579,12 +585,23 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
         .ok();
 
     shim::inject_script("peakd:exit", EXIT_SHORTCUT_JS);
+    // YouTube's video ads are scriptlet territory (see `youtube.rs`); the
+    // script is registered like any other, and the shield decides whether a
+    // view's collection actually carries it.
+    shim::inject_script(youtube::SCRIPT_NAME, youtube::YOUTUBE_ADS_JS);
     shim::set_window(&cfg.window_title, cfg.width, cfg.height);
+    // The Qt side's own strings (file dialogs, name filters) in the session's
+    // language — the web UI follows the user's `ui.locale` preference instead.
+    shim::set_strings(&i18n::shell_strings(&cfg.lang));
 
     // In-process ad filtering + the Google sign-in UA override. The engine is
     // compiled by the server; loading it never fails the shell (it just browses
     // unfiltered if the cache is absent).
     filter::install(std::path::Path::new(&cfg.adfilter_dir));
+    // Deliberately before `peakd_qt_run`: the app view builds its script
+    // collection while the QML completes, so the shield state has to be known
+    // by then (it is what keeps `peakd:youtube` out when blocking is off).
+    shim::set_filter_scripts(filter::stats().0);
     shim::set_filter_cb(on_filter);
     shim::set_ua_cb(on_ua);
     shim::set_download_cb(on_download);

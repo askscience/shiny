@@ -14,6 +14,7 @@
 import { focusWindow, getWorkspacesList } from './desktop.js';
 import { refreshTiles } from './tiles.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
+import { t } from './i18n.js';
 
 const PAD = 40;   // margin of the grid region inside #tile-grid
 const GAP = 16;   // between cells
@@ -60,7 +61,9 @@ function addBadge(el, name) {
   const index = list.findIndex((ws) => (ws.windows || []).includes(name));
   const badge = document.createElement('span');
   badge.className = 'overview-badge';
-  badge.textContent = index >= 0 ? `WS ${index + 1}` : 'WS';
+  badge.textContent = index >= 0
+    ? t('desktop.overviewWs', { n: index + 1 }, `WS ${index + 1}`)
+    : t('desktop.overviewWsNone', null, 'WS');
   badge.dataset.overview = 'badge';
   header.appendChild(badge);
 }

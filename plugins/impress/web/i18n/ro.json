@@ -1,0 +1,80 @@
+{
+  "plugin.impress.toolbar.presentations": "Prezentări",
+  "plugin.impress.toolbar.titlePlaceholder": "Fără titlu",
+  "plugin.impress.toolbar.theme": "Temă",
+  "plugin.impress.toolbar.present": "Prezintă",
+  "plugin.impress.toolbar.newDeck": "Prezentare nouă",
+  "plugin.impress.toolbar.importOdp": "Importă .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Salvează în Documente",
+  "plugin.impress.toolbar.saveNow": "Salvează acum",
+  "plugin.impress.toolbar.deleteDeck": "Șterge prezentarea",
+
+  "plugin.impress.menu.empty": "Încă nicio prezentare",
+  "plugin.impress.menu.newDeck": "Prezentare nouă",
+  "plugin.impress.menu.importOdp": "Importă .odp",
+  "plugin.impress.menu.saveToDocuments": "Salvează în Documente",
+  "plugin.impress.menu.deleteDeck": "Șterge prezentarea",
+
+  "plugin.impress.ctx.newDeck": "Prezentare nouă",
+  "plugin.impress.ctx.addSlide": "Adaugă diapozitiv",
+  "plugin.impress.ctx.saveNow": "Salvează acum",
+  "plugin.impress.ctx.present": "Prezintă",
+  "plugin.impress.ctx.stopPresenting": "Oprește prezentarea",
+  "plugin.impress.ctx.deleteDeck": "Șterge prezentarea",
+
+  "plugin.impress.status.saving": "Se salvează…",
+  "plugin.impress.status.unsaved": "Modificări nesalvate",
+  "plugin.impress.status.saved.one": "Salvat {time} · {count} diapozitiv",
+  "plugin.impress.status.saved.few": "Salvat {time} · {count} diapozitive",
+  "plugin.impress.status.saved.other": "Salvat {time} · {count} de diapozitive",
+
+  "plugin.impress.empty.noDeck": "Nicio prezentare",
+  "plugin.impress.empty.noDeckBody": "Creează una sau cere AI-ului să construiască o prezentare",
+
+  "plugin.impress.inspector.layout": "Aspect",
+  "plugin.impress.inspector.transition": "Tranziție",
+  "plugin.impress.inspector.bullets": "Puncte",
+  "plugin.impress.inspector.speakerNotes": "Note pentru vorbitor",
+  "plugin.impress.inspector.hint": "Dă clic pe orice text de pe diapozitiv pentru a-l edita direct.",
+  "plugin.impress.inspector.applyAll": "Aplică această tranziție și apariția punctelor la fiecare diapozitiv",
+  "plugin.impress.inspector.applyAllLabel": "Aplică la toate diapozitivele",
+
+  "plugin.impress.ops.addSlide": "Adaugă diapozitiv",
+  "plugin.impress.ops.moveUp": "Mută mai sus",
+  "plugin.impress.ops.moveDown": "Mută mai jos",
+  "plugin.impress.ops.deleteSlide": "Șterge diapozitivul",
+
+  "plugin.impress.transition.none": "Niciuna",
+  "plugin.impress.transition.fade": "Estompare",
+  "plugin.impress.transition.slide": "Alunecare",
+  "plugin.impress.transition.push": "Împingere",
+  "plugin.impress.transition.zoom": "Mărire",
+
+  "plugin.impress.reveal.all": "Toate deodată",
+  "plugin.impress.reveal.bullets": "Unul câte unul",
+
+  "plugin.impress.slide.addText": "Adaugă text",
+  "plugin.impress.slide.addTitle": "Adaugă un titlu",
+  "plugin.impress.slide.addSubtitle": "Adaugă un subtitlu",
+  "plugin.impress.slide.attribution": "Atribuire",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Înapoi la editor",
+  "plugin.impress.present.fullScreen": "Ecran complet",
+  "plugin.impress.present.exitFullScreen": "Ieși din ecranul complet",
+  "plugin.impress.present.blocked": "Ecranul complet a fost blocat de browser",
+
+  "plugin.impress.dialog.deleteDeck": "Ștergi \"{title}\"?",
+
+  "plugin.impress.toast.saveFailed": "Salvarea a eșuat",
+  "plugin.impress.toast.openFailed": "Prezentarea nu a putut fi deschisă",
+  "plugin.impress.toast.createFailed": "Prezentarea nu a putut fi creată",
+  "plugin.impress.toast.deleteFailed": "Prezentarea nu a putut fi ștearsă",
+  "plugin.impress.toast.imported": "Am importat {name}",
+  "plugin.impress.toast.importFailed": "Importul a eșuat — este acesta un fișier .odp valid?",
+  "plugin.impress.toast.openFileFailed": "Fișierul nu a putut fi deschis",
+
+  "plugin.impress.meta.description": "Creator de prezentări — prezentările sunt stocate ca diapozitive și exportate ca fișiere .odp deschise",
+  "plugin.impress.meta.summary": "Impress: construiește, editează și prezintă prezentări OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Birou"
+}

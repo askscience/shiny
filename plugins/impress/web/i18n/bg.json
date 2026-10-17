@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Презентации",
+  "plugin.impress.toolbar.titlePlaceholder": "Без заглавие",
+  "plugin.impress.toolbar.theme": "Тема",
+  "plugin.impress.toolbar.present": "Представи",
+  "plugin.impress.toolbar.newDeck": "Нова презентация",
+  "plugin.impress.toolbar.importOdp": "Импортирай .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Запази в “Документи”",
+  "plugin.impress.toolbar.saveNow": "Запази сега",
+  "plugin.impress.toolbar.deleteDeck": "Изтрий презентацията",
+
+  "plugin.impress.menu.empty": "Още няма презентации",
+  "plugin.impress.menu.newDeck": "Нова презентация",
+  "plugin.impress.menu.importOdp": "Импортирай .odp",
+  "plugin.impress.menu.saveToDocuments": "Запази в “Документи”",
+  "plugin.impress.menu.deleteDeck": "Изтрий презентацията",
+
+  "plugin.impress.ctx.newDeck": "Нова презентация",
+  "plugin.impress.ctx.addSlide": "Добави слайд",
+  "plugin.impress.ctx.saveNow": "Запази сега",
+  "plugin.impress.ctx.present": "Представи",
+  "plugin.impress.ctx.stopPresenting": "Спри представянето",
+  "plugin.impress.ctx.deleteDeck": "Изтрий презентацията",
+
+  "plugin.impress.status.saving": "Запазване…",
+  "plugin.impress.status.unsaved": "Незапазени промени",
+  "plugin.impress.status.saved.one": "Запазено {time} · {count} слайд",
+  "plugin.impress.status.saved.other": "Запазено {time} · {count} слайда",
+
+  "plugin.impress.empty.noDeck": "Няма презентация",
+  "plugin.impress.empty.noDeckBody": "Създайте една или помолете ИИ да изгради презентация",
+
+  "plugin.impress.inspector.layout": "Оформление",
+  "plugin.impress.inspector.transition": "Преход",
+  "plugin.impress.inspector.bullets": "Точки",
+  "plugin.impress.inspector.speakerNotes": "Бележки за лектора",
+  "plugin.impress.inspector.hint": "Щракнете върху който и да е текст в слайда, за да го редактирате направо.",
+  "plugin.impress.inspector.applyAll": "Приложи този преход и поява на точките към всеки слайд",
+  "plugin.impress.inspector.applyAllLabel": "Приложи към всички слайдове",
+
+  "plugin.impress.ops.addSlide": "Добави слайд",
+  "plugin.impress.ops.moveUp": "Премести нагоре",
+  "plugin.impress.ops.moveDown": "Премести надолу",
+  "plugin.impress.ops.deleteSlide": "Изтрий слайда",
+
+  "plugin.impress.transition.none": "Няма",
+  "plugin.impress.transition.fade": "Избледняване",
+  "plugin.impress.transition.slide": "Плъзгане",
+  "plugin.impress.transition.push": "Избутване",
+  "plugin.impress.transition.zoom": "Увеличение",
+
+  "plugin.impress.reveal.all": "Всички наведнъж",
+  "plugin.impress.reveal.bullets": "Една по една",
+
+  "plugin.impress.slide.addText": "Добави текст",
+  "plugin.impress.slide.addTitle": "Добави заглавие",
+  "plugin.impress.slide.addSubtitle": "Добави подзаглавие",
+  "plugin.impress.slide.attribution": "Приписване",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Обратно към редактора",
+  "plugin.impress.present.fullScreen": "Цял екран",
+  "plugin.impress.present.exitFullScreen": "Излез от цял екран",
+  "plugin.impress.present.blocked": "Целият екран беше блокиран от браузъра",
+
+  "plugin.impress.dialog.deleteDeck": "Да се изтрие ли “{title}”?",
+
+  "plugin.impress.toast.saveFailed": "Запазването не успя",
+  "plugin.impress.toast.openFailed": "Презентацията не можа да се отвори",
+  "plugin.impress.toast.createFailed": "Презентацията не можа да се създаде",
+  "plugin.impress.toast.deleteFailed": "Презентацията не можа да се изтрие",
+  "plugin.impress.toast.imported": "Импортирано: {name}",
+  "plugin.impress.toast.importFailed": "Импортирането не успя — това валиден .odp файл ли е?",
+  "plugin.impress.toast.openFileFailed": "Файлът не можа да се отвори",
+
+  "plugin.impress.meta.description": "Създател на презентации — презентациите се съхраняват като слайдове и се експортират като отворени .odp файлове",
+  "plugin.impress.meta.summary": "Impress: създавайте, редактирайте и представяйте слайд презентации OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Офис"
+}

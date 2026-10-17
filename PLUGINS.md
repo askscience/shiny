@@ -1529,6 +1529,57 @@ as "the feature is broken", not "the address changed".
 
 ---
 
+### Translating a plugin (i18n)
+
+The shell's UI is translated through JSON catalogues
+([interface language](../docs/core/i18n.md)); a plugin joins in the same way.
+
+**Window surface (`web/plugin.js`, `web/hud.js`)**
+
+```js
+import { t, tp } from '../../js/i18n.js';   // relative: works through the kiosk proxy
+
+t('plugin.hello.toolbar.greet', null, 'Greet');          // key, params, English fallback
+tp('plugin.hello.count', n, { count: n }, `${n} items`); // plurals: key.one / key.other
+```
+
+- Catalogues live at `plugins/<name>/web/i18n/<code>.json` (flat JSON, keys
+  fully qualified with the plugin name). The core loads the active plugin's
+  catalogue before importing its module and reloads it when the interface
+  language changes.
+- **Always pass the English fallback** — a plugin with no catalogues then
+  behaves exactly as before.
+- Add `plugin.<name>.meta.description` / `.meta.summary` / `.meta.category` to
+  the catalogue: `/api/plugins` serves the localized card text from there
+  (falling back to `plugin.toml`), so the Plugins window and the launcher show
+  translated cards even while the plugin is inactive.
+- `web/js/tests/i18n.test.mjs` checks every `plugin.<name>.*` key used in your
+  JS against your catalogue — a missing entry fails the build.
+
+**Status lines (agent tools)**
+
+`Tool::step_label()` / `humanize()` are English. To have the dock's status line
+follow the user's language, return a keyed `UiText` from the additive hooks:
+
+```rust
+fn step_ui(&self) -> Option<UiText> {
+    Some(UiText::keyed("steps.listing", "Listing files…"))
+}
+fn done_ui(&self, _result: &str, data: &Value) -> Option<UiText> {
+    Some(UiText::keyed("steps.listed", "Listed the files")
+        .param("count", data.get("count").cloned().unwrap_or(0.into())))
+}
+```
+
+The key is **relative to the plugin**; the host prefixes it with
+`plugin.<name>.` before it goes on the wire, so the catalogue entry is
+`plugin.<name>.steps.listing`. `None` (the default) keeps the English label.
+
+**Tool errors** are translated server-side by matching the English message
+against the catalogues' values — add an entry for a user-facing error (e.g.
+`plugin.hello.error.noName` = `"a name is required"`) and it comes back in the
+caller's language. Dynamic messages without an entry stay English.
+
 ## 20. Roadmap
 
 The v1 plugin system delivers a **self-contained plugin model**: a plugin ships `plugin.toml` + cdylib + `migrations/` + `skills/` + `web/` (+ `RouteSpec` routes) and the core needs zero edits to host it — tools, schema, REST routes and window UI all live in the plugin folder. `word`, `calc`, `impress`, `radio` and `youtube` are migrated to this model; `hello` needs nothing; `keyboard` and `traveler` remain chrome-integrated (item 7).

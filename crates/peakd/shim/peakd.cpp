@@ -121,6 +121,15 @@ Context *g_ctx = nullptr;
 // Scripts injected into every page, registered before the shell starts.
 QList<InjectedScript> g_pending_scripts;
 
+/// The one injected script the shield toggle owns: the YouTube ad scriptlet,
+/// registered by Rust under exactly this name. Everything else in
+/// `g_pending_scripts` is load-bearing and always runs.
+const char *kFilterScriptName = "peakd:youtube";
+
+/// Whether the ad-filter scriptlets belong in a view's collection. Set by Rust
+/// (the shield state), and read every time a collection is built or rebuilt.
+bool g_filter_scripts = false;
+
 // Ad filtering + the Google sign-in User-Agent override (Rust owns the engine).
 peakd_filter_cb g_filter_cb = nullptr;
 peakd_ua_cb g_ua_cb = nullptr;
@@ -334,6 +343,15 @@ QString g_window_title = QStringLiteral("peakd");
 int g_window_width = 1280;
 int g_window_height = 860;
 
+// The shell's own strings, from the shared catalogues (see `src/i18n.rs`).
+QHash<QString, QString> g_strings;
+
+/// A translated shell string, or the English literal when the catalogue has
+/// no entry (an older catalogue, or a language that does not ship one).
+QString tr_key(const char *key, const char *fallback) {
+    return g_strings.value(QString::fromUtf8(key), QString::fromUtf8(fallback));
+}
+
 void emit_view(const QString &id, const char *kind, const QString &payload) {
     if (g_ctx && g_ctx->view_cb) {
         g_ctx->view_cb(g_ctx->userdata, id.toUtf8().constData(), kind,
@@ -379,20 +397,20 @@ QStringList mime_filters(const QStringList &mime_types) {
     QStringList filters;
     for (const QString &mime : mime_types) {
         if (mime == QLatin1String("image/*")) {
-            filters << QStringLiteral("Images (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.svg *.avif)");
+            filters << tr_key("qt.filter.images", "Images (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.svg *.avif)");
         } else if (mime == QLatin1String("video/*")) {
-            filters << QStringLiteral("Videos (*.mp4 *.webm *.mkv *.mov *.avi)");
+            filters << tr_key("qt.filter.videos", "Videos (*.mp4 *.webm *.mkv *.mov *.avi)");
         } else if (mime == QLatin1String("audio/*")) {
-            filters << QStringLiteral("Audio (*.mp3 *.ogg *.wav *.flac *.m4a *.opus)");
+            filters << tr_key("qt.filter.audio", "Audio (*.mp3 *.ogg *.wav *.flac *.m4a *.opus)");
         } else if (mime == QLatin1String("application/pdf")) {
-            filters << QStringLiteral("PDF (*.pdf)");
+            filters << tr_key("qt.filter.pdf", "PDF (*.pdf)");
         } else if (mime == QLatin1String("text/*")) {
-            filters << QStringLiteral("Text (*.txt *.md *.csv *.json *.html)");
+            filters << tr_key("qt.filter.text", "Text (*.txt *.md *.csv *.json *.html)");
         } else if (mime.contains(QLatin1Char('/'))) {
-            filters << QStringLiteral("%1 (*)").arg(mime);
+            filters << tr_key("qt.filter.any", "%1 (*)").arg(mime);
         }
     }
-    filters << QStringLiteral("All files (*)");
+    filters << tr_key("qt.filter.allFiles", "All files (*)");
     return filters;
 }
 
@@ -617,6 +635,9 @@ public:
     void set_app_channel(QObject *channel) { app_channel_ = channel; }
 
     /// {name, source} for the bootstrap and every injected script.
+    ///
+    /// The ad-filter scriptlet is left out while the shield is off — it is the
+    /// only injected script whose absence costs nothing but ads.
     Q_INVOKABLE QVariantList scriptSources() const {
         QVariantList list;
         if (g_ctx && !g_ctx->bootstrap.isEmpty()) {
@@ -624,6 +645,7 @@ public:
                                     {QStringLiteral("source"), g_ctx->bootstrap}});
         }
         for (const InjectedScript &script : g_pending_scripts) {
+            if (!g_filter_scripts && script.name == QLatin1String(kFilterScriptName)) continue;
             list.append(QVariantMap{{QStringLiteral("name"), script.name},
                                     {QStringLiteral("source"), script.source}});
         }
@@ -742,23 +764,24 @@ public:
         QStringList files;
         switch (mode) {
         case 0: {  // FileModeOpen
-            const QString file =
-                QFileDialog::getOpenFileName(parent, QStringLiteral("Open"), QString(), filters);
+            const QString file = QFileDialog::getOpenFileName(
+                parent, tr_key("qt.dialog.open", "Open"), QString(), filters);
             if (!file.isEmpty()) files << file;
             break;
         }
         case 1:  // FileModeOpenMultiple
-            files = QFileDialog::getOpenFileNames(parent, QStringLiteral("Open"), QString(), filters);
+            files = QFileDialog::getOpenFileNames(
+                parent, tr_key("qt.dialog.open", "Open"), QString(), filters);
             break;
         case 2: {  // FileModeUploadFolder
-            const QString dir =
-                QFileDialog::getExistingDirectory(parent, QStringLiteral("Choose folder"));
+            const QString dir = QFileDialog::getExistingDirectory(
+                parent, tr_key("qt.dialog.chooseFolder", "Choose folder"));
             if (!dir.isEmpty()) files << dir;
             break;
         }
         case 3: {  // FileModeSave
-            const QString file = QFileDialog::getSaveFileName(parent, QStringLiteral("Save"),
-                                                             default_name, filters);
+            const QString file = QFileDialog::getSaveFileName(
+                parent, tr_key("qt.dialog.save", "Save"), default_name, filters);
             if (!file.isEmpty()) files << file;
             break;
         }
@@ -948,10 +971,36 @@ void peakd_qt_inject_script(const char *name, const char *source) {
     g_pending_scripts.append(InjectedScript{QString::fromUtf8(name), QString::fromUtf8(source)});
 }
 
+/// Include (or leave out) the ad-filter scriptlets and re-apply every live
+/// view's collection. A collection is only read when a document is created, so
+/// this takes effect on the next navigation of an already-open tab — and right
+/// away for a tab opened afterwards.
+void peakd_qt_set_filter_scripts(int on) {
+    g_filter_scripts = on != 0;
+    if (!g_ctx || !g_ctx->scene_root) return;  // before the scene: recorded only
+    if (g_ctx->app_view) {
+        QMetaObject::invokeMethod(g_ctx->scene_root, "applyScripts",
+                                  Q_ARG(QVariant, QVariant::fromValue(g_ctx->app_view)));
+    }
+    for (QObject *view : g_ctx->children) {
+        QMetaObject::invokeMethod(g_ctx->scene_root, "applyScripts",
+                                  Q_ARG(QVariant, QVariant::fromValue(view)));
+    }
+}
+
 void peakd_qt_set_window(const char *title, int width, int height) {
     g_window_title = QString::fromUtf8(title);
     if (width > 0) g_window_width = width;
     if (height > 0) g_window_height = height;
+}
+
+void peakd_qt_set_strings(const char *strings_json) {
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(strings_json));
+    if (!doc.isObject()) return;
+    const QJsonObject obj = doc.object();
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+        if (it.value().isString()) g_strings.insert(it.key(), it.value().toString());
+    }
 }
 
 int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb ipc,

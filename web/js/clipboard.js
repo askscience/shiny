@@ -33,6 +33,7 @@ import {
   isStorable, normalizeHistory, normalizeText, pushEntry, removeEntry,
 } from './clipboardShared.js';
 import { getClipboardHistory, setClipboardHistory } from './preferences.js';
+import { t } from './i18n.js';
 
 /* ── State ────────────────────────────────────────────────────── */
 
@@ -79,7 +80,7 @@ export async function copyText(text, { source = 'app' } = {}) {
   if (!clean) return false;
   const ok = await writeClipboard(clean);
   recordCopy(clean, source);
-  if (!ok) toast('Clipboard unavailable', { type: 'error' });
+  if (!ok) toast(t('clip.unavailable', null, 'Clipboard unavailable'), { type: 'error' });
   return ok;
 }
 

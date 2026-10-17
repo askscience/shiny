@@ -2,9 +2,10 @@
  * weatherShared.js — pure weather helpers for the top-bar chip and its
  * forecast menu (`hudLeft.js`, `weatherMenu.js`).
  *
- * Kept import-free on purpose: `web/js/tests/weatherShared.test.mjs` loads it
- * in Node with no DOM.
+ * `web/js/tests/weatherShared.test.mjs` loads it in Node with the i18n harness
+ * (no DOM).
  */
+import { t } from './i18n.js';
 
 /** WMO weather-code groups, as the words the chip and the menu show. */
 export const WMO_LABEL = {
@@ -62,7 +63,10 @@ export function weatherIconStem(code) {
 
 /** The code's label, e.g. 61 -> "Rain". */
 export function weatherLabel(code) {
-  return WMO_LABEL[code] ?? 'Cloudy';
+  // The catalogue enumerates the codes; the English table stays the fallback so
+  // an unmapped code is never a raw key. (Dynamic keys are outside the linter's
+  // static scan — keep this table and en.json in step.)
+  return t(`weather.code.${code}`, null, WMO_LABEL[code] ?? 'Cloudy');
 }
 
 /** Whole degrees, or `null` when the API gave nothing usable. */
@@ -83,7 +87,7 @@ export function tempText(value) {
  * the rest are short weekday names. `dateIso` is Open-Meteo's "YYYY-MM-DD".
  */
 export function forecastDayLabel(dateIso, index, locale = 'en-US') {
-  if (index === 0) return 'Today';
+  if (index === 0) return t('weather.today');
   const [y, m, d] = String(dateIso).split('-').map(Number);
   if (!y || !m || !d) return '';
   return new Date(y, m - 1, d).toLocaleDateString(locale, { weekday: 'short' });

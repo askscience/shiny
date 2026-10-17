@@ -14,6 +14,7 @@
 import { button, emptyState, toast, setTileGlow, glowGradient } from '../../ui/index.js';
 import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { t } from '../../js/i18n.js';
 
 export const CALCULATOR_PLUGIN = 'calculator';
 
@@ -116,10 +117,10 @@ async function equals() {
     renderDisplay();
     await refreshHistory();
   } catch (e) {
-    resultEl.textContent = 'Error';
+    resultEl.textContent = t('plugin.calculator.display.error', null, 'Error');
     // Sticky until the next successful renderDisplay() repaints the glow.
     updateGlow({ error: true });
-    toast(e.message || 'Could not evaluate', { type: 'error' });
+    toast(e.message || t('plugin.calculator.toast.evaluateFailed', null, 'Could not evaluate'), { type: 'error' });
   }
 }
 
@@ -232,14 +233,17 @@ async function refreshHistory() {
     const { history } = await apiHistory();
     historyEl.textContent = '';
     if (!history || !history.length) {
-      historyEl.appendChild(emptyState({ title: 'No history', body: 'Calculations you run here or ask the AI for appear below.' }));
+      historyEl.appendChild(emptyState({
+        title: t('plugin.calculator.empty.noHistory', null, 'No history'),
+        body: t('plugin.calculator.empty.noHistoryBody', null, 'Calculations you run here or ask the AI for appear below.'),
+      }));
       return;
     }
     for (const item of history) {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'calculator-history-item';
-      row.title = 'Reuse this result';
+      row.title = t('plugin.calculator.history.reuse', null, 'Reuse this result');
       const expr = document.createElement('span');
       expr.className = 'calculator-history-expr';
       expr.textContent = item.expression;
@@ -256,7 +260,7 @@ async function refreshHistory() {
       historyEl.appendChild(row);
     }
   } catch (e) {
-    toast(e.message || 'Could not load history', { type: 'error' });
+    toast(e.message || t('plugin.calculator.toast.historyFailed', null, 'Could not load history'), { type: 'error' });
   }
 }
 
@@ -264,9 +268,9 @@ async function clearHistory() {
   try {
     await apiClearHistory();
     await refreshHistory();
-    toast('History cleared', { type: 'info' });
+    toast(t('plugin.calculator.toast.historyCleared', null, 'History cleared'), { type: 'info' });
   } catch (e) {
-    toast(e.message || 'Could not clear history', { type: 'error' });
+    toast(e.message || t('plugin.calculator.toast.clearFailed', null, 'Could not clear history'), { type: 'error' });
   }
 }
 
@@ -308,9 +312,9 @@ export function mountCalculatorTile() {
     btn.setAttribute('aria-label', label);
     return btn;
   };
-  historyToggleBtn = barBtn('ui/list', 'History', toggleHistory);
-  sciToggleBtn = barBtn('ui/scientific', 'Scientific', toggleSci);
-  const clearBtn = barBtn('ui/trash', 'Clear history', () => void clearHistory());
+  historyToggleBtn = barBtn('ui/list', t('plugin.calculator.toolbar.history', null, 'History'), toggleHistory);
+  sciToggleBtn = barBtn('ui/scientific', t('plugin.calculator.toolbar.scientific', null, 'Scientific'), toggleSci);
+  const clearBtn = barBtn('ui/trash', t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), () => void clearHistory());
   bar.append(spacer, historyToggleBtn, sciToggleBtn, clearBtn);
   tileEl.appendChild(bar);
 
@@ -393,12 +397,12 @@ export function wireCalculatorEvents() {
 export function calculatorContextMenu() {
   const hasExpr = !!expression.trim();
   return [
-    { type: 'item', label: 'Equals', icon: 'ui/check', disabled: !hasExpr, onClick: () => void equals() },
-    { type: 'item', label: 'Clear all', icon: 'ui/close', onClick: clearAll },
+    { type: 'item', label: t('plugin.calculator.menu.equals', null, 'Equals'), icon: 'ui/check', disabled: !hasExpr, onClick: () => void equals() },
+    { type: 'item', label: t('plugin.calculator.menu.clearAll', null, 'Clear all'), icon: 'ui/close', onClick: clearAll },
     { type: 'separator' },
-    { type: 'item', label: 'Scientific', icon: 'ui/scientific', checked: sciMode, onClick: toggleSci },
-    { type: 'item', label: 'History', icon: 'ui/list', checked: historyOpen, onClick: toggleHistory },
-    { type: 'item', label: 'Clear history', icon: 'ui/trash', danger: true, onClick: () => void clearHistory() },
+    { type: 'item', label: t('plugin.calculator.toolbar.scientific', null, 'Scientific'), icon: 'ui/scientific', checked: sciMode, onClick: toggleSci },
+    { type: 'item', label: t('plugin.calculator.toolbar.history', null, 'History'), icon: 'ui/list', checked: historyOpen, onClick: toggleHistory },
+    { type: 'item', label: t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), icon: 'ui/trash', danger: true, onClick: () => void clearHistory() },
   ];
 }
 

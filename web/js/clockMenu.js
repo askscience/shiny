@@ -13,6 +13,7 @@
 import { apiFetch } from './api.js';
 import { button, emptyState, iconButton } from '../ui/index.js';
 import { notifyMenuChange } from './menuState.js';
+import { getLocale, t, tp } from './i18n.js';
 import {
   buildMonthCells, formatEventTime, formatLocationTime, groupEventsByDate,
   isoDate, isoDayLabel, monthKey, monthLabel, shiftMonth, weekdayShortNames,
@@ -134,7 +135,7 @@ function ensurePopup() {
   popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup clock-menu hidden';
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Time and calendar');
+  popup.setAttribute('aria-label', t('hud.timeCalendar'));
 
   const head = document.createElement('div');
   head.className = 'clock-menu-head';
@@ -143,7 +144,7 @@ function ensurePopup() {
   head.append(
     iconButton({
       icon: 'ui/chevron-left',
-      label: 'Previous month',
+      label: t('clock.prevMonth'),
       variant: 'quiet',
       size: 'sm',
       onClick: () => stepMonth(-1),
@@ -151,7 +152,7 @@ function ensurePopup() {
     monthEl,
     iconButton({
       icon: 'ui/chevron-right',
-      label: 'Next month',
+      label: t('clock.nextMonth'),
       variant: 'quiet',
       size: 'sm',
       onClick: () => stepMonth(1),
@@ -163,7 +164,7 @@ function ensurePopup() {
 
   weekdaysEl = document.createElement('div');
   weekdaysEl.className = 'clock-menu-weekdays';
-  for (const name of weekdayShortNames(navigator.language || 'en-US')) {
+  for (const name of weekdayShortNames(getLocale())) {
     const cell = document.createElement('div');
     cell.className = 'clock-menu-weekday';
     cell.textContent = name;
@@ -185,7 +186,7 @@ function ensurePopup() {
   const actions = document.createElement('div');
   actions.className = 'clock-menu-actions';
   actions.appendChild(button({
-    label: 'Open Calendar',
+    label: t('clock.openCalendar'),
     icon: 'ui/calendar',
     variant: 'quiet',
     size: 'sm',
@@ -211,7 +212,7 @@ function el(tag, className, text) {
 /** The live line under the month: wall-clock time at the located place. */
 function renderClock() {
   if (!timeEl) return;
-  const locale = navigator.language || 'en-US';
+  const locale = getLocale();
   const zone = getWeatherState()?.timezone || null;
   const now = formatLocationTime(new Date(), zone, locale, {
     hour: '2-digit',
@@ -219,12 +220,12 @@ function renderClock() {
     second: '2-digit',
   });
   timeEl.textContent = zone ? `${now} · ${zone}` : now;
-  timeEl.title = zone ? `Time at your location (${zone})` : 'Time on this machine';
+  timeEl.title = zone ? t('clock.timeAtLocation', { zone }) : t('clock.timeOnMachine');
 }
 
 function renderCalendar() {
   if (!gridEl) return;
-  const locale = navigator.language || 'en-US';
+  const locale = getLocale();
   monthEl.textContent = monthLabel(viewYear, viewMonth, locale);
 
   const todayIso = isoDate(new Date());
@@ -245,9 +246,7 @@ function renderCalendar() {
       dot.setAttribute('aria-hidden', 'true');
       day.appendChild(dot);
     }
-    const count = dayEvents.length
-      ? ` — ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`
-      : '';
+    const count = dayEvents.length ? tp('clock.eventCount', dayEvents.length) : '';
     day.setAttribute('aria-label', `${isoDayLabel(cell.iso, locale)}${count}`);
     day.addEventListener('click', () => selectDate(cell.iso));
     gridEl.appendChild(day);
@@ -264,30 +263,29 @@ function selectDate(iso) {
 
 function renderDay() {
   if (!dayHeadEl || !eventsEl) return;
-  const locale = navigator.language || 'en-US';
-  dayHeadEl.textContent = selectedDate ? isoDayLabel(selectedDate, locale) : '';
+  dayHeadEl.textContent = selectedDate ? isoDayLabel(selectedDate, getLocale()) : '';
   eventsEl.textContent = '';
 
   if (monthState === 'loading') {
-    eventsEl.appendChild(emptyState({ title: 'Loading events…' }));
+    eventsEl.appendChild(emptyState({ title: t('clock.loadingEvents') }));
     return;
   }
   if (monthState === 'missing') {
     eventsEl.appendChild(emptyState({
       icon: 'ui/puzzle',
-      title: 'Calendar plugin not installed',
-      body: 'Install it to see saved events here.',
+      title: t('clock.pluginMissing'),
+      body: t('clock.pluginMissingBody'),
     }));
     return;
   }
   if (monthState === 'error') {
-    eventsEl.appendChild(emptyState({ icon: 'ui/warning', title: 'Could not load events' }));
+    eventsEl.appendChild(emptyState({ icon: 'ui/warning', title: t('clock.loadEventsFailed') }));
     return;
   }
 
   const list = selectedDate ? (eventsByDate.get(selectedDate) || []) : [];
   if (!list.length) {
-    eventsEl.appendChild(el('div', 'clock-menu-none', 'No events'));
+    eventsEl.appendChild(el('div', 'clock-menu-none', t('clock.noEvents')));
     return;
   }
 
@@ -295,7 +293,7 @@ function renderDay() {
     const row = el('div', 'clock-menu-event');
     row.append(
       el('span', 'clock-menu-event-time', formatEventTime(ev)),
-      el('span', 'clock-menu-event-title', ev.title || '(untitled)'),
+      el('span', 'clock-menu-event-title', ev.title || t('clock.untitled')),
     );
     if (ev.location) row.title = ev.location;
     eventsEl.appendChild(row);

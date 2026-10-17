@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Afspiller nu",
+  "plugin.youtube.hero.untitled": "YouTube-video",
+  "plugin.youtube.hero.back": "Tilbage",
+  "plugin.youtube.hero.backLabel": "Tilbage til YouTube-søgning",
+  "plugin.youtube.player.title": "YouTube-afspiller",
+
+  "plugin.youtube.search.placeholder": "Søg på YouTube…",
+
+  "plugin.youtube.grid.upNext": "Næste",
+  "plugin.youtube.grid.becauseYouWatched": "Næste · fordi du så “{title}”",
+  "plugin.youtube.grid.forYou": "Til dig",
+  "plugin.youtube.grid.showAll": "Vis alle {category}",
+  "plugin.youtube.grid.untitled": "Video",
+
+  "plugin.youtube.empty.noResults": "Ingen videoer fundet",
+  "plugin.youtube.empty.noMatch": "Intet matchede “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Søg på YouTube",
+  "plugin.youtube.empty.searchBody": "Skriv ovenfor — eller bed AI'en om at finde en video.",
+  "plugin.youtube.empty.unavailableTitle": "Søgningen er utilgængelig",
+  "plugin.youtube.empty.retry": "Prøv igen om lidt",
+
+  "plugin.youtube.category.watched": "Set {count}×",
+  "plugin.youtube.category.generic": "Kategori",
+
+  "plugin.youtube.menu.search": "Søg",
+  "plugin.youtube.menu.home": "Hjem",
+  "plugin.youtube.menu.refresh": "Opdatér resultater",
+  "plugin.youtube.menu.back": "Tilbage",
+
+  "plugin.youtube.meta.description": "Se YouTube-videoer i YouTube-vinduet — AI'en kan søge på YouTube og afspille videoer",
+  "plugin.youtube.meta.summary": "YouTube: AI-søgning og afspilning i YouTube-vinduet",
+  "plugin.youtube.meta.category": "Medier"
+}

@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetradio via Radio Browser — sök stationer och spela dem i Radio-fönstret",
+  "plugin.radio.meta.summary": "Internetradio: sök och spela stationer (Radio Browser)",
+  "plugin.radio.meta.category": "Media",
+
+  "plugin.radio.notify.nowPlaying": "Spelar nu",
+  "plugin.radio.toast.streamRefused": "Strömmen kunde inte spelas — prova en annan station",
+
+  "plugin.radio.status.pickStation": "Välj en station",
+  "plugin.radio.status.streaming": "Strömmar",
+
+  "plugin.radio.empty.noStations": "Inga stationer hittades",
+  "plugin.radio.empty.noMatch": "Inget matchade “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser går inte att nå",
+  "plugin.radio.error.tryAgain": "Försök igen om en stund",
+
+  "plugin.radio.fallback.station": "Station",
+  "plugin.radio.search.placeholder": "Stationer eller genrer…",
+
+  "plugin.radio.menu.play": "Spela",
+  "plugin.radio.menu.pause": "Pausa",
+  "plugin.radio.menu.stop": "Stopp",
+  "plugin.radio.menu.refresh": "Uppdatera stationer"
+}

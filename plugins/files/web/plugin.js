@@ -16,6 +16,7 @@ import { openContextMenu } from '../../js/contextMenu.js';
 import { copyText } from '../../js/clipboard.js';
 import { pluginForFile, openWithPlugin, pickFiles } from '../../js/files.js';
 import { apiFetch } from '../../js/api.js';
+import { t, tp } from '../../js/i18n.js';
 
 export const FILES_PLUGIN = 'files';
 
@@ -56,18 +57,18 @@ const thumbCache = new Map();  // rel -> Promise<string|null> (dataURL)
 let observer = null;
 
 const PLACES = [
-  { name: 'Home', path: '', icon: 'ui/home' },
-  { name: 'Trash', path: '.Trash', icon: 'ui/trash' },
+  { labelKey: 'plugin.files.place.home', path: '', icon: 'ui/home' },
+  { labelKey: 'plugin.files.place.trash', path: '.Trash', icon: 'ui/trash' },
 ];
 const BOOKMARKS = [
-  { name: 'Desktop', path: 'Desktop', icon: 'ui/folder-desktop' },
-  { name: 'Documents', path: 'Documents', icon: 'ui/folder-documents' },
-  { name: 'Downloads', path: 'Downloads', icon: 'ui/folder-downloads' },
-  { name: 'Music', path: 'Music', icon: 'ui/folder-music' },
-  { name: 'Pictures', path: 'Pictures', icon: 'ui/folder-pictures' },
-  { name: 'Public', path: 'Public', icon: 'ui/folder-public' },
-  { name: 'Templates', path: 'Templates', icon: 'ui/folder-templates' },
-  { name: 'Videos', path: 'Videos', icon: 'ui/folder-videos' },
+  { labelKey: 'plugin.files.place.desktop', path: 'Desktop', icon: 'ui/folder-desktop' },
+  { labelKey: 'plugin.files.place.documents', path: 'Documents', icon: 'ui/folder-documents' },
+  { labelKey: 'plugin.files.place.downloads', path: 'Downloads', icon: 'ui/folder-downloads' },
+  { labelKey: 'plugin.files.place.music', path: 'Music', icon: 'ui/folder-music' },
+  { labelKey: 'plugin.files.place.pictures', path: 'Pictures', icon: 'ui/folder-pictures' },
+  { labelKey: 'plugin.files.place.public', path: 'Public', icon: 'ui/folder-public' },
+  { labelKey: 'plugin.files.place.templates', path: 'Templates', icon: 'ui/folder-templates' },
+  { labelKey: 'plugin.files.place.videos', path: 'Videos', icon: 'ui/folder-videos' },
 ];
 
 /* Well-known folders wear their own coloured folder glyph (one per icon set);
@@ -162,11 +163,11 @@ function formatWhen(secs) {
   const now = new Date();
   const day = 86_400_000;
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const t = d.getTime();
+  const ms = d.getTime();
   const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (t >= startOfToday) return `Today ${time}`;
-  if (t >= startOfToday - day) return `Yesterday ${time}`;
-  if (t >= startOfToday - 6 * day) return d.toLocaleDateString([], { weekday: 'long' });
+  if (ms >= startOfToday) return t('plugin.files.when.today', { time }, `Today ${time}`);
+  if (ms >= startOfToday - day) return t('plugin.files.when.yesterday', { time }, `Yesterday ${time}`);
+  if (ms >= startOfToday - 6 * day) return d.toLocaleDateString([], { weekday: 'long' });
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 function entryIcon(entry) {
@@ -206,11 +207,16 @@ function updateStatus() {
   if (!sel.length) return;
   if (sel.length === 1) {
     const e = sel[0];
-    const what = e.kind === 'dir' ? (e.count != null ? `${e.count} item${e.count === 1 ? '' : 's'}` : 'Folder') : formatSize(e.size);
-    statusEl.textContent = `“${e.name}” selected (${what})`;
+    const what = e.kind === 'dir'
+      ? (e.count != null
+        ? tp('plugin.files.status.items', e.count, null, `${e.count} items`)
+        : t('plugin.files.status.folder', null, 'Folder'))
+      : formatSize(e.size);
+    statusEl.textContent = t('plugin.files.status.selected', { name: e.name, what }, `“${e.name}” selected (${what})`);
   } else {
     const bytes = sel.reduce((n, e) => n + (e.kind === 'file' ? (e.size || 0) : 0), 0);
-    statusEl.textContent = `${sel.length} items selected (${formatSize(bytes)})`;
+    statusEl.textContent = tp('plugin.files.status.multiSelected', sel.length, { size: formatSize(bytes) },
+      `${sel.length} items selected (${formatSize(bytes)})`);
   }
 }
 function cssEscape(s) {
@@ -440,10 +446,10 @@ function buildSidebar() {
 
   const head = document.createElement('div');
   head.className = 'files-sidebar-head';
-  searchBtn = iconBtn('ui/search', 'Search', toggleSearch);
+  searchBtn = iconBtn('ui/search', t('plugin.files.toolbar.search', null, 'Search'), toggleSearch);
   const spacer = document.createElement('span');
   spacer.className = 'tile-bar-spacer';
-  const menuBtn = iconBtn('ui/list', 'Menu', (e) => openAppMenu(e.currentTarget));
+  const menuBtn = iconBtn('ui/list', t('plugin.files.toolbar.menu', null, 'Menu'), (e) => openAppMenu(e.currentTarget));
   head.append(searchBtn, spacer, menuBtn);
   sidebarEl.appendChild(head);
 
@@ -467,7 +473,7 @@ function renderPlaces() {
     void setIcon(ic, place.icon, { size: 16 });
     const label = document.createElement('span');
     label.className = 'files-place-label';
-    label.textContent = place.name;
+    label.textContent = t(place.labelKey);
     el.append(ic, label);
     el.addEventListener('click', () => navigate(place.path));
     placesEl.appendChild(el);
@@ -493,8 +499,8 @@ function buildHeader() {
   headerEl = document.createElement('div');
   headerEl.className = 'files-header';
 
-  navBack = iconBtn('ui/chevron-left', 'Back', goBack);
-  navFwd = iconBtn('ui/chevron-right', 'Forward', goForward);
+  navBack = iconBtn('ui/chevron-left', t('plugin.files.toolbar.back', null, 'Back'), goBack);
+  navFwd = iconBtn('ui/chevron-right', t('plugin.files.toolbar.forward', null, 'Forward'), goForward);
 
   pathbarEl = document.createElement('div');
   pathbarEl.className = 'files-pathbar';
@@ -502,8 +508,8 @@ function buildHeader() {
   const actions = document.createElement('div');
   actions.className = 'files-header-actions';
 
-  viewBtn = iconBtn(view === 'grid' ? 'ui/grid' : 'ui/list', 'Toggle view', toggleView);
-  const viewChevron = iconBtn('ui/chevron-down', 'View options', (e) => openViewMenu(e.currentTarget));
+  viewBtn = iconBtn(view === 'grid' ? 'ui/grid' : 'ui/list', t('plugin.files.toolbar.toggleView', null, 'Toggle view'), toggleView);
+  const viewChevron = iconBtn('ui/chevron-down', t('plugin.files.toolbar.viewOptions', null, 'View options'), (e) => openViewMenu(e.currentTarget));
   viewChevron.classList.add('files-view-chevron');
   const split = document.createElement('div');
   split.className = 'files-view-split';
@@ -529,7 +535,7 @@ function renderHeader() {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'files-search-input';
-    input.placeholder = 'Search…';
+    input.placeholder = t('plugin.files.search.placeholder', null, 'Search…');
     input.autocomplete = 'off';
     input.value = query;
     input.addEventListener('input', () => {
@@ -539,7 +545,8 @@ function renderHeader() {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); exitSearch(); }
     });
-    const clear = iconBtn('ui/close', 'Clear', () => { input.value = ''; input.focus(); void runSearch(''); });
+    const clearLabel = t('plugin.files.search.clear', null, 'Clear');
+    const clear = iconBtn('ui/close', clearLabel, () => { input.value = ''; input.focus(); void runSearch(''); });
     clear.classList.add('files-search-clear');
     wrap.append(input, clear);
     pathbarEl.appendChild(wrap);
@@ -577,7 +584,7 @@ function renderHeader() {
     pathbarEl.appendChild(el);
   });
 
-  const menu = iconBtn('ui/list', 'Path actions', (e) => openPathMenu(e.currentTarget));
+  const menu = iconBtn('ui/list', t('plugin.files.toolbar.pathActions', null, 'Path actions'), (e) => openPathMenu(e.currentTarget));
   menu.classList.add('files-path-menu');
   pathbarEl.appendChild(menu);
 }
@@ -595,8 +602,14 @@ function render() {
   if (!list.length) {
     contentEl.appendChild(emptyState({
       icon: query ? 'ui/search' : 'ui/folder-open',
-      title: query ? 'No results found' : (isTrashPath(cwd) ? 'Trash is empty' : 'Folder is empty'),
-      body: query ? `No files match “${query}”.` : 'Drag files here or use the menu to upload.',
+      title: query
+        ? t('plugin.files.empty.noResults', null, 'No results found')
+        : (isTrashPath(cwd)
+          ? t('plugin.files.empty.trash', null, 'Trash is empty')
+          : t('plugin.files.empty.folder', null, 'Folder is empty')),
+      body: query
+        ? t('plugin.files.empty.noMatch', { query }, `No files match “${query}”.`)
+        : t('plugin.files.empty.dropHint', null, 'Drag files here or use the menu to upload.'),
     }));
     return;
   }
@@ -652,7 +665,11 @@ function columnHeader() {
     });
     return b;
   };
-  head.append(mk('name', 'Name', 'files-col-name'), mk('size', 'Size', 'files-col-size'), mk('modified', 'Modified', 'files-col-when'));
+  head.append(
+    mk('name', t('plugin.files.column.name', null, 'Name'), 'files-col-name'),
+    mk('size', t('plugin.files.column.size', null, 'Size'), 'files-col-size'),
+    mk('modified', t('plugin.files.column.modified', null, 'Modified'), 'files-col-when'),
+  );
   return head;
 }
 
@@ -700,7 +717,7 @@ function rowEntry(entry) {
   const size = document.createElement('div');
   size.className = 'files-row-size';
   size.textContent = entry.kind === 'dir'
-    ? (entry.count != null ? `${entry.count} item${entry.count === 1 ? '' : 's'}` : '—')
+    ? (entry.count != null ? tp('plugin.files.status.items', entry.count, null, `${entry.count} items`) : '—')
     : formatSize(entry.size);
   const when = document.createElement('div');
   when.className = 'files-row-when';
@@ -734,14 +751,14 @@ async function load() {
   try {
     const data = await apiList(cwd);
     if (!mounted) return;
-    homeLabel = 'Home';
+    homeLabel = t('plugin.files.place.home', null, 'Home');
     allEntries = data?.entries || [];
     entries = allEntries;
     updateGlow();
   } catch (e) {
     if (!mounted) return;
     allEntries = []; entries = [];
-    toast(e.message || 'Could not open folder', { type: 'error' });
+    toast(e.message || t('plugin.files.toast.openFailed', null, 'Could not open folder'), { type: 'error' });
   }
   renderPlaces();
   renderHeader();
@@ -815,7 +832,13 @@ function downloadEntry(entry) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  notify({ app: 'Files', title: 'Downloading', body: entry.name, icon: 'ui/download', urgency: 'low' });
+  notify({
+    app: 'Files',
+    title: t('plugin.files.notify.downloading', null, 'Downloading'),
+    body: entry.name,
+    icon: 'ui/download',
+    urgency: 'low',
+  });
 }
 
 /* ── search ─────────────────────────────────────────────────── */
@@ -840,7 +863,7 @@ async function runSearch(q) {
     if (!mounted) return;
     render();
   } catch (e) {
-    toast(e.message || 'Search failed', { type: 'error' });
+    toast(e.message || t('plugin.files.toast.searchFailed', null, 'Search failed'), { type: 'error' });
   }
 }
 
@@ -865,55 +888,59 @@ function openAppMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   const trashed = isTrashPath(cwd);
   openContextMenu([
-    { type: 'item', label: 'New Folder', icon: 'ui/folder-plus', onClick: () => void newFolder() },
-    { type: 'item', label: 'Upload Files…', icon: 'ui/upload', onClick: pickUpload },
+    { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New Folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
+    { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload Files…'), icon: 'ui/upload', onClick: pickUpload },
     { type: 'separator' },
-    { type: 'item', label: 'Show Hidden Files', icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
-    { type: 'item', label: 'View', icon: view === 'grid' ? 'ui/grid' : 'ui/list', onClick: toggleView },
+    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
+    { type: 'item', label: t('plugin.files.menu.view', null, 'View'), icon: view === 'grid' ? 'ui/grid' : 'ui/list', onClick: toggleView },
     { type: 'separator' },
-    { type: 'item', label: 'Empty Trash', icon: 'ui/trash', danger: true, disabled: !trashed, onClick: () => void emptyTrash() },
+    { type: 'item', label: t('plugin.files.menu.emptyTrash', null, 'Empty Trash'), icon: 'ui/trash', danger: true, disabled: !trashed, onClick: () => void emptyTrash() },
   ], r.left, r.bottom + 6);
 }
 
 function openViewMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   openContextMenu([
-    { type: 'item', label: 'Grid', icon: 'ui/grid', checked: view === 'grid', onClick: () => setView('grid') },
-    { type: 'item', label: 'List', icon: 'ui/list', checked: view === 'list', onClick: () => setView('list') },
+    { type: 'item', label: t('plugin.files.view.grid', null, 'Grid'), icon: 'ui/grid', checked: view === 'grid', onClick: () => setView('grid') },
+    { type: 'item', label: t('plugin.files.view.list', null, 'List'), icon: 'ui/list', checked: view === 'list', onClick: () => setView('list') },
     { type: 'separator' },
-    { type: 'item', label: 'Show Hidden Files', icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
+    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
   ], r.left, r.bottom + 6);
 }
 
 function openPathMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   openContextMenu([
-    { type: 'item', label: 'New Folder', icon: 'ui/folder-plus', onClick: () => void newFolder() },
-    { type: 'item', label: 'Upload Files…', icon: 'ui/upload', onClick: pickUpload },
+    { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New Folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
+    { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload Files…'), icon: 'ui/upload', onClick: pickUpload },
     { type: 'separator' },
-    { type: 'item', label: 'Copy Path', icon: 'ui/copy', onClick: () => copyPath() },
-    { type: 'item', label: 'Show Hidden Files', icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
+    { type: 'item', label: t('plugin.files.menu.copyPath', null, 'Copy Path'), icon: 'ui/copy', onClick: () => copyPath() },
+    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
   ], r.left, r.bottom + 6);
 }
 
 function copyPath() {
   // The central clipboard service records this in the top-bar history.
-  void copyText(cwd || 'Home', { source: 'files' }).then((ok) => {
-    toast(ok ? 'Path copied' : 'Clipboard unavailable', ok ? undefined : { type: 'error' });
+  void copyText(cwd || t('plugin.files.place.home', null, 'Home'), { source: 'files' }).then((ok) => {
+    toast(ok
+      ? t('plugin.files.toast.pathCopied', null, 'Path copied')
+      : t('plugin.files.toast.clipboardUnavailable', null, 'Clipboard unavailable'),
+    ok ? undefined : { type: 'error' });
   });
 }
 
 /* ── mutations ──────────────────────────────────────────────── */
 
 async function newFolder() {
-  const name = window.prompt('New folder name', 'New folder');
+  const name = window.prompt(t('plugin.files.dialog.newFolderTitle', null, 'New folder name'),
+    t('plugin.files.dialog.newFolderDefault', null, 'New folder'));
   if (!name) return;
   try {
     await apiMkdir(joinPath(cwd, name));
     await refresh();
-    toast(`Created “${name}”`);
+    toast(t('plugin.files.toast.created', { name }, `Created “${name}”`));
   } catch (e) {
-    toast(e.message || 'Could not create folder', { type: 'error' });
+    toast(e.message || t('plugin.files.toast.createFailed', null, 'Could not create folder'), { type: 'error' });
   }
 }
 async function pickUpload() {
@@ -927,30 +954,40 @@ async function uploadFiles(files) {
       await apiFetch(`/api/files/upload?path=${enc(cwd)}&name=${enc(file.name)}`, { method: 'POST', body: file });
       ok++;
     } catch (_) {
-      toast(`Upload failed: ${file.name}`, { type: 'error' });
+      toast(t('plugin.files.toast.uploadFailed', { name: file.name }, `Upload failed: ${file.name}`), { type: 'error' });
     }
   }
   if (ok) {
-    notify({ app: 'Files', title: 'Upload complete', body: `${ok} file${ok === 1 ? '' : 's'} added`, icon: 'ui/upload', urgency: 'low' });
+    notify({
+      app: 'Files',
+      title: t('plugin.files.notify.uploadComplete', null, 'Upload complete'),
+      body: tp('plugin.files.notify.uploaded', ok, null, `${ok} files added`),
+      icon: 'ui/upload',
+      urgency: 'low',
+    });
     await refresh();
   }
 }
 async function renameEntry(entry) {
-  const name = window.prompt('Rename to', entry.name);
+  const name = window.prompt(t('plugin.files.dialog.renameTitle', null, 'Rename to'), entry.name);
   if (!name || name === entry.name) return;
   try {
     await apiRename(entry.path, joinPath(parentOf(entry.path), name));
     await refresh();
-    toast(`Renamed to “${name}”`);
+    toast(t('plugin.files.toast.renamed', { name }, `Renamed to “${name}”`));
   } catch (e) {
-    toast(e.message || 'Could not rename', { type: 'error' });
+    toast(e.message || t('plugin.files.toast.renameFailed', null, 'Could not rename'), { type: 'error' });
   }
 }
 async function removeEntries(list, permanent) {
   if (!list.length) return;
   const label = list.length === 1
-    ? (permanent ? `Permanently delete “${list[0].name}”?` : `Move “${list[0].name}” to Trash?`)
-    : (permanent ? `Permanently delete ${list.length} items?` : `Move ${list.length} items to Trash?`);
+    ? (permanent
+      ? t('plugin.files.dialog.deleteOne', { name: list[0].name }, `Permanently delete “${list[0].name}”?`)
+      : t('plugin.files.dialog.trashOne', { name: list[0].name }, `Move “${list[0].name}” to Trash?`))
+    : (permanent
+      ? tp('plugin.files.dialog.deleteMany', list.length, null, `Permanently delete ${list.length} items?`)
+      : tp('plugin.files.dialog.trashMany', list.length, null, `Move ${list.length} items to Trash?`));
   if (!window.confirm(label)) return;
   let ok = 0;
   for (const entry of list) {
@@ -959,27 +996,33 @@ async function removeEntries(list, permanent) {
   selection.clear();
   await refresh();
   if (ok) {
-    if (permanent) toast(`Deleted ${ok} item${ok === 1 ? '' : 's'}`);
-    else notify({ app: 'Files', title: 'Moved to Trash', body: `${ok} item${ok === 1 ? '' : 's'}`, icon: 'ui/trash', urgency: 'low' });
+    if (permanent) toast(tp('plugin.files.toast.deleted', ok, null, `Deleted ${ok} items`));
+    else notify({
+      app: 'Files',
+      title: t('plugin.files.notify.movedToTrash', null, 'Moved to Trash'),
+      body: tp('plugin.files.notify.movedItems', ok, null, `${ok} items`),
+      icon: 'ui/trash',
+      urgency: 'low',
+    });
   }
 }
 async function restoreEntries(list) {
   let ok = 0;
   for (const entry of list) {
-    try { await apiRestore(entry.name); ok++; } catch (e) { toast(e.message || 'Could not restore', { type: 'error' }); }
+    try { await apiRestore(entry.name); ok++; } catch (e) { toast(e.message || t('plugin.files.toast.restoreFailed', null, 'Could not restore'), { type: 'error' }); }
   }
   selection.clear();
   await refresh();
-  if (ok) toast(`Restored ${ok} item${ok === 1 ? '' : 's'}`);
+  if (ok) toast(tp('plugin.files.toast.restored', ok, null, `Restored ${ok} items`));
 }
 async function emptyTrash() {
-  if (!window.confirm('Empty the Trash? This cannot be undone.')) return;
+  if (!window.confirm(t('plugin.files.dialog.emptyTrash', null, 'Empty the Trash? This cannot be undone.'))) return;
   try {
     await apiEmptyTrash();
     await refresh();
-    toast('Trash emptied');
+    toast(t('plugin.files.toast.trashEmptied', null, 'Trash emptied'));
   } catch (e) {
-    toast(e.message || 'Could not empty trash', { type: 'error' });
+    toast(e.message || t('plugin.files.toast.emptyTrashFailed', null, 'Could not empty trash'), { type: 'error' });
   }
 }
 
@@ -1102,7 +1145,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   seek.step = '1';
   seek.value = '0';
   seek.className = 'files-player-seek';
-  seek.setAttribute('aria-label', 'Seek');
+  seek.setAttribute('aria-label', t('plugin.files.player.seek', null, 'Seek'));
 
   const durEl = document.createElement('span');
   durEl.className = 'files-player-time';
@@ -1113,7 +1156,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
     syncVolume();
   } });
   muteBtn.classList.add('files-player-btn');
-  muteBtn.title = 'Mute';
+  muteBtn.title = t('plugin.files.player.mute', null, 'Mute');
 
   function syncVolume() {
     muteBtn.classList.toggle('is-muted', media.muted || media.volume === 0);
@@ -1121,7 +1164,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
 
   const fsBtn = button({ icon: 'ui/expand', variant: 'ghost', onClick: () => toggleFullscreen() });
   fsBtn.classList.add('files-player-btn');
-  fsBtn.title = 'Full screen';
+  fsBtn.title = t('plugin.files.player.fullscreen', null, 'Full screen');
 
   bar.append(playBtn, curEl, seek, durEl, muteBtn, fsBtn);
 
@@ -1185,8 +1228,9 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   media.addEventListener('error', async () => {
     const meta = await videoInfo(entry.path);
     const codec = (audio ? meta?.audio_codec : meta?.video_codec);
-    const label = codec ? String(codec).toUpperCase() : 'This format';
-    errorBox.textContent = `${label} can't be decoded by this browser.`;
+    const label = codec ? String(codec).toUpperCase() : t('plugin.files.player.thisFormat', null, 'This format');
+    errorBox.textContent = t('plugin.files.player.cannotDecode', { codec: label },
+      `${label} can't be decoded by this browser.`);
     errorBox.classList.remove('hidden');
   });
 
@@ -1247,14 +1291,15 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
 async function fillPreview(card, entry, nav) {
   const info = document.createElement('div');
   info.className = 'files-preview-meta';
-  info.textContent = `${entry.path || homeLabel} · ${entry.kind === 'dir' ? 'Folder' : formatSize(entry.size)}${entry.modified ? ` · ${formatWhen(entry.modified)}` : ''}`;
+  const what = entry.kind === 'dir' ? t('plugin.files.status.folder', null, 'Folder') : formatSize(entry.size);
+  info.textContent = `${entry.path || homeLabel} · ${what}${entry.modified ? ` · ${formatWhen(entry.modified)}` : ''}`;
 
   if (entry.is_image) {
     const img = document.createElement('img');
     img.className = 'files-preview-img';
     img.src = rawUrl(entry.path);
     img.addEventListener('click', () => img.classList.toggle('is-zoomed'));
-    card.append(img, navBar(nav, 'Click image to zoom'), info);
+    card.append(img, navBar(nav, t('plugin.files.preview.zoomHint', null, 'Click image to zoom')), info);
     return;
   }
   if (entry.is_pdf) {
@@ -1276,12 +1321,12 @@ async function fillPreview(card, entry, nav) {
   if (entry.is_office) {
     const box = document.createElement('div');
     box.className = 'files-preview-doc';
-    box.textContent = 'Loading…';
+    box.textContent = t('plugin.files.preview.loading', null, 'Loading…');
     card.append(box, navBar(nav, ''), info);
     try {
       renderOfficePreview(box, await apiRender(entry.path));
     } catch (e) {
-      box.textContent = `Cannot preview: ${e.message}`;
+      box.textContent = t('plugin.files.preview.cannotPreview', { message: e.message }, `Cannot preview: ${e.message}`);
     }
     return;
   }
@@ -1289,12 +1334,12 @@ async function fillPreview(card, entry, nav) {
     const isCode = /^(rs|py|js|mjs|cjs|ts|tsx|jsx|json|toml|yaml|yml|sh|zsh|bash|css|html|htm|xml|sql|ini|conf|cfg|log)$/.test(entry.ext || '');
     const pre = document.createElement('pre');
     pre.className = 'files-preview-text' + (isCode ? ' files-preview-text--code' : '');
-    pre.textContent = 'Loading…';
+    pre.textContent = t('plugin.files.preview.loading', null, 'Loading…');
     card.append(pre, navBar(nav, ''), info);
     try {
       pre.textContent = (await apiRead(entry.path)) || (await apiText(entry.path));
     } catch (e) {
-      pre.textContent = `Cannot preview: ${e.message}`;
+      pre.textContent = t('plugin.files.preview.cannotPreview', { message: e.message }, `Cannot preview: ${e.message}`);
     }
     return;
   }
@@ -1302,8 +1347,8 @@ async function fillPreview(card, entry, nav) {
   box.className = 'files-preview-unknown';
   box.appendChild(icon(entryIcon(entry), { size: 48 }));
   const p = document.createElement('p');
-  p.textContent = 'No preview for this file type.';
-  const dl = button({ label: 'Download', icon: 'ui/download', onClick: () => downloadEntry(entry) });
+  p.textContent = t('plugin.files.preview.noneForType', null, 'No preview for this file type.');
+  const dl = button({ label: t('plugin.files.preview.download', null, 'Download'), icon: 'ui/download', onClick: () => downloadEntry(entry) });
   box.append(p, dl);
   card.append(box, navBar(nav, ''), info);
 }
@@ -1316,14 +1361,14 @@ function navBar(nav, hint) {
   next.classList.add('ui-btn--icon');
   const label = document.createElement('span');
   label.className = 'files-preview-hint';
-  label.textContent = hint || `${nav.count} items · ← → to move`;
+  label.textContent = hint || tp('plugin.files.preview.navHint', nav.count, null, `${nav.count} items · ← → to move`);
   bar.append(prev, label, next);
   return bar;
 }
 let pdfPage = 1;
 function renderOfficePreview(box, data) {
   box.innerHTML = '';
-  if (!data) { box.textContent = 'No preview'; return; }
+  if (!data) { box.textContent = t('plugin.files.preview.none', null, 'No preview'); return; }
   if (data.format === 'doc') {
     const doc = document.createElement('div');
     doc.className = 'files-doc';
@@ -1376,7 +1421,7 @@ function renderOfficePreview(box, data) {
     box.appendChild(wrap);
     return;
   }
-  box.textContent = 'No preview';
+  box.textContent = t('plugin.files.preview.none', null, 'No preview');
 }
 
 /** The ODT HTML comes from our own converter (escaped text, limited tags), but
@@ -1399,7 +1444,7 @@ async function renderPdfInto(host, rel) {
   pdfPage = 1;
   host.innerHTML = '';
   const canvas = await renderPdfPage(rel, pdfPage, 900);
-  if (!canvas) { host.textContent = 'Could not render PDF'; return; }
+  if (!canvas) { host.textContent = t('plugin.files.preview.pdfFailed', null, 'Could not render PDF'); return; }
   const pageBox = document.createElement('div');
   pageBox.className = 'files-preview-pdf-page';
   pageBox.appendChild(canvas);
@@ -1407,7 +1452,8 @@ async function renderPdfInto(host, rel) {
   controls.className = 'files-preview-pdf-nav';
   const prev = button({ icon: 'ui/chevron-left', variant: 'ghost', onClick: () => { pdfPage = Math.max(1, pdfPage - 1); void redraw(); } });
   prev.classList.add('ui-btn--icon');
-  const label = document.createElement('span'); label.className = 'files-preview-hint'; label.textContent = `Page ${pdfPage}`;
+  const label = document.createElement('span'); label.className = 'files-preview-hint';
+  label.textContent = t('plugin.files.preview.page', { n: pdfPage }, `Page ${pdfPage}`);
   const next = button({ icon: 'ui/chevron-right', variant: 'ghost', onClick: () => { pdfPage += 1; void redraw(); } });
   next.classList.add('ui-btn--icon');
   controls.append(prev, label, next);
@@ -1417,7 +1463,7 @@ async function renderPdfInto(host, rel) {
     if (!c) return;
     pageBox.innerHTML = '';
     pageBox.appendChild(c);
-    label.textContent = `Page ${pdfPage}`;
+    label.textContent = t('plugin.files.preview.page', { n: pdfPage }, `Page ${pdfPage}`);
   }
 }
 
@@ -1441,6 +1487,7 @@ function hash(s) {
 export function mountFilesTile() {
   if (tileEl) return tileEl;
 
+  homeLabel = t('plugin.files.place.home', null, 'Home');
   tileEl = document.createElement('section');
   tileEl.className = 'tile files-tile';
   tileEl.dataset.plugin = FILES_PLUGIN;
@@ -1642,24 +1689,24 @@ export function filesContextMenu(ctx) {
   const items = [];
 
   if (entry) {
-    items.push({ type: 'item', label: 'Open', icon: 'ui/expand', onClick: () => openEntry(entry) });
-    if (entry.kind === 'file') items.push({ type: 'item', label: 'Download', icon: 'ui/download', onClick: () => downloadEntry(entry) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.open', null, 'Open'), icon: 'ui/expand', onClick: () => openEntry(entry) });
+    if (entry.kind === 'file') items.push({ type: 'item', label: t('plugin.files.ctx.download', null, 'Download'), icon: 'ui/download', onClick: () => downloadEntry(entry) });
   }
-  items.push({ type: 'item', label: 'New Folder', icon: 'ui/folder-plus', onClick: () => void newFolder() });
-  items.push({ type: 'item', label: 'Upload Files…', icon: 'ui/upload', onClick: pickUpload });
+  items.push({ type: 'item', label: t('plugin.files.menu.newFolder', null, 'New Folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() });
+  items.push({ type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload Files…'), icon: 'ui/upload', onClick: pickUpload });
   items.push({ type: 'separator' });
   if (trashed) {
-    items.push({ type: 'item', label: 'Restore', icon: 'ui/refresh', disabled: !targets.length, onClick: () => void restoreEntries(targets) });
-    items.push({ type: 'item', label: 'Delete Permanently', icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.restore', null, 'Restore'), icon: 'ui/refresh', disabled: !targets.length, onClick: () => void restoreEntries(targets) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.deletePermanently', null, 'Delete Permanently'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
   } else {
-    items.push({ type: 'item', label: 'Rename…', icon: 'ui/pencil', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void renameEntry(targets[0]) });
-    items.push({ type: 'item', label: 'Move to Trash', icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, false) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.rename', null, 'Rename…'), icon: 'ui/pencil', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void renameEntry(targets[0]) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.moveToTrash', null, 'Move to Trash'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, false) });
   }
   items.push({ type: 'separator' });
-  items.push({ type: 'item', label: 'Show Hidden Files', icon: 'ui/eye', checked: showHidden, onClick: toggleHidden });
+  items.push({ type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden });
   if (isTrashPath(cwd)) {
     items.push({ type: 'separator' });
-    items.push({ type: 'item', label: 'Empty Trash', icon: 'ui/warning', danger: true, onClick: () => void emptyTrash() });
+    items.push({ type: 'item', label: t('plugin.files.menu.emptyTrash', null, 'Empty Trash'), icon: 'ui/warning', danger: true, onClick: () => void emptyTrash() });
   }
   return items;
 }

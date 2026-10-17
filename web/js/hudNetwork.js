@@ -22,6 +22,7 @@
 import { apiFetch, getToken } from './api.js';
 import { setIcon } from '../ui/index.js';
 import { toggleNetworkMenu } from './networkMenu.js';
+import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-network');
 const iconEl = document.getElementById('hud-network-icon');
@@ -134,14 +135,14 @@ function apply(status) {
   if (connection && connection.kind === 'ethernet') {
     setIcon(iconEl, 'hud/ethernet', { size: 20 });
     chipEl.classList.add('is-wired');
-    labelEl.textContent = 'Ethernet';
+    labelEl.textContent = t('net.ethernet');
     pctEl.textContent = '';
     const bits = [
-      'Ethernet',
+      t('net.ethernet'),
       connection.interface,
       connection.speed_mbps ? `${connection.speed_mbps} Mb/s` : null,
       connection.ip4 || null,
-      connection.managed === false ? 'system-managed' : null,
+      connection.managed === false ? t('net.systemManaged') : null,
     ].filter(Boolean);
     chipEl.title = bits.join(' — ');
     chipEl.setAttribute('aria-label', bits.join(', '));
@@ -152,14 +153,14 @@ function apply(status) {
     const limited = connectivity && connectivity.internet === false;
     setIcon(iconEl, `hud/wifi-${connection.level}`, { size: 20 });
     chipEl.classList.add(limited ? 'is-warning' : 'is-connected');
-    labelEl.textContent = connection.ssid || 'Wi-Fi';
+    labelEl.textContent = connection.ssid || t('net.wifi');
     pctEl.textContent = connection.strength != null ? `${connection.strength}%` : '';
     const bits = [
-      connection.ssid || 'Wi-Fi',
+      connection.ssid || t('net.wifi'),
       connection.strength != null ? `${connection.strength}%` : null,
       connection.security || null,
       connection.band || null,
-      limited ? 'no internet' : null,
+      limited ? t('net.noInternet') : null,
       connection.ip4 || null,
     ].filter(Boolean);
     chipEl.title = bits.join(' — ');
@@ -171,9 +172,9 @@ function apply(status) {
   if (wifi.present && wifi.hardware_enabled === false) {
     setIcon(iconEl, 'hud/wifi-blocked', { size: 20 });
     chipEl.classList.add('is-dim');
-    labelEl.textContent = 'Wi-Fi blocked';
+    labelEl.textContent = t('hud.wifiBlocked');
     pctEl.textContent = '';
-    chipEl.title = 'Wireless is disabled by a hardware switch';
+    chipEl.title = t('hud.wifiHardwareSwitch');
     chipEl.setAttribute('aria-label', chipEl.title);
     return;
   }
@@ -181,9 +182,9 @@ function apply(status) {
   if (wifi.present && wifi.enabled === false) {
     setIcon(iconEl, 'hud/wifi-off', { size: 20 });
     chipEl.classList.add('is-dim');
-    labelEl.textContent = 'Wi-Fi off';
+    labelEl.textContent = t('hud.wifiOff');
     pctEl.textContent = '';
-    chipEl.title = 'Wi-Fi is turned off — open the network panel to enable it';
+    chipEl.title = t('hud.wifiTurnedOffHint');
     chipEl.setAttribute('aria-label', chipEl.title);
     return;
   }
@@ -191,9 +192,9 @@ function apply(status) {
   if (wifi.present) {
     setIcon(iconEl, 'hud/wifi-0', { size: 20 });
     chipEl.classList.add('is-dim');
-    labelEl.textContent = 'Not connected';
+    labelEl.textContent = t('net.notConnected');
     pctEl.textContent = '';
-    chipEl.title = 'No network connection';
+    chipEl.title = t('hud.noNetwork');
     chipEl.setAttribute('aria-label', chipEl.title);
     return;
   }

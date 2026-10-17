@@ -1,3 +1,5 @@
+import { getLocale } from './i18n.js';
+
 const API_BASE = '';
 const SESSION_COOKIE = 'shiny_token';
 
@@ -77,6 +79,10 @@ export async function apiFetch(path, options = {}) {
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // Every server-produced user-facing string (error toasts, status lines) is
+  // translated for this language.
+  headers['Accept-Language'] = getLocale();
+
   if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
@@ -138,15 +144,21 @@ function voiceLangKey() {
   return id ? `voice.lang.${id}` : 'voice.lang';
 }
 
-/** Explicit per-user language choice, or `null` when following the browser. */
+/** Explicit per-user language choice, or `null` when following the interface. */
 export function getVoiceLangExplicit() {
   return localStorage.getItem(voiceLangKey()) || null;
 }
 
-/** Resolved language: the user's explicit choice, else the browser language. */
+/**
+ * Resolved language for speech recognition, spoken replies and the language the
+ * assistant writes in: the explicit per-user choice, else the interface
+ * language. The interface language follows the system language until the user
+ * picks one (Settings → Appearance → Interface language), so this is the system
+ * language out of the box — and choosing an interface language switches the
+ * voice with it, until a separate voice language is picked under Voice.
+ */
 export function getVoiceLang() {
-  return getVoiceLangExplicit() ||
-    (navigator.language || 'en-US').split('-')[0];
+  return getVoiceLangExplicit() || getLocale().split('-')[0];
 }
 
 /** Persist an explicit language. Pass empty/null to clear it (back to auto). */
@@ -155,7 +167,7 @@ export function setVoiceLang(lang) {
   else localStorage.removeItem(voiceLangKey());
 }
 
-/** Follow the browser language again (drop the explicit override). */
+/** Follow the interface language again (drop the explicit override). */
 export function clearVoiceLang() {
   localStorage.removeItem(voiceLangKey());
 }

@@ -1,0 +1,34 @@
+{
+  "plugin.youtube.hero.nowPlaying": "Sada se reproducira",
+  "plugin.youtube.hero.untitled": "YouTube videozapis",
+  "plugin.youtube.hero.back": "Natrag",
+  "plugin.youtube.hero.backLabel": "Natrag na pretragu YouTubea",
+  "plugin.youtube.player.title": "YouTube reproduktor",
+
+  "plugin.youtube.search.placeholder": "Pretraži YouTube…",
+
+  "plugin.youtube.grid.upNext": "Sljedeće",
+  "plugin.youtube.grid.becauseYouWatched": "Sljedeće · jer ste gledali “{title}”",
+  "plugin.youtube.grid.forYou": "Za vas",
+  "plugin.youtube.grid.showAll": "Prikaži sve: {category}",
+  "plugin.youtube.grid.untitled": "Videozapis",
+
+  "plugin.youtube.empty.noResults": "Nema pronađenih videozapisa",
+  "plugin.youtube.empty.noMatch": "Ništa ne odgovara pojmu “{term}”.",
+  "plugin.youtube.empty.searchTitle": "Pretraži YouTube",
+  "plugin.youtube.empty.searchBody": "Tipkajte gore — ili zamolite AI da pronađe videozapis.",
+  "plugin.youtube.empty.unavailableTitle": "Pretraga nije dostupna",
+  "plugin.youtube.empty.retry": "Pokušajte ponovno za trenutak",
+
+  "plugin.youtube.category.watched": "Gledano {count}×",
+  "plugin.youtube.category.generic": "Kategorija",
+
+  "plugin.youtube.menu.search": "Pretraži",
+  "plugin.youtube.menu.home": "Početna",
+  "plugin.youtube.menu.refresh": "Osvježi rezultate",
+  "plugin.youtube.menu.back": "Natrag",
+
+  "plugin.youtube.meta.description": "Gledajte YouTube videozapise u prozoru YouTube — AI može pretraživati YouTube i reproducirati videozapise",
+  "plugin.youtube.meta.summary": "YouTube: AI pretraga i reprodukcija u prozoru YouTube",
+  "plugin.youtube.meta.category": "Mediji"
+}

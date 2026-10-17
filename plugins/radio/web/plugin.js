@@ -22,6 +22,7 @@ import {
   setTileGlow, setTileGlowFromUrl,
 } from '../../ui/index.js';
 import { getToken } from '../../js/api.js';
+import { t } from '../../js/i18n.js';
 
 export const RADIO_PLUGIN = 'radio';
 
@@ -85,7 +86,7 @@ function playStation(station, { announce = true } = {}) {
     if (announce) {
       notify({
         app: 'Radio',
-        title: 'Now playing',
+        title: t('plugin.radio.notify.nowPlaying', null, 'Now playing'),
         body: station.name,
         icon: 'ui/play',
         plugin: RADIO_PLUGIN,
@@ -95,7 +96,10 @@ function playStation(station, { announce = true } = {}) {
   }).catch(() => {
     playing = false;
     renderHero();
-    toast('Stream refused to play — try another station', { type: 'error' });
+    toast(
+      t('plugin.radio.toast.streamRefused', null, 'Stream refused to play — try another station'),
+      { type: 'error' },
+    );
   });
 }
 
@@ -114,7 +118,10 @@ function togglePlayback() {
     }).catch(() => {
       playing = false;
       renderHero();
-      toast('Stream refused to play — try another station', { type: 'error' });
+      toast(
+        t('plugin.radio.toast.streamRefused', null, 'Stream refused to play — try another station'),
+        { type: 'error' },
+      );
     });
   }
 }
@@ -165,7 +172,7 @@ async function pollNowPlaying() {
       if (previous) {
         notify({
           app: 'Radio',
-          title: 'Now playing',
+          title: t('plugin.radio.notify.nowPlaying', null, 'Now playing'),
           body: nowPlaying.artist ? `${nowPlaying.artist} — ${nowPlaying.title}` : nowPlaying.title,
           icon: 'ui/play',
           plugin: RADIO_PLUGIN,
@@ -283,9 +290,9 @@ function heroSubtitle() {
     const parts = [nowPlaying.artist, current?.name].filter(Boolean);
     return [...new Set(parts)].join(' · ');
   }
-  if (!current) return 'Pick a station';
+  if (!current) return t('plugin.radio.status.pickStation', null, 'Pick a station');
   const tag = (current.tags || '').split(',').map((t) => t.trim()).filter(Boolean)[0];
-  return [tag, current.country].filter(Boolean).join(' · ') || 'Streaming';
+  return [tag, current.country].filter(Boolean).join(' · ') || t('plugin.radio.status.streaming', null, 'Streaming');
 }
 
 function heroArt() {
@@ -408,7 +415,11 @@ function renderGrid(stations, term) {
     const wrap = document.createElement('div');
     wrap.className = 'radio-grid-status';
     wrap.appendChild(term
-      ? emptyState({ icon: 'ui/search', title: 'No stations found', body: `Nothing matched “${term}”.` })
+      ? emptyState({
+        icon: 'ui/search',
+        title: t('plugin.radio.empty.noStations', null, 'No stations found'),
+        body: t('plugin.radio.empty.noMatch', { term }, `Nothing matched “${term}”.`),
+      })
       : spinner());
     gridEl.appendChild(wrap);
     return;
@@ -427,8 +438,8 @@ async function runSearch(text) {
     wrap.className = 'radio-grid-status';
     wrap.appendChild(emptyState({
       icon: 'ui/warning',
-      title: 'Radio Browser unreachable',
-      body: e.message || 'Try again in a moment',
+      title: t('plugin.radio.error.unreachable', null, 'Radio Browser unreachable'),
+      body: e.message || t('plugin.radio.error.tryAgain', null, 'Try again in a moment'),
     }));
     gridEl.appendChild(wrap);
   }
@@ -457,7 +468,7 @@ function onArtifactAction(e) {
   if (action?.tool === 'radio_play') {
     const station = streamFromArtifact(artifact) || toStation({
       stationuuid: action?.params?.stationuuid,
-      name: action?.params?.name || 'Station',
+      name: action?.params?.name || t('plugin.radio.fallback.station', null, 'Station'),
       url_resolved: action?.params?.stream_url,
       favicon: action?.params?.favicon || '',
     });
@@ -519,7 +530,7 @@ export function mountRadioTile() {
   tileEl.appendChild(hero);
 
   /* Search */
-  const search = searchBar({ placeholder: 'Stations or genres…' });
+  const search = searchBar({ placeholder: t('plugin.radio.search.placeholder', null, 'Stations or genres…') });
   let searchTimer = null;
   search.input.addEventListener('input', (e) => {
     window.clearTimeout(searchTimer);
@@ -581,14 +592,27 @@ export function radioContextMenu() {
   return [
     {
       type: 'item',
-      label: playing ? 'Pause' : 'Play',
+      label: playing
+        ? t('plugin.radio.menu.pause', null, 'Pause')
+        : t('plugin.radio.menu.play', null, 'Play'),
       icon: playing ? 'ui/pause' : 'ui/play',
       disabled: !hasStation,
       onClick: () => togglePlayback(),
     },
-    { type: 'item', label: 'Stop', icon: 'ui/stop', disabled: !hasStation, onClick: () => stopPlayback() },
+    {
+      type: 'item',
+      label: t('plugin.radio.menu.stop', null, 'Stop'),
+      icon: 'ui/stop',
+      disabled: !hasStation,
+      onClick: () => stopPlayback(),
+    },
     { type: 'separator' },
-    { type: 'item', label: 'Refresh stations', icon: 'ui/refresh', onClick: () => void runSearch('') },
+    {
+      type: 'item',
+      label: t('plugin.radio.menu.refresh', null, 'Refresh stations'),
+      icon: 'ui/refresh',
+      onClick: () => void runSearch(''),
+    },
   ];
 }
 

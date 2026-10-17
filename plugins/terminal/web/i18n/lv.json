@@ -1,0 +1,30 @@
+{
+  "plugin.terminal.meta.description": "Īsts Linux terminālis lietotnē — uz PTY balstīta pieteikšanās čaula savā logā",
+  "plugin.terminal.meta.summary": "Terminālis: īsta čaula pār PTY, attēlota ar xterm.js",
+  "plugin.terminal.meta.category": "Sistēma",
+
+  "plugin.terminal.tab.label": "Terminālis {n}",
+  "plugin.terminal.tab.new": "Jauna cilne",
+  "plugin.terminal.tab.close": "Aizvērt {name}",
+  "plugin.terminal.tabs.label": "Termināļa cilnes",
+
+  "plugin.terminal.status.starting": "startē termināli…",
+  "plugin.terminal.status.connecting": "savieno…",
+  "plugin.terminal.status.reconnecting": "atkārtoti savieno…",
+  "plugin.terminal.status.connected": "savienots",
+  "plugin.terminal.status.startFailed": "nevarēja palaist čaulu",
+  "plugin.terminal.status.expired": "sesija beidzās — piesakieties vēlreiz",
+  "plugin.terminal.status.xtermFailed": "nevarēja ielādēt xterm.js",
+
+  "plugin.terminal.toast.tabLimit.zero": "Terminālis: ne vairāk kā {count} cilņu",
+  "plugin.terminal.toast.tabLimit.one": "Terminālis: ne vairāk kā {count} cilne",
+  "plugin.terminal.toast.tabLimit.other": "Terminālis: ne vairāk kā {count} cilnes",
+  "plugin.terminal.toast.startFailed": "Terminālis: nevarēja palaist čaulu",
+  "plugin.terminal.toast.xtermFailed": "Terminālis: neizdevās ielādēt xterm.js",
+  "plugin.terminal.toast.clipboardUnavailable": "Starpliktuve nav pieejama",
+
+  "plugin.terminal.ctx.copy": "Kopēt",
+  "plugin.terminal.ctx.paste": "Ielīmēt",
+  "plugin.terminal.ctx.clearScrollback": "Notīrīt ritināšanas vēsturi",
+  "plugin.terminal.ctx.closeTab": "Aizvērt cilni"
+}

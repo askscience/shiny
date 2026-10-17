@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Wissenschaftlicher Rechner — arithmetische und wissenschaftliche Ausdrücke im Rechner-Fenster berechnen",
+  "plugin.calculator.meta.summary": "Rechner: Grundrechenarten und wissenschaftliche Mathematik",
+  "plugin.calculator.meta.category": "Office",
+
+  "plugin.calculator.display.error": "Fehler",
+
+  "plugin.calculator.toolbar.history": "Verlauf",
+  "plugin.calculator.toolbar.scientific": "Wissenschaftlich",
+  "plugin.calculator.toolbar.clearHistory": "Verlauf leeren",
+
+  "plugin.calculator.menu.equals": "Gleich",
+  "plugin.calculator.menu.clearAll": "Alles löschen",
+
+  "plugin.calculator.history.reuse": "Dieses Ergebnis wiederverwenden",
+
+  "plugin.calculator.empty.noHistory": "Kein Verlauf",
+  "plugin.calculator.empty.noHistoryBody": "Berechnungen, die Sie hier ausführen oder die KI ausführen lassen, erscheinen unten.",
+
+  "plugin.calculator.toast.evaluateFailed": "Die Berechnung ist fehlgeschlagen",
+  "plugin.calculator.toast.historyFailed": "Der Verlauf konnte nicht geladen werden",
+  "plugin.calculator.toast.historyCleared": "Verlauf geleert",
+  "plugin.calculator.toast.clearFailed": "Der Verlauf konnte nicht geleert werden"
+}

@@ -1,0 +1,66 @@
+{
+  "plugin.image.meta.description": "Fotobewerker — toon- en kleuraanpassingen, vervagen/verscherpen/vignettering en filmlooks met één tik in het Afbeeldingen-venster",
+  "plugin.image.meta.summary": "Fotobewerker: aanpassingen en filmlooks",
+  "plugin.image.meta.category": "Media",
+
+  "plugin.image.toolbar.menu": "Menu",
+  "plugin.image.toolbar.fitToggle": "Passend / werkelijke grootte wisselen",
+
+  "plugin.image.dial.brightness": "Helderheid",
+  "plugin.image.dial.contrast": "Contrast",
+  "plugin.image.dial.exposure": "Belichting",
+  "plugin.image.dial.vibrance": "Levendigheid",
+  "plugin.image.dial.saturation": "Verzadiging",
+  "plugin.image.dial.blur": "Vervagen",
+  "plugin.image.dial.sharpen": "Verscherpen",
+  "plugin.image.dial.vignette": "Vignettering",
+
+  "plugin.image.oneClick.autoTone": "Automatische toon",
+  "plugin.image.oneClick.autoContrast": "Automatisch contrast",
+  "plugin.image.oneClick.invert": "Omkeren",
+  "plugin.image.oneClick.grayscale": "Zwart-wit",
+  "plugin.image.oneClick.sepia": "Sepia",
+  "plugin.image.oneClick.revert": "Terugzetten",
+  "plugin.image.oneClick.revertTitle": "De oorspronkelijke upload herstellen",
+
+  "plugin.image.empty.title": "Geen afbeelding geopend",
+  "plugin.image.empty.body": "Open of sleep een afbeelding om te beginnen.",
+  "plugin.image.empty.open": "Afbeelding openen",
+
+  "plugin.image.menu.file": "Bestand",
+  "plugin.image.menu.image": "Afbeelding",
+  "plugin.image.menu.view": "Weergave",
+  "plugin.image.menu.open": "Openen…",
+  "plugin.image.menu.saveCopy": "Een kopie opslaan…",
+  "plugin.image.menu.delete": "Afbeelding verwijderen",
+  "plugin.image.menu.rotateLeft": "Naar links draaien",
+  "plugin.image.menu.rotateRight": "Naar rechts draaien",
+  "plugin.image.menu.flipH": "Horizontaal spiegelen",
+  "plugin.image.menu.flipV": "Verticaal spiegelen",
+  "plugin.image.menu.revert": "Terug naar het origineel",
+  "plugin.image.menu.zoomIn": "Inzoomen",
+  "plugin.image.menu.zoomOut": "Uitzoomen",
+  "plugin.image.menu.fit": "Passend maken",
+  "plugin.image.menu.actualSize": "Werkelijke grootte",
+
+  "plugin.image.ctx.open": "Afbeelding openen…",
+
+  "plugin.image.dialog.deleteConfirm": "\"{title}\" verwijderen?",
+  "plugin.image.dialog.thisImage": "deze afbeelding",
+
+  "plugin.image.toast.openFirst": "Open eerst een afbeelding",
+  "plugin.image.toast.opened": "{title} geopend",
+  "plugin.image.toast.editFailed": "Bewerken mislukt",
+  "plugin.image.toast.operationFailed": "Bewerking mislukt",
+  "plugin.image.toast.renderFailed": "Kon de afbeelding niet weergeven",
+  "plugin.image.toast.uploadFailed": "Uploaden mislukt",
+  "plugin.image.toast.saveFailed": "Opslaan mislukt",
+  "plugin.image.toast.deleted": "Afbeelding verwijderd",
+  "plugin.image.toast.deleteFailed": "Kon de afbeelding niet verwijderen",
+  "plugin.image.toast.reverted": "Teruggezet naar de originele pixels",
+  "plugin.image.toast.openFailed": "Kon het bestand niet openen",
+
+  "plugin.image.error.emptyFile": "dat bestand is leeg",
+  "plugin.image.error.notAnImage": "“{name}” is geen afbeelding die de editor kan openen",
+  "plugin.image.error.unnamedFile": "bestand"
+}

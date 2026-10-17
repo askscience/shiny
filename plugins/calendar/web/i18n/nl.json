@@ -1,0 +1,68 @@
+{
+  "plugin.calendar.meta.description": "Agenda — gebeurtenissen plannen, weergeven en ordenen in het Agenda-venster",
+  "plugin.calendar.meta.summary": "Agenda: gebeurtenissen plannen en ordenen",
+  "plugin.calendar.meta.category": "Kantoor",
+
+  "plugin.calendar.month.january": "januari",
+  "plugin.calendar.month.february": "februari",
+  "plugin.calendar.month.march": "maart",
+  "plugin.calendar.month.april": "april",
+  "plugin.calendar.month.may": "mei",
+  "plugin.calendar.month.june": "juni",
+  "plugin.calendar.month.july": "juli",
+  "plugin.calendar.month.august": "augustus",
+  "plugin.calendar.month.september": "september",
+  "plugin.calendar.month.october": "oktober",
+  "plugin.calendar.month.november": "november",
+  "plugin.calendar.month.december": "december",
+
+  "plugin.calendar.grid.sun": "zo",
+  "plugin.calendar.grid.mon": "ma",
+  "plugin.calendar.grid.tue": "di",
+  "plugin.calendar.grid.wed": "wo",
+  "plugin.calendar.grid.thu": "do",
+  "plugin.calendar.grid.fri": "vr",
+  "plugin.calendar.grid.sat": "za",
+
+  "plugin.calendar.event.allDay": "Hele dag",
+
+  "plugin.calendar.toolbar.previousMonth": "Vorige maand",
+  "plugin.calendar.toolbar.nextMonth": "Volgende maand",
+  "plugin.calendar.toolbar.today": "Vandaag",
+  "plugin.calendar.toolbar.newEvent": "Nieuwe gebeurtenis",
+
+  "plugin.calendar.ctx.refresh": "Vernieuwen",
+
+  "plugin.calendar.detail.edit": "Bewerken",
+  "plugin.calendar.detail.delete": "Verwijderen",
+
+  "plugin.calendar.empty.noEvents": "Geen gebeurtenissen",
+  "plugin.calendar.empty.noEventsBody": "Niets gepland. Voeg een gebeurtenis toe of vraag de AI er een te plannen.",
+
+  "plugin.calendar.dialog.title": "Gebeurtenis",
+  "plugin.calendar.dialog.editTitle": "Gebeurtenis bewerken",
+  "plugin.calendar.dialog.titleField": "Titel",
+  "plugin.calendar.dialog.titlePlaceholder": "bv. Teamoverleg",
+  "plugin.calendar.dialog.dateField": "Datum",
+  "plugin.calendar.dialog.startTimeField": "Begintijd",
+  "plugin.calendar.dialog.endTimeField": "Eindtijd",
+  "plugin.calendar.dialog.locationField": "Locatie",
+  "plugin.calendar.dialog.locationPlaceholder": "Locatie (optioneel)",
+  "plugin.calendar.dialog.notesField": "Notities",
+  "plugin.calendar.dialog.notesPlaceholder": "Notities (optioneel)",
+  "plugin.calendar.dialog.cancel": "Annuleren",
+  "plugin.calendar.dialog.save": "Gebeurtenis opslaan",
+
+  "plugin.calendar.toast.titleRequired": "Titel is vereist",
+  "plugin.calendar.toast.dateRequired": "Datum is vereist",
+  "plugin.calendar.toast.updated": "Gebeurtenis bijgewerkt",
+  "plugin.calendar.toast.scheduled": "Gebeurtenis gepland",
+  "plugin.calendar.toast.deleted": "Gebeurtenis verwijderd",
+  "plugin.calendar.toast.loadFailed": "Kon gebeurtenissen niet laden",
+  "plugin.calendar.toast.saveFailed": "Kon de gebeurtenis niet opslaan",
+  "plugin.calendar.toast.deleteFailed": "Kon de gebeurtenis niet verwijderen",
+
+  "plugin.calendar.confirm.deleteEvent": "\"{title}\" verwijderen?",
+
+  "plugin.calendar.notify.eventSoon": "Gebeurtenis begint binnenkort"
+}

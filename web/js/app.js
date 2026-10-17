@@ -45,6 +45,7 @@ import { initThinkToggle } from './thinkToggle.js';
 import { initTouchBar } from './touchbar.js';
 import { reloadUserSession } from './session.js';
 import { loadUserPreferences, getWakeWord } from './preferences.js';
+import { initI18n } from './i18n.js';
 import { initBackground } from './background.js';
 import { hideBootScreen } from './bootScreen.js';
 
@@ -66,6 +67,10 @@ async function boot() {
   // The bar's separators come from the one hudDivider factory; mount them
   // before anything awaits so the bar never paints without them.
   initHudDividers();
+  // Interface language before anything can render text — the sign-in screen is
+  // static markup that showLogin() reveals as-is, so the catalogs have to be
+  // in hand before the first reveal (the splash still covers the app here).
+  await initI18n();
   // Theme + appearance first: everything renders through these tokens.
   await initThemeLoader();
   initIconLoader(); // resolve the stored icon set against the theme's mode

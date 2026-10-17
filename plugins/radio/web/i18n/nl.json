@@ -1,0 +1,25 @@
+{
+  "plugin.radio.meta.description": "Internetradio via Radio Browser — zenders zoeken en ze afspelen in het Radio-venster",
+  "plugin.radio.meta.summary": "Internetradio: zenders zoeken en afspelen (Radio Browser)",
+  "plugin.radio.meta.category": "Media",
+
+  "plugin.radio.notify.nowPlaying": "Speelt nu",
+  "plugin.radio.toast.streamRefused": "De stream wilde niet afspelen — probeer een andere zender",
+
+  "plugin.radio.status.pickStation": "Kies een zender",
+  "plugin.radio.status.streaming": "Streamen",
+
+  "plugin.radio.empty.noStations": "Geen zenders gevonden",
+  "plugin.radio.empty.noMatch": "Niets gevonden voor “{term}”.",
+
+  "plugin.radio.error.unreachable": "Radio Browser niet bereikbaar",
+  "plugin.radio.error.tryAgain": "Probeer het zo opnieuw",
+
+  "plugin.radio.fallback.station": "Zender",
+  "plugin.radio.search.placeholder": "Zenders of genres…",
+
+  "plugin.radio.menu.play": "Afspelen",
+  "plugin.radio.menu.pause": "Pauzeren",
+  "plugin.radio.menu.stop": "Stoppen",
+  "plugin.radio.menu.refresh": "Zenders vernieuwen"
+}

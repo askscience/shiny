@@ -1,0 +1,24 @@
+{
+  "plugin.calculator.meta.description": "Tieteellinen laskin — laske aritmeettisia ja tieteellisiä lausekkeita Laskin-ikkunassa",
+  "plugin.calculator.meta.summary": "Laskin: perus- ja tiedelaskenta",
+  "plugin.calculator.meta.category": "Toimisto",
+
+  "plugin.calculator.display.error": "Virhe",
+
+  "plugin.calculator.toolbar.history": "Historia",
+  "plugin.calculator.toolbar.scientific": "Tieteellinen",
+  "plugin.calculator.toolbar.clearHistory": "Tyhjennä historia",
+
+  "plugin.calculator.menu.equals": "Yhtä suuri kuin",
+  "plugin.calculator.menu.clearAll": "Tyhjennä kaikki",
+
+  "plugin.calculator.history.reuse": "Käytä tätä tulosta uudelleen",
+
+  "plugin.calculator.empty.noHistory": "Ei historiaa",
+  "plugin.calculator.empty.noHistoryBody": "Täällä tehdyt tai tekoälyltä pyydetyt laskut näkyvät alla.",
+
+  "plugin.calculator.toast.evaluateFailed": "Laskenta epäonnistui",
+  "plugin.calculator.toast.historyFailed": "Historiaa ei voitu ladata",
+  "plugin.calculator.toast.historyCleared": "Historia tyhjennetty",
+  "plugin.calculator.toast.clearFailed": "Historiaa ei voitu tyhjentää"
+}

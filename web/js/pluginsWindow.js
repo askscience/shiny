@@ -14,6 +14,7 @@ import {
 import { pluginIconEl } from './pluginIcon.js';
 import { pickFiles } from './files.js';
 import { getPluginLayout, setPluginLayout } from './preferences.js';
+import { t } from './i18n.js';
 
 export const PLUGINS_WINDOW = 'plugins';
 
@@ -42,6 +43,11 @@ function niceName(p) {
   return p.name.charAt(0).toUpperCase() + p.name.slice(1);
 }
 
+/** What a user reads for a category; the stored value stays English. */
+function categoryLabel(cat) {
+  return cat === 'Other' ? t('plugins.categoryOther', null, 'Other') : cat;
+}
+
 /** Cross-window signal: the tray, tiles and desktop all re-read the plugin set. */
 function notifyPluginsChanged(opened) {
   localStorage.setItem('plugins.changed', String(Date.now()));
@@ -66,8 +72,8 @@ async function loadPlugins() {
     refs.empty.textContent = '';
     refs.empty.appendChild(emptyState({
       icon: 'ui/warning',
-      title: "Couldn't load plugins",
-      body: e.message || 'Unknown error',
+      title: t('plugins.loadFailed', null, "Couldn't load plugins"),
+      body: e.message || t('plugins.unknownError', null, 'Unknown error'),
     }));
     return;
   }
@@ -76,7 +82,9 @@ async function loadPlugins() {
 
 async function onPluginAction(action, name) {
   if (busy) return;
-  if (action === 'uninstall' && !confirm(`Remove plugin "${name}"? Its database tables will remain.`)) {
+  if (action === 'uninstall'
+    && !confirm(t('plugins.uninstallConfirm', { name },
+      `Remove plugin "${name}"? Its database tables will remain.`))) {
     return;
   }
   busy = true;
@@ -88,11 +96,12 @@ async function onPluginAction(action, name) {
 
   try {
     await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ name }) });
-    toast(action === 'uninstall' ? `Removed ${name}`
-      : action === 'activate' ? `Activated ${name}` : `Deactivated ${name}`);
+    toast(action === 'uninstall' ? t('plugins.removed', { name }, `Removed ${name}`)
+      : action === 'activate' ? t('plugins.activated', { name }, `Activated ${name}`)
+        : t('plugins.deactivated', { name }, `Deactivated ${name}`));
     notifyPluginsChanged(action === 'activate' ? name : undefined);
   } catch (err) {
-    toast(err.message || 'Action failed', { type: 'error' });
+    toast(err.message || t('plugins.actionFailed', null, 'Action failed'), { type: 'error' });
   } finally {
     busy = false;
     setBusy(false);
@@ -131,7 +140,7 @@ function renderCategories() {
     const chip = el('button', 'plugin-chip');
     chip.type = 'button';
     chip.dataset.category = cat;
-    chip.textContent = cat === 'all' ? 'All' : cat;
+    chip.textContent = cat === 'all' ? t('plugins.categoryAll', null, 'All') : categoryLabel(cat);
     chip.classList.toggle('is-active', cat === category);
     on(chip, 'click', () => {
       category = cat;
@@ -152,7 +161,7 @@ function pluginCard(p) {
   const iconWrap = el('span', 'plugin-card-icon');
   iconWrap.appendChild(pluginIconEl(p.name, { size: 26, fallback: 'ui/puzzle' }));
   const cat = (p.category || '').trim() || 'Other';
-  head.append(iconWrap, badge(cat, { tone: active ? 'accent' : 'neutral' }));
+  head.append(iconWrap, badge(categoryLabel(cat), { tone: active ? 'accent' : 'neutral' }));
 
   const name = el('h3', 'plugin-card-name');
   name.textContent = niceName(p);
@@ -160,13 +169,16 @@ function pluginCard(p) {
   desc.textContent = p.description || p.summary || '';
 
   const meta = el('div', 'plugin-card-meta');
-  meta.append(el('span', null, `v${p.version}`), el('span', null, `API ${p.api_level}`));
+  meta.append(
+    el('span', null, `v${p.version}`),
+    el('span', null, t('plugins.apiLevel', { level: p.api_level }, `API ${p.api_level}`)),
+  );
 
   const actions = el('div', 'plugin-card-actions');
   if (active) {
     if (p.surface) {
       const openBtn = button({
-        label: 'Open',
+        label: t('plugins.open', null, 'Open'),
         variant: 'primary',
         size: 'sm',
         onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: p.name } })),
@@ -174,14 +186,14 @@ function pluginCard(p) {
       actions.appendChild(openBtn);
     }
     actions.appendChild(button({
-      label: 'Deactivate',
+      label: t('ctx.deactivate'),
       variant: 'ghost',
       size: 'sm',
       onClick: () => void onPluginAction('deactivate', p.name),
     }));
   } else {
     actions.appendChild(button({
-      label: 'Activate',
+      label: t('ctx.activate'),
       variant: 'primary',
       size: 'sm',
       onClick: () => void onPluginAction('activate', p.name),
@@ -191,7 +203,7 @@ function pluginCard(p) {
     icon: 'ui/trash',
     variant: 'ghost',
     size: 'sm',
-    label: `Remove ${niceName(p)}`,
+    label: t('plugins.remove', { name: niceName(p) }, `Remove ${niceName(p)}`),
     onClick: () => void onPluginAction('uninstall', p.name),
   });
   removeBtn.classList.add('plugin-card-remove');
@@ -204,13 +216,16 @@ function pluginCard(p) {
   if (active && p.surface && p.name !== 'keyboard') {
     const mode = select({
       options: [
-        { value: 'tile', label: 'Tile' },
-        { value: 'full', label: 'Full screen' },
+        { value: 'tile', label: t('plugins.layoutTile', null, 'Tile') },
+        { value: 'full', label: t('ctx.fullscreen') },
       ],
       value: getPluginLayout(p.name),
       onChange: (value) => {
         setPluginLayout(p.name, value);
-        toast(`${niceName(p)}: opens as ${value === 'full' ? 'full screen' : 'tile'}`, { type: 'info' });
+        toast(value === 'full'
+          ? t('plugins.opensAsFull', { name: niceName(p) }, `${niceName(p)}: opens as full screen`)
+          : t('plugins.opensAsTile', { name: niceName(p) }, `${niceName(p)}: opens as tile`),
+        { type: 'info' });
       },
     });
     mode.classList.add('plugin-card-mode');
@@ -226,7 +241,8 @@ function render() {
   refs.grid.textContent = '';
 
   refs.meta.textContent = plugins.length
-    ? `${activeSet.size} active · ${plugins.length} installed`
+    ? t('plugins.storeMeta', { active: activeSet.size, total: plugins.length },
+      `${activeSet.size} active · ${plugins.length} installed`)
     : '';
 
   if (!plugins.length) {
@@ -234,8 +250,9 @@ function render() {
     refs.empty.textContent = '';
     refs.empty.appendChild(emptyState({
       icon: 'ui/puzzle',
-      title: 'No plugins installed',
-      body: "PEAK'D! is running in its bare form. Install a plugin to add tools, routes, and skills.",
+      title: t('plugins.none', null, 'No plugins installed'),
+      body: t('plugins.noneBody', null,
+        "PEAK'D! is running in its bare form. Install a plugin to add tools, routes, and skills."),
     }));
     return;
   }
@@ -244,8 +261,8 @@ function render() {
     refs.empty.textContent = '';
     refs.empty.appendChild(emptyState({
       icon: 'ui/search',
-      title: 'No matching plugins',
-      body: 'Try a different search or category.',
+      title: t('plugins.noMatch', null, 'No matching plugins'),
+      body: t('plugins.noMatchBody', null, 'Try a different search or category.'),
     }));
     return;
   }
@@ -259,7 +276,7 @@ function render() {
 async function uploadArchive(file) {
   if (busy || !file) return;
   if (!/\.(zip|tar\.gz|tgz)$/i.test(file.name)) {
-    toast('File must be .zip or .tar.gz', { type: 'error' });
+    toast(t('plugins.badArchive', null, 'File must be .zip or .tar.gz'), { type: 'error' });
     return;
   }
   busy = true;
@@ -269,10 +286,11 @@ async function uploadArchive(file) {
     const form = new FormData();
     form.append('file', file);
     const res = await apiFetch('/api/plugins/install', { method: 'POST', body: form });
-    toast(`Installed: ${res?.data?.installed || 'plugin'}`);
+    toast(t('plugins.installed', { name: res?.data?.installed || 'plugin' },
+      `Installed: ${res?.data?.installed || 'plugin'}`));
     notifyPluginsChanged(res?.data?.installed);
   } catch (e) {
-    toast(e.message || 'Install failed', { type: 'error' });
+    toast(e.message || t('plugins.installFailed', null, 'Install failed'), { type: 'error' });
   } finally {
     busy = false;
     refs.installBtn.setLoading(false);
@@ -283,6 +301,12 @@ async function uploadArchive(file) {
 
 /* ── Activity log ───────────────────────────────────────────── */
 
+/** Replace the log body with one grey note (loading / empty / unavailable). */
+function activityNote(text) {
+  refs.activity.textContent = '';
+  refs.activity.appendChild(el('div', 'plugins-activity-empty', text));
+}
+
 async function refreshActivity() {
   if (!refs.activity) return;
   try {
@@ -291,12 +315,12 @@ async function refreshActivity() {
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch('/api/plugins/install.log', { headers });
     if (!res.ok) {
-      refs.activity.innerHTML = '<div class="plugins-activity-empty">Activity unavailable.</div>';
+      activityNote(t('plugins.activityUnavailable', null, 'Activity unavailable.'));
       return;
     }
     const text = (await res.text()).trim();
     if (!text) {
-      refs.activity.innerHTML = '<div class="plugins-activity-empty">No install events yet.</div>';
+      activityNote(t('plugins.activityEmpty', null, 'No install events yet.'));
       return;
     }
     const lines = text.split('\n').slice(-60);
@@ -308,7 +332,7 @@ async function refreshActivity() {
       refs.activity.appendChild(el('div', `plugins-activity-line ${cls}`, line));
     }
   } catch (_) {
-    refs.activity.innerHTML = '<div class="plugins-activity-empty">Activity unavailable.</div>';
+    activityNote(t('plugins.activityUnavailable', null, 'Activity unavailable.'));
   }
 }
 
@@ -324,10 +348,12 @@ function mountPlugins() {
 
   const toolbar = el('div', 'plugins-toolbar');
   const search = searchBar({
-    placeholder: 'Search plugins…',
+    placeholder: t('plugins.search', null, 'Search plugins…'),
     onInput: (value) => { query = value; render(); },
   });
-  const installBtn = button({ label: 'Install', icon: 'ui/upload', variant: 'primary', size: 'sm' });
+  const installBtn = button({
+    label: t('plugins.install', null, 'Install'), icon: 'ui/upload', variant: 'primary', size: 'sm',
+  });
   on(installBtn, 'click', async () => {
     const [file] = await pickFiles({ accept: '.zip,.tar.gz,.tgz,application/zip,application/gzip' });
     if (file) void uploadArchive(file);
@@ -337,7 +363,7 @@ function mountPlugins() {
   const metaRow = el('div', 'plugins-categories-row');
   const categories = el('div', 'plugins-categories');
   categories.setAttribute('role', 'toolbar');
-  categories.setAttribute('aria-label', 'Plugin categories');
+  categories.setAttribute('aria-label', t('plugins.categories', null, 'Plugin categories'));
   const meta = el('span', 'plugins-store-meta');
   metaRow.append(categories, meta);
 
@@ -345,9 +371,11 @@ function mountPlugins() {
   const empty = el('div', 'plugins-empty hidden');
 
   const details = el('details', 'plugins-activity-details');
-  details.appendChild(el('summary', null, 'Install activity'));
+  details.appendChild(el('summary', null, t('plugins.installActivity', null, 'Install activity')));
   const activity = el('div', 'plugins-activity');
-  activity.innerHTML = '<div class="plugins-activity-empty">Loading…</div>';
+  activity.appendChild(
+    el('div', 'plugins-activity-empty', t('plugins.activityLoading', null, 'Loading…')),
+  );
   details.appendChild(activity);
   on(details, 'toggle', () => { if (details.open) void refreshActivity(); });
 
@@ -400,7 +428,12 @@ export function getPluginsElement() {
 
 export function pluginsContextMenu() {
   return [
-    { type: 'item', label: 'Refresh', icon: 'ui/refresh', onClick: () => void loadPlugins() },
+    {
+      type: 'item',
+      label: t('plugins.refresh', null, 'Refresh'),
+      icon: 'ui/refresh',
+      onClick: () => void loadPlugins(),
+    },
   ];
 }
 

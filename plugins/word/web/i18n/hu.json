@@ -1,0 +1,50 @@
+{
+  "plugin.word.toolbar.documents": "Dokumentumok",
+  "plugin.word.toolbar.titlePlaceholder": "Névtelen",
+  "plugin.word.toolbar.newDocument": "Új dokumentum",
+  "plugin.word.toolbar.importOdt": ".odt importálása",
+  "plugin.word.toolbar.saveToDocuments": "Mentés a Dokumentumok mappába",
+  "plugin.word.toolbar.saveNow": "Mentés most",
+  "plugin.word.toolbar.deleteDocument": "Dokumentum törlése",
+  "plugin.word.toolbar.bold": "Félkövér",
+  "plugin.word.toolbar.italic": "Dőlt",
+  "plugin.word.toolbar.underline": "Aláhúzás",
+  "plugin.word.toolbar.heading": "Címsor",
+  "plugin.word.toolbar.bulletList": "Felsorolás",
+  "plugin.word.toolbar.font": "Betűtípus",
+  "plugin.word.toolbar.fontHint": "Betűtípus — a kijelölésre érvényes, vagy a teljes dokumentumra, ha nincs kijelölés",
+
+  "plugin.word.status.saving": "Mentés…",
+  "plugin.word.status.unsaved": "Nem mentett módosítások",
+  "plugin.word.status.saved.one": "Mentve {time} · {count} szó",
+  "plugin.word.status.saved.other": "Mentve {time} · {count} szó",
+
+  "plugin.word.menu.empty": "Még nincsenek dokumentumok",
+  "plugin.word.menu.newDocument": "Új dokumentum",
+  "plugin.word.menu.importOdt": ".odt importálása",
+  "plugin.word.menu.saveToDocuments": "Mentés a Dokumentumok mappába",
+  "plugin.word.menu.deleteDocument": "Dokumentum törlése",
+
+  "plugin.word.ctx.newDocument": "Új dokumentum",
+  "plugin.word.ctx.saveNow": "Mentés most",
+  "plugin.word.ctx.saveToDocuments": "Mentés a Dokumentumok mappába",
+  "plugin.word.ctx.bold": "Félkövér",
+  "plugin.word.ctx.italic": "Dőlt",
+  "plugin.word.ctx.heading": "Címsor",
+  "plugin.word.ctx.list": "Lista",
+  "plugin.word.ctx.deleteDocument": "Dokumentum törlése",
+
+  "plugin.word.dialog.deleteDoc": "Törli a(z) „{title}” dokumentumot?",
+
+  "plugin.word.toast.saveFailed": "A mentés nem sikerült",
+  "plugin.word.toast.openFailed": "Nem sikerült megnyitni a dokumentumot",
+  "plugin.word.toast.createFailed": "Nem sikerült létrehozni a dokumentumot",
+  "plugin.word.toast.deleteFailed": "Nem sikerült törölni a dokumentumot",
+  "plugin.word.toast.imported": "{name} importálva",
+  "plugin.word.toast.importFailed": "Az importálás nem sikerült — érvényes .odt fájl ez?",
+  "plugin.word.toast.openFileFailed": "Nem sikerült megnyitni a fájlt",
+
+  "plugin.word.meta.description": "Egyszerű szövegszerkesztő — a dokumentumok nyílt .odt fájlként tárolódnak",
+  "plugin.word.meta.summary": "Szövegszerkesztő: OpenDocument (.odt) dokumentumok létrehozása, szerkesztése és olvasása",
+  "plugin.word.meta.category": "Iroda"
+}

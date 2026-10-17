@@ -17,6 +17,7 @@
 import { apiFetch } from './api.js';
 import { getLinkPlugin } from './preferences.js';
 import { toast } from '../ui/index.js';
+import { t } from './i18n.js';
 
 /** `plugin.toml` capability that makes a plugin a link-handler candidate. */
 export const LINK_CAPABILITY = 'open-urls';
@@ -91,7 +92,7 @@ export async function openUrl(url) {
   if (!isKiosk() || !url) return false;
   const plugin = resolveLinkPlugin(await linkCatalog());
   if (!plugin) {
-    toast('No browser plugin is installed', { type: 'error' });
+    toast(t('link.noBrowserPlugin', null, 'No browser plugin is installed'), { type: 'error' });
     return false;
   }
   try {
@@ -100,7 +101,8 @@ export async function openUrl(url) {
       body: JSON.stringify({ name: plugin }),
     });
   } catch (err) {
-    toast(err?.message || `Could not open ${plugin}`, { type: 'error' });
+    toast(err?.message || t('link.openFailed', { plugin }, `Could not open ${plugin}`),
+      { type: 'error' });
     return false;
   }
   window.__pendingUrlOpen = { plugin, url, ts: Date.now() };

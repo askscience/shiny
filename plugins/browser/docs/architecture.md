@@ -158,9 +158,25 @@ POST /api/browser/filter/refresh  -> shiny_filter::engine::load (re-fetch) -> { 
 shell side: peakd restores the same cache and blocks per-request in-process
 ```
 
+The lists are EasyList + EasyPrivacy plus this module's own YouTube rules
+(`filter::extra_filters`: the player's own ad endpoints, which the community
+lists have covered only intermittently). They are part of the config, so the
+cache signature changes with them and the next start recompiles the engine.
+
 `filter::document_blocked` exists to test a document URL against the compiled
 engine (`Verdict::Block`) but is currently not wired into `browser_read`; the
 read path is best-effort filtering through the shared client.
+
+YouTube's **video** ads are not reachable from a filter list at all — the ad and
+the video are served from the same `googlevideo.com/videoplayback` shape. That
+half is a document-start script the *shell* injects into every frame
+(`crates/peakd/js/youtube-ads.js`, registered as `peakd:youtube`, see
+`crates/peakd/src/youtube.rs`): it renames the ad keys out of the player's
+responses and gets a running ad out of the way. It ships with the shell rather
+than the server, is self-gating on youtube.com (which is also what covers the
+YouTube plugin's `youtube.com/embed` player), and the window's shield toggle
+drops it from every view's script collection (`peakd:settings` /
+`peakd:filter` → `peakd_qt_set_filter_scripts`).
 
 ### 5. Downloads
 

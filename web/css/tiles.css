@@ -2720,6 +2720,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border-radius: 0;
   background: transparent;
   color: var(--text);
+  font-family: var(--font-body);
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
@@ -2737,6 +2738,10 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 .mail-account-btn-chevron { display: inline-flex; color: var(--muted); }
 .mail-account-btn-chevron .ui-icon { width: 12px; height: 12px; }
+
+/* Account menu rows (body-level popup). A button does not inherit the page
+   font, so the family must be explicit — same as the other document menus. */
+.mail-account-menu-item { font-family: var(--font-body); }
 
 .mail-title {
   flex: 1;
@@ -2873,6 +2878,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border-bottom: 1px solid var(--glass-border);
   background: transparent;
   color: var(--text);
+  font-family: var(--font-body);
   text-align: left;
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);

@@ -3,6 +3,7 @@
  *   node web/js/tests/bluetoothShared.test.mjs
  */
 
+import './helpers/i18n.mjs';   // catalogs, so t() resolves the English labels
 import {
   batteryLabel, chipIconName, chipLabel, connectedDevice, deviceIconName, signalLabel,
 } from '../bluetoothShared.js';

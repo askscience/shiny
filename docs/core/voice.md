@@ -142,6 +142,16 @@ faster-whisper, by contrast, is handed the **ISO-639-1 code itself** from the
 browser (`getVoiceLang()`), which skips language detection. The same setting
 drives spoken replies and the assistant's reply language.
 
+Which language that is: `getVoiceLang()` in
+[`web/js/api.js`](../../web/js/api.js) returns the explicit per-user override
+(`voice.lang.<id>`, Settings → Voice → Language) when one is set, and otherwise
+the **interface language** (`ui.locale`, Settings → System). The interface
+language itself follows the system/browser language until the user picks one, so
+the default is the system language; choosing an interface language switches
+recognition, spoken replies and the assistant's reply language together, and a
+language picked under Voice keeps the voice separate from the interface. See
+[interface language](i18n.md).
+
 The full language table lives in [Sidecars → Languages](../deployment/sidecars.md#languages).
 
 ## Speech synthesis (TTS)

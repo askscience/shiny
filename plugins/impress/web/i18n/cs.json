@@ -1,0 +1,81 @@
+{
+  "plugin.impress.toolbar.presentations": "Prezentace",
+  "plugin.impress.toolbar.titlePlaceholder": "Bez názvu",
+  "plugin.impress.toolbar.theme": "Motiv",
+  "plugin.impress.toolbar.present": "Prezentovat",
+  "plugin.impress.toolbar.newDeck": "Nová prezentace",
+  "plugin.impress.toolbar.importOdp": "Importovat .odp",
+  "plugin.impress.toolbar.saveToDocuments": "Uložit do Dokumentů",
+  "plugin.impress.toolbar.saveNow": "Uložit nyní",
+  "plugin.impress.toolbar.deleteDeck": "Smazat prezentaci",
+
+  "plugin.impress.menu.empty": "Zatím žádné prezentace",
+  "plugin.impress.menu.newDeck": "Nová prezentace",
+  "plugin.impress.menu.importOdp": "Importovat .odp",
+  "plugin.impress.menu.saveToDocuments": "Uložit do Dokumentů",
+  "plugin.impress.menu.deleteDeck": "Smazat prezentaci",
+
+  "plugin.impress.ctx.newDeck": "Nová prezentace",
+  "plugin.impress.ctx.addSlide": "Přidat snímek",
+  "plugin.impress.ctx.saveNow": "Uložit nyní",
+  "plugin.impress.ctx.present": "Prezentovat",
+  "plugin.impress.ctx.stopPresenting": "Ukončit prezentaci",
+  "plugin.impress.ctx.deleteDeck": "Smazat prezentaci",
+
+  "plugin.impress.status.saving": "Ukládám…",
+  "plugin.impress.status.unsaved": "Neuložené změny",
+  "plugin.impress.status.saved.one": "Uloženo {time} · {count} snímek",
+  "plugin.impress.status.saved.few": "Uloženo {time} · {count} snímky",
+  "plugin.impress.status.saved.many": "Uloženo {time} · {count} snímku",
+  "plugin.impress.status.saved.other": "Uloženo {time} · {count} snímků",
+
+  "plugin.impress.empty.noDeck": "Žádná prezentace",
+  "plugin.impress.empty.noDeckBody": "Vytvořte ji, nebo požádejte AI, ať sestaví prezentaci",
+
+  "plugin.impress.inspector.layout": "Rozvržení",
+  "plugin.impress.inspector.transition": "Přechod",
+  "plugin.impress.inspector.bullets": "Odrážky",
+  "plugin.impress.inspector.speakerNotes": "Poznámky přednášejícího",
+  "plugin.impress.inspector.hint": "Kliknutím na libovolný text na snímku jej upravíte přímo.",
+  "plugin.impress.inspector.applyAll": "Použít tento přechod a zobrazení odrážek na všechny snímky",
+  "plugin.impress.inspector.applyAllLabel": "Použít na všechny snímky",
+
+  "plugin.impress.ops.addSlide": "Přidat snímek",
+  "plugin.impress.ops.moveUp": "Posunout nahoru",
+  "plugin.impress.ops.moveDown": "Posunout dolů",
+  "plugin.impress.ops.deleteSlide": "Smazat snímek",
+
+  "plugin.impress.transition.none": "Žádný",
+  "plugin.impress.transition.fade": "Prolnutí",
+  "plugin.impress.transition.slide": "Posun",
+  "plugin.impress.transition.push": "Zatlačení",
+  "plugin.impress.transition.zoom": "Přiblížení",
+
+  "plugin.impress.reveal.all": "Najednou",
+  "plugin.impress.reveal.bullets": "Postupně",
+
+  "plugin.impress.slide.addText": "Přidat text",
+  "plugin.impress.slide.addTitle": "Přidat název",
+  "plugin.impress.slide.addSubtitle": "Přidat podtitul",
+  "plugin.impress.slide.attribution": "Uvedení zdroje",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Zpět do editoru",
+  "plugin.impress.present.fullScreen": "Celá obrazovka",
+  "plugin.impress.present.exitFullScreen": "Ukončit celou obrazovku",
+  "plugin.impress.present.blocked": "Celou obrazovku prohlížeč zablokoval",
+
+  "plugin.impress.dialog.deleteDeck": "Smazat “{title}”?",
+
+  "plugin.impress.toast.saveFailed": "Uložení se nezdařilo",
+  "plugin.impress.toast.openFailed": "Prezentaci se nepodařilo otevřít",
+  "plugin.impress.toast.createFailed": "Prezentaci se nepodařilo vytvořit",
+  "plugin.impress.toast.deleteFailed": "Prezentaci se nepodařilo smazat",
+  "plugin.impress.toast.imported": "Importováno {name}",
+  "plugin.impress.toast.importFailed": "Import se nezdařil — je to platný soubor .odp?",
+  "plugin.impress.toast.openFileFailed": "Soubor se nepodařilo otevřít",
+
+  "plugin.impress.meta.description": "Tvorba prezentací — prezentace uložené jako snímky a exportované jako otevřené soubory .odp",
+  "plugin.impress.meta.summary": "Impress: tvořte, upravujte a prezentujte sady snímků OpenDocument (.odp)",
+  "plugin.impress.meta.category": "Kancelář"
+}

@@ -6,10 +6,12 @@
  * then form factor, then the level bucket. A muted mic can never draw a live
  * mic glyph, and headphones never draw speaker waves.
  *
- * `audioShared.js` is deliberately import-free, so Node can load it directly.
+ * `audioShared.js` only pulls in the i18n runtime, so Node loads it directly
+ * with the i18n harness (catalogs, no DOM).
  *
  * Run:  node web/js/tests/audioShared.test.mjs
  */
+import './helpers/i18n.mjs';   // catalogs, so t() resolves the English labels
 import { currentNode, isHeadphones, nodeIcon, nodeLabel, nodeSubtitle } from '../audioShared.js';
 
 let failures = 0;

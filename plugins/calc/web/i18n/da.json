@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Regnearksberegner — ark gemt som åbne cellegitre, kan redigeres i Calc-vinduet",
+  "plugin.calc.meta.summary": "Calc: opret, redigér og beregn med regneark",
+  "plugin.calc.meta.category": "Kontor",
+
+  "plugin.calc.bar.spreadsheets": "Regneark",
+
+  "plugin.calc.toolbar.newSheet": "Nyt regneark",
+  "plugin.calc.toolbar.importOds": "Importér .ods",
+  "plugin.calc.toolbar.importCsv": "Importér CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Gem i Dokumenter",
+  "plugin.calc.toolbar.saveNow": "Gem nu",
+  "plugin.calc.toolbar.deleteSheet": "Slet regneark",
+
+  "plugin.calc.menu.noSheets": "Ingen regneark endnu",
+
+  "plugin.calc.sheet.untitled": "Uden titel",
+  "plugin.calc.sheet.importedCsv": "Importeret CSV",
+
+  "plugin.calc.formula.placeholder": "Værdi eller formel (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Gemmer…",
+  "plugin.calc.status.dirty": "Ikke-gemte ændringer",
+  "plugin.calc.status.saved.one": "Gemt {time} · {count} celle",
+  "plugin.calc.status.saved.other": "Gemt {time} · {count} celler",
+
+  "plugin.calc.dialog.delete": "Slet \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Gemningen mislykkedes",
+  "plugin.calc.toast.openFailed": "Kunne ikke åbne regnearket",
+  "plugin.calc.toast.createFailed": "Kunne ikke oprette regnearket",
+  "plugin.calc.toast.deleteFailed": "Kunne ikke slette regnearket",
+  "plugin.calc.toast.imported": "Importede {name}",
+  "plugin.calc.toast.importOdsFailed": "Importen mislykkedes — er det en gyldig .ods-fil?",
+  "plugin.calc.toast.importCsvFailed": "Importen mislykkedes — er det en gyldig CSV-fil?",
+  "plugin.calc.toast.openFileFailed": "Kunne ikke åbne filen"
+}

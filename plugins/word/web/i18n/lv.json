@@ -1,0 +1,51 @@
+{
+  "plugin.word.toolbar.documents": "Dokumenti",
+  "plugin.word.toolbar.titlePlaceholder": "Bez nosaukuma",
+  "plugin.word.toolbar.newDocument": "Jauns dokuments",
+  "plugin.word.toolbar.importOdt": "Importēt .odt",
+  "plugin.word.toolbar.saveToDocuments": "Saglabāt mapē Dokumenti",
+  "plugin.word.toolbar.saveNow": "Saglabāt tagad",
+  "plugin.word.toolbar.deleteDocument": "Dzēst dokumentu",
+  "plugin.word.toolbar.bold": "Treknraksts",
+  "plugin.word.toolbar.italic": "Kursīvs",
+  "plugin.word.toolbar.underline": "Pasvītrojums",
+  "plugin.word.toolbar.heading": "Virsraksts",
+  "plugin.word.toolbar.bulletList": "Aizzīmju saraksts",
+  "plugin.word.toolbar.font": "Fonts",
+  "plugin.word.toolbar.fontHint": "Fonts — attiecas uz atlasi vai uz visu dokumentu, ja nekas nav atlasīts",
+
+  "plugin.word.status.saving": "Saglabā…",
+  "plugin.word.status.unsaved": "Nesaglabātas izmaiņas",
+  "plugin.word.status.saved.zero": "Saglabāts {time} · {count} vārdu",
+  "plugin.word.status.saved.one": "Saglabāts {time} · {count} vārds",
+  "plugin.word.status.saved.other": "Saglabāts {time} · {count} vārdi",
+
+  "plugin.word.menu.empty": "Vēl nav dokumentu",
+  "plugin.word.menu.newDocument": "Jauns dokuments",
+  "plugin.word.menu.importOdt": "Importēt .odt",
+  "plugin.word.menu.saveToDocuments": "Saglabāt mapē Dokumenti",
+  "plugin.word.menu.deleteDocument": "Dzēst dokumentu",
+
+  "plugin.word.ctx.newDocument": "Jauns dokuments",
+  "plugin.word.ctx.saveNow": "Saglabāt tagad",
+  "plugin.word.ctx.saveToDocuments": "Saglabāt mapē Dokumenti",
+  "plugin.word.ctx.bold": "Treknraksts",
+  "plugin.word.ctx.italic": "Kursīvs",
+  "plugin.word.ctx.heading": "Virsraksts",
+  "plugin.word.ctx.list": "Saraksts",
+  "plugin.word.ctx.deleteDocument": "Dzēst dokumentu",
+
+  "plugin.word.dialog.deleteDoc": "Dzēst \"{title}\"?",
+
+  "plugin.word.toast.saveFailed": "Saglabāšana neizdevās",
+  "plugin.word.toast.openFailed": "Nevarēja atvērt dokumentu",
+  "plugin.word.toast.createFailed": "Nevarēja izveidot dokumentu",
+  "plugin.word.toast.deleteFailed": "Nevarēja dzēst dokumentu",
+  "plugin.word.toast.imported": "Importēts {name}",
+  "plugin.word.toast.importFailed": "Importēšana neizdevās — vai šis ir derīgs .odt fails?",
+  "plugin.word.toast.openFileFailed": "Nevarēja atvērt failu",
+
+  "plugin.word.meta.description": "Vienkāršs teksta procesors — dokumenti glabājas kā atvērti .odt faili",
+  "plugin.word.meta.summary": "Teksta procesors: veidot, rediģēt un lasīt OpenDocument (.odt) dokumentus",
+  "plugin.word.meta.category": "Birojs"
+}

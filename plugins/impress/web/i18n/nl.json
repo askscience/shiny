@@ -1,0 +1,79 @@
+{
+  "plugin.impress.toolbar.presentations": "Presentaties",
+  "plugin.impress.toolbar.titlePlaceholder": "Zonder titel",
+  "plugin.impress.toolbar.theme": "Thema",
+  "plugin.impress.toolbar.present": "Presenteren",
+  "plugin.impress.toolbar.newDeck": "Nieuwe presentatie",
+  "plugin.impress.toolbar.importOdp": ".odp importeren",
+  "plugin.impress.toolbar.saveToDocuments": "Opslaan in Documenten",
+  "plugin.impress.toolbar.saveNow": "Nu opslaan",
+  "plugin.impress.toolbar.deleteDeck": "Presentatie verwijderen",
+
+  "plugin.impress.menu.empty": "Nog geen presentaties",
+  "plugin.impress.menu.newDeck": "Nieuwe presentatie",
+  "plugin.impress.menu.importOdp": ".odp importeren",
+  "plugin.impress.menu.saveToDocuments": "Opslaan in Documenten",
+  "plugin.impress.menu.deleteDeck": "Presentatie verwijderen",
+
+  "plugin.impress.ctx.newDeck": "Nieuwe presentatie",
+  "plugin.impress.ctx.addSlide": "Dia toevoegen",
+  "plugin.impress.ctx.saveNow": "Nu opslaan",
+  "plugin.impress.ctx.present": "Presenteren",
+  "plugin.impress.ctx.stopPresenting": "Presentatie stoppen",
+  "plugin.impress.ctx.deleteDeck": "Presentatie verwijderen",
+
+  "plugin.impress.status.saving": "Opslaan…",
+  "plugin.impress.status.unsaved": "Niet-opgeslagen wijzigingen",
+  "plugin.impress.status.saved.one": "Opgeslagen {time} · {count} dia",
+  "plugin.impress.status.saved.other": "Opgeslagen {time} · {count} dia's",
+
+  "plugin.impress.empty.noDeck": "Geen presentatie",
+  "plugin.impress.empty.noDeckBody": "Maak er een, of vraag de AI een presentatie te bouwen",
+
+  "plugin.impress.inspector.layout": "Indeling",
+  "plugin.impress.inspector.transition": "Overgang",
+  "plugin.impress.inspector.bullets": "Opsommingstekens",
+  "plugin.impress.inspector.speakerNotes": "Notities voor de spreker",
+  "plugin.impress.inspector.hint": "Klik op tekst op de dia om die direct te bewerken.",
+  "plugin.impress.inspector.applyAll": "Deze overgang en opsomming toepassen op elke dia",
+  "plugin.impress.inspector.applyAllLabel": "Toepassen op alle dia's",
+
+  "plugin.impress.ops.addSlide": "Dia toevoegen",
+  "plugin.impress.ops.moveUp": "Omhoog verplaatsen",
+  "plugin.impress.ops.moveDown": "Omlaag verplaatsen",
+  "plugin.impress.ops.deleteSlide": "Dia verwijderen",
+
+  "plugin.impress.transition.none": "Geen",
+  "plugin.impress.transition.fade": "Vervagen",
+  "plugin.impress.transition.slide": "Schuiven",
+  "plugin.impress.transition.push": "Duwen",
+  "plugin.impress.transition.zoom": "Zoomen",
+
+  "plugin.impress.reveal.all": "Alles in één keer",
+  "plugin.impress.reveal.bullets": "Eén voor één",
+
+  "plugin.impress.slide.addText": "Tekst toevoegen",
+  "plugin.impress.slide.addTitle": "Een titel toevoegen",
+  "plugin.impress.slide.addSubtitle": "Een ondertitel toevoegen",
+  "plugin.impress.slide.attribution": "Bronvermelding",
+  "plugin.impress.strip.thumbTitle": "{n}. {title}",
+
+  "plugin.impress.present.backToEditor": "Terug naar de editor",
+  "plugin.impress.present.fullScreen": "Volledig scherm",
+  "plugin.impress.present.exitFullScreen": "Volledig scherm sluiten",
+  "plugin.impress.present.blocked": "Volledig scherm werd geblokkeerd door de browser",
+
+  "plugin.impress.dialog.deleteDeck": "\"{title}\" verwijderen?",
+
+  "plugin.impress.toast.saveFailed": "Opslaan mislukt",
+  "plugin.impress.toast.openFailed": "Kon de presentatie niet openen",
+  "plugin.impress.toast.createFailed": "Kon de presentatie niet aanmaken",
+  "plugin.impress.toast.deleteFailed": "Kon de presentatie niet verwijderen",
+  "plugin.impress.toast.imported": "{name} geïmporteerd",
+  "plugin.impress.toast.importFailed": "Importeren mislukt — is dit een geldig .odp-bestand?",
+  "plugin.impress.toast.openFileFailed": "Kon het bestand niet openen",
+
+  "plugin.impress.meta.description": "Presentatiebouwer — presentaties worden opgeslagen als dia's en geëxporteerd als open .odp-bestanden",
+  "plugin.impress.meta.summary": "Impress: OpenDocument-presentaties (.odp) bouwen, bewerken en tonen",
+  "plugin.impress.meta.category": "Kantoor"
+}

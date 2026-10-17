@@ -8,9 +8,17 @@
  * initial paint never pays for them.
  */
 
+import { t } from './i18n.js';
+
 export const CORE_WINDOWS = {
-  settings: { title: 'Settings', icon: 'ui/settings', load: () => import('./settingsWindow.js') },
-  plugins: { title: 'Plugins', icon: 'ui/puzzle', load: () => import('./pluginsWindow.js') },
+  settings: {
+    title: 'Settings', titleKey: 'hud.settings', icon: 'ui/settings',
+    load: () => import('./settingsWindow.js'),
+  },
+  plugins: {
+    title: 'Plugins', titleKey: 'hud.plugins', icon: 'ui/puzzle',
+    load: () => import('./pluginsWindow.js'),
+  },
 };
 
 export function isCoreWindow(name) {
@@ -18,7 +26,8 @@ export function isCoreWindow(name) {
 }
 
 export function coreWindowTitle(name) {
-  return CORE_WINDOWS[name]?.title || name;
+  const win = CORE_WINDOWS[name];
+  return win ? t(win.titleKey, null, win.title) : name;
 }
 
 /** A theme icon path for a built-in window (plugins ship their own SVG). */

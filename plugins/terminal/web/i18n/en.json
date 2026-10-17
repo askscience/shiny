@@ -1,0 +1,29 @@
+{
+  "plugin.terminal.meta.description": "A real Linux terminal inside the app — a PTY-backed login shell in its own window",
+  "plugin.terminal.meta.summary": "Terminal: a real shell over a PTY, rendered with xterm.js",
+  "plugin.terminal.meta.category": "System",
+
+  "plugin.terminal.tab.label": "Terminal {n}",
+  "plugin.terminal.tab.new": "New tab",
+  "plugin.terminal.tab.close": "Close {name}",
+  "plugin.terminal.tabs.label": "Terminal tabs",
+
+  "plugin.terminal.status.starting": "starting terminal…",
+  "plugin.terminal.status.connecting": "connecting…",
+  "plugin.terminal.status.reconnecting": "reconnecting…",
+  "plugin.terminal.status.connected": "connected",
+  "plugin.terminal.status.startFailed": "could not start a shell",
+  "plugin.terminal.status.expired": "session expired — sign in again",
+  "plugin.terminal.status.xtermFailed": "could not load xterm.js",
+
+  "plugin.terminal.toast.tabLimit.one": "Terminal: at most {count} tab",
+  "plugin.terminal.toast.tabLimit.other": "Terminal: at most {count} tabs",
+  "plugin.terminal.toast.startFailed": "Terminal: could not start a shell",
+  "plugin.terminal.toast.xtermFailed": "Terminal: xterm.js failed to load",
+  "plugin.terminal.toast.clipboardUnavailable": "Clipboard unavailable",
+
+  "plugin.terminal.ctx.copy": "Copy",
+  "plugin.terminal.ctx.paste": "Paste",
+  "plugin.terminal.ctx.clearScrollback": "Clear scrollback",
+  "plugin.terminal.ctx.closeTab": "Close tab"
+}

@@ -1,0 +1,37 @@
+{
+  "plugin.calc.meta.description": "Spreadsheet calculator — sheets stored as open cell grids, editable in the Calc window",
+  "plugin.calc.meta.summary": "Calc: create, edit and compute with spreadsheets",
+  "plugin.calc.meta.category": "Office",
+
+  "plugin.calc.bar.spreadsheets": "Spreadsheets",
+
+  "plugin.calc.toolbar.newSheet": "New spreadsheet",
+  "plugin.calc.toolbar.importOds": "Import .ods",
+  "plugin.calc.toolbar.importCsv": "Import CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Save to Documents",
+  "plugin.calc.toolbar.saveNow": "Save now",
+  "plugin.calc.toolbar.deleteSheet": "Delete spreadsheet",
+
+  "plugin.calc.menu.noSheets": "No spreadsheets yet",
+
+  "plugin.calc.sheet.untitled": "Untitled",
+  "plugin.calc.sheet.importedCsv": "Imported CSV",
+
+  "plugin.calc.formula.placeholder": "Value or formula (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Saving…",
+  "plugin.calc.status.dirty": "Unsaved changes",
+  "plugin.calc.status.saved.one": "Saved {time} · {count} cell",
+  "plugin.calc.status.saved.other": "Saved {time} · {count} cells",
+
+  "plugin.calc.dialog.delete": "Delete \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Save failed",
+  "plugin.calc.toast.openFailed": "Could not open spreadsheet",
+  "plugin.calc.toast.createFailed": "Could not create spreadsheet",
+  "plugin.calc.toast.deleteFailed": "Could not delete spreadsheet",
+  "plugin.calc.toast.imported": "Imported {name}",
+  "plugin.calc.toast.importOdsFailed": "Import failed — is this a valid .ods file?",
+  "plugin.calc.toast.importCsvFailed": "Import failed — is this a valid CSV file?",
+  "plugin.calc.toast.openFileFailed": "Could not open file"
+}

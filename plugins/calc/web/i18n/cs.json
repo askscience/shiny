@@ -1,0 +1,39 @@
+{
+  "plugin.calc.meta.description": "Tabulkový kalkulátor — tabulky uložené jako otevřené mřížky buněk, upravitelné v okně Calc",
+  "plugin.calc.meta.summary": "Calc: vytvářejte, upravujte a počítejte s tabulkami",
+  "plugin.calc.meta.category": "Kancelář",
+
+  "plugin.calc.bar.spreadsheets": "Tabulky",
+
+  "plugin.calc.toolbar.newSheet": "Nová tabulka",
+  "plugin.calc.toolbar.importOds": "Importovat .ods",
+  "plugin.calc.toolbar.importCsv": "Importovat CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Uložit do Dokumentů",
+  "plugin.calc.toolbar.saveNow": "Uložit nyní",
+  "plugin.calc.toolbar.deleteSheet": "Smazat tabulku",
+
+  "plugin.calc.menu.noSheets": "Zatím žádné tabulky",
+
+  "plugin.calc.sheet.untitled": "Bez názvu",
+  "plugin.calc.sheet.importedCsv": "Importované CSV",
+
+  "plugin.calc.formula.placeholder": "Hodnota nebo vzorec (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Ukládám…",
+  "plugin.calc.status.dirty": "Neuložené změny",
+  "plugin.calc.status.saved.one": "Uloženo {time} · {count} buňka",
+  "plugin.calc.status.saved.few": "Uloženo {time} · {count} buňky",
+  "plugin.calc.status.saved.many": "Uloženo {time} · {count} buňky",
+  "plugin.calc.status.saved.other": "Uloženo {time} · {count} buněk",
+
+  "plugin.calc.dialog.delete": "Smazat “{title}”?",
+
+  "plugin.calc.toast.saveFailed": "Uložení se nezdařilo",
+  "plugin.calc.toast.openFailed": "Tabulku se nepodařilo otevřít",
+  "plugin.calc.toast.createFailed": "Tabulku se nepodařilo vytvořit",
+  "plugin.calc.toast.deleteFailed": "Tabulku se nepodařilo smazat",
+  "plugin.calc.toast.imported": "Importováno {name}",
+  "plugin.calc.toast.importOdsFailed": "Import se nezdařil — je to platný soubor .ods?",
+  "plugin.calc.toast.importCsvFailed": "Import se nezdařil — je to platný soubor CSV?",
+  "plugin.calc.toast.openFileFailed": "Soubor se nepodařilo otevřít"
+}

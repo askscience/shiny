@@ -13,6 +13,7 @@
 import { notify, setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { activatePlugin } from '../../js/tiles.js';
+import { t, tp } from '../../js/i18n.js';
 
 const PLUGIN = 'updates';
 const POLL_MS = 5 * 60 * 1000;
@@ -103,19 +104,21 @@ function update() {
     badgeEl.style.display = 'block';
     badgeEl.textContent = count > 99 ? '99+' : String(count);
     btn.classList.add('is-active');
-    btn.title = `${count} update${count === 1 ? '' : 's'} available`;
+    btn.title = tp('plugin.updates.hud.available', count, null, '{count} updates available');
   } else {
     badgeEl.style.display = 'none';
     btn.classList.remove('is-active');
-    btn.title = error ? 'Updates unavailable' : 'System up to date';
+    btn.title = error
+      ? t('plugin.updates.status.unavailable', null, 'Updates unavailable')
+      : t('plugin.updates.hud.upToDate', null, 'System up to date');
   }
   btn.setAttribute('aria-label', btn.title);
 
   if (lastCount === 0 && count > 0) {
     notify({
       app: 'Updates',
-      title: 'Updates available',
-      body: `${count} update${count === 1 ? '' : 's'} ready to install`,
+      title: t('plugin.updates.hud.notifyTitle', null, 'Updates available'),
+      body: tp('plugin.updates.hud.notifyBody', count, null, '{count} updates ready to install'),
       icon: 'ui/download',
       urgency: 'normal',
     });

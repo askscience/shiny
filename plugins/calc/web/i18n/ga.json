@@ -1,0 +1,40 @@
+{
+  "plugin.calc.meta.description": "Áireamhán scarbhileoige — stóráiltear bileoga mar eangacha cealla oscailte, is féidir iad a chur in eagar i bhfuinneog Calc",
+  "plugin.calc.meta.summary": "Calc: cruthaigh, cuir in eagar agus ríomh le scarbhileoga",
+  "plugin.calc.meta.category": "Oifig",
+
+  "plugin.calc.bar.spreadsheets": "Scarbhileoga",
+
+  "plugin.calc.toolbar.newSheet": "Scarbhileog nua",
+  "plugin.calc.toolbar.importOds": "Iompórtáil .ods",
+  "plugin.calc.toolbar.importCsv": "Iompórtáil CSV",
+  "plugin.calc.toolbar.saveToDocuments": "Sábháil i nDoiciméid",
+  "plugin.calc.toolbar.saveNow": "Sábháil anois",
+  "plugin.calc.toolbar.deleteSheet": "Scrios an scarbhileog",
+
+  "plugin.calc.menu.noSheets": "Níl aon scarbhileog ann fós",
+
+  "plugin.calc.sheet.untitled": "Gan teideal",
+  "plugin.calc.sheet.importedCsv": "CSV iompórtáilte",
+
+  "plugin.calc.formula.placeholder": "Luach nó foirmle (=SUM(A1:A5))",
+
+  "plugin.calc.status.saving": "Á sábháil…",
+  "plugin.calc.status.dirty": "Athruithe gan sábháil",
+  "plugin.calc.status.saved.one": "Sábháilte {time} · {count} cill",
+  "plugin.calc.status.saved.two": "Sábháilte {time} · {count} chill",
+  "plugin.calc.status.saved.few": "Sábháilte {time} · {count} chill",
+  "plugin.calc.status.saved.many": "Sábháilte {time} · {count} gcill",
+  "plugin.calc.status.saved.other": "Sábháilte {time} · {count} cealla",
+
+  "plugin.calc.dialog.delete": "Scrios \"{title}\"?",
+
+  "plugin.calc.toast.saveFailed": "Theip ar an sábháil",
+  "plugin.calc.toast.openFailed": "Níorbh fhéidir an scarbhileog a oscailt",
+  "plugin.calc.toast.createFailed": "Níorbh fhéidir an scarbhileog a chruthú",
+  "plugin.calc.toast.deleteFailed": "Níorbh fhéidir an scarbhileog a scriosadh",
+  "plugin.calc.toast.imported": "Iompórtáladh {name}",
+  "plugin.calc.toast.importOdsFailed": "Theip ar an iompórtáil — an comhad .ods bailí é seo?",
+  "plugin.calc.toast.importCsvFailed": "Theip ar an iompórtáil — an comhad CSV bailí é seo?",
+  "plugin.calc.toast.openFileFailed": "Níorbh fhéidir an comhad a oscailt"
+}

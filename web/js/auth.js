@@ -7,6 +7,7 @@ import {
 } from './userProfiles.js';
 import { resetUserSession } from './session.js';
 import { hideBootScreen } from './bootScreen.js';
+import { t } from './i18n.js';
 
 const overlay = document.getElementById('login-overlay');
 const appEl = document.getElementById('app');
@@ -93,7 +94,7 @@ function showStarting(name) {
   passwordInput?.setAttribute('disabled', '');
   usernameInput?.setAttribute('disabled', '');
   errorEl.classList.add('is-status');
-  errorEl.textContent = `Starting ${name}…`;
+  errorEl.textContent = t('auth.starting', { name }, `Starting ${name}…`);
   errorEl.classList.remove('hidden');
 }
 
@@ -154,7 +155,7 @@ function renderProfilePicker() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'profile-tile';
-    btn.setAttribute('aria-label', `Sign in as ${user.name}`);
+    btn.setAttribute('aria-label', t('auth.signInAs', { name: user.name }, `Sign in as ${user.name}`));
 
     const avatar = document.createElement('div');
     avatar.className = 'profile-avatar';
@@ -175,7 +176,7 @@ function renderProfilePicker() {
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.className = 'profile-tile profile-tile-add';
-  addBtn.setAttribute('aria-label', 'Add new user');
+  addBtn.setAttribute('aria-label', t('auth.addNewUser', null, 'Add new user'));
 
   const addAvatar = document.createElement('div');
   addAvatar.className = 'profile-avatar profile-avatar-add';
@@ -183,7 +184,7 @@ function renderProfilePicker() {
 
   const addLabel = document.createElement('span');
   addLabel.className = 'profile-tile-name';
-  addLabel.textContent = 'Add user';
+  addLabel.textContent = t('auth.addUser', null, 'Add user');
 
   addBtn.append(addAvatar, addLabel);
   addBtn.addEventListener('click', () => showRegisterStep());
@@ -290,12 +291,12 @@ loginBtn?.addEventListener('click', async () => {
   // Either a picked profile (picker step) or a typed username (manual step).
   const username = selectedUser?.username || usernameInput?.value.trim() || '';
   if (!username) {
-    showError('Enter your username');
+    showError(t('auth.enterUsername', null, 'Enter your username'));
     usernameInput?.focus();
     return;
   }
   if (!passwordInput?.value) {
-    showError('Enter your password');
+    showError(t('auth.enterPassword', null, 'Enter your password'));
     passwordInput?.focus();
     return;
   }
@@ -344,12 +345,12 @@ registerBtn?.addEventListener('click', async () => {
   const password = registerPasswordInput?.value || '';
 
   if (!username) {
-    showError('Choose a username');
+    showError(t('auth.chooseUsername', null, 'Choose a username'));
     registerUsernameInput?.focus();
     return;
   }
   if (!password) {
-    showError('Choose a password');
+    showError(t('auth.choosePassword', null, 'Choose a password'));
     registerPasswordInput?.focus();
     return;
   }
@@ -406,7 +407,7 @@ window.addEventListener('auth:expired', () => {
   clearAuth();
   showLogin();
   window.dispatchEvent(new CustomEvent('app:toast', {
-    detail: { message: 'Session expired — sign in again', type: 'error' },
+    detail: { message: t('auth.sessionExpired', null, 'Session expired — sign in again'), type: 'error' },
   }));
 });
 

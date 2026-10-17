@@ -15,6 +15,7 @@
 import { setIcon } from '../ui/index.js';
 import { apiFetch } from './api.js';
 import { getAiProvider, getOllamaModel, getThink, setThink } from './preferences.js';
+import { t } from './i18n.js';
 
 const btn = document.getElementById('compose-think-btn');
 const glyph = btn?.querySelector('[data-icon]') || null;
@@ -33,9 +34,9 @@ export function canThink() {
 }
 
 function unsupportedReason() {
-  if (support?.provider === 'openai') return 'Thinking needs an Ollama model';
-  if (support?.model) return `${support.model} cannot think`;
-  return 'This model cannot think';
+  if (support?.provider === 'openai') return t('chat.thinkingNeedsOllama', null, 'Thinking needs an Ollama model');
+  if (support?.model) return t('chat.modelCannotThink', { model: support.model }, `${support.model} cannot think`);
+  return t('chat.thisModelCannotThink', null, 'This model cannot think');
 }
 
 function syncSurface() {
@@ -45,7 +46,9 @@ function syncSurface() {
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   btn.disabled = !capable;
   btn.title = capable
-    ? (on ? 'Thinking on — click to turn it off' : 'Thinking off — click to turn it on')
+    ? (on
+      ? t('chat.thinkingOnHint', null, 'Thinking on — click to turn it off')
+      : t('chat.thinkingOffHint', null, 'Thinking off — click to turn it on'))
     : unsupportedReason();
   btn.setAttribute('aria-label', btn.title);
   if (glyph) {
