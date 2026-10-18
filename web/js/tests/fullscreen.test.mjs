@@ -391,14 +391,23 @@ check('a bottom bar clears the desktop',
 
 const sphereCss = readFileSync(new URL('../../css/sphere.css', import.meta.url), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
+check('the bar positions itself — no wrapper element',
+  !/#chrome-bottom/.test(sphereCss) && /#sphere-container \{\n  position: fixed;/.test(sphereCss));
 check('the voice bar docks in either bottom corner',
-  /html\[data-orb-pos='bottom-left'\] #chrome-bottom/.test(sphereCss)
-  && /html\[data-orb-pos='bottom-right'\] #chrome-bottom/.test(sphereCss));
-check('…and as a pill in the top bar row',
-  /html\[data-orb-pos='top-left'\] #chrome-bottom/.test(sphereCss)
-  && /html\[data-orb-pill='1'\] #sphere-container/.test(sphereCss));
-check('the pill has its own gap and floating shadow',
-  /--voice-pill-gap:/.test(sphereCss) && /html\[data-orb-pill='1'\] #sphere-container\s*\{[^}]*--shadow-float/.test(sphereCss));
+  /data-orb-pos='bottom-left'\] #sphere-container/.test(sphereCss)
+  && /data-orb-pos='bottom-right'\] #sphere-container/.test(sphereCss));
+check('the bar takes its own size from the settings',
+  /width: var\(--voice-bar-width\)/.test(sphereCss)
+  && /height: var\(--voice-bar-height\)/.test(sphereCss));
+check('the corners are a setting of the bar',
+  /data-orb-radius='pill'\] #sphere-container/.test(sphereCss)
+  && /data-orb-radius='rounded'\] #sphere-container/.test(sphereCss)
+  && /data-orb-radius='square'\] #sphere-container/.test(sphereCss));
+check('a plate appears when a border or the step line needs one',
+  /data-orb-plate='1'\] #sphere-container/.test(sphereCss));
+check('the dock is a sibling placed from the bar\'s own height',
+  /#artifact-dock \{\n  position: fixed;/.test(sphereCss)
+  && /var\(--voice-bar-height\)/.test(sphereCss));
 check('“all accents” fills the lip and glow with the focus palette',
   /html\[data-orb-color='palette'\] \.voice-lip/.test(sphereCss)
   && /html\[data-orb-color='palette'\] \.voice-glow/.test(sphereCss)
@@ -406,12 +415,12 @@ check('“all accents” fills the lip and glow with the focus palette',
 check('the palette border reuses the focus-mode ring',
   /data-orb-border='palette'\] #sphere-container::before/.test(sphereCss)
   && /--focus-ring/.test(sphereCss));
-check('the size scale drives the lip and the pill',
-  /--voice-scale/.test(sphereCss) && /calc\(116px \* var\(--voice-scale/.test(sphereCss));
 check('the step line has a home inside the sphere',
   /id="voice-step"/.test(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')));
-check('the top-left pill reserves its room in that row',
-  /html\[data-orb-pos='top-left'\][^{]*#hud-header\s*\{[^}]*padding-left/.test(sphereCss));
+check('in the top row the bar takes the top bar\'s height',
+  /data-orb-pos='top-left'\] #sphere-container\s*\{[^}]*height: var\(--hud-bar-height\)/.test(sphereCss));
+check('the top-left bar reserves its width in that row',
+  /var\(--voice-bar-width\) \+ var\(--voice-pill-gap\)/.test(sphereCss));
 
 /* ── 12. The position preferences ───────────────────────────── */
 
@@ -439,17 +448,21 @@ check('moving the top bar back restores the chosen corner',
 
 /* ── 13. Voice-bar appearance ───────────────────────────────── */
 
-check('the bar is a bare lip by default', prefs.orbIsPill(prefs.getImmersive()) === false);
-check('the top-left spot always renders a pill',
-  prefs.orbIsPill({ ...prefs.getImmersive(), orb_position: 'top-left' }) === true);
-check('the step line inside turns any position into a pill',
-  prefs.orbIsPill({ ...prefs.getImmersive(), orb_position: 'bottom-left', orb_step: true }) === true);
+check('the bar starts as a plain lip', prefs.orbHasPlate(prefs.getImmersive()) === true); // hairline default
+check('no border and no step line means no plate',
+  prefs.orbHasPlate({ ...prefs.getImmersive(), orb_border: 'none', orb_step: false }) === false);
+check('a border paints the plate',
+  prefs.orbHasPlate({ ...prefs.getImmersive(), orb_border: 'palette', orb_step: false }) === true);
+check('the step line paints the plate too',
+  prefs.orbHasPlate({ ...prefs.getImmersive(), orb_border: 'none', orb_step: true }) === true);
 
 localStorage.setItem('desktop.immersive', JSON.stringify({
   bar_position: 'top',
   orb_position: 'bottom-center',
   orb_color: 'palette',
-  orb_size: 1.25,
+  orb_width: 320,
+  orb_height: 56,
+  orb_radius: 'square',
   orb_border: 'palette',
   orb_step: true,
 }));
@@ -457,20 +470,22 @@ prefs.applyImmersive();
 check('the appearance choices reach CSS',
   documentElement.dataset.orbColor === 'palette'
   && documentElement.dataset.orbBorder === 'palette'
-  && documentElement.dataset.orbPill === '1'
+  && documentElement.dataset.orbRadius === 'square'
+  && documentElement.dataset.orbPlate === '1'
   && documentElement.dataset.orbStep === '1');
-check('the size is published as a scale',
-  documentElement.style.getPropertyValue('--voice-scale') === '1.25',
-  documentElement.style.getPropertyValue('--voice-scale'));
+check('the bar size lands on the bar element',
+  documentElement.style.getPropertyValue('--voice-bar-width') === '320px'
+  && documentElement.style.getPropertyValue('--voice-bar-height') === '56px',
+  `${documentElement.style.getPropertyValue('--voice-bar-width')} x ${documentElement.style.getPropertyValue('--voice-bar-height')}`);
 
-const stored = prefs.getImmersive();
-check('out-of-range values are clamped and unknown ones fall back',
-  prefs.getImmersive().orb_size === 1.25
-  && (() => {
-    localStorage.setItem('desktop.immersive', JSON.stringify({ orb_size: 9, orb_color: 'nope', orb_border: 'nope' }));
-    const s = prefs.getImmersive();
-    return s.orb_size === 1.6 && s.orb_color === 'accent' && s.orb_border === 'hairline';
-  })(), JSON.stringify(stored));
+localStorage.setItem('desktop.immersive', JSON.stringify({
+  orb_width: 999, orb_height: 1, orb_radius: 'nope', orb_color: 'nope', orb_border: 'nope',
+}));
+const clamped = prefs.getImmersive();
+check('out-of-range sizes are clamped and unknown values fall back',
+  clamped.orb_width === 400 && clamped.orb_height === 24 && clamped.orb_radius === 'pill'
+  && clamped.orb_color === 'accent' && clamped.orb_border === 'hairline',
+  JSON.stringify(clamped));
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);

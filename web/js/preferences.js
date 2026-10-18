@@ -471,32 +471,37 @@ const DEFAULT_IMMERSIVE = {
   bar_position: 'top',
   autohide_orb: true,
   orb_position: 'bottom-center',
-  /** `accent` follows the theme accent; `palette` uses every accent at once
-   *  (`--focus-bar`, the same palette the focus-mode window frame uses). */
-  orb_color: 'accent',
-  /** Visual scale of the lip, its glow and the pill's width (0.7 … 1.6). */
-  orb_size: 1,
-  /** Border of the pill: none, the theme hairline, or the palette ring. */
+  /** Width and height of the bar itself. In the top row the height is pinned to
+   *  the top bar; everywhere else the size is exactly what the user picked. */
+  orb_width: 176,
+  orb_height: 40,
+  /** Corners: fully round (a pill), the app's control radius, or square. */
+  orb_radius: 'pill',
+  /** Border of the bar: none, the theme hairline, or the palette ring. */
   orb_border: 'hairline',
-  /** Show the humanised tool step line inside the voice pill. */
+  /** Show the humanised tool step line inside the voice bar. */
   orb_step: false,
 };
 
 const ORB_COLORS = ['accent', 'palette'];
+const ORB_RADII = ['pill', 'rounded', 'square'];
 const ORB_BORDERS = ['none', 'hairline', 'palette'];
 
 /** Fullscreen chrome behaviour, merged over defaults. */
 export function getImmersive() {
   const stored = readJson(scopedKey(IMMERSIVE_KEY), {});
   const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
-  const size = Number(src.orb_size);
+  const width = Number(src.orb_width);
+  const height = Number(src.orb_height);
   return {
     autohide_bar: src.autohide_bar !== false,
     bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : 'top',
     autohide_orb: src.autohide_orb !== false,
     orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : 'bottom-center',
+    orb_width: Number.isFinite(width) ? Math.round(clamp(width, 64, 400)) : 176,
+    orb_height: Number.isFinite(height) ? Math.round(clamp(height, 24, 72)) : 40,
+    orb_radius: ORB_RADII.includes(src.orb_radius) ? src.orb_radius : 'pill',
     orb_color: ORB_COLORS.includes(src.orb_color) ? src.orb_color : 'accent',
-    orb_size: Number.isFinite(size) ? clamp(size, 0.7, 1.6) : 1,
     orb_border: ORB_BORDERS.includes(src.orb_border) ? src.orb_border : 'hairline',
     orb_step: src.orb_step === true,
   };
@@ -526,13 +531,11 @@ export function setImmersive(patch) {
 }
 
 /**
- * Whether the voice bar renders as a pill (a plate) rather than the bare lip.
- *
- * The top-left spot is a pill because it joins the top bar's row; showing the
- * tool step line inside the bar needs a plate to sit in wherever the bar is.
+ * Whether the bar paints a plate behind itself: a border or the step line needs
+ * one. Without it the bar is just the lip, exactly as it has always been.
  */
-export function orbIsPill(immersive = getImmersive()) {
-  return effectiveOrbPosition(immersive) === 'top-left' || immersive.orb_step === true;
+export function orbHasPlate(immersive = getImmersive()) {
+  return immersive.orb_border !== 'none' || immersive.orb_step === true;
 }
 
 /** Publish the immersion settings to CSS and the fullscreen controller. */
@@ -543,9 +546,12 @@ export function applyImmersive() {
   root.dataset.orbPos = effectiveOrbPosition(s);
   root.dataset.orbColor = s.orb_color;
   root.dataset.orbBorder = s.orb_border;
-  root.dataset.orbPill = orbIsPill(s) ? '1' : '0';
+  root.dataset.orbRadius = s.orb_radius;
+  root.dataset.orbPlate = orbHasPlate(s) ? '1' : '0';
   root.dataset.orbStep = s.orb_step ? '1' : '0';
-  root.style.setProperty('--voice-scale', String(s.orb_size));
+  // The bar's own size, applied to the bar element itself (sphere.css).
+  root.style.setProperty('--voice-bar-width', `${s.orb_width}px`);
+  root.style.setProperty('--voice-bar-height', `${s.orb_height}px`);
   root.dataset.autohideBar = s.autohide_bar ? '1' : '0';
   root.dataset.autohideOrb = s.autohide_orb ? '1' : '0';
   window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));

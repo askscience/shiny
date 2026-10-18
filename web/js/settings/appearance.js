@@ -310,18 +310,44 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     orbColor.select.value = immersive.orb_color;
 
-    const orbSizeControl = slider({
-      min: 0.7, max: 1.6, step: 0.05, value: immersive.orb_size,
+    const orbWidthControl = slider({
+      min: 64, max: 400, step: 4, value: immersive.orb_width,
       onInput: (value) => {
-        orbSize.value.textContent = `${Math.round(value * 100)}%`;
-        setImmersive({ orb_size: Number(value) });
+        orbWidth.value.textContent = `${Math.round(value)} px`;
+        setImmersive({ orb_width: Number(value) });
       },
     });
-    const orbSize = sliderField(
-      t('settings.appearance.orbSize', null, 'Voice bar size'),
-      `${Math.round(immersive.orb_size * 100)}%`,
-      orbSizeControl,
+    const orbWidth = sliderField(
+      t('settings.appearance.orbWidth', null, 'Width'),
+      `${immersive.orb_width} px`,
+      orbWidthControl,
     );
+
+    const orbHeightControl = slider({
+      min: 24, max: 72, step: 2, value: immersive.orb_height,
+      onInput: (value) => {
+        orbHeight.value.textContent = `${Math.round(value)} px`;
+        setImmersive({ orb_height: Number(value) });
+      },
+    });
+    const orbHeight = sliderField(
+      t('settings.appearance.orbHeight', null, 'Height'),
+      `${immersive.orb_height} px`,
+      orbHeightControl,
+    );
+    const orbHeightHint = el('p', 'settings-hint',
+      t('settings.appearance.orbHeightHint', null,
+        'In the top bar the bar takes the top bar\'s height; everywhere else this is the height you pick.'));
+
+    const orbRadius = select({
+      options: [
+        { value: 'pill', label: t('settings.appearance.orbRadius.pill', null, 'Pill (fully round)') },
+        { value: 'rounded', label: t('settings.appearance.orbRadius.rounded', null, 'Rounded') },
+        { value: 'square', label: t('settings.appearance.orbRadius.square', null, 'Square') },
+      ],
+      onChange: (value) => setImmersive({ orb_radius: value }),
+    });
+    orbRadius.select.value = immersive.orb_radius;
 
     const orbBorder = select({
       options: [
@@ -337,7 +363,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       label: t('settings.appearance.orbStep', null, 'Tool step line in the bar'),
       hint: t('settings.appearance.orbStepHint', null,
         'Show the humanised tool step text inside the voice bar instead of in the pill above it. '
-        + 'The bar becomes a pill so the line has somewhere to sit.'),
+        + 'The bar gets a plate so the line has somewhere to sit.'),
       checked: immersive.orb_step,
       onChange: (checked) => setImmersive({ orb_step: checked }),
     });
@@ -349,18 +375,20 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       autohideOrb,
       field(t('settings.appearance.orbPosition', null, 'Voice bar position'), orbPosition, {
         hint: t('settings.appearance.orbPositionHint', null,
-          'At the top left the voice bar becomes a pill in the top bar row, like the workspace chooser. '
-          + 'With the top bar at the bottom, a bottom-docked voice bar moves to that top-left pill instead.'),
+          'At the top left the bar joins the top bar\'s row, at the top bar\'s height. '
+          + 'With the top bar at the bottom, a bottom-docked voice bar moves up there instead.'),
       }),
       field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor, {
         hint: t('settings.appearance.orbColorHint', null,
           '“All accents” uses every accent the theme declares at once — the same palette as the '
           + 'focus-mode window frame.'),
       }),
-      orbSize.wrap,
+      orbWidth.wrap,
+      orbHeight.wrap,
+      orbHeightHint,
+      field(t('settings.appearance.orbRadius', null, 'Corners'), orbRadius),
       field(t('settings.appearance.orbBorder', null, 'Voice bar border'), orbBorder, {
-        hint: t('settings.appearance.orbBorderHint', null,
-          'Border of the pill (top-left, or when the step line lives in the bar).'),
+        hint: t('settings.appearance.orbBorderHint', null, 'Border of the bar itself.'),
       }),
       orbStep,
     ];

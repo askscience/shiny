@@ -1,5 +1,5 @@
 /* Keyboard plugin — virtual keyboard bar at the bottom of the screen.
-   While open, plugin windows (#tile-grid) and the chrome-bottom stack are
+   While open, plugin windows (#tile-grid) and the voice bar are
    raised above it, so the keyboard never covers them. */
 
 :root {
@@ -115,8 +115,13 @@ body.keyboard-open #tile-grid {
 /* The voice bar and the dock pill ride directly above the keyboard —
    the keyboard owns the bottom edge while it is open. Only a bottom-docked bar
    has to move: the top-left pill is nowhere near the keyboard. */
-html[data-orb-pos^='bottom'] body.keyboard-open #chrome-bottom {
+html[data-orb-pos^='bottom'] body.keyboard-open #sphere-container {
   bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 10px);
+}
+
+/* The dock keeps its own gap above the bar, which it no longer contains. */
+html[data-orb-pos^='bottom'] body.keyboard-open #artifact-dock {
+  bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 10px + var(--voice-bar-height) + 12px);
 }
 
 body.keyboard-open #artifact-dock-step {

@@ -283,7 +283,7 @@ html[data-orb-pos='top-left']:not([data-bar-pos='top']) body:not(.fs-active) #ti
 
 /* ── Voice bar, dock and reply line: autohide ───────────────── */
 
-html[data-autohide-orb='1'] #chrome-bottom {
+html[data-autohide-orb='1'] :is(#sphere-container, #artifact-dock) {
   opacity: 0;
   visibility: hidden;
   /* Slides off the edge the bar docks to: down for every bottom position, up
@@ -295,7 +295,7 @@ html[data-autohide-orb='1'] #chrome-bottom {
     visibility var(--motion-feedback) linear var(--motion-reveal);
 }
 
-html[data-autohide-orb='1'] body.fs-orb #chrome-bottom {
+html[data-autohide-orb='1'] body.fs-orb :is(#sphere-container, #artifact-dock) {
   opacity: 1;
   visibility: visible;
   transform: translate(var(--orb-x, -50%), 0);
@@ -323,8 +323,8 @@ html[data-autohide-orb='1'] body.fs-orb #hud-transcript {
    fullscreen workspace the composer lives inside the thread, so the bar can stay
    away there — but only there: the browser's own fullscreen says nothing about
    the workspace on view. */
-html[data-autohide-orb='1'] body:not(.fs-active).compose-active #chrome-bottom,
-html[data-autohide-orb='1'] body:not(.fs-active).agent-awaiting #chrome-bottom {
+html[data-autohide-orb='1'] body:not(.fs-active).compose-active :is(#sphere-container, #artifact-dock),
+html[data-autohide-orb='1'] body:not(.fs-active).agent-awaiting :is(#sphere-container, #artifact-dock) {
   opacity: 1;
   visibility: visible;
   transform: translate(var(--orb-x, -50%), 0);
@@ -385,7 +385,7 @@ body.fullscreen-active .compose-conversation {
 
 @media (hover: none) {
   html[data-bar-pos] #hud-header,
-  html[data-bar-pos] #chrome-bottom,
+  html[data-bar-pos] :is(#sphere-container, #artifact-dock),
   html[data-bar-pos] #hud-transcript {
     opacity: 1;
     visibility: visible;
@@ -395,7 +395,7 @@ body.fullscreen-active .compose-conversation {
      never left parked off-screen on a touch device. */
   html[data-bar-pos][data-autohide-bar] #hud-header,
   html[data-bar-pos] #hud-header { transform: none; }
-  html[data-bar-pos] #chrome-bottom { transform: translate(var(--orb-x, -50%), 0); }
+  html[data-bar-pos] :is(#sphere-container, #artifact-dock) { transform: translate(var(--orb-x, -50%), 0); }
   html[data-bar-pos] #hud-transcript { transform: translate(-50%, 0); }
 
   /* Touch keeps the bars up — there is no hover to bring them back, and a
@@ -423,7 +423,7 @@ body.fullscreen-active .compose-conversation {
 
 @media (prefers-reduced-motion: reduce) {
   #hud-header,
-  #chrome-bottom,
+  :is(#sphere-container, #artifact-dock),
   #hud-transcript,
   .compose-composer,
   .compose-send {

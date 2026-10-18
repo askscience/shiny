@@ -165,10 +165,8 @@
 .compose-stop,
 .compose-send,
 .compose-chats-btn,
-/* The flat bar's small radius; a pill keeps its capsule shape. */
-html[data-orb-pill='0'] #sphere-container {
-  border-radius: var(--radius-sm) !important;
-}
+/* The flat bar's small radius used to be forced here; the bar's corners are a
+   Settings choice now, so the theme must not override them. */
 .ui-toggle::after { border-radius: 50% !important; }
 
 /* Affordances that stay genuinely circular: an avatar, a track
@@ -611,22 +609,17 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 /* ── Voice bar ─────────────────────────────────────────────────
    The lip keeps its audio-reactive behaviour — it is the one piece
    of motion worth having — but it loses the bloom and becomes a flat
-   accent bar that swells in width rather than in glow. */
-/* Bare bar in accent mode only: the flat lip sizes would overflow a pill, and
-   the palette mode needs the gradient fill instead of a solid accent. */
-html[data-orb-pill='0'][data-orb-color='accent'] #sphere-container {
-  width: calc(168px * var(--voice-scale, 1)) !important;
-  height: calc(34px * var(--voice-scale, 1)) !important;
-}
-html[data-orb-pill='0'][data-orb-color='accent'] .voice-lip {
-  width: calc(104px * var(--voice-scale, 1)) !important;
+   accent bar that swells in width rather than in glow. The bar's own size,
+   corners and border come from Settings, so only the look is themed here. */
+html[data-orb-plate='0'][data-orb-color='accent'] .voice-lip {
+  width: min(66%, 200px) !important;
   height: 2px !important;
   background: var(--voice-color) !important;
   box-shadow: none !important;
   opacity: calc(0.4 + var(--voice-level) * 0.6);
 }
-html[data-orb-pill='0'][data-orb-color='accent'] .voice-glow {
-  width: calc(112px * var(--voice-scale, 1)) !important;
+html[data-orb-plate='0'][data-orb-color='accent'] .voice-glow {
+  width: min(70%, 220px) !important;
   height: 2px !important;
   background: color-mix(in srgb, var(--voice-color) 45%, transparent) !important;
   box-shadow: none !important;

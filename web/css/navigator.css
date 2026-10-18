@@ -35,9 +35,7 @@ body.navigator-active #map-stage {
   will-change: transform;
 }
 
-body.navigator-active #chrome-bottom {
-  gap: 0;
-}
+
 
 /* —— Slim top instruction strip —— */
 #nav-hud.hidden {

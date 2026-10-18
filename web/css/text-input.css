@@ -12,8 +12,8 @@ body.compose-active #artifact-dock {
   display: none !important;
 }
 
-body.compose-active #chrome-bottom,
-body.agent-awaiting #chrome-bottom {
+body.compose-active :is(#sphere-container, #artifact-dock),
+body.agent-awaiting :is(#sphere-container, #artifact-dock) {
   z-index: 50;
 }
 
@@ -540,7 +540,7 @@ body.compose-awaiting .compose-composer .compose-send {
   }
 
   /* The voice bar would sit on the composer on a phone — the panel owns the bottom. */
-  body.compose-active #chrome-bottom { display: none !important; }
+  body.compose-active :is(#sphere-container, #artifact-dock) { display: none !important; }
 
   .compose-dock-field { font-size: 16px; min-width: 0; }
 }

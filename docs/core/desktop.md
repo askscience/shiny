@@ -455,19 +455,25 @@ included), it slides away through the bottom edge, and it reserves
 fullscreen override: the top position steps aside there because it would cover a
 fullscreen app's own toolbar, which a bottom bar cannot.
 
-The voice bar (`#chrome-bottom`, the lip/glow and the artifact dock) docks at
-`bottom-center` (the default), `bottom-left`, `bottom-right` or `top-left`:
+The voice bar **is `#sphere-container`**: there is no container between the
+settings and the bar. Its width, height, corners, border and colours land on
+that element itself (`sphere.css`), and it positions itself (`position: fixed`)
+per `data-orb-pos` — `bottom-center` (the default), `bottom-left`,
+`bottom-right` or `top-left`:
 
 - the bottom corners align it to `--desktop-gap` on that side;
-- `top-left` turns it into a **glass pill in the top bar's row** — the same
-  plate as the workspace chooser (`--surface`, `--glass-border`, radius 999px,
-  `--shadow-glass`) with the lip and glow inside it, clipped to the plate. A
-  full-width row gives up `--voice-pill-width` (plus one gap) on the left; a
-  `center` row reserves the same on both sides so the rail keeps its centre;
+- `top-left` puts it in the top bar's row **at the top bar's height**
+  (`--hud-bar-height`) — the width still comes from the setting — and a
+  full-width row gives up `--voice-bar-width` plus one gap, while a `center` row
+  reserves the same on both sides so the rail keeps its centre;
 - one edge cannot hold both bars, so `effectiveOrbPosition()` renders a
-  bottom-docked voice bar at the **top-left pill** while `bar_position` is
-  `bottom`. The stored preference is untouched: moving the top bar back restores
-  the chosen corner.
+  bottom-docked voice bar at the top-left spot while `bar_position` is `bottom`.
+  The stored preference is untouched: moving the top bar back restores the chosen
+  corner.
+
+The **status dock (`#artifact-dock`) is a sibling**, not a wrapper: it is fixed
+too and hangs `--voice-bar-height` plus one gap away from the bar's edge, so a
+taller bar or a changing dock never pushes the other around.
 
 Reveal/keep proximity and the voice-bar hot zone follow the docking edge: the
 horizontal bar reveals from the top or bottom strip, a side dock from its own
@@ -479,17 +485,18 @@ on `<html>` / a CSS variable):
 
 | Setting | Values | Effect |
 |---|---|---|
+| `orb_width` / `orb_height` | 64–400 px / 24–72 px | Published as `--voice-bar-width` / `--voice-bar-height` and applied to the bar element. The top row pins the height to `--hud-bar-height`. |
+| `orb_radius` | `pill`, `rounded`, `square` | The bar's own corners (999px, `--radius-md`, 0). |
 | `orb_color` | `accent`, `palette` | `palette` fills the lip and the glow with `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. A shadow cannot take a gradient, so this mode drops the box-shadow and fills the layers instead. |
-| `orb_size` | 0.7 … 1.6 | Published as `--voice-scale`; multiplies the lip, the glow, the hit area and the pill. |
-| `orb_border` | `none`, `hairline`, `palette` | The pill's border. `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
-| `orb_step` | on/off | Shows the humanised tool step line inside the voice pill. `dockStep.js` mirrors `#artifact-dock-step` into `#voice-step` (the dock keeps the live region), the bar becomes a pill at any position, and the dock's own line is hidden so the text never appears twice. |
+| `orb_border` | `none`, `hairline`, `palette` | The bar's own border. `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
+| `orb_step` | on/off | Shows the humanised tool step line inside the bar. `dockStep.js` mirrors `#artifact-dock-step` into `#voice-step` (the dock keeps the live region) and the dock's own line is hidden so the text never appears twice. |
 
-The pill is deliberately detached: `--voice-pill-gap` between it and the rail,
-plus its own floating shadow, so it reads as a free pill rather than part of the
-bar. `--voice-pill-slot` is what the row reserves; it grows when the step line is
-inside and the pill is capped to the same value, so the rail can never end up
-underneath it. Themes that flatten gradients or set `!important` bar sizes scope
-those rules to the bare/accent mode (pitch does), so these options keep working.
+With no border (the default is the hairline) and no step line the bar paints no
+plate at all — it is only the lip, exactly as before. A border or the step line
+paints the glass plate (`--surface`, `--shadow-float`, clipped lip/glow). At the
+top the bar keeps `--voice-pill-gap` from the rail, and themes that flatten
+gradients scope those rules to the accent mode (pitch does), so the options keep
+working.
 
 Constants:
 
