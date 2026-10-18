@@ -164,9 +164,15 @@
   box-shadow: var(--search-shadow);
   transition: box-shadow var(--motion-feedback) var(--motion-ease);
 }
-/* A hairline ring on the pill, not the input inside it (and an outline composes
-   safely with a theme whose `--shadow-sm` is `none`). */
-.ui-search:focus-within { outline: 1px solid var(--accent); outline-offset: 1px; }
+/* The pill carries its hairline in every state. A negative outline offset puts
+   the ring *inside* the pill's edge, where 1px reads as a hairline instead of
+   the 2px-looking floating ring `outline-offset: 1px` produced — and an outline
+   still composes safely with a theme whose `--shadow-sm` is `none`. The colour
+   is the theme's border token: dark ink on light themes, light ink on dark. */
+.ui-search { outline: 1px solid var(--glass-border); outline-offset: -1px; }
+/* Focus keeps the same very thin ring and only recolours it to the accent —
+   the state reads from the colour, never from a fatter or floating outline. */
+.ui-search:focus-within { outline-color: var(--accent); }
 .ui-search .ui-input {
   flex: 1 1 auto;
   min-width: 0;

@@ -98,9 +98,11 @@ can't be listed over HTTP.
   `--surface-strong`), `--search-ink` (the round magnifier action, default
   `--text`, glyph cut out in the plate colour) and `--search-shadow` (unset by
   default: a field in a row of controls must not bleed out of its row; a
-  page-level search sets it). Retune those to re-skin it; never restyle the
-  `.ui-input` inside a `.ui-search` — the pill owns the plate, radius and focus
-  hairline, in both light and dark modes.
+  page-level search sets it). Its 1px edge is the theme's border token
+  (`--glass-border`) in every state; focus only recolours that ring to
+  `--accent`, never thickens it. Retune those to re-skin it; never restyle the
+  `.ui-input` inside a `.ui-search` — the pill owns the plate, radius and edge,
+  in both light and dark modes.
 - **Icons** — always `stroke="currentColor"` (or `fill`), 24×24 viewBox,
   1.5 stroke width for visual rhythm. They inherit color from CSS and follow
   the theme (coloured artwork only follows the accent when *Accent-tinted

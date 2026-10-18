@@ -60,7 +60,8 @@ dialog; focus moves into the dialog while it is open.
 ## Search
 
 `searchBar()` renders a pill: the input is bare and `.ui-search` itself carries
-the plate, the radius and the focus ring (a 1px accent hairline), with the
+the plate, the radius and a 1px ring in every state (the theme's border token at
+rest, recoloured to the accent on focus — the width never changes), with the
 magnifier as a round action at the end (`.ui-search-action` — it returns the
 caret to the input and is kept out of the tab order). Pass `onClear` and the
 clear button sits between the input and the disc.
@@ -79,8 +80,9 @@ do:
 
 Themes re-skin the field through `--search-plate` (default `--surface-strong`),
 `--search-ink` (default `--text`, the disc, with the glyph cut out in the plate
-colour) and `--search-shadow`, instead of restyling the inner input; window CSS
-adjusts only the wrapper (`.browser-address .ui-search { flex: 1 1 auto }`,
+colour), `--search-shadow` and `--glass-border` (the 1px resting ring), instead
+of restyling the inner input; window CSS adjusts only the wrapper
+(`.browser-address .ui-search { flex: 1 1 auto }`,
 `.radio-tile .ui-search { margin: … }`).
 
 ## Dials and lifetime
