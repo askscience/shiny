@@ -42,11 +42,12 @@ function makeElement(tag) {
 }
 
 /** One page under test: a fresh global with the host it should load from. */
-function makePage(hostname, { brokenHead = false } = {}) {
+function makePage(hostname, { brokenHead = false, unparsed = false } = {}) {
   const elements = new Map();   // selector -> element the script asks for
   const listeners = new Map();  // event name -> handlers
   const observers = [];         // live MutationObservers, for driving callbacks
   const timers = new Map();     // interval id -> callback
+  const state = { body: '', fetched: [], appendedToBareDocument: false };
   let nextTimer = 1;
 
   const head = makeElement('head');
@@ -54,8 +55,10 @@ function makePage(hostname, { brokenHead = false } = {}) {
   const documentElement = makeElement('html');
 
   const doc = {
-    documentElement,
-    head,
+    // `unparsed` is the document a DocumentCreation script actually sees: no
+    // root element, no head. `parse()` is the parser arriving with them.
+    documentElement: unparsed ? null : documentElement,
+    head: unparsed ? null : head,
     createElement: (tag) => makeElement(tag),
     querySelector: (selector) => elements.get(selector) || null,
     addEventListener: (type, fn) => {
@@ -63,6 +66,15 @@ function makePage(hostname, { brokenHead = false } = {}) {
       listeners.get(type).push(fn);
     },
     emit(type) { for (const fn of listeners.get(type) || []) fn({ type }); },
+    // The document node itself. Appending an element here at creation is what
+    // blanked youtube.com in the real engine: the parser never builds
+    // html/head/body afterwards. The script must never do it.
+    appendChild(child) { state.appendedToBareDocument = true; this.kids.push(child); return child; },
+    kids: [],
+    parse() {
+      doc.documentElement = documentElement;
+      doc.head = head;
+    },
   };
 
   const window = {
@@ -111,7 +123,6 @@ function makePage(hostname, { brokenHead = false } = {}) {
     disconnect() { this.target = null; }
   }
 
-  const state = { body: '', fetched: [] };
   const nativeFetch = (input) => {
     state.fetched.push(typeof input === 'string' ? input : (input && input.url) || '');
     const response = {
@@ -171,8 +182,19 @@ check('a DOMContentLoaded elsewhere stays harmless', other.window.fetch === othe
 
 /* ── youtube.com: the whole surface ──────────────────────────── */
 
-const page = makePage('www.youtube.com');
+const page = makePage('www.youtube.com', { unparsed: true });
 check('arms itself on youtube.com', page.window.__peakdYoutubeAds === true);
+// At document creation the parser has no root yet. Touching the document node
+// itself there is what left youtube.com as a lone <style> — a blank page.
+check(
+  'never appends to the bare document at creation',
+  page.state.appendedToBareDocument === false,
+  String(page.state.appendedToBareDocument),
+);
+check(
+  'leaves the document alone until the parser has a root',
+  page.doc.head === null && page.doc.documentElement === null,
+);
 
 /* Player responses through fetch. */
 page.state.body = '{"adPlacements":[{"ad":1}],"videoDetails":{"videoId":"abc"}}';
@@ -270,6 +292,8 @@ check(
   JSON.stringify(page.window.ytInitialPlayerResponse),
 );
 page.window.ytInitialPlayerResponse.adSlots = [{ slot: true }];
+// The parser builds html/head/body, then the load events fire.
+page.doc.parse();
 page.doc.emit('DOMContentLoaded');
 page.window.emit('yt-navigate-finish');
 check(
@@ -278,10 +302,14 @@ check(
   JSON.stringify(page.window.ytInitialPlayerResponse),
 );
 
-/* The ad boxes. */
+/* The ad boxes land in the head the parser built. */
 check(
-  'the cosmetic stylesheet is installed',
+  'the cosmetic stylesheet is installed in the head',
   page.doc.head.children.some((el) => el.tagName === 'STYLE' && /display:none/.test(el.textContent)),
+);
+check(
+  'and the document node itself stayed untouched',
+  page.state.appendedToBareDocument === false,
 );
 
 /* The fallback: an ad that started anyway. */

@@ -260,11 +260,19 @@
     'ytd-in-feed-ad-layout-renderer,ytd-ad-slot-renderer,' +
     'ytd-banner-promo-renderer,.ytd-companion-slot-renderer{display:none !important;}';
 
+  // Appends only to an element that exists. Never to the `document` node:
+  // at document creation the parser has no root yet, and giving the document
+  // an element child of its own stops the parser from ever building
+  // html/head/body — the page then loads as a lone <style> and renders blank
+  // (this is what `document.head || document.documentElement || document`
+  // did on youtube.com).
   function hideAdBoxes() {
     try {
+      var root = document.head || document.documentElement;
+      if (!root) return;
       var style = document.createElement('style');
       style.textContent = CSS;
-      (document.head || document.documentElement || document).appendChild(style);
+      root.appendChild(style);
     } catch (err) {
       // Styling only.
     }
