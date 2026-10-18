@@ -1,10 +1,13 @@
 import { createVoicePlayback } from './playback.js';
-import { extractAfterWake } from './wake.js';
+import { extractAfterWake, isStopPhrase } from './wake.js';
 import { floatTo16BitPCM, acquireMicrophone } from './capture.js';
 import { apiFetch, getVoiceLang, getVoiceLangExplicit } from '../api.js';
-import { cleanTranscript } from '../transcriptGuard.js';
-import { setSphereState, setVoiceReady } from '../sphere.js';
-import { getAiName, getSilenceTimeout, getWhisperModel, getEffectiveSttEngine, getWakeWord } from '../preferences.js';
+import { cleanTranscript, isSelfEcho } from '../transcriptGuard.js';
+import { setSphereState, setVoiceReady, setConversationMode } from '../sphere.js';
+import {
+  getAiName, getSilenceTimeout, getWhisperModel, getEffectiveSttEngine, getWakeWord,
+  getConversation, getConversationTimeout,
+} from '../preferences.js';
 import { t } from '../i18n.js';
 
 /* Wake mode: the long-press arms the wake listener and it stays armed until
@@ -64,6 +67,14 @@ let voiceLang = 'en';        // ISO-639-1 passed to faster-whisper
 let silenceTimer = null;
 let wakeDetected = false;
 let awaitingCommand = false;
+/**
+ * A request was already heard after the wake phrase (a partial may show it
+ * before the phrase-only case can be decided). The endpointer uses this to know
+ * that "hey <name>, what's the weather" was spoken in one breath and should be
+ * finalized and dispatched — instead of waiting for a command that is already
+ * there.
+ */
+let wakeRemainderSeen = false;
 
 // Engine selection, resolved in prepareVoice().
 let sttEngine = 'whisper';
@@ -119,6 +130,39 @@ let lastVoiceAt = 0;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/* ── Conversation window ────────────────────────────────────────
+ * Once the wake word has been heard, the assistant keeps listening for a while
+ * after each answer so the user can follow up without saying the phrase again.
+ * The window is what turns a wake session into a conversation, and it is the
+ * only listening the app opens without a gesture — so it is bounded by
+ * `voice.conversation_timeout`, it never opens unless Settings asks for it, and
+ * the orb shows `conversation` for as long as it is armed.
+ *
+ * The microphone rule that makes this safe: the recogniser is open **only while
+ * the assistant is silent**. A reply closing the session is what stops the
+ * assistant from transcribing (and answering) itself — not echo cancellation.
+ * The one ear that stays open during a reply is the barge-in monitor, which
+ * measures energy and never transcribes.
+ */
+const CONVERSATION_LISTEN_MODE = 'continuous';
+/** How long after a reply an echo-shaped transcript is still treated as ours. */
+const ECHO_FILTER_WINDOW_MS = 2500;
+
+let conversationTimer = null;
+/** When the window's budget was last (re)armed, so speech does not restart it
+ *  on every audio frame. */
+let conversationArmedAt = 0;
+/** True while this session began with the wake word (or already is a window). */
+let conversationSession = false;
+/** A reply is audibly playing right now. */
+let playbackActive = false;
+/** The last reply the assistant spoke — what the echo filter compares against. */
+let playbackText = '';
+/** When that reply stopped playing. */
+let playbackEndedAt = 0;
+/** An interruption happened: the next turn is a correction of that turn. */
+let correctionPending = false;
+
 function clearSilenceTimer() {
   if (silenceTimer) {
     clearTimeout(silenceTimer);
@@ -129,6 +173,7 @@ function clearSilenceTimer() {
 function resetWakeState() {
   wakeDetected = false;
   awaitingCommand = false;
+  wakeRemainderSeen = false;
 }
 
 function resetEndpointing() {
@@ -177,19 +222,176 @@ function armWakeCommandTimer() {
   }, WAKE_COMMAND_TIMEOUT_MS);
 }
 
+/* ── Conversation window ────────────────────────────────────── */
+
+function clearConversationTimer() {
+  if (conversationTimer) {
+    clearTimeout(conversationTimer);
+    conversationTimer = null;
+  }
+}
+
+/** (Re)start the window's silence budget — every burst of speech pushes it out. */
+function armConversationTimer() {
+  clearConversationTimer();
+  conversationArmedAt = performance.now();
+  const timeout = getConversationTimeout();
+  // No limit (the default): a conversation lasts until the user ends it — a tap
+  // for one thing only, a double tap to type, or a stop phrase.
+  if (!timeout) return;
+  conversationTimer = setTimeout(() => {
+    conversationTimer = null;
+    if (!listening || listenMode !== CONVERSATION_LISTEN_MODE) return;
+    closeConversation();
+  }, timeout);
+}
+
+/**
+ * Listen for the next request without the wake word.
+ *
+ * Called when a reply stops playing. This is the only listening the app opens
+ * without a gesture, so it needs the Settings switch, a wake session to have
+ * happened, and it always comes back to a bounded window.
+ */
+async function openConversationWindow() {
+  if (playbackActive || listening || !conversationSession || !getConversation()) return;
+  try {
+    await startListening(CONVERSATION_LISTEN_MODE);
+  } catch (e) {
+    // A microphone that will not open ends the conversation, not the app; the
+    // next press reports it.
+    console.warn('Conversation window could not open:', e);
+    closeConversation();
+    return;
+  }
+  // A reply can start while the microphone is still opening — and a gesture can
+  // take the microphone first — so the window only claims a session it actually
+  // opened, and it is never live during playback (the rule the design rests on).
+  if (playbackActive || !listening || listenMode !== CONVERSATION_LISTEN_MODE) return;
+  armConversationTimer();
+  setConversationMode(true);
+}
+
+/**
+ * End the conversation without arming anything else.
+ *
+ * A tap means "one thing only" and a double tap means "I'll type": both leave
+ * the conversation, and neither should leave a wake listener running behind the
+ * gesture that follows.
+ */
+export function leaveConversation() {
+  conversationSession = false;
+  correctionPending = false;
+  clearConversationTimer();
+  if (listening) stopListening();
+  setConversationMode(false);
+  setSphereState('idle');
+}
+
+/** End the window (timeout or stop phrase) and go back to waiting for the wake word. */
+function closeConversation() {
+  leaveConversation();
+  // Hands free again: back to the armed wake listener, exactly as a long-press
+  // leaves it (Vosk, local, nothing uploaded) — or closed, if the wake word is
+  // off and there is nothing left to wait for.
+  if (getWakeWord()) startListening('wake').catch(() => {});
+}
+
+/** True while the app is in conversation mode (listening without the phrase). */
+export function isConversationOpen() {
+  return conversationSession && listening && listenMode === CONVERSATION_LISTEN_MODE;
+}
+
+/** True when `said` is (mostly) the reply the assistant just spoke. */
+function isEchoTurn(said) {
+  return !!said && !!playbackText
+    && performance.now() - playbackEndedAt <= ECHO_FILTER_WINDOW_MS
+    && isSelfEcho(said, playbackText);
+}
+
+/**
+ * Drop a transcript that is the assistant's own reply picked up by the
+ * microphone. Not a turn: inside a window the listening simply continues, and
+ * outside one the bar goes back to rest.
+ */
+function dropEchoTurn(said, mode) {
+  console.warn("Dropped a transcript that repeats the assistant's reply:", said);
+  if (mode === CONVERSATION_LISTEN_MODE && getConversation()) {
+    stopListening();
+    void openConversationWindow();
+    return;
+  }
+  setSphereState('idle');
+}
+
+/**
+ * Mark that the next request corrects the turn just interrupted.
+ *
+ * The voice path sets this itself, from `voice:barge-in`; `app.js` calls this
+ * when the user stops an answer by tapping or long-pressing, which is the same
+ * intent — "no, I meant…" — and should land as a correction too. The flag is
+ * consumed by the next dispatched turn, so it cannot leak into a later one.
+ */
+export function markCorrectionPending() {
+  correctionPending = true;
+}
+
+window.addEventListener('voice:barge-in', () => {
+  correctionPending = true;
+});
+
+/**
+ * A reply is audible, or has just stopped.
+ *
+ * `speaking: true` closes any listening that a previous turn left open: the
+ * recogniser must never be live while the assistant talks, or it would
+ * transcribe — and answer — the assistant itself. The barge-in monitor is a
+ * separate stream and keeps running, which is what still lets the user
+ * interrupt. `speaking: false` is the other half of the deal: this is the
+ * moment the conversation window re-opens.
+ */
+window.addEventListener('voice:speaking', (e) => {
+  const detail = e.detail || {};
+  if (detail.text) playbackText = detail.text;
+  if (detail.speaking) {
+    playbackActive = true;
+    clearConversationTimer();
+    if (listening) stopListening();
+    return;
+  }
+  playbackActive = false;
+  playbackEndedAt = performance.now();
+  void openConversationWindow();
+});
+
 function dispatchVoiceResult(text) {
   clearSilenceTimer();
   const mode = listenMode;
   // Nothing invented ever reaches the agent: a credits-only result is the same
   // as hearing nothing, so the turn is dropped instead of answered.
   const said = cleanTranscript(text);
+  if (isEchoTurn(said)) {
+    // The window opens onto the tail of the assistant's own audio, and the
+    // decoder types it out. A wake listener keeps waiting for the phrase; a
+    // window keeps waiting for a real request.
+    if (mode === CONVERSATION_LISTEN_MODE) dropEchoTurn(said, mode);
+    return;
+  }
   stopListening();
   if (!said) {
     setSphereState('idle');
     window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'silence' } }));
     return;
   }
-  window.dispatchEvent(new CustomEvent('voice:result', { detail: { text: said, mode } }));
+  // A wake turn (and anything said inside a window) is a conversation: the
+  // window re-opens after the answer, and the reply is what the echo filter
+  // compares against.
+  if (mode === 'wake' || mode === CONVERSATION_LISTEN_MODE) conversationSession = true;
+  // An interruption just before this request makes it a correction of the turn
+  // the user stopped, so the agent knows what "no, intendo Milano" refers to.
+  const correction = correctionPending;
+  correctionPending = false;
+  window.dispatchEvent(new CustomEvent('voice:result', { detail: { text: said, mode, correction } }));
 }
 
 function handleWakeTranscript(text, isFinal) {
@@ -210,7 +412,12 @@ function handleWakeTranscript(text, isFinal) {
 
   wakeDetected = true;
   if (remainder) {
-    dispatchVoiceResult(remainder);
+    // The request is part of this utterance. Remember it so the endpointer
+    // finalizes it, but never dispatch a *partial*: a partial is revised as the
+    // decoder hears more ("pi" → "pi tempo" → "pi tempo so …"), and dispatching
+    // every revision turned one sentence into one confused turn per revision.
+    wakeRemainderSeen = true;
+    if (isFinal) dispatchVoiceResult(remainder);
     return;
   }
 
@@ -263,7 +470,15 @@ function handleTranscript(text, isFinal) {
     handleWakeTranscript(text, isFinal);
     return;
   }
-  if (isFinal) dispatchVoiceResult(text);
+  if (!isFinal) return;
+  // "Basta" / "stop" on its own ends the conversation instead of becoming a
+  // request — and because only the whole utterance counts, "stop the music"
+  // still reaches the agent.
+  if (listenMode === CONVERSATION_LISTEN_MODE && isStopPhrase(cleanTranscript(text))) {
+    closeConversation();
+    return;
+  }
+  dispatchVoiceResult(text);
 }
 
 /* ── faster-whisper transport ───────────────────────────────── */
@@ -430,13 +645,20 @@ async function finalizeWhisper() {
   clearSilenceTimer();
   stopListening();
 
+  if (text && isEchoTurn(text)) {
+    dropEchoTurn(text, mode);
+    return;
+  }
   if (text) {
     // A wake-session request can still carry the phrase it followed ("hey
     // <name>, turn on the lights") — the decoder is biased with that phrase, so
     // it often does. Hand the agent only the request, exactly as the partial
     // path does.
     const said = mode === 'wake' ? extractAfterWake(text, getAiName()) || text : text;
-    window.dispatchEvent(new CustomEvent('voice:result', { detail: { text: said, mode } }));
+    if (mode === 'wake' || mode === CONVERSATION_LISTEN_MODE) conversationSession = true;
+    const correction = correctionPending;
+    correctionPending = false;
+    window.dispatchEvent(new CustomEvent('voice:result', { detail: { text: said, mode, correction } }));
     return;
   }
   setSphereState('idle');
@@ -477,8 +699,10 @@ function trackEndpointing(rms) {
   if (now - lastVoiceAt < WHISPER_ENDPOINT_SILENCE_MS) return;
 
   // "Hey <name>" then a pause: that pause is the user getting ready to speak,
-  // not the end of the request — keep the session open for the command.
-  if (listenMode === 'wake' && wakeDetected && !awaitingCommand) {
+  // not the end of the request — keep the session open for the command. A
+  // request already heard in the same breath is different: the user is done
+  // speaking, so fall through and finalize it.
+  if (listenMode === 'wake' && wakeDetected && !awaitingCommand && !wakeRemainderSeen) {
     sawSpeech = false;
     awaitingCommand = true;
     setSphereState('listening');
@@ -486,7 +710,9 @@ function trackEndpointing(rms) {
     return;
   }
 
-  const expecting = listenMode === 'single' || (listenMode === 'wake' && awaitingCommand);
+  const expecting = listenMode === 'single'
+    || listenMode === CONVERSATION_LISTEN_MODE
+    || (listenMode === 'wake' && (awaitingCommand || wakeRemainderSeen));
   if (!expecting) return;
   sawSpeech = false;
   void finalizeWhisper();
@@ -902,6 +1128,15 @@ export async function startListening(mode) {
           },
         }));
 
+        // Inside the window, speech pushes the silence budget out — the same
+        // idea as the single-shot timer, and independent of the engine. The
+        // 500 ms guard keeps it to a couple of timer restarts per second rather
+        // than one per audio frame.
+        if (listenMode === CONVERSATION_LISTEN_MODE && level > WHISPER_SPEECH_RMS
+            && performance.now() - conversationArmedAt > 500) {
+          armConversationTimer();
+        }
+
         trackEndpointing(level);
       } catch (_) {}
     };
@@ -909,6 +1144,9 @@ export async function startListening(mode) {
     processor.connect(audioContext.destination);
 
     if (mode === 'single') armSilenceTimer();
+    // The window's budget is silence-based: armConversationTimer() restarts on
+    // every burst of speech, so thinking out loud does not end the session.
+    if (mode === CONVERSATION_LISTEN_MODE) armConversationTimer();
     // Wake mode arms no timer on purpose: it listens until the wake word.
   } catch (e) {
     // Release whatever the attempt already acquired: a failure after the
@@ -939,6 +1177,7 @@ export function stopListening() {
   resetWakeState();
   resetEndpointing();
   clearSilenceTimer();
+  clearConversationTimer();
   whisperQueue = [];
   whisperQueuedSamples = 0;
   whisperFinalizing = false;
@@ -1001,6 +1240,12 @@ window.addEventListener('power:changed', maybeReconfigureVoice);
 window.addEventListener('locale:change', maybeReconfigureVoice);
 
 export function cancelListening() {
+  // An explicit cancel ends the conversation too: the next reply must not
+  // re-open a window the user has just closed by tapping.
+  conversationSession = false;
+  correctionPending = false;
+  clearConversationTimer();
+  setConversationMode(false);
   stopListening();
   window.dispatchEvent(new CustomEvent('voice:cancelled', { detail: { reason: 'user' } }));
 }

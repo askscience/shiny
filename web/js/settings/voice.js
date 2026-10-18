@@ -1,7 +1,7 @@
 import { apiFetch, getVoiceLang, getVoiceLangExplicit, setVoiceLang, clearVoiceLang } from '../api.js';
 import { toast, button, select, slider, toggleRow, revealRegion, disposeMotion } from '../../ui/index.js';
 import { t } from '../i18n.js';
-import { getTtsVoice, setTtsVoice, getTtsSpeed, setTtsSpeed, getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord, getSttEngine, setSttEngine, getWhisperModel, setWhisperModel, getTtsEngine, setTtsEngine, getQwenModel, setQwenModel } from '../preferences.js';
+import { getTtsVoice, setTtsVoice, getTtsSpeed, setTtsSpeed, getSilenceTimeout, setSilenceTimeout, getWakeWord, setWakeWord, getConversation, setConversation, getConversationTimeout, setConversationTimeout, getSttEngine, setSttEngine, getWhisperModel, setWhisperModel, getTtsEngine, setTtsEngine, getQwenModel, setQwenModel } from '../preferences.js';
 import { voicesForEngine } from '../voiceShared.js';
 import { el, field, sliderField, heading } from './controls.js';
 
@@ -348,6 +348,32 @@ export function createVoiceSection({ on, cleanups, resources }) {
       onChange: (checked) => setWakeWord(checked),
     });
 
+    // The conversation is on by default: waking the assistant means talking to
+    // it. Its length is a choice between a bound and "until I stop it".
+    const conversationTimeout = select({
+      options: [
+        { value: '0', label: t('settings.voice.conversationUntilStopped', null, 'Until I stop it') },
+        ...[8, 15, 20, 30, 45, 60].map((count) => ({
+          value: String(count * 1000),
+          label: t('settings.voice.seconds', { count }, `${count} seconds`),
+        })),
+      ],
+      onChange: (value) => setConversationTimeout(Number(value)),
+    });
+    const conversationTimeoutMs = getConversationTimeout();
+    if ([...conversationTimeout.select.options].some((o) => Number(o.value) === conversationTimeoutMs)) {
+      conversationTimeout.select.value = String(conversationTimeoutMs);
+    }
+    const conversation = toggleRow({
+      label: t('settings.voice.conversation', null, 'Keep listening after a reply'),
+      hint: t('settings.voice.conversationHint', null,
+        'Once “Hey …” wakes it, the assistant stays in conversation: after each reply it keeps listening, '
+        + 'so a follow-up needs no phrase. A tap asks one thing only, a double tap switches to typing, '
+        + 'and “basta” ends it. The assistant never listens while it is speaking.'),
+      checked: getConversation(),
+      onChange: (checked) => setConversation(checked),
+    });
+
     if (ttsVoiceValue) ttsVoice.select.value = ttsVoiceValue;
 
     void (async () => {
@@ -395,6 +421,10 @@ export function createVoiceSection({ on, cleanups, resources }) {
         hint: t('settings.voice.stopListeningHint', null, 'How long to wait for speech before canceling a tap-to-talk input.'),
       }),
       wake,
+      conversation,
+      field(t('settings.voice.conversationWindow', null, 'Conversation window'), conversationTimeout, {
+        hint: t('settings.voice.conversationWindowHint', null, 'How long the microphone stays open after each answer.'),
+      }),
     ];
   }
 

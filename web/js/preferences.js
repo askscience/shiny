@@ -27,6 +27,8 @@ const VOICE_QWEN_VOICE_KEY = 'voice.qwen_voice';      // Qwen3-TTS speaker
 const VOICE_TTS_SPEED_KEY = 'voice.tts_speed';
 const VOICE_SILENCE_KEY = 'voice.silence_timeout';
 const VOICE_WAKE_KEY = 'voice.wake_word';
+const VOICE_CONVERSATION_KEY = 'voice.conversation';
+const VOICE_CONVERSATION_TIMEOUT_KEY = 'voice.conversation_timeout';
 const VOICE_STT_ENGINE_KEY = 'voice.stt_engine';
 const VOICE_WHISPER_MODEL_KEY = 'voice.whisper_model';
 const VOICE_TTS_ENGINE_KEY = 'voice.tts_engine';
@@ -707,6 +709,41 @@ export function setWakeWord(on) {
   if (on) localStorage.removeItem(key); // default true
   else localStorage.setItem(key, 'false');
   persist(VOICE_WAKE_KEY, on ? 'true' : 'false');
+}
+
+/* ── Conversation window (per-user, server-backed) ────────────
+ * Once the wake word has been heard, the assistant stays in conversation: it
+ * keeps listening after each answer so a follow-up needs no phrase. On by
+ * default — that is what "wake it up and talk to it" means — and it ends on a
+ * gesture (a tap = one thing only, a double tap = type) or a stop phrase, not on
+ * a timer unless the user picks one. */
+
+export function getConversation() {
+  return localStorage.getItem(scopedKey(VOICE_CONVERSATION_KEY)) !== 'false';
+}
+
+export function setConversation(on) {
+  const key = scopedKey(VOICE_CONVERSATION_KEY);
+  if (on) localStorage.removeItem(key); // default true
+  else localStorage.setItem(key, 'false');
+  persist(VOICE_CONVERSATION_KEY, on ? 'true' : 'false');
+}
+
+/**
+ * How long the conversation stays open after a reply, in milliseconds.
+ * `0` — the default — means "until the user stops it".
+ */
+export function getConversationTimeout() {
+  const raw = localStorage.getItem(scopedKey(VOICE_CONVERSATION_TIMEOUT_KEY));
+  if (raw === null) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.round(clamp(n, 0, 60000)) : 0;
+}
+
+export function setConversationTimeout(ms) {
+  const n = Math.round(clamp(numOr(ms, 0), 0, 60000));
+  localStorage.setItem(scopedKey(VOICE_CONVERSATION_TIMEOUT_KEY), String(n));
+  persist(VOICE_CONVERSATION_TIMEOUT_KEY, String(n));
 }
 
 /* ── Speech recognition engine (per-user, server-backed) ──── */

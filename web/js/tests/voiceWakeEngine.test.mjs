@@ -37,10 +37,20 @@ document.getElementById = () => ({
 });
 
 const events = [];
+// A real (tiny) event bus: recognition.js subscribes to `voice:speaking` and
+// `voice:barge-in` when it loads, so a dispatch has to reach those listeners.
+const listeners = new Map();
 globalThis.window = {
-  addEventListener: () => {},
+  addEventListener: (type, handler) => {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push(handler);
+  },
   removeEventListener: () => {},
-  dispatchEvent: (event) => { events.push(event); return true; },
+  dispatchEvent: (event) => {
+    events.push(event);
+    for (const handler of listeners.get(event.type) || []) handler(event);
+    return true;
+  },
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
 };
 globalThis.CustomEvent = class {
@@ -203,6 +213,13 @@ events.length = 0;
 sttChunks.length = 0;
 await prepared('whisper');
 await recognition.startListening('wake');
+
+// A partial is revised as the decoder hears more ("pi" → "pi tempo" → …). It
+// must never become a turn: that is what turned one sentence into six.
+voskHandlers.partialresult({ result: { partial: `${WAKE_PHRASE} turn on the` } });
+await settle();
+assert.equal(resultEvents().length, 0, 'a partial is never dispatched as a request');
+
 voskHandlers.result({ result: { text: `${WAKE_PHRASE} turn on the lights` } });
 await settle();
 const said = resultEvents();
@@ -215,3 +232,153 @@ assert.equal(sttChunks.length, 0, 'a one-breath request needs no Whisper session
 
 assert.equal(stoppedTracks >= 1, true, 'sessions release their microphone');
 console.log('Voice wake-engine checks passed');
+
+/* ── 4. The conversation window ────────────────────────────────
+ * After a wake turn the recogniser re-opens on its own, without the phrase —
+ * but never while a reply is audible, and only when Settings asks for it.
+ * The engines here are Vosk so the whole loop can be driven deterministically:
+ * Vosk emits a result the moment the fake recogniser is told to. */
+
+const { isSelfEcho } = await import('../transcriptGuard.js');
+const prefs = await import('../preferences.js');
+
+// The text-level backstop: the assistant's own reply must never be mistaken
+// for a request, while a short answer stays valid (it legitimately appears in
+// the question the assistant just asked).
+const REPLY = 'Domani a Milano piove tutto il giorno, con una temperatura intorno ai quindici gradi.';
+assert.equal(isSelfEcho(REPLY.slice(0, 60), REPLY), true, 'a slice of the reply is the assistant echoing itself');
+assert.equal(isSelfEcho('si', REPLY), false, 'a short answer is not an echo');
+assert.equal(isSelfEcho('', REPLY), false, 'nothing said is not an echo');
+assert.equal(isSelfEcho('accendi la luce', REPLY), false, 'an unrelated request is not an echo');
+
+// The defaults are what a wake session gets without touching Settings: in
+// conversation, and with no timer — it lasts until a gesture or a stop phrase.
+assert.equal(prefs.getConversation(), true, 'conversation mode defaults on');
+assert.equal(prefs.getConversationTimeout(), 0, 'and has no time limit by default');
+
+prefs.setConversation(true);
+await prepared('vosk');
+
+// A wake turn: phrase alone, then the request.
+events.length = 0;
+await recognition.startListening('wake');
+voskHandlers.result({ result: { text: WAKE_PHRASE } });
+await settle();
+voskHandlers.result({ result: { text: 'che tempo fa domani' } });
+await settle();
+assert.equal(resultEvents().length, 1);
+assert.equal(resultEvents()[0].detail.mode, 'wake');
+assert.equal(resultEvents()[0].detail.correction, false, 'a plain request is not a correction');
+
+// While the reply plays no recogniser is live, so it cannot transcribe (and
+// answer) the assistant.
+window.dispatchEvent(new globalThis.CustomEvent('voice:speaking', { detail: { speaking: true, text: REPLY } }));
+assert.equal(recognition.isListening(), false, 'playback closes the recogniser');
+const micBeforePlayback = micAcquisitions;
+feedFrame(0.05);
+await settle();
+assert.equal(micAcquisitions, micBeforePlayback, 'no microphone opens while a reply is audible');
+
+// The reply ends: the window opens by itself and the next request needs no
+// wake phrase.
+window.dispatchEvent(new globalThis.CustomEvent('voice:speaking', { detail: { speaking: false, text: REPLY } }));
+await settle();
+assert.equal(recognition.isListening(), true, 'the window re-opens after the reply');
+assert.equal(micAcquisitions, micBeforePlayback + 1, 'the window opens one microphone');
+
+events.length = 0;
+feedFrame(0.05);
+voskHandlers.result({ result: { text: 'e a Roma invece' } });
+await settle();
+assert.equal(resultEvents().length, 1, 'a follow-up needs no wake word');
+assert.equal(resultEvents()[0].detail.text, 'e a Roma invece');
+assert.equal(resultEvents()[0].detail.mode, 'continuous', 'window turns are continuous');
+
+// "Basta" ends the window instead of becoming a request.
+window.dispatchEvent(new globalThis.CustomEvent('voice:speaking', { detail: { speaking: false, text: 'A Roma invece è sereno.' } }));
+await settle();
+events.length = 0;
+voskHandlers.result({ result: { text: 'basta' } });
+await settle();
+assert.equal(resultEvents().length, 0, 'the stop phrase closes the window without a turn');
+recognition.stopListening();
+await settle();
+
+/* ── 5. Interruption marks the next turn as a correction ─────── */
+
+prefs.setConversation(false);
+await prepared('vosk');
+events.length = 0;
+window.dispatchEvent(new globalThis.CustomEvent('voice:barge-in'));
+await recognition.startListening('single');
+voskHandlers.result({ result: { text: 'no intendo milano' } });
+await settle();
+assert.equal(resultEvents().length, 1);
+assert.equal(resultEvents()[0].detail.correction, true, 'a request after an interruption is a correction');
+
+// The flag is consumed: the turn after it is a plain request again.
+events.length = 0;
+await recognition.startListening('single');
+voskHandlers.result({ result: { text: 'e domani' } });
+await settle();
+assert.equal(resultEvents()[0].detail.correction, false, 'the correction flag does not leak');
+recognition.stopListening();
+await settle();
+
+/* ── 6. Nothing is uploaded for a reply that is playing ──────── */
+
+await prepared('whisper');
+sttChunks.length = 0;
+await recognition.startListening('single');
+feedFrame(0.05);
+await settle();
+assert.ok(sttChunks.length > 0, 'a live session does stream to Whisper');
+recognition.stopListening();
+await settle();
+
+// Now the same session with a reply playing: the recogniser is closed, so the
+// microphone cannot feed the engine at all.
+window.dispatchEvent(new globalThis.CustomEvent('voice:speaking', { detail: { speaking: true, text: REPLY } }));
+sttChunks.length = 0;
+const chunksWhileSpeaking = sttChunks.length;
+feedFrame(0.05);
+await settle();
+assert.equal(sttChunks.length, chunksWhileSpeaking, 'no audio reaches the engine while speaking');
+assert.equal(recognition.isListening(), false);
+
+/* ── 6b. A continuous Whisper turn finalizes on trailing silence ───
+ * The endpointer has to treat the window like a real request, or the user's
+ * speech would never be dispatched at all. */
+
+prefs.setConversation(true);
+await prepared('whisper');
+events.length = 0;
+await recognition.startListening('continuous');
+feedFrame(0.05);                          // speech starts the utterance
+await new Promise((resolve) => setTimeout(resolve, 950)); // trailing silence
+feedFrame(0);                             // the endpointer sees it
+await settle();
+assert.equal(resultEvents().length, 1, 'a continuous whisper turn finalizes on silence');
+assert.equal(resultEvents()[0].detail.mode, 'continuous');
+recognition.stopListening();
+await settle();
+
+/* ── 7. With the window off, behaviour is exactly as before ──── */
+
+prefs.setConversation(false);
+await prepared('vosk');
+await recognition.startListening('wake');
+voskHandlers.result({ result: { text: WAKE_PHRASE } });
+await settle();
+voskHandlers.result({ result: { text: 'che ore sono' } });
+await settle();
+const micWithWindowOff = micAcquisitions;
+window.dispatchEvent(new globalThis.CustomEvent('voice:speaking', { detail: { speaking: true, text: 'Sono le tre.' } }));
+window.dispatchEvent(new globalThis.CustomEvent('voice:speaking', { detail: { speaking: false, text: 'Sono le tre.' } }));
+await settle();
+assert.equal(recognition.isListening(), false, 'without the setting no window opens');
+assert.equal(micAcquisitions, micWithWindowOff, 'and no microphone is opened');
+recognition.stopListening();
+await settle();
+
+console.log('Voice conversation-window checks passed');

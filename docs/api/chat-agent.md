@@ -28,6 +28,7 @@ Request:
   "think": true,                 // Ollama reasoning switch (thinking models)
   "stream": false,
   "voice": false,                // true ⇒ spoken prose, no markdown
+  "correction": false,           // true ⇒ this message corrects the previous one
   "turn_id": "<uuid>",           // client id, for /api/agent/stop
   "conversation_id": "<uuid>",   // continue an existing thread
   "context": { "lat": 41.9, "lon": 12.5, "heading": 180 },
@@ -44,6 +45,14 @@ mode**: while it is non-empty the turn is scoped to those plugins — only web
 search and their tools run, and a desktop action or another plugin's tool comes
 back as an `unavailable` outcome. Everything is available again when the list is
 empty. See [desktop.md § Focus mode](../core/desktop.md#focus-mode).
+
+`correction: true` means the user stopped the previous answer to amend the
+request — the voice client sets it when an interruption (barge-in, or a tap that
+stops a turn) is followed by speech. The turn's prompt (`correction_block()` in
+`agent_steps`) then frames the message against the request that was being
+answered, so "no, intendo Milano" applies to it instead of arriving as a new,
+unrelated question. The interrupted turn's invisible `system` note is already in
+the history either way.
 
 JSON response (`AgentResponse`):
 

@@ -11,7 +11,7 @@ use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
 use crate::services::agent_runner::{run_agent, AgentRunInput, AgentRunResult};
-use crate::services::agent_steps::{voice_style_block, LONG_FORM_BLOCK};
+use crate::services::agent_steps::{correction_block, voice_style_block, LONG_FORM_BLOCK};
 use crate::services::agent_tools::{fetch_active_trip, AgentContext};
 use crate::services::navigation::NavigationSession;
 
@@ -39,6 +39,11 @@ pub struct AgentRequest {
     /// the reply must be conversational spoken prose, not lists/markdown.
     #[serde(default)]
     pub voice: bool,
+    /// True when the user interrupted the previous reply to correct it: the
+    /// message is applied to the request being answered, not read as a new one.
+    /// Absent in every client that predates the conversation window.
+    #[serde(default)]
+    pub correction: bool,
     /// Client-generated id for this turn. Lets the user stop it mid-answer
     /// (`POST /api/agent/stop`) and lets the core tell "stopped" apart from
     /// "finished" when it saves the turn.
@@ -302,6 +307,7 @@ async fn prepare_agent(
     let mode = body.mode.unwrap_or_else(|| "single".into());
     let lang = body.lang.unwrap_or_else(|| "en".into());
     let voice = body.voice;
+    let correction = body.correction;
     let ctx_body = body.context.unwrap_or(AgentContextBody {
         lat: None,
         lon: None,
@@ -564,12 +570,15 @@ async fn prepare_agent(
         "Answer completely and helpfully — be concise for simple questions, but give detail, steps, or lists whenever the answer needs them."
     };
     let voice_style = voice_style_block(voice);
+    // The user stopped the last answer to amend the request: say so, or "no,
+    // intendo Milano" arrives as a question about nothing.
+    let correction_note = correction_block(correction);
 
     let system = format!(
         "You are {ai_name}, {persona}. Always reply in {lang_name}. {style_lead}\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
          Address the user as {user_first} when it feels natural.\n\
-         {voice_style}{long_form}\n\
+         {voice_style}{correction_note}{long_form}\n\
          ## Tool protocol (strict)\n\
          - Call exactly ONE tool per turn.\n\
          - Output ONLY raw JSON on its own line — no markdown fences.\n\
@@ -615,6 +624,7 @@ async fn prepare_agent(
             plugins_hint,
             history,
             voice,
+            correction,
             think: body.think,
             ctx,
         },

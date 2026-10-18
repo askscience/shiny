@@ -8,13 +8,45 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
   const BARGE_IN_RMS = 0.03;
   const BARGE_IN_HOLD_MS = 350;
   const BARGE_IN_SETTLE_MS = 800;
-  const BARGE_IN_TTS_GUARD_MS = 700;
+  /**
+   * Window after a reply starts playing in which the assistant's own residual
+   * (what echo cancellation left of it in the microphone) is *measured* instead
+   * of acted on — see `settleEchoThreshold()`. Outside it, a voice above the
+   * threshold interrupts.
+   */
+  const ECHO_SAMPLE_MS = BARGE_IN_SETTLE_MS;
+  /** Frames kept for that measurement (~20 ms each on a 48 kHz context). */
+  const ECHO_SAMPLE_MAX = 48;
+  /**
+   * Which sample counts as the echo floor. The 40th percentile tracks a loud
+   * speaker but cannot be dragged up by a user who starts talking immediately,
+   * which a mean or a maximum would.
+   */
+  const ECHO_PERCENTILE = 0.4;
+  /** How far above that floor a voice has to be to count as interrupting. */
+  const ECHO_MARGIN = 2.5;
+  /** Ceiling for the raised threshold, so a loud room stays interruptible. */
+  const BARGE_IN_MAX = 0.08;
   let currentAudio = null;
   let stopPlayback = null;
   let speakToken = 0;
   let barge = { stream: null, ctx: null, proc: null, source: null, since: 0, startedAt: 0, fired: true };
-  let bargeGuardUntil = 0;
+  /** Level a voice must exceed to interrupt; re-measured for every reply. */
+  let bargeThreshold = BARGE_IN_RMS;
+  /** When the current reply started playing (0 when nothing is playing). */
+  let playbackStartedAt = 0;
+  /** Residual levels sampled during the first ECHO_SAMPLE_MS of the reply. */
+  let echoSamples = [];
+  /** The last reply that was actually spoken — the echo filter's reference. */
+  let lastSpoken = '';
   let pendingSpeech = null;
+
+  /** Tell the app whether a reply is audible, and what it is saying. */
+  function announceSpeaking(speaking) {
+    window.dispatchEvent(new CustomEvent('voice:speaking', {
+      detail: { speaking, text: lastSpoken },
+    }));
+  }
 
   async function speak(text, lang) {
     stopSpeaking();
@@ -22,8 +54,13 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
     // link is stripped before it gets here, and a picture-only reply strips to
     // an empty string. The synthesizer rejects an empty input, so sending it
     // used to end every such turn in "Voice playback unavailable" — an error
-    // toast for a reply that was only ever a picture.
-    if (!text || !text.trim()) return;
+    // toast for a reply that was only ever a picture. Nothing was audible, so
+    // the reply is announced as already finished: a conversation window still
+    // has to re-open on it.
+    if (!text || !text.trim()) {
+      announceSpeaking(false);
+      return;
+    }
     const token = ++speakToken;
     const controller = new AbortController();
     pendingSpeech = controller;
@@ -54,12 +91,21 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
           audio.onerror = null;
           stopPulse();
           URL.revokeObjectURL(url);
+          playbackStartedAt = 0;
+          announceSpeaking(false);
           if (error) reject(error); else resolve();
         };
         stopPlayback = () => finish();
         audio.onended = () => finish();
         audio.onerror = () => finish(new Error('playback failed'));
-        bargeGuardUntil = performance.now() + BARGE_IN_TTS_GUARD_MS;
+        // The reply is audible from here on, and the barge-in monitor spends
+        // the first ECHO_SAMPLE_MS measuring it instead of watching for a
+        // voice, so its threshold can sit above the assistant's own residual.
+        lastSpoken = text;
+        playbackStartedAt = performance.now();
+        bargeThreshold = BARGE_IN_RMS;
+        echoSamples = [];
+        announceSpeaking(true);
         Promise.resolve().then(() => audio.play()).catch(finish);
       });
     } catch (error) {
@@ -68,6 +114,9 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: { message: t('voice.playbackUnavailable', null, 'Voice playback unavailable'), type: 'error' },
       }));
+      // Nothing reached the speakers, but nothing is speaking either: the
+      // window may re-open on this reply just like on a spoken one.
+      announceSpeaking(false);
     } finally {
       if (pendingSpeech === controller) pendingSpeech = null;
       // A cancelled reply must never clear the newer reply's speaking state.
@@ -110,12 +159,32 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
    * Watch the microphone while the assistant is thinking or speaking.
    *
    * The mic has to stay open for the user to be able to interrupt, which is a
-   * deliberate trade: `echoCancellation` plus a threshold well above the speech
-   * threshold (and a short guard right after playback starts) keep the
-   * assistant's own voice from cutting itself off.
+   * deliberate trade: `echoCancellation` plus a threshold above the speech
+   * threshold keep the assistant's own voice from cutting itself off — and that
+   * threshold is **measured per reply** rather than fixed, see
+   * [`settleEchoThreshold`].
    */
   let bargeGeneration = 0;
   let bargeStarting = false;
+
+  /**
+   * Set this reply's interruption threshold above the assistant's own residual.
+   *
+   * Measured, not guessed: with headphones the floor is near silence and the
+   * threshold stays at `BARGE_IN_RMS`, so even a quiet voice interrupts; a
+   * laptop speaker leaks enough of the reply to raise the bar above it, which is
+   * what keeps the assistant from stopping itself. Only the opening
+   * `ECHO_SAMPLE_MS` of playback is sampled, and the 40th percentile means a
+   * user who starts talking inside that window cannot push the bar above their
+   * own voice.
+   */
+  function settleEchoThreshold() {
+    const ordered = echoSamples.slice().sort((a, b) => a - b);
+    echoSamples = [];
+    const floor = ordered[Math.floor(ordered.length * ECHO_PERCENTILE)] || 0;
+    bargeThreshold = Math.min(BARGE_IN_MAX, Math.max(BARGE_IN_RMS, floor * ECHO_MARGIN));
+  }
+
   async function startBargeInMonitor() {
     if (barge.stream || bargeStarting) return;
     bargeStarting = true;
@@ -143,11 +212,24 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
       proc.onaudioprocess = (e) => {
         if (barge.fired || !barge.stream) return;
         const now = performance.now();
-        if (now - barge.startedAt < BARGE_IN_SETTLE_MS || now < bargeGuardUntil) return;
         const data = e.inputBuffer.getChannelData(0);
         let sum = 0;
         for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-        if (Math.sqrt(sum / data.length) > BARGE_IN_RMS) {
+        const rms = Math.sqrt(sum / data.length);
+
+        // The opening moments of a reply are the assistant's own voice coming
+        // back through echo cancellation: measure it instead of acting on it,
+        // so the threshold can sit above it (settleEchoThreshold).
+        if (playbackStartedAt && now - playbackStartedAt < ECHO_SAMPLE_MS) {
+          echoSamples.push(rms);
+          if (echoSamples.length > ECHO_SAMPLE_MAX) echoSamples.shift();
+          return;
+        }
+        if (echoSamples.length) settleEchoThreshold();
+
+        // The start of a turn is the user getting ready, not an interruption.
+        if (now - barge.startedAt < BARGE_IN_SETTLE_MS) return;
+        if (rms > bargeThreshold) {
           if (!barge.since) barge.since = now;
           if (now - barge.since >= BARGE_IN_HOLD_MS) {
             barge.fired = true;
@@ -174,6 +256,8 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
     bargeStarting = false;
     const { stream, ctx, proc, source } = barge;
     barge = { stream: null, ctx: null, proc: null, source: null, since: 0, startedAt: 0, fired: true };
+    bargeThreshold = BARGE_IN_RMS;
+    echoSamples = [];
     try { source?.disconnect(); } catch (_) {}
     try { proc?.disconnect(); } catch (_) {}
     try { ctx?.close(); } catch (_) {}

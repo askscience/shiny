@@ -6,7 +6,7 @@ import {
   onDoubleTap, setConversationMode, setMicLevel, resetMicLevel,
   getSphereState, waitForVoiceReady,
 } from './sphere.js';
-import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand } from './voice.js';
+import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand, markCorrectionPending, leaveConversation, isConversationOpen } from './voice.js';
 import { sendToAgent, sendToAgentCompose, stopActiveTurn, isTurnActive } from './agent.js';
 import { startGpsTracking, stopGpsTracking } from './gps.js';
 import {
@@ -265,13 +265,25 @@ async function tapOrb() {
   }
 
   if (isListening()) {
+    const inConversation = isConversationOpen();
     cancelVoiceInput();
-    return;
+    // A tap inside a conversation means "one thing only": the mode ends here and
+    // the tap opens a single request below, instead of only cancelling.
+    if (!inConversation) return;
   }
 
   // Tapping while the assistant is answering stops it and hands the mic
-  // straight over: "stop, let me rephrase".
-  if (isTurnActive()) await stopActiveTurn('tap');
+  // straight over: "stop, let me rephrase". Stopping it means what follows is a
+  // correction of that answer, so the next turn is marked as one.
+  if (isTurnActive()) {
+    markCorrectionPending();
+    await stopActiveTurn('tap');
+  }
+
+  // Whatever conversation was open ends with this tap — including one that was
+  // only waiting for its reply, so the answer cannot re-open a window the user
+  // has closed.
+  leaveConversation();
 
   try {
     await startListening('single');
@@ -291,7 +303,10 @@ function wireSphere() {
       voiceNotReady();
       return;
     }
-    if (isTurnActive()) await stopActiveTurn('long-press');
+    if (isTurnActive()) {
+      markCorrectionPending();
+      await stopActiveTurn('long-press');
+    }
     try {
       // Long-press is the wake-word gesture; when the wake word is disabled it
       // falls back to a normal single-shot listen.
@@ -323,7 +338,10 @@ function wireSphere() {
   // works even while voice is still preparing (or unavailable).
   onDoubleTap(() => {
     if (isComposeAwaiting()) return;
-    if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
+    // Typing takes over from the voice, so a conversation ends here; a plain
+    // listening session keeps its old behaviour (the keyboard opens over it).
+    if (isConversationOpen()) leaveConversation();
+    else if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
     openTextInput();
   });
 }
@@ -360,7 +378,7 @@ async function handleBargeIn() {
 
 function wireVoiceResults() {
   window.addEventListener('voice:result', async (e) => {
-    const { text, mode } = e.detail;
+    const { text, mode, correction } = e.detail;
     const ctx = travelerActive ? getCurrentPosition() : null;
     const agentMode = mode === 'continuous' ? 'continuous' : 'single';
 
@@ -368,7 +386,7 @@ function wireVoiceResults() {
     resetMicLevel();
 
     try {
-      await sendToAgent(text, agentMode, ctx);
+      await sendToAgent(text, agentMode, ctx, correction);
     } catch (_) {}
 
     if (!isTextInputOpen() && !isComposeAwaiting()) setSphereState('idle');

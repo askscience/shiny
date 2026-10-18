@@ -131,6 +131,7 @@ active, in which case it is forced to Vosk (see below).
 | Vosk selected, archive missing | `/api/voice/download` fetches it server-side first |
 | Vosk model fails to load | the bar stays enabled in the error state; the next listen gesture retries the load once and, if it still fails, toasts the reason instead of listening |
 | low-power AI active (Power Saver) | forced to Vosk without overwriting the setting |
+| inside a conversation window | the configured engine, re-opened after each reply (see below) |
 
 Recovery (`scheduleWhisperRecovery`) polls every `WHISPER_RECOVERY_POLL_MS`
 (5 s) while idle and **never flips the engine mid-session** — `startListening()`
@@ -313,8 +314,75 @@ Matching (`web/js/voice.js`):
 After the wake phrase alone, `awaitingCommand` is set,
 `armWakeCommandTimer()` gives the command `WAKE_COMMAND_TIMEOUT_MS` (8 s) before
 it cancels with *"Didn't catch that"*, and the session swaps to the configured
-engine. Partials are acted on in wake mode; a `cleanTranscript()` pass runs first
-so an invented partial cannot arm the window.
+engine. Partials are **never dispatched** — they are being revised as the
+decoder hears more ("pi" → "pi tempo" → "pi tempo so …"), so a partial only
+records that a request has started (`wakeRemainderSeen`) and the *final* is what
+reaches the agent. A `cleanTranscript()` pass runs first so an invented partial
+cannot arm the window.
+
+## Conversation window
+
+Waking the assistant means talking to it: once the wake phrase has been heard
+(with `voice.conversation`, **on by default**), a turn does not end with its
+answer. When the reply's playback ends, `openConversationWindow()` re-opens
+listening on the configured engine, so the next request needs no wake phrase.
+Turns inside the window dispatch `mode: "continuous"`, which the core records
+with the turn.
+
+The window ends on gestures, not on a clock unless the user picks one:
+
+- **A tap** means "one thing only": the conversation ends and the tap opens a
+  single request (`leaveConversation()` before `startListening('single')`).
+- **A double tap** switches to typing, which ends the conversation too.
+- An utterance that is **only** a stop phrase ("basta", "stop") ends it. The list
+  is whole-utterance matched, so "stop the music" still reaches the agent
+  (`isStopPhrase()` in `voice/wake.js`).
+- `voice.conversation_timeout` is **0 by default ("until I stop it")**.
+  A non-zero value arms `armConversationTimer()`, which **restarts on every burst
+  of speech** so thinking out loud does not end it; on expiry
+  `closeConversation()` returns to the armed wake listener — the same state a
+  long-press leaves — or closes the microphone when the wake word is off.
+- The orb's `conversation` state is held for as long as the window is armed.
+
+### The microphone rule
+
+The recogniser is open **only while the assistant is silent**. `playback.js`
+dispatches `voice:speaking { speaking, text }` around real playback;
+`recognition.js` closes any live session on `speaking: true` and re-opens the
+window only after `speaking: false`. That is what makes the assistant unable to
+transcribe — and answer — itself: not echo cancellation, but the absence of a
+listening path.
+
+The one ear open during a reply is the **barge-in monitor** (`playback.js`): a
+second microphone stream that never transcribes and stops the reply the moment
+the user talks over it (`voice:barge-in` → `handleBargeIn()`). Its threshold is
+**measured per reply**: during the first `ECHO_SAMPLE_MS` (800 ms) of playback
+the monitor samples the assistant's own residual (what echo cancellation left of
+it in the microphone), takes the 40th percentile as the floor, and refuses to
+fire below `max(BARGE_IN_RMS, floor × 2.5)` (capped at `BARGE_IN_MAX`).
+Headphones therefore interrupt on a quiet voice; a loud laptop speaker raises the
+bar by itself, which is what stops the assistant from cutting itself off.
+
+### Interrupt → correct
+
+Stopping an answer makes the next request a **correction** of it.
+`markCorrectionPending()` — called by `voice:barge-in` and by the tap/long-press
+paths in `app.js` — sets a flag that the next dispatched turn consumes, and that
+turn carries `correction: true` to `/api/agent`. The core adds
+`correction_block()` to the turn's prompt, so the message is applied to the
+request being answered instead of reading as a new question. The interrupted turn
+is already saved with the invisible `system` note that says the user stopped it.
+
+### Echo filter
+
+`isSelfEcho(text, spoken)` in `transcriptGuard.js` is the text-level backstop for
+the moment the window opens onto the tail of the assistant's audio. A transcript
+is dropped when it is substantially the last reply: a verbatim (word-aligned)
+slice of ≥ 3 words, or ≥ 80 % of its words present in order with at least 5
+words. Short answers ("sì", "no", "ok") are never dropped — those words
+legitimately appear in the question the assistant just asked. The comparison runs
+for `ECHO_FILTER_WINDOW_MS` (2.5 s) after playback ends, and a dropped transcript
+keeps the window listening instead of creating a turn.
 
 ## Local VAD and endpointing
 

@@ -14,6 +14,27 @@ pub fn build_planning_messages(
     ]
 }
 
+/// Extra instruction for the **planning** system prompt when the user stopped
+/// the previous answer to correct it (the request body's `correction` flag,
+/// set when the client heard an interruption).
+///
+/// The interrupted turn and its "the user stopped this reply" note are already
+/// in the conversation history; this block says how to read the message that
+/// follows it, so "no, intendo Milano" is applied to the request being answered
+/// instead of arriving as a brand-new, unrelated question.
+pub fn correction_block(correction: bool) -> String {
+    if !correction {
+        return String::new();
+    }
+    "\n## This message corrects the previous request\n\
+     The user stopped your previous reply before it finished and this message \
+     corrects the request you were answering. Read it against that request — a \
+     different city, a different day, a changed subject — and apply the change \
+     instead of treating it as a new question. Do not repeat the part of the \
+     answer they interrupted.\n"
+        .to_string()
+}
+
 /// Reply-style rules for the *planning* system prompt. When `voice` is true the
 /// request came from speech and the reply is read aloud by text-to-speech, so
 /// it must read as natural speech — no markdown, no lists. In text mode the
@@ -62,7 +83,9 @@ pub const LONG_FORM_BLOCK: &str = "\n## Documents and long-form content\n\
 /// `history` carries the earlier turns of this conversation so the model never
 /// "forgets" what was being discussed while it is mid-tool-loop.
 /// `voice` re-applies the spoken-reply constraints here because the final reply
-/// after tool calls is generated from THIS prompt, not the planning one.
+/// after tool calls is generated from THIS prompt, not the planning one — and
+/// `correction` re-applies the "this message corrects the previous request"
+/// framing for the same reason.
 pub fn build_continuation_messages(
     ai_name: &str,
     lang: &str,
@@ -72,6 +95,7 @@ pub fn build_continuation_messages(
     plugins_hint: &str,
     history: &[(String, String)],
     voice: bool,
+    correction: bool,
 ) -> Vec<(String, String)> {
     let plugins_line = if plugins_hint.is_empty() {
         String::new()
@@ -96,20 +120,21 @@ pub fn build_continuation_messages(
         )
     };
     // The final reply after the tools is generated from this prompt, so the
-    // spoken-reply and document-confirmation rules must be repeated here — the
-    // planning system prompt is no longer in the message list.
+    // spoken-reply, correction and document-confirmation rules must be repeated
+    // here — the planning system prompt is no longer in the message list.
     let voice_line = if voice {
         "Your reply is read aloud by text-to-speech: plain conversational prose only — \
          no markdown, no bullet or numbered lists, no headings, no emoji. Short natural sentences.\n"
     } else {
         ""
     };
+    let correction_line = correction_block(correction);
     let doc_line = "If a document, report or other long-form deliverable was created or updated in the \
                     steps above, confirm it in one or two short sentences (what it is and its title). \
                     Do NOT restate, summarize or list its contents — the user reads it in its window.\n";
     let system = format!(
         "You are {ai_name}. Language: {lang}. Mode: {mode} — answer fully and clearly; be concise for simple questions but give detail when helpful.\n\
-         {voice_line}{doc_line}\
+         {voice_line}{correction_line}{doc_line}\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
          Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
          {plugins_line}\
@@ -735,6 +760,7 @@ mod tests {
             "traveler: Trip tracking",
             &[],
             false,
+            false,
         );
         // Slim prompt: the full tool reference must NOT be repeated.
         assert!(!msgs[0].1.contains("## Tool call format"));
@@ -744,22 +770,40 @@ mod tests {
 
     #[test]
     fn continuation_without_plugins_omits_hint() {
-        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false);
+        let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false, false);
         assert!(!msgs[0].1.contains("Plugin windows"));
     }
 
     #[test]
     fn continuation_voice_reply_is_spoken_prose() {
-        let voice = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], true);
+        let voice = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], true, false);
         assert!(voice[0].1.contains("read aloud"), "voice rule missing: {}", voice[0].1);
-        let text = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false);
+        let text = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false, false);
         assert!(!text[0].1.contains("read aloud"), "voice rule leaked into text mode");
     }
 
     #[test]
     fn continuation_always_carries_document_confirmation_rule() {
-        let text = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false);
+        let text = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false, false);
         assert!(text[0].1.contains("Do NOT restate"), "doc rule missing: {}", text[0].1);
+    }
+
+    #[test]
+    fn correction_block_only_applies_to_corrections() {
+        assert!(correction_block(false).is_empty());
+        let block = correction_block(true);
+        assert!(block.contains("corrects the previous request"));
+        assert!(block.contains("Do not repeat"));
+        // It has to ride along in the continuation prompt too: the final reply
+        // after tool calls is generated from that one, not the planning prompt.
+        let corrected = build_continuation_messages(
+            "Shiny", "en", "single", "No, Milano", &[], "", &[], true, true,
+        );
+        assert!(corrected[0].1.contains("corrects the previous request"));
+        let plain = build_continuation_messages(
+            "Shiny", "en", "single", "No, Milano", &[], "", &[], true, false,
+        );
+        assert!(!plain[0].1.contains("corrects the previous request"));
     }
 
     #[test]
@@ -954,6 +998,7 @@ mod tests {
             &[],
             "radio: Internet radio (inactive)",
             &[],
+            false,
             false,
         );
         assert!(msgs[0].1.contains("plugin_activate"), "hint should teach activation: {}", msgs[0].1);

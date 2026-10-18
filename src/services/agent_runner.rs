@@ -96,6 +96,9 @@ pub struct AgentRunInput {
     /// True when the request came from speech (STT) and the reply is spoken
     /// back (TTS) — the reply must then be conversational prose, not markdown.
     pub voice: bool,
+    /// True when the user stopped the previous reply to correct it: the message
+    /// is read against the request it corrects, not as a new question.
+    pub correction: bool,
     /// Ollama's `think` switch for this turn: `Some(true)` asks a thinking
     /// model for its reasoning trace, `Some(false)` turns it off, `None`
     /// leaves the model's own default in place.
@@ -183,6 +186,7 @@ where
                 &input.plugins_hint,
                 &input.history,
                 input.voice,
+                input.correction,
             )
         };
 

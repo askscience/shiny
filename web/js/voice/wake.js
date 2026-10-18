@@ -53,6 +53,34 @@ function matchWakeName(tokens, nameTokens) {
 }
 
 /**
+ * Phrases that end a conversation window instead of reaching the agent.
+ *
+ * Only the **whole** utterance counts, which is what makes this safe: "stop"
+ * closes the window, while "stop the music" is a request the agent has to see.
+ * The list stays short and unambiguous — "grazie" or "ok" are things people say
+ * constantly and must never end a conversation.
+ */
+const STOP_PHRASES = new Set([
+  'basta',
+  'basta cosi',
+  'basta grazie',
+  'smetti',
+  'smettere',
+  'stop',
+  'stop it',
+  'stop listening',
+  'stop ascoltare',
+  'that s all',
+  'that s it',
+  'we are done',
+]);
+
+/** True when `text` is nothing but a phrase that ends the conversation. */
+export function isStopPhrase(text) {
+  return STOP_PHRASES.has(normalizeSpeech(text));
+}
+
+/**
  * Pull the request out of a transcript that starts with (or contains) the wake
  * phrase, e.g. "hey <name>, turn on the lights" → "turn on the lights".
  *

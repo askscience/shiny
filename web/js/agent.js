@@ -157,7 +157,7 @@ async function handleNavigation(res, userMessage, context) {
   }
 }
 
-function buildAgentBody(message, mode, context, voice = false, turnId = null) {
+function buildAgentBody(message, mode, context, voice = false, turnId = null, correction = false) {
   // Same per-user resolved language as voice (explicit choice or browser
   // default), so the AI replies in the language the user actually hears.
   const lang = getVoiceLang();
@@ -173,6 +173,10 @@ function buildAgentBody(message, mode, context, voice = false, turnId = null) {
   };
   // Lets the core abort this exact turn when the user stops it.
   if (turnId) body.turn_id = turnId;
+  // The user stopped the assistant mid-answer and is correcting the request.
+  // The core records it as an invisible note next to the turn it interrupted,
+  // so "no, intendo Milano" is read against what it corrects.
+  if (correction) body.correction = true;
   const model = getOllamaModel();
   if (model) body.ollama_model = model;
   // The brain toggle: ask a thinking model for its reasoning trace (the core
@@ -469,7 +473,7 @@ function surfaceNotifications(res) {
 // blank the reply of a newer send that overtook it.
 let replyToken = 0;
 
-export async function sendToAgent(message, mode, context) {
+export async function sendToAgent(message, mode, context, correction = false) {
   setAgentAwaiting(true);
   setSphereState('processing');
   handleAgentStep(t('chat.thinkingPending', null, 'Thinking…'));
@@ -483,7 +487,7 @@ export async function sendToAgent(message, mode, context) {
 
   try {
     const res = await requestAgent(
-      buildAgentBody(message, mode, context, true, turn.id),
+      buildAgentBody(message, mode, context, true, turn.id, correction),
       handleAgentStep,
       turn.controller.signal,
     );

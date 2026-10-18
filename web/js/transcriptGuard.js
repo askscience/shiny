@@ -139,3 +139,44 @@ export function cleanTranscript(text) {
   }
   return raw;
 }
+
+/** A transcript shorter than this is never treated as the assistant's echo:
+ *  "sì", "ok", "no" are legitimate answers to a question the assistant asked. */
+const MIN_ECHO_WORDS = 5;
+/** Share of the transcript's words that must be present in the last reply. */
+const ECHO_COVERAGE = 0.8;
+
+/**
+ * True when `text` is (mostly) something the assistant just said.
+ *
+ * With the conversation window the microphone re-opens the moment a reply
+ * stops playing, and the tail of the assistant's own voice can still be in the
+ * air — a decoder handed that audio simply types it out, and a turn built on it
+ * would be the assistant answering itself. Text the assistant just spoke is
+ * therefore not something the user said.
+ *
+ * The test is deliberately proportional. A word-by-word containment check would
+ * drop "sì" whenever the assistant asked a yes/no question, so the transcript
+ * has to be substantial (five words) *and* almost entirely inside the reply
+ * (80 % of its words present, in order). A whole phrase repeated back verbatim
+ * is caught on its own, from three words up.
+ */
+export function isSelfEcho(text, spoken) {
+  const said = wordsOf(text);
+  const heard = wordsOf(spoken);
+  if (!said.length || !heard.length) return false;
+
+  // Verbatim (word-aligned) containment: the clearest echo there is.
+  if (said.length >= 3 && ` ${foldText(spoken)} `.includes(` ${foldText(text)} `)) return true;
+
+  if (said.length < MIN_ECHO_WORDS) return false;
+  let cursor = 0;
+  let hits = 0;
+  for (const word of said) {
+    while (cursor < heard.length && heard[cursor] !== word) cursor += 1;
+    if (cursor === heard.length) break;
+    hits += 1;
+    cursor += 1;
+  }
+  return hits / said.length >= ECHO_COVERAGE;
+}
