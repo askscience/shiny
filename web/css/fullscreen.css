@@ -122,13 +122,17 @@ html[data-bar-pos='top'] body.fs-active.fs-top #tile-grid {
   top: var(--hud-header-total);
 }
 
+/* A side rail fills the edge the way the horizontal bar fills the width: one
+   continuous strip from the top inset to the bottom one. It used to be
+   content-sized, so a side dock was a short pill at the top and the rest of the
+   column stayed empty. */
 html[data-bar-pos='left'] .hud-header-main,
 html[data-bar-pos='right'] .hud-header-main {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   width: var(--hud-bar-height);
   height: auto;
-  max-height: 100%;
+  min-height: 0;
   padding: 4px 0;
   gap: 2px;
   overflow: visible;
@@ -197,6 +201,9 @@ html[data-bar-pos='right'] #hud-top {
   flex-direction: column;
   padding-left: 0;
   padding-top: 6px;
+  /* The controls sit at the far end of the rail, mirroring the horizontal
+     layout where the push divider sends them right. */
+  margin-top: auto;
 }
 
 html[data-bar-pos='left'] #workspace-bar,
@@ -219,6 +226,31 @@ html[data-bar-pos='center'] .hud-header-main {
   max-width: min(760px, calc(100vw - 28px));
 }
 
+/* Bottom: the same row as `top`, docked to the lower edge. It adds the
+   safe-area inset the other positions do not need. */
+html[data-bar-pos='bottom'] #hud-header {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  align-items: flex-end;
+  padding:
+    var(--desktop-gap, 12px)
+    var(--desktop-gap, 14px)
+    max(var(--desktop-gap, 12px), env(safe-area-inset-bottom));
+}
+
+/* …and it slides away through the edge it sits on. No fullscreen override: a
+   bottom bar cannot cover a fullscreen app's own top toolbar, which is the
+   reason the top bar steps aside there. */
+html[data-bar-pos='bottom'][data-autohide-bar='1'] #hud-header {
+  transform: translateY(calc(100% + 16px));
+}
+
+html[data-bar-pos='bottom'][data-autohide-bar='1'] body.fs-top #hud-header {
+  transform: translateY(0);
+}
+
 /* ── Desktop layout: make room for a side-docked bar ────────── */
 
 /* A side dock takes the side, not the top band. Scoped to the workspace on
@@ -233,12 +265,30 @@ html[data-bar-pos='right'] body:not(.fs-active) #tile-grid {
   right: calc(var(--hud-bar-height) + 32px);
 }
 
+/* A bottom bar takes the bottom band instead of the top one. */
+html[data-bar-pos='bottom'] body:not(.fs-active) #tile-grid {
+  bottom: var(--hud-header-total);
+}
+
+/* The reply line floats above the voice bar, so a bottom bar would cover it. */
+html[data-bar-pos='bottom'] #hud-transcript {
+  bottom: calc(max(156px, calc(env(safe-area-inset-bottom) + 140px)) + var(--hud-header-total));
+}
+
+/* A top-left voice pill occupies the top band too, even when the top bar docks
+   elsewhere — with a bottom bar the desktop then clears both edges. */
+html[data-orb-pos='top-left']:not([data-bar-pos='top']) body:not(.fs-active) #tile-grid {
+  top: var(--hud-header-total);
+}
+
 /* ── Voice bar, dock and reply line: autohide ───────────────── */
 
 html[data-autohide-orb='1'] #chrome-bottom {
   opacity: 0;
   visibility: hidden;
-  transform: translate(-50%, calc(100% + 24px));
+  /* Slides off the edge the bar docks to: down for every bottom position, up
+     for the top-left pill (`--orb-glide-y` comes from sphere.css). */
+  transform: translate(var(--orb-x, -50%), var(--orb-glide-y, calc(100% + 24px)));
   transition:
     opacity var(--motion-reveal) var(--motion-ease),
     transform var(--motion-reveal) var(--motion-ease),
@@ -248,7 +298,7 @@ html[data-autohide-orb='1'] #chrome-bottom {
 html[data-autohide-orb='1'] body.fs-orb #chrome-bottom {
   opacity: 1;
   visibility: visible;
-  transform: translate(-50%, 0);
+  transform: translate(var(--orb-x, -50%), 0);
   transition:
     opacity var(--motion-reveal) var(--motion-ease),
     transform var(--motion-reveal) var(--motion-ease),
@@ -277,7 +327,7 @@ html[data-autohide-orb='1'] body:not(.fs-active).compose-active #chrome-bottom,
 html[data-autohide-orb='1'] body:not(.fs-active).agent-awaiting #chrome-bottom {
   opacity: 1;
   visibility: visible;
-  transform: translate(-50%, 0);
+  transform: translate(var(--orb-x, -50%), 0);
 }
 
 html[data-autohide-orb='1'] body:not(.fs-active).agent-awaiting #hud-transcript {
@@ -345,7 +395,7 @@ body.fullscreen-active .compose-conversation {
      never left parked off-screen on a touch device. */
   html[data-bar-pos][data-autohide-bar] #hud-header,
   html[data-bar-pos] #hud-header { transform: none; }
-  html[data-bar-pos] #chrome-bottom { transform: translate(-50%, 0); }
+  html[data-bar-pos] #chrome-bottom { transform: translate(var(--orb-x, -50%), 0); }
   html[data-bar-pos] #hud-transcript { transform: translate(-50%, 0); }
 
   /* Touch keeps the bars up — there is no hover to bring them back, and a

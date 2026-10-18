@@ -372,6 +372,55 @@ check('the browser-wide fullscreen state never pins the grid',
 check('no layout rule keys off the browser-wide state',
   !/body:not\(\.fullscreen-active\)/.test(css));
 
+/* ── 11. Bar and voice-bar docking ────────────────────────────
+   A side dock has to fill the edge (it used to be content-sized, leaving the
+   lower column empty), a bottom top bar takes the bottom band, and the voice bar
+   can sit in a corner or become the top-left pill. */
+
+check('a side dock fills the edge instead of hugging its content',
+  /html\[data-bar-pos='left'\] \.hud-header-main[\s\S]{0,400}?flex:\s*1 1 auto/.test(css));
+check('…with the controls pushed to the far end',
+  /html\[data-bar-pos='left'\] #hud-top[\s\S]{0,200}?margin-top:\s*auto/.test(css));
+check('the bottom bar docks to the lower edge',
+  /html\[data-bar-pos='bottom'\] #hud-header\s*\{[^}]*bottom:\s*0/.test(css));
+check('a bottom bar clears the desktop',
+  /html\[data-bar-pos='bottom'\] body:not\(\.fs-active\) #tile-grid\s*\{[^}]*bottom:/.test(css));
+
+const sphereCss = readFileSync(new URL('../../css/sphere.css', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+check('the voice bar docks in either bottom corner',
+  /html\[data-orb-pos='bottom-left'\] #chrome-bottom/.test(sphereCss)
+  && /html\[data-orb-pos='bottom-right'\] #chrome-bottom/.test(sphereCss));
+check('…and as a pill in the top bar row',
+  /html\[data-orb-pos='top-left'\] #chrome-bottom/.test(sphereCss)
+  && /html\[data-orb-pos='top-left'\] #sphere-container/.test(sphereCss));
+check('the top-left pill reserves its room in that row',
+  /html\[data-orb-pos='top-left'\][^{]*#hud-header\s*\{[^}]*padding-left/.test(sphereCss));
+
+/* ── 12. The position preferences ───────────────────────────── */
+
+const prefs = await import('../preferences.js');
+check('the top bar can dock at the bottom', prefs.BAR_POSITIONS.includes('bottom'));
+check('the voice bar has four docking spots',
+  prefs.ORB_POSITIONS.join() === 'bottom-center,bottom-left,bottom-right,top-left');
+check('a bottom voice bar moves to the top-left pill when the top bar owns that edge',
+  prefs.effectiveOrbPosition({ bar_position: 'bottom', orb_position: 'bottom-center' }) === 'top-left');
+check('…while the top bar is elsewhere the corner is kept',
+  prefs.effectiveOrbPosition({ bar_position: 'top', orb_position: 'bottom-left' }) === 'bottom-left');
+check('a top-left pill never moves because of a bottom bar',
+  prefs.effectiveOrbPosition({ bar_position: 'bottom', orb_position: 'top-left' }) === 'top-left');
+
+localStorage.setItem('desktop.immersive',
+  JSON.stringify({ bar_position: 'bottom', orb_position: 'bottom-right' }));
+prefs.applyImmersive();
+check('the immersion settings are published to CSS',
+  documentElement.dataset.barPos === 'bottom' && documentElement.dataset.orbPos === 'top-left');
+localStorage.setItem('desktop.immersive',
+  JSON.stringify({ bar_position: 'top', orb_position: 'bottom-right' }));
+prefs.applyImmersive();
+check('moving the top bar back restores the chosen corner',
+  documentElement.dataset.orbPos === 'bottom-right');
+
 if (failures) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

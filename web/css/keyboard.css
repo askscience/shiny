@@ -113,8 +113,9 @@ body.keyboard-open #tile-grid {
 }
 
 /* The voice bar and the dock pill ride directly above the keyboard —
-   the keyboard owns the bottom edge while it is open. */
-body.keyboard-open #chrome-bottom {
+   the keyboard owns the bottom edge while it is open. Only a bottom-docked bar
+   has to move: the top-left pill is nowhere near the keyboard. */
+html[data-orb-pos^='bottom'] body.keyboard-open #chrome-bottom {
   bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 10px);
 }
 

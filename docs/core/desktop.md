@@ -441,16 +441,46 @@ rides the same top-edge reveal. `build(name)` renders **Deactivate/Close** and
 
 `fullscreen.js` also owns the desktop-wide bar/voice-bar autohide. Cached
 immersion settings (`getImmersive()`: `autohide_bar`, `bar_position`,
-`autohide_orb`) are published to `<html>` by `applyImmersive()` as
-`data-bar-pos`, `data-autohide-bar`, `data-autohide-orb`. Constants:
+`autohide_orb`, `orb_position`) are published to `<html>` by
+`applyImmersive()` as `data-bar-pos`, `data-orb-pos`, `data-autohide-bar`,
+`data-autohide-orb`.
+
+The top bar docks at `top` (the default), `left`, `right`, `bottom` or `center`.
+The side docks fill the edge — the rail is `flex: 1 1 auto` and the control
+cluster is pushed to the far end — the way the horizontal rail fills the width;
+before that a side dock was a short pill at the top of an otherwise empty column.
+A `bottom` bar is the `top` row docked to the lower edge (safe-area padding
+included), it slides away through the bottom edge, and it reserves
+`--hud-header-total` at the bottom of `#tile-grid` instead of the top. It has no
+fullscreen override: the top position steps aside there because it would cover a
+fullscreen app's own toolbar, which a bottom bar cannot.
+
+The voice bar (`#chrome-bottom`, the lip/glow and the artifact dock) docks at
+`bottom-center` (the default), `bottom-left`, `bottom-right` or `top-left`:
+
+- the bottom corners align it to `--desktop-gap` on that side;
+- `top-left` turns it into a **glass pill in the top bar's row** — the same
+  plate as the workspace chooser (`--surface`, `--glass-border`, radius 999px,
+  `--shadow-glass`) with the lip and glow inside it, clipped to the plate. A
+  full-width row gives up `--voice-pill-width` (plus one gap) on the left; a
+  `center` row reserves the same on both sides so the rail keeps its centre;
+- one edge cannot hold both bars, so `effectiveOrbPosition()` renders a
+  bottom-docked voice bar at the **top-left pill** while `bar_position` is
+  `bottom`. The stored preference is untouched: moving the top bar back restores
+  the chosen corner.
+
+Reveal/keep proximity and the voice-bar hot zone follow the docking edge: the
+horizontal bar reveals from the top or bottom strip, a side dock from its own
+side, and the voice bar from its configured corner (`ORB_ZONE` deep,
+`ORB_HALF` wide). Constants:
 
 | Constant | Value | Meaning |
 |---|---|---|
 | `EDGE_ZONE` | 120 px | keep a shown bar up |
 | `REVEAL_ZONE` | 28 px | only this close summons it |
 | `BAR_DWELL_MS` | 700 ms | pointer must *stay* in the reveal strip |
-| `ORB_ZONE` | 200 px | bottom band that reveals the voice bar |
-| `ORB_HALF` | 340 px | …within this many px of centre |
+| `ORB_ZONE` | 200 px | band along the voice bar's edge that reveals it |
+| `ORB_HALF` | 340 px | …within this many px of its corner |
 | `ENTER_HOLD_MS` | 1600 ms | show chrome briefly after entering fullscreen |
 
 A fullscreen window overrides the bar's autohide for the top position; other bar

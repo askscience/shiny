@@ -457,12 +457,20 @@ export function applyDesktopSurface() {
 const IMMERSIVE_KEY = 'desktop.immersive';
 
 /** Where the fullscreen top bar docks and slides in from. */
-export const BAR_POSITIONS = ['top', 'left', 'right', 'center'];
+export const BAR_POSITIONS = ['top', 'left', 'right', 'bottom', 'center'];
+
+/**
+ * Where the voice bar docks. `top-left` renders it as a glass pill in the top
+ * bar's row (the same plate as the workspace chooser, with the lip and glow
+ * inside); the bottom variants align it to that corner of the bottom edge.
+ */
+export const ORB_POSITIONS = ['bottom-center', 'bottom-left', 'bottom-right', 'top-left'];
 
 const DEFAULT_IMMERSIVE = {
   autohide_bar: true,
   bar_position: 'top',
   autohide_orb: true,
+  orb_position: 'bottom-center',
 };
 
 /** Fullscreen chrome behaviour, merged over defaults. */
@@ -473,7 +481,23 @@ export function getImmersive() {
     autohide_bar: src.autohide_bar !== false,
     bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : 'top',
     autohide_orb: src.autohide_orb !== false,
+    orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : 'bottom-center',
   };
+}
+
+/**
+ * Where the voice bar is actually rendered, given both choices.
+ *
+ * One edge cannot hold both bars: with the top bar docked at the bottom, a
+ * bottom-docked voice bar would land on top of it, so it takes the top-left
+ * pill instead — the place it occupies "as if it were the top bar". The stored
+ * preference is untouched, so moving the top bar back restores the choice.
+ */
+export function effectiveOrbPosition(immersive = getImmersive()) {
+  if (immersive.bar_position === 'bottom' && immersive.orb_position.startsWith('bottom')) {
+    return 'top-left';
+  }
+  return immersive.orb_position;
 }
 
 export function setImmersive(patch) {
@@ -489,6 +513,7 @@ export function applyImmersive() {
   const s = getImmersive();
   const root = document.documentElement;
   root.dataset.barPos = s.bar_position;
+  root.dataset.orbPos = effectiveOrbPosition(s);
   root.dataset.autohideBar = s.autohide_bar ? '1' : '0';
   root.dataset.autohideOrb = s.autohide_orb ? '1' : '0';
   window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));

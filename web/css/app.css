@@ -1513,6 +1513,14 @@ body.compose-awaiting #artifact-dock:has(> #artifact-dock-icons:empty) {
   transform: translateX(-50%);
 }
 
+/* The top-left pill sits in the top bar's row, so its status bubble hangs below
+   the dock — there is nothing above it to hang into. */
+html[data-orb-pos='top-left'] body:not(.compose-active) #artifact-dock:has(> #artifact-dock-icons:empty),
+html[data-orb-pos='top-left'] body.compose-awaiting #artifact-dock:has(> #artifact-dock-icons:empty) {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
 /* …and once the line is gone there is nothing left in that pill, so the bubble
    goes with it instead of sitting above the voice bar empty. Cards keep it up on
    their own. (The awaiting case is finished off in text-input.css, which owns

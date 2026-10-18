@@ -4,18 +4,102 @@
    edge and swells with the voice (--voice-level, set by sphere.js from the
    `voice:level` events). Depth goes UP only, never as a drop shadow below. */
 
+:root {
+  /* Width of the compact pill the bar becomes at the top left. The top bar's
+     row reserves exactly this much room, so the two cannot drift apart. */
+  --voice-pill-width: 108px;
+}
+
 #chrome-bottom {
   position: fixed;
   /* The lip hugs the bottom edge; the status pill floats above it. */
   bottom: max(16px, calc(env(safe-area-inset-bottom) + 10px));
   left: 50%;
-  transform: translateX(-50%);
+  /* Where the bar is centred on the x axis. The corner positions set it to 0
+     so the same transitions slide straight down (or up) without an x offset. */
+  transform: translate(var(--orb-x, -50%), 0);
   z-index: 35;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   pointer-events: none;
+}
+
+/* ── Docking ─────────────────────────────────────────────────────
+ * Bottom-centre is the default. A corner keeps the same lip; the top-left spot
+ * turns the bar into a glass pill in the top bar's row (the same plate as the
+ * workspace chooser), with the lip and its glow inside it. `data-orb-pos` is
+ * published by applyImmersive(); effectiveOrbPosition() resolves the one
+ * combination that would collide (a bottom top bar and a bottom voice bar).
+ */
+
+html[data-orb-pos='bottom-left'] #chrome-bottom {
+  left: max(var(--desktop-gap, 14px), env(safe-area-inset-left));
+  right: auto;
+  align-items: flex-start;
+  --orb-x: 0;
+}
+
+html[data-orb-pos='bottom-right'] #chrome-bottom {
+  right: max(var(--desktop-gap, 14px), env(safe-area-inset-right));
+  left: auto;
+  align-items: flex-end;
+  --orb-x: 0;
+}
+
+/* The pill joins the top bar's row. The dock goes below it, toward the content
+   — `column-reverse` because the sphere is the last child. */
+html[data-orb-pos='top-left'] #chrome-bottom {
+  top: var(--hud-header-pad);
+  bottom: auto;
+  left: var(--desktop-gap, 14px);
+  right: auto;
+  align-items: flex-start;
+  flex-direction: column-reverse;
+  --orb-x: 0;
+  /* It hides upward, through the top edge, not down. */
+  --orb-glide-y: calc(-100% - 24px);
+}
+
+/* The row reservation lives with the bar it protects: a full-width row gives up
+   the pill's width plus one gap, so the rail never overlaps it. */
+html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='bottom']) #hud-header {
+  padding-left: calc(var(--desktop-gap, 14px) + var(--voice-pill-width, 108px) + var(--desktop-gap, 10px));
+}
+
+/* A centred rail keeps its centre: reserve the same room on both sides rather
+   than pushing it right. */
+html[data-orb-pos='top-left'][data-bar-pos='center'] #hud-header {
+  padding-left: calc(var(--desktop-gap, 14px) + var(--voice-pill-width, 108px) + var(--desktop-gap, 10px));
+  padding-right: calc(var(--desktop-gap, 14px) + var(--voice-pill-width, 108px) + var(--desktop-gap, 10px));
+}
+
+/* ── The top-left pill ──────────────────────────────────────────
+ * The workspace chooser's plate, so the row reads as one piece of glass. The
+ * glow is clipped to the pill on purpose: inside a plate it reads as a wash at
+ * the lower edge instead of blooming up into the row. */
+html[data-orb-pos='top-left'] #sphere-container {
+  width: var(--voice-pill-width, 108px);
+  height: var(--hud-bar-height);
+  padding: 0 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  overflow: hidden;
+}
+
+html[data-orb-pos='top-left'] .voice-lip {
+  width: 56px;
+  bottom: 6px;
+}
+
+html[data-orb-pos='top-left'] .voice-glow {
+  width: 64px;
+  bottom: 6px;
 }
 
 #chrome-bottom #sphere-container,

@@ -261,7 +261,14 @@
    One flat bar, hairline-bounded, spanning the width. The pill and
    its glass are gone; the tray, the chips and the clock all sit in a
    single horizontal strip, which is how a launcher status bar reads. */
-#hud-header { padding: var(--hud-header-pad) var(--desktop-gap, 12px) var(--desktop-gap, 10px) !important; }
+/* Row positions only: a side dock owns its own padding (fullscreen.css), a
+   bottom row adds the safe-area inset the flat theme does not carry, and the
+   top-left voice pill reserves room in the row (sphere.css), which an
+   `!important` padding here would silently beat. */
+html[data-bar-pos='top']:not([data-orb-pos='top-left']) #hud-header,
+html[data-bar-pos='center']:not([data-orb-pos='top-left']) #hud-header {
+  padding: var(--hud-header-pad) var(--desktop-gap, 12px) var(--desktop-gap, 10px) !important;
+}
 
 .hud-header-main {
   background: var(--bg-elevated) !important;
@@ -601,18 +608,21 @@ body.overview-active .tile--overview { box-shadow: none !important; }
    The lip keeps its audio-reactive behaviour — it is the one piece
    of motion worth having — but it loses the bloom and becomes a flat
    accent bar that swells in width rather than in glow. */
-#sphere-container {
+/* Row positions only: the top-left spot is a pill in the top bar's row, which
+   owns its own plate and lip (sphere.css); these flat-lip sizes would overflow
+   it. */
+html[data-orb-pos]:not([data-orb-pos='top-left']) #sphere-container {
   width: 168px !important;
   height: 34px !important;
 }
-.voice-lip {
+html[data-orb-pos]:not([data-orb-pos='top-left']) .voice-lip {
   width: 104px !important;
   height: 2px !important;
   background: var(--voice-color) !important;
   box-shadow: none !important;
   opacity: calc(0.4 + var(--voice-level) * 0.6);
 }
-.voice-glow {
+html[data-orb-pos]:not([data-orb-pos='top-left']) .voice-glow {
   width: 112px !important;
   height: 2px !important;
   background: color-mix(in srgb, var(--voice-color) 45%, transparent) !important;

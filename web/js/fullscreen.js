@@ -45,7 +45,7 @@ import {
   getFocus, getFullscreen, toggleFullscreen, clearFullscreen,
   isolateInNewWorkspace, restoreFromNewWorkspace, hasFullscreenWindow,
 } from './desktop.js';
-import { getImmersive, applyImmersive } from './preferences.js';
+import { getImmersive, applyImmersive, effectiveOrbPosition } from './preferences.js';
 import { isPluginActive } from './activePlugins.js';
 
 const EDGE_ZONE = 120;     // px from the edge that keeps the bar up once shown
@@ -219,8 +219,10 @@ function setReveal(top, orb) {
 function barRevealProximity() {
   const cfg = immersiveCfg();
   const vw = window.innerWidth;
+  const vh = window.innerHeight;
   if (cfg.bar_position === 'left') return lastX >= 0 && lastX <= REVEAL_ZONE;
   if (cfg.bar_position === 'right') return lastX >= 0 && vw - lastX <= REVEAL_ZONE;
+  if (cfg.bar_position === 'bottom') return lastY >= 0 && vh - lastY <= REVEAL_ZONE;
   return lastY >= 0 && lastY <= REVEAL_ZONE;
 }
 
@@ -232,8 +234,10 @@ function barRevealProximity() {
 function barKeepProximity() {
   const cfg = immersiveCfg();
   const vw = window.innerWidth;
+  const vh = window.innerHeight;
   if (cfg.bar_position === 'left') return lastX >= 0 && lastX <= EDGE_ZONE;
   if (cfg.bar_position === 'right') return lastX >= 0 && vw - lastX <= EDGE_ZONE;
+  if (cfg.bar_position === 'bottom') return lastY >= 0 && vh - lastY <= EDGE_ZONE;
   return lastY >= 0 && lastY <= EDGE_ZONE;
 }
 
@@ -287,9 +291,18 @@ function evalReveal() {
   // pointer has insisted there (or when held up around entering fullscreen).
   const nearBar = edgeDwell;
 
-  const nearOrb = lastY >= 0
-    && lastY >= vh - ORB_ZONE
-    && Math.abs(lastX - vw / 2) <= ORB_HALF;
+  // The voice bar docks to a corner of its own, so the hot zone follows it: a
+  // top-left pill is reached from the top edge, a bottom corner from its own
+  // side of the bottom strip, and the default from the bottom centre.
+  const orbPos = effectiveOrbPosition(cfg);
+  const nearOrb = orbPos === 'top-left'
+    ? lastY >= 0 && lastY <= ORB_ZONE && lastX >= 0 && lastX <= ORB_HALF
+    : lastY >= 0 && lastY >= vh - ORB_ZONE
+      && (orbPos === 'bottom-left'
+        ? lastX >= 0 && lastX <= ORB_HALF
+        : orbPos === 'bottom-right'
+          ? lastX >= 0 && vw - lastX <= ORB_HALF
+          : Math.abs(lastX - vw / 2) <= ORB_HALF);
 
   // A fullscreen window hides the bar of its workspace no matter what the
   // desktop-wide autohide preference says.

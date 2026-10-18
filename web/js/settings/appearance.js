@@ -278,6 +278,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
         { value: 'top', label: t('common.top', null, 'Top') },
         { value: 'left', label: t('common.left', null, 'Left') },
         { value: 'right', label: t('common.right', null, 'Right') },
+        { value: 'bottom', label: t('common.bottom', null, 'Bottom') },
         { value: 'center', label: t('common.center', null, 'Center') },
       ],
       onChange: (value) => setImmersive({ bar_position: value }),
@@ -285,16 +286,31 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     barPosition.select.value = immersive.bar_position;
     const autohideOrb = toggleRow({
       label: t('settings.appearance.autohideOrb', null, 'Autohide the voice bar'),
-      hint: t('settings.appearance.autohideOrbHint', null, 'Slide the voice bar away until the pointer reaches the bottom centre.'),
+      hint: t('settings.appearance.autohideOrbHint', null, 'Slide the voice bar away until the pointer reaches the edge it docks to.'),
       checked: immersive.autohide_orb,
       onChange: (checked) => setImmersive({ autohide_orb: checked }),
     });
+    const orbPosition = select({
+      options: [
+        { value: 'bottom-center', label: t('settings.appearance.orbPosition.bottomCenter', null, 'Bottom centre') },
+        { value: 'bottom-left', label: t('settings.appearance.orbPosition.bottomLeft', null, 'Bottom left') },
+        { value: 'bottom-right', label: t('settings.appearance.orbPosition.bottomRight', null, 'Bottom right') },
+        { value: 'top-left', label: t('settings.appearance.orbPosition.topLeft', null, 'Top left (pill in the top bar)') },
+      ],
+      onChange: (value) => setImmersive({ orb_position: value }),
+    });
+    orbPosition.select.value = immersive.orb_position;
 
     return [
       heading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar')),
       autohideBar,
       field(t('settings.appearance.topBarPosition', null, 'Top bar position'), barPosition),
       autohideOrb,
+      field(t('settings.appearance.orbPosition', null, 'Voice bar position'), orbPosition, {
+        hint: t('settings.appearance.orbPositionHint', null,
+          'At the top left the voice bar becomes a pill in the top bar row, like the workspace chooser. '
+          + 'With the top bar at the bottom, a bottom-docked voice bar moves to that top-left pill instead.'),
+      }),
     ];
   }
 
