@@ -15,6 +15,9 @@
 
 const stepEl = document.getElementById('artifact-dock-step');
 const dockEl = document.getElementById('artifact-dock');
+/** The same line inside the voice pill (Settings → Appearance → “step line in
+ *  the bar”). It is a mirror, not a live region: the dock keeps that job. */
+const voiceStepEl = document.getElementById('voice-step');
 
 function bubbleStillNeeded() {
   const icons = document.getElementById('artifact-dock-icons');
@@ -28,6 +31,10 @@ export function setDockStep(message) {
   if (!text) return;
   stepEl.textContent = text;
   stepEl.classList.remove('hidden');
+  if (voiceStepEl) {
+    voiceStepEl.textContent = text;
+    voiceStepEl.classList.remove('hidden');
+  }
   // Paint the bubble the line lives in, whatever artifacts.js last decided.
   dockEl?.classList.remove('hidden');
   window.dispatchEvent(new CustomEvent('agent:step', { detail: { message: text } }));
@@ -37,6 +44,10 @@ export function clearDockStep() {
   if (!stepEl) return;
   stepEl.textContent = '';
   stepEl.classList.add('hidden');
+  if (voiceStepEl) {
+    voiceStepEl.textContent = '';
+    voiceStepEl.classList.add('hidden');
+  }
   // With no line left, the bubble is only worth keeping for saved cards.
   if (!bubbleStillNeeded()) dockEl?.classList.add('hidden');
   window.dispatchEvent(new CustomEvent('agent:step', { detail: { message: null } }));

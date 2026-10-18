@@ -301,6 +301,47 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     orbPosition.select.value = immersive.orb_position;
 
+    const orbColor = select({
+      options: [
+        { value: 'accent', label: t('settings.appearance.orbColor.accent', null, 'Theme accent') },
+        { value: 'palette', label: t('settings.appearance.orbColor.palette', null, 'All accents together') },
+      ],
+      onChange: (value) => setImmersive({ orb_color: value }),
+    });
+    orbColor.select.value = immersive.orb_color;
+
+    const orbSizeControl = slider({
+      min: 0.7, max: 1.6, step: 0.05, value: immersive.orb_size,
+      onInput: (value) => {
+        orbSize.value.textContent = `${Math.round(value * 100)}%`;
+        setImmersive({ orb_size: Number(value) });
+      },
+    });
+    const orbSize = sliderField(
+      t('settings.appearance.orbSize', null, 'Voice bar size'),
+      `${Math.round(immersive.orb_size * 100)}%`,
+      orbSizeControl,
+    );
+
+    const orbBorder = select({
+      options: [
+        { value: 'none', label: t('settings.appearance.orbBorder.none', null, 'None') },
+        { value: 'hairline', label: t('settings.appearance.orbBorder.hairline', null, 'Hairline') },
+        { value: 'palette', label: t('settings.appearance.orbBorder.palette', null, 'All accents (ring)') },
+      ],
+      onChange: (value) => setImmersive({ orb_border: value }),
+    });
+    orbBorder.select.value = immersive.orb_border;
+
+    const orbStep = toggleRow({
+      label: t('settings.appearance.orbStep', null, 'Tool step line in the bar'),
+      hint: t('settings.appearance.orbStepHint', null,
+        'Show the humanised tool step text inside the voice bar instead of in the pill above it. '
+        + 'The bar becomes a pill so the line has somewhere to sit.'),
+      checked: immersive.orb_step,
+      onChange: (checked) => setImmersive({ orb_step: checked }),
+    });
+
     return [
       heading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar')),
       autohideBar,
@@ -311,6 +352,17 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
           'At the top left the voice bar becomes a pill in the top bar row, like the workspace chooser. '
           + 'With the top bar at the bottom, a bottom-docked voice bar moves to that top-left pill instead.'),
       }),
+      field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor, {
+        hint: t('settings.appearance.orbColorHint', null,
+          '“All accents” uses every accent the theme declares at once — the same palette as the '
+          + 'focus-mode window frame.'),
+      }),
+      orbSize.wrap,
+      field(t('settings.appearance.orbBorder', null, 'Voice bar border'), orbBorder, {
+        hint: t('settings.appearance.orbBorderHint', null,
+          'Border of the pill (top-left, or when the step line lives in the bar).'),
+      }),
+      orbStep,
     ];
   }
 

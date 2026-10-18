@@ -471,17 +471,34 @@ const DEFAULT_IMMERSIVE = {
   bar_position: 'top',
   autohide_orb: true,
   orb_position: 'bottom-center',
+  /** `accent` follows the theme accent; `palette` uses every accent at once
+   *  (`--focus-bar`, the same palette the focus-mode window frame uses). */
+  orb_color: 'accent',
+  /** Visual scale of the lip, its glow and the pill's width (0.7 … 1.6). */
+  orb_size: 1,
+  /** Border of the pill: none, the theme hairline, or the palette ring. */
+  orb_border: 'hairline',
+  /** Show the humanised tool step line inside the voice pill. */
+  orb_step: false,
 };
+
+const ORB_COLORS = ['accent', 'palette'];
+const ORB_BORDERS = ['none', 'hairline', 'palette'];
 
 /** Fullscreen chrome behaviour, merged over defaults. */
 export function getImmersive() {
   const stored = readJson(scopedKey(IMMERSIVE_KEY), {});
   const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+  const size = Number(src.orb_size);
   return {
     autohide_bar: src.autohide_bar !== false,
     bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : 'top',
     autohide_orb: src.autohide_orb !== false,
     orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : 'bottom-center',
+    orb_color: ORB_COLORS.includes(src.orb_color) ? src.orb_color : 'accent',
+    orb_size: Number.isFinite(size) ? clamp(size, 0.7, 1.6) : 1,
+    orb_border: ORB_BORDERS.includes(src.orb_border) ? src.orb_border : 'hairline',
+    orb_step: src.orb_step === true,
   };
 }
 
@@ -508,12 +525,27 @@ export function setImmersive(patch) {
   applyImmersive();
 }
 
+/**
+ * Whether the voice bar renders as a pill (a plate) rather than the bare lip.
+ *
+ * The top-left spot is a pill because it joins the top bar's row; showing the
+ * tool step line inside the bar needs a plate to sit in wherever the bar is.
+ */
+export function orbIsPill(immersive = getImmersive()) {
+  return effectiveOrbPosition(immersive) === 'top-left' || immersive.orb_step === true;
+}
+
 /** Publish the immersion settings to CSS and the fullscreen controller. */
 export function applyImmersive() {
   const s = getImmersive();
   const root = document.documentElement;
   root.dataset.barPos = s.bar_position;
   root.dataset.orbPos = effectiveOrbPosition(s);
+  root.dataset.orbColor = s.orb_color;
+  root.dataset.orbBorder = s.orb_border;
+  root.dataset.orbPill = orbIsPill(s) ? '1' : '0';
+  root.dataset.orbStep = s.orb_step ? '1' : '0';
+  root.style.setProperty('--voice-scale', String(s.orb_size));
   root.dataset.autohideBar = s.autohide_bar ? '1' : '0';
   root.dataset.autohideOrb = s.autohide_orb ? '1' : '0';
   window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));

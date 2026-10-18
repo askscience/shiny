@@ -1513,6 +1513,10 @@ body.compose-awaiting #artifact-dock:has(> #artifact-dock-icons:empty) {
   transform: translateX(-50%);
 }
 
+/* The step line can live inside the voice bar instead (Settings → Appearance):
+   then the dock keeps only its saved cards and the line must not appear twice. */
+html[data-orb-step='1'] #artifact-dock-step { display: none; }
+
 /* The top-left pill sits in the top bar's row, so its status bubble hangs below
    the dock — there is nothing above it to hang into. */
 html[data-orb-pos='top-left'] body:not(.compose-active) #artifact-dock:has(> #artifact-dock-icons:empty),

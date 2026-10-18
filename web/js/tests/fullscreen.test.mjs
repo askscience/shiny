@@ -88,11 +88,14 @@ function element(tag = 'div') {
   return emitter({
     tagName: String(tag).toUpperCase(),
     className: '',
-    style: {
-      setProperty() {},
-      removeProperty() {},
-      getPropertyValue: () => '',
-    },
+    style: (() => {
+      const props = new Map();
+      return {
+        setProperty: (name, value) => props.set(name, String(value)),
+        removeProperty: (name) => props.delete(name),
+        getPropertyValue: (name) => props.get(name) ?? '',
+      };
+    })(),
     dataset: {},
     children: [],
     textContent: '',
@@ -393,7 +396,20 @@ check('the voice bar docks in either bottom corner',
   && /html\[data-orb-pos='bottom-right'\] #chrome-bottom/.test(sphereCss));
 check('…and as a pill in the top bar row',
   /html\[data-orb-pos='top-left'\] #chrome-bottom/.test(sphereCss)
-  && /html\[data-orb-pos='top-left'\] #sphere-container/.test(sphereCss));
+  && /html\[data-orb-pill='1'\] #sphere-container/.test(sphereCss));
+check('the pill has its own gap and floating shadow',
+  /--voice-pill-gap:/.test(sphereCss) && /html\[data-orb-pill='1'\] #sphere-container\s*\{[^}]*--shadow-float/.test(sphereCss));
+check('“all accents” fills the lip and glow with the focus palette',
+  /html\[data-orb-color='palette'\] \.voice-lip/.test(sphereCss)
+  && /html\[data-orb-color='palette'\] \.voice-glow/.test(sphereCss)
+  && /--focus-bar/.test(sphereCss));
+check('the palette border reuses the focus-mode ring',
+  /data-orb-border='palette'\] #sphere-container::before/.test(sphereCss)
+  && /--focus-ring/.test(sphereCss));
+check('the size scale drives the lip and the pill',
+  /--voice-scale/.test(sphereCss) && /calc\(116px \* var\(--voice-scale/.test(sphereCss));
+check('the step line has a home inside the sphere',
+  /id="voice-step"/.test(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')));
 check('the top-left pill reserves its room in that row',
   /html\[data-orb-pos='top-left'\][^{]*#hud-header\s*\{[^}]*padding-left/.test(sphereCss));
 
@@ -420,6 +436,41 @@ localStorage.setItem('desktop.immersive',
 prefs.applyImmersive();
 check('moving the top bar back restores the chosen corner',
   documentElement.dataset.orbPos === 'bottom-right');
+
+/* ── 13. Voice-bar appearance ───────────────────────────────── */
+
+check('the bar is a bare lip by default', prefs.orbIsPill(prefs.getImmersive()) === false);
+check('the top-left spot always renders a pill',
+  prefs.orbIsPill({ ...prefs.getImmersive(), orb_position: 'top-left' }) === true);
+check('the step line inside turns any position into a pill',
+  prefs.orbIsPill({ ...prefs.getImmersive(), orb_position: 'bottom-left', orb_step: true }) === true);
+
+localStorage.setItem('desktop.immersive', JSON.stringify({
+  bar_position: 'top',
+  orb_position: 'bottom-center',
+  orb_color: 'palette',
+  orb_size: 1.25,
+  orb_border: 'palette',
+  orb_step: true,
+}));
+prefs.applyImmersive();
+check('the appearance choices reach CSS',
+  documentElement.dataset.orbColor === 'palette'
+  && documentElement.dataset.orbBorder === 'palette'
+  && documentElement.dataset.orbPill === '1'
+  && documentElement.dataset.orbStep === '1');
+check('the size is published as a scale',
+  documentElement.style.getPropertyValue('--voice-scale') === '1.25',
+  documentElement.style.getPropertyValue('--voice-scale'));
+
+const stored = prefs.getImmersive();
+check('out-of-range values are clamped and unknown ones fall back',
+  prefs.getImmersive().orb_size === 1.25
+  && (() => {
+    localStorage.setItem('desktop.immersive', JSON.stringify({ orb_size: 9, orb_color: 'nope', orb_border: 'nope' }));
+    const s = prefs.getImmersive();
+    return s.orb_size === 1.6 && s.orb_color === 'accent' && s.orb_border === 'hairline';
+  })(), JSON.stringify(stored));
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);

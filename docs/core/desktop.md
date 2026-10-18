@@ -472,7 +472,26 @@ The voice bar (`#chrome-bottom`, the lip/glow and the artifact dock) docks at
 Reveal/keep proximity and the voice-bar hot zone follow the docking edge: the
 horizontal bar reveals from the top or bottom strip, a side dock from its own
 side, and the voice bar from its configured corner (`ORB_ZONE` deep,
-`ORB_HALF` wide). Constants:
+`ORB_HALF` wide).
+
+The bar's look is settings too (`applyImmersive()` publishes each as `data-*`
+on `<html>` / a CSS variable):
+
+| Setting | Values | Effect |
+|---|---|---|
+| `orb_color` | `accent`, `palette` | `palette` fills the lip and the glow with `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. A shadow cannot take a gradient, so this mode drops the box-shadow and fills the layers instead. |
+| `orb_size` | 0.7 … 1.6 | Published as `--voice-scale`; multiplies the lip, the glow, the hit area and the pill. |
+| `orb_border` | `none`, `hairline`, `palette` | The pill's border. `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
+| `orb_step` | on/off | Shows the humanised tool step line inside the voice pill. `dockStep.js` mirrors `#artifact-dock-step` into `#voice-step` (the dock keeps the live region), the bar becomes a pill at any position, and the dock's own line is hidden so the text never appears twice. |
+
+The pill is deliberately detached: `--voice-pill-gap` between it and the rail,
+plus its own floating shadow, so it reads as a free pill rather than part of the
+bar. `--voice-pill-slot` is what the row reserves; it grows when the step line is
+inside and the pill is capped to the same value, so the rail can never end up
+underneath it. Themes that flatten gradients or set `!important` bar sizes scope
+those rules to the bare/accent mode (pitch does), so these options keep working.
+
+Constants:
 
 | Constant | Value | Meaning |
 |---|---|---|
