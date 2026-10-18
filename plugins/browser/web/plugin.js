@@ -899,10 +899,39 @@ function toggleShield() {
   browserSettings.adblock = on;
   updateShield();
   shellSend('peakd:filter:', { enabled: on });
+  // Half the filter is a document-start script (it joins or leaves a page when
+  // that page loads), so the tab in front of the user has to reload for "off"
+  // to really let ads through — and for "on" to hide them again.
+  reloadActivePage();
   void apiFetch('/api/browser/settings', {
     method: 'POST',
     body: JSON.stringify({ adblock: on }),
   }).catch(() => {});
+}
+
+/** Reload the active tab's page, when it has one loaded. */
+function reloadActivePage() {
+  const tab = activeTab();
+  if (tab && tab.native && tab.url) reload();
+}
+
+/**
+ * Core's Settings window saved browser settings: follow them live.
+ *
+ * The ad-block switch there writes the same preference the shield button does,
+ * and without this the shell would keep its old state until this window is
+ * mounted again.
+ */
+function onSettingsChanged(event) {
+  const section = event?.detail?.section;
+  if (section && section !== 'browser') return;
+  if (!tileEl) return;
+  const before = browserSettings.adblock;
+  void loadSettings().then(() => {
+    // Same rule as the shield button: the scriptlet only lands on a fresh
+    // document, so an open page has to reload for the change to show.
+    if (browserSettings.adblock !== before) reloadActivePage();
+  });
 }
 
 /** Reflect the shield state on its button (on = accent, off = muted). */
@@ -2026,6 +2055,9 @@ let syncQueued = false;
 let menuSyncTimer = null;
 /** Core menus slide in with `hudMenuIn`; re-sync once they have landed. */
 const MENU_SETTLE_MS = 200;
+let shieldTimer = null;
+/** How often the open window asks the shell for the live shield state. */
+const SHIELD_POLL_MS = 3000;
 
 /**
  * Coalesce a burst of layout changes into one sync per frame.
@@ -2112,6 +2144,24 @@ function stopBoundsSync() {
   window.removeEventListener('menu:change', onMenuChange);
   clearTimeout(menuSyncTimer);
   menuSyncTimer = null;
+}
+
+/**
+ * Keep the shield's blocked count honest while this window is open.
+ *
+ * The shell only pushes `window.__peakdShield` when something changes, so
+ * without a poll the count would look frozen even while the filter is busy.
+ */
+function startShieldPoll() {
+  stopShieldPoll();
+  shieldTimer = setInterval(() => {
+    if (nativeAvailable) shellRaw('peakd:shield:query');
+  }, SHIELD_POLL_MS);
+}
+
+function stopShieldPoll() {
+  if (shieldTimer) clearInterval(shieldTimer);
+  shieldTimer = null;
 }
 
 /* ── AI-driven navigation ─────────────────────────────────────── */
@@ -2272,6 +2322,7 @@ export function mountBrowserTile() {
   updateNavButtons();
   updateShield();
   startBoundsSync();
+  startShieldPoll();
   // One tab, on its home surface.
   createTab({});
   // A link clicked before this window mounted now has somewhere to go.
@@ -2289,8 +2340,10 @@ export function mountBrowserTile() {
 
 export function unmountBrowserTile() {
   stopBoundsSync();
+  stopShieldPoll();
   window.removeEventListener('message', onFrameMessage);
   window.removeEventListener('clipboard:paste', onClipboardPaste);
+  window.removeEventListener('settings:change', onSettingsChanged);
   document.removeEventListener('pointerdown', onBrowserPointerDown, true);
   document.removeEventListener('keydown', onBrowserKeydown, true);
   wired = false;
@@ -2337,6 +2390,9 @@ export function wireBrowserEvents() {
   window.addEventListener('clipboard:paste', onClipboardPaste);
   // The home shelf talks back through postMessage (card clicks, refresh).
   window.addEventListener('message', onFrameMessage);
+  // The Settings window's own ad-block switch writes the same preference:
+  // follow it live instead of waiting for this window to mount again.
+  window.addEventListener('settings:change', onSettingsChanged);
   // Keep the pages' `prefers-color-scheme` in step with the app theme.
   window.addEventListener('theme:change', pushSettings);
 }

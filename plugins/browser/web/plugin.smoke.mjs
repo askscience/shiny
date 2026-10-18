@@ -171,13 +171,18 @@ const calls = { navigate: [], settings: [], downloadEvents: [], downloadRemove: 
 const copyText = async (text) => { calls.copied.push(text); return true; };
 const readClipboardText = async () => 'https://copied.example/';
 
+/** What `GET /api/browser/settings` would report right now. */
+let serverAdblock = true;
+
 const apiFetch = async (path, options = {}) => {
   if (path === '/api/browser/settings' && (!options.method || options.method === 'GET')) {
-    return { success: true, data: { adblock: true, incognito: false, downloads_dir: '/home/u/Downloads', rules: 12345 } };
+    return { success: true, data: { adblock: serverAdblock, incognito: false, downloads_dir: '/home/u/Downloads', rules: 12345 } };
   }
   if (path === '/api/browser/settings') {
-    calls.settings.push(JSON.parse(options.body));
-    return { success: true, data: JSON.parse(options.body) };
+    const body = JSON.parse(options.body);
+    calls.settings.push(body);
+    if (typeof body.adblock === 'boolean') serverAdblock = body.adblock;
+    return { success: true, data: body };
   }
   if (path.startsWith('/api/browser/downloads/event')) {
     calls.downloadEvents.push(JSON.parse(options.body));
@@ -382,14 +387,64 @@ check(
 
 /* The shield toggles ad blocking and tells the shell. */
 const shield = shieldControl;
+const reloads = () => viewCommands().filter((c) => c.op === 'reload').length;
+const lastFilter = () => rawCommands().filter((m) => m.startsWith('peakd:filter:')).pop();
+const shieldReloadsBefore = reloads();
 shield.dispatch('click', {});
 await tick(30);
 check('the shield persists the choice', calls.settings.some((s) => s.adblock === false), JSON.stringify(calls.settings));
 check('the shield tells the shell to disable', rawCommands().some((m) => m === 'peakd:filter:{"enabled":false}'), rawCommands().join(' | ').slice(0, 120));
 check('the shield reflects its off state', String(shield.className).includes('is-off'));
+// Half the filter is a document-start script: an open page only gets the new
+// state when it loads again, so the shield reloads it (this is what makes
+// "off" really let ads through on the page the user is looking at).
+const visibleTab = viewCommands().filter((c) => c.op === 'open' || c.op === 'navigate').pop();
+check(
+  'the shield reloads the page it just changed',
+  reloads() === shieldReloadsBefore + 1 && lastView('reload')?.id === visibleTab?.id,
+  JSON.stringify({ reload: lastView('reload'), visibleTab }),
+);
 shield.dispatch('click', {});
 await tick(30);
 check('the shield can be turned back on', rawCommands().some((m) => m === 'peakd:filter:{"enabled":true}'));
+check('turning it back on reloads again', reloads() === shieldReloadsBefore + 2, String(reloads()));
+
+/* Core's Settings window writes the same preference: follow it live. */
+serverAdblock = false; // what that window's save would have left on the server
+const settingsListeners = windowListeners['settings:change'] || [];
+check('the window listens for settings changes', settingsListeners.length > 0);
+const pushesBefore = rawCommands().filter((m) => m.startsWith('peakd:settings:')).length;
+const reloadsBeforeSettings = reloads();
+for (const fn of settingsListeners) fn({ detail: { section: 'browser' } });
+await tick(60);
+check(
+  'a settings change re-pushes the state to the shell',
+  rawCommands().filter((m) => m.startsWith('peakd:settings:')).length > pushesBefore
+    && JSON.parse(rawCommands().filter((m) => m.startsWith('peakd:settings:')).pop().slice('peakd:settings:'.length)).adblock === false,
+  rawCommands().slice(-2).join(' | '),
+);
+check(
+  'a settings change reloads the open page too',
+  reloads() === reloadsBeforeSettings + 1,
+  String(reloads()),
+);
+
+/* A tab on its home surface has no page to reload. */
+byLabel('Home').dispatch('click', {});
+await tick(60);
+const reloadsAtHome = reloads();
+shield.dispatch('click', {});
+await tick(30);
+check('a home tab is not reloaded by the shield', reloads() === reloadsAtHome, String(reloads()));
+check('the shield still tells the shell from a home tab', lastFilter() === 'peakd:filter:{"enabled":true}', lastFilter());
+
+/* The window keeps the shell's block count live while it is open. */
+await tick(3200);
+check(
+  'the window polls the shell for the live shield state',
+  rawCommands().includes('peakd:shield:query'),
+  rawCommands().slice(-3).join(' | '),
+);
 
 /* Incognito: the tab is private, and navigating it asks for the OTR profile. */
 const beforeIncognito = viewCommands().filter((c) => c.op === 'open').length;

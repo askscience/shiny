@@ -100,6 +100,26 @@ The Browser is one of the surfaces the central clipboard service
   the engine's Paste action on the active tab.
 - "Paste and go" reads the clipboard via `readClipboardText()` and navigates.
 
+## Shield and ad blocking
+
+The toolbar shield toggles the shell's filter (`peakd:filter:`) and persists the
+choice (`POST /api/browser/settings`). Two things make the on/off state visible:
+
+- Half the filter is a **document-start scriptlet** (the YouTube ad-skip, see
+  `crates/peakd/src/youtube.rs`), and a view only picks up the new script
+  collection when a document is created — so `toggleShield()` reloads the active
+  tab's page (`peakd:view:` `reload`) right after telling the shell. Flipping the
+  shield shows or hides ads on the page in front of the user, not only on the
+  next visit.
+- The shell pushes `window.__peakdShield` only when something changes, so the
+  window polls `peakd:shield:query` every `SHIELD_POLL_MS` (3 s) while it is
+  mounted. That keeps the button's "N blocked" count live — the visible proof
+  the filter is working on a page that looks the same either way.
+
+The core Settings window's own ad-block switch writes the same preference, but
+only this window has the shell bridge: it listens for `settings:change` and
+re-pushes (and reloads the open page) when that save lands.
+
 ## DOM and CSS
 
 - Root: `<section class="tile browser-tile" data-plugin="browser">`.
@@ -128,6 +148,7 @@ The Browser is one of the surfaces the central clipboard service
 | `url:open` | core link router (`web/js/linkRouter.js`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
 | `message` | sandboxed home shelf | `browser:open-card` → `news/click` POST + navigate; `browser:refresh-news` → reload the shelf |
 | `theme:change` | core theme | `pushSettings()` |
+| `settings:change` | core Settings window (browser section) | `onSettingsChanged` — re-fetches `/api/browser/settings`, re-pushes to the shell, and reloads the active page when `adblock` changed |
 | `resize`, `desktop:changed`, `overlay:open`, `fullscreen:change`, `menu:change` | core | `requestSync()` for native-view bounds/mask |
 
 ### Global callbacks the shell calls
@@ -158,6 +179,7 @@ The Browser is one of the surfaces the central clipboard service
 | `peakd:filter:` | `{ enabled }` | Live shield toggle |
 | `peakd:download:` | `{ id, action }` | `pause`/`resume`/`cancel`/`remove`/`clear` |
 | `peakd:downloads:list` | raw (no JSON) | Ask the shell to push its live list via `window.__peakdDownloads` |
+| `peakd:shield:query` | raw (no JSON) | Ask the shell to push the shield state via `window.__peakdShield` (polled while mounted, see Shield and ad blocking) |
 
 `peakd:view:` ops (parsed by `crates/peakd/src/browse.rs` `Command::parse`):
 `open` (`url`, `rect`, `visible`, `incognito`), `navigate`, `setBounds`,

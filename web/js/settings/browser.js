@@ -48,7 +48,15 @@ export function createBrowserSection({ on, cleanups, resources }) {
           void apiFetch('/api/browser/settings', {
             method: 'POST',
             body: JSON.stringify({ adblock: checked }),
-          }).catch(() => {});
+          })
+            .then(() => {
+              // The Browser window owns the shell bridge: it applies this to the
+              // running shell and reloads the open page for the scriptlet half.
+              window.dispatchEvent(
+                new CustomEvent('settings:change', { detail: { section: 'browser' } }),
+              );
+            })
+            .catch(() => {});
         },
       });
 
