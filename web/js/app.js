@@ -27,6 +27,8 @@ import { initHudPower } from './powerMenu.js';
 import { initHudDividers } from './hudDivider.js';
 import { initHudPlugins } from './hudPlugins.js';
 import { initPluginHud } from './pluginHud.js';
+import { initCraftStore } from './craftStore.js';
+import { initAppFileEvents } from './appSaves.js';
 import { installClipboard } from './clipboard.js';
 import { initHudClipboard } from './clipboardMenu.js';
 import { initNavigator } from './navigator.js';
@@ -143,6 +145,11 @@ async function initApp() {
   initHudPower(); // top-bar power menu (reboot / power off / suspend, logind)
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initPluginHud(); // optional per-plugin top-bar chips (loaded when installed)
+  initCraftStore(); // Craft store: keeps the installed Craft apps updated
+  // A Craft app saves through the browser APIs inside its iframe: the shell
+  // reports the path so the desktop can say where the file went and refresh the
+  // folder (the app itself only knows the handle).
+  initAppFileEvents({ notify: (message) => toast(message, { type: 'ok' }) });
   // Central clipboard: record every copy app-wide (DOM copy/cut events), expose
   // the hook the Qt shell reports Browser-page copies through, and mount the
   // top-bar history menu. Installed before any plugin window can copy.

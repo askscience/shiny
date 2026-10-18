@@ -545,6 +545,32 @@ body.compose-awaiting .compose-composer .compose-send {
   .compose-dock-field { font-size: 16px; min-width: 0; }
 }
 
+/* ── The chat never sits under the voice bar ──────────────────
+   The bar is fixed chrome and stays up for the chat (it is the tap-to-talk
+   target), so the thread gives up the band it holds and keeps the rest: the top
+   bar's row while the bar rides it, the bar's own box when it docks to the
+   bottom edge. Phones are excluded — there the panel owns the bottom and the
+   bar stands down for it (above). */
+@media (min-width: 641px) {
+  html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center']) body.compose-active .compose-conversation {
+    top: calc(var(--hud-header-total, 0px) + 8px);
+  }
+
+  html[data-orb-pos^='bottom'] body.compose-active .compose-conversation {
+    bottom: calc(max(16px, calc(env(safe-area-inset-bottom) + 10px)) + var(--voice-bar-height) + 12px);
+  }
+
+  html[data-orb-pos='top-left'][data-bar-pos='bottom'] body.compose-active .compose-conversation {
+    bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) + var(--hud-bar-height) + 12px);
+  }
+
+  /* A left dock is a column at that edge: the thread keeps clear of it too,
+     since the panel hugs the left side of the screen. */
+  html[data-orb-pos='top-left'][data-bar-pos='left'] body.compose-active .compose-conversation {
+    left: calc(var(--hud-bar-height) + 24px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .compose-spinner { animation-duration: 2.4s; }
 }

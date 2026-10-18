@@ -8,6 +8,9 @@ pub struct Manifest {
     /// Plugin API level the plugin was built against. The loader compares this
     /// to `shiny_plugin_sdk::CORE_API_LEVEL`.
     pub api_level: u32,
+    /// Entry point symbol of the cdylib. Web-app plugins (`kind = "web"` in
+    /// `plugin.toml`) have no cdylib and may omit it.
+    #[serde(default)]
     pub entry_symbol: String,
     /// Target triple this binary was compiled for (`x86_64-unknown-linux-gnu`).
     /// The installer refuses archives whose triple doesn't match the host.

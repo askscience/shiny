@@ -230,8 +230,10 @@ QString unique_download_path(const QString &dir, const QString &name) {
     return candidate;
 }
 
+void notify_file_saved(const QString &path, const QString &source);
+
 void emit_download(QWebEngineDownloadRequest *download, const QString &id, const char *kind,
-                   bool incognito, const QString &error) {
+                   bool incognito, bool from_app, const QString &error) {
     if (!g_download_cb || !download) return;
     QJsonObject o;
     o[QStringLiteral("id")] = id;
@@ -244,6 +246,9 @@ void emit_download(QWebEngineDownloadRequest *download, const QString &id, const
     o[QStringLiteral("total")] = static_cast<double>(download->totalBytes());
     o[QStringLiteral("received")] = static_cast<double>(download->receivedBytes());
     o[QStringLiteral("incognito")] = incognito;
+    // A download the app view started is an app saving a copy of something, not
+    // a page offering a file: the window says so in the downloads panel.
+    o[QStringLiteral("source")] = from_app ? QStringLiteral("app") : QStringLiteral("page");
     QString state = QStringLiteral("downloading");
     switch (download->state()) {
     case QWebEngineDownloadRequest::DownloadRequested:
@@ -270,6 +275,11 @@ void emit_download(QWebEngineDownloadRequest *download, const QString &id, const
     }
     const QByteArray body = QJsonDocument(o).toJson(QJsonDocument::Compact);
     g_download_cb(g_cb_userdata, id.toUtf8().constData(), kind, body.constData());
+    if (from_app && download->state() == QWebEngineDownloadRequest::DownloadCompleted) {
+        // The fallback an app takes when it cannot write through the picker:
+        // the copy is on disk, so the shell reports it like any other save.
+        notify_file_saved(o.value(QStringLiteral("path")).toString(), QStringLiteral("download"));
+    }
 }
 
 /// Take ownership of one download: assign an id, choose a destination, accept
@@ -277,6 +287,13 @@ void emit_download(QWebEngineDownloadRequest *download, const QString &id, const
 void handle_download(QQuickWebEngineDownloadRequest *download, bool incognito) {
     if (!download) return;
     const QString id = QStringLiteral("d%1").arg(++g_download_seq);
+    // A download the app view starts is an app saving a copy of something (the
+    // fallback web apps use when they cannot write through the picker); one from
+    // a page view is the Browser plugin's business. The QML view type is not in
+    // the public headers, so the comparison is on the pointer the scene handed
+    // over (same object, same address).
+    const bool from_app = g_ctx && g_ctx->app_view
+            && reinterpret_cast<QObject *>(download->view()) == g_ctx->app_view;
 
     QString dir;
     if (incognito) {
@@ -300,33 +317,85 @@ void handle_download(QQuickWebEngineDownloadRequest *download, bool incognito) {
     download->setDownloadFileName(name);
     g_downloads.insert(id, download);
 
-    emit_download(download, id, "download", incognito, QString());
+    emit_download(download, id, "download", incognito, from_app, QString());
 
     QObject::connect(download, &QWebEngineDownloadRequest::receivedBytesChanged, download,
-                     [download, id, incognito]() {
-                         emit_download(download, id, "progress", incognito, QString());
+                     [download, id, incognito, from_app]() {
+                         emit_download(download, id, "progress", incognito, from_app, QString());
                      });
     QObject::connect(download, &QWebEngineDownloadRequest::totalBytesChanged, download,
-                     [download, id, incognito]() {
-                         emit_download(download, id, "progress", incognito, QString());
+                     [download, id, incognito, from_app]() {
+                         emit_download(download, id, "progress", incognito, from_app, QString());
                      });
     QObject::connect(download, &QWebEngineDownloadRequest::isPausedChanged, download,
-                     [download, id, incognito]() {
-                         emit_download(download, id, "progress", incognito, QString());
+                     [download, id, incognito, from_app]() {
+                         emit_download(download, id, "progress", incognito, from_app, QString());
                      });
     QObject::connect(
         download, &QWebEngineDownloadRequest::stateChanged, download,
-        [download, id, incognito](QWebEngineDownloadRequest::DownloadState state) {
+        [download, id, incognito, from_app](QWebEngineDownloadRequest::DownloadState state) {
             const char *kind = "progress";
             if (state == QWebEngineDownloadRequest::DownloadCompleted) kind = "completed";
             else if (state == QWebEngineDownloadRequest::DownloadCancelled) kind = "cancelled";
             else if (state == QWebEngineDownloadRequest::DownloadInterrupted) kind = "interrupted";
-            emit_download(download, id, kind, incognito, QString());
+            emit_download(download, id, kind, incognito, from_app, QString());
         });
 
-    std::fprintf(stderr, "peakd: download %s -> %s\n", name.toUtf8().constData(),
-                 dir.toUtf8().constData());
+    std::fprintf(stderr, "peakd: download %s -> %s%s\n", name.toUtf8().constData(),
+                 dir.toUtf8().constData(), from_app ? " (app)" : "");
     download->accept();
+}
+
+/// Tell the window about a file an app wrote on its own.
+///
+/// Embedded web apps save through the ordinary browser APIs (a save picker or an
+/// anchor download) and the bytes land on disk without the app ever reporting
+/// them: nothing in the shell's own state knows the file exists. The window turns
+/// this into a toast carrying the real path and a files refresh, so a save made
+/// inside an app shows up in the system like any other.
+void notify_file_saved(const QString &path, const QString &source) {
+    if (!g_ctx || !g_ctx->scene_root || path.isEmpty()) return;
+    const QFileInfo info(path);
+    const QDir dir(info.absolutePath());
+    QJsonObject detail{
+        {QStringLiteral("path"), path},
+        {QStringLiteral("name"), info.fileName()},
+        {QStringLiteral("dir"), info.absolutePath()},
+        {QStringLiteral("dirName"), dir.dirName()},
+        {QStringLiteral("source"), source},
+    };
+    const QString script =
+        QStringLiteral("window.dispatchEvent(new CustomEvent('shiny:file-saved',{detail:%1}))")
+            .arg(QString::fromUtf8(QJsonDocument(detail).toJson(QJsonDocument::Compact)));
+    peakd_qt_main_run_js(script.toUtf8().constData(), 0);
+}
+
+/// Watch for the file a chosen save path promises.
+///
+/// The picker hands the path back to the page and the engine writes it
+/// afterwards, so poll briefly and report once the file is actually on disk. A
+/// save that never materialises is only logged: the write can still be in
+/// flight, and a wrong "not saved" message would be worse than silence.
+void watch_app_write(const QString &path, const QString &source) {
+    if (path.isEmpty() || !g_ctx || !g_ctx->scene) return;
+    auto *timer = new QTimer(g_ctx->scene);
+    timer->setInterval(250);
+    timer->setProperty("ticks", 0);
+    QObject::connect(timer, &QTimer::timeout, [timer, path, source]() {
+        const int ticks = timer->property("ticks").toInt() + 1;
+        timer->setProperty("ticks", ticks);
+        if (QFileInfo::exists(path)) {
+            timer->stop();
+            timer->deleteLater();
+            notify_file_saved(path, source);
+        } else if (ticks > 24) {
+            timer->stop();
+            timer->deleteLater();
+            std::fprintf(stderr, "peakd: app save %s never appeared\n",
+                         path.toUtf8().constData());
+        }
+    });
+    timer->start();
 }
 
 /// Install the interceptor and the download handler on a profile.
@@ -469,6 +538,14 @@ Item {
         }
         onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
         onPermissionRequested: (permission) => { if (shell.allowPermission(permission.permissionType, permission.origin)) permission.grant(); else permission.deny(); }
+        onFileSystemAccessRequested: (request) => {
+            // First-party apps may hold local files: the picker path is granted
+            // by the engine itself, anything else is the shell's call. Every
+            // other origin is refused, which is also the engine's default.
+            const allowed = shell.isAppOrigin(request.origin)
+            shell.logNote("fs-access", request.origin + " flags=" + request.accessFlags + (allowed ? " allow" : " deny"))
+            if (allowed) request.accept(); else request.reject()
+        }
         onContextMenuRequested: (request) => {
             // The app's own HTML menus own every right-click in the shell: the
             // web side preventDefaults them, so a request arriving here is a
@@ -756,9 +833,15 @@ public:
 
     /// The file pickers the app's plugins use (`web/js/files.js` pickFiles,
     /// image import, uploads) and the ones a page requests.
+    ///
+    /// A save an embedded web app starts arrives here too: the engine routes
+    /// `showSaveFilePicker` through this dialog and writes the file itself once
+    /// the path is handed back, which is why the chosen path is watched.
     Q_INVOKABLE void fileDialog(int mode, const QStringList &mime_types,
                                 const QString &default_name, QObject *request) {
         if (!request || !g_ctx) return;
+        std::fprintf(stderr, "peakd: file dialog mode=%d name=%s\n", mode,
+                     default_name.toUtf8().constData());
         const QString filters = mime_filters(mime_types).join(QStringLiteral(";;"));
         QWidget *parent = g_ctx->scene;
         QStringList files;
@@ -782,15 +865,31 @@ public:
         case 3: {  // FileModeSave
             const QString file = QFileDialog::getSaveFileName(
                 parent, tr_key("qt.dialog.save", "Save"), default_name, filters);
-            if (!file.isEmpty()) files << file;
+            if (!file.isEmpty()) {
+                files << file;
+                watch_app_write(file, QStringLiteral("picker"));
+            }
             break;
         }
         default:
             break;
         }
+        if (files.isEmpty()) {
+            std::fprintf(stderr, "peakd: file dialog cancelled\n");
+        } else {
+            for (const QString &file : files)
+                std::fprintf(stderr, "peakd: file dialog chose %s\n", file.toUtf8().constData());
+        }
         request->setProperty("accepted", true);
         if (files.isEmpty()) QMetaObject::invokeMethod(request, "dialogReject");
         else QMetaObject::invokeMethod(request, "dialogAccept", Q_ARG(QVariant, QVariant(files)));
+    }
+
+    /// One diagnostic line from the web side, so the shell's log carries what a
+    /// page did without going through the window's console.
+    Q_INVOKABLE void logNote(const QString &tag, const QString &detail) const {
+        std::fprintf(stderr, "peakd: %s %s\n", tag.toUtf8().constData(),
+                     detail.toUtf8().constData());
     }
 
     /// The selection a page reported for a Ctrl+C made inside it.

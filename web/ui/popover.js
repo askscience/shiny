@@ -1,5 +1,35 @@
 const placements = new WeakMap();
 
+/**
+ * Park a menu that hangs off a HUD chip: under it, or ABOVE it when the menu
+ * does not fit below and there is more room over it. A top bar docked at the
+ * bottom edge needs that flip — otherwise every menu opens off-screen.
+ *
+ * `align` is the anchor's edge the menu lines up with ('left' or 'right'), and
+ * the menu keeps its own width; only its height is capped to the room it is
+ * given, so a long list scrolls instead of spilling out of the viewport.
+ */
+export function placeMenu(popup, anchor, { gap = 8, align = 'left', minHeight = 220 } = {}) {
+  const rect = anchor.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 12;
+  const bottom = rect.bottom + gap;
+  const width = popup.offsetWidth;
+  const left = align === 'right'
+    ? Math.max(margin, Math.min(rect.right - width, vw - width - margin))
+    : Math.max(margin, Math.min(rect.left, vw - width - margin));
+  // Room inside the viewport under the anchor, and over it.
+  const below = vh - bottom - margin;
+  const above = rect.top - gap - margin;
+  const upwards = popup.offsetHeight > below && above > below;
+  popup.style.left = `${left}px`;
+  popup.style.top = `${upwards
+    ? Math.max(margin, rect.top - gap - Math.min(popup.offsetHeight, above))
+    : bottom}px`;
+  popup.style.maxHeight = `${Math.max(minHeight, upwards ? above : below)}px`;
+}
+
 /** Keep an open popup within the visual viewport until it is hidden or removed. */
 export function placePopover(popup, anchor, options = {}) {
   placements.get(popup)?.();

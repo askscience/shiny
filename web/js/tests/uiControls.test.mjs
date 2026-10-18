@@ -1,6 +1,7 @@
 import './helpers/i18n.mjs';
 import assert from 'node:assert/strict';
-import { placePopover } from '../../ui/popover.js';
+import { readFileSync } from 'node:fs';
+import { placePopover, placeMenu } from '../../ui/popover.js';
 import { dial } from '../../ui/components/dial.js';
 
 class Node extends EventTarget {
@@ -20,6 +21,29 @@ assert.equal(popup.style.maxWidth,'304px');
 assert.equal(popup.style.minWidth,'304px','wide anchors cannot force popovers offscreen');
 assert.equal(popup.style.left,'8px');
 assert.ok(parseFloat(popup.style.top)+popup.offsetHeight<=212,'popup fits above a soft keyboard');
+
+/* placeMenu keeps a chip's menu on screen: under the chip, or ABOVE it when the
+   chip sits at the bottom of the screen — a top bar docked at the bottom edge
+   would otherwise open every menu off-screen. */
+globalThis.window.innerWidth=1000;
+globalThis.window.innerHeight=700;
+const chipMenu={style:{},offsetWidth:200,offsetHeight:260};
+const chip=bottom=>({getBoundingClientRect:()=>({left:40,top:bottom-28,right:140,bottom})});
+placeMenu(chipMenu,chip(688));
+assert.equal(chipMenu.style.left,'40px');
+assert.equal(chipMenu.style.top,'392px','a menu at the bottom edge opens upward');
+assert.equal(chipMenu.style.maxHeight,'640px','the room above the chip caps it');
+placeMenu(chipMenu,chip(40));
+assert.equal(chipMenu.style.top,'48px','a menu at the top edge opens under its chip');
+assert.equal(chipMenu.style.maxHeight,'640px');
+
+/* …and every HUD chip menu goes through it rather than opening downward. */
+for (const file of ['clockMenu.js','weatherMenu.js','networkMenu.js','bluetoothMenu.js',
+  'batteryMenu.js','audioMenu.js','clipboardMenu.js','powerMenu.js']) {
+  const src=readFileSync(new URL(`../${file}`,import.meta.url),'utf8');
+  assert.ok(/placeMenu\(popup, trigger/.test(src),`${file} uses the shared menu placement`);
+  assert.ok(!/rect\.bottom \+ 8/.test(src),`${file} does not open downward unconditionally`);
+}
 const preview=[],commits=[];
 const knob=dial({label:'Brightness',min:-100,max:100,step:1,format:String,onInput:v=>preview.push(v),onChange:v=>commits.push(v)});
 const emit=(type,props={})=>knob.dispatchEvent(Object.assign(new Event(type,{cancelable:true}),props));

@@ -109,6 +109,57 @@ base-uri 'none'; \
 form-action 'self'; \
 frame-ancestors 'none'";
 
+/// Content-Security-Policy for a **web-app plugin** (`kind = "web"`): a static
+/// site the shell mounts in an iframe at `/plugins/<name>/`.
+///
+/// These sites are built by their upstream projects (trunk + wasm-bindgen) and
+/// installed from release archives we verify against their published SHA-256,
+/// so they are the same trust class as a plugin cdylib. They need two things
+/// the shell's policy forbids: `'unsafe-inline'` for the inline module script
+/// their `index.html` uses to boot, and `'wasm-unsafe-eval'`/`'unsafe-eval'`
+/// for instantiating their wasm. `frame-ancestors 'self'` (against the shell's
+/// `'none'`) is what lets the shell frame them; stray framing by a website is
+/// still impossible because the frame's parent must be this origin.
+const WEB_APP_CONTENT_SECURITY_POLICY: &str = "default-src 'self' data: blob:; \
+script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; \
+style-src 'self' 'unsafe-inline'; \
+img-src 'self' data: blob:; \
+font-src 'self' data:; \
+media-src 'self' data: blob:; \
+worker-src 'self' blob:; \
+connect-src 'self' data: blob:; \
+object-src 'none'; \
+base-uri 'none'; \
+form-action 'none'; \
+frame-ancestors 'self'";
+
+/// Cache policy for web-app assets, applied only inside the web-app router.
+/// Their builds are content-hashed and immutable, and the shell would
+/// otherwise re-download tens of megabytes of wasm on every reload (the core
+/// serves everything else `no-store`). The entry document is revalidated so a
+/// new version of the app is picked up the next time it is opened.
+async fn web_app_cache_policy(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let revalidate = {
+        let path = req.uri().path();
+        path.ends_with('/') || path.ends_with("/index.html")
+    };
+    let mut response = next.run(req).await;
+    let value = if revalidate {
+        "no-cache"
+    } else {
+        "public, max-age=31536000, immutable"
+    };
+    if let Ok(value) = axum::http::HeaderValue::from_str(value) {
+        response
+            .headers_mut()
+            .insert(axum::http::header::CACHE_CONTROL, value);
+    }
+    response
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub pool: SqlitePool,
@@ -149,6 +200,12 @@ pub struct AppState {
     pub song_gen: SongGenClient,
     /// Plugin manager: hosts the ToolRegistry + loaded cdylibs.
     pub plugins: PluginManager,
+    /// Craft store: installs and updates the Craft App Suite's web builds as
+    /// web-app plugins (`/api/plugins/store`).
+    pub store: crate::plugins::store::Store,
+    /// Craft app MCP servers. One runs per focused Craft app and nowhere else:
+    /// focus mode is the hard boundary for an app's AI control.
+    pub craft_mcp: crate::plugins::craft_mcp::CraftMcp,
     /// Iroh remote-access service.
     pub iroh: crate::services::iroh_remote::IrohRemote,
     /// Tailscale Serve/Funnel access (a public `*.ts.net` HTTPS URL).
@@ -388,33 +445,64 @@ fn build_plugin_routes(state: &AppState) -> Router<AppState> {
     // backstop for extractor-based handlers).
     router = router.layer(axum::extract::DefaultBodyLimit::max(160 * 1024 * 1024));
 
-    // Serve each installed plugin's web assets at /plugins/<name>/.
+    // Serve each installed native plugin's web assets at /plugins/<name>/.
     // Register the ServeDir for every plugin unconditionally: ServeDir reads
     // from disk per request, so a plugin whose web/ dir (or icon.svg) is added
-    // after startup is still served — no restart needed.
+    // after startup is still served — no restart needed. Web-app plugins are
+    // served by `build_webapp_routes` instead: the shell frames them, so they
+    // carry different headers.
     for manifest in state.plugins.list() {
-        // `web_dir` is attacker-controlled in plugin.toml; the loader already
-        // rejects absolute/`..` values, and this second check keeps the router
-        // safe even if a manifest was produced by an older build.
-        if let Err(e) =
-            crate::plugins::loader::validate_relative_path("web_dir", &manifest.web_dir)
-        {
-            tracing::warn!(
-                "plugin '{}' has an invalid web_dir, not serving it: {e}",
-                manifest.name
-            );
+        if state.plugins.kind_for(&manifest.name).is_web() {
             continue;
         }
-        // A user override lives in the writable plugins dir, a system plugin
-        // in the read-only baseline; serve whichever one won the load.
-        let Some(install_dir) = state.plugins.plugin_dir_for(&manifest.name) else {
-            continue;
-        };
-        let web_path = install_dir.join(&manifest.web_dir);
-        router = router.nest_service(
-            &format!("/plugins/{}", manifest.name),
-            ServeDir::new(web_path),
+        if let Some(web_path) = plugin_web_root(state, &manifest) {
+            router = router.nest_service(
+                &format!("/plugins/{}", manifest.name),
+                ServeDir::new(web_path),
+            );
+        }
+    }
+    router
+}
+
+/// The directory a plugin serves at `/plugins/<name>/`, or `None` when it
+/// cannot be served. `web_dir` is attacker-controlled in `plugin.toml`; the
+/// loader already rejects absolute/`..` values, and this second check keeps
+/// the router safe even if a manifest was produced by an older build. The
+/// install dir follows whichever copy won the load: a user override lives in
+/// the writable plugins dir, a system plugin in the read-only baseline.
+fn plugin_web_root(
+    state: &AppState,
+    manifest: &shiny_plugin_sdk::manifest::Manifest,
+) -> Option<std::path::PathBuf> {
+    if let Err(e) = crate::plugins::loader::validate_relative_path("web_dir", &manifest.web_dir) {
+        tracing::warn!(
+            "plugin '{}' has an invalid web_dir, not serving it: {e}",
+            manifest.name
         );
+        return None;
+    }
+    let install_dir = state.plugins.plugin_dir_for(&manifest.name)?;
+    Some(install_dir.join(&manifest.web_dir))
+}
+
+/// Serve installed **web-app** plugins (`kind = "web"`): static sites mounted
+/// in a plugin window's iframe. `build_router` merges this router *after* the
+/// shell's header layers, so the shell's `X-Frame-Options: DENY` and
+/// `frame-ancestors 'none'` — which are `overriding` — never reach these
+/// documents; the web-app stack below applies to them instead.
+fn build_webapp_routes(state: &AppState) -> Router<AppState> {
+    let mut router: Router<AppState> = Router::new();
+    for manifest in state.plugins.list() {
+        if !state.plugins.kind_for(&manifest.name).is_web() {
+            continue;
+        }
+        if let Some(web_path) = plugin_web_root(state, &manifest) {
+            router = router.nest_service(
+                &format!("/plugins/{}", manifest.name),
+                ServeDir::new(web_path),
+            );
+        }
     }
     router
 }
@@ -474,6 +562,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/activate", post(crate::plugins::admin_api::activate))
         .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
+        // Craft store: the Craft App Suite's web builds as web-app plugins.
+        .route("/api/plugins/store", get(crate::plugins::store::store_list))
+        .route("/api/plugins/store/refresh", post(crate::plugins::store::store_refresh))
+        .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
+        .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
@@ -604,7 +697,8 @@ pub fn build_router(state: AppState) -> Router {
     let static_files = ServeDir::new(&web_dir)
         .not_found_service(ServeFile::new(format!("{}/index.html", web_dir)));
 
-    Router::new()
+    // Everything except web-app plugins runs under the shell's header policy.
+    let shell = Router::new()
         .route("/api/health/live", get(health::live))
         .route("/api/health/ready", get(health::ready))
         .merge(public_routes)
@@ -643,7 +737,35 @@ pub fn build_router(state: AppState) -> Router {
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::HeaderName::from_static("referrer-policy"),
             axum::http::HeaderValue::from_static("no-referrer"),
+        ));
+
+    // Web-app plugins are pages the shell frames in a window, so their headers
+    // differ on purpose (see `WEB_APP_CONTENT_SECURITY_POLICY`). Merged AFTER
+    // the shell's layers: those are `overriding`, so anything merged earlier
+    // would have `DENY`/`frame-ancestors 'none'` stamped back onto the framed
+    // document and the iframe would be refused.
+    let web_apps = build_webapp_routes(&state)
+        .layer(axum::middleware::from_fn(locale_middleware))
+        .layer(axum::middleware::from_fn(web_app_cache_policy))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("content-security-policy"),
+            axum::http::HeaderValue::from_static(WEB_APP_CONTENT_SECURITY_POLICY),
         ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("x-content-type-options"),
+            axum::http::HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("x-frame-options"),
+            axum::http::HeaderValue::from_static("SAMEORIGIN"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("referrer-policy"),
+            axum::http::HeaderValue::from_static("no-referrer"),
+        ));
+
+    shell
+        .merge(web_apps)
         .layer(axum::middleware::from_fn(diagnostics::trace))
         .with_state(state)
 }

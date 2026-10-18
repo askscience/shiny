@@ -1503,7 +1503,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 
 /* The step line can live inside the voice bar instead (Settings → Appearance):
    then the dock keeps only its saved cards and the line must not appear twice. */
-html[data-orb-step='1'] #artifact-dock-step { display: none; }
+html:not([data-orb-status='off']) #artifact-dock-step { display: none; }
 
 /* Once the line is gone there is nothing left in that pill, so the bubble goes
    with it instead of sitting above the voice bar empty. Cards keep it up on

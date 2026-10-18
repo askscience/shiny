@@ -110,6 +110,8 @@
   "plugin.files.preview.navHint.other": "{count} items · ← → to move",
   "plugin.files.preview.pdfFailed": "Could not render PDF",
   "plugin.files.preview.page": "Page {n}",
+  "plugin.files.preview.prev": "Previous file",
+  "plugin.files.preview.next": "Next file",
 
   "plugin.files.meta.description": "File browser — browse, preview and manage your home folders",
   "plugin.files.meta.summary": "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash",

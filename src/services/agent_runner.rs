@@ -150,7 +150,9 @@ pub async fn run_agent<F, G>(
     mut on_thinking: G,
 ) -> Result<AgentRunResult, AppError>
 where
-    F: FnMut(&UiText),
+    // The step line, plus the tool it belongs to when it is a tool's
+    // (`None` for the thinking opener and the refusals with no action).
+    F: FnMut(&UiText, Option<&str>),
     G: FnMut(&str),
 {
     let mut artifacts: Vec<Value> = Vec::new();
@@ -166,7 +168,7 @@ where
     let mut interrupted = false;
 
     let think = thinking_label();
-    on_step(&UiText::keyed(think.key, think.text));
+    on_step(&UiText::keyed(think.key, think.text), None);
 
     for iteration in 0..MAX_TOOL_STEPS {
         if turn_stopped(&cancel) {
@@ -267,11 +269,11 @@ where
             if action.starts_with("workspace_") && !input.ctx.workspaces_enabled {
                 tracing::info!("Refusing {action}: workspaces are off on this screen");
                 let step = step_label_for_action("workspaces_unavailable");
-                on_step(&UiText::keyed(step.key, step.text));
+                on_step(&UiText::keyed(step.key, step.text), None);
                 continue;
             }
 
-            on_step(&ui_step(state, &action));
+            on_step(&ui_step(state, &action), Some(action.as_str()));
 
             match execute_action(state, traveler, &input.ctx, &action, &params).await {
             Ok(outcome) => {
@@ -369,7 +371,10 @@ where
                 completed_steps.push(note.clone());
                 // The model gets the full note above; the bubble gets a short
                 // human line (never the raw payload).
-                on_step(&ui_done(state, &outcome.action, &outcome.result, &outcome.data));
+                on_step(
+                    &ui_done(state, &outcome.action, &outcome.result, &outcome.data),
+                    Some(outcome.action.as_str()),
+                );
             }
             Err(e) => {
                 actions_taken.push(ActionTaken {
@@ -380,7 +385,7 @@ where
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
                 completed_steps.push(note.clone());
                 let step = failed_label_for_action(&action);
-                on_step(&UiText::keyed(step.key, step.text));
+                on_step(&UiText::keyed(step.key, step.text), Some(action.as_str()));
             }
             }
         }

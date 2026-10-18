@@ -1,6 +1,6 @@
 import {
   searchBar, confirmDialog, promptDialog, slider as uiSlider, toolbar, input as uiInput, toolButton,
-  controlButton, icon, setIcon, button, emptyState, toast, notify, modal, setTileGlow,
+  controlButton, icon, setIcon, iconButton, button, emptyState, toast, notify, modal, setTileGlow,
   setTileGlowFromUrl, glowGradient,
 } from '../../ui/index.js';
 
@@ -1026,18 +1026,38 @@ let previewApi = null;
 let previewIndex = -1;
 let previewOpenedAt = 0;
 
+/** Everything the quick look can step through: the visible files, no folders. */
+function previewItems() {
+  return visibleEntries().filter((e) => e.kind !== 'dir');
+}
+
 function closePreview() {
   const api = previewApi;
   previewApi = null;
   previewIndex = -1;
   if (!api) return;
+  stopPreviewMedia(api.stage);
   api.close();
 }
+
+/** Leaving a file (or the quick look) must not leave its sound running: a
+ *  detached <audio>/<video> keeps playing on its own. */
+function stopPreviewMedia(stage) {
+  for (const media of stage?.querySelectorAll?.('audio,video') || []) {
+    try { media.pause(); } catch (_) { /* already gone */ }
+  }
+}
+
+/**
+ * Space / `Sushi`-style quick look. A bare overlay rather than a window: the
+ * file itself is the surface — no frame, no padding — with the side arrows
+ * appearing on hover and the details riding a gradient mixed from the theme's
+ * own canvas (so the scrim follows every theme).
+ */
 async function openPreview(entry, index = -1) {
-  const list = visibleEntries().filter((e) => e.kind !== 'dir');
+  closePreview();   // first: closing resets the step position
+  const list = previewItems();
   previewIndex = index >= 0 ? index : list.findIndex((e) => e.path === entry.path);
-  const nav = { prev: () => stepPreview(-1, list), next: () => stepPreview(1, list), count: list.length };
-  closePreview();
   let api;
   api = modal({
     label: entry.name,
@@ -1046,22 +1066,92 @@ async function openPreview(entry, index = -1) {
       if (previewApi === api) previewApi = null;
     },
   });
-  api.card.classList.add('files-preview-card');
+  api.el.classList.add('files-look');
+  api.card.classList.add('files-look-surface');
   api.body.remove();
+
+  api.stage = document.createElement('div');
+  api.stage.className = 'files-look-stage';
+  api.arrows = lookArrows();
+  api.info = lookInfo();
+  api.card.append(api.stage, api.arrows, api.info.el);
   previewApi = api;
   api.open();
   previewOpenedAt = Date.now();
-  try {
-    await fillPreview(api.card, entry, nav);
-  } catch (_) { /* keep the window up even if a preview fails */ }
+  await showPreview(entry);
 }
+
+/** Show one file in place. Stepping reuses the open overlay, so the pointer
+ *  that revealed an arrow never loses it between two files. */
+async function showPreview(entry) {
+  const api = previewApi;
+  if (!api) return;
+  const list = previewItems();
+  const what = entry.kind === 'dir' ? t('plugin.files.status.folder', null, 'Folder') : formatSize(entry.size);
+  api.info.name.textContent = entry.name || baseName(entry.path);
+  api.info.meta.textContent = `${entry.path || homeLabel} · ${what}${entry.modified ? ` · ${formatWhen(entry.modified)}` : ''}`;
+  api.info.note.textContent = entry.is_image
+    ? t('plugin.files.preview.zoomHint', null, 'Click image to zoom')
+    : tp('plugin.files.preview.navHint', Math.max(1, list.length), null, `${list.length} items · ← → to move`);
+  api.arrows.classList.toggle('hidden', list.length < 2);
+  // A player keeps its own controls along the bottom edge: the details sit
+  // above them rather than under the bar.
+  api.card.classList.toggle('is-media', !!(entry.is_video || entry.is_audio));
+
+  // A fresh view per file: a fetch still in flight for the previous one then
+  // lands in a detached node instead of on top of the new file.
+  stopPreviewMedia(api.stage);
+  api.stage.textContent = '';
+  const view = document.createElement('div');
+  view.className = 'files-look-view';
+  api.stage.appendChild(view);
+  try {
+    await fillPreview(view, entry);
+  } catch (_) { /* keep the preview up even if a file fails */ }
+}
+
 function stepPreview(dir, list) {
-  if (!list.length) return;
+  if (!list.length || !previewApi) return;
   previewIndex = (previewIndex + dir + list.length) % list.length;
   const entry = list[previewIndex];
   selectEntry(entry, null);
-  closePreview();
-  void openPreview(entry, previewIndex);
+  void showPreview(entry);
+}
+
+/** The two side arrows: hidden until the pointer is over the preview. */
+function lookArrows() {
+  const wrap = document.createElement('div');
+  wrap.className = 'files-look-arrows';
+  wrap.append(
+    lookArrow('prev', 'ui/chevron-left', t('plugin.files.preview.prev', null, 'Previous file'),
+      () => stepPreview(-1, previewItems())),
+    lookArrow('next', 'ui/chevron-right', t('plugin.files.preview.next', null, 'Next file'),
+      () => stepPreview(1, previewItems())),
+  );
+  return wrap;
+}
+
+function lookArrow(dir, iconName, label, onClick) {
+  const btn = iconButton({ icon: iconName, label, onClick });
+  btn.classList.add('files-look-arrow', `is-${dir}`);
+  return btn;
+}
+
+/** The scrim: file name, where it lives, and what the viewer can do. */
+function lookInfo() {
+  const info = document.createElement('div');
+  info.className = 'files-look-info';
+  const titles = document.createElement('div');
+  titles.className = 'files-look-titles';
+  const name = document.createElement('span');
+  name.className = 'files-look-name';
+  const meta = document.createElement('span');
+  meta.className = 'files-look-meta';
+  const note = document.createElement('span');
+  note.className = 'files-look-note';
+  titles.append(name, meta);
+  info.append(titles, note);
+  return { el: info, name, meta, note };
 }
 function fmtClock(secs) {
   if (!Number.isFinite(secs) || secs < 0) secs = 0;
@@ -1079,6 +1169,9 @@ async function videoInfo(rel) {
     return res?.data || null;
   } catch (_) { return null; }
 }
+
+/** How long the player's controls stay up after the last pointer move. */
+const PLAYER_IDLE_MS = 2600;
 
 /**
  * The in-app media player, shared by video and music previews. The stream is
@@ -1156,6 +1249,28 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
 
   bar.append(playBtn, curEl, seek, durEl, muteBtn, fsBtn);
 
+  // The controls are a hover affordance: they follow the pointer and step out
+  // of the way once it rests — but only while the file is playing, since a
+  // paused player is exactly when you reach for them.
+  let hideTimer = null;
+  let pointerOverBar = false;
+  function showBar() {
+    wrap.classList.remove('is-idle');
+    scheduleHideBar();
+  }
+  function scheduleHideBar() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      if (pointerOverBar || media.paused) return;
+      wrap.classList.add('is-idle');
+    }, PLAYER_IDLE_MS);
+  }
+  wrap.addEventListener('pointermove', showBar);
+  wrap.addEventListener('pointerenter', showBar);
+  wrap.addEventListener('pointerleave', scheduleHideBar);
+  bar.addEventListener('pointerenter', () => { pointerOverBar = true; showBar(); });
+  bar.addEventListener('pointerleave', () => { pointerOverBar = false; scheduleHideBar(); });
+
   const errorBox = document.createElement('div');
   errorBox.className = 'files-player-error hidden';
 
@@ -1185,7 +1300,10 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
     else if (wrap.requestFullscreen) wrap.requestFullscreen();
     else media.webkitEnterFullscreen?.();
   }
-  function syncPlay() { void setIcon(playIcon, media.paused ? 'ui/play' : 'ui/pause', { size: 16 }); }
+  function syncPlay() {
+    void setIcon(playIcon, media.paused ? 'ui/play' : 'ui/pause', { size: 16 });
+    showBar();   // play/pause is worth seeing; paused keeps the bar up
+  }
   function syncTime() {
     if (!scrubbing) {
       if (Number.isFinite(media.duration) && media.duration > 0) duration = media.duration;
@@ -1276,41 +1394,37 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   return wrap;
 }
 
-async function fillPreview(card, entry, nav) {
-  const info = document.createElement('div');
-  info.className = 'files-preview-meta';
-  const what = entry.kind === 'dir' ? t('plugin.files.status.folder', null, 'Folder') : formatSize(entry.size);
-  info.textContent = `${entry.path || homeLabel} · ${what}${entry.modified ? ` · ${formatWhen(entry.modified)}` : ''}`;
-
+/** Paint one file into the quick look's view. Navigation lives outside this
+ *  (the side arrows), so a file only ever fills the surface. */
+async function fillPreview(view, entry) {
   if (entry.is_image) {
     const img = document.createElement('img');
     img.className = 'files-preview-img';
     img.src = rawUrl(entry.path);
     img.addEventListener('click', () => img.classList.toggle('is-zoomed'));
-    card.append(img, navBar(nav, t('plugin.files.preview.zoomHint', null, 'Click image to zoom')), info);
+    view.appendChild(img);
     return;
   }
   if (entry.is_pdf) {
     const box = document.createElement('div');
     box.className = 'files-preview-pdf';
-    card.appendChild(box);
+    view.appendChild(box);
     await renderPdfInto(box, entry.path);
-    card.append(navBar(nav, ''), info);
     return;
   }
   if (entry.is_video) {
-    card.append(buildMediaPlayer(entry), navBar(nav, ''), info);
+    view.appendChild(buildMediaPlayer(entry));
     return;
   }
   if (entry.is_audio) {
-    card.append(buildMediaPlayer(entry, { audio: true }), navBar(nav, ''), info);
+    view.appendChild(buildMediaPlayer(entry, { audio: true }));
     return;
   }
   if (entry.is_office) {
     const box = document.createElement('div');
     box.className = 'files-preview-doc';
     box.textContent = t('plugin.files.preview.loading', null, 'Loading…');
-    card.append(box, navBar(nav, ''), info);
+    view.appendChild(box);
     try {
       renderOfficePreview(box, await apiRender(entry.path));
     } catch (e) {
@@ -1323,7 +1437,7 @@ async function fillPreview(card, entry, nav) {
     const pre = document.createElement('pre');
     pre.className = 'files-preview-text' + (isCode ? ' files-preview-text--code' : '');
     pre.textContent = t('plugin.files.preview.loading', null, 'Loading…');
-    card.append(pre, navBar(nav, ''), info);
+    view.appendChild(pre);
     try {
       pre.textContent = (await apiRead(entry.path)) || (await apiText(entry.path));
     } catch (e) {
@@ -1338,20 +1452,7 @@ async function fillPreview(card, entry, nav) {
   p.textContent = t('plugin.files.preview.noneForType', null, 'No preview for this file type.');
   const dl = button({ label: t('plugin.files.preview.download', null, 'Download'), icon: 'ui/download', onClick: () => downloadEntry(entry) });
   box.append(p, dl);
-  card.append(box, navBar(nav, ''), info);
-}
-function navBar(nav, hint) {
-  const bar = document.createElement('div');
-  bar.className = 'files-preview-nav';
-  const prev = button({ icon: 'ui/chevron-left', variant: 'ghost', onClick: nav.prev });
-  prev.classList.add('ui-btn--icon');
-  const next = button({ icon: 'ui/chevron-right', variant: 'ghost', onClick: nav.next });
-  next.classList.add('ui-btn--icon');
-  const label = document.createElement('span');
-  label.className = 'files-preview-hint';
-  label.textContent = hint || tp('plugin.files.preview.navHint', nav.count, null, `${nav.count} items · ← → to move`);
-  bar.append(prev, label, next);
-  return bar;
+  view.appendChild(box);
 }
 let pdfPage = 1;
 function renderOfficePreview(box, data) {
@@ -1440,7 +1541,7 @@ async function renderPdfInto(host, rel) {
   controls.className = 'files-preview-pdf-nav';
   const prev = button({ icon: 'ui/chevron-left', variant: 'ghost', onClick: () => { pdfPage = Math.max(1, pdfPage - 1); void redraw(); } });
   prev.classList.add('ui-btn--icon');
-  const label = document.createElement('span'); label.className = 'files-preview-hint';
+  const label = document.createElement('span'); label.className = 'files-preview-page';
   label.textContent = t('plugin.files.preview.page', { n: pdfPage }, `Page ${pdfPage}`);
   const next = button({ icon: 'ui/chevron-right', variant: 'ghost', onClick: () => { pdfPage += 1; void redraw(); } });
   next.classList.add('ui-btn--icon');
@@ -1662,6 +1763,11 @@ export function wireFilesEvents() {
     if (!mounted) return;
     const dir = e.detail?.dir ?? '';
     if (cwd === dir || cwd === '') void refresh();
+  });
+  // An embedded app (Craft suite) wrote a file itself: the shell reports the
+  // absolute path, so the folder on screen may be the one it landed in.
+  window.addEventListener('files:external', () => {
+    if (mounted) void refresh();
   });
 }
 

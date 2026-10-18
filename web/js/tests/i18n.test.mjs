@@ -310,7 +310,7 @@ function pluginJs(dir) {
       const path = join(d, entry);
       if (statSync(path).isDirectory()) {
         walkDir(path);
-      } else if (extname(path) === '.js' && !/filmcraft_web|\.min\./.test(entry)) {
+      } else if (extname(path) === '.js' && !/\.min\./.test(entry)) {
         out.push(path);
       }
     }

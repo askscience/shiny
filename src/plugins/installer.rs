@@ -12,7 +12,9 @@ use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::manifest::Manifest;
 use shiny_plugin_sdk::services::PluginCtx;
 
-use crate::plugins::loader::find_cdylib;
+use crate::plugins::loader::{
+    find_cdylib, parse_extras, validate_plugin_name, validate_relative_path, HostExtras, PluginKind,
+};
 use crate::plugins::manager::PluginManager;
 
 /// Append a single line to `<plugins_dir>/install.log`.
@@ -90,11 +92,86 @@ pub async fn install_archive(
     // If the archive contains a single top-level dir, descend into it.
     let install_dir = find_install_root(&staging);
 
+    let (manifest, extras) = read_staged_manifest(&install_dir, plugins_dir)?;
+    require_installable(&install_dir, &manifest, extras.kind, plugins_dir)?;
+    finish_install(&install_dir, &manifest.name, &staging, plugins_dir, manager, base_ctx).await
+}
+
+/// Install a web-app plugin assembled by the Craft store: `zip_bytes` is the
+/// app's static site (as published in its release), `manifest_toml` the
+/// generated manifest describing it, and `icon` an optional `web/icon.png`.
+///
+/// The archive's payload is moved under `web/` — the app's own `index.html`
+/// becomes the plugin's document root — and the manifest is written beside it,
+/// so the result is an ordinary plugin directory for the loader and the
+/// `/plugins/<name>/` route.
+pub async fn install_web_app(
+    zip_bytes: Vec<u8>,
+    manifest_toml: String,
+    icon: Option<Vec<u8>>,
+    plugins_dir: &Path,
+    manager: &PluginManager,
+    base_ctx: Arc<PluginCtx>,
+) -> Result<String, AppError> {
+    log_event(plugins_dir, &format!("webapp-install-begin bytes={}", zip_bytes.len()));
+    let format = match ArchiveFormat::sniff(&zip_bytes) {
+        Some(f) => f,
+        None => {
+            log_event(plugins_dir, "reject-format unknown-bytes");
+            return Err(AppError::BadRequest(
+                "Unrecognised archive format (expected .zip or .tar.gz)".into(),
+            ));
+        }
+    };
+
+    let staging = unique_staging_dir(plugins_dir);
+    std::fs::create_dir_all(&staging)?;
+    let _staging_cleanup = StagingCleanup(staging.clone());
+
+    // Extract into a payload subdirectory so the app's files can be moved to
+    // `web/` in one pass, whatever shape the archive has.
+    let payload = staging.join("_payload");
+    std::fs::create_dir_all(&payload)?;
+    if let Err(e) = extract(&zip_bytes, format, &payload) {
+        log_event(plugins_dir, &format!("extract-failed: {e}"));
+        return Err(e);
+    }
+    // Release archives wrap the site in a single top-level folder
+    // (`photocraft-web-0.10.0/`); descend when that is all there is.
+    let payload_root = single_subdirectory(&payload).unwrap_or_else(|| payload.clone());
+
+    let web_dir = staging.join("web");
+    std::fs::create_dir_all(&web_dir)?;
+    move_children(&payload_root, &web_dir)?;
+    let _ = std::fs::remove_dir_all(&payload);
+    if let Some(icon) = icon {
+        std::fs::write(web_dir.join("icon.png"), icon)?;
+    }
+    std::fs::write(staging.join("plugin.toml"), manifest_toml)?;
+
+    let install_dir = find_install_root(&staging);
+    let (manifest, extras) = read_staged_manifest(&install_dir, plugins_dir)?;
+    if !extras.kind.is_web() {
+        log_event(plugins_dir, &format!("reject-kind name={} expected=web", manifest.name));
+        return Err(AppError::BadRequest(format!(
+            "install_web_app needs a web-app manifest for '{}'", manifest.name
+        )));
+    }
+    require_installable(&install_dir, &manifest, extras.kind, plugins_dir)?;
+    finish_install(&install_dir, &manifest.name, &staging, plugins_dir, manager, base_ctx).await
+}
+
+/// Read and validate the manifest of a staged plugin directory. Everything a
+/// manifest can get wrong (name, API level, declared paths) is checked here,
+/// before any file is published.
+fn read_staged_manifest(
+    install_dir: &Path,
+    plugins_dir: &Path,
+) -> Result<(Manifest, HostExtras), AppError> {
     let manifest_text = match std::fs::read_to_string(install_dir.join("plugin.toml")) {
         Ok(t) => t,
         Err(e) => {
             log_event(plugins_dir, &format!("manifest-read-failed: {e}"));
-            let _ = std::fs::remove_dir_all(&staging);
             return Err(AppError::BadRequest("plugin.toml not found at archive root".into()));
         }
     };
@@ -102,20 +179,27 @@ pub async fn install_archive(
         Ok(m) => m,
         Err(e) => {
             log_event(plugins_dir, &format!("manifest-parse-failed: {e}"));
-            let _ = std::fs::remove_dir_all(&staging);
             return Err(AppError::BadRequest(format!("Invalid plugin.toml: {}", e)));
         }
     };
     // The manifest name is joined into `plugins_dir` below — reject anything
     // that is not a single safe path component (path traversal).
-    if let Err(e) = crate::plugins::loader::validate_plugin_name(&manifest.name) {
+    if let Err(e) = validate_plugin_name(&manifest.name) {
         log_event(plugins_dir, &format!("reject-name name={:?}", manifest.name));
-        let _ = std::fs::remove_dir_all(&staging);
         return Err(e);
     }
+    // Declared directories are joined onto the install dir; refuse anything
+    // that is not a plain relative sub-path (mirrors the loader, and runs
+    // before the installability check below joins `web_dir`).
+    validate_relative_path("migrations_dir", &manifest.migrations_dir)?;
+    validate_relative_path("skills_dir", &manifest.skills_dir)?;
+    validate_relative_path("web_dir", &manifest.web_dir)?;
+
+    let extras = parse_extras(&manifest_text);
     log_event(plugins_dir, &format!(
-        "manifest-ok name={} version={} api_level={}",
-        manifest.name, manifest.version, manifest.api_level
+        "manifest-ok name={} version={} api_level={} kind={}",
+        manifest.name, manifest.version, manifest.api_level,
+        if extras.kind.is_web() { "web" } else { "native" }
     ));
 
     if manifest.api_level > shiny_plugin_sdk::CORE_API_LEVEL {
@@ -123,55 +207,106 @@ pub async fn install_archive(
             "reject api_level {} > core {}",
             manifest.api_level, shiny_plugin_sdk::CORE_API_LEVEL
         ));
-        let _ = std::fs::remove_dir_all(&staging);
         return Err(AppError::BadRequest(format!(
             "Plugin api_level {} > core {}", manifest.api_level, shiny_plugin_sdk::CORE_API_LEVEL
         )));
     }
+    Ok((manifest, extras))
+}
 
-    // Validate a cdylib is present.
-    if find_cdylib(&install_dir, &manifest.name).is_none() {
-        log_event(plugins_dir, &format!(
-            "cdylib-missing name={}", manifest.name
-        ));
-        let _ = std::fs::remove_dir_all(&staging);
+/// What a staged directory must contain to be loadable: a cdylib for a native
+/// plugin, an entry document for a web-app plugin.
+fn require_installable(
+    install_dir: &Path,
+    manifest: &Manifest,
+    kind: PluginKind,
+    plugins_dir: &Path,
+) -> Result<(), AppError> {
+    if kind.is_web() {
+        if !install_dir.join(&manifest.web_dir).join("index.html").is_file() {
+            log_event(plugins_dir, &format!("webapp-entry-missing name={}", manifest.name));
+            return Err(AppError::BadRequest(format!(
+                "Web app archive for '{}' has no {}/index.html",
+                manifest.name, manifest.web_dir
+            )));
+        }
+        return Ok(());
+    }
+    if find_cdylib(install_dir, &manifest.name).is_none() {
+        log_event(plugins_dir, &format!("cdylib-missing name={}", manifest.name));
         return Err(AppError::BadRequest(format!(
             "Archive does not contain a cdylib for plugin '{}'", manifest.name
         )));
     }
+    Ok(())
+}
 
+/// Publish a staged plugin directory: take the install lock, swap the staged
+/// files into `plugins_dir/<name>` with rollback, then register the plugin
+/// with the manager. Disk changes stay provisional until registration
+/// succeeds; cancellation also restores the previous files.
+async fn finish_install(
+    install_dir: &Path,
+    plugin_name: &str,
+    staging: &Path,
+    plugins_dir: &Path,
+    manager: &PluginManager,
+    base_ctx: Arc<PluginCtx>,
+) -> Result<String, AppError> {
     // Installation lock — serializes concurrent installs. Two layers: an
     // in-process async mutex (same-server races) and an advisory file lock
-    // (multi-process). Held until the end of `install_archive`.
+    // (multi-process). Held until the end of the install.
     static INSTALL_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let _process_guard = INSTALL_MUTEX.lock().await;
     let lockfile = plugins_dir.join(".install.lock");
     let _lock = acquire_lock(&lockfile).await?;
 
-    let final_dir = plugins_dir.join(&manifest.name);
-    let backup = plugins_dir.join(format!("{}.bak", manifest.name));
-    let mut swap = InstallSwap::prepare(&install_dir, &final_dir, &backup)?;
-    let _ = std::fs::remove_dir_all(&staging);
+    let final_dir = plugins_dir.join(plugin_name);
+    let backup = plugins_dir.join(format!("{}.bak", plugin_name));
+    let mut swap = InstallSwap::prepare(install_dir, &final_dir, &backup)?;
+    let _ = std::fs::remove_dir_all(staging);
 
-    // Disk changes remain provisional until the manager has prepared and
-    // published the new registration. Cancellation also restores the files.
     let installed_name = match manager.install_dir_static(&final_dir, base_ctx).await {
         Ok(name) => name,
         Err(error) => {
-            log_event(plugins_dir, &format!("register-failed name={}: {error}", manifest.name));
+            log_event(plugins_dir, &format!("register-failed name={plugin_name}: {error}"));
             if let Err(rollback) = swap.rollback() {
-                log_event(plugins_dir, &format!("rollback-failed name={}: {rollback}", manifest.name));
+                log_event(plugins_dir, &format!("rollback-failed name={plugin_name}: {rollback}"));
                 return Err(AppError::Internal(format!("Plugin install failed: {error}; restoring previous files failed: {rollback}")));
             }
-            log_event(plugins_dir, &format!("files-restored name={}", manifest.name));
+            log_event(plugins_dir, &format!("files-restored name={plugin_name}"));
             return Err(error);
         }
     };
     swap.committed = true;
-    log_event(plugins_dir, &format!(
-        "install-ok name={}", installed_name
-    ));
+    log_event(plugins_dir, &format!("install-ok name={installed_name}"));
     Ok(installed_name)
+}
+
+/// The single child directory of `dir`, when that is all it holds. Extracted
+/// release archives routinely wrap their payload in one folder.
+fn single_subdirectory(dir: &Path) -> Option<PathBuf> {
+    let entries: Vec<_> = std::fs::read_dir(dir).ok()?.flatten().collect();
+    if entries.len() == 1 && entries[0].path().is_dir() {
+        return Some(entries[0].path());
+    }
+    None
+}
+
+/// Move every child of `from` into `to` (same filesystem: both live under the
+/// install staging directory).
+fn move_children(from: &Path, to: &Path) -> Result<(), AppError> {
+    let entries = std::fs::read_dir(from)?;
+    for entry in entries.flatten() {
+        let target = to.join(entry.file_name());
+        if target.exists() {
+            return Err(AppError::BadRequest(format!(
+                "archive contains '{}' twice", entry.file_name().to_string_lossy()
+            )));
+        }
+        std::fs::rename(entry.path(), &target)?;
+    }
+    Ok(())
 }
 
 struct StagingCleanup(PathBuf);

@@ -118,9 +118,12 @@ Read [Runtime & ABI](runtime-abi.md) before writing any DB or HTTP code.
 | `src/plugins/registry.rs` | `ToolRegistry` — action key → `Arc<dyn Tool>`. |
 | `src/plugins/manager.rs` | `PluginManager` — contributions, persona, skills, activation. |
 | `src/plugins/installer.rs` | zip/tar unpacker, manifest validation, install log. |
+| `src/plugins/store.rs` | Craft store: catalog, GitHub release resolution, SHA-256 verification, web-app installs. |
 | `src/plugins/admin_api.rs` | Plugin HTTP endpoints. |
-| `src/api/mod.rs` | Plugin route mounting + `inject_path_params`. |
+| `src/api/mod.rs` | Plugin route mounting + `inject_path_params`; the web-app routes carry framing/caching headers of their own. |
 | `src/main.rs` | `RouterHandle` hot swap + boot discovery. |
 | `web/js/pluginIcon.js` | Plugin icon resolution. |
 | `web/js/activePlugins.js` | Frontend active-plugin set. |
+| `web/js/webAppSurface.js` | Window surface for a `kind = "web"` plugin (the iframe). |
+| `web/js/craftStore.js` | Craft store data + the background updater. |
 | `PLUGINS.md` | The original root document (kept; this set supersedes it). |

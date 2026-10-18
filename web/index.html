@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="pitch" data-bar-pos="top" data-orb-pos="bottom-center" data-orb-color="accent" data-orb-border="hairline" data-orb-pill="0" data-orb-step="0" data-autohide-bar="1" data-autohide-orb="1">
+<html lang="en" data-theme="pitch" data-bar-pos="top" data-orb-pos="bottom-center" data-orb-color="accent" data-orb-border="hairline" data-orb-attached="0" data-orb-status="off" data-autohide-bar="1" data-autohide-orb="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -213,19 +213,18 @@
       <div id="tile-overlay-body" class="tile-overlay-body"></div>
     </div>
 
-    <!-- The assistant's presence. The voice bar is its own element — Settings →
-         Appearance sizes and shapes THIS element (width, height, corners,
-         border, colours); there is no container between them. The status pill
-         (artifact dock) is a sibling that hangs clear of the bar's height. -->
+    <!-- The assistant's presence: ONE element. The voice bar is this div and
+         nothing else — Settings → Appearance gives it its size, colour and
+         border, the accent line and its voice-reactive shadow are the element's
+         own (sphere.css). Nothing sits inside it but the step line's text. The
+         status pill (artifact dock) is a sibling that hangs clear of its box. -->
     <div id="artifact-dock" class="hidden" aria-label="Saved cards" data-i18n-aria-label="hud.savedCards">
       <div id="artifact-dock-icons"></div>
       <div id="artifact-dock-step" class="artifact-dock-step hidden" aria-live="polite"></div>
     </div>
-    <button type="button" id="sphere-container" aria-label="Voice assistant" data-i18n-aria-label="hud.voiceAssistant">
+    <div id="sphere-container" role="button" tabindex="0" aria-label="Voice assistant" data-i18n-aria-label="hud.voiceAssistant">
       <span id="voice-step" class="voice-step hidden" aria-hidden="true"></span>
-      <span class="voice-glow" aria-hidden="true"></span>
-      <span class="voice-lip" aria-hidden="true"></span>
-    </button>
+    </div>
 
     <div id="compose-mode" class="compose-mode hidden" aria-hidden="true">
       <div id="compose-conversation" class="compose-conversation">

@@ -5,13 +5,17 @@
  *   1. the curated icon mapped to this plugin in the active icon set
  *      (`PLUGIN_ICONS` → e.g. `apps/files`; Infinity ships these coloured),
  *   2. the plugin's own `web/icon.svg` (served at `/plugins/<name>/icon.svg`),
- *   3. a core-window theme icon, for built-in windows,
- *   4. the caller's `fallback` (`ui/puzzle` by default).
+ *   3. the plugin's own `web/icon.png` — a web-app plugin installed from the
+ *      Craft store carries its vendor's app icon, which is a PNG. The coloured
+ *      set shows it as published; the monochrome set converts it to a
+ *      monochrome rendering so it sits with the line glyphs around it,
+ *   4. a core-window theme icon, for built-in windows,
+ *   5. the caller's `fallback` (`ui/puzzle` by default).
  *
  * Icons come through the unified resolver (`/ui/index.js`), so they follow the
  * active set, the theme, the accent tint and any theme overrides.
  */
-import { setIcon, loadIconSvg, decorateSvg } from '../ui/index.js';
+import { setIcon, loadIconSvg, decorateSvg, getActiveIconset } from '../ui/index.js';
 import { isCoreWindow, coreWindowIcon } from './coreWindows.js';
 
 /**
@@ -86,10 +90,33 @@ function paint(span, name) {
   loadSvg(name).then(async ({ svg, iconName }) => {
     if (svg) {
       span.innerHTML = await decorateSvg(svg, iconName);
-    } else {
-      void setIcon(span, isCoreWindow(name) ? coreWindowIcon(name) : fallback,
-        { size, label });
+      return;
     }
+    const themeIcon = isCoreWindow(name) ? coreWindowIcon(name) : fallback;
+    if (isCoreWindow(name)) {
+      void setIcon(span, themeIcon, { size, label });
+      return;
+    }
+    // A plugin with no svg of its own may still carry a PNG (the Craft store
+    // installs each app's own icon as `web/icon.png`). The `<img>` loads the
+    // response once — the browser caches it — and falls back to the theme icon
+    // when the plugin has no PNG at all.
+    //
+    // The artwork follows the icon set: the coloured set shows it as the app
+    // publishes it, while the monochrome set converts it to grayscale (the
+    // `is-monochrome` rule in ui.css) so a coloured badge does not drop into a
+    // tray of line glyphs. Re-painting on `iconset:change` re-evaluates this.
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.classList.toggle('is-monochrome', !getActiveIconset());
+    img.addEventListener('error', () => {
+      img.remove();
+      void setIcon(span, themeIcon, { size, label });
+    }, { once: true });
+    img.src = `/plugins/${name}/icon.png`;
+    span.textContent = '';
+    span.appendChild(img);
   });
 }
 

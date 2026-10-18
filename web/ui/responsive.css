@@ -19,8 +19,8 @@
 
 /* Every title-bar action remains reachable: short windows use one scrollable
    row, so a long toolbar cannot consume the document's entire height. */
-.tile:not(.filmcraft-tile) .tile-header { flex: 0 0 auto; min-width: 0; }
-.tile:not(.filmcraft-tile) [data-window-bar] { min-width: 0; }
+.tile .tile-header { flex: 0 0 auto; min-width: 0; }
+.tile [data-window-bar] { min-width: 0; }
 .plugins-toolbar { flex-wrap: wrap; }
 .plugins-toolbar .ui-search { min-width: min(180px,100%); }
 .plugins-window,.settings-window,.settings-layout,.settings-panels { min-width: 0; min-height: 0; }
@@ -87,8 +87,8 @@
   #tile-grid { bottom: max(var(--desktop-gap,8px),env(safe-area-inset-bottom)); }
 }
 @media (max-height: 500px) {
-  .tile:not(.filmcraft-tile) .tile-header--merged > [data-window-bar] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; min-height: 44px; }
-  .tile:not(.filmcraft-tile) .tile-header--merged > [data-window-bar] > * { flex-shrink: 0; }
+  .tile .tile-header--merged > [data-window-bar] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; min-height: 44px; }
+  .tile .tile-header--merged > [data-window-bar] > * { flex-shrink: 0; }
   .calculator-tile { overflow-y: auto; }
   .calculator-tile > :not(.tile-header) { flex-shrink: 0; }
   .calculator-keys { overflow: visible; }
@@ -101,8 +101,8 @@
 @media (pointer: coarse) {
   .ui-btn,.ui-tool.ui-btn,.ui-chip,.ui-select-option,.settings-nav-item { min-height: 44px; }
   .ui-btn--icon,.ui-tool.ui-btn { min-width: 44px; }
-  .tile:not(.filmcraft-tile) .tile-header-btn { width: 40px; height: 44px; }
-  .tile:not(.filmcraft-tile) .tile-header-controls { flex-shrink: 0; }
+  .tile .tile-header-btn { width: 40px; height: 44px; }
+  .tile .tile-header-controls { flex-shrink: 0; }
   /* 16px avoids browser auto-zoom when a phone focuses a form control. */
   .ui-input,.ui-textarea,.ui-select { font-size: 16px; }
   .ui-slider { min-height: 32px; }

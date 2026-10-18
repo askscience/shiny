@@ -10,6 +10,14 @@ describes the install audit trail and the (currently inactive) signature hook.
 - Plugins are full Rust `cdylib`s loaded into the server process. They have **full
   process privileges** — they can read SQLite rows, make HTTP calls, spawn
   threads and write files. **Do not install plugins you do not trust.**
+- A `kind = "web"` plugin (the Craft store installs these) is the exception:
+  no code runs in the server process, only a static site is served. Its
+  HTML/JS/wasm executes in the shell's renderer, framed from the same origin
+  with the app's own CSP; it is installed from its vendor's release and
+  verified against the release's published SHA-256, and its download is
+  restricted to GitHub hosts. Framing is allowed for exactly these routes
+  (`X-Frame-Options: SAMEORIGIN`); everything else the core serves stays
+  `DENY`.
 - Plugin management (install/uninstall/activate/deactivate) is gated only by a
   **logged-in user token** — there is currently **no admin role**. The
   `ADMIN_TOKEN` env var and the `travelers.is_admin` column are read but **not

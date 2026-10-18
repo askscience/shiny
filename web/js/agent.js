@@ -343,7 +343,7 @@ async function readAgentStream(res, onStep, onThinking) {
       }
 
       if (event.type === 'step' && event.message) {
-        onStep?.({ key: event.key, params: event.params, message: event.message });
+        onStep?.({ key: event.key, params: event.params, message: event.message, action: event.action });
       } else if (event.type === 'thinking' && event.message) {
         onThinking?.(event.message);
       } else if (event.type === 'done') {
@@ -399,7 +399,8 @@ async function requestAgent(body, onStep, signal, onThinking) {
  * their key (the English prefix is a backstop for a server without keys).
  */
 function handleAgentStep(step) {
-  const { key, params, message } = typeof step === 'string' ? { message: step } : (step || {});
+  const { key, params, message, action } =
+    typeof step === 'string' ? { message: step } : (step || {});
   if (typeof message !== 'string') return;
   // The image tool reserves a visible slot for the picture that is coming.
   if (key === 'step.renderingImage' || message.startsWith('Rendering image')) {
@@ -409,7 +410,7 @@ function handleAgentStep(step) {
   if (key === 'step.composingSong' || message.startsWith('Composing the song')) {
     showSongPlaceholder();
   }
-  setDockStep(key ? t(key, params, message) : message);
+  setDockStep(key ? t(key, params, message) : message, { action });
 }
 
 /** The AI chose a plugin window to surface (show_plugin tool). */

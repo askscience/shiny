@@ -112,12 +112,27 @@ window. In the multi-user install plugins are also **installed per user**
 | `calculator` | Office | Basic/scientific math sharing one evaluator with the window. |
 | `image` | Media | Layered raster editor (blend modes, filters, painting, selection). |
 | `studio` | Media | DAW-grade sequencer + synth; renders to WAV on a self-contained DSP engine. |
-| `filmcraft` | Media | FilmCraft video editor in a window (cut, colour, sound, export), plus a headless engine for batch renders. |
 | `radio` | Media | Internet radio via Radio Browser. |
 | `youtube` | Media | Search and watch videos, with a built-in recommender. |
 
 Each plugin has its own documentation in [`plugins/<name>/docs/`](plugins) (for
 example [`plugins/files/docs/README.md`](plugins/files/docs/README.md)).
+
+### Craft apps
+
+The Plugins window's **Craft apps** tab is a store for the
+[Craft App Suite](https://getartcraft.com/apps) (PhotoCraft, FilmCraft,
+WordCraft, PdfCraft, …): it lists each app from the core's catalog, installs
+that app's own **web build** from its GitHub release — verified against the
+release's SHA-256 — as a web-app plugin (`kind = "web"`, served at
+`/plugins/<id>/` and mounted in a window as an iframe), and keeps it updated.
+Each app can also be given **AI control**: its command-line tool (a Model
+Context Protocol server, shipped in the same release) is installed on request,
+and the agent can then drive that app's engine — but only while the app's window
+is in focus mode, a rule the core enforces, not the prompt.
+The catalog and the release rules follow
+[ArtCraft Launcher](https://github.com/storytold/craft-launcher) (MIT OR
+Apache-2.0, © ArtCraft Team and contributors).
 
 ---
 

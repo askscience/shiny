@@ -1,22 +1,35 @@
-/* Voice bar — the assistant's presence.
+/* Voice bar — the assistant's presence, and ONE element.
  *
- * The bar IS #sphere-container: its width, height, corners, border and colours
- * come straight from Settings → Appearance and land on THIS element — there is
- * no wrapper between the settings and the bar. Its only child, the status dock
- * (#artifact-dock), is a sibling, positioned relative to the bar's own height.
+ * The bar IS #sphere-container and the element is all of it: its own body
+ * (Settings → Appearance "Voice bar colour" — the theme accent, or every accent
+ * at once), its own border, its own rounding and its own audio-reactive shadow.
+ * Nothing sits inside it but the step line's text.
  *
- * With no border (and no step line) the bar is invisible except for the lip: an
- * accent-coloured shadow that rises from it and swells with the voice
- * (--voice-level, set by sphere.js from the `voice:level` events). A border or
- * the step line paints a plate behind it.
+ * It has two modes:
+ *
+ *  - attached (`data-orb-pos='top-left'`): it rides the top bar's row at its
+ *    start, at the rail's height and rounding, and it FOLLOWS the bar — a top
+ *    bar docked at the bottom takes the voice bar down with it. The rail gives
+ *    up one slot plus its own gap, so the two read as one row.
+ *  - free (`bottom-center`, `bottom-left`, `bottom-right`): it docks to the
+ *    bottom edge on its own, with the width and height picked in Settings. The
+ *    size settings therefore apply on this edge only — the opposite one from a
+ *    top bar.
+ *
+ * The rounding is the top bar's own (its rail is a pill), so it is not a
+ * setting; the colour follows the theme accent (or --error while the mic is
+ * unhappy).
  */
 
 :root {
-  /* The bar's own size. applyImmersive() overwrites both from the settings. */
+  /* Free mode: the bar's own size. applyImmersive() overwrites both. */
   --voice-bar-width: 176px;
   --voice-bar-height: 40px;
-  /* Gap between the bar and the top bar's rail when it docks at the top left. */
-  --voice-pill-gap: 14px;
+  /* Attached mode: the slot the bar takes at the start of the top bar's row.
+     A step line inside it needs more room than the bare bar. */
+  --voice-slot: 108px;
+  /* The top bar's rounding — its rail is a pill (.hud-header-main). */
+  --voice-radius: 999px;
 }
 
 /* ── The bar ─────────────────────────────────────────────────── */
@@ -33,33 +46,106 @@
   justify-content: center;
   gap: 8px;
   border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
+  border-radius: var(--voice-radius, 999px);
+  /* The bar's own body: its colour IS the bar. */
+  background: var(--voice-color);
+  color: var(--voice-ink);
+  font: inherit;
   cursor: pointer;
   touch-action: none;
-  -webkit-appearance: none;
-  appearance: none;
   outline: none;
   /* Where the bar is centred on the x axis. The corner positions set it to 0
      so the same transitions slide straight down (or up) without an x offset. */
   transform: translate(var(--orb-x, -50%), 0);
-  /* Driven from sphere.js; the defaults are the resting look. */
+  /* Driven from sphere.js: the audio level and the stereo pan of the voice. */
   --voice-level: 0;
   --voice-pan: 0;
-  --voice-base: 0.22;
+  --voice-halo: 42%;
   --voice-color: var(--accent);
+  /* The bar's ink: on the accent body the accent's contrast. The top-bar look
+     overrides it (and the body) — see `data-orb-style` below. */
+  --voice-ink: var(--accent-contrast, #08090b);
+  /* The presence, and the audio effect is all of it: at rest there is no shadow
+     at all (every offset, blur and spread is scaled by the level), and it
+     swells with the voice, leaning with the stereo pan. Kept in a token so the
+     top-bar look can compose it with that plate's own shadow. */
+  --voice-glow:
+    0 0 calc(var(--voice-level) * 28px) calc(var(--voice-level) * 4px)
+      color-mix(in srgb, var(--voice-color) var(--voice-halo), transparent),
+    calc(var(--voice-pan) * var(--voice-level) * 10px)
+      calc(var(--voice-level) * -20px)
+      calc(var(--voice-level) * 36px)
+      calc(var(--voice-level) * 4px)
+      color-mix(in srgb, var(--voice-color) 45%, transparent);
+  box-shadow: var(--voice-glow);
   transition:
-    transform var(--motion-feedback) var(--motion-ease),
     background-color var(--motion-feedback) linear,
     border-color var(--motion-feedback) linear;
 }
 
-/* ── Docking ─────────────────────────────────────────────────────
- * Bottom-centre is the default. `data-orb-pos` is published by
- * applyImmersive(); effectiveOrbPosition() resolves the one combination that
- * would collide (a bottom top bar and a bottom voice bar).
- */
+/* ── Attached: it rides the top bar's row ─────────────────────── */
+
+html[data-orb-pos='top-left'] #sphere-container {
+  width: var(--voice-slot);
+  height: var(--hud-bar-height);
+  --orb-x: 0;
+}
+
+/* A horizontal row — at the top, centred, or docked to the bottom edge: the bar
+   starts the row, and the row gives up its slot plus the row's own gap. */
+html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center']) #sphere-container {
+  top: var(--hud-header-pad);
+  bottom: auto;
+  left: var(--desktop-gap, 14px);
+  right: auto;
+  /* It hides upward, through the top edge, not down. */
+  --orb-glide-y: calc(-100% - 24px);
+}
+
+html[data-orb-pos='top-left'][data-bar-pos='bottom'] #sphere-container {
+  top: auto;
+  bottom: max(var(--desktop-gap, 12px), env(safe-area-inset-bottom));
+  left: var(--desktop-gap, 14px);
+  right: auto;
+  --orb-glide-y: calc(100% + 24px);
+}
+
+html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center'], [data-bar-pos='bottom']) #hud-header {
+  padding-left: calc(var(--desktop-gap, 14px) + var(--voice-slot) + var(--desktop-gap, 10px));
+}
+
+/* A centred rail keeps its centre: reserve the same room on both sides rather
+   than pushing it right. */
+html[data-orb-pos='top-left'][data-bar-pos='center'] #hud-header {
+  padding-right: calc(var(--desktop-gap, 14px) + var(--voice-slot) + var(--desktop-gap, 10px));
+}
+
+/* A side dock is a vertical row of the rail's own width: the bar starts it and
+   takes the row's cross size. */
+html[data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']) #sphere-container {
+  top: max(10px, env(safe-area-inset-top));
+  bottom: auto;
+  width: var(--hud-bar-height);
+  height: var(--voice-slot);
+  --orb-x: 0;
+  --orb-glide-y: calc(-100% - 24px);
+}
+
+html[data-orb-pos='top-left'][data-bar-pos='left'] #sphere-container {
+  left: 8px;
+  right: auto;
+}
+
+html[data-orb-pos='top-left'][data-bar-pos='right'] #sphere-container {
+  right: 8px;
+  left: auto;
+}
+
+html[data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-header {
+  padding-top: calc(max(10px, env(safe-area-inset-top)) + var(--voice-slot) + 8px);
+}
+
+/* ── Free: it docks to the bottom edge on its own ─────────────── */
 
 html[data-orb-pos='bottom-center'] #sphere-container {
   left: 50%;
@@ -80,50 +166,18 @@ html[data-orb-pos='bottom-right'] #sphere-container {
   --orb-x: 0;
 }
 
-/* Top left: the bar joins the top bar's row, so it takes the top bar's height —
-   the user's width still applies, and the colours are theirs. */
-html[data-orb-pos='top-left'] #sphere-container {
-  top: var(--hud-header-pad);
-  bottom: auto;
-  left: var(--desktop-gap, 14px);
-  right: auto;
-  height: var(--hud-bar-height);
-  --orb-x: 0;
-  /* It hides upward, through the top edge, not down. */
-  --orb-glide-y: calc(-100% - 24px);
+/* ── The border ─────────────────────────────────────────────────
+ * A line on the bar itself. The bar is filled with the accent, so the hairline
+ * is the accent's contrast ink rather than the glass one — still a 1px line,
+ * but visible on every theme and every accent. */
+
+html[data-orb-border='hairline'] #sphere-container {
+  border-color: color-mix(in srgb, var(--accent-contrast, #fff) 38%, transparent);
 }
 
-/* The row gives up the bar's width plus one gap, so the rail never overlaps it. */
-html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='bottom']) #hud-header {
-  padding-left: calc(var(--desktop-gap, 14px) + var(--voice-bar-width) + var(--voice-pill-gap));
+html[data-orb-style='bar'][data-orb-border='hairline'] #sphere-container {
+  border-color: var(--glass-border);
 }
-
-/* A centred rail keeps its centre: reserve the same room on both sides rather
-   than pushing it right. */
-html[data-orb-pos='top-left'][data-bar-pos='center'] #hud-header {
-  padding-left: calc(var(--desktop-gap, 14px) + var(--voice-bar-width) + var(--voice-pill-gap));
-  padding-right: calc(var(--desktop-gap, 14px) + var(--voice-bar-width) + var(--voice-pill-gap));
-}
-
-/* ── Corners ──────────────────────────────────────────────────── */
-
-html[data-orb-radius='pill'] #sphere-container { border-radius: 999px; }
-html[data-orb-radius='rounded'] #sphere-container { border-radius: var(--radius-md, 12px); }
-html[data-orb-radius='square'] #sphere-container { border-radius: 0; }
-
-/* ── The plate and the border ─────────────────────────────────── */
-
-/* A border or the step line needs something to sit on; without either the bar
-   is just the lip, exactly as it has always been. */
-html[data-orb-plate='1'] #sphere-container {
-  background: var(--surface);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  overflow: hidden;
-}
-
-html[data-orb-border='hairline'] #sphere-container { border-color: var(--glass-border); }
 
 html[data-orb-border='palette'] #sphere-container { border-color: transparent; }
 
@@ -146,25 +200,60 @@ html[data-orb-border='palette'] #sphere-container::before {
 
 /* ── All accents at once ────────────────────────────────────────
  * `--focus-bar` is the palette the focus-mode window frame uses (the picked
- * accent plus every accent the theme declares). A shadow cannot take a
- * gradient, so in this mode the lip and the glow are filled with it and lose
- * their shadows. */
-html[data-orb-color='palette'] .voice-lip,
-html[data-orb-color='palette'] .voice-glow {
+ * accent plus every accent the theme declares). The bloom keeps the accent, so
+ * the voice-reactive shadow survives this mode. The top-bar look keeps its own
+ * plate (see below) and shows the palette in the shadow alone. */
+html[data-orb-color='palette']:not([data-orb-style='bar']) #sphere-container {
   background: var(--focus-bar, var(--accent));
-  box-shadow: none;
 }
 
-/* ── Step line inside the bar ───────────────────────────────────
- * A mirror of the dock's live line, not a live region of its own: the dock
- * keeps that job (and stays in the accessibility tree). */
+/* ── The top-bar look ───────────────────────────────────────────
+ * Settings → Appearance → "Voice bar style: top bar": the bar wears the same
+ * plate as the top bar's rail (.hud-header-main) instead of the accent body —
+ * same surface, same glass hairline, same float shadow — and the accent comes
+ * back only in the audio glow. */
+html[data-orb-style='bar'] #sphere-container {
+  background: var(--surface);
+  border-color: var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  --voice-ink: var(--text);
+  /* The plate's definition is its surface + hairline, the way the rail has it.
+     `box-shadow` is NOT touched here: a theme that collapses its shadows
+     (`--shadow-glass: none`, pitch) would otherwise take the audio glow with it
+     — `none, <glow>` is an invalid list and drops the whole declaration. */
+}
+
+html[data-orb-style='bar'][data-orb-border='none'] #sphere-container { border-color: transparent; }
+html[data-orb-style='bar'][data-orb-border='palette'] #sphere-container { border-color: transparent; }
+
+/* ── The bar's glyph: the status line, or the tool's icon ───────
+ * Settings → Appearance → "Tool status": `off` shows nothing here (the line
+ * stays in the bubble above the bar), `text` the humanised step line, `icons`
+ * the running tool's mark — painted by voiceGlyph.js, which also re-runs the
+ * swap fade below on every change. A step line needs room to read; an icon
+ * needs a square, and with no tool the app's own mark fills it. */
+html[data-orb-status='text'] { --voice-slot: min(40vw, 220px); }
+
+html[data-orb-status='off'] .voice-step { display: none; }
+
+html[data-orb-status='icons'] .voice-step {
+  width: var(--voice-glyph, 20px);
+  height: var(--voice-glyph, 20px);
+  /* The brand mark (.app-icon) masks from the font size, so the square holds
+     for the app mark and for a catalogue icon alike. */
+  font-size: var(--voice-glyph, 20px);
+}
+
+/* A mirror of the dock's live line, not a live region of its own: the dock
+   keeps that job (and stays in the accessibility tree). */
 .voice-step {
   position: relative;
   z-index: 3;
   min-width: 0;
   font-size: 10.5px;
   line-height: 1.2;
-  color: var(--text-secondary);
+  color: var(--voice-ink);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -173,14 +262,22 @@ html[data-orb-color='palette'] .voice-glow {
   animation: dockStepIn var(--motion-feedback) var(--ease-out) both;
 }
 
-html[data-orb-step='0'] .voice-step { display: none; }
+/* The swap: the new mark fades in — soft, and over before it reads as motion.
+   Restarted by voiceGlyph.js on every change (it clears the class first). */
+.voice-step.is-fading { animation: voiceGlyphFade 260ms var(--ease-out) 1 both; }
+
+@keyframes voiceGlyphFade {
+  from { opacity: 0; transform: scale(0.86); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
 body.orb-speaking .voice-step { visibility: hidden; }
 body.compose-active .voice-step,
 body.navigator-active .voice-step { display: none; }
 
 /* ── The status dock ────────────────────────────────────────────
  * A sibling of the bar, not its container: it hangs just clear of the bar's
- * height (whatever size the user picked), on the same side.
+ * box, on the same side.
  */
 #artifact-dock {
   position: fixed;
@@ -208,14 +305,34 @@ html[data-orb-pos='bottom-right'] #artifact-dock {
   transform: translate(var(--orb-x, -50%), 0);
 }
 
+/* Attached: the dock hangs off the bar's own box (the row is the bar's own
+   height), on the row's inner side. */
 html[data-orb-pos='top-left'] #artifact-dock {
+  left: var(--desktop-gap, 14px);
+  right: auto;
+  --orb-x: 0;
+  transform: translate(var(--orb-x, -50%), 0);
+  --orb-glide-y: calc(-100% - 24px);
+}
+
+html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center']) #artifact-dock {
   top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
   bottom: auto;
-  left: var(--desktop-gap, 14px);
-  --orb-x: 0;
-  --orb-glide-y: calc(-100% - 24px);
-  transform: translate(var(--orb-x, -50%), 0);
 }
+
+html[data-orb-pos='top-left'][data-bar-pos='bottom'] #artifact-dock {
+  top: auto;
+  bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) + var(--hud-bar-height) + 12px);
+  --orb-glide-y: calc(100% + 24px);
+}
+
+html[data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']) #artifact-dock {
+  top: calc(max(10px, env(safe-area-inset-top)) + var(--voice-slot) + 20px);
+  bottom: auto;
+}
+
+html[data-orb-pos='top-left'][data-bar-pos='left'] #artifact-dock { left: 8px; right: auto; }
+html[data-orb-pos='top-left'][data-bar-pos='right'] #artifact-dock { right: 8px; left: auto; }
 
 /* ── States ───────────────────────────────────────────────────── */
 
@@ -229,7 +346,7 @@ html[data-orb-pos='top-left'] #artifact-dock {
 
 #sphere-container.disabled {
   --voice-color: var(--muted);
-  --voice-base: 0.1;
+  --voice-halo: 20%;
   opacity: 0.45;
   pointer-events: none;
 }
@@ -240,70 +357,13 @@ html[data-orb-pos='top-left'] #artifact-dock {
 #sphere-container.state-processing,
 #sphere-container.state-speaking,
 #sphere-container.state-warming {
-  --voice-base: 0.42;
+  --voice-halo: 62%;
 }
 #sphere-container.state-error {
   --voice-color: var(--error);
-  --voice-base: 0.5;
+  --voice-halo: 72%;
 }
-
-/* ── The lip and its glow ─────────────────────────────────────── */
-
-/* The lip itself: no fill and no border — it exists only as a tight accent
-   shadow that hugs the bottom edge. It tracks the bar's width. */
-.voice-lip {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  z-index: 1;
-  width: min(66%, 200px);
-  height: 3px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: transparent;
-  border: 0;
-  box-shadow:
-    0 0 5px 0 var(--voice-color),
-    0 -2px 10px 0 color-mix(in srgb, var(--voice-color) 55%, transparent);
-  opacity: calc(0.55 + var(--voice-level) * 0.45);
-  transition: opacity var(--motion-feedback) linear;
-}
-
-/* Inside a plate the lip sits on the plate's lower edge instead of the screen
-   edge. */
-html[data-orb-plate='1'] .voice-lip { bottom: 4px; }
-
-/* The audio-reactive coloured shadow, rising from the lip. No fill either:
-   the shape only exists as its upward shadow. Louder voice = taller and
-   brighter; a stereo pan leans it left or right. */
-.voice-glow {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  z-index: 0;
-  width: min(70%, 220px);
-  height: 4px;
-  transform:
-    translateX(calc(-50% + (var(--voice-pan) * 10px)))
-    scaleY(calc(0.6 + var(--voice-level) * 1.3));
-  transform-origin: 50% 100%;
-  border-radius: 999px;
-  background: transparent;
-  border: 0;
-  box-shadow:
-    0 calc(-8px - var(--voice-level) * 10px)
-      calc(16px + var(--voice-level) * 24px) 0
-      color-mix(in srgb, var(--voice-color) 70%, transparent);
-  filter: blur(3px);
-  opacity: calc(var(--voice-base) + var(--voice-level) * 0.75);
-  transition: opacity var(--motion-feedback) linear, transform var(--motion-feedback) linear;
-  pointer-events: none;
-}
-
-html[data-orb-plate='1'] .voice-glow { bottom: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
-  #sphere-container,
-  .voice-lip,
-  .voice-glow { transition: none; }
+  #sphere-container { transition: none; }
 }

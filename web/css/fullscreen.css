@@ -77,21 +77,22 @@ html[data-bar-pos='right'][data-autohide-bar='1'] body.fs-top #hud-header {
   transform: translateX(0);
 }
 
-/* A fullscreen window owns the screen of its workspace: the top bar goes away
-   there whatever the desktop-wide autohide preference says, and comes back
-   from the top edge like a docked bar. The left/right docks and every other
-   workspace keep that preference. `fs-active` is the in-app fullscreen state of
-   the workspace on view — fullscreen.js moves it with the workspace, and it
-   holds whether or not the browser granted real fullscreen.
+/* A fullscreen window owns the screen of its workspace: the bar goes away there
+   whatever the desktop-wide autohide preference says and whichever edge it
+   docks to, and comes back from that edge like a docked bar. `fs-active` is the
+   in-app fullscreen state of the workspace on view — fullscreen.js moves it with
+   the workspace, and it holds whether or not the browser granted real
+   fullscreen.
 
    `!important` is load-bearing: with autohide off the bar carries the app's
    entrance animation (`hudFadeIn`, fill mode `both`). An animation's filled
    values beat every normal declaration — including an ID selector — in the
    window before this rule applies, so the animation is cancelled outright. */
-html[data-bar-pos='top'] body.fs-active #hud-header {
+body.fs-active #hud-header {
   animation: none !important;
   opacity: 0 !important;
   visibility: hidden !important;
+  /* Default: away through the top edge. Each dock overrides the direction. */
   transform: translateY(calc(-100% - 16px)) !important;
   transition:
     opacity var(--motion-reveal) var(--motion-ease),
@@ -99,10 +100,24 @@ html[data-bar-pos='top'] body.fs-active #hud-header {
     visibility var(--motion-feedback) linear var(--motion-reveal);
 }
 
-html[data-bar-pos='top'] body.fs-active.fs-top #hud-header {
+html[data-bar-pos='bottom'] body.fs-active #hud-header {
+  transform: translateY(calc(100% + 16px)) !important;
+}
+
+html[data-bar-pos='left'] body.fs-active #hud-header {
+  transform: translateX(calc(-100% - 16px)) !important;
+}
+
+html[data-bar-pos='right'] body.fs-active #hud-header {
+  transform: translateX(calc(100% + 16px)) !important;
+}
+
+/* …and it comes back from that edge. The selector carries the position
+   attribute so it outranks the per-edge transforms above. */
+html[data-bar-pos] body.fs-active.fs-top #hud-header {
   opacity: 1 !important;
   visibility: visible !important;
-  transform: translateY(0) !important;
+  transform: translate(0, 0) !important;
   transition:
     opacity var(--motion-reveal) var(--motion-ease),
     transform var(--motion-reveal) var(--motion-ease),
@@ -265,20 +280,17 @@ html[data-bar-pos='right'] body:not(.fs-active) #tile-grid {
   right: calc(var(--hud-bar-height) + 32px);
 }
 
-/* A bottom bar takes the bottom band instead of the top one. */
+/* A bottom bar takes the bottom band instead of the top one — the desktop keeps
+   its normal top edge, so the windows do not leave room for a bar that is no
+   longer there. */
 html[data-bar-pos='bottom'] body:not(.fs-active) #tile-grid {
+  top: max(var(--desktop-gap, 16px), env(safe-area-inset-top));
   bottom: var(--hud-header-total);
 }
 
 /* The reply line floats above the voice bar, so a bottom bar would cover it. */
 html[data-bar-pos='bottom'] #hud-transcript {
   bottom: calc(max(156px, calc(env(safe-area-inset-bottom) + 140px)) + var(--hud-header-total));
-}
-
-/* A top-left voice pill occupies the top band too, even when the top bar docks
-   elsewhere — with a bottom bar the desktop then clears both edges. */
-html[data-orb-pos='top-left']:not([data-bar-pos='top']) body:not(.fs-active) #tile-grid {
-  top: var(--hud-header-total);
 }
 
 /* ── Voice bar, dock and reply line: autohide ───────────────── */
@@ -296,6 +308,31 @@ html[data-autohide-orb='1'] :is(#sphere-container, #artifact-dock) {
 }
 
 html[data-autohide-orb='1'] body.fs-orb :is(#sphere-container, #artifact-dock) {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(var(--orb-x, -50%), 0);
+  transition:
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback);
+}
+
+/* A voice bar riding the top bar's row is part of that bar: it hides and comes
+   back with it — the bar's own autohide, and a fullscreen window — so its own
+   autohide switch has nothing to add there. It slides off through the edge the
+   row sits on (`--orb-glide-y`, sphere.css) and rides the bar's `fs-top`. */
+html[data-orb-attached='1'][data-autohide-bar='1'] :is(#sphere-container, #artifact-dock),
+html[data-orb-attached='1'] body.fs-active :is(#sphere-container, #artifact-dock) {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(var(--orb-x, -50%), var(--orb-glide-y, calc(-100% - 24px)));
+  transition:
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback) linear var(--motion-reveal);
+}
+
+html[data-orb-attached='1'] body.fs-top :is(#sphere-container, #artifact-dock) {
   opacity: 1;
   visibility: visible;
   transform: translate(var(--orb-x, -50%), 0);
@@ -407,7 +444,8 @@ body.fullscreen-active .compose-conversation {
   html[data-bar-pos='top'] body.fs-active #hud-header,
   html[data-bar-pos='left'] body.fs-active #hud-header,
   html[data-bar-pos='right'] body.fs-active #hud-header,
-  html[data-bar-pos='center'] body.fs-active #hud-header {
+  html[data-bar-pos='center'] body.fs-active #hud-header,
+  html[data-bar-pos='bottom'] body.fs-active #hud-header {
     opacity: 1 !important;
     visibility: visible !important;
     transform: none !important;

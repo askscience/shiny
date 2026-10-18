@@ -358,3 +358,39 @@
   background: #000;
   image-rendering: pixelated;
 }
+
+/* ── Appearance → Tool status: the control and its live preview ──
+   A miniature of the voice bar wearing the glyph. voiceGlyph.js paints it (the
+   app's own mark, then a few tools' marks) and re-runs the bar's swap glitch on
+   every change, so the option shows what it does before it is picked. */
+.orb-status-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.orb-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 72px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.orb-preview-glyph {
+  width: 16px;
+  height: 16px;
+  /* The brand mark masks from the font size — keep the two in step. */
+  font-size: 16px;
+}
+
+/* The preview wears whatever look the bar wears (Settings → Voice bar style). */
+html[data-orb-style='bar'] .orb-preview {
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+}

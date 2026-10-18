@@ -17,6 +17,9 @@
   outline-offset: -8px;
 }
 
+/* ── Tabs (installed plugins / Craft store) ────────────────── */
+.plugins-tabs { display: flex; gap: 6px; }
+
 /* ── Toolbar ───────────────────────────────────────────────── */
 .plugins-toolbar {
   display: flex;
@@ -24,6 +27,22 @@
   gap: 10px;
 }
 .plugins-toolbar .ui-search { flex: 1; }
+
+/* Store-only controls: check for updates, install everything, auto-update. */
+.plugins-store-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.plugins-store-actions.hidden { display: none; }
+.plugins-store-auto-label {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
 /* ── Category chips ────────────────────────────────────────── */
 .plugins-categories-row {
@@ -123,6 +142,37 @@
 
 .plugin-card-mode { margin-top: 2px; }
 .plugin-card-mode .ui-select { font-size: 12px; }
+
+/* ── Craft store cards ─────────────────────────────────────── */
+/* An app that is not installed yet has no local icon: an initial disc keeps
+   the card readable without fetching anything from the network. */
+.store-card-letter {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.store-card-status {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.store-card-status.is-busy { color: var(--accent); }
+.store-card-status.is-error { color: var(--error); }
+
+/* AI control (the app's MCP server): a compact switch on the app's card. */
+.plugin-card-mcp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.plugin-card-mcp-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
 /* ── Empty state ───────────────────────────────────────────── */
 .plugins-empty {

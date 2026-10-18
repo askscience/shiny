@@ -77,7 +77,7 @@ JSON response (`AgentResponse`):
 `type`:
 
 ```jsonc
-{ "type": "step", "message": "Searching the web…", "key": "step.searchingWeb" }
+{ "type": "step", "message": "Searching the web…", "key": "step.searchingWeb", "action": "web_search" }
 { "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
 { "type": "done", "data": { /* the full AgentResponse */ } }
 { "type": "error", "message": "…" }
@@ -87,7 +87,10 @@ A `step` carries the catalogue `key` (and `params` when the message has
 placeholders) next to the English `message`; the client renders
 `t(key, params, message)` so the bubble follows the user's interface language
 (see [interface language](../core/i18n.md)). Plugin tools that do not opt in
-send `message` only.
+send `message` only. `action` is the tool the line belongs to (absent for the
+thinking opener and for refusals with no action behind them): the client maps it
+to a catalogue icon, so Settings → Appearance → voice bar can wear the tool's
+mark instead of the line (`toolIcons.js`).
 
 The stream sends keep-alives. The final `done` carries everything the JSON mode
 returns; `AgentResponse.thinking` holds the turn's full trace (saved with the

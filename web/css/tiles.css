@@ -421,6 +421,23 @@ html[data-window-translucent="1"] .tile {
   to { opacity: 1; transform: none; }
 }
 
+/* A web-app plugin (`kind = "web"`) is a static site the shell frames: the
+   iframe fills everything below the window bar and the app owns its surface
+   (its own background, its own chrome inside the tile). */
+.tile--webapp {
+  padding: 0;
+}
+
+.webapp-frame {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  /* Match the opaque tile surface while the app (wasm) boots. */
+  background: var(--bg-elevated);
+}
+
 /* The map tile: the plugin's interface fills the window. */
 .tile--map #map-stage {
   position: relative;
@@ -5821,27 +5838,62 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-status-pill.hidden { display: none; }
 
 /* ── Quick look ─────────────────────────────────────────────── */
+/* Space opens a bare overlay rather than a window: the file is the surface,
+   with no frame around it. The side arrows show on hover, and the details ride
+   a gradient mixed from the theme's own canvas — so the scrim follows the
+   theme, and the file fills whatever room it is given. */
+
+.files-look {
+  padding: 0;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+}
+.files-look-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  overflow: hidden;
+  /* The veil behind the surface already blurs what is under it. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.files-look-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.files-look-view {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The file itself: an image sits in the surface, never in a box on it. */
 .files-preview-img {
   max-width: 100%;
-  max-height: 68vh;
+  max-height: 100%;
   object-fit: contain;
-  border-radius: var(--radius-sm);
   cursor: zoom-in;
   transition: transform var(--motion-reveal) var(--motion-ease);
 }
 .files-preview-img.is-zoomed { transform: scale(1.8); cursor: zoom-out; }
-.files-preview-media {
-  max-width: 100%;
-  max-height: 68vh;
-  border-radius: var(--radius-sm);
-  background: #000;
-}
-.files-preview-audio { width: 100%; }
 
-/* In-app video player (quick look) — a QuickTime-style overlay of app-chrome
-   controls over a black stage. The bar is absolutely positioned so it can
-   never be clipped by the player's rounded overflow or a short window, which
-   is what hid the buttons before. */
+/* In-app media player (quick look) — a QuickTime-style overlay of app-chrome
+   controls over the file. The bar is absolutely positioned so it can never be
+   clipped by the player's overflow or a short window (which is what hid the
+   buttons before), it wears the theme's accent rather than a baked-in black,
+   and it steps out of the way while playing once the pointer rests. */
 .files-player {
   position: relative;
   display: flex;
@@ -5872,7 +5924,7 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   color: var(--accent);
   background:
     radial-gradient(120% 120% at 30% 20%, var(--accent-soft), transparent 60%),
-    linear-gradient(135deg, #1b1c22, #0d0e12);
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--bg-elevated)), var(--bg));
 }
 .files-player-art .ui-icon { width: 72px; height: 72px; opacity: 0.9; }
 .files-player-bar {
@@ -5884,26 +5936,37 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   align-items: center;
   gap: 8px;
   padding: 22px 12px 10px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+  /* Accent chrome: fades in from the file, with the accent's own ink on it. */
+  background: linear-gradient(to top,
+    color-mix(in srgb, var(--accent) 92%, transparent),
+    color-mix(in srgb, var(--accent) 0%, transparent));
+  transition: opacity var(--motion-feedback) var(--motion-ease);
 }
+.files-player.is-idle .files-player-bar { opacity: 0; pointer-events: none; }
 .files-player-btn {
   flex: none;
   width: 30px;
   height: 30px;
   border-radius: var(--radius-sm);
-  color: #fff;
+  color: var(--accent-contrast);
 }
-.files-player-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.18); }
-.files-player-btn.is-muted { color: rgba(255, 255, 255, 0.45); }
+.files-player-btn:hover { color: var(--accent-contrast); background: color-mix(in srgb, var(--accent-contrast) 16%, transparent); }
+.files-player-btn.is-muted { color: color-mix(in srgb, var(--accent-contrast) 45%, transparent); }
 .files-player-time {
   flex: none;
   min-width: 42px;
   text-align: center;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
+  color: color-mix(in srgb, var(--accent-contrast) 88%, transparent);
 }
-.files-player-seek { flex: 1; min-width: 0; }
+.files-player-seek {
+  flex: 1;
+  min-width: 0;
+  background: color-mix(in srgb, var(--accent-contrast) 24%, transparent);
+}
+.files-player-seek::-webkit-slider-thumb { background: var(--accent-contrast); }
+.files-player-seek::-moz-range-thumb { background: var(--accent-contrast); }
 .files-player-error {
   position: absolute;
   left: 0;
@@ -5919,50 +5982,67 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-player-error.hidden { display: none; }
 .files-player:fullscreen .files-player-media { max-height: 100vh; }
 
-/* In the quick-look card the player fills the window like other media. */
-.files-preview-card .files-player {
+/* In the quick look the player fills the surface like any other file. Its bar
+   keeps its own gradient and is lifted clear of the info scrim. */
+.files-look .files-player {
+  align-self: stretch;
   flex: 1;
   min-height: 0;
   width: 100%;
   max-height: none;
   border-radius: 0;
+  box-shadow: none;
 }
-.files-preview-card .files-player-media {
+.files-look .files-player-media {
   flex: 1;
   min-height: 0;
   max-height: none;
+  width: 100%;
+  height: 100%;
 }
+.files-look .files-player-art {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+/* Text and documents read directly on the surface: a readable measure, no
+   panel, and enough room at the bottom to scroll clear of the scrim. */
 .files-preview-text {
   margin: 0;
-  max-height: 60vh;
+  max-height: none;
+  max-width: min(100%, 86ch);
+  flex: 1;
+  align-self: stretch;
   overflow: auto;
-  padding: 18px 22px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
+  padding: 34px clamp(20px, 5vw, 56px) 104px;
+  border: 0;
+  background: none;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 13.5px;
-  line-height: 1.7;
+  line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-word;
   text-align: left;
 }
 .files-preview-text--code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 12.5px;
+  line-height: 1.65;
   color: var(--text-secondary);
 }
 
 /* Office quick-look: rendered document / sheet / slides */
 .files-preview-doc {
-  max-height: 66vh;
+  max-height: none;
+  max-width: min(100%, 86ch);
+  flex: 1;
+  align-self: stretch;
   overflow: auto;
-  padding: 26px 30px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
+  padding: 34px clamp(20px, 5vw, 56px) 104px;
+  border: 0;
+  background: none;
   text-align: left;
 }
 .files-doc { color: var(--text); font-family: var(--font-body); font-size: 14px; line-height: 1.7; }
@@ -5976,11 +6056,13 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-doc b, .files-doc strong { font-weight: 700; }
 
 .files-sheet-wrap {
-  max-height: 66vh;
+  flex: 1;
+  align-self: stretch;
+  max-height: none;
   overflow: auto;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
+  padding: 28px clamp(18px, 5vw, 64px) 104px;
+  border: 0;
+  background: none;
 }
 .files-sheet { border-collapse: collapse; font-family: var(--font-body); font-size: 12.5px; min-width: 100%; }
 .files-sheet th, .files-sheet td {
@@ -5993,7 +6075,16 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-sheet th { background: var(--glass); font-weight: 600; position: sticky; top: 0; }
 .files-sheet td:empty::after { content: '\00a0'; }
 
-.files-slides { display: flex; flex-direction: column; gap: 12px; max-height: 66vh; overflow: auto; }
+.files-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  align-self: stretch;
+  max-height: none;
+  overflow: auto;
+  padding: 28px clamp(18px, 5vw, 64px) 104px;
+}
 .files-slide {
   display: flex;
   gap: 14px;
@@ -6028,9 +6119,12 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  max-height: 68vh;
+  gap: 14px;
+  flex: 1;
+  align-self: stretch;
+  max-height: none;
   overflow: auto;
+  padding: 24px 24px 104px;
 }
 .files-preview-pdf-page {
   background: #fff;
@@ -6039,27 +6133,30 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   overflow: hidden;
 }
 .files-preview-pdf-page canvas { display: block; max-width: 100%; height: auto; }
-.files-preview-pdf-nav,
-.files-preview-nav {
+/* The page controls stay reachable while the pages scroll under them. */
+.files-preview-pdf-nav {
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-strong, var(--glass));
 }
-.files-preview-hint { font-size: 11.5px; color: var(--muted); }
-.files-preview-meta {
-  font-size: 11.5px;
-  color: var(--muted);
-  text-align: center;
-  word-break: break-all;
-}
+.files-preview-page { font-size: 11.5px; color: var(--muted); }
 .files-preview-unknown {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 28px;
+  justify-content: center;
+  gap: 14px;
+  flex: 1;
+  padding: 0 24px 84px;
   color: var(--muted);
+  text-align: center;
 }
 .files-preview-unknown p { margin: 0; font-size: 13px; }
 
@@ -6136,51 +6233,94 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-mini-slide-sub { font-size: 6.5px; color: var(--muted); margin-bottom: 3px; }
 .files-mini-slide-bullet { font-size: 6.5px; line-height: 1.45; color: var(--text-secondary); }
 
-/* Quick-look window: the same bordered, rounded window as the app's other
-   dialogs — a normal size, not full screen — but with the preview content
-   flush to the window edge. Toggled with Space. */
-.files-preview-card {
-  width: min(1024px, 100%);
-  height: min(720px, calc(100vh - 40px));
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
+/* The quick look's own chrome: side arrows that appear under the pointer, and
+   the details on a scrim mixed from the theme's canvas. Toggled with Space. */
+.files-look-arrows {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
 }
-.files-preview-card .files-preview-img {
-  flex: 1;
-  min-height: 0;
-  width: auto;
-  max-width: 100%;
-  max-height: none;
-  margin: 0 auto;
-  object-fit: contain;
+.files-look-arrows.hidden { display: none; }
+.files-look .files-look-arrow {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translateY(-50%);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-strong, var(--glass)) 72%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--glass-blur-light)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light)) saturate(var(--glass-saturate));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-feedback) var(--motion-ease),
+    background var(--motion-feedback) var(--motion-ease);
 }
-.files-preview-card .files-preview-media {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  max-height: none;
-  object-fit: contain;
+.files-look .files-look-arrow.is-prev { left: 20px; }
+.files-look .files-look-arrow.is-next { right: 20px; }
+.files-look:hover .files-look-arrow,
+.files-look .files-look-arrow:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
-.files-preview-card .files-preview-audio { width: 100%; flex: none; }
-.files-preview-card .files-preview-doc,
-.files-preview-card .files-preview-text,
-.files-preview-card .files-preview-pdf {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  max-height: none;
-}
-.files-preview-card .files-slides,
-.files-preview-card .files-sheet-wrap { max-height: none; }
-.files-preview-card .files-preview-unknown { flex: 1; justify-content: center; }
-.files-preview-card .files-preview-nav,
-.files-preview-card .files-preview-meta,
-.files-preview-card .files-preview-pdf-nav { flex: none; }
+.files-look .files-look-arrow:hover { background: var(--glass-hover, var(--surface-strong)); }
 
-/* Keep the footer readable, flush to the screen edges. */
-.files-preview-card .files-preview-nav { padding: 6px 12px; }
-.files-preview-card .files-preview-meta { padding: 0 12px 8px; }
+.files-look-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 46px 22px calc(14px + env(safe-area-inset-bottom, 0px));
+  /* The scrim is the theme's canvas fading up out of the file. */
+  background: linear-gradient(to top,
+    color-mix(in srgb, var(--bg) 94%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 68%, transparent) 46%,
+    transparent 100%);
+  font-family: var(--font-body);
+  pointer-events: none;
+}
+.files-look-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  pointer-events: auto;
+}
+.files-look-name {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-look-meta {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+.files-look-note {
+  flex: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+/* A player owns the bottom edge: the details sit above its control bar. */
+.files-look-surface.is-media .files-look-info {
+  padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+}
 
 /* ════════════════════════════════════════════════════════════════
    Image plugin — minimal photo editor.

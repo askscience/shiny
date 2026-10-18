@@ -73,6 +73,13 @@
 /* Icon — inline themed SVG inherits currentColor */
 .ui-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .ui-icon svg { width: 100%; height: 100%; display: block; }
+/* A PNG icon (a plugin that ships its vendor's app icon rather than a theme
+   svg — see web/js/pluginIcon.js) fills the same box. On the monochrome icon
+   set that artwork is converted to grayscale, so it matches the line glyphs
+   instead of dropping a coloured badge into the tray; the coloured sets show
+   it as published. */
+.ui-icon img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.ui-icon img.is-monochrome { filter: grayscale(1); }
 .ui-icon--missing { border-radius: 50%; }
 
 /* App brand icon — the PEAK'D! mark (/favicon.svg) painted as a mask,

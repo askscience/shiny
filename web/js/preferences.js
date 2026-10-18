@@ -38,6 +38,7 @@ const IMAGE_QUALITY_KEY = 'image.quality';
 const MUSIC_QUALITY_KEY = 'music.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const UI_LOCALE_KEY = 'ui.locale';
+const STORE_AUTO_UPDATE_KEY = 'store.autoUpdate';
 const DEFAULT_AI_NAME = "PEAK'D!";
 
 function scopedKey(base) {
@@ -238,6 +239,22 @@ export function setPluginLayout(name, mode) {
   if (mode === 'full') localStorage.setItem(key, 'full');
   else localStorage.removeItem(key);
   persist(`${PLUGIN_LAYOUT_KEY}.${name}`, mode === 'full' ? 'full' : '');
+}
+
+/**
+ * Whether the Craft store updates the apps it installed on its own. Default
+ * on: an installed app is a static site the store can replace safely, and a
+ * stale app is the thing users notice.
+ */
+export function getStoreAutoUpdate() {
+  return localStorage.getItem(scopedKey(STORE_AUTO_UPDATE_KEY)) !== 'false';
+}
+
+export function setStoreAutoUpdate(on) {
+  const key = scopedKey(STORE_AUTO_UPDATE_KEY);
+  if (on) localStorage.removeItem(key); // default true
+  else localStorage.setItem(key, 'false');
+  persist(STORE_AUTO_UPDATE_KEY, on ? 'true' : 'false');
 }
 
 /**
@@ -460,31 +477,38 @@ const IMMERSIVE_KEY = 'desktop.immersive';
 export const BAR_POSITIONS = ['top', 'left', 'right', 'bottom', 'center'];
 
 /**
- * Where the voice bar docks. `top-left` renders it as a glass pill in the top
- * bar's row (the same plate as the workspace chooser, with the lip and glow
- * inside); the bottom variants align it to that corner of the bottom edge.
+ * Where the voice bar is: `top-left` rides the top bar's row at its start (at
+ * the rail's height and rounding) and follows the bar to whichever edge it
+ * docks to; the bottom variants dock it to that corner of the bottom edge on
+ * its own, where the width and height settings apply.
  */
 export const ORB_POSITIONS = ['bottom-center', 'bottom-left', 'bottom-right', 'top-left'];
+
+/** The one position that rides the top bar instead of holding an edge alone. */
+export const ORB_ATTACHED = 'top-left';
 
 const DEFAULT_IMMERSIVE = {
   autohide_bar: true,
   bar_position: 'top',
   autohide_orb: true,
   orb_position: 'bottom-center',
-  /** Width and height of the bar itself. In the top row the height is pinned to
-   *  the top bar; everywhere else the size is exactly what the user picked. */
+  /** Width and height of the bar on its own edge. Riding the top bar it takes
+   *  the rail's size instead, so these apply on the free dock only. */
   orb_width: 176,
   orb_height: 40,
-  /** Corners: fully round (a pill), the app's control radius, or square. */
-  orb_radius: 'pill',
-  /** Border of the bar: none, the theme hairline, or the palette ring. */
+  /** The bar's own look: `accent` — the body is the accent (or the palette) —
+   *  or `bar`, the top bar's glass plate, leaving the accent to the audio glow. */
+  orb_style: 'accent',
+  /** Border of the bar: none, the accent hairline, or the palette ring. */
   orb_border: 'hairline',
-  /** Show the humanised tool step line inside the voice bar. */
-  orb_step: false,
+  /** What the bar wears: `off`, the humanised tool step line as `text`, or
+   *  the running tool's `icons` (swapped per tool with a short fade). */
+  orb_status: 'off',
 };
 
 const ORB_COLORS = ['accent', 'palette'];
-const ORB_RADII = ['pill', 'rounded', 'square'];
+const ORB_STYLES = ['accent', 'bar'];
+const ORB_STATUSES = ['off', 'text', 'icons'];
 const ORB_BORDERS = ['none', 'hairline', 'palette'];
 
 /** Fullscreen chrome behaviour, merged over defaults. */
@@ -500,10 +524,13 @@ export function getImmersive() {
     orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : 'bottom-center',
     orb_width: Number.isFinite(width) ? Math.round(clamp(width, 64, 400)) : 176,
     orb_height: Number.isFinite(height) ? Math.round(clamp(height, 24, 72)) : 40,
-    orb_radius: ORB_RADII.includes(src.orb_radius) ? src.orb_radius : 'pill',
     orb_color: ORB_COLORS.includes(src.orb_color) ? src.orb_color : 'accent',
+    orb_style: ORB_STYLES.includes(src.orb_style) ? src.orb_style : 'accent',
     orb_border: ORB_BORDERS.includes(src.orb_border) ? src.orb_border : 'hairline',
-    orb_step: src.orb_step === true,
+    // `orb_step` (the retired on/off switch) still reads as the text mode.
+    orb_status: ORB_STATUSES.includes(src.orb_status)
+      ? src.orb_status
+      : (src.orb_step === true ? 'text' : 'off'),
   };
 }
 
@@ -511,15 +538,21 @@ export function getImmersive() {
  * Where the voice bar is actually rendered, given both choices.
  *
  * One edge cannot hold both bars: with the top bar docked at the bottom, a
- * bottom-docked voice bar would land on top of it, so it takes the top-left
- * pill instead — the place it occupies "as if it were the top bar". The stored
- * preference is untouched, so moving the top bar back restores the choice.
+ * bottom-docked voice bar would land on top of it, so it rides the bar's row
+ * instead — and a row at the bottom carries it down there with the bar. The
+ * stored preference is untouched, so moving the top bar back restores the
+ * choice.
  */
 export function effectiveOrbPosition(immersive = getImmersive()) {
   if (immersive.bar_position === 'bottom' && immersive.orb_position.startsWith('bottom')) {
-    return 'top-left';
+    return ORB_ATTACHED;
   }
   return immersive.orb_position;
+}
+
+/** Whether the voice bar rides the top bar's row (rather than holding its own edge). */
+export function orbIsAttached(immersive = getImmersive()) {
+  return effectiveOrbPosition(immersive) === ORB_ATTACHED;
 }
 
 export function setImmersive(patch) {
@@ -530,26 +563,18 @@ export function setImmersive(patch) {
   applyImmersive();
 }
 
-/**
- * Whether the bar paints a plate behind itself: a border or the step line needs
- * one. Without it the bar is just the lip, exactly as it has always been.
- */
-export function orbHasPlate(immersive = getImmersive()) {
-  return immersive.orb_border !== 'none' || immersive.orb_step === true;
-}
-
 /** Publish the immersion settings to CSS and the fullscreen controller. */
 export function applyImmersive() {
   const s = getImmersive();
   const root = document.documentElement;
   root.dataset.barPos = s.bar_position;
   root.dataset.orbPos = effectiveOrbPosition(s);
+  root.dataset.orbAttached = orbIsAttached(s) ? '1' : '0';
   root.dataset.orbColor = s.orb_color;
   root.dataset.orbBorder = s.orb_border;
-  root.dataset.orbRadius = s.orb_radius;
-  root.dataset.orbPlate = orbHasPlate(s) ? '1' : '0';
-  root.dataset.orbStep = s.orb_step ? '1' : '0';
-  // The bar's own size, applied to the bar element itself (sphere.css).
+  root.dataset.orbStyle = s.orb_style;
+  root.dataset.orbStatus = s.orb_status;
+  // The size the bar takes on its own edge, for the bar element (sphere.css).
   root.style.setProperty('--voice-bar-width', `${s.orb_width}px`);
   root.style.setProperty('--voice-bar-height', `${s.orb_height}px`);
   root.dataset.autohideBar = s.autohide_bar ? '1' : '0';

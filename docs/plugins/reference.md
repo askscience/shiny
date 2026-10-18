@@ -165,7 +165,8 @@ req.params.require_f64("lat")?
 | `name` | string | yes | Unique; install directory name. |
 | `version` | semver | yes | Shown in `/api/plugins`. |
 | `api_level` | u32 | yes | Rejected if `> CORE_API_LEVEL`. |
-| `entry_symbol` | string | yes | Usually `shiny_plugin_entry`. |
+| `entry_symbol` | string | native only | Usually `shiny_plugin_entry`; a `kind = "web"` plugin omits it. |
+| `kind` | string | no | `"native"` (default) or `"web"` — a static web app: `web/index.html` is served at `/plugins/<name>/` and the shell mounts it in a window as an iframe. Host-side key, like `category`; a web app ships no cdylib and contributes no tools/routes. |
 | `target_triple` | string | no | Installer refuses mismatches. |
 | `description` | string | no | Short human title. |
 | `author` | string | no | Attribution. |
@@ -392,6 +393,10 @@ Both isolate panics so one bad job cannot wedge the worker.
 | `POST` | `/api/plugins/activate` | Bearer | `{ "name": "..." }`. |
 | `POST` | `/api/plugins/deactivate` | Bearer | `{ "name": "..." }`. |
 | `GET` | `/api/plugins/install.log` | Bearer | Last 200 lines of the install log. |
+| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress. |
+| `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag). |
+| `POST` | `/api/plugins/store/install` | Bearer | `{ "id": "photocraft" }` — download, verify (SHA-256) and install one app's web build, in the background. |
+| `POST` | `/api/plugins/store/mcp` | Bearer | `{ "id": "photocraft", "enable": true }` — install/remove the app's CLI (its MCP server). Its tools exist only while that app's window is in focus mode. |
 
 There is **no admin role** — any logged-in user can install/uninstall; see
 [Security](security.md).

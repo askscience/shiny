@@ -273,6 +273,20 @@ capabilities = ["open-urls"]                  # optional declared capabilities �
 # signature = "<hex ed25519>"                  # optional; see §12
 ```
 
+A **web-app plugin** (`kind = "web"`) needs no `entry_symbol` and no cdylib: its
+whole payload is the static site in `web/`, which the shell frames in a window:
+
+```toml
+name = "photocraft"
+version = "0.10.0"
+api_level = 1
+kind = "web"                                  # static web app — no cdylib
+description = "Image editing"
+summary = "PhotoCraft — the app's own web build, installed by the Craft store"
+web_dir = "web"
+category = "Craft"
+```
+
 Fields:
 
 | Field | Type | Required | Notes |
@@ -280,7 +294,8 @@ Fields:
 | `name` | string | yes | unique; used as the install directory name |
 | `version` | semver | yes | surfaced in `/api/plugins` |
 | `api_level` | u32 | yes | if `> CORE_API_LEVEL` the install is rejected |
-| `entry_symbol` | string | yes | usually `"shiny_plugin_entry"` |
+| `entry_symbol` | string | native only | usually `"shiny_plugin_entry"`; a web-app plugin omits it |
+| `kind` | string | no | `"native"` (default: a cdylib) or `"web"` (a static web app: `web/index.html`, served at `/plugins/<name>/` and framed in a window). Host-side key, like `category` |
 | `target_triple` | string | no | when present the installer refuses mismatched platforms |
 | `description` | string | no | short human title |
 | `author` | string | no | attribution |
@@ -709,11 +724,16 @@ Bearer (any logged-in user). Returns installed plugins, each with the caller's o
     {
       "name": "hello", "version": "0.1.0", "api_level": 1,
       "description": "Demo plugin...", "summary": "...", "enabled": true,
-      "surface": true, "hud": false, "category": "Demo", "capabilities": []
+      "surface": true, "web_app": false, "hud": false, "category": "Demo",
+      "capabilities": []
     }
   ]
 }
 ```
+
+`surface` is true when the plugin ships a `web/plugin.js` window module;
+`web_app` is true for a `kind = "web"` plugin, whose window the shell mounts as
+an iframe over `/plugins/<name>/` instead.
 
 ### `POST /api/plugins/install`
 
@@ -757,6 +777,52 @@ Keeps the plugin installed and its database tables intact, but disables its tool
 ### `GET /api/plugins/install.log`
 
 Bearer (any logged-in user). Returns the last 200 lines of `PLUGINS_DIR/install.log` as `text/plain`. Useful for plugin managers and for post-incident forensics.
+
+### Craft store
+
+The core carries a catalog of the [Craft App Suite](https://getartcraft.com/apps)
+and installs each app's own **web build** as a web-app plugin, verified against
+the SHA-256 its GitHub release publishes. Downloads are restricted to GitHub
+hosts; installs land in `PLUGINS_DIR/<app-id>/` like any other plugin.
+
+| Endpoint | Body | Does |
+|---|---|---|
+| `GET /api/plugins/store` | — | The catalog plus each app's installed/latest version, `update_available`, install `state` (`idle`, `downloading`, `installing`, `failed`) and `progress`. Answered from cache; a background refresh is scheduled when an entry is stale. |
+| `POST /api/plugins/store/refresh` | — | Re-checks every app's latest release, ignoring the cache (GitHub rate-limits unauthenticated callers, so entries are ETag-cached for an hour and the last good answer is kept when a check fails). |
+| `POST /api/plugins/store/install` | `{"id":"photocraft"}` | Downloads, verifies and installs (or updates) one app. Returns immediately; the work runs in the background and is visible through `GET /api/plugins/store` and the install log. Uninstall uses `POST /api/plugins/uninstall` as usual. |
+| `POST /api/plugins/store/mcp` | `{"id":"photocraft","enable":true}` | Installs (or removes) the app's command-line tool, which is its MCP server; see AI control below. |
+
+The catalog and the release/verification rules follow
+[ArtCraft Launcher](https://github.com/storytold/craft-launcher) (MIT OR
+Apache-2.0, © ArtCraft Team and the contributors): `crates/core/src/catalog.rs`
+for the suite table and `release.rs` for picking an asset out of a release. We
+install the `-web-` asset and keep the whole pipeline inside the plugin system
+(`src/plugins/store.rs`).
+
+#### AI control (MCP)
+
+Every Craft app ships `<app>-cli`, whose `mcp` subcommand is a Model Context
+Protocol server over stdio that drives the app's engine. The **AI control**
+switch on an app's store card (`POST /api/plugins/store/mcp`) downloads the
+release's Linux package, verifies it, and installs just the CLI at
+`PLUGINS_DIR/.craft-mcp/<id>/bin/<id>-cli` (a dot-directory: the plugin scanner
+skips it, and updating the web app never touches it).
+
+The capability is **focus-scoped in code**: `src/plugins/craft_mcp.rs` starts
+one server per *focused* Craft app at the beginning of each agent turn and stops
+every other one, registering the app's MCP tools under its plugin id
+(`photocraft_command_list`, …; the doc fragment is the tool's description plus a
+compact argument list). With no Craft app focused, no server runs and no tool
+exists; with another plugin focused, the ordinary focus gate refuses them; and
+the owner is marked focus-only in the registry, so a stale registration is
+refused with a `suggest_focus` message instead of being dispatched. None of this
+depends on prompt wording.
+
+The app CLI drives the app's own engine: in headless mode it opens, edits and
+saves documents itself (`--automation-read-root` / `--automation-write-root`
+scope its file access to the user's home). The visible window is the web build,
+which has no MCP server, so the agent drives the same app's *engine*, not the
+pixels already on screen.
 
 ### Activation state
 
@@ -1015,6 +1081,33 @@ export default {
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
 plugins build DOM with shared controls. Optional plugin stylesheets arrange
 domain content without replacing shared control styling or motion.
+
+#### Web-app plugins (`kind = "web"`)
+
+A web-app plugin ships **no** `web/plugin.js`: its payload is a static site
+(a wasm build of a desktop app, usually) whose `index.html` is the document
+root of `/plugins/<name>/`. The shell mounts it for you through the same
+window contract (`web/js/webAppSurface.js` builds one `section.tile webapp-tile`
+holding an `<iframe>`), so the tray, launcher, workspaces, focus and fullscreen
+all treat it like any plugin window — there is nothing to implement.
+
+What the core does for these routes:
+
+- **Framing:** `X-Frame-Options: SAMEORIGIN` with CSP `frame-ancestors 'self'`,
+  instead of the `DENY`/`'none'` every other response carries. The document's
+  own policy additionally allows `'unsafe-inline'` (the trunk-built page boots
+  through an inline module script) and `'wasm-unsafe-eval'`/`'unsafe-eval'`
+  (instantiating the wasm).
+- **Caching:** content-hashed assets are `immutable` for a year and the entry
+  document is `no-cache`, so a reload does not re-download tens of megabytes.
+- **No sandbox attribute:** sandboxing same-origin content is a no-op without
+  dropping `allow-same-origin`, and dropping it would take the app's storage
+  (IndexedDB/OPFS, where its files live) with it. A web app is installed from
+  its vendor's release and verified against the release's SHA-256 — the same
+  trust class as a plugin cdylib.
+
+The app shares the shell's origin, so it also shares its storage namespace;
+two apps that store under the same keys would collide (none do today).
 
 ### Opening links (`open-urls`)
 

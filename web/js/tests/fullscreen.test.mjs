@@ -396,31 +396,43 @@ check('the bar positions itself — no wrapper element',
 check('the voice bar docks in either bottom corner',
   /data-orb-pos='bottom-left'\] #sphere-container/.test(sphereCss)
   && /data-orb-pos='bottom-right'\] #sphere-container/.test(sphereCss));
+/* The bar IS the element: one div, its own body, its own shadow. */
+const barMarkup = /id="sphere-container"[\s\S]*?<\/div>/.exec(
+  readFileSync(new URL('../../index.html', import.meta.url), 'utf8'))?.[0] || '';
+check('the bar is one element — the only thing inside it is the step text',
+  (barMarkup.match(/<span/g) || []).length === 1 && /<span id="voice-step"/.test(barMarkup));
 check('the bar takes its own size from the settings',
   /width: var\(--voice-bar-width\)/.test(sphereCss)
   && /height: var\(--voice-bar-height\)/.test(sphereCss));
-check('the corners are a setting of the bar',
-  /data-orb-radius='pill'\] #sphere-container/.test(sphereCss)
-  && /data-orb-radius='rounded'\] #sphere-container/.test(sphereCss)
-  && /data-orb-radius='square'\] #sphere-container/.test(sphereCss));
-check('a plate appears when a border or the step line needs one',
-  /data-orb-plate='1'\] #sphere-container/.test(sphereCss));
-check('the dock is a sibling placed from the bar\'s own height',
-  /#artifact-dock \{\n  position: fixed;/.test(sphereCss)
-  && /var\(--voice-bar-height\)/.test(sphereCss));
-check('“all accents” fills the lip and glow with the focus palette',
-  /html\[data-orb-color='palette'\] \.voice-lip/.test(sphereCss)
-  && /html\[data-orb-color='palette'\] \.voice-glow/.test(sphereCss)
-  && /--focus-bar/.test(sphereCss));
+check('the corners are the top bar\'s own, not a setting',
+  /#sphere-container \{[\s\S]{0,400}?border-radius: var\(--voice-radius/.test(sphereCss)
+  && /--voice-radius: 999px/.test(sphereCss)
+  && !/data-orb-radius/.test(sphereCss));
+check('the bar\'s colour is the bar\'s own body',
+  /#sphere-container \{[\s\S]{0,400}?background: var\(--voice-color\)/.test(sphereCss)
+  && !/data-orb-border='none'\]\s*#sphere-container\s*\{[^}]*background:/.test(sphereCss));
+check('the voice-reactive shadow is the bar\'s own shadow',
+  /--voice-glow:[\s\S]{0,400}?--voice-level/.test(sphereCss)
+  && /box-shadow: var\(--voice-glow\)/.test(sphereCss)
+  && !/#sphere-container::after/.test(sphereCss));
+check('the dock is a sibling of the bar',
+  /#artifact-dock \{\n  position: fixed;/.test(sphereCss));
+check('“all accents” fills the bar itself with the focus palette',
+  /html\[data-orb-color='palette'\]\:not\(\[data-orb-style='bar'\]\) #sphere-container \{[\s\S]{0,120}?var\(--focus-bar/.test(sphereCss));
+check('the top-bar look swaps the body for the rail\'s plate, glow kept',
+  /data-orb-style='bar'\] #sphere-container \{[\s\S]{0,400}?background: var\(--surface\)/.test(sphereCss)
+  && !/data-orb-style='bar'\] #sphere-container \{[\s\S]{0,400}?box-shadow:/.test(sphereCss));
 check('the palette border reuses the focus-mode ring',
   /data-orb-border='palette'\] #sphere-container::before/.test(sphereCss)
   && /--focus-ring/.test(sphereCss));
-check('the step line has a home inside the sphere',
+check('the step line has a home inside the bar',
   /id="voice-step"/.test(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')));
-check('in the top row the bar takes the top bar\'s height',
+check('in the top bar the bar rides the rail\'s height and rounding',
   /data-orb-pos='top-left'\] #sphere-container\s*\{[^}]*height: var\(--hud-bar-height\)/.test(sphereCss));
-check('the top-left bar reserves its width in that row',
-  /var\(--voice-bar-width\) \+ var\(--voice-pill-gap\)/.test(sphereCss));
+check('the bar follows the top bar down to the bottom edge',
+  /data-orb-pos='top-left'\]\[data-bar-pos='bottom'\] #sphere-container\s*\{[^}]*bottom:/.test(sphereCss));
+check('the row gives up the bar\'s slot plus its own gap',
+  /var\(--voice-slot\) \+ var\(--desktop-gap/.test(sphereCss));
 
 /* ── 12. The position preferences ───────────────────────────── */
 
@@ -428,33 +440,51 @@ const prefs = await import('../preferences.js');
 check('the top bar can dock at the bottom', prefs.BAR_POSITIONS.includes('bottom'));
 check('the voice bar has four docking spots',
   prefs.ORB_POSITIONS.join() === 'bottom-center,bottom-left,bottom-right,top-left');
-check('a bottom voice bar moves to the top-left pill when the top bar owns that edge',
-  prefs.effectiveOrbPosition({ bar_position: 'bottom', orb_position: 'bottom-center' }) === 'top-left');
+check('a bottom voice bar rides the bar\'s row when the top bar owns that edge',
+  prefs.effectiveOrbPosition({ bar_position: 'bottom', orb_position: 'bottom-center' }) === 'top-left'
+  && prefs.orbIsAttached({ bar_position: 'bottom', orb_position: 'bottom-center' }) === true);
 check('…while the top bar is elsewhere the corner is kept',
-  prefs.effectiveOrbPosition({ bar_position: 'top', orb_position: 'bottom-left' }) === 'bottom-left');
-check('a top-left pill never moves because of a bottom bar',
+  prefs.effectiveOrbPosition({ bar_position: 'top', orb_position: 'bottom-left' }) === 'bottom-left'
+  && prefs.orbIsAttached({ bar_position: 'top', orb_position: 'bottom-left' }) === false);
+check('a top-left voice bar never moves because of a bottom bar',
   prefs.effectiveOrbPosition({ bar_position: 'bottom', orb_position: 'top-left' }) === 'top-left');
 
 localStorage.setItem('desktop.immersive',
   JSON.stringify({ bar_position: 'bottom', orb_position: 'bottom-right' }));
 prefs.applyImmersive();
 check('the immersion settings are published to CSS',
-  documentElement.dataset.barPos === 'bottom' && documentElement.dataset.orbPos === 'top-left');
+  documentElement.dataset.barPos === 'bottom' && documentElement.dataset.orbPos === 'top-left'
+  && documentElement.dataset.orbAttached === '1');
 localStorage.setItem('desktop.immersive',
   JSON.stringify({ bar_position: 'top', orb_position: 'bottom-right' }));
 prefs.applyImmersive();
 check('moving the top bar back restores the chosen corner',
-  documentElement.dataset.orbPos === 'bottom-right');
+  documentElement.dataset.orbPos === 'bottom-right'
+  && documentElement.dataset.orbAttached === '0');
 
 /* ── 13. Voice-bar appearance ───────────────────────────────── */
 
-check('the bar starts as a plain lip', prefs.orbHasPlate(prefs.getImmersive()) === true); // hairline default
-check('no border and no step line means no plate',
-  prefs.orbHasPlate({ ...prefs.getImmersive(), orb_border: 'none', orb_step: false }) === false);
-check('a border paints the plate',
-  prefs.orbHasPlate({ ...prefs.getImmersive(), orb_border: 'palette', orb_step: false }) === true);
-check('the step line paints the plate too',
-  prefs.orbHasPlate({ ...prefs.getImmersive(), orb_border: 'none', orb_step: true }) === true);
+/* Riding the top bar's row the bar hides and comes back with the top bar —
+   its own autohide switch has nothing to add there. */
+const fullscreenCss = readFileSync(new URL('../../css/fullscreen.css', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+check('an attached voice bar hides with the top bar',
+  /data-orb-attached='1'\]\[data-autohide-bar='1'\][\s\S]{0,200}?#sphere-container/.test(fullscreenCss)
+  && /data-orb-attached='1'\] body\.fs-active[\s\S]{0,200}?#sphere-container/.test(fullscreenCss));
+check('…and comes back with it',
+  /data-orb-attached='1'\] body\.fs-top[\s\S]{0,200}?#sphere-container/.test(fullscreenCss));
+check('a fullscreen window hides the bar at every dock',
+  /body\.fs-active #hud-header \{[\s\S]{0,400}?visibility: hidden/.test(fullscreenCss)
+  && /data-bar-pos='bottom'\] body\.fs-active #hud-header\s*\{\s*transform: translateY\(calc\(100% \+ 16px\)\)/.test(fullscreenCss)
+  && /data-bar-pos='left'\] body\.fs-active #hud-header\s*\{\s*transform: translateX\(calc\(-100% - 16px\)\)/.test(fullscreenCss));
+check('…and comes back from that edge',
+  /html\[data-bar-pos\] body\.fs-active\.fs-top #hud-header/.test(fullscreenCss));
+
+/* The bar's own body is not a setting: the border choices shape it, so none of
+   them may take it away — a borderless bar is a bar without a border. */
+check('the border setting never decides whether the bar exists',
+  !/data-orb-border='none'\]\s*#sphere-container\s*\{[^}]*background:/.test(sphereCss)
+  && !/data-orb-plate/.test(sphereCss));
 
 localStorage.setItem('desktop.immersive', JSON.stringify({
   bar_position: 'top',
@@ -462,28 +492,25 @@ localStorage.setItem('desktop.immersive', JSON.stringify({
   orb_color: 'palette',
   orb_width: 320,
   orb_height: 56,
-  orb_radius: 'square',
   orb_border: 'palette',
-  orb_step: true,
+  orb_status: 'icons',
 }));
 prefs.applyImmersive();
 check('the appearance choices reach CSS',
   documentElement.dataset.orbColor === 'palette'
   && documentElement.dataset.orbBorder === 'palette'
-  && documentElement.dataset.orbRadius === 'square'
-  && documentElement.dataset.orbPlate === '1'
-  && documentElement.dataset.orbStep === '1');
+  && documentElement.dataset.orbStatus === 'icons');
 check('the bar size lands on the bar element',
   documentElement.style.getPropertyValue('--voice-bar-width') === '320px'
   && documentElement.style.getPropertyValue('--voice-bar-height') === '56px',
   `${documentElement.style.getPropertyValue('--voice-bar-width')} x ${documentElement.style.getPropertyValue('--voice-bar-height')}`);
 
 localStorage.setItem('desktop.immersive', JSON.stringify({
-  orb_width: 999, orb_height: 1, orb_radius: 'nope', orb_color: 'nope', orb_border: 'nope',
+  orb_width: 999, orb_height: 1, orb_color: 'nope', orb_border: 'nope',
 }));
 const clamped = prefs.getImmersive();
 check('out-of-range sizes are clamped and unknown values fall back',
-  clamped.orb_width === 400 && clamped.orb_height === 24 && clamped.orb_radius === 'pill'
+  clamped.orb_width === 400 && clamped.orb_height === 24
   && clamped.orb_color === 'accent' && clamped.orb_border === 'hairline',
   JSON.stringify(clamped));
 

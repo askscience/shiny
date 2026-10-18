@@ -45,7 +45,7 @@ import {
   getFocus, getFullscreen, toggleFullscreen, clearFullscreen,
   isolateInNewWorkspace, restoreFromNewWorkspace, hasFullscreenWindow,
 } from './desktop.js';
-import { getImmersive, applyImmersive, effectiveOrbPosition } from './preferences.js';
+import { getImmersive, applyImmersive, effectiveOrbPosition, orbIsAttached } from './preferences.js';
 import { isPluginActive } from './activePlugins.js';
 
 const EDGE_ZONE = 120;     // px from the edge that keeps the bar up once shown
@@ -211,10 +211,26 @@ function setReveal(top, orb) {
 }
 
 /**
+ * How much of the bottom edge is already spoken for by the voice bar: reaching
+ * the bar that is *there* is reaching the edge, so the strip starts at its top
+ * instead of at the screen's. Zero unless the voice bar shares that edge.
+ */
+function bottomVoiceBarGap(cfg) {
+  const onBottom = effectiveOrbPosition(cfg).startsWith('bottom')
+    || (orbIsAttached(cfg) && cfg.bar_position === 'bottom');
+  if (!onBottom) return 0;
+  const rect = document.getElementById('sphere-container')?.getBoundingClientRect();
+  if (!rect || !rect.height) return 0;
+  return Math.max(0, window.innerHeight - rect.top);
+}
+
+/**
  * The narrow strip along the edge the bar docks to. Only reaching this close
  * summons the bar: a plugin window's own top bar lives at the very top of a
  * fullscreen app, so resting on its buttons must not be enough. The pointer has
- * to insist here (see [`armEdgeDwell`]) before the chrome comes back.
+ * to insist here (see [`armEdgeDwell`]) before the chrome comes back. At the
+ * bottom the strip covers the voice bar too — it sits on that edge, and the
+ * pointer lands on it long before it reaches the screen's last pixels.
  */
 function barRevealProximity() {
   const cfg = immersiveCfg();
@@ -222,7 +238,7 @@ function barRevealProximity() {
   const vh = window.innerHeight;
   if (cfg.bar_position === 'left') return lastX >= 0 && lastX <= REVEAL_ZONE;
   if (cfg.bar_position === 'right') return lastX >= 0 && vw - lastX <= REVEAL_ZONE;
-  if (cfg.bar_position === 'bottom') return lastY >= 0 && vh - lastY <= REVEAL_ZONE;
+  if (cfg.bar_position === 'bottom') return lastY >= 0 && vh - lastY <= REVEAL_ZONE + bottomVoiceBarGap(cfg);
   return lastY >= 0 && lastY <= REVEAL_ZONE;
 }
 
@@ -237,7 +253,7 @@ function barKeepProximity() {
   const vh = window.innerHeight;
   if (cfg.bar_position === 'left') return lastX >= 0 && lastX <= EDGE_ZONE;
   if (cfg.bar_position === 'right') return lastX >= 0 && vw - lastX <= EDGE_ZONE;
-  if (cfg.bar_position === 'bottom') return lastY >= 0 && vh - lastY <= EDGE_ZONE;
+  if (cfg.bar_position === 'bottom') return lastY >= 0 && vh - lastY <= EDGE_ZONE + bottomVoiceBarGap(cfg);
   return lastY >= 0 && lastY <= EDGE_ZONE;
 }
 
@@ -269,15 +285,18 @@ function armEdgeDwell(atEdge, nearBar) {
 /**
  * The bar and the voice bar hide and reveal on the whole desktop, not only in
  * fullscreen — the immersion settings are desktop-wide. Each piece is
- * independent, so an always-on bar can sit next to an autohiding voice bar.
+ * independent, so an always-on bar can sit next to an autohiding voice bar —
+ * except a voice bar riding the top bar's row: that one is part of the bar and
+ * hides and reveals with it.
  *
  * The bar only reveals once the pointer has insisted at its docking edge
  * (`edgeDwell`), so brushing past the top while reaching for a window's own
  * toolbar does not summon it. A fullscreen window still overrides the bar's
- * autohide for the top position: the app owns the screen while it is
- * fullscreen, so the bar is away until the pointer insists at the top edge
- * whatever the setting says. The window rides the same reveal: fullscreen.css
- * shifts it down by the bar's height so the chrome never covers it.
+ * autohide whatever edge it docks to — top or bottom — because the app owns the
+ * screen while it is fullscreen, so the bar is away until the pointer insists
+ * at that edge however the setting reads. The window rides the same reveal:
+ * fullscreen.css shifts it down by the bar's height so the chrome never covers
+ * it.
  */
 function evalReveal() {
   const cfg = immersiveCfg();
@@ -285,29 +304,26 @@ function evalReveal() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const fsActive = body.classList.contains('fs-active');
-  const fsTopBar = fsActive && cfg.bar_position === 'top';
 
   // The bar comes back from whichever edge it docks to — only after the
   // pointer has insisted there (or when held up around entering fullscreen).
   const nearBar = edgeDwell;
 
-  // The voice bar docks to a corner of its own, so the hot zone follows it: a
-  // top-left pill is reached from the top edge, a bottom corner from its own
-  // side of the bottom strip, and the default from the bottom centre.
+  // The voice bar keeps its own hot zone only on the edge it holds alone; a
+  // free bar docks to a corner of the bottom strip.
   const orbPos = effectiveOrbPosition(cfg);
-  const nearOrb = orbPos === 'top-left'
-    ? lastY >= 0 && lastY <= ORB_ZONE && lastX >= 0 && lastX <= ORB_HALF
-    : lastY >= 0 && lastY >= vh - ORB_ZONE
-      && (orbPos === 'bottom-left'
-        ? lastX >= 0 && lastX <= ORB_HALF
-        : orbPos === 'bottom-right'
-          ? lastX >= 0 && vw - lastX <= ORB_HALF
-          : Math.abs(lastX - vw / 2) <= ORB_HALF);
+  const attached = orbIsAttached(cfg);
+  const nearOrb = lastY >= 0 && lastY >= vh - ORB_ZONE
+    && (orbPos === 'bottom-left'
+      ? lastX >= 0 && lastX <= ORB_HALF
+      : orbPos === 'bottom-right'
+        ? lastX >= 0 && vw - lastX <= ORB_HALF
+        : Math.abs(lastX - vw / 2) <= ORB_HALF);
 
   // A fullscreen window hides the bar of its workspace no matter what the
-  // desktop-wide autohide preference says.
-  const showBar = fsTopBar ? (held || nearBar) : (!cfg.autohide_bar || held || nearBar);
-  setReveal(showBar, !cfg.autohide_orb || held || nearOrb);
+  // desktop-wide autohide preference says — at every edge it can dock to.
+  const showBar = (fsActive || cfg.autohide_bar) ? (held || nearBar) : true;
+  setReveal(showBar, attached ? showBar : (!cfg.autohide_orb || held || nearOrb));
 }
 
 function holdReveal(ms) {

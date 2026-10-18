@@ -159,7 +159,7 @@ kiosk from its Terminal plugin. Automated tests use scratch state instead.
   locale changes, clipboard and the virtual keyboard.
 - Open every bundled plugin. Confirm Browser child views, shields, downloads and
   incognito; Terminal resize, output replay and reconnect; Files navigation; and
-  save/open/export in Word, Calc, Impress, PDF, Image, Studio and FilmCraft.
+  save/open/export in Word, Calc, Impress, PDF, Image and Studio.
 - Check Mail, Calendar, Calculator, Radio, YouTube, Traveler and Updates, including
   their agent tools. Focus each plugin and verify other plugins' tools stay
   excluded. Check plugin install/replace/remove using a disposable fixture.

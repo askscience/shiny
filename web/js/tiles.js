@@ -38,6 +38,7 @@ import {
 } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
 import { loadPluginCatalog } from './i18n.js';
+import { webAppSurface } from './webAppSurface.js';
 
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 
@@ -168,29 +169,38 @@ async function refreshCatalog() {
   } catch (_) { /* keep last catalog */ }
 
   const wanted = new Set(
-    plugins.filter((p) => activeSet.has(p.name) && p.surface).map((p) => p.name),
+    plugins
+      .filter((p) => activeSet.has(p.name) && (p.surface || p.web_app))
+      .map((p) => p.name),
   );
   let wiredAny = false;
   for (const p of plugins) {
-    if (activeSet.has(p.name) && p.surface && !surfaceModules.has(p.name)) {
-      try {
-        // Relative on purpose: a module specifier resolves against the
-        // *module's* URL, and the app can be served through the filtering
-        // proxy (the kiosk), where the module URL lives under `/p/…`.
-        // A root-absolute `/plugins/…` would resolve to the proxy origin
-        // instead of the app and the window would never mount (kiosk bug).
-        const moduleUrl = new URL(`../plugins/${p.name}/plugin.js`, import.meta.url);
-        // The plugin's translations first, so strings resolved while the
-        // module graph evaluates are already in the user's language.
-        await loadPluginCatalog(moduleUrl);
-        const mod = await import(moduleUrl.href);
-        surfaceModules.set(p.name, mod.default || mod);
-        surfaceUrls.set(p.name, moduleUrl);
-        surfaceModules.get(p.name)?.wireEvents?.();
-        wiredAny = true;
-      } catch (err) {
-        console.warn(`plugin surface '${p.name}' failed to load`, err);
-      }
+    if (!activeSet.has(p.name) || surfaceModules.has(p.name)) continue;
+    // A web-app plugin is a static site rather than a module: mount it in an
+    // iframe. No `plugin.js` to import and no plugin catalogue to load (the
+    // app brings its own UI and its own translations).
+    if (p.web_app) {
+      surfaceModules.set(p.name, webAppSurface(p.name));
+      continue;
+    }
+    if (!p.surface) continue;
+    try {
+      // Relative on purpose: a module specifier resolves against the
+      // *module's* URL, and the app can be served through the filtering
+      // proxy (the kiosk), where the module URL lives under `/p/…`.
+      // A root-absolute `/plugins/…` would resolve to the proxy origin
+      // instead of the app and the window would never mount (kiosk bug).
+      const moduleUrl = new URL(`../plugins/${p.name}/plugin.js`, import.meta.url);
+      // The plugin's translations first, so strings resolved while the
+      // module graph evaluates are already in the user's language.
+      await loadPluginCatalog(moduleUrl);
+      const mod = await import(moduleUrl.href);
+      surfaceModules.set(p.name, mod.default || mod);
+      surfaceUrls.set(p.name, moduleUrl);
+      surfaceModules.get(p.name)?.wireEvents?.();
+      wiredAny = true;
+    } catch (err) {
+      console.warn(`plugin surface '${p.name}' failed to load`, err);
     }
   }
   // A surface activated in the same agent response as its tool call would
@@ -369,7 +379,7 @@ function ensureWindowChrome(el, name) {
 
   // The marker identifies injected chrome — not the styling class. A plugin
   // bar that happens to reuse `tile-header` must not be able to suppress the
-  // close/fullscreen injection (FilmCraft shipped exactly that bug).
+  // close/fullscreen injection.
   if (el.querySelector(':scope > [data-window-chrome]')) return;
 
   const header = document.createElement('header');

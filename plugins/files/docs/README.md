@@ -19,7 +19,7 @@ helpers every other plugin uses.
 
 - A **Files window**: grid/list, lazy thumbnails, preview (Space), double-click
   opens a file in its owning app, upload, a `.Trash`, and a Sushi-style
-  quick-look with a streaming video player.
+  quick-look — a bare overlay with hover arrows and a streaming video player.
 - A **home per user**: `$HOME/.shiny/home/<user-id>/` with the classic folders
   (`Desktop`, `Documents`, `Downloads`, `Music`, `Pictures`, `Public`,
   `Templates`, `Videos`), provisioned by the `on_user_registered` hook and

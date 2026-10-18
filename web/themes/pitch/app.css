@@ -189,10 +189,10 @@
 .boot-bar span,
 .launcher-item-icon { background-image: none !important; }
 
-/* …except the voice bar's "all accents" mode, which is a deliberate gradient:
-   flattening it would make the palette option do nothing in this theme. */
-html:not([data-orb-color='palette']) .voice-glow,
-html:not([data-orb-color='palette']) .voice-lip { background-image: none !important; }
+/* …except the voice bar's "all accents" mode, which is a deliberate gradient
+   filled across the bar itself: flattening it would make the palette option do
+   nothing in this theme. */
+html:not([data-orb-color='palette']) #sphere-container { background-image: none !important; }
 
 .ui-gradient-text {
   -webkit-text-fill-color: currentColor !important;
@@ -605,30 +605,6 @@ html[data-bar-pos='center']:not([data-orb-pos='top-left']) #hud-header {
   letter-spacing: 0.1em !important;
 }
 body.overview-active .tile--overview { box-shadow: none !important; }
-
-/* ── Voice bar ─────────────────────────────────────────────────
-   The lip keeps its audio-reactive behaviour — it is the one piece
-   of motion worth having — but it loses the bloom and becomes a flat
-   accent bar that swells in width rather than in glow. The bar's own size,
-   corners and border come from Settings, so only the look is themed here. */
-html[data-orb-plate='0'][data-orb-color='accent'] .voice-lip {
-  width: min(66%, 200px) !important;
-  height: 2px !important;
-  background: var(--voice-color) !important;
-  box-shadow: none !important;
-  opacity: calc(0.4 + var(--voice-level) * 0.6);
-}
-html[data-orb-plate='0'][data-orb-color='accent'] .voice-glow {
-  width: min(70%, 220px) !important;
-  height: 2px !important;
-  background: color-mix(in srgb, var(--voice-color) 45%, transparent) !important;
-  box-shadow: none !important;
-  filter: none !important;
-  transform:
-    translateX(calc(-50% + (var(--voice-pan) * 8px)))
-    scaleX(calc(0.6 + var(--voice-level) * 1.1));
-  opacity: calc(var(--voice-base) + var(--voice-level) * 0.6);
-}
 
 /* ── Artifact dock ────────────────────────────────────────────── */
 #artifact-dock {
@@ -1267,37 +1243,32 @@ html[data-orb-plate='0'][data-orb-color='accent'] .voice-glow {
   border: 1px solid var(--glass-border) !important;
   color: var(--muted) !important;
 }
-/* Quick look + the in-window media player: flat panels, and the
-   hardcoded black/white chrome normalised onto tokens. */
-.files-preview-card {
-  background: var(--surface-strong) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: none !important;
+/* Quick look: the file sits straight on the flat canvas — no veil, no panel —
+   and the player's control bar wears the accent with no plate or border. */
+.files-look {
+  background: var(--bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
-.files-preview-media,
+.files-look .files-look-arrow {
+  border: 1px solid var(--glass-border) !important;
+  background: var(--surface-strong) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.files-look .files-look-arrow:hover { background: var(--glass-strong) !important; }
 .files-player,
 .files-player-media {
   background: #000 !important;
-  border-radius: var(--radius-sm) !important;
+  border-radius: 0 !important;
 }
 .files-player-bar {
-  background: var(--surface) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
 }
-.files-player-btn {
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text-secondary) !important;
-}
-.files-player-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
-.files-player-time,
 .files-player-error { color: var(--muted) !important; }
-.files-player-seek { background: var(--glass-strong) !important; }
-.files-preview-hint { color: var(--muted) !important; }
 .files-preview-text { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; }
 
 /* ── Word ───────────────────────────────────────────────────────

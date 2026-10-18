@@ -265,6 +265,17 @@ The same set rides in `AgentContext.focused`, and `execute_action` enforces it
 - an invented tool name reaches its own "unknown action" error rather than being
   blamed on focus mode.
 
+**Craft apps and focus mode.** A Craft app installed by the store can expose its
+own MCP server (its `<app>-cli mcp`), which the core adapts into tools owned by
+that app (`photocraft_command_list`, …). They are a *focus-only* surface,
+enforced in code rather than in the prompt: `src/plugins/craft_mcp.rs` starts a
+server only for the Craft apps whose windows are focused and stops every other
+one before the tool list is built, and `ToolRegistry::is_focus_only` makes
+`execute_action` refuse a stale registration with a `suggest_focus` refusal.
+With no Craft app focused there is no server and no tool at all, so the model
+cannot reach an app the user is not working with; with one focused, only that
+app's MCP tools join the turn.
+
 `tests/focus_mode_scope.rs` runs that against the real plugins (19 plugins, 331
 tools) and dispatches for real. Two of these paths exist because of measured
 failures: qwen3.5:4b reached for `show_plugin` on the unfocused plugin when only

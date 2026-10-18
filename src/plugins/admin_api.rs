@@ -24,6 +24,10 @@ struct PluginListEntry {
     summary: Option<String>,
     /// True when the plugin ships a `web/plugin.js` window surface.
     surface: bool,
+    /// True when the plugin is a static web app (`kind = "web"` in
+    /// `plugin.toml`): the shell mounts `/plugins/<name>/` in an iframe
+    /// instead of importing a `plugin.js` module.
+    web_app: bool,
     /// True when the plugin ships a `web/hud.js` top-bar contribution, loaded
     /// for the plugin simply being installed (not only when active).
     hud: bool,
@@ -83,6 +87,7 @@ pub async fn list(
                     state.plugins.category_for(&m.name),
                 ),
             };
+            let web_app = state.plugins.kind_for(&m.name).is_web();
             PluginListEntry {
                 category,
                 capabilities: state.plugins.capabilities_for(&m.name),
@@ -93,6 +98,7 @@ pub async fn list(
                 summary,
                 enabled,
                 surface,
+                web_app,
                 hud,
             }
         })
@@ -178,6 +184,14 @@ pub async fn uninstall(
     let dir = std::path::Path::new(&state.config.plugins_dir).join(&name);
     if dir.exists() {
         let _ = std::fs::remove_dir_all(&dir);
+    }
+    // AI control (the app's MCP command-line tool) belongs to the app: removing
+    // the app removes it too.
+    let mcp_dir = std::path::Path::new(&state.config.plugins_dir)
+        .join(".craft-mcp")
+        .join(&name);
+    if mcp_dir.exists() {
+        let _ = std::fs::remove_dir_all(&mcp_dir);
     }
     crate::plugins::installer::log_event(std::path::Path::new(&state.config.plugins_dir), &format!("uninstall-ok name={name} removed={removed}"));
 

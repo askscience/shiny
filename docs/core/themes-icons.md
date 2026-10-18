@@ -156,8 +156,12 @@ A plugin's identity icon is resolved by
 1. the shared library icon mapped to it (`PLUGIN_ICONS` → an `apps/<name>`
    glyph **of the active set**, coloured in the Infinity set),
 2. the plugin's own `web/icon.svg` (served at `/plugins/<name>/icon.svg`),
-3. the core-window icon (Settings → `ui/settings`, Plugins → `ui/puzzle`),
-4. the fallback `ui/puzzle`.
+3. the plugin's own `web/icon.png` — a web-app plugin installed from the Craft
+   store carries its vendor's app icon this way; the coloured sets show it as
+   published, while the monochrome set converts it to grayscale so it matches
+   the line glyphs,
+4. the core-window icon (Settings → `ui/settings`, Plugins → `ui/puzzle`),
+5. the fallback `ui/puzzle`.
 
 Bundled plugins all have a curated `apps/<name>` icon. A third-party plugin can
 ship `web/icon.svg`. The style for those is deliberately bolder than the thin

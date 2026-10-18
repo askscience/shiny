@@ -98,18 +98,22 @@ hidden dirs and leftover `_staging-*` dirs are skipped.
 
 1. Parse `plugin.toml`.
 2. Validate `api_level` and (optional) `target_triple`.
-3. Locate the cdylib inside the archive, copy it to a versioned name so
-   re-installs are safe even on Windows, and `dlopen` it.
-4. Resolve `shiny_plugin_entry` and call it; receive `*mut dyn Plugin`, wrap as
-   `Box<dyn Plugin>`.
-5. Run any `migrations/*.sql` not yet recorded in the core
+3. **Native** (`kind = "native"`, the default): locate the cdylib inside the
+   archive, copy it to a versioned name so re-installs are safe even on Windows,
+   and `dlopen` it; resolve `shiny_plugin_entry` and call it to receive
+   `*mut dyn Plugin`. **Web-app** (`kind = "web"`): no cdylib is looked for and
+   nothing is loaded — the plugin is a static site, and the loader builds a
+   no-op `Plugin` handle so the rest of the pipeline is unchanged. A web app
+   must ship `<web_dir>/index.html`; without one the load fails.
+4. Run any `migrations/*.sql` not yet recorded in the core
    `plugin_schema_versions` table (host pool, load time).
-6. Build a `PluginCtx` and call `plugin.register(ctx, &mut builder)`.
-7. Move `builder.tools` into the live `ToolRegistry`, append `skills_md` +
+5. Build a `PluginCtx` and call `plugin.register(ctx, &mut builder)` (a web app
+   registers nothing).
+6. Move `builder.tools` into the live `ToolRegistry`, append `skills_md` +
    `persona` + `context_lines` to the per-plugin contribution list, and resolve
    each `RouteSpec` tag to a handler.
-8. Call `plugin.on_load(ctx)`.
-9. Rebuild the served router.
+7. Call `plugin.on_load(ctx)`.
+8. Rebuild the served router.
 
 ### Every `/api/agent` call
 
@@ -122,9 +126,9 @@ prompt, and any registered tool is dispatched through `ToolRegistry::invoke`.
 
 ### Archive layout
 
-A plugin archive is a directory containing **at least** `plugin.toml` and a
-cdylib (`.so`, `.dylib` or `.dll`). The directory may be the archive root or a
-child.
+A plugin archive is a directory containing **at least** `plugin.toml` and either
+a cdylib (`.so`, `.dylib` or `.dll`) or — for `kind = "web"` — the app's entry
+document `web/index.html`. The directory may be the archive root or a child.
 
 ```
 hello.zip
@@ -134,6 +138,14 @@ hello.zip
     ├── migrations/001_init.sql      # optional
     ├── skills/hello.md              # optional
     └── web/plugin.js                # optional window + icon.svg
+
+photocraft.zip                       # kind = "web" — no cdylib
+└── photocraft/
+    ├── plugin.toml
+    └── web/
+        ├── index.html
+        ├── photocraft_web_bg.wasm
+        └── icon.png                 # optional; the shell's tray icon
 ```
 
 ### Workflow (mirrors WordPress)
@@ -146,7 +158,8 @@ hello.zip
    descend into it.
 4. Parse `plugin.toml`; validate `api_level ≤ CORE_API_LEVEL`; validate
    `target_triple` against the host when present.
-5. Locate a cdylib; reject if none.
+5. Require what the kind needs: a cdylib for a native plugin, `web/index.html`
+   for a web app; reject otherwise.
 6. Acquire the install lock on `PLUGINS_DIR/.install.lock`.
 7. If `PLUGINS_DIR/<name>/` exists, back it up as `<name>.bak`.
 8. `rename` staging → `PLUGINS_DIR/<name>/`; clean staging.

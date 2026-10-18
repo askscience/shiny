@@ -22,6 +22,9 @@ pub struct LoadedPlugin {
     /// reason as `category`: the frontend resolves features like the link
     /// handler from these declarations instead of hardcoding plugin names.
     pub capabilities: Vec<String>,
+    /// `web` for a plugin that is only a static web app (no cdylib). The shell
+    /// mounts those in an iframe instead of importing a `web/plugin.js`.
+    pub kind: PluginKind,
     /// `Arc` (not `Box`) so lifecycle hooks (`on_load`/`on_unload`) can be
     /// awaited without holding the loader lock.
     pub plugin: Arc<dyn Plugin>,
@@ -33,6 +36,33 @@ pub struct LoadedPlugin {
 unsafe impl Send for LoadedPlugin {}
 unsafe impl Sync for LoadedPlugin {}
 
+/// What a plugin is made of. `Native` is a cdylib loaded with `dlopen` (the
+/// historical shape); `Web` is a static web app served at `/plugins/<name>/`
+/// and mounted by the shell in an iframe — it ships no code we execute in
+/// this process, so it needs no cdylib and no entry symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PluginKind {
+    #[default]
+    Native,
+    Web,
+}
+
+impl PluginKind {
+    pub fn is_web(self) -> bool {
+        matches!(self, PluginKind::Web)
+    }
+}
+
+/// Host-side hint keys of a `plugin.toml`, read without touching the
+/// `Manifest` ABI. They drive host behaviour only (`category` groups the tray,
+/// `capabilities` feeds the link handler, `kind` selects the loader path).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct HostExtras {
+    pub category: Option<String>,
+    pub capabilities: Vec<String>,
+    pub kind: PluginKind,
+}
+
 /// Only the host-side hint keys of a plugin.toml — parsed independently so
 /// they can be read from disk without touching the `Manifest` ABI.
 #[derive(serde::Deserialize)]
@@ -41,6 +71,8 @@ struct ManifestExtras {
     category: Option<String>,
     #[serde(default)]
     capabilities: Vec<String>,
+    #[serde(default)]
+    kind: Option<String>,
 }
 
 /// Optional diagnostics only. Legacy archives remain accepted without this
@@ -65,7 +97,7 @@ fn trace_build_metadata(manifest_text: &str) {
 
 /// Trimmed, empty-dropped host extras for one manifest. These keys are hints,
 /// so a missing or malformed extras block yields nothing rather than an error.
-fn parse_extras(manifest_text: &str) -> (Option<String>, Vec<String>) {
+pub(crate) fn parse_extras(manifest_text: &str) -> HostExtras {
     trace_build_metadata(manifest_text);
     let extras = toml::from_str::<ManifestExtras>(manifest_text).ok();
     let category = extras
@@ -73,6 +105,10 @@ fn parse_extras(manifest_text: &str) -> (Option<String>, Vec<String>) {
         .and_then(|e| e.category.clone())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let kind = match extras.as_ref().and_then(|e| e.kind.as_deref()).map(str::trim) {
+        Some("web") => PluginKind::Web,
+        _ => PluginKind::Native,
+    };
     let capabilities = extras
         .map(|e| e.capabilities)
         .unwrap_or_default()
@@ -80,7 +116,7 @@ fn parse_extras(manifest_text: &str) -> (Option<String>, Vec<String>) {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    (category, capabilities)
+    HostExtras { category, capabilities, kind }
 }
 
 pub struct Loader {
@@ -113,6 +149,23 @@ impl Drop for LoadedPlugin {
             LIBRARY_GRAVEYARD.lock().push(library);
         }
     }
+}
+
+/// The `Plugin` handle for a web-app plugin (`kind = "web"`). Its whole
+/// payload is the static `web/` directory the core already serves, so it
+/// contributes no tools, routes, skills or persona — but keeping it behind
+/// the same trait means install, activation, uninstall, `kind_for` and the
+/// router all keep working unchanged.
+struct WebAppPlugin {
+    manifest: Manifest,
+}
+
+impl Plugin for WebAppPlugin {
+    fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+
+    fn register(&self, _ctx: Arc<PluginCtx>, _builder: &mut RegistryBuilder<'_>) {}
 }
 
 /// Validate that a plugin name is a single safe path component. It comes from
@@ -201,6 +254,14 @@ impl Loader {
             .unwrap_or_default()
     }
 
+    /// What kind of plugin this is (native cdylib or web app).
+    pub fn kind_for(&self, name: &str) -> PluginKind {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .map(|p| p.kind)
+            .unwrap_or_default()
+    }
+
     pub fn has(&self, name: &str) -> bool {
         self.loaded.read().iter().any(|p| p.manifest.name == name)
     }
@@ -228,9 +289,9 @@ impl Loader {
             .map_err(|e| AppError::BadRequest(format!("Invalid plugin.toml: {}", e)))?;
         validate_plugin_name(&manifest.name)?;
 
-        // Category and capabilities are host-side hints, read from the same
-        // toml but kept out of `Manifest` to preserve the plugin ABI.
-        let (category, capabilities) = parse_extras(&manifest_text);
+        // Category, capabilities and kind are host-side hints, read from the
+        // same toml but kept out of `Manifest` to preserve the plugin ABI.
+        let extras = parse_extras(&manifest_text);
 
         if manifest.api_level > shiny_plugin_sdk::CORE_API_LEVEL {
             return Err(AppError::BadRequest(format!(
@@ -256,63 +317,76 @@ impl Loader {
         validate_relative_path("skills_dir", &manifest.skills_dir)?;
         validate_relative_path("web_dir", &manifest.web_dir)?;
 
-        // Never grow the retired-library graveyard without bound: each entry is
-        // a mapped cdylib we cannot safely dlclose. Fail the load instead of
-        // letting an install/uninstall loop exhaust the process.
-        if LIBRARY_GRAVEYARD.lock().len() >= MAX_RETIRED_LIBRARIES {
-            return Err(AppError::Internal(format!(
-                "Too many plugin replacements this session (max {MAX_RETIRED_LIBRARIES}); restart Shiny to load more."
-            )));
-        }
-
-        // Locate the cdylib file.
-        let lib_path = find_cdylib(install_dir, &manifest.name)
-            .ok_or_else(|| AppError::BadRequest(format!(
-                "No cdylib found in {} for plugin '{}'", install_dir.display(), manifest.name
-            )))?;
-
-        // On Windows the file may be locked by the previous load — copy to a
-        // versioned path so we can re-install while the old Library is alive.
-        //
-        // On Unix that workaround is unnecessary *and* expensive: the original
-        // can be `dlopen`ed directly, and it can be overwritten or unlinked
-        // while it is mapped (the kernel keeps the inode alive), so a re-install
-        // still works. Copying every cdylib was several GiB of disk I/O on every
-        // startup — the plugin loaders' real cost — for no benefit here.
-        #[cfg(windows)]
-        let load_path = make_loadable_copy(&lib_path);
-        #[cfg(not(windows))]
-        let load_path = lib_path;
-
-        // SAFETY: cdylib plugins must be `Send + Sync` and free of statics
-        // accessible after `dlclose`. We retain `Library` in `LoadedPlugin` so
-        // it lives as long as the plugin is registered.
-        let library = unsafe { Library::new(&load_path) }
-            .map_err(|e| AppError::Internal(format!(
-                "Failed to dlopen {}: {}", load_path.display(), e
-            )))?;
-
-        // Honor the manifest's declared entry symbol (defaulting to the
-        // standard `shiny_plugin_entry`) so the field is actually read.
-        let entry_symbol = if manifest.entry_symbol.trim().is_empty() {
-            PLUGIN_ENTRY_SYMBOL
+        let (plugin, library): (Arc<dyn Plugin>, Option<Library>) = if extras.kind.is_web() {
+            // A web-app plugin is a static site with no code to dlopen. Refuse
+            // it early when the entry document is missing, so a broken
+            // download fails the install instead of opening an empty window.
+            let web_root = install_dir.join(&manifest.web_dir);
+            if !web_root.join("index.html").is_file() {
+                return Err(AppError::BadRequest(format!(
+                    "Web-app plugin '{}' has no {}/index.html to serve",
+                    manifest.name, manifest.web_dir
+                )));
+            }
+            (Arc::new(WebAppPlugin { manifest: manifest.clone() }), None)
         } else {
-            manifest.entry_symbol.as_str()
-        };
-        let entry: Symbol<PluginEntry> = unsafe { library.get(entry_symbol.as_bytes()) }
-            .map_err(|e| AppError::Internal(format!(
-                "Missing symbol {entry_symbol} in {}: {}", load_path.display(), e
-            )))?;
+            // Never grow the retired-library graveyard without bound: each
+            // entry is a mapped cdylib we cannot safely dlclose. Fail the load
+            // instead of letting an install/uninstall loop exhaust the process.
+            if LIBRARY_GRAVEYARD.lock().len() >= MAX_RETIRED_LIBRARIES {
+                return Err(AppError::Internal(format!(
+                    "Too many plugin replacements this session (max {MAX_RETIRED_LIBRARIES}); restart Shiny to load more."
+                )));
+            }
 
-        // SAFETY: transmute `*mut dyn Plugin` returned by the C symbol into a
-        // `Box<dyn Plugin>`. We trust the plugin author's `shiny_plugin_entry`
-        // to return a value allocated via `Box::into_raw(Box::new(...))`.
-        let raw = unsafe { entry() };
-        let plugin: Arc<dyn Plugin> = if raw.is_null() {
-            return Err(AppError::Internal("Plugin entry returned null".into()));
-        } else {
+            // Locate the cdylib file.
+            let lib_path = find_cdylib(install_dir, &manifest.name)
+                .ok_or_else(|| AppError::BadRequest(format!(
+                    "No cdylib found in {} for plugin '{}'", install_dir.display(), manifest.name
+                )))?;
+
+            // On Windows the file may be locked by the previous load — copy to a
+            // versioned path so we can re-install while the old Library is alive.
+            //
+            // On Unix that workaround is unnecessary *and* expensive: the original
+            // can be `dlopen`ed directly, and it can be overwritten or unlinked
+            // while it is mapped (the kernel keeps the inode alive), so a re-install
+            // still works. Copying every cdylib was several GiB of disk I/O on every
+            // startup — the plugin loaders' real cost — for no benefit here.
+            #[cfg(windows)]
+            let load_path = make_loadable_copy(&lib_path);
+            #[cfg(not(windows))]
+            let load_path = lib_path;
+
+            // SAFETY: cdylib plugins must be `Send + Sync` and free of statics
+            // accessible after `dlclose`. We retain `Library` in `LoadedPlugin` so
+            // it lives as long as the plugin is registered.
+            let library = unsafe { Library::new(&load_path) }
+                .map_err(|e| AppError::Internal(format!(
+                    "Failed to dlopen {}: {}", load_path.display(), e
+                )))?;
+
+            // Honor the manifest's declared entry symbol (defaulting to the
+            // standard `shiny_plugin_entry`) so the field is actually read.
+            let entry_symbol = if manifest.entry_symbol.trim().is_empty() {
+                PLUGIN_ENTRY_SYMBOL
+            } else {
+                manifest.entry_symbol.as_str()
+            };
+            let entry: Symbol<PluginEntry> = unsafe { library.get(entry_symbol.as_bytes()) }
+                .map_err(|e| AppError::Internal(format!(
+                    "Missing symbol {entry_symbol} in {}: {}", load_path.display(), e
+                )))?;
+
+            // SAFETY: transmute `*mut dyn Plugin` returned by the C symbol into a
+            // `Box<dyn Plugin>`. We trust the plugin author's `shiny_plugin_entry`
+            // to return a value allocated via `Box::into_raw(Box::new(...))`.
+            let raw = unsafe { entry() };
+            if raw.is_null() {
+                return Err(AppError::Internal("Plugin entry returned null".into()));
+            }
             let boxed: Box<dyn Plugin> = unsafe { Box::from_raw(raw) };
-            boxed.into()
+            (boxed.into(), Some(library))
         };
 
         // Sanity: the plugin's manifest matches what's on disk.
@@ -356,11 +430,12 @@ impl Loader {
         // Stash the loaded plugin (this keeps the library open).
         let loaded = LoadedPlugin {
             manifest: manifest.clone(),
-            category,
-            capabilities,
+            category: extras.category,
+            capabilities: extras.capabilities,
+            kind: extras.kind,
             plugin,
             ctx: ctx.clone(),
-            library: Some(library),
+            library,
             install_dir: install_dir.to_path_buf(),
         };
 
@@ -600,18 +675,28 @@ mod tests {
     }
 
     /// `capabilities` is a host-side hint parsed from the same toml as
-    /// `category`; absent or blank entries must never reach the API.
+    /// `category`; absent or blank entries must never reach the API. `kind`
+    /// selects the loader path and defaults to `native`.
     #[test]
-    fn host_extras_carry_capabilities() {
-        let (category, capabilities) = parse_extras(
+    fn host_extras_carry_capabilities_and_kind() {
+        let extras = parse_extras(
             "name = \"alt-browser\"\ncapabilities = [\"open-urls\", \"  \", \" media \"]\ncategory = \" Web \"\n",
         );
-        assert_eq!(category.as_deref(), Some("Web"));
-        assert_eq!(capabilities, vec!["open-urls".to_string(), "media".to_string()]);
+        assert_eq!(extras.category.as_deref(), Some("Web"));
+        assert_eq!(extras.capabilities, vec!["open-urls".to_string(), "media".to_string()]);
+        assert_eq!(extras.kind, PluginKind::Native);
 
-        let (category, capabilities) = parse_extras("name = \"legacy\"\n");
-        assert!(category.is_none());
-        assert!(capabilities.is_empty());
+        let extras = parse_extras("name = \"legacy\"\n");
+        assert!(extras.category.is_none());
+        assert!(extras.capabilities.is_empty());
+        assert_eq!(extras.kind, PluginKind::Native);
+
+        // An unknown kind is a hint, not an error: it loads as a native plugin.
+        assert_eq!(parse_extras("kind = \"plugin\"\n").kind, PluginKind::Native);
+
+        let extras = parse_extras("name = \"photocraft\"\nkind = \" web \"\n");
+        assert_eq!(extras.kind, PluginKind::Web);
+        assert!(extras.kind.is_web());
     }
 
     /// Regression: `Path::join` with an absolute path *replaces* the base, so

@@ -56,7 +56,7 @@ step is timestamped there.
 | Window never appears | `web/plugin.js` is not loaded or default export lacks `mount` | Check the browser console; the app logs one `console.warn`. |
 | Edits to `plugins/<name>/web/` do nothing | The app serves the **installed** copy | Copy to the root that wins — `PLUGINS_DIR/<name>/web/` (`~/.local/share/shiny/plugins` in a kiosk install) if a same-named plugin is installed there, else `data/plugins/<name>/web/` — or reinstall. |
 | Window mounts but looks unstyled | Plugin shipped CSS or wrong class | Build with the core UI library; use the `<name>-*` prefix. |
-| Plugin window blocked by CSP or `X-Frame-Options` | The window is an `<iframe>`, and the core sends `X-Frame-Options: DENY` | Mount the surface on a canvas in the tile instead; `script-src 'self' 'wasm-unsafe-eval'` already allows WebAssembly. See [`plugins/filmcraft`](../../plugins/filmcraft/docs/README.md). |
+| Plugin window blocked by CSP or `X-Frame-Options` | The window is an `<iframe>`, but the plugin is not a web app | Only a `kind = "web"` plugin may be framed: the core serves those routes with `X-Frame-Options: SAMEORIGIN` and a policy that admits their inline boot script and wasm. Everything else gets `DENY`, so a native plugin's window must be mounted in the tile as DOM. |
 | Icon not shown | No `apps/<name>` mapping and no `web/icon.svg` | Add one; see [themes & icons](../core/themes-icons.md). |
 
 ### Smoke-testing a window
@@ -64,9 +64,10 @@ step is timestamped there.
 `node --check web/plugin.js` catches syntax errors. For more, follow
 [`plugins/browser/web/plugin.smoke.mjs`](../../plugins/browser/web/plugin.smoke.mjs):
 it mounts the real surface against a small DOM shim and asserts the generated
-markup and the postMessage contract. The FilmCraft window has the same kind of
-shim ([`plugins/filmcraft/web/plugin.smoke.mjs`](../../plugins/filmcraft/web/plugin.smoke.mjs)),
-which asserts the tile contract, the relative asset imports and the relay.
+markup and the postMessage contract. A web-app plugin (`kind = "web"`) has no
+`plugin.js` to smoke-test — the core serves and the shell frames its static
+site — and the shell's contract for that window is pinned by
+`web/js/tests/webAppSurface.test.mjs`.
 
 ---
 

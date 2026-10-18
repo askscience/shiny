@@ -78,6 +78,7 @@ The shell is split by concern. Grouped:
 | `agent.js` | Drives `/api/agent` (JSON + SSE), renders replies. |
 | `chatHistory.js` | Conversation list + message bubbles. |
 | `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, close), the sphere. |
+| `dockStep.js`, `voiceGlyph.js`, `toolIcons.js` | The assistant's status line and the voice bar's glyph: the dock bubble, the same line or the running tool's icon inside the bar (with its swap fade), and the tool → catalogue-icon map. |
 | `thinkToggle.js` | Chat head's brain button + voice-bar menu entry: Ollama thinking on/off, gated by the model's capability (`GET /api/ai/thinking`). |
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
 | `files.js` | `saveOrDownload` / `openWithPlugin` desktop integration. |
@@ -88,7 +89,10 @@ The shell is split by concern. Grouped:
 | Module | Role |
 |---|---|
 | `settingsWindow.js`, `preferences.js` | Settings window + per-user preferences. |
-| `pluginsWindow.js`, `activePlugins.js`, `pluginIcon.js` | Plugin manager, active set, icon resolution. |
+| `pluginsWindow.js`, `activePlugins.js`, `pluginIcon.js` | Plugin manager (installed list + the Craft store tab), active set, icon resolution (theme icon → `icon.svg` → `icon.png`). |
+| `craftStore.js` | Craft App Suite catalog + the background updater (install/update via `/api/plugins/store`); also toggles an app's AI control (its MCP server). |
+| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site. |
+| `appSaves.js` | Follows the shell's `shiny:file-saved` reports — a web app saved through the browser APIs inside its iframe — and turns them into the toast with the real path plus the `files:external` refresh the Files window listens for. |
 | `appearance.js` | Accent/gradient/theme. |
 | `userProfiles.js` | Profile/persona. |
 | `coreWindows.js` | Built-in windows (Settings, Plugins, Chats). |

@@ -442,8 +442,8 @@ rides the same top-edge reveal. `build(name)` renders **Deactivate/Close** and
 `fullscreen.js` also owns the desktop-wide bar/voice-bar autohide. Cached
 immersion settings (`getImmersive()`: `autohide_bar`, `bar_position`,
 `autohide_orb`, `orb_position`) are published to `<html>` by
-`applyImmersive()` as `data-bar-pos`, `data-orb-pos`, `data-autohide-bar`,
-`data-autohide-orb`.
+`applyImmersive()` as `data-bar-pos`, `data-orb-pos`, `data-orb-attached`,
+`data-autohide-bar`, `data-autohide-orb`.
 
 The top bar docks at `top` (the default), `left`, `right`, `bottom` or `center`.
 The side docks fill the edge — the rail is `flex: 1 1 auto` and the control
@@ -451,52 +451,86 @@ cluster is pushed to the far end — the way the horizontal rail fills the width
 before that a side dock was a short pill at the top of an otherwise empty column.
 A `bottom` bar is the `top` row docked to the lower edge (safe-area padding
 included), it slides away through the bottom edge, and it reserves
-`--hud-header-total` at the bottom of `#tile-grid` instead of the top. It has no
-fullscreen override: the top position steps aside there because it would cover a
-fullscreen app's own toolbar, which a bottom bar cannot.
+`--hud-header-total` at the bottom of `#tile-grid` instead of the top — the
+desktop's own top edge comes back to the plain `--desktop-gap`, so the windows
+never leave room for a bar that is no longer up there. A
+fullscreen window hides the bar **at every dock** — top, bottom, left, right or
+centre — and it comes back from that edge once the pointer insists there
+(`body.fs-top`), whatever the desktop-wide autohide preference says; only the
+`top` dock also pushes the fullscreen window down by `--hud-header-total`, since
+only a bar above it would cover the app's own toolbar.
 
-The voice bar **is `#sphere-container`**: there is no container between the
-settings and the bar. Its width, height, corners, border and colours land on
-that element itself (`sphere.css`), and it positions itself (`position: fixed`)
-per `data-orb-pos` — `bottom-center` (the default), `bottom-left`,
-`bottom-right` or `top-left`:
+The top bar's own menus (clock, weather, and the systray chips: sound, network,
+Bluetooth, battery, power, clipboard) go through `placeMenu()`
+(`web/ui/popover.js`): a menu hangs under its chip and **flips above it** when it
+would not fit below — a bar docked at the bottom edge would otherwise open every
+menu off-screen.
 
-- the bottom corners align it to `--desktop-gap` on that side;
-- `top-left` puts it in the top bar's row **at the top bar's height**
-  (`--hud-bar-height`) — the width still comes from the setting — and a
-  full-width row gives up `--voice-bar-width` plus one gap, while a `center` row
-  reserves the same on both sides so the rail keeps its centre;
+The voice bar **is `#sphere-container`**, and the element is all of it: its body
+is the accent (Settings → Appearance "Voice bar colour"), its border is the
+setting, its audio-reactive shadow is its own `box-shadow`, and the only thing
+inside it is the step line's text. There is no wrapper and no second element
+carrying the bar. It positions itself (`position: fixed`) per `data-orb-pos` —
+`bottom-center` (the default), `bottom-left`, `bottom-right` or `top-left`:
+
+- the bottom corners are the edge it **holds alone**: aligned to `--desktop-gap`
+  on that side, with the width and height picked in Settings;
+- `top-left` **rides the top bar's row** at its start: the rail's height and
+  rounding (`--voice-radius`, the rail's own pill), one `--voice-slot` wide
+  (`min(40vw, 220px)` with the step line), and — unlike a free corner — it
+  follows the bar, going down to the bottom edge when the bar docks there. The
+  row gives up the slot plus its own gap, so the two read as one row, and the
+  bar hides and reveals with the bar it rides (`data-orb-attached`, below);
 - one edge cannot hold both bars, so `effectiveOrbPosition()` renders a
-  bottom-docked voice bar at the top-left spot while `bar_position` is `bottom`.
+  bottom-docked voice bar in the bar's row while `bar_position` is `bottom`.
   The stored preference is untouched: moving the top bar back restores the chosen
   corner.
 
 The **status dock (`#artifact-dock`) is a sibling**, not a wrapper: it is fixed
-too and hangs `--voice-bar-height` plus one gap away from the bar's edge, so a
-taller bar or a changing dock never pushes the other around.
+too and hangs clear of the bar's box (its own height on the free dock, the rail's
+height while riding the row), so a taller bar or a changing dock never pushes the
+other around.
 
 Reveal/keep proximity and the voice-bar hot zone follow the docking edge: the
 horizontal bar reveals from the top or bottom strip, a side dock from its own
-side, and the voice bar from its configured corner (`ORB_ZONE` deep,
-`ORB_HALF` wide).
+side, and a free voice bar from its configured corner (`ORB_ZONE` deep,
+`ORB_HALF` wide). At the bottom the strip covers the voice bar that sits on it
+too (`bottomVoiceBarGap`) — reaching the bar that is *there* is reaching the
+edge. The fullscreen bubble (app name, close / exit fullscreen) is a child of
+the row, so every edge that can hold the bar holds the way out of fullscreen
+with it. A voice bar riding the row has no hot zone of its own: it
+reveals with the bar (`body.fs-top`), which is what `data-orb-attached` drives in
+`fullscreen.css` — its own autohide switch does not apply there.
+
+While the chat is open (`body.compose-active`) the thread gives up the band the
+bar holds rather than letting the bar cover its foot: the top bar's row while
+the bar rides it (`--hud-header-total`), the bar's own box when it docks to the
+bottom (`--voice-bar-height` plus its offset), the left dock's column when the
+row is there — `text-input.css`. On phones the panel owns the bottom and the bar
+stands down for it instead.
 
 The bar's look is settings too (`applyImmersive()` publishes each as `data-*`
 on `<html>` / a CSS variable):
 
 | Setting | Values | Effect |
 |---|---|---|
-| `orb_width` / `orb_height` | 64–400 px / 24–72 px | Published as `--voice-bar-width` / `--voice-bar-height` and applied to the bar element. The top row pins the height to `--hud-bar-height`. |
-| `orb_radius` | `pill`, `rounded`, `square` | The bar's own corners (999px, `--radius-md`, 0). |
-| `orb_color` | `accent`, `palette` | `palette` fills the lip and the glow with `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. A shadow cannot take a gradient, so this mode drops the box-shadow and fills the layers instead. |
-| `orb_border` | `none`, `hairline`, `palette` | The bar's own border. `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
-| `orb_step` | on/off | Shows the humanised tool step line inside the bar. `dockStep.js` mirrors `#artifact-dock-step` into `#voice-step` (the dock keeps the live region) and the dock's own line is hidden so the text never appears twice. |
+| `orb_width` / `orb_height` | 64–400 px / 24–72 px | Published as `--voice-bar-width` / `--voice-bar-height` and applied to the bar where it holds an edge alone. Riding the top bar's row the bar takes the rail's size instead, so the panel hides these two there. |
+| `orb_color` | `accent`, `palette` | The bar's own body: the theme accent, or `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. The audio bloom keeps the accent in both modes, so the voice-reactive shadow survives "all accents". |
+| `orb_border` | `none`, `hairline`, `palette` | The bar's own border — a line on the bar, not what makes it exist. The hairline is the accent's contrast ink, so it reads on the accent fill; `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
+| `orb_status` | `off`, `text`, `icons` | What the bar's own glyph wears (`#voice-step`, the one span inside it): nothing — the line stays in the bubble above — the humanised tool step line as **text** (in the accent's contrast ink; the slot grows to fit it in the top row), or the **icon** of the tool that is running. The icon mode always carries a mark: the app's own at rest, the tool's while one runs, and back — each swap a short fade ([`voiceGlyph.js`](../../web/js/voiceGlyph.js) paints it, `sphere.css` animates it). `toolIcons.js` maps a tool action to a catalogue icon by prefix; the action rides the step from the server (`agent_runner.rs` → the SSE `step` event → `agent.js`). With any mode but `off` the bubble's own line is hidden, so the line never shows twice, and the dock keeps the live region. |
+| `orb_style` | `accent`, `bar` | The bar's own look: `accent` is the accent body (the colour above), `bar` the same glass plate the top bar's rail wears (`--surface`, the glass hairline, the glass blur) — the accent then shows in the audio glow alone. The panel's preview follows the choice. |
 
-With no border (the default is the hairline) and no step line the bar paints no
-plate at all — it is only the lip, exactly as before. A border or the step line
-paints the glass plate (`--surface`, `--shadow-float`, clipped lip/glow). At the
-top the bar keeps `--voice-pill-gap` from the rail, and themes that flatten
-gradients scope those rules to the accent mode (pitch does), so the options keep
-working.
+The corners are **not** a setting: the bar uses the top bar's rounding
+(`--voice-radius`, 999px — the rail is a pill). Its shadow is the assistant's
+presence: `--voice-glow`, the bar's own `box-shadow` — a halo that swells with
+`--voice-level` plus a bloom that rises above the bar and leans with
+`--voice-pan` (both driven from `sphere.js`). Every offset, blur and spread in
+that token rides the level, so a bar with the mic quiet casts **nothing**: the
+shadow is the audio effect and not a resting decoration. The top-bar look keeps
+it — it must not set `box-shadow` itself, or a theme that collapses its shadows
+(`--shadow-glass: none`, pitch) would take the glow down with it.
+Themes that flatten gradients scope those rules to the accent mode (pitch does),
+so the options keep working.
 
 Constants:
 

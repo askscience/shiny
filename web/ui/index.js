@@ -27,7 +27,7 @@ export { segmented } from './components/choice.js';
 
 export { button, iconButton, controlButton, toolButton, menuButton } from './components/button.js';
 export { element } from './components/element.js';
-export { placePopover } from './popover.js';
+export { placePopover, placeMenu } from './popover.js';
 export { field, input, textarea, select, selectControl, useSelectMenu, toggle, toggleRow, slider, checkbox, searchBar } from './components/field.js';
 export { card, panel, section, divider, stack, row } from './components/card.js';
 export { modal, sheet, tooltip } from './components/overlay.js';

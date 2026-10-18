@@ -159,8 +159,9 @@ Do not add Google Fonts, remote font stylesheets or webfont downloads to plugin 
 
 Received HTML email is embedded content: preserve its original typography and
 styles. Do not inject UI fonts into its iframe. Likewise, a browser page or a
-user-authored document is distinct from the surrounding application controls.
-Filmcraft was excluded from this consolidation.
+user-authored document is distinct from the surrounding application controls —
+and a web-app plugin (`kind = "web"`) owns the whole surface inside its frame,
+including its typography.
 
 ## Verification
 
@@ -170,7 +171,7 @@ local fixture server with fake API responses, mounts actual window modules and
 core chrome, and checks phone portrait/landscape, desktop and narrow desktop tiles.
 It checks overflow, clipped controls, every settings section, touch/mouse select
 menus, email typography and external font requests. The map and virtual keyboard
-use their core frontends; Hello has no window. Filmcraft is excluded.
+use their core frontends; Hello has no window.
 
 The browser suite is optional tooling, not an application build dependency. With
 Playwright and its Chromium browser installed in a tooling directory:

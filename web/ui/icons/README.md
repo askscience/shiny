@@ -128,6 +128,12 @@ Bundled plugins all have a curated `apps/` glyph and no longer need to ship
 their own. A third-party plugin that ships no icon falls back to `ui/puzzle`
 unless/until a mapping is added.
 
+A **web-app plugin** (`kind = "web"`, installed by the Craft store) carries its
+vendor's own icon as `web/icon.png`. `pluginIconEl` shows that artwork as
+published on the coloured sets and converts it to grayscale on the monochrome
+set, so it sits with the line glyphs instead of dropping a coloured badge into
+the tray.
+
 ## License & attribution
 
 Both curated sets are **GPL-3.0** — the same license as this project:

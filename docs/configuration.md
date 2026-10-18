@@ -17,7 +17,7 @@ All values parsed by the binary live in
 |---|---|---|---|
 | Database | `sqlite://data/traveler.db` | `DATABASE_URL` | Identity, travel, chat, plugin state. |
 | Log | `data/shiny.log` | `LOG_FILE` | Tee'd alongside stdout. |
-| Plugins (writable) | `data/plugins` | `PLUGINS_DIR` | Per-user plugin folders + `install.log` + `.install.lock`; uploads land here. |
+| Plugins (writable) | `data/plugins` | `PLUGINS_DIR` | Per-user plugin folders + `install.log` + `.install.lock`; uploads and Craft store installs land here. |
 | Plugins (baseline) | — | `SYSTEM_PLUGINS_DIR` | Optional read-only system plugin baseline; a same-named user plugin overrides it. |
 | Backgrounds | `data/backgrounds` | `BACKGROUNDS_DIR` | Per-user desktop background images. |
 | Vosk models | `data/vosk-models` | `VOSK_MODELS_DIR` | Served to the browser at `/api/voice/models/vosk`. |

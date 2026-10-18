@@ -89,6 +89,8 @@ impl AppState {
                 std::path::PathBuf::from(&config.yue2_models_dir),
                 config.yue2_engine.clone(),
             ),
+            store: crate::plugins::store::Store::new(),
+            craft_mcp: crate::plugins::craft_mcp::CraftMcp::new(),
             iroh: crate::services::iroh_remote::IrohRemote::new(),
             tailscale: crate::services::tailscale::TailscaleService::new(config.server_port),
             session: Default::default(),

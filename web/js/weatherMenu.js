@@ -9,7 +9,7 @@
  * and Escape close it, resize repositions it).
  */
 
-import { emptyState, setIcon } from '../ui/index.js';
+import { emptyState, setIcon, placeMenu } from '../ui/index.js';
 import { notifyMenuChange } from './menuState.js';
 import { getLocale, t } from './i18n.js';
 import {
@@ -85,13 +85,7 @@ function onKey(event) {
 /** The weather chip sits left of the bar, so the popup hangs from its left. */
 function reposition() {
   if (!popup || !trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const width = popup.offsetWidth;
-  const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
-  const top = rect.bottom + 8;
-  popup.style.left = `${left}px`;
-  popup.style.top = `${top}px`;
-  popup.style.maxHeight = `${Math.max(220, window.innerHeight - top - 16)}px`;
+  placeMenu(popup, trigger);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */

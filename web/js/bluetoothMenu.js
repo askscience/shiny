@@ -11,9 +11,7 @@
 import { apiFetch } from './api.js';
 import { notifyMenuChange } from './menuState.js';
 import { t } from './i18n.js';
-import {
-  badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle,
-} from '../ui/index.js';
+import { badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle, placeMenu } from '../ui/index.js';
 import {
   batteryLabel, deviceIconName, signalLabel,
 } from './bluetoothShared.js';
@@ -94,13 +92,7 @@ function onKey(event) {
 
 function reposition() {
   if (!popup || !trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const width = popup.offsetWidth;
-  const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
-  const top = rect.bottom + 8;
-  popup.style.left = `${left}px`;
-  popup.style.top = `${top}px`;
-  popup.style.maxHeight = `${Math.max(220, window.innerHeight - top - 16)}px`;
+  placeMenu(popup, trigger, { align: 'right' });
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */

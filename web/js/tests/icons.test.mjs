@@ -170,6 +170,10 @@ check('icon.js resolves through the active set', iconSrc.includes('getActiveIcon
 check('icon.js has a generic tint', iconSrc.includes('export function tintSvg'));
 check('icon.js repaints live icons', iconSrc.includes('export function refreshIcons'));
 check('icon.js caches per set+theme', iconSrc.includes('${set}:${theme}:${name}'));
+check('plugin PNG icons follow the active set',
+  pluginIconSrc.includes('getActiveIconset') && pluginIconSrc.includes('is-monochrome'));
+check('the monochrome set converts vendor artwork',
+  readFileSync(join(root, 'web', 'ui', 'ui.css'), 'utf8').includes('img.is-monochrome'));
 const loader = readFileSync(join(root, 'web', 'ui', 'iconset-loader.js'), 'utf8');
 check('iconset-loader defaults to infinity', loader.includes("DEFAULT_CHOICE = 'infinity'"));
 check('iconset-loader defaults to native colours',

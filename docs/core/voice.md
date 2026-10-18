@@ -265,10 +265,14 @@ silently reverting to the default one.
 
 ## The voice bar and gestures
 
-The bar (`web/js/sphere.js`, styled by `/css/sphere.css`) is a small lip at the
-bottom centre whose accent-coloured shadow rises and swells with the audio
-level. `setSphereState(state)` toggles the container classes; states seen in the
-code are `disabled`, `downloading`, `idle`, `listening`, `conversation`,
+The bar (`web/js/sphere.js`, styled by `/css/sphere.css`) is the assistant's
+presence and **one element**: its body is the theme accent (or every accent at
+once) and its own shadow — a halo plus a bloom — rises and swells with the audio
+level, leaning with the stereo pan. Riding the top bar's row it takes that row's
+height and rounding and follows the bar; on its own edge it takes the width and
+height from Settings → Appearance, with the step line's text inside it.
+`setSphereState(state)` toggles the container classes; states seen in the code
+are `disabled`, `downloading`, `idle`, `listening`, `conversation`,
 `processing`, `speaking` and `error`.
 
 | Gesture | Trigger | Action |

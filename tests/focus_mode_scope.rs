@@ -224,3 +224,120 @@ async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
         "focus off must not block anything"
     );
 }
+
+/// A Craft app's MCP tools are a focus-only surface: they run for that app and
+/// for nothing else — not when no window is focused, and not when a different
+/// plugin is. This is the hard-coded half of the rule (the MCP host also stops
+/// the server when the app is unfocused); the tool is left registered on
+/// purpose, so the gate is what this test proves.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn craft_app_mcp_tools_exist_only_while_the_app_is_focused() {
+    use std::sync::Arc;
+
+    struct FakeMcpTool;
+
+    #[async_trait::async_trait]
+    impl shiny_plugin_sdk::tools::Tool for FakeMcpTool {
+        fn name(&self) -> &str {
+            "photocraft_doc_open"
+        }
+        fn step_label(&self) -> &str {
+            "Using PhotoCraft…"
+        }
+        fn doc_fragment(&self) -> Option<&str> {
+            Some("### PhotoCraft: `photocraft_doc_open`\n")
+        }
+        async fn invoke(
+            &self,
+            _ctx: &shiny_plugin_sdk::services::PluginCtx,
+            _req: shiny_plugin_sdk::tools::ToolRequest<'_>,
+        ) -> Result<
+            shiny_plugin_sdk::outcome::ActionOutcome,
+            shiny_plugin_sdk::errors::AppError,
+        > {
+            Ok(shiny_plugin_sdk::outcome::ActionOutcome::ok(
+                "photocraft_doc_open",
+                json!({ "opened": true }),
+            ))
+        }
+    }
+
+    let app = support::TestApp::new().await;
+    // A store-installed app: a web-app plugin (no cdylib), which contributes no
+    // tools of its own — the MCP host is the one that does.
+    let dir = std::path::Path::new(&app.state.config.plugins_dir).join("photocraft");
+    std::fs::create_dir_all(dir.join("web")).expect("web dir");
+    std::fs::write(
+        dir.join("plugin.toml"),
+        "name = \"photocraft\"\nversion = \"0.10.0\"\napi_level = 1\nkind = \"web\"\n\
+         web_dir = \"web\"\ncategory = \"Craft\"\n",
+    )
+    .expect("manifest");
+    std::fs::write(dir.join("web/index.html"), "<!doctype html>").expect("entry page");
+
+    let state = &app.state;
+    let installed = app.load_plugins().await;
+    assert!(
+        installed.iter().any(|name| name == "photocraft"),
+        "the web app did not load: {installed:?}"
+    );
+
+    let traveler = traveler();
+    sqlx::query("INSERT INTO travelers (id, name, email, password_hash) VALUES (?1, ?2, ?3, ?4)")
+        .bind(&traveler.id)
+        .bind(&traveler.name)
+        .bind(&traveler.email)
+        .bind(&traveler.password_hash)
+        .execute(&state.pool)
+        .await
+        .expect("insert traveller");
+    state
+        .plugins
+        .set_enabled_for(&traveler.id, "photocraft", true)
+        .await
+        .expect("enable the app for the test user");
+
+    let tools = state.plugins.tools();
+    tools.install_owned(Arc::new(FakeMcpTool), "photocraft");
+    tools.mark_focus_only("photocraft");
+    assert!(tools.is_focus_only("photocraft"));
+    assert_eq!(tools.owner_of("photocraft_doc_open"), "photocraft");
+
+    // Focused on the app: its MCP tool runs.
+    let out = execute_action(
+        state,
+        &traveler,
+        &ctx(&["photocraft"]),
+        "photocraft_doc_open",
+        &json!({}),
+    )
+    .await
+    .expect("the MCP tool dispatches");
+    assert_eq!(out.result, "ok", "{:?}", out.data);
+    assert_eq!(out.owner.as_deref(), Some("photocraft"));
+
+    // Nothing focused: refused, with the app named as the one to focus.
+    let idle = execute_action(
+        state,
+        &traveler,
+        &ctx(&[]),
+        "photocraft_doc_open",
+        &json!({}),
+    )
+    .await
+    .expect("the refusal is an outcome, not an error");
+    assert!(refused_by_focus_mode(&idle), "{:?}", idle.data);
+    assert_eq!(idle.data["suggest_focus"], "photocraft");
+
+    // A different plugin focused: the ordinary focus gate refuses it as well.
+    let other = execute_action(
+        state,
+        &traveler,
+        &ctx(&["word"]),
+        "photocraft_doc_open",
+        &json!({}),
+    )
+    .await
+    .expect("the refusal is an outcome, not an error");
+    assert!(refused_by_focus_mode(&other), "{:?}", other.data);
+}

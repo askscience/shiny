@@ -155,7 +155,7 @@ cargo clippy --locked --workspace --exclude peakd --exclude peakd-mac --all-targ
 ```
 
 The web check syntax-checks first-party JavaScript and runs every Node test and
-the Browser, FilmCraft and Image plugin surface smoke checks,
+the Browser and Image plugin surface smoke checks,
 stopping at the first failure. There is no frontend bundler or npm installation.
 The formatting gate covers the refactored modules; older formatting is kept
 separate from functional changes.

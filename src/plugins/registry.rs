@@ -28,6 +28,11 @@ pub struct ToolRegistry {
     /// service singletons). Tool invocations run against the owner's ctx so
     /// `ctx.manifest.name` is correct and pools/clients are reused.
     plugin_ctx: Arc<RwLock<HashMap<String, Arc<PluginCtx>>>>,
+    /// Owners whose tools exist only while their window is focused: the Craft
+    /// apps' MCP servers (see `craft_mcp`). Registration is not enough — a
+    /// server left running must never leak its tools into a turn where the app
+    /// is not focused, so the dispatcher checks this set directly.
+    focus_only: Arc<RwLock<BTreeSet<String>>>,
 }
 
 impl ToolRegistry {
@@ -77,6 +82,19 @@ impl ToolRegistry {
     /// fresh contextless one per call.
     pub fn set_plugin_ctx(&self, plugin_name: &str, ctx: Arc<PluginCtx>) {
         self.plugin_ctx.write().insert(plugin_name.to_string(), ctx);
+    }
+
+    /// Mark an owner as focus-only: its tools are usable only while that
+    /// plugin's window is in focus mode. Used for the Craft apps' MCP tools.
+    pub fn mark_focus_only(&self, plugin_name: &str) {
+        if !plugin_name.is_empty() {
+            self.focus_only.write().insert(plugin_name.to_string());
+        }
+    }
+
+    /// Whether an owner's tools are restricted to focus mode.
+    pub fn is_focus_only(&self, plugin_name: &str) -> bool {
+        self.focus_only.read().contains(plugin_name)
     }
 
     pub fn list(&self) -> Vec<String> {

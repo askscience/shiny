@@ -132,13 +132,17 @@ pub struct ActionTaken {
 enum AgentStreamEvent {
     /// A status line: `message` is the English text, `key`/`params` the
     /// catalogue entry the web client translates (absent when the line has no
-    /// catalogue entry, e.g. a plugin tool's plain-English label).
+    /// catalogue entry, e.g. a plugin tool's plain-English label). `action` is
+    /// the tool the line belongs to — the client picks the tool's icon from it
+    /// (Settings → Appearance → voice bar: icons instead of the line).
     Step {
         message: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         key: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         params: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        action: Option<String>,
     },
     /// Reasoning trace of a thinking model, one block per tool-loop iteration.
     Thinking { message: String },
@@ -364,6 +368,26 @@ async fn prepare_agent(
     // registry refuses any other plugin's tools while this is non-empty, so the
     // prompt's promise and what the model can actually call are the same thing.
     ctx.focused = focused.iter().cloned().collect();
+
+    // Craft-app AI control is a focus-only surface, enforced here in code: a
+    // focused app's MCP server is started (and every other one stopped) before
+    // the tool list is built, so this turn advertises and can call exactly the
+    // focused apps' tools. When nothing is focused no server runs at all, and
+    // the agent has no way to reach those tools — no prompt wording involved.
+    let craft_home = state
+        .os_identity_for(traveler)
+        .map(|identity| identity.home)
+        .or_else(|| std::env::var("HOME").ok())
+        .unwrap_or_else(|| ".".to_string());
+    state
+        .craft_mcp
+        .sync(
+            &state.plugins,
+            std::path::Path::new(&state.config.plugins_dir),
+            &craft_home,
+            &focused,
+        )
+        .await;
 
     let traveler_active = installed.contains("traveler");
     let active_trip = if traveler_active {
@@ -687,7 +711,7 @@ pub async fn handle_agent(
         model.as_deref(),
         prepared.input,
         cancel.clone(),
-        |_| {},
+        |_, _| {},
         |_| {},
     )
     .await?;
@@ -830,10 +854,11 @@ pub async fn handle_agent_stream(
             model.as_deref(),
             input,
             cancel.clone(),
-            |step| emit(AgentStreamEvent::Step {
+            |step, action| emit(AgentStreamEvent::Step {
                 message: step.text.clone(),
                 key: step.key.clone(),
                 params: (!step.params.is_empty()).then(|| serde_json::Value::Object(step.params.clone())),
+                action: action.map(str::to_string),
             }),
             |msg| emit(AgentStreamEvent::Thinking {
                 message: msg.to_string(),

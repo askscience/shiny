@@ -13,7 +13,7 @@ use shiny_plugin_sdk::manifest::Manifest;
 use shiny_plugin_sdk::routes::{RouteHandler, RouteSpec};
 use shiny_plugin_sdk::services::PluginCtx;
 
-use crate::plugins::loader::Loader;
+use crate::plugins::loader::{Loader, PluginKind};
 use crate::plugins::registry::ToolRegistry;
 
 /// Per-plugin contributions persisted after `register()`.
@@ -234,6 +234,11 @@ impl PluginManager {
     /// Capabilities for one installed plugin (declared in its `plugin.toml`).
     pub fn capabilities_for(&self, name: &str) -> Vec<String> {
         self.inner.loader.capabilities_for(name)
+    }
+
+    /// What one installed plugin is made of (native cdylib or web app).
+    pub fn kind_for(&self, name: &str) -> PluginKind {
+        self.inner.loader.kind_for(name)
     }
 
     /// All installed plugins' routes: `(plugin_name, spec, handler)`.

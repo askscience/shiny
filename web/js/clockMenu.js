@@ -11,7 +11,7 @@
  */
 
 import { apiFetch } from './api.js';
-import { button, emptyState, iconButton } from '../ui/index.js';
+import { button, emptyState, iconButton, placeMenu } from '../ui/index.js';
 import { notifyMenuChange } from './menuState.js';
 import { getLocale, t, tp } from './i18n.js';
 import {
@@ -119,13 +119,7 @@ function onKey(event) {
 /** The clock sits left of the bar, so the popup hangs from its left edge. */
 function reposition() {
   if (!popup || !trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const width = popup.offsetWidth;
-  const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
-  const top = rect.bottom + 8;
-  popup.style.left = `${left}px`;
-  popup.style.top = `${top}px`;
-  popup.style.maxHeight = `${Math.max(220, window.innerHeight - top - 16)}px`;
+  placeMenu(popup, trigger);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */

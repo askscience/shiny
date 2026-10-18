@@ -3,11 +3,12 @@ import { toast, button, input, select, slider, toggleRow, listThemes, setTheme, 
 import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
-import { getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips } from '../preferences.js';
+import { getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, orbIsAttached } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
 import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
 import { pickFiles } from '../files.js';
 import { el, field, sliderField, heading } from './controls.js';
+import { paintGlyph } from '../voiceGlyph.js';
 import { revealRegion, disposeMotion } from '../../ui/motion.js';
 
 /** Build the appearance section with resources owned by its current mount. */
@@ -281,7 +282,10 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
         { value: 'bottom', label: t('common.bottom', null, 'Bottom') },
         { value: 'center', label: t('common.center', null, 'Center') },
       ],
-      onChange: (value) => setImmersive({ bar_position: value }),
+      onChange: (value) => {
+        setImmersive({ bar_position: value });
+        syncAttached();
+      },
     });
     barPosition.select.value = immersive.bar_position;
     const autohideOrb = toggleRow({
@@ -295,9 +299,12 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
         { value: 'bottom-center', label: t('settings.appearance.orbPosition.bottomCenter', null, 'Bottom centre') },
         { value: 'bottom-left', label: t('settings.appearance.orbPosition.bottomLeft', null, 'Bottom left') },
         { value: 'bottom-right', label: t('settings.appearance.orbPosition.bottomRight', null, 'Bottom right') },
-        { value: 'top-left', label: t('settings.appearance.orbPosition.topLeft', null, 'Top left (pill in the top bar)') },
+        { value: 'top-left', label: t('settings.appearance.orbPosition.topLeft', null, 'In the top bar') },
       ],
-      onChange: (value) => setImmersive({ orb_position: value }),
+      onChange: (value) => {
+        setImmersive({ orb_position: value });
+        syncAttached();
+      },
     });
     orbPosition.select.value = immersive.orb_position;
 
@@ -309,6 +316,15 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       onChange: (value) => setImmersive({ orb_color: value }),
     });
     orbColor.select.value = immersive.orb_color;
+
+    const orbStyle = select({
+      options: [
+        { value: 'accent', label: t('settings.appearance.orbStyle.accent', null, 'Accent') },
+        { value: 'bar', label: t('settings.appearance.orbStyle.bar', null, 'Top bar') },
+      ],
+      onChange: (value) => setImmersive({ orb_style: value }),
+    });
+    orbStyle.select.value = immersive.orb_style;
 
     const orbWidthControl = slider({
       min: 64, max: 400, step: 4, value: immersive.orb_width,
@@ -335,19 +351,6 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       `${immersive.orb_height} px`,
       orbHeightControl,
     );
-    const orbHeightHint = el('p', 'settings-hint',
-      t('settings.appearance.orbHeightHint', null,
-        'In the top bar the bar takes the top bar\'s height; everywhere else this is the height you pick.'));
-
-    const orbRadius = select({
-      options: [
-        { value: 'pill', label: t('settings.appearance.orbRadius.pill', null, 'Pill (fully round)') },
-        { value: 'rounded', label: t('settings.appearance.orbRadius.rounded', null, 'Rounded') },
-        { value: 'square', label: t('settings.appearance.orbRadius.square', null, 'Square') },
-      ],
-      onChange: (value) => setImmersive({ orb_radius: value }),
-    });
-    orbRadius.select.value = immersive.orb_radius;
 
     const orbBorder = select({
       options: [
@@ -359,14 +362,60 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     orbBorder.select.value = immersive.orb_border;
 
-    const orbStep = toggleRow({
-      label: t('settings.appearance.orbStep', null, 'Tool step line in the bar'),
-      hint: t('settings.appearance.orbStepHint', null,
-        'Show the humanised tool step text inside the voice bar instead of in the pill above it. '
-        + 'The bar gets a plate so the line has somewhere to sit.'),
-      checked: immersive.orb_step,
-      onChange: (checked) => setImmersive({ orb_step: checked }),
+    /* What the bar itself wears: nothing, the status line as text, or the icon
+       of the tool that is running. The preview beside the control is live — it
+       cycles the app's mark and a few tools' marks with the very same swap
+       fade the bar runs (voiceGlyph.js / sphere.css), so the option shows
+       what it does. */
+    const statusPreview = el('span', 'orb-preview');
+    const statusGlyph = el('span', 'orb-preview-glyph');
+    statusPreview.appendChild(statusGlyph);
+    const PREVIEW_TOOLS = ['', 'web_search', 'generate_image', 'generate_song', 'mail_send'];
+    let previewIndex = 0;
+    let previewTimer = null;
+    const paintPreview = () => {
+      paintGlyph(statusGlyph, {
+        mode: 'icons',
+        action: PREVIEW_TOOLS[previewIndex % PREVIEW_TOOLS.length],
+      });
+    };
+    const syncStatus = () => {
+      const icons = orbStatus.select.value === 'icons';
+      statusPreview.classList.toggle('hidden', !icons);
+      clearInterval(previewTimer);
+      previewTimer = null;
+      if (!icons) return;
+      previewIndex = 0;
+      paintPreview();
+      previewTimer = setInterval(() => { previewIndex += 1; paintPreview(); }, 2400);
+    };
+    cleanups.push(() => clearInterval(previewTimer));
+
+    const orbStatus = select({
+      options: [
+        { value: 'off', label: t('settings.appearance.orbStatus.off', null, 'Nothing') },
+        { value: 'text', label: t('settings.appearance.orbStatus.text', null, 'Step line') },
+        { value: 'icons', label: t('settings.appearance.orbStatus.icons', null, 'Tool icons') },
+      ],
+      onChange: (value) => {
+        setImmersive({ orb_status: value });
+        syncStatus();
+      },
     });
+    orbStatus.select.value = immersive.orb_status;
+    const orbStatusRow = el('span', 'orb-status-control');
+    orbStatusRow.append(orbStatus.select, statusPreview);
+    syncStatus();
+
+    /* Riding the top bar the voice bar takes the rail's size and hides with the
+       bar, so the size and its own autohide only mean something on the edge it
+       holds alone. */
+    const ownEdgeRows = [autohideOrb, orbWidth.wrap, orbHeight.wrap];
+    function syncAttached() {
+      const attached = orbIsAttached();
+      for (const row of ownEdgeRows) row.classList.toggle('hidden', attached);
+    }
+    syncAttached();
 
     return [
       heading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar')),
@@ -375,22 +424,31 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       autohideOrb,
       field(t('settings.appearance.orbPosition', null, 'Voice bar position'), orbPosition, {
         hint: t('settings.appearance.orbPositionHint', null,
-          'At the top left the bar joins the top bar\'s row, at the top bar\'s height. '
-          + 'With the top bar at the bottom, a bottom-docked voice bar moves up there instead.'),
+          'In the top bar the bar rides the top bar\'s row at its height and rounding, and follows '
+          + 'it — down to the bottom edge included — hiding and revealing with it. The width, '
+          + 'height and its own autohide apply where it holds an edge alone.'),
       }),
       field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor, {
         hint: t('settings.appearance.orbColorHint', null,
           '“All accents” uses every accent the theme declares at once — the same palette as the '
           + 'focus-mode window frame.'),
       }),
+      field(t('settings.appearance.orbStyle', null, 'Voice bar style'), orbStyle, {
+        hint: t('settings.appearance.orbStyleHint', null,
+          'The accent (or every accent at once) as the bar\'s own body, or the same glass plate '
+          + 'the top bar wears — which leaves the accent to the audio shadow.'),
+      }),
       orbWidth.wrap,
       orbHeight.wrap,
-      orbHeightHint,
-      field(t('settings.appearance.orbRadius', null, 'Corners'), orbRadius),
       field(t('settings.appearance.orbBorder', null, 'Voice bar border'), orbBorder, {
         hint: t('settings.appearance.orbBorderHint', null, 'Border of the bar itself.'),
       }),
-      orbStep,
+      field(t('settings.appearance.orbStatus', null, 'Tool status'), orbStatusRow, {
+        hint: t('settings.appearance.orbStatusHint', null,
+          'What the bar itself wears: nothing, the humanised tool step line as text, or the icon '
+          + 'of the tool that is running — swapped per tool. With no tool at all (thinking) it '
+          + 'wears the app\'s own mark.'),
+      }),
     ];
   }
 

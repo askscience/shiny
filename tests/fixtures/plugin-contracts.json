@@ -411,40 +411,6 @@
       "write_file"
     ]
   },
-  "filmcraft": {
-    "api_level": 1,
-    "routes": [
-      {
-        "auth": "auth",
-        "method": "Get",
-        "path": "/api/filmcraft/next"
-      },
-      {
-        "auth": "auth",
-        "method": "Get",
-        "path": "/api/filmcraft/status"
-      },
-      {
-        "auth": "auth",
-        "method": "Post",
-        "path": "/api/filmcraft/result"
-      },
-      {
-        "auth": "public",
-        "method": "Get",
-        "path": "/audio-worklet.js"
-      }
-    ],
-    "tools": [
-      "film",
-      "film_command",
-      "film_commands",
-      "film_export",
-      "film_export_cancel",
-      "film_export_status",
-      "film_headless"
-    ]
-  },
   "hello": {
     "api_level": 1,
     "routes": [],
