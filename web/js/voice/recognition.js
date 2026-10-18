@@ -4,7 +4,7 @@ import { floatTo16BitPCM, acquireMicrophone } from './capture.js';
 import { apiFetch, getVoiceLang, getVoiceLangExplicit } from '../api.js';
 import { cleanTranscript } from '../transcriptGuard.js';
 import { setSphereState, setVoiceReady } from '../sphere.js';
-import { getAiName, getSilenceTimeout, getWhisperModel, getEffectiveSttEngine } from '../preferences.js';
+import { getAiName, getSilenceTimeout, getWhisperModel, getEffectiveSttEngine, getWakeWord } from '../preferences.js';
 import { t } from '../i18n.js';
 
 /* Wake mode: the long-press arms the wake listener and it stays armed until
@@ -67,6 +67,22 @@ let awaitingCommand = false;
 
 // Engine selection, resolved in prepareVoice().
 let sttEngine = 'whisper';
+/**
+ * The engine the *current* session is actually streaming to.
+ *
+ * A wake session always listens with **Vosk** when its model is loaded: a
+ * listener that stays armed for minutes must cost a local WASM recogniser, not
+ * a Whisper pass per utterance. The moment the wake phrase is heard the session
+ * swaps to `sttEngine` — the engine the user chose in Settings (Whisper), or
+ * Vosk when that is what Settings/Power Saver resolve to — so the request
+ * itself gets the accuracy and the language model the user picked. `sttEngine`
+ * stays the configured choice; this is only what the audio callback feeds.
+ */
+let sessionEngine = 'whisper';
+/** True once the Vosk model is loaded, so the wake listener can use it. */
+let voskReady = false;
+/** Language of the loaded Vosk model, so a reload only happens when it differs. */
+let voskLang = '';
 let whisperModel = 'tiny';
 let whisperReady = false;
 /** True when this boot kicked off a model download that is still running. */
@@ -202,7 +218,43 @@ function handleWakeTranscript(text, isFinal) {
     awaitingCommand = true;
     setSphereState('listening');
     armWakeCommandTimer();
+    // The phrase is behind us: hand the rest of the session to the engine the
+    // user chose, so the request itself is not transcribed by the small Vosk
+    // model that only had to recognise a name.
+    swapToCommandEngine();
   }
+}
+
+/**
+ * Move an armed wake session from the Vosk wake listener to the command engine.
+ *
+ * Only the destination changes — the microphone, the audio graph and the
+ * session stay exactly as they are. That is what keeps the hand-off silent:
+ * nothing is reopened, no second permission prompt appears, and the first word
+ * after the wake phrase is not clipped. When the user's engine *is* Vosk, or
+ * Vosk was never available and the wake phase already ran on Whisper, there is
+ * nothing to move.
+ */
+function swapToCommandEngine() {
+  if (sttEngine !== 'whisper' || sessionEngine === 'whisper') return;
+
+  recognizer = null; // the wake listener's job is done
+  whisperLastPartial = '';
+  whisperQueue = [];
+  whisperQueuedSamples = 0;
+  whisperSpeechActive = false;
+  whisperPreroll = [];
+  whisperPrerollSamples = 0;
+  whisperSession = newSessionId();
+  // The wake phrase was speech, but it belongs to the previous engine: the
+  // endpointing clock starts over with the command, so the pause a user takes
+  // to think before speaking it is not read as "the utterance ended" — which
+  // would finalize an empty session and answer "Didn't catch that". The
+  // Whisper wake path always did this by clearing `sawSpeech` when the phrase
+  // landed; the hand-off has to do the same.
+  sawSpeech = false;
+  lastVoiceAt = 0;
+  sessionEngine = 'whisper';
 }
 
 function handleTranscript(text, isFinal) {
@@ -338,7 +390,7 @@ async function pumpWhisperQueue(token) {
  * trailing-silence detector in the audio callback.
  */
 async function finalizeWhisper() {
-  if (!listening || whisperFinalizing || sttEngine !== 'whisper') return;
+  if (!listening || whisperFinalizing || sessionEngine !== 'whisper') return;
   const token = listenToken;
   const session = whisperSession;
   if (!session) return;
@@ -379,7 +431,12 @@ async function finalizeWhisper() {
   stopListening();
 
   if (text) {
-    window.dispatchEvent(new CustomEvent('voice:result', { detail: { text, mode } }));
+    // A wake-session request can still carry the phrase it followed ("hey
+    // <name>, turn on the lights") — the decoder is biased with that phrase, so
+    // it often does. Hand the agent only the request, exactly as the partial
+    // path does.
+    const said = mode === 'wake' ? extractAfterWake(text, getAiName()) || text : text;
+    window.dispatchEvent(new CustomEvent('voice:result', { detail: { text: said, mode } }));
     return;
   }
   setSphereState('idle');
@@ -406,7 +463,7 @@ function whisperFailed(e) {
 
 /** Trailing-silence endpointing: Whisper has no VAD on the wire. */
 function trackEndpointing(rms) {
-  if (sttEngine !== 'whisper' || !listening || whisperFinalizing) return;
+  if (sessionEngine !== 'whisper' || !listening || whisperFinalizing) return;
   const now = performance.now();
 
   if (rms > WHISPER_SPEECH_RMS) {
@@ -526,10 +583,12 @@ async function ensureWhisperReady(lang, initial) {
  * that timing decide the engine for the whole session, keep checking quietly
  * and upgrade when it answers.
  *
- * The swap is held until nothing is listening: startListening() resolves the
- * engine into a Vosk recognizer (or a whisper session) for that session's
- * whole life, and the per-frame reader branches on sttEngine, so flipping it
- * mid-session would send audio to an engine that was never set up.
+ * The swap is held until nothing is listening: startListening() sets up the
+ * recogniser or Whisper session the session actually streams to
+ * (`sessionEngine`), and the per-frame reader branches on that, so flipping the
+ * preference mid-session would send audio to an engine that was never set up.
+ * (The one deliberate mid-session hand-off is the wake → command swap, which
+ * sets its own engine up first — see swapToCommandEngine.)
  *
  * Deliberately invisible: no toast, no status line. The upgrade only makes
  * the next thing the user says transcribe better.
@@ -621,26 +680,19 @@ async function prepareVoiceInner() {
     // A failed status probe is treated as "missing": attempting the download
     // is harmless when the archive is already there, and initVosk would fail
     // anyway when it is not.
-    if ((status?.vosk || 'missing') === 'missing') {
-      try {
-        // The server downloads the model inside this request, so it gets a
-        // bigger budget than an ordinary poll.
-        await voiceFetch('/api/voice/download', {
-          method: 'POST',
-          body: JSON.stringify({ lang }),
-        }, VOSK_DOWNLOAD_TIMEOUT_MS);
-      } catch (e) {
-        window.dispatchEvent(new CustomEvent('app:toast', {
-          detail: { message: t('voice.modelDownloadFailed', null, 'Voice model download failed'), type: 'error' },
-        }));
-        setVoiceReady(true);
-        setSphereState('error');
-        return;
-      }
+    try {
+      if ((status?.vosk || 'missing') === 'missing') await downloadVoskModel(lang);
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: t('voice.modelDownloadFailed', null, 'Voice model download failed'), type: 'error' },
+      }));
+      setVoiceReady(true);
+      setSphereState('error');
+      return;
     }
 
     try {
-      await initVosk(sttLang);
+      await loadVosk();
     } catch (e) {
       window.dispatchEvent(new CustomEvent('app:toast', {
         detail: { message: t('voice.modelLoadFailed', null, 'Speech model failed to load'), type: 'error' },
@@ -649,10 +701,53 @@ async function prepareVoiceInner() {
       setSphereState('error');
       return;
     }
+  } else if (getWakeWord()) {
+    // The wake listener runs on Vosk even when the command engine is Whisper,
+    // so its model has to be in place before the first long-press. Failing here
+    // is not fatal — the wake phase then falls back to the configured engine —
+    // so it is logged rather than toasted at a user who never asked for Vosk.
+    try {
+      if ((status?.vosk || 'missing') === 'missing') await downloadVoskModel(lang);
+      await loadVosk();
+    } catch (e) {
+      voskReady = false;
+      console.warn('Vosk model unavailable for the wake listener:', e);
+    }
   }
 
   setVoiceReady(true);
   setSphereState('idle');
+}
+
+/** Ask the server to fetch and pack the Vosk archive for `lang`. */
+async function downloadVoskModel(lang) {
+  // The server downloads the model inside this request, so it gets a bigger
+  // budget than an ordinary poll.
+  await voiceFetch('/api/voice/download', {
+    method: 'POST',
+    body: JSON.stringify({ lang }),
+  }, VOSK_DOWNLOAD_TIMEOUT_MS);
+}
+
+/**
+ * Load the Vosk model for the resolved STT language. A model that is already
+ * loaded for that language is reused — re-parsing the archive for every
+ * long-press would be pure latency.
+ */
+async function loadVosk() {
+  if (voskModel && voskLang === sttLang) {
+    voskReady = true;
+    return;
+  }
+  try {
+    await initVosk(sttLang);
+  } catch (e) {
+    voskReady = false;
+    voskLang = '';
+    throw e;
+  }
+  voskLang = sttLang;
+  voskReady = true;
 }
 
 async function initVosk(lang) {
@@ -685,6 +780,11 @@ export async function startListening(mode) {
   whisperQueue = [];
   whisperQueuedSamples = 0;
   whisperFinalizing = false;
+  // A wake session starts on Vosk when its model is loaded — the configured
+  // engine takes over the moment the phrase is heard (see
+  // swapToCommandEngine). Every other session streams to the configured engine
+  // for its whole life.
+  sessionEngine = mode === 'wake' && voskReady ? 'vosk' : sttEngine;
   setSphereState(mode === 'single' ? 'listening' : 'conversation');
 
   try {
@@ -693,10 +793,10 @@ export async function startListening(mode) {
     // error state on purpose, so this gesture is the retry (the failure may
     // have been a timeout) — and a real failure has to be said, not end in a
     // null dereference with the microphone left running behind it.
-    if (sttEngine !== 'whisper' && !voskModel) {
+    if (sessionEngine === 'vosk' && !(voskModel && voskLang === sttLang)) {
       setSphereState('warming');
       try {
-        await initVosk(sttLang);
+        await loadVosk();
       } catch (_) {
         throw new Error(t('voice.modelLoadFailedHint', null,
           'Speech model failed to load — pick another engine in Settings → Voice'));
@@ -731,7 +831,7 @@ export async function startListening(mode) {
       return;
     }
 
-    if (sttEngine === 'whisper') {
+    if (sessionEngine === 'whisper') {
       whisperSession = newSessionId();
     } else {
       recognizer = new voskModel.KaldiRecognizer(16000);
@@ -782,7 +882,7 @@ export async function startListening(mode) {
         const level = rms(sumM);
 
         // One speech decision drives both the upload gate and the endpointer.
-        if (sttEngine === 'whisper') {
+        if (sessionEngine === 'whisper') {
           pushWhisperAudio(floatTo16BitPCM(mono), level > WHISPER_SPEECH_RMS, performance.now());
           void pumpWhisperQueue(token);
         } else {

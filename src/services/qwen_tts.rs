@@ -378,6 +378,10 @@ impl QwenClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let detail = resp.text().await.unwrap_or_default();
+            // The browser only shows a flat toast, so the sidecar's own reason
+            // — an unknown speaker, an unsupported language, a model that is
+            // not downloaded — has to be said here or not at all.
+            tracing::warn!("Qwen3-TTS failed ({status}): {detail} [voice={speaker}, lang={lang}]");
             return Err(format!("Qwen3-TTS error ({status}): {detail}"));
         }
 

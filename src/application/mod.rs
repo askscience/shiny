@@ -5,6 +5,7 @@ pub mod lifecycle;
 pub mod logging;
 pub mod router;
 pub mod sidecars;
+pub mod voice_watchdog;
 
 use crate::services::audio::AudioService;
 use crate::services::bluetooth::BluetoothService;

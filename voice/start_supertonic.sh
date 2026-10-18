@@ -35,19 +35,13 @@ PY
 
 sidecar_up() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "http://$HOST:$PORT/docs" >/dev/null 2>&1 \
-      || curl -fsS --max-time 2 "http://$HOST:$PORT/" >/dev/null 2>&1
+    # `/v1/health` answers 503 while the model is still loading, so "bound but
+    # not ready" is not mistaken for ready (and `/docs` is served that early).
+    curl -fsS --max-time 2 "http://$HOST:$PORT/v1/health" >/dev/null 2>&1
   else
     "$1" - "$HOST" "$PORT" <<'PY' >/dev/null 2>&1
-import urllib.request, sys
-for path in ("/docs", "/"):
-    try:
-        urllib.request.urlopen(f"http://{sys.argv[1]}:{sys.argv[2]}{path}", timeout=2).read()
-        break
-    except Exception:
-        continue
-else:
-    raise SystemExit(1)
+import sys, urllib.request
+urllib.request.urlopen(f"http://{sys.argv[1]}:{sys.argv[2]}/v1/health", timeout=2).read()
 PY
   fi
 }
@@ -88,6 +82,41 @@ if sidecar_up "$probe_py"; then
   exit 0
 fi
 [ "$CHECK_ONLY" = "1" ] && exit 1
+
+# Two launchers run on every login — shiny-session and the core server — and a
+# start is slow enough (bind, fetch/load the ONNX model) that both could get
+# past the probe above and race for the port: the loser died on EADDRINUSE
+# after paying the model load. The starter holds this lock for as long as the
+# sidecar lives (the descriptor is inherited through the exec below), so a
+# launcher that arrives during a start waits for health instead of racing it.
+# The lock is per-port runtime state, never a file in the install tree — a
+# distro package may ship that read-only. flock is a Debian staple but not on
+# macOS; without it the port probe is the fallback.
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+[ -d "$runtime_dir" ] || runtime_dir="${TMPDIR:-/tmp}"
+LOCK="${SUPERTONIC_LOCK_FILE:-$runtime_dir/shiny-supertonic-$PORT.lock}"
+if command -v flock >/dev/null 2>&1 && : >>"$LOCK" 2>/dev/null; then
+  exec 9>>"$LOCK"
+  if ! flock -n 9; then
+    echo "Supertonic sidecar is starting on $HOST:$PORT"
+    took_over=0
+    for _ in $(seq 1 120); do  # ~60 s: a cold model load is slow
+      sleep 0.5
+      if sidecar_up "$probe_py"; then
+        echo "Supertonic sidecar ready on $HOST:$PORT"
+        exit 0
+      fi
+      if flock -n 9; then  # the starter died — take over and start ours
+        took_over=1
+        break
+      fi
+    done
+    if [ "$took_over" != "1" ]; then
+      echo "Supertonic sidecar did not answer on $HOST:$PORT" >&2
+      exit 1
+    fi
+  fi
+fi
 
 if [ -z "$PY" ]; then
   if [ "${SUPERTONIC_AUTO_INSTALL:-1}" = "1" ]; then

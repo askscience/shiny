@@ -18,6 +18,12 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
 
   async function speak(text, lang) {
     stopSpeaking();
+    // A reply can legitimately have nothing left to say aloud: an image or song
+    // link is stripped before it gets here, and a picture-only reply strips to
+    // an empty string. The synthesizer rejects an empty input, so sending it
+    // used to end every such turn in "Voice playback unavailable" — an error
+    // toast for a reply that was only ever a picture.
+    if (!text || !text.trim()) return;
     const token = ++speakToken;
     const controller = new AbortController();
     pendingSpeech = controller;

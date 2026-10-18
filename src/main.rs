@@ -52,6 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = AppState::new(config.clone(), pool.clone());
     state.session = shiny::auth::init_session(&pool, &config).await;
     let mut workers = shiny::application::lifecycle::Workers::default();
+    workers.track(Some(shiny::application::voice_watchdog::start(state.clone())));
     workers.track(state.gpsd.start_tracked().await);
     workers.track(state.network.start_tracked().await);
     workers.track(state.audio.start_tracked().await);

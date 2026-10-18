@@ -62,6 +62,40 @@ if sidecar_up; then
 fi
 [ "$CHECK_ONLY" = "1" ] && exit 1
 
+# The port probe above cannot see a start that is still building the binary or
+# loading ~600 MB of weights, and a first start can take minutes — long enough
+# for the core's watchdog, a session launcher and a Settings → Reload to pile
+# up. The starter holds this lock for as long as the sidecar lives (the
+# descriptor is inherited through the exec below), so late arrivals wait for
+# health rather than starting a second copy that dies on EADDRINUSE after
+# paying the same load. Per-port runtime state, never a file in the install
+# tree; without flock the port probe is the fallback.
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+[ -d "$runtime_dir" ] || runtime_dir="${TMPDIR:-/tmp}"
+LOCK="${QWEN_TTS_LOCK_FILE:-$runtime_dir/shiny-qwen-tts-$PORT.lock}"
+if command -v flock >/dev/null 2>&1 && : >>"$LOCK" 2>/dev/null; then
+  exec 9>>"$LOCK"
+  if ! flock -n 9; then
+    echo "Qwen3-TTS sidecar is starting on $HOST:$PORT"
+    took_over=0
+    for _ in $(seq 1 240); do  # ~2 min; a first run also builds the binary
+      sleep 0.5
+      if sidecar_up; then
+        echo "Qwen3-TTS sidecar ready on $HOST:$PORT"
+        exit 0
+      fi
+      if flock -n 9; then  # the starter died — take over and start ours
+        took_over=1
+        break
+      fi
+    done
+    if [ "$took_over" != "1" ]; then
+      echo "Qwen3-TTS sidecar did not answer on $HOST:$PORT" >&2
+      exit 1
+    fi
+  fi
+fi
+
 # Build on first use. The build is heavy, so it happens once and is reused.
 if [ "$REBUILD" = "1" ] || [ ! -x "$BIN" ]; then
   mkdir -p "$(dirname "$LOG")"

@@ -80,10 +80,24 @@ long utterances.
 - **Session-spawned.** [`scripts/shiny-session`](../../scripts/shiny-session)
   starts both launchers before opening the kiosk so the engines are warm by the
   first spoken word; on a real multi-user box each user gets their own.
+- **Supervised.** [`src/application/voice_watchdog.rs`](../../src/application/voice_watchdog.rs)
+  probes each enabled engine every 15 s (Whisper `/health`, Supertonic `/docs`,
+  Qwen `/v1/audio/voices`) and re-runs the matching launcher once one has been
+  silent for three consecutive probes, backing off 30 s → 5 min between attempts.
+  Without it a sidecar that died — killed with the login session that spawned it,
+  crashed, OOM — stayed dead until the next core restart, which is what "TTS and
+  STT just stopped working" looks like from the outside. An engine whose
+  `AUTO_START_*` is off is never restarted, and every attempt is logged so
+  `data/shiny.log` shows the story.
 - **Manual.** `./voice/start_whisper.sh` / `./voice/start_supertonic.sh`.
 
 Sidecars are **detached on purpose**: they outlive the server, and a second
 server start finds them already listening and exits without starting another.
+Each launcher takes a per-port `flock` for the whole start — and, through the
+descriptor it inherits into the `exec`, for the sidecar's life — so a launcher
+that arrives while another is still binding or loading a model waits for health
+instead of racing it. That race used to end in `EADDRINUSE` after both had paid
+the model load.
 
 ---
 
@@ -111,13 +125,16 @@ spawns them):
 | `WHISPER_AUTO_INSTALL` | `0` | Build the venv if the package is missing. |
 | `WHISPER_MODELS_DIR` | `data/whisper-models` | Model storage. |
 | `WHISPER_LOG_FILE` | `data/whisper-sidecar.log` | Log file. |
+| `WHISPER_LOCK_FILE` | `$XDG_RUNTIME_DIR/shiny-whisper-<port>.lock` | Start lock. |
 | `WHISPER_BOOTSTRAP_PYTHON` | `python3` | Interpreter used only for the downloader/venv. |
 | `SUPERTONIC_HOST` / `SUPERTONIC_PORT` | `127.0.0.1` / `7788` | Bind. |
 | `SUPERTONIC_PYTHON` | — | Explicit interpreter. |
 | `SUPERTONIC_AUTO_INSTALL` | `1` | Provision `.venv-supertonic` on demand. |
 | `SUPERTONIC_LOG_FILE` | `data/supertonic-sidecar.log` | Log file. |
+| `SUPERTONIC_LOCK_FILE` | `$XDG_RUNTIME_DIR/shiny-supertonic-<port>.lock` | Start lock. |
 | `QWEN_TTS_PORT` | `7787` | Bind. |
 | `QWEN_TTS_MODELS_DIR` | `data/qwen-tts-models` | GGUF storage. |
+| `QWEN_TTS_LOCK_FILE` | `$XDG_RUNTIME_DIR/shiny-qwen-tts-<port>.lock` | Start lock. |
 
 Server-side variables (`WHISPER_URL`, `SUPERTONIC_URL`, `QWEN_TTS_URL`,
 `AUTO_START_*`, `*_AUTO_INSTALL`) are listed in

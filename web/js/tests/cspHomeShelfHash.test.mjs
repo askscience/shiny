@@ -74,9 +74,24 @@ check(
   `expected '${digest}' in src/api/mod.rs — update CONTENT_SECURITY_POLICY`,
 );
 
+// The voice engine's own CSP requirement. vosk-browser boots its worker from a
+// blob whose emscripten glue evaluates a string, and a blob worker inherits the
+// document's policy; 'wasm-unsafe-eval' permits WebAssembly compilation only.
+// Dropping plain 'unsafe-eval' makes every Vosk model load fail with "Speech
+// model failed to load" — speech input *and* the wake word go with it.
+const scriptSrc = /script-src([^;]*);/.exec(apiMod)?.[1] ?? '';
+check(
+  "script-src allows 'wasm-unsafe-eval' (Vosk's WebAssembly core)",
+  scriptSrc.includes("'wasm-unsafe-eval'"),
+);
+check(
+  "script-src allows 'unsafe-eval' (Vosk's blob worker boots through eval)",
+  scriptSrc.includes("'unsafe-eval'"),
+);
+
 if (failures) {
   console.error(`\n${failures} check(s) failed`);
   process.exit(1);
 }
 
-console.log('\nthe CSP hash matches the Browser start-page script');
+console.log('\nthe CSP hash matches the Browser start-page script, and the Vosk worker allowance is intact');

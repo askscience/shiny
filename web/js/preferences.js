@@ -559,7 +559,15 @@ function ttsVoiceKey(engine) {
  * rather than sent to a server that would answer with a 400.
  */
 export function getTtsVoice(engine = getEffectiveTtsEngine()) {
-  return voiceForEngine(engine, localStorage.getItem(scopedKey(ttsVoiceKey(engine))));
+  const stored = localStorage.getItem(scopedKey(ttsVoiceKey(engine)));
+  // Voices shared one key (`voice.tts_voice`) before the engines were split, so
+  // a speaker picked back then still lives there — for a Qwen user that is a
+  // Qwen speaker sitting under the Supertonic key, which this engine's lookup
+  // would miss and silently answer in the default voice instead. Fall back to
+  // that value; `voiceForEngine` validates it against this engine's own list,
+  // so a leftover pick can never reach an engine it does not belong to.
+  const legacy = engine === 'qwen' ? localStorage.getItem(scopedKey(VOICE_TTS_VOICE_KEY)) : null;
+  return voiceForEngine(engine, stored) || voiceForEngine(engine, legacy);
 }
 
 export function setTtsVoice(voice, engine = getEffectiveTtsEngine()) {

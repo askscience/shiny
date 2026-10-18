@@ -810,6 +810,12 @@ pub fn text_chunks(text: &str, max_chars: usize) -> Vec<String> {
 
 // ---------- Supertonic TTS ---------------------------------------------------
 
+/// The model the bundled sidecar serves (`voice/start_supertonic.sh` passes the
+/// GGUF-less Supertonic build straight to `supertonic serve`). The sidecar
+/// refuses a request that names a different model with a 400, so this has to
+/// match what the launcher started.
+const SUPERTONIC_MODEL: &str = "supertonic-3";
+
 #[derive(Clone)]
 pub struct SupertonicClient {
     client: reqwest::Client,
@@ -849,10 +855,15 @@ impl SupertonicClient {
         voice: Option<&str>,
         speed: Option<f32>,
     ) -> Result<Vec<u8>, AppError> {
-        let voice = voice.unwrap_or(&self.default_voice);
+        // An empty voice is not "no preference" to the sidecar — it is an
+        // unknown voice, and it answers 400 for the whole request. Treat it as
+        // absent so a stray `voice: ""` costs a default read, not the reply.
+        let voice = voice
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or(&self.default_voice);
         let speed = speed.unwrap_or(1.0).clamp(0.7, 2.0);
         let body = serde_json::json!({
-            "model": "supertonic-3",
+            "model": SUPERTONIC_MODEL,
             "input": text,
             "voice": voice,
             "response_format": "wav",
@@ -870,6 +881,15 @@ impl SupertonicClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let err = resp.text().await.unwrap_or_default();
+            // The browser turns this into one flat toast ("Voice playback
+            // unavailable"), so the sidecar's own explanation — an unknown
+            // voice, an unsupported lang, a model that is not the one it was
+            // started with — would otherwise be lost for good. Every 400 from
+            // this route is one of those, and all of them are fixable.
+            tracing::warn!(
+                "Supertonic TTS failed ({status}): {err} \
+                 [model={SUPERTONIC_MODEL}, voice={voice}, lang={lang}, speed={speed}]"
+            );
             return Err(AppError::Internal(format!(
                 "Supertonic TTS error {}: {}",
                 status, err

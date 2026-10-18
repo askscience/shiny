@@ -105,6 +105,17 @@ Without the wrapper the `ivector/` folder is flattened to the root and Vosk
 fails with *"Ivector feature dimension mismatch"*. The browser cache-busts the
 URL with `?v=2` because the IndexedDB folder name derives from the whole URL.
 
+Vosk only runs at all because the app's CSP grants `script-src` **both**
+`'wasm-unsafe-eval'` and `'unsafe-eval'` (`CONTENT_SECURITY_POLICY` in
+`src/api/mod.rs`). `vosk-browser` starts its worker from a blob, the emscripten
+glue inside that blob evaluates a string to boot, and a blob worker inherits the
+document's policy — while `'wasm-unsafe-eval'` permits WebAssembly compilation
+only. With just the wasm allowance, Chromium refuses the worker (*"Refused to
+evaluate a string as JavaScript"*), every model load fails, and the user sees
+*"Speech model failed to load — pick another engine in Settings → Voice"* for
+every engine choice, because the failure is in the loader, not in the engine.
+`web/js/tests/cspHomeShelfHash.test.mjs` fails if either directive disappears.
+
 ### Engine selection, fallback and upgrade
 
 The browser resolves the STT engine in `prepareVoice()` (`web/js/voice.js`) from
@@ -123,9 +134,29 @@ active, in which case it is forced to Vosk (see below).
 
 Recovery (`scheduleWhisperRecovery`) polls every `WHISPER_RECOVERY_POLL_MS`
 (5 s) while idle and **never flips the engine mid-session** — `startListening()`
-resolves the engine for that session's whole life. Readiness waits
-`WHISPER_READY_ATTEMPTS` (20) × 700 ms for a bundled model, or
+sets up the recogniser or Whisper session a session actually streams to.
+Readiness waits `WHISPER_READY_ATTEMPTS` (20) × 700 ms for a bundled model, or
 `WHISPER_DOWNLOAD_ATTEMPTS` (40) when a download is in flight.
+
+### The wake phase always listens with Vosk
+
+The engine above governs the **request**. An armed wake listener is a different
+job: it can sit open for minutes waiting for a phrase, so it runs on **Vosk** —
+a local WASM recogniser that uploads nothing — whatever engine the user picked.
+`prepareVoice()` therefore loads the Vosk model whenever the wake word is
+enabled, not only when Vosk is the chosen engine; a failure there is logged
+rather than toasted, because the wake phase then simply falls back to the
+configured engine.
+
+When the phrase arrives alone, `swapToCommandEngine()` hands the *same* session
+to `getEffectiveSttEngine()`: the microphone stays open, no second permission
+prompt appears, and everything from that moment is transcribed by the chosen
+engine (Whisper, or Vosk when Settings or Power Saver resolve to it). The
+endpointing clock restarts at the hand-off, so the pause a user takes before
+speaking the request is not read as the end of the utterance. A phrase followed
+by a request in one breath is dispatched directly and never opens a Whisper
+session at all. `startListening()` records the phase in `sessionEngine`; the
+per-frame reader branches on that, never on the preference.
 
 ### Languages and the STT language
 
@@ -173,6 +204,19 @@ re-exports it so core and plugins share one implementation.
   `M1…M5` and `F1…F5`.
 - **Speed** — clamped to `0.7…2.0` (client preference is also clamped there).
 - **Response** — `audio/wav` bytes, returned verbatim by `/api/tts`.
+- **Failures** — a 400 means the sidecar rejected the request itself: an unknown
+  voice, a `lang` outside its list, or a model other than the one it serves. The
+  voice the client sends is always one of the sidecar's own (`GET /v1/styles`
+  reports exactly `M1…M5`/`F1…F5`), and an empty voice is treated as "no
+  preference" rather than passed through as an unknown one. Every failed
+  synthesis logs the sidecar's status and message to `data/shiny.log` — the
+  browser only ever shows one flat toast, so that line is the only place the
+  actual reason survives.
+- **Nothing to say** — an empty reply is never synthesized. An image-only or
+  song-only answer is stripped of its markup before it reaches the speaker and
+  can come out empty, and the sidecar rejects an empty input — which used to end
+  those turns in "Voice playback unavailable" for a reply that was only ever a
+  picture. `speak()` returns before the request instead.
 
 ### Qwen3-TTS (opt-in, higher quality)
 
@@ -213,7 +257,10 @@ it. Each engine has its own voice set and its own stored pick
 [`web/js/voiceShared.js`](../../web/js/voiceShared.js)), so switching engines in
 Settings keeps both choices and a speaker name is never sent to an engine that
 does not know it — Supertonic answers an unknown voice with a 400, which would
-otherwise mute every reply.
+otherwise mute every reply. A pick made before the voices were split per engine
+still lives under `voice.tts_voice`; it is read as a fallback for whichever
+engine it validates against, so a Qwen user keeps their speaker instead of
+silently reverting to the default one.
 
 ## The voice bar and gestures
 
@@ -240,26 +287,34 @@ tapOrb })`). `voice:level` events feed `setMicLevel` (clamped to `--voice-level`
 Long-press **arms** wake recognition; the listener stays armed until the phrase
 is heard or the user taps to cancel. There is deliberately no "waiting for the
 wake word" timeout — being timed out mid-thought is the complaint this avoids.
-Idle listening is cheap because nothing is uploaded until the local VAD hears
-speech.
+
+An armed listener runs on **Vosk** and stays entirely local: audio is decoded in
+WASM, nothing is uploaded, and no sidecar is involved until the phrase has been
+heard. (Before the hand-off, the only traffic an armed listener can produce is
+the one-time model fetch.) The request that follows is then transcribed by the
+engine chosen in Settings — see
+[the wake phase always listens with Vosk](#the-wake-phase-always-listens-with-vosk).
 
 Matching (`web/js/voice.js`):
 
 - The assistant name comes from `getAiName()` (`ai.name`, default `PEAK'D!`).
 - Text is normalised (lowercase, punctuation to spaces), then the name is
-  matched with a per-token Levenshtein tolerance of 1 (2 for tokens ≥ 5 chars).
+  matched with a per-token Levenshtein tolerance of 1 (2 for tokens ≥ 5 chars) —
+  the small models regularly render an unusual name as a near-homophone
+  ("Peak'd" → "Beak").
 - The name may be the whole utterance, or follow "hey", or follow a clipped
-  one/two-letter "hey" — the tiny Whisper model regularly renders an unusual
-  name as a near-homophone ("Peak'd" → "Beak").
+  one/two-letter "hey".
 - `extractAfterWake()` returns the request after the phrase, `''` when the
   phrase was heard alone, or `null` when absent.
-- In wake mode the decoder is biased with `prompt=Hey <name>` so the unusual
-  name survives the tiny model.
+- A wake session that has fallen back to Whisper (no Vosk model on this machine)
+  biases the decoder with `prompt=Hey <name>` so the unusual name survives the
+  tiny model. Vosk needs no such help.
 
-After the wake phrase alone, `awaitingCommand` is set and
+After the wake phrase alone, `awaitingCommand` is set,
 `armWakeCommandTimer()` gives the command `WAKE_COMMAND_TIMEOUT_MS` (8 s) before
-it cancels with *"Didn't catch that"*. Partials are acted on in wake mode; a
-`cleanTranscript()` pass runs first so an invented partial cannot arm the window.
+it cancels with *"Didn't catch that"*, and the session swaps to the configured
+engine. Partials are acted on in wake mode; a `cleanTranscript()` pass runs first
+so an invented partial cannot arm the window.
 
 ## Local VAD and endpointing
 

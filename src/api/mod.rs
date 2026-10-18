@@ -66,8 +66,16 @@ use crate::services::song_gen::SongGenClient;
 /// `/vendor`), so `script-src 'self'` is enough — inline `<script>` and inline
 /// event handlers are forbidden, which is the backstop for the sanitized
 /// markdown path. `'wasm-unsafe-eval'` is required by the in-browser Vosk
-/// recognizer. Styles stay `'unsafe-inline'` for the many `style` attributes
-/// the UI sets; images may come from anywhere (map tiles, article images).
+/// recognizer, and **`'unsafe-eval'` by the worker it runs in**: vosk-browser
+/// builds its worker from a blob, and the emscripten glue inside it evaluates a
+/// string to start up. `'wasm-unsafe-eval'` only permits WebAssembly
+/// compilation, so without plain `'unsafe-eval'` Chromium refuses that blob
+/// outright ("Refused to evaluate a string as JavaScript") and every Vosk load
+/// fails with *"Speech model failed to load"* — the whole engine, and the wake
+/// word with it, is dead. A blob worker inherits this document's policy, so
+/// the allowance has to live here. Styles stay `'unsafe-inline'` for the many
+/// `style` attributes the UI sets; images may come from anywhere (map tiles,
+/// article images).
 ///
 /// Three app features need explicit allowances:
 /// - The top bar's weather chip and the clock read Open-Meteo directly from the
@@ -88,7 +96,7 @@ use crate::services::song_gen::SongGenClient;
 ///   native child webviews at the site's real origin, which our CSP never sees.
 ///   `frame-ancestors 'none'` still stops other sites from framing the app.
 const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
-script-src 'self' 'wasm-unsafe-eval' 'sha256-RTChVTGEv6ek9ksfULImRsV6YrFDk0+Pe14aCpe8NBc='; \
+script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' 'sha256-RTChVTGEv6ek9ksfULImRsV6YrFDk0+Pe14aCpe8NBc='; \
 style-src 'self' 'unsafe-inline'; \
 img-src 'self' data: blob: http: https:; \
 connect-src 'self' https://router.project-osrm.org https://api.open-meteo.com; \

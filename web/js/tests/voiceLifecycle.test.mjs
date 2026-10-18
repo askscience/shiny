@@ -109,3 +109,15 @@ assert.equal(playback.isBargeInMonitoring(), true);
 assert.equal(freshStopped, 0);
 playback.stopBargeInMonitor();
 assert.equal(freshStopped, 1);
+
+// A reply with nothing left to say aloud — an image-only reply strips to an
+// empty string before it reaches the speaker — must never be synthesized: the
+// sidecar rejects an empty input, and the failure showed up as "Voice playback
+// unavailable" for a reply that was only ever a picture.
+let emptyRequests = 0;
+const quiet = createVoicePlayback({ request: () => { emptyRequests++; } });
+await quiet.speak('');
+await quiet.speak('   ');
+await quiet.speak(null);
+assert.equal(emptyRequests, 0, 'empty text is never sent for synthesis');
+console.log('Empty replies are never synthesized');
