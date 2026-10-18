@@ -79,6 +79,7 @@ pub async fn install_archive(
     // Stage the extraction in a tmp dir, then move to the canonical location.
     let staging = unique_staging_dir(plugins_dir);
     std::fs::create_dir_all(&staging)?;
+    let _staging_cleanup = StagingCleanup(staging.clone());
 
     if let Err(e) = extract(&bytes, format, &staging) {
         log_event(plugins_dir, &format!("extract-failed: {e}"));
@@ -149,45 +150,88 @@ pub async fn install_archive(
 
     let final_dir = plugins_dir.join(&manifest.name);
     let backup = plugins_dir.join(format!("{}.bak", manifest.name));
-    if final_dir.exists() {
-        // Back up the previous installation as `<name>.bak` so people can roll back.
-        if backup.exists() {
-            std::fs::remove_dir_all(&backup).ok();
-        }
-        std::fs::rename(&final_dir, &backup).ok();
-    }
-    if let Err(e) = std::fs::rename(&install_dir, &final_dir) {
-        log_event(plugins_dir, &format!("rename-failed: {e}"));
-        let _ = std::fs::remove_dir_all(&staging);
-        // The previous install (if any) was moved to `.bak` — put it back.
-        if backup.exists() {
-            let _ = std::fs::rename(&backup, &final_dir);
-        }
-        return Err(AppError::Internal(format!("rename failed: {e}")));
-    }
-    // Clean staging
+    let mut swap = InstallSwap::prepare(&install_dir, &final_dir, &backup)?;
     let _ = std::fs::remove_dir_all(&staging);
 
-    // Register via the manager (this dl's the cdylib + runs migrations).
+    // Disk changes remain provisional until the manager has prepared and
+    // published the new registration. Cancellation also restores the files.
     let installed_name = match manager.install_dir_static(&final_dir, base_ctx).await {
-        Ok(n) => n,
-        Err(e) => {
-            log_event(plugins_dir, &format!("register-failed name={}: {e}", manifest.name));
-            // Roll back the new install dir, then restore the `.bak` of the
-            // previous working version so a failed upgrade doesn't leave the
-            // plugin missing entirely.
-            let _ = std::fs::remove_dir_all(&final_dir);
-            if backup.exists() {
-                let _ = std::fs::rename(&backup, &final_dir);
-                log_event(plugins_dir, &format!("restored-backup name={}", manifest.name));
+        Ok(name) => name,
+        Err(error) => {
+            log_event(plugins_dir, &format!("register-failed name={}: {error}", manifest.name));
+            if let Err(rollback) = swap.rollback() {
+                log_event(plugins_dir, &format!("rollback-failed name={}: {rollback}", manifest.name));
+                return Err(AppError::Internal(format!("Plugin install failed: {error}; restoring previous files failed: {rollback}")));
             }
-            return Err(e);
+            log_event(plugins_dir, &format!("files-restored name={}", manifest.name));
+            return Err(error);
         }
     };
+    swap.committed = true;
     log_event(plugins_dir, &format!(
         "install-ok name={}", installed_name
     ));
     Ok(installed_name)
+}
+
+struct StagingCleanup(PathBuf);
+impl Drop for StagingCleanup {
+    fn drop(&mut self) {
+        if self.0.exists() {
+            if let Err(error) = std::fs::remove_dir_all(&self.0) {
+                tracing::warn!("Could not clean plugin staging directory {}: {error}", self.0.display());
+            }
+        }
+    }
+}
+
+/// Filesystem half of an installation. Database migrations are independently
+/// committed; restoring these files never claims to undo a committed schema.
+struct InstallSwap {
+    destination: PathBuf,
+    backup: PathBuf,
+    previous: bool,
+    installed: bool,
+    committed: bool,
+}
+
+impl InstallSwap {
+    fn prepare(staged: &Path, destination: &Path, backup: &Path) -> Result<Self, AppError> {
+        let previous = destination.exists();
+        if previous {
+            if backup.exists() { std::fs::remove_dir_all(backup)?; }
+            std::fs::rename(destination, backup)?;
+        }
+        let mut swap = Self { destination: destination.into(), backup: backup.into(), previous,
+            installed: false, committed: false };
+        if let Err(error) = std::fs::rename(staged, destination) {
+            if let Err(rollback) = swap.rollback() {
+                return Err(AppError::Internal(format!("Plugin rename failed: {error}; restore failed: {rollback}")));
+            }
+            return Err(error.into());
+        }
+        swap.installed = true;
+        Ok(swap)
+    }
+
+    fn rollback(&mut self) -> Result<(), AppError> {
+        if self.committed { return Ok(()); }
+        if self.installed && self.destination.exists() {
+            std::fs::remove_dir_all(&self.destination)?;
+        }
+        self.installed = false;
+        if self.previous { std::fs::rename(&self.backup, &self.destination)?; }
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for InstallSwap {
+    fn drop(&mut self) {
+        if let Err(error) = self.rollback() {
+            tracing::error!(destination = %self.destination.display(), "Plugin file rollback failed: {error}");
+        }
+    }
 }
 
 /// Open `path` and take an exclusive advisory lock on it (blocking, but run
@@ -318,4 +362,39 @@ fn unique_staging_dir(plugins_dir: &Path) -> PathBuf {
         .unwrap_or(0);
     let pid = std::process::id();
     plugins_dir.join(format!("_staging-{}-{}", pid, ts))
+}
+#[cfg(test)]
+mod swap_tests {
+    use super::*;
+    #[test]
+    fn dropped_upgrade_restores_previous_files() {
+        let root = tempfile::tempdir().unwrap();
+        let staged = root.path().join("staged");
+        let destination = root.path().join("plugin");
+        let backup = root.path().join("plugin.bak");
+        for path in [&staged, &destination] { std::fs::create_dir(path).unwrap(); }
+        std::fs::write(destination.join("version"), "old").unwrap();
+        std::fs::write(staged.join("version"), "new").unwrap();
+        {
+            let _swap = InstallSwap::prepare(&staged, &destination, &backup).unwrap();
+            assert_eq!(std::fs::read_to_string(destination.join("version")).unwrap(), "new");
+        }
+        assert_eq!(std::fs::read_to_string(destination.join("version")).unwrap(), "old");
+    }
+    #[test]
+    fn failed_move_restores_previous_files_and_does_not_use_a_stale_backup() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("plugin");
+        let backup = root.path().join("plugin.bak");
+        std::fs::create_dir(&destination).unwrap();
+        std::fs::write(destination.join("version"), "old").unwrap();
+        assert!(InstallSwap::prepare(&root.path().join("missing"), &destination, &backup).is_err());
+        assert_eq!(std::fs::read_to_string(destination.join("version")).unwrap(), "old");
+        // A first install may have an unrelated historical backup. It must not
+        // silently activate that archive on failure.
+        std::fs::rename(&destination, &backup).unwrap();
+        assert!(InstallSwap::prepare(&root.path().join("missing"), &destination, &backup).is_err());
+        assert!(!destination.exists());
+        assert!(backup.exists());
+    }
 }

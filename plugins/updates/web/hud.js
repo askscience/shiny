@@ -10,7 +10,7 @@
  * `/api/updates/status` and shows the pending count; a desktop notification is
  * raised on a 0 → N transition.
  */
-import { notify, setIcon } from '../../ui/index.js';
+import { controlButton, notify, setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { activatePlugin } from '../../js/tiles.js';
 import { t, tp } from '../../js/i18n.js';
@@ -33,7 +33,7 @@ export function install() {
   // Styled like the other host status chips (sound / Wi-Fi / Bluetooth), not
   // like the round Settings/Plugins/Power buttons — see `.hud-updates` in
   // web/css/app.css.
-  btn = document.createElement('button');
+  btn = controlButton();
   btn.type = 'button';
   btn.id = 'hud-updates';
   btn.className = 'hud-updates';

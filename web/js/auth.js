@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 import { apiFetch, setAuth, getToken, clearAuth, logoutSession, validateSession, getTraveler } from './api.js';
 import {
   getKnownUsers,
@@ -152,7 +153,7 @@ function renderProfilePicker() {
   profilePicker.innerHTML = '';
 
   pickerUsers().forEach((user) => {
-    const btn = document.createElement('button');
+    const btn = controlButton();
     btn.type = 'button';
     btn.className = 'profile-tile';
     btn.setAttribute('aria-label', t('auth.signInAs', { name: user.name }, `Sign in as ${user.name}`));
@@ -173,7 +174,7 @@ function renderProfilePicker() {
   // Linux accounts cannot be created from the web — hide "Add user".
   if (linuxMode) return;
 
-  const addBtn = document.createElement('button');
+  const addBtn = controlButton();
   addBtn.type = 'button';
   addBtn.className = 'profile-tile profile-tile-add';
   addBtn.setAttribute('aria-label', t('auth.addNewUser', null, 'Add new user'));

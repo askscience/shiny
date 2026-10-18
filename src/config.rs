@@ -89,6 +89,24 @@ pub struct Config {
 }
 
 impl Config {
+    /// Validate invariants before starting workers or touching runtime state.
+    pub fn validate(&self) -> Result<(), crate::errors::AppError> {
+        let invalid = |message: &str| crate::errors::AppError::BadRequest(message.into());
+        if self.server_host.trim().is_empty() || self.database_url.trim().is_empty() {
+            return Err(invalid("Server host and database URL must not be empty"));
+        }
+        for url in [&self.ollama_url, &self.whisper_url, &self.supertonic_url, &self.qwen_tts_url] {
+            let parsed = reqwest::Url::parse(url).map_err(|_| invalid("Invalid provider URL"))?;
+            if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+                return Err(invalid("Provider URLs must use HTTP or HTTPS"));
+            }
+        }
+        if self.web_dir.trim().is_empty() || self.plugins_dir.trim().is_empty() {
+            return Err(invalid("Web and plugin directories must not be empty"));
+        }
+        Ok(())
+    }
+
     pub fn from_env() -> Self {
         let linux_users = env::var("SHINY_LINUX_USERS")
             .unwrap_or_else(|_| "false".into())

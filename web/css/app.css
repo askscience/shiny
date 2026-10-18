@@ -79,10 +79,10 @@ html, body {
   flex-shrink: 0;
   contain: layout style paint;
   transition:
-    background var(--duration-fast),
-    border-color var(--duration-fast),
-    color var(--duration-fast),
-    transform var(--duration-fast) var(--ease-spring);
+    background var(--motion-feedback),
+    border-color var(--motion-feedback),
+    color var(--motion-feedback),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 .icon-btn:hover {
   background: var(--glass-hover);
@@ -484,7 +484,7 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
 /* The remove button only appears on hover — but only where a pointer can
    hover at all, so touch keeps it reachable. */
 @media (hover: hover) and (pointer: fine) {
-  .clipboard-row-remove { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+  .clipboard-row-remove { opacity: 0; transition: opacity var(--motion-feedback) var(--motion-ease); }
   .clipboard-row:hover .clipboard-row-remove,
   .clipboard-row:focus-within .clipboard-row-remove { opacity: 1; }
 }
@@ -589,8 +589,8 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast),
-    border-color var(--duration-fast);
+  transition: background var(--motion-feedback), color var(--motion-feedback),
+    border-color var(--motion-feedback);
 }
 
 .workspace-bar-dot:hover { background: var(--glass-hover); color: var(--text); }
@@ -628,7 +628,7 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
   background: var(--glass);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback);
 }
 
 .workspace-bar-btn:hover {
@@ -681,8 +681,8 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 
 #fullscreen-bubble .fullscreen-bubble-btn:hover {
@@ -748,7 +748,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--motion-feedback) var(--motion-ease);
 }
 
 .hud-plugin-btn:hover { color: var(--text); }
@@ -767,8 +767,8 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   background: currentColor;
   opacity: 0;
   transform: scaleX(0.4);
-  transition: opacity var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+  transition: opacity var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 
 .hud-plugin-btn.is-active .hud-plugin-line { opacity: 1; transform: scaleX(1); }
@@ -801,8 +801,8 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .hud-clock:hover { background: var(--glass-hover); }
 .hud-clock.is-open { background: var(--glass-hover); border-color: var(--glass-border); }
@@ -833,9 +833,9 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: opacity var(--duration-fast),
-    background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: opacity var(--motion-feedback),
+    background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .hud-meteo:hover { background: var(--glass-hover); }
 .hud-meteo.is-open { background: var(--glass-hover); border-color: var(--glass-border); }
@@ -877,8 +877,8 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .ui-hud-menu-trigger:hover { background: var(--glass-hover); }
 .ui-hud-menu-trigger[aria-expanded='true'] { background: var(--glass-hover); }
@@ -887,7 +887,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   display: inline-flex;
   flex-shrink: 0;
   color: var(--muted);
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition: transform var(--motion-feedback) var(--motion-ease);
 }
 .ui-hud-menu-chevron .ui-icon { width: 13px; height: 13px; }
 .ui-hud-menu-trigger[aria-expanded='true'] .ui-hud-menu-chevron { transform: rotate(180deg); }
@@ -934,7 +934,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .ui-hud-menu-item:hover { background: var(--glass-hover); }
 .ui-hud-menu-item.is-active { color: var(--accent); }
@@ -950,7 +950,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   flex-shrink: 0;
   color: var(--accent);
   opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-out);
+  transition: opacity var(--motion-feedback) var(--motion-ease);
 }
 .ui-hud-menu-check .ui-icon { width: 14px; height: 14px; }
 .ui-hud-menu-item.is-active .ui-hud-menu-check { opacity: 1; }
@@ -1011,7 +1011,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .clock-menu-day:hover { background: var(--glass-hover); }
 .clock-menu-day.is-today { color: var(--accent); font-weight: 600; }
@@ -1223,9 +1223,9 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .power-mode-btn:hover { background: var(--glass-hover); color: var(--text); }
 .power-mode-btn.is-active {
@@ -1277,7 +1277,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   text-align: left;
   cursor: pointer;
   user-select: none;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .ctx-menu-item:hover { background: var(--glass-hover); }
 .ctx-menu-item:disabled { opacity: 0.4; cursor: default; }
@@ -1300,7 +1300,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   width: 14px;
   height: 14px;
 }
-.ctx-menu-check { color: var(--accent); opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+.ctx-menu-check { color: var(--accent); opacity: 0; transition: opacity var(--motion-feedback) var(--motion-ease); }
 .ctx-menu-icon { color: var(--muted); }
 .ctx-menu-chevron { color: var(--muted); margin-left: auto; }
 
@@ -1367,8 +1367,8 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   opacity: 0;
   transform: translateY(12px) scale(0.98);
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease);
 }
 #reply-text:not(.hidden) { opacity: 1; transform: translateY(0) scale(1); }
 
@@ -1381,7 +1381,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   background: rgba(0, 0, 0, 0.5);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-slow) var(--ease-out);
+  transition: opacity var(--motion-connect) var(--motion-ease);
   backdrop-filter: blur(var(--glass-blur-light));
   -webkit-backdrop-filter: blur(var(--glass-blur-light));
 }
@@ -1404,8 +1404,8 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
   opacity: 0;
   contain: layout style paint;
   transition:
-    transform var(--duration-slow) var(--ease-out),
-    opacity var(--duration-normal) var(--ease-out);
+    transform var(--motion-connect) var(--motion-ease),
+    opacity var(--motion-reveal) var(--motion-ease);
   overflow: hidden;
 }
 #travel-panel.visible { transform: translateX(0); opacity: 1; }
@@ -1642,7 +1642,7 @@ body.keyboard-open #artifact-dock {
   border: none;
   background: none;
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition: transform var(--motion-feedback) var(--motion-ease);
 }
 .profile-tile:hover { transform: translateY(-2px); }
 .profile-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }
@@ -1731,7 +1731,7 @@ body.keyboard-open #artifact-dock {
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--duration-fast), background var(--duration-fast);
+  transition: border-color var(--motion-feedback), background var(--motion-feedback);
 }
 .chat-history-item:hover { background: var(--glass-hover); }
 .chat-history-item.is-active { border-color: var(--accent); }
@@ -1796,7 +1796,7 @@ body.keyboard-open #artifact-dock {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .ui-select-option:hover { background: var(--glass-hover); }
 .ui-select-option.is-active { background: var(--accent-soft); }

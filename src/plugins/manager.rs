@@ -84,16 +84,16 @@ impl PluginManager {
     /// Check whether `user_id` has `plugin_name` enabled. A plugin is enabled
     /// by default (no row = enabled).
     pub async fn is_enabled_for(&self, user_id: &str, plugin_name: &str) -> bool {
-        let enabled: Option<i64> = sqlx::query_scalar(
+        let result = sqlx::query_scalar::<_, i64>(
             "SELECT enabled FROM user_plugin_states WHERE user_id = ?1 AND plugin_name = ?2",
-        )
-        .bind(user_id)
-        .bind(plugin_name)
-        .fetch_optional(&self.inner.pool)
-        .await
-        .ok()
-        .flatten();
-        enabled.map(|e| e == 1).unwrap_or(true)
+        ).bind(user_id).bind(plugin_name).fetch_optional(&self.inner.pool).await;
+        match result {
+            Ok(enabled) => enabled.map(|value| value == 1).unwrap_or(true),
+            Err(error) => {
+                tracing::error!(plugin = plugin_name, "Plugin activation lookup failed: {error}");
+                false
+            }
+        }
     }
 
     pub async fn set_enabled_for(&self, user_id: &str, plugin_name: &str, enabled: bool) -> Result<(), AppError> {
@@ -148,15 +148,29 @@ impl PluginManager {
     /// - remember off: only the explicitly-enabled ones (opt-in, starts empty
     ///   and grows as the user/AI activate plugins).
     pub async fn session_active_set(&self, user_id: &str) -> BTreeSet<String> {
-        if !self.session_remember(user_id).await {
-            return self.explicitly_enabled_for(user_id).await;
+        match self.try_session_active_set(user_id).await {
+            Ok(active) => active,
+            Err(error) => {
+                tracing::error!("Plugin session lookup failed: {error}");
+                BTreeSet::new()
+            }
         }
-        let disabled = self.disabled_for(user_id).await;
-        self.list()
-            .into_iter()
-            .map(|m| m.name)
-            .filter(|n| !disabled.contains(n))
-            .collect()
+    }
+
+    /// HTTP callers can report storage failures instead of presenting an
+    /// empty or fully enabled plugin list as if the lookup succeeded.
+    pub async fn try_session_active_set(&self, user_id: &str) -> Result<BTreeSet<String>, AppError> {
+        let remember: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM user_preferences WHERE user_id = ? AND key = 'session.remember'"
+        ).bind(user_id).fetch_optional(&self.inner.pool).await?;
+        let remember = matches!(remember.as_deref(), Some("true") | Some("1"));
+        let rows: Vec<String> = sqlx::query_scalar(
+            "SELECT plugin_name FROM user_plugin_states WHERE user_id = ? AND enabled = ?"
+        ).bind(user_id).bind(if remember { 0 } else { 1 }).fetch_all(&self.inner.pool).await?;
+        let names: BTreeSet<_> = rows.into_iter().collect();
+        Ok(if remember {
+            self.list().into_iter().map(|manifest| manifest.name).filter(|name| !names.contains(name)).collect()
+        } else { names })
     }
 
     /// Whether `plugin_name` is usable for `user_id` this session.
@@ -331,6 +345,19 @@ impl PluginManager {
         install_dir: &std::path::Path,
         base_ctx: Arc<PluginCtx>,
     ) -> Result<String, AppError> {
+        let name = self.register_dir_static(install_dir, base_ctx).await?;
+        self.inner.loader.call_on_load(&name).await;
+        Ok(name)
+    }
+
+    /// Prepare schemas, tools and routes without starting plugin background
+    /// work. Call on_load separately when the application owns that lifecycle.
+    /// Useful for isolated contract tests as well as explicit startup staging.
+    pub async fn register_dir_static(
+        &self,
+        install_dir: &std::path::Path,
+        base_ctx: Arc<PluginCtx>,
+    ) -> Result<String, AppError> {
         let (manifest, builder, ctx) = self.inner.loader.install_dir(install_dir, &self.inner.pool, base_ctx).await?;
         let plugin_name = manifest.name.clone();
 
@@ -364,7 +391,6 @@ impl PluginManager {
         // Tools dispatch through the plugin's own ctx (real manifest +
         // reused pools), then the documented `on_load` lifecycle hook runs.
         self.inner.tools.set_plugin_ctx(&plugin_name, ctx);
-        self.inner.loader.call_on_load(&plugin_name).await;
         Ok(manifest.name)
     }
 

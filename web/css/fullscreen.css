@@ -30,9 +30,9 @@ html[data-autohide-bar='1'] #hud-header {
   visibility: hidden;
   transform: translateY(calc(-100% - 16px));
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    visibility 0s linear var(--duration-normal);
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback) linear var(--motion-reveal);
 }
 
 html[data-autohide-bar='1'] body.fs-top #hud-header {
@@ -40,9 +40,9 @@ html[data-autohide-bar='1'] body.fs-top #hud-header {
   visibility: visible;
   transform: translateY(0);
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    visibility 0s;
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback);
 }
 
 /* Left / right: a vertical column against that edge, full height. */
@@ -94,9 +94,9 @@ html[data-bar-pos='top'] body.fs-active #hud-header {
   visibility: hidden !important;
   transform: translateY(calc(-100% - 16px)) !important;
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    visibility 0s linear var(--duration-normal);
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback) linear var(--motion-reveal);
 }
 
 html[data-bar-pos='top'] body.fs-active.fs-top #hud-header {
@@ -104,9 +104,9 @@ html[data-bar-pos='top'] body.fs-active.fs-top #hud-header {
   visibility: visible !important;
   transform: translateY(0) !important;
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    visibility 0s;
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback);
 }
 
 /* The revealed bar must not cover the fullscreen window's own top bar (where
@@ -115,7 +115,7 @@ html[data-bar-pos='top'] body.fs-active.fs-top #hud-header {
    slides it back to the top. `--hud-header-total` is the bar plus its header
    padding, so the app clears the chrome with a hair of breathing room. */
 html[data-bar-pos='top'] body.fs-active #tile-grid {
-  transition: top var(--duration-normal) var(--ease-out);
+  transition: top var(--motion-reveal) var(--motion-ease);
 }
 
 html[data-bar-pos='top'] body.fs-active.fs-top #tile-grid {
@@ -240,9 +240,9 @@ html[data-autohide-orb='1'] #chrome-bottom {
   visibility: hidden;
   transform: translate(-50%, calc(100% + 24px));
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    visibility 0s linear var(--duration-normal);
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback) linear var(--motion-reveal);
 }
 
 html[data-autohide-orb='1'] body.fs-orb #chrome-bottom {
@@ -250,17 +250,17 @@ html[data-autohide-orb='1'] body.fs-orb #chrome-bottom {
   visibility: visible;
   transform: translate(-50%, 0);
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    visibility 0s;
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease),
+    visibility var(--motion-feedback);
 }
 
 html[data-autohide-orb='1'] #hud-transcript {
   opacity: 0;
   transform: translate(-50%, 16px);
   transition:
-    opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+    opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease);
 }
 
 html[data-autohide-orb='1'] body.fs-orb #hud-transcript {

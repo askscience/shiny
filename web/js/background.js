@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * background.js — the full-screen desktop background layer (#background).
  *
@@ -207,7 +208,7 @@ export function renderBackgroundPresets(container, { onSelect, onUpload } = {}) 
   container.innerHTML = '';
 
   const tile = (active) => {
-    const btn = document.createElement('button');
+    const btn = controlButton();
     btn.type = 'button';
     btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', String(active));

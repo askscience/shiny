@@ -76,12 +76,12 @@ export function chip(o = {}) {
   const el = document.createElement('button');
   el.type = 'button';
   el.className = 'ui-chip';
-  if (o.active) el.classList.add('is-active');
   if (o.icon) el.appendChild(icon(o.icon, { size: 15 }));
   const label = document.createElement('span');
   label.textContent = o.label || '';
   el.appendChild(label);
-  el.setActive = (v) => el.classList.toggle('is-active', v);
+  el.setActive = (v) => { el.classList.toggle('is-active', !!v); el.setAttribute('aria-pressed', String(!!v)); };
+  el.setActive(o.active);
   if (o.onClick) el.addEventListener('click', o.onClick);
   return el;
 }

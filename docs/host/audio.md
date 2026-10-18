@@ -205,3 +205,16 @@ the reason. The rest of Shiny is unchanged.
 | `scripts/install-t2-audio-dsp.sh`, `scripts/t2-audio/` | T2 speaker DSP graph |
 | `scripts/install-t2-audio-watchdog.sh` | T2 stuck-card watchdog (restarts WirePlumber) |
 | `scripts/install-t2-bluetooth-fix.sh` | SBC-XQ ordering for BT audio |
+
+## Command execution and reader ownership
+
+Short `pactl` commands run through an injectable core `CommandRunner`, retaining
+the existing environment resolution and command timeout. The production runner
+kills its child on cancellation/timeout and limits captured stdout to 4 MiB and
+stderr to 128 KiB. It logs program, duration and success without command output
+or arguments. Tests substitute an unavailable daemon without mutating host audio.
+
+The long-lived `pactl subscribe` process keeps its explicit streaming lifecycle
+and `kill_on_drop` policy. Production owns the reader's join handle through
+`start_tracked()` and aborts/joins it during shutdown; the existing `start()`
+entrypoint retains its detached behavior for callers that manage their own scope.

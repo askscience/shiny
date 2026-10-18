@@ -203,16 +203,21 @@ impl BatteryService {
     /// Spawn the reader. Returns immediately: a machine without a battery
     /// boots exactly as it did before.
     pub async fn start(&self) {
+        self.start_tracked().await;
+    }
+
+    /// Start once and hand ownership of the reader to the application runtime.
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> {
         if self.inner.started.swap(true, Ordering::SeqCst) {
-            return;
+            return None;
         }
         let service = self.clone();
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             loop {
                 service.refresh();
                 tokio::time::sleep(REFRESH).await;
             }
-        });
+        }))
     }
 }
 

@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use base64::Engine as _;
-use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::Receiver;
+use std::collections::VecDeque;
 use futures::StreamExt;
 use serde_json::{json, Value};
 
@@ -121,10 +122,38 @@ struct Capture {
     timed_out: bool,
 }
 
+/// Keep the command echo/start and the latest output without retaining an
+/// unlimited stream while a verbose command runs for the full capture window.
+#[derive(Default)]
+struct CaptureBuffer {
+    head: Vec<u8>,
+    tail: VecDeque<u8>,
+    truncated: bool,
+}
+const CAPTURE_HEAD_BYTES: usize = 32 * 1024;
+const CAPTURE_TAIL_BYTES: usize = 1024 * 1024;
+impl CaptureBuffer {
+    fn append(&mut self, chunk: &[u8]) {
+        let prefix = (CAPTURE_HEAD_BYTES - self.head.len()).min(chunk.len());
+        self.head.extend_from_slice(&chunk[..prefix]);
+        self.tail.extend(&chunk[prefix..]);
+        if self.tail.len() > CAPTURE_TAIL_BYTES {
+            let discard = self.tail.len() - CAPTURE_TAIL_BYTES;
+            self.tail.drain(..discard);
+            self.truncated = true;
+        }
+    }
+    fn finish(mut self) -> Vec<u8> {
+        if self.truncated { self.head.extend_from_slice(b"\n... [output truncated] ...\n"); }
+        self.head.extend(self.tail);
+        self.head
+    }
+}
+
 /// Collect the session's output until the shell goes quiet (or `MAX_WAIT`).
-async fn capture(events: &mut UnboundedReceiver<Event>, command: &str) -> Capture {
+async fn capture(events: &mut Receiver<Event>, command: &str) -> Capture {
     let started = Instant::now();
-    let mut bytes: Vec<u8> = Vec::new();
+    let mut bytes = CaptureBuffer::default();
     let mut last_output: Option<Instant> = None;
     let mut timed_out = false;
 
@@ -149,10 +178,10 @@ async fn capture(events: &mut UnboundedReceiver<Event>, command: &str) -> Captur
                     base64::engine::general_purpose::STANDARD.decode(encoded.as_bytes())
                 {
                     let arrived = !chunk.is_empty();
-                    bytes.extend_from_slice(&chunk);
+                    bytes.append(&chunk);
                     if arrived
                         && (last_output.is_some()
-                            || has_real_output(&bytes, command, started.elapsed()))
+                            || has_real_output(&bytes.head, command, started.elapsed()))
                     {
                         last_output = Some(Instant::now());
                     }
@@ -162,13 +191,16 @@ async fn capture(events: &mut UnboundedReceiver<Event>, command: &str) -> Captur
             // Ready / Ping carry no output.
             Ok(Some(_)) => {}
             // The session's feed closed.
-            Ok(None) => break,
+            Ok(None) => {
+                bytes.append(b"\n... [output stream interrupted; command may still be running] ...\n");
+                break;
+            },
             // Tick: re-evaluate the quiet/deadline conditions.
             Err(_) => {}
         }
     }
 
-    Capture { bytes, timed_out }
+    Capture { bytes: bytes.finish(), timed_out }
 }
 
 /// Where the shell's echo of the typed command ends, if it is visible in the
@@ -434,5 +466,28 @@ mod tests {
         if let Ok(session) = crate::pty::agent_for("tool-test-user") {
             let _ = session.close();
         }
+    }
+}
+
+#[cfg(test)]
+mod capture_limit_tests {
+    use super::*;
+    #[test]
+    fn verbose_capture_keeps_the_start_and_latest_error_with_bounded_memory() {
+        let mut output = CaptureBuffer::default();
+        output.append(b"command echo\n");
+        for _ in 0..2000 { output.append(&[b'x'; 8192]); }
+        output.append(b"final diagnostic");
+        let bytes = output.finish();
+        assert!(bytes.len() < 2 * 1024 * 1024);
+        assert!(bytes.starts_with(b"command echo\n"));
+        assert!(bytes.ends_with(b"final diagnostic"));
+        assert!(String::from_utf8_lossy(&bytes).contains("[output truncated]"));
+    }
+    #[test]
+    fn short_capture_preserves_every_byte() {
+        let mut output = CaptureBuffer::default();
+        output.append(b"hello "); output.append(b"world\n");
+        assert_eq!(output.finish(), b"hello world\n");
     }
 }

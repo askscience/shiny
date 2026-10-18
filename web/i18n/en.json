@@ -3,7 +3,9 @@
 
   "common.back": "Back",
   "common.cancel": "Cancel",
+  "common.ok": "OK",
   "common.close": "Close",
+  "common.clear": "Clear",
   "common.copy": "Copy",
   "common.cut": "Cut",
   "common.forget": "Forget",
@@ -1021,5 +1023,6 @@
   "errors.artifactNotFound": "Artifact not found",
   "errors.database": "Database error",
   "errors.network": "Could not reach an external service. Check your network connection.",
-  "errors.timeout": "Request timed out. Try again."
+  "errors.timeout": "Request timed out. Try again.",
+  "api.invalidResponse": "The server returned an invalid response. Try again."
 }

@@ -10,10 +10,7 @@
 import { apiFetch } from './api.js';
 
 /** Shown only when the host list cannot be fetched (e.g. a remote client). */
-const FALLBACK = [
-  'Roboto', 'Inter', 'DM Sans', 'Space Grotesk', 'Instrument Serif',
-  'DejaVu Sans', 'system-ui',
-];
+const FALLBACK = ['system-ui', 'sans-serif', 'serif', 'monospace'];
 
 let cached = null;
 let inflight = null;

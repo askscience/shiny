@@ -102,3 +102,15 @@ The plugin endpoints (`/api/plugins/*`, remote, etc.) are documented in
 - `/plugins/<name>/*` serves that plugin's `web/` assets from
   `PLUGINS_DIR/<name>/<web_dir>/`.
 - `/api/voice/models/vosk/*` serves downloaded Vosk model archives.
+
+## Local health and request correlation
+
+`GET /api/health/live` returns `{"success":true,"data":{"status":"live"},"error":null}`.
+`GET /api/health/ready` returns the same envelope with status `ready` after a
+successful SQLite probe, or HTTP 503 with status `unavailable`. The probe deadline
+is one second and optional AI/host services are not dependencies. Both endpoints
+are unauthenticated but require a loopback peer without remote proxy markers;
+other callers receive HTTP 403.
+
+Responses include a generated `X-Request-Id` for correlation with server tracing.
+Queries, authentication headers and request bodies are excluded from request logs.

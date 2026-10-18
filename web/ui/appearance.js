@@ -120,12 +120,12 @@ export function setGradient(gradient) {
  * ─────────────────────────────────────────────────────────────── */
 
 const FONT_KEY = 'ui.font';
-const DEFAULT_FONT = 'Roboto';
+const DEFAULT_FONT = 'system-ui';
 
 /** Sentinel: follow the active theme's own fonts instead of an override. */
 export const FONT_THEME = 'theme';
 
-/** The chosen global font family (defaults to Roboto). */
+/** The chosen global font family (defaults to the system UI font). */
 export function getFont() {
   return localStorage.getItem(scopedKey(FONT_KEY)) || DEFAULT_FONT;
 }

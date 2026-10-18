@@ -29,6 +29,7 @@ small number of areas; each area has its own index and cross-links.
 | [Voice](core/voice.md) | faster-whisper / Vosk STT, Supertonic / Qwen TTS, the voice bar. |
 | [Desktop](core/desktop.md) | Window manager, workspaces, layouts, focus mode, HUD, launcher, gestures. |
 | [Web UI](core/web-ui.md) | The frontend module graph and UI component library. |
+| [Shared UI components](core/ui-components.md) | Component APIs, mobile layouts, fonts and browser verification. |
 | [Interface language](core/i18n.md) | JSON catalogs, `t()`/`tp()`, the language model (voice follows the interface), adding a language. |
 | [Themes & icons](core/themes-icons.md) | Tokens, accent/gradient, selectable icon sets and KDE curation. |
 | [Data & auth](core/data-and-auth.md) | SQLite schema, migrations, users, tokens, Linux-user binding. |

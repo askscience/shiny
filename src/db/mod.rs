@@ -1,26 +1,24 @@
+use sha2::{Digest, Sha256};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::Connection;
 use sqlx::{SqliteConnection, SqlitePool};
 use std::str::FromStr;
-use std::path::Path;
+use std::time::Duration;
 
 use crate::errors::AppError;
 
 /// Build the connect options for a `DATABASE_URL` (or bare path), creating the
 /// file and any parent directory when missing.
 fn connect_options(database_url: &str) -> Result<SqliteConnectOptions, sqlx::Error> {
-    std::fs::create_dir_all("data").ok();
-    let opts = if database_url.starts_with("sqlite://") {
-        SqliteConnectOptions::from_str(database_url)?.create_if_missing(true)
-    } else if let Some(path) = database_url.strip_prefix("sqlite:") {
-        if let Some(parent) = Path::new(path).parent() {
-            std::fs::create_dir_all(parent).ok();
+    let opts = SqliteConnectOptions::from_str(database_url)?
+        .create_if_missing(true)
+        .busy_timeout(Duration::from_secs(5));
+    let path = opts.get_filename();
+    if path != std::path::Path::new(":memory:") {
+        if let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent)?;
         }
-        SqliteConnectOptions::new()
-            .filename(path)
-            .create_if_missing(true)
-    } else {
-        SqliteConnectOptions::from_str(database_url)?.create_if_missing(true)
-    };
+    }
     Ok(opts)
 }
 
@@ -43,97 +41,192 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
         .await
 }
 
+/// Ordered, append-only migration registry. Existing databases are adopted
+/// using column probes in the same transaction that records their versions.
+const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (
+        1,
+        "001_init.sql",
+        include_str!("../../migrations/001_init.sql"),
+    ),
+    (
+        2,
+        "002_artifacts.sql",
+        include_str!("../../migrations/002_artifacts.sql"),
+    ),
+    (
+        3,
+        "003_username_avatar.sql",
+        include_str!("../../migrations/003_username_avatar.sql"),
+    ),
+    (
+        4,
+        "004_admin.sql",
+        include_str!("../../migrations/004_admin.sql"),
+    ),
+    (
+        5,
+        "005_user_plugin_states.sql",
+        include_str!("../../migrations/005_user_plugin_states.sql"),
+    ),
+    (
+        6,
+        "006_user_preferences.sql",
+        include_str!("../../migrations/006_user_preferences.sql"),
+    ),
+    (
+        7,
+        "007_chat_conversations.sql",
+        include_str!("../../migrations/007_chat_conversations.sql"),
+    ),
+    (
+        8,
+        "008_chat_indexes.sql",
+        include_str!("../../migrations/008_chat_indexes.sql"),
+    ),
+    (
+        9,
+        "009_linux_identity.sql",
+        include_str!("../../migrations/009_linux_identity.sql"),
+    ),
+];
+
 pub async fn run_migrations(conn: &mut SqliteConnection) -> Result<(), AppError> {
-    let migration = include_str!("../../migrations/001_init.sql");
-    sqlx::raw_sql(migration).execute(&mut *conn).await?;
-    let migration2 = include_str!("../../migrations/002_artifacts.sql");
-    sqlx::raw_sql(migration2).execute(&mut *conn).await?;
-
-    let has_username: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pragma_table_info('travelers') WHERE name = 'username'",
-    )
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(AppError::Database)?;
-
-    if has_username == 0 {
-        let migration3 = include_str!("../../migrations/003_username_avatar.sql");
-        sqlx::raw_sql(migration3).execute(&mut *conn).await?;
-    }
-
-    let has_is_admin: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pragma_table_info('travelers') WHERE name = 'is_admin'",
-    )
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(AppError::Database)?;
-
-    if has_is_admin == 0 {
-        let migration4 = include_str!("../../migrations/004_admin.sql");
-        sqlx::raw_sql(migration4).execute(&mut *conn).await?;
-    }
-    // Re-apply the first-user promotion (idempotent).
+    // Reserve the write lock before checking versions: another process cannot
+    // race the schema check or the migration completion record.
+    let mut tx = conn.begin_with("BEGIN IMMEDIATE").await?;
     sqlx::raw_sql(
-        "UPDATE travelers SET is_admin = 1 WHERE id = \
-         (SELECT id FROM travelers ORDER BY created_at ASC LIMIT 1)",
+        "CREATE TABLE IF NOT EXISTS core_schema_versions (
+        version INTEGER PRIMARY KEY, file TEXT NOT NULL, checksum TEXT NOT NULL,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )",
     )
-    .execute(&mut *conn)
+    .execute(&mut *tx)
     .await?;
-
-    let migration5 = include_str!("../../migrations/005_user_plugin_states.sql");
-    sqlx::raw_sql(migration5).execute(&mut *conn).await?;
-
-    let migration6 = include_str!("../../migrations/006_user_preferences.sql");
-    sqlx::raw_sql(migration6).execute(&mut *conn).await?;
-
-    // Chat conversations (007): create the table, and add the
-    // `conversation_id` column to chat_messages only when it is missing (the
-    // raw ALTER is not idempotent, so guard it with pragma_table_info).
-    sqlx::raw_sql(include_str!("../../migrations/007_chat_conversations.sql"))
-        .execute(&mut *conn)
-        .await?;
-    let has_conversation_id: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pragma_table_info('chat_messages') WHERE name = 'conversation_id'",
-    )
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(AppError::Database)?;
-    if has_conversation_id == 0 {
-        sqlx::raw_sql("ALTER TABLE chat_messages ADD COLUMN conversation_id TEXT")
-            .execute(&mut *conn)
+    for &(version, file, sql) in MIGRATIONS {
+        let checksum = hex::encode(Sha256::digest(sql.as_bytes()));
+        let existing: Option<(String, String)> =
+            sqlx::query_as("SELECT file, checksum FROM core_schema_versions WHERE version = ?")
+                .bind(version)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if let Some((stored_file, stored_checksum)) = existing {
+            if stored_file != file || stored_checksum != checksum {
+                return Err(AppError::Internal(format!(
+                    "Applied core migration changed: {file}"
+                )));
+            }
+            continue;
+        }
+        apply_legacy_migration(&mut tx, version, sql).await?;
+        sqlx::query("INSERT INTO core_schema_versions (version, file, checksum) VALUES (?, ?, ?)")
+            .bind(version)
+            .bind(file)
+            .bind(checksum)
+            .execute(&mut *tx)
             .await?;
     }
-
-    // Reasoning traces of thinking models are stored with their reply so the
-    // chat can show them again after a reload.
-    let has_thinking: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pragma_table_info('chat_messages') WHERE name = 'thinking'",
+    // Preserve the previous startup behavior even when migrations are recorded.
+    sqlx::query(
+        "UPDATE travelers SET is_admin = 1 WHERE id =
+        (SELECT id FROM travelers ORDER BY created_at ASC LIMIT 1)",
     )
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(AppError::Database)?;
-    if has_thinking == 0 {
-        sqlx::raw_sql("ALTER TABLE chat_messages ADD COLUMN thinking TEXT")
-            .execute(&mut *conn)
-            .await?;
-    }
-
-    let migration8 = include_str!("../../migrations/008_chat_indexes.sql");
-    sqlx::raw_sql(migration8).execute(&mut *conn).await?;
-
-    // Linux-user identity (009): add the `unix_*` columns only when the first
-    // one is missing — the raw ALTERs are not idempotent.
-    let has_unix_user: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM pragma_table_info('travelers') WHERE name = 'unix_user'",
-    )
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(AppError::Database)?;
-    if has_unix_user == 0 {
-        let migration9 = include_str!("../../migrations/009_linux_identity.sql");
-        sqlx::raw_sql(migration9).execute(&mut *conn).await?;
-    }
-
-    tracing::info!("Database migrations applied");
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    tracing::info!("Database migrations verified");
     Ok(())
+}
+
+async fn has_column(
+    conn: &mut SqliteConnection,
+    table: &str,
+    column: &str,
+) -> Result<bool, AppError> {
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM pragma_table_info(?) WHERE name = ?")
+        .bind(table)
+        .bind(column)
+        .fetch_one(conn)
+        .await?;
+    Ok(count != 0)
+}
+
+async fn apply_legacy_migration(
+    conn: &mut SqliteConnection,
+    version: i64,
+    sql: &str,
+) -> Result<(), AppError> {
+    match version {
+        3 | 9 => {
+            if version == 3 {
+                // A complete legacy migration must be adopted without running
+                // its data backfill again. A user may have intentionally kept
+                // a nullable username after that migration originally ran.
+                let indexed: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_travelers_username'"
+                ).fetch_one(&mut *conn).await?;
+                if indexed > 0
+                    && has_column(conn, "travelers", "username").await?
+                    && has_column(conn, "travelers", "avatar").await?
+                {
+                    return Ok(());
+                }
+            }
+            // Old releases applied these without a transaction. Recover partial
+            // application by guarding each ALTER, then run their idempotent tail.
+            for statement in sql.split(';') {
+                let Some(alter) = statement.find("ALTER TABLE ") else {
+                    if !statement.trim().is_empty() {
+                        sqlx::raw_sql(statement).execute(&mut *conn).await?;
+                    }
+                    continue;
+                };
+                let words: Vec<_> = statement[alter..].split_whitespace().collect();
+                let (table, column) = (words[2], words[5]);
+                if !has_column(conn, table, column).await? {
+                    sqlx::raw_sql(statement).execute(&mut *conn).await?;
+                }
+            }
+        }
+        4 => {
+            if !has_column(conn, "travelers", "is_admin").await? {
+                sqlx::raw_sql(sql).execute(&mut *conn).await?;
+            }
+        }
+        7 => {
+            sqlx::raw_sql(sql).execute(&mut *conn).await?;
+            for column in ["conversation_id", "thinking"] {
+                if !has_column(conn, "chat_messages", column).await? {
+                    sqlx::raw_sql(&format!(
+                        "ALTER TABLE chat_messages ADD COLUMN {column} TEXT"
+                    ))
+                    .execute(&mut *conn)
+                    .await?;
+                }
+            }
+        }
+        _ => {
+            sqlx::raw_sql(sql).execute(&mut *conn).await?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+    #[test]
+    fn bare_paths_and_sqlite_urls_keep_query_options_and_create_only_their_parent() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("nested/state.db");
+        for url in [
+            format!("{}?mode=rwc", path.display()),
+            format!("sqlite://{}?mode=rwc", path.display()),
+        ] {
+            let options = connect_options(&url).unwrap();
+            assert_eq!(options.get_filename(), &path);
+        }
+        assert!(path.parent().unwrap().is_dir());
+        assert!(!path.exists());
+    }
 }

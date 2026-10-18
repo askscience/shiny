@@ -1,3 +1,7 @@
+import {
+  mediaCard, controlButton, setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl,
+  glowFromImageUrl,
+} from '../../ui/index.js';
 /**
  * youtube.js — the YouTube plugin's window.
  *
@@ -16,9 +20,6 @@
  */
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
-import {
-  setIcon, searchBar, emptyState, spinner, setTileGlow, glowUrl, glowFromImageUrl,
-} from '../../ui/index.js';
 
 export const YOUTUBE_PLUGIN = 'youtube';
 const BG_KEY = 'youtube.background';
@@ -171,56 +172,11 @@ function renderGridCurrent() {
 }
 
 function videoCell(v, idx) {
-  // div[role=button], not <button>: button elements collapse their content
-  // contribution when the grid scrolls, shrinking cells under the art.
-  const cell = document.createElement('div');
-  cell.className = 'yt-cell';
+  const cell = mediaCard({ title: v.title || t('plugin.youtube.grid.untitled', null, 'Video'),
+    subtitle: v.channel, src: v.thumbnail || thumbFor(v.video_id), position: idx + 1, duration: v.duration,
+    className: 'yt-cell', prefix: 'yt-cell', onClick: () => playVideo(v) });
   cell.dataset.videoId = v.video_id || '';
-  cell.setAttribute('role', 'button');
-  cell.tabIndex = 0;
-  if (current?.video_id === v.video_id) cell.classList.add('yt-cell--current');
-
-  const num = document.createElement('span');
-  num.className = 'yt-cell-num';
-  num.textContent = String(idx + 1).padStart(2, '0');
-
-  const art = document.createElement('span');
-  art.className = 'yt-cell-art';
-  const img = document.createElement('img');
-  img.src = v.thumbnail || thumbFor(v.video_id);
-  img.alt = '';
-  img.loading = 'lazy';
-  img.onerror = () => img.remove();
-  art.appendChild(img);
-
-  if (v.duration) {
-    const dur = document.createElement('span');
-    dur.className = 'yt-cell-dur';
-    dur.textContent = v.duration;
-    art.appendChild(dur);
-  }
-
-  const meta = document.createElement('span');
-  meta.className = 'yt-cell-meta';
-  const name = document.createElement('span');
-  name.className = 'yt-cell-name';
-  name.textContent = v.title || t('plugin.youtube.grid.untitled', null, 'Video');
-  meta.appendChild(name);
-  if (v.channel) {
-    const channel = document.createElement('span');
-    channel.className = 'yt-cell-channel';
-    channel.textContent = v.channel;
-    meta.appendChild(channel);
-  }
-
-  cell.append(num, art, meta);
-  cell.addEventListener('click', () => playVideo(v));
-  cell.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      playVideo(v);
-    }
-  });
+  cell.classList.toggle('yt-cell--current', current?.video_id === v.video_id);
   return cell;
 }
 
@@ -325,7 +281,7 @@ function renderCategories(cats) {
   for (const c of list) {
     const name = typeof c === 'string' ? c : c?.name;
     if (!name) continue;
-    const chip = document.createElement('button');
+    const chip = controlButton();
     chip.type = 'button';
     chip.className = 'yt-category';
     chip.textContent = titleCase(name);
@@ -368,7 +324,7 @@ function renderHome(sections) {
     const sec = document.createElement('section');
     sec.className = 'yt-section';
 
-    const head = document.createElement('button');
+    const head = controlButton();
     head.type = 'button';
     head.className = 'yt-section-title';
     head.textContent = `${titleCase(section.category)} · ${videos.length}`;
@@ -491,7 +447,7 @@ export function mountYoutubeTile() {
   infoSubEl = document.createElement('div');
   infoSubEl.className = 'yt-hero-sub';
   infoText.append(infoTitleEl, infoSubEl);
-  const backBtn = document.createElement('button');
+  const backBtn = controlButton();
   backBtn.type = 'button';
   backBtn.className = 'yt-hero-back';
   backBtn.title = t('plugin.youtube.hero.back', null, 'Back');

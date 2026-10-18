@@ -235,13 +235,16 @@ const iconButton = ({ icon: name = 'ui/info', label = '', size, onClick, disable
 const searchBar = ({ placeholder = 'Search…', value } = {}) => {
   const wrap = makeElement('div');
   wrap.className = 'ui-search';
-  wrap.appendChild(icon('ui/search'));
   const el = makeElement('input');
   el.className = 'ui-input';
   el.type = 'text';
   el.placeholder = placeholder;
   if (value != null) el.value = value;
   wrap.appendChild(el);
+  const action = makeElement('button');
+  action.className = 'ui-search-action';
+  action.appendChild(icon('ui/search'));
+  wrap.appendChild(action);
   wrap.input = el;
   return wrap;
 };
@@ -265,9 +268,9 @@ function findAll(root, predicate, out = []) {
   return out;
 }
 
-/* The transform strips `import` lines, then re-exports what the file defines. */
+/* The transform strips static import declarations, then re-exports what the file defines. */
 const moduleSource = source
-  .replace(/^import .*$/gm, '')
+  .replace(/^import\s+[\s\S]*?;[ \t]*\n?/gm, '')
   .concat(
     `\nexport { ${['mountBrowserTile', 'unmountBrowserTile', 'getBrowserTileElement', 'wireBrowserEvents', 'browserContextMenu']
       .filter((name) => !new RegExp(`export\\s+(function|const|let|var)\\s+${name}\\b`).test(source))
@@ -277,6 +280,8 @@ const moduleSource = source
 const context = vm.createContext({
   console, document: documentStub, window: windowStub,
   apiFetch, icon, iconButton, searchBar, openWithPlugin, pluginForFile, revealInFiles,
+  toolbar: (children = [], { className = '' } = {}) => { const node = makeElement('div'); node.className = `ui-toolbar ${className}`; node.append(...children); return node; },
+  controlButton: () => { const node = makeElement('button'); node.type = 'button'; return node; },
   onOpenUrl,
   // Imported by the window from the core UI library; stubbed so mount() and the
   // settings/theming paths can run without the real shell.

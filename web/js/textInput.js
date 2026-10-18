@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 import { setSphereState } from './sphere.js';
 import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
@@ -237,7 +238,7 @@ function makeImageBlock(src, name, alt) {
   const actions = document.createElement('div');
   actions.className = 'compose-image-actions';
 
-  const open = document.createElement('button');
+  const open = controlButton();
   open.type = 'button';
   open.className = 'compose-image-action';
   open.title = t('chat.openInImageEditor', null, 'Open in the Image editor');
@@ -249,7 +250,7 @@ function makeImageBlock(src, name, alt) {
       .catch(() => {});
   });
 
-  const save = document.createElement('button');
+  const save = controlButton();
   save.type = 'button';
   save.className = 'compose-image-action';
   save.title = t('chat.saveToPictures', null, 'Save to Pictures');
@@ -342,7 +343,7 @@ function makeSongBlock(url, title) {
   const block = document.createElement('div');
   block.className = 'compose-song-block';
 
-  const button = document.createElement('button');
+  const button = controlButton();
   button.type = 'button';
   button.className = 'compose-song-play';
   button.setAttribute('aria-label', t('chat.play', null, 'Play'));

@@ -1,4 +1,4 @@
-import { getLocale } from './i18n.js';
+import { getLocale, t } from './i18n.js';
 
 const API_BASE = '';
 const SESSION_COOKIE = 'shiny_token';
@@ -54,44 +54,70 @@ export class ApiError extends Error {
   }
 }
 
+let sessionCheck = null;
+
+/** Coalesce simultaneous 401s; only a confirmed cookie rejection expires auth. */
 async function handleUnauthorized() {
-  // A 401 can be a stale localStorage bearer token while the `shiny_token`
-  // session cookie is still valid. Re-check against the cookie first so a
-  // transient 401 never logs the user out.
-  try {
-    const res = await fetch('/api/travelers/me', { headers: {} });
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (data?.data) {
+  if (sessionCheck) return sessionCheck;
+  const token = getToken();
+  const traveler = localStorage.getItem('traveler');
+  sessionCheck = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch('/api/travelers/me', { headers: {}, signal: controller.signal });
+      // A different login completed while this request was in flight.
+      if (getToken() !== token || localStorage.getItem('traveler') !== traveler) return false;
+      if (res.ok) {
+        const data = await res.json();
+        if (!data?.data || getToken() !== token || localStorage.getItem('traveler') !== traveler) return false;
+        localStorage.removeItem('token'); // discard the stale bearer; use the valid cookie
         localStorage.setItem('traveler', JSON.stringify(data.data));
+        return true;
       }
-      return; // still authenticated via the session cookie
+      if (res.status === 401) {
+        clearAuth();
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      }
+    } catch (_) {
+      // Connectivity and malformed responses cannot prove session expiry.
+    } finally {
+      clearTimeout(timer);
     }
-  } catch (_) {
-    /* network error — fall through to logout */
+    return false;
+  })();
+  try { return await sessionCheck; }
+  finally { sessionCheck = null; }
+}
+
+/** Shared authentication/recovery for JSON, binary and streaming requests.
+ * A rejected request is retried once only after cookie authentication succeeds.
+ * Network failures are never retried automatically (a mutation may have run).
+ */
+export async function apiRequest(path, options = {}) {
+  const { authRedirect = true, responseType, ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers);
+  const token = getToken();
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+  headers.set('Accept-Language', getLocale());
+  if (typeof options.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
-  clearAuth();
-  window.dispatchEvent(new CustomEvent('auth:expired'));
+  let res = await fetch(`${API_BASE}${path}`, { ...requestOptions, headers });
+  if (res.status === 401 && authRedirect && await handleUnauthorized()) {
+    // Release the first response body before issuing a replacement request.
+    await res.body?.cancel();
+    headers.delete('Authorization');
+    res = await fetch(`${API_BASE}${path}`, { ...requestOptions, headers });
+  }
+  return res;
 }
 
 export async function apiFetch(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  // Every server-produced user-facing string (error toasts, status lines) is
-  // translated for this language.
-  headers['Accept-Language'] = getLocale();
-
-  if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await apiRequest(path, options);
 
   if (options.responseType === 'blob') {
     if (res.status === 401) {
-      if (options.authRedirect !== false) handleUnauthorized();
       throw new ApiError('Session expired — please sign in again', 401);
     }
     if (!res.ok) {
@@ -110,11 +136,13 @@ export async function apiFetch(path, options = {}) {
   }
 
   if (res.status === 401) {
-    if (options.authRedirect !== false) handleUnauthorized();
     throw new ApiError(data?.error || 'Unauthorized', 401);
   }
   if (!res.ok) {
     throw new ApiError(data?.error || text || res.statusText, res.status);
+  }
+  if (text && data === null && text.trim() !== 'null') {
+    throw new ApiError(t('api.invalidResponse', null, 'The server returned an invalid response. Try again.'), 502);
   }
   return data;
 }

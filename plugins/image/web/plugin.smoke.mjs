@@ -304,11 +304,17 @@ class FileStub {
   constructor(name) { this.name = name; this.type = 'image/png'; this.size = 3; }
 }
 
-const moduleSource = source.replace(/^import .*$/gm, '');
+const moduleSource = source.replace(/^import\s+[\s\S]*?;[ \t]*\n?/gm, '');
 
 const context = vm.createContext({
   console, document: documentStub, window: windowStub,
   button, setIcon, slider, toast, emptyState, openContextMenu,
+  confirmDialog: async () => true,
+  el: (tag, cls, text) => { const node = makeElement(tag); node.className = cls || ''; if (text != null) node.textContent = text; return node; },
+  toolButton: (name, label, onClick) => button({ icon: name, label, onClick }),
+  toolbar: (children = [], { className = '' } = {}) => { const node = makeElement('div'); node.className = `ui-toolbar ${className}`; node.append(...children); return node; },
+  controlButton: () => { const node = makeElement('button'); node.type = 'button'; return node; },
+  t: (key, params, fallback) => fallback ?? key,
   saveOrDownload, pickFiles, onOpenFromFiles, api,
   URL: {
     createObjectURL: () => 'blob:test',
@@ -326,6 +332,8 @@ const context = vm.createContext({
   Blob: BlobStub, Date,
 });
 
+// Exercise the real shared dial implementation against the DOM shim.
+vm.runInContext(readFileSync(join(here, '../../../web/ui/components/dial.js'), 'utf8').replace('export function dial', 'function dial'), context);
 const mod = new vm.SourceTextModule(moduleSource, { context });
 await mod.link(() => { throw new Error('unexpected import'); });
 await mod.evaluate();
@@ -402,17 +410,17 @@ check(
 );
 
 /* Dials are persistent settings: values stay put, fine-tuning replaces. */
-const dials = findByClass(tile, 'image-dial');
+const dials = findByClass(tile, 'ui-dial');
 check('the dock has the eight adjustment dials', dials.length === 8, String(dials.length));
-const dialValue = (d) => findByClass(d, 'image-dial-value')[0].textContent;
-const dialArc = (d) => findByClass(d, 'image-dial-arc')[0].attrs['stroke-dasharray'];
+const dialValue = (d) => findByClass(d, 'ui-dial-value')[0].textContent;
+const dialArc = (d) => findByClass(d, 'ui-dial-arc')[0].attrs['stroke-dasharray'];
 const beforeDial = calls.rawApply.length;
 dials[0].dispatch('pointerdown', { clientY: 200, pointerId: 1, preventDefault() {} });
 dials[0].dispatch('pointermove', { clientY: 130, shiftKey: false });
 await tick(30);
 const preview = calls.rawApply[beforeDial];
 check('dragging previews the value without committing', preview?.opts.commit === false && preview.body.settings?.brightness === 88, JSON.stringify(preview));
-check('the arc fills for the drag value', dialArc(dials[0]) === '44 100', dialArc(dials[0]));
+check('the arc fills for the drag value', dialArc(dials[0]) === '33 100', dialArc(dials[0]));
 dials[0].dispatch('pointerup', { pointerId: 1 });
 await tick(30);
 check(

@@ -1,3 +1,6 @@
+import {
+  toolbar, controlButton, icon, iconButton, searchBar, themeMode,
+} from '../../ui/index.js';
 /**
  * browser.js — the Browser plugin's window.
  *
@@ -27,7 +30,6 @@ import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js'
 import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { openCoreWindow } from '../../js/tiles.js';
-import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
 
 export const BROWSER_PLUGIN = 'browser';
 
@@ -474,7 +476,7 @@ function renderTabs() {
     el.setAttribute('role', 'tab');
     el.setAttribute('aria-selected', String(tab.id === activeTabId));
 
-    const label = document.createElement('button');
+    const label = controlButton();
     label.type = 'button';
     label.className = 'browser-tab-label';
     if (tab.incognito) {
@@ -492,7 +494,7 @@ function renderTabs() {
       : tabName;
     label.addEventListener('click', () => setActiveTab(tab.id));
 
-    const close = document.createElement('button');
+    const close = controlButton();
     close.type = 'button';
     close.className = 'browser-tab-close';
     close.setAttribute(
@@ -662,8 +664,7 @@ function buildTabStrip() {
 }
 
 function buildToolbar() {
-  const bar = document.createElement('div');
-  bar.className = 'browser-bar';
+  const bar = toolbar([], { className: 'browser-bar' });
 
   // Back and forward are the same glyph, mirrored. The theme ships
   // `ui/arrow-left` but its `ui/forward` is a curved "share" arrow, so the pair
@@ -933,7 +934,7 @@ function buildDownloadsPanel() {
   const title = document.createElement('span');
   title.className = 'browser-downloads-title';
   title.textContent = t('plugin.browser.downloads.title', null, 'Downloads');
-  const clear = document.createElement('button');
+  const clear = controlButton();
   clear.type = 'button';
   clear.className = 'browser-downloads-clear';
   clear.textContent = t('plugin.browser.downloads.clearFinished', null, 'Clear finished');
@@ -1232,7 +1233,7 @@ function popoverSeparator() {
 
 /** One actionable row in the overflow menu. */
 function menuItem(iconName, label, onClick) {
-  const item = document.createElement('button');
+  const item = controlButton();
   item.type = 'button';
   item.className = 'browser-menu-item';
   item.setAttribute('role', 'menuitem');
@@ -1260,7 +1261,7 @@ function buildBrowserMenu() {
   const engines = document.createElement('div');
   engines.className = 'browser-engine-list';
   for (const engine of SEARCH_ENGINES) {
-    const item = document.createElement('button');
+    const item = controlButton();
     item.type = 'button';
     item.className = 'browser-menu-item browser-engine';
     item.dataset.engine = engine.id;
@@ -1347,7 +1348,7 @@ function buildHistoryPanel() {
   const head = document.createElement('div');
   head.className = 'browser-popover-head';
   head.append(labelSpan(t('plugin.browser.history.title', null, 'History')));
-  const clear = document.createElement('button');
+  const clear = controlButton();
   clear.type = 'button';
   clear.className = 'browser-popover-action';
   clear.textContent = t('plugin.browser.history.clear', null, 'Clear');
@@ -1413,7 +1414,7 @@ function renderHistory() {
     return;
   }
   historyListEl.replaceChildren(...history.map((entry) => {
-    const row = document.createElement('button');
+    const row = controlButton();
     row.type = 'button';
     row.className = 'browser-popover-row';
     const main = document.createElement('div');
@@ -1490,7 +1491,7 @@ function renderBookmarks() {
   bookmarksListEl.replaceChildren(...bookmarks.map((bookmark) => {
     const row = document.createElement('div');
     row.className = 'browser-popover-row';
-    const main = document.createElement('button');
+    const main = controlButton();
     main.type = 'button';
     main.className = 'browser-popover-main';
     const title = document.createElement('div');
@@ -1622,7 +1623,6 @@ async function fetchNews({ refresh = false } = {}) {
 function homeDocument(news) {
   const cards = Array.isArray(news?.cards) ? news.cards : [];
   const topics = Array.isArray(news?.topics) ? news.topics : [];
-  const payload = JSON.stringify({ cards, topics }).replace(/<\//g, '<\\/');
   const personal = news?.personalized && cards.length;
   const brand = t('plugin.browser.home.brandNote', null, 'filtered by the ad blocker');
   const hint = t('plugin.browser.home.hint', null,
@@ -1630,6 +1630,11 @@ function homeDocument(news) {
   const recent = t('plugin.browser.home.recentSearches', null, 'Because of your recent searches');
   const refresh = t('plugin.browser.home.refresh', null, 'Refresh');
   const refreshing = t('plugin.browser.home.refreshing', null, 'Refreshing…');
+  // The shelf's data block. Also where every *translated* string the handler
+  // needs has to live: the handler's own text is allowlisted in the app's CSP
+  // by an exact SHA-256 (src/api/mod.rs), so interpolating into the script
+  // would change its bytes per locale and break the hash.
+  const payload = JSON.stringify({ cards, topics, refreshing }).replace(/<\//g, '<\\/');
 
   const shelf = personal
     ? `<div class="chips">${topics
@@ -1714,7 +1719,7 @@ function homeDocument(news) {
     var again = event.target && event.target.closest ? event.target.closest('[data-refresh]') : null;
     if (again) {
       again.disabled = true;
-      again.textContent = '${refreshing}';
+      again.textContent = data.refreshing || 'Refreshing…';
       try { parent.postMessage({ type: 'browser:refresh-news' }, '*'); } catch (e) {}
     }
   });

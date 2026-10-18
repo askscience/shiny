@@ -11,6 +11,10 @@
    themes that zero `--glass-blur` still get a frosted surface. A theme can
    retune any of the four. */
 :root {
+  --motion-feedback: 120ms;
+  --motion-reveal: 200ms;
+  --motion-connect: 280ms;
+  --motion-ease: cubic-bezier(.2,.8,.2,1);
   --popover-bg: color-mix(in srgb, var(--surface-strong) 70%, transparent);
   --popover-border: var(--glass-border);
   --popover-blur: 20px;
@@ -97,11 +101,11 @@
   padding: 12px 22px; font: inherit; font-weight: 600; font-size: 14px;
   text-decoration: none; user-select: none; white-space: nowrap;
   transition:
-    background var(--duration-fast),
-    border-color var(--duration-fast),
-    color var(--duration-fast),
-    transform var(--duration-fast) var(--ease-spring),
-    opacity var(--duration-fast);
+    background var(--motion-feedback),
+    border-color var(--motion-feedback),
+    color var(--motion-feedback),
+    transform var(--motion-feedback) var(--motion-ease),
+    opacity var(--motion-feedback);
 }
 .ui-btn:active { transform: scale(0.97); }
 .ui-btn:disabled, .ui-btn.is-disabled { cursor: default; pointer-events: none; }
@@ -124,7 +128,7 @@
   width: 100%; font: inherit; font-size: 14px;
   padding: 12px 14px; border-radius: var(--radius-xs);
   border: 1px solid transparent; outline: none; appearance: none;
-  transition: border-color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast);
+  transition: border-color var(--motion-feedback), background var(--motion-feedback), box-shadow var(--motion-feedback);
 }
 .ui-textarea { resize: none; line-height: 1.5; }
 .ui-select { cursor: pointer; padding-right: 36px; }
@@ -134,24 +138,84 @@
   pointer-events: none; width: 14px; height: 14px;
 }
 
-.ui-search { position: relative; }
-.ui-search .ui-input { padding-left: 38px; }
-.ui-search > .ui-icon {
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-  width: 16px; height: 16px; pointer-events: none;
+/* Search — a pill with the magnifier as its round action at the end. The plate
+   is the theme's elevated surface and the disc is the theme's ink with the
+   glyph cut out of it, so the control reads the same in light and dark themes:
+   inverting both variables (or just `--search-plate` / `--search-ink`) in a
+   theme is enough to re-skin it.
+
+   A search field normally sits in a row of 32–34px window controls, so the pill
+   is that tall and flat by default: it matches the buttons beside it and its
+   shadow cannot bleed out of the row. A page-level search (the Radio/YouTube
+   heroes) opts into the larger floating pill via `--search-size` and
+   `--search-shadow`. */
+.ui-search {
+  --search-size: 34px;
+  --search-plate: var(--surface-strong, var(--bg-elevated, var(--surface)));
+  --search-ink: var(--text);
+  --search-shadow: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--search-plate);
+  box-shadow: var(--search-shadow);
+  transition: box-shadow var(--motion-feedback) var(--motion-ease);
+}
+/* A hairline ring on the pill, not the input inside it (and an outline composes
+   safely with a theme whose `--shadow-sm` is `none`). */
+.ui-search:focus-within { outline: 1px solid var(--accent); outline-offset: 1px; }
+.ui-search .ui-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--search-size);
+  /* Text inset scales with the pill (0.6 of its height, as in the design). */
+  padding: 0 6px 0 calc(var(--search-size) * 0.6);
+  border-radius: inherit;
+  font-family: var(--font-body);
+}
+/* Plate and outline live on the pill: the input inside stays bare in every
+   state a theme may have styled (some themes inset-shadow their fields). */
+.ui-search .ui-input,
+.ui-search .ui-input:hover,
+.ui-search .ui-input:focus { border: 0; background: transparent; box-shadow: none; }
+.ui-search-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--search-size);
+  height: var(--search-size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--search-ink);
+  color: var(--search-plate);
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease);
+}
+.ui-search-action:hover { background: color-mix(in srgb, var(--search-ink) 88%, var(--accent, var(--search-ink)) 12%); }
+.ui-search--clearable .ui-search-clear { flex: none; margin-right: 2px; }
+@media (pointer: coarse) { .ui-search { --search-size: 44px; } }
+
+/* Native domain controls must honor the selected application font as well. */
+[data-ui-control="button"], .ui-input, .ui-select, .ui-textarea {
+  font-family: var(--font-body);
 }
 
 /* Toggle — button[role="switch"] */
 .ui-toggle {
   position: relative; width: 44px; height: 26px; flex-shrink: 0;
   border-radius: 999px; border: 1px solid transparent; cursor: pointer; padding: 0;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback);
 }
 .ui-toggle::after {
   content: ''; position: absolute; top: 50%; left: 3px;
   width: 18px; height: 18px; border-radius: 50%;
   transform: translateY(-50%);
-  transition: transform var(--duration-fast) var(--ease-out), background var(--duration-fast);
+  transition: transform var(--motion-feedback) var(--motion-ease), background var(--motion-feedback);
 }
 .ui-toggle[aria-checked="true"]::after { transform: translate(18px, -50%); }
 
@@ -165,9 +229,9 @@
 .ui-checkbox .ui-checkbox-box {
   width: 18px; height: 18px; border-radius: 5px; border: 1px solid transparent;
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback);
 }
-.ui-checkbox .ui-checkbox-box .ui-icon { width: 12px; height: 12px; opacity: 0; transition: opacity var(--duration-fast); }
+.ui-checkbox .ui-checkbox-box .ui-icon { width: 12px; height: 12px; opacity: 0; transition: opacity var(--motion-feedback); }
 .ui-checkbox.is-checked .ui-checkbox-box .ui-icon { opacity: 1; }
 
 /* ── Card / Panel / Section ────────────────────────────────── */
@@ -191,7 +255,7 @@
   position: fixed; inset: 0; z-index: var(--z-overlay);
   display: flex; align-items: center; justify-content: center; padding: 20px;
   opacity: 0; pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease);
 }
 .ui-modal.is-open { opacity: 1; pointer-events: auto; }
 .ui-modal-card {
@@ -200,7 +264,7 @@
   border-radius: var(--radius-lg); border: 1px solid transparent;
   padding: 28px 26px; display: flex; flex-direction: column; gap: 20px;
   transform: translateY(10px) scale(0.985);
-  transition: transform var(--duration-normal) var(--ease-out);
+  transition: transform var(--motion-reveal) var(--motion-ease);
 }
 .ui-modal.is-open .ui-modal-card { transform: translateY(0) scale(1); }
 .ui-modal-card--wide { width: min(560px, 100%); }
@@ -209,7 +273,7 @@
   position: fixed; inset: 0; z-index: var(--z-overlay);
   display: flex; align-items: flex-end; justify-content: center;
   opacity: 0; pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease);
 }
 .ui-sheet.is-open { opacity: 1; pointer-events: auto; }
 .ui-sheet-card {
@@ -217,7 +281,7 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0; border: 1px solid transparent;
   padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
   transform: translateY(24px);
-  transition: transform var(--duration-normal) var(--ease-out);
+  transition: transform var(--motion-reveal) var(--motion-ease);
 }
 .ui-sheet.is-open .ui-sheet-card { transform: translateY(0); }
 
@@ -229,7 +293,7 @@
   transform: translate(-50%, 2px); opacity: 0; pointer-events: none;
   padding: 6px 10px; border-radius: var(--radius-xs);
   font-size: 11px; font-weight: 500; white-space: nowrap; z-index: var(--z-toast);
-  transition: opacity var(--duration-fast), transform var(--duration-fast);
+  transition: opacity var(--motion-feedback), transform var(--motion-feedback);
 }
 [data-tooltip]:hover::after { opacity: 1; transform: translate(-50%, 0); }
 
@@ -244,7 +308,7 @@
   padding: 13px 20px; border-radius: var(--radius-sm); border: 1px solid transparent;
   font-size: 13px; font-weight: 500; text-align: center;
   opacity: 0; transform: translateY(-8px);
-  transition: opacity var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease), transform var(--motion-reveal) var(--motion-ease);
 }
 .ui-toast.is-in { opacity: 1; transform: translateY(0); }
 
@@ -278,8 +342,8 @@
   pointer-events: auto;
   opacity: 0;
   transform: translateY(-10px) scale(0.98);
-  transition: opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease);
   cursor: pointer;
 }
 
@@ -345,8 +409,8 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .ui-notification-action:hover {
   background: var(--glass-hover);
@@ -369,7 +433,7 @@
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition: background var(--motion-feedback), color var(--motion-feedback);
 }
 .ui-notification-close:hover { background: var(--glass-hover); color: var(--text); }
 
@@ -398,7 +462,7 @@
 @keyframes uiShimmer { to { transform: translateX(100%); } }
 
 .ui-progress { height: 3px; border-radius: 999px; overflow: hidden; }
-.ui-progress-bar { height: 100%; border-radius: 999px; transition: width var(--duration-normal) var(--ease-out); }
+.ui-progress-bar { height: 100%; border-radius: 999px; transition: width var(--motion-reveal) var(--motion-ease); }
 
 .ui-empty {
   display: flex; flex-direction: column; align-items: center; gap: 14px;
@@ -436,7 +500,7 @@
   padding: 12px 14px; border-radius: var(--radius-xs);
   border: 1px solid transparent; cursor: pointer; text-align: left; width: 100%;
   font: inherit; background: none;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback);
 }
 .ui-list-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ui-list-item-title { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -451,7 +515,7 @@
   display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
   padding: 8px 14px; border-radius: 999px; border: 1px solid transparent;
   font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
-  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback), color var(--motion-feedback), transform var(--motion-feedback) var(--motion-ease);
 }
 .ui-chip:active { transform: scale(0.96); }
 .ui-chip .ui-icon { width: 15px; height: 15px; }
@@ -477,7 +541,7 @@
   position: relative; width: 44px; height: 44px; border-radius: 50%;
   border: 1px solid transparent; cursor: pointer; padding: 0; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast) var(--ease-spring);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback), transform var(--motion-feedback) var(--motion-ease);
 }
 .ui-dock-btn:hover { transform: translateY(-1px); }
 .ui-dock-btn:active { transform: scale(0.94); }
@@ -496,7 +560,7 @@
   width: 32px; height: 32px; border-radius: 50%; border: 1px solid transparent;
   cursor: pointer; padding: 0; font-size: 17px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition: background var(--motion-feedback), color var(--motion-feedback);
 }
 .ui-artifact-body { padding: 22px 26px 30px; display: flex; flex-direction: column; gap: 20px; }
 .ui-artifact-stats { display: flex; gap: 28px; }
@@ -527,7 +591,7 @@
 .ui-insight-close {
   border: none; background: none; cursor: pointer; padding: 2px;
   font-size: 14px; line-height: 1; flex-shrink: 0; border-radius: 4px;
-  transition: color var(--duration-fast);
+  transition: color var(--motion-feedback);
 }
 
 /* ── HUD chip ──────────────────────────────────────────────── */
@@ -535,7 +599,7 @@
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   padding: 6px 12px; border-radius: 999px; border: 1px solid transparent;
   font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
-  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
+  transition: background var(--motion-feedback), border-color var(--motion-feedback), color var(--motion-feedback);
 }
 .ui-hud-chip .ui-icon { width: 13px; height: 13px; }
 
@@ -551,9 +615,9 @@
   opacity: 0;
   transform: translateY(10px);
   transition:
-    opacity var(--reveal-duration) var(--ease-cinematic),
-    transform var(--reveal-duration) var(--ease-cinematic);
-  transition-delay: var(--reveal-delay, 0ms);
+    opacity var(--reveal-duration) var(--motion-ease),
+    transform var(--reveal-duration) var(--motion-ease);
+  transition-delay: var(--reveal-delay, var(--motion-feedback));
 }
 [data-reveal].is-revealed { opacity: 1; transform: translateY(0); }
 
@@ -561,3 +625,130 @@
   [data-reveal] { opacity: 1; transform: none; transition: none; }
   .ui-spinner, .ui-skeleton::after { animation: none; }
 }
+
+/* Shared rotary numeric control. */
+.ui-dial {
+  flex: none;
+  width: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ui-dial-knob {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background var(--motion-feedback) ease, box-shadow var(--motion-feedback) ease;
+}
+.ui-dial:hover .ui-dial-knob { background: var(--glass-hover); }
+.ui-dial.is-dragging .ui-dial-knob,
+.ui-dial.is-set .ui-dial-knob {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.ui-dial:focus-visible { outline: none; }
+.ui-dial:focus-visible .ui-dial-knob {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.ui-dial-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ui-dial-track {
+  stroke: var(--glass-border);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.ui-dial-arc {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--motion-feedback) ease, stroke-dashoffset var(--motion-feedback) ease;
+}
+.ui-dial-value {
+  position: relative;
+  font-size: 11px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ui-dial.is-set .ui-dial-value { color: var(--accent); }
+.ui-dial-label {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+.ui-menu-trigger.ui-btn { flex: none; gap: 6px; height: 32px; padding: 0 10px; min-width: 0; max-width: 200px; font-family: var(--font-body); }
+.ui-menu-trigger > .ui-icon:first-child { color: var(--accent); }
+.ui-menu-trigger > .ui-icon:last-child { color: var(--muted); }
+.ui-menu-trigger .ui-menu-trigger-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-menu-trigger[aria-expanded="true"] { background: var(--glass-hover); }
+
+.ui-media-card {
+  position: relative;
+  display: block;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  cursor: pointer;
+  padding: 0;
+  /* NO overflow:hidden here — an overflowing grid item reports a collapsed
+     intrinsic height and the track shrinks under the art. The art box clips. */
+  text-align: left;
+  transition: border-color var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease),
+    box-shadow var(--motion-feedback) var(--motion-ease);
+}
+
+.ui-media-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Shared document/account menus; domain content supplies title and metadata. */
+.ui-menu {
+  position: fixed;
+  z-index: calc(var(--z-hud) + 2);
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: min(380px, 60dvh);
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+}
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease);
+}
+.ui-menu-item:hover, .ui-menu-item:focus-visible { background: var(--glass-hover); }
+.ui-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ui-menu-item.is-active { color: var(--accent); }
+.ui-menu-item:disabled { opacity: .5; cursor: default; }
+@media (pointer: coarse) { .ui-menu-item { min-height: 44px; } }

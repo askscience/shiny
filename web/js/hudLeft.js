@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * Top HUD bar.
  * - Clock + local weather: CORE chrome — always on, plugin-free.
@@ -216,7 +217,7 @@ function renderMenuItems() {
   }
 
   destinations.forEach((dest) => {
-    const item = document.createElement('button');
+    const item = controlButton();
     item.type = 'button';
     item.className = 'ui-hud-menu-item';
     if (dest.key === active) item.classList.add('is-active');
@@ -241,7 +242,7 @@ function renderMenuItems() {
 }
 
 function buildTripMenuTrigger(destinations, active) {
-  const trigger = document.createElement('button');
+  const trigger = controlButton();
   trigger.type = 'button';
   trigger.className = 'ui-hud-menu-trigger';
   trigger.setAttribute('aria-haspopup', 'menu');

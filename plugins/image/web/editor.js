@@ -1,3 +1,8 @@
+import {
+  confirmDialog, dial, toolbar, element as el, toolButton, controlButton, button, setIcon, toast,
+  emptyState,
+} from '../../../ui/index.js';
+
 /**
  * editor.js — the Image window: a minimal photo editor.
  *
@@ -14,7 +19,6 @@
  * `plugins/image/web/`).
  */
 
-import { button, setIcon, toast, emptyState } from '../../../ui/index.js';
 import { openContextMenu } from '../../../js/contextMenu.js';
 import { saveOrDownload, pickFiles, onOpenFromFiles } from '../../../js/files.js';
 import { t } from '../../../js/i18n.js';
@@ -68,24 +72,7 @@ export const S = {
 
 /* ── Small helpers ──────────────────────────────────────────────── */
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-}
-
-export function iconButton(iconName, label, onClick, { size = 16, className = '', variant = 'ghost' } = {}) {
-  const btn = button({ variant, onClick });
-  btn.classList.add('ui-btn--icon');
-  if (className) btn.classList.add(...className.split(' '));
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
-  const ic = el('span', 'image-icon');
-  btn.appendChild(ic);
-  void setIcon(ic, iconName, { size });
-  return btn;
-}
+export const iconButton = toolButton;
 
 /* ── Workspace skeleton ─────────────────────────────────────────── */
 
@@ -95,9 +82,9 @@ export function buildWorkspace() {
   S.tile = tile;
 
   /* Application bar: menu + document title + zoom. */
-  const appbar = el('div', 'image-appbar');
+  const appbar = toolbar([], { className: 'image-appbar' });
   appbar.dataset.windowBar = '';
-  const menuBtn = iconButton('ui/list', t('plugin.image.toolbar.menu', null, 'Menu'), (e) => openMainMenu(e.currentTarget));
+  const menuBtn = toolButton('ui/list', t('plugin.image.toolbar.menu', null, 'Menu'), (e) => openMainMenu(e.currentTarget));
   const appTitle = el('span', 'image-appbar-title');
   S.els.appTitle = appTitle;
   const appRight = el('div', 'image-appbar-right');
@@ -242,146 +229,15 @@ function fmtValue(spec, v) {
    so dials stay where you put them and fine-tuning a knob REPLACES its value
    instead of stacking deltas. Drag vertical, scroll, or use the arrow keys;
    double-click resets one dial. */
-const DIAL_R = 18;
-
-function dialSvg() {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 44 44');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('image-dial-svg');
-  const mk = (cls) => {
-    const c = document.createElementNS(ns, 'circle');
-    c.setAttribute('cx', '22');
-    c.setAttribute('cy', '22');
-    c.setAttribute('r', String(DIAL_R));
-    c.setAttribute('fill', 'none');
-    c.setAttribute('pathLength', '100');
-    c.setAttribute('transform', 'rotate(135 22 22)');
-    c.classList.add(cls);
-    return c;
-  };
-  const track = mk('image-dial-track');
-  track.setAttribute('stroke-dasharray', '75 100');
-  const arc = mk('image-dial-arc');
-  arc.setAttribute('stroke-dasharray', '0 100');
-  svg.append(track, arc);
-  return { svg, arc };
-}
-
 function buildDial(spec) {
-  const wrap = el('div', 'image-dial');
-  const label = t(spec.labelKey, null, spec.label);
-  wrap.setAttribute('role', 'slider');
-  wrap.setAttribute('aria-label', label);
-  wrap.setAttribute('aria-valuemin', String(spec.min));
-  wrap.setAttribute('aria-valuemax', String(spec.max));
-  wrap.tabIndex = 0;
-
-  const knob = el('span', 'image-dial-knob');
-  const { svg, arc } = dialSvg();
-  const valueEl = el('span', 'image-dial-value', '0');
-  knob.append(svg, valueEl);
-  const labelEl = el('span', 'image-dial-label', label);
-  wrap.append(knob, labelEl);
-
-  const span = spec.max - spec.min;
-  const neutralFrac = spec.min < 0 ? (0 - spec.min) / span : 0;
-
-  let value = 0;
-  let drag = null;
-  let wheelTimer = null;
-
-  const clampV = (v) => Math.min(spec.max, Math.max(spec.min, v));
-  const snap = (v) => Math.round(v / spec.step) * spec.step;
-
-  const paint = () => {
-    const f = (value - spec.min) / span;
-    const a = Math.min(f, neutralFrac);
-    const b = Math.max(f, neutralFrac);
-    arc.setAttribute('stroke-dasharray', `${Math.round((b - a) * 1000) / 10} 100`);
-    arc.setAttribute('stroke-dashoffset', `${-Math.round(a * 1000) / 10}`);
-    valueEl.textContent = fmtValue(spec, value);
-    wrap.classList.toggle('is-set', value !== 0);
-    wrap.setAttribute('aria-valuenow', String(value));
-    wrap.setAttribute('aria-valuetext', fmtValue(spec, value));
-  };
-
-  /** Send this dial's value as a settings update (partial merge server-side). */
-  const push = (commit) => queueSettings({ [spec.key]: value }, { commit });
-
-  wrap.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    wrap.setPointerCapture(e.pointerId);
-    wrap.classList.add('is-dragging');
-    drag = { y0: e.clientY, v0: value };
+  const control = dial({
+    label: t(spec.labelKey, null, spec.label), min: spec.min, max: spec.max, step: spec.step,
+    format: value => fmtValue(spec, value),
+    onInput: value => queueSettings({ [spec.key]: value }, { commit: false }),
+    onChange: value => queueSettings({ [spec.key]: value }, { commit: true }),
+    onCancel: () => { control.setValue(S.doc?.settings?.[spec.key] || 0); void reloadComposite(); },
   });
-  wrap.addEventListener('pointermove', (e) => {
-    if (!drag) return;
-    // 160 px of travel covers the full range; hold Shift for fine control.
-    const scale = e.shiftKey ? 5 : 1;
-    const next = clampV(snap(drag.v0 + ((drag.y0 - e.clientY) / (160 * scale)) * span));
-    if (next === value) return;
-    value = next;
-    paint();
-    push(false);
-  });
-  const endDrag = (e) => {
-    if (!drag) return;
-    drag = null;
-    wrap.classList.remove('is-dragging');
-    try { wrap.releasePointerCapture(e.pointerId); } catch (_) { /* released */ }
-    push(true);
-  };
-  wrap.addEventListener('pointerup', endDrag);
-  wrap.addEventListener('pointercancel', endDrag);
-
-  wrap.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const step = e.shiftKey ? spec.step : spec.step * 5;
-    value = clampV(snap(value + (e.deltaY < 0 ? step : -step)));
-    paint();
-    push(false);
-    window.clearTimeout(wheelTimer);
-    wheelTimer = window.setTimeout(() => push(true), 350);
-  }, { passive: false });
-
-  wrap.addEventListener('keydown', (e) => {
-    const step = e.shiftKey ? spec.step * 10 : spec.step;
-    let next = null;
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = value + step;
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = value - step;
-    else if (e.key === 'Home' || e.key === 'Delete' || e.key === 'Backspace') next = 0;
-    else if (e.key === 'Escape') {
-      e.preventDefault();
-      value = Number(S.doc?.settings?.[spec.key] || 0);
-      paint();
-      void reloadComposite();
-      return;
-    }
-    if (next == null) return;
-    e.preventDefault();
-    value = clampV(snap(next));
-    paint();
-    push(true);
-  });
-
-  wrap.addEventListener('dblclick', () => {
-    value = 0;
-    paint();
-    push(true);
-  });
-
-  paint();
-  return {
-    key: spec.key,
-    el: wrap,
-    /** Repaint from the document's stored settings (no request). */
-    set(v) {
-      value = clampV(snap(Number(v) || 0));
-      paint();
-    },
-  };
+  return { key: spec.key, el: control, set: control.setValue, destroy: control.destroy };
 }
 
 function buildAdjustBody() {
@@ -728,7 +584,7 @@ export async function downloadCurrent() {
 export async function deleteCurrent(imageId = S.doc?.image_id, title = S.doc?.title) {
   if (!imageId) return;
   const name = title || t('plugin.image.dialog.thisImage', null, 'this image');
-  if (!window.confirm(t('plugin.image.dialog.deleteConfirm', { title: name }, 'Delete "{title}"?'))) return;
+  if (!await confirmDialog(t('plugin.image.dialog.deleteConfirm', { title: name }, 'Delete "{title}"?'))) return;
   try {
     await api.deleteImage(imageId);
     if (S.doc?.image_id === imageId) S.doc = null;
@@ -776,6 +632,7 @@ export function getEditorElement() {
 }
 
 export function unmountEditor() {
+  for (const control of S.els.dials || []) control.destroy();
   window.removeEventListener('keydown', onKeyDown);
   keysWired = false;
   window.clearTimeout(looksTimer);

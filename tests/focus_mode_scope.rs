@@ -1,6 +1,6 @@
 //! Focus mode has to let the focused plugin's own tools through — for EVERY
 //! plugin, not just the one that happened to be tested by hand. This loads the
-//! real cdylibs from `data/plugins` and checks the same registry the agent
+//! explicitly built cdylibs in a temporary install tree and checks the same registry the agent
 //! dispatches against:
 //!
 //!   1. every registered tool names the plugin that owns it (a tool with no
@@ -14,97 +14,11 @@
 //! Run with:
 //!     cargo test --test focus_mode_scope -- --nocapture
 
-use std::sync::Arc;
-
+mod support;
 use serde_json::json;
-use shiny::api::AppState;
-use shiny::config::Config;
 use shiny::models::Traveler;
 use shiny::services::agent_tools::{execute_action, focus_blocks_plugin};
 use shiny_plugin_sdk::context::AgentContext;
-
-use shiny::services::audio::AudioService;
-use shiny::services::bluetooth::BluetoothService;
-use shiny::services::diary_gen::DiaryGenerator;
-use shiny::services::display::DisplayService;
-use shiny::services::gpsd::GpsdService;
-use shiny::services::keyboard_backlight::KeyboardBacklightService;
-use shiny::services::network::NetworkService;
-use shiny::services::ollama::OllamaClient;
-use shiny::services::osm::OsmService;
-use shiny::services::power::PowerService;
-use shiny::services::screen_brightness::ScreenBrightnessService;
-use shiny::services::supertonic::SupertonicClient;
-use shiny::services::touchbar::TouchBarService;
-use shiny::services::web_search::SearchService;
-use shiny::services::whisper::WhisperClient;
-
-async fn state_for(plugins_dir: &str, db: &str) -> AppState {
-    let db_url = format!("sqlite://{db}?mode=rwc");
-    let mut conn = shiny::db::connect(&db_url).await.expect("connection");
-    shiny::db::run_migrations(&mut conn).await.expect("migrations");
-    drop(conn);
-    let pool = shiny::db::init_pool(&db_url).await.expect("pool");
-
-    let mut config = Config::from_env();
-    config.plugins_dir = plugins_dir.to_string();
-    config.database_url = db_url;
-
-    AppState {
-        pool: pool.clone(),
-        ollama: OllamaClient::new(config.ollama_url.clone(), config.ollama_model.clone()),
-        search: SearchService::new(),
-        osm: OsmService::new(),
-        gpsd: GpsdService::new(config.gpsd_host.clone(), config.gpsd_port),
-        network: NetworkService::new(),
-        audio: AudioService::new(),
-        battery: shiny::services::battery::BatteryService::new(),
-        bluetooth: BluetoothService::new(),
-        power: PowerService::new(),
-        display: DisplayService::new(),
-        touchbar: TouchBarService::new(),
-        keyboard_backlight: KeyboardBacklightService::new(),
-        screen_brightness: ScreenBrightnessService::new(),
-        diary_gen: Arc::new(DiaryGenerator::new(
-            pool.clone(),
-            OllamaClient::new(config.ollama_url.clone(), config.ollama_model.clone()),
-            OsmService::new(),
-        )),
-        agent_turns: Default::default(),
-        supertonic: SupertonicClient::new(config.supertonic_url.clone(), config.supertonic_voice.clone()),
-        whisper: WhisperClient::new(config.whisper_url.clone(), config.whisper_models_dir.clone()),
-        qwen_tts: shiny::services::qwen_tts::QwenClient::new(
-            config.qwen_tts_url.clone(),
-            std::path::PathBuf::from(&config.qwen_tts_models_dir),
-        ),
-        image_gen: shiny::services::image_gen::ImageGenClient::new(
-            vec![
-                (
-                    shiny::services::image_gen::Z_IMAGE.id,
-                    std::path::PathBuf::from(&config.z_image_models_dir),
-                ),
-                (
-                    shiny::services::image_gen::QWEN_IMAGE.id,
-                    std::path::PathBuf::from(&config.qwen_image_models_dir),
-                ),
-            ],
-            config.z_image_sd_cli.clone(),
-        ),
-        plugins: shiny::plugins::PluginManager::new(
-            std::path::PathBuf::from(&config.plugins_dir),
-            pool.clone(),
-        ),
-        song_gen: shiny::services::song_gen::SongGenClient::new(
-            std::path::PathBuf::from(&config.yue2_models_dir),
-            config.yue2_engine.clone(),
-        ),
-        iroh: shiny::services::iroh_remote::IrohRemote::new(),
-        tailscale: shiny::services::tailscale::TailscaleService::new(config.server_port),
-        session: Default::default(),
-        router_rebuild: None,
-        config,
-    }
-}
 
 fn ctx(focused: &[&str]) -> AgentContext {
     AgentContext {
@@ -139,27 +53,37 @@ fn traveler() -> Traveler {
 
 /// A focus-mode refusal, as opposed to any other failure.
 fn refused_by_focus_mode(out: &shiny::services::agent_tools::ActionOutcome) -> bool {
-    out.result == "unavailable" && out.data.get("focus_mode").and_then(|v| v.as_bool()) == Some(true)
+    out.result == "unavailable"
+        && out.data.get("focus_mode").and_then(|v| v.as_bool()) == Some(true)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_plugins_own_tools_survive_focus_mode() {
-    let db = "/tmp/focus-scope-probe.db";
-    let _ = std::fs::remove_file(db);
-    let state = state_for("data/plugins", db).await;
-    let installed = state.plugins.discover_and_install(state.plugin_ctx()).await;
+    let app = support::TestApp::new().await;
+    app.stage_all_plugins();
+    let state = &app.state;
+    let installed = app.load_plugins().await;
 
     let tools = state.plugins.tools();
     let keys = tools.list();
-    assert!(!keys.is_empty(), "no plugin tools registered — did nothing load?");
+    assert!(
+        !keys.is_empty(),
+        "no plugin tools registered — did nothing load?"
+    );
     println!("{} plugins, {} tools", installed.len(), keys.len());
 
     // 1. Every registered tool must name its owner. These are all plugin tools
     //    (core actions live in the dispatcher's own match), so an empty owner
     //    means focus mode would treat it as a core action and refuse it for
     //    every plugin — the bug that made Word unusable while focused.
-    let unowned: Vec<&String> = keys.iter().filter(|k| tools.owner_of(k).is_empty()).collect();
-    assert!(unowned.is_empty(), "plugin tools with no owner: {unowned:?}");
+    let unowned: Vec<&String> = keys
+        .iter()
+        .filter(|k| tools.owner_of(k).is_empty())
+        .collect();
+    assert!(
+        unowned.is_empty(),
+        "plugin tools with no owner: {unowned:?}"
+    );
 
     // 2. For each plugin: focused ⇒ its own tools pass, another plugin's don't.
     let mut checked = 0;
@@ -184,24 +108,43 @@ async fn every_plugins_own_tools_survive_focus_mode() {
             );
         }
         // With nothing focused, everything is available again.
-        assert!(!focus_blocks_plugin(&ctx(&[]), name), "{name}: blocked with focus off");
+        assert!(
+            !focus_blocks_plugin(&ctx(&[]), name),
+            "{name}: blocked with focus off"
+        );
     }
     println!("{checked} tools checked across {} plugins", installed.len());
-    assert!(checked > 20, "expected the plugin sets to be substantial, checked {checked}");
+    assert!(
+        checked > 20,
+        "expected the plugin sets to be substantial, checked {checked}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
-    let db = "/tmp/focus-dispatch-probe.db";
-    let _ = std::fs::remove_file(db);
-    let state = state_for("data/plugins", db).await;
-    let installed = state.plugins.discover_and_install(state.plugin_ctx()).await;
-    assert!(installed.iter().any(|n| n == "word"), "word plugin not loaded: {installed:?}");
-    assert!(installed.iter().any(|n| n == "calc"), "calc plugin not loaded: {installed:?}");
+    let app = support::TestApp::new().await;
+    app.stage_plugin("word");
+    app.stage_plugin("calc");
+    let state = &app.state;
+    let installed = app.load_plugins().await;
+    assert!(
+        installed.iter().any(|n| n == "word"),
+        "word plugin not loaded: {installed:?}"
+    );
+    assert!(
+        installed.iter().any(|n| n == "calc"),
+        "calc plugin not loaded: {installed:?}"
+    );
 
     let tools = state.plugins.tools();
-    assert!(tools.list().iter().any(|t| t == "doc_create"), "word's real tool is doc_create");
-    assert!(tools.list().iter().any(|t| t == "calc_list"), "calc's real tool is calc_list");
+    assert!(
+        tools.list().iter().any(|t| t == "doc_create"),
+        "word's real tool is doc_create"
+    );
+    assert!(
+        tools.list().iter().any(|t| t == "calc_list"),
+        "calc's real tool is calc_list"
+    );
     assert_eq!(tools.owner_of("doc_create"), "word");
     assert_eq!(tools.owner_of("calc_list"), "calc");
 
@@ -228,9 +171,15 @@ async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
 
     // Focused on word: word's own tool must reach the plugin.
     let word_ctx = ctx(&["word"]);
-    let out = execute_action(&state, &traveler, &word_ctx, "doc_create", &json!({ "title": "Focus probe" }))
-        .await
-        .expect("doc_create dispatches");
+    let out = execute_action(
+        state,
+        &traveler,
+        &word_ctx,
+        "doc_create",
+        &json!({ "title": "Focus probe" }),
+    )
+    .await
+    .expect("doc_create dispatches");
     assert!(
         !refused_by_focus_mode(&out),
         "word's own tool was refused while word is focused: {:?}",
@@ -238,7 +187,7 @@ async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
     );
 
     // ... while another plugin's tool is refused, before it runs.
-    let blocked = execute_action(&state, &traveler, &word_ctx, "calc_list", &json!({}))
+    let blocked = execute_action(state, &traveler, &word_ctx, "calc_list", &json!({}))
         .await
         .expect("calc_list dispatches");
     assert!(
@@ -249,7 +198,14 @@ async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
 
     // A name that does not exist is NOT focus mode's fault — it must report the
     // unknown action, so the model fixes the name instead of blaming the focus.
-    let unknown = execute_action(&state, &traveler, &word_ctx, "word_create_document", &json!({})).await;
+    let unknown = execute_action(
+        state,
+        &traveler,
+        &word_ctx,
+        "word_create_document",
+        &json!({}),
+    )
+    .await;
     match unknown {
         Ok(out) => assert!(
             !refused_by_focus_mode(&out),
@@ -260,8 +216,11 @@ async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
     }
 
     // With nothing focused, the other plugin works again.
-    let out = execute_action(&state, &traveler, &ctx(&[]), "calc_list", &json!({}))
+    let out = execute_action(state, &traveler, &ctx(&[]), "calc_list", &json!({}))
         .await
         .expect("calc_list dispatches");
-    assert!(!refused_by_focus_mode(&out), "focus off must not block anything");
+    assert!(
+        !refused_by_focus_mode(&out),
+        "focus off must not block anything"
+    );
 }

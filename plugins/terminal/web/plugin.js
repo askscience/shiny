@@ -31,10 +31,12 @@
  * and replays recent output.
  */
 
-import { icon, iconButton, toast } from '../../ui/index.js';
-import { apiFetch, getToken } from '../../js/api.js';
+import { controlButton, icon, iconButton, toast } from '../../ui/index.js';
+import * as coreApi from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
+
+const { apiFetch, getToken } = coreApi;
 
 export const TERMINAL_PLUGIN = 'terminal';
 
@@ -227,7 +229,7 @@ function renderTabs() {
     el.setAttribute('role', 'tab');
     el.setAttribute('aria-selected', String(tab.id === activeTabId));
 
-    const label = document.createElement('button');
+    const label = controlButton();
     label.type = 'button';
     label.className = 'terminal-tab-label';
     const text = document.createElement('span');
@@ -237,7 +239,7 @@ function renderTabs() {
     label.title = tab.shell ? `${tab.shell} — ${tab.cwd}` : tabLabel(tab);
     label.addEventListener('click', () => setActiveTab(tab.id));
 
-    const close = document.createElement('button');
+    const close = controlButton();
     close.type = 'button';
     close.className = 'terminal-tab-close';
     close.setAttribute('aria-label', t('plugin.terminal.tab.close', { name: tabLabel(tab) }, 'Close {name}'));
@@ -671,6 +673,13 @@ function stopStream() {
   }
 }
 
+function requestStream(path, options) {
+  if (typeof coreApi.apiRequest === 'function') return coreApi.apiRequest(path, options);
+  // Preserve hot-install compatibility with an already-open older core page.
+  const token = getToken();
+  return fetch(path, { ...options, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+}
+
 /**
  * Read the window's SSE frames off `/api/terminal/events` with a streaming
  * fetch — one connection for every tab (see `streamAbort`).
@@ -683,12 +692,10 @@ function stopStream() {
  */
 async function runStream(ctrl) {
   const expect = tabs.map((t) => t.sessionId).filter(Boolean).join(',');
-  const token = getToken();
   let res;
   try {
     const query = expect ? `?expect=${encodeURIComponent(expect)}` : '';
-    res = await fetch(`/api/terminal/events${query}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    res = await requestStream(`/api/terminal/events${query}`, {
       cache: 'no-store',
       signal: ctrl.signal,
     });

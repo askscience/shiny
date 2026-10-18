@@ -1,112 +1,27 @@
-use std::fs::OpenOptions;
-use std::io::{self, Write};
-use std::process::{Child, Command, Stdio};
-use std::sync::Arc;
-use std::task::{Context, Poll};
-
-use arc_swap::ArcSwap;
-use tower::Service;
-
-use tracing_subscriber::EnvFilter;
-
-use shiny::api;
-use shiny::api::AppState;
-use shiny::config::Config;
-use shiny::db;
-use shiny::services::audio::AudioService;
-use shiny::services::battery::BatteryService;
-use shiny::services::bluetooth::BluetoothService;
+use shiny::application::{logging::TeeMakeWriter, router::RouterHandle, sidecars::*};
 use shiny::services::diary_gen::DiaryGenerator;
-use shiny::services::display::DisplayService;
-use shiny::services::gpsd::GpsdService;
-use shiny::services::keyboard_backlight::KeyboardBacklightService;
-use shiny::services::network::NetworkService;
-use shiny::services::ollama::OllamaClient;
-use shiny::services::osm::OsmService;
-use shiny::services::power::PowerService;
-use shiny::services::screen_brightness::ScreenBrightnessService;
-use shiny::services::supertonic::SupertonicClient;
-use shiny::services::touchbar::TouchBarService;
-use shiny::services::web_search::SearchService;
-use shiny::services::whisper::WhisperClient;
-use shiny::services::qwen_tts::QwenClient;
-
-/// Swappable router handle: implements `tower::Service<IncomingStream>` by
-/// delegating to the currently-loaded `Router`, so plugin installs/uninstalls
-/// can hot-swap the live router without a server restart.
-#[derive(Clone)]
-struct RouterHandle {
-    inner: Arc<ArcSwap<axum::Router>>,
-}
-
-impl RouterHandle {
-    fn new(router: axum::Router) -> Self {
-        Self { inner: Arc::new(ArcSwap::from_pointee(router)) }
-    }
-
-    fn swap(&self, router: axum::Router) {
-        self.inner.store(Arc::new(router));
-    }
-}
-
-impl<'a> Service<axum::serve::IncomingStream<'a>> for RouterHandle {
-    type Response = axum::Router;
-    type Error = std::convert::Infallible;
-    type Future = std::future::Ready<Result<axum::Router, std::convert::Infallible>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, stream: axum::serve::IncomingStream<'a>) -> Self::Future {
-        // The router rotates through this handle, so the peer address cannot
-        // be injected by a layer built at router-construction time. Add it
-        // here, per connection, as `ConnectInfo`: handlers use it to tell a
-        // local request from a remote one (network changes are loopback-only).
-        let remote = stream.remote_addr();
-        let router = self
-            .inner
-            .load_full()
-            .as_ref()
-            .clone()
-            .layer(axum::middleware::from_fn(
-                move |mut req: axum::extract::Request, next: axum::middleware::Next| async move {
-                    req.extensions_mut().insert(axum::extract::ConnectInfo(remote));
-                    next.run(req).await
-                },
-            ));
-        std::future::ready(Ok(router))
-    }
-}
+use shiny::{api, api::AppState, config::Config, db};
+use std::sync::Arc;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     let config = Config::from_env();
+    config.validate()?;
 
-    // Full logs: the tracer tees to stdout AND a file (data/shiny.log by
-    // default; override with LOG_FILE). Parent dirs are created eagerly.
-    if let Some(parent) = std::path::Path::new(&config.log_file).parent() {
-        std::fs::create_dir_all(parent).ok();
-    }
-    let log_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&config.log_file)?;
+    let log_writer = TeeMakeWriter::new(&config.log_file)?;
 
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(&config.log_level)),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level)),
         )
-        .with_writer(TeeMakeWriter { file: log_file })
+        .with_writer(log_writer)
         .init();
 
     tracing::info!("Starting Shiny AI assistant…");
     tracing::info!("Logging to {}", config.log_file);
-
-    std::fs::create_dir_all("data").ok();
 
     if config.auto_start_supertonic {
         spawn_supertonic_sidecar(&config);
@@ -134,192 +49,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pool = db::init_pool(&config.database_url).await?;
 
-    let ollama = OllamaClient::new(config.ollama_url.clone(), config.ollama_model.clone());
-
-    if ollama.is_available().await {
-        tracing::info!("Ollama is available at {}", config.ollama_url);
-    } else {
-        tracing::warn!(
-            "Ollama not available at {}. AI features (chat, diary gen) will fail.",
-            config.ollama_url
-        );
-    }
-
-    let supertonic = SupertonicClient::new(
-        config.supertonic_url.clone(),
-        config.supertonic_voice.clone(),
-    );
-
-    if supertonic.is_available().await {
-        tracing::info!("Supertonic TTS available at {}", config.supertonic_url);
-    } else {
-        tracing::warn!(
-            "Supertonic not available at {}. TTS will fail until sidecar is started.",
-            config.supertonic_url
-        );
-    }
-
-    let search = SearchService::new();
-    let osm = OsmService::new();
-    let gpsd = GpsdService::new(config.gpsd_host.clone(), config.gpsd_port);
-
-    let whisper = WhisperClient::new(
-        config.whisper_url.clone(),
-        config.whisper_models_dir.clone(),
-    );
-    if whisper.is_available().await {
-        tracing::info!("faster-whisper STT available at {}", config.whisper_url);
-    } else {
-        tracing::warn!(
-            "faster-whisper not available at {}. Voice falls back to Vosk.",
-            config.whisper_url
-        );
-    }
-
-    // Local image generation (Z-Image Turbo / Qwen-Image 2.1 Turbo): one
-    // sd-cli process per image, so nothing stays resident.
-    let image_gen = shiny::services::image_gen::ImageGenClient::new(
-        vec![
-            (
-                shiny::services::image_gen::Z_IMAGE.id,
-                std::path::PathBuf::from(&config.z_image_models_dir),
-            ),
-            (
-                shiny::services::image_gen::QWEN_IMAGE.id,
-                std::path::PathBuf::from(&config.qwen_image_models_dir),
-            ),
-        ],
-        config.z_image_sd_cli.clone(),
-    );
-
-    // Local song generation (YuE2 through HOT-Step-CPP's ace-server): one
-    // engine process per song, started on a private port and released when the
-    // render ends.
-    let song_gen = shiny::services::song_gen::SongGenClient::new(
-        std::path::PathBuf::from(&config.yue2_models_dir),
-        config.yue2_engine.clone(),
-    );
-
-    let qwen_tts = QwenClient::new(
-        config.qwen_tts_url.clone(),
-        std::path::PathBuf::from(&config.qwen_tts_models_dir),
-    );
-    if qwen_tts.health().await.is_some() {
-        tracing::info!("Qwen3-TTS available at {}", config.qwen_tts_url);
-    } else if config.auto_start_qwen_tts {
-        tracing::warn!(
-            "Qwen3-TTS not answering yet at {}; it may still be starting.",
-            config.qwen_tts_url
-        );
-    } else {
-        tracing::info!(
-            "Qwen3-TTS not started (opt-in via Settings → Voice or AUTO_START_QWEN_TTS=true)."
-        );
-    }
-
-    gpsd.start().await;
-
-    // Host network panel (NetworkManager). Spawns and retries in the
-    // background; a machine without NM simply reports `available: false`.
-    let network = NetworkService::new();
-    network.start().await;
-
-    // Host sound panel (PipeWire via the Pulse socket). Same contract: the
-    // probe/event loop is backgrounded, so a machine without PipeWire boots
-    // unchanged and the panel just reports `available: false`.
-    let audio = AudioService::new();
-    audio.start().await;
-
-    // Host Bluetooth panel (BlueZ over D-Bus). Same contract: the reader is
-    // backgrounded, so a machine without BlueZ or an adapter boots unchanged.
-    let bluetooth = BluetoothService::new();
-    bluetooth.start().await;
-
-    // Host battery panel (the kernel's sysfs power-supply class). Same
-    // contract: the reader is backgrounded, so a desktop with no battery boots
-    // unchanged and the chip hides itself.
-    let battery = BatteryService::new();
-    battery.start().await;
-
-    // Host power menu (reboot / power off / suspend) through freedesktop
-    // logind. Stateless: every action opens the system bus on demand, so a
-    // machine without logind simply reports `available: false`.
-    let power = PowerService::new();
-
-    // Host interface scale (webview page zoom). Stateless: the choice lives in
-    // a small file the kiosk shell reads, so there is nothing to start.
-    let display = DisplayService::new();
-
-    // Host Touch Bar capability (T2 MacBook). Stateless: a sysfs probe, so a
-    // machine without the hardware reports `available: false` and the web UI
-    // never listens for the bar's keys.
-    let touchbar = TouchBarService::new();
-
-    // Host keyboard backlight (the Mac's kbd_backlight LED). Stateless: reads
-    // and writes a sysfs attribute, so a machine without the LED reports
-    // `available: false` and the backlight actions are a no-op.
-    let keyboard_backlight = KeyboardBacklightService::new();
-
-    // Host panel brightness (the Mac's gmux_backlight). Same contract.
-    let screen_brightness = ScreenBrightnessService::new();
-
-    if gpsd.is_connected().await {
-        tracing::info!("GPSD connected at {}:{}", config.gpsd_host, config.gpsd_port);
-    } else {
-        tracing::warn!(
-            "GPSD not available. Using mock GPS data for position tracking."
-        );
-    }
-
-    let diary_gen = Arc::new(DiaryGenerator::new(pool.clone(), ollama.clone(), osm.clone()));
-
-    // Loopback-only session token: lets the local kiosk and the server-mode
-    // window authenticate without a password (never valid over Iroh/LAN).
-    let session = shiny::auth::init_session(&pool, &config).await;
-
-    let state = AppState {
-        pool: pool.clone(),
-        config: config.clone(),
-        ollama,
-        search,
-        osm,
-        gpsd,
-        network,
-        audio,
-        battery,
-        bluetooth,
-        power,
-        display,
-        touchbar,
-        keyboard_backlight,
-        screen_brightness,
-        diary_gen: diary_gen.clone(),
-        agent_turns: Default::default(),
-        supertonic,
-        whisper,
-        qwen_tts,
-        image_gen,
-        song_gen,
-        plugins: shiny::plugins::PluginManager::with_system_dir(
-            std::path::PathBuf::from(&config.plugins_dir),
-            config
-                .system_plugins_dir
-                .as_ref()
-                .map(std::path::PathBuf::from),
-            pool.clone(),
-        ),
-        iroh: shiny::services::iroh_remote::IrohRemote::new(),
-        tailscale: shiny::services::tailscale::TailscaleService::new(config.server_port),
-        session,
-        router_rebuild: None,
-    };
+    let mut state = AppState::new(config.clone(), pool.clone());
+    state.session = shiny::auth::init_session(&pool, &config).await;
+    let mut workers = shiny::application::lifecycle::Workers::default();
+    workers.track(state.gpsd.start_tracked().await);
+    workers.track(state.network.start_tracked().await);
+    workers.track(state.audio.start_tracked().await);
+    workers.track(state.bluetooth.start_tracked().await);
+    workers.track(state.battery.start_tracked().await);
+    // Optional services never prevent the desktop from becoming available.
+    tracing::info!("Optional providers will be probed on use; unavailable services retain their existing fallbacks");
 
     // Server mode at startup, when the session user asked for it.
     state.autostart_remote().await;
 
     // Scan plugins directory and load installed cdylib plugins (hot-reload
     // registration on startup; subsequent installs use the admin API).
-    std::fs::create_dir_all(&config.plugins_dir).ok();
+    std::fs::create_dir_all(&config.plugins_dir)?;
     let base_ctx = state.plugin_ctx();
     let installed = state.plugins.discover_and_install(base_ctx).await;
     if !installed.is_empty() {
@@ -329,7 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if config.diary_auto_generate {
-        spawn_diary_cron(diary_gen, config.diary_generate_time.clone());
+        workers.track(Some(spawn_diary_cron(
+            state.diary_gen.clone(),
+            config.diary_generate_time.clone(),
+        )));
     }
 
     // Wire live router rebuild: the served router is swappable, and every
@@ -341,9 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(std::sync::Mutex::new(None));
 
     let dispatch = |cell: &Arc<std::sync::Mutex<Option<Arc<dyn Fn() + Send + Sync>>>>| {
-        let cell = cell.clone();
+        let cell = Arc::downgrade(cell);
         Arc::new(move || {
-            if let Some(cb) = cell.lock().unwrap().clone() {
+            if let Some(cb) = cell.upgrade().and_then(|cell| cell.lock().unwrap().clone()) {
                 cb();
             }
         }) as Arc<dyn Fn() + Send + Sync>
@@ -369,178 +118,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Web UI served from / (static files in {})", config.web_dir);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, router_handle).await?;
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let server = axum::serve(listener, router_handle).with_graceful_shutdown(async move {
+        let mut shutdown_rx = shutdown_rx;
+        let _ = shutdown_rx.changed().await;
+    });
+    let server = std::future::IntoFuture::into_future(server);
+    tokio::pin!(server);
+    let result = tokio::select! {
+        result = &mut server => result,
+        _ = shiny::application::lifecycle::shutdown_signal() => {
+            tracing::info!("Shutting down: draining requests for up to 10 seconds");
+            state.agent_turns.cancel_all();
+            let _ = shutdown_tx.send(true);
+            match tokio::time::timeout(std::time::Duration::from_secs(10), &mut server).await {
+                Ok(result) => result,
+                Err(_) => {
+                    tracing::warn!("Request drain deadline reached; closing remaining streams");
+                    Ok(())
+                }
+            }
+        }
+    };
+    state.agent_turns.cancel_all();
+    workers.shutdown().await;
+    // Long-lived SSE streams may hold a pool clone; never wait indefinitely.
+    if tokio::time::timeout(std::time::Duration::from_secs(2), pool.close())
+        .await
+        .is_err()
+    {
+        tracing::warn!("Database close deadline reached");
+    }
+    result?;
 
     Ok(())
 }
 
-/// Writes each log record to both stdout and the log file.
-struct TeeWriter {
-    file: std::fs::File,
-}
-
-impl Write for TeeWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let _ = io::stdout().write_all(buf);
-        self.file.write_all(buf)?;
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let _ = io::stdout().flush();
-        self.file.flush()
-    }
-}
-
-/// `MakeWriter` that hands each log line a cloned file handle. The clone
-/// shares the original's O_APPEND open-file description, so concurrent
-/// writes land at the end without interleaving (not "an independent handle").
-struct TeeMakeWriter {
-    file: std::fs::File,
-}
-
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TeeMakeWriter {
-    type Writer = TeeWriter;
-
-    fn make_writer(&'a self) -> Self::Writer {
-        TeeWriter {
-            file: self
-                .file
-                .try_clone()
-                .expect("failed to clone log file handle"),
-        }
-    }
-}
-
-/// Reap a detached sidecar in the background.
-///
-/// The sidecars are deliberately detached: they outlive the server, and a
-/// second server start finds them already listening and exits without starting
-/// another. But a child whose `Child` handle is simply dropped becomes a
-/// **zombie** the moment it exits, because nothing ever calls `wait()` — which
-/// is exactly what the start scripts do after their health probe finds an
-/// existing daemon. A thread parked on `wait()` reaps it, costs nothing, and
-/// keeps the process table clean.
-fn reap_in_background(mut child: Child) {
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
-}
-
-/// Bring up the Supertonic TTS sidecar (`voice/start_supertonic.sh`).
-///
-/// Detached and non-blocking, mirroring [`spawn_whisper_sidecar`]: the script
-/// probes the port first, picks an interpreter that has `supertonic[serve]`
-/// (the app venv, then PATH), and selects the execution provider (Vulkan →
-/// CUDA → CPU via `voice/detect_accel.py`). `AUTO_START_SUPERTONIC` defaults
-/// on so TTS works out of the box; `SUPERTONIC_AUTO_INSTALL` lets the launcher
-/// provision the venv when the package is absent.
-fn spawn_supertonic_sidecar(config: &Config) {
-    let port = config
-        .supertonic_url
-        .rsplit(':')
-        .next()
-        .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
-        .unwrap_or(7788);
-
-    let mut cmd = Command::new("bash");
-    cmd.arg("voice/start_supertonic.sh")
-        .env("SUPERTONIC_PORT", port.to_string());
-    if let Some(python) = &config.supertonic_python {
-        cmd.env("SUPERTONIC_PYTHON", python);
-    }
-    if config.auto_install_supertonic {
-        cmd.env("SUPERTONIC_AUTO_INSTALL", "1");
-    } else {
-        cmd.env("SUPERTONIC_AUTO_INSTALL", "0");
-    }
-
-    match cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => {
-            reap_in_background(child);
-            tracing::info!("Starting Supertonic sidecar on port {}", port)
-        }
-        Err(e) => tracing::warn!("Could not auto-start Supertonic: {}", e),
-    }
-}
-
-/// Bring up the faster-whisper STT sidecar (`voice/start_whisper.sh`).
-///
-/// Detached and non-blocking: the script probes `WHISPER_URL/health` first, so
-/// a second server process never double-starts it, and it exits quietly when
-/// no interpreter provides faster-whisper — in that case the app simply stays
-/// on Vosk and Settings offers to install it.
-fn spawn_whisper_sidecar(config: &Config) {
-    let port = config
-        .whisper_url
-        .rsplit(':')
-        .next()
-        .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
-        .unwrap_or(7789);
-
-    let mut cmd = Command::new("bash");
-    cmd.arg("voice/start_whisper.sh")
-        .env("WHISPER_PORT", port.to_string())
-        .env("WHISPER_MODELS_DIR", &config.whisper_models_dir);
-    if let Some(python) = &config.whisper_python {
-        cmd.env("WHISPER_PYTHON", python);
-    }
-    if config.auto_install_whisper {
-        cmd.env("WHISPER_AUTO_INSTALL", "1");
-    }
-
-    match cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => {
-            reap_in_background(child);
-            tracing::info!("Starting faster-whisper sidecar on port {}", port)
-        }
-        Err(e) => tracing::warn!("Could not auto-start faster-whisper: {}", e),
-    }
-}
-
-/// Bring up the Qwen3-TTS sidecar (`voice/start_qwen_tts.sh`).
-///
-/// Opt-in: the launcher builds `qwentts.cpp` on first use and downloads the
-/// GGUF weights, both of which are heavy. It is idempotent (the port is probed
-/// first) and picks Vulkan → CUDA → CPU via `voice/detect_accel.py`.
-fn spawn_qwen_tts_sidecar(config: &Config) {
-    let port = config
-        .qwen_tts_url
-        .rsplit(':')
-        .next()
-        .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
-        .unwrap_or(7787);
-
-    let mut cmd = Command::new("bash");
-    cmd.arg("voice/start_qwen_tts.sh")
-        .env("QWEN_TTS_PORT", port.to_string())
-        .env("QWEN_TTS_MODELS_DIR", &config.qwen_tts_models_dir);
-
-    match cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => {
-            reap_in_background(child);
-            tracing::info!("Starting Qwen3-TTS sidecar on port {}", port)
-        }
-        Err(e) => tracing::warn!("Could not auto-start Qwen3-TTS: {}", e),
-    }
-}
-
-fn spawn_diary_cron(diary_gen: Arc<DiaryGenerator>, generate_time: String) {
+fn spawn_diary_cron(
+    diary_gen: Arc<DiaryGenerator>,
+    generate_time: String,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         // Parse the configured HH:MM once. The old implementation ticked
         // every hour *from process start*, so the "%H:%M == target" check
@@ -581,5 +198,5 @@ fn spawn_diary_cron(diary_gen: Arc<DiaryGenerator>, generate_time: String) {
             tracing::info!("Auto-generating daily diary entries...");
             diary_gen.auto_generate_daily().await;
         }
-    });
+    })
 }

@@ -225,11 +225,16 @@ impl BluetoothService {
     /// Spawn the reader. Returns immediately: a machine without BlueZ or a
     /// Bluetooth adapter boots exactly as it did before.
     pub async fn start(&self) {
+        self.start_tracked().await;
+    }
+
+    /// Start once and hand ownership of the reader to the application runtime.
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> {
         if self.inner.started.swap(true, Ordering::SeqCst) {
-            return;
+            return None;
         }
         let service = self.clone();
-        tokio::spawn(async move { service.run().await });
+        Some(tokio::spawn(async move { service.run().await }))
     }
 
     async fn run(self) {
@@ -684,6 +689,7 @@ async fn register_agent(connection: &zbus::Connection) -> Result<(), String> {
 impl BluetoothService {
     /// No-op: `BluetoothStatus::unavailable(START_REASON)` already explains why.
     pub async fn start(&self) {}
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> { None }
 
     pub async fn refresh(&self) {}
 

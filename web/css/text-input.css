@@ -35,7 +35,7 @@ body.compose-active:not(.compose-awaiting) #hud-header,
 body.compose-active:not(.compose-awaiting) #insight-cards {
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease);
 }
 
 body.compose-active #hud-transcript {
@@ -52,7 +52,7 @@ body.compose-active #hud-transcript {
   pointer-events: none;
   opacity: 0;
   box-sizing: border-box;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease);
   background: transparent;
 }
 
@@ -106,8 +106,8 @@ body.compose-active #hud-transcript {
   cursor: pointer;
   pointer-events: auto;
   transition:
-    opacity var(--duration-fast, 0.15s) var(--ease-out),
-    transform var(--duration-fast, 0.15s) var(--ease-out);
+    opacity var(--motion-feedback, var(--motion-feedback)) var(--motion-ease),
+    transform var(--motion-feedback, var(--motion-feedback)) var(--motion-ease);
 }
 .compose-stop.visible { display: flex; }
 .compose-stop:active { transform: scale(0.92); }
@@ -249,7 +249,7 @@ body.compose-active #hud-transcript {
 .compose-cot-summary .ui-icon { color: var(--muted); }
 /* The disclosure arrow: points at the trace while closed, turns to point
    down at it once the user opens the chain of thought. */
-.compose-cot-arrow { transition: transform var(--duration-fast) var(--ease-out); }
+.compose-cot-arrow { transition: transform var(--motion-feedback) var(--motion-ease); }
 .compose-cot[open] .compose-cot-arrow { transform: rotate(90deg); }
 .compose-cot[open] .compose-cot-summary { margin-bottom: 4px; }
 .compose-cot-body {
@@ -287,7 +287,7 @@ body.compose-active #hud-transcript {
   gap: 6px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-fast, 0.15s) var(--ease-out, ease);
+  transition: opacity var(--motion-feedback, var(--motion-feedback)) var(--motion-ease, ease);
 }
 .compose-image-block:hover .compose-image-actions,
 .compose-image-block:focus-within .compose-image-actions {
@@ -445,10 +445,10 @@ body.compose-active #hud-transcript {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow: var(--shadow-glass);
   transition:
-    background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-spring);
+    background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 
 .compose-chats-btn:hover {
@@ -519,8 +519,8 @@ body.compose-awaiting .compose-composer .compose-send {
   color: var(--accent-contrast);
   cursor: pointer;
   transition:
-    transform var(--duration-fast) var(--ease-spring),
-    opacity var(--duration-fast) var(--ease-out);
+    transform var(--motion-feedback) var(--motion-ease),
+    opacity var(--motion-feedback) var(--motion-ease);
 }
 
 .compose-send:hover { transform: translateY(-1px); }

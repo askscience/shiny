@@ -76,6 +76,13 @@ can't be listed over HTTP.
 
 ## Contracts a theme must honor
 
+- **Flow interaction** — consume or override the shared `--motion-feedback`,
+  `--motion-reveal`, `--motion-connect`, and `--motion-ease` roles. Core's final
+  `flow.css` layer owns interaction structure, settings grids and reduced-motion
+  behavior. Skin colors and shapes through theme tokens; do not disable common
+  menu entrances or introduce a competing button interaction system. User window
+  settings still override the theme's window defaults.
+
 - **Accent slots** — `appearance.js` rewrites `--accent`, `--accent-2`,
   `--accent-soft`, `--accent-glow`, `--accent-contrast`, `--gradient-accent`,
   `--gradient-text`, `--gradient-mesh` at runtime from the user's choice.
@@ -86,6 +93,14 @@ can't be listed over HTTP.
   Declare at least two accents or the frame falls back to `--accent`.
 - **Semantic colors** — `--ok`, `--warn`, `--error` are functional, not
   decorative. Keep them legible.
+- **Shared search field** — `/ui/ui.css` draws the search pill from three
+  variables: `--search-plate` (the plate behind the text, default
+  `--surface-strong`), `--search-ink` (the round magnifier action, default
+  `--text`, glyph cut out in the plate colour) and `--search-shadow` (unset by
+  default: a field in a row of controls must not bleed out of its row; a
+  page-level search sets it). Retune those to re-skin it; never restyle the
+  `.ui-input` inside a `.ui-search` — the pill owns the plate, radius and focus
+  hairline, in both light and dark modes.
 - **Icons** — always `stroke="currentColor"` (or `fill`), 24×24 viewBox,
   1.5 stroke width for visual rhythm. They inherit color from CSS and follow
   the theme (coloured artwork only follows the accent when *Accent-tinted
@@ -109,3 +124,14 @@ core renders through `/ui/` components — so plugin content always matches
 the active theme and the user's accent automatically. If plugin web assets
 land (see PLUGINS.md roadmap), they must load `/ui/` and use the same
 components instead of shipping styles.
+
+## Responsive controls and fonts
+
+Core `ui/responsive.css` loads after theme app overrides. Keep controls reachable
+in narrow tiles and short landscape viewports; do not override its scrolling,
+touch target or dialog bounds. See the [shared UI contract](../../docs/core/ui-components.md).
+
+Body/display fonts default to the system UI stack. Use local generic serif and
+monospace stacks for editorial/code content. Do not load Google Fonts or remote
+webfonts. The global font option still accepts installed host fonts. These rules
+apply to UI chrome, not to received HTML email inside the Mail reader iframe.

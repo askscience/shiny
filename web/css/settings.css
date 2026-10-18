@@ -37,7 +37,7 @@
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition: background var(--motion-feedback), color var(--motion-feedback);
 }
 .settings-nav-item:hover { background: var(--glass-hover); color: var(--text); }
 .settings-nav-item.is-active { background: var(--accent-soft); color: var(--accent); }
@@ -46,7 +46,7 @@
   display: inline-flex;
   flex-shrink: 0;
   color: var(--muted);
-  transition: color var(--duration-fast);
+  transition: color var(--motion-feedback);
 }
 .settings-nav-item:hover .settings-nav-icon { color: var(--text-secondary); }
 .settings-nav-item.is-active .settings-nav-icon { color: var(--accent); }
@@ -188,7 +188,7 @@
   cursor: pointer;
   padding: 0;
   position: relative;
-  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast), box-shadow var(--duration-fast);
+  transition: transform var(--motion-feedback) var(--motion-ease), border-color var(--motion-feedback), box-shadow var(--motion-feedback);
 }
 .swatch:hover { transform: translateY(-2px); border-color: var(--text); }
 .swatch.is-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
@@ -267,9 +267,9 @@
   font: inherit;
   color: var(--text);
   transition:
-    border-color var(--duration-fast),
-    box-shadow var(--duration-fast),
-    transform var(--duration-fast) var(--ease-spring);
+    border-color var(--motion-feedback),
+    box-shadow var(--motion-feedback),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 .bg-preset:hover { border-color: var(--text-secondary); transform: translateY(-2px); }
 .bg-preset.is-active {
@@ -325,30 +325,6 @@
 }
 .whisper-model-row .settings-hint { margin-top: 8px; }
 .whisper-model-row .ui-btn { flex: 0 0 auto; margin-top: 8px; }
-
-/* ── Narrow window: nav becomes a horizontal strip ─────────── */
-@container (max-width: 620px) {
-  .settings-window { flex-direction: column; }
-  .settings-nav {
-    flex: none;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-right: none;
-    border-bottom: 1px solid var(--glass-border);
-    padding: 8px;
-  }
-  .settings-nav-item {
-    width: auto;
-    flex: 0 0 auto;
-    min-height: 40px;
-    padding: 8px 12px;
-  }
-  .settings-nav-label { display: none; }
-  .settings-nav-item { gap: 0; }
-  .settings-nav-item .settings-nav-icon { color: inherit; }
-  .settings-panels { padding: 16px; }
-}
 
 /* ── Remote (Iroh) ───────────────────────────────────────────── */
 .remote-link {

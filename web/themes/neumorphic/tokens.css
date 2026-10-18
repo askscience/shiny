@@ -100,9 +100,9 @@
 
   /* Typography — two families, not three. The editorial serif is
      retired; it is what made the plastic feel decorative. */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
-  --font-editorial: 'Space Grotesk', system-ui, sans-serif;
+  --font-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-editorial: ui-serif, Georgia, serif;
 
   /* Display scale — was "type as hero". Tightened: a launcher-era
      restraint, and the plastic reads better without a headline. */

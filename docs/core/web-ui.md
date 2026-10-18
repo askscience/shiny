@@ -104,8 +104,8 @@ The shell is split by concern. Grouped:
 
 ## The UI component library (`web/ui/`)
 
-Plugins never ship CSS. Every visual surface is built from the theme-agnostic
-component library:
+Plugins reuse the theme-agnostic component library for controls. Plugin-specific
+CSS may arrange domain content; shared styling and motion remain in core:
 
 | File | Role |
 |---|---|
@@ -127,9 +127,9 @@ QtWebEngine 6.8 crashes the whole shell (SIGSEGV in `QXcbWindow::handleNativeEve
 mid-teardown of the popup's native window) as soon as a native `<select>` dropdown
 opens — which is what made choosing a theme or an icon set in Settings → Appearance
 restart the kiosk. The component keeps the styled `<select>` as the closed field
-and draws the open list itself (`.ui-select-menu`, an in-page popover). A raw
-`<select>` a plugin builds must be armed with `useSelectMenu(el)` for the same
-reason. The upstream fix is in Qt 6.9.2 (QTBUG-135036).
+and draws the open list itself (`.ui-select-menu`, an in-page popover). `selectControl()` returns the same shared control without a wrapper for
+compact toolbars. Legacy raw selects can be armed with `useSelectMenu(el)`, but
+new plugin controls should use the shared factories. The upstream fix is in Qt 6.9.2 (QTBUG-135036).
 
 ---
 
@@ -200,3 +200,64 @@ The module graph is plain ES modules with relative imports so the same tree
 works under `peakd`/`peakd-mac` and in any browser, and plugins can import the
 UI library relative to their own served location. There is no transpile step to
 keep in sync with the server.
+
+## Module and resource ownership
+
+### Flow: shared layout and motion
+
+`web/ui/flow.css` loads after theme app overrides. It defines shared interaction
+structure while consuming the active theme's colors and shape tokens. The core
+tokens in `ui.css` are `--motion-feedback` (120 ms), `--motion-reveal` (200 ms),
+`--motion-connect` (280 ms), and `--motion-ease`. Themes may override these roles;
+plugins consume them rather than define independent timings. Existing window
+radius, opacity, blur, shadow, title height, font, icon and accent settings remain
+authoritative. There is no additional appearance preference to migrate.
+
+The [component inventory and responsive contract](ui-components.md) documents
+all shared controls, font policy and browser verification.
+
+The public UI entry point exports `controlGrid`, `controlCard`, `controlGroup`,
+`segmented`, and `controlButton`. `controlButton()` is an unskinned button for
+domain-specific layouts; ordinary actions use `button()`/`iconButton()`. First-party
+plugin button builders use the shared factories. Editors, terminal rendering,
+media, musical timing, and canvases retain their domain behavior.
+
+`transition`, `enterSurface`, `revealRegion`, `disposeMotion`, `motionDuration`,
+and `reducedMotion` own finite transitions. Replacement cancels old completion;
+reduced motion completes pending state changes; a bounded fallback handles an
+occluded renderer. Final styles belong to CSS, not a retained animation. Call
+`disposeMotion(root)` on unmount and dispose `segmented().destroy()` with its
+owner. Only animate small controls, selection indicators and reveal regions;
+do not animate streaming content, large editor surfaces or window dragging.
+
+Settings keeps its 12 existing section IDs and direct navigation. Shared control
+cards sit in groups defined by existing translated headings; the grid gains two
+columns when the **window**, rather than the screen, is wide enough. A narrow
+window turns the section navigation into an icon-only strip — each tab keeps its
+`aria-label`/`title`, so nothing loses its name. Provider, voice engine and
+backdrop options reveal inside their owning card. Locale rerenders continue to
+dispose previous section resources. Visible labels reuse existing translation
+catalogs; new UI text must use `t()`/`tp()` keys.
+
+Shared modal and sheet APIs retain `el`, `card`, `open`, `close`, and `isOpen`;
+modal also retains `body`. Both add `destroy()` for owner teardown and accept an
+optional translated `label` and `removeOnClose` for one-shot surfaces. They trap keyboard focus, restore it on dismissal,
+and preserve background inert state for nested dialogs. Reopening during an exit
+cannot be hidden by an earlier completion.
+
+Public import paths remain unchanged. `settingsWindow.js` owns the window and
+navigation while `settings/` contains section factories and shared controls.
+`desktop.js` forwards the existing desktop API to `desktop/workspaces.js`;
+`desktop/layout.js` renders geometry and splits, and `desktop/interactions.js`
+handles floating-window pointer operations. `voice.js` forwards to recognition
+orchestration in `voice/`, alongside capture conversion, wake matching and playback.
+
+`createResources()` owns listeners, timers and abort controllers for a mount. It
+disposes them once in reverse order and immediately cleans up resources registered
+after disposal. Settings replaces its section resources on locale changes, so
+polls and listeners cannot accumulate across rerenders. Existing theme tokens,
+translation keys, preference formats and plugin window contracts remain intact.
+
+Playback releases audio object URLs on completion, error and cancellation, aborts
+cancelled synthesis requests, and releases microphones granted after barge-in
+monitoring has already been cancelled.

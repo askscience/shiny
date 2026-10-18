@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * hudPlugins.js — the plugin icon tray in the top HUD bar.
  *
@@ -53,7 +54,7 @@ async function refresh() {
 function buildButton(p) {
   const active = activeSet.has(p.name);
 
-  const btn = document.createElement('button');
+  const btn = controlButton();
   btn.type = 'button';
   btn.className = 'hud-plugin-btn';
   btn.dataset.plugin = p.name;

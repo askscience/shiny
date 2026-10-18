@@ -289,11 +289,16 @@ impl NetworkService {
     /// so a machine without NetworkManager boots exactly as it did before.
     /// Safe to call once per process.
     pub async fn start(&self) {
+        self.start_tracked().await;
+    }
+
+    /// Start once and hand ownership of the reader to the application runtime.
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> {
         if self.inner.started.swap(true, Ordering::SeqCst) {
-            return;
+            return None;
         }
         let service = self.clone();
-        tokio::spawn(async move { service.run().await });
+        Some(tokio::spawn(async move { service.run().await }))
     }
 
     async fn run(&self) {
@@ -875,6 +880,7 @@ fn device_state_label(state: &nmrs::DeviceState) -> &'static str {
 impl NetworkService {
     /// No-op: `NetworkStatus::unavailable(START_REASON)` already explains why.
     pub async fn start(&self) {}
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> { None }
 
     pub async fn refresh(&self) {}
 

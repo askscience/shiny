@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * fullscreenBubble.js — the top-bar bubble for a fullscreen plugin window.
  *
@@ -26,7 +27,7 @@ function pluginLabel(name) {
 }
 
 function makeButton(className, iconName, label) {
-  const btn = document.createElement('button');
+  const btn = controlButton();
   btn.type = 'button';
   btn.className = `fullscreen-bubble-btn ${className}`;
   btn.title = label;

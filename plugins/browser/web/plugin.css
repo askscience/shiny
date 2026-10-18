@@ -65,17 +65,6 @@
   min-width: 0;
 }
 
-/* Size the library's field to the toolbar rather than to a form: the same
-   height as the icon buttons beside it. The vertical padding is dropped because
-   the 34px height is the whole control here — with the library's 12px it would
-   leave 10px of text box inside a 13px line. */
-.browser-address .ui-input {
-  height: var(--browser-control);
-  padding: 0 14px 0 38px;
-  font-size: 13px;
-  border-radius: 999px;
-}
-
 /* ── Tab strip ──────────────────────────────────────────────── */
 
 .browser-tabstrip {
@@ -111,8 +100,8 @@
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--text-secondary, var(--text));
-  transition: background var(--duration-fast, 120ms) var(--ease-out, ease),
-              border-color var(--duration-fast, 120ms) var(--ease-out, ease);
+  transition: background var(--motion-feedback) var(--motion-ease),
+              border-color var(--motion-feedback) var(--motion-ease);
 }
 
 .browser-tab:hover {
@@ -390,7 +379,7 @@
   height: 100%;
   border-radius: 999px;
   background: var(--accent, #7aa2ff);
-  transition: width 160ms ease;
+  transition: width var(--motion-reveal) var(--motion-ease);
 }
 
 .browser-download-actions {

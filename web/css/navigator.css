@@ -109,9 +109,9 @@ body.navigator-active #chrome-bottom {
   align-items: center;
   justify-content: center;
   transition:
-    background var(--duration-fast),
-    color var(--duration-fast),
-    transform var(--duration-fast) var(--ease-spring);
+    background var(--motion-feedback),
+    color var(--motion-feedback),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 
 .nav-exit-btn:hover {

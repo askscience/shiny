@@ -1,3 +1,9 @@
+import {
+  confirmDialog, slider as uiSlider, toolbar, dial, element as h, input as uiInput,
+  selectControl, controlButton, toast, icon, setIcon, button, searchBar, setTileGlow,
+  glowGradient,
+} from '../../ui/index.js';
+
 /**
  * studio.js — the Studio plugin's window (DAW engine + Bitwig-style shell).
  *
@@ -22,7 +28,6 @@
  * is WebAudio. Launcher clips loop and launch quantized to the next bar.
  */
 
-import { toast, icon, setIcon, button, searchBar, setTileGlow, glowGradient, useSelectMenu } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { saveOrDownload } from '../../js/files.js';
 import { t, tp } from '../../js/i18n.js';
@@ -333,12 +338,6 @@ const FACTORY_PRESETS = {
 
 /* ── dom helpers ────────────────────────────────────────────── */
 
-function h(tag, cls, text) {
-  const el = document.createElement(tag);
-  if (cls) el.className = cls;
-  if (text != null) el.textContent = text;
-  return el;
-}
 function fmt(n) {
   if (!Number.isFinite(n)) return '0';
   if (Number.isInteger(n)) return String(n);
@@ -1485,24 +1484,16 @@ function meterNode(getAnalyser) {
 /* ── native-ish controls ────────────────────────────────────── */
 
 function nativeSelect(options, value, onchange, hint) {
-  const selEl = document.createElement('select');
-  selEl.className = 'studio-select';
-  for (const [val, label] of options) {
-    const opt = document.createElement('option');
-    opt.value = val;
-    opt.textContent = label;
-    selEl.appendChild(opt);
-  }
-  selEl.value = value;
-  selEl.addEventListener('change', () => onchange(selEl.value));
-  useSelectMenu(selEl);
+  const selEl = selectControl({ options: options.map(([value, label]) => ({ value, label })), value, onChange: onchange });
+  selEl.classList.add('studio-select');
   if (hint) withHint(selEl, hint);
   return selEl;
 }
+
 function numberField(placeholder, value, onchange, hint) {
-  const input = document.createElement('input');
+  const input = uiInput();
   input.type = 'number';
-  input.className = 'studio-number';
+  input.classList.add(...('studio-number').split(/\s+/));
   input.placeholder = placeholder;
   input.value = String(value);
   input.addEventListener('change', () => { onchange(parseInt(input.value, 10) || 0); });
@@ -1512,58 +1503,17 @@ function numberField(placeholder, value, onchange, hint) {
 
 /* Arc knob: 270° ring from the neutral "0" to the value (bipolar-aware). */
 function knob(label, min, max, step, value, onchange, resetTo) {
-  const k = h('div', 'studio-knob');
-  k.dataset.param = label;
-  const lab = h('span', 'studio-knob-label', label);
-  const dial = h('div', 'studio-knob-dial');
-  dial.title = t('plugin.studio.knob.hint', { label }, `${label} — drag up/down, double-click to reset`);
-  const ptr = h('span', 'studio-knob-pointer');
-  dial.appendChild(ptr);
-  const val = h('span', 'studio-knob-value');
-  let cur = value;
-  const set = (v) => {
-    cur = Math.min(max, Math.max(min, v));
-    const span = max - min || 1;
-    const norm = (cur - min) / span;
-    const zeroNorm = Math.min(1, Math.max(0, (0 - min) / span));
-    const a0 = -135 + zeroNorm * 270;   // angle of the "0" (neutral) position
-    const a1 = -135 + norm * 270;       // angle of the current value
-    dial.style.setProperty('--arc-start', `${Math.min(a0, a1).toFixed(2)}deg`);
-    dial.style.setProperty('--arc-sweep', `${Math.abs(a1 - a0).toFixed(2)}deg`);
-    ptr.style.transform = `rotate(${a1}deg)`;
-    val.textContent = fmt(cur);
-    k.dataset.value = fmt(cur);
-  };
-  set(value);
-  k._dial = dial;   // expose for automation-follow visual updates
-  k._set = set;
-  let dragging = false;
-  let startY = 0;
-  let startV = 0;
-  dial.addEventListener('pointerdown', (e) => {
-    dragging = true;
-    startY = e.clientY;
-    startV = cur;
-    dial.setPointerCapture?.(e.pointerId);
-    e.preventDefault();
+  const k = dial({ label, min, max, step, value, resetValue: resetTo ?? min, format: fmt,
+    onInput: next => {
+      onchange(next);
+      setReadout(t('plugin.studio.readout.param', { label, value: fmt(next) }, `${label} — ${fmt(next)}`));
+    },
   });
-  const move = (e) => {
-    if (!dragging) return;
-    const dy = startY - e.clientY;
-    let v = startV + (dy / 150) * (max - min);
-    if (step > 0) v = Math.round(v / step) * step;
-    v = Math.min(max, Math.max(min, v));
-    set(v);
-    onchange(v);
-    setReadout(t('plugin.studio.readout.param', { label, value: fmt(cur) }, `${label} — ${fmt(cur)}`));
-  };
-  const up = () => { dragging = false; };
-  dial.addEventListener('pointermove', move);
-  dial.addEventListener('pointerup', up);
-  dial.addEventListener('pointercancel', up);
-  dial.addEventListener('dblclick', () => { if (resetTo != null) { set(resetTo); onchange(resetTo); } });
-  k.addEventListener('mouseenter', () => setReadout(t('plugin.studio.readout.param', { label, value: fmt(cur) }, `${label} — ${fmt(cur)}`)));
-  k.append(lab, dial, val);
+  k.classList.add('studio-knob');
+  k.dataset.param = label;
+  k._dial = k.dial;
+  k._set = k.setValue;
+  k.addEventListener('mouseenter', () => setReadout(t('plugin.studio.readout.param', { label, value: fmt(k.value) }, `${label} — ${fmt(k.value)}`)));
   return k;
 }
 
@@ -1571,9 +1521,8 @@ function knob(label, min, max, step, value, onchange, resetTo) {
 function fader(label, value, onchange) {
   const wrap = h('div', 'studio-mixer-fader');
   wrap.dataset.param = label;
-  const inp = document.createElement('input');
-  inp.type = 'range';
-  inp.className = 'studio-fader-input';
+  const inp = uiSlider();
+  inp.classList.add(...('studio-fader-input').split(/\s+/));
   inp.min = '0';
   inp.max = '2';
   inp.step = '0.01';
@@ -2054,9 +2003,9 @@ function renderArranger() {
 }
 
 function inlineRename(span, value, done) {
-  const input = document.createElement('input');
+  const input = uiInput();
   input.type = 'text';
-  input.className = 'studio-rename';
+  input.classList.add(...('studio-rename').split(/\s+/));
   input.value = value;
   span.replaceWith(input);
   input.focus();
@@ -2479,9 +2428,9 @@ function renderEditorToolbar() {
   edToolbarEl.textContent = '';
   if (!current) return;
 
-  const name = document.createElement('input');
+  const name = uiInput();
   name.type = 'text';
-  name.className = 'studio-title studio-title--clip';
+  name.classList.add(...('studio-title studio-title--clip').split(/\s+/));
   name.value = current.title || 'Clip';
   name.maxLength = 120;
   name.title = t('plugin.studio.editor.clipName', null, 'Clip name');
@@ -3176,9 +3125,9 @@ function renderPadGrid(v, container) {
   const pad = pads[selectedPad] || { name: 'Pad', kind: 'kick' };
   const ed = h('div', 'studio-pad-editor');
   ed.appendChild(h('span', 'studio-rack-label', t('plugin.studio.device.pad', { n: selectedPad + 1 }, `Pad ${selectedPad + 1}`)));
-  const nameInput = document.createElement('input');
+  const nameInput = uiInput();
   nameInput.type = 'text';
-  nameInput.className = 'studio-number';
+  nameInput.classList.add(...('studio-number').split(/\s+/));
   nameInput.value = pad.name;
   nameInput.addEventListener('change', () => { pad.name = nameInput.value || 'Pad'; markDirty(); renderDevices(); });
   ed.appendChild(nameInput);
@@ -3291,9 +3240,9 @@ function renderSynthme() {
 
   const head = h('div', 'studio-synthme-head');
   head.appendChild(h('span', 'studio-synthme-title', t('plugin.studio.synthme.title', null, 'SynthMe — instrument creator')));
-  const name = document.createElement('input');
+  const name = uiInput();
   name.type = 'text';
-  name.className = 'studio-title studio-title--clip';
+  name.classList.add(...('studio-title studio-title--clip').split(/\s+/));
   name.value = d.name;
   name.maxLength = 80;
   name.placeholder = t('plugin.studio.synthme.namePlaceholder', null, 'Instrument name');
@@ -3547,9 +3496,9 @@ function renderGrid() {
 
   const head = h('div', 'studio-synthme-head');
   head.appendChild(h('span', 'studio-synthme-title', 'WaveMe'));
-  const name = document.createElement('input');
+  const name = uiInput();
   name.type = 'text';
-  name.className = 'studio-title studio-title--clip';
+  name.classList.add(...('studio-title studio-title--clip').split(/\s+/));
   name.value = d.name;
   name.placeholder = t('plugin.studio.grid.namePlaceholder', null, 'Patch name');
   name.addEventListener('change', () => { d.name = name.value.trim() || 'My Grid'; });
@@ -3849,7 +3798,7 @@ function renderBrowser() {
         actions: [
           smallBtn('+', t('plugin.studio.browser.addToTrack', null, 'Add to selected track'), () => void addSavedAsClip(tr.track_id)),
           smallBtn('×', t('plugin.studio.browser.deletePattern', null, 'Delete pattern'), async () => {
-            if (confirm(t('plugin.studio.dialog.delete', { name: tr.title }, `Delete "${tr.title}"?`))) await deleteTrack(tr.track_id).catch((e) => toast(e.message, { type: 'error' }));
+            if (await confirmDialog(t('plugin.studio.dialog.delete', { name: tr.title }, `Delete "${tr.title}"?`))) await deleteTrack(tr.track_id).catch((e) => toast(e.message, { type: 'error' }));
           }),
         ],
       }));
@@ -3877,7 +3826,7 @@ function renderBrowser() {
         sub: `${Math.round(a.bpm)} BPM`,
         onClick: () => void loadArrangement(a.id).catch((e) => toast(e.message, { type: 'error' })),
         actions: [smallBtn('×', t('plugin.studio.browser.deleteArrangement', null, 'Delete arrangement'), async () => {
-          if (confirm(t('plugin.studio.dialog.delete', { name: a.title }, `Delete "${a.title}"?`))) await deleteArrangement(a.id).catch((e) => toast(e.message, { type: 'error' }));
+          if (await confirmDialog(t('plugin.studio.dialog.delete', { name: a.title }, `Delete "${a.title}"?`))) await deleteArrangement(a.id).catch((e) => toast(e.message, { type: 'error' }));
         })],
       }));
     }
@@ -4254,7 +4203,7 @@ export function mountStudioTile() {
   tileEl.dataset.plugin = STUDIO_PLUGIN;
 
   /* ── header / transport ── */
-  barEl = h('div', 'studio-bar');
+  barEl = toolbar([], { className: 'studio-bar' });
   barEl.dataset.windowBar = '';
 
   arrToggleBtn = h('button', 'studio-transport studio-transport--on');
@@ -4323,9 +4272,9 @@ export function mountStudioTile() {
   beatDotEl = h('span', 'studio-beat');
   beatDotEl.title = t('plugin.studio.toolbar.beatIndicator', null, 'Beat indicator');
 
-  bpmInput = document.createElement('input');
+  bpmInput = uiInput();
   bpmInput.type = 'number';
-  bpmInput.className = 'studio-bpm';
+  bpmInput.classList.add(...('studio-bpm').split(/\s+/));
   bpmInput.min = 40;
   bpmInput.max = 240;
   bpmInput.value = '120';
@@ -4342,9 +4291,9 @@ export function mountStudioTile() {
   });
   const bpmLabel = h('span', 'studio-bpm-label', 'BPM');
 
-  titleInput = document.createElement('input');
+  titleInput = uiInput();
   titleInput.type = 'text';
-  titleInput.className = 'studio-title';
+  titleInput.classList.add(...('studio-title').split(/\s+/));
   titleInput.placeholder = t('plugin.studio.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
   titleInput.value = 'Untitled Arrangement';
@@ -4367,7 +4316,7 @@ export function mountStudioTile() {
 
   // The left-hand list opener (patterns / instruments / effects / presets),
   // shaped like Word/Calc's documents menu (icon + chevron).
-  browserBtn = document.createElement('button');
+  browserBtn = controlButton();
   browserBtn.type = 'button';
   browserBtn.className = 'studio-menu-btn';
   browserBtn.setAttribute('aria-haspopup', 'true');
@@ -4443,7 +4392,7 @@ export function mountStudioTile() {
   detailBodyEl = h('div', 'studio-detail-body');
   const editorWrap = h('div', 'studio-editor-page');
   editorPageEl = editorWrap;
-  edToolbarEl = h('div', 'studio-editor-toolbar');
+  edToolbarEl = toolbar([], { className: 'studio-editor-toolbar' });
   gridEl = h('div', 'studio-grid');
   pianoEl = h('div', 'studio-pianoroll-inline hidden');
   editorWrap.append(edToolbarEl, gridEl, pianoEl);
@@ -4536,6 +4485,7 @@ export function mountStudioTile() {
 }
 
 export function unmountStudioTile() {
+  tileEl?.querySelectorAll('.ui-dial').forEach(control => control.destroy());
   window.removeEventListener('keydown', onStudioKeydown);
   stopPlayback();
   stopAllLauncher();

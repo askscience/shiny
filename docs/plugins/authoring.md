@@ -1,5 +1,34 @@
 # Authoring a plugin
 
+## Shared interface contract
+
+See the [shared component inventory](../core/ui-components.md) for the complete API,
+responsive window rules, system-font policy and browser verification commands.
+Use `toolButton`, `menuButton`, `toolbar`, `dial` and `mediaCard` for their reusable
+patterns rather than copying a neighboring plugin.
+
+Import ordinary controls and motion from core's relative `ui/index.js` entry
+point. Use `button`/`iconButton` for actions, `controlButton()` for an unskinned
+domain button, and `select()` (or `useSelectMenu`) for in-page dropdowns. Use `element()` instead of duplicating a generic DOM helper; it routes all native
+form controls through the shared factories. Share
+`controlGrid`, `controlCard`, `controlGroup`, and `segmented` rather than creating
+another settings or selection system. Labels belong in plugin catalogs and
+resolve through `t()`/`tp()`; core component labels follow core catalogs.
+
+Flow motion uses `--motion-feedback`, `--motion-reveal`, `--motion-connect`, and
+`--motion-ease`. Plugin layout CSS consumes these without introducing separate
+ordinary-control timings. Core supplies menu entrances and button feedback. Use
+`enterSurface` for a separately positioned popover and `revealRegion` for small
+dependent controls. Call `disposeMotion(root)` on owner teardown; call `destroy()`
+on owned segmented controls and shared dialogs. Never scale or animate terminal,
+editor, player or canvas contents in response to toolbar actions. Domain
+animations such as playback meters and slide transitions keep intentional timing
+and must respect reduced motion.
+
+Preserve theme colors, shape tokens, user fonts and window appearance settings.
+Plugin CSS arranges content or specializes domain visualization; shared controls
+retain shared focus and motion. See [Web UI](../core/web-ui.md) for lifecycle rules.
+
 This is a complete, runnable walkthrough. The reference implementation is
 [`plugins/hello/`](../../plugins/hello); read it alongside this page.
 
@@ -238,9 +267,10 @@ Rules:
 - `mount()` returns a `section.tile <name>-tile` element with
   `data-plugin="<name>"`. Core tiles it, applies focus/fullscreen, and calls
   `unmount()` on deactivation.
-- **Plugins never ship CSS.** Build with the core UI library
+- **Plugins reuse core controls.** Build with the core UI library
   (`import { button, icon, notify } from '../../../ui/index.js'`) and core's
-  `web/css/tiles.css` keyed by your class prefix.
+  `web/css/tiles.css` keyed by your class prefix. Plugin stylesheets may arrange
+  domain content; shared control appearance and motion stay in core.
 - **Icons**: use names from [`web/ui/icons/INDEX.md`](../../web/ui/icons/INDEX.md);
   never hand-draw SVG inside the window.
 - **Identity icons** resolve through the active icon set (`apps/<name>` mapped

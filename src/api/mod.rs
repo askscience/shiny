@@ -1,3 +1,5 @@
+pub mod health;
+mod diagnostics;
 pub mod artifacts;
 pub mod auth;
 pub mod background;
@@ -75,14 +77,18 @@ use crate::services::song_gen::SongGenClient;
 ///   click/refresh handler is a **static** inline `<script>`; CSP hashes are the
 ///   only way to allow an inline script in a sandboxed (opaque-origin) frame, so
 ///   the script's exact SHA-256 is allowlisted below. Editing that script in
-///   `plugins/browser/web/plugin.js` requires updating the hash here.
+///   `plugins/browser/web/plugin.js` requires updating the hash here —
+///   `web/js/tests/cspHomeShelfHash.test.mjs` fails when the two drift apart.
+///   The script must stay free of interpolation: a `${…}` in it makes its bytes
+///   locale-dependent, no single hash can match, and the start page is refused
+///   (translated strings it needs ride in its JSON data block instead).
 /// - Frames are used across the app (the sandboxed `srcdoc` shelves, mail
 ///   bodies, the YouTube embed), so `frame-src` is left permissive. Note this
 ///   only governs pages the app itself frames; ordinary browsing happens in
 ///   native child webviews at the site's real origin, which our CSP never sees.
 ///   `frame-ancestors 'none'` still stops other sites from framing the app.
 const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
-script-src 'self' 'wasm-unsafe-eval' 'sha256-Sz9x6nnEJCuJi8kFyc0Cy6JglT8TyTnBSc7jFTweAIY='; \
+script-src 'self' 'wasm-unsafe-eval' 'sha256-RTChVTGEv6ek9ksfULImRsV6YrFDk0+Pe14aCpe8NBc='; \
 style-src 'self' 'unsafe-inline'; \
 img-src 'self' data: blob: http: https:; \
 connect-src 'self' https://router.project-osrm.org https://api.open-meteo.com; \
@@ -591,6 +597,8 @@ pub fn build_router(state: AppState) -> Router {
         .not_found_service(ServeFile::new(format!("{}/index.html", web_dir)));
 
     Router::new()
+        .route("/api/health/live", get(health::live))
+        .route("/api/health/ready", get(health::ready))
         .merge(public_routes)
         .merge(protected_routes)
         .merge(build_plugin_routes(&state))
@@ -628,5 +636,6 @@ pub fn build_router(state: AppState) -> Router {
             axum::http::HeaderName::from_static("referrer-policy"),
             axum::http::HeaderValue::from_static("no-referrer"),
         ))
+        .layer(axum::middleware::from_fn(diagnostics::trace))
         .with_state(state)
 }

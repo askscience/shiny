@@ -1,3 +1,5 @@
+import { confirmDialog } from '../ui/index.js';
+import { element as el, chip as uiChip } from '../ui/index.js';
 /**
  * pluginsWindow.js — the Plugins window (built-in desktop surface).
  *
@@ -27,12 +29,7 @@ let query = '';
 let category = 'all';
 let busy = false;
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-}
+
 
 function on(target, event, handler, opts) {
   target?.addEventListener(event, handler, opts);
@@ -83,10 +80,11 @@ async function loadPlugins() {
 async function onPluginAction(action, name) {
   if (busy) return;
   if (action === 'uninstall'
-    && !confirm(t('plugins.uninstallConfirm', { name },
+    && !await confirmDialog(t('plugins.uninstallConfirm', { name },
       `Remove plugin "${name}"? Its database tables will remain.`))) {
     return;
   }
+  if (!refs || busy) return;
   busy = true;
   setBusy(true);
 
@@ -110,7 +108,7 @@ async function onPluginAction(action, name) {
 }
 
 function setBusy(value) {
-  refs.grid.querySelectorAll('button').forEach((b) => { b.disabled = value; });
+  refs?.grid.querySelectorAll('button').forEach((b) => { b.disabled = value; });
 }
 
 /* ── Rendering ──────────────────────────────────────────────── */
@@ -137,12 +135,10 @@ function renderCategories() {
   refs.categories.textContent = '';
   const cats = ['all', ...categoriesOf()];
   for (const cat of cats) {
-    const chip = el('button', 'plugin-chip');
+    const chip = uiChip({ label: cat === 'all' ? t('plugins.categoryAll', null, 'All') : categoryLabel(cat), active: cat === category });
     chip.type = 'button';
     chip.dataset.category = cat;
-    chip.textContent = cat === 'all' ? t('plugins.categoryAll', null, 'All') : categoryLabel(cat);
-    chip.classList.toggle('is-active', cat === category);
-    on(chip, 'click', () => {
+    chip.addEventListener('click', () => {
       category = cat;
       renderCategories();
       render();
@@ -279,6 +275,7 @@ async function uploadArchive(file) {
     toast(t('plugins.badArchive', null, 'File must be .zip or .tar.gz'), { type: 'error' });
     return;
   }
+  if (!refs || busy) return;
   busy = true;
   setBusy(true);
   refs.installBtn.setLoading(true);

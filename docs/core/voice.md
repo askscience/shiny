@@ -355,3 +355,16 @@ The swap never touches the stored Voice settings and requires no reload. See
 
 Related: [sidecars](../deployment/sidecars.md) · [API voice](../api/voice.md) ·
 [low-power AI](../host/battery-power.md#power-management-application-profile).
+
+## Internal module layout and cancellation
+
+`web/js/voice.js` retains the public API and forwards to `voice/recognition.js`.
+Capture conversion and permission-grant ownership live in `voice/capture.js`,
+pure wake-name matching in `voice/wake.js`, and playback, analysis and barge-in
+monitoring in `voice/playback.js`. Existing recognition engines, tuning values,
+voice events and preference keys are preserved.
+
+Cancelled synthesis requests are aborted, playback object URLs are released on
+all completion paths, and old microphone permission grants cannot overwrite or
+stop a newer session. Node lifecycle tests exercise these races without opening a
+real microphone.

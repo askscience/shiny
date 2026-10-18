@@ -1,3 +1,8 @@
+import {
+  toolbar, element as el, controlButton, button, chip, emptyState, field, icon, iconButton,
+  input, list, listItem, modal, notify, row, spinner,
+} from '../../ui/index.js';
+
 /**
  * plugin.js — the Updates plugin's window.
  *
@@ -13,10 +18,6 @@
  * The persistent top-bar chip lives in `hud.js`; this file is only the window.
  */
 
-import {
-  button, chip, emptyState, field, icon, iconButton, input, list, listItem,
-  modal, notify, row, spinner,
-} from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 
@@ -99,8 +100,7 @@ export function mountUpdatesTile() {
 }
 
 function buildBar() {
-  const bar = document.createElement('div');
-  bar.className = 'updates-bar';
+  const bar = toolbar([], { className: 'updates-bar' });
   bar.dataset.windowBar = '';
   bar.style.cssText = 'display:flex;align-items:center;gap:6px;width:100%;padding:0 4px;';
   bar.setAttribute('role', 'tablist');
@@ -147,13 +147,6 @@ export function getUpdatesTileElement() {
 }
 
 /* ── rendering ──────────────────────────────────────────────── */
-
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-}
 
 function render() {
   if (!contentEl) return;

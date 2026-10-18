@@ -26,7 +26,7 @@
  * re-opening re-attaches the same editor with the project intact.
  */
 
-import { button, iconButton, spinner, toast } from '../../ui/index.js';
+import { controlButton, button, iconButton, spinner, toast } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 
 export const FILMCRAFT_PLUGIN = 'filmcraft';
@@ -196,7 +196,7 @@ function setStatus(message) {
 
 /** Small DOM helper: an element with a class and text. */
 function text(tag, className, content) {
-  const el = document.createElement(tag);
+  const el = (tag === 'button' ? controlButton() : document.createElement(tag));
   el.className = className;
   el.textContent = content;
   return el;

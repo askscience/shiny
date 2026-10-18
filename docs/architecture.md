@@ -89,7 +89,7 @@ See the [crate map](reference/crate-map.md) for every crate.
 
 | Path | Responsibility |
 |---|---|
-| [`main.rs`](../src/main.rs) | Bootstrap: config → log tee → sidecars → DB migrations → services → plugins → diary cron → serve. Also owns the `ArcSwap` router handle. |
+| [`main.rs`](../src/main.rs) | Runtime orchestration: validate config → logs → sidecars → migrations → construct services → start owned workers → plugins → serve → bounded shutdown. |
 | [`config.rs`](../src/config.rs) | `Config::from_env`, the `ConfigSnapshot` handed to plugins. |
 | [`lib.rs`](../src/lib.rs) | Re-exports `config`, `errors`, `db`, `models`, `auth`, `services`, `api`, `plugins`. |
 | [`db/mod.rs`](../src/db/mod.rs) | Connection options, pool, and the embedded core migration runner. |
@@ -100,6 +100,8 @@ See the [crate map](reference/crate-map.md) for every crate.
 | [`services/`](../src/services) | Long-lived services and business logic (agent, voice, travel, host, ai). |
 | [`plugins/`](../src/plugins) | Loader (dlopen), registry, manager, installer, admin API. |
 
+`src/application/` owns the shared `AppState::new(config, pool)` factory, router dispatch, bounded log writer, detached sidecar launchers and owned-worker lifecycle. Construction starts no workers, probes no providers, loads no plugins and writes no session token. Production starts these explicitly; tests use the same construction path against temporary state. Short audio commands use an injectable `CommandRunner`; its production implementation bounds execution time and captured output.
+
 The server keeps a **single `AppState`** (cheaply cloneable) behind the axum
 router: the `SqlitePool`, `Config`, every host service, the `PluginManager`, the
 voice clients, the Iroh/Tailscale services and the session token live there.
@@ -108,10 +110,10 @@ voice clients, the Iroh/Tailscale services and the session token live there.
 
 `main.rs` wraps the axum router in a `RouterHandle` built on
 `arc_swap::ArcSwap<Router>`. The handle implements
-`tower::Service<IncomingStream>` and injects `ConnectInfo` per connection so
+`tower::Service<IncomingStream>` and injects each connection’s `ConnectInfo` into requests so
 handlers can distinguish loopback from remote. Installing or uninstalling a
 plugin rebuilds the router and stores it; in-flight requests keep the old
-snapshot, the next request sees the new one. No restart. See
+snapshot, and the next request sees the new one, including requests on an existing keep-alive connection. No restart. See
 [plugin architecture](plugins/architecture.md).
 
 ---
@@ -283,3 +285,18 @@ Two independent paths, both opt-in, documented in
 - [Agent](core/agent.md) · [Voice](core/voice.md) · [Desktop](core/desktop.md)
 - [Plugin system](plugins/README.md)
 - [API reference](api/README.md)
+
+## Runtime reliability
+
+- SIGINT and SIGTERM stop new HTTP work and cancel agent turns, including turns
+  racing shutdown. Requests drain for up to 10 seconds; owned host readers and
+  diary work are aborted and joined, then database closure is bounded to 2 seconds.
+  Detached speech daemons intentionally outlive this process.
+- Optional AI providers are probed when used rather than serially delaying boot.
+  Missing AI, speech or host services retain their established fallbacks.
+- `LOG_FILE` keeps the active file plus three rotated files, with a 10 MiB
+  threshold. Request tracing excludes query strings, headers and bodies. The
+  generated `X-Request-Id` response header correlates request logs.
+- Local-only `GET /api/health/live` reports process availability; `/api/health/ready`
+  checks SQLite with a one-second deadline. Missing optional services do not fail
+  readiness. Both refuse non-loopback peers and remote proxy markers.

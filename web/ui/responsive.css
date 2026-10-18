@@ -1,0 +1,136 @@
+/* Shared window/control sizing. Domain canvases scroll inside their own viewport.
+   Named containers respond to a tiled window as well as to a phone screen. */
+.tile { container-name: plugin-window; min-width: 0; }
+:where(.ui-field,.ui-stack,.ui-row,.ui-search,.ui-select-wrap,.ui-control-grid,.ui-segmented) { min-width: 0; max-width: 100%; }
+:where(.ui-input,.ui-select,.ui-textarea) { min-width: 0; box-sizing: border-box; }
+.ui-btn { max-width: 100%; }
+.ui-btn > span:not(.ui-icon,.ui-spinner) { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.ui-tool.ui-btn { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); }
+.ui-tool--danger:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
+.ui-segmented { flex-wrap: wrap; }
+.ui-segmented > button { min-width: 0; overflow-wrap: anywhere; }
+.ui-select-option[aria-disabled="true"] { opacity: .5; cursor: default; }
+.ui-modal,.ui-sheet { box-sizing: border-box; padding: max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
+.ui-modal-card,.ui-sheet-card { min-width: 0; max-width: 100%; max-height: calc(100dvh - 24px); box-sizing: border-box; }
+.ui-modal-card { padding: clamp(12px,4vw,26px); }
+.ui-modal-card > .ui-row { gap: 12px; }
+.ui-modal-card .ui-title { min-width: 0; overflow-wrap: anywhere; }
+.ui-empty { min-width: 0; max-width: 100%; padding: 20px 12px; overflow-wrap: anywhere; }
+
+/* Every title-bar action remains reachable: short windows use one scrollable
+   row, so a long toolbar cannot consume the document's entire height. */
+.tile:not(.filmcraft-tile) .tile-header { flex: 0 0 auto; min-width: 0; }
+.tile:not(.filmcraft-tile) [data-window-bar] { min-width: 0; }
+.plugins-toolbar { flex-wrap: wrap; }
+.plugins-toolbar .ui-search { min-width: min(180px,100%); }
+.plugins-window,.settings-window,.settings-layout,.settings-panels { min-width: 0; min-height: 0; }
+.plugins-window > * { flex-shrink: 0; }
+.plugin-card { min-width: 0; }
+.plugin-card-head,.plugin-card-meta,.plugin-card-actions { flex-wrap: wrap; }
+.plugin-card-name,.plugin-card-meta,.settings-hint { overflow-wrap: anywhere; }
+.plugin-card-icon { flex-shrink: 0; }
+.settings-inline-actions,.background-image-row,.whisper-model-row { flex-wrap: wrap; }
+.settings-panel .ui-control-card .ui-row { flex-wrap: wrap; gap: 8px; }
+.settings-panel .ui-toggle-row { flex-wrap: nowrap !important; }
+.settings-nav { min-height: 0; }
+.remote-qr { max-width: 100%; height: auto; aspect-ratio: 1; }
+.bg-preset-grid { grid-template-columns: repeat(auto-fill,minmax(min(150px,100%),1fr)); }
+
+@container plugin-window (max-width: 700px) {
+  .tile-header--merged { align-items: center; }
+  .tile-header--merged > [data-window-bar] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; height: auto; min-height: 44px; }
+  .tile-header--merged > [data-window-bar] > :not(input,.ui-input,.ui-select-wrap) { flex-shrink: 0; }
+  .tile-header--merged > [data-window-bar] > input { flex: 1 0 100px; width: 100px; }
+  .mail-body { flex-direction: column; overflow: hidden; }
+  .mail-folders { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--glass-border); }
+  .mail-folder { flex-shrink: 0; }
+  .mail-list { flex: 1 1 42%; min-width: 0; min-height: 0; border-right: 0; border-bottom: 1px solid var(--glass-border); }
+  .mail-reader { flex: 1 1 58%; min-height: 0; min-width: 0; }
+  .mail-onboarding { min-width: 0; padding: 12px; }
+  .mail-form-grid { grid-template-columns: minmax(0,1fr); }
+  .impress-body { flex-direction: column; }
+  .impress-strip { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 6px; gap: 6px; border-right: 0; }
+  .impress-thumb { width: 88px; }
+  .impress-stage-wrap { overflow-y: auto; }
+  .impress-inspector { overflow: visible; }
+  .studio-body { flex-direction: column; }
+  .studio-panel { flex: 1 1 50%; }
+  .studio-browser { left: 4px; max-width: calc(100% - 8px); }
+  .studio-detail { max-height: 42%; min-height: 0; }
+  .studio-detail-body { overflow: auto; }
+}
+@container plugin-window (max-width: 560px) {
+  .files-shell { flex-direction: column; }
+  .files-sidebar { display: flex; flex-direction: row; width: auto; max-width: 100%; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--glass-border); }
+  .files-sidebar-head { flex-shrink: 0; }
+  .files-places { flex-direction: row; padding: 4px; }
+  .files-place { width: auto; flex-shrink: 0; }
+  .files-place-sep { display: none; }
+  .files-main { min-height: 0; }
+  .files-header { flex-wrap: wrap; }
+  .files-pathbar { flex-basis: 100%; order: 1; }
+  .pdf-main { flex-direction: column; }
+  .pdf-rail { flex-direction: row; width: auto; max-height: 88px; overflow-x: auto; overflow-y: hidden; padding: 6px; }
+  .pdf-thumb { width: 60px; }
+  .pdf-thumb canvas { max-width: 100%; height: auto; }
+  .calendar-month-label { min-width: 0; white-space: nowrap; }
+  .calendar-grid,.calendar-weekdays { grid-template-columns: repeat(7,minmax(0,1fr)); }
+  .calendar-day { min-width: 0; padding: 4px 2px; }
+  .calendar-detail { max-height: 30%; }
+  .calendar-detail-item { flex-wrap: wrap; gap: 6px; }
+  .calendar-detail-actions { margin-inline-start: auto; }
+  .word-editor { padding: 16px; }
+  .image-dock-body { padding: 8px; gap: 8px; }
+}
+/* Landscape phones must retain phone window switching and enough content height. */
+@media (pointer: coarse) and (max-width: 960px) and (max-height: 600px) {
+  #tile-grid { bottom: max(var(--desktop-gap,8px),env(safe-area-inset-bottom)); }
+}
+@media (max-height: 500px) {
+  .tile:not(.filmcraft-tile) .tile-header--merged > [data-window-bar] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; min-height: 44px; }
+  .tile:not(.filmcraft-tile) .tile-header--merged > [data-window-bar] > * { flex-shrink: 0; }
+  .calculator-tile { overflow-y: auto; }
+  .calculator-tile > :not(.tile-header) { flex-shrink: 0; }
+  .calculator-keys { overflow: visible; }
+  .calculator-display { min-height: 0; padding: 8px 12px; }
+  .calendar-detail { max-height: 30%; }
+  .image-dock { max-height: 40%; }
+  .impress-stage-wrap { overflow-y: auto; }
+  .impress-inspector { overflow: visible; }
+}
+@media (pointer: coarse) {
+  .ui-btn,.ui-tool.ui-btn,.ui-chip,.ui-select-option,.settings-nav-item { min-height: 44px; }
+  .ui-btn--icon,.ui-tool.ui-btn { min-width: 44px; }
+  .tile:not(.filmcraft-tile) .tile-header-btn { width: 40px; height: 44px; }
+  .tile:not(.filmcraft-tile) .tile-header-controls { flex-shrink: 0; }
+  /* 16px avoids browser auto-zoom when a phone focuses a form control. */
+  .ui-input,.ui-textarea,.ui-select { font-size: 16px; }
+  .ui-slider { min-height: 32px; }
+}
+.ui-toolbar { display: flex; align-items: center; gap: 8px; min-width: 0; flex: none; }
+@container plugin-window (max-width: 700px) {
+  .browser-tile .browser-bar { display: grid; grid-template-columns: repeat(9,44px); height: auto; overflow-x: auto; overflow-y: hidden; padding: 4px 8px; }
+  .browser-tile .browser-address { grid-row: 1; grid-column: 1 / -1; width: calc(100cqw - 16px); position: sticky; left: 0; }
+}
+@container plugin-window (min-width: 561px) and (max-width: 900px) {
+  .mail-body { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); grid-template-rows: auto minmax(0,1fr); }
+  .mail-folders { grid-column: 1 / -1; width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; }
+  .mail-folder { flex-shrink: 0; }
+  .mail-list,.mail-reader { min-width: 0; min-height: 0; }
+}
+/* Form-wide defaults become compact controls when used directly in a toolbar. */
+.ui-toolbar > .ui-select { width: auto; max-width: 180px; flex: 0 0 auto; }
+.ui-toolbar > .ui-input:is([type="text"],[type="search"]) { width: 120px; flex: 1 1 100px; }
+.ui-toolbar > .tile-bar-spacer { min-width: 0; }
+@container plugin-window (max-width: 700px) {
+  .tile-header--merged > .ui-toolbar > .ui-input:is([type="text"],[type="search"]) { flex: 1 0 100px; }
+}
+@media (pointer: coarse) {
+  .files-pathbar { height: auto; min-height: 44px; }
+  .files-path-crumb { min-height: 44px; }
+}
+.ui-dialog-form { gap: 16px; }
+.ui-dialog-actions { gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.pdf-annot-bar { flex-wrap: wrap; max-width: calc(100dvw - 16px); }
+.files-pathbar.is-searching { height: auto; padding: 0; background: transparent; overflow: visible; }
+.files-pathbar > .ui-search { flex: 1; }

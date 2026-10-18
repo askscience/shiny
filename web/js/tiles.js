@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * tiles.js — plugin window surfaces (Hyprland-style desktop).
  *
@@ -379,7 +380,7 @@ function ensureWindowChrome(el, name) {
   controls.className = 'tile-header-controls';
 
   const core = isCoreWindow(name);
-  const closeBtn = document.createElement('button');
+  const closeBtn = controlButton();
   closeBtn.type = 'button';
   closeBtn.className = 'tile-header-btn tile-header-btn--close';
   closeBtn.title = core ? 'Close' : 'Deactivate plugin';
@@ -391,7 +392,7 @@ function ensureWindowChrome(el, name) {
     else void deactivatePlugin(name);
   });
 
-  const fullBtn = document.createElement('button');
+  const fullBtn = controlButton();
   fullBtn.type = 'button';
   fullBtn.className = 'tile-header-btn tile-header-btn--full';
   fullBtn.title = 'Full screen';
@@ -404,7 +405,7 @@ function ensureWindowChrome(el, name) {
     toggleWindowFullscreen(name);
   });
 
-  const focusBtn = document.createElement('button');
+  const focusBtn = controlButton();
   focusBtn.type = 'button';
   focusBtn.className = 'tile-header-btn tile-header-btn--focus';
   focusBtn.title = 'Focus';

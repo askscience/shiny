@@ -145,3 +145,42 @@ appears when the shell dies in a way this policy does not retry.
 - [Display & input](../host/display-input.md) (scale, Touch Bar, gestures)
 - [Multi-user Linux](multi-user-linux.md)
 - [T2 Mac](t2-mac.md)
+
+## Acceptance checks after internal refactors
+
+Run these only in a user-arranged maintenance session; never restart the live
+kiosk from its Terminal plugin. Automated tests use scratch state instead.
+
+- Sign in through the greeter, reload, switch server mode and return, then log
+  out. Verify token rotation, durable cookies, exit codes 0/42/43 and the existing
+  crash-retry policy still behave as documented.
+- Restore a saved workspace; exercise tiling, columns, floating windows,
+  fullscreen, keyboard shortcuts, gestures and display scale. Verify themes,
+  locale changes, clipboard and the virtual keyboard.
+- Open every bundled plugin. Confirm Browser child views, shields, downloads and
+  incognito; Terminal resize, output replay and reconnect; Files navigation; and
+  save/open/export in Word, Calc, Impress, PDF, Image, Studio and FilmCraft.
+- Check Mail, Calendar, Calculator, Radio, YouTube, Traveler and Updates, including
+  their agent tools. Focus each plugin and verify other plugins' tools stay
+  excluded. Check plugin install/replace/remove using a disposable fixture.
+- Exercise typed and spoken chat, stop/barge-in, conversation restoration and
+  optional provider failures. Verify the established Whisper/Vosk fallback.
+- Confirm audio, network, Bluetooth, battery, power and backlight controls on
+  supported hardware. Confirm unavailable services hide their panels. Check
+  remote access with host mutations refused.
+- During an arranged shutdown, verify bounded server exit and clean restart;
+  detached voice daemons must survive as before. Confirm saved documents,
+  preferences, identity and plugin activation survive the upgrade.
+
+Record hardware-dependent results explicitly; compilation and mocked tests do not
+claim these physical-session checks have passed.
+
+For the Flow interface, also check all five themes, both icon sets, custom fonts
+and accents, interface scaling, window corners at 0/32 px, transparency, blur,
+shadows and HUD placement. Test Settings in a narrow tile and wide window, every
+section and direct section shortcut, long translations and RTL. Toggle dependent
+voice/provider fields rapidly; reopen a dialog during its exit; check keyboard
+focus and reduced motion. Menus must stay usable over Browser child views.
+Typing, playback, terminal output and editor selection must remain stable while
+surrounding controls change. Check frame pacing on the actual kiosk; the virtual
+display acceptance run verifies behavior rather than hardware performance.

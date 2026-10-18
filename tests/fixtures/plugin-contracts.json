@@ -1,0 +1,1212 @@
+{
+  "browser": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/bookmarks"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/downloads"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/filter"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/history"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/news"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/sessions"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/settings"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/state"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/bookmarks/add"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/bookmarks/remove"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/downloads/clear"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/downloads/event"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/downloads/remove"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/filter/refresh"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/history/clear"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/history/record"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/navigate"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/news/click"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/preview"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/session"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/session/close"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/settings"
+      }
+    ],
+    "tools": [
+      "browse",
+      "browse_search",
+      "browser_extract",
+      "browser_goto",
+      "browser_open",
+      "browser_read",
+      "browser_search",
+      "open_browser",
+      "read_page",
+      "search_in_browser"
+    ]
+  },
+  "calc": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/spreadsheets/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/spreadsheets"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/spreadsheets/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/spreadsheets/:id/export"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/spreadsheets"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/spreadsheets/import"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/spreadsheets/:id"
+      }
+    ],
+    "tools": [
+      "calc_clear",
+      "calc_create",
+      "calc_delete",
+      "calc_list",
+      "calc_read",
+      "calc_write",
+      "clear_sheet",
+      "clear_spreadsheet",
+      "create_spreadsheet",
+      "delete_sheet",
+      "delete_spreadsheet",
+      "edit_spreadsheet",
+      "empty_sheet",
+      "get_sheet",
+      "get_spreadsheet",
+      "list_sheets",
+      "list_spreadsheets",
+      "new_sheet",
+      "new_spreadsheet",
+      "read_sheet",
+      "read_spreadsheet",
+      "remove_sheet",
+      "set_cell",
+      "set_cells",
+      "sheets",
+      "spreadsheets",
+      "update_spreadsheet",
+      "wipe_sheet",
+      "write_sheet"
+    ]
+  },
+  "calculator": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/calculator/history"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/calculator/history"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/calculator/eval"
+      }
+    ],
+    "tools": [
+      "calc_history",
+      "calculate",
+      "calculation_history",
+      "calculator_clear_history",
+      "calculator_eval",
+      "calculator_history",
+      "clear_calc_history",
+      "clear_calculator_history",
+      "compute",
+      "evaluate"
+    ]
+  },
+  "calendar": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/calendar/events/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/calendar/events"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/calendar/events"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/calendar/events/:id"
+      }
+    ],
+    "tools": [
+      "add_event",
+      "calendar",
+      "calendar_create",
+      "calendar_day",
+      "calendar_delete",
+      "calendar_get",
+      "calendar_list",
+      "calendar_update",
+      "cancel_event",
+      "create_event",
+      "day_events",
+      "delete_event",
+      "edit_event",
+      "events",
+      "events_on",
+      "get_day",
+      "get_events",
+      "list_events",
+      "move_event",
+      "new_event",
+      "remove_event",
+      "reschedule",
+      "schedule",
+      "update_event"
+    ]
+  },
+  "files": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/download"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/home"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/list"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/raw"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/read"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/render"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/search"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/text"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/thumb"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/video-frame"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/video-info"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/delete"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/empty-trash"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/mkdir"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/rename"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/restore"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/upload"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/write"
+      }
+    ],
+    "tools": [
+      "browse_files",
+      "cat_file",
+      "copy_file",
+      "create_file",
+      "create_folder",
+      "delete_file",
+      "duplicate_file",
+      "file_copy",
+      "file_delete",
+      "file_details",
+      "file_info",
+      "file_list",
+      "file_mkdir",
+      "file_move",
+      "file_read",
+      "file_restore",
+      "file_search",
+      "file_write",
+      "find_file",
+      "list_files",
+      "ls_home",
+      "make_directory",
+      "move_file",
+      "open_file",
+      "read_file",
+      "remove_file",
+      "rename_file",
+      "restore_file",
+      "save_file",
+      "search_files",
+      "stat_file",
+      "trash_file",
+      "undelete_file",
+      "write_file"
+    ]
+  },
+  "filmcraft": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/filmcraft/next"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/filmcraft/status"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/filmcraft/result"
+      },
+      {
+        "auth": "public",
+        "method": "Get",
+        "path": "/audio-worklet.js"
+      }
+    ],
+    "tools": [
+      "film",
+      "film_command",
+      "film_commands",
+      "film_export",
+      "film_export_cancel",
+      "film_export_status",
+      "film_headless"
+    ]
+  },
+  "hello": {
+    "api_level": 1,
+    "routes": [],
+    "tools": [
+      "hello"
+    ]
+  },
+  "image": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/images/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/images"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/images/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/images/:id/data"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/images/:id/looks"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/images/:id/render"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/images"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/images/:id/apply"
+      }
+    ],
+    "tools": [
+      "apply_effect",
+      "apply_filter",
+      "delete_image",
+      "get_image",
+      "image_delete",
+      "image_edit",
+      "image_get",
+      "image_info",
+      "image_list",
+      "images",
+      "list_images",
+      "remove_image"
+    ]
+  },
+  "impress": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/presentations/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/presentations"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/presentations/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/presentations/:id/export"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/presentations"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/presentations/import"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/presentations/:id"
+      }
+    ],
+    "tools": [
+      "add_slide",
+      "change_slide",
+      "create_presentation",
+      "delete_deck",
+      "delete_presentation",
+      "edit_presentation",
+      "get_presentation",
+      "list_decks",
+      "list_presentations",
+      "modify_slide",
+      "new_deck",
+      "new_presentation",
+      "open_presentation",
+      "presentations",
+      "read_presentation",
+      "remove_presentation",
+      "rewrite_deck",
+      "set_slides",
+      "slide_create",
+      "slide_delete",
+      "slide_edit",
+      "slide_list",
+      "slide_read",
+      "slide_write",
+      "update_slide",
+      "write_presentation"
+    ]
+  },
+  "keyboard": {
+    "api_level": 1,
+    "routes": [],
+    "tools": []
+  },
+  "mail": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/mail/accounts/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/mail/accounts"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/mail/folders"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/mail/list"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/mail/message"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/mail/search"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/mail/status"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/mail/accounts"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/mail/accounts/test"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/mail/delete"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/mail/flag"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/mail/send"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/mail/sync"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/mail/accounts/:id"
+      }
+    ],
+    "tools": [
+      "mail_list",
+      "mail_read",
+      "mail_search",
+      "mail_send",
+      "mail_status",
+      "mail_sync",
+      "refresh_mail",
+      "sync_mail"
+    ]
+  },
+  "pdf": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/pdfs/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs/:id/export"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs/:id/file"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs/:id/pages/:page"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs/:id/runs/:page"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/pdfs/:id/text/:page"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/annotate"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/delete-pages"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/edit-text"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/merge"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/reorder"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/replace-text"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/rotate"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/watermark"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/import"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/pdfs/:id"
+      }
+    ],
+    "tools": [
+      "add_annotation",
+      "add_note",
+      "add_pdf_note",
+      "add_sticky_note",
+      "add_watermark",
+      "annotate_pdf",
+      "append_pdf",
+      "combine_pdfs",
+      "comment_pdf",
+      "create_pdf",
+      "delete_pages",
+      "delete_pdf",
+      "edit_pdf_text",
+      "find_and_replace",
+      "highlight_pdf",
+      "list_pdfs",
+      "merge_pdfs",
+      "move_pages",
+      "new_pdf",
+      "note_pdf",
+      "open_pdf",
+      "pdf_add_note",
+      "pdf_annotate",
+      "pdf_create",
+      "pdf_delete",
+      "pdf_delete_pages",
+      "pdf_list",
+      "pdf_merge",
+      "pdf_read",
+      "pdf_reorder",
+      "pdf_replace_text",
+      "pdf_rotate",
+      "pdf_watermark",
+      "pdfs",
+      "read_pdf",
+      "remove_pages",
+      "remove_pdf",
+      "reorder_pages",
+      "rotate_pages",
+      "rotate_pdf",
+      "watermark_pdf"
+    ]
+  },
+  "radio": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/radio/nowplaying"
+      }
+    ],
+    "tools": [
+      "listen_radio",
+      "play_radio",
+      "radio_play",
+      "radio_search",
+      "radio_stop",
+      "stop_radio"
+    ]
+  },
+  "studio": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/studio/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/studio/arrangement/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/studio/presets/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/:id/audio"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/arrangement"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/arrangement/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/catalog"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/presets"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/:id/render"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/analyze"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/arrangement"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/arrangement/render"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/presets"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/preview"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/waveform"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/studio/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/studio/arrangement/:id"
+      }
+    ],
+    "tools": [
+      "analyze_track",
+      "arrangements",
+      "check_mix",
+      "compose_track",
+      "create_arrangement",
+      "delete_arrangement",
+      "delete_preset",
+      "delete_track",
+      "edit_track",
+      "get_arrangement",
+      "get_track",
+      "list_arrangements",
+      "list_presets",
+      "list_tracks",
+      "make_beat",
+      "measure_track",
+      "new_track",
+      "presets",
+      "re_render",
+      "remove_track",
+      "render_track",
+      "save_arrangement",
+      "save_instrument",
+      "save_preset",
+      "studio_analyze",
+      "studio_arrangement_delete",
+      "studio_arrangement_get",
+      "studio_arrangement_list",
+      "studio_arrangement_save",
+      "studio_catalog",
+      "studio_create",
+      "studio_delete",
+      "studio_get",
+      "studio_instruments",
+      "studio_list",
+      "studio_params",
+      "studio_preset_delete",
+      "studio_preset_list",
+      "studio_preset_save",
+      "studio_render",
+      "studio_update",
+      "track_info",
+      "tracks",
+      "update_track"
+    ]
+  },
+  "terminal": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/terminal/events"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/terminal/stream"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/terminal/close"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/terminal/input"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/terminal/resize"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/terminal/sessions"
+      }
+    ],
+    "tools": [
+      "run_command",
+      "shell",
+      "terminal",
+      "terminal_exec",
+      "terminal_run"
+    ]
+  },
+  "traveler": {
+    "api_level": 1,
+    "routes": [],
+    "tools": [
+      "create_trip",
+      "end_trip",
+      "generate_diary",
+      "get_active_trip",
+      "get_diary",
+      "get_trip",
+      "list_diary",
+      "list_locations",
+      "list_trips",
+      "map_poi",
+      "map_reverse",
+      "map_route",
+      "map_search",
+      "navigate_to",
+      "new_trip",
+      "plan_trip",
+      "search_diary",
+      "show_artifact",
+      "start_trip",
+      "submit_location",
+      "trip_route",
+      "trip_stats",
+      "update_artifact"
+    ]
+  },
+  "updates": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/updates/history"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/updates/jobs"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/updates/status"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/updates/apply"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/updates/ollama/update"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/updates/refresh"
+      }
+    ],
+    "tools": [
+      "apply_updates",
+      "check_updates",
+      "detect_distro",
+      "distro_info",
+      "install_updates",
+      "list_updates",
+      "ollama_update",
+      "refresh_updates",
+      "system_updates",
+      "update_ollama",
+      "update_package_lists",
+      "update_system",
+      "updates_apply",
+      "updates_distro",
+      "updates_refresh",
+      "updates_status",
+      "upgrade_ollama"
+    ]
+  },
+  "word": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/documents/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/documents"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/documents/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/documents/:id/export"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/documents"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/documents/import"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/documents/:id"
+      }
+    ],
+    "tools": [
+      "add_to_document",
+      "append_text",
+      "change_document",
+      "create_document",
+      "delete_document",
+      "doc_append",
+      "doc_create",
+      "doc_delete",
+      "doc_edit",
+      "doc_list",
+      "doc_open",
+      "doc_read",
+      "doc_write",
+      "documents",
+      "edit_document",
+      "list_documents",
+      "modify_document",
+      "new_document",
+      "open_document",
+      "read_document",
+      "remove_document",
+      "replace_text",
+      "update_document",
+      "write_document"
+    ]
+  },
+  "youtube": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/youtube/categories"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/youtube/home"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/youtube/search"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/youtube/suggest"
+      }
+    ],
+    "tools": [
+      "play_youtube",
+      "recommend_youtube",
+      "search_youtube",
+      "suggest_videos",
+      "watch_youtube",
+      "youtube_play",
+      "youtube_recommend",
+      "youtube_search",
+      "youtube_suggest",
+      "yt_search"
+    ]
+  }
+}

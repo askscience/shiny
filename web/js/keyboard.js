@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * keyboard.js — the Keyboard plugin's frontend.
  *
@@ -330,7 +331,7 @@ function pressKey(k) {
 /* ── Render ─────────────────────────────────────────────────── */
 
 function keyButton(k, label, cls = '') {
-  const b = document.createElement('button');
+  const b = controlButton();
   b.type = 'button';
   b.className = 'keyboard-key';
   if (cls) b.className += ` ${cls}`;
@@ -374,7 +375,7 @@ function renderDesktopRow() {
   const row = document.createElement('div');
   row.className = 'keyboard-row keyboard-row--desktop';
   const btn = (label, title, fn) => {
-    const b = document.createElement('button');
+    const b = controlButton();
     b.type = 'button';
     b.className = 'keyboard-key keyboard-key--fn keyboard-key--desktop';
     b.textContent = label;
@@ -569,7 +570,7 @@ function wireEvents() {
 
 function createHudButton() {
   if (hudBtn) return;
-  hudBtn = document.createElement('button');
+  hudBtn = controlButton();
   hudBtn.type = 'button';
   hudBtn.id = 'hud-keyboard-btn';
   hudBtn.className = 'icon-btn';

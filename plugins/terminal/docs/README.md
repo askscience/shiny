@@ -30,6 +30,14 @@ back; `timed_out: true` means the command is still running and was left alone.
 The AI can also open the window with the core `show_plugin` tool, and the user
 types there directly.
 
+## Output capture and recovery
+
+Command capture keeps a bounded prefix and rolling tail before applying the
+existing 16,000-character output limit. Verbose output retains its start and latest
+diagnostics with a truncation marker. If its output feed falls behind and closes,
+the returned text explicitly reports interruption; the command itself continues
+in its existing PTY. The tool's result fields remain unchanged.
+
 ## Security
 
 The shell has the server user's privileges. Shiny refuses the Terminal from

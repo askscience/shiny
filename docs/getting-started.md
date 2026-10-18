@@ -142,3 +142,43 @@ An archive is a folder with `plugin.toml` + a `.so`/`.dylib`/`.dll` (+ optional
 | STT does nothing | faster-whisper sidecar up? Otherwise Vosk downloads a model. |
 | Sound/Bluetooth chip missing | Expected when PipeWire/BlueZ are absent — see [host](host/README.md). |
 | Plugin window blank | Check the install log at `data/plugins/install.log` and the browser console. |
+
+## Development verification
+
+Run checks without starting or restarting the desktop:
+
+```bash
+scripts/test-web.sh
+scripts/check-format.sh
+CARGO_BUILD_JOBS=1 scripts/test-rust.sh
+cargo clippy --locked --workspace --exclude peakd --exclude peakd-mac --all-targets
+```
+
+The web check syntax-checks first-party JavaScript and runs every Node test and
+the Browser, FilmCraft and Image plugin surface smoke checks,
+stopping at the first failure. There is no frontend bundler or npm installation.
+The formatting gate covers the refactored modules; older formatting is kept
+separate from functional changes.
+
+The Rust runner explicitly builds native plugin fixtures before testing. Tests
+use unique temporary databases and staged plugin source assets; missing libraries
+fail with instructions rather than silently skipping. The default fixture library
+directory is `target/debug`; set `SHINY_TEST_LIB_DIR` explicitly for another build
+profile or `CARGO_TARGET_DIR`. Tests never auto-discover installed plugins or run
+plugin startup hooks. Keep build concurrency low while working inside Terminal.
+
+`tests/fixtures/plugin-contracts.json` pins native tools and routes. To recapture
+an intentionally changed contract, run only the explicit capture test against the
+chosen known build, then review the resulting diff:
+
+```bash
+cargo test -p shiny --test plugin_contracts capture_plugin_contracts -- --ignored
+```
+
+CI builds the Qt kiosk shell separately on Debian 13. Hardware and session
+acceptance checks are listed in [Kiosk shell](deployment/kiosk-shell.md).
+
+The Flow UI checks cover interrupted reveals, reduced motion, renderer stalls,
+dialog reopening and nested focus isolation. The Settings lifecycle check mounts
+all 12 sections and verifies cleanup across locale changes. Keep existing
+translation keys when reorganizing controls; add catalog entries for new text.

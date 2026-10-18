@@ -657,3 +657,9 @@ All errors follow a consistent JSON structure:
 - `"Trip not found"` — Wrong ID or doesn't belong to you
 - `"Trip is already active"` — Can't start an already active trip
 - `"No diary entry for this date"` — No entry exists yet
+
+## Local health probes
+
+`GET /api/health/live` and `GET /api/health/ready` are loopback-only diagnostics.
+See [local health and request correlation](docs/api/README.md#local-health-and-request-correlation)
+for payloads, readiness semantics and the `X-Request-Id` response header.

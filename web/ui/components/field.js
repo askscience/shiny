@@ -1,9 +1,13 @@
 /** field — form controls: input, textarea, select, toggle, slider, checkbox, search. */
 
 import { icon } from '../icon.js';
+import { controlButton, iconButton } from './button.js';
 import { t } from '../../js/i18n.js';
+import { enterSurface, disposeMotion } from '../motion.js';
+import { placePopover } from '../popover.js';
 
 /** Label + control + hint wrapper. */
+let fieldId = 0;
 export function field({ label, hint, control, htmlFor } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'ui-field';
@@ -11,7 +15,9 @@ export function field({ label, hint, control, htmlFor } = {}) {
     const l = document.createElement('label');
     l.className = 'ui-label';
     l.textContent = label;
-    if (htmlFor) l.htmlFor = htmlFor;
+    const target = control?.select || control;
+    if (target && !target.id) target.id = `ui-field-${++fieldId}`;
+    if (htmlFor || target?.id) l.htmlFor = htmlFor || target.id;
     wrap.appendChild(l);
   }
   if (control) wrap.appendChild(control);
@@ -34,6 +40,9 @@ export function input(o = {}) {
   if (o.maxlength) el.maxLength = o.maxlength;
   if (o.autocomplete) el.autocomplete = o.autocomplete;
   if (o.autocapitalize) el.autocapitalize = o.autocapitalize;
+  for (const key of ['min', 'max', 'step', 'name', 'inputMode']) if (o[key] != null) el[key] = o[key];
+  if (o.label) el.setAttribute('aria-label', o.label);
+  if (o.className) el.classList.add(...o.className.split(/\s+/).filter(Boolean));
   if (o.onInput) el.addEventListener('input', (e) => o.onInput(e.target.value, e));
   return el;
 }
@@ -60,26 +69,33 @@ export function textarea(o = {}) {
  * event for a window that is already gone. So the look stays the styled
  * `<select>`'s, while the open list is an in-page menu (`.ui-select-menu`).
  */
-export function select(o = {}) {
-  const wrap = document.createElement('div');
-  wrap.className = 'ui-select-wrap';
+export function selectControl(o = {}) {
   const el = document.createElement('select');
   el.className = 'ui-select';
   if (o.id) el.id = o.id;
-  wrap.setOptions = (options = []) => {
+  if (o.label) el.setAttribute('aria-label', o.label);
+  el.setOptions = (options = []) => {
     if (openSelect?.select === el) closeSelectMenu();
     el.textContent = '';
     for (const opt of options) {
       const node = document.createElement('option');
       if (typeof opt === 'string') { node.value = opt; node.textContent = opt; }
-      else { node.value = opt.value; node.textContent = opt.label; }
+      else { node.value = opt.value; node.textContent = opt.label; node.disabled = !!opt.disabled; }
       el.appendChild(node);
     }
     if (o.value != null) el.value = o.value;
   };
-  wrap.setOptions(o.options || []);
+  el.setOptions(o.options || []);
   if (o.onChange) el.addEventListener('change', (e) => o.onChange(e.target.value, e));
   useSelectMenu(el);
+  return el;
+}
+
+export function select(o = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ui-select-wrap';
+  const el = selectControl(o);
+  wrap.setOptions = el.setOptions;
   wrap.appendChild(el);
   wrap.appendChild(icon('ui/chevron-down'));
   wrap.select = el;
@@ -95,7 +111,12 @@ export function select(o = {}) {
 export function useSelectMenu(el) {
   if (el.dataset.selectMenuArmed) return el;
   el.dataset.selectMenuArmed = '1';
-  el.addEventListener('mousedown', (e) => { e.preventDefault(); openSelectMenu(el); });
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    openSelectMenu(el);
+  });
+  el.addEventListener('mousedown', (e) => e.preventDefault());
   el.addEventListener('click', (e) => e.preventDefault());
   el.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -118,13 +139,16 @@ export function closeSelectMenu() {
 }
 
 function openSelectMenu(el) {
+  if (el.disabled) return;
   const wasOpenFor = openSelect?.select === el;
   closeSelectMenu();
   if (wasOpenFor) return; // second click on the same field toggles it shut
   const options = [...el.options];
-  if (!options.length) return;
+  const enabled = options.map((opt, index) => opt.disabled ? -1 : index).filter(index => index >= 0);
+  if (!enabled.length) return;
 
   let active = Math.max(0, options.findIndex((opt) => opt.value === el.value));
+  if (options[active].disabled) active = enabled[0];
   const items = [];
   const menu = document.createElement('div');
   menu.className = 'ui-select-menu';
@@ -136,6 +160,7 @@ function openSelectMenu(el) {
     if (scroll) items[active]?.scrollIntoView({ block: 'nearest' });
   };
   const choose = (index) => {
+    if (options[index]?.disabled) return;
     const value = options[index]?.value;
     closeSelectMenu();
     if (value == null) return;
@@ -151,37 +176,36 @@ function openSelectMenu(el) {
     item.className = 'ui-select-option';
     item.setAttribute('role', 'option');
     item.dataset.value = opt.value;
+    item.setAttribute('aria-disabled', String(!!opt.disabled));
+    item.setAttribute('aria-selected', String(opt.value === el.value));
     item.textContent = opt.label || opt.textContent || opt.value;
-    item.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); choose(i); });
+    item.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); choose(i); });
     items.push(item);
     menu.appendChild(item);
   });
   syncActive();
 
   const place = () => {
-    const r = el.getBoundingClientRect();
-    const gap = 6;
-    menu.style.minWidth = `${Math.round(r.width)}px`;
-    menu.style.left = `${Math.round(Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`;
-    const below = window.innerHeight - r.bottom - gap;
-    menu.style.top = menu.offsetHeight > below && r.top - gap > below
-      ? `${Math.round(Math.max(8, r.top - gap - menu.offsetHeight))}px`
-      : `${Math.round(r.bottom + gap)}px`;
+    placePopover(menu, el);
   };
 
   const onDocPointerDown = (e) => {
     if (!menu.contains(e.target) && !el.contains(e.target)) closeSelectMenu();
   };
+  const anchorObserver = typeof MutationObserver !== 'undefined'
+    ? new MutationObserver(() => {
+      if (!el.isConnected || el.closest('[hidden],.hidden')) closeSelectMenu();
+    }) : null;
   const onWheel = (e) => {
     if (!menu.contains(e.target)) closeSelectMenu();
   };
   const onKeyDown = (e) => {
-    const last = options.length - 1;
+    const position = enabled.indexOf(active);
     switch (e.key) {
-      case 'ArrowDown': active = Math.min(last, active + 1); break;
-      case 'ArrowUp': active = Math.max(0, active - 1); break;
-      case 'Home': active = 0; break;
-      case 'End': active = last; break;
+      case 'ArrowDown': active = enabled[Math.min(enabled.length - 1, position + 1)]; break;
+      case 'ArrowUp': active = enabled[Math.max(0, position - 1)]; break;
+      case 'Home': active = enabled[0]; break;
+      case 'End': active = enabled[enabled.length - 1]; break;
       case 'Enter': case ' ': choose(active); e.preventDefault(); return;
       case 'Escape': closeSelectMenu(); el.focus(); e.preventDefault(); return;
       case 'Tab': closeSelectMenu(); return;
@@ -191,23 +215,31 @@ function openSelectMenu(el) {
     syncActive(true);
   };
   const dispose = () => {
+    disposeMotion(menu);
+    anchorObserver?.disconnect();
     document.removeEventListener('pointerdown', onDocPointerDown, true);
     window.removeEventListener('wheel', onWheel, true);
     window.removeEventListener('resize', closeSelectMenu);
     window.removeEventListener('blur', closeSelectMenu);
+    window.visualViewport?.removeEventListener('resize', closeSelectMenu);
+    window.visualViewport?.removeEventListener('scroll', closeSelectMenu);
     menu.removeEventListener('keydown', onKeyDown);
     menu.remove();
   };
 
   document.body.appendChild(menu);
   place();
+  enterSurface(menu);
   menu.focus();
   menu.addEventListener('keydown', onKeyDown);
   document.addEventListener('pointerdown', onDocPointerDown, true);
   window.addEventListener('wheel', onWheel, { capture: true, passive: true });
   window.addEventListener('resize', closeSelectMenu);
   window.addEventListener('blur', closeSelectMenu);
+  window.visualViewport?.addEventListener('resize', closeSelectMenu);
+  window.visualViewport?.addEventListener('scroll', closeSelectMenu);
   openSelect = { select: el, dispose };
+  anchorObserver?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
 }
 
 /** Switch. Returns button[role=switch]; `.setChecked(v)`, change via onChange. */
@@ -246,6 +278,7 @@ export function toggleRow(o = {}) {
     main.appendChild(sub);
   }
   const t = toggle(o);
+  if (o.label) t.setAttribute('aria-label', o.label);
   row.append(main, t);
   row.toggle = t;
   return row;
@@ -286,13 +319,34 @@ export function checkbox(o = {}) {
   return el;
 }
 
-/** Search field with leading icon. */
+/** Search field: a pill with the magnifier as its round action at the end. */
 export function searchBar(o = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'ui-search';
-  wrap.appendChild(icon('ui/search'));
-  const el = input({ placeholder: o.placeholder || t('common.search'), value: o.value, onInput: o.onInput });
+  const label = o.label || o.placeholder || t('common.search');
+  const el = input({ placeholder: o.placeholder || t('common.search'), label, value: o.value, onInput: o.onInput, autocomplete: 'off' });
   wrap.appendChild(el);
+  if (o.onClear) {
+    const clear = iconButton({ icon: 'ui/close', label: o.clearLabel || t('common.clear'), size: 'sm', onClick: () => {
+      el.value = '';
+      el.focus();
+      o.onClear();
+    } });
+    clear.classList.add('ui-search-clear');
+    wrap.classList.add('ui-search--clearable');
+    wrap.appendChild(clear);
+  }
+  /* The glyph is the field's affordance, not a second action: it hands the
+     caret back to the input and stays out of the tab order (the input carries
+     the label), so keyboard users are not given a dead stop. */
+  const action = controlButton();
+  action.classList.add('ui-search-action');
+  action.tabIndex = -1;
+  action.setAttribute('aria-hidden', 'true');
+  action.title = label;
+  action.appendChild(icon('ui/search', { size: 15 }));
+  action.addEventListener('click', () => el.focus());
+  wrap.appendChild(action);
   wrap.input = el;
   return wrap;
 }

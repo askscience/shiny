@@ -202,3 +202,25 @@ Install with `sudo scripts/install-linux-auth.sh` (`--uninstall` restores).
 
 Related: [API auth](../api/auth.md) · [multi-user Linux](../deployment/multi-user-linux.md) ·
 [plugin security](../plugins/security.md).
+
+## Migration tracking and preference consistency
+
+Core startup adopts legacy databases with guarded column checks and records the
+nine historical migrations in `core_schema_versions` (version, filename, SHA-256,
+applied timestamp). Adoption and recording run in one immediate transaction
+before the application pool opens. Partial historical column additions are
+completed without rewriting the historical SQL files. Later startups verify the
+recorded checksums and refuse modified migration files. New migrations must be
+added to the ordered registry in `src/db/mod.rs`.
+
+Preference writes now commit all supplied keys together. Existing per-account keys
+and string-encoded values are preserved. Plugin activation lookup failures refuse
+access and return storage errors to HTTP callers rather than appearing as a
+successful empty or fully enabled plugin list.
+
+The frontend shares authentication recovery across JSON, binary and fetch-stream
+requests. Concurrent 401 responses share one bounded cookie-session probe. Only a
+confirmed 401 from that probe expires the local login; network errors, server
+errors and malformed responses retain it. A valid cookie replaces a stale bearer
+and permits one retry. API calls reject malformed nonempty JSON responses, including
+the shell HTML returned by the static-file fallback.

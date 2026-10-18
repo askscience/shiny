@@ -781,11 +781,16 @@ The separation between **deactivate** (keep install dir + tables, just turn tool
 
 ## 15. ABI stability & the runtime bridge
 
-`api_level` is the version of the SDK's public trait surface. Plugins declare the level they were built against. The runtime accepts plugins where `api_level ≤ CORE_API_LEVEL`. The current level is **1**.
+`api_level` describes the SDK's source-level trait surface; the loader accepts
+levels up to the current **1**. This check does not prove binary compatibility:
+the entry returns a Rust trait object, which has no stable C ABI.
 
-When the SDK adds fields or methods without breaking existing trait impls, `CORE_API_LEVEL` increments but **existing plugins keep working** because `default` trait impls are used.
-
-When a method signature changes or a required method is added without a default, `CORE_API_LEVEL` increments a major step and **existing plugins must be rebuilt**. We commit to never silently breaking plugins within an `api_level`.
+Host-only refactors must freeze the entry signature, trait layout, `Manifest`,
+contexts and shared SDK structures. Adding default methods or struct fields can
+change vtables or memory layouts and requires a coordinated rebuild and explicit
+compatibility testing. Build new native plugins with matching SDK sources,
+compiler and target. See [Runtime & ABI](docs/plugins/runtime-abi.md) for optional
+host-side `[build]` diagnostic metadata and the compatibility fixture checks.
 
 ### Two load-bearing rules (learned from production crashes)
 
@@ -881,9 +886,29 @@ Before publishing a plugin:
 
 ## 19. UI & theming
 
-Plugins never ship CSS, and they cannot inject HTML into the frontend. Every
-visual surface a plugin can reach is rendered by core through the **Shiny UI
-library**, so plugin output always matches the user's theme and accent.
+The [shared component inventory](docs/core/ui-components.md) documents the control
+APIs, mobile portrait/landscape rules, system-font policy and browser tests. Use
+`element`, `toolbar`, `toolButton`, `menuButton`, `menuSurface`, `menuItem`, `selectControl`, `dial` and
+`mediaCard` for common plugin UI; extend the library instead of duplicating them.
+
+The shared **Flow** layer owns ordinary-control interaction across core and
+plugins. Import `button`/`iconButton`, or `controlButton()` for an unskinned domain
+button, from core's relative `ui/index.js`. Use the shared `element()` helper
+instead of a plugin-local DOM factory. Use `controlGrid`, `controlCard`,
+`controlGroup`, and `segmented` for reusable arrangements and choices.
+
+Consume `--motion-feedback`, `--motion-reveal`, `--motion-connect`, and
+`--motion-ease` in layout CSS. Use `enterSurface` for a positioned popup or
+`revealRegion` for small dependent fields; dispose transitions with their owner.
+Ordinary controls share motion; terminals, editors, canvases and media retain
+their specialized behavior. Respect reduced motion, every Appearance option,
+and translated labels. See [the shared interface contract](docs/plugins/authoring.md#shared-interface-contract)
+and [Flow lifecycle rules](docs/core/web-ui.md#flow-shared-layout-and-motion).
+
+Plugins build their window DOM using the **Shiny UI library**. Plugin-specific
+CSS may arrange domain content, but control styling and motion stay in core so
+plugin output follows the user's theme and accent. Tool output remains data;
+core renders its artifacts through shared components.
 
 The same split applies to tools: **core is a simple AI assistant** — its only
 built-in tool is `web_search` (`web/skills/core-assistant.md`). Artifact cards
@@ -988,7 +1013,8 @@ export default {
 `data-plugin="<name>"`; core tiles it, applies focus/fullscreen, and calls
 `unmount()` on deactivation. Window styles live in core's `web/css/tiles.css`
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
-plugins build DOM only, never ship CSS.
+plugins build DOM with shared controls. Optional plugin stylesheets arrange
+domain content without replacing shared control styling or motion.
 
 ### Opening links (`open-urls`)
 
@@ -1134,7 +1160,7 @@ Bundled plugins: add or edit an entry in `PLUGIN_ICONS` in
 `web/js/pluginIcon.js` pointing at an `apps/<name>` icon, and make sure that
 icon exists in `web/ui/icons/apps/` (see `web/ui/icons/README.md` for how to
 curate one from the KDE set). The full catalog is
-[`web/ui/icons/INDEX.md`](../web/ui/icons/INDEX.md).
+[`web/ui/icons/INDEX.md`](web/ui/icons/INDEX.md).
 
 #### Icon style
 
@@ -1532,7 +1558,7 @@ as "the feature is broken", not "the address changed".
 ### Translating a plugin (i18n)
 
 The shell's UI is translated through JSON catalogues
-([interface language](../docs/core/i18n.md)); a plugin joins in the same way.
+([interface language](docs/core/i18n.md)); a plugin joins in the same way.
 
 **Window surface (`web/plugin.js`, `web/hud.js`)**
 
@@ -1596,4 +1622,4 @@ Remaining follow-up work:
 8. **Safe plugin data access** — `rt::bridge` now uses a per-plugin single-thread `current_thread` dispatcher, and a synchronous `ctx.db()` (`libsqlite3-sys` FFI) accessor is implemented and unit-tested. Both still segfault in the server because the plugin links its **own** `libsqlite3` (compiled with `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`), so multiple SQLite copies coexist in one process. Fix by (a) routing plugin DB through the host's single SQLite copy, or (b) building SQLite without `SQLITE_ENABLE_MEMORY_MANAGEMENT` (see §15 caveat).
 7. **Plugin uninstall path with DB rollback** — drop plugin-owned tables when an admin request explicitly asks for it.
 
-Nothing here changes the v1 contract — plugins written against `api_level=1` keep working across the roadmap.
+Roadmap changes must preserve the v1 binary layout or use an explicit coordinated SDK rebuild; `api_level` alone does not establish binary compatibility.

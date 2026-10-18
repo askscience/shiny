@@ -13,16 +13,36 @@ Source: [`crates/shiny-plugin-sdk/src/rt.rs`](../../crates/shiny-plugin-sdk/src/
 
 ---
 
-## API level
+## API level and binary compatibility
 
-`api_level` is the version of the SDK's public trait surface. The loader accepts
-plugins where `api_level ≤ CORE_API_LEVEL` (currently **1**).
+`api_level` is a source-level plugin API convention. The loader accepts plugins
+where `api_level ≤ CORE_API_LEVEL` (currently **1**), but this comparison does
+**not** prove binary compatibility. The entry point returns a Rust trait object;
+Rust does not give it a stable C ABI, even though the entry symbol uses `extern C`.
 
-- Adding fields/methods **with defaults** bumps `CORE_API_LEVEL` while existing
-  plugins keep working.
-- Changing a signature or adding a required method without a default bumps a
-  major step and **requires a rebuild**.
-- Plugins are never silently broken within an `api_level`.
+Keep the existing `Plugin` trait, entry signature, `Manifest`, contexts and shared
+SDK structures frozen for compatible host-only refactors. Adding a default trait
+method or a struct field is not a safe binary-compatible change: it may change a
+vtable or memory layout. Such changes need an explicit coordinated rebuild and
+compatibility validation. Use matching SDK sources, compiler and target for new
+native plugin builds. A stable C or process-based ABI would be a separate versioned
+migration, not an incidental cleanup.
+
+Optional build diagnostics may be included in `plugin.toml`, parsed host-side
+without extending the SDK's `Manifest`:
+
+```toml
+[build]
+rustc = "compiler version used for this archive"
+target = "x86_64-unknown-linux-gnu"
+sdk_revision = "source revision used to build the SDK"
+```
+
+Legacy archives without this table remain accepted. Metadata is diagnostic and
+is not a guarantee that a library is safe to load. Native compatibility tests
+compare registered tools and routes against `tests/fixtures/plugin-contracts.json`.
+They stage explicit build artifacts into temporary directories and do not start
+plugin `on_load` work or read the kiosk's installed copies.
 
 ---
 

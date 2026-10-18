@@ -1,3 +1,7 @@
+import {
+  mediaCard, icon, button, searchBar, spinner, emptyState, notify, toast, setTileGlow,
+  setTileGlowFromUrl,
+} from '../../ui/index.js';
 /**
  * radio.js — the Radio plugin's window (flat, square, artwork-driven).
  *
@@ -17,10 +21,6 @@
  *   module handles both radio actions there too.
  */
 
-import {
-  icon, button, searchBar, spinner, emptyState, notify, toast,
-  setTileGlow, setTileGlowFromUrl,
-} from '../../ui/index.js';
 import { getToken } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
 
@@ -369,42 +369,10 @@ function renderGridCurrent() {
 }
 
 function stationCell(s, idx) {
-  // div[role=button], not <button>: button elements collapse their content
-  // contribution when the grid scrolls, shrinking cells under the art.
-  const cell = document.createElement('div');
-  cell.className = 'radio-cell';
+  const cell = mediaCard({ title: s.name, src: s.favicon, position: idx + 1,
+    className: 'radio-cell', prefix: 'radio-cell', onClick: () => playStation(s) });
   cell.dataset.stationuuid = s.stationuuid || '';
-  cell.setAttribute('role', 'button');
-  cell.tabIndex = 0;
-  if (current?.stationuuid === s.stationuuid && playing) cell.classList.add('radio-cell--current');
-
-  const num = document.createElement('span');
-  num.className = 'radio-cell-num';
-  num.textContent = String(idx + 1).padStart(2, '0');
-
-  const art = document.createElement('span');
-  art.className = 'radio-cell-art';
-  if (s.favicon) {
-    const img = document.createElement('img');
-    img.src = s.favicon;
-    img.alt = '';
-    img.loading = 'lazy';
-    img.onerror = () => img.remove();
-    art.appendChild(img);
-  }
-
-  const name = document.createElement('span');
-  name.className = 'radio-cell-name';
-  name.textContent = s.name;
-
-  cell.append(num, art, name);
-  cell.addEventListener('click', () => playStation(s));
-  cell.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      playStation(s);
-    }
-  });
+  cell.classList.toggle('radio-cell--current', current?.stationuuid === s.stationuuid && playing);
   return cell;
 }
 

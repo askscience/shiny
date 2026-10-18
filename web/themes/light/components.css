@@ -91,8 +91,6 @@
 .ui-select-wrap .ui-icon { color: var(--muted); }
 .ui-select option { background: var(--bg-elevated); color: var(--text); }
 
-.ui-search > .ui-icon { color: var(--muted); }
-
 .ui-toggle { background: var(--glass-strong); border-color: var(--glass-border); }
 .ui-toggle::after { background: var(--text-secondary); }
 .ui-toggle[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }

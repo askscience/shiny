@@ -1,3 +1,9 @@
+import {
+  menuSurface, menuItem, confirmDialog, menuButton, toolbar, input as uiInput, toolButton,
+  placePopover, controlButton, icon, button, emptyState, toast, select, setTileGlow,
+  setTileGlowFromUrl, glowGradient, fontStackFor, setIcon,
+} from '../../ui/index.js';
+
 /**
  * word.js — the Word plugin's window (simple ODT word processor).
  *
@@ -10,11 +16,6 @@
  * the window refreshes its document list and opens what the AI touched.
  */
 
-import {
-  icon, button, emptyState, toast, select, setTileGlow, setTileGlowFromUrl, glowGradient,
-  fontStackFor,
-} from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { listFonts } from '../../js/fonts.js';
@@ -185,7 +186,9 @@ async function newDocument() {
 
 async function removeCurrent() {
   if (!currentDoc) return;
-  if (!window.confirm(t('plugin.word.dialog.deleteDoc', { title: currentDoc.title }, `Delete "${currentDoc.title}"?`))) return;
+  const target = currentDoc;
+  if (!await confirmDialog(t('plugin.word.dialog.deleteDoc', { title: currentDoc.title }, `Delete "${currentDoc.title}"?`))) return;
+  if (currentDoc !== target || !tileEl) return;
   try {
     await deleteDoc(currentDoc.id);
     currentDoc = null;
@@ -207,9 +210,7 @@ async function refreshDocs() {
 
 function ensureDocMenu() {
   if (docMenuPopup) return;
-  docMenuPopup = document.createElement('div');
-  docMenuPopup.className = 'word-doc-menu hidden';
-  docMenuPopup.setAttribute('role', 'menu');
+  docMenuPopup = menuSurface({ className: 'word-doc-menu', onEscape: closeDocMenu });
   document.body.appendChild(docMenuPopup);
 }
 
@@ -242,9 +243,7 @@ function renderDocMenuItems() {
     docMenuPopup.appendChild(empty);
   } else {
     docs.forEach((doc) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'word-doc-menu-item';
+      const item = menuItem({ className: 'word-doc-menu-item' });
       if (doc.id === currentDoc?.id) item.classList.add('is-active');
       item.setAttribute('role', 'menuitem');
 
@@ -272,9 +271,7 @@ function renderDocMenuItems() {
   const foot = document.createElement('div');
   foot.className = 'word-doc-menu-foot';
   const footItem = (iconName, label, danger, onClick) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'word-doc-menu-item';
+    const item = menuItem({ className: 'word-doc-menu-item' });
     if (danger) item.classList.add('word-doc-menu-item--danger');
     item.setAttribute('role', 'menuitem');
     const ic = document.createElement('span');
@@ -311,10 +308,8 @@ function openDocMenu() {
   ensureDocMenu();
   renderDocMenuItems();
   docMenuPopup.classList.remove('hidden');
-  const r = docMenuBtn.getBoundingClientRect();
-  const left = Math.max(12, Math.min(r.left, window.innerWidth - 280 - 12));
-  docMenuPopup.style.left = `${left}px`;
-  docMenuPopup.style.top = `${r.bottom + 8}px`;
+  placePopover(docMenuPopup, docMenuBtn);
+  docMenuPopup.focusFirst();
   docMenuOpen = true;
   docMenuBtn.setAttribute('aria-expanded', 'true');
   document.addEventListener('pointerdown', onDocMenuOutside, true);
@@ -500,10 +495,7 @@ async function exportCurrent() {
 /* ── Tile lifecycle ─────────────────────────────────────────── */
 
 function toolbarButton(key, iconName, label, onClick) {
-  const btn = button({ icon: iconName, variant: 'ghost', onClick });
-  btn.classList.add('ui-btn--icon', 'word-tool');
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
+  const btn = toolButton(iconName, label, onClick, { className: 'word-tool' });
   toolbarBtns[key] = btn;
   return btn;
 }
@@ -517,28 +509,13 @@ export function mountWordTile() {
   tileEl.dataset.plugin = WORD_PLUGIN;
 
   /* Top bar: doc menu + title + save indicator */
-  const bar = document.createElement('div');
-  bar.className = 'word-bar';
+  const bar = toolbar([], { className: 'word-bar' });
   bar.dataset.windowBar = '';
 
-  docMenuBtn = document.createElement('button');
-  docMenuBtn.type = 'button';
-  docMenuBtn.className = 'word-doc-btn';
-  docMenuBtn.setAttribute('aria-haspopup', 'menu');
-  docMenuBtn.setAttribute('aria-expanded', 'false');
-  docMenuBtn.title = t('plugin.word.toolbar.documents', null, 'Documents');
-  const docIcon = document.createElement('span');
-  docIcon.className = 'word-doc-btn-icon';
-  docMenuBtn.appendChild(docIcon);
-  void setIcon(docIcon, 'ui/doc', { size: 15 });
-  const chevron = document.createElement('span');
-  chevron.className = 'word-doc-btn-chevron';
-  docMenuBtn.appendChild(chevron);
-  void setIcon(chevron, 'ui/chevron-down', { size: 12 });
-  docMenuBtn.addEventListener('click', toggleDocMenu);
+  docMenuBtn = menuButton({ icon: 'ui/doc', label: t('plugin.word.toolbar.documents', null, 'Documents'), onClick: toggleDocMenu, className: 'word-doc-btn' });
 
-  titleInput = document.createElement('input');
-  titleInput.className = 'word-title';
+  titleInput = uiInput();
+  titleInput.classList.add('word-title');
   titleInput.type = 'text';
   titleInput.placeholder = t('plugin.word.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
@@ -550,21 +527,21 @@ export function mountWordTile() {
   // File actions — unified order across word/calc/impress: new, import,
   // export, (save), delete.
   const newBtn = button({ icon: 'ui/plus', variant: 'ghost', onClick: () => void newDocument() });
-  newBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
+  newBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'word-tool--secondary');
   newBtn.title = t('plugin.word.toolbar.newDocument', null, 'New document');
   newBtn.setAttribute('aria-label', t('plugin.word.toolbar.newDocument', null, 'New document'));
   const importBtn = button({ icon: 'ui/download', variant: 'ghost', onClick: pickOdtFile });
-  importBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
+  importBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'word-tool--secondary');
   importBtn.title = t('plugin.word.toolbar.importOdt', null, 'Import .odt');
   importBtn.setAttribute('aria-label', t('plugin.word.toolbar.importOdt', null, 'Import .odt'));
   const exportBtn = button({ icon: 'ui/upload', variant: 'ghost', onClick: () => void exportCurrent() });
-  exportBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--secondary');
+  exportBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'word-tool--secondary');
   exportBtn.title = t('plugin.word.toolbar.saveToDocuments', null, 'Save to Documents');
   exportBtn.setAttribute('aria-label', t('plugin.word.toolbar.saveToDocuments', null, 'Save to Documents'));
   const saveBtn = toolbarButton('save', 'ui/save', t('plugin.word.toolbar.saveNow', null, 'Save now'), () => void persist());
   saveBtn.classList.add('word-tool--secondary');
   const delBtn = button({ icon: 'ui/trash', variant: 'ghost', onClick: () => void removeCurrent() });
-  delBtn.classList.add('ui-btn--icon', 'word-tool', 'word-tool--danger', 'word-tool--secondary');
+  delBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'ui-tool--danger', 'word-tool--secondary');
   delBtn.title = t('plugin.word.toolbar.deleteDocument', null, 'Delete document');
   delBtn.setAttribute('aria-label', t('plugin.word.toolbar.deleteDocument', null, 'Delete document'));
 

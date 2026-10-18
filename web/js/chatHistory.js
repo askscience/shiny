@@ -157,7 +157,7 @@ async function refreshList() {
 
 function ensurePanel() {
   if (panel) return;
-  panel = modal({ title: null, wide: true });
+  panel = modal({ title: null, label: t('chat.history'), wide: true });
   panel.el.classList.add('chat-history-panel');
   panel.body.style.gap = '0'; // title bar + padded content, like a plugin window
 }

@@ -37,11 +37,11 @@ body.overview-active #tile-grid {
 body.overview-active .tile--overview {
   position: absolute;
   transition:
-    left var(--duration-normal) var(--ease-out),
-    top var(--duration-normal) var(--ease-out),
-    width var(--duration-normal) var(--ease-out),
-    height var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out);
+    left var(--motion-reveal) var(--motion-ease),
+    top var(--motion-reveal) var(--motion-ease),
+    width var(--motion-reveal) var(--motion-ease),
+    height var(--motion-reveal) var(--motion-ease),
+    box-shadow var(--motion-reveal) var(--motion-ease);
   box-shadow: var(--shadow-float);
   animation: overviewTileIn var(--duration-normal) var(--ease-out) backwards;
   cursor: pointer;
@@ -120,8 +120,8 @@ body.overview-active .tile--overview {
   color: var(--text-secondary);
   box-shadow: var(--shadow-float);
   transition:
-    transform var(--duration-fast) var(--ease-spring),
-    border-color var(--duration-fast) var(--ease-out);
+    transform var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 
 .launcher-item:hover .launcher-item-icon { transform: translateY(-3px) scale(1.05); }

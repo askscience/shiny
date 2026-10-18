@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * contextMenu.js — right-click context menus for the core desktop.
  *
@@ -275,7 +276,7 @@ function pluginMenuItems(name, ctx) {
 
 /** Shared row scaffold: [check] [icon] [label] (+ chevron for submenus). */
 function rowShell(text, danger) {
-  const item = document.createElement('button');
+  const item = controlButton();
   item.type = 'button';
   item.className = MENU_CLS + '-item';
   if (danger) item.classList.add('is-danger');

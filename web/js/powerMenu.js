@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * powerMenu.js — the top-bar power menu: reboot, power off or suspend the
  * machine. A popover anchored to the power button, backed by the server's
@@ -218,7 +219,7 @@ function actionRow(action) {
   const allowed = action.allows(status);
   const disabled = busy !== null || !allowed;
 
-  const row = document.createElement('button');
+  const row = controlButton();
   row.type = 'button';
   row.className = 'ui-hud-menu-item';
   row.disabled = disabled;

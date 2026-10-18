@@ -71,3 +71,14 @@ so the terminal works offline and under the kiosk.
 ## Related
 
 [README](README.md) · [routes](routes.md) · [window](window.md).
+
+PTY output subscribers and new-session watchers use bounded queues (32 pending
+messages plus the channel's sender slot). A stalled consumer is disconnected
+rather than retaining unlimited output. A dropped session feed closes the
+multiplexed HTTP body so the existing window reconnects, receives `ready`, and
+replays the latest bounded scrollback. Session IDs, frame payloads, PTY lifetime
+and the 256 KiB scrollback contract are unchanged. The shell itself keeps running.
+
+The window feature-detects the core `apiRequest` helper. New core pages share
+session recovery with other requests; a hot install into a page with the older
+core API cached retains the legacy bearer-authenticated fetch path until reload.

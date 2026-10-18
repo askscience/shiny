@@ -23,8 +23,8 @@
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
-  transition: opacity var(--duration-slow) var(--ease-out),
-              visibility 0s linear var(--duration-slow);
+  transition: opacity var(--motion-connect) var(--motion-ease),
+              visibility var(--motion-feedback) linear var(--motion-connect);
 }
 #boot-screen.is-hidden {
   opacity: 0;

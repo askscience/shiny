@@ -30,6 +30,9 @@ const SCROLLBACK_BYTES: usize = 256 * 1024;
 const MAX_SESSIONS_PER_USER: usize = 8;
 const MAX_SESSIONS_TOTAL: usize = 32;
 
+/// A stalled window must not retain unlimited PTY output. Disconnect its
+/// stream when this queue fills; the existing reconnect path replays scrollback.
+const MAX_PENDING_EVENTS: usize = 32;
 /// How often an idle session emits an SSE comment-ish ping.
 const PING_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -100,7 +103,7 @@ impl Event {
 /// snapshot: no output can slip between "send me history" and "send me live".
 struct Inner {
     scrollback: Vec<u8>,
-    subscribers: Vec<mpsc::UnboundedSender<Event>>,
+    subscribers: Vec<mpsc::Sender<Event>>,
     cols: u16,
     rows: u16,
 }
@@ -128,13 +131,13 @@ static SESSIONS: LazyLock<Mutex<HashMap<String, Arc<Session>>>> =
 /// Windows watching for new sessions, per user. The multiplexed window stream
 /// (`GET /api/terminal/events`) registers a receiver here so a session created
 /// after it connected — a new tab — is picked up without a reconnect.
-static WATCHERS: LazyLock<Mutex<HashMap<String, Vec<mpsc::UnboundedSender<String>>>>> =
+static WATCHERS: LazyLock<Mutex<HashMap<String, Vec<mpsc::Sender<String>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Register for the ids of the sessions this user creates from now on.
 /// Dropping the receiver unregisters it on the next notify.
-pub fn watch(user_id: &str) -> mpsc::UnboundedReceiver<String> {
-    let (tx, rx) = mpsc::unbounded();
+pub fn watch(user_id: &str) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel(MAX_PENDING_EVENTS);
     if let Ok(mut watchers) = WATCHERS.lock() {
         watchers.entry(user_id.to_string()).or_default().push(tx);
     }
@@ -144,7 +147,7 @@ pub fn watch(user_id: &str) -> mpsc::UnboundedReceiver<String> {
 fn notify_watchers(user_id: &str, session_id: &str) {
     if let Ok(mut watchers) = WATCHERS.lock() {
         if let Some(list) = watchers.get_mut(user_id) {
-            list.retain(|tx| tx.unbounded_send(session_id.to_string()).is_ok());
+            list.retain_mut(|tx| tx.try_send(session_id.to_string()).is_ok());
         }
     }
 }
@@ -374,8 +377,8 @@ impl Session {
 
     /// Hand a subscriber the current scrollback and the live feed, atomically.
     /// Returns `(scrollback, receiver, alive)`.
-    pub fn subscribe(&self) -> (Vec<u8>, mpsc::UnboundedReceiver<Event>, bool) {
-        let (tx, rx) = mpsc::unbounded();
+    pub fn subscribe(&self) -> (Vec<u8>, mpsc::Receiver<Event>, bool) {
+        let (tx, rx) = mpsc::channel(MAX_PENDING_EVENTS);
         let Ok(mut inner) = self.inner.lock() else {
             return (Vec::new(), rx, false);
         };
@@ -398,16 +401,14 @@ impl Session {
         if len > SCROLLBACK_BYTES {
             inner.scrollback.drain(..len - SCROLLBACK_BYTES);
         }
-        inner
-            .subscribers
-            .retain(|tx| tx.unbounded_send(Event::Out(encoded.clone())).is_ok());
+        publish_to_subscribers(&mut inner.subscribers, Event::Out(encoded));
     }
 
     fn broadcast(&self, event: Event) {
         let Ok(mut inner) = self.inner.lock() else {
             return;
         };
-        inner.subscribers.retain(|tx| tx.unbounded_send(event.clone()).is_ok());
+        publish_to_subscribers(&mut inner.subscribers, event);
     }
 
     pub fn write_input(&self, data: &[u8]) -> Result<(), AppError> {
@@ -456,12 +457,39 @@ impl Session {
         let Ok(mut inner) = self.inner.lock() else {
             return;
         };
-        for tx in inner.subscribers.drain(..) {
-            let _ = tx.unbounded_send(Event::Exit { code });
+        for mut tx in inner.subscribers.drain(..) {
+            let _ = tx.try_send(Event::Exit { code });
         }
         drop(inner);
         if let Ok(mut registry) = SESSIONS.lock() {
             registry.remove(&self.id);
         }
+    }
+}
+
+fn publish_to_subscribers(subscribers: &mut Vec<mpsc::Sender<Event>>, event: Event) {
+    subscribers.retain_mut(|sender| sender.try_send(event.clone()).is_ok());
+}
+
+#[cfg(test)]
+mod backpressure_tests {
+    use super::*;
+    use futures::StreamExt;
+    #[test]
+    fn a_slow_consumer_does_not_block_a_healthy_subscriber_or_grow_forever() {
+        let (slow, mut stalled) = mpsc::channel(MAX_PENDING_EVENTS);
+        let (fast, mut healthy) = mpsc::channel(MAX_PENDING_EVENTS);
+        let mut subscribers = vec![slow, fast];
+        for _ in 0..100 {
+            publish_to_subscribers(&mut subscribers, Event::Out("output".into()));
+            assert!(futures::executor::block_on(healthy.next()).is_some());
+        }
+        assert_eq!(subscribers.len(), 1, "only the healthy subscriber remains attached");
+        let buffered = futures::executor::block_on(async {
+            let mut count = 0;
+            while stalled.next().await.is_some() { count += 1; }
+            count
+        });
+        assert!(buffered <= MAX_PENDING_EVENTS + 1);
     }
 }

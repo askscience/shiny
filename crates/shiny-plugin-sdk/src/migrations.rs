@@ -28,36 +28,42 @@ pub async fn run_plugin_migrations(pool: &SqlitePool, plugin: &str, dir: &Path) 
         return Ok(Vec::new());
     }
 
-    let mut files: Vec<String> = std::fs::read_dir(dir)?
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-        .filter_map(|e| e.file_name().to_str().map(String::from))
-        .filter(|n| n.ends_with(".sql"))
-        .collect();
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            if let Some(name) = entry.file_name().to_str().filter(|name| name.ends_with(".sql")) {
+                files.push(name.to_owned());
+            }
+        }
+    }
     files.sort();
 
     let mut applied = Vec::new();
     for file in files {
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
         let already: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM plugin_schema_versions WHERE plugin = ?1 AND file = ?2",
         )
         .bind(plugin)
         .bind(&file)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await?;
         if already > 0 {
+            tx.commit().await?;
             continue;
         }
 
         let path = dir.join(&file);
         let sql = std::fs::read_to_string(&path)?;
-        sqlx::raw_sql(&sql).execute(pool).await?;
+        sqlx::Executor::execute(&mut *tx, sql.as_str()).await?;
 
         sqlx::query("INSERT INTO plugin_schema_versions (plugin, file) VALUES (?1, ?2)")
             .bind(plugin)
             .bind(&file)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
+        tx.commit().await?;
 
         applied.push(file);
     }

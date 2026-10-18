@@ -1,3 +1,9 @@
+import {
+  menuSurface, menuItem, confirmDialog, toolButton, menuButton, toolbar, input as uiInput,
+  placePopover, controlButton, icon, button, emptyState, toast, setTileGlow, glowFromDrawable,
+  setIcon,
+} from '../../ui/index.js';
+
 /**
  * calc.js — the Calc plugin's window (simple spreadsheet).
  *
@@ -14,10 +20,6 @@
  * the window refreshes its sheet list and opens what the AI touched.
  */
 
-import {
-  icon, button, emptyState, toast, setTileGlow, glowFromDrawable,
-} from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
@@ -481,7 +483,9 @@ async function newSheet() {
 
 async function removeCurrent() {
   if (!current) return;
-  if (!window.confirm(t('plugin.calc.dialog.delete', { title: current.title }, 'Delete "{title}"?'))) return;
+  const target = current;
+  if (!await confirmDialog(t('plugin.calc.dialog.delete', { title: current.title }, 'Delete "{title}"?'))) return;
+  if (current !== target || !tileEl) return;
   try {
     await deleteSheet(current.id);
     current = null;
@@ -503,9 +507,7 @@ async function refreshSheets() {
 
 function ensureSheetMenu() {
   if (sheetMenuPopup) return;
-  sheetMenuPopup = document.createElement('div');
-  sheetMenuPopup.className = 'calc-sheet-menu hidden';
-  sheetMenuPopup.setAttribute('role', 'menu');
+  sheetMenuPopup = menuSurface({ className: 'calc-sheet-menu', onEscape: closeSheetMenu });
   document.body.appendChild(sheetMenuPopup);
 }
 
@@ -539,9 +541,7 @@ function renderSheetMenuItems() {
     sheetMenuPopup.appendChild(empty);
   } else {
     sheets.forEach((sheet) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'calc-sheet-menu-item';
+      const item = menuItem({ className: 'calc-sheet-menu-item' });
       if (sheet.id === current?.id) item.classList.add('is-active');
       item.setAttribute('role', 'menuitem');
 
@@ -567,9 +567,7 @@ function renderSheetMenuItems() {
   const foot = document.createElement('div');
   foot.className = 'calc-sheet-menu-foot';
   const footItem = (iconName, label, danger, onClick) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'calc-sheet-menu-item';
+    const item = menuItem({ className: 'calc-sheet-menu-item' });
     if (danger) item.classList.add('calc-sheet-menu-item--danger');
     item.setAttribute('role', 'menuitem');
     const ic = document.createElement('span');
@@ -607,10 +605,8 @@ function openSheetMenu() {
   ensureSheetMenu();
   renderSheetMenuItems();
   sheetMenuPopup.classList.remove('hidden');
-  const r = sheetMenuBtn.getBoundingClientRect();
-  const left = Math.max(12, Math.min(r.left, window.innerWidth - 280 - 12));
-  sheetMenuPopup.style.left = `${left}px`;
-  sheetMenuPopup.style.top = `${r.bottom + 8}px`;
+  placePopover(sheetMenuPopup, sheetMenuBtn);
+  sheetMenuPopup.focusFirst();
   sheetMenuOpen = true;
   sheetMenuBtn.setAttribute('aria-expanded', 'true');
   document.addEventListener('pointerdown', onSheetMenuOutside, true);
@@ -775,8 +771,8 @@ function renderGrid() {
 function ensureEditor() {
   // The grid re-render (innerHTML = '') detaches the editor — recreate it.
   if (editorInputEl && editorInputEl.isConnected) return;
-  editorInputEl = document.createElement('input');
-  editorInputEl.className = 'calc-cell-editor';
+  editorInputEl = uiInput();
+  editorInputEl.classList.add('calc-cell-editor');
   editorInputEl.autocomplete = 'off';
   editorInputEl.addEventListener('keydown', (e) => {
     e.stopPropagation();
@@ -884,28 +880,13 @@ export function mountCalcTile() {
   tileEl.dataset.plugin = CALC_PLUGIN;
 
   /* Top bar: sheet menu + title + save indicator */
-  const bar = document.createElement('div');
-  bar.className = 'calc-bar';
+  const bar = toolbar([], { className: 'calc-bar' });
   bar.dataset.windowBar = '';
 
-  sheetMenuBtn = document.createElement('button');
-  sheetMenuBtn.type = 'button';
-  sheetMenuBtn.className = 'calc-sheet-btn';
-  sheetMenuBtn.setAttribute('aria-haspopup', 'menu');
-  sheetMenuBtn.setAttribute('aria-expanded', 'false');
-  sheetMenuBtn.title = t('plugin.calc.bar.spreadsheets', null, 'Spreadsheets');
-  const sheetIcon = document.createElement('span');
-  sheetIcon.className = 'calc-sheet-btn-icon';
-  sheetMenuBtn.appendChild(sheetIcon);
-  void setIcon(sheetIcon, 'ui/calc', { size: 15 });
-  const chevron = document.createElement('span');
-  chevron.className = 'calc-sheet-btn-chevron';
-  sheetMenuBtn.appendChild(chevron);
-  void setIcon(chevron, 'ui/chevron-down', { size: 12 });
-  sheetMenuBtn.addEventListener('click', toggleSheetMenu);
+  sheetMenuBtn = menuButton({ icon: 'ui/calc', label: t('plugin.calc.bar.spreadsheets', null, 'Spreadsheets'), onClick: toggleSheetMenu, className: 'calc-sheet-btn' });
 
-  titleInput = document.createElement('input');
-  titleInput.className = 'calc-title';
+  titleInput = uiInput();
+  titleInput.classList.add('calc-title');
   titleInput.type = 'text';
   titleInput.placeholder = t('plugin.calc.sheet.untitled', null, 'Untitled');
   titleInput.maxLength = 120;
@@ -914,14 +895,7 @@ export function mountCalcTile() {
     if (current) void persist();
   });
 
-  const toolBtn = (iconName, label, onClick, danger) => {
-    const btn = button({ icon: iconName, variant: 'ghost', onClick });
-    btn.classList.add('ui-btn--icon', 'calc-tool');
-    if (danger) btn.classList.add('calc-tool--danger');
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
-    return btn;
-  };
+  const toolBtn = (iconName, label, onClick, danger) => toolButton(iconName, label, onClick, { className: 'calc-tool', danger });
 
   saveDot = document.createElement('span');
   saveDot.className = 'calc-save-dot';
@@ -941,13 +915,12 @@ export function mountCalcTile() {
   tileEl.appendChild(bar);
 
   /* Formula bar */
-  const formulaBar = document.createElement('div');
-  formulaBar.className = 'calc-formula-bar';
+  const formulaBar = toolbar([], { className: 'calc-formula-bar' });
   formulaRefEl = document.createElement('span');
   formulaRefEl.className = 'calc-formula-ref';
   formulaRefEl.textContent = 'A1';
-  formulaInputEl = document.createElement('input');
-  formulaInputEl.className = 'calc-formula-input';
+  formulaInputEl = uiInput();
+  formulaInputEl.classList.add('calc-formula-input');
   formulaInputEl.type = 'text';
   formulaInputEl.placeholder = t('plugin.calc.formula.placeholder', null, 'Value or formula (=SUM(A1:A5))');
   formulaInputEl.autocomplete = 'off';

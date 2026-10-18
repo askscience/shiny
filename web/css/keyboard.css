@@ -22,7 +22,7 @@
   backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
   transform: translateY(105%);
-  transition: transform var(--duration-normal) var(--ease-out);
+  transition: transform var(--motion-reveal) var(--motion-ease);
   pointer-events: none;
 }
 
@@ -57,10 +57,10 @@
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 
 .keyboard-key:active {
@@ -153,4 +153,13 @@ body.keyboard-open #artifact-dock-step {
   }
 
   .keyboard-key { height: 38px; font-size: 15px; }
+}
+
+/* A short landscape viewport still needs room for the field being edited. */
+@media (pointer: coarse) and (max-height: 500px) {
+  :root { --keyboard-height: 180px; }
+  #keyboard-bar { gap: 3px; padding-top: 4px; padding-bottom: max(4px,env(safe-area-inset-bottom)); }
+  .keyboard-rows,.keyboard-row { gap: 3px; }
+  .keyboard-key { height: 30px; font-size: 14px; }
+  body.keyboard-open #tile-grid { bottom: calc(var(--keyboard-height) + env(safe-area-inset-bottom) + 8px); }
 }

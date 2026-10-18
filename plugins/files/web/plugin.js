@@ -1,3 +1,9 @@
+import {
+  searchBar, confirmDialog, promptDialog, slider as uiSlider, toolbar, input as uiInput, toolButton,
+  controlButton, icon, setIcon, button, emptyState, toast, notify, modal, setTileGlow,
+  setTileGlowFromUrl, glowGradient,
+} from '../../ui/index.js';
+
 /**
  * files.js — the Files plugin's window (GNOME Files / Nautilus style).
  *
@@ -8,10 +14,6 @@
  * text mini) and AI wiring (`file_*` outcomes) work as before.
  */
 
-import {
-  icon, setIcon, button, emptyState, toast, notify, modal,
-  setTileGlow, setTileGlowFromUrl, glowGradient,
-} from '../../ui/index.js';
 import { openContextMenu } from '../../js/contextMenu.js';
 import { copyText } from '../../js/clipboard.js';
 import { pluginForFile, openWithPlugin, pickFiles } from '../../js/files.js';
@@ -464,7 +466,7 @@ function renderPlaces() {
   placesEl.innerHTML = '';
   const addPlace = (place) => {
     const active = place.path === '' ? cwd === '' : cwd === place.path || cwd.startsWith(`${place.path}/`);
-    const el = document.createElement('button');
+    const el = controlButton();
     el.type = 'button';
     el.className = 'files-place' + (active ? ' is-active' : '');
     el.dataset.path = place.path;
@@ -488,10 +490,7 @@ function renderPlaces() {
 /* ── header ─────────────────────────────────────────────────── */
 
 function iconBtn(iconName, label, onClick) {
-  const btn = button({ icon: iconName, variant: 'ghost', onClick });
-  btn.classList.add('ui-btn--icon', 'files-icon-btn');
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
+  const btn = toolButton(iconName, label, onClick, { className: 'files-icon-btn' });
   return btn;
 }
 
@@ -528,16 +527,14 @@ function renderHeader() {
   void setIcon(viewBtn, view === 'grid' ? 'ui/grid' : 'ui/list', { size: 16 });
 
   pathbarEl.innerHTML = '';
+  pathbarEl.classList.toggle('is-searching', searchMode);
   if (searchMode) {
-    const wrap = document.createElement('div');
-    wrap.className = 'files-search-entry';
-    wrap.appendChild(icon('ui/search', { size: 15 }));
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'files-search-input';
-    input.placeholder = t('plugin.files.search.placeholder', null, 'Search…');
-    input.autocomplete = 'off';
-    input.value = query;
+    const wrap = searchBar({
+      placeholder: t('plugin.files.search.placeholder', null, 'Search…'), value: query,
+      clearLabel: t('plugin.files.search.clear', null, 'Clear'),
+      onClear: () => void runSearch(''),
+    });
+    const input = wrap.input;
     input.addEventListener('input', () => {
       window.clearTimeout(input.__t);
       input.__t = window.setTimeout(() => void runSearch(input.value), 250);
@@ -545,16 +542,12 @@ function renderHeader() {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); exitSearch(); }
     });
-    const clearLabel = t('plugin.files.search.clear', null, 'Clear');
-    const clear = iconBtn('ui/close', clearLabel, () => { input.value = ''; input.focus(); void runSearch(''); });
-    clear.classList.add('files-search-clear');
-    wrap.append(input, clear);
     pathbarEl.appendChild(wrap);
     requestAnimationFrame(() => input.focus());
     return;
   }
 
-  const root = document.createElement('button');
+  const root = controlButton();
   root.type = 'button';
   root.className = 'files-path-crumb' + (cwd === '' ? ' is-current' : '');
   root.appendChild(icon('ui/home', { size: 14 }));
@@ -643,7 +636,7 @@ function columnHeader() {
   const head = document.createElement('div');
   head.className = 'files-col-head';
   const mk = (key, label, cls) => {
-    const b = document.createElement('button');
+    const b = controlButton();
     b.type = 'button';
     b.className = `files-col ${cls}`;
     const span = document.createElement('span');
@@ -932,11 +925,12 @@ function copyPath() {
 /* ── mutations ──────────────────────────────────────────────── */
 
 async function newFolder() {
-  const name = window.prompt(t('plugin.files.dialog.newFolderTitle', null, 'New folder name'),
+  const directory = cwd;
+  const name = await promptDialog(t('plugin.files.dialog.newFolderTitle', null, 'New folder name'),
     t('plugin.files.dialog.newFolderDefault', null, 'New folder'));
   if (!name) return;
   try {
-    await apiMkdir(joinPath(cwd, name));
+    await apiMkdir(joinPath(directory, name));
     await refresh();
     toast(t('plugin.files.toast.created', { name }, `Created “${name}”`));
   } catch (e) {
@@ -969,7 +963,7 @@ async function uploadFiles(files) {
   }
 }
 async function renameEntry(entry) {
-  const name = window.prompt(t('plugin.files.dialog.renameTitle', null, 'Rename to'), entry.name);
+  const name = await promptDialog(t('plugin.files.dialog.renameTitle', null, 'Rename to'), entry.name);
   if (!name || name === entry.name) return;
   try {
     await apiRename(entry.path, joinPath(parentOf(entry.path), name));
@@ -988,7 +982,7 @@ async function removeEntries(list, permanent) {
     : (permanent
       ? tp('plugin.files.dialog.deleteMany', list.length, null, `Permanently delete ${list.length} items?`)
       : tp('plugin.files.dialog.trashMany', list.length, null, `Move ${list.length} items to Trash?`));
-  if (!window.confirm(label)) return;
+  if (!await confirmDialog(label)) return;
   let ok = 0;
   for (const entry of list) {
     try { await apiDelete(entry.path); ok++; } catch (_) { /* keep going */ }
@@ -1016,7 +1010,7 @@ async function restoreEntries(list) {
   if (ok) toast(tp('plugin.files.toast.restored', ok, null, `Restored ${ok} items`));
 }
 async function emptyTrash() {
-  if (!window.confirm(t('plugin.files.dialog.emptyTrash', null, 'Empty the Trash? This cannot be undone.'))) return;
+  if (!await confirmDialog(t('plugin.files.dialog.emptyTrash', null, 'Empty the Trash? This cannot be undone.'))) return;
   try {
     await apiEmptyTrash();
     await refresh();
@@ -1038,9 +1032,6 @@ function closePreview() {
   previewIndex = -1;
   if (!api) return;
   api.close();
-  // Each preview builds a fresh modal; drop the previous one after its exit
-  // animation so detached overlays don't pile up in the DOM.
-  setTimeout(() => api.el.remove(), 400);
 }
 async function openPreview(entry, index = -1) {
   const list = visibleEntries().filter((e) => e.kind !== 'dir');
@@ -1049,11 +1040,10 @@ async function openPreview(entry, index = -1) {
   closePreview();
   let api;
   api = modal({
+    label: entry.name,
+    removeOnClose: true,
     onClose: () => {
       if (previewApi === api) previewApi = null;
-      // Each preview builds a fresh modal; drop this one after its exit
-      // animation so detached overlays don't pile up in the DOM.
-      setTimeout(() => api.el.remove(), 400);
     },
   });
   api.card.classList.add('files-preview-card');
@@ -1124,8 +1114,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   let scrubbing = false;
   let rafId = null;
 
-  const bar = document.createElement('div');
-  bar.className = 'files-player-bar';
+  const bar = toolbar([], { className: 'files-player-bar' });
 
   const playBtn = button({ variant: 'ghost', onClick: () => togglePlay() });
   playBtn.classList.add('files-player-btn');
@@ -1138,13 +1127,12 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   curEl.className = 'files-player-time';
   curEl.textContent = '0:00';
 
-  const seek = document.createElement('input');
-  seek.type = 'range';
+  const seek = uiSlider();
   seek.min = '0';
   seek.max = '1000';
   seek.step = '1';
   seek.value = '0';
-  seek.className = 'files-player-seek';
+  seek.classList.add('files-player-seek');
   seek.setAttribute('aria-label', t('plugin.files.player.seek', null, 'Seek'));
 
   const durEl = document.createElement('span');

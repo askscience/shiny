@@ -1,3 +1,9 @@
+import {
+  searchBar, menuSurface, menuItem, confirmDialog, menuButton, toolbar, element as h, input as uiInput,
+  toolButton, placePopover, controlButton, button, emptyState, field, icon, input, modal, notify,
+  select, textarea, toast, setTileGlow, glowGradient, setIcon,
+} from '../../ui/index.js';
+
 /**
  * mail.js — the Mail plugin's window (IMAP/SMTP mail client).
  *
@@ -11,11 +17,6 @@
  * refreshes its account/status state.
  */
 
-import {
-  button, emptyState, field, icon, input, modal, notify, select, textarea, toast,
-  setTileGlow, glowGradient,
-} from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { externalLinkUrl, isKiosk, openUrl } from '../../js/linkRouter.js';
@@ -356,19 +357,8 @@ async function openMessage(id) {
 
 /* ── Rendering: top bar ─────────────────────────────────────── */
 
-function h(tag, className, text) {
-  const el = document.createElement(tag);
-  if (className) el.className = className;
-  if (text != null) el.textContent = text;
-  return el;
-}
-
 function toolbarButton(iconName, label, onClick, danger = false) {
-  const btn = button({ icon: iconName, variant: 'ghost', onClick });
-  btn.classList.add('ui-btn--icon', 'mail-tool');
-  if (danger) btn.classList.add('mail-tool--danger');
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
+  const btn = toolButton(iconName, label, onClick, { className: 'mail-tool', danger });
   return btn;
 }
 
@@ -385,9 +375,7 @@ function toggleAccountMenu() {
 
 function ensureAccountMenu() {
   if (accountPopup) return;
-  accountPopup = document.createElement('div');
-  accountPopup.className = 'mail-account-menu hidden';
-  accountPopup.setAttribute('role', 'menu');
+  accountPopup = menuSurface({ className: 'mail-account-menu', onEscape: closeAccountMenu });
   document.body.appendChild(accountPopup);
 }
 
@@ -414,7 +402,7 @@ function openAccountMenu() {
     accountPopup.appendChild(empty);
   } else {
     for (const a of accounts) {
-      const item = h('button', 'mail-account-menu-item');
+      const item = menuItem({ className: 'mail-account-menu-item' });
       item.type = 'button';
       item.setAttribute('role', 'menuitem');
       if (a.id === currentAccount?.id) item.classList.add('is-active');
@@ -444,10 +432,8 @@ function openAccountMenu() {
   accountPopup.appendChild(foot);
 
   accountPopup.classList.remove('hidden');
-  const r = barAccountBtn.getBoundingClientRect();
-  const left = Math.max(12, Math.min(r.left, window.innerWidth - 280 - 12));
-  accountPopup.style.left = `${left}px`;
-  accountPopup.style.top = `${r.bottom + 8}px`;
+  placePopover(accountPopup, barAccountBtn);
+  accountPopup.focusFirst();
   accountPopupOpen = true;
   renderBar();
   document.addEventListener('pointerdown', onAccountMenuOutside, true);
@@ -456,6 +442,7 @@ function openAccountMenu() {
 /* ── Rendering: main body ───────────────────────────────────── */
 
 function render() {
+  renderBar();
   bodyEl.innerHTML = '';
   if (!configured) {
     renderSetup(bodyEl);
@@ -466,15 +453,14 @@ function render() {
   foldersEl = foldersPane;
 
   const listPane = h('div', 'mail-list');
-  const searchBar = h('div', 'mail-search');
-  searchInputEl = document.createElement('input');
-  searchInputEl.type = 'search';
-  searchInputEl.className = 'mail-search-input';
-  searchInputEl.placeholder = t('plugin.mail.search.placeholder', null, 'Search cached mail…');
-  searchInputEl.setAttribute('aria-label', t('plugin.mail.search.label', null, 'Search mail'));
-  searchInputEl.addEventListener('input', () => onSearch(searchInputEl.value));
-  searchBar.appendChild(searchInputEl);
-  listPane.appendChild(searchBar);
+  const search = searchBar({
+    placeholder: t('plugin.mail.search.placeholder', null, 'Search cached mail…'),
+    label: t('plugin.mail.search.label', null, 'Search mail'), onInput: onSearch,
+  });
+  searchInputEl = search.input;
+  const searchWrap = h('div', 'mail-search');
+  searchWrap.appendChild(search);
+  listPane.appendChild(searchWrap);
   listEl = h('div', 'mail-list-items');
   listPane.appendChild(listEl);
 
@@ -905,7 +891,9 @@ function openForward(msg) {
 async function deleteCurrent(msg) {
   const account = pickAccount();
   if (!account) return;
-  if (!window.confirm(t('plugin.mail.dialog.delete', { folder: currentFolder }, 'Delete this message from {folder}?'))) return;
+  const folder = currentFolder;
+  if (!await confirmDialog(t('plugin.mail.dialog.delete', { folder: currentFolder }, 'Delete this message from {folder}?'))) return;
+  if (!tileEl || folder !== currentFolder || account !== pickAccount()) return;
   try {
     await deleteMessage(account.id, currentFolder, msg.id);
     toast(t('plugin.mail.toast.deleted', null, 'Message deleted'), { type: 'info' });
@@ -988,7 +976,7 @@ function openSettings() {
           }
         });
         delBtn.addEventListener('click', async () => {
-          if (!window.confirm(t('plugin.mail.dialog.removeAccount', { email: a.email }, 'Remove mail account {email}?'))) return;
+          if (!await confirmDialog(t('plugin.mail.dialog.removeAccount', { email: a.email }, 'Remove mail account {email}?'))) return;
           try {
             await deleteAccount(a.id);
             if (currentAccount?.id === a.id) currentAccount = null;
@@ -1099,25 +1087,14 @@ export function mountMailTile() {
   tileEl.dataset.plugin = MAIL_PLUGIN;
 
   /* Top bar: account menu + title + status dot */
-  const bar = h('div', 'mail-bar');
+  const bar = toolbar([], { className: 'mail-bar' });
   bar.dataset.windowBar = '';
-  barAccountBtn = document.createElement('button');
-  barAccountBtn.type = 'button';
-  barAccountBtn.className = 'mail-account-btn';
-  barAccountBtn.setAttribute('aria-haspopup', 'menu');
-  barAccountBtn.setAttribute('aria-expanded', 'false');
-  barAccountBtn.title = t('plugin.mail.bar.accounts', null, 'Accounts');
-  const icon = h('span', 'mail-account-btn-icon');
-  barAccountBtn.appendChild(icon);
-  void setIcon(icon, 'ui/mail', { size: 15 });
-  barAccountLabel = h('span', 'mail-account-btn-label', t('plugin.mail.bar.noAccount', null, 'No account'));
-  const chevron = h('span', 'mail-account-btn-chevron');
-  barAccountBtn.appendChild(chevron);
-  void setIcon(chevron, 'ui/chevron-down', { size: 12 });
-  barAccountBtn.appendChild(barAccountLabel);
-  barAccountBtn.addEventListener('click', toggleAccountMenu);
+  barAccountBtn = menuButton({ icon: 'ui/mail', label: t('plugin.mail.bar.accounts', null, 'Accounts'),
+    text: t('plugin.mail.bar.noAccount', null, 'No account'), onClick: toggleAccountMenu,
+    className: 'mail-account-btn' });
+  barAccountLabel = barAccountBtn.caption;
 
-  const title = h('div', 'mail-title', 'Mail');
+  const title = h('div', 'tile-bar-spacer');
   statusDot = h('span', 'mail-status-dot');
   statusDot.setAttribute('aria-hidden', 'true');
 

@@ -205,6 +205,8 @@ pub struct AudioService {
 }
 
 struct Inner {
+    runner: Arc<dyn crate::services::command::CommandRunner>,
+
     status: ArcSwap<AudioStatus>,
     events: broadcast::Sender<Arc<AudioStatus>>,
     /// Serializes snapshots: a burst of events must not stack N `pactl`
@@ -219,9 +221,15 @@ struct Inner {
 impl AudioService {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_runner(Arc::new(crate::services::command::SystemCommandRunner))
+    }
+
+    /// Tests can exercise command failures without reaching the host daemon.
+    pub fn with_runner(runner: Arc<dyn crate::services::command::CommandRunner>) -> Self {
         let (events, _) = broadcast::channel(BROADCAST_CAPACITY);
         Self {
             inner: Arc::new(Inner {
+                runner,
                 status: ArcSwap::from_pointee(AudioStatus::unavailable(START_REASON)),
                 events,
                 refreshing: Mutex::new(()),
@@ -270,11 +278,16 @@ impl AudioService {
     /// so a machine without PipeWire boots exactly as it did before. Safe to
     /// call once per process.
     pub async fn start(&self) {
+        self.start_tracked().await;
+    }
+
+    /// Start once and hand ownership of the reader to the application runtime.
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> {
         if self.inner.started.swap(true, Ordering::SeqCst) {
-            return;
+            return None;
         }
         let service = self.clone();
-        tokio::spawn(async move { service.run().await });
+        Some(tokio::spawn(async move { service.run().await }))
     }
 
     async fn run(&self) {
@@ -309,9 +322,9 @@ impl AudioService {
 
     /// One snapshot: server info plus the two node lists.
     async fn snapshot(&self) -> Result<AudioStatus, String> {
-        let info = run_pactl(&["--format=json", "info"]).await?;
-        let sinks = run_pactl(&["--format=json", "list", "sinks"]).await?;
-        let sources = run_pactl(&["--format=json", "list", "sources"]).await?;
+        let info = run_pactl(self.inner.runner.as_ref(), &["--format=json", "info"]).await?;
+        let sinks = run_pactl(self.inner.runner.as_ref(), &["--format=json", "list", "sinks"]).await?;
+        let sources = run_pactl(self.inner.runner.as_ref(), &["--format=json", "list", "sources"]).await?;
 
         let info: serde_json::Value = serde_json::from_slice(&info)
             .map_err(|err| format!("pactl info returned invalid JSON: {err}"))?;
@@ -415,7 +428,7 @@ impl AudioService {
         }
         let _guard = self.inner.command.lock().await;
         let spec = node_spec(target, id);
-        run_pactl(&[
+        run_pactl(self.inner.runner.as_ref(), &[
             target.set_volume_flag(),
             spec.as_str(),
             &format!("{percent}%"),
@@ -440,7 +453,7 @@ impl AudioService {
             Some(false) => "0",
             None => "toggle",
         };
-        run_pactl(&[target.set_mute_flag(), spec.as_str(), value]).await?;
+        run_pactl(self.inner.runner.as_ref(), &[target.set_mute_flag(), spec.as_str(), value]).await?;
         drop(_guard);
         self.refresh().await;
         Ok(())
@@ -449,7 +462,7 @@ impl AudioService {
     /// Make a node the default target for new streams.
     pub async fn set_default(&self, target: AudioTarget, id: u32) -> Result<(), String> {
         let _guard = self.inner.command.lock().await;
-        run_pactl(&[target.set_default_flag(), &id.to_string()]).await?;
+        run_pactl(self.inner.runner.as_ref(), &[target.set_default_flag(), &id.to_string()]).await?;
         drop(_guard);
         self.refresh().await;
         Ok(())
@@ -509,20 +522,11 @@ fn user_runtime_dir() -> Option<std::path::PathBuf> {
 /// Run one `pactl` invocation and return stdout, with the client environment
 /// applied and a hard timeout so a stuck daemon cannot wedge the caller.
 #[cfg(target_os = "linux")]
-async fn run_pactl(args: &[&str]) -> Result<Vec<u8>, String> {
-    let mut command = tokio::process::Command::new("pactl");
-    command
-        .args(args)
-        .envs(client_env())
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-
-    let child = command.spawn().map_err(|err| pactl_error(&err))?;
-    let output = tokio::time::timeout(COMMAND_TIMEOUT, child.wait_with_output())
-        .await
-        .map_err(|_| format!("pactl {} timed out", args.join(" ")))?
-        .map_err(|err| format!("pactl {} failed: {err}", args.join(" ")))?;
+async fn run_pactl(runner: &dyn crate::services::command::CommandRunner, args: &[&str]) -> Result<Vec<u8>, String> {
+    let output = runner.run(crate::services::command::CommandSpec {
+        program: "pactl".into(), args: args.iter().map(|arg| (*arg).into()).collect(),
+        env: client_env().into_iter().map(|(key, value)| (key.into(), value)).collect(), timeout: COMMAND_TIMEOUT,
+    }).await.map_err(|error| pactl_error(&error))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -733,6 +737,7 @@ fn channel_count(channel_map: &str) -> u8 {
 impl AudioService {
     /// No-op: `AudioStatus::unavailable(START_REASON)` already explains why.
     pub async fn start(&self) {}
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> { None }
 
     pub async fn refresh(&self) {}
 
@@ -978,5 +983,26 @@ mod tests {
             assert_eq!(nodes.len(), 1);
             assert_eq!(nodes[0].name, "alsa_input.mic");
         }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod runner_tests {
+    use super::*;
+    struct Unavailable;
+    #[async_trait::async_trait]
+    impl crate::services::command::CommandRunner for Unavailable {
+        async fn run(&self, spec: crate::services::command::CommandSpec) -> std::io::Result<std::process::Output> {
+            assert_eq!(spec.program, "pactl");
+            assert!(spec.timeout > std::time::Duration::ZERO);
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "fixture: no daemon"))
+        }
+    }
+    #[tokio::test]
+    async fn missing_audio_daemon_does_not_require_a_real_host() {
+        let service = AudioService::with_runner(Arc::new(Unavailable));
+        service.refresh().await;
+        assert!(!service.status().available);
+        assert!(service.set_mute(AudioTarget::Sink, None, Some(true)).await.is_err());
     }
 }

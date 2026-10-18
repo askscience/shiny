@@ -166,7 +166,7 @@ fn stream() -> RouteHandler {
 /// One session's frames as a boxed stream, tagged with its id: `ready` always,
 /// then the pending scrollback (so a tab that just appeared is caught up), then
 /// the live feed.
-type FrameStream = Pin<Box<dyn futures::Stream<Item = Result<Bytes, Infallible>> + Send>>;
+type FrameStream = Pin<Box<dyn futures::Stream<Item = Result<Bytes, std::io::Error>> + Send>>;
 
 fn session_frames(session: &Arc<Session>) -> FrameStream {
     let id = session.id.clone();
@@ -180,10 +180,21 @@ fn session_frames(session: &Arc<Session>) -> FrameStream {
         head.push(Event::Exit { code: None }.to_sse_tagged(&id));
     }
     let head = futures::stream::iter(
-        head.into_iter().map(|frame| Ok::<Bytes, Infallible>(Bytes::from(frame))),
+        head.into_iter().map(|frame| Ok::<Bytes, std::io::Error>(Bytes::from(frame))),
     );
-    let live = live.map(move |event| Ok::<Bytes, Infallible>(Bytes::from(event.to_sse_tagged(&id))));
-    Box::pin(head.chain(live))
+    let saw_exit = Arc::new(std::sync::atomic::AtomicBool::new(!alive));
+    let ended = saw_exit.clone();
+    let live = live.map(move |event| {
+        if matches!(event, Event::Exit { .. }) {
+            ended.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok::<Bytes, std::io::Error>(Bytes::from(event.to_sse_tagged(&id)))
+    });
+    let tail = futures::stream::once(async move {
+        if saw_exit.load(std::sync::atomic::Ordering::Relaxed) { Ok(Bytes::new()) }
+        else { Err(std::io::Error::new(std::io::ErrorKind::ConnectionReset, "Terminal consumer fell behind; reconnect for replay")) }
+    });
+    Box::pin(head.chain(live).chain(tail))
 }
 
 fn push_session(all: &mut SelectAll<FrameStream>, seen: &mut HashSet<String>, session: &Arc<Session>) {
@@ -274,7 +285,7 @@ fn events() -> RouteHandler {
         );
 
         let head = futures::stream::iter(
-            head.into_iter().map(|frame| Ok::<Bytes, Infallible>(Bytes::from(frame))),
+            head.into_iter().map(|frame| Ok::<Bytes, std::io::Error>(Bytes::from(frame))),
         );
         let stream = head.chain(merged);
 

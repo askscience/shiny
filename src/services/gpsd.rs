@@ -40,12 +40,16 @@ impl GpsdService {
     }
 
     pub async fn start(&self) {
+        self.start_tracked().await;
+    }
+
+    pub async fn start_tracked(&self) -> Option<tokio::task::JoinHandle<()>> {
         let host = self.host.clone();
         let port = self.port;
         let current = self.current.clone();
         let connected = self.connected.clone();
 
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             let addr = format!("{}:{}", host, port);
 
             match TcpStream::connect(&addr).await {
@@ -96,7 +100,7 @@ impl GpsdService {
             }
 
             Self::mock_gps_loop(current, connected).await;
-        });
+        }))
     }
 
     async fn mock_gps_loop(

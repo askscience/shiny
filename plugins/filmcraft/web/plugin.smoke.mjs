@@ -78,6 +78,7 @@ const document = {
 
 /** The core UI library and the api helper the window imports. */
 const ui = {
+  controlButton: () => { const node = new El('button'); node.type = 'button'; return node; },
   button: (o) => {
     const el = new El('button');
     el.type = 'button';

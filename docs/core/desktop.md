@@ -1,7 +1,7 @@
 # Desktop (window manager)
 
 Shiny's desktop is a Hyprland-style window manager that runs entirely in the
-browser. `web/js/desktop.js` owns the *state* — workspaces, focus, fullscreen
+browser. `web/js/desktop.js` exposes the stable API; `web/js/desktop/workspaces.js` owns the *state* — workspaces, focus, fullscreen
 and the tiling layout — while `web/js/tiles.js` owns the *DOM*: it mounts one
 tile window per plugin surface and asks `desktop.js` how to arrange them. The
 two are deliberately separate: layout math never touches plugin markup, and
@@ -9,8 +9,8 @@ plugin markup never decides where it goes.
 
 The desktop is scoped per traveler (see [web-ui.md](web-ui.md) and
 `web/js/preferences.js`), so workspaces, focus, fullscreen and floating-window
-geometry are all restored per account. On a vertical phone-shaped screen
-(`MOBILE_PORTRAIT_QUERY`) the whole workspace system stands down and the
+geometry are all restored per account. On a phone-shaped screen, including touch landscape
+(`MOBILE_QUERY`) the whole workspace system stands down and the
 desktop becomes a single column of windows — a *view* over the stored
 arrangement, never a rewrite of it.
 
@@ -27,7 +27,7 @@ arrangement, never a rewrite of it.
 | `web/js/launcher.js` | Full-screen plugin launcher (three-finger swipe down) |
 | `web/js/gestures.js` | Trackpad gesture → desktop action vocabulary |
 | `web/js/contextMenu.js` | Right-click / long-press menus and the popup engine |
-| `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait) |
+| `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait and landscape) |
 | `web/js/preferences.js` | Per-user storage for all of the above |
 
 ## Window lifecycle
@@ -189,7 +189,7 @@ splitter overlay, then branches:
 - **Fullscreen / single** — when a window is fullscreen, or only one is visible,
   the grid becomes a single 1×1 track and the visible tile gets `.tile--full`.
 
-A vertical phone screen forces `mode: 'columns'` in `getDesktopLayout()` without
+A phone screen in portrait or touch landscape forces `mode: 'columns'` in `getDesktopLayout()` without
 touching the stored value, so the choice returns with the screen.
 
 ### Splitters
@@ -538,3 +538,12 @@ and the `notify()` helper.
 
 Related: [web UI](web-ui.md) · [themes & icons](themes-icons.md) ·
 [host panels](../host/README.md).
+
+## Implementation boundaries
+
+The `desktop.js` public entrypoint forwards to `desktop/workspaces.js`, which
+owns workspaces, focus, fullscreen, persistence and desktop commands. A layout
+controller in `desktop/layout.js` owns rendering and geometry, with floating-window
+pointer handling in `desktop/interactions.js`. The controller accesses the same
+session-owned state; this refactor changes no workspace or preference formats.
+The fullscreen behavior suite continues to exercise the public entrypoint.

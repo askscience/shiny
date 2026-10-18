@@ -26,7 +26,7 @@ pub struct LoadedPlugin {
     /// awaited without holding the loader lock.
     pub plugin: Arc<dyn Plugin>,
     pub ctx: Arc<PluginCtx>,
-    pub library: Library,
+    library: Option<Library>,
     pub install_dir: PathBuf,
 }
 
@@ -43,9 +43,30 @@ struct ManifestExtras {
     capabilities: Vec<String>,
 }
 
+/// Optional diagnostics only. Legacy archives remain accepted without this
+/// table; build metadata is evidence for support, never a binary-safety proof.
+#[derive(serde::Deserialize)]
+struct BuildMetadata {
+    rustc: Option<String>,
+    target: Option<String>,
+    sdk_revision: Option<String>,
+}
+
+fn trace_build_metadata(manifest_text: &str) {
+    #[derive(serde::Deserialize)]
+    struct Extras { build: Option<BuildMetadata> }
+    if let Ok(Extras { build: Some(build) }) = toml::from_str(manifest_text) {
+        // Bound untrusted diagnostic strings and escape newlines via Debug.
+        let bounded = |value: Option<String>| value.map(|value| value.chars().take(160).collect::<String>());
+        tracing::debug!(rustc = ?bounded(build.rustc), target = ?bounded(build.target),
+            sdk_revision = ?bounded(build.sdk_revision), "Plugin build metadata");
+    }
+}
+
 /// Trimmed, empty-dropped host extras for one manifest. These keys are hints,
 /// so a missing or malformed extras block yields nothing rather than an error.
 fn parse_extras(manifest_text: &str) -> (Option<String>, Vec<String>) {
+    trace_build_metadata(manifest_text);
     let extras = toml::from_str::<ManifestExtras>(manifest_text).ok();
     let category = extras
         .as_ref()
@@ -81,8 +102,17 @@ const MAX_RETIRED_LIBRARIES: usize = 100;
 /// Retire a loaded plugin: keep its library mapped (see `LIBRARY_GRAVEYARD`)
 /// and drop the rest of the handle.
 fn retire(loaded: LoadedPlugin) {
-    LIBRARY_GRAVEYARD.lock().push(loaded.library);
-    // `plugin` (Box<dyn Plugin>) and `ctx` drop here.
+    drop(loaded);
+}
+
+impl Drop for LoadedPlugin {
+    fn drop(&mut self) {
+        // Also cover cancellation while awaiting on_unload: registry tools and
+        // router snapshots may still reference this library's vtables then.
+        if let Some(library) = self.library.take() {
+            LIBRARY_GRAVEYARD.lock().push(library);
+        }
+    }
 }
 
 /// Validate that a plugin name is a single safe path component. It comes from
@@ -308,7 +338,16 @@ impl Loader {
 
         // Register tools / routes / crons into a fresh builder.
         let mut builder = RegistryBuilder::new();
-        plugin.register(base_ctx.clone(), &mut builder);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            plugin.register(base_ctx.clone(), &mut builder);
+        })).map_err(|_| AppError::Internal(format!("Plugin '{}' registration panicked", manifest.name)))?;
+        for route in &builder.routes {
+            if plugin.route_handler(&route.handler_tag).is_none() {
+                return Err(AppError::BadRequest(format!(
+                    "Plugin '{}' declares an unresolved route handler '{}'", manifest.name, route.handler_tag
+                )));
+            }
+        }
 
         // Build per-plugin ctx with the manifest's snapshot. The plugin opens
         // its own SQLite pool lazily via `ctx.pool()` — never share ours.
@@ -321,7 +360,7 @@ impl Loader {
             capabilities,
             plugin,
             ctx: ctx.clone(),
-            library,
+            library: Some(library),
             install_dir: install_dir.to_path_buf(),
         };
 

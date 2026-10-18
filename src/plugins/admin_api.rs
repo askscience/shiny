@@ -45,7 +45,7 @@ pub async fn list(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let active = state.plugins.session_active_set(&traveler.id).await;
+    let active = state.plugins.try_session_active_set(&traveler.id).await?;
     let entries: Vec<PluginListEntry> = state
         .plugins
         .list()
@@ -106,7 +106,7 @@ pub async fn active(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let active = state.plugins.session_active_set(&traveler.id).await;
+    let active = state.plugins.try_session_active_set(&traveler.id).await?;
     let names: Vec<String> = active.into_iter().collect();
     Ok(Json(json!({ "success": true, "data": names })))
 }
@@ -132,22 +132,19 @@ pub async fn install(
     let bytes = archive_bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
 
     let base_ctx = state.plugin_ctx();
-    let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
-    let name = crate::plugins::installer::install_archive(
-        bytes,
-        plugins_dir,
-        &state.plugins,
-        base_ctx,
-    ).await?;
-
-    // After install, activation follows the per-user session semantics
-    // (`session_active_set`): users with `session.remember` off opt in by
-    // activating the plugin; remembering users see it active unless they
-    // explicitly deactivated it. Nothing to do here.
-
-    if let Some(rebuild) = &state.router_rebuild {
-        rebuild();
-    }
+    let plugins_dir = std::path::PathBuf::from(&state.config.plugins_dir);
+    let manager = state.plugins.clone();
+    let rebuild = state.router_rebuild.clone();
+    // A dropped HTTP request must not cancel a half-published native upgrade.
+    // Once upload/validation is complete, the operation finishes independently
+    // and publishes its router even if the client disconnects.
+    let name = tokio::spawn(async move {
+        let name = crate::plugins::installer::install_archive(
+            bytes, &plugins_dir, &manager, base_ctx,
+        ).await?;
+        if let Some(rebuild) = rebuild { rebuild(); }
+        Ok::<_, AppError>(name)
+    }).await.map_err(|error| AppError::Internal(format!("Plugin installation task failed: {error}")))??;
 
     Ok(Json(json!({ "success": true, "data": { "installed": name } })))
 }

@@ -97,8 +97,6 @@
 .ui-select-wrap .ui-icon { color: var(--muted); }
 .ui-select option { background: var(--surface-strong); color: var(--text); }
 
-.ui-search > .ui-icon { color: var(--muted); }
-
 /* Toggle — a flat track with a flat square-ish knob. */
 .ui-toggle { background: var(--glass-strong); border-color: var(--glass-border); }
 .ui-toggle::after { background: var(--muted); border-radius: 50%; }

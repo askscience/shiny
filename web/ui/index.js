@@ -21,9 +21,14 @@ export {
 } from './appearance.js';
 export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg, refreshIcons, refreshFolderIcons, colorizeFolder, tintSvg, decorateSvg } from './icon.js';
 export { reveal } from './reveal.js';
+export { transition, disposeMotion, revealRegion, enterSurface, reducedMotion, motionDuration } from './motion.js';
+export { controlGrid, controlCard, controlGroup, toolbar } from './components/layout.js';
+export { segmented } from './components/choice.js';
 
-export { button, iconButton } from './components/button.js';
-export { field, input, textarea, select, useSelectMenu, toggle, toggleRow, slider, checkbox, searchBar } from './components/field.js';
+export { button, iconButton, controlButton, toolButton, menuButton } from './components/button.js';
+export { element } from './components/element.js';
+export { placePopover } from './popover.js';
+export { field, input, textarea, select, selectControl, useSelectMenu, toggle, toggleRow, slider, checkbox, searchBar } from './components/field.js';
 export { card, panel, section, divider, stack, row } from './components/card.js';
 export { modal, sheet, tooltip } from './components/overlay.js';
 export { toast, wireToastEvents, spinner, skeleton, progress, emptyState, badge } from './components/feedback.js';
@@ -37,3 +42,8 @@ export {
   installGlow, refreshGlow, glowFor, createRim, setGlow, setTileGlow,
   setTileGlowFromUrl, glowUrl, glowGradient, glowFromDrawable, glowFromImageUrl, partnerColor,
 } from './components/glow.js';
+
+export { dial } from './components/dial.js';
+export { mediaCard } from './components/media.js';
+export { confirmDialog, promptDialog } from './components/dialog.js';
+export { menuSurface, menuItem } from './components/menu.js';

@@ -1,3 +1,9 @@
+import {
+  menuSurface, menuItem, confirmDialog, promptDialog, menuButton, toolbar, input as uiInput,
+  toolButton, placePopover, controlButton, icon, button, emptyState, toast, spinner, setTileGlow,
+  glowFromDrawable, setIcon,
+} from '../../ui/index.js';
+
 /**
  * pdf.js — the PDF plugin's window (pdf_oxide viewer + editor).
  *
@@ -10,11 +16,6 @@
  * window refreshes its document list and opens what the AI touched.
  */
 
-import {
-  icon, button, emptyState, toast, spinner,
-  setTileGlow, glowFromDrawable,
-} from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
@@ -352,14 +353,13 @@ function closeEditBar() {
  */
 function showEditBar(run, box) {
   closeEditBar();
-  const bar = document.createElement('div');
-  bar.className = 'pdf-edit-bar';
+  const bar = toolbar([], { className: 'pdf-edit-bar' });
 
-  const apply = document.createElement('button');
+  const apply = controlButton();
   apply.type = 'button';
   apply.className = 'pdf-edit-apply';
   apply.textContent = t('plugin.pdf.edit.apply', null, 'Apply changes');
-  const cancel = document.createElement('button');
+  const cancel = controlButton();
   cancel.type = 'button';
   cancel.className = 'pdf-edit-cancel';
   cancel.textContent = t('plugin.pdf.edit.cancel', null, 'Cancel');
@@ -467,11 +467,10 @@ function placeTextBox(pageElNow, ev) {
 /** Formatting toolbar for the pending text box. */
 function showAddTextBar(box) {
   closeEditBar();
-  const bar = document.createElement('div');
-  bar.className = 'pdf-edit-bar';
+  const bar = toolbar([], { className: 'pdf-edit-bar' });
 
   const pill = (label, title, on, onClick) => {
-    const b = document.createElement('button');
+    const b = controlButton();
     b.type = 'button';
     b.className = 'pdf-edit-pill';
     b.title = title;
@@ -513,20 +512,20 @@ function showAddTextBar(box) {
   bar.append(sizeLabel, minus, plus);
   sep();
 
-  const colorInput = document.createElement('input');
+  const colorInput = uiInput();
   colorInput.type = 'color';
-  colorInput.className = 'pdf-edit-color';
+  colorInput.classList.add(...('pdf-edit-color').split(/\s+/));
   colorInput.title = t('plugin.pdf.edit.textColour', null, 'Text colour');
   colorInput.value = addTextFmt.color;
   colorInput.addEventListener('input', () => { addTextFmt.color = colorInput.value; sync(); });
   bar.appendChild(colorInput);
   sep();
 
-  const apply = document.createElement('button');
+  const apply = controlButton();
   apply.type = 'button';
   apply.className = 'pdf-edit-apply';
   apply.textContent = t('plugin.pdf.edit.addText', null, 'Add text');
-  const cancel = document.createElement('button');
+  const cancel = controlButton();
   cancel.type = 'button';
   cancel.className = 'pdf-edit-cancel';
   cancel.textContent = t('plugin.pdf.edit.cancel', null, 'Cancel');
@@ -844,7 +843,7 @@ async function renderThumbs() {
     num.className = 'pdf-thumb-num';
     num.textContent = String(i + 1);
 
-    const del = document.createElement('button');
+    const del = controlButton();
     del.type = 'button';
     del.className = 'pdf-thumb-del';
     del.title = t('plugin.pdf.rail.deletePage', null, 'Delete page');
@@ -1012,7 +1011,9 @@ async function exportCurrent() {
 
 async function removeCurrent() {
   if (!currentPdf) return;
-  if (!window.confirm(t('plugin.pdf.dialog.deleteDoc', { title: currentPdf.title }, `Delete "${currentPdf.title}"?`))) return;
+  const target = currentPdf;
+  if (!await confirmDialog(t('plugin.pdf.dialog.deleteDoc', { title: currentPdf.title }, `Delete "${currentPdf.title}"?`))) return;
+  if (currentPdf !== target || !tileEl) return;
   try {
     await deletePdf(currentPdf.pdf_id);
     dropPdfDoc();
@@ -1059,11 +1060,13 @@ async function applyReorder(order, focusPage) {
 
 async function removePage(page) {
   if (!currentPdf) return;
+  const target = currentPdf;
   if (currentPdf.page_count <= 1) {
     toast(t('plugin.pdf.toast.onlyPage', null, 'Cannot delete the only page'), { type: 'error' });
     return;
   }
-  if (!window.confirm(t('plugin.pdf.dialog.deletePage', { page: page + 1 }, `Delete page ${page + 1}?`))) return;
+  if (!await confirmDialog(t('plugin.pdf.dialog.deletePage', { page: page + 1 }, `Delete page ${page + 1}?`))) return;
+  if (currentPdf !== target || !tileEl) return;
   setBusy(true);
   try {
     await deletePages([page]);
@@ -1220,13 +1223,16 @@ function selectedPdfText() {
 function showAnnotBar(rect) {
   ensureAnnotBar();
   annotRect = rect;
+  const targetDoc = currentPdf;
+  const page = currentPage;
+  const stillSelected = () => tileEl && currentPdf === targetDoc && currentPage === page;
   // Capture any text selection now: clicking a button clears it, and both the
   // note and text-box prompts are much more useful pre-filled with the words
   // the user actually pointed at.
   const picked = selectedPdfText();
   annotBar.innerHTML = '';
   const mk = (label, fn) => {
-    const b = document.createElement('button');
+    const b = controlButton();
     b.type = 'button';
     b.className = 'pdf-annot-btn';
     b.textContent = label;
@@ -1234,9 +1240,9 @@ function showAnnotBar(rect) {
     annotBar.appendChild(b);
   };
   const mkText = (label, message, kind, prefill) => {
-    mk(label, () => {
-      const t = window.prompt(message, prefill || '');
-      if (t != null && t.trim()) void doAnnotate(kind, t.trim());
+    mk(label, async () => {
+      const t = await promptDialog(message, prefill || '');
+      if (t != null && t.trim() && stillSelected()) void doAnnotate(kind, t.trim(), rect);
     });
   };
   mk(t(ANNOT_LABELS.highlight.labelKey, null, 'Highlight'), () => void doAnnotate('highlight', ''));
@@ -1245,20 +1251,20 @@ function showAnnotBar(rect) {
   mk(t(ANNOT_LABELS.squiggly.labelKey, null, 'Squiggly'), () => void doAnnotate('squiggly', ''));
   mkText(t(ANNOT_LABELS.note.labelKey, null, 'Note'), t('plugin.pdf.dialog.noteText', null, 'Note text:'), 'note', picked);
   mkText(t(ANNOT_LABELS.free_text.labelKey, null, 'Text box'), t('plugin.pdf.dialog.textToPlace', null, 'Text to place on the page:'), 'free_text', picked);
-  mk(t(ANNOT_LABELS.link.labelKey, null, 'Link'), () => {
-    const url = window.prompt(t('plugin.pdf.dialog.linkUrl', null, 'Link URL:'));
-    if (url != null && url.trim()) void doAnnotate('link', url.trim());
+  mk(t(ANNOT_LABELS.link.labelKey, null, 'Link'), async () => {
+    const url = await promptDialog(t('plugin.pdf.dialog.linkUrl', null, 'Link URL:'));
+    if (url != null && url.trim() && stillSelected()) void doAnnotate('link', url.trim(), rect);
   });
   if (picked) {
-    mk(t('plugin.pdf.annot.findReplace', null, 'Find & replace…'), () => {
-      const old = window.prompt(t('plugin.pdf.dialog.findText', null, 'Find text:'), picked);
-      if (old == null || !old.trim()) return;
-      const nw = window.prompt(t('plugin.pdf.dialog.replaceWith', { text: old.trim() }, `Replace "${old.trim()}" with:`), '');
-      if (nw == null) return;
+    mk(t('plugin.pdf.annot.findReplace', null, 'Find & replace…'), async () => {
+      const old = await promptDialog(t('plugin.pdf.dialog.findText', null, 'Find text:'), picked);
+      if (old == null || !old.trim() || !stillSelected()) return;
+      const nw = await promptDialog(t('plugin.pdf.dialog.replaceWith', { text: old.trim() }, `Replace "${old.trim()}" with:`), '');
+      if (nw == null || !stillSelected()) return;
       void doReplaceText(old.trim(), nw);
     });
   }
-  const close = document.createElement('button');
+  const close = controlButton();
   close.type = 'button';
   close.className = 'pdf-annot-btn pdf-annot-btn--close';
   close.textContent = '×';
@@ -1267,16 +1273,15 @@ function showAnnotBar(rect) {
   annotBar.appendChild(close);
   annotBar.classList.remove('hidden');
   const r = selDisplayRect || { left: 12, top: 12 };
-  annotBar.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 560))}px`;
-  annotBar.style.top = `${Math.max(8, r.top - 48)}px`;
+  placePopover(annotBar, { getBoundingClientRect: () => ({ ...r, bottom: r.top, width: 0 }) });
 }
 
-async function doAnnotate(kind, text) {
+async function doAnnotate(kind, text, selection = annotRect) {
   // Read the rect before hiding the bar: the bar's document-level `pointerdown`
   // handler fires ahead of the button's `click`, so hiding first would leave
   // `annotRect` null here and silently drop every annotation.
-  if (!currentPdf || !annotRect) return;
-  const rect = [annotRect.x, annotRect.y, annotRect.w, annotRect.h];
+  if (!currentPdf || !selection) return;
+  const rect = [selection.x, selection.y, selection.w, selection.h];
   hideAnnotBar();
   setBusy(true);
   try {
@@ -1293,12 +1298,15 @@ async function doAnnotate(kind, text) {
   }
 }
 
-function promptFindReplace() {
+async function promptFindReplace() {
   if (!currentPdf) return;
-  const old = window.prompt(t('plugin.pdf.dialog.findText', null, 'Find text:'), '');
-  if (old == null || !old.trim()) return;
-  const nw = window.prompt(t('plugin.pdf.dialog.replaceWith', { text: old.trim() }, `Replace "${old.trim()}" with:`), '');
-  if (nw == null) return;
+  const targetDoc = currentPdf;
+  const page = currentPage;
+  const stillSelected = () => tileEl && currentPdf === targetDoc && currentPage === page;
+  const old = await promptDialog(t('plugin.pdf.dialog.findText', null, 'Find text:'), '');
+  if (old == null || !old.trim() || !stillSelected()) return;
+  const nw = await promptDialog(t('plugin.pdf.dialog.replaceWith', { text: old.trim() }, `Replace "${old.trim()}" with:`), '');
+  if (nw == null || !stillSelected()) return;
   void doReplaceText(old.trim(), nw);
 }
 
@@ -1318,10 +1326,11 @@ async function doReplaceText(oldText, newText) {
   }
 }
 
-function promptWatermark() {
+async function promptWatermark() {
   if (!currentPdf) return;
-  const text = window.prompt(t('plugin.pdf.dialog.watermarkText', null, 'Watermark text:'), t('plugin.pdf.dialog.watermarkDefault', null, 'DRAFT'));
-  if (text == null || !text.trim()) return;
+  const targetDoc = currentPdf;
+  const text = await promptDialog(t('plugin.pdf.dialog.watermarkText', null, 'Watermark text:'), t('plugin.pdf.dialog.watermarkDefault', null, 'DRAFT'));
+  if (text == null || !text.trim() || !tileEl || currentPdf !== targetDoc) return;
   void doWatermark(text.trim());
 }
 
@@ -1357,9 +1366,7 @@ function gotoPage(delta) {
 
 function ensureDocMenu() {
   if (docMenuPopup) return;
-  docMenuPopup = document.createElement('div');
-  docMenuPopup.className = 'pdf-doc-menu hidden';
-  docMenuPopup.setAttribute('role', 'menu');
+  docMenuPopup = menuSurface({ className: 'pdf-doc-menu', onEscape: closeDocMenu });
   document.body.appendChild(docMenuPopup);
 }
 
@@ -1383,9 +1390,7 @@ function onDocMenuKey(e) {
 }
 
 function docMenuItem(title, iconName, opts = {}) {
-  const item = document.createElement('button');
-  item.type = 'button';
-  item.className = 'pdf-doc-menu-item';
+  const item = menuItem({ className: 'pdf-doc-menu-item' });
   if (opts.danger) item.classList.add('pdf-doc-menu-item--danger');
   item.setAttribute('role', 'menuitem');
   const ic = document.createElement('span');
@@ -1477,10 +1482,8 @@ function openDocMenu() {
   ensureDocMenu();
   renderDocMenuItems();
   docMenuPopup.classList.remove('hidden');
-  const r = docMenuBtn.getBoundingClientRect();
-  const left = Math.max(12, Math.min(r.left, window.innerWidth - 300 - 12));
-  docMenuPopup.style.left = `${left}px`;
-  docMenuPopup.style.top = `${r.bottom + 8}px`;
+  placePopover(docMenuPopup, docMenuBtn);
+  docMenuPopup.focusFirst();
   docMenuOpen = true;
   docMenuBtn.setAttribute('aria-expanded', 'true');
   document.addEventListener('pointerdown', onDocMenuOutside, true);
@@ -1495,10 +1498,7 @@ function toggleDocMenu() {
 /* ── Tile lifecycle ─────────────────────────────────────────── */
 
 function toolbarButton(iconName, label, onClick) {
-  const btn = button({ icon: iconName, variant: 'ghost', onClick });
-  btn.classList.add('ui-btn--icon', 'pdf-tool');
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
+  const btn = toolButton(iconName, label, onClick, { className: 'pdf-tool' });
   return btn;
 }
 
@@ -1510,28 +1510,13 @@ export function mountPdfTile() {
   tileEl.dataset.plugin = PDF_PLUGIN;
 
   /* Top bar */
-  const bar = document.createElement('div');
-  bar.className = 'pdf-bar';
+  const bar = toolbar([], { className: 'pdf-bar' });
   bar.dataset.windowBar = '';
 
-  docMenuBtn = document.createElement('button');
-  docMenuBtn.type = 'button';
-  docMenuBtn.className = 'pdf-doc-btn';
-  docMenuBtn.setAttribute('aria-haspopup', 'menu');
-  docMenuBtn.setAttribute('aria-expanded', 'false');
-  docMenuBtn.title = t('plugin.pdf.toolbar.documents', null, 'PDFs');
-  const docIcon = document.createElement('span');
-  docIcon.className = 'pdf-doc-btn-icon';
-  docMenuBtn.appendChild(docIcon);
-  void setIcon(docIcon, 'ui/doc', { size: 15 });
-  const chevron = document.createElement('span');
-  chevron.className = 'pdf-doc-btn-chevron';
-  docMenuBtn.appendChild(chevron);
-  void setIcon(chevron, 'ui/chevron-down', { size: 12 });
-  docMenuBtn.addEventListener('click', toggleDocMenu);
+  docMenuBtn = menuButton({ icon: 'ui/doc', label: t('plugin.pdf.toolbar.documents', null, 'PDFs'), onClick: toggleDocMenu, className: 'pdf-doc-btn' });
 
-  titleInput = document.createElement('input');
-  titleInput.className = 'pdf-title';
+  titleInput = uiInput();
+  titleInput.classList.add('pdf-title');
   titleInput.type = 'text';
   titleInput.placeholder = t('plugin.pdf.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
@@ -1576,7 +1561,7 @@ export function mountPdfTile() {
   const importBtn = toolbarButton('ui/download', t('plugin.pdf.toolbar.importPdf', null, 'Import .pdf'), pickPdfFile);
   const exportBtn = toolbarButton('ui/save', t('plugin.pdf.toolbar.saveToDocuments', null, 'Save to Documents'), () => void exportCurrent());
   const delBtn = toolbarButton('ui/trash', t('plugin.pdf.toolbar.deletePdf', null, 'Delete PDF'), () => void removeCurrent());
-  delBtn.classList.add('pdf-tool--danger');
+  delBtn.classList.add('ui-tool--danger');
 
   saveDot = document.createElement('span');
   saveDot.className = 'pdf-save-dot';

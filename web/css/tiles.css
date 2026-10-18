@@ -153,7 +153,7 @@ body.is-tiling-resize {
   box-shadow: var(--window-shadow, none);
   overflow: hidden;
   pointer-events: auto;
-  transition: border-color var(--duration-normal) var(--ease-out);
+  transition: border-color var(--motion-reveal) var(--motion-ease);
   /* Size container: plugin windows switch to a compact layout when the
      WINDOW itself gets narrow (multiple tiles side by side, or a phone). */
   container-type: inline-size;
@@ -345,8 +345,8 @@ html[data-window-translucent="1"] .tile {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 
 .tile-header-btn:hover {
@@ -512,28 +512,8 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   background: var(--glass);
 }
 
-.word-doc-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.word-doc-btn:hover { background: var(--glass-hover); }
-.word-doc-btn[aria-expanded='true'] { background: var(--glass-hover); }
 
-.word-doc-btn-icon { display: inline-flex; color: var(--accent); }
-.word-doc-btn-icon .ui-icon { width: 15px; height: 15px; }
-.word-doc-btn-chevron { display: inline-flex; color: var(--muted); }
-.word-doc-btn-chevron .ui-icon { width: 12px; height: 12px; }
 
 .word-title {
   flex: 1;
@@ -575,7 +555,7 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   height: 7px;
   border-radius: 50%;
   background: var(--muted);
-  transition: background var(--duration-normal) var(--ease-out);
+  transition: background var(--motion-reveal) var(--motion-ease);
 }
 
 .word-save-dot.is-active {
@@ -594,19 +574,7 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 
 .word-tools-spacer { flex: 1; }
 
-.word-tool {
-  width: 30px;
-  height: 30px;
-  border-radius: 0;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
 
-.word-tool:hover { background: var(--glass-hover); color: var(--text); }
 
 .word-tool.is-active {
   background: var(--accent-soft);
@@ -614,7 +582,6 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   color: var(--accent);
 }
 
-.word-tool--danger:hover { color: var(--error); border-color: var(--error); }
 
 /* Editor — editorial typography. */
 .word-editor {
@@ -689,47 +656,9 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 }
 
 /* Doc menu popup (body-level). */
-.word-doc-menu {
-  position: fixed;
-  z-index: calc(var(--z-hud) + 2);
-  min-width: 260px;
-  max-width: min(320px, calc(100vw - 28px));
-  max-height: min(340px, 60vh);
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  animation: hudMenuIn var(--duration-fast) var(--ease-out);
-}
 
-.word-doc-menu::-webkit-scrollbar { display: none; }
 
-.word-doc-menu-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 9px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.word-doc-menu-item:hover { background: var(--glass-hover); }
-.word-doc-menu-item.is-active { color: var(--accent); }
 
 .word-doc-menu-title {
   flex: 1;
@@ -769,19 +698,13 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 }
 
 /* ── Word compact variant (narrow window) ────────────────────
-   When the Word WINDOW is small, the toolbar keeps only the formatting
-   commands; secondary actions (save/import/export/new/delete) live in the
-   document menu. */
+   The toolbar scrolls on narrow windows; every command and the installed-font
+   picker remains available. */
 @container (max-width: 480px) {
-  .word-tool--secondary { display: none; }
-  /* Drop the font picker before the controls overflow; fonts remain available
-     on a wider window. */
-  .word-font { display: none; }
 
   .word-bar { padding: 8px 12px; }
   .word-title { font-size: 14px; }
   .word-tools { padding: 5px 12px; gap: 2px; }
-  .word-tool { width: 30px; height: 30px; }
 
   .word-editor { padding: 16px 16px 52px; font-size: 16px; }
   .word-status { padding: 6px 12px 7px; }
@@ -842,7 +765,7 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   filter: blur(var(--glow-live-blur, 0px)) saturate(1.3)
           brightness(var(--glow-brightness, 0.5));
   opacity: 0;
-  transition: opacity var(--duration-slow) var(--ease-out);
+  transition: opacity var(--motion-connect) var(--motion-ease);
   pointer-events: none;
   z-index: -1;
 }
@@ -997,7 +920,7 @@ html[data-window-background="0"] .tile-glow {
   width: 3px;
   height: 4px;
   background: var(--accent);
-  transition: height var(--duration-normal) var(--ease-out);
+  transition: height var(--motion-reveal) var(--motion-ease);
 }
 
 .radio-tile--live .radio-eq span {
@@ -1024,9 +947,9 @@ html[data-window-background="0"] .tile-glow {
   border: none;
   background: var(--glass);
   color: var(--text);
-  transition: background var(--duration-fast) var(--ease-out),
-    opacity var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    opacity var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 
 .radio-t-btn:hover:not(:disabled) {
@@ -1047,11 +970,13 @@ html[data-window-background="0"] .tile-glow {
 }
 
 /* ── Search ────────────────────────────────────────────────── */
+/* A page-level search, not a row of controls: the bigger, floating pill. */
 .radio-tile .ui-search {
+  --search-size: 40px;
+  --search-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.12));
   position: relative;
   z-index: 1;
   margin: 14px 24px 0;
-  border-radius: 0;
 }
 
 /* ── Station grid ──────────────────────────────────────────── */
@@ -1073,20 +998,6 @@ html[data-window-background="0"] .tile-glow {
 
 .radio-grid-status { grid-column: 1 / -1; padding: 24px 0; }
 
-.radio-cell {
-  position: relative;
-  display: block;
-  border: 1px solid var(--glass-border);
-  background: var(--glass);
-  cursor: pointer;
-  padding: 0;
-  /* NO overflow:hidden here — an overflowing grid item reports a collapsed
-     intrinsic height and the track shrinks under the art. The art box clips. */
-  text-align: left;
-  transition: border-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out);
-}
 
 .radio-cell:hover {
   border-color: var(--text);
@@ -1122,7 +1033,7 @@ html[data-window-background="0"] .tile-glow {
   overflow: hidden;
   background: var(--glass);
   filter: grayscale(0.85) brightness(0.55);
-  transition: filter var(--duration-normal) var(--ease-out);
+  transition: filter var(--motion-reveal) var(--motion-ease);
 }
 
 .radio-cell-art img {
@@ -1281,17 +1192,19 @@ html[data-window-background="0"] .tile-glow {
   background: var(--glass);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 
 .yt-hero-back:hover { background: var(--glass-hover); }
 
 /* ── Search ────────────────────────────────────────────────── */
+/* A page-level search, not a row of controls: the bigger, floating pill. */
 .yt-tile .ui-search {
+  --search-size: 40px;
+  --search-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.12));
   position: relative;
   z-index: 1;
   margin: 12px 20px 0;
-  border-radius: 0;
 }
 
 /* ── Category chips (idle homepage) ────────────────────────── */
@@ -1319,9 +1232,9 @@ html[data-window-background="0"] .tile-glow {
   font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 
 .yt-category:hover {
@@ -1400,21 +1313,6 @@ html[data-window-background="0"] .tile-glow {
 }
 .yt-shelf::-webkit-scrollbar { display: none; }
 .yt-shelf .yt-cell { flex: none; width: 172px; }
-
-.yt-cell {
-  position: relative;
-  display: block;
-  border: 1px solid var(--glass-border);
-  background: var(--glass);
-  cursor: pointer;
-  padding: 0;
-  /* NO overflow:hidden here — an overflowing grid item reports a collapsed
-     intrinsic height and the track shrinks under the art. The art box clips. */
-  text-align: left;
-  transition: border-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out);
-}
 
 .yt-cell:hover {
   border-color: var(--text);
@@ -1580,8 +1478,8 @@ html[data-window-background="0"] .tile-glow {
   -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
   opacity: 0;
   transform: translateY(10px);
-  transition: opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+  transition: opacity var(--motion-reveal) var(--motion-ease),
+    transform var(--motion-reveal) var(--motion-ease);
   pointer-events: auto;
 }
 
@@ -1606,7 +1504,7 @@ html[data-window-background="0"] .tile-glow {
   background: var(--glass);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast);
+  transition: background var(--motion-feedback);
 }
 
 .tile-overlay-back:hover { background: var(--glass-hover); }
@@ -1682,28 +1580,8 @@ body.compose-active #tile-overlay {
   background: var(--glass);
 }
 
-.calc-sheet-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.calc-sheet-btn:hover { background: var(--glass-hover); }
-.calc-sheet-btn[aria-expanded='true'] { background: var(--glass-hover); }
 
-.calc-sheet-btn-icon { display: inline-flex; color: var(--accent); }
-.calc-sheet-btn-icon .ui-icon { width: 15px; height: 15px; }
-.calc-sheet-btn-chevron { display: inline-flex; color: var(--muted); }
-.calc-sheet-btn-chevron .ui-icon { width: 12px; height: 12px; }
 
 .calc-title {
   flex: 1;
@@ -1727,7 +1605,7 @@ body.compose-active #tile-overlay {
   height: 7px;
   border-radius: 50%;
   background: var(--muted);
-  transition: background var(--duration-normal) var(--ease-out);
+  transition: background var(--motion-reveal) var(--motion-ease);
 }
 
 .calc-save-dot.is-active {
@@ -1772,7 +1650,7 @@ body.compose-active #tile-overlay {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 12px;
   outline: none;
-  transition: border-color var(--duration-fast) var(--ease-out);
+  transition: border-color var(--motion-feedback) var(--motion-ease);
 }
 
 .calc-formula-input:focus { border-color: var(--accent); }
@@ -1840,7 +1718,7 @@ body.compose-active #tile-overlay {
   cursor: cell;
   background: var(--bg);
   user-select: none;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 
 .calc-cell--data:hover { background: var(--glass-hover); }
@@ -1891,47 +1769,9 @@ body.compose-active #tile-overlay {
 }
 
 /* Sheet menu popup (body-level). */
-.calc-sheet-menu {
-  position: fixed;
-  z-index: calc(var(--z-hud) + 2);
-  min-width: 260px;
-  max-width: min(320px, calc(100vw - 28px));
-  max-height: min(340px, 60vh);
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  animation: hudMenuIn var(--duration-fast) var(--ease-out);
-}
 
-.calc-sheet-menu::-webkit-scrollbar { display: none; }
 
-.calc-sheet-menu-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 9px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.calc-sheet-menu-item:hover { background: var(--glass-hover); }
-.calc-sheet-menu-item.is-active { color: var(--accent); }
 
 .calc-sheet-menu-title {
   flex: 1;
@@ -1983,20 +1823,7 @@ body.compose-active #tile-overlay {
   border-bottom: 1px solid var(--glass-border);
 }
 
-.calc-tool {
-  width: 30px;
-  height: 30px;
-  border-radius: 0;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
 
-.calc-tool:hover { background: var(--glass-hover); color: var(--text); }
-.calc-tool--danger:hover { color: var(--error); border-color: var(--error); }
 
 /* Focusable cells: selection outline is the focus indicator — drop the
    default browser ring. */
@@ -2023,28 +1850,8 @@ body.compose-active #tile-overlay {
   background: var(--glass);
 }
 
-.impress-deck-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.impress-deck-btn:hover { background: var(--glass-hover); }
-.impress-deck-btn[aria-expanded='true'] { background: var(--glass-hover); }
 
-.impress-deck-btn-icon { display: inline-flex; color: var(--accent); }
-.impress-deck-btn-icon .ui-icon { width: 15px; height: 15px; }
-.impress-deck-btn-chevron { display: inline-flex; color: var(--muted); }
-.impress-deck-btn-chevron .ui-icon { width: 12px; height: 12px; }
 
 .impress-title {
   flex: 1;
@@ -2085,7 +1892,7 @@ body.compose-active #tile-overlay {
   height: 7px;
   border-radius: 50%;
   background: var(--muted);
-  transition: background var(--duration-normal) var(--ease-out);
+  transition: background var(--motion-reveal) var(--motion-ease);
 }
 
 .impress-save-dot.is-active {
@@ -2102,20 +1909,7 @@ body.compose-active #tile-overlay {
   border-bottom: 1px solid var(--glass-border);
 }
 
-.impress-tool {
-  width: 30px;
-  height: 30px;
-  border-radius: 0;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
 
-.impress-tool:hover { background: var(--glass-hover); color: var(--text); }
-.impress-tool--danger:hover { color: var(--error); border-color: var(--error); }
 
 /* Body: strip + stage/inspector */
 .impress-body {
@@ -2148,8 +1942,8 @@ body.compose-active #tile-overlay {
   background: var(--surface-strong);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out);
+  transition: border-color var(--motion-feedback) var(--motion-ease),
+    box-shadow var(--motion-feedback) var(--motion-ease);
 }
 
 .impress-thumb:hover { border-color: var(--muted); }
@@ -2231,7 +2025,7 @@ body.compose-active #tile-overlay {
   font-size: 12.5px;
   outline: none;
   resize: vertical;
-  transition: border-color var(--duration-fast) var(--ease-out);
+  transition: border-color var(--motion-feedback) var(--motion-ease);
 }
 
 .impress-field-input:focus { border-color: var(--accent); }
@@ -2271,8 +2065,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 
 .impress-op:hover { background: var(--glass-hover); color: var(--text); }
@@ -2298,47 +2092,9 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 
 /* Deck menu popup (body-level). */
-.impress-deck-menu {
-  position: fixed;
-  z-index: calc(var(--z-hud) + 2);
-  min-width: 260px;
-  max-width: min(320px, calc(100vw - 28px));
-  max-height: min(340px, 60vh);
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  animation: hudMenuIn var(--duration-fast) var(--ease-out);
-}
 
-.impress-deck-menu::-webkit-scrollbar { display: none; }
 
-.impress-deck-menu-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 9px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.impress-deck-menu-item:hover { background: var(--glass-hover); }
-.impress-deck-menu-item.is-active { color: var(--accent); }
 
 .impress-deck-menu-title {
   flex: 1;
@@ -2551,8 +2307,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   min-height: 1em;
   cursor: text;
   border-radius: 2px;
-  transition: background var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    box-shadow var(--motion-feedback) var(--motion-ease);
 }
 .impress-slide [contenteditable]:hover {
   background: color-mix(in srgb, var(--im-accent) 10%, transparent);
@@ -2606,8 +2362,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.82);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 
 .impress-present-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
@@ -2663,7 +2419,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 /* Progressive bullet build (Slide.reveal === 'bullets'): each bullet keeps its
    space — only opacity changes, so the slide never reflows as it builds. */
 .impress-present .impress-slide-bullet {
-  transition: opacity 240ms var(--ease-out);
+  transition: opacity var(--motion-connect) var(--motion-ease);
 }
 .impress-present .impress-slide-bullet.is-hidden { opacity: 0; }
 
@@ -2708,40 +2464,12 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: var(--glass);
 }
 
-.mail-account-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  max-width: 200px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
 
-.mail-account-btn:hover { background: var(--glass-hover); }
-.mail-account-btn[aria-expanded='true'] { background: var(--glass-hover); }
-.mail-account-btn-icon { display: inline-flex; color: var(--accent); }
-.mail-account-btn-icon .ui-icon { width: 15px; height: 15px; }
-.mail-account-btn-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 500;
-}
-.mail-account-btn-chevron { display: inline-flex; color: var(--muted); }
-.mail-account-btn-chevron .ui-icon { width: 12px; height: 12px; }
 
 /* Account menu rows (body-level popup). A button does not inherit the page
    font, so the family must be explicit — same as the other document menus. */
 .mail-account-menu-item { font-family: var(--font-body); }
+.mail-account-menu-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
 .mail-title {
   flex: 1;
@@ -2759,7 +2487,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   height: 7px;
   border-radius: 50%;
   background: var(--muted);
-  transition: background var(--duration-normal) var(--ease-out);
+  transition: background var(--motion-reveal) var(--motion-ease);
 }
 .mail-status-dot.is-ok {
   background: var(--accent);
@@ -2775,20 +2503,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border-bottom: 1px solid var(--glass-border);
 }
 
-.mail-tool {
-  width: 30px;
-  height: 30px;
-  border-radius: 0;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
 
-.mail-tool:hover { background: var(--glass-hover); color: var(--text); }
-.mail-tool--danger:hover { color: var(--error); border-color: var(--error); }
 
 /* Body panes */
 .mail-body {
@@ -2823,7 +2538,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease), color var(--motion-feedback) var(--motion-ease);
 }
 .mail-folder:hover { background: var(--glass-hover); color: var(--text); }
 .mail-folder.is-active { background: var(--accent-soft); color: var(--accent); }
@@ -2848,18 +2563,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border-bottom: 1px solid var(--glass-border);
 }
 
-.mail-search-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 7px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--glass);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-}
-.mail-search-input:focus { outline: none; border-color: var(--accent); }
 
 .mail-list-items {
   flex: 1;
@@ -2881,7 +2584,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   font-family: var(--font-body);
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .mail-item:hover { background: var(--glass-hover); }
 .mail-item.is-active { background: var(--accent-soft); }
@@ -3032,7 +2735,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
+  transition: border-color var(--motion-feedback) var(--motion-ease), background var(--motion-feedback) var(--motion-ease);
 }
 .mail-provider-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
 
@@ -3114,9 +2817,9 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 .calculator-bar-btn:hover { background: var(--glass-hover); color: var(--text); }
 .calculator-bar-btn.is-active {
@@ -3191,8 +2894,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   font-size: 15px;
   font-family: var(--font-body);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .calculator-key:hover { background: var(--glass-hover); }
 .calculator-key.is-fn { color: var(--accent); font-size: 12px; letter-spacing: 0.02em; }
@@ -3227,7 +2930,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .calculator-history-item:hover { background: var(--glass-hover); }
 .calculator-history-expr {
@@ -3317,7 +3020,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   text-align: left;
   cursor: pointer;
   min-height: 64px;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .calendar-day:hover { background: var(--glass-hover); }
 .calendar-day.is-other { background: var(--surface); opacity: 0.4; cursor: default; }
@@ -3470,8 +3173,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 .studio-transport:hover { background: var(--glass-hover); }
 .studio-transport--play { color: var(--accent); }
@@ -3523,7 +3226,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease);
 }
 .studio-menu-btn:hover { background: var(--glass-hover); }
 .studio-menu-btn[aria-expanded='true'] { background: var(--glass-hover); }
@@ -3559,8 +3262,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 .studio-btn:hover { background: var(--glass-hover); color: var(--text); }
 .studio-btn--danger:hover { color: var(--error); border-color: var(--error); }
@@ -3582,7 +3285,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   height: 7px;
   border-radius: 50%;
   background: var(--muted);
-  transition: background var(--duration-normal) var(--ease-out);
+  transition: background var(--motion-reveal) var(--motion-ease);
 }
 .studio-save-dot.is-active {
   background: var(--accent);
@@ -3648,8 +3351,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   padding: 7px 8px;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .studio-track-item:hover { background: var(--glass-hover); }
 .studio-track-item--active { border-color: var(--accent); background: var(--glass-hover); }
@@ -3729,8 +3432,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   position: sticky;
   left: 0;
   z-index: 2;
-  transition: border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: border-color var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 .studio-track-head--active { border-color: var(--accent); color: var(--text); }
 .studio-track-dot {
@@ -3778,8 +3481,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   top: 0;
   z-index: 1;
   background: var(--glass);
-  transition: color var(--duration-fast) var(--ease-out),
-    background var(--duration-fast) var(--ease-out);
+  transition: color var(--motion-feedback) var(--motion-ease),
+    background var(--motion-feedback) var(--motion-ease);
 }
 .studio-scene--playing { color: var(--accent); background: var(--glass-hover); }
 
@@ -3793,9 +3496,9 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   cursor: pointer;
   min-width: 0;
   min-height: 0;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease);
 }
 .studio-cell:hover { border-color: var(--track, var(--accent)); }
 .studio-cell--on {
@@ -3918,8 +3621,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: transparent;
   cursor: pointer;
   min-height: 16px;
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    border-color var(--motion-feedback) var(--motion-ease);
 }
 .studio-pr-cell:hover { border-color: var(--accent); }
 .studio-pr-cell--on { background: var(--accent); border-color: transparent; }
@@ -4137,45 +3840,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   gap: 3px;
   width: 52px;
 }
-.studio-knob-dial {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, var(--glass-hover), var(--glass));
-  border: 1px solid var(--glass-border);
-  cursor: ns-resize;
-  touch-action: none;
-}
-/* Value arc ring: colored by the assigned instrument (--track), drawn from
-   the neutral "0" position to the current value (bipolar-aware). */
-.studio-knob-dial::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  border-radius: 50%;
-  background: conic-gradient(from var(--arc-start, 225deg), var(--track, var(--accent)) 0 var(--arc-sweep, 0deg), rgba(255, 255, 255, 0.07) var(--arc-sweep, 0deg));
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  opacity: 0.9;
-  pointer-events: none;
-}
-.studio-knob-pointer {
-  position: absolute;
-  left: 50%;
-  top: 3px;
-  width: 2px;
-  height: 10px;
-  margin-left: -1px;
-  background: var(--track, var(--accent));
-  border-radius: 1px;
-  transform-origin: 50% 14px;
-}
-.studio-knob-label {
-  font-size: 9px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
 .studio-knob-wrap { position: relative; flex: none; }
 .studio-knob-auto {
   position: absolute;
@@ -4192,15 +3856,10 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   padding: 0;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 120ms linear;
+  transition: opacity var(--motion-feedback) linear;
 }
 .studio-knob-wrap:hover .studio-knob-auto { opacity: 1; }
 .studio-knob-auto:hover { color: var(--accent); border-color: var(--accent); }
-.studio-knob-value {
-  font-size: 9px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
 
 /* mixer strips */
 .studio-mixer-strip {
@@ -4833,7 +4492,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   transform-origin: left center;
   transform: scaleX(0);
   background: linear-gradient(90deg, #5ad1a8, #57d9ff);
-  transition: background 120ms linear;
+  transition: background var(--motion-feedback) linear;
 }
 .studio-meter-fill--clip { background: var(--error); }
 .studio-meter-peak {
@@ -4853,7 +4512,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(87, 217, 255, 0); }
   50% { box-shadow: 0 0 8px 1px rgba(87, 217, 255, 0.55); }
 }
-.studio-beat { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--glass-border); transition: background 80ms linear; }
+.studio-beat { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--glass-border); transition: background var(--motion-feedback) linear; }
 .studio-beat--hit { background: var(--accent); box-shadow: 0 0 8px 1px var(--accent); }
 .studio-status[data-state='busy'] { animation: studio-busy 0.9s ease-in-out infinite; }
 @keyframes studio-busy { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
@@ -5089,12 +4748,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 
 /* In-bar icon tools match Studio's 32px transport buttons. */
-.word-tool, .calc-tool, .impress-tool, .mail-tool,
-.calendar-nav-btn, .calculator-bar-btn, .pdf-tool {
-  width: 32px;
-  height: 32px;
-}
-
+.calendar-nav-btn, .calculator-bar-btn { width: 32px; height: 32px; }
 /* ─────────────────────────────────────────────────────────────
    Terminal plugin — the host shell window (xterm.js surface).
    Chrome (tab strip/status) follows the theme like every other window; the
@@ -5144,8 +4798,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--text-secondary, var(--text));
-  transition: background var(--duration-fast, 120ms) var(--ease-out, ease),
-              border-color var(--duration-fast, 120ms) var(--ease-out, ease);
+  transition: background var(--motion-feedback, var(--motion-feedback)) var(--motion-ease, ease),
+              border-color var(--motion-feedback, var(--motion-feedback)) var(--motion-ease, ease);
 }
 
 .terminal-tab:hover {
@@ -5234,25 +4888,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: var(--glass);
 }
 
-.pdf-doc-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.pdf-doc-btn:hover { background: var(--glass-hover); }
-.pdf-doc-btn[aria-expanded='true'] { background: var(--glass-hover); }
-.pdf-doc-btn-icon { display: inline-flex; color: var(--accent); }
-.pdf-doc-btn-icon .ui-icon { width: 15px; height: 15px; }
-.pdf-doc-btn-chevron { display: inline-flex; color: var(--muted); }
-.pdf-doc-btn-chevron .ui-icon { width: 12px; height: 12px; }
 
 .pdf-title {
   flex: 1;
@@ -5280,17 +4915,6 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   color: var(--text-secondary);
 }
 
-.pdf-tool {
-  border-radius: 0;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-.pdf-tool:hover { background: var(--glass-hover); color: var(--text); }
-.pdf-tool--danger:hover { color: var(--error); border-color: var(--error); }
 
 .pdf-save-dot {
   flex: none;
@@ -5298,7 +4922,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   height: 7px;
   border-radius: 50%;
   background: var(--muted);
-  transition: background var(--duration-normal) var(--ease-out);
+  transition: background var(--motion-reveal) var(--motion-ease);
 }
 .pdf-save-dot.is-active {
   background: var(--accent);
@@ -5336,8 +4960,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   background: var(--bg);
   padding: 3px;
   cursor: grab;
-  transition: border-color var(--duration-fast) var(--ease-out),
-    background var(--duration-fast) var(--ease-out);
+  transition: border-color var(--motion-feedback) var(--motion-ease),
+    background var(--motion-feedback) var(--motion-ease);
 }
 .pdf-thumb:hover { border-color: var(--accent); }
 .pdf-thumb.is-active {
@@ -5507,7 +5131,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 1px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  transition: background var(--duration-fast), outline-color var(--duration-fast);
+  transition: background var(--motion-feedback), outline-color var(--motion-feedback);
 }
 .pdf-run:hover {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -5621,8 +5245,8 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    color var(--motion-feedback) var(--motion-ease);
 }
 .pdf-annot-btn:hover { background: var(--glass-hover); color: var(--text); }
 .pdf-annot-btn--close { color: var(--muted); padding: 0 10px; }
@@ -5647,44 +5271,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
 }
 
 /* Doc menu popup (body-level) — mirrors the Word/Image menus. */
-.pdf-doc-menu {
-  position: fixed;
-  z-index: calc(var(--z-hud) + 2);
-  min-width: 260px;
-  max-width: min(320px, calc(100vw - 28px));
-  max-height: min(380px, 60vh);
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  animation: hudMenuIn var(--duration-fast) var(--ease-out);
-}
-.pdf-doc-menu::-webkit-scrollbar { display: none; }
 
-.pdf-doc-menu-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 9px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.pdf-doc-menu-item:hover { background: var(--glass-hover); }
 .pdf-doc-menu-title {
   flex: 1;
   min-width: 0;
@@ -5897,17 +5484,17 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   .studio-tile *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    transition-duration: var(--motion-feedback) !important;
   }
 }
 
 /* Narrow windows: keep the DAW usable instead of letting the scope and
    the detail panel squeeze the timeline. */
-@media (max-width: 900px) {
+@container (max-width: 900px) {
   .studio-scope { display: none; }
   .studio-device { min-width: 170px; }
 }
-@media (max-width: 640px) {
+@container (max-width: 640px) {
   .studio-title { max-width: 130px; }
   .studio-browser { width: 100% !important; max-width: none; }
 }
@@ -5987,7 +5574,7 @@ textarea.impress-field-input { min-height: 64px; line-height: 1.45; }
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast);
+  transition: background var(--motion-feedback) var(--motion-ease), color var(--motion-feedback);
 }
 .files-place:hover { background: var(--glass-hover); color: var(--text); }
 .files-place.is-active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
@@ -6050,27 +5637,6 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 .files-path-menu { margin-left: auto; flex: none; width: 26px; height: 26px; border-radius: 6px; color: var(--text-secondary); }
 .files-path-menu:hover { background: var(--glass-hover); color: var(--text); }
 
-.files-search-entry {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  padding: 0 4px;
-  color: var(--muted);
-}
-.files-search-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 13px;
-}
-.files-search-input::placeholder { color: var(--muted); }
-.files-search-clear { width: 24px; height: 24px; }
 
 .files-header-actions { display: flex; align-items: center; gap: 2px; }
 .files-view-split { display: flex; align-items: center; }
@@ -6261,7 +5827,7 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   object-fit: contain;
   border-radius: var(--radius-sm);
   cursor: zoom-in;
-  transition: transform var(--duration-normal) var(--ease-out);
+  transition: transform var(--motion-reveal) var(--motion-ease);
 }
 .files-preview-img.is-zoomed { transform: scale(1.8); cursor: zoom-out; }
 .files-preview-media {
@@ -6664,7 +6230,7 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   padding: 4px 8px;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background var(--motion-feedback) ease, color var(--motion-feedback) ease;
 }
 .image-zoom-chip:hover { background: var(--glass-hover); color: var(--text); }
 .image-zoom-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -6744,9 +6310,9 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   background-position: calc(var(--i, 0) * -64px) 0;
   background-repeat: no-repeat;
   transition:
-    transform 160ms cubic-bezier(0.2, 0.7, 0.3, 1.2),
-    box-shadow 180ms ease,
-    border-color 140ms ease;
+    transform var(--motion-reveal) cubic-bezier(0.2, 0.7, 0.3, 1.2),
+    box-shadow var(--motion-reveal) ease,
+    border-color var(--motion-feedback) ease;
 }
 /* Until the strip image arrives, gentle pulse instead of empty boxes. */
 .image-look-row:not([style*="--look-url"]) .image-look-chip {
@@ -6778,67 +6344,6 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   padding: 2px 2px 4px;
   scrollbar-width: thin;
 }
-.image-dial {
-  flex: none;
-  width: 58px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  cursor: ns-resize;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.image-dial-knob {
-  position: relative;
-  width: 54px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: background 140ms ease, box-shadow 140ms ease;
-}
-.image-dial:hover .image-dial-knob { background: var(--glass-hover); }
-.image-dial.is-dragging .image-dial-knob,
-.image-dial.is-set .image-dial-knob {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-.image-dial:focus-visible { outline: none; }
-.image-dial:focus-visible .image-dial-knob {
-  box-shadow: 0 0 0 2px var(--accent);
-}
-.image-dial-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.image-dial-track {
-  stroke: var(--glass-border);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.image-dial-arc {
-  stroke: var(--accent);
-  stroke-width: 3;
-  stroke-linecap: round;
-  transition: stroke-dasharray 120ms ease, stroke-dashoffset 120ms ease;
-}
-.image-dial-value {
-  position: relative;
-  font-size: 11px;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.image-dial.is-set .image-dial-value { color: var(--accent); }
-.image-dial-label {
-  font-size: 9px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-  max-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* One-click actions */
 .image-oneclicks { display: flex; flex-wrap: wrap; gap: 6px; }
 .image-oneclick {
@@ -6850,7 +6355,7 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
   padding: 5px 12px;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, transform 120ms ease;
+  transition: background var(--motion-feedback) ease, color var(--motion-feedback) ease, transform var(--motion-feedback) ease;
 }
 .image-oneclick:hover {
   background: color-mix(in srgb, var(--glass-hover) 60%, var(--glass));
@@ -6874,8 +6379,6 @@ button.files-path-crumb:hover { background: var(--glass-hover); color: var(--tex
 @media (prefers-reduced-motion: reduce) {
   .image-look-chip,
   .image-look-chip:hover,
-  .image-dial-arc,
-  .image-dial-knob,
   .image-oneclick { transition: none; }
   .image-look-chip:hover { transform: none; }
   .image-look-row:not([style*="--look-url"]) .image-look-chip { animation: none; }

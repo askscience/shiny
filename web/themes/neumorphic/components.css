@@ -121,8 +121,6 @@
 .ui-select-wrap .ui-icon { color: var(--muted); }
 .ui-select option { background: var(--surface-strong); color: var(--text); }
 
-.ui-search > .ui-icon { color: var(--muted); }
-
 .ui-toggle { background: var(--surface); border-color: var(--glass-border); box-shadow: var(--shadow-inset-sm); }
 .ui-toggle::after { background: var(--surface-strong); box-shadow: var(--shadow-sm); }
 .ui-toggle[aria-checked="true"] { background: var(--accent); border-color: transparent; }

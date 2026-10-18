@@ -71,10 +71,12 @@ impl CancelHandle {
     /// Resolves as soon as the turn is cancelled (immediately if it already is).
     /// Used as the losing branch of a `select!` around a model call.
     pub async fn cancelled(&self) {
-        if self.is_cancelled() {
-            return;
+        let notified = self.0.notify.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        if !self.is_cancelled() {
+            notified.await;
         }
-        self.0.notify.notified().await;
     }
 }
 
@@ -82,6 +84,7 @@ impl CancelHandle {
 #[derive(Clone, Default)]
 pub struct TurnRegistry {
     inner: Arc<Mutex<HashMap<String, Entry>>>,
+    shutting_down: Arc<AtomicBool>,
 }
 
 impl TurnRegistry {
@@ -90,6 +93,7 @@ impl TurnRegistry {
     pub fn register(&self, turn_id: &str, user_id: &str) -> CancelHandle {
         let flag = Arc::new(Flag::default());
         let mut map = self.inner.lock().unwrap();
+        flag.cancelled.store(self.shutting_down.load(Ordering::SeqCst), Ordering::SeqCst);
         map.retain(|_, e| match e.finished_at {
             Some(at) => at.elapsed() < FINISHED_TTL,
             None => true,
@@ -132,6 +136,19 @@ impl TurnRegistry {
         }
     }
 
+    /// Cancel every active turn during process shutdown; no user-facing late
+    /// stop annotation is generated for a server lifecycle event.
+    pub fn cancel_all(&self) {
+        let map = self.inner.lock().unwrap();
+        self.shutting_down.store(true, Ordering::SeqCst);
+        for entry in map.values() {
+            if entry.state == State::Running {
+                entry.flag.cancelled.store(true, Ordering::SeqCst);
+                entry.flag.notify.notify_waiters();
+            }
+        }
+    }
+
     /// Mark a turn as done (called once its result has been persisted). The
     /// entry is kept briefly so a late stop is still recognised.
     pub fn finish(&self, turn_id: &str) {
@@ -140,5 +157,21 @@ impl TurnRegistry {
             entry.state = State::Finished;
             entry.finished_at = Some(Instant::now());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn shutdown_wakes_active_turns_and_prevents_new_work() {
+        let registry = TurnRegistry::default();
+        let active = registry.register("active", "one");
+        let waiter = tokio::spawn({ let active = active.clone(); async move { active.cancelled().await } });
+        tokio::task::yield_now().await;
+        registry.cancel_all();
+        tokio::time::timeout(Duration::from_secs(1), waiter).await.unwrap().unwrap();
+        assert!(active.is_cancelled());
+        assert!(registry.register("late", "one").is_cancelled());
     }
 }

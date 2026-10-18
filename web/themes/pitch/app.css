@@ -1213,12 +1213,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 .files-icon-btn:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
 .files-icon-btn.is-disabled { opacity: 0.3; }
-.files-search-input {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
-  color: var(--text) !important;
-}
 .files-col-head {
   border-bottom: 1px solid var(--glass-border) !important;
   color: var(--muted) !important;
@@ -1394,12 +1388,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 .mail-folder-name { font-size: 12.5px !important; font-weight: 500 !important; color: inherit !important; }
 .mail-folder-count { color: var(--muted) !important; }
 .mail-list { background: var(--bg-elevated) !important; border-right: 1px solid var(--glass-border) !important; }
-.mail-search-input {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
-  color: var(--text) !important;
-}
 .mail-item {
   border-bottom: 1px solid var(--glass-border) !important;
   border-radius: 0 !important;
@@ -1633,14 +1621,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   color: var(--muted) !important;
 }
 .browser-newtab:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
-.browser-address .ui-input {
-  background: var(--bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
-  color: var(--text) !important;
-  font-family: ui-monospace, monospace !important;
-  font-size: 12.5px !important;
-}
 .browser-nav {
   background: transparent !important;
   border: 1px solid transparent !important;
@@ -1797,13 +1777,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   box-shadow: none !important;
 }
 
-.image-dial-label { color: var(--muted) !important; }
-.image-dial-value { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; }
-.image-dial-track { stroke: var(--glass-border) !important; }
-.image-dial-arc { stroke: var(--accent) !important; }
-.image-dial:hover .image-dial-knob,
-.image-dial.is-dragging .image-dial-knob { background: var(--glass-hover) !important; }
-
 .image-oneclick {
   background: var(--glass) !important;
   color: var(--text-secondary) !important;
@@ -1854,7 +1827,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 .studio-beat { background: var(--accent) !important; }
 .studio-time,
 .studio-bpm {
-  font-family: ui-monospace, monospace !important;
+  font-family: var(--font-body) !important;
   color: var(--text-secondary) !important;
   font-size: 12px !important;
 }
@@ -1874,7 +1847,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   background: var(--glass) !important;
   border: none !important;
   color: var(--muted) !important;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-body);
   font-size: 10px !important;
 }
 .studio-arr-head {
@@ -2079,11 +2052,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   color: var(--text-secondary) !important;
 }
 .studio-macro-entry:hover { background: var(--glass-hover) !important; }
-.studio-knob { background: var(--bg) !important; border: 1px solid var(--glass-border) !important; }
-.studio-knob-dial { background: var(--surface) !important; border-color: var(--glass-border) !important; box-shadow: none !important; }
-.studio-knob-pointer { background: var(--accent) !important; }
-.studio-knob-label { color: var(--muted) !important; font-size: 9.5px !important; letter-spacing: 0.08em; }
-.studio-knob-value { color: var(--text-secondary) !important; font-family: ui-monospace, monospace; font-size: 10.5px !important; }
 .studio-knob-auto { color: var(--accent) !important; }
 
 .studio-mixer-strip {
@@ -2143,7 +2111,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   border-top: 1px solid var(--glass-border) !important;
 }
 .studio-scope { background: var(--bg) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-xs) !important; }
-.studio-footer-param { color: var(--muted) !important; font-family: ui-monospace, monospace; font-size: 11px !important; }
+.studio-footer-param { color: var(--muted) !important; font-family: var(--font-body); font-size: 11px !important; }
 .studio-bar-sep { background: var(--glass-border) !important; }
 /* The WaveMe patch grid + SynthMe rows. */
 .studio-grid-palette { gap: 4px !important; }

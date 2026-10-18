@@ -1,3 +1,4 @@
+import { controlButton } from '../ui/components/button.js';
 /**
  * launcher.js — the plugin launcher (three-finger swipe down).
  *
@@ -81,7 +82,7 @@ function render() {
   for (const p of plugins) {
     const isActive = active.has(p.name);
     const displayName = label(p.name);
-    const btn = document.createElement('button');
+    const btn = controlButton();
     btn.type = 'button';
     btn.className = 'launcher-item';
     btn.classList.toggle('is-active', isActive);

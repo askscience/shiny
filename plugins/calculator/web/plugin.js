@@ -1,3 +1,8 @@
+import {
+  toolbar, toolButton, controlButton, button, emptyState, toast, setTileGlow, glowGradient,
+  setIcon,
+} from '../../ui/index.js';
+
 /**
  * calculator.js — the Calculator plugin's window (basic + scientific).
  *
@@ -11,8 +16,6 @@
  * window shows the last `calculator_eval` result and refreshes its history.
  */
 
-import { button, emptyState, toast, setTileGlow, glowGradient } from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
 
@@ -132,7 +135,7 @@ const OPERATOR_LABELS = {
 };
 
 function keyBtn(label, action, cls = '') {
-  const b = document.createElement('button');
+  const b = controlButton();
   b.type = 'button';
   b.className = `calculator-key ${cls}`.trim();
   b.textContent = label;
@@ -240,7 +243,7 @@ async function refreshHistory() {
       return;
     }
     for (const item of history) {
-      const row = document.createElement('button');
+      const row = controlButton();
       row.type = 'button';
       row.className = 'calculator-history-item';
       row.title = t('plugin.calculator.history.reuse', null, 'Reuse this result');
@@ -299,19 +302,12 @@ export function mountCalculatorTile() {
 
   /* Top bar: sci/history/clear controls (the window title bar already names
      the plugin, so no title label here). */
-  const bar = document.createElement('div');
-  bar.className = 'calculator-bar';
+  const bar = toolbar([], { className: 'calculator-bar' });
   bar.dataset.windowBar = '';
   const spacer = document.createElement('div');
   spacer.className = 'calculator-bar-spacer';
 
-  const barBtn = (iconName, label, onClick) => {
-    const btn = button({ icon: iconName, variant: 'ghost', onClick });
-    btn.classList.add('ui-btn--icon', 'calculator-bar-btn');
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
-    return btn;
-  };
+  const barBtn = (iconName, label, onClick) => toolButton(iconName, label, onClick, { className: 'calculator-bar-btn' });
   historyToggleBtn = barBtn('ui/list', t('plugin.calculator.toolbar.history', null, 'History'), toggleHistory);
   sciToggleBtn = barBtn('ui/scientific', t('plugin.calculator.toolbar.scientific', null, 'Scientific'), toggleSci);
   const clearBtn = barBtn('ui/trash', t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), () => void clearHistory());

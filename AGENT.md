@@ -65,8 +65,8 @@ cargo build -p peakd-mac          # macOS shell
 cargo build -p shiny-server-mode  # server-mode GTK window
 
 # Tests (same commands CI runs)
-for f in web/js/tests/*.test.mjs; do node "$f"; done        # frontend
-cargo test --workspace --exclude peakd --exclude peakd-mac  # rust
+scripts/test-web.sh                                    # frontend
+scripts/test-rust.sh                                   # explicit plugin fixtures + Rust tests
 cargo clippy --workspace --exclude peakd --exclude peakd-mac --all-targets
 ```
 
@@ -76,6 +76,12 @@ app's Terminal plugin, so a blocking build freezes the user's own terminal.
 ## Recipes
 
 ### Change the UI
+The shared **Flow** layer (`web/ui/flow.css`, loaded after theme overrides) owns
+ordinary control motion and settings grouping. Reuse the UI factories, including
+`controlButton()` for unskinned plugin buttons. Consume `--motion-*` tokens;
+dispose finite transitions with their owner and preserve reduced-motion behavior.
+Keep every user Appearance option and put visible text in translation catalogs.
+
 1. Edit `web/index.html` / `web/js/**` / `web/css/**` — there is **no bundler and no
    npm step**; the server serves the tree as-is with `Cache-Control: no-store`, so a
    reload picks changes up.
@@ -117,9 +123,13 @@ app's Terminal plugin, so a blocking build freezes the user's own terminal.
         -H "Authorization: Bearer $TOKEN" -F "file=@/tmp/pkg/myplugin.zip"
    ```
    Installation is hot — no restart. `PLUGINS.md` §7/§12 has the long form.
-5. **Served-copy gotcha:** the app serves the *installed* copy under
-   `data/plugins/<name>/web/`. Editing `plugins/<name>/web/**` is not enough —
-   reinstall (or copy) before expecting the change in a running app.
+5. **Served-copy gotcha:** the app serves the *installed* copy, never
+   `plugins/<name>/web/`. Two roots are scanned — the read-only
+   `SYSTEM_PLUGINS_DIR` baseline (the repo's `data/plugins`) and the writable
+   `PLUGINS_DIR` (`~/.local/share/shiny/plugins` in a kiosk install). A
+   same-named plugin in `PLUGINS_DIR` **overrides** the baseline, so when both
+   exist the copy that must be refreshed is `PLUGINS_DIR/<name>/web/`; copying
+   to `data/plugins` alone leaves the stale window in front of it.
 6. Plugin migrations are recorded by filename and never re-run: never edit an applied
    file, add a new one.
 
@@ -151,7 +161,7 @@ then verify the cross-links still resolve.
 - **The user runs the live kiosk session.** Build and prepare, but do not restart or
   replace the running session — say what to restart and let them do it.
 - Rust: `cargo clippy` clean for the crates CI covers; `migrations/` are append-only;
-  the SDK is the ABI — additive changes with defaults keep old plugins loading.
+  the SDK crosses an unstable Rust ABI — freeze shared types and trait layouts for host-only refactors; default methods alone do not ensure binary compatibility.
 - Frontend tests are plain Node scripts with their own `check()` helpers; add one
   under `web/js/tests/` (the CI glob picks it up automatically).
 - When a task touches the assistant's *status strings*, note the split: UI-facing

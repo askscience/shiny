@@ -2,8 +2,10 @@
 
 The window is a **minimal photo editor**: a window bar, a borderless canvas
 that fills the window, and a bottom dock with a filmstrip of looks and a bank
-of rotary dials. All styling lives in the core stylesheet — this plugin ships
-DOM only.
+of rotary dials. The dials are the shared `dial` control from
+`web/ui/index.js` (`docs/core/ui-components.md`); this plugin ships DOM only —
+its dock layout comes from the core stylesheet, the dial look from the library
+and its tokens.
 
 ---
 
@@ -30,7 +32,7 @@ DOM only.
 | Empty state | `.image-empty` → core `emptyState` + `.image-empty-open` button |
 | Dock | `.image-dock` → `.image-dock-body`, `.image-dock-divider` |
 | Looks | `.image-look-row` (`--look-url`, `--look-n`) → `.image-look-chip` (per chip `--i`; `is-active` = the selected look) |
-| Adjust | `.image-adjust` → `.image-dial-row` → `.image-dial` (`role="slider"`; `.image-dial-knob`, `.image-dial-svg/track/arc`, `.image-dial-value`, `.image-dial-label`; `is-set`/`is-dragging`); `.image-oneclicks` → `.image-oneclick` (`--revert`) |
+| Adjust | `.image-adjust` → `.image-dial-row` → shared `.ui-dial` (`role="slider"`; library classes `.ui-dial-knob`, `.ui-dial-svg/track/arc`, `.ui-dial-value`, `.ui-dial-label`; `is-set`/`is-dragging`); `.image-oneclicks` → `.image-oneclick` (`--revert`) |
 
 Look chips carry **no visible text** — the effect name lives in `title` /
 `aria-label`, and the visual is the open image with that look applied
@@ -74,8 +76,9 @@ these `web/editor.js` functions:
   (`commit=false`), one commit on release (`commit=true`) — and the dial **stays
   where you put it**, so fine-tuning a value **replaces** it instead of stacking
   deltas. Drag vertically (160 px = full range; hold Shift for fine control),
-  scroll to nudge, arrow keys (Shift = ×10), `Home`/`Delete`/double-click reset
-  one dial, Escape cancels back to the committed pixels. Destructive edits
+  scroll to nudge, arrow keys (Shift = ×10), `Home`/`End` jump to the range
+  limits, `Delete`/`Backspace`/double-click reset one dial, Escape cancels back
+  to the committed pixels. Destructive edits
   (one-clicks, rotate/flip, AI) bake the live state in and the dials snap to 0
   from the server's echoed state; the look strip follows every real commit
   (450 ms trailing debounce).

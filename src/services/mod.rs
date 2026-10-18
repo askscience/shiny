@@ -35,3 +35,5 @@ pub mod tailscale;
 
 /// Shared sysfs backlight read/write logic (keyboard + screen).
 mod backlight;
+pub mod command;
+pub mod preferences;

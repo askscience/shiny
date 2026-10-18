@@ -1,5 +1,5 @@
-import { apiFetch, getToken, getVoiceLang, getTraveler, ApiError } from './api.js';
-import { renderArtifact, clearArtifacts } from './artifacts.js';
+import { apiFetch, apiRequest, getVoiceLang, getTraveler, ApiError } from './api.js';
+import { renderArtifact } from './artifacts.js';
 import {
   upsertArtifact,
   applyDockDestinationGroup,
@@ -22,7 +22,7 @@ import {
   extractDestinationFromMessage,
   agentFailedNavigation,
 } from './navigationApi.js';
-import { getLocale, t, tp } from './i18n.js';
+import { t, tp } from './i18n.js';
 
 const TRIP_ACTIONS = new Set(['create_trip', 'start_trip', 'end_trip']);
 
@@ -354,15 +354,9 @@ async function readAgentStream(res, onStep, onThinking) {
 }
 
 async function requestAgent(body, onStep, signal, onThinking) {
-  const headers = { 'Content-Type': 'application/json' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  // Streamed errors are rendered server-side too: tell it our language.
-  headers['Accept-Language'] = getLocale();
-
-  const res = await fetch('/api/agent', {
+  const res = await apiRequest('/api/agent', {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
   });

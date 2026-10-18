@@ -54,7 +54,7 @@ step is timestamped there.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Window never appears | `web/plugin.js` is not loaded or default export lacks `mount` | Check the browser console; the app logs one `console.warn`. |
-| Edits to `plugins/<name>/web/` do nothing | The app serves the **installed** copy | Copy to `data/plugins/<name>/web/` or reinstall. |
+| Edits to `plugins/<name>/web/` do nothing | The app serves the **installed** copy | Copy to the root that wins — `PLUGINS_DIR/<name>/web/` (`~/.local/share/shiny/plugins` in a kiosk install) if a same-named plugin is installed there, else `data/plugins/<name>/web/` — or reinstall. |
 | Window mounts but looks unstyled | Plugin shipped CSS or wrong class | Build with the core UI library; use the `<name>-*` prefix. |
 | Plugin window blocked by CSP or `X-Frame-Options` | The window is an `<iframe>`, and the core sends `X-Frame-Options: DENY` | Mount the surface on a canvas in the tile instead; `script-src 'self' 'wasm-unsafe-eval'` already allows WebAssembly. See [`plugins/filmcraft`](../../plugins/filmcraft/docs/README.md). |
 | Icon not shown | No `apps/<name>` mapping and no `web/icon.svg` | Add one; see [themes & icons](../core/themes-icons.md). |

@@ -1,3 +1,10 @@
+import {
+  menuSurface, menuItem, confirmDialog, menuButton, toolbar, field as uiField,
+  textarea as uiTextarea, element as h, input as uiInput, selectControl, toolButton,
+  placePopover, controlButton, icon, button, emptyState, toast, setTileGlow, glowGradient,
+  setIcon,
+} from '../../ui/index.js';
+
 /**
  * impress.js — the Impress plugin's window (slide deck builder).
  *
@@ -12,11 +19,6 @@
  * the window refreshes its deck list and opens what the AI touched.
  */
 
-import {
-  icon, button, emptyState, toast,
-  setTileGlow, glowGradient, useSelectMenu,
-} from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
@@ -159,13 +161,6 @@ function slideCount() {
 }
 
 /* ── Rendering ──────────────────────────────────────────────── */
-
-function h(tag, className, text) {
-  const el = document.createElement(tag);
-  if (className) el.className = className;
-  if (text != null) el.textContent = text;
-  return el;
-}
 
 /** Render one slide as a DOM node (used by the stage and thumbnails).
  *  `editable` makes the stage slide's text contentEditable so it can be
@@ -518,7 +513,9 @@ async function newDeck() {
 
 async function removeCurrent() {
   if (!current) return;
-  if (!window.confirm(t('plugin.impress.dialog.deleteDeck', { title: current.title }, `Delete "${current.title}"?`))) return;
+  const target = current;
+  if (!await confirmDialog(t('plugin.impress.dialog.deleteDeck', { title: current.title }, `Delete "${current.title}"?`))) return;
+  if (current !== target || !tileEl) return;
   try {
     await deleteDeck(current.id);
     current = null;
@@ -540,9 +537,7 @@ async function refreshDecks() {
 
 function ensureDeckMenu() {
   if (deckMenuPopup) return;
-  deckMenuPopup = document.createElement('div');
-  deckMenuPopup.className = 'impress-deck-menu hidden';
-  deckMenuPopup.setAttribute('role', 'menu');
+  deckMenuPopup = menuSurface({ className: 'impress-deck-menu', onEscape: closeDeckMenu });
   document.body.appendChild(deckMenuPopup);
 }
 
@@ -583,7 +578,7 @@ function renderDeckMenuItems() {
     deckMenuPopup.appendChild(empty);
   } else {
     decks.forEach((deck) => {
-      const item = h('button', 'impress-deck-menu-item');
+      const item = menuItem({ className: 'impress-deck-menu-item' });
       item.type = 'button';
       item.setAttribute('role', 'menuitem');
       if (deck.id === current?.id) item.classList.add('is-active');
@@ -604,7 +599,7 @@ function renderDeckMenuItems() {
 
   const foot = h('div', 'impress-deck-menu-foot');
   const footItem = (iconName, label, danger, onClick) => {
-    const item = h('button', 'impress-deck-menu-item');
+    const item = menuItem({ className: 'impress-deck-menu-item' });
     item.type = 'button';
     item.setAttribute('role', 'menuitem');
     if (danger) item.classList.add('impress-deck-menu-item--danger');
@@ -630,10 +625,8 @@ function openDeckMenu() {
   ensureDeckMenu();
   renderDeckMenuItems();
   deckMenuPopup.classList.remove('hidden');
-  const r = deckMenuBtn.getBoundingClientRect();
-  const left = Math.max(12, Math.min(r.left, window.innerWidth - 280 - 12));
-  deckMenuPopup.style.left = `${left}px`;
-  deckMenuPopup.style.top = `${r.bottom + 8}px`;
+  placePopover(deckMenuPopup, deckMenuBtn);
+  deckMenuPopup.focusFirst();
   deckMenuOpen = true;
   deckMenuBtn.setAttribute('aria-expanded', 'true');
   document.addEventListener('pointerdown', onDeckMenuOutside, true);
@@ -908,11 +901,7 @@ function prevSlide() {
 /* ── Tile lifecycle ─────────────────────────────────────────── */
 
 function toolbarButton(iconName, label, onClick, danger = false) {
-  const btn = button({ icon: iconName, variant: 'ghost', onClick });
-  btn.classList.add('ui-btn--icon', 'impress-tool');
-  if (danger) btn.classList.add('impress-tool--danger');
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
+  const btn = toolButton(iconName, label, onClick, { className: 'impress-tool', danger });
   return btn;
 }
 
@@ -925,25 +914,13 @@ export function mountImpressTile() {
   tileEl.dataset.plugin = IMPRESS_PLUGIN;
 
   /* Top bar: deck menu + title + theme + save indicator */
-  const bar = h('div', 'impress-bar');
+  const bar = toolbar([], { className: 'impress-bar' });
   bar.dataset.windowBar = '';
 
-  deckMenuBtn = document.createElement('button');
-  deckMenuBtn.type = 'button';
-  deckMenuBtn.className = 'impress-deck-btn';
-  deckMenuBtn.setAttribute('aria-haspopup', 'menu');
-  deckMenuBtn.setAttribute('aria-expanded', 'false');
-  deckMenuBtn.title = t('plugin.impress.toolbar.presentations', null, 'Presentations');
-  const deckIcon = h('span', 'impress-deck-btn-icon');
-  deckMenuBtn.appendChild(deckIcon);
-  void setIcon(deckIcon, 'ui/present', { size: 15 });
-  const chevron = h('span', 'impress-deck-btn-chevron');
-  deckMenuBtn.appendChild(chevron);
-  void setIcon(chevron, 'ui/chevron-down', { size: 12 });
-  deckMenuBtn.addEventListener('click', toggleDeckMenu);
+  deckMenuBtn = menuButton({ icon: 'ui/present', label: t('plugin.impress.toolbar.presentations', null, 'Presentations'), onClick: toggleDeckMenu, className: 'impress-deck-btn' });
 
-  titleInput = document.createElement('input');
-  titleInput.className = 'impress-title';
+  titleInput = uiInput();
+  titleInput.classList.add('impress-title');
   titleInput.type = 'text';
   titleInput.placeholder = t('plugin.impress.toolbar.titlePlaceholder', null, 'Untitled');
   titleInput.maxLength = 120;
@@ -955,8 +932,8 @@ export function mountImpressTile() {
     }
   });
 
-  themeSelect = document.createElement('select');
-  themeSelect.className = 'impress-theme';
+  themeSelect = selectControl();
+  themeSelect.classList.add('impress-theme');
   themeSelect.title = t('plugin.impress.toolbar.theme', null, 'Theme');
   for (const t of THEMES) {
     const opt = document.createElement('option');
@@ -972,7 +949,6 @@ export function mountImpressTile() {
     renderStrip();
     updateGlow();
   });
-  useSelectMenu(themeSelect);
 
   saveDot = h('span', 'impress-save-dot');
   saveDot.setAttribute('aria-hidden', 'true');
@@ -1042,8 +1018,8 @@ function buildInspector() {
   const panel = h('div', 'impress-inspector');
 
   const layoutField = field(t('plugin.impress.inspector.layout', null, 'Layout'), () => {
-    layoutSelect = document.createElement('select');
-    layoutSelect.className = 'impress-field-input';
+    layoutSelect = selectControl();
+    layoutSelect.classList.add('impress-field-input');
     for (const l of LAYOUTS) {
       const opt = document.createElement('option');
       opt.value = l;
@@ -1057,7 +1033,6 @@ function buildInspector() {
       renderStage();
       renderStrip();
     });
-    useSelectMenu(layoutSelect);
     return layoutSelect;
   });
   panel.appendChild(layoutField);
@@ -1067,8 +1042,8 @@ function buildInspector() {
   const animField = (label, options, labels, onChange) => {
     const wrap = h('div', 'impress-field');
     wrap.appendChild(h('label', 'impress-field-label', label));
-    const select = document.createElement('select');
-    select.className = 'impress-field-input';
+    const select = selectControl();
+    select.classList.add('impress-field-input');
     for (const value of options) {
       const opt = document.createElement('option');
       opt.value = value;
@@ -1076,7 +1051,6 @@ function buildInspector() {
       select.appendChild(opt);
     }
     select.addEventListener('change', () => onChange(select.value));
-    useSelectMenu(select);
     wrap.appendChild(select);
     return { wrap, select };
   };
@@ -1148,21 +1122,15 @@ function buildInspector() {
 
 /** Build a labelled form field (used for the layout selector + notes). */
 function buildField(label, kind) {
-  const wrap = h('div', 'impress-field');
-  const lbl = h('label', 'impress-field-label', label);
-  const el = document.createElement(kind === 'textarea' ? 'textarea' : 'input');
-  el.className = 'impress-field-input';
-  if (kind === 'input') el.type = 'text';
-  else el.rows = 4;
-  el.autocomplete = 'off';
-  wrap.append(lbl, el);
-  return wrap;
+  const control = kind === 'textarea' ? uiTextarea({ rows: 4 }) : uiInput();
+  control.classList.add('impress-field-input');
+  control.autocomplete = 'off';
+  return field(label, () => control);
 }
 
 function field(label, make) {
-  const wrap = h('div', 'impress-field');
-  const lbl = h('label', 'impress-field-label', label);
-  wrap.append(lbl, make());
+  const wrap = uiField({ label, control: make() });
+  wrap.classList.add('impress-field');
   return wrap;
 }
 

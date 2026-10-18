@@ -127,3 +127,28 @@ migrations/
 
 Keep them small and append-only. Never edit an applied file; always add the
 next number.
+
+## Atomic execution and recovery
+
+The host takes a SQLite `BEGIN IMMEDIATE` transaction before checking whether a
+migration is recorded. Its SQL and `plugin_schema_versions` completion row commit
+together. Failed SQL or a failed completion record rolls back both, and concurrent
+loads cannot execute the same migration twice. Historical migration files remain
+append-only; their filename records are unchanged.
+
+Each migration commits separately. If a later migration or registration fails,
+earlier successful migrations remain committed. The installer restores the old
+plugin files on failure or cancellation and reports restoration failures, but file
+rollback does **not** reverse database migrations. Use compatible additive schema
+changes when old and new plugin code may overlap; recovering incompatible schema
+changes requires a verified database backup or a forward repair migration.
+
+Registration validates declared route handlers before retiring the previous loaded
+plugin. Libraries remain mapped for in-flight native references as before.
+
+After the upload has been read, installation continues in an independent server
+task if the HTTP client disconnects; router publication is part of that task.
+Loaded library handles are retained even if unload cleanup is cancelled, so
+in-flight tool/route vtables cannot be unmapped. Forced process termination still
+requires the normal backup/recovery procedure; file rollback is not a replacement
+for a database backup.

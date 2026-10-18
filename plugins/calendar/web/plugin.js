@@ -1,3 +1,7 @@
+import {
+  confirmDialog, controlButton, button, emptyState, field, input, modal, notify, textarea, toast,
+  toggleRow, setTileGlow, glowGradient, setIcon,
+} from '../../ui/index.js';
 /**
  * calendar.js — the Calendar plugin's window (month grid + day detail).
  *
@@ -10,11 +14,6 @@
  * window reloads its month and selects the date the AI touched.
  */
 
-import {
-  button, emptyState, field, input, modal, notify, textarea, toast, toggleRow,
-  setTileGlow, glowGradient,
-} from '../../ui/index.js';
-import { setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
 
@@ -154,7 +153,7 @@ function renderGrid() {
   for (let w = 0; w < weeks; w++) {
     for (let d = 0; d < 7; d++) {
       const dayNum = w * 7 + d - startOffset + 1;
-      const cell = document.createElement('button');
+      const cell = controlButton();
       cell.type = 'button';
       cell.className = 'calendar-day';
 
@@ -386,7 +385,7 @@ async function saveFromModal() {
 }
 
 async function removeEvent(ev) {
-  if (!window.confirm(t('plugin.calendar.confirm.deleteEvent', { title: ev.title }, 'Delete "{title}"?'))) return;
+  if (!await confirmDialog(t('plugin.calendar.confirm.deleteEvent', { title: ev.title }, 'Delete "{title}"?'))) return;
   try {
     await apiDelete(ev.event_id);
     await loadEvents();
