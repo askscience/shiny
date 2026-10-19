@@ -802,27 +802,75 @@ install the `-web-` asset and keep the whole pipeline inside the plugin system
 #### AI control (MCP)
 
 Every Craft app ships `<app>-cli`, whose `mcp` subcommand is a Model Context
-Protocol server over stdio that drives the app's engine. The **AI control**
-switch on an app's store card (`POST /api/plugins/store/mcp`) downloads the
+Protocol server over stdio that drives the app's engine. **AI control is on by
+default and installs with the app**: installing or updating an app pulls the
 release's Linux package, verifies it, and installs just the CLI at
 `PLUGINS_DIR/.craft-mcp/<id>/bin/<id>-cli` (a dot-directory: the plugin scanner
-skips it, and updating the web app never touches it).
+skips it, and updating the web app never touches it) — so the pair is always in
+step and there is no second download to remember. The card's **AI control**
+switch (`POST /api/plugins/store/mcp`) is the opt-out: turning it off removes the
+CLI and records the choice in `.craft-mcp/<id>/disabled`, which later installs
+and the background updater respect; turning it back on clears the marker and
+installs the CLI (when the app is installed — otherwise the app's own install
+carries it). An app installed without its CLI (a failed download, or one
+installed before this rule) shows `mcp_pending` in `GET /api/plugins/store` and
+is finished by the updater or the card's own button. One rule decides what an
+install/update does with the CLI (`cli_plan` in `src/plugins/store.rs`):
+opted out → nothing; already at this release → nothing (no 60–124 MB
+re-download); otherwise install it, or say the release has none. `mcp_enabled`
+in the store snapshot is the decision, so the switch reads the user's choice and
+not whether a file happens to exist yet.
 
-The capability is **focus-scoped in code**: `src/plugins/craft_mcp.rs` starts
-one server per *focused* Craft app at the beginning of each agent turn and stops
-every other one, registering the app's MCP tools under its plugin id
-(`photocraft_command_list`, …; the doc fragment is the tool's description plus a
-compact argument list). With no Craft app focused, no server runs and no tool
-exists; with another plugin focused, the ordinary focus gate refuses them; and
-the owner is marked focus-only in the registry, so a stale registration is
-refused with a `suggest_focus` message instead of being dispatched. None of this
-depends on prompt wording.
+The capability follows the app's **window**, enforced in code:
+`src/plugins/craft_mcp.rs` starts one server per *open* Craft app at the beginning
+of each agent turn and stops every server whose window is closed, registering the
+app's MCP tools under its plugin id (`photocraft_command_list`, …; the doc fragment
+is the tool's description plus a compact argument list). **Focus mode narrows that
+same surface**: with one or more windows focused, only those apps keep a server, so
+focusing is how the user points the AI at one activity (or a few) instead of
+everything on screen. With no window open, no server runs and no tool exists; with
+another plugin focused, the ordinary focus gate refuses them. Opening an app
+mid-turn (`show_plugin`) starts its server and hands the model its tools in the same
+conversation. Turning AI control off (the CLI removed) stops a running server at the
+next turn as well. None of this depends on prompt wording.
 
 The app CLI drives the app's own engine: in headless mode it opens, edits and
 saves documents itself (`--automation-read-root` / `--automation-write-root`
-scope its file access to the user's home). The visible window is the web build,
-which has no MCP server, so the agent drives the same app's *engine*, not the
-pixels already on screen.
+scope its file access to the user's home). Those two flags **imply `--headless`**
+(the CLI's own rule), so the server the agent talks to is a private engine
+process — **not** the window on screen, which is the vendor's static web build
+and has no control channel. The vendor's live channel, `<app> --control 7979`, is
+a native-app feature; the web builds can't host it. Two consequences, both in the
+prompt so the model cannot pretend otherwise: it must **save or export** the
+document and give the user the path, and unsaved work dies with the turn's
+process (the host stops the server when the window closes or the focus changes).
+
+**Live control, when the app's build can take it.** The Craft web builds
+document a page API — `window.<app>.request(method, params)`, the same methods
+their desktop control channel takes. It is detected per app id, never per app
+name: `web/js/webAppSurface.js` looks up `window[<plugin id>]`, and when the
+functions are there it attaches the page to the core's control-channel proxy
+(`src/plugins/craft_control.rs`) over SSE. The proxy opens a loopback port
+speaking the vendor's line protocol and forwards every request to the page, which
+runs it in the live document and answers; the MCP host then starts `<app>-cli mcp
+--connect 127.0.0.1:<port>` instead of the headless server, so the agent's tools
+change **the window the user sees**. A build without the API attaches nothing and
+keeps the headless fallback, so the feature lights up per app as its releases
+ship the API — for the whole suite, including apps installed later. The prompt
+says which mode each open app is in; focus mode still decides *which* apps have a
+server at all. Routes: `GET /api/plugins/craft/control/events?app=<id>` (SSE,
+page side) and `POST /api/plugins/craft/control/reply`.
+
+**Opening files inside an app.** The web builds ask for files with a classic
+`<input type=file>`, which the kiosk's web engine cannot answer on its own (it is
+embedder business, and no handler was wired). `web/js/webAppSurface.js` therefore
+shims the frame's file inputs: a click opens the shell's picker
+(`web/js/filePicker.js`), which browses the home through the Files plugin, and
+the bytes come back as `File` objects in the frame's own realm with `input` and
+`change` dispatched — the app's own Open… then works, for every web app, present
+or installed later, with no per-app code. The shell's own `pickFiles()` uses the
+same dialog. Files → “Open with app” for a web app still needs the app's page API
+(`openFile`), so it follows the same gate as live control.
 
 ### Activation state
 

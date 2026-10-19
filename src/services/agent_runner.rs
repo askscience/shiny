@@ -104,6 +104,12 @@ pub struct AgentRunInput {
     /// leaves the model's own default in place.
     pub think: Option<bool>,
     pub ctx: AgentContext,
+    /// Craft apps whose windows the client reported open for this turn, and the
+    /// home their CLIs are scoped to. The loop itself opens an app when the
+    /// model calls `show_plugin`, and it has to expose that app's MCP the same
+    /// way the turn start did (see `plugins::craft_mcp`).
+    pub craft_open: std::collections::BTreeSet<String>,
+    pub craft_home: String,
 }
 
 pub struct ActionTaken {
@@ -169,6 +175,12 @@ where
 
     let think = thinking_label();
     on_step(&UiText::keyed(think.key, think.text), None);
+
+    // Craft-app AI control is a property of the turn start, but the loop itself
+    // opens windows (`show_plugin`): this is the set the MCP host is synced with
+    // as apps are opened mid-turn.
+    let focused_craft: std::collections::BTreeSet<String> = input.ctx.focused.iter().cloned().collect();
+    let mut craft_open = input.craft_open.clone();
 
     for iteration in 0..MAX_TOOL_STEPS {
         if turn_stopped(&cancel) {
@@ -338,15 +350,67 @@ where
 
                 let mut note = describe_tool_step(&outcome.action, &outcome.result, &outcome.data);
 
+                // A Craft app the AI just opened exposes its MCP from now on:
+                // start its server and hand the model its tools, so it can drive
+                // the app in this same conversation instead of reaching for the
+                // terminal. Focus mode wins: the host keeps only the focused
+                // apps, so opening another one changes nothing there.
+                if outcome.action == "show_plugin" && outcome.result == "ok" {
+                    if let Some(name) = outcome.data.get("plugin").and_then(|v| v.as_str()) {
+                        if crate::plugins::store::CraftApp::by_id(name).is_some() {
+                            craft_open.insert(name.to_string());
+                            state
+                                .craft_mcp
+                                .sync(
+                                    &state.plugins,
+                                    &state.craft_control,
+                                    std::path::Path::new(&state.config.plugins_dir),
+                                    &input.craft_home,
+                                    &craft_open,
+                                    &focused_craft,
+                                )
+                                .await;
+                            let docs = state
+                                .plugins
+                                .tools()
+                                .skills_markdown_for(&std::collections::BTreeSet::from([name
+                                    .to_string()]));
+                            if !docs.trim().is_empty() {
+                                note.push_str(&format!(
+                                    "\n\nApp '{name}' tools (available from now on):\n{docs}"
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 // Keep a plugin's tool docs in the conversation after its tools
                 // are used: the continuation prompt is slim, so without this the
                 // model "forgets" calc_write after calc_create and replies
                 // without filling the sheet. Injected once per plugin per run.
                 if let Some(owner) = &outcome.owner {
                     if owner != "core" && injected_skills.insert(owner.clone()) {
+                        // A plugin carries its own skills docs; a store-installed
+                        // Craft app has none, so its MCP tools' docs stand in.
                         let skills = state.plugins.skills_for(owner);
+                        let skills = if skills.trim().is_empty() {
+                            state
+                                .plugins
+                                .tools()
+                                .skills_markdown_for(&std::collections::BTreeSet::from([owner
+                                    .clone()]))
+                        } else {
+                            skills
+                        };
                         if !skills.trim().is_empty() {
-                            note.push_str(&format!("\n\nPlugin '{owner}' tools:\n{skills}"));
+                            // A Craft app's tools act on its engine, not on the
+                            // window the user sees: the model has to save.
+                            let reminder = if crate::plugins::store::CraftApp::by_id(owner).is_some() {
+                                "\nThese tools edit the app's engine, not the window the user sees: save/export the document before answering and give the path."
+                            } else {
+                                ""
+                            };
+                            note.push_str(&format!("\n\nPlugin '{owner}' tools:{reminder}\n{skills}"));
                         }
                     }
                 }

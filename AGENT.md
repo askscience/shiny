@@ -39,7 +39,7 @@ and an optional web surface.
 |---|---|
 | `src/main.rs`, `src/api/` | Axum server: routes, middleware, auth (`mod.rs` mounts core + plugin routes and serves `web/` as the fallback) |
 | `src/services/` | Core services: agent runner/tools, voice glue, host panels (audio/network/bluetooth/battery/power), image/song generation, whisper |
-| `src/plugins/` | Plugin manager, loader, registry/bridge (`registry.rs` adapts plugin tools into the agent's tool registry), installer, admin API, Craft store (`store.rs`: installs the Craft App Suite's web builds as `kind = "web"` plugins), Craft MCP hosts (`craft_mcp.rs`: each focused app's CLI as focus-only agent tools) |
+| `src/plugins/` | Plugin manager, loader, registry/bridge (`registry.rs` adapts plugin tools into the agent's tool registry), installer, admin API, Craft store (`store.rs`: installs the Craft App Suite's web builds as `kind = "web"` plugins), Craft MCP hosts (`craft_mcp.rs`: each open app's CLI as agent tools; focus mode narrows them to the focused apps) |
 | `src/db/` | SQLite pool + **core migrations embedded with `include_str!`** (a new file in `migrations/` also needs its line here) |
 | `migrations/` | Core schema migrations (numbered; never edit an applied one) |
 | `web/index.html` | The single shell page (boot splash, login, HUD skeleton) |

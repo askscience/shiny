@@ -7,6 +7,7 @@ pub mod installer;
 pub mod admin_api;
 pub mod store;
 pub mod craft_mcp;
+pub mod craft_control;
 
 pub use manager::PluginManager;
 pub use registry::ToolRegistry;

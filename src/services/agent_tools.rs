@@ -70,15 +70,6 @@ pub async fn execute_action(
         if focus_blocks_plugin(ctx, &owner) {
             return Ok(focus_plugin_refusal(ctx, &owner));
         }
-        // Focus-only surfaces (a Craft app's MCP tools) exist only while that
-        // app's window is in focus mode. The MCP host also stops the server
-        // when the app is unfocused; this check keeps a stale registration from
-        // ever leaking tools into a turn where nothing is focused.
-        if state.plugins.tools().is_focus_only(&owner)
-            && !ctx.focused.iter().any(|focused| focused == &owner)
-        {
-            return Ok(focus_only_refusal(&owner));
-        }
         let plugin_ctx = state.plugin_ctx();
         let os_home = state.os_identity_for(traveler).map(|u| u.home);
         let outcome = state
@@ -883,26 +874,6 @@ fn focus_plugin_refusal(ctx: &AgentContext, owner: &str) -> ActionOutcome {
     }
 }
 
-/// Refusal for a focus-only surface (a Craft app's MCP tools) used while that
-/// app's window is not in focus mode. Hard rule: these tools exist only for the
-/// focused app — the same rule the MCP host enforces by lifecycle.
-fn focus_only_refusal(owner: &str) -> ActionOutcome {
-    ActionOutcome {
-        action: owner.into(),
-        result: "unavailable".into(),
-        data: json!({ "error": format!(
-            "'{owner}' exposes its tools only while its window is in focus mode, and it is not \
-             focused right now, so its tools are unavailable this turn. Say so in one short \
-             sentence and SUGGEST the user focuses {owner} — the eye button in its window, or \
-             right-clicking its icon in the top bar — if the request needs it; only they can \
-             change the focus."
-        ), "focus_mode": true, "suggest_focus": owner }),
-        artifact: None,
-        extra_artifacts: vec![],
-        owner: None,
-    }
-}
-
 /// Error outcome for a desktop-control tool whose plugin isn't installed or
 /// isn't active for this user. Returns `None` when the plugin is usable.
 async fn active_plugin_error(
@@ -1072,8 +1043,8 @@ fn strip_balanced_braces(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        focus_blocks_core, focus_blocks_plugin, focus_core_refusal, focus_only_refusal,
-        focus_plugin_refusal, AgentContext,
+        focus_blocks_core, focus_blocks_plugin, focus_core_refusal, focus_plugin_refusal,
+        AgentContext,
     };
 
     fn ctx(focused: &[&str]) -> AgentContext {
@@ -1140,20 +1111,5 @@ mod tests {
         assert!(core_msg.contains("desktop action"), "{core_msg}");
         assert!(core_msg.contains("files, word"), "{core_msg}");
         assert!(core_msg.contains("web search"), "says what still works: {core_msg}");
-    }
-
-    /// A Craft app's MCP tools are a focus-only surface: without that app's
-    /// window focused they must be refused with a suggestion, never silently
-    /// dispatched.
-    #[test]
-    fn focus_only_tools_are_refused_without_their_app_focus() {
-        let refusal = focus_only_refusal("photocraft");
-        assert_eq!(refusal.result, "unavailable");
-        assert_eq!(refusal.data["focus_mode"], true);
-        assert_eq!(refusal.data["suggest_focus"], "photocraft");
-        let msg = refusal.data["error"].as_str().unwrap_or_default();
-        assert!(msg.contains("focus mode"), "{msg}");
-        assert!(msg.contains("SUGGEST"), "{msg}");
-        assert!(msg.contains("eye button"), "{msg}");
     }
 }

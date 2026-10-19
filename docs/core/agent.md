@@ -265,16 +265,35 @@ The same set rides in `AgentContext.focused`, and `execute_action` enforces it
 - an invented tool name reaches its own "unknown action" error rather than being
   blamed on focus mode.
 
-**Craft apps and focus mode.** A Craft app installed by the store can expose its
+**Craft apps and their windows.** A Craft app installed by the store can expose its
 own MCP server (its `<app>-cli mcp`), which the core adapts into tools owned by
-that app (`photocraft_command_list`, …). They are a *focus-only* surface,
-enforced in code rather than in the prompt: `src/plugins/craft_mcp.rs` starts a
-server only for the Craft apps whose windows are focused and stops every other
-one before the tool list is built, and `ToolRegistry::is_focus_only` makes
-`execute_action` refuse a stale registration with a `suggest_focus` refusal.
-With no Craft app focused there is no server and no tool at all, so the model
-cannot reach an app the user is not working with; with one focused, only that
-app's MCP tools join the turn.
+that app (`photocraft_command_list`, …). The app's **window** is the boundary, and
+it is enforced in code rather than in the prompt: `src/plugins/craft_mcp.rs` starts
+a server for every Craft app the client reports open and stops the ones whose window
+is closed, before the tool list is built — so an app the user is not working in has
+no tool at all, and every app they *are* working in has its own. **Focus mode
+narrows that to the focused apps**: with one or more windows focused, only they keep
+a server, which is what concentrating on one activity — one app, or a few — means.
+Opening an app mid-turn (`show_plugin`) starts its server and hands the model its
+tools in the same conversation, and the prompt carries a `## Craft apps (open now)`
+block naming them, so the model drives an app through its own tools instead of
+scripting its command-line in the terminal.
+
+What those tools act on is decided per app at turn start. When the page showing
+an app exposes the vendor's documented page API (`window.<app>.request`), the
+shell attaches it to the core's control-channel proxy (`plugins::craft_control`)
+and the CLI is started with `--connect` — **live**: tool calls change the document
+in the window the user sees. Otherwise the host runs `<app>-cli mcp` **headless**
+(the automation roots it passes imply it): the tools edit the app's engine in that
+process, *not* the window, which is the vendor's separate web build. For headless
+apps the prompt tells the model to save or export the document and hand over the
+path, and that unsaved work lives only inside the turn's process (the server is
+stopped when the window closes or the focus changes). The
+`## Craft apps (open now)` block names each open app's mode, so the model never
+promises a change it cannot make; the detection is by plugin id, so an app
+installed later lands in whichever mode its build supports.
+(The vendor's desktop channel — `vectorcraft --control 7979` — is what the proxy
+speaks on the app's behalf; the static web builds carry the page API instead.)
 
 `tests/focus_mode_scope.rs` runs that against the real plugins (19 plugins, 331
 tools) and dispatches for real. Two of these paths exist because of measured
@@ -301,6 +320,8 @@ pub struct AgentRunInput {
     pub history: Vec<(String, String)>,
     pub voice: bool,
     pub ctx: AgentContext,
+    pub craft_open: BTreeSet<String>,  // Craft apps whose windows are open
+    pub craft_home: String,            // home the app CLIs are scoped to
 }
 ```
 

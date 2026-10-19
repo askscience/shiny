@@ -6,14 +6,25 @@
 //! installs the CLI next to the web app (`PLUGINS_DIR/.craft-mcp/<id>/bin/`)
 //! when the user turns AI control on for that app.
 //!
-//! **Focus mode is the boundary, and it is enforced here, in code.** One server
-//! exists per focused Craft app and nothing else: [`CraftMcp::sync`] runs at the
-//! start of every agent turn, starts the servers of the apps whose windows are
-//! focused, and stops + unregisters every other one. An unfocused app's tools
-//! are therefore neither advertised nor callable — no prompt wording involved.
-//! Their tools are registered with the app's plugin id as owner, so the
-//! existing focus gate (another plugin focused) applies as well, and
-//! `mark_focus_only` keeps the boundary even if a server ever outlives its turn.
+//! **An open window is what turns a server on.** [`CraftMcp::sync`] runs at the
+//! start of every agent turn with the windows the client reports; every Craft
+//! app among them gets a server, and its tools are registered under the app's
+//! plugin id — so the AI drives the apps the user is actually working in, the
+//! same way it would use any other plugin's tools.
+//!
+//! **Focus mode narrows that to the focused apps, in code.** With one or more
+//! windows focused, [`CraftMcp::sync`] keeps only those apps' servers up and
+//! stops + unregisters every other one, so an open-but-unfocused app's tools are
+//! neither advertised nor callable — no prompt wording involved. Their tools are
+//! registered with the app's plugin id as owner, so the ordinary focus gate
+//! applies as well.
+//!
+//! **Live or headless is decided per app, not per app name.** When the page
+//! showing an app exposes the vendor's documented control API, the shell attaches
+//! it to [`crate::plugins::craft_control`] and the CLI starts with `--connect`,
+//! so the tools act on the window the user sees. Otherwise the CLI runs headless
+//! with its automation roots. Any Craft app — including one installed later —
+//! lands in whichever mode its build supports, with no code change here.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -67,6 +78,28 @@ pub fn version_path(plugins_dir: &Path, id: &str) -> PathBuf {
     plugins_dir.join(".craft-mcp").join(id).join("version")
 }
 
+/// Where "AI control off" is remembered. Installing an app brings its CLI with
+/// it, and the background updater keeps the pair in step — so the user's refusal
+/// has to outlive both: this marker is the decision, not a convenience flag.
+pub fn opt_out_path(plugins_dir: &Path, id: &str) -> PathBuf {
+    plugins_dir.join(".craft-mcp").join(id).join("disabled")
+}
+
+/// Whether an app's AI control may be installed: on unless the user turned it
+/// off for that app.
+pub fn ai_control_allowed(plugins_dir: &Path, id: &str) -> bool {
+    !opt_out_path(plugins_dir, id).is_file()
+}
+
+/// Whether the installed CLI already comes from `version` — an app update that
+/// does not change the CLI must not re-download 60–124 MB for nothing.
+pub fn ai_control_current(plugins_dir: &Path, id: &str, version: &str) -> bool {
+    cli_path(plugins_dir, id).is_file()
+        && std::fs::read_to_string(version_path(plugins_dir, id))
+            .map(|installed| installed.trim() == version)
+            .unwrap_or(false)
+}
+
 // ── Transport ───────────────────────────────────────────────────────────────
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
@@ -83,13 +116,25 @@ struct McpClient {
 }
 
 impl McpClient {
-    fn spawn(cli: &Path, label: &str, home: &str) -> Result<Self, AppError> {
-        let mut child = Command::new(cli)
-            .arg("mcp")
-            .arg("--automation-read-root")
-            .arg(home)
-            .arg("--automation-write-root")
-            .arg(home)
+    /// Start the app's CLI. `connect` is the control-channel port the page is
+    /// answering on (live mode); without one the CLI runs headless, with the
+    /// automation roots confining its file access.
+    fn spawn(cli: &Path, label: &str, home: &str, connect: Option<u16>) -> Result<Self, AppError> {
+        let mut command = Command::new(cli);
+        command.arg("mcp");
+        match connect {
+            Some(port) => {
+                command.arg("--connect").arg(format!("127.0.0.1:{port}"));
+            }
+            None => {
+                command
+                    .arg("--automation-read-root")
+                    .arg(home)
+                    .arg("--automation-write-root")
+                    .arg(home);
+            }
+        }
+        let mut child = command
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             // Diagnostics are not part of the protocol; never block on them.
@@ -339,6 +384,9 @@ fn tool_doc(app_name: &str, registered: &str, info: &McpToolInfo) -> String {
 /// A running app server, shared by every tool it advertised.
 struct ServerHandle {
     client: McpClient,
+    /// True when the CLI is connected to the page's control channel, so its
+    /// tools act on the window the user sees (`plugins::craft_control`).
+    live: bool,
 }
 
 // ── The `Tool` adapter ──────────────────────────────────────────────────────
@@ -435,22 +483,64 @@ impl CraftMcp {
         out
     }
 
-    /// The hard focus rule. Called once per agent turn, before the tool list is
-    /// built: start the servers of the focused Craft apps, stop and unregister
-    /// every other one. `home` scopes the app's file access.
+    /// Apps whose server is connected to the window (live), not to a headless
+    /// engine. The prompt tells the model which of the two it is talking to.
+    pub async fn live_apps(&self) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .hosts
+            .lock()
+            .await
+            .iter()
+            .filter(|(_, host)| host.live)
+            .map(|(id, _)| id.clone())
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// The rule in one place, called once per agent turn, before the tool list
+    /// is built: every **open** Craft app keeps its server, and while the user is
+    /// in focus mode only the **focused** apps do. `open` and `focused` are the
+    /// window names the client reported — anything that is not a Craft app is
+    /// dropped when the servers start. `home` scopes the app's file access.
+    ///
+    /// Whether the server talks to the **window** or runs headless is decided per
+    /// app by [`CraftControl`]: a page that exposes the vendor's control API
+    /// attaches through the proxy, and the CLI then starts with `--connect`. A
+    /// server whose mode changed is restarted, so the model never keeps tools
+    /// that act on last turn's target.
     pub async fn sync(
         &self,
         manager: &PluginManager,
+        control: &crate::plugins::craft_control::CraftControl,
         plugins_dir: &Path,
         home: &str,
+        open: &BTreeSet<String>,
         focused: &BTreeSet<String>,
     ) {
-        // Stop what is no longer focused.
+        let wanted = wanted_apps(open, focused);
+
+        // Which apps a page is answering for right now. This also creates the
+        // link's loopback port on first use; the app's CLI connects to it only
+        // when a page is attached.
+        let mut live_ports: HashMap<String, Option<u16>> = HashMap::new();
+        for id in &wanted {
+            live_ports.insert(id.clone(), control.live_port(id).await);
+        }
+
+        // Stop what is neither open nor focused — and anything whose CLI was
+        // removed since (AI control turned off), or whose live/headless mode no
+        // longer matches the page. Its tools leave the registry with it, so the
+        // turn cannot advertise or call them.
         let stale: Vec<(String, Arc<ServerHandle>)> = {
             let hosts = self.hosts.lock().await;
             hosts
                 .iter()
-                .filter(|(id, _)| !focused.contains(*id))
+                .filter(|(id, host)| {
+                    !wanted.contains(*id)
+                        || !cli_path(plugins_dir, id).is_file()
+                        || host.live != live_ports.get(*id).copied().flatten().is_some()
+                })
                 .map(|(id, host)| (id.clone(), host.clone()))
                 .collect()
         };
@@ -460,11 +550,11 @@ impl CraftMcp {
             // exactly the MCP tools registered under this app id.
             manager.tools().uninstall_plugin(&id);
             self.hosts.lock().await.remove(&id);
-            tracing::debug!("Craft MCP for {id} stopped (no longer focused)");
+            tracing::debug!("Craft MCP for {id} stopped (window closed, AI control off, or mode changed)");
         }
 
-        // Start what is focused and has a CLI installed.
-        for id in focused {
+        // Start what is wanted and has a CLI installed.
+        for id in &wanted {
             if self.hosts.lock().await.contains_key(id) {
                 continue;
             }
@@ -476,7 +566,8 @@ impl CraftMcp {
             if !cli.is_file() {
                 continue; // AI control was not enabled for this app
             }
-            match start_server(app, &cli, home, manager).await {
+            let connect = live_ports.get(id).copied().flatten();
+            match start_server(app, &cli, home, manager, connect).await {
                 Ok(host) => {
                     self.hosts.lock().await.insert(id.clone(), host);
                 }
@@ -488,15 +579,30 @@ impl CraftMcp {
     }
 }
 
+/// The apps whose MCP server belongs to this turn: every open one — or, while
+/// the user is in focus mode, only the focused ones. Focus mode is the user
+/// narrowing the AI to the work in front of them, so it wins over the open
+/// windows; with it off, an open app is what the AI may drive.
+fn wanted_apps(open: &BTreeSet<String>, focused: &BTreeSet<String>) -> BTreeSet<String> {
+    if focused.is_empty() {
+        open.clone()
+    } else {
+        focused.clone()
+    }
+}
+
 /// Spawn one app CLI, handshake, list its tools and register them under the
-/// app's plugin id (marked focus-only).
+/// app's plugin id. `connect` selects the target: a live page's control channel
+/// or a headless engine.
 async fn start_server(
     app: &'static CraftApp,
     cli: &Path,
     home: &str,
     manager: &PluginManager,
+    connect: Option<u16>,
 ) -> Result<Arc<ServerHandle>, AppError> {
-    let client = McpClient::spawn(cli, app.name, home)?;
+    let live = connect.is_some();
+    let client = McpClient::spawn(cli, app.name, home, connect)?;
     let initialized = tokio::time::timeout(HANDSHAKE_TIMEOUT, async {
         client
             .request(
@@ -514,7 +620,7 @@ async fn start_server(
     .await
     .map_err(|_| AppError::Internal(format!("{} MCP handshake timed out", app.name)))??;
 
-    let server = Arc::new(ServerHandle { client });
+    let server = Arc::new(ServerHandle { client, live });
     let registry = manager.tools();
     for info in initialized {
         let registered = registered_tool_name(app.id, &info.name);
@@ -527,7 +633,6 @@ async fn start_server(
         };
         registry.install_owned(Arc::new(tool), app.id);
     }
-    registry.mark_focus_only(app.id);
     tracing::info!("Craft MCP for {} ready", app.id);
     Ok(server)
 }
@@ -625,6 +730,39 @@ mod tests {
         assert_eq!(truncate_result("ok"), "ok");
     }
 
+    /// The rule: an open app is what the AI may drive; focus mode narrows that
+    /// to the focused apps alone, and with nothing open and nothing focused
+    /// there is no server at all.
+    #[test]
+    fn open_apps_run_unless_focus_mode_narrows_them() {
+        let open: BTreeSet<String> = ["photocraft", "wordcraft"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        let focused_one: BTreeSet<String> = ["wordcraft"].iter().map(|name| name.to_string()).collect();
+
+        assert_eq!(wanted_apps(&open, &BTreeSet::new()), open);
+        assert_eq!(wanted_apps(&open, &focused_one), focused_one);
+        // A focused app with no window is still served: the focus set is the
+        // user's own statement about what they are working on.
+        assert_eq!(wanted_apps(&BTreeSet::new(), &focused_one), focused_one);
+        assert!(wanted_apps(&BTreeSet::new(), &BTreeSet::new()).is_empty());
+    }
+
+    /// Turning AI control off is a decision, and it has to outlive an app update
+    /// (installs bring the CLI) — so it lives in the app's own `.craft-mcp` dir,
+    /// next to the CLI it removed.
+    #[test]
+    fn the_opt_out_lives_with_the_cli() {
+        let path = opt_out_path(Path::new("/data/plugins"), "photocraft");
+        assert_eq!(
+            path,
+            Path::new("/data/plugins/.craft-mcp/photocraft/disabled")
+        );
+        // A path the filesystem has never seen means AI control is on.
+        assert!(ai_control_allowed(Path::new("/data/plugins"), "photocraft"));
+    }
+
     /// The CLI lives outside the plugin directory, in a dot-dir the plugin
     /// scanner skips — a web-app update swaps the plugin dir and must not take
     /// the binary with it.
@@ -656,7 +794,7 @@ mod tests {
             eprintln!("SHINY_CRAFT_CLI not set, skipping");
             return;
         };
-        let client = McpClient::spawn(Path::new(&cli), "PhotoCraft", "/tmp").expect("spawn");
+        let client = McpClient::spawn(Path::new(&cli), "PhotoCraft", "/tmp", None).expect("spawn");
         let tools = tokio::time::timeout(HANDSHAKE_TIMEOUT, async {
             client
                 .request(

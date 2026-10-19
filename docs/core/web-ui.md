@@ -90,8 +90,9 @@ The shell is split by concern. Grouped:
 |---|---|
 | `settingsWindow.js`, `preferences.js` | Settings window + per-user preferences. |
 | `pluginsWindow.js`, `activePlugins.js`, `pluginIcon.js` | Plugin manager (installed list + the Craft store tab), active set, icon resolution (theme icon → `icon.svg` → `icon.png`). |
-| `craftStore.js` | Craft App Suite catalog + the background updater (install/update via `/api/plugins/store`); also toggles an app's AI control (its MCP server). |
-| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site. |
+| `craftStore.js` | Craft App Suite catalog + the background updater (install/update via `/api/plugins/store`, including an install still missing its AI control); also toggles an app's AI control (its MCP server). |
+| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site, plus the page half of live AI control (detects `window[<app>].request` and answers the core's control-channel proxy) and the file-input shim that gives every app's Open… the shell's picker. |
+| `filePicker.js` | The shell's file dialog: browses the user's home through the Files plugin (`/api/files/list`, `/api/files/raw`) and returns picked entries, or real `File` objects for the caller's realm. Used by `files.js` and by every web app's `<input type=file>` through the surface shim. |
 | `appSaves.js` | Follows the shell's `shiny:file-saved` reports — a web app saved through the browser APIs inside its iframe — and turns them into the toast with the real path plus the `files:external` refresh the Files window listens for. |
 | `appearance.js` | Accent/gradient/theme. |
 | `userProfiles.js` | Profile/persona. |

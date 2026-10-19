@@ -58,8 +58,8 @@ export async function installCraftApp(id) {
 }
 
 /** Turn an app's AI control (its MCP server) on or off. Once on, the agent can
- *  drive the app only while that app's window is in focus mode — a rule the
- *  core enforces, not a prompt instruction. */
+ *  drive every app whose window is open, and focus mode narrows that to the
+ *  focused apps — a rule the core enforces, not a prompt instruction. */
 export async function setCraftMcp(id, enable) {
   await apiFetch('/api/plugins/store/mcp', {
     method: 'POST',
@@ -79,8 +79,11 @@ export async function craftUpdateTick({ force = false } = {}) {
     if (force || !snapshot) await refreshStore();
     else await loadStore();
     if (!getStoreAutoUpdate()) return [];
+    // Outdated apps update themselves — and so does an install that is missing
+    // its AI control (the app's CLI), which is what lets an app that was already
+    // on disk pick its CLI up without the user hunting for a second download.
     const outdated = (snapshot?.apps || []).filter(
-      (app) => app.installed_version && app.update_available && !craftAppBusy(app),
+      (app) => app.installed_version && (app.update_available || app.mcp_pending) && !craftAppBusy(app),
     );
     for (const app of outdated) await installCraftApp(app.id);
     if (outdated.length) {

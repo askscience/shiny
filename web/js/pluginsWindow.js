@@ -321,15 +321,22 @@ async function installFromStore(id, name) {
   }
 }
 
-/** Download and install every app that is missing or outdated. */
+/** Download and install every app that is missing, outdated — or installed
+ *  without its AI control (the CLI installs with the app). */
 async function installAllFromStore() {
   const apps = (storeSnapshot()?.apps || [])
-    .filter((app) => !craftAppBusy(app) && (!app.installed_version || app.update_available));
+    .filter((app) => !craftAppBusy(app)
+      && (!app.installed_version || app.update_available || app.mcp_pending));
   if (!apps.length) {
     toast(t('plugins.storeAllCurrent', null, 'Every Craft app is up to date'));
     return;
   }
-  const bytes = apps.reduce((sum, app) => sum + (app.asset_size || 0), 0);
+  // The app's AI control (its CLI) installs with the app, so the estimate has to
+  // include it whenever it will actually be downloaded.
+  const cliBytes = (app) => (app.mcp_available && (!app.mcp_installed || app.mcp_pending)
+    ? (app.mcp_size || 0)
+    : 0);
+  const bytes = apps.reduce((sum, app) => sum + (app.asset_size || 0) + cliBytes(app), 0);
   const size = bytes ? ` (~${formatSize(bytes)})` : '';
   if (!await confirmDialog(t('plugins.storeInstallAllConfirm', { count: apps.length, size },
     `Install ${apps.length} apps${size}?`))) {
@@ -383,6 +390,9 @@ function storeCard(app) {
     status.textContent = app.error || t('plugins.installFailed', null, 'Install failed');
   } else if (installed && app.update_available) {
     status.textContent = t('plugins.storeUpdateReady', null, 'Update available');
+  } else if (installed && app.mcp_pending) {
+    // The app is installed but its AI control is not — the install finishes it.
+    status.textContent = t('plugins.storeAiControlPending', null, 'AI control: finishing install');
   } else if (installed) {
     status.textContent = t('plugins.storeUpToDate', null, 'Up to date');
   } else if (app.error) {
@@ -404,7 +414,7 @@ function storeCard(app) {
       onClick: () => void installFromStore(app.id, app.name),
     }));
   } else {
-    if (app.update_available) {
+    if (app.update_available || app.mcp_pending) {
       actions.appendChild(button({
         label: t('plugins.storeUpdate', null, 'Update'),
         variant: 'primary',
@@ -414,7 +424,7 @@ function storeCard(app) {
     }
     actions.appendChild(button({
       label: t('plugins.open', null, 'Open'),
-      variant: app.update_available ? 'ghost' : 'primary',
+      variant: app.update_available || app.mcp_pending ? 'ghost' : 'primary',
       size: 'sm',
       onClick: () => void openCraftApp(app),
     }));
@@ -435,9 +445,12 @@ function storeCard(app) {
   return card;
 }
 
-/** On/off switch for an app's AI control (its MCP server). The capability is
- *  focus-scoped by the core, not by this switch: once installed, the agent can
- *  drive the app only while its window is in focus mode. */
+/** On/off switch for an app's AI control (its MCP server). On by default: the
+ *  app's install brings its CLI, so the switch is the *decision* (off means the
+ *  CLI is removed and later installs/updates respect that), not whether a file
+ *  happens to be on disk yet. Scoped by the core: the agent can drive every app
+ *  whose window is open, and focus mode narrows that to the apps the user is
+ *  focused on. */
 function aiControlRow(app) {
   const row = el('div', 'plugin-card-mcp');
   const label = el(
@@ -445,15 +458,22 @@ function aiControlRow(app) {
     'plugin-card-mcp-label',
     t('plugins.storeAiControl', null, 'AI control'),
   );
+  const enabled = app.mcp_enabled !== false;
   if (app.mcp_installed && app.mcp_version) {
     label.title = t(
       'plugins.storeAiControlVersion',
       { version: app.mcp_version },
       `AI control v${app.mcp_version}`,
     );
+  } else if (enabled) {
+    label.title = t(
+      'plugins.storeAiControlIncluded',
+      null,
+      'Installs with the app',
+    );
   }
   const aiToggle = toggle({
-    checked: !!app.mcp_installed,
+    checked: enabled,
     onChange: (value) => void setCraftAiControl(app, value),
   });
   aiToggle.setAttribute(
@@ -466,13 +486,13 @@ function aiControlRow(app) {
 }
 
 async function setCraftAiControl(app, enable) {
-  if (enable) {
+  if (enable && app.installed_version) {
     const size = app.mcp_size ? ` (~${formatSize(app.mcp_size)})` : '';
     const confirmed = await confirmDialog(
       t(
         'plugins.storeAiControlConfirm',
         { name: app.name, size },
-        `Give the AI control of ${app.name}${size}? It can drive the app only while its window is in focus mode.`,
+        `Give the AI control of ${app.name}${size}? It can drive the app while its window is open; focus mode narrows it to the apps you focus.`,
       ),
     );
     if (!confirmed) {
@@ -483,7 +503,9 @@ async function setCraftAiControl(app, enable) {
   try {
     await setCraftMcp(app.id, enable);
     toast(enable
-      ? t('plugins.storeAiControlOn', { name: app.name }, `${app.name}: AI control is ready`)
+      ? (app.installed_version
+        ? t('plugins.storeAiControlOn', { name: app.name }, `${app.name}: AI control is ready`)
+        : t('plugins.storeAiControlWithApp', { name: app.name }, `${app.name}: AI control installs with the app`))
       : t('plugins.storeAiControlOff', { name: app.name }, `${app.name}: AI control removed`));
   } catch (e) {
     toast(e.message || t('plugins.installFailed', null, 'Install failed'), { type: 'error' });

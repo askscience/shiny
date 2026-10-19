@@ -10,6 +10,7 @@
 import { apiFetch } from './api.js';
 import { toast } from '../ui/index.js';
 import { t } from './i18n.js';
+import { pickFilesFromShell } from './filePicker.js';
 
 /** Sensible default folder per content kind. */
 export const FILES_FOLDER = {
@@ -84,20 +85,25 @@ export async function saveOrDownload(blob, { name, dir = FILES_FOLDER.document, 
 }
 
 /**
- * Open the OS file picker and resolve with the chosen files (empty on cancel).
+ * Open a file picker and resolve with the chosen files (empty on cancel).
  *
- * Why this exists: WebKit — Safari and the native WKWebView shell — only opens
- * the panel for a file input that is **connected and rendered**. A detached
- * input, or one hidden with `display:none`, is silently ignored when
- * `.click()` is called; Chrome tolerates both. That is why the same
- * `input.click()` "works in other browsers" but does nothing in the native
- * browser, and it is not a macOS permission (the shell is not sandboxed and
- * needs no usage string for the open panel to appear).
- *
- * The input is therefore appended just off-screen (still laid out, not
- * `display:none`) and removed once the dialog closes.
+ * The shell's own dialog comes first (`filePicker.js`, browsing the home through
+ * the Files plugin): the kiosk's web engine shows no dialog for a classic
+ * `<input type=file>`, so this is the only route that works there — and it works
+ * for every plugin, including the Craft web apps, whose Open… goes through the
+ * same picker (see `webAppSurface.js`). When the Files plugin is unavailable,
+ * the old `<input type=file>` path stays as the fallback: WebKit only opens it
+ * for a **connected and rendered** input, hence the off-screen but laid-out
+ * element below.
  */
-export function pickFiles({ accept = '', multiple = false } = {}) {
+export async function pickFiles({ accept = '', multiple = false } = {}) {
+  const picked = await pickFilesFromShell({ accept, multiple }).catch(() => null);
+  if (picked !== null) return picked;
+  return pickFilesWithInput({ accept, multiple });
+}
+
+/** The browser's own picker — the fallback when the Files plugin is absent. */
+function pickFilesWithInput({ accept = '', multiple = false } = {}) {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';

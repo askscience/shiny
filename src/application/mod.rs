@@ -91,6 +91,7 @@ impl AppState {
             ),
             store: crate::plugins::store::Store::new(),
             craft_mcp: crate::plugins::craft_mcp::CraftMcp::new(),
+            craft_control: crate::plugins::craft_control::CraftControl::new(),
             iroh: crate::services::iroh_remote::IrohRemote::new(),
             tailscale: crate::services::tailscale::TailscaleService::new(config.server_port),
             session: Default::default(),

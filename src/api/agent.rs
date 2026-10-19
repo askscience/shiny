@@ -292,6 +292,83 @@ fn focus_state_line(focused: &std::collections::BTreeSet<String>) -> String {
     }
 }
 
+/// "## Craft apps (open now)" — the prompt's view of the Craft apps whose MCP
+/// server is up this turn, split by what the tools act on. **Live** apps (their
+/// page exposes the vendor's control channel, so the CLI was started with
+/// `--connect`) change the window in front of the user. **Headless** apps drive
+/// an engine in a separate process: the model must save/export and hand over a
+/// path — unsaved work dies with that process. Both lists come from the same app
+/// ids, so an app added later in the suite lands in whichever mode it supports
+/// without any change here.
+fn craft_apps_block(running: &[String], live: &[String]) -> String {
+    if running.is_empty() {
+        return String::new();
+    }
+    let display = |id: &String| {
+        crate::plugins::store::CraftApp::by_id(id)
+            .map(|app| app.name.to_string())
+            .unwrap_or_else(|| id.clone())
+    };
+    let names: Vec<String> = running.iter().map(display).collect();
+    let tools: Vec<String> = running.iter().map(|id| format!("{id}_*")).collect();
+    let live_set: std::collections::BTreeSet<&String> = live.iter().collect();
+    let live_names: Vec<String> = running
+        .iter()
+        .filter(|id| live_set.contains(id))
+        .map(display)
+        .collect();
+    let headless_names: Vec<String> = running
+        .iter()
+        .filter(|id| !live_set.contains(id))
+        .map(display)
+        .collect();
+
+    let mut block = format!(
+        "\n## Craft apps (open now)\n\
+         {} — their windows are open, so their own app tools ({}) are available this turn. \
+         Drive them with those tools, never their command-line through the terminal.\n",
+        names.join(", "),
+        tools.join(", "),
+    );
+    if !live_names.is_empty() {
+        block.push_str(&format!(
+            "{}: live — the tools act on the open window itself: what you draw or change appears \
+             there as you make it. No export is needed unless the user wants a file.\n",
+            live_names.join(", "),
+        ));
+    }
+    if !headless_names.is_empty() {
+        block.push_str(&format!(
+            "{}: headless — the tools drive the app's engine in a separate process, not the window, \
+             and that process ends with this session, so unsaved work is lost. Save or export the \
+             document (in the app's own format, under the user's home — that is the app's write \
+             root) before you answer, tell the user the path, and only then say it is done.\n",
+            headless_names.join(", "),
+        ));
+    }
+    block
+}
+
+/// The windows the client reported open this turn, across every workspace, kept
+/// to the session's active plugins. This is the set the Craft MCP host follows
+/// (see `plugins::craft_mcp`): a plain name set, so whatever is not an open
+/// Craft app is dropped when the servers start.
+fn open_windows(
+    desktop: Option<&DesktopState>,
+    installed: &std::collections::BTreeSet<String>,
+) -> std::collections::BTreeSet<String> {
+    desktop
+        .map(|d| {
+            d.workspaces
+                .iter()
+                .flat_map(|ws| ws.windows.iter())
+                .filter(|name| installed.contains(*name))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 struct PreparedAgent {
     input: AgentRunInput,
     trip_id: Option<String>,
@@ -369,11 +446,17 @@ async fn prepare_agent(
     // prompt's promise and what the model can actually call are the same thing.
     ctx.focused = focused.iter().cloned().collect();
 
-    // Craft-app AI control is a focus-only surface, enforced here in code: a
-    // focused app's MCP server is started (and every other one stopped) before
-    // the tool list is built, so this turn advertises and can call exactly the
-    // focused apps' tools. When nothing is focused no server runs at all, and
-    // the agent has no way to reach those tools — no prompt wording involved.
+    // Windows the user has open right now, across every workspace: a Craft app
+    // among them keeps its MCP server up, so the AI drives the app the user is
+    // working in without entering focus mode.
+    let open = open_windows(body.desktop.as_ref(), &installed);
+
+    // Craft-app AI control rides those two sets, and it is enforced here in
+    // code: every open app's MCP server is started (and the closed ones stopped)
+    // before the tool list is built, and while the user is in focus mode only
+    // the focused apps' servers stay up — so this turn advertises and can call
+    // exactly the apps the user has in front of them, one or several. No prompt
+    // wording is involved.
     let craft_home = state
         .os_identity_for(traveler)
         .map(|identity| identity.home)
@@ -383,8 +466,10 @@ async fn prepare_agent(
         .craft_mcp
         .sync(
             &state.plugins,
+            &state.craft_control,
             std::path::Path::new(&state.config.plugins_dir),
             &craft_home,
+            &open,
             &focused,
         )
         .await;
@@ -558,6 +643,14 @@ async fn prepare_agent(
         .collect::<Vec<_>>()
         .join("; ");
 
+    // The Craft apps whose MCP server is up this turn, and which of them act on
+    // the open window (live) rather than on a headless engine. Their tools are in
+    // the "## Tools" docs like any other plugin's; this block says what they act
+    // on, so the model never promises a change it cannot make.
+    let running_craft = state.craft_mcp.running_apps().await;
+    let live_craft = state.craft_mcp.live_apps().await;
+    let craft_block = craft_apps_block(&running_craft, &live_craft);
+
     let desktop_block = desktop_state_block(body.desktop.as_ref());
     // Focus mode is a property of this turn, not of the desktop layout: it rides
     // with the focused windows the client just reported. The state line is
@@ -611,7 +704,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\n{focus_line}User name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{focus_block}{plugin_catalog_block}{desktop_block}",
+         Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{craft_block}{focus_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
         lang_name = language_name(&lang),
@@ -629,6 +722,7 @@ async fn prepare_agent(
         mode = mode,
         history_block = history_block,
         plugin_windows_block = plugin_windows_block,
+        craft_block = craft_block,
         focus_block = focus_block,
         plugin_catalog_block = plugin_catalog_block,
         desktop_block = desktop_block,
@@ -651,6 +745,8 @@ async fn prepare_agent(
             correction,
             think: body.think,
             ctx,
+            craft_open: open,
+            craft_home,
         },
     })
 }
@@ -916,7 +1012,10 @@ pub async fn handle_agent_dispatch(
 
 #[cfg(test)]
 mod tests {
-    use super::{focus_mode_block, focus_state_line};
+    use super::{
+        craft_apps_block, focus_mode_block, focus_state_line, open_windows, DesktopState,
+        WorkspaceSnapshot,
+    };
     use std::collections::BTreeSet;
 
     fn set(names: &[&str]) -> BTreeSet<String> {
@@ -951,5 +1050,68 @@ mod tests {
         assert!(!block.contains("plugin_unfocus"), "{block}");
         // Never nag: suggestions are gated on being useful.
         assert!(block.contains("genuinely helps"), "{block}");
+    }
+
+    /// The open windows are what the Craft MCP host follows: every workspace
+    /// counts (an app left on another workspace is still open), a plugin that is
+    /// not active this session is not a window the turn can drive, and a client
+    /// that sends no desktop opens nothing.
+    #[test]
+    fn open_windows_span_every_workspace_and_stay_inside_the_active_set() {
+        let active = set(&["photocraft", "wordcraft"]);
+        let desktop = DesktopState {
+            active: Some(2),
+            workspaces: vec![
+                WorkspaceSnapshot {
+                    index: 1,
+                    windows: vec!["photocraft".into(), "calc".into()],
+                },
+                WorkspaceSnapshot {
+                    index: 2,
+                    windows: vec!["wordcraft".into()],
+                },
+            ],
+            workspaces_enabled: Some(true),
+            focused: vec!["wordcraft".into()],
+        };
+        assert_eq!(
+            open_windows(Some(&desktop), &active),
+            set(&["photocraft", "wordcraft"])
+        );
+        assert!(
+            open_windows(None, &active).is_empty(),
+            "no desktop in the request means no window to drive"
+        );
+    }
+
+    /// The prompt says where a Craft app's tools act: live on the window when the
+    /// page exposes the control channel, or on a headless engine whose unsaved
+    /// work dies with the process.
+    #[test]
+    fn craft_block_tells_live_from_headless() {
+        let running = vec!["vectorcraft".to_string()];
+        let headless = craft_apps_block(&running, &[]);
+        assert!(headless.contains("VectorCraft"), "{headless}");
+        assert!(headless.contains("vectorcraft_*"), "{headless}");
+        assert!(headless.contains("headless"), "{headless}");
+        assert!(headless.contains("not the window"), "{headless}");
+        assert!(headless.contains("Save or export"), "{headless}");
+        assert!(
+            headless.contains("write root"),
+            "the model has to know where saving is allowed: {headless}"
+        );
+        assert!(
+            headless.contains("is lost"),
+            "the model must know the process is ephemeral: {headless}"
+        );
+
+        let live = craft_apps_block(&running, &running);
+        assert!(live.contains("live —"), "{live}");
+        assert!(live.contains("open window"), "{live}");
+        assert!(
+            !live.contains("Save or export"),
+            "a live app needs no export to be seen: {live}"
+        );
+        assert!(craft_apps_block(&[], &[]).is_empty());
     }
 }

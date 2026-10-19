@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -151,12 +151,44 @@ pub struct Release {
 }
 
 /// One asset we may download (`<app>-cli` comes out of the Linux tarball).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CliAsset {
     pub name: String,
     pub url: String,
     pub size: u64,
     pub sha256: Option<String>,
+}
+
+/// What installing an app's AI control comes to. The app's install/update path
+/// and the updater both go through this one rule, so "with AI control" and
+/// "without" never disagree — for any app in the suite, including one installed
+/// after this was written.
+#[derive(Debug, PartialEq)]
+enum CliPlan {
+    /// The user turned AI control off for this app (`disabled` marker).
+    OptedOut,
+    /// The CLI on disk already comes from this release.
+    Current,
+    /// Install/update this asset.
+    Install(CliAsset),
+    /// The release publishes no CLI for this platform.
+    Unavailable,
+}
+
+fn cli_plan(plugins_dir: &Path, app: &CraftApp, release: &Release) -> CliPlan {
+    if !crate::plugins::craft_mcp::ai_control_allowed(plugins_dir, app.id) {
+        CliPlan::OptedOut
+    } else if crate::plugins::craft_mcp::ai_control_current(
+        plugins_dir,
+        app.id,
+        &release.version.to_string(),
+    ) {
+        CliPlan::Current
+    } else if let Some(asset) = release.cli.clone() {
+        CliPlan::Install(asset)
+    } else {
+        CliPlan::Unavailable
+    }
 }
 
 /// The architecture suffix the Craft releases use, when we can run it.
@@ -371,10 +403,14 @@ impl Store {
                     .and_then(|entry| entry.release.as_ref().ok())
                     .map(|release| release.asset_size)
                     .unwrap_or(0);
-                // AI control: the app's CLI is installed on request (it is a
-                // 60–90 MB package), and only while the app is focused do its
-                // tools exist (see `craft_mcp`).
+                // AI control: the app's CLI (60–124 MB) is installed together
+                // with the app, and its tools exist while the app's window is
+                // open — focus mode narrows them to the focused apps (see
+                // `craft_mcp`). `mcp_enabled` is the user's decision (on unless
+                // they turned it off for this app); `mcp_pending` is an install
+                // that is not complete yet, which the updater finishes.
                 let plugins_dir = std::path::Path::new(&state.config.plugins_dir);
+                let mcp_enabled = crate::plugins::craft_mcp::ai_control_allowed(plugins_dir, app.id);
                 let mcp_installed =
                     crate::plugins::craft_mcp::cli_path(plugins_dir, app.id).is_file();
                 let mcp_available = cached
@@ -382,6 +418,19 @@ impl Store {
                     .and_then(|entry| entry.release.as_ref().ok())
                     .and_then(|release| release.cli.as_ref())
                     .is_some();
+                let mcp_pending = match (&installed_version, &latest) {
+                    // An install is complete when the app and its AI control are
+                    // both at the release: a missing CLI, or one left behind by
+                    // an earlier release, is work the updater finishes.
+                    (Some(_), Some(latest)) => {
+                        mcp_available
+                            && crate::plugins::craft_mcp::ai_control_allowed(plugins_dir, app.id)
+                            && !crate::plugins::craft_mcp::ai_control_current(
+                                plugins_dir, app.id, latest,
+                            )
+                    }
+                    _ => false,
+                };
                 let mcp_size = cached
                     .as_ref()
                     .and_then(|entry| entry.release.as_ref().ok())
@@ -409,6 +458,8 @@ impl Store {
                     "error": status.error.or(latest_error),
                     "mcp_available": mcp_available,
                     "mcp_installed": mcp_installed,
+                    "mcp_enabled": mcp_enabled,
+                    "mcp_pending": mcp_pending,
                     "mcp_version": mcp_version,
                     "mcp_size": mcp_size,
                 })
@@ -591,7 +642,7 @@ impl Store {
     async fn install_release(
         &self,
         state: &AppState,
-        app: &CraftApp,
+        app: &'static CraftApp,
         release: &Release,
     ) -> Result<(), AppError> {
         let plugins_dir = PathBuf::from(&state.config.plugins_dir);
@@ -648,6 +699,38 @@ impl Store {
             &plugins_dir,
             &format!("craft-install-ok app={} plugin={installed} version={}", app.id, release.version),
         );
+
+        // AI control is part of the app, not a second download the user has to
+        // remember: the same release's `<app>-cli` is installed alongside the
+        // web build — on a first install, and on every update that brings a new
+        // one, so the pair never drifts apart. Unless they turned it off for
+        // this app. A CLI failure leaves the app installed (its card then says
+        // AI control is off) and is never allowed to fail the app install.
+        match cli_plan(&plugins_dir, app, release) {
+            CliPlan::OptedOut => crate::plugins::installer::log_event(
+                &plugins_dir,
+                &format!("craft-mcp-opted-out app={}", app.id),
+            ),
+            // In step already: an app update that does not change the CLI buys
+            // nothing by downloading it again.
+            CliPlan::Current => {}
+            // No Linux CLI in this release (or not for this platform): say so
+            // once, in the log, rather than at every turn.
+            CliPlan::Unavailable => crate::plugins::installer::log_event(
+                &plugins_dir,
+                &format!("craft-mcp-unavailable app={} version={}", app.id, release.version),
+            ),
+            CliPlan::Install(asset) => {
+                if let Err(error) = self.install_cli(state, app, release, &asset).await {
+                    tracing::warn!("Craft MCP for {} was not installed: {error}", app.id);
+                    crate::plugins::installer::log_event(
+                        &plugins_dir,
+                        &format!("craft-mcp-failed app={} {error}", app.id),
+                    );
+                }
+            }
+        }
+
         self.inner.status.lock().remove(app.id);
         Ok(())
     }
@@ -662,6 +745,15 @@ impl Store {
             return Err(AppError::BadRequest(format!("{} is busy", app.name)));
         }
         let release = self.release_for(app).await?;
+        // Already at this release (the app's install brought it): a 60–124 MB
+        // download would buy nothing.
+        if crate::plugins::craft_mcp::ai_control_current(
+            Path::new(&state.config.plugins_dir),
+            app.id,
+            &release.version.to_string(),
+        ) {
+            return Ok(());
+        }
         let asset = release.cli.clone().ok_or_else(|| {
             AppError::BadRequest(format!(
                 "{} does not publish a Linux command-line tool for this machine in v{}",
@@ -726,10 +818,11 @@ impl Store {
             permissions.set_mode(0o755);
             std::fs::set_permissions(&target, permissions)?;
         }
-        std::fs::write(
-            crate::plugins::craft_mcp::version_path(&plugins_dir, app.id),
-            release.version.to_string(),
-        )?;
+        let version_file = crate::plugins::craft_mcp::version_path(&plugins_dir, app.id);
+        std::fs::write(&version_file, release.version.to_string())?;
+        // The install succeeded, so any earlier "AI control off" stands resolved:
+        // updates from here on keep the CLI in step.
+        let _ = std::fs::remove_file(crate::plugins::craft_mcp::opt_out_path(&plugins_dir, app.id));
         crate::plugins::installer::log_event(
             &plugins_dir,
             &format!(
@@ -743,7 +836,44 @@ impl Store {
         Ok(())
     }
 
-    /// Remove an app's AI-control bundle ("AI control" off).
+    /// The AI-control switch's one job: record the user's decision, and act on
+    /// it now when there is something to act on. On an app that is not installed
+    /// yet only the decision is stored — its own install carries the CLI, so
+    /// there is nothing to download here.
+    pub async fn set_ai_control(
+        &self,
+        state: &AppState,
+        id: &str,
+        enable: bool,
+    ) -> Result<(), AppError> {
+        let app = CraftApp::by_id(id)
+            .ok_or_else(|| AppError::BadRequest(format!("unknown Craft app '{id}'")))?;
+        if !enable {
+            return self.remove_mcp(state, id);
+        }
+        // Clear the refusal first, so an install that arrives meanwhile keeps
+        // the CLI.
+        let marker = crate::plugins::craft_mcp::opt_out_path(
+            Path::new(&state.config.plugins_dir),
+            app.id,
+        );
+        if marker.is_file() {
+            std::fs::remove_file(&marker)?;
+        }
+        let installed = state
+            .plugins
+            .list()
+            .iter()
+            .any(|manifest| manifest.name == app.id);
+        if installed {
+            self.start_mcp_install(state, id).await?;
+        }
+        Ok(())
+    }
+
+    /// Remove an app's AI-control bundle ("AI control" off) and remember the
+    /// choice: the app keeps updating in the background, and an update must not
+    /// silently put the 60–124 MB CLI back.
     pub fn remove_mcp(&self, state: &AppState, id: &str) -> Result<(), AppError> {
         let app = CraftApp::by_id(id)
             .ok_or_else(|| AppError::BadRequest(format!("unknown Craft app '{id}'")))?;
@@ -754,6 +884,13 @@ impl Store {
                 AppError::Internal(format!("could not remove {} AI control: {error}", app.name))
             })?;
         }
+        let marker = crate::plugins::craft_mcp::opt_out_path(&plugins_dir, app.id);
+        if let Some(parent) = marker.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&marker, "1").map_err(|error| {
+            AppError::Internal(format!("could not record {} AI control off: {error}", app.name))
+        })?;
         crate::plugins::installer::log_event(
             &plugins_dir,
             &format!("craft-mcp-removed app={}", app.id),
@@ -953,9 +1090,10 @@ pub async fn store_refresh(
 }
 
 /// POST /api/plugins/store/install  body {"id":"photocraft"} — download,
-/// verify and install (or update) one app. The work runs in the background;
-/// progress and failures are reported by the store snapshot and the plugin
-/// install log.
+/// verify and install (or update) one app, **its command-line tool (AI control)
+/// included**, unless the user turned that off for the app. The work runs in the
+/// background; progress and failures are reported by the store snapshot and the
+/// plugin install log.
 pub async fn store_install(
     State(state): State<AppState>,
     Extension(_traveler): Extension<Traveler>,
@@ -970,9 +1108,11 @@ pub async fn store_install(
 }
 
 /// POST /api/plugins/store/mcp  body {"id":"photocraft","enable":true|false} —
-/// install (or remove) the app's command-line tool, which is also its MCP
-/// server. The agent can use it only while that app's window is in focus
-/// mode; that rule is enforced by the MCP host, not by prompt wording.
+/// the AI-control switch: record whether the user wants it, and install/remove
+/// the app's command-line tool (its MCP server) to match. On by default: an
+/// app's install brings the CLI unless this turned it off. The agent can use it
+/// while that app's window is open, and focus mode narrows that to the focused
+/// apps; the rule is enforced by the MCP host, not by prompt wording.
 pub async fn store_mcp(
     State(state): State<AppState>,
     Extension(_traveler): Extension<Traveler>,
@@ -986,11 +1126,7 @@ pub async fn store_mcp(
         .get("enable")
         .and_then(|value| value.as_bool())
         .unwrap_or(true);
-    if enable {
-        state.store.start_mcp_install(&state, id).await?;
-    } else {
-        state.store.remove_mcp(&state, id)?;
-    }
+    state.store.set_ai_control(&state, id, enable).await?;
     Ok(Json(json!({
         "success": true,
         "data": { "id": id, "mcp": enable },
@@ -1206,5 +1342,62 @@ mod tests {
         let odd = CraftApp { former_ids: &[], ..*app };
         let escaped = manifest_toml(&CraftApp { tagline: "a \"quoted\" tagline", ..odd }, &release);
         assert!(toml::from_str::<shiny_plugin_sdk::manifest::Manifest>(&escaped).is_ok());
+    }
+
+    /// The one rule behind "AI control comes with the app": on by default, off
+    /// respected, a current CLI left alone (no 60–124 MB re-download on an app
+    /// update), and a release without a CLI reported instead of guessed. The
+    /// update path and the updater both read it, for every app id.
+    #[test]
+    fn ai_control_install_plan_handles_with_and_without_it() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let plugins_dir = dir.path();
+        let app = CraftApp::by_id("vectorcraft").expect("known app");
+        let asset = CliAsset {
+            name: "vectorcraft-1.2.3-linux-x86_64.tar.gz".into(),
+            url: "https://github.com/storytold/vectorcraft/releases/download/v1.2.3/x.tar.gz"
+                .into(),
+            size: 42,
+            sha256: None,
+        };
+        let release = Release {
+            version: semver::Version::new(1, 2, 3),
+            asset_name: "vectorcraft-web-1.2.3.zip".into(),
+            asset_url: String::new(),
+            asset_size: 0,
+            sha256: None,
+            cli: Some(asset.clone()),
+        };
+
+        // On by default: the app's install brings the CLI.
+        assert_eq!(
+            cli_plan(plugins_dir, app, &release),
+            CliPlan::Install(asset.clone())
+        );
+
+        // "AI control off" survives an install/update.
+        let marker = crate::plugins::craft_mcp::opt_out_path(plugins_dir, app.id);
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        std::fs::write(&marker, "1").unwrap();
+        assert_eq!(cli_plan(plugins_dir, app, &release), CliPlan::OptedOut);
+        std::fs::remove_file(&marker).unwrap();
+
+        // Already at this release: nothing to download.
+        let cli = crate::plugins::craft_mcp::cli_path(plugins_dir, app.id);
+        std::fs::create_dir_all(cli.parent().unwrap()).unwrap();
+        std::fs::write(&cli, b"bin").unwrap();
+        std::fs::write(
+            crate::plugins::craft_mcp::version_path(plugins_dir, app.id),
+            "1.2.3",
+        )
+        .unwrap();
+        assert_eq!(cli_plan(plugins_dir, app, &release), CliPlan::Current);
+
+        // A release with no CLI for this platform is named, not retried.
+        std::fs::remove_file(&cli).unwrap();
+        assert_eq!(
+            cli_plan(plugins_dir, app, &Release { cli: None, ..release }),
+            CliPlan::Unavailable
+        );
     }
 }

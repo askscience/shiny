@@ -119,6 +119,7 @@ Read [Runtime & ABI](runtime-abi.md) before writing any DB or HTTP code.
 | `src/plugins/manager.rs` | `PluginManager` — contributions, persona, skills, activation. |
 | `src/plugins/installer.rs` | zip/tar unpacker, manifest validation, install log. |
 | `src/plugins/store.rs` | Craft store: catalog, GitHub release resolution, SHA-256 verification, web-app installs. |
+| `src/plugins/craft_mcp.rs` | Craft MCP hosts: each open app's `<app>-cli mcp` as agent tools, focus mode narrowing them to the focused apps. |
 | `src/plugins/admin_api.rs` | Plugin HTTP endpoints. |
 | `src/api/mod.rs` | Plugin route mounting + `inject_path_params`; the web-app routes carry framing/caching headers of their own. |
 | `src/main.rs` | `RouterHandle` hot swap + boot discovery. |

@@ -393,10 +393,12 @@ Both isolate panics so one bad job cannot wedge the worker.
 | `POST` | `/api/plugins/activate` | Bearer | `{ "name": "..." }`. |
 | `POST` | `/api/plugins/deactivate` | Bearer | `{ "name": "..." }`. |
 | `GET` | `/api/plugins/install.log` | Bearer | Last 200 lines of the install log. |
-| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress. |
+| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress, and per app `mcp_enabled` (the AI-control decision), `mcp_installed`, `mcp_pending`. |
 | `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag). |
-| `POST` | `/api/plugins/store/install` | Bearer | `{ "id": "photocraft" }` — download, verify (SHA-256) and install one app's web build, in the background. |
-| `POST` | `/api/plugins/store/mcp` | Bearer | `{ "id": "photocraft", "enable": true }` — install/remove the app's CLI (its MCP server). Its tools exist only while that app's window is in focus mode. |
+| `POST` | `/api/plugins/store/install` | Bearer | `{ "id": "photocraft" }` — download, verify (SHA-256) and install one app's web build **and its command-line tool (AI control)**, in the background. |
+| `POST` | `/api/plugins/store/mcp` | Bearer | `{ "id": "photocraft", "enable": true }` — the AI-control switch: records the decision and installs/removes the app's CLI (its MCP server). On by default; off is remembered (`.craft-mcp/<id>/disabled`), so installs and updates respect it. |
+| `GET` | `/api/plugins/craft/control/events` | Bearer | SSE, the page's side of a live Craft app link (`?app=<id>`): each message is one control request the page runs through `window.<app>.request`. |
+| `POST` | `/api/plugins/craft/control/reply` | Bearer | `{ "app": "vectorcraft", "id": 42, "ok": true, "result": … }` — the page's answer to one forwarded request. |
 
 There is **no admin role** — any logged-in user can install/uninstall; see
 [Security](security.md).

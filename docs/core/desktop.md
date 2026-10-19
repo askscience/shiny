@@ -258,7 +258,9 @@ from, so leaving fullscreen hands it back (see [Real fullscreen](#real-fullscree
 
 `getDesktopSnapshot()` (1-based indices) is sent to the AI on every request so
 it knows which windows live in which workspace — and, in `focused`, whether the
-turn runs in focus mode. The `workspace_*` and `desktop_*` tools are applied back
+turn runs in focus mode. The `windows` it lists are also what the Craft MCP host
+follows: every Craft app the user has open keeps its app tools in the turn (see
+[agent.md](agent.md)). The `workspace_*` and `desktop_*` tools are applied back
 through `agent:actions` (`wireAgentActions`); focus mode is not among them,
 because the AI cannot change it.
 
@@ -338,6 +340,12 @@ snapshot (`focused`), where it **scopes and enforces** the turn:
     its own "unknown action" error, so the model corrects the name instead of
     concluding that focus mode is in its way (this is what made it tell the user
     to leave focus mode while Word was focused);
+- a **Craft app's MCP tools** follow the open windows like any other plugin's
+  tools, and focus mode narrows them the same way: with nothing focused every open
+  app is served, with focus mode on only the focused ones keep a server
+  (`src/plugins/craft_mcp.rs`). Each app's server is **live** (acting on the
+  window) when the app's page exposes the documented control API — the shell
+  attaches it through `plugins/craft_control.rs` — and headless otherwise;
 - only the user changes focus mode (the eye button, the two context menus). The
   model can only SUGGEST it, which is what the refusal tells it to do.
 

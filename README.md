@@ -126,10 +126,15 @@ WordCraft, PdfCraft, …): it lists each app from the core's catalog, installs
 that app's own **web build** from its GitHub release — verified against the
 release's SHA-256 — as a web-app plugin (`kind = "web"`, served at
 `/plugins/<id>/` and mounted in a window as an iframe), and keeps it updated.
-Each app can also be given **AI control**: its command-line tool (a Model
-Context Protocol server, shipped in the same release) is installed on request,
-and the agent can then drive that app's engine — but only while the app's window
-is in focus mode, a rule the core enforces, not the prompt.
+Each app comes with its **AI control** already: the app's command-line tool (a
+Model Context Protocol server, shipped in the same release) installs alongside
+the web build, on by default — no separate switch to find. An app's **open
+window** is what puts its tools in the turn; focus mode narrows that to the apps
+the user is focused on, a rule the core enforces, not the prompt. When the app's
+build exposes its page control channel, the agent drives the **window itself**
+and changes appear live; without it, it works headless and hands you a saved
+file. The switch on the app's card turns AI control off (and frees the 60–124 MB);
+that choice survives later updates.
 The catalog and the release rules follow
 [ArtCraft Launcher](https://github.com/storytold/craft-launcher) (MIT OR
 Apache-2.0, © ArtCraft Team and contributors).

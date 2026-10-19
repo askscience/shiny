@@ -31,6 +31,11 @@ helpers every other plugin uses.
   `saveOrDownload`, `openWithPlugin`, `onOpenFromFiles`, `pickFiles`,
   `fileFromHome`. Other plugins' exports go to the user's home through these
   instead of a browser download.
+- The shell's **file dialog** ([`web/js/filePicker.js`](../../../web/js/filePicker.js))
+  browses this plugin's home through `/api/files/home|list` and reads bytes with
+  `/api/files/raw`. `pickFiles` opens it, and the web-app surface shim uses it for
+  every `<input type=file>` inside an app window — so a Craft app's Open… works in
+  the kiosk, where the web engine has no file dialog of its own.
 
 ## Home resolution
 

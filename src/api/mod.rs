@@ -203,9 +203,13 @@ pub struct AppState {
     /// Craft store: installs and updates the Craft App Suite's web builds as
     /// web-app plugins (`/api/plugins/store`).
     pub store: crate::plugins::store::Store,
-    /// Craft app MCP servers. One runs per focused Craft app and nowhere else:
-    /// focus mode is the hard boundary for an app's AI control.
+    /// Craft app MCP servers: one runs per open Craft app, and focus mode
+    /// narrows that to the focused apps (see `plugins::craft_mcp`).
     pub craft_mcp: crate::plugins::craft_mcp::CraftMcp,
+    /// Craft control-channel proxy: when a page shows an app and exposes its
+    /// documented page API, the app's CLI connects here instead of running
+    /// headless (see `plugins::craft_control`).
+    pub craft_control: crate::plugins::craft_control::CraftControl,
     /// Iroh remote-access service.
     pub iroh: crate::services::iroh_remote::IrohRemote,
     /// Tailscale Serve/Funnel access (a public `*.ts.net` HTTPS URL).
@@ -567,6 +571,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/store/refresh", post(crate::plugins::store::store_refresh))
         .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
         .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
+        // Craft control-channel proxy: the page's side of a live app link.
+        .route("/api/plugins/craft/control/events", get(crate::plugins::craft_control::events))
+        .route("/api/plugins/craft/control/reply", post(crate::plugins::craft_control::reply))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))

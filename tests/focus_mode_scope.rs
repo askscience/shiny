@@ -225,13 +225,12 @@ async fn a_focused_plugins_tool_reaches_the_plugin_and_another_does_not() {
     );
 }
 
-/// A Craft app's MCP tools are a focus-only surface: they run for that app and
-/// for nothing else — not when no window is focused, and not when a different
-/// plugin is. This is the hard-coded half of the rule (the MCP host also stops
-/// the server when the app is unfocused); the tool is left registered on
-/// purpose, so the gate is what this test proves.
+/// A Craft app's MCP tools belong to its open window, and focus mode narrows
+/// them to the focused apps: with nothing focused they run like any other
+/// plugin's tool (the MCP host is what keeps the server up while the window is
+/// open), while another plugin focused refuses them with the app named.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn craft_app_mcp_tools_exist_only_while_the_app_is_focused() {
+async fn craft_app_mcp_tools_follow_focus_mode() {
     use std::sync::Arc;
 
     struct FakeMcpTool;
@@ -299,8 +298,6 @@ async fn craft_app_mcp_tools_exist_only_while_the_app_is_focused() {
 
     let tools = state.plugins.tools();
     tools.install_owned(Arc::new(FakeMcpTool), "photocraft");
-    tools.mark_focus_only("photocraft");
-    assert!(tools.is_focus_only("photocraft"));
     assert_eq!(tools.owner_of("photocraft_doc_open"), "photocraft");
 
     // Focused on the app: its MCP tool runs.
@@ -316,7 +313,8 @@ async fn craft_app_mcp_tools_exist_only_while_the_app_is_focused() {
     assert_eq!(out.result, "ok", "{:?}", out.data);
     assert_eq!(out.owner.as_deref(), Some("photocraft"));
 
-    // Nothing focused: refused, with the app named as the one to focus.
+    // Nothing focused: the app the user has open is an ordinary tool surface —
+    // focus mode is how they narrow it, not the price of admission.
     let idle = execute_action(
         state,
         &traveler,
@@ -325,11 +323,16 @@ async fn craft_app_mcp_tools_exist_only_while_the_app_is_focused() {
         &json!({}),
     )
     .await
-    .expect("the refusal is an outcome, not an error");
-    assert!(refused_by_focus_mode(&idle), "{:?}", idle.data);
-    assert_eq!(idle.data["suggest_focus"], "photocraft");
+    .expect("the MCP tool dispatches");
+    assert!(
+        !refused_by_focus_mode(&idle),
+        "an open app's tools must not be refused just because nothing is focused: {:?}",
+        idle.data
+    );
+    assert_eq!(idle.result, "ok", "{:?}", idle.data);
 
-    // A different plugin focused: the ordinary focus gate refuses it as well.
+    // A different plugin focused: the ordinary focus gate refuses it, naming the
+    // app the user would have to focus.
     let other = execute_action(
         state,
         &traveler,
@@ -340,4 +343,5 @@ async fn craft_app_mcp_tools_exist_only_while_the_app_is_focused() {
     .await
     .expect("the refusal is an outcome, not an error");
     assert!(refused_by_focus_mode(&other), "{:?}", other.data);
+    assert_eq!(other.data["suggest_focus"], "photocraft");
 }

@@ -19,8 +19,142 @@
  * user has open in it.
  */
 
+import { apiFetch } from './api.js';
+import { pickPaths, filesFromEntries, readFileBytes } from './filePicker.js';
+
 /** @type {Map<string, object>} */
 const surfaces = new Map();
+
+/**
+ * Live AI control for a Craft app whose page exposes the vendor's documented
+ * page API — `window.<app>.request(method, params)`, the same methods its
+ * desktop control channel takes. The core runs a loopback proxy that speaks the
+ * app CLI's control protocol (`src/plugins/craft_control.rs`); this is the page
+ * half: every request the proxy forwards is executed inside the running app and
+ * answered back, so the agent's tools act on the window the user sees.
+ *
+ * Feature-detected and app-agnostic: the global is the plugin's own name
+ * (`vectorcraft` → `window.vectorcraft`), so any Craft app — present or
+ * installed later — that ships the documented API gets live control with no
+ * change here. A build without it keeps the headless behavior: nothing is
+ * attached and the core's fallback servers stay in charge.
+ */
+function attachControl(name, frame, surface) {
+  const api = frame.contentWindow?.[name];
+  if (!api || typeof api.request !== 'function') return;
+  if (surface.controlFor === frame.contentWindow) return; // already attached
+  surface.control?.close();
+  surface.controlFor = frame.contentWindow;
+
+  const source = new EventSource(
+    new URL(`../api/plugins/craft/control/events?app=${encodeURIComponent(name)}`, import.meta.url),
+  );
+  source.addEventListener('message', (event) => {
+    let request;
+    try {
+      request = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (!request || typeof request.method !== 'string') return;
+    const reply = { app: name, id: request.id };
+    void (async () => {
+      try {
+        reply.result = await api.request(request.method, request.params ?? {});
+        reply.ok = true;
+      } catch (error) {
+        reply.ok = false;
+        reply.error = String(error?.message ?? error);
+      }
+      try {
+        await apiFetch('/api/plugins/craft/control/reply', {
+          method: 'POST',
+          body: JSON.stringify(reply),
+        });
+      } catch (error) {
+        console.warn(`craft control: could not answer ${name}`, error);
+      }
+    })();
+  });
+  // EventSource reconnects by itself; a dead stream is the server's business.
+  surface.control = source;
+}
+
+/**
+ * In-app Open… for web apps. The kiosk's web engine has no handler for a classic
+ * `<input type=file>`, so clicking Open did nothing at all. For the lifetime of
+ * the frame's document, its file inputs are pointed at the shell's picker
+ * (`filePicker.js`): the user picks through the Files plugin, the bytes come
+ * back from it, and the app receives real `File` objects on its own input with
+ * `input`/`change` dispatched — exactly what its code listens for.
+ *
+ * App-agnostic by construction: any web app that uses a file input gets this
+ * with no code of its own.
+ */
+function installFileInputShim(frame) {
+  const realm = frame.contentWindow;
+  if (!realm || realm.__shinyFileInput) return;
+  const proto = realm.HTMLInputElement?.prototype;
+  if (!proto) return;
+  realm.__shinyFileInput = true;
+
+  const nativeClick = proto.click;
+  const nativeShow = proto.showPicker;
+
+  const fill = async (input) => {
+    const picked = await pickPaths({ accept: input.accept || '', multiple: !!input.multiple });
+    if (!picked || !picked.length) return;
+    const files = await filesFromEntries(realm, picked);
+    const transfer = new realm.DataTransfer();
+    for (const file of files) transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new realm.Event('input', { bubbles: true }));
+    input.dispatchEvent(new realm.Event('change', { bubbles: true }));
+  };
+
+  const intercept = (input) => {
+    void fill(input).catch((error) => {
+      console.warn('web app file picker failed', error);
+    });
+  };
+
+  proto.click = function (...args) {
+    if (this instanceof realm.HTMLInputElement && this.type === 'file' && !this.disabled) {
+      intercept(this);
+      return undefined;
+    }
+    return nativeClick.apply(this, args);
+  };
+  if (typeof nativeShow === 'function') {
+    proto.showPicker = function (...args) {
+      if (this instanceof realm.HTMLInputElement && this.type === 'file' && !this.disabled) {
+        intercept(this);
+        return undefined;
+      }
+      return nativeShow.apply(this, args);
+    };
+  }
+}
+
+/**
+ * Hand a file to the app when its page API can take bytes:
+ * `window.<app>.openFile(name, bytes)`. This is what “Open with app” in Files
+ * (and a pending request from before the window mounted) needs; a build without
+ * the API simply cannot receive one yet — the same gate as live control.
+ */
+async function handFileToApp(name, frame, detail) {
+  const api = frame.contentWindow?.[name];
+  if (!detail?.path || typeof api?.openFile !== 'function') return false;
+  try {
+    const blob = await readFileBytes(detail.path);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const filename = detail.name || detail.path.split('/').pop() || 'file';
+    return api.openFile(filename, bytes) !== false;
+  } catch (error) {
+    console.warn(`could not open ${detail.path} in ${name}`, error);
+    return false;
+  }
+}
 
 function ensureSurface(name) {
   let surface = surfaces.get(name);
@@ -58,6 +192,22 @@ function ensureSurface(name) {
     getElement() { return tile; },
     wireEvents() {},
   };
+  // Files → "Open with app" (and a request queued before this window mounted)
+  // reaches the app through its page API when the build can take bytes.
+  window.addEventListener('files:open', (event) => {
+    if (event.detail?.plugin === name) void handFileToApp(name, frame, event.detail);
+  });
+  // The app's document (and its page API) is ready at `load`; a reload replaces
+  // the window the bridge was talking to, so re-attach on every load.
+  frame.addEventListener('load', () => {
+    attachControl(name, frame, surface);
+    installFileInputShim(frame);
+    const pending = window.__pendingFileOpen;
+    if (pending?.plugin === name) {
+      window.__pendingFileOpen = null;
+      void handFileToApp(name, frame, pending);
+    }
+  });
   surfaces.set(name, surface);
   return surface;
 }
@@ -69,6 +219,7 @@ export function webAppSurface(name) {
 
 /** Drop a cached surface (tests; the shell keeps surfaces for their window). */
 export function forgetWebAppSurface(name) {
+  surfaces.get(name)?.control?.close();
   surfaces.delete(name);
 }
 
