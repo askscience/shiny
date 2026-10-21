@@ -3,9 +3,10 @@
 The frontend is a **no-build ES-module app** served from `web/`. There is no
 bundler: [`web/index.html`](../../web/index.html) loads the shell CSS, a
 synchronous theme bootstrap, and then the module graph under
-[`web/js/`](../../web/js). All `/api/*` HTML/JS/CSS is served with
-`Cache-Control: no-store`, so a server restart or source edit is picked up on
-the next reload.
+[`web/js/`](../../web/js). Static shell assets are served with
+`Cache-Control: no-cache` (revalidated, 304 when unchanged), so a server
+restart or source edit is picked up on the next reload. API and SSE responses
+stay `no-store`.
 
 ---
 
@@ -56,6 +57,9 @@ The shell is split by concern. Grouped:
 | `contextMenu.js` | The single right-click menu engine. |
 | `linkRouter.js` | Kiosk link routing: sends external link clicks to the chosen link-handler plugin (see below). |
 | `menuState.js` | Shared menu state helpers. |
+| `menuFactory.js` | The shared HUD-popup lifecycle (build once, open/close, outside click, Escape, placement). |
+| `hudStream.js` | Shared SSE + poll fallback for the top-bar chips. |
+| `officeMenu.js` | Shared document-menu footer and date label for Calc/Impress/Word/PDF. |
 
 ### HUD & host panels
 
@@ -92,7 +96,7 @@ The shell is split by concern. Grouped:
 | `pluginsWindow.js`, `activePlugins.js`, `pluginIcon.js` | Plugin manager (installed list + the Craft store tab), active set, icon resolution (theme icon → `icon.svg` → `icon.png`). |
 | `craftStore.js` | Craft App Suite catalog + the background updater (install/update via `/api/plugins/store`, including an install still missing its AI control); also toggles an app's AI control (its MCP server). |
 | `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site, plus the page half of live AI control (detects `window[<app>].request` and answers the core's control-channel proxy) and the file-input shim that gives every app's Open… the shell's picker. |
-| `filePicker.js` | The shell's file dialog: browses the user's home through the Files plugin (`/api/files/list`, `/api/files/raw`) and returns picked entries, or real `File` objects for the caller's realm. Used by `files.js` and by every web app's `<input type=file>` through the surface shim. |
+| `filePicker.js` | The shell's file picker: a compact **floating window** (`ui/floating`: the desktop's own title bar with only close, outside the tiling) with the Files window's thumbnail grid (`files-*` classes, `/api/files/thumb`) browsing the user's home through the Files plugin. Returns picked entries, or real `File` objects for the caller's realm. Used by `files.js` and by every web app's `<input type=file>` through the surface shim. |
 | `appSaves.js` | Follows the shell's `shiny:file-saved` reports — a web app saved through the browser APIs inside its iframe — and turns them into the toast with the real path plus the `files:external` refresh the Files window listens for. |
 | `appearance.js` | Accent/gradient/theme. |
 | `userProfiles.js` | Profile/persona. |
@@ -155,7 +159,8 @@ export default {
 ```
 
 `mount()` returns a `section.tile <name>-tile` carrying `data-plugin="<name>"`;
-core tiles it, applies focus/fullscreen, and calls `unmount()` on deactivation.
+core tiles it, applies focus/fullscreen, and calls `unmount()` on window close,
+deactivation or uninstall.
 Window styles live in core's `web/css/tiles.css`, keyed by the plugin's class
 prefix.
 

@@ -1,5 +1,5 @@
 import {
-  searchBar, confirmDialog, promptDialog, slider as uiSlider, toolbar, input as uiInput, toolButton,
+  searchBar, confirmDialog, promptDialog, slider as uiSlider, toolbar, toolButton,
   controlButton, icon, setIcon, iconButton, button, emptyState, toast, notify, modal, setTileGlow,
   setTileGlowFromUrl, glowGradient,
 } from '../../ui/index.js';
@@ -1232,12 +1232,13 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   durEl.className = 'files-player-time';
   durEl.textContent = '0:00';
 
-  const muteBtn = button({ icon: 'ui/music', variant: 'ghost', onClick: () => {
+  const muteBtn = button({ icon: 'ui/volume', variant: 'ghost', onClick: () => {
     media.muted = !media.muted;
     syncVolume();
   } });
   muteBtn.classList.add('files-player-btn');
   muteBtn.title = t('plugin.files.player.mute', null, 'Mute');
+  muteBtn.setAttribute('aria-label', t('plugin.files.player.mute', null, 'Mute'));
 
   function syncVolume() {
     muteBtn.classList.toggle('is-muted', media.muted || media.volume === 0);
@@ -1246,6 +1247,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   const fsBtn = button({ icon: 'ui/expand', variant: 'ghost', onClick: () => toggleFullscreen() });
   fsBtn.classList.add('files-player-btn');
   fsBtn.title = t('plugin.files.player.fullscreen', null, 'Full screen');
+  fsBtn.setAttribute('aria-label', t('plugin.files.player.fullscreen', null, 'Full screen'));
 
   bar.append(playBtn, curEl, seek, durEl, muteBtn, fsBtn);
 

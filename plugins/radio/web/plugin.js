@@ -1,5 +1,5 @@
 import {
-  mediaCard, icon, button, searchBar, spinner, emptyState, notify, toast, setTileGlow,
+  mediaCard, icon, button, searchBar, spinner, emptyState, notify, toast,
   setTileGlowFromUrl,
 } from '../../ui/index.js';
 /**
@@ -153,7 +153,7 @@ function stopPolling() {
 }
 
 async function pollNowPlaying() {
-  if (!playing || !current?.streamUrl) return;
+  if (document.hidden || !playing || !current?.streamUrl) return;
   try {
     const res = await fetch(
       `/api/radio/nowplaying?url=${encodeURIComponent(current.streamUrl)}`,

@@ -52,11 +52,6 @@ export function initTouchBar(next = {}) {
   void probeHost();
 }
 
-/** True when a Touch Bar is present (kiosk flag or server detection). */
-export function hostHasTouchBar() {
-  return hostFlag;
-}
-
 /**
  * Ask the server whether this machine has a T2 Touch Bar. The kiosk sets the
  * flag directly, but a plain browser does not — and the server runs on the

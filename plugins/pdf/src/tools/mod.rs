@@ -9,20 +9,12 @@ use serde_json::{json, Value};
 
 use shiny_plugin_sdk::db::Value as DbValue;
 use shiny_plugin_sdk::errors::AppError;
+use shiny_plugin_sdk::util::{as_text};
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
 use crate::ops;
-
-fn as_text(v: &DbValue) -> String {
-    match v {
-        DbValue::Text(s) => s.clone(),
-        DbValue::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_int(v: &DbValue) -> i64 {
     match v {
         DbValue::Int(n) => *n,

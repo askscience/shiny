@@ -1,6 +1,5 @@
 import {
   toolbar, toolButton, controlButton, button, emptyState, toast, setTileGlow, glowGradient,
-  setIcon,
 } from '../../ui/index.js';
 
 /**

@@ -161,8 +161,11 @@ let installed: BTreeSet<String> = state.plugins.session_active_set(&traveler.id)
 `session.remember` preference:
 
 - **remember on** — installed plugins minus those explicitly disabled.
-- **remember off** — only plugins with an explicit `enabled = 1` row (opt-in,
-  starts empty and grows as the user or the AI activates plugins).
+- **remember off** — only plugins with an explicit `enabled = 1` row (opt-in).
+  The boot reset (`POST /api/plugins/session/reset`) drops the previous
+  session's rows, so a sign-in starts empty and grows as the user or the AI
+  activates plugins; deactivating deletes the row instead of remembering an
+  "off".
 
 The active set decides which plugins' skills, persona fragments and context
 lines enter the system prompt, and which plugin tools are callable.

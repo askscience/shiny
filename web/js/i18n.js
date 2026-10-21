@@ -266,12 +266,6 @@ export function formatNumber(value, options = undefined) {
   return new Intl.NumberFormat(locale, options).format(value);
 }
 
-/** Format a date/time for the active language (Date, epoch ms or ISO string). */
-export function formatDate(value, options = undefined) {
-  const date = value instanceof Date ? value : new Date(value);
-  return new Intl.DateTimeFormat(locale, options).format(date);
-}
-
 /* ── static markup ──────────────────────────────────────────────
  * index.html carries English text plus a key; localize() replaces it wherever
  * a message exists. Unknown keys leave the English text (and attributes)

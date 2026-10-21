@@ -15,6 +15,7 @@
  * later.
  */
 import { apiFetch } from './api.js';
+import { refreshPluginCatalog } from './activePlugins.js';
 import { getLinkPlugin } from './preferences.js';
 import { toast } from '../ui/index.js';
 import { t } from './i18n.js';
@@ -71,17 +72,14 @@ export function resolveLinkPlugin(catalog, preferred = getLinkPlugin()) {
   return pick(preferred) || pick(DEFAULT_LINK_PLUGIN) || candidates[0]?.name || null;
 }
 
-let catalogCache = null;
-
-/** The plugin catalog, cached for the clicks that follow a successful fetch. */
+/** The shared plugin catalog; one fetch serves boot, the tray and every click. */
 export async function linkCatalog() {
   try {
-    const res = await apiFetch('/api/plugins');
-    catalogCache = res?.data || [];
+    return await refreshPluginCatalog();
   } catch (_) {
-    // Keep the last known catalog — a transient failure must not kill the click.
+    // Keep the click alive even when the catalog is temporarily unavailable.
+    return [];
   }
-  return catalogCache || [];
 }
 
 /**

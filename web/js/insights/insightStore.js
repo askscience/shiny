@@ -43,10 +43,6 @@ function persistDismiss(destKey, cardId) {
   saveDismissedMap(map);
 }
 
-export function getActiveInsightDestination() {
-  return activeDestination;
-}
-
 /** Cards currently visible (already filtered by dismiss). */
 export function getVisibleCards() {
   return cards;

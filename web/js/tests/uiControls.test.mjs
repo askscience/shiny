@@ -37,11 +37,14 @@ placeMenu(chipMenu,chip(40));
 assert.equal(chipMenu.style.top,'48px','a menu at the top edge opens under its chip');
 assert.equal(chipMenu.style.maxHeight,'640px');
 
-/* …and every HUD chip menu goes through it rather than opening downward. */
+/* …and every HUD chip menu goes through the shared factory rather than
+   positioning itself. The placement itself is tested above. */
+const factory=readFileSync(new URL('../menuFactory.js',import.meta.url),'utf8');
+assert.ok(/placeMenu\(popup, trigger/.test(factory),'the menu factory uses the shared placement');
 for (const file of ['clockMenu.js','weatherMenu.js','networkMenu.js','bluetoothMenu.js',
   'batteryMenu.js','audioMenu.js','clipboardMenu.js','powerMenu.js']) {
   const src=readFileSync(new URL(`../${file}`,import.meta.url),'utf8');
-  assert.ok(/placeMenu\(popup, trigger/.test(src),`${file} uses the shared menu placement`);
+  assert.ok(/createMenu\(/.test(src),`${file} uses the shared menu factory`);
   assert.ok(!/rect\.bottom \+ 8/.test(src),`${file} does not open downward unconditionally`);
 }
 const preview=[],commits=[];

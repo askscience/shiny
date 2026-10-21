@@ -10,98 +10,52 @@
  */
 
 import { apiFetch } from './api.js';
-import { notifyMenuChange } from './menuState.js';
+import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
-import { badge, button, emptyState, icon, iconButton, input, listItem, modal, spinner, toast, toggle, placeMenu } from '../ui/index.js';
+import { badge, button, emptyState, icon, iconButton, input, listItem, modal, spinner, toast, toggle } from '../ui/index.js';
 
 const POLL_MS = 3000;
 
-let popup = null;
 let body = null;
 let wifiToggle = null;
 let wifiHint = null;
 let pollTimer = null;
 let status = null;
-let open = false;
-let trigger = null;
 /** SSID of the in-flight connect, so its row can show progress. */
 let connecting = null;
 
 /* ── Open / close ──────────────────────────────────────────── */
 
-export function isNetworkMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  align: 'right',
+  onOpen: () => {
+    render();
+    void refresh();
+    if (!pollTimer) pollTimer = setInterval(() => void refresh(), POLL_MS);
+  },
+  onClose: () => {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  },
+});
 
 export function openNetworkMenu(chip) {
-  trigger = chip || trigger;
-  ensurePopup();
-  open = true;
-  // The popup element is reused between opens (so its scroll position and
-  // listeners survive), and only `ensurePopup` runs once — unhide it here,
-  // otherwise the second open would render into a hidden element.
-  popup.classList.remove('hidden');
-  // Restart the entry animation: it played on the first open and a reused
-  // element would otherwise just pop in.
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-  render();
-  void refresh();
-  if (!pollTimer) pollTimer = setInterval(() => void refresh(), POLL_MS);
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip);
 }
 
 export function closeNetworkMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleNetworkMenu(chip) {
-  if (open) closeNetworkMenu();
-  else openNetworkMenu(chip);
-}
-
-function onOutside(event) {
-  // The password dialog lives in document.body, not in the popover: a click
-  // inside it must not dismiss the menu underneath.
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeNetworkMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeNetworkMenu();
-  }
-}
-
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger, { align: 'right' });
+  menu.toggle(chip);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup network-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('hud.network'));
@@ -138,13 +92,13 @@ function ensurePopup() {
   body.className = 'network-body';
 
   popup.append(head, body);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 /* ── Data ──────────────────────────────────────────────────── */
 
 async function refresh() {
-  if (!open) return;
+  if (!menu.isOpen()) return;
   try {
     const res = await apiFetch('/api/network/status', { authRedirect: false });
     if (res?.data) {
@@ -355,7 +309,7 @@ function render() {
   if ((s.links || []).length) body.appendChild(linksSection(s));
 
   // Keep the popover height honest: it can grow as networks appear.
-  requestAnimationFrame(() => reposition());
+  requestAnimationFrame(() => menu.reposition());
 }
 
 function sectionTitle(text) {

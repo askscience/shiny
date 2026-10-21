@@ -14,103 +14,59 @@
  */
 
 import { apiFetch } from './api.js';
-import { emptyState, icon, iconButton, listItem, slider, toast, setIcon, placeMenu } from '../ui/index.js';
+import { emptyState, icon, iconButton, listItem, slider, toast, setIcon } from '../ui/index.js';
 import { currentNode, nodeIcon, nodeLabel, nodeSubtitle } from './audioShared.js';
-import { notifyMenuChange } from './menuState.js';
+import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
 
 const POLL_MS = 2000;
 const VOLUME_DEBOUNCE_MS = 120;
 
-let popup = null;
 let bodyEl = null;
 let hintEl = null;
 let errorEl = null;
 let loadingEl = null;
-let open = false;
-let trigger = null;
 let status = null;
 let pollTimer = null;
 let dragging = false;
 let signature = '';
 let volumeTimer = null;
 let audioCtx = null;
-/** Per-target persistent elements, built once by `ensurePopup`. */
+/** Per-target persistent elements, built once by `buildPopup`. */
 const refs = {};
 
 /* ── Open / close ──────────────────────────────────────────── */
 
-export function isAudioMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  align: 'right',
+  onOpen: () => {
+    render(true);
+    void refresh();
+    if (!pollTimer) pollTimer = setInterval(() => void refresh(), POLL_MS);
+  },
+  onClose: () => {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  },
+});
 
 export function openAudioMenu(chip) {
-  trigger = chip || trigger;
-  ensurePopup();
-  open = true;
-  // The popup element is reused between opens (so its listeners and scroll
-  // position survive), and only `ensurePopup` runs once — unhide it here,
-  // otherwise the second open would render into a hidden element.
-  popup.classList.remove('hidden');
-  // Restart the entry animation: it played on the first open and a reused
-  // element would otherwise just pop in.
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-  render(true);
-  void refresh();
-  if (!pollTimer) pollTimer = setInterval(() => void refresh(), POLL_MS);
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip);
 }
 
 export function closeAudioMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleAudioMenu(chip) {
-  if (open) closeAudioMenu();
-  else openAudioMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeAudioMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeAudioMenu();
-  }
-}
-
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger, { align: 'right' });
+  menu.toggle(chip);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup audio-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('hud.sound'));
@@ -146,7 +102,7 @@ function ensurePopup() {
 
   bodyEl.append(loadingEl, errorEl, refs.sink.card, refs.source.card);
   popup.append(head, bodyEl);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 function buildSection(label, target) {
@@ -216,7 +172,7 @@ function buildSection(label, target) {
 /* ── Data ──────────────────────────────────────────────────── */
 
 async function refresh(force = false) {
-  if (!open) return;
+  if (!menu.isOpen()) return;
   try {
     const res = await apiFetch('/api/audio/status', { authRedirect: false });
     if (res?.data) {
@@ -266,7 +222,7 @@ function render(force = false) {
 
   updateSection(refs.sink, 'sink', status.sinks, status.default_sink);
   updateSection(refs.source, 'source', status.sources, status.default_source);
-  requestAnimationFrame(() => reposition());
+  requestAnimationFrame(() => menu.reposition());
 }
 
 function updateSection(ref, target, nodes, defaultName) {

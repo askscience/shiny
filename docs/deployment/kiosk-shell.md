@@ -83,9 +83,11 @@ before the first request.
 
 **File dialogs.** QtWebEngine does not answer a page's classic
 `<input type=file>` by itself — the embedder has to, and the shell deliberately
-leaves that to the app: the shell's own picker is `web/js/filePicker.js` (backed
-by the Files plugin, so it also works for the shell's own uploads), and
-`web/js/webAppSurface.js` shims every web app's file inputs to the same dialog.
+leaves that to the app: the shell's own picker is `web/js/filePicker.js`, a
+compact floating window (the desktop's own title bar, only a close control, and
+the Files window's thumbnail grid) outside the tiling and backed by the Files
+plugin, so it also works for the shell's own uploads; and
+`web/js/webAppSurface.js` shims every web app's file inputs to the same picker.
 That keeps one file UI, in the app's theme, instead of a native Qt dialog, and
 needs no signal wiring in `peakd`. Saving is unaffected: app downloads arrive
 through `downloadRequested` and are reported back by `appSaves.js`.

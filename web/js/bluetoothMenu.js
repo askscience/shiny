@@ -9,97 +9,56 @@
  */
 
 import { apiFetch } from './api.js';
-import { notifyMenuChange } from './menuState.js';
+import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
-import { badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle, placeMenu } from '../ui/index.js';
+import { badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle } from '../ui/index.js';
 import {
   batteryLabel, deviceIconName, signalLabel,
 } from './bluetoothShared.js';
 
 const POLL_MS = 3000;
 
-let popup = null;
 let body = null;
 let powerToggle = null;
 let powerHint = null;
 let scanBtn = null;
 let pollTimer = null;
 let status = null;
-let open = false;
-let trigger = null;
 /** id of the device with an action in flight, so its row can show progress. */
 let busy = null;
 
 /* ── Open / close ──────────────────────────────────────────── */
 
-export function isBluetoothMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  align: 'right',
+  onOpen: () => {
+    render();
+    void refresh();
+    if (!pollTimer) pollTimer = setInterval(() => void refresh(), POLL_MS);
+  },
+  onClose: () => {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  },
+});
 
 export function openBluetoothMenu(chip) {
-  trigger = chip || trigger;
-  ensurePopup();
-  open = true;
-  // The popup element is reused between opens (so its listeners survive), and
-  // only `ensurePopup` runs once — unhide it here.
-  popup.classList.remove('hidden');
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-  render();
-  void refresh();
-  if (!pollTimer) pollTimer = setInterval(() => void refresh(), POLL_MS);
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip);
 }
 
 export function closeBluetoothMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleBluetoothMenu(chip) {
-  if (open) closeBluetoothMenu();
-  else openBluetoothMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeBluetoothMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeBluetoothMenu();
-  }
-}
-
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger, { align: 'right' });
+  menu.toggle(chip);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup bluetooth-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('hud.bluetooth'));
@@ -135,13 +94,13 @@ function ensurePopup() {
   body.className = 'bluetooth-body';
 
   popup.append(head, body);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 /* ── Data ──────────────────────────────────────────────────── */
 
 async function refresh() {
-  if (!open) return;
+  if (!menu.isOpen()) return;
   try {
     const res = await apiFetch('/api/bluetooth/status', { authRedirect: false });
     if (res?.data) {
@@ -301,7 +260,7 @@ function render() {
   body.appendChild(deviceSection(t('bt.paired'), paired, 'connect'));
   body.appendChild(deviceSection(t('bt.nearby'), nearby, 'pair', s.discovering ? 'searching' : null));
 
-  requestAnimationFrame(() => reposition());
+  requestAnimationFrame(() => menu.reposition());
 }
 
 function sectionTitle(text) {

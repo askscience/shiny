@@ -162,7 +162,12 @@ impl ToolRegistry {
         let owner_map = self.owner.read();
         let mut seen = std::collections::HashSet::new();
         let mut out = String::new();
-        for (key, tool) in map.iter() {
+        // `HashMap` iteration order can change when a plugin is installed
+        // mid-turn, which used to reorder the tool docs and invalidate any
+        // model-side prompt prefix cache. Sort by the tool's stable name.
+        let mut entries: Vec<(&String, &Arc<dyn Tool>)> = map.iter().collect();
+        entries.sort_by(|a, b| a.1.name().cmp(b.1.name()));
+        for (key, tool) in entries {
             if !seen.insert(tool.name()) {
                 continue;
             }

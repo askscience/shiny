@@ -55,3 +55,6 @@ backpack/
 # on purpose — results are machine-specific and the numbers are reported in the
 # final notes, not committed as fixtures.
 /benchmarks/
+
+# Local checkout of the private reports-and-ideas repo (code audits, notes).
+/reports-and-ideas/

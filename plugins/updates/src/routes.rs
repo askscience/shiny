@@ -8,15 +8,12 @@
 use std::sync::Arc;
 
 use axum::extract::{FromRequestParts, Request};
-use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{
-    bridged_route, is_remote_request, user_id_from_request, HttpMethod, RouteHandler, RouteSpec,
-};
+use shiny_plugin_sdk::routes::{bridged_route, is_remote_request, ok, user_id, RouteHandler, RouteSpec};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::distro;
@@ -27,42 +24,12 @@ use crate::status;
 
 pub fn route_specs() -> Vec<RouteSpec> {
     vec![
-        RouteSpec {
-            method: HttpMethod::Get,
-            path: "/api/updates/status".into(),
-            auth: "auth".into(),
-            handler_tag: "status".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Get,
-            path: "/api/updates/history".into(),
-            auth: "auth".into(),
-            handler_tag: "history".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Get,
-            path: "/api/updates/jobs".into(),
-            auth: "auth".into(),
-            handler_tag: "job".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/updates/refresh".into(),
-            auth: "auth".into(),
-            handler_tag: "refresh".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/updates/apply".into(),
-            auth: "auth".into(),
-            handler_tag: "apply".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/updates/ollama/update".into(),
-            auth: "auth".into(),
-            handler_tag: "ollama".into(),
-        },
+        RouteSpec::get("/api/updates/status", "status"),
+        RouteSpec::get("/api/updates/history", "history"),
+        RouteSpec::get("/api/updates/jobs", "job"),
+        RouteSpec::post("/api/updates/refresh", "refresh"),
+        RouteSpec::post("/api/updates/apply", "apply"),
+        RouteSpec::post("/api/updates/ollama/update", "ollama"),
     ]
 }
 
@@ -80,15 +47,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
-
-fn ok(data: serde_json::Value) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-fn user_id(req: &Request) -> Result<String, AppError> {
-    user_id_from_request(req).ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
 /// Privileged operations are refused for remote (Iroh / reverse-proxy) clients.
 fn deny_remote(req: &Request) -> Result<(), AppError> {
     if is_remote_request(req) {
@@ -131,6 +89,8 @@ async fn take_query<T: DeserializeOwned + Default + Send + 'static>(
 #[serde(default)]
 struct StatusQuery {
     force: Option<bool>,
+    /// The top-bar chip only needs the count; omit the package list.
+    summary: Option<bool>,
 }
 
 fn status_handler(_ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -138,13 +98,26 @@ fn status_handler(_ctx: Arc<PluginCtx>) -> RouteHandler {
         let _uid = user_id(&req)?;
         let q: StatusQuery = take_query(req).await.unwrap_or_default();
         // `force` (an explicit user action) waits for a fresh list; the plain
-        // poll used by the top-bar chip returns the cache immediately and
-        // refreshes in the background, so it never occupies the plugin runtime.
-        let snapshot = if q.force.unwrap_or(false) {
-            status::collect(true)
+        // poll returns the cache immediately and refreshes in the background.
+        // The first collection (or a forced one) runs on the blocking pool, so
+        // a slow package manager never occupies the plugin's serial worker.
+        let force = q.force.unwrap_or(false);
+        let mut snapshot = if force || !status::has_cache() {
+            tokio::task::spawn_blocking(move || {
+                if force {
+                    status::collect(true)
+                } else {
+                    status::snapshot()
+                }
+            })
+            .await
+            .map_err(|e| AppError::Internal(format!("updates worker task failed: {e}")))?
         } else {
             status::snapshot()
         };
+        if q.summary.unwrap_or(false) {
+            snapshot.packages.clear();
+        }
         Ok(ok(serde_json::to_value(&snapshot)?))
     })
 }

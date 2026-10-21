@@ -1,19 +1,17 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
-    routes::{HttpMethod, RouteHandler, RouteSpec},
+    plugin::Plugin,
+    routes::{RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::{bridged, RegistryBuilder},
 };
 
 use crate::tool::TerminalExec;
 
-pub struct TerminalPlugin {
-    ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(TerminalPlugin);
 
 /// Persona line: the model must know the window exists *and* that it can run
 /// commands there itself (`terminal_exec`), so "run ls" is answered with the
@@ -23,42 +21,12 @@ pub const PERSONA: &str =
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/terminal/sessions".into(),
-            auth: "auth".into(),
-            handler_tag: "sessions".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Get,
-            path: "/api/terminal/stream".into(),
-            auth: "auth".into(),
-            handler_tag: "stream".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Get,
-            path: "/api/terminal/events".into(),
-            auth: "auth".into(),
-            handler_tag: "events".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/terminal/input".into(),
-            auth: "auth".into(),
-            handler_tag: "input".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/terminal/resize".into(),
-            auth: "auth".into(),
-            handler_tag: "resize".into(),
-        },
-        RouteSpec {
-            method: HttpMethod::Post,
-            path: "/api/terminal/close".into(),
-            auth: "auth".into(),
-            handler_tag: "close".into(),
-        },
+        RouteSpec::post("/api/terminal/sessions", "sessions"),
+        RouteSpec::get("/api/terminal/stream", "stream"),
+        RouteSpec::get("/api/terminal/events", "events"),
+        RouteSpec::post("/api/terminal/input", "input"),
+        RouteSpec::post("/api/terminal/resize", "resize"),
+        RouteSpec::post("/api/terminal/close", "close"),
     ]
 }
 
@@ -66,26 +34,15 @@ fn route_specs() -> Vec<RouteSpec> {
 impl Plugin for TerminalPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "terminal".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "A real Linux terminal — a PTY-backed login shell in its own window".into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some("Terminal: a real shell over a PTY, rendered with xterm.js".into()),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("terminal")
+                .description("A real Linux terminal — a PTY-backed login shell in its own window")
+                .summary("Terminal: a real shell over a PTY, rendered with xterm.js")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/terminal.md"))
@@ -93,19 +50,11 @@ impl Plugin for TerminalPlugin {
                 "Terminal: enabled — the assistant runs shell commands with terminal_exec; the user can also type in the Terminal window.",
             )
             .tool_arc(bridged(Arc::new(TerminalExec)));
-        for spec in route_specs() {
-            builder.route(spec);
-        }
+        builder.routes(route_specs());
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
 }
 
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(TerminalPlugin { ctx: OnceLock::new() }))
-}

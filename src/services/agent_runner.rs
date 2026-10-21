@@ -8,7 +8,7 @@ use crate::errors::AppError;
 use crate::models::Traveler;
 use crate::services::ai::AiClient;
 use crate::services::agent_steps::{
-    build_continuation_messages, build_planning_messages, describe_tool_step,
+    build_continuation_system, build_planning_messages, describe_tool_step,
     done_label_for_action, failed_label_for_action, messages_char_count, step_label_for_action,
     thinking_label,
 };
@@ -173,6 +173,25 @@ where
     let mut final_reply = String::new();
     let mut interrupted = false;
 
+    // The continuation prompt is append-only: its system half and the
+    // conversation history are rendered once, then each finished tool appends
+    // one `[Done]` line. Re-rendering every earlier step from scratch on each
+    // iteration made the prompt copy cost grow quadratically.
+    let planning_messages = build_planning_messages(&input.system, &input.message);
+    let continuation_system = build_continuation_system(
+        &input.ai_name,
+        &input.lang,
+        &input.mode,
+        &input.plugins_hint,
+        &input.history,
+        input.voice,
+        input.correction,
+    );
+    let mut continuation_messages = vec![
+        ("system".to_string(), continuation_system),
+        ("user".to_string(), input.message.clone()),
+    ];
+
     let think = thinking_label();
     on_step(&UiText::keyed(think.key, think.text), None);
 
@@ -189,19 +208,9 @@ where
         }
 
         let messages = if completed_steps.is_empty() && iteration == 0 {
-            build_planning_messages(&input.system, &input.message)
+            planning_messages.clone()
         } else {
-            build_continuation_messages(
-                &input.ai_name,
-                &input.lang,
-                &input.mode,
-                &input.message,
-                &completed_steps,
-                &input.plugins_hint,
-                &input.history,
-                input.voice,
-                input.correction,
-            )
+            continuation_messages.clone()
         };
 
         let size = messages_char_count(&messages);
@@ -432,7 +441,9 @@ where
                     }
                 }
 
-                completed_steps.push(note.clone());
+                continuation_messages
+                    .push(("user".to_string(), format!("[Done] {note}")));
+                completed_steps.push(note);
                 // The model gets the full note above; the bubble gets a short
                 // human line (never the raw payload).
                 on_step(
@@ -447,7 +458,9 @@ where
                     data: None,
                 });
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
-                completed_steps.push(note.clone());
+                continuation_messages
+                    .push(("user".to_string(), format!("[Done] {note}")));
+                completed_steps.push(note);
                 let step = failed_label_for_action(&action);
                 on_step(&UiText::keyed(step.key, step.text), Some(action.as_str()));
             }

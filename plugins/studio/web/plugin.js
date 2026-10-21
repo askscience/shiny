@@ -1373,7 +1373,7 @@ function startScope() {
   if (scopeRaf) return;
   const tick = () => {
     scopeRaf = requestAnimationFrame(tick);
-    drawScopeFrame();
+    if (!document.hidden) drawScopeFrame();
   };
   scopeRaf = requestAnimationFrame(tick);
 }
@@ -3484,9 +3484,6 @@ function gridDefaultDraft() {
       { from: ['m3', 'out'], to: ['m4', 'in'] },
     ],
   };
-}
-function gridCableAt(portId) {
-  return gridDraft.cables.find((c) => c.from[0] + ':' + c.from[1] === portId || c.to[0] + ':' + c.to[1] === portId);
 }
 function renderGrid() {
   if (!gridWrapEl) return;

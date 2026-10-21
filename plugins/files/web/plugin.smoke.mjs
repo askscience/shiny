@@ -509,6 +509,16 @@ press(' ');
 await tick(60);
 check('Space reopens it on the same selection',
   !!first('files-look') && first('files-look-name')?.textContent === 'cover.png');
+
+/* The veil around the compact surface is a close target too. */
+const veil = first('files-look');
+veil.dispatch('click', { target: veil });
+await tick(60);
+check('a click outside the surface closes the quick look', inBody('files-look').length === 0);
+
+press(' ');
+await tick(60);
+check('Space opens it once more', !!first('files-look'));
 mod.namespace.unmountFilesTile();
 await tick(60);
 check('unmount closes the quick look', inBody('files-look').length === 0);

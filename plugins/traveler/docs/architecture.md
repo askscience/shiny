@@ -13,7 +13,7 @@ plugins/traveler/
 │   ├── lib.rs
 │   ├── plugin.rs                  manifest, tools, entry (registers NO routes)
 │   ├── models.rs                  row types mirrored from core
-│   ├── osm.rs                     plugin-owned OSM client
+│   ├── osm.rs                     re-export of the shared shiny-osm client
 │   ├── navigation.rs              NavigationSession builder
 │   ├── diary.rs                   diary generation
 │   ├── story.rs                   narrative pipeline
@@ -35,7 +35,7 @@ plugins/traveler/
 | Owned by core | Owned by the plugin |
 |---|---|
 | `/api/trips`, `/api/locations`, `/api/map/*`, `/api/navigate/start`, `/api/diary` | The 22 agent tools |
-| `GpsdService`, `OsmService`, `DiaryGenerator`, `navigation.rs` | Its own `osm.rs`, `navigation.rs`, `diary.rs`, `story.rs` |
+| `GpsdService`, `DiaryGenerator`, core `navigation.rs` | Shared `shiny-osm` client, plugin `navigation.rs`, `diary.rs`, `story.rs` |
 | The Leaflet map window, dock, saved-places HUD, insight cards | The trip planner (`plan_trip`) and artifact cards |
 
 Both sides read/write the **same SQLite tables** (`trips`, `locations`,
@@ -43,11 +43,13 @@ Both sides read/write the **same SQLite tables** (`trips`, `locations`,
 The plugin registers **no `RouteSpec` routes** — core serves the REST. See
 [travel domain](../../../docs/core/travel.md).
 
-## Why the plugin still has its own OSM/navigation code
+## Why navigation stays local while OSM is shared
 
 The agent tools run inside the plugin's runtime/bridge and must not share
-host-built clients across the dlopen boundary, so the plugin has its own clients
-(mirroring core's logic). This is the same rule as every plugin — see
+host-built *runtime state* across the dlopen boundary. Stateless code is safe to
+share, so the OSM request/parse logic lives in the `shiny-osm` crate and both
+sides link it; navigation and diary state remain plugin-local. This is the same
+rule as every plugin — see
 [Runtime & ABI](../../../docs/plugins/runtime-abi.md).
 
 ## Persistent data

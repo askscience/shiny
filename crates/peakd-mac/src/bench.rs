@@ -34,7 +34,7 @@ use crate::config::Benchmark;
 
 /// The page-side instrumentation, compiled in so there is no path to get wrong
 /// at runtime.
-const BENCH_JS: &str = include_str!("../js/bench.js");
+const BENCH_JS: &str = include_str!("../../peakd/js/bench.js");
 
 /// Synthetic drag of a floating plugin window, used by `--benchmark-drag-tile`.
 const DRAG_TILE_JS: &str = include_str!("../js/bench-drag-tile.js");

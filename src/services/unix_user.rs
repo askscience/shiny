@@ -70,13 +70,6 @@ pub fn list_human_users() -> Vec<UnixUser> {
     users.dedup_by(|a, b| a.name == b.name);
     users
 }
-
-/// True when `name` resolves to a human Linux account. Convenience for
-/// validation before binding a Shiny account to it.
-pub fn is_human_user(name: &str) -> bool {
-    lookup_name(name).map(|u| u.is_human()).unwrap_or(false)
-}
-
 // ── Linux implementation ─────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]

@@ -7,7 +7,7 @@
 //! (`shiny_filter::load`) and restored here from the shared on-disk cache, so
 //! this crate links only `shiny-filter-core` — no HTTP client, no tokio.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 
@@ -136,49 +136,6 @@ pub fn is_blocked(url: &str, first_party: &str, resource_type: i32, method: &str
     }
     blocked
 }
-
-/// Cosmetic CSS for a document URL (host-specific rules only).
-///
-/// Wired to per-view injection in a follow-up; network blocking is the main
-/// value and ships first (PLAN §3 B4).
-#[allow(dead_code)]
-pub fn cosmetic_css(url: &str) -> String {
-    let Some(s) = state() else { return String::new() };
-    if !s.enabled.load(Ordering::Relaxed) {
-        return String::new();
-    }
-    s.engine
-        .as_ref()
-        .map(|e| e.cosmetic_css(url))
-        .unwrap_or_default()
-}
-
-/// Cosmetic CSS including generic rules matching the document's class/id set.
-#[allow(dead_code)]
-pub fn cosmetic_css_for(url: &str, classes: &[String], ids: &[String]) -> String {
-    let Some(s) = state() else { return String::new() };
-    if !s.enabled.load(Ordering::Relaxed) {
-        return String::new();
-    }
-    s.engine
-        .as_ref()
-        .map(|e| e.cosmetic_css_for_classes(url, classes, ids))
-        .unwrap_or_default()
-}
-
-/// Scriptlet JS the lists want injected at document-start.
-#[allow(dead_code)]
-pub fn injected_script(url: &str) -> String {
-    let Some(s) = state() else { return String::new() };
-    if !s.enabled.load(Ordering::Relaxed) {
-        return String::new();
-    }
-    s.engine
-        .as_ref()
-        .map(|e| e.injected_script(url))
-        .unwrap_or_default()
-}
-
 /// Qt's `QWebEngineUrlRequestInfo::ResourceType` → the adblock vocabulary.
 ///
 /// Values are the stable enum ordinals from Qt 6 (see the Qt documentation);
@@ -200,20 +157,6 @@ fn kind_from_qt(value: i32) -> RequestKind {
         _ => RequestKind::Other,
     }
 }
-
-/// The default cache directory, resolved like the shell's data dir.
-#[allow(dead_code)]
-pub fn default_dir() -> PathBuf {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(root) = exe.parent().and_then(Path::parent).and_then(Path::parent) {
-            if root.join("Cargo.toml").is_file() {
-                return root.join("data").join("adfilter");
-            }
-        }
-    }
-    PathBuf::from("data/adfilter")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

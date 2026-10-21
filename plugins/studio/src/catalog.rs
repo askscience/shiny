@@ -128,27 +128,6 @@ pub fn catalog_json() -> Value {
         },
     })
 }
-
-/// A compact, human/LLM-readable description of one instrument kind.
-pub fn describe_kind(kind: &str) -> Option<Value> {
-    if !voices::is_kind(kind) {
-        return None;
-    }
-    let category = if voices::is_drum(kind) {
-        "drum"
-    } else if voices::is_melodic(kind) {
-        "synth"
-    } else {
-        "special"
-    };
-    Some(json!({
-        "kind": kind,
-        "category": category,
-        "params": params_json(voices::param_defs_for(kind)),
-        "defaults": voices::kind_params(kind),
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

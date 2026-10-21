@@ -49,17 +49,11 @@ wreq = { version = "6.0.0-rc.31", default-features = false, features = [
 ] }
 wreq-util = "3.0.0-rc.14"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
-tokio-stream = "0.1"
-futures-util = "0.3"
 bytes = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 url = "2"
-percent-encoding = "2"
-anyhow = "1"
-thiserror = "2"
-parking_lot = "0.12"
 
 [dev-dependencies]
 serde_json = "1"

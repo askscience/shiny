@@ -10,7 +10,7 @@ use super::delay::{Chorus, Phaser, StereoDelay};
 use super::filter::{Filter, FilterKind};
 use super::limiter::Compressor;
 use super::reverb::Reverb;
-use super::util::{db_to_gain, soft_clip, tube, Biquad, DcBlocker, Oversampler};
+use super::util::{soft_clip, tube, Biquad, DcBlocker, Oversampler};
 
 /// The effect kinds the engine understands (mirrors `crate::fx::EFFECT_KINDS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -584,9 +584,4 @@ impl Effect {
             Effect::Bitcrush(b) => b.tick(l, r),
         }
     }
-}
-
-/// Small helper: linear gain from a possibly-missing key.
-pub fn gain_of(params: &HashMap<String, f64>, key: &str, default_db: f64) -> f32 {
-    db_to_gain(v(params, &[key], default_db))
 }

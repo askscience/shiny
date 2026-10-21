@@ -18,7 +18,7 @@ use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, user_id_from_request, RouteHandler};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::fs_util;
@@ -72,12 +72,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-
-fn user_id(req: &Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
 /// Resolve the request's home directory: the caller's real OS home when core
 /// bound them to a Linux account, otherwise the virtual `~/.shiny/home/<id>`.
 ///
@@ -87,11 +81,6 @@ fn user_id(req: &Request) -> Result<String, AppError> {
 async fn request_home(uid: &str, os_home: Option<String>) -> Result<std::path::PathBuf, AppError> {
     fs_util::ensure_home_for(uid, os_home.as_deref()).await
 }
-
-fn ok(data: Json) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
 async fn take_query<T: DeserializeOwned + Send + 'static>(
     req: Request,
 ) -> Result<(T, Request), AppError> {

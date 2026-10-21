@@ -72,25 +72,6 @@ fn sheet_summary_json(row: &(String, String, i64, i64, String)) -> Value {
     })
 }
 
-/// A1-style reference: 1–2 uppercase letters followed by a positive number.
-fn is_valid_cell_ref(cell_ref: &str) -> bool {
-    let bytes = cell_ref.as_bytes();
-    let mut i = 0;
-    let mut letters = 0;
-    while i < bytes.len() && bytes[i].is_ascii_uppercase() {
-        letters += 1;
-        i += 1;
-        if letters > 2 {
-            return false;
-        }
-    }
-    if letters == 0 || i >= bytes.len() {
-        return false;
-    }
-    let digits = &cell_ref[i..];
-    digits.len() <= 4 && digits.chars().all(|c| c.is_ascii_digit()) && digits != "0"
-}
-
 fn value_to_string(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
@@ -122,7 +103,7 @@ fn merge_cells(
 
     for (raw_ref, value) in incoming {
         let cell_ref = raw_ref.trim().to_uppercase();
-        if !is_valid_cell_ref(&cell_ref) {
+        if !crate::routes::is_valid_cell_ref(&cell_ref) {
             return Err(AppError::BadRequest(format!(
                 "Invalid cell reference \"{raw_ref}\" — expected something like A1 or BC42"
             )));

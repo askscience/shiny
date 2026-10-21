@@ -203,7 +203,8 @@ pub async fn execute_action(
                 }
             } else {
                 let already = !state.plugins.is_enabled_for(&traveler.id, &name).await;
-                state.plugins.set_enabled_for(&traveler.id, &name, false).await?;
+                state.plugins.deactivate_for(&traveler.id, &name).await?;
+                state.craft_mcp.stop_app(&state.plugins, &name).await;
                 ActionOutcome {
                     action: action_key.clone(),
                     result: "ok".into(),
@@ -221,7 +222,8 @@ pub async fn execute_action(
             let active = state.plugins.session_active_set(&traveler.id).await;
             let mut deactivated: Vec<String> = Vec::new();
             for name in &active {
-                state.plugins.set_enabled_for(&traveler.id, name, false).await?;
+                state.plugins.deactivate_for(&traveler.id, name).await?;
+                state.craft_mcp.stop_app(&state.plugins, name).await;
                 deactivated.push(name.clone());
             }
             ActionOutcome {

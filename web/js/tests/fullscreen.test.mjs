@@ -219,7 +219,8 @@ localStorage.setItem('session.remember', 'true');
 
 const {
   initDesktop, ensureWindows, getWorkspacesList, switchWorkspace,
-  activeWorkspaceIndex, workspaceLock,
+  activeWorkspaceIndex, workspaceLock, closeWindow,
+  togglePluginFocus, isPluginFocused,
 } = await import('../desktop.js');
 const {
   initFullscreen, toggleWindowFullscreen, exitWindowFullscreen,
@@ -513,6 +514,38 @@ check('out-of-range sizes are clamped and unknown values fall back',
   clamped.orb_width === 400 && clamped.orb_height === 24
   && clamped.orb_color === 'accent' && clamped.orb_border === 'hairline',
   JSON.stringify(clamped));
+
+/* ── 14. Closing a window (close ≠ deactivate) ─────────────────
+   The window's X closes the window: it leaves every workspace, focus mode,
+   fullscreen and the saved arrangement — the plugin's activation is not this
+   function's business. Fresh mode ("remember" off) restores nothing. */
+
+togglePluginFocus('gamma');
+check('focus mode is on gamma before the close', isPluginFocused('gamma'));
+
+check('closing a window rearranged the workspace', closeWindow('gamma') === true);
+check('the closed window is in no workspace',
+  !list().some((ws) => ws.windows.includes('gamma')));
+check('focus mode dropped it', !isPluginFocused('gamma'));
+check('closing it again is a no-op', closeWindow('gamma') === false);
+check('the remaining windows are untouched',
+  [...list()[0].windows].sort().join() === 'alpha,beta');
+
+// Closing a fullscreen window directly (its workspace sealed around it) hands
+// the desktop back rather than leaving an empty, sealed workspace behind.
+toggleWindowFullscreen('gamma');
+check('gamma went fullscreen again', dedicated('gamma')?.fullscreen === 'gamma');
+closeWindow('gamma');
+check('the dedicated workspace is dropped with the window',
+  dedicated('gamma') === null && !list().some((ws) => ws.fullscreen));
+check('the desktop is back on an ordinary workspace', activeWorkspaceIndex() === 0);
+
+// Fresh mode: the same saved arrangements exist, but a session with
+// "remember" off restores none of them.
+localStorage.removeItem('session.remember');
+check('a fresh session never restores saved windows', prefs.getWorkspaces() === null);
+localStorage.setItem('session.remember', 'true');
+check('remember mode restores them', Array.isArray(prefs.getWorkspaces()));
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);

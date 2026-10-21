@@ -2,7 +2,10 @@
 //! resolution, directory listing, trash and search. Everything here is real
 //! filesystem I/O through `tokio::fs` — the plugin owns no database.
 
+use futures::StreamExt;
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
@@ -42,18 +45,7 @@ pub fn shiny_root() -> PathBuf {
 }
 
 /// Keep an account id usable as a single directory name.
-pub fn sanitize_user(user_id: &str) -> String {
-    let cleaned: String = user_id
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
-        .take(64)
-        .collect();
-    if cleaned.is_empty() {
-        "default".into()
-    } else {
-        cleaned
-    }
-}
+pub use shiny_plugin_sdk::util::sanitize_user;
 
 pub fn user_home(user_id: &str) -> PathBuf {
     shiny_root().join(sanitize_user(user_id))
@@ -101,13 +93,36 @@ async fn provision_classic_dirs(home: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Homes already provisioned in this process. Every route used to run eight
+/// `create_dir_all` calls (plus the home/cache dirs) before doing its actual
+/// work; after the first success they are skipped.
+fn provisioned_homes() -> &'static Mutex<HashSet<PathBuf>> {
+    static HOMES: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    HOMES.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+async fn provision_once(home: &Path) -> Result<(), AppError> {
+    let already = provisioned_homes()
+        .lock()
+        .map(|guard| guard.contains(home))
+        .unwrap_or(false);
+    if already {
+        return Ok(());
+    }
+    provision_classic_dirs(home).await?;
+    if let Ok(mut guard) = provisioned_homes().lock() {
+        guard.insert(home.to_path_buf());
+    }
+    Ok(())
+}
+
 /// Create the user's virtual home plus the classic folders. Idempotent; called
 /// for a brand-new account by `on_user_registered` and lazily by every
 /// route/tool so existing accounts are backfilled on first use.
 pub async fn ensure_home(user_id: &str) -> Result<PathBuf, AppError> {
     let home = user_home(user_id);
     tokio::fs::create_dir_all(&home).await?;
-    provision_classic_dirs(&home).await?;
+    provision_once(&home).await?;
     tokio::fs::create_dir_all(home.join(CACHE_DIR)).await?;
     Ok(home)
 }
@@ -125,7 +140,7 @@ pub async fn ensure_home_for(user_id: &str, os_home: Option<&str>) -> Result<Pat
             if !meta.is_dir() {
                 return Err(AppError::Internal(format!("home path {h} is not a folder")));
             }
-            provision_classic_dirs(&home).await?;
+            provision_once(&home).await?;
             Ok(home)
         }
         None => ensure_home(user_id).await,
@@ -277,23 +292,41 @@ pub async fn dir_count(path: &Path) -> u64 {
     n
 }
 
+/// How many subdirectory counts one listing will compute. Counting every
+/// child directory scans the whole subtree; capping and running the survivors
+/// concurrently keeps a 150-folder open from doing 150 serial readdir walks.
+const MAX_DIR_COUNTS: usize = 24;
+
 /// List a directory, folders first then case-insensitive by name.
 pub async fn list_dir(home: &Path, dir: &Path) -> Result<Vec<Value>, AppError> {
     let mut entries: Vec<Value> = Vec::new();
+    let mut dirs: Vec<(usize, PathBuf)> = Vec::new();
     let mut rd = tokio::fs::read_dir(dir).await?;
     while let Some(entry) = rd.next_entry().await? {
         let path = entry.path();
         let is_dir = entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false);
-        if let Some(mut v) = entry_json(home, &path).await {
+        if let Some(v) = entry_json(home, &path).await {
             if is_dir {
-                let count = dir_count(&path).await;
-                if let Some(obj) = v.as_object_mut() {
-                    obj.insert("count".into(), json!(count));
-                }
+                dirs.push((entries.len(), path));
             }
             entries.push(v);
         }
     }
+
+    let counts: Vec<(usize, u64)> = futures::stream::iter(
+        dirs.into_iter()
+            .take(MAX_DIR_COUNTS)
+            .map(|(idx, path)| async move { (idx, dir_count(&path).await) }),
+    )
+    .buffer_unordered(8)
+    .collect()
+    .await;
+    for (idx, count) in counts {
+        if let Some(obj) = entries.get_mut(idx).and_then(Value::as_object_mut) {
+            obj.insert("count".into(), json!(count));
+        }
+    }
+
     entries.sort_by(|a, b| {
         let ad = a.get("kind").and_then(|k| k.as_str()) == Some("dir");
         let bd = b.get("kind").and_then(|k| k.as_str()) == Some("dir");

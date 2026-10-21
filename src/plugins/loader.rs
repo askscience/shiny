@@ -460,6 +460,8 @@ impl Loader {
             retire(old);
         }
         self.loaded.write().push(loaded);
+        // Localized metadata may have changed with this install/replacement.
+        crate::i18n::clear_plugin_meta_cache();
 
         Ok((plugin_manifest, builder, ctx))
     }
@@ -532,6 +534,7 @@ impl Loader {
             old.plugin.on_unload(old.ctx.clone()).await;
             retire(old);
         }
+        crate::i18n::clear_plugin_meta_cache();
         true
     }
 }

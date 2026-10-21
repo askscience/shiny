@@ -7,11 +7,12 @@ import { controlButton } from '../ui/components/button.js';
  *
  *   • Right-click anywhere in a plugin window (title bar OR content) → window
  *     menu (focus mode / bring to front / fullscreen / move-to-workspace / the
- *     app's own actions / deactivate).
+ *     app's own actions / close window / deactivate).
  *   • Right-click in a text field (anywhere in the app) → edit menu (cut /
  *     copy / paste / select all).
  *   • Right-click a plugin tray icon in the top bar → plugin menu (focus mode,
- *     bring to front, fullscreen, activate / deactivate).
+ *     bring to front, fullscreen, open window when it was closed, activate /
+ *     deactivate).
  *   • Right-click the top bar itself        → desktop menu.
  *   • Right-click the empty desktop         → desktop menu (new / remove
  *     workspace, switch workspace, layout mode).
@@ -48,7 +49,7 @@ import {
 import { toggleWindowFullscreen } from './fullscreen.js';
 import {
   deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
-  isCoreWindow, closeCoreWindow, openCoreWindow,
+  isCoreWindow, closeCoreWindow, openCoreWindow, closePluginWindow,
 } from './tiles.js';
 import { refreshGpsPosition } from './map.js';
 import { setIcon, toast } from '../ui/index.js';
@@ -501,13 +502,24 @@ function windowMenu(name, ctx = {}) {
         danger: true,
         onClick: () => closeCoreWindow(name),
       }]
-      : [{
-        type: 'item',
-        label: t('ctx.deactivate'),
-        icon: 'ui/close',
-        danger: true,
-        onClick: () => void deactivatePlugin(name),
-      }]),
+      : [
+        {
+          // Closing the window leaves the plugin enabled — its tools stay
+          // available and the tray can bring the window back. Deactivate is the
+          // separate, persistent switch.
+          type: 'item',
+          label: t('common.close'),
+          icon: 'ui/close',
+          onClick: () => closePluginWindow(name),
+        },
+        {
+          type: 'item',
+          label: t('ctx.deactivate'),
+          icon: 'ui/close',
+          danger: true,
+          onClick: () => void deactivatePlugin(name),
+        },
+      ]),
   ];
 }
 
@@ -544,6 +556,15 @@ function trayMenu(btn) {
         icon: 'ui/expand',
         checked: getFullscreen() === name,
         onClick: () => toggleWindowFullscreen(name),
+      });
+    } else {
+      // The plugin is on but its window was closed: reopen it. This is the
+      // counterpart of close ≠ deactivate.
+      items.push({
+        type: 'item',
+        label: t('ctx.openWindow', null, 'Open window'),
+        icon: 'ui/expand',
+        onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name } })),
       });
     }
     items.push({ type: 'separator' });

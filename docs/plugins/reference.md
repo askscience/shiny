@@ -98,7 +98,8 @@ pub struct RegistryBuilder<'a> {
 }
 ```
 
-Builder methods: `.tool(t)`, `.tool_arc(arc)`, `.route(spec)`, `.cron(spec)`,
+Builder methods: `.tool(t)`, `.tool_arc(arc)`, `.tools(arcs)` (bridges each
+tool onto the plugin runtime), `.route(spec)`, `.routes(specs)`, `.cron(spec)`,
 `.skills(md)`, `.persona(p)`, `.context_line(line)`.
 
 > `.skills()` / `.persona()` **replace** the value; `.context_line()` appends.
@@ -180,6 +181,17 @@ req.params.require_f64("lat")?
 
 `CORE_API_LEVEL = 1` (`crates/shiny-plugin-sdk/src/lib.rs`).
 
+Native plugins construct the manifest with the shared defaults:
+
+```rust
+Manifest::new("documents")
+    .description("Document editor")
+    .summary("Documents: create and edit")
+```
+
+`Manifest::new` fills the version, API level, entry symbol, author and the
+standard directories.
+
 ---
 
 ## Routes
@@ -203,7 +215,37 @@ where F: Fn(axum::extract::Request) -> Fut + Send + Sync + 'static,
       Fut: Future<Output = Result<Response, AppError>> + Send + 'static;
 ```
 
+Build authenticated specs with the constructors instead of the struct literal:
+
+```rust
+RouteSpec::get("/api/documents", "doc_list")
+RouteSpec::post("/api/documents", "doc_create")
+RouteSpec::delete("/api/documents/:id", "doc_delete").public()
+```
+
+`RouteSpec::new(method, path, tag)` remains available for a dynamic method.
+`.public()` and `.admin()` override the default `"auth"`.
+
 Always build handlers with `bridged_route`.
+
+### Route helpers
+
+The SDK also carries the small helpers every route module used to duplicate:
+
+| Helper | Purpose |
+|---|---|
+| `routes::ok(data)` | `{ "success": true, "data": … }` response. |
+| `routes::user_id(req)` | Authenticated user id, or the shared 401. |
+| `util::clean_title(t)` | Trim and cap a user title at 120 characters. |
+| `util::filename_for_title(t, ext, fallback)` | Filesystem-safe stem + extension. |
+| `util::as_text(v)` / `util::as_opt_text(v)` | Text from an SDK DB value; the `opt` form maps NULL/empty to `None`. |
+| `util::sanitize_user(id)` | A user id safe as one path segment. |
+
+### Entry-point boilerplate
+
+`ctx_plugin!(MyPlugin)` generates the `ctx: OnceLock<Arc<PluginCtx>>` struct,
+`install_ctx`/`routes_for` plumbing, `Default`, and the `shiny_plugin_entry`
+symbol. The plugin still writes its own `manifest()` and `register()`.
 
 ### Identity & path params
 
@@ -391,7 +433,9 @@ Both isolate panics so one bad job cannot wedge the worker.
 | `POST` | `/api/plugins/install` | Bearer | Multipart `file=@archive` (limit 64 MB). |
 | `POST` | `/api/plugins/uninstall` | Bearer | `{ "name": "..." }`. |
 | `POST` | `/api/plugins/activate` | Bearer | `{ "name": "..." }`. |
-| `POST` | `/api/plugins/deactivate` | Bearer | `{ "name": "..." }`. |
+| `POST` | `/api/plugins/deactivate` | Bearer | `{ "name": "..." }` — turns the plugin off, closes its window and stops any process it kept alive (a Craft app's MCP server, gracefully). |
+| `POST` | `/api/plugins/window/closed` | Bearer | `{ "name": "..." }` — the shell closed a plugin window: stop its process now (graceful MCP lifecycle). Does **not** change `enabled`. |
+| `POST` | `/api/plugins/session/reset` | Bearer | Fresh-session boot (`session.remember` off): drop this user's session activations and stop every Craft MCP server. |
 | `GET` | `/api/plugins/install.log` | Bearer | Last 200 lines of the install log. |
 | `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress, and per app `mcp_enabled` (the AI-control decision), `mcp_installed`, `mcp_pending`. |
 | `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag). |

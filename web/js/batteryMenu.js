@@ -11,8 +11,8 @@
  */
 
 import { apiFetch } from './api.js';
-import { button, emptyState, setIcon, toggleRow, placeMenu } from '../ui/index.js';
-import { notifyMenuChange } from './menuState.js';
+import { button, emptyState, setIcon, toggleRow } from '../ui/index.js';
+import { createMenu } from './menuFactory.js';
 import { openCoreWindowSection } from './tiles.js';
 import {
   getAutoPowerSaver, getEffectivePowerMode, getEffectiveSttEngine,
@@ -27,78 +27,41 @@ import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-battery');
 
-let popup = null;
 let body = null;
 let headIcon = null;
 let headTitle = null;
 let headHint = null;
 let status = null;
-let open = false;
-let trigger = null;
 let refreshing = false;
 
 /* ── Open / close ──────────────────────────────────────────── */
 
-export function isBatteryMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  align: 'right',
+  restartAnimation: false,
+  onOpen: () => {
+    void refresh();
+    render();
+  },
+});
 
 export function openBatteryMenu(chip) {
-  trigger = chip || trigger || chipEl;
-  ensurePopup();
-  open = true;
-  popup.classList.remove('hidden');
-  void refresh();
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  render();
-  reposition();
-  notifyMenuChange();
+  menu.show(chip || chipEl);
 }
 
 export function closeBatteryMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleBatteryMenu(chip) {
-  if (open) closeBatteryMenu();
-  else openBatteryMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeBatteryMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeBatteryMenu();
-  }
-}
-
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger, { align: 'right' });
+  menu.toggle(chip || chipEl);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup battery-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('battery.title'));
@@ -120,7 +83,7 @@ function ensurePopup() {
   body.className = 'battery-menu-body';
 
   popup.append(head, body);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 function el(tag, className, text) {
@@ -133,7 +96,7 @@ function el(tag, className, text) {
 /* ── Data ──────────────────────────────────────────────────── */
 
 async function refresh() {
-  if (!open || refreshing) return;
+  if (!menu.isOpen() || refreshing) return;
   refreshing = true;
   try {
     const res = await apiFetch('/api/battery/status', { authRedirect: false });
@@ -142,7 +105,7 @@ async function refresh() {
     // Server restarting or offline: keep the last snapshot on screen.
   } finally {
     refreshing = false;
-    if (open) render();
+    if (menu.isOpen()) render();
   }
 }
 
@@ -165,7 +128,7 @@ function render() {
   body.appendChild(switchesSection());
   body.appendChild(summarySection());
   body.appendChild(settingsAction());
-  requestAnimationFrame(() => reposition());
+  requestAnimationFrame(() => menu.reposition());
 }
 
 function renderHead() {
@@ -261,9 +224,9 @@ function settingsAction() {
 
 window.addEventListener('battery:changed', (event) => {
   status = event.detail || null;
-  if (open) render();
+  if (menu.isOpen()) render();
 });
 
 window.addEventListener('power:settings', () => {
-  if (open) render();
+  if (menu.isOpen()) render();
 });

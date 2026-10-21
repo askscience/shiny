@@ -150,9 +150,38 @@ enum AgentStreamEvent {
     Error { message: String },
 }
 
+struct CachedCoreSkill {
+    modified: Option<std::time::SystemTime>,
+    text: String,
+}
+
+/// Read the core skill once per file revision. The file is edited live in the
+/// no-build UI, so the cache is keyed by mtime rather than baked at compile
+/// time: an edit is still picked up on the next turn without a restart.
 fn load_core_skill() -> String {
-    std::fs::read_to_string("web/skills/core-assistant.md")
-        .unwrap_or_else(|_| "Use JSON action blocks.".into())
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Option<CachedCoreSkill>>> =
+        std::sync::OnceLock::new();
+    const PATH: &str = "web/skills/core-assistant.md";
+
+    let modified = std::fs::metadata(PATH).and_then(|m| m.modified()).ok();
+    let cache = CACHE.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(guard) = cache.lock() {
+        if let Some(cached) = guard.as_ref() {
+            if cached.modified == modified {
+                return cached.text.clone();
+            }
+        }
+    }
+
+    let text = std::fs::read_to_string(PATH)
+        .unwrap_or_else(|_| "Use JSON action blocks.".into());
+    if let Ok(mut guard) = cache.lock() {
+        *guard = Some(CachedCoreSkill {
+            modified,
+            text: text.clone(),
+        });
+    }
+    text
 }
 
 fn first_name(full: &str) -> String {
@@ -854,9 +883,8 @@ async fn finish_turn(
     let note = stopped.then_some(chat_memory::INTERRUPTED_NOTE);
     let thinking = (!result.thinking.trim().is_empty()).then_some(result.thinking.as_str());
 
-    let _ = chat_memory::save_turn_with_note(
+    let local_title = match chat_memory::save_turn_with_note(
         &state.pool,
-        ai,
         traveler_id,
         conversation_id,
         user_message,
@@ -864,7 +892,38 @@ async fn finish_turn(
         note,
         thinking,
     )
-    .await;
+    .await
+    {
+        Ok(title) => title,
+        Err(e) => {
+            tracing::warn!("Failed to save agent turn: {e}");
+            None
+        }
+    };
+
+    // The local title above is already visible. Upgrade it with the model's
+    // three-word title in the background, after Done, never on the reply path.
+    if let Some(local_title) = local_title {
+        let pool = state.pool.clone();
+        let ai = ai.clone();
+        let traveler_id = traveler_id.to_string();
+        let conversation_id = conversation_id.to_string();
+        let user_message = user_message.to_string();
+        tokio::spawn(async move {
+            if let Err(e) = chat_memory::upgrade_title(
+                &pool,
+                &ai,
+                &traveler_id,
+                &conversation_id,
+                &user_message,
+                &local_title,
+            )
+            .await
+            {
+                tracing::debug!("conversation title upgrade failed: {e}");
+            }
+        });
+    }
 
     if let Some(id) = turn_id {
         state.agent_turns.finish(id);
@@ -934,11 +993,29 @@ pub async fn handle_agent_stream(
     let cancel = turn_id
         .as_deref()
         .map(|id| state.agent_turns.register(id, &traveler.id));
+    let disconnect_cancel = cancel.clone();
+    // Detect a closed SSE consumer immediately, not only when the next event
+    // happens to be sent: a long model call should be abandoned as soon as the
+    // receiver disappears.
+    if let Some(handle) = disconnect_cancel.clone() {
+        let closed_tx = tx.clone();
+        tokio::spawn(async move {
+            closed_tx.closed().await;
+            handle.cancel();
+        });
+    }
 
     tokio::spawn(async move {
         let emit = |event: AgentStreamEvent| {
             if let Ok(json) = serde_json::to_string(&event) {
-                let _ = tx.send(json);
+                if tx.send(json).is_err() {
+                    // The SSE consumer is gone (tab closed, request aborted).
+                    // Stop the model and the tool loop instead of finishing an
+                    // answer nobody can receive.
+                    if let Some(handle) = disconnect_cancel.as_ref() {
+                        handle.cancel();
+                    }
+                }
             }
         };
 

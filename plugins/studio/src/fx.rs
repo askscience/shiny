@@ -8,11 +8,6 @@ use crate::voices::{choice, def, logdef, ParamDef};
 /// Effect kinds, in UI order.
 pub const EFFECT_KINDS: &[&str] =
     &["distortion", "filter", "eq", "compressor", "delay", "reverb", "chorus", "phaser", "bitcrush"];
-
-pub fn is_effect(kind: &str) -> bool {
-    EFFECT_KINDS.contains(&kind)
-}
-
 const DIST_MODES: &[&str] = &["Soft", "Hard", "Fold", "Tube", "Fuzz"];
 const FILTER_TYPES: &[&str] = &["LP", "HP", "BP", "Notch", "Peak"];
 

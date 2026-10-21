@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 
-use io_email::client::{EmailClientStd, EmailClientStdError};
+use io_email::client::EmailClientStd;
 use io_email::envelope::types::Envelope;
 use io_email::flag::types::{Flag, FlagOp, IanaFlag};
 use io_email::mailbox::types::Mailbox;
@@ -23,6 +23,7 @@ use url::Url;
 
 use shiny_plugin_sdk::db::{Db, Value};
 use shiny_plugin_sdk::errors::AppError;
+use shiny_plugin_sdk::util::{as_opt_text, as_text};
 
 use crate::cache;
 
@@ -166,29 +167,12 @@ where
 
 const COLUMNS: &str = "id, label, email, provider, imap_host, imap_port, imap_security, \
     smtp_host, smtp_port, smtp_security, username, password, verified, verified_at, last_error";
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_i64(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,
         _ => 0,
     }
 }
-
-fn as_opt_text(v: &Value) -> Option<String> {
-    match v {
-        Value::Text(s) if !s.is_empty() => Some(s.clone()),
-        _ => None,
-    }
-}
-
 fn as_bool(v: &Value) -> bool {
     as_i64(v) != 0
 }
@@ -789,9 +773,4 @@ pub async fn delete_message(a: Account, folder: String, id: String) -> Result<()
         Ok(())
     })
     .await
-}
-
-/// Map a generic io-email error into a friendly message.
-pub fn email_err(e: &EmailClientStdError) -> String {
-    e.to_string()
 }

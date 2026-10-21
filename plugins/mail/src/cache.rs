@@ -10,32 +10,16 @@ use std::collections::HashSet;
 use serde_json::{json, Value as Json};
 use shiny_plugin_sdk::db::{Db, Value};
 use shiny_plugin_sdk::errors::AppError;
+use shiny_plugin_sdk::util::{as_opt_text, as_text};
 
 /// Upper bound on how many messages one folder sync will backfill.
 pub const MAX_SYNC: usize = 300;
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_i64(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,
         _ => 0,
     }
 }
-
-fn as_opt_text(v: &Value) -> Option<String> {
-    match v {
-        Value::Text(s) if !s.is_empty() => Some(s.clone()),
-        _ => None,
-    }
-}
-
 fn parse_json_array(s: &str) -> Json {
     serde_json::from_str::<Json>(s).unwrap_or_else(|_| json!([]))
 }
@@ -455,23 +439,6 @@ pub fn search(
         })
         .collect())
 }
-
-/// (last_synced_at, total) for one account + folder, scoped to the user.
-pub fn sync_state(
-    db: &Db,
-    user_id: &str,
-    account_id: &str,
-    folder: &str,
-) -> Result<Option<(String, i64)>, AppError> {
-    let folder = canon_folder(folder);
-    let rows = db.query(
-        "SELECT last_synced_at, total FROM mail_sync_state \
-         WHERE user_id = ?1 AND account_id = ?2 AND folder = ?3",
-        &[Value::text(user_id), Value::text(account_id), Value::text(&folder)],
-    )?;
-    Ok(rows.first().map(|r| (as_text(&r[0]), as_i64(&r[1]))))
-}
-
 /// True when the folder was synced within the last `max_age_secs`. Lets the
 /// list/search backfill skip empty folders it just synced instead of hitting
 /// IMAP on every call.

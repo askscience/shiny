@@ -4,17 +4,17 @@
 //! engine. Rendered audio is stored as a WAV BLOB and served from
 //! `GET /api/studio/:id/audio`.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use axum::extract::Request;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use serde_json::{json, Value};
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{
-    bridged_route, path_params_from_request, user_id_from_request, RouteHandler,
-};
+use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::catalog;
@@ -22,6 +22,36 @@ use crate::engine;
 use crate::store;
 
 const MAX_BODY: usize = 1024 * 1024;
+
+type WaveformPeaks = (Vec<(f32, f32)>, u32);
+type WaveformCache = Mutex<HashMap<u64, WaveformPeaks>>;
+
+/// Waveform peaks keyed by the exact pattern JSON. The arranger asks for the
+/// same clip's peaks on every mute/solo/rename/drag-end; without this cache
+/// each rebuild re-rendered the whole track.
+fn waveform_cache() -> &'static WaveformCache {
+    static CACHE: OnceLock<WaveformCache> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn pattern_hash(value: &Value) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    serde_json::to_string(value).unwrap_or_default().hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Run a DSP render on the plugin runtime's blocking pool. Studio's serial
+/// worker must stay free to answer the window's status/route calls while a
+/// track renders. The closure owns the config and never touches SQLite.
+async fn blocking<T, F>(f: F) -> Result<T, AppError>
+where
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| AppError::Internal(format!("studio worker task failed: {e}")))?
+}
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -49,15 +79,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => return None,
     })
 }
-
-fn user_id(req: &Request) -> Result<String, AppError> {
-    user_id_from_request(req).ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Value) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
 fn take_path(req: &Request) -> Result<String, AppError> {
     let mut params = path_params_from_request(req)
         .ok_or_else(|| AppError::BadRequest("no path parameter found".into()))?;
@@ -97,11 +118,15 @@ fn studio_create(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let value = read_json(req).await?;
             let cfg = engine::parse_config(&value).map_err(AppError::BadRequest)?;
-            let rendered = engine::render_track(&cfg).map_err(AppError::BadRequest)?;
-
-            let id = uuid::Uuid::new_v4().to_string();
             let cfg_json = serde_json::to_string(&cfg).map_err(AppError::from)?;
             let title = if cfg.title.trim().is_empty() { "Untitled".into() } else { cfg.title.trim().to_string() };
+            let render_cfg = cfg.clone();
+            let rendered = blocking(move || {
+                engine::render_track(&render_cfg).map_err(AppError::BadRequest)
+            })
+            .await?;
+
+            let id = uuid::Uuid::new_v4().to_string();
             store::insert(
                 ctx.pool().await,
                 &id,
@@ -218,7 +243,10 @@ fn studio_render(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::NotFound("studio track not found".into()));
             };
             let cfg = serde_json::from_str::<engine::TrackConfig>(&row.7).map_err(AppError::from)?;
-            let rendered = engine::render_track(&cfg).map_err(AppError::BadRequest)?;
+            let rendered = blocking(move || {
+                engine::render_track(&cfg).map_err(AppError::BadRequest)
+            })
+            .await?;
             store::update_render(ctx.pool().await, &id, &uid, rendered.duration_ms as i64, &rendered.wav).await?;
             Ok(ok(json!({
                 "track_id": id,
@@ -240,7 +268,10 @@ fn studio_arrangement_render(_ctx: Arc<PluginCtx>) -> RouteHandler {
             let _uid = user_id(&req)?;
             let value = read_json(req).await?;
             let arr = engine::parse_arrangement(&value).map_err(AppError::BadRequest)?;
-            let rendered = engine::render_arrangement(&arr).map_err(AppError::BadRequest)?;
+            let rendered = blocking(move || {
+                engine::render_arrangement(&arr).map_err(AppError::BadRequest)
+            })
+            .await?;
             Response::builder()
                 .status(200)
                 .header(CONTENT_TYPE, "audio/wav")
@@ -259,7 +290,10 @@ fn studio_preview(_ctx: Arc<PluginCtx>) -> RouteHandler {
             let _uid = user_id(&req)?;
             let value = read_json(req).await?;
             let cfg = engine::parse_config(&value).map_err(AppError::BadRequest)?;
-            let rendered = engine::render_track(&cfg).map_err(AppError::BadRequest)?;
+            let rendered = blocking(move || {
+                engine::render_track(&cfg).map_err(AppError::BadRequest)
+            })
+            .await?;
             Response::builder()
                 .status(200)
                 .header(CONTENT_TYPE, "audio/wav")
@@ -277,9 +311,28 @@ fn studio_waveform(_ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let _uid = user_id(&req)?;
             let value = read_json(req).await?;
+            let key = pattern_hash(&value);
+            if let Some((peaks, duration_ms)) = waveform_cache()
+                .lock()
+                .ok()
+                .and_then(|guard| guard.get(&key).cloned())
+            {
+                return Ok(ok(json!({ "peaks": peaks, "duration_ms": duration_ms })));
+            }
             let cfg = engine::parse_config(&value).map_err(AppError::BadRequest)?;
             let duration_ms = (cfg.steps as f64 / 4.0 * 60.0 / cfg.bpm * 1000.0).round() as u32;
-            let peaks = engine::waveform_peaks(&cfg, 96).map_err(AppError::BadRequest)?;
+            let peaks = blocking(move || {
+                engine::waveform_peaks(&cfg, 96).map_err(AppError::BadRequest)
+            })
+            .await?;
+            if let Ok(mut guard) = waveform_cache().lock() {
+                if guard.len() >= 64 {
+                    if let Some(oldest) = guard.keys().next().copied() {
+                        guard.remove(&oldest);
+                    }
+                }
+                guard.insert(key, (peaks.clone(), duration_ms));
+            }
             Ok(ok(json!({ "peaks": peaks, "duration_ms": duration_ms })))
         }
     })
@@ -427,7 +480,10 @@ fn studio_analyze(_ctx: Arc<PluginCtx>) -> RouteHandler {
         let _uid = user_id(&req)?;
         let value = read_json(req).await?;
         let cfg = engine::parse_config(&value).map_err(AppError::BadRequest)?;
-        let analysis = engine::analyze(&cfg).map_err(AppError::BadRequest)?;
+        let analysis = blocking(move || {
+            engine::analyze(&cfg).map_err(AppError::BadRequest)
+        })
+        .await?;
         let data = serde_json::to_value(analysis).map_err(AppError::from)?;
         Ok(ok(data))
     })

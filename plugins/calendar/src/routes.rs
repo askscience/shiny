@@ -5,14 +5,14 @@
 use std::sync::Arc;
 
 use axum::extract::{FromRequest, FromRequestParts};
-use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, user_id_from_request, RouteHandler};
+use shiny_plugin_sdk::util::{as_text};
+use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::date::{current_month, month_bounds, normalize_date, normalize_time};
@@ -29,24 +29,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => return None,
     })
 }
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Json) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_int(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,

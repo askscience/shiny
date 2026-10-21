@@ -1,3 +1,4 @@
+import { ensureVosk } from '../vendorLoader.js';
 import { createVoicePlayback } from './playback.js';
 import { extractAfterWake, isStopPhrase } from './wake.js';
 import { floatTo16BitPCM, acquireMicrophone } from './capture.js';
@@ -966,6 +967,7 @@ async function loadVosk() {
     return;
   }
   try {
+    await ensureVosk();
     await initVosk(sttLang);
   } catch (e) {
     voskReady = false;
@@ -987,7 +989,7 @@ async function initVosk(lang) {
   // download of a re-packed model (e.g. after the ivector-layout fix).
   const modelUrl = `/api/voice/models/vosk/${lang}.tar.gz?v=2`;
   voskModel = await withTimeout(
-    Vosk.createModel(modelUrl),
+    globalThis.Vosk.createModel(modelUrl),
     VOSK_MODEL_TIMEOUT_MS,
     'Vosk model load timed out',
   );
@@ -1289,3 +1291,4 @@ export function isWakeAwaitingCommand() {
 export function getActiveSttEngine() {
   return sttEngine;
 }
+

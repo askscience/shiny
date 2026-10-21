@@ -441,11 +441,12 @@ export function initFullscreen() {
     syncFullscreenChrome();
     announce();
   });
-  // A fullscreen app that gets deactivated (its window button, the tray, the
-  // Plugins page) is gone: leaving fullscreen hands its workspace back rather
-  // than leaving the desktop sealed around an empty screen. A dedicated
-  // workspace whose window is deactivated off screen is dropped when the windows
-  // are reconciled (desktop.js).
+  // A fullscreen app that gets deactivated (the tray, the Plugins page, the AI)
+  // is gone: leaving fullscreen hands its workspace back rather than leaving
+  // the desktop sealed around an empty screen. Closing the window instead goes
+  // through closePluginWindow, which exits fullscreen itself; a dedicated
+  // workspace whose window is deactivated off screen is dropped when the
+  // windows are reconciled (desktop.js).
   window.addEventListener('plugins:changed', () => {
     const name = fullscreenWindow();
     if (name && !isPluginActive(name)) exitWindowFullscreen();

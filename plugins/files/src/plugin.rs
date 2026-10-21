@@ -5,13 +5,13 @@
 //! routes and its agent tools, and provisions each account's classic home
 //! folders (`Desktop`, `Documents`, …) under `$HOME/.shiny/home/<user-id>/`.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
-    routes::{HttpMethod, RouteHandler, RouteSpec},
+    plugin::Plugin,
+    routes::{RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
@@ -21,41 +21,32 @@ use crate::tools::{
     FileSearch, FileWrite,
 };
 
-pub struct FilesPlugin {
-    ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(FilesPlugin);
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str =
     "a file manager; browse, preview and organize the user's home folders";
 
 fn route_specs() -> Vec<RouteSpec> {
-    let auth = "auth".to_string();
-    let spec = |method: HttpMethod, path: &str, tag: &str| RouteSpec {
-        method,
-        path: path.into(),
-        auth: auth.clone(),
-        handler_tag: tag.into(),
-    };
     vec![
-        spec(HttpMethod::Get, "/api/files/list", "files_list"),
-        spec(HttpMethod::Get, "/api/files/home", "files_home"),
-        spec(HttpMethod::Get, "/api/files/read", "files_read"),
-        spec(HttpMethod::Get, "/api/files/text", "files_text"),
-        spec(HttpMethod::Get, "/api/files/render", "files_render"),
-        spec(HttpMethod::Get, "/api/files/raw", "files_raw"),
-        spec(HttpMethod::Get, "/api/files/thumb", "files_thumb"),
-        spec(HttpMethod::Get, "/api/files/video-info", "files_video_info"),
-        spec(HttpMethod::Get, "/api/files/video-frame", "files_video_frame"),
-        spec(HttpMethod::Get, "/api/files/download", "files_download"),
-        spec(HttpMethod::Get, "/api/files/search", "files_search"),
-        spec(HttpMethod::Post, "/api/files/upload", "files_upload"),
-        spec(HttpMethod::Post, "/api/files/write", "files_write"),
-        spec(HttpMethod::Post, "/api/files/mkdir", "files_mkdir"),
-        spec(HttpMethod::Post, "/api/files/rename", "files_rename"),
-        spec(HttpMethod::Post, "/api/files/delete", "files_delete"),
-        spec(HttpMethod::Post, "/api/files/restore", "files_restore"),
-        spec(HttpMethod::Post, "/api/files/empty-trash", "files_empty_trash"),
+        RouteSpec::get("/api/files/list", "files_list"),
+        RouteSpec::get("/api/files/home", "files_home"),
+        RouteSpec::get("/api/files/read", "files_read"),
+        RouteSpec::get("/api/files/text", "files_text"),
+        RouteSpec::get("/api/files/render", "files_render"),
+        RouteSpec::get("/api/files/raw", "files_raw"),
+        RouteSpec::get("/api/files/thumb", "files_thumb"),
+        RouteSpec::get("/api/files/video-info", "files_video_info"),
+        RouteSpec::get("/api/files/video-frame", "files_video_frame"),
+        RouteSpec::get("/api/files/download", "files_download"),
+        RouteSpec::get("/api/files/search", "files_search"),
+        RouteSpec::post("/api/files/upload", "files_upload"),
+        RouteSpec::post("/api/files/write", "files_write"),
+        RouteSpec::post("/api/files/mkdir", "files_mkdir"),
+        RouteSpec::post("/api/files/rename", "files_rename"),
+        RouteSpec::post("/api/files/delete", "files_delete"),
+        RouteSpec::post("/api/files/restore", "files_restore"),
+        RouteSpec::post("/api/files/empty-trash", "files_empty_trash"),
     ]
 }
 
@@ -63,29 +54,15 @@ fn route_specs() -> Vec<RouteSpec> {
 impl Plugin for FilesPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "files".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "File browser — browse, preview and manage your home folders".into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some(
-                "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash"
-                    .into(),
-            ),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("files")
+                .description("File browser — browse, preview and manage your home folders")
+                .summary("GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/files.md"))
@@ -93,10 +70,8 @@ impl Plugin for FilesPlugin {
                 "Files: enabled — browse the user's home folders (Desktop, Documents, \
                  Downloads, Music, Pictures, Public, Templates, Videos) with previews.",
             );
-        for spec in route_specs() {
-            builder.route(spec);
-        }
-        for tool in [
+        builder.routes(route_specs());
+        builder.tools([
             Arc::new(FileList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(FileRead) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(FileWrite) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
@@ -106,15 +81,11 @@ impl Plugin for FilesPlugin {
             Arc::new(FileDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(FileRestore) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(FileSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-            Arc::new(FileInfo) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-        ] {
-            builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
-        }
+            Arc::new(FileInfo) as Arc<dyn shiny_plugin_sdk::tools::Tool>,]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
 
     /// Provision this account's home folder tree. Runs on the plugin-owned
@@ -129,8 +100,3 @@ impl Plugin for FilesPlugin {
     }
 }
 
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(FilesPlugin { ctx: OnceLock::new() }))
-}

@@ -1,4 +1,3 @@
-import { confirmDialog } from '../ui/index.js';
 import { element as el, chip as uiChip } from '../ui/index.js';
 /**
  * pluginsWindow.js — the Plugins window (built-in desktop surface).
@@ -14,8 +13,9 @@ import { element as el, chip as uiChip } from '../ui/index.js';
  * Installing/uninstalling is server-wide; activate/deactivate is per-user.
  */
 import { apiFetch, getToken } from './api.js';
+import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import {
-  toast, icon, button, iconButton, badge, emptyState, searchBar, select, toggle,
+  toast, button, iconButton, badge, emptyState, searchBar, select, toggle, confirmDialog,
 } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { pickFiles } from './files.js';
@@ -63,14 +63,14 @@ function notifyPluginsChanged(opened) {
 
 /* ── Data ───────────────────────────────────────────────────── */
 
-async function loadPlugins() {
+async function loadPlugins(force = false) {
   try {
-    const [listRes, activeRes] = await Promise.all([
-      apiFetch('/api/plugins'),
-      apiFetch('/api/plugins/active'),
+    const [list, active] = await Promise.all([
+      refreshPluginCatalog({ force }),
+      refreshActivePlugins({ force }),
     ]);
-    plugins = listRes?.data || [];
-    activeSet = new Set(activeRes?.data || []);
+    plugins = list || [];
+    activeSet = new Set(active || []);
   } catch (e) {
     plugins = [];
     activeSet = new Set();
@@ -89,11 +89,8 @@ async function loadPlugins() {
 
 async function onPluginAction(action, name) {
   if (busy) return;
-  if (action === 'uninstall'
-    && !await confirmDialog(t('plugins.uninstallConfirm', { name },
-      `Remove plugin "${name}"? Its database tables will remain.`))) {
-    return;
-  }
+  // Uninstall is confirmed inline in the card itself (see `inlineConfirm`):
+  // the action arrives here only after the user answered there.
   if (!refs || busy) return;
   busy = true;
   setBusy(true);
@@ -157,6 +154,38 @@ function renderCategories() {
   }
 }
 
+/**
+ * Inline confirmation for a destructive action, inside the card itself: the
+ * action row gives way to one short line and two buttons. The card is already
+ * the thing the decision is about, so a modal only adds distance.
+ */
+function inlineConfirm(actions, { message, confirmLabel, onConfirm }) {
+  const row = el('div', 'plugin-card-actions plugin-card-confirm hidden');
+  const text = el('span', 'plugin-card-confirm-text', message);
+  const show = (on) => {
+    actions.classList.toggle('hidden', on);
+    row.classList.toggle('hidden', !on);
+    if (on) confirm.focus();
+  };
+  const cancel = button({
+    label: t('common.cancel', null, 'Cancel'),
+    variant: 'ghost',
+    size: 'sm',
+    onClick: () => show(false),
+  });
+  const confirm = button({
+    label: confirmLabel,
+    variant: 'danger',
+    size: 'sm',
+    onClick: () => {
+      show(false);
+      onConfirm();
+    },
+  });
+  row.append(text, cancel, confirm);
+  return { row, ask: () => show(true), reset: () => show(false) };
+}
+
 function pluginCard(p) {
   const active = activeSet.has(p.name);
   const card = el('article', 'plugin-card');
@@ -181,6 +210,12 @@ function pluginCard(p) {
   );
 
   const actions = el('div', 'plugin-card-actions');
+  const removeConfirm = inlineConfirm(actions, {
+    message: t('plugins.uninstallConfirm', { name: niceName(p) },
+      `Remove plugin "${niceName(p)}"? Its database tables will remain.`),
+    confirmLabel: t('plugins.remove', { name: niceName(p) }, `Remove ${niceName(p)}`),
+    onConfirm: () => void onPluginAction('uninstall', p.name),
+  });
   if (active) {
     if (p.surface || p.web_app) {
       const openBtn = button({
@@ -210,12 +245,12 @@ function pluginCard(p) {
     variant: 'ghost',
     size: 'sm',
     label: t('plugins.remove', { name: niceName(p) }, `Remove ${niceName(p)}`),
-    onClick: () => void onPluginAction('uninstall', p.name),
+    onClick: () => removeConfirm.ask(),
   });
   removeBtn.classList.add('plugin-card-remove');
   actions.appendChild(removeBtn);
 
-  const card_children = [head, name, desc, meta, actions];
+  const card_children = [head, name, desc, meta, actions, removeConfirm.row];
 
   // Per-window mode for active plugins with a window (the keyboard is bottom
   // chrome, so it has no window mode).
@@ -404,6 +439,12 @@ function storeCard(app) {
   }
 
   const actions = el('div', 'plugin-card-actions');
+  const removeConfirm = inlineConfirm(actions, {
+    message: t('plugins.uninstallConfirm', { name: app.name },
+      `Remove plugin "${app.name}"? Its database tables will remain.`),
+    confirmLabel: t('plugins.remove', { name: app.name }, `Remove ${app.name}`),
+    onConfirm: () => void onPluginAction('uninstall', app.id),
+  });
   if (craftAppBusy(app)) {
     // The status line already says what is happening; no action to take.
   } else if (!installed) {
@@ -434,14 +475,14 @@ function storeCard(app) {
     variant: 'ghost',
     size: 'sm',
     label: t('plugins.remove', { name: app.name }, `Remove ${app.name}`),
-    onClick: () => void onPluginAction('uninstall', app.id),
+    onClick: () => removeConfirm.ask(),
   });
   removeBtn.classList.add('plugin-card-remove');
   if (installed) actions.appendChild(removeBtn);
 
   card.append(head, name, desc, meta, status);
   if (app.mcp_available) card.appendChild(aiControlRow(app));
-  card.appendChild(actions);
+  card.append(actions, removeConfirm.row);
   return card;
 }
 
@@ -770,7 +811,7 @@ function mountPlugins() {
     if (f) void uploadArchive(f);
   });
 
-  on(window, 'plugins:changed', () => void refreshActiveTab());
+  on(window, 'plugins:changed', () => void refreshActiveTab(true));
   cleanups.push(() => {
     if (storePollTimer) clearTimeout(storePollTimer);
     storePollTimer = null;
@@ -802,13 +843,13 @@ function setTab(next) {
 }
 
 /** Reload whatever the visible tab shows (a plugin landed or was removed). */
-async function refreshActiveTab() {
+async function refreshActiveTab(force = false) {
   if (tab === 'store') {
     try { await loadStore(); } catch (_) { /* the status line reports it */ }
     if (refs && tab === 'store') render();
     return;
   }
-  await loadPlugins();
+  await loadPlugins(force);
 }
 
 function unmountPlugins() {

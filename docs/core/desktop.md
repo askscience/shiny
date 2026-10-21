@@ -8,8 +8,10 @@ two are deliberately separate: layout math never touches plugin markup, and
 plugin markup never decides where it goes.
 
 The desktop is scoped per traveler (see [web-ui.md](web-ui.md) and
-`web/js/preferences.js`), so workspaces, focus, fullscreen and floating-window
-geometry are all restored per account. On a phone-shaped screen, including touch landscape
+`web/js/preferences.js`): with `session.remember` on, workspaces, focus,
+fullscreen and floating-window geometry are all restored per account; with it
+off (the default) a sign-in starts fresh — see [Preferences](#preferences). On
+a phone-shaped screen, including touch landscape
 (`MOBILE_QUERY`) the whole workspace system stands down and the
 desktop becomes a single column of windows — a *view* over the stored
 arrangement, never a rewrite of it.
@@ -61,11 +63,45 @@ has `surface: true` are loaded. `refreshCatalog()`:
 5. re-delivers the last `agent:actions` payload if a surface was wired late, so
    a plugin activated in the same agent response as its tool call still sees it.
 
+`refreshCatalog()` also prunes `openWindows` (below) for plugins that are no
+longer active and turns `catalogReady` on after its first pass.
+
 `deactivatePlugin(name)` POSTs `/api/plugins/deactivate`, then writes the
 `plugins.changed` localStorage stamp and dispatches `plugins:changed`.
 `activatePlugin(name)` does the same against `/api/plugins/activate` and adds
-`detail.opened` so the desktop can **reveal** the new window — switch to the
-workspace holding it — without focusing it (see [Focus mode](#focus-mode)).
+`detail.opened` so the desktop **opens and reveals** the new window — switch to
+the workspace holding it — without focusing it (see [Focus mode](#focus-mode)).
+
+### Open windows
+
+A plugin being **active** is not a window. `tiles.js` keeps `openWindows`, the
+set of plugin windows open **in this session**:
+
+- `initTileManager()` seeds it from the saved workspaces;
+  `preferences.js` returns none when `session.remember` is off, so a fresh
+  session starts empty even if an earlier sign-in left windows behind.
+- `openPluginWindow(name, { focus })` adds to it (the tray, the Plugins page,
+  the launcher, the AI's `show_plugin`); `closePluginWindow(name)` removes from
+  it.
+- `surfacePlugins()` is `openWindows` filtered to active plugins with a
+  surface — the list the tiling layout, workspace bar, `desktop_*` tools and
+  fullscreen machinery all see. No such list is consulted until
+  `catalogReady`, so a saved workspace is never pruned against a half-loaded
+  plugin set.
+- Closing a web app forgets its surface (`forgetWebAppSurface`): the cached
+  iframe and its control stream are dropped and reopening builds a fresh one.
+  Native surfaces keep their module (an ES module is a singleton) and rebuild
+  their element.
+
+Deactivation prunes `openWindows` too, so a deactivated plugin's window leaves
+the grid and `ensureWindows()` drops it from the saved workspaces.
+
+`closePluginWindow(name)` — the window's **X**, the context menu's "Close
+window" — removes the name from `openWindows` and the saved workspaces, tears
+the surface down, exits fullscreen when needed and POSTs
+`/api/plugins/window/closed` so a Craft app's MCP engine stops gracefully. It
+never touches `enabled`: deactivate stays in the Plugins page, both context
+menus and the AI tools, and the tray can reopen a closed-but-active window.
 
 ### Core windows
 
@@ -95,8 +131,9 @@ restored window is never pruned from its saved workspace before it mounts.
 `ensureWindowChrome(el, name)` runs once per element and prepends:
 
 - the tier-0 **ambient glow** (`installGlow`, see [themes-icons.md](themes-icons.md));
-- a `.tile-header` holding `.tile-header-controls` — **close** (deactivate or
-  close a core window), **full screen** (`toggleWindowFullscreen`) and **focus**
+- a `.tile-header` holding `.tile-header-controls` — **close** (`closePluginWindow`
+  for a plugin window, `closeCoreWindow` for a core window; never a
+  deactivation), **full screen** (`toggleWindowFullscreen`) and **focus**
   (`ui/eye` → `togglePluginFocus`, the focus-mode toggle; a core window takes
   part in focus mode like any other);
 - a centered `.tile-header-title` (or, when the plugin nominates a top bar with
@@ -215,9 +252,11 @@ from, so leaving fullscreen hands it back (see [Real fullscreen](#real-fullscree
 
 - `ensureWindows(names)` migrates a first load (one workspace with everything),
   prunes deactivated surfaces, repairs the fullscreen rule and adds newly
-  activated windows to the active workspace. It deliberately does nothing when
-  `names` is empty on the first render, so a reload does not wipe saved
-  workspaces before the active set has loaded.
+  opened windows to the active workspace. `renderTiles()` calls it only after
+  `catalogReady` (the first active-set + catalog pass), so saved workspaces are
+  never pruned against a half-loaded plugin set; an empty `names` still leaves
+  the structure alone, because closing a window already removed it from the
+  saved arrangement (`closeWindow`).
 - `reconcile()` enforces the **fullscreen rule**: a fullscreen app must live in
   a workspace by itself. A stray window that breaks the rule is moved to a
   shelter workspace; a fullscreen app whose workspace no longer holds it is
@@ -247,6 +286,7 @@ from, so leaving fullscreen hands it back (see [Real fullscreen](#real-fullscree
 | `moveWindowByIndex(name, idx)` | `idx` may be `'new'`; out-of-range auto-creates (capped at 9) |
 | `focusWindow(name)` | Make it the **active** window, switching workspace if needed, and raise |
 | `revealWindow(name)` | Put it on screen (switch workspace) *without* making it active — the open path |
+| `closeWindow(name)` | Close a window: remove it from every workspace, drop its focus/fullscreen and focus mode, repair the fullscreen rule and persist the new arrangement (a no-op in fresh mode) |
 | `cycleFocus(names, dir)` | Rotate focus through the active workspace |
 | `toggleFullscreen(name, force)` | Low-level in-app fullscreen pointer (see `enterWindowFullscreen`) |
 | `isolateInNewWorkspace(name)` | Desktop half of fullscreen: a dedicated workspace that records `home`; returns its id |
@@ -441,8 +481,8 @@ The window gives up its own title-bar stripe (`body.fs-active .tile--full >
 .tile-header { display: none }`), except a *merged* bar that is really the
 plugin's toolbar. Its close / exit controls move into `#fullscreen-bubble`
 (`web/js/fullscreenBubble.js`), a glass pill on the left of the top bar that
-rides the same top-edge reveal. `build(name)` renders **Deactivate/Close** and
-**Exit full screen**, reusing `deactivatePlugin` / `closeCoreWindow` /
+rides the same top-edge reveal. `build(name)` renders **Close** and
+**Exit full screen**, reusing `closePluginWindow` / `closeCoreWindow` /
 `exitWindowFullscreen`.
 
 ### Chrome reveal
@@ -469,10 +509,10 @@ centre — and it comes back from that edge once the pointer insists there
 only a bar above it would cover the app's own toolbar.
 
 The top bar's own menus (clock, weather, and the systray chips: sound, network,
-Bluetooth, battery, power, clipboard) go through `placeMenu()`
-(`web/ui/popover.js`): a menu hangs under its chip and **flips above it** when it
-would not fit below — a bar docked at the bottom edge would otherwise open every
-menu off-screen.
+Bluetooth, battery, power, clipboard) share `createMenu()`
+(`web/js/menuFactory.js`), which calls `placeMenu()` (`web/ui/popover.js`): a
+menu hangs under its chip and **flips above it** when it would not fit below — a
+bar docked at the bottom edge would otherwise open every menu off-screen.
 
 The voice bar **is `#sphere-container`**, and the element is all of it: its body
 is the accent (Settings → Appearance "Voice bar colour"), its border is the
@@ -602,7 +642,16 @@ Desktop state is stored per user via `/api/preferences`:
 |---|---|
 | `desktop.layout` | `tiling` / `columns` / `windows`. |
 | `desktop.workspaces` | Workspace count / assignments. |
-| `session.remember` | Restore the previous desktop on sign-in. |
+| `session.remember` | Restore the previous desktop on sign-in. **Off (default)** = fresh session: the boot reset drops the previous activations, stops every Craft MCP server, and no window is restored; deactivating mid-session deletes the activation instead of remembering an "off". **On** = restore exactly what was left: enabled plugins plus the saved windows, positions, focus and fullscreen. |
+
+With **remember off**, `app.js` calls `resetSessionPlugins()`
+(`web/js/activePlugins.js`) before `initApp()`: the server drops this user's
+`enabled = 1` session activations (`PluginManager::reset_session_activations`,
+`POST /api/plugins/session/reset`) and stops every running Craft MCP server, and
+`tiles.js` starts with an empty `openWindows` — no windows, no plugin surfaces
+loaded beyond the session's own activations. With **remember on**, only the
+windows the saved workspace list contains are reopened: a plugin being enabled
+never opens a window by itself.
 | `ui.theme.name` | Active theme. |
 | `appearance.*` | Accent + gradient. |
 | `desktop.surface.window_background` | The blurred window glow. |

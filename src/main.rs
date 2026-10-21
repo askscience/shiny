@@ -120,10 +120,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-    let server = axum::serve(listener, router_handle).with_graceful_shutdown(async move {
-        let mut shutdown_rx = shutdown_rx;
-        let _ = shutdown_rx.changed().await;
-    });
+    let server = axum::serve(listener, router_handle)
+        .tcp_nodelay(true)
+        .with_graceful_shutdown(async move {
+            let mut shutdown_rx = shutdown_rx;
+            let _ = shutdown_rx.changed().await;
+        });
     let server = std::future::IntoFuture::into_future(server);
     tokio::pin!(server);
     let result = tokio::select! {

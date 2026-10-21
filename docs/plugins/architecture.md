@@ -55,23 +55,26 @@ speaks, replies, and has only the built-in generic tools.
 shiny/
 ├── Cargo.toml                       # [workspace] root, lists ./, SDK and the plugins
 ├── crates/
-│   └── shiny-plugin-sdk/            # public trait surface + shared types
-│       └── src/
-│           ├── lib.rs                # re-exports + CORE_API_LEVEL
-│           ├── plugin.rs             # the `Plugin` trait + PLUGIN_ENTRY_SYMBOL
-│           ├── tools.rs              # `Tool` trait + `RegistryBuilder` + `bridged()`
-│           ├── outcome.rs            # `ActionOutcome`
-│           ├── context.rs            # `AgentContext`
-│           ├── services.rs           # `PluginCtx` + Ollama/Search/Supertonic + ConfigSnapshot
-│           ├── rt.rs                 # `bridge()` — plugin-owned Tokio runtime
-│           ├── artifacts.rs          # `Artifact` + `build_from_params`
-│           ├── navigation.rs         # `NavigationSession`
-│           ├── manifest.rs           # `Manifest`
-│           ├── routes.rs             # `RouteSpec`, `HttpMethod`, handler types
-│           ├── crons.rs              # `CronSpec`
-│           ├── notification.rs       # `Notification`
-│           ├── db.rs                 # synchronous plugin DB handle
-│           └── migrations.rs         # per-plugin migration runner
+│   ├── shiny-plugin-sdk/             # public trait surface + shared types
+│   │   └── src/
+│   │       ├── lib.rs                # re-exports, CORE_API_LEVEL, ctx_plugin!
+│   │       ├── plugin.rs             # the `Plugin` trait + PLUGIN_ENTRY_SYMBOL
+│   │       ├── tools.rs              # `Tool` trait + `RegistryBuilder` + `bridged()`
+│   │       ├── outcome.rs            # `ActionOutcome`
+│   │       ├── context.rs            # `AgentContext`
+│   │       ├── services.rs           # `PluginCtx` + Ollama/Search/Supertonic + ConfigSnapshot
+│   │       ├── rt.rs                 # `bridge()` — plugin-owned Tokio runtime
+│   │       ├── artifacts.rs          # `Artifact` + `build_from_params`
+│   │       ├── navigation.rs         # `NavigationSession`
+│   │       ├── manifest.rs           # `Manifest` + `Manifest::new`
+│   │       ├── routes.rs             # `RouteSpec` constructors, handler types, ok/user_id
+│   │       ├── util.rs               # title/filename/DB-value/user-id helpers
+│   │       ├── crons.rs              # `CronSpec`
+│   │       ├── notification.rs       # `Notification`
+│   │       ├── db.rs                 # synchronous plugin DB handle
+│   │       └── migrations.rs         # per-plugin migration runner
+│   ├── shiny-osm/                    # OSM client shared by core + traveler
+│   └── peakd-core/                   # display-scale state shared by the shells
 ├── plugins/<name>/                   # one self-contained plugin each
 └── src/plugins/                      # loader/registry/manager/installer/admin_api
 ```
@@ -191,7 +194,7 @@ restart (or reinstall a fresh archive).
 | `session.remember` | Active set |
 |---|---|
 | on | installed minus explicitly-disabled |
-| off | only explicitly-enabled (opt-in, starts empty) |
+| off | only explicitly-enabled (opt-in); boot reset clears the previous session's rows, so it starts empty |
 
 Deactivating a plugin keeps its install dir and tables but removes its tools
 from the prompt and makes `ToolRegistry::invoke` return

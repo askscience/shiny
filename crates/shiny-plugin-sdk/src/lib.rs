@@ -26,6 +26,7 @@ pub mod ods;
 pub mod odp;
 pub mod upload;
 pub mod db;
+pub mod util;
 
 pub use errors::AppError;
 pub use services::{OllamaClient, SearchService, SupertonicClient};
@@ -46,6 +47,48 @@ pub use upload::field_bytes_capped;
 /// The core API level. Plugins declare `api_level` in `plugin.toml`; the loader
 /// refuses to load a plugin built against a newer API than the running core.
 pub const CORE_API_LEVEL: u32 = 1;
+
+/// Standard entry boilerplate for a plugin that keeps `Arc<PluginCtx>` and
+/// dispatches route tags through `crate::routes::handle`.
+///
+/// The plugin still writes its own `manifest()` and `register()`; this macro
+/// provides the struct, the context slot, `route_handler()` plumbing, and the
+/// C entry symbol.
+#[macro_export]
+macro_rules! ctx_plugin {
+    ($name:ident) => {
+        pub struct $name {
+            ctx: ::std::sync::OnceLock<::std::sync::Arc<$crate::services::PluginCtx>>,
+        }
+
+        impl $name {
+            pub fn new() -> Self {
+                Self { ctx: ::std::sync::OnceLock::new() }
+            }
+
+            fn install_ctx(&self, ctx: ::std::sync::Arc<$crate::services::PluginCtx>) {
+                let _ = self.ctx.set(ctx);
+            }
+
+            fn routes_for(&self, tag: &str) -> ::core::option::Option<$crate::routes::RouteHandler> {
+                let ctx = self.ctx.get()?;
+                crate::routes::handle(ctx, tag)
+            }
+        }
+
+        impl ::core::default::Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        /// The C entry symbol the loader transmutes and calls.
+        #[no_mangle]
+        pub extern "C" fn shiny_plugin_entry() -> *mut dyn $crate::plugin::Plugin {
+            ::std::boxed::Box::into_raw(::std::boxed::Box::new(<$name>::new()))
+        }
+    };
+}
 
 /// Hard cap on the decompressed size of an ODF `content.xml`.
 ///

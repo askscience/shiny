@@ -16,7 +16,7 @@
  * (`batteryMenu.js`); the big controls live in Settings → Power.
  */
 
-import { apiFetch, getToken } from './api.js';
+import { createHudStream } from './hudStream.js';
 import { setIcon } from '../ui/index.js';
 import { setPowerBatteryStatus } from './preferences.js';
 import { toggleBatteryMenu } from './batteryMenu.js';
@@ -30,93 +30,18 @@ const iconEl = document.getElementById('hud-battery-icon');
 const labelEl = document.getElementById('hud-battery-label');
 const pctEl = document.getElementById('hud-battery-pct');
 
-const RECONNECT_MS = 5000;
-const POLL_MS = 30000;
-
-let abort = null;
-let pollTimer = null;
+const stream = createHudStream({
+  eventsUrl: '/api/battery/events',
+  statusUrl: '/api/battery/status',
+  pollMs: 30000,
+  label: 'battery',
+  apply,
+});
 
 export function initHudBattery() {
   if (!chipEl) return;
   chipEl.addEventListener('click', () => toggleBatteryMenu(chipEl));
-  void subscribe();
-}
-
-function headers() {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/* ── SSE ────────────────────────────────────────────────────── */
-
-async function subscribe() {
-  for (;;) {
-    abort = new AbortController();
-    try {
-      const res = await fetch('/api/battery/events', {
-        headers: headers(),
-        credentials: 'same-origin',
-        signal: abort.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`battery events: ${res.status}`);
-      stopPolling();
-      await readStream(res);
-    } catch (_) {
-      if (abort.signal.aborted) return;
-    }
-    // Stream ended or failed: keep the chip honest with the poll while we
-    // wait to reconnect (the kiosk proxy may drop an idle stream).
-    startPolling();
-    await sleep(RECONNECT_MS);
-  }
-}
-
-async function readStream(res) {
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return;
-    buffer += decoder.decode(value, { stream: true });
-
-    const chunks = buffer.split('\n\n');
-    buffer = chunks.pop() || '';
-
-    for (const chunk of chunks) {
-      const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'));
-      if (!dataLine) continue;
-      try {
-        apply(JSON.parse(dataLine.replace(/^data:\s*/, '')));
-      } catch (_) { /* keep-alive comment or partial frame */ }
-    }
-  }
-}
-
-/* ── Poll fallback ──────────────────────────────────────────── */
-
-function startPolling() {
-  if (pollTimer) return;
-  void poll();
-  pollTimer = setInterval(() => void poll(), POLL_MS);
-}
-
-function stopPolling() {
-  if (!pollTimer) return;
-  clearInterval(pollTimer);
-  pollTimer = null;
-}
-
-async function poll() {
-  try {
-    const res = await apiFetch('/api/battery/status', { authRedirect: false });
-    apply(res?.data);
-  } catch (_) { /* server restarting — keep the last state */ }
+  stream.start();
 }
 
 /* ── Rendering ──────────────────────────────────────────────── */

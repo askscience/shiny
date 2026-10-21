@@ -23,11 +23,6 @@ const glyph = btn?.querySelector('[data-icon]') || null;
 /** Last capability answer; `null` = not resolved yet. */
 let support = null;
 
-/** Cached, synchronous — the context menu reads it while building. */
-export function getThinkingSupport() {
-  return support;
-}
-
 /** False only when the probe positively established the model cannot think. */
 export function canThink() {
   return !support || support.supported;

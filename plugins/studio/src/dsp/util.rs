@@ -45,23 +45,6 @@ pub fn soft_clip(x: f32) -> f32 {
         x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
     }
 }
-
-/// Hard-ish clipper with a 3 dB rounded knee — used for drum bus glue.
-#[inline]
-pub fn clip_knee(x: f32) -> f32 {
-    if x <= -1.5 {
-        -1.0
-    } else if x >= 1.5 {
-        1.0
-    } else if x <= -0.5 {
-        -0.5 + (x + 0.5) * 0.5
-    } else if x >= 0.5 {
-        0.5 + (x - 0.5) * 0.5
-    } else {
-        x
-    }
-}
-
 /// Asymmetric tube-style saturation (adds even harmonics).
 #[inline]
 pub fn tube(x: f32) -> f32 {
@@ -143,13 +126,6 @@ pub fn db_to_gain(db: f64) -> f32 {
 pub fn gain_to_db(g: f32) -> f32 {
     20.0 * g.max(1e-9).log10()
 }
-
-/// MIDI note number → Hz (A4 = 69 = 440 Hz).
-#[inline]
-pub fn midi_to_hz(note: f64) -> f64 {
-    440.0 * 2f64.powf((note - 69.0) / 12.0)
-}
-
 /// Frequency ratio for a detune in cents.
 #[inline]
 pub fn cents_ratio(cents: f64) -> f64 {

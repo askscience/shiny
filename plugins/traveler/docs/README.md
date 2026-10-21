@@ -60,7 +60,7 @@ trip/GPS/map/diary/navigation behavior belongs to this plugin
 | Concern | Traveler plugin | Core (stays) |
 |---|---|---|
 | Agent tools | 22 tools (`create_trip` … `update_artifact`) | `web_search`, `show_plugin`, `plugin_*`, `desktop_*`, `workspace_*` |
-| OSM client | `src/osm.rs` (`OsmClient`) | `src/services/osm.rs` (`OsmService`) |
+| OSM client | Shared `shiny-osm` crate (`OsmClient`) | Same crate, re-exported as `OsmService` |
 | Diary writer | `src/diary.rs` | `src/services/diary_gen.rs` (`DiaryGenerator` + cron) |
 | Navigation builder | `src/navigation.rs` | `src/services/navigation.rs` |
 | Trip/location/diary **REST** | — | `src/api/{trips,locations,diary}.rs` |
@@ -77,12 +77,14 @@ There are **two parallel paths over one shared schema**:
    `navigator.js`, `gps.js`, `navigationApi.js`) talks to core axum handlers under
    `/api/trips`, `/api/locations`, `/api/diary`, `/api/map/*` and
    `/api/navigate/start` (`src/api/mod.rs` lines 377–393). These handlers use
-   core's `OsmService`, `DiaryGenerator` and `gpsd`. This path exists whether or
-   not the plugin is installed — it is the map/dock chrome's backend.
+   core's `OsmService` (a re-export of the shared `shiny-osm` client),
+   `DiaryGenerator` and `gpsd`. This path exists whether or not the plugin is
+   installed — it is the map/dock chrome's backend.
 2. **Agent path (plugin-served).** The LLM emits action blocks; core's
    `execute_action` dispatches registered action keys to the plugin's `Tool`
    implementations (`src/services/agent_tools.rs`). Those tools query the same
-   SQLite tables and call the plugin's own `OsmClient` / `diary` / `story`.
+   SQLite tables and call `shiny-osm` / `diary` / `story`. The OSM client is
+   shared with core, so the two paths cannot drift.
 
 `src/services/agent_tools.rs` still defines shared helpers (`fetch_active_trip`)
 that the REST handlers call, and keeps the traveler-verb refusal list. The plugin
@@ -110,7 +112,7 @@ plugins/traveler/
     ├── lib.rs                  # module exports + TravelerPlugin re-export
     ├── plugin.rs               # Plugin impl, manifest, register(), entry symbol
     ├── models.rs               # Trip / Location / DiaryEntry row types
-    ├── osm.rs                  # Nominatim + OSRM + Overpass client
+    ├── osm.rs                  # re-export of the shared shiny-osm client
     ├── navigation.rs          # build_navigation_session()
     ├── diary.rs                # generate_for_date() + location summary
     ├── story.rs                # research → facts → Ollama prose (plan_trip)

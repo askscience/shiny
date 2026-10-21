@@ -173,6 +173,26 @@ impl<'a> RegistryBuilder<'a> {
         self
     }
 
+    /// Add every spec from an iterator/array.
+    pub fn routes<I>(&mut self, specs: I) -> &mut Self
+    where
+        I: IntoIterator<Item = crate::routes::RouteSpec>,
+    {
+        self.routes.extend(specs);
+        self
+    }
+
+    /// Add every tool from an iterator/array, bridged onto the plugin runtime.
+    pub fn tools<I>(&mut self, tools: I) -> &mut Self
+    where
+        I: IntoIterator<Item = Arc<dyn Tool>>,
+    {
+        for tool in tools {
+            self.tools.push(bridged(tool));
+        }
+        self
+    }
+
     pub fn cron(&mut self, c: crate::crons::CronSpec) -> &mut Self {
         self.crons.push(c);
         self

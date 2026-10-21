@@ -18,6 +18,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
+import { formatMenuDate, showDocumentMenu } from '../../js/officeMenu.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const PDF_PLUGIN = 'pdf';
@@ -1433,7 +1434,7 @@ function renderDocMenuItems() {
       : t('plugin.pdf.menu.noOthersToMerge', null, 'No other PDFs to merge');
     docMenuPopup.appendChild(head);
     others.forEach((d) => {
-      docMenuPopup.appendChild(docMenuItem(d.title, 'ui/loop', { time: formatWhen(d.updated_at), onClick: () => void doMerge(d.pdf_id) }));
+      docMenuPopup.appendChild(docMenuItem(d.title, 'ui/loop', { time: formatMenuDate(d.updated_at), onClick: () => void doMerge(d.pdf_id) }));
     });
     const foot = document.createElement('div');
     foot.className = 'pdf-doc-menu-foot';
@@ -1450,7 +1451,7 @@ function renderDocMenuItems() {
   } else {
     docs.forEach((d) => {
       docMenuPopup.appendChild(docMenuItem(d.title, 'ui/doc', {
-        time: formatWhen(d.updated_at),
+        time: formatMenuDate(d.updated_at),
         active: d.pdf_id === currentPdf?.pdf_id,
         onClick: () => { if (d.pdf_id !== currentPdf?.pdf_id) void openDoc(d); },
       }));
@@ -1469,25 +1470,11 @@ function renderDocMenuItems() {
   docMenuPopup.appendChild(foot);
 }
 
-function formatWhen(iso) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch (_) {
-    return '';
-  }
-}
-
 function openDocMenu() {
   ensureDocMenu();
   renderDocMenuItems();
-  docMenuPopup.classList.remove('hidden');
-  placePopover(docMenuPopup, docMenuBtn);
-  docMenuPopup.focusFirst();
   docMenuOpen = true;
-  docMenuBtn.setAttribute('aria-expanded', 'true');
-  document.addEventListener('pointerdown', onDocMenuOutside, true);
-  document.addEventListener('keydown', onDocMenuKey, true);
+  showDocumentMenu(docMenuPopup, docMenuBtn, onDocMenuOutside, onDocMenuKey);
 }
 
 function toggleDocMenu() {

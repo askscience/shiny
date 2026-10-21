@@ -1399,16 +1399,6 @@ async fn fetch_topic(topic: &str, searxng: Option<&str>) -> Result<Vec<RawResult
     store(&url, results.clone());
     Ok(results)
 }
-
-/// The interest profile for a user, or an empty one when history is unusable.
-pub fn interests_for(
-    ctx: &std::sync::Arc<shiny_plugin_sdk::services::PluginCtx>,
-    user_id: &str,
-) -> Profile {
-    let rows = history::recent_rows(ctx, user_id, 200).unwrap_or_default();
-    profile_from_history(&rows, chrono::Utc::now())
-}
-
 /// Build the home shelf: profile → topics → fetch → rank → best N.
 ///
 /// `refresh` skips the cache when the user asked for new cards.

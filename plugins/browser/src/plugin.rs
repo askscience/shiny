@@ -7,21 +7,18 @@
 //! plugin owns the window's sessions, its history and the news shelf; it no
 //! longer runs a filtering proxy.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    plugin::Plugin,
     routes::{HttpMethod, RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
 
-pub struct BrowserPlugin {
-    /// The ctx handed to `register`; routes resolve through it.
-    pub ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(BrowserPlugin);
 
 /// The plugin's name, in one place: the manifest, the tile's `data-plugin`
 /// attribute, the route namespace and the artifacts' owner all have to agree.
@@ -35,33 +32,18 @@ pub const SKILLS: &str = include_str!("../skills/browser.md");
 #[async_trait]
 impl Plugin for BrowserPlugin {
     fn manifest(&self) -> &Manifest {
-        static M: OnceLock<Manifest> = OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: PLUGIN_NAME.into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "Browse the web inside Shiny — a web window with a news home ranked from your \
-                 searches"
-                    .into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some(
-                "Browser: web browsing in its own window, with related-news cards chosen from \
-                 what you search for"
-                    .into(),
-            ),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
+        M.get_or_init(|| {
+            Manifest::new(PLUGIN_NAME)
+                .description("Browse the web inside Shiny — a web window with a news home ranked from your \
+                 searches")
+                .summary("Browser: web browsing in its own window, with related-news cards chosen from \
+                 what you search for")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
 
         builder
             .persona(PERSONA)
@@ -72,7 +54,7 @@ impl Plugin for BrowserPlugin {
                  related-news cards ranked from the user's recent searches.",
             );
 
-        for spec in [
+        builder.routes([
             (HttpMethod::Get, "/api/browser/state", "browser_state"),
             (HttpMethod::Get, "/api/browser/sessions", "browser_sessions"),
             (HttpMethod::Post, "/api/browser/session", "browser_session_create"),
@@ -95,23 +77,14 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/downloads/event", "browser_download_event"),
             (HttpMethod::Post, "/api/browser/downloads/remove", "browser_download_remove"),
             (HttpMethod::Post, "/api/browser/downloads/clear", "browser_downloads_clear"),
-        ] {
-            builder.route(RouteSpec {
-                method: spec.0,
-                path: spec.1.into(),
-                auth: "auth".into(),
-                handler_tag: spec.2.into(),
-            });
-        }
+        ].map(|(method, path, tag)| RouteSpec::new(method, path, tag)));
 
         // A URL the window should be showing right now, for the UI to poll.
-        for tool in [
+        builder.tools([
             Arc::new(crate::tools::BrowserOpen) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::BrowserSearch),
             Arc::new(crate::tools::BrowserRead),
-        ] {
-            builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
-        }
+        ]);
     }
 
     /// Repair the history schema when the plugin loads.
@@ -152,13 +125,6 @@ impl Plugin for BrowserPlugin {
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
-}
-
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(BrowserPlugin { ctx: OnceLock::new() }))
 }

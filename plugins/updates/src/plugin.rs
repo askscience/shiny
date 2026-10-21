@@ -1,19 +1,17 @@
 //! Plugin glue: manifest, contributions, entry symbol.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    plugin::Plugin,
     routes::RouteHandler,
     services::PluginCtx,
     tools::{bridged, RegistryBuilder},
 };
 
-pub struct UpdatesPlugin {
-    ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(UpdatesPlugin);
 
 pub const PERSONA: &str =
     "an assistant that can check for and install Linux system and Ollama updates on the machine";
@@ -21,28 +19,16 @@ pub const PERSONA: &str =
 #[async_trait]
 impl Plugin for UpdatesPlugin {
     fn manifest(&self) -> &Manifest {
-        static M: OnceLock<Manifest> = OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "updates".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "Check and install system + Ollama updates across every major Linux distribution"
-                    .into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some("Updates: one window (and HUD chip) for system and Ollama updates".into()),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
+        M.get_or_init(|| {
+            Manifest::new("updates")
+                .description("Check and install system + Ollama updates across every major Linux distribution")
+                .summary("Updates: one window (and HUD chip) for system and Ollama updates")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
 
         builder
             .persona(PERSONA)
@@ -52,9 +38,7 @@ impl Plugin for UpdatesPlugin {
                  Ollama updates.",
             );
 
-        for spec in crate::routes::route_specs() {
-            builder.route(spec);
-        }
+        builder.routes(crate::routes::route_specs());
 
         builder
             .tool_arc(bridged(Arc::new(crate::tools::UpdatesStatusTool)))
@@ -65,15 +49,7 @@ impl Plugin for UpdatesPlugin {
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
 }
 
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(UpdatesPlugin {
-        ctx: OnceLock::new(),
-    }))
-}

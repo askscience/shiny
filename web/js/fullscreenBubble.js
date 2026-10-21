@@ -14,7 +14,7 @@ import { controlButton } from '../ui/components/button.js';
  * routes the buttons to the same actions as the window's own controls.
  */
 import { isCoreWindow, coreWindowTitle } from './coreWindows.js';
-import { closeCoreWindow, deactivatePlugin } from './tiles.js';
+import { closeCoreWindow, closePluginWindow } from './tiles.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
 import { icon } from '../ui/index.js';
 import { t } from './i18n.js';
@@ -41,15 +41,14 @@ function build(name) {
   const core = isCoreWindow(name);
   bubble.textContent = '';
 
-  // Minimal chrome: just the two controls (deactivate / close and exit
-  // fullscreen) — no app icon, so the left of the bar stays uncluttered.
+  // Minimal chrome: just the two controls (close and exit fullscreen) — no
+  // app icon, so the left of the bar stays uncluttered. Close closes the
+  // window; it does not deactivate the plugin.
   const shown = pluginLabel(name);
   const close = makeButton(
     'fullscreen-bubble-btn--close',
     'ui/close',
-    core
-      ? t('desktop.closeWindow', { name: shown }, `Close ${shown}`)
-      : t('desktop.deactivateWindow', { name: shown }, `Deactivate ${shown}`),
+    t('desktop.closeWindow', { name: shown }, `Close ${shown}`),
   );
   close.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -57,10 +56,9 @@ function build(name) {
       closeCoreWindow(name); // handles leaving fullscreen itself
       return;
     }
-    // Hand the desktop its workspace back before the window goes away, so a
-    // closed fullscreen app can never leave a sealed, empty workspace behind.
-    if (fullscreenWindow() === name) exitWindowFullscreen();
-    void deactivatePlugin(name);
+    // closePluginWindow hands the desktop its workspace back before the window
+    // goes away, so a closed fullscreen app never leaves a sealed empty one.
+    closePluginWindow(name);
   });
 
   const exit = makeButton('fullscreen-bubble-btn--exit', 'ui/compress',

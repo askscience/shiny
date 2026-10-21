@@ -179,19 +179,9 @@ impl BatteryService {
     /// Publish only when the snapshot changed; the reader polls on an interval,
     /// so this is what keeps idle SSE clients from being woken for nothing.
     fn publish_if_changed(&self, status: BatteryStatus) {
-        let json = serde_json::to_string(&status).unwrap_or_default();
-        {
-            let mut last = self
-                .inner
-                .last_json
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            if *last == json {
-                return;
-            }
-            *last = json;
-        }
-        self.publish(status);
+        crate::services::publish::publish_if_changed(&self.inner.last_json, status, |status| {
+            self.publish(status);
+        });
     }
 
     /// Read the kernel once and publish the result. Used at startup and by the

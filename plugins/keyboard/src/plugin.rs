@@ -2,7 +2,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    plugin::Plugin,
     services::PluginCtx,
     tools::RegistryBuilder,
 };
@@ -13,21 +13,10 @@ pub struct KeyboardPlugin;
 impl Plugin for KeyboardPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "keyboard".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "Virtual multi-language keyboard at the bottom of the screen — types into any focused input".into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some("Virtual keyboard: types into any text input (8 language layouts)".into()),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("keyboard")
+                .description("Virtual multi-language keyboard at the bottom of the screen — types into any focused input")
+                .summary("Virtual keyboard: types into any text input (8 language layouts)")
         })
     }
 

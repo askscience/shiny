@@ -53,6 +53,12 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(8);
 /// One `tools/call` may run an app command; long ones use the app's own
 /// `wait:false` + job tools, so this is a backstop.
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+/// How long a stopped server gets to answer the MCP `shutdown` request.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
+/// How long it gets to exit on its own after `exit` + stdin EOF before it is
+/// killed. Long enough for an app to flush a document, short enough that
+/// closing a window feels immediate.
+const STOP_GRACE: Duration = Duration::from_secs(3);
 /// Tool results are model context: cap what one call may add to it.
 const MAX_RESULT_BYTES: usize = 64 * 1024;
 /// One tool's doc fragment (name + description + argument list).
@@ -106,7 +112,9 @@ type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
 
 /// One JSON-RPC-over-stdio connection to an app's MCP server.
 struct McpClient {
-    stdin: Mutex<ChildStdin>,
+    /// `None` once the client has been stopped: closing stdin is the EOF that
+    /// tells a well-behaved MCP server to exit.
+    stdin: Mutex<Option<ChildStdin>>,
     pending: Pending,
     next_id: AtomicU64,
     /// Held so the process is reaped (and, with `kill_on_drop`, stopped) when
@@ -182,7 +190,7 @@ impl McpClient {
         });
 
         Ok(Self {
-            stdin: Mutex::new(stdin),
+            stdin: Mutex::new(Some(stdin)),
             pending,
             next_id: AtomicU64::new(1),
             child: Mutex::new(child),
@@ -193,7 +201,10 @@ impl McpClient {
     async fn write_line(&self, message: &Value) -> Result<(), AppError> {
         let mut line = message.to_string();
         line.push('\n');
-        let mut stdin = self.stdin.lock().await;
+        let mut guard = self.stdin.lock().await;
+        let Some(stdin) = guard.as_mut() else {
+            return Err(AppError::Internal(format!("{} MCP is stopped", self.label)));
+        };
         stdin.write_all(line.as_bytes()).await.map_err(|error| {
             AppError::Internal(format!("{} MCP write failed: {error}", self.label))
         })?;
@@ -276,11 +287,27 @@ impl McpClient {
         Ok(out)
     }
 
-    /// Ask the process to exit and reap it. Idempotent.
+    /// Ask the process to leave, then reap it. Graceful first: the MCP
+    /// lifecycle (`shutdown` request, `exit` notification), then EOF on stdin
+    /// (a well-behaved stdio server exits on that), then a bounded wait. Only
+    /// a server that refuses all of that is killed. Idempotent.
     async fn stop(&self) {
+        // The request may hang on a server that does not implement lifecycle
+        // methods; it must not hold the window close hostage.
+        let _ = tokio::time::timeout(
+            SHUTDOWN_TIMEOUT,
+            self.request("shutdown", json!({})),
+        )
+        .await;
+        let _ = self.notify("exit", json!({})).await;
+        // Dropping the pipe is the graceful signal for stdio transports.
+        self.stdin.lock().await.take();
         let mut child = self.child.lock().await;
-        let _ = child.start_kill();
-        let _ = child.wait().await;
+        if tokio::time::timeout(STOP_GRACE, child.wait()).await.is_err() {
+            tracing::warn!("{} MCP ignored shutdown; killing it", self.label);
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+        }
     }
 }
 
@@ -496,6 +523,31 @@ impl CraftMcp {
             .collect();
         out.sort();
         out
+    }
+
+    /// Stop one app's server right now (its window was closed, or the plugin
+    /// was deactivated). Graceful shutdown, then its tools leave the registry —
+    /// the same cleanup `sync` does for a stale app, without waiting for the
+    /// next agent turn. A no-op when the app has no server running.
+    pub async fn stop_app(&self, manager: &PluginManager, id: &str) {
+        let host = self.hosts.lock().await.remove(id);
+        let Some(host) = host else { return };
+        host.client.stop().await;
+        manager.tools().uninstall_plugin(id);
+        tracing::debug!("Craft MCP for {id} stopped (window closed or plugin deactivated)");
+    }
+
+    /// Stop every running app server. Used when a fresh session starts: with
+    /// "remember" off nothing from the previous sign-in may keep running.
+    pub async fn stop_all(&self, manager: &PluginManager) {
+        let hosts: Vec<(String, Arc<ServerHandle>)> = {
+            self.hosts.lock().await.drain().collect()
+        };
+        for (id, host) in hosts {
+            host.client.stop().await;
+            manager.tools().uninstall_plugin(&id);
+            tracing::debug!("Craft MCP for {id} stopped (fresh session)");
+        }
     }
 
     /// The rule in one place, called once per agent turn, before the tool list

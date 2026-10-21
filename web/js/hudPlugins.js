@@ -16,6 +16,7 @@ import { controlButton } from '../ui/components/button.js';
  * or the AI makes, possibly for several plugins — the accent plus a plate).
  */
 import { apiFetch } from './api.js';
+import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import { hudDivider } from './hudDivider.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { isPluginFocused } from './desktop.js';
@@ -37,14 +38,14 @@ function trayLabel(name) {
   return `${label(name)} (${state}${isPluginFocused(name) ? ', focused' : ''})`;
 }
 
-async function refresh() {
+async function refresh(force = false) {
   try {
-    const [listRes, activeRes] = await Promise.all([
-      apiFetch('/api/plugins'),
-      apiFetch('/api/plugins/active'),
+    const [list, active] = await Promise.all([
+      refreshPluginCatalog({ force }),
+      refreshActivePlugins({ force }),
     ]);
-    plugins = listRes?.data || [];
-    activeSet = new Set(activeRes?.data || []);
+    plugins = list || [];
+    activeSet = new Set(active || []);
   } catch (_) {
     // Keep the last known list on transient errors.
   }
@@ -151,11 +152,11 @@ export async function openPlugin(name) {
 
 export function initHudPlugins() {
   if (!trayEl) return;
-  window.addEventListener('plugins:changed', () => void refresh());
+  window.addEventListener('plugins:changed', () => void refresh(true));
   // Focus mode is a desktop state change — repaint the glyphs, don't refetch.
   window.addEventListener('desktop:changed', syncFocusFlags);
   window.addEventListener('storage', (e) => {
-    if (e.key === 'plugins.changed') void refresh();
+    if (e.key === 'plugins.changed') void refresh(true);
   });
   void refresh();
 }

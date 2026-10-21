@@ -45,6 +45,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
+use crate::services::output::{last_error_line, last_log_error};
 
 // Shared with the song generator — one implementation, see `services::media`.
 pub use crate::services::media::{files_home, human_bytes};
@@ -732,33 +733,6 @@ fn cachedit_threshold() -> Option<String> {
         return Some(raw.to_string());
     }
     Some("0.30".to_string())
-}
-
-fn last_error_line(stdout: &[u8], stderr: &[u8]) -> String {
-    let out = String::from_utf8_lossy(stdout);
-    let err = String::from_utf8_lossy(stderr);
-    out.lines()
-        .last()
-        .filter(|l| l.to_lowercase().contains("error"))
-        .or_else(|| err.lines().last())
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .unwrap_or_else(|| "Download failed".into())
-}
-
-/// Last meaningful lines of an sd-cli log, for a failed render.
-fn last_log_error(path: &Path) -> String {
-    let text = std::fs::read_to_string(path).unwrap_or_default();
-    let tail: Vec<&str> = text
-        .lines()
-        .rev()
-        .filter(|l| !l.trim().is_empty())
-        .take(3)
-        .collect();
-    if tail.is_empty() {
-        return "no output captured".into();
-    }
-    tail.into_iter().rev().collect::<Vec<_>>().join(" | ")
 }
 
 #[cfg(test)]

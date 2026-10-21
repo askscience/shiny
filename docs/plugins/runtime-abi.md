@@ -8,6 +8,7 @@ reqwest/hyper.
 Source: [`crates/shiny-plugin-sdk/src/rt.rs`](../../crates/shiny-plugin-sdk/src/rt.rs),
 [`tools.rs`](../../crates/shiny-plugin-sdk/src/tools.rs),
 [`routes.rs`](../../crates/shiny-plugin-sdk/src/routes.rs),
+[`util.rs`](../../crates/shiny-plugin-sdk/src/util.rs),
 [`services.rs`](../../crates/shiny-plugin-sdk/src/services.rs),
 [`db.rs`](../../crates/shiny-plugin-sdk/src/db.rs).
 
@@ -70,9 +71,11 @@ at load time.
 
 ## `rt::bridge` — the plugin-owned runtime
 
-`bridge(fut)` queues the future onto a **process-global, single-threaded**
+`bridge(fut)` queues the future onto the **plugin's own single-threaded**
 (`current_thread`) runtime and hands the result back over an executor-agnostic
-oneshot channel. The host worker never blocks.
+oneshot channel. Each plugin cdylib statically links its own copy of the SDK,
+so the worker and its queue are per plugin, not process-global. The host worker
+never blocks.
 
 ```rust
 // Wrong: aborts the host on the first sqlx/reqwest call.

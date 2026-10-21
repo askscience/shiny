@@ -43,6 +43,41 @@ pub struct Manifest {
     pub signature: Option<String>,
 }
 
+impl Manifest {
+    /// Standard manifest for a first-party cdylib plugin.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: semver::Version::new(0, 1, 0),
+            api_level: crate::CORE_API_LEVEL,
+            entry_symbol: crate::plugin::PLUGIN_ENTRY_SYMBOL.into(),
+            target_triple: None,
+            description: None,
+            author: Some("shiny".into()),
+            summary: None,
+            migrations_dir: default_migrations_dir(),
+            skills_dir: default_skills_dir(),
+            web_dir: default_web_dir(),
+            signature: None,
+        }
+    }
+
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    pub fn summary(mut self, summary: impl Into<String>) -> Self {
+        self.summary = Some(summary.into());
+        self
+    }
+
+    pub fn author(mut self, author: impl Into<String>) -> Self {
+        self.author = Some(author.into());
+        self
+    }
+}
+
 fn default_migrations_dir() -> String {
     "migrations".into()
 }

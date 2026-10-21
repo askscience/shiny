@@ -71,43 +71,23 @@ pub const INTERRUPTED_NOTE: &str = "The user stopped this reply before it finish
 Treat the assistant's previous message as incomplete and possibly unread or unheard — \
 the user may restate, correct or replace their request next. Do not apologise for the \
 interruption or mention this note; just continue naturally.";
-
-/// Persist the user message and the assistant reply, touch the conversation,
-/// and set its title from the first user message when still untitled.
-pub async fn save_turn(
-    pool: &SqlitePool,
-    ai: &AiClient,
-    traveler_id: &str,
-    conversation_id: &str,
-    user_message: &str,
-    assistant_reply: &str,
-) -> Result<(), AppError> {
-    save_turn_with_note(
-        pool,
-        ai,
-        traveler_id,
-        conversation_id,
-        user_message,
-        assistant_reply,
-        None,
-        None,
-    )
-    .await
-}
-
-/// Same as [`save_turn`], plus an optional invisible `system` note describing
-/// how the turn ended (e.g. the user stopped it) and the assistant's optional
-/// reasoning trace, stored with the reply so the chat can show it again.
+/// Persist one turn in a single transaction. On the first turn the conversation
+/// gets a local title immediately (no second model call before `Done`); the
+/// caller may upgrade it in the background with [`upgrade_title`].
+///
+/// Returns the local title when this call set one, so the caller knows whether
+/// a background upgrade is useful.
 pub async fn save_turn_with_note(
     pool: &SqlitePool,
-    ai: &AiClient,
     traveler_id: &str,
     conversation_id: &str,
     user_message: &str,
     assistant_reply: &str,
     note: Option<&str>,
     assistant_thinking: Option<&str>,
-) -> Result<(), AppError> {
+) -> Result<Option<String>, AppError> {
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
     sqlx::query(
         "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
          VALUES (?1, ?2, ?3, 'user', ?4, datetime('now'))",
@@ -116,7 +96,7 @@ pub async fn save_turn_with_note(
     .bind(traveler_id)
     .bind(conversation_id)
     .bind(user_message)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(AppError::Database)?;
 
@@ -132,43 +112,87 @@ pub async fn save_turn_with_note(
         .bind(conversation_id)
         .bind(assistant_reply)
         .bind(assistant_thinking)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(AppError::Database)?;
     }
 
     if let Some(note) = note {
-        insert_note(pool, traveler_id, conversation_id, note).await?;
+        sqlx::query(
+            "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
+             VALUES (?1, ?2, ?3, 'system', ?4, datetime('now'))",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(traveler_id)
+        .bind(conversation_id)
+        .bind(note)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
     }
 
     // Title the conversation on its FIRST turn only; later turns just bump
-    // updated_at.
+    // updated_at. The local title is instant and can be upgraded later.
     let current_title: Option<String> = sqlx::query_scalar(
         "SELECT title FROM chat_conversations WHERE id = ?1",
     )
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    let is_untitled = matches!(current_title.as_deref(), None | Some("") | Some("New chat"));
-    if is_untitled {
-        let title = generate_title(ai, user_message).await;
+    let local_title = matches!(
+        current_title.as_deref(),
+        None | Some("") | Some("New chat")
+    )
+    .then(|| title_from(user_message));
+
+    if let Some(title) = &local_title {
         sqlx::query(
             "UPDATE chat_conversations SET title = ?1, updated_at = datetime('now') WHERE id = ?2",
         )
-        .bind(&title)
+        .bind(title)
         .bind(conversation_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(AppError::Database)?;
     } else {
         sqlx::query("UPDATE chat_conversations SET updated_at = datetime('now') WHERE id = ?1")
             .bind(conversation_id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(AppError::Database)?;
     }
 
+    tx.commit().await.map_err(AppError::Database)?;
+    Ok(local_title)
+}
+
+/// Replace a locally derived title with the model's three-word one, but only
+/// while the local title is still in place — a user rename must win. Runs after
+/// `Done`, so the extra model call is never on the reply path.
+pub async fn upgrade_title(
+    pool: &SqlitePool,
+    ai: &AiClient,
+    traveler_id: &str,
+    conversation_id: &str,
+    user_message: &str,
+    local_title: &str,
+) -> Result<(), AppError> {
+    let title = generate_title(ai, user_message).await;
+    if title.trim().is_empty() || title == local_title {
+        return Ok(());
+    }
+    sqlx::query(
+        "UPDATE chat_conversations SET title = ?1 \
+         WHERE id = ?2 AND traveler_id = ?3 AND title = ?4",
+    )
+    .bind(&title)
+    .bind(conversation_id)
+    .bind(traveler_id)
+    .bind(local_title)
+    .execute(pool)
+    .await
+    .map_err(AppError::Database)?;
     Ok(())
 }
 

@@ -9,17 +9,13 @@
  * and Escape close it, resize repositions it).
  */
 
-import { emptyState, setIcon, placeMenu } from '../ui/index.js';
-import { notifyMenuChange } from './menuState.js';
+import { emptyState, setIcon } from '../ui/index.js';
+import { createMenu } from './menuFactory.js';
 import { getLocale, t } from './i18n.js';
 import {
   forecastDayLabel, tempText, weatherIconStem, weatherLabel,
 } from './weatherShared.js';
 import { getWeatherError, getWeatherState, refreshWeatherNow } from './hudLeft.js';
-
-let popup = null;
-let trigger = null;
-let open = false;
 
 let headIconEl = null;
 let tempEl = null;
@@ -28,64 +24,24 @@ let metaEl = null;
 let daysEl = null;
 let emptyEl = null;
 
-export function isWeatherMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  onOpen: () => {
+    render();
+    if (!getWeatherState()) refreshWeatherNow();
+  },
+});
 
 export function openWeatherMenu(chip) {
-  trigger = chip || trigger;
-  ensurePopup();
-  open = true;
-  popup.classList.remove('hidden');
-  // Restart the entry animation: the element is reused between opens.
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-  render();
-  if (!getWeatherState()) refreshWeatherNow();
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip);
 }
 
 export function closeWeatherMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleWeatherMenu(chip) {
-  if (open) closeWeatherMenu();
-  else openWeatherMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeWeatherMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeWeatherMenu();
-  }
-}
-
-/** The weather chip sits left of the bar, so the popup hangs from its left. */
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger);
+  menu.toggle(chip);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
@@ -97,9 +53,8 @@ function el(tag, className, text) {
   return node;
 }
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup weather-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('weather.forecastTitle'));
@@ -124,7 +79,7 @@ function ensurePopup() {
   daysEl = el('div', 'weather-menu-days');
 
   popup.append(head, metaEl, emptyEl, daysEl);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 /** Swap the empty state's copy (it is built once, shown for two reasons). */
@@ -180,7 +135,7 @@ function render() {
     daysEl.appendChild(row);
   });
 
-  requestAnimationFrame(() => reposition());
+  requestAnimationFrame(() => menu.reposition());
 }
 
 export function initWeatherMenu() {
@@ -190,6 +145,6 @@ export function initWeatherMenu() {
   chip.setAttribute('aria-expanded', 'false');
   chip.addEventListener('click', () => toggleWeatherMenu(chip));
   window.addEventListener('weather:update', () => {
-    if (open) render();
+    if (menu.isOpen()) render();
   });
 }

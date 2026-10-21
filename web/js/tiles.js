@@ -17,7 +17,7 @@ import { controlButton } from '../ui/components/button.js';
  *   the desktop with desktop_fullscreen / workspace_* tools (→ `agent:actions`).
  * - Artifact cards are NOT tiles — they use the dock + travel panel as before.
  */
-import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
+import { isPluginActive, refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import { CORE_WINDOWS, isCoreWindow, coreWindowTitle } from './coreWindows.js';
 import { getPluginLayout } from './preferences.js';
 import {
@@ -26,6 +26,7 @@ import {
   focusWindow, clearFullscreen, clearFocus, getFullscreen,
   setSurfaceNamesProvider, isFocusOnlyChange, bumpZ, getWorkspacesList,
   isPluginFocused, togglePluginFocus, reconcilePluginFocus, revealWindow,
+  closeWindow as closeDesktopWindow,
 } from './desktop.js';
 import {
   toggleWindowFullscreen, enterWindowFullscreen, exitWindowFullscreen,
@@ -38,7 +39,7 @@ import {
 } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
 import { loadPluginCatalog } from './i18n.js';
-import { webAppSurface } from './webAppSurface.js';
+import { webAppSurface, forgetWebAppSurface } from './webAppSurface.js';
 
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 
@@ -48,15 +49,23 @@ const MAP_TILE_PLUGIN = 'traveler';
  * tray, workspace bar and context menu can recognise them too. */
 const coreOpen = new Set();          // built-in windows the user has open
 const coreLoading = new Map();       // name -> in-flight import promise
+/** Plugin windows open in THIS session. A plugin being enabled is not a
+ *  window: this set (seeded from the saved workspaces when "Remember my
+ *  workspace" is on, empty in a fresh session) is what puts windows on the
+ *  desktop. Closing a window removes it; deactivating a plugin does too. */
+const openWindows = new Set();
+const webApps = new Set();           // open windows whose surface is an iframe
+let catalogReady = false;            // first active-set + surface pass finished
 
 let grid = null;
 let overlay = null;
 let overlayBody = null;
 let overlayTitle = null;
 
-let pluginCatalog = new Map(); // name -> { description }
+let pluginCatalog = new Map(); // name -> { description, surface, web_app }
 let surfaceModules = new Map(); // name -> plugin.js surface module
 const surfaceUrls = new Map(); // name -> the module's URL (for catalog reloads)
+const surfaceLoads = new Map(); // name -> in-flight surface import
 
 // Switching the interface language reloads every mounted plugin's catalog, so
 // the next render of its window is already translated (open windows pick it up
@@ -74,17 +83,70 @@ function pluginLabel(name) {
   return isCoreWindow(name) ? coreWindowTitle(name) : name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-/** Which plugins currently have a window surface? */
+/** Which windows belong on the desktop right now: the open set, filtered to
+ *  the plugins that are active and have a surface. An enabled plugin with no
+ *  window is not on the desktop. */
 function surfacePlugins() {
   const out = [];
-  if (isPluginActive(MAP_TILE_PLUGIN)) out.push(MAP_TILE_PLUGIN);
+  if (openWindows.has(MAP_TILE_PLUGIN) && isPluginActive(MAP_TILE_PLUGIN)) {
+    out.push(MAP_TILE_PLUGIN);
+  }
   // Built-in windows are listed even while their module is still importing, so
   // a restored window is not pruned from its saved workspace before it mounts.
   for (const name of coreOpen) out.push(name);
-  for (const name of surfaceModules.keys()) {
-    if (!isCoreWindow(name)) out.push(name);
+  for (const name of openWindows) {
+    if (name === MAP_TILE_PLUGIN || isCoreWindow(name)) continue;
+    if (isPluginActive(name) && surfaceModules.has(name)) out.push(name);
   }
   return out;
+}
+
+/** Whether a window surface that `pluginCatalog` says is a web app exists,
+ *  recreating it after a close (closing destroys the iframe on purpose). */
+function ensureWebAppSurface(name) {
+  if (surfaceModules.has(name)) return true;
+  if (!pluginCatalog.get(name)?.web_app) return false;
+  surfaceModules.set(name, webAppSurface(name));
+  webApps.add(name);
+  return true;
+}
+
+/**
+ * Load one plugin's window surface on demand. A plugin being active is not
+ * enough: a surface is imported when its window opens (or a saved window is
+ * restored), so a session with fifteen active plugins no longer evaluates
+ * fifteen modules at boot.
+ */
+async function ensureSurface(name) {
+  if (name === MAP_TILE_PLUGIN || surfaceModules.has(name)) return true;
+  if (surfaceLoads.has(name)) return surfaceLoads.get(name);
+  const meta = pluginCatalog.get(name);
+  if (!meta || (!meta.surface && !meta.web_app)) return false;
+
+  const load = (async () => {
+    if (meta.web_app) return ensureWebAppSurface(name);
+    try {
+      // Relative on purpose: a module specifier resolves against the module's
+      // URL, and the app can be served through the filtering proxy (the
+      // kiosk), where the module URL lives under `/p/…`.
+      const moduleUrl = new URL(`../plugins/${name}/plugin.js`, import.meta.url);
+      await loadPluginCatalog(moduleUrl);
+      const mod = await import(moduleUrl.href);
+      surfaceModules.set(name, mod.default || mod);
+      surfaceUrls.set(name, moduleUrl);
+      surfaceModules.get(name)?.wireEvents?.();
+      return true;
+    } catch (err) {
+      console.warn(`plugin surface '${name}' failed to load`, err);
+      return false;
+    }
+  })();
+  surfaceLoads.set(name, load);
+  try {
+    return await load;
+  } finally {
+    surfaceLoads.delete(name);
+  }
 }
 
 /** Load (once) the module backing a built-in window. */
@@ -153,20 +215,19 @@ export function closeCoreWindow(name) {
  * Refresh the plugin catalog AND dynamically load/unload each enabled
  * plugin's window surface (its `web/plugin.js`, served at /plugins/<name>/).
  */
-async function refreshCatalog() {
+async function refreshCatalog(force = false) {
   // Which plugins are active THIS session (fresh mode → empty). This, not the
   // persisted `enabled` flag from /api/plugins, decides which window surfaces
   // get loaded — so a fresh sign-in never mounts plugin windows.
-  const activeSet = await refreshActivePlugins();
-
-  let plugins = [];
-  try {
-    const res = await apiFetch('/api/plugins');
-    plugins = res?.data || [];
-    pluginCatalog = new Map(
-      plugins.map((p) => [p.name, { description: p.description || p.summary || '' }]),
-    );
-  } catch (_) { /* keep last catalog */ }
+  const activeSet = await refreshActivePlugins({ force });
+  const plugins = await refreshPluginCatalog({ force });
+  pluginCatalog = new Map(
+    plugins.map((p) => [p.name, {
+      description: p.description || p.summary || '',
+      surface: !!p.surface,
+      web_app: !!p.web_app,
+    }]),
+  );
 
   const wanted = new Set(
     plugins
@@ -176,32 +237,11 @@ async function refreshCatalog() {
   let wiredAny = false;
   for (const p of plugins) {
     if (!activeSet.has(p.name) || surfaceModules.has(p.name)) continue;
-    // A web-app plugin is a static site rather than a module: mount it in an
-    // iframe. No `plugin.js` to import and no plugin catalogue to load (the
-    // app brings its own UI and its own translations).
-    if (p.web_app) {
-      surfaceModules.set(p.name, webAppSurface(p.name));
-      continue;
-    }
-    if (!p.surface) continue;
-    try {
-      // Relative on purpose: a module specifier resolves against the
-      // *module's* URL, and the app can be served through the filtering
-      // proxy (the kiosk), where the module URL lives under `/p/…`.
-      // A root-absolute `/plugins/…` would resolve to the proxy origin
-      // instead of the app and the window would never mount (kiosk bug).
-      const moduleUrl = new URL(`../plugins/${p.name}/plugin.js`, import.meta.url);
-      // The plugin's translations first, so strings resolved while the
-      // module graph evaluates are already in the user's language.
-      await loadPluginCatalog(moduleUrl);
-      const mod = await import(moduleUrl.href);
-      surfaceModules.set(p.name, mod.default || mod);
-      surfaceUrls.set(p.name, moduleUrl);
-      surfaceModules.get(p.name)?.wireEvents?.();
-      wiredAny = true;
-    } catch (err) {
-      console.warn(`plugin surface '${p.name}' failed to load`, err);
-    }
+    // Only windows that exist (open now or restored from a saved workspace)
+    // need a surface. Active-but-closed plugins stay as catalog metadata.
+    if (!openWindows.has(p.name)) continue;
+    if (!p.surface && !p.web_app) continue;
+    if (await ensureSurface(p.name)) wiredAny = true;
   }
   // A surface activated in the same agent response as its tool call would
   // otherwise miss the `agent:actions` dispatch (wired after it fired) —
@@ -214,11 +254,29 @@ async function refreshCatalog() {
     if (isCoreWindow(name)) continue;
     if (!wanted.has(name)) {
       surfaceModules.get(name)?.unmount?.();
+      // A web app's unmount is a no-op: its iframe and control stream live in
+      // webAppSurface's cache, so dropping the surface without forgetting it
+      // would leave the app running off screen (and a later activation would
+      // resurrect the stale frame).
+      if (webApps.has(name)) forgetWebAppSurface(name);
       surfaceModules.delete(name);
+      webApps.delete(name);
+    }
+  }
+  // A window only lives while its plugin is active and has a surface. A
+  // deactivation (or an uninstalled plugin) takes its saved window with it.
+  for (const name of [...openWindows]) {
+    if (name === MAP_TILE_PLUGIN) {
+      if (!isPluginActive(name)) openWindows.delete(name);
+    } else if (!isCoreWindow(name)
+      && !surfaceModules.has(name)
+      && !surfaceLoads.has(name)) {
+      openWindows.delete(name);
     }
   }
   // Built-in windows behave like plugin surfaces once open.
   await Promise.all([...coreOpen].map((name) => ensureCoreSurface(name)));
+  catalogReady = true;
 }
 
 /* ── Map tile (traveler plugin window) ─────────────────────── */
@@ -291,8 +349,9 @@ function scheduleMapGlow(view) {
   mapGlowTimer = window.setTimeout(() => void sampleMapGlow(view), 250);
 }
 
-/** Remove the map tile from the grid (traveler deactivated). */
+/** Remove the map tile from the grid (traveler deactivated or uninstalled). */
 function unmountMapTile() {
+  openWindows.delete(MAP_TILE_PLUGIN);
   mapTileEl?.remove();
   mapTileEl = null;
   mapRimEl = null;
@@ -317,8 +376,10 @@ function elementForTile(name) {
   return surfaceModules.get(name)?.mount?.() || null;
 }
 
-/** Deactivate a plugin — the close icon on its window. Mirrors the Plugins
- *  page so the desktop, map and surfaces all refresh together. */
+/** Deactivate a plugin (Plugins page, context/tray menus, AI). This is not the
+ *  window's close button: it turns the plugin off for the session and its
+ *  window goes with it. Mirrors the Plugins page so the desktop, map and
+ *  surfaces all refresh together. */
 export async function deactivatePlugin(name) {
   try {
     await apiFetch('/api/plugins/deactivate', {
@@ -353,6 +414,77 @@ export async function activatePlugin(name) {
   window.dispatchEvent(new CustomEvent('plugins:changed', { detail: { opened: name } }));
 }
 
+/** Put a plugin's window on the desktop, if its plugin is active and has a
+ *  surface. Opening a window is not activation: a plugin that was activated
+ *  earlier (or is active by default with "remember" on) can be opened and
+ *  closed without touching its enabled state. `focus` makes it the active
+ *  window; without it the window is raised but the accent stays put. */
+export async function openPluginWindow(name, { focus = false } = {}) {
+  if (!name) return false;
+  if (isCoreWindow(name)) {
+    openCoreWindow(name);
+    return true;
+  }
+  if (!isPluginActive(name)) return false;
+
+  if (name !== MAP_TILE_PLUGIN) {
+    if (!pluginCatalog.has(name)) await refreshCatalog();
+    const meta = pluginCatalog.get(name);
+    if (!meta || (!meta.surface && !meta.web_app)) return false;
+    openWindows.add(name);
+    if (!await ensureSurface(name)) {
+      openWindows.delete(name);
+      return false;
+    }
+  } else {
+    openWindows.add(name);
+  }
+
+  renderTiles();
+  if (focus) focusPlugin(name);
+  else revealPlugin(name);
+  return true;
+}
+
+/** Close a plugin's window — a real close, not a deactivation. The plugin stays
+ *  enabled, so its tools keep working and the tray can reopen it; the window's
+ *  surface is torn down (playback stops, a web app's iframe and control stream
+ *  are destroyed) and the server is told to release whatever the window kept
+ *  alive (a Craft app's MCP process). */
+export function closePluginWindow(name) {
+  if (!name) return;
+  if (isCoreWindow(name)) {
+    closeCoreWindow(name);
+    return;
+  }
+  if (!openWindows.has(name)) return;
+  openWindows.delete(name);
+  if (fullscreenWindow() === name) exitWindowFullscreen();
+  if (name !== MAP_TILE_PLUGIN) {
+    if (webApps.has(name)) {
+      // Drop the frame entirely: a closed app must not keep running off
+      // screen. Reopening builds a fresh surface.
+      forgetWebAppSurface(name);
+      surfaceModules.delete(name);
+      webApps.delete(name);
+    } else {
+      // Native surfaces tear their tile down; the module itself stays cached
+      // (ES modules are singletons), and mount() rebuilds the window.
+      surfaceModules.get(name)?.unmount?.();
+    }
+  }
+  // Take it out of the saved arrangement too (a no-op in fresh mode, where
+  // nothing is persisted). That render also re-tiles the remaining windows.
+  if (!closeDesktopWindow(name)) renderTiles();
+  // Craft apps: stop the MCP engine now and gracefully instead of waiting for
+  // the next agent turn. No-op for every other plugin.
+  void apiFetch('/api/plugins/window/closed', {
+    method: 'POST',
+    authRedirect: false,
+    body: JSON.stringify({ name }),
+  }).catch(() => { /* the next agent turn reconciles the process either way */ });
+}
+
 /** The loaded window-surface module for a plugin (or undefined). Used by the
  *  context menu to collect the app's own `contextMenu()` entries. */
 export function getPluginSurface(name) {
@@ -360,8 +492,15 @@ export function getPluginSurface(name) {
 }
 
 /** The mounted window element for a plugin (the map counts as traveler's), or
- *  null when the plugin has no window / is not mounted yet. */
+ *  null when the plugin has no window / is not mounted yet. An element that is
+ *  merely cached after a close does not count: the window is not on the
+ *  desktop. */
 export function getPluginTile(name) {
+  if (isCoreWindow(name)) {
+    if (!coreOpen.has(name)) return null;
+  } else if (!openWindows.has(name)) {
+    return null;
+  }
   if (name === MAP_TILE_PLUGIN) return mapTileEl;
   return surfaceModules.get(name)?.getElement?.() || null;
 }
@@ -393,13 +532,13 @@ function ensureWindowChrome(el, name) {
   const closeBtn = controlButton();
   closeBtn.type = 'button';
   closeBtn.className = 'tile-header-btn tile-header-btn--close';
-  closeBtn.title = core ? 'Close' : 'Deactivate plugin';
-  closeBtn.setAttribute('aria-label', core ? `Close ${pluginLabel(name)}` : `Deactivate ${pluginLabel(name)}`);
+  closeBtn.title = 'Close';
+  closeBtn.setAttribute('aria-label', `Close ${pluginLabel(name)}`);
   closeBtn.appendChild(icon('ui/close', { size: 14 }));
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (core) closeCoreWindow(name);
-    else void deactivatePlugin(name);
+    else closePluginWindow(name);
   });
 
   const fullBtn = controlButton();
@@ -509,12 +648,13 @@ function renderTiles() {
 
   // Names appearing for the first time are windows being opened now.
   const opening = names.filter((n) => !mountedNames.has(n));
-  ensureWindows(names);
-  // A focused plugin whose window is gone (deactivated, or a stale saved entry)
-  // leaves focus mode here, where the window list is authoritative. Skipped
-  // while the list is still empty on the first render — pruning against that
-  // would wipe the restored focus set before the plugin set has loaded.
-  if (names.length) reconcilePluginFocus(names);
+  // Before the active set and the surface modules have loaded, the saved
+  // window list is not authoritative: pruning against a half-loaded set would
+  // wipe the restored workspaces. The first catalog pass turns this on.
+  if (catalogReady) ensureWindows(names);
+  // A focused plugin whose window is gone (closed, deactivated, or a stale
+  // saved entry) leaves focus mode here, where the window list is authoritative.
+  if (catalogReady) reconcilePluginFocus(names);
 
   // Give a window being opened the top of the stacking order *before* the
   // layout applies it, so one pass is enough.
@@ -598,6 +738,11 @@ function renderTiles() {
   // NOT focused. Focus mode is the user's explicit choice — the eye button, the
   // tray menu, or the AI — so a new window never enters it, never takes the
   // accent from the window being worked on, and never narrows the AI's skills.
+
+  // The window set changed (opened, closed, activated, deactivated). Chrome
+  // that follows a window rather than its plugin — the map's vignette, puck,
+  // trips HUD and GPS — listens to this, after the tiles have been re-laid out.
+  window.dispatchEvent(new CustomEvent('windows:changed', { detail: { names: [...names] } }));
 }
 
 /** Slide the visible windows into place after a workspace switch, coming from
@@ -786,12 +931,14 @@ export function initTileManager() {
   setSurfaceNamesProvider(() => surfacePlugins());
   setFullscreenSurfaceProvider(() => surfacePlugins());
 
-  mountMapTile();
-
-  // Reopen the built-in windows that were part of the saved workspace.
+  // Restore the windows the user left open. In fresh mode there is no saved
+  // workspace (preferences.js returns nothing when "remember" is off), so the
+  // set stays empty and the session starts with a clean desktop. Being
+  // active/enabled alone never opens a window.
   for (const ws of getWorkspacesList()) {
     for (const name of ws.windows || []) {
       if (isCoreWindow(name)) coreOpen.add(name);
+      else openWindows.add(name);
     }
   }
 
@@ -853,18 +1000,20 @@ export function initTileManager() {
 
   window.addEventListener('plugin:focus', (e) => {
     const name = e.detail?.name;
-    if (name) focusPlugin(name);
+    if (name) void openPluginWindow(name, { focus: true });
   });
   window.addEventListener('plugins:changed', async (e) => {
-    await refreshActivePlugins();
-    await refreshCatalog();
+    await refreshCatalog(true);
     if (!isPluginActive(MAP_TILE_PLUGIN)) unmountMapTile();
     if (!surfacePlugins().includes(activePhonePlugin)) activePhonePlugin = null;
     renderTiles();
-    // A plugin just opened from the tray — show its window. It is raised but
-    // not focused: neither the active window nor focus mode changes on an open.
+    // A plugin just opened from the tray, launcher, Plugins page or the AI —
+    // show its window. It is raised but not focused: neither the active window
+    // nor focus mode changes on an open.
     const opened = e.detail?.opened;
-    if (opened) revealPlugin(opened);
+    for (const name of (Array.isArray(opened) ? opened : (opened ? [opened] : []))) {
+      void openPluginWindow(name);
+    }
   });
 }
 

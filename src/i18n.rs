@@ -17,7 +17,9 @@
 //! English catalogue, including `{placeholder}` templates.
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 use axum::http::{header, HeaderMap};
 
@@ -25,6 +27,44 @@ static WEB_DIR: OnceLock<String> = OnceLock::new();
 static PLUGINS_DIR: OnceLock<String> = OnceLock::new();
 static CATALOGUES: OnceLock<HashMap<String, HashMap<String, String>>> = OnceLock::new();
 static PATTERNS: OnceLock<Patterns> = OnceLock::new();
+
+/// Parsed plugin catalogues, keyed by file and invalidated by mtime. The
+/// plugin metadata endpoint used to read and parse the same JSON once per
+/// field (three fields, two locale fallbacks) for every plugin.
+type PluginCatalogues = HashMap<PathBuf, (Option<SystemTime>, serde_json::Value)>;
+static PLUGIN_CATALOGUES: OnceLock<Mutex<PluginCatalogues>> = OnceLock::new();
+
+fn plugin_catalogue_value(path: &Path, key: &str) -> Option<String> {
+    let modified = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    let cache = PLUGIN_CATALOGUES.get_or_init(|| Mutex::new(HashMap::new()));
+
+    if let Ok(guard) = cache.lock() {
+        if let Some((cached_at, value)) = guard.get(path) {
+            if *cached_at == modified {
+                return value.get(key).and_then(|v| v.as_str()).map(str::to_string);
+            }
+        }
+    }
+
+    let text = std::fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let result = value.get(key).and_then(|v| v.as_str()).map(str::to_string);
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(path.to_path_buf(), (modified, value));
+    }
+    result
+}
+
+/// Drop the parsed plugin catalogues after a plugin install/uninstall. The
+/// mtime check covers ordinary edits; this covers a replacement that keeps the
+/// same timestamp.
+pub fn clear_plugin_meta_cache() {
+    if let Some(cache) = PLUGIN_CATALOGUES.get() {
+        if let Ok(mut guard) = cache.lock() {
+            guard.clear();
+        }
+    }
+}
 
 /// Remember where the catalogues live (the served UI dir and the installed
 /// plugins dir). Called once at startup.
@@ -286,13 +326,8 @@ pub fn plugin_meta(
     let base = locale.split(['-', '_']).next().unwrap_or("en").to_string();
     for code in [locale.as_str(), base.as_str()] {
         let path = web_dir.join("i18n").join(format!("{code}.json"));
-        let Ok(text) = std::fs::read_to_string(&path) else { continue };
-        let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(&text)
-        else {
-            continue;
-        };
-        if let Some(serde_json::Value::String(value)) = map.get(&key) {
-            return Some(value.clone());
+        if let Some(value) = plugin_catalogue_value(&path, &key) {
+            return Some(value);
         }
     }
     fallback

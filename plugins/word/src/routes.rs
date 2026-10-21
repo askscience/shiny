@@ -8,15 +8,16 @@ use std::sync::Arc;
 
 use axum::extract::{FromRequest, FromRequestParts, Multipart};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
+use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title};
 use shiny_plugin_sdk::odt;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request, path_params_from_request};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, path_params_from_request, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 const MIME_ODT: &str = "application/vnd.oasis.opendocument.text";
@@ -38,39 +39,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Json) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-fn clean_title(t: &str) -> String {
-    let t = t.trim();
-    if t.is_empty() { "Untitled".into() } else { t.chars().take(120).collect() }
-}
-
-fn filename_for_title(t: &str) -> String {
-    let clean: String = t
-        .chars()
-        .map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.') { c } else { '-' })
-        .collect();
-    let clean = clean.trim().trim_matches('.').to_string();
-    let clean = if clean.is_empty() { "document".to_string() } else { clean };
-    format!("{clean}.odt")
-}
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_blob(v: &Value) -> Vec<u8> {
     match v {
         Value::Blob(b) => b.clone(),
@@ -244,7 +212,7 @@ fn doc_export(ctx: Arc<PluginCtx>) -> RouteHandler {
             let row = rows.first().ok_or_else(|| AppError::NotFound("Document not found".into()))?;
             let title = as_text(&row[0]);
             let bytes = as_blob(&row[1]);
-            let filename = filename_for_title(&title);
+            let filename = filename_for_title(&title, "odt", "document");
             Ok(Response::builder()
                 .header(CONTENT_TYPE, MIME_ODT)
                 .header(CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", filename.replace('"', "")))

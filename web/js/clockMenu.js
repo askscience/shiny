@@ -11,8 +11,8 @@
  */
 
 import { apiFetch } from './api.js';
-import { button, emptyState, iconButton, placeMenu } from '../ui/index.js';
-import { notifyMenuChange } from './menuState.js';
+import { button, emptyState, iconButton } from '../ui/index.js';
+import { createMenu } from './menuFactory.js';
 import { getLocale, t, tp } from './i18n.js';
 import {
   buildMonthCells, formatEventTime, formatLocationTime, groupEventsByDate,
@@ -22,10 +22,6 @@ import { getWeatherState } from './hudLeft.js';
 import { openPlugin } from './hudPlugins.js';
 
 const CALENDAR_PLUGIN = 'calendar';
-
-let popup = null;
-let trigger = null;
-let open = false;
 
 /* Viewed month (month is 0-based) and the selected day ("YYYY-MM-DD"). */
 let viewYear = 0;
@@ -48,85 +44,44 @@ let gridEl = null;
 let dayHeadEl = null;
 let eventsEl = null;
 
-export function isClockMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  onOpen: () => {
+    const today = new Date();
+    if (followToday || !selectedDate) {
+      selectedDate = isoDate(today);
+      viewYear = today.getFullYear();
+      viewMonth = today.getMonth();
+    }
+
+    renderClock();
+    renderCalendar();
+    void loadMonth();
+
+    if (!tickTimer) tickTimer = setInterval(renderClock, 1000);
+  },
+  onClose: () => {
+    if (tickTimer) clearInterval(tickTimer);
+    tickTimer = null;
+  },
+});
 
 export function openClockMenu(chip) {
-  trigger = chip || trigger;
-  ensurePopup();
-
-  const today = new Date();
-  if (followToday || !selectedDate) {
-    selectedDate = isoDate(today);
-    viewYear = today.getFullYear();
-    viewMonth = today.getMonth();
-  }
-
-  open = true;
-  popup.classList.remove('hidden');
-  // Restart the entry animation: the element is reused between opens.
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-
-  renderClock();
-  renderCalendar();
-  void loadMonth();
-
-  if (!tickTimer) tickTimer = setInterval(renderClock, 1000);
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip);
 }
 
 export function closeClockMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  if (tickTimer) clearInterval(tickTimer);
-  tickTimer = null;
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleClockMenu(chip) {
-  if (open) closeClockMenu();
-  else openClockMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeClockMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeClockMenu();
-  }
-}
-
-/** The clock sits left of the bar, so the popup hangs from its left edge. */
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger);
+  menu.toggle(chip);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup clock-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('hud.timeCalendar'));
@@ -191,7 +146,7 @@ function ensurePopup() {
   }));
 
   popup.append(head, timeEl, weekdaysEl, gridEl, detail, actions);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 function el(tag, className, text) {
@@ -308,18 +263,18 @@ function stepMonth(delta) {
 }
 
 async function loadMonth() {
-  if (!open) return;
+  if (!menu.isOpen()) return;
   const token = ++fetchToken;
   try {
     const res = await apiFetch(
       `/api/calendar/events?month=${encodeURIComponent(monthKey(viewYear, viewMonth))}&limit=1000`,
       { authRedirect: false },
     );
-    if (token !== fetchToken || !open) return;
+    if (token !== fetchToken || !menu.isOpen()) return;
     eventsByDate = groupEventsByDate(res?.data?.events || []);
     monthState = 'ready';
   } catch (err) {
-    if (token !== fetchToken || !open) return;
+    if (token !== fetchToken || !menu.isOpen()) return;
     eventsByDate = new Map();
     // No route at all means the plugin is not installed/loaded.
     monthState = err?.status === 404 ? 'missing' : 'error';
@@ -335,6 +290,6 @@ export function initClockMenu() {
   chip.addEventListener('click', () => toggleClockMenu(chip));
   // The zone can arrive (or move) while the popover is open.
   window.addEventListener('weather:update', () => {
-    if (open) renderClock();
+    if (menu.isOpen()) renderClock();
   });
 }

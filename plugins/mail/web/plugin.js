@@ -1,6 +1,6 @@
 import {
-  searchBar, menuSurface, menuItem, confirmDialog, menuButton, toolbar, element as h, input as uiInput,
-  toolButton, placePopover, controlButton, button, emptyState, field, icon, input, modal, notify,
+  searchBar, menuSurface, menuItem, confirmDialog, menuButton, toolbar, element as h,
+  toolButton, placePopover, button, emptyState, field, icon, input, modal, notify,
   select, textarea, toast, setTileGlow, glowGradient, setIcon,
 } from '../../ui/index.js';
 
@@ -194,13 +194,6 @@ function testAccount(payload) {
   });
 }
 
-function updateAccount(id, payload) {
-  return api(`/api/mail/accounts/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
 function deleteAccount(id) {
   return api(`/api/mail/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
@@ -209,10 +202,6 @@ function deleteAccount(id) {
 
 function verifiedAccounts() {
   return accounts.filter((a) => a.verified);
-}
-
-function accountById(id) {
-  return accounts.find((a) => a.id === id) || null;
 }
 
 function pickAccount() {
@@ -1044,6 +1033,7 @@ function totalUnread(folderList) {
 }
 
 async function checkNewMail() {
+  if (document.hidden) return;
   const account = pickAccount();
   if (!account || !configured) return;
   try {

@@ -19,7 +19,7 @@
  *   await setIcon(existingEl, 'artifacts/route');
  */
 
-import { getActiveTheme, themeUrl } from './theme-loader.js';
+import { getActiveTheme, getThemeManifest, themeUrl } from './theme-loader.js';
 import { getActiveIconset, setHas, paletteFor, tintEnabled } from './iconset-loader.js';
 import { cssVar, hexToRgb } from './appearance.js';
 
@@ -100,6 +100,10 @@ async function fetchSvg(url) {
 function loadSvg(name) {
   const set = getActiveIconset() || 'base';
   const theme = getActiveTheme();
+  // `theme.json` declares whether the theme overrides any glyphs. Most themes
+  // (including the default pitch) do not; without this check every icon pays a
+  // 404 for `/themes/<theme>/icons/...` before falling back to the base set.
+  const themeShipsIcons = getThemeManifest()?.icons;
   const key = `${set}:${theme}:${name}`;
   if (!cache.has(key)) {
     cache.set(
@@ -109,8 +113,10 @@ function loadSvg(name) {
           return fetchSvg(`/ui/iconsets/${set}/${name}.svg`);
         }
         // Theme override first, then the unified base icon set.
-        const svg = (await fetchSvg(themeUrl(`icons/${name}.svg`)))
-          || (await fetchSvg(`/ui/icons/${name}.svg`));
+        const themeSvg = themeShipsIcons === false
+          ? null
+          : await fetchSvg(themeUrl(`icons/${name}.svg`));
+        const svg = themeSvg || (await fetchSvg(`/ui/icons/${name}.svg`));
         if (svg) return svg;
         const alias = ALIASES[name];
         return alias ? loadSvg(alias) : null;

@@ -11,21 +11,15 @@
  * `install` is called once per page load; `uninstall` when the plugin is
  * uninstalled. The plugin owns its DOM.
  */
-import { apiFetch } from './api.js';
+import { refreshPluginCatalog } from './activePlugins.js';
 import { loadPluginCatalog } from './i18n.js';
 
 const modules = new Map(); // plugin name -> hud module
 const hudUrls = new Map(); // plugin name -> the module's URL (for catalog reloads)
 let started = false;
 
-async function refresh() {
-  let plugins = [];
-  try {
-    const res = await apiFetch('/api/plugins');
-    plugins = res?.data || [];
-  } catch (_) {
-    return; // keep whatever is already mounted on a transient error
-  }
+async function refresh(force = false) {
+  const plugins = await refreshPluginCatalog({ force });
   const installed = new Set(plugins.filter((p) => p.hud).map((p) => p.name));
 
   // Remove chips for plugins that are gone.
@@ -64,8 +58,8 @@ export function initPluginHud() {
   void refresh();
   if (started) return;
   started = true;
-  window.addEventListener('plugins:changed', () => void refresh());
+  window.addEventListener('plugins:changed', () => void refresh(true));
   window.addEventListener('storage', (e) => {
-    if (e.key === 'plugins.changed') void refresh();
+    if (e.key === 'plugins.changed') void refresh(true);
   });
 }

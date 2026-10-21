@@ -111,6 +111,36 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Deactivate a plugin the way the current session mode remembers it.
+    /// With `session.remember` on this writes the persistent `enabled = 0`
+    /// row (the user's explicit "off"). In fresh mode there is nothing to
+    /// remember across sign-ins, so it drops the session activation instead —
+    /// a fresh-session choice must not turn into a persistent disable later.
+    pub async fn deactivate_for(&self, user_id: &str, plugin_name: &str) -> Result<(), AppError> {
+        if self.session_remember(user_id).await {
+            return self.set_enabled_for(user_id, plugin_name, false).await;
+        }
+        sqlx::query(
+            "DELETE FROM user_plugin_states WHERE user_id = ?1 AND plugin_name = ?2",
+        )
+        .bind(user_id)
+        .bind(plugin_name)
+        .execute(&self.inner.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Start a clean session: drop every explicit activation a previous fresh
+    /// session left behind. `enabled = 0` rows are remember-mode choices and are
+    /// left alone — fresh mode never reads them.
+    pub async fn reset_session_activations(&self, user_id: &str) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM user_plugin_states WHERE user_id = ?1 AND enabled = 1")
+            .bind(user_id)
+            .execute(&self.inner.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Read the user's `session.remember` preference (default false). This one
     /// switch decides whether a sign-in resumes the saved workspace (plugins,
     /// windows, layout) or starts fresh (core assistant only, empty desktop).

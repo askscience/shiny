@@ -1,16 +1,14 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
-    routes::{HttpMethod, RouteHandler, RouteSpec},
+    plugin::Plugin,
+    routes::{RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
 
-pub struct ImpressPlugin {
-    ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(ImpressPlugin);
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str =
@@ -18,13 +16,13 @@ pub const PERSONA: &str =
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
-        RouteSpec { method: HttpMethod::Get, path: "/api/presentations".into(), auth: "auth".into(), handler_tag: "deck_list".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/presentations".into(), auth: "auth".into(), handler_tag: "deck_create".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/presentations/import".into(), auth: "auth".into(), handler_tag: "deck_import".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/presentations/:id".into(), auth: "auth".into(), handler_tag: "deck_get".into() },
-        RouteSpec { method: HttpMethod::Put, path: "/api/presentations/:id".into(), auth: "auth".into(), handler_tag: "deck_save".into() },
-        RouteSpec { method: HttpMethod::Delete, path: "/api/presentations/:id".into(), auth: "auth".into(), handler_tag: "deck_delete".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/presentations/:id/export".into(), auth: "auth".into(), handler_tag: "deck_export".into() },
+        RouteSpec::get("/api/presentations", "deck_list"),
+        RouteSpec::post("/api/presentations", "deck_create"),
+        RouteSpec::post("/api/presentations/import", "deck_import"),
+        RouteSpec::get("/api/presentations/:id", "deck_get"),
+        RouteSpec::put("/api/presentations/:id", "deck_save"),
+        RouteSpec::delete("/api/presentations/:id", "deck_delete"),
+        RouteSpec::get("/api/presentations/:id/export", "deck_export"),
     ]
 }
 
@@ -32,55 +30,33 @@ fn route_specs() -> Vec<RouteSpec> {
 impl Plugin for ImpressPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "impress".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "Presentation builder — decks stored as slides, exported as open .odp files".into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some("Impress: build, edit and present OpenDocument (.odp) slide decks".into()),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("impress")
+                .description("Presentation builder — decks stored as slides, exported as open .odp files")
+                .summary("Impress: build, edit and present OpenDocument (.odp) slide decks")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/impress.md"))
             .context_line(
                 "Impress: enabled — the Impress window edits slide decks stored as open .odp files.",
             );
-        for spec in route_specs() {
-            builder.route(spec);
-        }
-        for tool in [
+        builder.routes(route_specs());
+        builder.tools([
             Arc::new(crate::tools::SlideCreate) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::SlideWrite) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::SlideEdit) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::SlideRead) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::SlideList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-            Arc::new(crate::tools::SlideDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-        ] {
-            builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
-        }
+            Arc::new(crate::tools::SlideDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
 }
 
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(ImpressPlugin { ctx: OnceLock::new() }))
-}

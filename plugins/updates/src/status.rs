@@ -25,6 +25,17 @@ fn cache() -> &'static Mutex<Option<Cache>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
+/// Whether a collected snapshot is already available. Used by the route to
+/// decide whether the first collection can run on the blocking pool while the
+/// plugin's serial worker stays responsive.
+pub fn has_cache() -> bool {
+    cache()
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().map(|_| true))
+        .unwrap_or(false)
+}
+
 fn cached_fresh() -> Option<UpdateStatus> {
     let guard = cache().lock().ok()?;
     let entry = guard.as_ref()?;
@@ -108,12 +119,6 @@ pub fn snapshot() -> UpdateStatus {
     // No cache yet: one synchronous collect so the first caller gets real data.
     collect(true)
 }
-
-/// Kick off a background refresh (deduplicated).
-pub fn request_refresh() {
-    spawn_refresh();
-}
-
 fn spawn_refresh() {
     if REFRESHING.swap(true, Ordering::SeqCst) {
         return;

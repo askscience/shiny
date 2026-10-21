@@ -14,8 +14,8 @@ import { controlButton } from '../ui/components/button.js';
  */
 
 import { apiFetch } from './api.js';
-import { button, emptyState, icon, modal, setIcon, toast, placeMenu } from '../ui/index.js';
-import { notifyMenuChange } from './menuState.js';
+import { button, emptyState, icon, modal, setIcon, toast } from '../ui/index.js';
+import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-power');
@@ -65,79 +65,39 @@ const ACTIONS = [
   },
 ];
 
-let popup = null;
 let body = null;
 let status = null;
-let open = false;
-let trigger = null;
 /** id of the action in flight, so the menu can lock while it runs. */
 let busy = null;
 
 /* ── Open / close ──────────────────────────────────────────── */
 
-export function isPowerMenuOpen() {
-  return open;
-}
+const menu = createMenu({
+  build: buildPopup,
+  align: 'right',
+  minHeight: 180,
+  onOpen: () => {
+    render();
+    void refresh();
+  },
+});
 
 export function openPowerMenu(chip) {
-  trigger = chip || trigger;
-  ensurePopup();
-  open = true;
-  popup.classList.remove('hidden');
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-  render();
-  void refresh();
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip);
 }
 
 export function closePowerMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function togglePowerMenu(chip) {
-  if (open) closePowerMenu();
-  else openPowerMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closePowerMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closePowerMenu();
-  }
-}
-
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger, { align: 'right', minHeight: 180 });
+  menu.toggle(chip);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup power-menu hidden';
   popup.setAttribute('role', 'menu');
   popup.setAttribute('aria-label', t('hud.power'));
@@ -150,7 +110,7 @@ function ensurePopup() {
   body.className = 'power-menu-body';
 
   popup.append(head, body);
-  document.body.appendChild(popup);
+  return popup;
 }
 
 function el(tag, className, text) {
@@ -163,7 +123,7 @@ function el(tag, className, text) {
 /* ── Data ──────────────────────────────────────────────────── */
 
 async function refresh() {
-  if (!open) return;
+  if (!menu.isOpen()) return;
   try {
     const res = await apiFetch('/api/power/status', { authRedirect: false });
     status = res?.data || null;
@@ -206,7 +166,7 @@ function render() {
   }
 
   for (const action of ACTIONS) body.appendChild(actionRow(action));
-  requestAnimationFrame(() => reposition());
+  requestAnimationFrame(() => menu.reposition());
 }
 
 function actionRow(action) {

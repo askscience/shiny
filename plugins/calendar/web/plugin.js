@@ -1,6 +1,6 @@
 import {
   confirmDialog, controlButton, button, emptyState, field, input, modal, notify, textarea, toast,
-  toggleRow, setTileGlow, glowGradient, setIcon,
+  toggleRow, setTileGlow, glowGradient,
 } from '../../ui/index.js';
 /**
  * calendar.js — the Calendar plugin's window (month grid + day detail).
@@ -412,6 +412,7 @@ function eventStartMs(ev) {
 }
 
 async function checkUpcomingEvents() {
+  if (document.hidden) return;
   try {
     const now = new Date();
     const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;

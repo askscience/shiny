@@ -1,6 +1,6 @@
 import {
   menuSurface, menuItem, confirmDialog, menuButton, toolbar, input as uiInput, toolButton,
-  placePopover, controlButton, icon, button, emptyState, toast, select, setTileGlow,
+  icon, button, toast, select, setTileGlow,
   setTileGlowFromUrl, glowGradient, fontStackFor, setIcon,
 } from '../../ui/index.js';
 
@@ -18,6 +18,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
+import { formatMenuDate, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
 import { listFonts } from '../../js/fonts.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
@@ -252,7 +253,7 @@ function renderDocMenuItems() {
       title.textContent = doc.title;
       const time = document.createElement('span');
       time.className = 'word-doc-menu-time';
-      time.textContent = formatWhen(doc.updated_at);
+      time.textContent = formatMenuDate(doc.updated_at);
       const check = document.createElement('span');
       check.className = 'word-doc-menu-check';
       item.append(title, time, check);
@@ -268,52 +269,23 @@ function renderDocMenuItems() {
 
   // Actions footer: new / import / export / delete. The compact window
   // layout hides these from the toolbar — the menu is their home.
-  const foot = document.createElement('div');
-  foot.className = 'word-doc-menu-foot';
-  const footItem = (iconName, label, danger, onClick) => {
-    const item = menuItem({ className: 'word-doc-menu-item' });
-    if (danger) item.classList.add('word-doc-menu-item--danger');
-    item.setAttribute('role', 'menuitem');
-    const ic = document.createElement('span');
-    ic.className = 'word-doc-menu-foot-icon';
-    item.appendChild(ic);
-    void setIcon(ic, iconName, { size: 14 });
-    const labelEl = document.createElement('span');
-    labelEl.className = 'word-doc-menu-title';
-    labelEl.textContent = label;
-    item.appendChild(labelEl);
-    item.addEventListener('click', () => {
-      closeDocMenu();
-      onClick();
-    });
-    foot.appendChild(item);
-  };
-  footItem('ui/plus', t('plugin.word.menu.newDocument', null, 'New document'), false, () => void newDocument());
-  footItem('ui/download', t('plugin.word.menu.importOdt', null, 'Import .odt'), false, pickOdtFile);
-  footItem('ui/save', t('plugin.word.menu.saveToDocuments', null, 'Save to Documents'), false, () => void exportCurrent());
-  footItem('ui/trash', t('plugin.word.menu.deleteDocument', null, 'Delete document'), true, () => void removeCurrent());
-  docMenuPopup.appendChild(foot);
-}
-
-function formatWhen(iso) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch (_) {
-    return '';
-  }
+  appendMenuFooter(docMenuPopup, {
+    prefix: 'word-doc',
+    close: closeDocMenu,
+    items: [
+      { icon: 'ui/plus', label: t('plugin.word.menu.newDocument', null, 'New document'), onClick: () => void newDocument() },
+      { icon: 'ui/download', label: t('plugin.word.menu.importOdt', null, 'Import .odt'), onClick: pickOdtFile },
+      { icon: 'ui/save', label: t('plugin.word.menu.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportCurrent() },
+      { icon: 'ui/trash', label: t('plugin.word.menu.deleteDocument', null, 'Delete document'), danger: true, onClick: () => void removeCurrent() },
+    ],
+  });
 }
 
 function openDocMenu() {
   ensureDocMenu();
   renderDocMenuItems();
-  docMenuPopup.classList.remove('hidden');
-  placePopover(docMenuPopup, docMenuBtn);
-  docMenuPopup.focusFirst();
   docMenuOpen = true;
-  docMenuBtn.setAttribute('aria-expanded', 'true');
-  document.addEventListener('pointerdown', onDocMenuOutside, true);
-  document.addEventListener('keydown', onDocMenuKey, true);
+  showDocumentMenu(docMenuPopup, docMenuBtn, onDocMenuOutside, onDocMenuKey);
 }
 
 function toggleDocMenu() {

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use axum::extract::{FromRequest, FromRequestParts};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use photon_rs::transform::SamplingFilter;
 use photon_rs::PhotonImage;
 use serde::de::DeserializeOwned;
@@ -19,7 +19,8 @@ use serde_json::{json, Map, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, user_id_from_request, RouteHandler};
+use shiny_plugin_sdk::util::{as_opt_text, as_text, clean_title};
+use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::{doc, ops};
@@ -41,43 +42,12 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => return None,
     })
 }
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Json) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_int(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,
         _ => 0,
     }
 }
-
-fn as_opt_text(v: &Value) -> Option<String> {
-    if matches!(v, Value::Null) {
-        return None;
-    }
-    let s = as_text(v);
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
-}
-
 fn path_params(req: &axum::extract::Request) -> HashMap<String, String> {
     path_params_from_request(req)
         .map(|p| p.into_iter().collect())
@@ -113,12 +83,6 @@ async fn take_json<T: DeserializeOwned>(req: axum::extract::Request) -> Result<T
         .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
     Ok(body)
 }
-
-fn clean_title(t: &str) -> String {
-    let t = t.trim();
-    if t.is_empty() { "Untitled".into() } else { t.chars().take(120).collect() }
-}
-
 /// Query for upload requests: the file's name (for the document title).
 #[derive(Deserialize, Default)]
 #[serde(default)]
@@ -347,14 +311,23 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
             let db = ctx.db();
 
             let res = if let Some(settings) = body.settings {
-                doc::apply_settings(&db, &uid, &id, &settings, commit)?
+                let d = doc::load(db, &uid, &id)?;
+                let res = tokio::task::spawn_blocking(move || {
+                    doc::apply_settings_pixels(d, &settings)
+                })
+                .await
+                .map_err(|e| AppError::Internal(format!("image worker task failed: {e}")))??;
+                if commit {
+                    doc::commit_settings(db, &uid, &id, &res.adjust)?;
+                }
+                res
             } else {
                 let operations = match (body.operations, body.operation) {
                     (Some(ops), _) if !ops.is_empty() => ops,
                     (_, Some(op)) => vec![op],
                     _ => return Err(AppError::BadRequest("operations required".into())),
                 };
-                doc::apply_operations(&db, &uid, &id, &operations, commit)?
+                doc::apply_operations(db, &uid, &id, &operations, commit)?
             };
 
             if want_raw {

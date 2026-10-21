@@ -1,6 +1,6 @@
 import {
   menuSurface, menuItem, confirmDialog, toolButton, menuButton, toolbar, input as uiInput,
-  placePopover, controlButton, icon, button, emptyState, toast, setTileGlow, glowFromDrawable,
+  placePopover, icon, toast, setTileGlow, glowFromDrawable,
   setIcon,
 } from '../../ui/index.js';
 
@@ -22,6 +22,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
+import { formatMenuDate, appendMenuFooter } from '../../js/officeMenu.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const CALC_PLUGIN = 'calc';
@@ -550,7 +551,7 @@ function renderSheetMenuItems() {
       title.textContent = sheet.title;
       const time = document.createElement('span');
       time.className = 'calc-sheet-menu-time';
-      time.textContent = formatWhen(sheet.updated_at);
+      time.textContent = formatMenuDate(sheet.updated_at);
       const check = document.createElement('span');
       check.className = 'calc-sheet-menu-check';
       item.append(title, time, check);
@@ -564,41 +565,17 @@ function renderSheetMenuItems() {
     });
   }
 
-  const foot = document.createElement('div');
-  foot.className = 'calc-sheet-menu-foot';
-  const footItem = (iconName, label, danger, onClick) => {
-    const item = menuItem({ className: 'calc-sheet-menu-item' });
-    if (danger) item.classList.add('calc-sheet-menu-item--danger');
-    item.setAttribute('role', 'menuitem');
-    const ic = document.createElement('span');
-    ic.className = 'calc-sheet-menu-foot-icon';
-    item.appendChild(ic);
-    void setIcon(ic, iconName, { size: 14 });
-    const labelEl = document.createElement('span');
-    labelEl.className = 'calc-sheet-menu-title';
-    labelEl.textContent = label;
-    item.appendChild(labelEl);
-    item.addEventListener('click', () => {
-      closeSheetMenu();
-      onClick();
-    });
-    foot.appendChild(item);
-  };
-  footItem('ui/plus', t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), false, () => void newSheet());
-  footItem('ui/download', t('plugin.calc.toolbar.importOds', null, 'Import .ods'), false, pickOdsFile);
-  footItem('ui/download', t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), false, pickCsvFile);
-  footItem('ui/save', t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), false, () => void exportOds());
-  footItem('ui/trash', t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), true, () => void removeCurrent());
-  sheetMenuPopup.appendChild(foot);
-}
-
-function formatWhen(iso) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch (_) {
-    return '';
-  }
+  appendMenuFooter(sheetMenuPopup, {
+    prefix: 'calc-sheet',
+    close: closeSheetMenu,
+    items: [
+      { icon: 'ui/plus', label: t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), onClick: () => void newSheet() },
+      { icon: 'ui/download', label: t('plugin.calc.toolbar.importOds', null, 'Import .ods'), onClick: pickOdsFile },
+      { icon: 'ui/download', label: t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), onClick: pickCsvFile },
+      { icon: 'ui/save', label: t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportOds() },
+      { icon: 'ui/trash', label: t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), danger: true, onClick: () => void removeCurrent() },
+    ],
+  });
 }
 
 function openSheetMenu() {

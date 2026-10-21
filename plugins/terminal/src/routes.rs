@@ -13,7 +13,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::extract::{FromRequestParts, Request};
 use axum::http::{header, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use base64::Engine as _;
 use bytes::Bytes;
 use futures::stream::SelectAll;
@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, is_remote_request, user_id_from_request, RouteHandler};
+use shiny_plugin_sdk::routes::{bridged_route, is_remote_request, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::pty::{self, Event, Session};
@@ -60,11 +60,6 @@ fn remote_allowed(ctx: &PluginCtx, uid: &str, req: &Request) -> bool {
         Some(shiny_plugin_sdk::db::Value::Text(v)) if v == "true"
     )
 }
-
-fn user_id(req: &Request) -> Result<String, AppError> {
-    user_id_from_request(req).ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
 /// Look up a session and check it belongs to the caller.
 fn owned(uid: &str, id: &str) -> Result<Arc<Session>, AppError> {
     let session =
@@ -74,11 +69,6 @@ fn owned(uid: &str, id: &str) -> Result<Arc<Session>, AppError> {
     }
     Ok(session)
 }
-
-fn ok(data: serde_json::Value) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
 async fn json_body<T: DeserializeOwned>(req: Request) -> Result<T, AppError> {
     let bytes = axum::body::to_bytes(req.into_body(), BODY_LIMIT)
         .await

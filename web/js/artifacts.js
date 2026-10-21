@@ -25,18 +25,6 @@ let activeArtifactId = null;
 /** One dock icon per topic slot (overview + 3 themes). */
 const MAX_VISIBLE = 4;
 
-function openPanel() {
-  if (!panel) return;
-  document.getElementById('app')?.classList.add('panel-open');
-  panel.classList.remove('hidden');
-  backdrop?.classList.remove('hidden');
-  requestAnimationFrame(() => {
-    panel.classList.add('visible');
-    backdrop?.classList.add('visible');
-    window.dispatchEvent(new Event('map:resize'));
-  });
-}
-
 function closePanel() {
   panel?.classList.remove('visible');
   backdrop?.classList.remove('visible');

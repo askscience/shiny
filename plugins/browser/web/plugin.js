@@ -236,6 +236,7 @@ function syncNativeTab(tab) {
 
 /** Keep the shell's native view aligned with the viewport element. */
 function syncActiveNative() {
+  if (document.hidden) return;
   syncNativeTab(activeTab());
 }
 
@@ -987,11 +988,6 @@ function toggleDownloadsPanel() {
     requestSync();
     void loadDownloads();
   }
-}
-
-function closeDownloadsPanel() {
-  if (downloadsPanel) downloadsPanel.classList.add('hidden');
-  requestSync();
 }
 
 /** Fetch the persisted history and ask the shell for its live list. */
@@ -2095,9 +2091,9 @@ function startBoundsSync() {
   // A native child window is positioned in native pixels, so it must follow the
   // viewport element every frame it moves. A `ResizeObserver` covers resizes and
   // a `MutationObserver` covers the inline style the drag/resize code writes;
-  // the slow interval is a fallback for anything else (a CSS animation, say).
-  // Only the active tab is visible, so only it is tracked.
-  boundsTimer = setInterval(syncActiveNative, 250);
+  // the one-second interval is only a fallback for anything else (a CSS
+  // animation, say). Only the active tab is visible, so only it is tracked.
+  boundsTimer = setInterval(syncActiveNative, 1000);
   if (typeof ResizeObserver !== 'undefined' && frameWrapEl) {
     boundsObserver = new ResizeObserver(requestSync);
     boundsObserver.observe(frameWrapEl);
@@ -2155,7 +2151,7 @@ function stopBoundsSync() {
 function startShieldPoll() {
   stopShieldPoll();
   shieldTimer = setInterval(() => {
-    if (nativeAvailable) shellRaw('peakd:shield:query');
+    if (!document.hidden && nativeAvailable) shellRaw('peakd:shield:query');
   }, SHIELD_POLL_MS);
 }
 

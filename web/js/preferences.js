@@ -1025,7 +1025,6 @@ function clamp(n, min, max) {
 /* ── Iroh remote access ───────────────────────────────────────── */
 
 const REMOTE_ALLOW_TERMINAL_KEY = 'remote.allow_terminal';
-const REMOTE_AUTOSTART_KEY = 'remote.autostart';
 
 /**
  * Whether a remote (Iroh) client may open the Terminal — a real shell on this
@@ -1040,18 +1039,6 @@ export function setRemoteAllowTerminal(on) {
   if (on) localStorage.setItem(key, 'true');
   else localStorage.removeItem(key);
   persist(REMOTE_ALLOW_TERMINAL_KEY, on ? 'true' : '');
-}
-
-/** Whether to enter server mode automatically on the next login/boot. */
-export function getRemoteAutostart() {
-  return localStorage.getItem(scopedKey(REMOTE_AUTOSTART_KEY)) === 'true';
-}
-
-export function setRemoteAutostart(on) {
-  const key = scopedKey(REMOTE_AUTOSTART_KEY);
-  if (on) localStorage.setItem(key, 'true');
-  else localStorage.removeItem(key);
-  persist(REMOTE_AUTOSTART_KEY, on ? 'true' : '');
 }
 
 /* ── Early surface application ─────────────────────────────────

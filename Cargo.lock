@@ -5240,6 +5240,7 @@ dependencies = [
  "cc",
  "libc",
  "parking_lot",
+ "peakd-core",
  "pkg-config",
  "serde_json",
  "shiny-filter-core",
@@ -5247,18 +5248,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "peakd-core"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "peakd-mac"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "parking_lot",
+ "peakd-core",
  "serde_json",
  "shiny-iroh-client",
  "tao",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "wry",
@@ -6849,6 +6856,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "shiny-iroh-proto",
+ "shiny-osm",
  "shiny-plugin-sdk",
  "sqlx",
  "tar",
@@ -6905,7 +6913,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "sqlx",
- "tokio",
  "uuid",
 ]
 
@@ -6920,7 +6927,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "sqlx",
- "tokio",
 ]
 
 [[package]]
@@ -6935,7 +6941,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "sqlx",
- "tokio",
  "uuid",
 ]
 
@@ -6945,6 +6950,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "futures",
  "image 0.24.9",
  "photon-rs",
  "semver",
@@ -6959,22 +6965,16 @@ name = "shiny-filter"
 version = "0.1.0"
 dependencies = [
  "adblock",
- "anyhow",
  "axum",
  "bytes",
- "futures-util",
  "http-body-util",
  "hyper",
  "hyper-util",
- "parking_lot",
- "percent-encoding",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "shiny-filter-core",
- "thiserror 2.0.18",
  "tokio",
- "tokio-stream",
  "tracing",
  "url",
  "wreq",
@@ -6988,7 +6988,6 @@ dependencies = [
  "adblock",
  "parking_lot",
  "serde",
- "serde_json",
  "tracing",
 ]
 
@@ -6998,7 +6997,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "semver",
- "serde",
  "serde_json",
  "shiny-plugin-sdk",
 ]
@@ -7031,7 +7029,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "sqlx",
- "tokio",
  "uuid",
 ]
 
@@ -7093,6 +7090,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-osm"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "shiny-plugin-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "shiny-pdf-plugin"
 version = "0.1.0"
 dependencies = [
@@ -7115,7 +7123,6 @@ dependencies = [
  "async-trait",
  "axum",
  "bytes",
- "chrono",
  "futures",
  "http",
  "libsqlite3-sys",
@@ -7189,7 +7196,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "tokio",
- "tracing",
  "uuid",
 ]
 
@@ -7203,10 +7209,10 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "shiny-osm",
  "shiny-plugin-sdk",
  "sqlx",
  "tokio",
- "tracing",
  "uuid",
 ]
 
@@ -7237,7 +7243,6 @@ dependencies = [
  "serde_json",
  "shiny-plugin-sdk",
  "sqlx",
- "tokio",
  "uuid",
 ]
 
@@ -8338,8 +8343,10 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9cd434a998747dd2c4276bc96ee2e0c7a2eadf3cae88e52be55a05fa9053f5"
 dependencies = [
+ "async-compression",
  "bitflags 2.13.2",
  "bytes",
+ "futures-core",
  "futures-util",
  "http",
  "http-body",

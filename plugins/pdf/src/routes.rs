@@ -8,14 +8,15 @@ use std::sync::Arc;
 
 use axum::extract::{FromRequest, FromRequestParts, Multipart};
 use axum::http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, user_id_from_request, RouteHandler};
+use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title};
+use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::ops;
@@ -50,39 +51,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Json) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-fn clean_title(t: &str) -> String {
-    let t = t.trim();
-    if t.is_empty() { "Untitled".into() } else { t.chars().take(120).collect() }
-}
-
-fn filename_for_title(t: &str) -> String {
-    let clean: String = t
-        .chars()
-        .map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.') { c } else { '-' })
-        .collect();
-    let clean = clean.trim().trim_matches('.').to_string();
-    let clean = if clean.is_empty() { "document".to_string() } else { clean };
-    format!("{clean}.pdf")
-}
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_int(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,
@@ -142,7 +110,8 @@ async fn take_json<T: DeserializeOwned>(
         .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))
 }
 
-fn load_bytes(ctx: &PluginCtx, uid: &str, id: &str) -> Result<Vec<u8>, AppError> {    let rows = ctx.db().query(
+fn load_bytes(ctx: &PluginCtx, uid: &str, id: &str) -> Result<Vec<u8>, AppError> {
+    let rows = ctx.db().query(
         "SELECT bytes FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
         &[Value::text(id), Value::text(uid)],
     )?;
@@ -150,9 +119,40 @@ fn load_bytes(ctx: &PluginCtx, uid: &str, id: &str) -> Result<Vec<u8>, AppError>
     Ok(as_blob(&row[0]))
 }
 
-/// Replace a document's bytes and refresh its cached page count.
-fn commit_bytes(ctx: &PluginCtx, uid: &str, id: &str, bytes: Vec<u8>) -> Result<usize, AppError> {
-    let count = ops::page_count(&bytes)?;
+/// Load the bytes and the cached page count together. Per-page routes used to
+/// re-parse the whole PDF just to validate the page number.
+fn load_bytes_and_count(
+    ctx: &PluginCtx,
+    uid: &str,
+    id: &str,
+) -> Result<(Vec<u8>, usize), AppError> {
+    let rows = ctx.db().query(
+        "SELECT bytes, page_count FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
+        &[Value::text(id), Value::text(uid)],
+    )?;
+    let row = rows.first().ok_or_else(|| AppError::NotFound("PDF not found".into()))?;
+    Ok((as_blob(&row[0]), as_int(&row[1]) as usize))
+}
+
+/// Run a CPU-heavy PDF operation off the plugin's serial async worker. The
+/// closure only receives owned bytes — never `ctx.db()` or a SQLite handle.
+async fn blocking<T, F>(f: F) -> Result<T, AppError>
+where
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| AppError::Internal(format!("PDF worker task failed: {e}")))?
+}
+
+fn commit_bytes_with_count(
+    ctx: &PluginCtx,
+    uid: &str,
+    id: &str,
+    bytes: Vec<u8>,
+    count: usize,
+) -> Result<usize, AppError> {
     let changed = ctx.db().execute(
         "UPDATE pdf_documents SET bytes = ?1, page_count = ?2, updated_at = datetime('now') \
          WHERE id = ?3 AND user_id = ?4",
@@ -223,8 +223,12 @@ fn pdf_create(ctx: Arc<PluginCtx>) -> RouteHandler {
             let format = body.format.unwrap_or_else(|| {
                 if body.plain.unwrap_or(false) { "plain".to_string() } else { "html".to_string() }
             });
-            let bytes = ops::create(&text, &css, &format)?;
-            let count = ops::page_count(&bytes)?;
+            let (bytes, count) = blocking(move || {
+                let bytes = ops::create(&text, &css, &format)?;
+                let count = ops::page_count(&bytes)?;
+                Ok::<_, AppError>((bytes, count))
+            })
+            .await?;
             let id = uuid::Uuid::new_v4().to_string();
 
             ctx.db().execute(
@@ -270,7 +274,11 @@ fn pdf_import(ctx: Arc<PluginCtx>) -> RouteHandler {
             }
             let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
 
-            let count = ops::validate(&data)?;
+            let (data, count) = blocking(move || {
+                let count = ops::validate(&data)?;
+                Ok::<_, AppError>((data, count))
+            })
+            .await?;
             let stem = original_name
                 .as_deref()
                 .map(|n| n.rsplit('.').nth(1).unwrap_or(n))
@@ -378,7 +386,7 @@ fn pdf_export(ctx: Arc<PluginCtx>) -> RouteHandler {
             let row = rows.first().ok_or_else(|| AppError::NotFound("PDF not found".into()))?;
             let title = as_text(&row[0]);
             let bytes = as_blob(&row[1]);
-            let filename = filename_for_title(&title);
+            let filename = filename_for_title(&title, "pdf", "document");
             Ok(Response::builder()
                 .header(CONTENT_TYPE, MIME_PDF)
                 .header(CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", filename.replace('"', "")))
@@ -429,11 +437,11 @@ fn pdf_render(ctx: Arc<PluginCtx>) -> RouteHandler {
             let (id, page) = take_id_page(&req)?;
             let (q, _req) = take_query::<RenderQuery>(req).await?;
             let dpi = q.dpi.unwrap_or(150).clamp(24, 400);
-            let bytes = load_bytes(&ctx, &uid, &id)?;
-            if page >= ops::page_count(&bytes)? {
+            let (bytes, count) = load_bytes_and_count(&ctx, &uid, &id)?;
+            if page >= count {
                 return Err(AppError::NotFound("page out of range".into()));
             }
-            let png = ops::render_png(&bytes, page, dpi)?;
+            let png = blocking(move || ops::render_png(&bytes, page, dpi)).await?;
             Ok(Response::builder()
                 .header(CONTENT_TYPE, "image/png")
                 .header(CACHE_CONTROL, "no-store")
@@ -451,11 +459,11 @@ fn pdf_text(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let (id, page) = take_id_page(&req)?;
-            let bytes = load_bytes(&ctx, &uid, &id)?;
-            if page >= ops::page_count(&bytes)? {
+            let (bytes, count) = load_bytes_and_count(&ctx, &uid, &id)?;
+            if page >= count {
                 return Err(AppError::NotFound("page out of range".into()));
             }
-            let text = ops::extract_text(&bytes, page)?;
+            let text = blocking(move || ops::extract_text(&bytes, page)).await?;
             Ok(ok(json!({ "page": page, "text": text })))
         }
     })
@@ -471,11 +479,11 @@ fn pdf_text_runs(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let (id, page) = take_id_page(&req)?;
-            let bytes = load_bytes(&ctx, &uid, &id)?;
-            if page >= ops::page_count(&bytes)? {
+            let (bytes, count) = load_bytes_and_count(&ctx, &uid, &id)?;
+            if page >= count {
                 return Err(AppError::NotFound("page out of range".into()));
             }
-            let runs = ops::page_text_runs(&bytes, page)?;
+            let runs = blocking(move || ops::page_text_runs(&bytes, page)).await?;
             Ok(ok(json!({ "page": page, "runs": runs })))
         }
     })
@@ -497,17 +505,22 @@ fn pdf_edit_text(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let id = take_id(&req)?;
             let body: EditBody = take_json(req).await?;
-            let bytes = load_bytes(&ctx, &uid, &id)?;
-            if body.page >= ops::page_count(&bytes)? {
+            let (bytes, page_count) = load_bytes_and_count(&ctx, &uid, &id)?;
+            if body.page >= page_count {
                 return Err(AppError::NotFound("page out of range".into()));
             }
-            let (out, applied) = ops::edit_text_runs(&bytes, body.page, &body.edits)?;
+            let (out, applied, count) = blocking(move || {
+                let (out, applied) = ops::edit_text_runs(&bytes, body.page, &body.edits)?;
+                let count = if applied > 0 { ops::page_count(&out)? } else { 0 };
+                Ok::<_, AppError>((out, applied, count))
+            })
+            .await?;
             if applied == 0 {
                 return Err(AppError::NotFound(
                     "no text run matched the supplied text and position".into(),
                 ));
             }
-            let count = commit_bytes(&ctx, &uid, &id, out)?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, out, count)?;
             Ok(ok(json!({ "applied": applied, "page_count": count })))
         }
     })
@@ -536,12 +549,17 @@ fn pdf_rotate(ctx: Arc<PluginCtx>) -> RouteHandler {
             let bytes = load_bytes(&ctx, &uid, &id)?;
             let all = body.all.unwrap_or(false);
             let list = body.pages.unwrap_or_default();
-            let new_bytes = if all || list.is_empty() {
-                ops::rotate(&bytes, None, degrees)?
-            } else {
-                ops::rotate(&bytes, Some(&list), degrees)?
-            };
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let (new_bytes, count) = blocking(move || {
+                let new_bytes = if all || list.is_empty() {
+                    ops::rotate(&bytes, None, degrees)?
+                } else {
+                    ops::rotate(&bytes, Some(&list), degrees)?
+                };
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
         }
     })
@@ -569,8 +587,13 @@ fn pdf_reorder(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::BadRequest("order must not be empty".into()));
             }
             let bytes = load_bytes(&ctx, &uid, &id)?;
-            let new_bytes = ops::select_pages(&bytes, &order)?;
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let (new_bytes, count) = blocking(move || {
+                let new_bytes = ops::select_pages(&bytes, &order)?;
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
         }
     })
@@ -598,8 +621,13 @@ fn pdf_delete_pages(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::BadRequest("pages must not be empty".into()));
             }
             let bytes = load_bytes(&ctx, &uid, &id)?;
-            let new_bytes = ops::delete_pages(&bytes, &pages)?;
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let (new_bytes, count) = blocking(move || {
+                let new_bytes = ops::delete_pages(&bytes, &pages)?;
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
         }
     })
@@ -628,8 +656,13 @@ fn pdf_merge(ctx: Arc<PluginCtx>) -> RouteHandler {
             }
             let bytes = load_bytes(&ctx, &uid, &id)?;
             let other = load_bytes(&ctx, &uid, &other_id)?;
-            let new_bytes = ops::merge(&bytes, &other)?;
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let (new_bytes, count) = blocking(move || {
+                let new_bytes = ops::merge(&bytes, &other)?;
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
         }
     })
@@ -659,9 +692,14 @@ fn pdf_replace_text(ctx: Arc<PluginCtx>) -> RouteHandler {
             let new = body.new.unwrap_or_default();
             let bytes = load_bytes(&ctx, &uid, &id)?;
             // Same content-stream engine the agent's pdf_replace_text uses.
-            let (new_bytes, report) = crate::stream_edit::replace_text(&bytes, page, &old, &new)?;
-            let touched = report.replaced;
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let (new_bytes, touched, count) = blocking(move || {
+                let (new_bytes, report) =
+                    crate::stream_edit::replace_text(&bytes, page, &old, &new)?;
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, report.replaced, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page": page, "replaced": touched, "page_count": count, "updated_at": "now" })))
         }
     })
@@ -729,8 +767,22 @@ fn pdf_annotate(ctx: Arc<PluginCtx>) -> RouteHandler {
                 color: body.text_color,
             };
             let bytes = load_bytes(&ctx, &uid, &id)?;
-            let new_bytes = ops::annotate(&bytes, page, &kind, rect, &text, body.color, &format)?;
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let kind_for_render = kind.clone();
+            let (new_bytes, count) = blocking(move || {
+                let new_bytes = ops::annotate(
+                    &bytes,
+                    page,
+                    &kind_for_render,
+                    rect,
+                    &text,
+                    body.color,
+                    &format,
+                )?;
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page": page, "kind": kind, "page_count": count, "updated_at": "now" })))
         }
     })
@@ -758,8 +810,13 @@ fn pdf_watermark(ctx: Arc<PluginCtx>) -> RouteHandler {
             let text = body.text.ok_or_else(|| AppError::BadRequest("text required".into()))?;
             let bytes = load_bytes(&ctx, &uid, &id)?;
             let pages = if body.all.unwrap_or(false) { None } else { body.pages.clone() };
-            let new_bytes = ops::add_watermark(&bytes, pages.as_deref(), &text)?;
-            let count = commit_bytes(&ctx, &uid, &id, new_bytes)?;
+            let (new_bytes, count) = blocking(move || {
+                let new_bytes = ops::add_watermark(&bytes, pages.as_deref(), &text)?;
+                let count = ops::page_count(&new_bytes)?;
+                Ok::<_, AppError>((new_bytes, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
             Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
         }
     })

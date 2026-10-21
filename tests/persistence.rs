@@ -17,7 +17,7 @@ async fn fresh_schema_is_recorded_and_repeated_startup_preserves_data() {
         .fetch_one(&app.state.pool)
         .await
         .unwrap();
-    assert_eq!(versions, 9);
+    assert_eq!(versions, 12);
     let value: String =
         sqlx::query_scalar("SELECT value FROM user_preferences WHERE user_id = 'u'")
             .fetch_one(&app.state.pool)
@@ -53,7 +53,7 @@ async fn adopts_legacy_and_partially_applied_columns_without_losing_identity() {
             .fetch_one(&mut conn)
             .await
             .unwrap(),
-        9
+        12
     );
 }
 

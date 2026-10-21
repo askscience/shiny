@@ -58,19 +58,6 @@ pub fn get() -> Option<AdFilter> {
 pub fn rules() -> usize {
     get().map(|f| f.rule_count()).unwrap_or(0)
 }
-
-/// Is this document URL blocked outright? Used by `browser_read`.
-pub fn document_blocked(url: &str) -> bool {
-    get()
-        .map(|f| {
-            matches!(
-                f.check_url(url, url, "document", "GET"),
-                shiny_filter::Verdict::Block
-            )
-        })
-        .unwrap_or(false)
-}
-
 /// Rules appended after the downloaded lists.
 ///
 /// EasyList and EasyPrivacy already carry most of YouTube's ad and tracking

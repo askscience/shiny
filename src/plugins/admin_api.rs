@@ -245,9 +245,47 @@ pub async fn deactivate(
     if !state.plugins.is_installed(&name) {
         return Err(AppError::BadRequest(format!("Plugin '{name}' is not installed")));
     }
-    set_user_enabled(&state, &traveler.id, &name, false).await?;
+    state.plugins.deactivate_for(&traveler.id, &name).await?;
+    // Turning an app off must also stop the engine its window kept alive —
+    // not wait for the next agent turn to reap it.
+    state.craft_mcp.stop_app(&state.plugins, &name).await;
     crate::plugins::installer::log_event(std::path::Path::new(&state.config.plugins_dir), &format!("deactivate user={} name={}", traveler.username.clone().unwrap_or_default(), name));
     Ok(Json(json!({ "success": true, "data": { "name": name, "enabled": false } })))
+}
+
+/// POST /api/plugins/session/reset — start a clean plugin session.
+///
+/// The shell calls this at boot when "Remember my workspace" is off: previous
+/// sign-ins' activations are dropped and any Craft app MCP process that
+/// outlived its window is stopped. With remember on the rows touched here are
+/// not part of the active set, so the call is harmless.
+pub async fn reset_session(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    state.plugins.reset_session_activations(&traveler.id).await?;
+    state.craft_mcp.stop_all(&state.plugins).await;
+    Ok(Json(json!({ "success": true, "data": {} })))
+}
+
+/// POST /api/plugins/window/closed  body {"name":"photocraft"}
+///
+/// The shell closed a plugin window. Windows are client state, but some
+/// plugins keep a process alive for their window (a Craft app's MCP engine):
+/// release it now, gracefully, instead of waiting for the next agent turn.
+/// A no-op for plugins that own no process (every native plugin).
+pub async fn window_closed(
+    State(state): State<AppState>,
+    Extension(_traveler): Extension<Traveler>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let name = body
+        .get("name")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| AppError::BadRequest("name required".into()))?
+        .to_string();
+    state.craft_mcp.stop_app(&state.plugins, &name).await;
+    Ok(Json(json!({ "success": true, "data": { "name": name } })))
 }
 
 /// GET /api/plugins/install.log  — last N lines of the install log. Any

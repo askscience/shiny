@@ -1,6 +1,8 @@
 import { cssVar, getThemeManifest } from '../ui/index.js';
+import { ensureLeaflet } from './vendorLoader.js';
 
 let map = null;
+let mapInitializing = false;
 let baseTileLayer = null;
 let userMarker = null;
 
@@ -45,8 +47,17 @@ const NAV_ZOOM_MIN = 13;
 const NAV_ZOOM_STOP = 17.5;
 let displayNavZoom = NAV_ZOOM_STOP;
 
-export function initMap() {
-  map = L.map('map', {
+export async function initMap() {
+  if (map || mapInitializing) return map;
+  mapInitializing = true;
+  try {
+    await ensureLeaflet();
+  } catch (err) {
+    console.warn('Leaflet unavailable:', err);
+    mapInitializing = false;
+    return null;
+  }
+  map = window.L.map('map', {
     zoomControl: false,
     attributionControl: false,
     dragging: true,
@@ -56,6 +67,7 @@ export function initMap() {
     boxZoom: false,
     keyboard: false,
   }).setView([currentPos.lat, currentPos.lon], 16);
+  mapInitializing = false;
 
   bindMapZoomGuards();
 

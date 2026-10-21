@@ -1,0 +1,9 @@
+[package]
+name = "peakd-core"
+version = "0.1.0"
+edition = "2021"
+description = "Display-scale state shared by the Linux and macOS PEAK'D! shells"
+publish = false
+
+[dependencies]
+serde_json = "1"

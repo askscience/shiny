@@ -10,49 +10,6 @@ pub use shiny_plugin_sdk::artifacts::{
     Artifact, ArtifactAction, ArtifactSection, Coordinates, PlanDay, RouteMeta,
     build_from_params,
 };
-
-pub fn monument_from_place(
-    title: &str,
-    place: &crate::services::osm::GeoPlace,
-    extra: Option<&str>,
-) -> Artifact {
-    let mut sections = vec![ArtifactSection {
-        label: "Location".into(),
-        value: place.display_name.clone(),
-    }];
-    if let Some(e) = extra {
-        sections.push(ArtifactSection {
-            label: "Info".into(),
-            value: e.to_string(),
-        });
-    }
-    Artifact {
-        id: uuid::Uuid::new_v4().to_string(),
-        artifact_type: "monument_info".into(),
-        title: title.to_string(),
-        subtitle: Some(place.display_name.clone()),
-        coordinates: Some(Coordinates {
-            lat: place.lat,
-            lon: place.lon,
-        }),
-        sections,
-        actions: vec![ArtifactAction {
-            label: "Navigate".into(),
-            tool: "map_route".into(),
-            params: serde_json::json!({
-                "to_lat": place.lat,
-                "to_lon": place.lon,
-            }),
-        }],
-        days: vec![],
-        route: None,
-        geometry: vec![],
-        narrative: None,
-        theme: None,
-        destination: None,
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtifactSummary {
     pub id: String,

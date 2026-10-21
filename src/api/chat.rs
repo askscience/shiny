@@ -40,6 +40,20 @@ pub struct HistoryQuery {
     pub limit: Option<i64>,
 }
 
+#[derive(Deserialize)]
+pub struct ConversationListQuery {
+    pub limit: Option<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct ConversationQuery {
+    pub limit: Option<i64>,
+    /// Load messages older than this message id.
+    pub before: Option<String>,
+    /// Omit stored reasoning traces unless the caller explicitly asks for them.
+    pub thinking: Option<bool>,
+}
+
 pub async fn send_message(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
@@ -129,11 +143,13 @@ pub async fn history(
     Extension(traveler): Extension<Traveler>,
     Query(params): Query<HistoryQuery>,
 ) -> Result<Json<ChatHistoryResponse>, AppError> {
-    let limit = params.limit.unwrap_or(50);
+    let limit = params.limit.unwrap_or(50).clamp(1, 500);
 
     let entries = sqlx::query_as::<_, (String, String, Option<String>)>(
-        "SELECT role, content, timestamp FROM chat_messages WHERE traveler_id = ?1 \
-         ORDER BY timestamp ASC LIMIT ?2",
+        "SELECT role, content, timestamp FROM (\
+             SELECT role, content, timestamp, rowid FROM chat_messages \
+             WHERE traveler_id = ?1 ORDER BY timestamp DESC, rowid DESC LIMIT ?2\
+         ) ORDER BY timestamp ASC, rowid ASC",
     )
     .bind(&traveler.id)
     .bind(limit)
@@ -176,17 +192,21 @@ pub struct ConversationListResponse {
 pub async fn list_conversations(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
+    Query(params): Query<ConversationListQuery>,
 ) -> Result<Json<ConversationListResponse>, AppError> {
+    let limit = params.limit.unwrap_or(100).clamp(1, 500);
     let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
         "SELECT c.id, c.title, c.updated_at, \
                 (SELECT content FROM chat_messages m \
                  WHERE m.conversation_id = c.id AND m.role != 'system' \
-                 ORDER BY m.timestamp DESC LIMIT 1) AS preview \
+                 ORDER BY m.timestamp DESC, m.rowid DESC LIMIT 1) AS preview \
          FROM chat_conversations c \
          WHERE c.traveler_id = ?1 \
-         ORDER BY c.updated_at DESC",
+         ORDER BY c.updated_at DESC \
+         LIMIT ?2",
     )
     .bind(&traveler.id)
+    .bind(limit)
     .fetch_all(&state.pool)
     .await
     .map_err(AppError::Database)?;
@@ -239,23 +259,40 @@ pub async fn conversation_messages(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
     axum::extract::Path(path): axum::extract::Path<ConversationPath>,
+    Query(params): Query<ConversationQuery>,
 ) -> Result<Json<ChatHistoryResponse>, AppError> {
+    let limit = params.limit.unwrap_or(500).clamp(1, 2000);
+    let include_thinking = if params.thinking.unwrap_or(true) { 1 } else { 0 };
     let entries = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
         // `system` rows are invisible notes written for the model (e.g. "the
         // user stopped this reply"). They belong in the agent's history and
         // must never show up as a bubble in the user's chat.
-        "SELECT role, content, timestamp, thinking FROM chat_messages \
+        //
+        // Newest-first window + reverse below returns the latest page in
+        // chronological order; `before` walks older pages.
+        "SELECT role, content, timestamp, \
+                CASE WHEN ?3 THEN thinking ELSE NULL END AS thinking \
+         FROM chat_messages \
          WHERE conversation_id = ?1 AND traveler_id = ?2 AND role != 'system' \
-         ORDER BY timestamp ASC, rowid ASC",
+           AND (?4 IS NULL OR rowid < (\
+               SELECT rowid FROM chat_messages \
+               WHERE id = ?4 AND conversation_id = ?1 AND traveler_id = ?2\
+           )) \
+         ORDER BY timestamp DESC, rowid DESC \
+         LIMIT ?5",
     )
     .bind(&path.id)
     .bind(&traveler.id)
+    .bind(include_thinking)
+    .bind(params.before.as_deref())
+    .bind(limit)
     .fetch_all(&state.pool)
     .await
     .map_err(AppError::Database)?;
 
     let data: Vec<ChatHistoryEntry> = entries
         .into_iter()
+        .rev()
         .map(|(role, content, timestamp, thinking)| ChatHistoryEntry {
             role,
             content,

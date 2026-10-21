@@ -77,26 +77,18 @@ pub const LONG_FORM_BLOCK: &str = "\n## Documents and long-form content\n\
      NEVER restate, summarize, list or explain again what you wrote inside the document: \
      the user reads it in its own window.\n";
 
-/// After the first tool: tiny system + user request + conversation history +
-/// completed step notes. `plugins_hint` keeps the plugin windows catalog
-/// visible so the model can still call `show_plugin` on later turns.
-/// `history` carries the earlier turns of this conversation so the model never
-/// "forgets" what was being discussed while it is mid-tool-loop.
-/// `voice` re-applies the spoken-reply constraints here because the final reply
-/// after tool calls is generated from THIS prompt, not the planning one — and
-/// `correction` re-applies the "this message corrects the previous request"
-/// framing for the same reason.
-pub fn build_continuation_messages(
+/// The continuation prompt's system half. It depends only on the conversation
+/// and the active plugin set, so the loop builds it once and appends `[Done]`
+/// notes as tools finish instead of re-rendering every earlier step.
+pub fn build_continuation_system(
     ai_name: &str,
     lang: &str,
     mode: &str,
-    user_message: &str,
-    completed_steps: &[String],
     plugins_hint: &str,
     history: &[(String, String)],
     voice: bool,
     correction: bool,
-) -> Vec<(String, String)> {
+) -> String {
     let plugins_line = if plugins_hint.is_empty() {
         String::new()
     } else {
@@ -132,13 +124,38 @@ pub fn build_continuation_messages(
     let doc_line = "If a document, report or other long-form deliverable was created or updated in the \
                     steps above, confirm it in one or two short sentences (what it is and its title). \
                     Do NOT restate, summarize or list its contents — the user reads it in its window.\n";
-    let system = format!(
+    format!(
         "You are {ai_name}. Language: {lang}. Mode: {mode} — answer fully and clearly; be concise for simple questions but give detail when helpful.\n\
          {voice_line}{correction_line}{doc_line}\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
          Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\
          {plugins_line}\
          {history_line}"
+    )
+}
+
+/// After the first tool: tiny system + user request + conversation history +
+/// completed step notes. `plugins_hint` keeps the plugin windows catalog
+/// visible so the model can still call `show_plugin` on later turns.
+/// `history` carries the earlier turns of this conversation so the model never
+/// "forgets" what was being discussed while it is mid-tool-loop.
+/// `voice` re-applies the spoken-reply constraints here because the final reply
+/// after tool calls is generated from THIS prompt, not the planning one — and
+/// `correction` re-applies the "this message corrects the previous request"
+/// framing for the same reason.
+pub fn build_continuation_messages(
+    ai_name: &str,
+    lang: &str,
+    mode: &str,
+    user_message: &str,
+    completed_steps: &[String],
+    plugins_hint: &str,
+    history: &[(String, String)],
+    voice: bool,
+    correction: bool,
+) -> Vec<(String, String)> {
+    let system = build_continuation_system(
+        ai_name, lang, mode, plugins_hint, history, voice, correction,
     );
 
     let mut messages = vec![

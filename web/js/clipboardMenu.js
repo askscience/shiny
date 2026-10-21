@@ -17,86 +17,43 @@
  * page (see menuState.js).
  */
 
-import { emptyState, icon, iconButton, listItem, placeMenu } from '../ui/index.js';
+import { emptyState, icon, iconButton, listItem } from '../ui/index.js';
 import { history, removeHistoryEntry, clearHistory, copyText } from './clipboard.js';
 import { previewText, relativeTime } from './clipboardShared.js';
-import { notifyMenuChange } from './menuState.js';
+import { createMenu } from './menuFactory.js';
 import { getFocus } from './desktop.js';
 import { t, tp } from './i18n.js';
 
-let popup = null;
 let bodyEl = null;
 let headCountEl = null;
 let clearBtn = null;
-let open = false;
-let trigger = null;
 
 /* ── Open / close ──────────────────────────────────────────── */
 
-export function isClipboardMenuOpen() {
-  return open;
-}
+const clipboardChip = () => document.getElementById('hud-clipboard');
+
+const menu = createMenu({
+  build: buildPopup,
+  align: 'right',
+  onOpen: () => render(),
+});
 
 export function openClipboardMenu(chip) {
-  trigger = chip || trigger || document.getElementById('hud-clipboard');
-  ensurePopup();
-  open = true;
-  // The popup element is reused between opens (scroll position and listeners
-  // survive); unhide it here so a second open is not a blank popup.
-  popup.classList.remove('hidden');
-  popup.style.animation = 'none';
-  void popup.offsetHeight;
-  popup.style.animation = '';
-  render();
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  window.addEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'true');
-  trigger?.classList.add('is-open');
-  reposition();
-  notifyMenuChange();
+  menu.show(chip || clipboardChip());
 }
 
 export function closeClipboardMenu() {
-  if (!open) return;
-  open = false;
-  popup?.classList.add('hidden');
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-  window.removeEventListener('resize', reposition);
-  trigger?.setAttribute('aria-expanded', 'false');
-  trigger?.classList.remove('is-open');
-  notifyMenuChange();
+  menu.close();
 }
 
 export function toggleClipboardMenu(chip) {
-  if (open) closeClipboardMenu();
-  else openClipboardMenu(chip);
-}
-
-function onOutside(event) {
-  if (event.target.closest?.('.ui-modal')) return;
-  if (popup?.contains(event.target)) return;
-  if (trigger?.contains(event.target)) return;
-  closeClipboardMenu();
-}
-
-function onKey(event) {
-  if (event.key === 'Escape' && !document.querySelector('.ui-modal:not(.hidden)')) {
-    closeClipboardMenu();
-  }
-}
-
-function reposition() {
-  if (!popup || !trigger) return;
-  placeMenu(popup, trigger, { align: 'right' });
+  menu.toggle(chip || clipboardChip());
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 
-function ensurePopup() {
-  if (popup) return;
-  popup = document.createElement('div');
+function buildPopup() {
+  const popup = document.createElement('div');
   popup.className = 'ui-hud-menu-popup clipboard-menu hidden';
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', t('hud.clipboardHistory'));
@@ -127,11 +84,11 @@ function ensurePopup() {
   bodyEl.className = 'clipboard-body';
 
   popup.append(head, bodyEl);
-  document.body.appendChild(popup);
   // The service announces every change; render only while visible.
   window.addEventListener('clipboard:changed', () => {
-    if (open) render();
+    if (menu.isOpen()) render();
   });
+  return popup;
 }
 
 /* ── Rendering ─────────────────────────────────────────────── */

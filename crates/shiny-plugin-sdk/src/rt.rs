@@ -12,11 +12,12 @@
 //! an executor-agnostic oneshot channel. The host worker never blocks; the
 //! plugin's own Tokio services its IO serially on one thread.
 //!
-//! The worker and its runtime are **process-global** — one thread shared by
-//! every bridged tool/route of every loaded plugin — so a panicking job must
-//! never take the worker down: each job is awaited under `catch_unwind`, the
-//! loop keeps running, and the awaiting host receives an `AppError` instead of
-//! a panic or a hang.
+//! The worker and its runtime belong to **this plugin's copy of the SDK** (each
+//! cdylib links the SDK statically), so all bridged tools/routes of one plugin
+//! share one thread while different plugins run independently. A panicking job
+//! must never take the worker down: each job is awaited under `catch_unwind`,
+//! the loop keeps running, and the awaiting host receives an `AppError` instead
+//! of a panic or a hang.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -29,9 +30,9 @@ use crate::errors::AppError;
 
 type Job = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-/// The process-global sender queueing jobs onto the single plugin worker
-/// thread. Every `bridge` call — from any plugin — queues here and is
-/// serviced serially.
+/// This plugin's sender queueing jobs onto its single worker thread. Every
+/// `bridge` call from this plugin queues here and is serviced serially; other
+/// plugins have their own copy of this queue.
 fn plugin_tx() -> &'static mpsc::UnboundedSender<Job> {
     static TX: OnceLock<mpsc::UnboundedSender<Job>> = OnceLock::new();
     TX.get_or_init(|| {

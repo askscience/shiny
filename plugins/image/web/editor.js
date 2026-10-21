@@ -1,5 +1,5 @@
 import {
-  confirmDialog, dial, toolbar, element as el, toolButton, controlButton, button, setIcon, toast,
+  confirmDialog, dial, toolbar, element as el, toolButton, button, toast,
   emptyState,
 } from '../../../ui/index.js';
 
@@ -438,16 +438,6 @@ async function send(body, { commit }) {
   // The strip previews render over the settings base, so they follow every
   // commit except a pure look swap (which leaves the base untouched).
   if (commit && !(body.operations && isPureLook(body.operations))) scheduleLooksRefresh();
-}
-
-/** Queue a destructive operation batch (one-clicks, geometry, AI). */
-export function queueOp(op, { commit = true } = {}) {
-  if (!S.doc) {
-    toast(t('plugin.image.toast.openFirst', null, 'Open an image first'), { type: 'error' });
-    return;
-  }
-  S.pending = { body: { operations: Array.isArray(op) ? op : [op] }, commit };
-  if (!S.applying) void pump();
 }
 
 /** Queue a dial-settings update (`{brightness: 30}` — merged server-side). */

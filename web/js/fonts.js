@@ -15,11 +15,6 @@ const FALLBACK = ['system-ui', 'sans-serif', 'serif', 'monospace'];
 let cached = null;
 let inflight = null;
 
-/** Force the next `listFonts()` to re-query (e.g. after installing a font). */
-export function clearFontCache() {
-  cached = null;
-}
-
 /** Installed font family names, sorted. Falls back to a small built-in list. */
 export async function listFonts({ force = false } = {}) {
   if (!force && cached) return cached;

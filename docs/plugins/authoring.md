@@ -96,7 +96,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
+    plugin::Plugin,
     services::PluginCtx,
     tools::{bridged, RegistryBuilder},
 };
@@ -107,19 +107,10 @@ pub struct MyPlugin;
 impl Plugin for MyPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "myplugin".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some("What this plugin does".into()),
-            author: None,
-            summary: None,
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("myplugin")
+                .description("What this plugin does")
+                .summary("MyPlugin: one greeting tool")
         })
     }
 
@@ -142,8 +133,9 @@ pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
 }
 ```
 
-Note `bridged(...)` around every tool. See
-[Runtime & ABI](runtime-abi.md).
+Note `bridged(...)` around every tool. A plugin that keeps the context for its
+routes uses `ctx_plugin!(MyPlugin)` instead of hand-writing the struct, context
+slot, `route_handler` and entry symbol. See [Runtime & ABI](runtime-abi.md).
 
 ---
 

@@ -57,22 +57,25 @@ Start `shiny` with an empty `PLUGINS_DIR` and you get a voice bar that listens, 
 shiny/
 ├── Cargo.toml                       # [workspace] root, lists ./, SDK and the plugins
 ├── crates/
-│   └── shiny-plugin-sdk/            # public trait surface + shared types
-│       ├── Cargo.toml
-│       └── src/
-│           ├── lib.rs                # re-exports
-│           ├── plugin.rs              # the `Plugin` trait + PLUGIN_ENTRY_SYMBOL
-│           ├── tools.rs               # `Tool` trait + `RegistryBuilder`
-│           ├── outcome.rs            # `ActionOutcome`
-│           ├── context.rs            # `AgentContext` (per-request agent state)
-│           ├── services.rs           # `PluginCtx` + lazy `OllamaClient`, `SearchService`, `SupertonicClient`, pool
-│           ├── rt.rs                 # `bridge()` — plugin-owned Tokio runtime (§15)
-│           ├── artifacts.rs          # `Artifact` value type + `build_from_params`
-│           ├── navigation.rs        # `NavigationSession` (optional navigator payload)
-│           ├── manifest.rs           # `Manifest` struct
-│           ├── routes.rs             # `RouteSpec`, `HttpMethod`
-│           ├── crons.rs              # `CronSpec`
-│           └── migrations.rs         # per-plugin migration runner
+│   ├── shiny-plugin-sdk/             # public trait surface + shared types
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs                # re-exports + ctx_plugin! entry macro
+│   │       ├── plugin.rs              # the `Plugin` trait + PLUGIN_ENTRY_SYMBOL
+│   │       ├── tools.rs               # `Tool` trait + `RegistryBuilder`
+│   │       ├── outcome.rs            # `ActionOutcome`
+│   │       ├── context.rs            # `AgentContext` (per-request agent state)
+│   │       ├── services.rs           # `PluginCtx` + lazy `OllamaClient`, `SearchService`, `SupertonicClient`, pool
+│   │       ├── rt.rs                 # `bridge()` — plugin-owned Tokio runtime (§15)
+│   │       ├── artifacts.rs          # `Artifact` value type + `build_from_params`
+│   │       ├── navigation.rs        # `NavigationSession` (optional navigator payload)
+│   │       ├── manifest.rs           # `Manifest` struct + `Manifest::new`
+│   │       ├── routes.rs             # `RouteSpec` constructors, `ok`/`user_id`
+│   │       ├── util.rs               # title/filename/DB-value/user-id helpers
+│   │       ├── crons.rs              # `CronSpec`
+│   │       └── migrations.rs         # per-plugin migration runner
+│   ├── shiny-osm/                    # OSM client shared by core + traveler
+│   └── peakd-core/                   # display-scale state shared by the shells
 ├── plugins/
 │   ├── hello/                        # demo plugin (see §7 worked example)
 │   │   ├── Cargo.toml
@@ -772,7 +775,20 @@ POST /api/plugins/deactivate
 { "name": "hello" }
 ```
 
-Keeps the plugin installed and its database tables intact, but disables its tools. The agent stops advertising the deactivated plugin's tools (their `doc_fragment` snippets are omitted from the skills markdown) and `ToolRegistry::invoke` returns `"plugin 'hello' is deactivated"` if the LLM still tries one. The disabled set is persisted to `data/plugins/disabled.json` so the state survives restarts.
+Keeps the plugin installed and its database tables intact, but disables its tools. The agent stops advertising the deactivated plugin's tools (their `doc_fragment` snippets are omitted from the skills markdown) and `ToolRegistry::invoke` returns `"plugin 'hello' is deactivated"` if the LLM still tries one. The choice is stored per user in `user_plugin_states` (the row `enabled` boolean), so it survives restarts. Deactivating also closes the plugin's window and stops any process the window kept alive (a Craft app's MCP server, gracefully — see `POST /api/plugins/window/closed`); **deactivate is not the window's X** (see Activation state below).
+
+### `POST /api/plugins/window/closed`
+
+```json
+POST /api/plugins/window/closed
+{ "name": "photocraft" }
+```
+
+The shell closed a plugin window. Windows are client state, but a Craft app's MCP server belongs to its window: this stops the app's CLI through the MCP lifecycle (`shutdown` request → `exit` notification → EOF on stdin, with a kill only after the grace period) and unregisters its tools immediately, instead of waiting for the next agent turn. A no-op for plugins that own no process. **Closing a window is not deactivation**: `enabled` is untouched and the tray can reopen the window.
+
+### `POST /api/plugins/session/reset`
+
+Called at boot (and sign-in) when `session.remember` is off. Drops the previous sign-in's session activations (this user's `user_plugin_states` rows with `enabled = 1`) and stops every running Craft MCP server, so a fresh session starts with no windows and every plugin closed. `enabled = 0` rows are remember-mode choices and are left alone.
 
 ### `GET /api/plugins/install.log`
 
@@ -832,7 +848,11 @@ everything on screen. With no window open, no server runs and no tool exists; wi
 another plugin focused, the ordinary focus gate refuses them. Opening an app
 mid-turn (`show_plugin`) starts its server and hands the model its tools in the same
 conversation. Turning AI control off (the CLI removed) stops a running server at the
-next turn as well. None of this depends on prompt wording.
+next turn as well. Closing the window or deactivating the plugin stops it **now**:
+`POST /api/plugins/window/closed` (and the deactivate path) ask the CLI to leave
+through the MCP lifecycle — a `shutdown` request, an `exit` notification, then EOF
+on stdin — and only kill a server that ignores all three (`McpClient::stop` in
+`src/plugins/craft_mcp.rs`). None of this depends on prompt wording.
 
 The app CLI drives the app's own engine: in headless mode it opens, edits and
 saves documents itself (`--automation-read-root` / `--automation-write-root`
@@ -843,7 +863,8 @@ and has no control channel. The vendor's live channel, `<app> --control 7979`, i
 a native-app feature; the web builds can't host it. Two consequences, both in the
 prompt so the model cannot pretend otherwise: it must **save or export** the
 document and give the user the path, and unsaved work dies with the turn's
-process (the host stops the server when the window closes or the focus changes).
+process (the host stops the server gracefully when the window closes or the
+focus changes).
 
 **Live control, when the app's build can take it.** The Craft web builds
 document a page API — `window.<app>.request(method, params)`, the same methods
@@ -868,17 +889,38 @@ shims the frame's file inputs: a click opens the shell's picker
 (`web/js/filePicker.js`), which browses the home through the Files plugin, and
 the bytes come back as `File` objects in the frame's own realm with `input` and
 `change` dispatched — the app's own Open… then works, for every web app, present
-or installed later, with no per-app code. The shell's own `pickFiles()` uses the
-same dialog. Files → “Open with app” for a web app still needs the app's page API
-(`openFile`), so it follows the same gate as live control.
+or installed later, with no per-app code. The picker is a **compact floating
+window** (`ui/floating`): the desktop's own slim title bar (draggable, only a
+close control), the Files window's grid with live thumbnails and its icon
+language, and the theme's window surface — no backdrop, not a modal, and outside
+the tiling, so it never disturbs the desktop layout. The shell's own
+`pickFiles()` uses the same window. Files → “Open with app” for a web app still
+needs the app's page API (`openFile`), so it follows the same gate as live
+control.
 
 ### Activation state
 
-Every plugin is either **Active** (default after install) or **Off** (deactivated). Activating / deactivating:
+Every plugin is either **Active** (its tools are on for the session) or **Off**
+(deactivated). The per-user `user_plugin_states` table stores the choice; it is
+what `GET /api/plugins` reports as `enabled`. What a sign-in *starts from*
+depends on `session.remember`:
+
+- **remember off** (default) — session-scoped. The shell calls
+  `POST /api/plugins/session/reset` before the app starts, so the previous
+  sign-in's activations are dropped and every Craft MCP server stops: no plugin
+  window exists and the desktop starts clean. Activating a plugin lasts for the
+  session; deactivating **deletes** the row instead of writing `enabled = 0`, so
+  a fresh-session choice never turns into a permanent disable later.
+- **remember on** — the previous session is restored: installed minus explicitly
+  disabled (`enabled = 0`), plus the saved workspaces (windows, positions,
+  focus, fullscreen). Only windows the saved workspace lists are reopened —
+  being active never opens a window by itself.
+
+Activating / deactivating:
 
 - Updates `GET /api/plugins` `enabled` boolean.
-- Persists to `data/plugins/disabled.json` (a small JSON file with one `disabled: ["name", ...]` array).
 - Affects the agent immediately: deactivated plugins contribute no `doc_fragment`, no `persona` fragment, no `context_lines`, and their `Tool::invoke` short-circuits with a friendly `BadRequest`.
+- Deactivating also closes the plugin's window and stops any process it kept alive (a Craft app's MCP server, gracefully). Its window **X** is a different gesture: it closes the window and stops its process, but the plugin stays active — the tray can reopen it, and its tools keep working while it is closed.
 
 The separation between **deactivate** (keep install dir + tables, just turn tools off) and **uninstall** (drop install dir + library unload) mirrors WordPress's "deactivate" vs "delete" distinction. Deactivation is reversible; uninstall requires re-uploading the archive.
 
@@ -1080,13 +1122,18 @@ How plugin content reaches the eye:
   **window** in the desktop shell (`web/js/tiles.js`, `#tile-grid`): the HUD
   header and the voice bar/dock are fixed chrome, and each plugin is an app
   with its own window container between them. The traveler plugin's window
-  hosts the map. Every window has a slim **title bar** (close = deactivate,
-  fullscreen = fill the desktop without covering the HUD); *Settings → Desktop
-  → Layout* picks the desktop style — **Tiling** or **Columns**, or
-  floating, draggable **Windows**. The AI can surface a window with the core
-  `show_plugin` tool (system prompt carries a compact catalog of active
-  plugins — name + manifest description — and the response field `focus_plugin`
-  focuses that window).
+  hosts the map. Every window has a slim **title bar**: **close** closes the
+  window for this session (the plugin stays active, its tools keep working, and
+  the tray can reopen it; a Craft app's engine stops gracefully), **fullscreen**
+  fills the desktop without covering the HUD, and **focus** toggles focus mode.
+  Deactivate lives in the Plugins page, the context/tray menus and the AI
+  tools — never on the X. Opening a window is not activation: with
+  `session.remember` on, only the windows the saved workspaces list are
+  reopened. *Settings → Desktop → Layout* picks the desktop style — **Tiling**
+  or **Columns**, or floating, draggable **Windows**. The AI can surface a
+  window with the core `show_plugin` tool (system prompt carries a compact
+  catalog of active plugins — name + manifest description — and the response
+  field `focus_plugin` focuses that window).
 - **Artifacts** (the `artifact` field of `ActionOutcome`) are JSON rendered
   by the `artifactPanel` composite (`web/ui/components/composites.js`) as a
   **sheet inside their plugin's own window** (`.tile-sheet` over the plugin's
@@ -1125,7 +1172,8 @@ export default {
 
 `mount()` returns a `section.tile <name>-tile` element carrying
 `data-plugin="<name>"`; core tiles it, applies focus/fullscreen, and calls
-`unmount()` on deactivation. Window styles live in core's `web/css/tiles.css`
+`unmount()` on window close, deactivation or uninstall. Window styles live in
+core's `web/css/tiles.css`
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
 plugins build DOM with shared controls. Optional plugin stylesheets arrange
 domain content without replacing shared control styling or motion.
@@ -1194,8 +1242,8 @@ inside the app resolves to a menu by context:
 
 | Right-click target | Menu |
 |---|---|
-| A plugin window — **title bar or content** | Window menu: Focus, Full screen, Move to workspace, **the app's own entries**, Deactivate |
-| A plugin icon in the top-bar tray | Plugin menu: Focus window / Full screen, then Activate or Deactivate |
+| A plugin window — **title bar or content** | Window menu: Focus, Full screen, Move to workspace, **the app's own entries**, Close window, Deactivate |
+| A plugin icon in the top-bar tray | Plugin menu: Focus window / Full screen — or **Open window** when the plugin is active but its window is closed — then Activate or Deactivate |
 | The top bar itself (HUD pill / workspace bar background) | Desktop menu (new/remove workspace, switch workspace, layout) |
 | A workspace dot | Workspace menu (new / remove) |
 | The empty desktop | Desktop menu |
@@ -1210,7 +1258,8 @@ cursor.
 
 **An app contributes its own entries.** A plugin's window surface may export a
 `contextMenu(ctx)` function. Core calls it when the window menu opens and
-splices the returned entries between "Move to workspace" and "Deactivate":
+splices the returned entries between "Move to workspace" and the window
+controls ("Close window" / "Deactivate"):
 
 ```js
 // plugins/word/web/plugin.js — the reference implementation

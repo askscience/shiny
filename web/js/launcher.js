@@ -14,6 +14,7 @@ import { controlButton } from '../ui/components/button.js';
  * desktop all dismiss.
  */
 import { apiFetch } from './api.js';
+import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { t } from './i18n.js';
 
@@ -27,14 +28,14 @@ function label(name) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-async function refresh() {
+async function refresh(force = false) {
   try {
-    const [listRes, activeRes] = await Promise.all([
-      apiFetch('/api/plugins'),
-      apiFetch('/api/plugins/active'),
+    const [list, activeNames] = await Promise.all([
+      refreshPluginCatalog({ force }),
+      refreshActivePlugins({ force }),
     ]);
-    plugins = listRes?.data || [];
-    active = new Set(activeRes?.data || []);
+    plugins = list || [];
+    active = new Set(activeNames || []);
   } catch (_) {
     // Keep the last known list on a transient error.
   }
@@ -131,11 +132,6 @@ export function closeLauncher() {
   document.body.classList.remove('launcher-active');
 }
 
-export function toggleLauncher() {
-  if (open) closeLauncher();
-  else openLauncher();
-}
-
 export function initLauncher() {
   if (panel) return;
   panel = document.getElementById('plugin-launcher');
@@ -158,6 +154,6 @@ export function initLauncher() {
     if (open && e.detail?.which !== 'launcher') closeLauncher();
   });
   window.addEventListener('plugins:changed', () => {
-    if (open) void refresh();
+    if (open) void refresh(true);
   });
 }

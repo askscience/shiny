@@ -82,8 +82,9 @@ export function uninstall() {
 }
 
 async function refresh() {
+  if (document.hidden) return;
   try {
-    const res = await apiFetch('/api/updates/status');
+    const res = await apiFetch('/api/updates/status?summary=true');
     if (res?.data) status = res.data;
   } catch (_) {
     // Server restarting or offline — keep the last known chip state.

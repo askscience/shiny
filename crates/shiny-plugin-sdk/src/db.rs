@@ -88,6 +88,10 @@ impl Db {
             }
             return Err(AppError::Internal(msg));
         }
+        // A plugin write must wait for the host/another plugin's transaction
+        // instead of failing immediately with "database is locked". The core
+        // pool already sets 5 s; the synchronous plugin handle did not.
+        unsafe { libsqlite3_sys::sqlite3_busy_timeout(raw, 5_000) };
         Ok(Db { raw: Mutex::new(raw) })
     }
 

@@ -158,15 +158,6 @@ pub fn is_active() -> bool {
     .map(|o| o.success)
     .unwrap_or(false)
 }
-
-pub fn restart_spec() -> Option<CmdSpec> {
-    if exec::which("systemctl").is_some() {
-        Some(CmdSpec::new("systemctl").args(["restart", "ollama"]).root())
-    } else {
-        None
-    }
-}
-
 fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }

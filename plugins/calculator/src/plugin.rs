@@ -1,16 +1,14 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
-    routes::{HttpMethod, RouteHandler, RouteSpec},
+    plugin::Plugin,
+    routes::{RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::RegistryBuilder,
 };
 
-pub struct CalculatorPlugin {
-    ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(CalculatorPlugin);
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str =
@@ -18,9 +16,9 @@ pub const PERSONA: &str =
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
-        RouteSpec { method: HttpMethod::Post, path: "/api/calculator/eval".into(), auth: "auth".into(), handler_tag: "eval".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/calculator/history".into(), auth: "auth".into(), handler_tag: "history_list".into() },
-        RouteSpec { method: HttpMethod::Delete, path: "/api/calculator/history".into(), auth: "auth".into(), handler_tag: "history_clear".into() },
+        RouteSpec::post("/api/calculator/eval", "eval"),
+        RouteSpec::get("/api/calculator/history", "history_list"),
+        RouteSpec::delete("/api/calculator/history", "history_clear"),
     ]
 }
 
@@ -28,50 +26,28 @@ fn route_specs() -> Vec<RouteSpec> {
 impl Plugin for CalculatorPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "calculator".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "Scientific calculator — evaluate arithmetic and scientific expressions in the Calculator window".into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some("Calculator: basic and scientific math".into()),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("calculator")
+                .description("Scientific calculator — evaluate arithmetic and scientific expressions in the Calculator window")
+                .summary("Calculator: basic and scientific math")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/calculator.md"))
             .context_line("Calculator: enabled — the Calculator window evaluates basic and scientific expressions.");
-        for spec in route_specs() {
-            builder.route(spec);
-        }
-        for tool in [
+        builder.routes(route_specs());
+        builder.tools([
             Arc::new(crate::tools::CalculatorEval) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::CalculatorHistory) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-            Arc::new(crate::tools::CalculatorClearHistory) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-        ] {
-            builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
-        }
+            Arc::new(crate::tools::CalculatorClearHistory) as Arc<dyn shiny_plugin_sdk::tools::Tool>,]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
 }
 
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(CalculatorPlugin { ctx: OnceLock::new() }))
-}

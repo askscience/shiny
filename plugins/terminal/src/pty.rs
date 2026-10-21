@@ -398,7 +398,10 @@ impl Session {
         };
         inner.scrollback.extend_from_slice(bytes);
         let len = inner.scrollback.len();
-        if len > SCROLLBACK_BYTES {
+        // Trim in bulk: draining 256 KB on every 4 KB chunk shifted the whole
+        // buffer continuously during a large `cat`. Let it grow to 2× the cap,
+        // then drop back to one cap, so the memmove is amortized.
+        if len > SCROLLBACK_BYTES * 2 {
             inner.scrollback.drain(..len - SCROLLBACK_BYTES);
         }
         publish_to_subscribers(&mut inner.subscribers, Event::Out(encoded));

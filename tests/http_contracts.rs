@@ -197,3 +197,164 @@ async fn storage_failure_is_not_reported_as_an_empty_plugin_session() {
         .is_err());
     assert!(!app.state.plugins.is_enabled_for("one", "terminal").await);
 }
+
+fn post_json(path: &str, token: Option<&str>, body: Value) -> Request {
+    let mut builder = Request::builder()
+        .uri(path)
+        .method("POST")
+        .header("content-type", "application/json");
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+    let mut request = builder.body(Body::from(body.to_string())).unwrap();
+    request.extensions_mut().insert(ConnectInfo(
+        "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),
+    ));
+    request
+}
+
+/// The session contract behind "Remember my workspace" and the window's X.
+///
+/// Fresh mode (the default): activations are session-scoped, so the boot reset
+/// drops them; deactivating a plugin deletes the activation instead of
+/// remembering an "off". A remember-mode "off" is a user choice and survives.
+/// Closing a window is a separate signal — it stops the app's process but never
+/// touches activation. Both routes are authenticated.
+#[tokio::test]
+async fn session_reset_and_window_close_follow_the_session_contract() {
+    let app = support::TestApp::new().await;
+    user(&app, "one").await;
+    let router = shiny::api::build_router(app.state.clone());
+
+    // Both routes require a token.
+    for path in ["/api/plugins/session/reset", "/api/plugins/window/closed"] {
+        let body = if path.ends_with("closed") {
+            json!({ "name": "calc" })
+        } else {
+            json!({})
+        };
+        assert_eq!(
+            router
+                .clone()
+                .oneshot(post_json(path, None, body.clone()))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED,
+            "{path}"
+        );
+        let response = router
+            .clone()
+            .oneshot(post_json(path, Some("one"), body))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        assert_eq!(json_body(response).await["success"], true);
+    }
+
+    // Fresh mode: an activation lives in this session only, and the reset drops
+    // it — a new sign-in starts with every plugin closed.
+    app.state
+        .plugins
+        .set_enabled_for("one", "hello", true)
+        .await
+        .unwrap();
+    let active = app
+        .state
+        .plugins
+        .try_session_active_set("one")
+        .await
+        .unwrap();
+    assert!(
+        active.contains("hello"),
+        "the session activation is live: {active:?}"
+    );
+    let response = router
+        .clone()
+        .oneshot(post_json(
+            "/api/plugins/session/reset",
+            Some("one"),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        app.state
+            .plugins
+            .try_session_active_set("one")
+            .await
+            .unwrap()
+            .is_empty(),
+        "a fresh session starts with no plugin active"
+    );
+
+    // A remember-mode "off" is not a session activation: the reset leaves it
+    // alone, so the user's explicit choice survives.
+    app.state
+        .plugins
+        .set_enabled_for("one", "hello", false)
+        .await
+        .unwrap();
+    let response = router
+        .clone()
+        .oneshot(post_json(
+            "/api/plugins/session/reset",
+            Some("one"),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        !app.state.plugins.is_enabled_for("one", "hello").await,
+        "an explicit off survives the reset"
+    );
+
+    // Deactivating in fresh mode deletes the activation instead of writing an
+    // "off" — no default-off, and no leftover row for the next session.
+    app.state
+        .plugins
+        .set_enabled_for("one", "hello", true)
+        .await
+        .unwrap();
+    app.state
+        .plugins
+        .deactivate_for("one", "hello")
+        .await
+        .unwrap();
+    assert!(
+        app.state.plugins.is_enabled_for("one", "hello").await,
+        "no row means the default (enabled) again, not a remembered off"
+    );
+    assert!(app
+        .state
+        .plugins
+        .try_session_active_set("one")
+        .await
+        .unwrap()
+        .is_empty());
+
+    // With remember on, the same call writes the persistent "off" instead.
+    sqlx::query(
+        "INSERT INTO user_preferences (user_id, key, value) \
+         VALUES ('one', 'session.remember', 'true')",
+    )
+    .execute(&app.state.pool)
+    .await
+    .unwrap();
+    app.state
+        .plugins
+        .set_enabled_for("one", "hello", true)
+        .await
+        .unwrap();
+    app.state
+        .plugins
+        .deactivate_for("one", "hello")
+        .await
+        .unwrap();
+    assert!(
+        !app.state.plugins.is_enabled_for("one", "hello").await,
+        "remember mode persists the off"
+    );
+}

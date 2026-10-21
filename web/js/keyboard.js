@@ -10,7 +10,7 @@ import { controlButton } from '../ui/components/button.js';
  * The plugin itself contributes nothing to the agent (no skills/tools) —
  * this module only exists when `isPluginActive('keyboard')`.
  */
-import { isPluginActive, refreshActivePlugins } from './activePlugins.js';
+import { refreshActivePlugins } from './activePlugins.js';
 import { getTraveler } from './api.js';
 import {
   cycleFocusActive, createWorkspace,

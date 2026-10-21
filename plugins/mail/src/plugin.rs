@@ -1,36 +1,34 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use async_trait::async_trait;
 use shiny_plugin_sdk::{
     manifest::Manifest,
-    plugin::{Plugin, PLUGIN_ENTRY_SYMBOL},
-    routes::{HttpMethod, RouteHandler, RouteSpec},
+    plugin::Plugin,
+    routes::{RouteHandler, RouteSpec},
     services::PluginCtx,
     tools::{RegistryBuilder, Tool},
 };
 
-pub struct MailPlugin {
-    ctx: OnceLock<Arc<PluginCtx>>,
-}
+shiny_plugin_sdk::ctx_plugin!(MailPlugin);
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str = "an email assistant; read, manage and send the user's mail";
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
-        RouteSpec { method: HttpMethod::Get, path: "/api/mail/status".into(), auth: "auth".into(), handler_tag: "mail_status".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/mail/accounts".into(), auth: "auth".into(), handler_tag: "mail_accounts_list".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/mail/accounts".into(), auth: "auth".into(), handler_tag: "mail_accounts_create".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/mail/accounts/test".into(), auth: "auth".into(), handler_tag: "mail_accounts_test".into() },
-        RouteSpec { method: HttpMethod::Put, path: "/api/mail/accounts/:id".into(), auth: "auth".into(), handler_tag: "mail_accounts_update".into() },
-        RouteSpec { method: HttpMethod::Delete, path: "/api/mail/accounts/:id".into(), auth: "auth".into(), handler_tag: "mail_accounts_delete".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/mail/folders".into(), auth: "auth".into(), handler_tag: "mail_folders".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/mail/list".into(), auth: "auth".into(), handler_tag: "mail_list".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/mail/search".into(), auth: "auth".into(), handler_tag: "mail_search".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/mail/sync".into(), auth: "auth".into(), handler_tag: "mail_sync".into() },
-        RouteSpec { method: HttpMethod::Get, path: "/api/mail/message".into(), auth: "auth".into(), handler_tag: "mail_message".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/mail/send".into(), auth: "auth".into(), handler_tag: "mail_send".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/mail/flag".into(), auth: "auth".into(), handler_tag: "mail_flag".into() },
-        RouteSpec { method: HttpMethod::Post, path: "/api/mail/delete".into(), auth: "auth".into(), handler_tag: "mail_delete".into() },
+        RouteSpec::get("/api/mail/status", "mail_status"),
+        RouteSpec::get("/api/mail/accounts", "mail_accounts_list"),
+        RouteSpec::post("/api/mail/accounts", "mail_accounts_create"),
+        RouteSpec::post("/api/mail/accounts/test", "mail_accounts_test"),
+        RouteSpec::put("/api/mail/accounts/:id", "mail_accounts_update"),
+        RouteSpec::delete("/api/mail/accounts/:id", "mail_accounts_delete"),
+        RouteSpec::get("/api/mail/folders", "mail_folders"),
+        RouteSpec::get("/api/mail/list", "mail_list"),
+        RouteSpec::get("/api/mail/search", "mail_search"),
+        RouteSpec::post("/api/mail/sync", "mail_sync"),
+        RouteSpec::get("/api/mail/message", "mail_message"),
+        RouteSpec::post("/api/mail/send", "mail_send"),
+        RouteSpec::post("/api/mail/flag", "mail_flag"),
+        RouteSpec::post("/api/mail/delete", "mail_delete"),
     ]
 }
 
@@ -38,50 +36,33 @@ fn route_specs() -> Vec<RouteSpec> {
 impl Plugin for MailPlugin {
     fn manifest(&self) -> &Manifest {
         static M: std::sync::OnceLock<Manifest> = std::sync::OnceLock::new();
-        M.get_or_init(|| Manifest {
-            name: "mail".into(),
-            version: semver::Version::new(0, 1, 0),
-            api_level: 1,
-            entry_symbol: PLUGIN_ENTRY_SYMBOL.into(),
-            target_triple: None,
-            description: Some(
-                "Mail client — IMAP inbox + SMTP compose, backed by io-email".into(),
-            ),
-            author: Some("shiny".into()),
-            summary: Some("Mail client: configure mail accounts, read the inbox and send email".into()),
-            migrations_dir: "migrations".into(),
-            skills_dir: "skills".into(),
-            web_dir: "web".into(),
-            signature: None,
+        M.get_or_init(|| {
+            Manifest::new("mail")
+                .description("Mail client — IMAP inbox + SMTP compose, backed by io-email")
+                .summary("Mail client: configure mail accounts, read the inbox and send email")
         })
     }
 
     fn register(&self, ctx: Arc<PluginCtx>, builder: &mut RegistryBuilder<'_>) {
-        let _ = self.ctx.set(ctx);
+        self.install_ctx(ctx);
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/mail.md"))
             .context_line(
                 "Mail: enabled — read and send email from the user's configured mail accounts.",
             );
-        for spec in route_specs() {
-            builder.route(spec);
-        }
-        for tool in [
+        builder.routes(route_specs());
+        builder.tools([
             Arc::new(crate::tools::MailStatus) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailList) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailRead) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailSearch) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailSync) as Arc<dyn Tool>,
-            Arc::new(crate::tools::MailSend) as Arc<dyn Tool>,
-        ] {
-            builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
-        }
+            Arc::new(crate::tools::MailSend) as Arc<dyn Tool>,]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
-        let ctx = self.ctx.get()?;
-        crate::routes::handle(ctx, tag)
+        self.routes_for(tag)
     }
 
     /// One-shot at load: encrypt every account password still stored in
@@ -131,8 +112,3 @@ impl Plugin for MailPlugin {
     }
 }
 
-/// The C entry symbol the loader transmutes and calls.
-#[no_mangle]
-pub extern "C" fn shiny_plugin_entry() -> *mut dyn Plugin {
-    Box::into_raw(Box::new(MailPlugin { ctx: OnceLock::new() }))
-}

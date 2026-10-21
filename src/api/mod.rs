@@ -28,13 +28,18 @@ pub mod touchbar;
 pub mod keyboard_backlight;
 pub mod screen_brightness;
 pub mod remote;
+mod sse;
 
+use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::Router;
 use axum::routing::{delete, get, patch, post, put};
 use shiny_plugin_sdk::routes::{HttpMethod, RouteHandler, RouteSpec};
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use tower::ServiceExt;
+use tower_http::compression::predicate::{NotForContentType, Predicate, SizeAbove};
+use tower_http::compression::CompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
@@ -534,6 +539,52 @@ async fn locale_middleware(
     crate::i18n::scope(locale, next.run(req)).await
 }
 
+/// Paths that are files or API endpoints, never SPA navigation. A missing one
+/// must return a small 404 instead of the 18 KB `index.html` fallback.
+fn is_shell_asset_path(path: &str) -> bool {
+    let path = path.trim_start_matches('/');
+    if path.is_empty() {
+        return false;
+    }
+    const PREFIXES: &[&str] = &[
+        "js/", "css/", "ui/", "themes/", "vendor/", "plugins/", "i18n/", "assets/", "api/",
+    ];
+    PREFIXES.iter().any(|prefix| path.starts_with(prefix))
+        || std::path::Path::new(path).extension().is_some()
+}
+
+/// Cache policy for the shell router. `no-cache` lets the browser store and
+/// revalidate assets (`ServeDir` already answers `If-Modified-Since` with a
+/// 304), while API responses and SSE stay out of every cache. Web-app routes
+/// are merged after this layer and keep their own immutable policy.
+async fn shell_cache_policy(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let is_api = path.starts_with("/api/");
+    // Model archives are static files, not per-user API data.
+    let is_static_api = path.starts_with("/api/voice/models/");
+    let is_event = path.ends_with("/events");
+
+    let mut response = next.run(req).await;
+    let value = if response.status() == StatusCode::NOT_FOUND || (is_api && !is_static_api) {
+        "no-store"
+    } else {
+        "no-cache"
+    };
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static(value));
+    if is_event {
+        response.headers_mut().insert(
+            header::HeaderName::from_static("x-accel-buffering"),
+            HeaderValue::from_static("no"),
+        );
+    }
+    response
+}
+
 pub fn build_router(state: AppState) -> Router {
     let web_dir = state.config.web_dir.clone();
     let vosk_models_dir = state.config.vosk_models_dir.clone();
@@ -565,6 +616,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/uninstall", post(crate::plugins::admin_api::uninstall))
         .route("/api/plugins/activate", post(crate::plugins::admin_api::activate))
         .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
+        // Fresh-session reset (session.remember off) and the shell's "window
+        // closed" signal: the window is client state, but an app's MCP process
+        // must stop now, gracefully, instead of at the next agent turn.
+        .route("/api/plugins/session/reset", post(crate::plugins::admin_api::reset_session))
+        .route("/api/plugins/window/closed", post(crate::plugins::admin_api::window_closed))
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
         // Craft store: the Craft App Suite's web builds as web-app plugins.
         .route("/api/plugins/store", get(crate::plugins::store::store_list))
@@ -701,8 +757,20 @@ pub fn build_router(state: AppState) -> Router {
         .merge(host_routes)
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth_middleware));
 
-    let static_files = ServeDir::new(&web_dir)
-        .not_found_service(ServeFile::new(format!("{}/index.html", web_dir)));
+    let index_service = ServeFile::new(format!("{}/index.html", web_dir));
+    let not_found_service = ServeFile::new(format!("{}/404.html", web_dir));
+    let spa_fallback = tower::service_fn(move |req: axum::extract::Request| {
+        let index_service = index_service.clone();
+        let not_found_service = not_found_service.clone();
+        async move {
+            if is_shell_asset_path(req.uri().path()) {
+                not_found_service.oneshot(req).await
+            } else {
+                index_service.oneshot(req).await
+            }
+        }
+    });
+    let static_files = ServeDir::new(&web_dir).not_found_service(spa_fallback);
 
     // Everything except web-app plugins runs under the shell's header policy.
     let shell = Router::new()
@@ -722,13 +790,29 @@ pub fn build_router(state: AppState) -> Router {
         // token leak into a durable cross-origin capability). There is no
         // legitimate cross-origin caller, so no CORS layer is added at all.
         //
-        // Never cache HTML/JS/CSS — the frontend must always re-fetch, so a
-        // server restart or a source edit is picked up on the next reload
-        // without stale JS lingering in the browser.
-        .layer(SetResponseHeaderLayer::overriding(
-            axum::http::header::CACHE_CONTROL,
-            axum::http::HeaderValue::from_static("no-store"),
-        ))
+        // Assets are stored but revalidated (`no-cache` + Last-Modified → 304),
+        // while API responses and SSE stay out of every cache. The web-app
+        // routes are merged after this layer and keep their own policy.
+        .layer(axum::middleware::from_fn(shell_cache_policy))
+        .layer(
+            CompressionLayer::new()
+                .br(true)
+                .gzip(true)
+                .compress_when(
+                    SizeAbove::new(256)
+                        .and(NotForContentType::GRPC)
+                        .and(NotForContentType::IMAGES)
+                        .and(NotForContentType::SSE)
+                        .and(NotForContentType::const_new("application/pdf"))
+                        .and(NotForContentType::const_new("application/zip"))
+                        .and(NotForContentType::const_new("application/gzip"))
+                        .and(NotForContentType::const_new("application/x-7z-compressed"))
+                        .and(NotForContentType::const_new("application/octet-stream"))
+                        .and(NotForContentType::const_new("application/vnd.oasis.opendocument"))
+                        .and(NotForContentType::const_new("audio/"))
+                        .and(NotForContentType::const_new("video/")),
+                ),
+        )
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::HeaderName::from_static("content-security-policy"),
             axum::http::HeaderValue::from_static(CONTENT_SECURITY_POLICY),
@@ -775,4 +859,34 @@ pub fn build_router(state: AppState) -> Router {
         .merge(web_apps)
         .layer(axum::middleware::from_fn(diagnostics::trace))
         .with_state(state)
+}
+
+#[cfg(test)]
+mod shell_path_tests {
+    use super::is_shell_asset_path;
+
+    #[test]
+    fn assets_and_api_paths_never_get_the_spa_fallback() {
+        for path in [
+            "/js/app.js",
+            "/css/tiles.css",
+            "/ui/icons/ui/close.svg",
+            "/themes/pitch/theme.json",
+            "/vendor/leaflet/leaflet.js",
+            "/plugins/files/plugin.js",
+            "/i18n/en.json",
+            "/assets/logo.png",
+            "/api/plugins",
+            "/favicon.svg",
+        ] {
+            assert!(is_shell_asset_path(path), "{path} should be an asset/API path");
+        }
+    }
+
+    #[test]
+    fn navigation_paths_keep_the_spa_fallback() {
+        for path in ["/", "/settings", "/plugins", "/chat/123", "/themes"] {
+            assert!(!is_shell_asset_path(path), "{path} should be navigation");
+        }
+    }
 }

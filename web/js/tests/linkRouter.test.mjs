@@ -21,7 +21,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(join(here, '..', 'linkRouter.js'), 'utf8');
 
 const start = source.indexOf('export function isKiosk');
-const end = source.indexOf('let catalogCache');
+const end = source.indexOf('/** The shared plugin catalog');
 if (start < 0 || end < 0 || end <= start) {
   console.error('could not locate the router predicates in linkRouter.js — did they move?');
   process.exit(1);

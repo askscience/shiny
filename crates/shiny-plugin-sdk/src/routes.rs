@@ -48,6 +48,54 @@ pub struct RouteSpec {
     pub handler_tag: String,
 }
 
+impl RouteSpec {
+    /// An authenticated route.
+    pub fn new(
+        method: HttpMethod,
+        path: impl Into<String>,
+        handler_tag: impl Into<String>,
+    ) -> Self {
+        Self {
+            method,
+            path: path.into(),
+            auth: "auth".into(),
+            handler_tag: handler_tag.into(),
+        }
+    }
+
+    pub fn get(path: impl Into<String>, handler_tag: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Get, path, handler_tag)
+    }
+
+    pub fn post(path: impl Into<String>, handler_tag: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Post, path, handler_tag)
+    }
+
+    pub fn put(path: impl Into<String>, handler_tag: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Put, path, handler_tag)
+    }
+
+    pub fn delete(path: impl Into<String>, handler_tag: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Delete, path, handler_tag)
+    }
+
+    pub fn patch(path: impl Into<String>, handler_tag: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Patch, path, handler_tag)
+    }
+
+    /// No bearer token required.
+    pub fn public(mut self) -> Self {
+        self.auth = "public".into();
+        self
+    }
+
+    /// Admin-only route.
+    pub fn admin(mut self) -> Self {
+        self.auth = "admin".into();
+        self
+    }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Route handlers & identity
 // ─────────────────────────────────────────────────────────────
@@ -141,6 +189,18 @@ pub fn is_remote_request(req: &axum::extract::Request) -> bool {
         || headers.contains_key(FORWARDED_FOR)
         || headers.contains_key(FORWARDED_PROTO)
         || headers.contains_key(FORWARDED_HOST)
+}
+
+/// JSON success envelope used by plugin routes:
+/// `{ "success": true, "data": ... }`.
+pub fn ok(data: serde_json::Value) -> Response {
+    axum::Json(serde_json::json!({ "success": true, "data": data })).into_response()
+}
+
+/// The authenticated user id, or the shared 401 response.
+pub fn user_id(req: &axum::extract::Request) -> Result<String, crate::errors::AppError> {
+    user_id_from_request(req)
+        .ok_or_else(|| crate::errors::AppError::Unauthorized("not authenticated".into()))
 }
 
 /// Read the authenticated user id the core auth middleware injected as a

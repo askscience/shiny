@@ -14,7 +14,7 @@
  */
 
 import { apiFetch } from './api.js';
-import { modal, button, iconButton, icon, list, listItem, emptyState, toast } from '../ui/index.js';
+import { floating, button, iconButton, icon, emptyState, toast } from '../ui/index.js';
 import { t } from './i18n.js';
 
 /** The Files plugin serves inline files up to this size; bigger reads use ranges. */
@@ -88,8 +88,102 @@ export async function pickerAvailable() {
   return available;
 }
 
+/** The Files window's own icon mapping, so a file looks the same in both. */
+function entryIcon(entry) {
+  if (entry.kind === 'dir') return 'ui/folder';
+  if (entry.is_image) return 'ui/image';
+  if (entry.is_pdf) return 'ui/doc';
+  if (entry.is_video) return 'ui/video';
+  if (entry.is_audio) return 'ui/music';
+  if (entry.is_archive) return 'ui/archive';
+  return 'ui/file';
+}
+
+/** The coloured folder artwork the Files window uses for the home folders. */
+const SPECIAL_FOLDERS = {
+  desktop: 'ui/folder-desktop',
+  documents: 'ui/folder-documents',
+  downloads: 'ui/folder-downloads',
+  music: 'ui/folder-music',
+  pictures: 'ui/folder-pictures',
+  public: 'ui/folder-public',
+  templates: 'ui/folder-templates',
+  videos: 'ui/folder-videos',
+};
+
+function folderIconFor(name) {
+  return SPECIAL_FOLDERS[String(name || '').toLowerCase()] || 'ui/folder';
+}
+
+/** A live thumbnail for images, the Files artwork for everything else. */
+function thumbFor(entry) {
+  const thumb = document.createElement('span');
+  thumb.className = 'files-thumb';
+  if (entry.kind === 'dir') {
+    thumb.classList.add('files-thumb--folder');
+    thumb.appendChild(icon(folderIconFor(entry.name), { size: 56 }));
+    return thumb;
+  }
+  if (entry.is_image) {
+    const img = document.createElement('img');
+    img.className = 'files-grid-img';
+    img.alt = '';
+    img.loading = 'lazy';
+    const typeIcon = () => {
+      img.remove();
+      thumb.classList.add('files-thumb--icon');
+      thumb.appendChild(icon(entryIcon(entry), { size: 40 }));
+    };
+    img.addEventListener('error', () => {
+      if (img.dataset.fallback) {
+        typeIcon();
+        return;
+      }
+      img.dataset.fallback = '1';
+      img.src = `/api/files/raw?path=${encodeURIComponent(entry.path)}`;
+    });
+    img.src = `/api/files/thumb?path=${encodeURIComponent(entry.path)}&size=320`;
+    thumb.appendChild(img);
+    return thumb;
+  }
+  thumb.classList.add('files-thumb--icon');
+  thumb.appendChild(icon(entryIcon(entry), { size: 40 }));
+  return thumb;
+}
+
 /**
- * The dialog itself. Resolves the chosen entries (`{name, path, kind, ext,
+ * One grid cell (the Files window's classes, so the grid reads the same):
+ * click picks a file / opens a folder, double-click or Enter opens the file.
+ */
+function entryCell(entry, { onPick, onOpen }) {
+  const cell = document.createElement('button');
+  cell.type = 'button';
+  cell.className = 'files-entry files-entry--grid file-picker-entry';
+  cell.dataset.path = entry.path;
+  cell.title = entry.name;
+  const name = document.createElement('span');
+  name.className = 'files-grid-name';
+  name.textContent = entry.name;
+  cell.append(thumbFor(entry), name);
+  cell.addEventListener('click', (event) => {
+    if (entry.kind === 'dir') onOpen(entry);
+    else if (event.detail === 2) onOpen(entry);
+    else onPick(entry);
+  });
+  cell.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (entry.kind === 'dir') onOpen(entry);
+    else {
+      onPick(entry);
+      onOpen(entry);
+    }
+  });
+  return cell;
+}
+
+/**
+ * The picker window. Resolves the chosen entries (`{name, path, kind, ext,
  * size}`), an empty array on Cancel, and `null` when the Files plugin is not
  * available (callers then keep their old behavior).
  */
@@ -102,7 +196,6 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
     let entries = [];
     let settled = false;
     const chosen = new Map();
-    const rowNodes = new Map();
 
     const pathLabel = document.createElement('div');
     pathLabel.className = 'file-picker-path';
@@ -116,11 +209,9 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
     pathText.className = 'file-picker-path-text';
     pathLabel.append(upBtn, pathText);
 
-    const listHost = document.createElement('div');
-    listHost.className = 'file-picker-list';
-    const rows = list([], () => null);
-    rows.className = 'ui-list file-picker-rows';
-    listHost.appendChild(rows);
+    const gridHost = document.createElement('div');
+    gridHost.className = 'files-grid file-picker-grid';
+    const cells = new Map();
 
     const footer = document.createElement('div');
     footer.className = 'file-picker-actions';
@@ -139,10 +230,11 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
     });
     footer.append(summary, cancelBtn, openBtn);
 
-    const dialog = modal({
+    const dialog = floating({
+      key: 'file-picker',
       title: t('files.pickerTitle', null, 'Open a file'),
-      wide: true,
-      body: [pathLabel, listHost, footer],
+      body: [pathLabel, gridHost, footer],
+      removeOnClose: true,
       onClose: () => finish([]),
     });
 
@@ -169,7 +261,7 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
         ? t('files.pickerSelected', { count: chosen.size }, `${chosen.size} selected`)
         : t('files.pickerNoSelection', null, 'Nothing selected');
       openBtn.disabled = chosen.size === 0;
-      for (const [path, row] of rowNodes) row.classList.toggle('is-selected', chosen.has(path));
+      for (const [path, cell] of cells) cell.classList.toggle('is-selected', chosen.has(path));
     }
 
     function choose(entry) {
@@ -187,40 +279,26 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
       refresh();
     }
 
-    function rowFor(entry) {
-      const isDir = entry.kind === 'dir';
-      const isImage = !!entry.is_image;
-      const row = listItem({
-        title: entry.name,
-        subtitle: isDir
-          ? t('files.pickerFolder', null, 'Folder')
-          : formatSize(entry.size),
-        leading: isDir ? 'ui/folder' : isImage ? 'ui/image' : 'ui/file',
-        onClick: (event) => {
-          if (isDir) {
-            void load(entry.path);
-            return;
-          }
-          choose(entry);
-          if (event?.detail === 2) close([...chosen.values()]);
-        },
-      });
-      row.classList.add('file-picker-row');
-      rowNodes.set(entry.path, row);
-      return row;
-    }
-
     function render() {
-      rows.replace([]);
-      rowNodes.clear();
+      gridHost.textContent = '';
+      cells.clear();
       for (const entry of entries) {
-        const row = rowFor(entry);
-        row.dataset.path = entry.path;
-        rowNodes.set(entry.path, row);
-        rows.appendChild(row);
+        const cell = entryCell(entry, {
+          onPick: choose,
+          onOpen: (picked) => {
+            if (picked.kind === 'dir') {
+              void load(picked.path);
+              return;
+            }
+            if (!chosen.has(picked.path)) choose(picked);
+            close([...chosen.values()]);
+          },
+        });
+        cells.set(entry.path, cell);
+        gridHost.appendChild(cell);
       }
       if (!entries.length) {
-        rows.appendChild(emptyState({
+        gridHost.appendChild(emptyState({
           icon: 'ui/folder',
           title: t('files.pickerEmpty', null, 'No files here'),
         }));
@@ -269,11 +347,4 @@ export async function pickFilesFromShell({ accept = '', multiple = false } = {})
     });
     return [];
   }
-}
-
-function formatSize(bytes) {
-  const value = Number(bytes) || 0;
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${Math.round(value / 1024)} kB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }

@@ -318,6 +318,39 @@ export function ensureWindows(names) {
   persist();
 }
 
+/**
+ * Close a window (not deactivate its plugin): take it out of every workspace,
+ * clear its focus/fullscreen state and focus mode, repair the fullscreen rule,
+ * and remember the new arrangement. In fresh mode `persist()` is a no-op, so
+ * this only changes the session; with "remember" on it is the new saved state.
+ */
+export function closeWindow(name) {
+  if (!name) return false;
+  let changed = false;
+  for (const ws of workspaces) {
+    if (ws.windows.includes(name)) {
+      ws.windows = ws.windows.filter((w) => w !== name);
+      changed = true;
+    }
+    if (ws.focus === name) { ws.focus = null; changed = true; }
+    if (ws.fullscreen === name) { ws.fullscreen = null; changed = true; }
+  }
+  const unfocused = focusedPlugins.delete(name);
+  if (unfocused) {
+    savePluginFocus([...focusedPlugins]);
+    renderWorkspaceBar();
+  }
+  if (!changed) {
+    if (unfocused) notify('focus');
+    return false;
+  }
+  reconcile();
+  loadActiveFocus();
+  persist();
+  notify();
+  return true;
+}
+
 /** Windows of the active workspace that still exist, in workspace order. */
 export function activeWindowNames(allNames) {
   if (!workspacesEnabled()) return [...allNames];
@@ -642,6 +675,17 @@ function pushWorkspace(name = null) {
   return ws;
 }
 
+export function createWorkspace() {
+  if (!workspacesEnabled()) return null;
+  syncActiveFocus();
+  const ws = pushWorkspace();
+  activeWs = ws.id;
+  loadActiveFocus();
+  persist();
+  notify();
+  return ws;
+}
+
 /**
  * Drop an empty workspace without merging it into a neighbour. Used by
  * fullscreen.js when a fullscreen app moved on and left its dedicated space
@@ -659,17 +703,6 @@ export function dropWorkspace(id) {
   persist();
   notify();
   return true;
-}
-
-export function createWorkspace() {
-  if (!workspacesEnabled()) return null;
-  syncActiveFocus();
-  const ws = pushWorkspace();
-  activeWs = ws.id;
-  loadActiveFocus();
-  persist();
-  notify();
-  return ws;
 }
 
 export function removeWorkspace() {
@@ -960,3 +993,4 @@ export function cycleFocusActive(dir = 1) {
 export function toggleFullscreenActive() {
   return toggleFullscreen(getFocus() || namesForShortcuts()[0]);
 }
+

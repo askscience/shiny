@@ -443,12 +443,18 @@ function dispatchAgentActions(res) {
   window.__lastAgentActions = actions;
   window.dispatchEvent(new CustomEvent('agent:actions', { detail: actions }));
   // The AI turned a plugin on/off — re-evaluate plugin windows, keyboard,
-  // HUD chrome and traveler surfaces immediately.
+  // HUD chrome and traveler surfaces immediately. Activation opens the new
+  // window (the same gesture as the tray); deactivation closes it.
   const touchedPlugins = actions.some(
     (a) => a?.action === 'plugin_activate' || a?.action === 'plugin_deactivate',
   );
   if (touchedPlugins) {
-    window.dispatchEvent(new CustomEvent('plugins:changed'));
+    const opened = actions
+      .filter((a) => a?.action === 'plugin_activate' && a?.result === 'ok')
+      .map((a) => a?.data?.plugin)
+      .filter(Boolean);
+    window.dispatchEvent(new CustomEvent('plugins:changed',
+      opened.length ? { detail: { opened } } : undefined));
   }
 }
 

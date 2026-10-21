@@ -298,6 +298,29 @@
 }
 .ui-sheet.is-open .ui-sheet-card { transform: translateY(0); }
 
+/* ── Floating window: the desktop's chrome, outside the tiling ── */
+.ui-floating {
+  position: fixed; z-index: var(--z-overlay);
+  display: flex; flex-direction: column;
+  width: min(520px, calc(100vw - 32px));
+  height: min(58vh, 440px);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--window-radius, var(--radius-lg));
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-float);
+}
+.ui-floating--wide { width: min(640px, calc(100vw - 32px)); }
+.ui-floating-head { cursor: grab; }
+.ui-floating-head:active { cursor: grabbing; }
+.ui-floating-spacer { width: 26px; }
+.ui-floating-body {
+  display: flex; flex-direction: column; gap: 8px;
+  flex: 1; min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+}
+
 /* Tooltip — pure CSS via data-tooltip */
 [data-tooltip] { position: relative; }
 [data-tooltip]::after {

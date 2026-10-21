@@ -18,6 +18,7 @@ use serde_json::{Map, Value as Json};
 
 use shiny_plugin_sdk::db::{Db, Value};
 use shiny_plugin_sdk::errors::AppError;
+use shiny_plugin_sdk::util::{as_opt_text, as_text};
 
 /// The dial keys, in render order. Unknown keys in a settings update are
 /// ignored; the window's dial specs mirror these units exactly.
@@ -81,15 +82,6 @@ pub struct EditResult {
     /// The full effective dial settings after the run ({} = neutral).
     pub adjust: Json,
 }
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_int(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,
@@ -103,19 +95,6 @@ fn as_blob(v: &Value) -> Vec<u8> {
         _ => Vec::new(),
     }
 }
-
-fn as_opt_text(v: &Value) -> Option<String> {
-    if matches!(v, Value::Null) {
-        return None;
-    }
-    let s = as_text(v);
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
-}
-
 /// Load a document with both buffers decoded to raw RGBA (legacy `png` rows
 /// are decoded on read; the first edit rewrites them as `rgba`).
 pub fn load(db: &Db, uid: &str, image_id: &str) -> Result<Doc, AppError> {
@@ -290,6 +269,20 @@ pub fn apply_settings(
     commit: bool,
 ) -> Result<EditResult, AppError> {
     let d = load(db, uid, image_id)?;
+    let res = apply_settings_pixels(d, update)?;
+    if commit {
+        commit_settings(db, uid, image_id, &res.adjust)?;
+    }
+    Ok(res)
+}
+
+/// The pure render half of a dial update. The route moves the loaded document
+/// into `spawn_blocking`, so the image plugin's serial worker stays responsive
+/// while the full-resolution pass runs. No database access happens here.
+pub fn apply_settings_pixels(
+    d: Doc,
+    update: &Map<String, Json>,
+) -> Result<EditResult, AppError> {
     let mut settings = d.adjust.clone();
     for key in DIAL_ORDER {
         if let Some(v) = update.get(*key) {
@@ -301,9 +294,6 @@ pub fn apply_settings(
             }
         }
     }
-    if commit {
-        set_adjust(db, uid, image_id, &settings)?;
-    }
     let raw = render_with(&d, &settings, d.look.as_deref())?;
     Ok(EditResult {
         raw,
@@ -312,6 +302,17 @@ pub fn apply_settings(
         look: d.look,
         adjust: Json::Object(settings),
     })
+}
+
+/// Persist the effective dial settings returned by [`apply_settings_pixels`].
+pub fn commit_settings(
+    db: &Db,
+    uid: &str,
+    image_id: &str,
+    adjust: &Json,
+) -> Result<(), AppError> {
+    let map = adjust.as_object().cloned().unwrap_or_default();
+    set_adjust(db, uid, image_id, &map)
 }
 
 /// Apply operations to a document. A lone `look` op changes the selected look

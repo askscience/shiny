@@ -2,7 +2,9 @@
 //! The "now playing" ICY metadata proxy the Radio window polls while a
 //! station plays (browsers can't read Shoutcast/Icecast metadata directly).
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use axum::extract::FromRequestParts;
 use axum::response::IntoResponse;
@@ -11,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 const MAX_METADATA_READ: usize = 64 * 1024 + 4080;
@@ -23,12 +25,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => None,
     }
 }
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
 async fn take_query<T: DeserializeOwned + Send + 'static>(
     req: axum::extract::Request,
 ) -> Result<(T, axum::extract::Request), AppError> {
@@ -44,10 +40,37 @@ struct NowPlayingQuery {
     url: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct NowPlayingData {
     title: Option<String>,
     station_name: Option<String>,
+}
+
+/// The window polls every 20 s; a slightly longer TTL turns every other poll
+/// into a cache hit and avoids a fresh DNS + TCP + TLS + ICY read each time.
+const NOW_PLAYING_TTL: Duration = Duration::from_secs(25);
+
+fn now_playing_cache() -> &'static Mutex<HashMap<String, (Instant, NowPlayingData)>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, NowPlayingData)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cached_now_playing(url: &str) -> Option<NowPlayingData> {
+    let guard = now_playing_cache().lock().ok()?;
+    let (at, data) = guard.get(url)?;
+    if at.elapsed() > NOW_PLAYING_TTL {
+        return None;
+    }
+    Some(data.clone())
+}
+
+fn store_now_playing(url: &str, data: &NowPlayingData) {
+    if let Ok(mut guard) = now_playing_cache().lock() {
+        if guard.len() >= 32 {
+            guard.retain(|_, (at, _)| at.elapsed() <= NOW_PLAYING_TTL);
+        }
+        guard.insert(url.to_string(), (Instant::now(), data.clone()));
+    }
 }
 
 fn nowplaying(_ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -56,6 +79,9 @@ fn nowplaying(_ctx: Arc<PluginCtx>) -> RouteHandler {
             let _uid = user_id(&req)?;
             let (q, _) = take_query::<NowPlayingQuery>(req).await?;
             let url = q.url.trim().to_string();
+            if let Some(data) = cached_now_playing(&url) {
+                return Ok(axum::Json(json!({ "success": true, "data": data })).into_response());
+            }
             // Reject anything that isn't a public http(s) host — this endpoint
             // makes a server-side GET, so it would otherwise be an SSRF
             // vector (http://127.0.0.1, http://169.254.169.254, LAN IPs, …).
@@ -70,6 +96,7 @@ fn nowplaying(_ctx: Arc<PluginCtx>) -> RouteHandler {
             .await
             .unwrap_or_else(|_| Ok(NowPlayingData { title: None, station_name: None }))?;
 
+            store_now_playing(&url, &data);
             Ok(axum::Json(json!({ "success": true, "data": data })).into_response())
         }
     })

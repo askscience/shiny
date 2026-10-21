@@ -31,6 +31,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
+use crate::services::output::{last_error_line};
 
 /// A whole utterance is decoded in one call; allow for a slow CPU fallback.
 const SYNTH_TIMEOUT_SECS: u64 = 600;
@@ -464,18 +465,6 @@ pub fn trim_runaway_tail(pcm: &[u8], sample_rate: u32) -> &[u8] {
     &pcm[..keep_sample * 2]
 }
 
-fn last_error_line(stdout: &[u8], stderr: &[u8]) -> String {
-    let out = String::from_utf8_lossy(stdout);
-    let err = String::from_utf8_lossy(stderr);
-    out.lines()
-        .last()
-        .filter(|l| l.to_lowercase().contains("error"))
-        .or_else(|| err.lines().last())
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .unwrap_or_else(|| "Download failed".into())
-}
-
 /// Split `text` on sentence boundaries, merging fragments up to a sane size.
 ///
 /// Each chunk becomes its own generation, which is the documented mitigation
@@ -565,12 +554,6 @@ pub fn pcm_to_wav(pcm: &[u8], sample_rate: u32) -> Vec<u8> {
     out.extend_from_slice(pcm);
     out
 }
-
-/// Convenience for the API layer: where the models live.
-pub fn default_models_dir() -> PathBuf {
-    PathBuf::from("data/qwen-tts-models")
-}
-
 /// TCP port out of a `http://host:port` base URL.
 fn url_port(base_url: &str) -> Option<u16> {
     base_url

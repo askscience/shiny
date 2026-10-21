@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
+use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::SqlitePool;
 use crate::errors::AppError;
 use crate::manifest::Manifest;
@@ -84,7 +85,13 @@ impl PluginCtx {
     pub async fn pool(&self) -> &SqlitePool {
         self.pool
             .get_or_init(|| async {
-                SqlitePool::connect(&self.config.database_url)
+                // Every plugin used to open sqlx's default ten connections
+                // against the one SQLite file. One writer plus one reader is
+                // enough for a plugin and keeps lock/memory pressure bounded.
+                SqlitePoolOptions::new()
+                    .max_connections(2)
+                    .acquire_timeout(Duration::from_secs(5))
+                    .connect(&self.config.database_url)
                     .await
                     .expect("plugin failed to open SQLite database")
             })

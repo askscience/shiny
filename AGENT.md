@@ -83,8 +83,9 @@ dispose finite transitions with their owner and preserve reduced-motion behavior
 Keep every user Appearance option and put visible text in translation catalogs.
 
 1. Edit `web/index.html` / `web/js/**` / `web/css/**` — there is **no bundler and no
-   npm step**; the server serves the tree as-is with `Cache-Control: no-store`, so a
-   reload picks changes up.
+   npm step**; the server serves the tree as-is with `Cache-Control: no-cache`
+   (revalidated, 304 when unchanged), so a reload picks changes up. API/SSE
+   responses remain `no-store`.
 2. Build UI from `web/ui/index.js` components and theme tokens (`.ui-*` classes,
    `--token` variables). Names of icons come from the icon catalog.
 3. Any user-visible string goes through `t()`/`tp()` with a key added to
@@ -146,8 +147,11 @@ then verify the cross-links still resolve.
 - **CSP forbids inline scripts** (`src/api/mod.rs` sets a strict policy). Pre-paint
   bootstraps live in their own files (`web/js/early-theme.js`, `early-i18n.js`).
   `eval`/inline handlers will not run.
-- **Missing static files do not 404** — `ServeDir` falls back to `index.html` with
-  HTTP 200, so validate parsed JSON/content, never the status code.
+- **Missing asset paths return a small 404** — navigation-like paths still get
+  the `index.html` SPA shell (with status 404), but `/js/`, `/css/`, `/ui/`,
+  `/themes/`, `/vendor/`, `/plugins/`, `/i18n/`, `/assets/`, `/api/` and any
+  path with a file extension return `web/404.html` instead of 18 KB of HTML.
+  Validate parsed JSON/content, not just the status code.
 - **Theme + i18n are runtime-swapped** through `<html>` data attributes and CSS
   variables; keep new UI keyed off tokens and translated keys, not literals.
   User-visible strings go through `t()`/`tp()` with a key in `web/i18n/en.json`

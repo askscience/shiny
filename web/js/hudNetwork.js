@@ -19,7 +19,7 @@
  * No wireless device and no wired link → the chip hides itself.
  */
 
-import { apiFetch, getToken } from './api.js';
+import { createHudStream } from './hudStream.js';
 import { setIcon } from '../ui/index.js';
 import { toggleNetworkMenu } from './networkMenu.js';
 import { t } from './i18n.js';
@@ -29,95 +29,20 @@ const iconEl = document.getElementById('hud-network-icon');
 const labelEl = document.getElementById('hud-network-label');
 const pctEl = document.getElementById('hud-network-pct');
 
-const RECONNECT_MS = 5000;
-const POLL_MS = 15000;
-
-let abort = null;
-let pollTimer = null;
+const stream = createHudStream({
+  eventsUrl: '/api/network/events',
+  statusUrl: '/api/network/status',
+  pollMs: 15000,
+  label: 'network',
+  apply,
+});
 
 export function initHudNetwork() {
   if (!chipEl) return;
   chipEl.setAttribute('aria-haspopup', 'dialog');
   chipEl.setAttribute('aria-expanded', 'false');
   chipEl.addEventListener('click', () => toggleNetworkMenu(chipEl));
-  void subscribe();
-}
-
-function headers() {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/* ── SSE ────────────────────────────────────────────────────── */
-
-async function subscribe() {
-  for (;;) {
-    abort = new AbortController();
-    try {
-      const res = await fetch('/api/network/events', {
-        headers: headers(),
-        credentials: 'same-origin',
-        signal: abort.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`network events: ${res.status}`);
-      stopPolling();
-      await readStream(res);
-    } catch (_) {
-      if (abort.signal.aborted) return;
-    }
-    // Stream ended or failed: keep the chip honest with the poll while we
-    // wait to reconnect (the kiosk proxy may drop an idle stream).
-    startPolling();
-    await sleep(RECONNECT_MS);
-  }
-}
-
-async function readStream(res) {
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return;
-    buffer += decoder.decode(value, { stream: true });
-
-    const chunks = buffer.split('\n\n');
-    buffer = chunks.pop() || '';
-
-    for (const chunk of chunks) {
-      const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'));
-      if (!dataLine) continue;
-      try {
-        apply(JSON.parse(dataLine.replace(/^data:\s*/, '')));
-      } catch (_) { /* keep-alive comment or partial frame */ }
-    }
-  }
-}
-
-/* ── Poll fallback ──────────────────────────────────────────── */
-
-function startPolling() {
-  if (pollTimer) return;
-  void poll();
-  pollTimer = setInterval(() => void poll(), POLL_MS);
-}
-
-function stopPolling() {
-  if (!pollTimer) return;
-  clearInterval(pollTimer);
-  pollTimer = null;
-}
-
-async function poll() {
-  try {
-    const res = await apiFetch('/api/network/status', { authRedirect: false });
-    apply(res?.data);
-  } catch (_) { /* server restarting — keep the last state */ }
+  stream.start();
 }
 
 /* ── Rendering ──────────────────────────────────────────────── */

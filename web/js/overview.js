@@ -151,11 +151,6 @@ export function closeOverview() {
   restore();
 }
 
-export function toggleOverview() {
-  if (open) closeOverview();
-  else openOverview();
-}
-
 function pick(target) {
   const el = target?.closest?.('#tile-grid > .tile[data-plugin]');
   if (!el) return false;

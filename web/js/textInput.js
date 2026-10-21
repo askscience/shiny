@@ -2,6 +2,7 @@ import { controlButton } from '../ui/components/button.js';
 import { setSphereState } from './sphere.js';
 import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
+import { ensureMarked } from './vendorLoader.js';
 import { icon } from '../ui/index.js';
 import { t } from './i18n.js';
 
@@ -569,6 +570,13 @@ export async function openTextInput() {
   field.value = '';
   field.disabled = false;
   setSphereState('idle');
+
+  // Markdown is only needed once the chat opens; keep it out of boot.
+  try {
+    await ensureMarked();
+  } catch (_) {
+    // renderMarkdown falls back to escaped plain text.
+  }
 
   // Resume the thread before the user starts typing.
   await loadConversation();

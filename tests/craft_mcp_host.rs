@@ -23,7 +23,9 @@ use shiny::services::agent_tools::{execute_action, AgentContext};
 
 /// The app CLI as the host starts it (`mcp --automation-read-root …`), speaking
 /// MCP over stdio. Every request is appended to `<cli>.requests` so the test can
-/// check what actually reached the app's process.
+/// check what actually reached the app's process, and every lifecycle step
+/// (`shutdown` / `exit`) is appended to `<cli>.exited`, so the test can prove a
+/// closed window leaves through the MCP handshake instead of being killed.
 const FAKE_CLI: &str = r#"#!/bin/sh
 while IFS= read -r line; do
   printf '%s\n' "$line" >> "$0.requests"
@@ -37,6 +39,14 @@ while IFS= read -r line; do
       ;;
     *'"method":"tools/call"'*)
       printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"command_list ok"}]}}\n' "$id"
+      ;;
+    *'"method":"shutdown"'*)
+      printf '%s\n' "graceful-shutdown" >> "$0.exited"
+      printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id"
+      ;;
+    *'"method":"exit"'*)
+      printf '%s\n' "graceful-exit" >> "$0.exited"
+      exit 0
       ;;
   esac
 done
@@ -224,6 +234,10 @@ async fn the_mcp_server_follows_the_open_window_and_focus_mode_narrows_it() {
     // Windows closed: the servers stop and the tools leave the registry.
     sync(&app, &[], &[]).await;
     assert!(running(&app).await.is_empty(), "closing the window stops the server");
+    // …and they leave through the MCP lifecycle, not through SIGKILL.
+    let exited = std::fs::read_to_string(format!("{}.exited", cli.display())).unwrap_or_default();
+    assert!(exited.contains("graceful-shutdown"), "shutdown was requested: {exited}");
+    assert!(exited.contains("graceful-exit"), "the server exited on request: {exited}");
     assert!(!tools.has("photocraft_command_list") && !tools.has("wordcraft_command_list"));
     assert!(
         !app.state
@@ -243,6 +257,54 @@ async fn the_mcp_server_follows_the_open_window_and_focus_mode_narrows_it() {
         running(&app).await.is_empty(),
         "removing the CLI must stop the app's server"
     );
+}
+
+/// Closing a window (the shell's X) releases the app's engine right away and
+/// gracefully, and — unlike deactivation — leaves the plugin enabled: its tools
+/// come back when the window does, without an activation round trip.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn closing_a_window_stops_the_engine_without_deactivating_the_plugin() {
+    let app = support::TestApp::new().await;
+    stage_web_app(&app, "photocraft");
+    app.load_plugins().await;
+    let traveler = traveler();
+    sqlx::query("INSERT INTO travelers (id, name, email, password_hash) VALUES (?1, ?2, ?3, ?4)")
+        .bind(&traveler.id)
+        .bind(&traveler.name)
+        .bind(&traveler.email)
+        .bind(&traveler.password_hash)
+        .execute(&app.state.pool)
+        .await
+        .expect("insert traveller");
+    app.state
+        .plugins
+        .set_enabled_for(&traveler.id, "photocraft", true)
+        .await
+        .expect("enable the app for the test user");
+
+    let cli = write_cli(&app, "photocraft");
+    sync(&app, &["photocraft"], &[]).await;
+    assert_eq!(running(&app).await, vec!["photocraft".to_string()]);
+
+    // The window-close endpoint: stop the engine now, gracefully.
+    app.state.craft_mcp.stop_app(&app.state.plugins, "photocraft").await;
+    assert!(running(&app).await.is_empty(), "the closed window's engine is stopped");
+    assert!(
+        !app.state.plugins.tools().has("photocraft_command_list"),
+        "its tools leave the registry with it"
+    );
+    let exited = std::fs::read_to_string(format!("{}.exited", cli.display())).unwrap_or_default();
+    assert!(exited.contains("graceful-shutdown") && exited.contains("graceful-exit"), "{exited}");
+
+    // Close ≠ deactivate: the plugin is still on for this user…
+    assert!(
+        app.state.plugins.is_enabled_for(&traveler.id, "photocraft").await,
+        "closing a window must not turn the plugin off"
+    );
+    // …and reopening the window brings the engine and its tools back.
+    sync(&app, &["photocraft"], &[]).await;
+    assert_eq!(running(&app).await, vec!["photocraft".to_string()]);
+    assert!(app.state.plugins.tools().has("photocraft_command_list"));
 }
 
 /// Turning AI control off is a decision the app's own updates have to respect:

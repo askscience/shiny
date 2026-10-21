@@ -522,14 +522,16 @@ await tick(320);
    otherwise a stale hole from before the hide clips the page when it moves. */
 const masksBeforeHide = viewCommands().filter((c) => c.op === 'setMask').length;
 tile.classList.add('hidden');
-await tick(320);
+// The fallback bounds tick is 1 s; observers cover the real browser, but this
+// harness has no MutationObserver.
+await tick(1100);
 check(
   'a hidden tile hides the page',
   lastView('setVisible')?.visible === false,
   JSON.stringify(lastView('setVisible')),
 );
 tile.classList.remove('hidden');
-await tick(320);
+await tick(1100);
 check(
   'coming back from a hide re-sends the mask even when empty',
   viewCommands().filter((c) => c.op === 'setMask').length > masksBeforeHide,

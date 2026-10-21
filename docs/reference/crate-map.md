@@ -12,6 +12,8 @@ and the remote-access crates.
 | `shiny-plugin-sdk` | [`crates/shiny-plugin-sdk`](../../crates/shiny-plugin-sdk) | lib | The public plugin API: `Plugin`/`Tool` traits, manifest, routes, crons, outcomes, notifications, artifacts, navigation, migrations, `PluginCtx`, canonical clients, and the ODT/ODS/ODP codecs. Both the binary and every plugin link it. |
 | `shiny-filter` | [`crates/shiny-filter`](../../crates/shiny-filter) | lib | The Browser's in-process filtering engine: compiles EasyList/EasyPrivacy, classifies and rewrites requests, exposes metrics. |
 | `shiny-filter-core` | [`crates/shiny-filter-core`](../../crates/shiny-filter-core) | lib | Shared filter-list parsing/classification logic used by `shiny-filter`. |
+| `shiny-osm` | [`crates/shiny-osm`](../../crates/shiny-osm) | lib | Nominatim/OSRM/Overpass client shared by core and the traveler plugin. |
+| `peakd-core` | [`crates/peakd-core`](../../crates/peakd-core) | lib | Display-scale choice/auto-snapping shared by the Linux and macOS shells. |
 | `peakd` | [`crates/peakd`](../../crates/peakd) | bin | Linux kiosk shell (Qt 6 + QtWebEngine): window, display scaling, child browser web views, downloads, trackpad gestures, request interceptor, host shims. |
 | `peakd-mac` | [`crates/peakd-mac`](../../crates/peakd-mac) | bin | macOS shell (WKWebView + `NSTouchBar`). Packaged as `Peakd.app` by [`scripts/bundle-app.sh`](../../scripts/bundle-app.sh). |
 | `shiny-auth` | [`crates/shiny-auth`](../../crates/shiny-auth) | bin | Root-owned, socket-activated, **verify-only** PAM helper (Linux-user mode). |

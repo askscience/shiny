@@ -121,7 +121,8 @@ snapshot, and the next request sees the new one, including requests on an existi
 ## 4. Request lifecycle
 
 1. The client calls an `/api/*` route (`fetch` or `EventSource`).
-2. `tower_http` CORS + a global `Cache-Control: no-store` layer run.
+2. `tower_http` compression and a path-aware cache policy run: shell assets are
+   `no-cache` (revalidated with `Last-Modified` → 304), API/SSE stay `no-store`.
 3. Public routes (register/login, languages, Vosk model files) bypass auth.
    Everything else runs [`auth_middleware`](../src/auth/mod.rs), which accepts a
    `Bearer` token or the `shiny_token` cookie.

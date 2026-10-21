@@ -1,7 +1,7 @@
 import {
   menuSurface, menuItem, confirmDialog, menuButton, toolbar, field as uiField,
   textarea as uiTextarea, element as h, input as uiInput, selectControl, toolButton,
-  placePopover, controlButton, icon, button, emptyState, toast, setTileGlow, glowGradient,
+  placePopover, icon, button, emptyState, toast, setTileGlow, glowGradient,
   setIcon,
 } from '../../ui/index.js';
 
@@ -21,6 +21,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
+import { formatMenuDate, appendMenuFooter } from '../../js/officeMenu.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const IMPRESS_PLUGIN = 'impress';
@@ -561,15 +562,6 @@ function onDeckMenuKey(e) {
   if (e.key === 'Escape') closeDeckMenu();
 }
 
-function formatWhen(iso) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch (_) {
-    return '';
-  }
-}
-
 function renderDeckMenuItems() {
   if (!deckMenuPopup) return;
   deckMenuPopup.innerHTML = '';
@@ -584,7 +576,7 @@ function renderDeckMenuItems() {
       if (deck.id === current?.id) item.classList.add('is-active');
 
       const title = h('span', 'impress-deck-menu-title', deck.title);
-      const meta = h('span', 'impress-deck-menu-time', `${deck.slide_count || 0} · ${formatWhen(deck.updated_at)}`);
+      const meta = h('span', 'impress-deck-menu-time', `${deck.slide_count || 0} · ${formatMenuDate(deck.updated_at)}`);
       const check = h('span', 'impress-deck-menu-check');
       item.append(title, meta, check);
       void setIcon(check, 'ui/check', { size: 13 });
@@ -597,28 +589,17 @@ function renderDeckMenuItems() {
     });
   }
 
-  const foot = h('div', 'impress-deck-menu-foot');
-  const footItem = (iconName, label, danger, onClick) => {
-    const item = menuItem({ className: 'impress-deck-menu-item' });
-    item.type = 'button';
-    item.setAttribute('role', 'menuitem');
-    if (danger) item.classList.add('impress-deck-menu-item--danger');
-    const ic = h('span', 'impress-deck-menu-foot-icon');
-    item.appendChild(ic);
-    void setIcon(ic, iconName, { size: 14 });
-    const labelEl = h('span', 'impress-deck-menu-title', label);
-    item.appendChild(labelEl);
-    item.addEventListener('click', () => {
-      closeDeckMenu();
-      onClick();
-    });
-    foot.appendChild(item);
-  };
-  footItem('ui/plus', t('plugin.impress.menu.newDeck', null, 'New presentation'), false, () => void newDeck());
-  footItem('ui/download', t('plugin.impress.menu.importOdp', null, 'Import .odp'), false, pickOdpFile);
-  footItem('ui/save', t('plugin.impress.menu.saveToDocuments', null, 'Save to Documents'), false, () => void exportOdp());
-  footItem('ui/trash', t('plugin.impress.menu.deleteDeck', null, 'Delete presentation'), true, () => void removeCurrent());
-  deckMenuPopup.appendChild(foot);
+  appendMenuFooter(deckMenuPopup, {
+    prefix: 'impress-deck',
+    close: closeDeckMenu,
+    buttonType: true,
+    items: [
+      { icon: 'ui/plus', label: t('plugin.impress.menu.newDeck', null, 'New presentation'), onClick: () => void newDeck() },
+      { icon: 'ui/download', label: t('plugin.impress.menu.importOdp', null, 'Import .odp'), onClick: pickOdpFile },
+      { icon: 'ui/save', label: t('plugin.impress.menu.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportOdp() },
+      { icon: 'ui/trash', label: t('plugin.impress.menu.deleteDeck', null, 'Delete presentation'), danger: true, onClick: () => void removeCurrent() },
+    ],
+  });
 }
 
 function openDeckMenu() {

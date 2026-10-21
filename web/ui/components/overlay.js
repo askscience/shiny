@@ -1,6 +1,7 @@
 /** Overlays share finite motion, focus containment and reversible dismissal. */
 
-import { iconButton } from './button.js';
+import { iconButton, controlButton } from './button.js';
+import { icon } from '../icon.js';
 import { t } from '../../js/i18n.js';
 import { transition, disposeMotion } from '../motion.js';
 import { createResources } from '../../js/resources.js';
@@ -8,6 +9,8 @@ import { createResources } from '../../js/resources.js';
 const overlays = [];
 const inertBefore = new Map();
 let nextTitleId = 0;
+/** Last dragged corner per key, so a floating panel reopens where it was left. */
+const floatingPositions = new Map();
 function syncBackground() {
   const top = overlays[overlays.length - 1];
   if (top) {
@@ -151,6 +154,151 @@ export function sheet(o = {}) {
   }
   el.appendChild(card);
   return lifecycle(el, card, o);
+}
+
+/**
+ * Small floating window: the desktop's own chrome (a slim title bar with a close
+ * control, draggable) on a compact surface, with no backdrop and **no tiling** —
+ * it sits above the desktop as a DOM surface, not as a plugin window. Use it for
+ * transient, compact things (a picker, a quick form) that should not take over
+ * the screen.
+ *
+ * Returns `{ el, body, open(), close(), isOpen(), destroy() }`. `key` remembers
+ * where the user dragged it; Escape and a click outside close it.
+ */
+export function floating(o = {}) {
+  const el = document.createElement('div');
+  el.className = `ui-floating${o.wide ? ' ui-floating--wide' : ''} hidden`;
+  el.setAttribute('role', 'dialog');
+  if (o.label) el.setAttribute('aria-label', o.label);
+  el.tabIndex = -1;
+
+  // The desktop's own window chrome: slim title bar, only a close control.
+  const head = document.createElement('header');
+  head.className = 'tile-header ui-floating-head';
+  const controls = document.createElement('span');
+  controls.className = 'tile-header-controls';
+  const closeBtn = controlButton();
+  closeBtn.type = 'button';
+  closeBtn.className = 'tile-header-btn tile-header-btn--close';
+  closeBtn.title = t('common.close');
+  closeBtn.setAttribute('aria-label', t('common.close'));
+  closeBtn.appendChild(icon('ui/close', { size: 14 }));
+  closeBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    api.close();
+  });
+  controls.appendChild(closeBtn);
+  const title = document.createElement('span');
+  title.className = 'tile-header-title';
+  title.textContent = o.title || '';
+  const spacer = document.createElement('span');
+  spacer.className = 'tile-header-spacer ui-floating-spacer';
+  head.append(controls, title, spacer);
+
+  const body = document.createElement('div');
+  body.className = 'ui-floating-body';
+  for (const node of [].concat(o.body || [])) {
+    if (node) body.appendChild(node);
+  }
+  el.append(head, body);
+
+  let opened = false;
+  let trigger = null;
+  let cleanup = null;
+
+  const clamp = (x, y) => {
+    const width = el.offsetWidth || 380;
+    const height = el.offsetHeight || 420;
+    const maxX = Math.max(8, (window.innerWidth || 1024) - width - 8);
+    const maxY = Math.max(8, (window.innerHeight || 768) - height - 8);
+    return {
+      x: Math.min(Math.max(8, x), maxX),
+      y: Math.min(Math.max(8, y), maxY),
+    };
+  };
+
+  const place = () => {
+    const saved = o.key ? floatingPositions.get(o.key) : null;
+    const width = el.offsetWidth || 380;
+    const height = el.offsetHeight || 420;
+    const x = saved?.x ?? Math.round(((window.innerWidth || 1024) - width) / 2);
+    const y = saved?.y ?? Math.round(((window.innerHeight || 768) - height) / 3);
+    const at = clamp(x, y);
+    el.style.left = `${at.x}px`;
+    el.style.top = `${at.y}px`;
+  };
+
+  // Drag by the head; the buttons in it keep their own clicks.
+  head.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || event.target.closest?.('button')) return;
+    const rect = el.getBoundingClientRect();
+    const dx = event.clientX - rect.left;
+    const dy = event.clientY - rect.top;
+    const move = (moveEvent) => {
+      const at = clamp(moveEvent.clientX - dx, moveEvent.clientY - dy);
+      el.style.left = `${at.x}px`;
+      el.style.top = `${at.y}px`;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (o.key) {
+        floatingPositions.set(o.key, {
+          x: parseFloat(el.style.left) || 0,
+          y: parseFloat(el.style.top) || 0,
+        });
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    event.preventDefault();
+  });
+
+  const api = {
+    el,
+    body,
+    isOpen: () => opened,
+    open() {
+      if (opened) return;
+      opened = true;
+      trigger = document.activeElement;
+      if (!el.parentElement) document.body.appendChild(el);
+      el.hidden = false;
+      el.classList.remove('hidden');
+      place();
+      const onDown = (event) => { if (!el.contains(event.target)) api.close(); };
+      const onKey = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          api.close();
+        }
+      };
+      document.addEventListener('pointerdown', onDown, true);
+      document.addEventListener('keydown', onKey, true);
+      cleanup = () => {
+        document.removeEventListener('pointerdown', onDown, true);
+        document.removeEventListener('keydown', onKey, true);
+      };
+      el.focus({ preventScroll: true });
+    },
+    close() {
+      if (!opened) return;
+      opened = false;
+      el.classList.add('hidden');
+      el.hidden = true;
+      cleanup?.();
+      cleanup = null;
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+      if (o.removeOnClose) el.remove();
+      o.onClose?.();
+    },
+    destroy() {
+      api.close();
+      el.remove();
+    },
+  };
+  return api;
 }
 
 /** Attach a CSS tooltip to an element. */

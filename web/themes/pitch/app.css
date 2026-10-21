@@ -144,7 +144,6 @@
 .hud-bluetooth,
 .hud-battery,
 .hud-updates,
-.ui-hud-chip,
 .ui-chip,
 .ui-badge,
 .ui-notification,
@@ -184,7 +183,6 @@
    fills; these rules make sure no element re-introduces one with a
    literal. */
 .ui-progress-bar,
-.ui-gradient-text,
 .boot-logo__base,
 .boot-bar span,
 .launcher-item-icon { background-image: none !important; }
@@ -193,11 +191,6 @@
    filled across the bar itself: flattening it would make the palette option do
    nothing in this theme. */
 html:not([data-orb-color='palette']) #sphere-container { background-image: none !important; }
-
-.ui-gradient-text {
-  -webkit-text-fill-color: currentColor !important;
-  color: var(--text) !important;
-}
 
 /* Selection follows the accent as ink, not a blue wash. */
 ::selection { background: var(--accent-soft); color: var(--text); }
@@ -461,13 +454,7 @@ html[data-bar-pos='center']:not([data-orb-pos='top-left']) #hud-header {
    Grouping is carried by space and a small uppercase label, the way a
    launcher's quick-settings sheet does it.
 
-   The network *panel* is a full window whose tile already draws the
-   frame, so it contributes no fill or border of its own either. */
-.network-window {
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-}
+   */
 
 /* One flat surface per popover — the popup's own hairline (set above)
    is the single boundary the theme allows. */
@@ -816,7 +803,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   letter-spacing: 0.24em !important;
   color: var(--text) !important;
 }
-.brand-tagline { color: var(--muted) !important; }
+
 .login-step-label {
   font-size: 10.5px !important;
   letter-spacing: 0.14em !important;
@@ -923,14 +910,14 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   transform: none !important;
 }
 .word-tool--danger:hover, .calc-tool--danger:hover, .impress-tool--danger:hover,
-.mail-tool--danger:hover, .pdf-tool--danger:hover, .impress-op--danger:hover,
+.mail-tool--danger:hover, .impress-op--danger:hover,
 .calendar-tool--danger:hover {
   background: var(--error-soft) !important;
   color: var(--error) !important;
 }
 
 /* ── Shared: window titles + status lines ─────────────────────── */
-.word-title, .calc-title, .impress-title, .mail-title, .pdf-title,
+.word-title, .calc-title, .impress-title, .pdf-title,
 .terminal-tab-text, .calendar-month-label, .studio-title, .browser-tab-text {
   font-family: var(--font-body) !important;
   font-weight: 500 !important;
@@ -1292,7 +1279,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   outline: none !important;
   border-color: var(--accent) !important;
 }
-.word-tools { gap: 2px !important; }
+
 .word-status { color: var(--muted) !important; }
 .word-save-dot { background: var(--accent) !important; box-shadow: none !important; }
 .word-doc-menu {
@@ -1386,9 +1373,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 .mail-reader-meta { color: var(--muted) !important; }
 .mail-reader-body { color: var(--text-secondary) !important; line-height: 1.7; }
-/* The message iframe sits on white because a mail body is a document;
-   framed by a hairline so it does not read as a hole in the window. */
-.mail-reader-html { background: var(--surface) !important; border: 1px solid var(--glass-border) !important; border-radius: var(--radius-sm) !important; }
+
 .mail-attachment {
   background: var(--surface) !important;
   border: 1px solid var(--glass-border) !important;
@@ -1405,13 +1390,6 @@ body.overview-active .tile--overview { box-shadow: none !important; }
 }
 .mail-account-row-badge { background: var(--glass-strong) !important; color: var(--text-secondary) !important; }
 .mail-account-row-badge.is-ok { background: transparent !important; border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); color: var(--ok) !important; }
-.mail-provider-btn {
-  background: var(--surface) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-sm) !important;
-  color: var(--text-secondary) !important;
-}
-.mail-provider-btn:hover { background: var(--glass-hover) !important; border-color: var(--glass-highlight) !important; }
 
 /* ── PDF ────────────────────────────────────────────────────────
    Chrome flattened. The page canvas stays white — a PDF page is a
@@ -2037,7 +2015,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   border-radius: var(--radius-sm) !important;
   box-shadow: none !important;
 }
-.studio-mixer-strip--sel { border-color: var(--accent) !important; }
+
 .studio-mixer-strip--master { background: var(--bg-elevated) !important; }
 .studio-mixer-name { color: var(--text-secondary) !important; font-size: 10.5px !important; font-weight: 600 !important; letter-spacing: 0.1em; }
 .studio-mixer-ms {
@@ -2252,15 +2230,7 @@ body.overview-active .tile--overview { box-shadow: none !important; }
   text-transform: uppercase;
   color: var(--muted) !important;
 }
-.plugin-chip {
-  background: transparent !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--radius-xs) !important;
-  color: var(--text-secondary) !important;
-  box-shadow: none !important;
-}
-.plugin-chip:hover { background: var(--glass-hover) !important; color: var(--text) !important; }
-.plugin-chip.is-active { border-color: var(--accent) !important; color: var(--accent) !important; }
+
 .plugin-card {
   background: var(--surface) !important;
   border: 1px solid var(--glass-border) !important;

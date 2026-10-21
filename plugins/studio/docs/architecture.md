@@ -77,7 +77,7 @@ timeline with per-sample track level/pan automation, then runs the global master
 | `src/grid.rs` | The Grid: module catalog, patch JSON, compiler and `GridEngine` runtime (topological order, audio inputs, control cables, per-block ramped modulation). |
 | `src/voices.rs` | Instrument catalog: `KINDS`, drum/melodic/sampler kind sets, `ParamDef` + constructors (`def`/`logdef`/`choice`), all parameter tables, per-kind defaults (`SynthParams::kind_defaults`), `default_level`/`default_pan`, MIDI-FX kinds and their params. |
 | `src/fx.rs` | Insert-effect catalog: `EFFECT_KINDS`, `param_defs`, `defaults`, `label`. Mirrors `dsp::fx::EffectKind`. |
-| `src/catalog.rs` | `catalog_json()` builds the self-describing JSON (kinds, effects, grid modules, MIDI FX, soundfonts, tunings, master_fx, limits); `describe_kind`. Served by `GET /api/studio/catalog` and the `studio_catalog` tool. |
+| `src/catalog.rs` | `catalog_json()` builds the self-describing JSON (kinds, effects, grid modules, MIDI FX, soundfonts, tunings, master_fx, limits). Served by `GET /api/studio/catalog` and the `studio_catalog` tool. |
 | `src/store.rs` | SQLite helpers for tracks, arrangements and presets; row shaping (`meta_json`, `full_json`, `arr_meta_json`, `arr_full_json`, `preset_json`); id-or-title resolution. |
 | `src/routes.rs` | The `/api/studio/*` axum handlers. See [`routes.md`](routes.md). |
 | `src/tools/mod.rs` | The 15 `studio_*` tools. See [`tools.md`](tools.md). |
@@ -89,7 +89,7 @@ timeline with per-sample track level/pan automation, then runs the global master
 | File | Responsibility |
 | --- | --- |
 | `dsp/mod.rs` | Module list and the `SR`/`BLOCK`/`POLY_*` constants. |
-| `dsp/util.rs` | `Rng` (xorshift64\*), `soft_clip`, `clip_knee`, `tube`, `DcBlocker`, `Smoother`, `pan_gains` (equal-power), `db_to_gain`/`gain_to_db`, `midi_to_hz`, `cents_ratio`, `Biquad` (LP/shelf/peak/HP), `Oversampler` (factor 1–8, 4th-order Butterworth), `ramp`. |
+| `dsp/util.rs` | `Rng` (xorshift64\*), `soft_clip`, `tube`, `DcBlocker`, `Smoother`, `pan_gains` (equal-power), `db_to_gain`/`gain_to_db`, `cents_ratio`, `Biquad` (LP/shelf/peak/HP), `Oversampler` (factor 1–8, 4th-order Butterworth), `ramp`. |
 | `dsp/osc.rs` | `Wave` (12 shapes), `Osc` (fundsp wavetable/PolyBLEP nodes, in-house sine + seeded noise, phase-mod for FM), `Unison` (detuned stack with stereo spread and level compensation). |
 | `dsp/env.rs` | `Adsr` (exponential with linear `shape` blend; attack overshoots to 1.3), `PercEnv` (one-shot attack/hold/exponential decay). |
 | `dsp/filter.rs` | `FilterKind` (LP/HP/BP/Notch/Peak/Ladder), TPT `Svf` core, `Filter` (1–2 poles, drive+makeup, DC blocker, fundsp Moog ladder path), `OnePole`, `BandPass`, `saturate`. |

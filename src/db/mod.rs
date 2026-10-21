@@ -89,6 +89,21 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "009_linux_identity.sql",
         include_str!("../../migrations/009_linux_identity.sql"),
     ),
+    (
+        10,
+        "010_auth_token_index.sql",
+        include_str!("../../migrations/010_auth_token_index.sql"),
+    ),
+    (
+        11,
+        "011_drop_duplicate_artifact_index.sql",
+        include_str!("../../migrations/011_drop_duplicate_artifact_index.sql"),
+    ),
+    (
+        12,
+        "012_chat_read_indexes.sql",
+        include_str!("../../migrations/012_chat_read_indexes.sql"),
+    ),
 ];
 
 pub async fn run_migrations(conn: &mut SqliteConnection) -> Result<(), AppError> {

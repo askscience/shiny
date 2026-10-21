@@ -6,15 +6,16 @@ use std::sync::Arc;
 
 use axum::extract::{FromRequest, FromRequestParts, Multipart};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Map, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
+use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title};
 use shiny_plugin_sdk::ods;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request, path_params_from_request};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, path_params_from_request, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 const MIME_ODS: &str = "application/vnd.oasis.opendocument.spreadsheet";
@@ -38,39 +39,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Json) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-fn clean_title(t: &str) -> String {
-    let t = t.trim();
-    if t.is_empty() { "Untitled".into() } else { t.chars().take(120).collect() }
-}
-
-fn filename_for_title(t: &str) -> String {
-    let clean: String = t
-        .chars()
-        .map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.') { c } else { '-' })
-        .collect();
-    let clean = clean.trim().trim_matches('.').to_string();
-    let clean = if clean.is_empty() { "spreadsheet".to_string() } else { clean };
-    format!("{clean}.ods")
-}
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(n) => n.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn as_int(v: &Value) -> i64 {
     match v {
         Value::Int(n) => *n,
@@ -335,7 +303,7 @@ fn sheet_export(ctx: Arc<PluginCtx>) -> RouteHandler {
             let title = as_text(&row[0]);
             let cells = parse_cells(&as_text(&row[1]));
             let bytes = ods::cells_to_ods(&cells)?;
-            let filename = filename_for_title(&title);
+            let filename = filename_for_title(&title, "ods", "spreadsheet");
             Ok(Response::builder()
                 .header(CONTENT_TYPE, MIME_ODS)
                 .header(CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", filename.replace('"', "")))

@@ -8,13 +8,13 @@
 
 use std::sync::Arc;
 
-use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request};
+use shiny_plugin_sdk::util::{sanitize_user};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::sessions;
@@ -48,16 +48,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => None,
     }
 }
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req).ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Value) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
-
 /// Decode a JSON request body.
 ///
 /// `Json` implements `FromRequest`, not `FromRequestParts`, so it has to
@@ -498,21 +488,6 @@ fn downloads_dir(user_id: &str, os_home: Option<&str>) -> std::path::PathBuf {
     };
     home.join("Downloads")
 }
-
-/// Keep an account id usable as a single directory name (matches Files).
-fn sanitize_user(user_id: &str) -> String {
-    let cleaned: String = user_id
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
-        .take(64)
-        .collect();
-    if cleaned.is_empty() {
-        "default".into()
-    } else {
-        cleaned
-    }
-}
-
 /// GET /api/browser/settings — the shield toggle + where downloads land.
 fn settings_route(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| {

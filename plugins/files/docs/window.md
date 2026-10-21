@@ -26,11 +26,13 @@ export default {
 - **Space** opens the quick-look: images, PDF (vendored PDF.js), Office
   documents (via `/render`), text mini, and a streaming video player using
   byte-ranged `/raw`.
-- The quick-look is a **bare overlay**, not a window: the file is the surface
-  (no frame, no padding), the arrows that step through the folder appear only
-  under the pointer (`← →` do the same from the keyboard), and the details ride
-  a gradient mixed from the theme's canvas. `openPreview`/`showPreview` reuse
-  the open overlay, so stepping repaints the file instead of rebuilding it.
+- The quick-look is a **compact bare lightbox**, not a window: a centered
+  surface (up to 920×620) with no frame or padding, the arrows that step through
+  the folder appear only under the pointer (`← →` do the same from the keyboard),
+  and the details ride a gradient mixed from the theme's canvas. Clicking the
+  veil outside the surface (or Escape) closes it. `openPreview`/`showPreview`
+  reuse the open overlay, so stepping repaints the file instead of rebuilding
+  it.
 - Video and music keep their QuickTime-style bar on the accent colour
   (`--accent`/`--accent-contrast`); it follows the pointer and steps aside while
   playing (`.files-player.is-idle`).

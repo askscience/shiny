@@ -9,7 +9,8 @@ the agent tools, the planner and the narrative pipeline live in the plugin.
 Both write the same SQLite tables, so a user sees one coherent domain.
 
 Core services: [`gpsd.rs`](../../src/services/gpsd.rs),
-[`osm.rs`](../../src/services/osm.rs),
+[`osm.rs`](../../src/services/osm.rs) (a thin re-export of the
+[`shiny-osm`](../../crates/shiny-osm) crate shared with the traveler plugin),
 [`navigation.rs`](../../src/services/navigation.rs),
 [`diary_gen.rs`](../../src/services/diary_gen.rs),
 [`insights/`](../../src/services/insights).
@@ -54,7 +55,8 @@ active trip with `source` marking their origin (`gpsd`, `manual`, `mock`).
 
 ## Maps (OpenStreetMap)
 
-[`OsmService`](../../src/services/osm.rs) fronts the public OSM services:
+[`OsmService`](../../src/services/osm.rs) — the shared `shiny-osm` client — fronts
+the public OSM services:
 
 - **Nominatim** — geocoding (`/api/map/search?q=…`) and reverse geocoding
   (`/api/map/reverse?lat=&lon=`).

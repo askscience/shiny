@@ -68,6 +68,14 @@ impl CancelHandle {
         self.0.cancelled.load(Ordering::SeqCst)
     }
 
+    /// Cancel this turn directly. Used when the SSE consumer disappears: the
+    /// request is gone, so the model/tools should stop instead of finishing an
+    /// answer nobody can receive.
+    pub fn cancel(&self) {
+        self.0.cancelled.store(true, Ordering::SeqCst);
+        self.0.notify.notify_waiters();
+    }
+
     /// Resolves as soon as the turn is cancelled (immediately if it already is).
     /// Used as the losing branch of a `select!` around a model call.
     pub async fn cancelled(&self) {

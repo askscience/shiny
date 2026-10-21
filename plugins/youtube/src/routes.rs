@@ -3,13 +3,12 @@
 use std::sync::Arc;
 
 use axum::extract::FromRequestParts;
-use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id_from_request};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
@@ -22,16 +21,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => None,
     }
 }
-
-fn user_id(req: &axum::extract::Request) -> Result<String, AppError> {
-    user_id_from_request(req)
-        .ok_or_else(|| AppError::Unauthorized("not authenticated".into()))
-}
-
-fn ok(data: Value) -> Response {
-    axum::Json(json!({ "success": true, "data": data })).into_response()
-}
-
 async fn take_query<T: DeserializeOwned + Send + 'static>(
     req: axum::extract::Request,
 ) -> Result<(T, axum::extract::Request), AppError> {

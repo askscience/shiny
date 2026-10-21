@@ -13,7 +13,7 @@ import {
   initThemeLoader, initIconLoader, initAppearance, refreshAppearance,
   wireToastEvents, wireNotificationEvents, toast, hydrateIcons, reveal,
 } from '../ui/index.js';
-import { refreshActivePlugins } from './activePlugins.js';
+import { refreshActivePlugins, resetSessionPlugins } from './activePlugins.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
@@ -32,7 +32,7 @@ import { initAppFileEvents } from './appSaves.js';
 import { installClipboard } from './clipboard.js';
 import { initHudClipboard } from './clipboardMenu.js';
 import { initNavigator } from './navigator.js';
-import { initTileManager, refreshTiles, openCoreWindow } from './tiles.js';
+import { initTileManager, openCoreWindow, getPluginTile } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
 import { initFullscreenBubble } from './fullscreenBubble.js';
 import { initOverview } from './overview.js';
@@ -46,7 +46,7 @@ import { initChatHistory } from './chatHistory.js';
 import { initThinkToggle } from './thinkToggle.js';
 import { initTouchBar } from './touchbar.js';
 import { reloadUserSession } from './session.js';
-import { loadUserPreferences, getWakeWord } from './preferences.js';
+import { loadUserPreferences, getRemember, getWakeWord } from './preferences.js';
 import { initI18n } from './i18n.js';
 import { initBackground } from './background.js';
 import { hideBootScreen } from './bootScreen.js';
@@ -55,6 +55,9 @@ let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
 // otherwise a fresh load in bare mode leaves the map stack visible.
 let travelerActive = null;
+// null = not yet evaluated — the first sync must always apply show/hide, even
+// when the map starts closed (a fresh session or a closed remembered window).
+let travelerWindowVisible = null;
 let lastUserId = null;
 
 function cancelVoiceInput() {
@@ -95,13 +98,19 @@ async function boot() {
     lastUserId = userId;
     if (appInitialized) {
       await reloadUserSession();
+      // A sign-in starts a new session. With "remember" off that means the
+      // desktop resets here too, not only on a page load: previous activations
+      // are dropped and every plugin window closes with them.
+      if (!getRemember()) {
+        await resetSessionPlugins();
+        window.dispatchEvent(new CustomEvent('plugins:changed'));
+      }
       refreshAppearance();
       await applyTravelerActivation();
       await refreshKeyboard();
       return;
     }
-    await loadUserPreferences();
-    await initApp();
+    await beginSession();
   });
 
   // Plugins panel may toggle the traveler plugin — re-evaluate and re-render
@@ -113,12 +122,23 @@ async function boot() {
   window.addEventListener('storage', async (e) => {
     if (e.key === 'plugins.changed') await applyTravelerActivation();
   });
+  // The map's chrome and GPS follow the traveler *window*, not the plugin's
+  // enabled state: closing the window is a real close even with the plugin on.
+  window.addEventListener('windows:changed', () => syncTravelerWindow());
 
   if (!(await requireAuth())) return;
 
   document.getElementById('app').classList.remove('hidden');
   hideBootScreen();
+  await beginSession();
+}
+
+/** Load this user's preferences, then start the desktop. In fresh mode the
+ *  previous sign-in's plugin activations are dropped first, so "don't
+ *  remember" really means an empty desktop with every plugin closed. */
+async function beginSession() {
   await loadUserPreferences();
+  if (!getRemember()) await resetSessionPlugins();
   await initApp();
 }
 
@@ -171,7 +191,12 @@ async function initApp() {
   await applyTravelerActivation();
   await refreshKeyboard();
 
-  setInterval(() => reloadUserSession(), 60000);
+  setInterval(() => {
+    if (!document.hidden) void reloadUserSession();
+  }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void reloadUserSession();
+  });
   await reloadUserSession();
   refreshAppearance();
 
@@ -182,18 +207,29 @@ async function initApp() {
   reveal();
 }
 
-/// Decide whether the OSM map / navigator / saved-trips HUD should render
-/// based on whether the current user has the `traveler` plugin activated.
+/// Re-evaluate the traveler plugin's enabled state, then sync its window.
 async function applyTravelerActivation() {
-  const active = await refreshActivePlugins();
-  const newTravelerActive = active.has('traveler');
-  if (newTravelerActive === travelerActive) return;
-  travelerActive = newTravelerActive;
+  const active = await refreshActivePlugins({ force: true });
+  const wasActive = travelerActive;
+  travelerActive = active.has('traveler');
 
-  // The tiling window manager owns plugin windows — refresh BEFORE initMap()
-  // so the map tile exists in the DOM when the traveler window appears.
-  initTileManager();
-  refreshTiles();
+  // The HUD modules below wire global listeners; run them once per activation
+  // transition. Whether the map itself is on screen is a separate state.
+  if (travelerActive && !wasActive) {
+    initHudTrips();
+    initNavigator();
+    initInsightCards();
+  }
+  syncTravelerWindow();
+}
+
+/// The OSM map chrome, navigator, saved-trips HUD and GPS follow the traveler
+/// *window* being open, not the plugin being enabled: closing the window is a
+/// real close, so the map UI and the GPS watch go with it.
+function syncTravelerWindow() {
+  const visible = !!travelerActive && !!getPluginTile('traveler')?.isConnected;
+  if (visible === travelerWindowVisible) return;
+  travelerWindowVisible = visible;
 
   const mapVignette = document.getElementById('map-vignette');
   const navPuck = document.getElementById('nav-puck');
@@ -205,14 +241,11 @@ async function applyTravelerActivation() {
   const hide = (el) => el?.classList.add('hidden');
   const show = (el) => el?.classList.remove('hidden');
 
-  if (travelerActive) {
+  if (visible) {
     if (!document.getElementById('map')?.childElementCount) {
-      initMap();
+      void initMap();
     }
     show(mapVignette);
-    initHudTrips();
-    initNavigator();
-    initInsightCards();
     startGpsTracking();
   } else {
     hide(mapVignette);
@@ -224,8 +257,8 @@ async function applyTravelerActivation() {
     hide(insightCards);
     // Chat-only mode: no artifact chrome.
     hide(document.getElementById('artifact-dock'));
-    // The GPS watch belongs to traveler mode — leaving it running drains
-    // battery and keeps pinging the location API with the map gone.
+    // The GPS watch belongs to the map window — leaving it running drains
+    // battery and keeps pinging the location API with no map on screen.
     stopGpsTracking();
   }
 }
