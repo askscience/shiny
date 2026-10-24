@@ -15,8 +15,8 @@ import { getThemeManifest, themeMode } from './theme-loader.js';
 
 const ACCENT_KEY = 'ui.accent';
 const GRADIENT_KEY = 'ui.gradient';
-const DEFAULT_ACCENT = '#ffffff';
-const DEFAULT_GRADIENT = { id: 'mono', angle: 135, stops: ['#ffffff', '#8a8a8a'] };
+const DEFAULT_ACCENT = '#7fa8e8';
+const DEFAULT_GRADIENT = { id: 'mono', angle: 135, stops: ['#e8eaed', '#6b7078'] };
 
 let getScope = () => null;
 
@@ -120,7 +120,7 @@ export function setGradient(gradient) {
  * ─────────────────────────────────────────────────────────────── */
 
 const FONT_KEY = 'ui.font';
-const DEFAULT_FONT = 'system-ui';
+const DEFAULT_FONT = 'Roboto';
 
 /** Sentinel: follow the active theme's own fonts instead of an override. */
 export const FONT_THEME = 'theme';

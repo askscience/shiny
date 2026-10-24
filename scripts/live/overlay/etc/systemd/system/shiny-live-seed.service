@@ -1,0 +1,14 @@
+[Unit]
+Description=PEAK'D! live account seed
+ConditionPathExists=/run/live/medium
+After=live-config.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do id user >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
+ExecStart=/usr/local/lib/shiny/seed-live-account.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

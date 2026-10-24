@@ -1,0 +1,108 @@
+#!/bin/bash
+# Live installer session: start the loopback-only PEAK'D! server as the live
+# user, mint the session token, then open the kiosk. No root, no installation.
+set -u
+
+LOG_DIR="$HOME/.local/share/shiny"
+mkdir -p "$LOG_DIR" "$HOME/.local/share/shiny/peakd" "$HOME/.local/share/shiny/plugins"
+LOG="$LOG_DIR/live-session.log"
+exec >>"$LOG" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] peakd-live-session start user=$(id -un) uid=$(id -u)"
+
+export XDG_SESSION_TYPE=x11
+export QT_QPA_PLATFORM=xcb
+export XDG_CURRENT_DESKTOP=PEAKD
+export DESKTOP_SESSION=peakd
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export SERVER_HOST=127.0.0.1
+export SERVER_PORT=8080
+export DATABASE_URL="sqlite://$HOME/.local/share/shiny/shiny.db"
+export BACKGROUNDS_DIR=/usr/share/shiny/backgrounds
+export LOG_FILE="$LOG_DIR/shiny.log"
+export PLUGINS_DIR="$HOME/.local/share/shiny/plugins"
+export SYSTEM_PLUGINS_DIR=/usr/lib/shiny/plugins
+export ADFILTER_DIR="$HOME/.local/share/shiny/adfilter"
+export WEB_DIR=/usr/share/shiny/web
+export SHINY_LIVE_INSTALLER=1
+export SHINY_AUTH_ENABLED=false
+export SHINY_LINUX_USERS=false
+export SHINY_HOME_MODE=virtual
+export SHINY_LOGIN_SELF_ONLY=false
+export SHINY_SESSION_TOKEN_FILE="$XDG_RUNTIME_DIR/shiny-session-token"
+export SUPERTONIC_AUTO_INSTALL=0
+export WHISPER_AUTO_INSTALL=0
+export RUST_LOG=info
+export PEAKD_APP_ORIGIN="http://127.0.0.1:8080"
+export PEAKD_DATA_DIR="$HOME/.local/share/shiny/peakd"
+export PEAKD_ADFILTER_DIR="$HOME/.local/share/shiny/adfilter"
+
+start_server() {
+    /usr/bin/shiny >>"$LOG_DIR/shiny.log" 2>&1 &
+    SERVER_PID=$!
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] shiny pid=$SERVER_PID"
+}
+
+wait_server() {
+    i=0
+    while [ "$i" -lt 120 ]; do
+        if curl -sf "http://127.0.0.1:8080/api/health/live" >/dev/null 2>&1 \
+            || curl -sf "http://127.0.0.1:8080/" >/dev/null 2>&1; then
+            return 0
+        fi
+        i=$((i + 1))
+        sleep 0.5
+    done
+    return 1
+}
+
+if ! pgrep -u "$(id -u)" -f '/usr/bin/shiny' >/dev/null 2>&1; then
+    start_server
+fi
+if ! wait_server; then
+    echo "server did not answer; leaving the log at $LOG_DIR/shiny.log"
+    exit 1
+fi
+
+# A fresh live DB has no traveler, so init_session cannot write the kiosk token.
+# Register the session account once, then restart the server so it is bound to
+# the account and writes $XDG_RUNTIME_DIR/shiny-session-token.
+if [ ! -s "$SHINY_SESSION_TOKEN_FILE" ]; then
+    USER_NAME=$(id -un)
+    curl -sS -o /dev/null -X POST "http://127.0.0.1:8080/api/auth/register" \
+        -H 'Content-Type: application/json' \
+        -d "{\"username\":\"$USER_NAME\",\"password\":\"live-installer\"}" || true
+    if pgrep -u "$(id -u)" -f '/usr/bin/shiny' >/dev/null 2>&1; then
+        pkill -u "$(id -u)" -f '/usr/bin/shiny' || true
+        sleep 1
+    fi
+    start_server
+    if ! wait_server; then
+        echo "server did not answer after registration"
+        exit 1
+    fi
+fi
+
+# The T2 watchdog is a no-op off T2; start it only when the unit exists.
+if [ -f /etc/systemd/user/shiny-t2-audio-watchdog.service ]; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+    systemctl --user start shiny-t2-audio-watchdog.service >/dev/null 2>&1 || true
+fi
+
+if [ -s "$SHINY_SESSION_TOKEN_FILE" ]; then
+    export SHINY_BOOT_TOKEN="$(cat "$SHINY_SESSION_TOKEN_FILE")"
+fi
+
+# No XFCE session: this is the product kiosk. Matchbox only supplies a minimal
+# window manager; peakd is the only visible application.
+if command -v matchbox-window-manager >/dev/null 2>&1; then
+    matchbox-window-manager -use_titlebar no >/dev/null 2>&1 &
+    sleep 0.5
+fi
+
+cd /usr/share/shiny || cd /
+while :; do
+    /usr/bin/peakd --app-mode
+    status=$?
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] peakd exited $status; restarting"
+    sleep 2
+done

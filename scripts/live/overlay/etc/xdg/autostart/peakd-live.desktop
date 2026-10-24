@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PEAK'D! Installer
+Comment=Start the PEAK'D! live installer session
+Exec=/usr/local/bin/peakd-live-session
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=XFCE;

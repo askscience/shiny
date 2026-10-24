@@ -11,8 +11,8 @@
 /** The two optional parts of a chip. */
 export const HUD_CHIP_PARTS = ['name', 'percent'];
 
-/** Percentages visible, device names hidden — the compact default: icon + %. */
-export const DEFAULT_HUD_CHIPS = { name: false, percent: true };
+/** Percentages and device names hidden by default (icon-only chips). */
+export const DEFAULT_HUD_CHIPS = { name: false, percent: false };
 
 /**
  * Normalize a stored value into `{ name, percent }`. Device names are hidden
@@ -23,8 +23,8 @@ export const DEFAULT_HUD_CHIPS = { name: false, percent: true };
 export function normalizeHudChips(value) {
   const src = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
-    name: src.name === true,
-    percent: src.percent !== false,
+    name: src.name === undefined ? DEFAULT_HUD_CHIPS.name : src.name === true,
+    percent: src.percent === undefined ? DEFAULT_HUD_CHIPS.percent : src.percent !== false,
   };
 }
 

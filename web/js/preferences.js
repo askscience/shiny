@@ -1,7 +1,7 @@
 import { apiFetch, getTraveler } from './api.js';
 import { isMobilePortrait } from './viewport.js';
 import { normalizeTouchBarSetting } from './touchbarShared.js';
-import { normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
+import { DEFAULT_HUD_CHIPS, normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
 import { effectivePowerMode, normalizePowerMode } from './powerShared.js';
 import { voiceForEngine } from './voiceShared.js';
 import { getLocalePreference, setLocalePreference, refreshLocaleFromStorage } from './i18n.js';
@@ -39,7 +39,7 @@ const MUSIC_QUALITY_KEY = 'music.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
 const UI_LOCALE_KEY = 'ui.locale';
 const STORE_AUTO_UPDATE_KEY = 'store.autoUpdate';
-const DEFAULT_AI_NAME = "PEAK'D!";
+const DEFAULT_AI_NAME = 'Peak';
 
 function scopedKey(base) {
   const id = getTraveler()?.id;
@@ -278,9 +278,9 @@ export function setLinkPlugin(name) {
 
 const DEFAULT_DESKTOP_LAYOUT = {
   mode: 'master',        // 'master' (shown as "Tiling") | 'columns' | 'windows'
-  master_ratio: 0.7,     // master fraction (0.25–0.85)
+  master_ratio: 0.414,   // master fraction (0.25–0.85)
   orientation: 'left',   // 'left' | 'right' | 'top' | 'bottom'
-  gap: 8,                // px between windows
+  gap: 4,                // px between windows
   stack_weights: {},     // pluginName -> size of its stack track (relative)
 };
 
@@ -346,10 +346,10 @@ export function getDesktopLayout() {
   const stored = readJson(scopedKey(DESKTOP_LAYOUT_KEY), {});
   const out = { ...DEFAULT_DESKTOP_LAYOUT, ...(stored || {}) };
   out.mode = ['master', 'columns', 'windows'].includes(out.mode) ? out.mode : 'master';
-  out.master_ratio = clamp(Number(out.master_ratio) || 0.7, 0.25, 0.85);
+  out.master_ratio = clamp(Number(out.master_ratio) || DEFAULT_DESKTOP_LAYOUT.master_ratio, 0.25, 0.85);
   out.orientation = ['left', 'right', 'top', 'bottom'].includes(out.orientation)
-    ? out.orientation : 'left';
-  out.gap = Math.round(clamp(Number(out.gap) ?? 8, 0, 40));
+    ? out.orientation : DEFAULT_DESKTOP_LAYOUT.orientation;
+  out.gap = Math.round(clamp(Number(out.gap) ?? DEFAULT_DESKTOP_LAYOUT.gap, 0, 40));
   const sw = out.stack_weights;
   out.stack_weights = (sw && typeof sw === 'object' && !Array.isArray(sw)) ? { ...sw } : {};
   // A vertical, phone-like screen has no room for a master/stack split or for
@@ -400,14 +400,14 @@ export function setWindowsGeom(geom) {
  * ───────────────────────────────────────────────────────────── */
 
 const DEFAULT_DESKTOP_SURFACE = {
-  window_radius: 28,     // px corner radius (matches --radius-lg default)
-  window_opacity: 100,   // % window background opacity
+  window_radius: 17,     // px corner radius (matches --radius-lg default)
+  window_opacity: 86,    // % window background opacity
   window_shadow: false,  // flat by default (noir hairline aesthetic)
-  glass_blur: 12,        // px backdrop blur: window transparency + frosted panels
+  glass_blur: 24,        // px backdrop blur: window transparency + frosted panels
   // The ambient "blurred mirror" behind a window (photo / PDF page / artwork /
   // accent glow — web/ui/components/glow.js + .tile-glow in tiles.css). Global,
   // so plugins keep calling setTileGlow*() and core decides whether it shows.
-  window_background: true,
+  window_background: false,
   title_height: 36,      // px window title bar height
 };
 
@@ -421,12 +421,14 @@ export function getDesktopSurface() {
   const stored = readJson(scopedKey(DESKTOP_SURFACE_KEY), {});
   const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
   return {
-    window_radius: Math.round(clamp(numOr(src.window_radius, 28), 0, 32)),
-    window_opacity: Math.round(clamp(numOr(src.window_opacity, 100), 60, 100)),
+    window_radius: Math.round(clamp(numOr(src.window_radius, DEFAULT_DESKTOP_SURFACE.window_radius), 0, 32)),
+    window_opacity: Math.round(clamp(numOr(src.window_opacity, DEFAULT_DESKTOP_SURFACE.window_opacity), 60, 100)),
     window_shadow: src.window_shadow === true,
-    glass_blur: Math.round(clamp(numOr(src.glass_blur, 12), 0, 24)),
-    window_background: src.window_background !== false,
-    title_height: Math.round(clamp(numOr(src.title_height, 36), 28, 48)),
+    glass_blur: Math.round(clamp(numOr(src.glass_blur, DEFAULT_DESKTOP_SURFACE.glass_blur), 0, 24)),
+    window_background: src.window_background === undefined
+      ? DEFAULT_DESKTOP_SURFACE.window_background
+      : src.window_background !== false,
+    title_height: Math.round(clamp(numOr(src.title_height, DEFAULT_DESKTOP_SURFACE.title_height), 28, 48)),
   };
 }
 
@@ -488,22 +490,23 @@ export const ORB_POSITIONS = ['bottom-center', 'bottom-left', 'bottom-right', 't
 export const ORB_ATTACHED = 'top-left';
 
 const DEFAULT_IMMERSIVE = {
-  autohide_bar: true,
-  bar_position: 'top',
-  autohide_orb: true,
-  orb_position: 'bottom-center',
+  autohide_bar: false,
+  bar_position: 'bottom',
+  autohide_orb: false,
+  orb_position: 'top-left',
   /** Width and height of the bar on its own edge. Riding the top bar it takes
    *  the rail's size instead, so these apply on the free dock only. */
-  orb_width: 176,
-  orb_height: 40,
+  orb_width: 64,
+  orb_height: 24,
+  orb_color: 'accent',
   /** The bar's own look: `accent` — the body is the accent (or the palette) —
    *  or `bar`, the top bar's glass plate, leaving the accent to the audio glow. */
-  orb_style: 'accent',
+  orb_style: 'bar',
   /** Border of the bar: none, the accent hairline, or the palette ring. */
-  orb_border: 'hairline',
+  orb_border: 'palette',
   /** What the bar wears: `off`, the humanised tool step line as `text`, or
    *  the running tool's `icons` (swapped per tool with a short fade). */
-  orb_status: 'off',
+  orb_status: 'icons',
 };
 
 const ORB_COLORS = ['accent', 'palette'];
@@ -517,20 +520,21 @@ export function getImmersive() {
   const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
   const width = Number(src.orb_width);
   const height = Number(src.orb_height);
+  const d = DEFAULT_IMMERSIVE;
   return {
-    autohide_bar: src.autohide_bar !== false,
-    bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : 'top',
-    autohide_orb: src.autohide_orb !== false,
-    orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : 'bottom-center',
-    orb_width: Number.isFinite(width) ? Math.round(clamp(width, 64, 400)) : 176,
-    orb_height: Number.isFinite(height) ? Math.round(clamp(height, 24, 72)) : 40,
-    orb_color: ORB_COLORS.includes(src.orb_color) ? src.orb_color : 'accent',
-    orb_style: ORB_STYLES.includes(src.orb_style) ? src.orb_style : 'accent',
-    orb_border: ORB_BORDERS.includes(src.orb_border) ? src.orb_border : 'hairline',
+    autohide_bar: src.autohide_bar === undefined ? d.autohide_bar : src.autohide_bar !== false,
+    bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : d.bar_position,
+    autohide_orb: src.autohide_orb === undefined ? d.autohide_orb : src.autohide_orb !== false,
+    orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : d.orb_position,
+    orb_width: Number.isFinite(width) ? Math.round(clamp(width, 64, 400)) : d.orb_width,
+    orb_height: Number.isFinite(height) ? Math.round(clamp(height, 24, 72)) : d.orb_height,
+    orb_color: ORB_COLORS.includes(src.orb_color) ? src.orb_color : d.orb_color,
+    orb_style: ORB_STYLES.includes(src.orb_style) ? src.orb_style : d.orb_style,
+    orb_border: ORB_BORDERS.includes(src.orb_border) ? src.orb_border : d.orb_border,
     // `orb_step` (the retired on/off switch) still reads as the text mode.
     orb_status: ORB_STATUSES.includes(src.orb_status)
       ? src.orb_status
-      : (src.orb_step === true ? 'text' : 'off'),
+      : (src.orb_step === true ? 'text' : d.orb_status),
   };
 }
 
@@ -594,7 +598,7 @@ const HUD_CHIPS_KEY = 'hud.chips';
 
 /** Which parts of the host status chips are visible, merged over defaults. */
 export function getHudChips() {
-  return normalizeHudChips(readJson(scopedKey(HUD_CHIPS_KEY), null));
+  return normalizeHudChips(readJson(scopedKey(HUD_CHIPS_KEY), DEFAULT_HUD_CHIPS));
 }
 
 export function setHudChips(patch) {
@@ -803,7 +807,7 @@ export function setWakeWord(on) {
  * Once the wake word has been heard, the assistant stays in conversation: it
  * keeps listening after each answer so a follow-up needs no phrase. On by
  * default — that is what "wake it up and talk to it" means — and it ends on a
- * gesture (a tap = one thing only, a double tap = type) or a stop phrase, not on
+ * gesture (a double tap = one thing only, a tap = type) or a stop phrase, not on
  * a timer unless the user picks one. */
 
 export function getConversation() {

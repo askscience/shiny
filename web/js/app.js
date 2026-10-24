@@ -25,7 +25,7 @@ import { initHudBluetooth } from './hudBluetooth.js';
 import { initHudBattery } from './hudBattery.js';
 import { initHudPower } from './powerMenu.js';
 import { initHudDividers } from './hudDivider.js';
-import { initHudPlugins } from './hudPlugins.js';
+import { initHudPlugins, openPlugin } from './hudPlugins.js';
 import { initPluginHud } from './pluginHud.js';
 import { initCraftStore } from './craftStore.js';
 import { initAppFileEvents } from './appSaves.js';
@@ -190,6 +190,7 @@ async function initApp() {
 
   await applyTravelerActivation();
   await refreshKeyboard();
+  await openLiveInstaller();
 
   setInterval(() => {
     if (!document.hidden) void reloadUserSession();
@@ -205,6 +206,19 @@ async function initApp() {
   wireVoiceResults();
   initTouchBar({ talk: tapOrb });
   reveal();
+}
+
+/// The live image has exactly one job: open the installer window as soon as
+/// the shell is ready. The route exists only when the installer plugin is
+/// active in live mode, so an installed system never auto-opens it.
+async function openLiveInstaller() {
+  try {
+    const res = await fetch('/api/installer/health', { cache: 'no-store' });
+    if (res.status === 404) return;
+    await openPlugin('installer');
+  } catch (_) {
+    // Normal installed sessions have no installer route.
+  }
 }
 
 /// Re-evaluate the traveler plugin's enabled state, then sync its window.
@@ -274,15 +288,15 @@ function voiceNotReady() {
   toast(
     preparing
       ? 'Voice is preparing — try again in a moment'
-      : 'Voice unavailable — you can still double-tap to type',
+      : 'Voice unavailable — you can still tap to type',
     { type: 'info' },
   );
 }
 
 /**
- * The voice bar's short-tap gesture, in one place: the Touch Bar's "Ask" button
- * calls this too, so both paths share the voice-readiness check, the
- * stop-and-rephrase behaviour and the error handling.
+ * The voice bar's listening gesture (double-tap), in one place: the Touch Bar's
+ * "Ask" button calls this too, so both paths share the voice-readiness check,
+ * the stop-and-rephrase behaviour and the error handling.
  */
 async function tapOrb() {
   if (isTextInputOpen() || isComposeAwaiting()) return;
@@ -334,8 +348,20 @@ async function tapOrb() {
   }
 }
 
+/** The voice bar's typing gesture (single tap): type to the assistant. */
+function typeOrb() {
+  if (isComposeAwaiting()) return;
+  // Typing takes over from the voice, so a conversation ends here; a plain
+  // listening session keeps its old behaviour (the keyboard opens over it).
+  if (isConversationOpen()) leaveConversation();
+  else if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
+  openTextInput();
+}
+
 function wireSphere() {
-  onShortTap(tapOrb);
+  // A single tap opens the keyboard. Text needs no speech model, so this works
+  // even while voice is still preparing (or unavailable).
+  onShortTap(typeOrb);
 
   onLongPressStart(async () => {
     if (isListening() || isComposeAwaiting()) return;
@@ -374,16 +400,9 @@ function wireSphere() {
     if (!isTextInputOpen()) setSphereState('idle');
   });
 
-  // Double-tap = type to the assistant. Text needs no speech model, so this
-  // works even while voice is still preparing (or unavailable).
-  onDoubleTap(() => {
-    if (isComposeAwaiting()) return;
-    // Typing takes over from the voice, so a conversation ends here; a plain
-    // listening session keeps its old behaviour (the keyboard opens over it).
-    if (isConversationOpen()) leaveConversation();
-    else if (isListening() && !isWakeAwaitingCommand()) cancelVoiceInput();
-    openTextInput();
-  });
+  // Double-tap = listen once, with the same stop-and-rephrase behaviour as the
+  // Touch Bar's "Ask" button.
+  onDoubleTap(tapOrb);
 }
 
 async function submitTextToAgent(text, handlers) {

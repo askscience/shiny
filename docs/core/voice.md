@@ -277,10 +277,10 @@ are `disabled`, `downloading`, `idle`, `listening`, `conversation`,
 
 | Gesture | Trigger | Action |
 |---|---|---|
-| Short tap | `pointerup` before `LONG_PRESS_MS`, no double | `tapOrb`: listen once (`startListening('single')`); tap again while listening cancels |
+| Short tap | `pointerup` before `LONG_PRESS_MS`, no double | `openTextInput()` — type to the assistant |
 | Long-press | held `LONG_PRESS_MS` (400 ms) | `startListening(getWakeWord() ? 'wake' : 'single')` — releasing does **not** close the mic |
-| Double tap | two taps within `DOUBLE_TAP_MS` (500 ms), or a late second tap within `LATE_DOUBLE_TAP_MS` (300 ms) | `openTextInput()` — type to the assistant |
-| Tap while answering | `isTurnActive()` | `stopActiveTurn('tap')`, then listen for the rephrase |
+| Double tap | two taps within `DOUBLE_TAP_MS` (500 ms) | `tapOrb`: listen once (`startListening('single')`); tap while listening cancels |
+| Double tap while answering | `isTurnActive()` | `stopActiveTurn('tap')`, then listen for the rephrase |
 | Talk over the reply | barge-in monitor | `stopActiveTurn('barge-in')` then listen |
 
 The Touch Bar's "Ask" button calls the same `tapOrb` path (`initTouchBar({ talk:
@@ -302,7 +302,7 @@ engine chosen in Settings — see
 
 Matching (`web/js/voice.js`):
 
-- The assistant name comes from `getAiName()` (`ai.name`, default `PEAK'D!`).
+- The assistant name comes from `getAiName()` (`ai.name`, default `Peak`).
 - Text is normalised (lowercase, punctuation to spaces), then the name is
   matched with a per-token Levenshtein tolerance of 1 (2 for tokens ≥ 5 chars) —
   the small models regularly render an unusual name as a near-homophone
@@ -335,9 +335,10 @@ with the turn.
 
 The window ends on gestures, not on a clock unless the user picks one:
 
-- **A tap** means "one thing only": the conversation ends and the tap opens a
-  single request (`leaveConversation()` before `startListening('single')`).
-- **A double tap** switches to typing, which ends the conversation too.
+- **A double tap** means "one thing only": the conversation ends and the double
+  tap opens a single request (`leaveConversation()` before
+  `startListening('single')`).
+- **A tap** switches to typing, which ends the conversation too.
 - An utterance that is **only** a stop phrase ("basta", "stop") ends it. The list
   is whole-utterance matched, so "stop the music" still reaches the agent
   (`isStopPhrase()` in `voice/wake.js`).
@@ -402,7 +403,7 @@ level also drives the glow and the pan.
 | `WHISPER_ENDPOINT_SILENCE_MS` | 900 | trailing silence that ends an utterance |
 | `WHISPER_MAX_QUEUED_SECONDS` | 20 | audio is dropped rather than queued forever if the network lags |
 | `WHISPER_CHUNK_MS` | 500 | declared decode-cadence hint (the queue is drained whole) |
-| `getSilenceTimeout()` | 3000–30000 ms (default 8000) | tap-to-talk wait before *"Didn't catch that"* |
+| `getSilenceTimeout()` | 3000–30000 ms (default 8000) | listen-once wait before *"Didn't catch that"* |
 
 While idle the audio callback costs one RMS loop per ~256 ms ScriptProcessor
 frame; audio is only enqueued while speech is active (plus preroll/hangover).

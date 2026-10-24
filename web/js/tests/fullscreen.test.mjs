@@ -512,7 +512,7 @@ localStorage.setItem('desktop.immersive', JSON.stringify({
 const clamped = prefs.getImmersive();
 check('out-of-range sizes are clamped and unknown values fall back',
   clamped.orb_width === 400 && clamped.orb_height === 24
-  && clamped.orb_color === 'accent' && clamped.orb_border === 'hairline',
+  && clamped.orb_color === 'accent' && clamped.orb_border === 'palette',
   JSON.stringify(clamped));
 
 /* ── 14. Closing a window (close ≠ deactivate) ─────────────────

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=PEAK'D!
+Comment=PEAK'D! live installer kiosk
+Exec=/usr/local/bin/peakd-live-session
+Type=Application
+DesktopNames=PEAKD;

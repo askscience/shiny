@@ -6,7 +6,7 @@
   "modes": ["dark"],
   "icons": false,
   "app": "app.css",
-  "defaultAccent": "#e8eaed",
+  "defaultAccent": "#7fa8e8",
   "defaultGradient": "mono",
   "accents": [
     { "id": "chalk",   "label": "Chalk",   "value": "#e8eaed" },

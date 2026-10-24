@@ -6,6 +6,8 @@ import { el, field, heading } from './controls.js';
 
 /** Build the touchbar section with resources owned by its current mount. */
 export function createTouchBarSection({ on, cleanups, resources }) {
+  if (document.documentElement.dataset.touchbarHost !== '1') return [];
+
   function buildTouchBar() {
     const mode = select({
       options: [

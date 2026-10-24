@@ -8,12 +8,13 @@
  *   Appearance — theme, accent, gradient, interface language, window surface,
  *                top bar, background
  *   Desktop    — tiling layout
- *   Browser    — default search engine, ad blocking, history
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
  *   Images     — local image generation model, quality + downloads
- *   Power      — power mode, low-power AI, screen/keyboard backlight
  *   System     — remember workspace, log out
+ *
+ * Browser settings live in the Browser window's own menu; power management
+ * (modes, switches and backlights) lives in the battery quick menu.
  *
  * Everything writes straight to the per-user preference store; there is no
  * "Done" navigation because closing the window is the exit. The only explicit
@@ -29,12 +30,10 @@ import { createAssistantSection } from './settings/assistant.js';
 import { createVoiceSection } from './settings/voice.js';
 import { createImageSection } from './settings/image.js';
 import { createMusicSection } from './settings/music.js';
-import { createPowerSection } from './settings/power.js';
 import { createDesktopSection } from './settings/desktop.js';
 import { createSystemSection } from './settings/system.js';
 import { createTouchBarSection } from './settings/touchbar.js';
 import { createRemoteSection } from './settings/remote.js';
-import { createBrowserSection } from './settings/browser.js';
 import { createAppearancePanelSection } from './settings/appearance.js';
 
 export const SETTINGS_WINDOW = 'settings';
@@ -77,16 +76,15 @@ function mountSettings() {
     { id: 'account', labelKey: 'settings.section.account', icon: 'ui/user', build: createAccountSection },
     { id: 'appearance', labelKey: 'settings.section.appearance', icon: 'ui/droplet', build: createAppearancePanelSection },
     { id: 'desktop', labelKey: 'settings.section.desktop', icon: 'ui/monitor', build: createDesktopSection },
-    { id: 'browser', labelKey: 'settings.section.browser', icon: 'ui/launcher', build: createBrowserSection },
     { id: 'assistant', labelKey: 'settings.section.assistant', icon: 'ui/message-circle', build: createAssistantSection },
     { id: 'voice', labelKey: 'settings.section.voice', icon: 'ui/mic', build: createVoiceSection },
     { id: 'images', labelKey: 'settings.section.images', icon: 'ui/image', build: createImageSection },
     { id: 'music', labelKey: 'settings.section.music', icon: 'ui/music', build: createMusicSection },
-    { id: 'power', labelKey: 'settings.section.power', icon: 'ui/power', build: createPowerSection },
     { id: 'touchbar', labelKey: 'settings.section.touchbar', icon: 'ui/keyboard', build: createTouchBarSection },
     { id: 'remote', labelKey: 'settings.section.remote', icon: 'ui/network', build: createRemoteSection },
     { id: 'system', labelKey: 'settings.section.system', icon: 'ui/power', build: createSystemSection },
-  ];
+  ].filter((section) => section.id !== 'touchbar'
+    || document.documentElement.dataset.touchbarHost === '1');
 
   let activePanel = pendingSection || 'account';
   pendingSection = null;
