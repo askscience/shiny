@@ -48,5 +48,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Wait for the legacy Pages build
+        # Pages first runs the branch builder for the repository; let it finish
+        # so this combined web+APT deployment is the one left published.
+        run: sleep 120
       - id: deployment
         uses: actions/deploy-pages@v4
