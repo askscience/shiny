@@ -33,7 +33,8 @@ omits falls back to the active icon set and then `/ui/icons/` — no more
 ## How it is wired in
 
 - Registered in `/themes/themes.json`.
-- `DEFAULT_THEME` in `/ui/theme-loader.js` → `'pitch'`.
+- `DEFAULT_THEME` in `/ui/theme-loader.js` is `neumorphic`; Pitch remains a
+  selectable theme.
 - The pre-paint bootstrap in `/index.html` hardcodes the same default (it cannot
   import a module, so the two must stay in step).
 

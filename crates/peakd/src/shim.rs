@@ -34,6 +34,7 @@ extern "C" {
     pub fn peakd_qt_inject_script(name: *const c_char, source: *const c_char);
     pub fn peakd_qt_set_filter_scripts(on: i32);
     pub fn peakd_qt_set_window(title: *const c_char, width: i32, height: i32);
+    pub fn peakd_qt_set_fullscreen(fullscreen: i32);
     pub fn peakd_qt_set_strings(strings_json: *const c_char);
     pub fn peakd_qt_quit();
     pub fn peakd_qt_main_load(url: *const c_char);
@@ -97,6 +98,10 @@ pub fn set_window(title: &str, width: f64, height: f64) {
             height.round() as i32,
         )
     }
+}
+
+pub fn set_fullscreen(fullscreen: bool) {
+    unsafe { peakd_qt_set_fullscreen(i32::from(fullscreen)) }
 }
 
 /// Hand the C++ side its strings (file-dialog titles, name filters) as one

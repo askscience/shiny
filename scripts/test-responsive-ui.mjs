@@ -40,6 +40,33 @@ const server=http.createServer(async(req,res)=>{
     if(u.pathname==='/api/presentations/test') data={id:'test',title:'Example presentation',theme:'aurora',slides:[{layout:'title',title:'A presentation on a phone',subtitle:'Portrait and landscape',notes:''},{layout:'content',title:'Another slide',bullets:['One','Two']}]};
     if(u.pathname==='/api/fonts') data=['system-ui','sans-serif','serif','monospace'];
     if(u.pathname.includes('/updates/status')) data={};
+    if(u.pathname==='/api/installer/health') data={version:'test',protocol:4,dry_run:true,root:false,socket:'',hardware:{vendor:'Test',product:'Synthetic machine',board:'',is_t2:false,firmware:'uefi',secure_boot:false,gpus:[],live_medium:null}};
+    if(u.pathname==='/api/installer/options') data={locales:['en_US.UTF-8','it_IT.UTF-8'],keyboards:['us','it'],timezones:['UTC','Europe/Rome'],default_locale:'it_IT.UTF-8',default_keyboard:'it',default_timezone:'Europe/Rome'};
+    if(u.pathname==='/api/installer/probe') data={
+      disks:[{
+        name:'nvme0n1', path:'/dev/nvme0n1', kind:'disk',
+        size_bytes:1000*1024**3, start_bytes:0, model:'Synthetic SSD', serial:'TEST-SERIAL',
+        tran:'nvme', removable:false, read_only:false, is_loop:false, is_rom:false,
+        mountpoints:[], fstype:'', pttype:'gpt', partuuid:'', uuid:'', label:'', fsver:'',
+        parttypename:'', partflags:[], holders:[],
+        free_extents:[{ start_bytes:300*1024**3+1024**2, size_bytes:700*1024**3-1024**2 }],
+        children:[
+          { name:'nvme0n1p1', path:'/dev/nvme0n1p1', kind:'part', size_bytes:200*1024**3,
+            start_bytes:1024**2, model:'', serial:'', tran:'', removable:false, read_only:false,
+            is_loop:false, is_rom:false, mountpoints:[], fstype:'ntfs', pttype:'gpt',
+            partuuid:'p1', uuid:'u1', label:'Windows', fsver:'', parttypename:'Microsoft basic data',
+            partflags:[], holders:[], free_extents:[], children:[] },
+          { name:'nvme0n1p2', path:'/dev/nvme0n1p2', kind:'part', size_bytes:100*1024**3,
+            start_bytes:200*1024**3+1024**2, model:'', serial:'', tran:'', removable:false, read_only:false,
+            is_loop:false, is_rom:false, mountpoints:[], fstype:'ext4', pttype:'gpt',
+            partuuid:'p2', uuid:'u2', label:'Data', fsver:'', parttypename:'Linux filesystem',
+            partflags:[], holders:[], free_extents:[], children:[] }
+        ]
+      }],
+      hardware:{vendor:'Test', product:'Synthetic machine', board:'', is_t2:false, firmware:'uefi',
+        secure_boot:false, gpus:[], live_medium:null},
+      live_medium:null
+    };
     res.setHeader('Content-Type','application/json');res.end(JSON.stringify({success:true,data}));return;
   }
   let path=u.pathname.startsWith('/plugins/') ? u.pathname.replace(/^\/plugins\/([^/]+)\//,'/plugins/$1/web/') : '/web'+u.pathname;
@@ -50,7 +77,7 @@ const server=http.createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try{
- const names=process.argv.slice(2);const plugins=names.length?names:['browser','calc','calculator','calendar','files','image','impress','mail','pdf','radio','studio','terminal','updates','word','youtube','settings','plugins','traveler','keyboard'];
+ const names=process.argv.slice(2);const plugins=names.length?names:['browser','calc','calculator','calendar','files','image','impress','installer','mail','pdf','radio','studio','terminal','updates','word','youtube','settings','plugins','traveler','keyboard'];
  for(const size of [{width:360,height:740},{width:740,height:360},{width:320,height:568},{width:1280,height:800,touch:false},{width:1280,height:800,touch:false,tileWidth:360}]){
  const context=await browser.newContext({viewport:{width:size.width,height:size.height},isMobile:size.touch!==false,hasTouch:size.touch!==false});
  for(const name of plugins){
@@ -85,6 +112,11 @@ try{
  },name);
  await page.waitForTimeout(180);
  if(name==='files') await page.locator('button[aria-label="Search"]').first().click();
+ if(name==='installer') {
+   await page.locator('.installer-timeline').waitFor();
+   assert.ok(await page.locator('.installer-clip--planned').count()>=2,'the installer timeline renders planned clips');
+   assert.ok(await page.locator('.installer-handle').count()>=1,'the installer timeline renders resize handles');
+ }
  if(name==='image') {
    await page.locator('.image-look-chip').first().waitFor();
    assert.equal(await page.locator('.ui-dial').count(),8,'all eight Image adjustments exist');
@@ -145,7 +177,7 @@ try{
  if(errors.length || report.over.length || report.clipped.length || fonts.length) failures.push({name,size,errors,over:report.over,clipped:report.clipped,fonts});
  if(process.env.SHINY_UI_SCREENSHOTS) await page.screenshot({path:`${process.env.SHINY_UI_SCREENSHOTS}/${name}-${size.width}x${size.height}${size.tileWidth ? `-tile${size.tileWidth}` : ''}-${theme}.png`});
  if(name==='settings') {
-  for(const id of ['account','appearance','desktop','browser','assistant','voice','images','music','power','touchbar','remote','system']) {
+  for(const id of ['account','appearance','desktop','assistant','voice','images','music','touchbar','remote','system']) {
    await page.evaluate(id=>window.testModule.selectSettingsSection(id),id);
    const overflow=await page.evaluate(()=>{const p=document.querySelector('.settings-panels');return p.scrollWidth>p.clientWidth+2;});
    if(overflow) failures.push({name,size,section:id,overflow});

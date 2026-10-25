@@ -41,7 +41,7 @@ Browser (web/)                              shiny (core binary)
 - Top HUD: clock + weather, plugin tray grouped by category, host chips
   (sound, network, Bluetooth, battery), workspace tabs, power menu, Settings /
   Plugins / Chats.
-- Voice bar gestures (tap / long-press wake / double-tap to type), barge-in, a
+- Voice bar gestures (tap to type / long-press wake / double-tap to listen), barge-in, a
   selectable icon library (Infinity coloured set by default, auto light/dark)
   and five bundled themes.
 
@@ -83,6 +83,25 @@ Microphone access needs HTTPS unless you connect over `localhost`.
 **Prerequisites:** Rust, system SQLite, Python 3.9+ (`supertonic[serve]` +
 `faster-whisper`), and optionally Ollama, GPSD, PipeWire, BlueZ, ffmpeg, CMake
 + `nasm` (the Browser's TLS client).
+
+## Packages
+
+Each release tag (`v*`) builds the `peakd` Debian package, publishes the signed
+APT repository to <https://askscience.github.io/shiny/apt/>, and creates a
+GitHub Release with the `.deb`. Ordinary pushes do not build packages.
+
+```sh
+sudo install -m 0644 peakd-archive.gpg /usr/share/keyrings/peakd-archive.gpg
+echo 'deb [signed-by=/usr/share/keyrings/peakd-archive.gpg] https://askscience.github.io/shiny/apt/ peakd main' \
+  | sudo tee /etc/apt/sources.list.d/peakd.list
+sudo apt update
+sudo apt install peakd
+```
+
+The public key ships in [`packaging/peakd-archive.gpg`](packaging/peakd-archive.gpg).
+Tag a version (for example `v0.1.1`) to cut a release; the tag is the package
+version. See [Debian package and APT repository](docs/deployment/packages.md)
+for the workflow, versioning and signing-key details.
 
 ---
 

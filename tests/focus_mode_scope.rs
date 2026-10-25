@@ -250,10 +250,8 @@ async fn craft_app_mcp_tools_follow_focus_mode() {
             &self,
             _ctx: &shiny_plugin_sdk::services::PluginCtx,
             _req: shiny_plugin_sdk::tools::ToolRequest<'_>,
-        ) -> Result<
-            shiny_plugin_sdk::outcome::ActionOutcome,
-            shiny_plugin_sdk::errors::AppError,
-        > {
+        ) -> Result<shiny_plugin_sdk::outcome::ActionOutcome, shiny_plugin_sdk::errors::AppError>
+        {
             Ok(shiny_plugin_sdk::outcome::ActionOutcome::ok(
                 "photocraft_doc_open",
                 json!({ "opened": true }),

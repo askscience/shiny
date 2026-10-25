@@ -63,11 +63,9 @@
   "plugin.browser.downloads.title": "Tniżżil",
   "plugin.browser.downloads.untitled": "tniżżil",
 
-  "plugin.browser.home.brandNote": "iffiltrat mill-imblukkar tar-reklami",
   "plugin.browser.home.emptyBody": "Fittex ftit affarijiet u din il-paġna timtela b'aħbarijiet dwarhom.",
   "plugin.browser.home.emptyRetry": "Għad m'hemmx x'jintwera — erġa' ġġedded.",
   "plugin.browser.home.emptyTitle": "Għad m'hemmx stejjer",
-  "plugin.browser.home.hint": "Ikteb indirizz jew tfittxija hawn fuq. Il-paġni jgħaddu mill-imblukkar tar-reklami.",
   "plugin.browser.home.loadFailed": "Ir-rakkomandazzjonijiet ma setgħux jitgħabbew",
   "plugin.browser.home.recentSearches": "Minħabba t-tiftixiet reċenti tiegħek",
   "plugin.browser.home.refresh": "Aġġorna",

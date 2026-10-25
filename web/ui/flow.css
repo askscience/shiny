@@ -33,44 +33,9 @@
 @keyframes ui-flow-menu-in { from { opacity: 0; translate: 0 -4px; } to { opacity: 1; translate: 0 0; } }
 .ui-modal,.ui-sheet,.ui-modal-card,.ui-sheet-card { transition: none; }
 .ui-modal.is-closing,.ui-sheet.is-closing { opacity: 1; pointer-events: none; }
-.settings-window { container: settings / inline-size; }
-.settings-layout { display: flex; flex: 1; min-height: 0; min-width: 0; }
-.settings-nav { flex-basis: 168px; position: relative; }
-.settings-nav-item { position: relative; z-index: 1; font-size: 12px; gap: 10px; }
-.settings-nav .ui-selection-indicator { inset-inline: 10px; }
-.settings-nav .settings-nav-item.is-active { background: transparent !important; }
-.settings-panels { padding: 24px; }
-.settings-section { max-width: none; }
-.settings-panel-head { margin-bottom: 24px; }
-.settings-panel-head h3 { font-size: 22px; font-weight: 500; letter-spacing: -.03em; }
-.settings-panel-icon { border-radius: var(--radius-md); }
-.settings-panel .settings-field { margin-bottom: 0; }
-.settings-panel .settings-label { font-size: 12px; letter-spacing: 0; text-transform: none; margin: 0 0 10px; font-weight: 500; }
-.settings-panel .settings-value { font-size: 11px; }
-.settings-panel .settings-hint { font-size: 11px; line-height: 1.5; margin-top: 9px; }
-.settings-panel .settings-subhead { letter-spacing: .02em; text-transform: none; padding: 0; border: 0; margin: 0 0 10px !important; }
-.settings-panel .ui-control-card > .ui-toggle-row { margin: 0; padding: 0; background: transparent; border: 0; }
-.settings-panel .ui-control-card .ui-input,.settings-panel .ui-control-card .ui-select { font-size: 12px; min-height: 38px; padding: 8px 10px; }
-.settings-panel .ui-control-card .ui-list-item-title { font-size: 12px; }
-.settings-panel .ui-control-card .ui-list-item-sub { white-space: normal; overflow: visible; text-overflow: clip; font-size: 11px; line-height: 1.5; }
-.settings-panel .ui-control-card > .settings-inline-actions { flex-wrap: wrap; }
-.settings-panel .ui-control-card:empty { display: none; }
-.settings-panel .ui-control-card .ui-control-card { border: 0; padding: 0; margin-top: 12px; background: transparent; }
 .swatch { transition: border-radius var(--motion-connect) var(--motion-ease),border-color var(--motion-feedback); }
 .swatch.is-active:not(.swatch--gradient) { border-radius: 50%; }
 .swatch:hover { transform: none; }
-@container settings (min-width: 800px) { .settings-panel .ui-control-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
-@container settings (max-width: 620px) {
-  .settings-nav { flex: 0 0 auto; flex-direction: row; overflow-x: auto; border: 0; border-bottom: 1px solid var(--glass-border); }
-  /* Icon-only strip: no room for labels in a narrow window — each tab keeps its
-     accessible name and tooltip (`aria-label`/`title` on the item). */
-  .settings-nav-item { width: auto; flex: 0 0 auto; white-space: nowrap; padding: 0 12px; justify-content: center; }
-  .settings-nav-label { display: none; }
-  .settings-nav .ui-selection-indicator { display: none; }
-  .settings-nav .settings-nav-item.is-active { background: var(--accent-soft) !important; }
-  .settings-layout { flex-direction: column; }
-  .settings-panels { padding: 18px; }
-}
 @media (prefers-reduced-motion: reduce) {
   :where([data-ui-control],.ui-btn,.ui-toggle,.ui-toggle::after,.ui-chip,.ui-segmented *,.settings-nav-item,.swatch) { transition: none !important; }
   .ui-hud-menu-popup,.ctx-menu,.ui-select-menu,.ui-modal,.ui-sheet,

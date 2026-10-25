@@ -1,5 +1,6 @@
 import { element as el } from '../../ui/index.js';
 import { icon, controlCard, controlGroup } from '../../ui/index.js';
+import { t } from '../i18n.js';
 
 let nextControlId = 0;
 
@@ -39,14 +40,24 @@ export function heading(text) {
   return h;
 }
 
-export function panel(id, iconName, title, children) {
+export function panel(id, iconName, title, children, { index = 0, total = 0, description = '' } = {}) {
   const section = el('section', 'settings-section settings-panel');
   section.id = `panel-${id}`;
   section.dataset.panel = id;
   const head = el('div', 'settings-panel-head');
   const ring = el('span', 'settings-panel-icon');
   ring.appendChild(icon(iconName, { size: 22 }));
-  head.append(ring, el('h3', null, title));
+  const copy = el('div', 'settings-panel-copy');
+  if (index && total) {
+    copy.appendChild(el('span', 'settings-panel-kicker', t(
+      'settings.panel.kicker',
+      { current: index, total },
+      'Section {current} of {total}',
+    )));
+  }
+  copy.appendChild(el('h3', 'settings-panel-title', title));
+  if (description) copy.appendChild(el('p', 'settings-panel-subtitle', description));
+  head.append(ring, copy);
   section.appendChild(head);
   section.append(...settingsGroups(children));
   return section;

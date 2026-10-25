@@ -15,7 +15,7 @@ import { getAiName, getOllamaModel, getThink } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
-import { showImagePlaceholder, clearImagePlaceholder, showSongPlaceholder, clearSongPlaceholder } from './textInput.js';
+import { showImagePlaceholder, clearImagePlaceholder, showSongPlaceholder, clearSongPlaceholder, renderAgentMedia } from './textInput.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -314,7 +314,7 @@ export async function removeConversation(id) {
   }
 }
 
-async function readAgentStream(res, onStep, onThinking) {
+async function readAgentStream(res, onStep, onThinking, onApproval) {
   if (!res.body) {
     throw new ApiError(t('agent.streamUnavailable', null, 'Agent stream unavailable'), 500);
   }
@@ -323,41 +323,55 @@ async function readAgentStream(res, onStep, onThinking) {
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const chunks = buffer.split('\n\n');
-    buffer = chunks.pop() || '';
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() || '';
 
-    for (const chunk of chunks) {
-      const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'));
-      if (!dataLine) continue;
+      for (const chunk of chunks) {
+        const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'));
+        if (!dataLine) continue;
 
-      let event;
-      try {
-        event = JSON.parse(dataLine.replace(/^data:\s*/, ''));
-      } catch {
-        continue;
-      }
+        let event;
+        try {
+          event = JSON.parse(dataLine.replace(/^data:\s*/, ''));
+        } catch {
+          continue;
+        }
 
-      if (event.type === 'step' && event.message) {
-        onStep?.({ key: event.key, params: event.params, message: event.message, action: event.action });
-      } else if (event.type === 'thinking' && event.message) {
-        onThinking?.(event.message);
-      } else if (event.type === 'done') {
-        return event.data;
-      } else if (event.type === 'error') {
-        throw new ApiError(event.message || t('agent.failed', null, 'Agent failed'), 500);
+        if (event.type === 'step' && event.message) {
+          onStep?.({ key: event.key, params: event.params, message: event.message, action: event.action });
+        } else if (event.type === 'thinking' && event.message) {
+          onThinking?.(event.message);
+        } else if (event.type === 'approval' && event.request_id) {
+          // The turn is parked until this is answered: show the command card,
+          // then reply through `/api/agent/approve`.
+          onApproval?.({
+            requestId: event.request_id,
+            action: event.action,
+            command: event.command,
+          });
+        } else if (event.type === 'done') {
+          return event.data;
+        } else if (event.type === 'error') {
+          throw new ApiError(event.message || t('agent.failed', null, 'Agent failed'), 500);
+        }
       }
     }
+  } finally {
+    // A finished turn must release its slot in Chromium's six-connection
+    // HTTP/1.1 budget immediately: an abandoned reader keeps the response open.
+    try { await reader.cancel(); } catch (_) { /* already closed */ }
   }
 
   throw new ApiError(t('agent.streamEnded', null, 'Agent stream ended unexpectedly'), 500);
 }
 
-async function requestAgent(body, onStep, signal, onThinking) {
+async function requestAgent(body, onStep, signal, onThinking, onApproval) {
   const res = await apiRequest('/api/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -375,7 +389,7 @@ async function requestAgent(body, onStep, signal, onThinking) {
       const text = await res.text();
       throw new ApiError(text || res.statusText, res.status);
     }
-    return readAgentStream(res, onStep, onThinking);
+    return readAgentStream(res, onStep, onThinking, onApproval);
   }
 
   const text = await res.text();
@@ -443,18 +457,14 @@ function dispatchAgentActions(res) {
   window.__lastAgentActions = actions;
   window.dispatchEvent(new CustomEvent('agent:actions', { detail: actions }));
   // The AI turned a plugin on/off — re-evaluate plugin windows, keyboard,
-  // HUD chrome and traveler surfaces immediately. Activation opens the new
-  // window (the same gesture as the tray); deactivation closes it.
+  // HUD chrome and traveler surfaces immediately. Activation does not open the
+  // window: the assistant surfaces one only when asked (show_plugin), so a tool
+  // call never rearranges the desktop on its own.
   const touchedPlugins = actions.some(
     (a) => a?.action === 'plugin_activate' || a?.action === 'plugin_deactivate',
   );
   if (touchedPlugins) {
-    const opened = actions
-      .filter((a) => a?.action === 'plugin_activate' && a?.result === 'ok')
-      .map((a) => a?.data?.plugin)
-      .filter(Boolean);
-    window.dispatchEvent(new CustomEvent('plugins:changed',
-      opened.length ? { detail: { opened } } : undefined));
+    window.dispatchEvent(new CustomEvent('plugins:changed'));
   }
 }
 
@@ -578,8 +588,23 @@ export async function sendToAgent(message, mode, context, correction = false) {
   }
 }
 
+/**
+ * Answer the terminal command the turn is waiting on:
+ * `allow` this one, `deny` it, or `allow_chat` for every command in this chat.
+ */
+export async function respondToApproval({ turnId, requestId, decision }) {
+  return apiFetch('/api/agent/approve', {
+    method: 'POST',
+    body: JSON.stringify({
+      turn_id: turnId,
+      request_id: requestId,
+      decision,
+    }),
+  });
+}
+
 /** Text compose mode: streams reply into compose panel */
-export async function sendToAgentCompose(message, context, { onStream, onDone, onError, onStopped, onThinking }) {
+export async function sendToAgentCompose(message, context, { onStream, onDone, onError, onStopped, onThinking, onApproval }) {
   onStream?.('');
   setAgentAwaiting(true);
   setSphereState('processing');
@@ -588,12 +613,18 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
   const turn = beginTurn();
   turn.handlers.onStopped = onStopped;
 
+  const body = buildAgentBody(message, 'single', context, false, turn.id);
+  // The text chat can render the terminal allow/deny card mid-turn; a turn
+  // without this flag never runs an unapproved command.
+  body.approve_tools = true;
+
   try {
     const res = await requestAgent(
-      buildAgentBody(message, 'single', context, false, turn.id),
+      body,
       handleAgentStep,
       turn.controller.signal,
       onThinking,
+      (approval) => onApproval?.({ ...approval, turnId: turn.id }),
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting
@@ -605,6 +636,10 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     clearImagePlaceholder();
     await streamText(res.reply || '', onStream, 12, () => activeTurn !== turn);
     if (activeTurn !== turn) return null;
+
+    // Generated images/tracks are chat elements of their own, built from the
+    // tool payload rather than the (server-stripped) markdown.
+    renderAgentMedia(res.actions_taken);
 
     await ingestAgentArtifacts(res.artifacts);
 

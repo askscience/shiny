@@ -61,11 +61,9 @@
   "plugin.browser.downloads.title": "Preuzimanja",
   "plugin.browser.downloads.untitled": "preuzimanje",
 
-  "plugin.browser.home.brandNote": "filtrirano blokatorom oglasa",
   "plugin.browser.home.emptyBody": "Pretražite nekoliko stvari i ova će se stranica ispuniti vijestima o njima.",
   "plugin.browser.home.emptyRetry": "Još nema što prikazati — pokušajte osvježiti.",
   "plugin.browser.home.emptyTitle": "Još nema priča",
-  "plugin.browser.home.hint": "Upišite adresu ili pretragu gore. Stranice se učitavaju kroz blokator oglasa.",
   "plugin.browser.home.loadFailed": "Nije moguće učitati preporuke",
   "plugin.browser.home.recentSearches": "Na temelju vaših nedavnih pretraga",
   "plugin.browser.home.refresh": "Osvježi",

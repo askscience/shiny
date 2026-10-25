@@ -1,12 +1,13 @@
 //! Shared agent execution loop with step callbacks.
 
 use serde_json::{Value, json};
-use shiny_plugin_sdk::tools::UiText;
+use shiny_plugin_sdk::tools::{normalize_action_name, UiText};
 
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
 use crate::services::ai::AiClient;
+use crate::services::approval::{ApprovalGate, Authorization};
 use crate::services::agent_steps::{
     build_continuation_system, build_planning_messages, describe_tool_step,
     done_label_for_action, failed_label_for_action, messages_char_count, step_label_for_action,
@@ -81,6 +82,32 @@ fn ui_done(state: &AppState, action: &str, result: &str, data: &Value) -> UiText
     UiText::keyed(step.key, step.text)
 }
 
+/// The shell command an action is about to run, when it is the Terminal's
+/// `terminal_exec`. Resolves aliases ("terminal", "shell", "run_command") and a
+/// plugin-namespaced name ("terminal.terminal_exec") through the registry, so a
+/// gate cannot be sidestepped by calling the tool by another of its names.
+fn terminal_command(state: &AppState, action: &str, params: &Value) -> Option<String> {
+    let normalized = normalize_action_name(action);
+    let canonical = state
+        .plugins
+        .tools()
+        .canonical_name(&normalized)
+        .or_else(|| {
+            let (_, rest) = normalized.split_once('.')?;
+            state.plugins.tools().canonical_name(rest)
+        })?;
+    if canonical != "terminal_exec" {
+        return None;
+    }
+    params
+        .get("command")
+        .or_else(|| params.get("cmd"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|command| !command.is_empty())
+        .map(str::to_string)
+}
+
 pub struct AgentRunInput {
     pub message: String,
     pub mode: String,
@@ -110,6 +137,10 @@ pub struct AgentRunInput {
     /// way the turn start did (see `plugins::craft_mcp`).
     pub craft_open: std::collections::BTreeSet<String>,
     pub craft_home: String,
+    /// Terminal-command consent for this turn. `None` only in tests; a real
+    /// turn always carries one, so a command cannot run without passing the
+    /// hard-coded guard and the chat's allow/deny answer.
+    pub approval: Option<ApprovalGate>,
 }
 
 pub struct ActionTaken {
@@ -137,6 +168,9 @@ pub struct AgentRunResult {
     /// The model's reasoning trace for this turn (every thinking block of the
     /// tool loop, joined). Empty unless thinking was on and the model has it.
     pub thinking: String,
+    /// Mid-turn rows persisted with the conversation, in visual order:
+    /// `("approval", {command, decision})` and `("media", {kind, url, …})`.
+    pub events: Vec<(String, String)>,
     /// True when the user stopped this turn before it finished. The reply (if
     /// any) is a partial answer, and the caller records an invisible note so
     /// the model understands why the turn looks truncated next time.
@@ -166,11 +200,11 @@ where
     let mut navigation: Option<NavigationSession> = None;
     let mut focus_plugin: Option<String> = None;
     let mut open_file: Option<Value> = None;
-    let mut produced_owners: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut injected_skills: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut completed_steps: Vec<String> = Vec::new();
     let mut thinking_log = String::new();
     let mut final_reply = String::new();
+    let mut turn_events: Vec<(String, String)> = Vec::new();
     let mut interrupted = false;
 
     // The continuation prompt is append-only: its system half and the
@@ -294,6 +328,93 @@ where
                 continue;
             }
 
+            // The assistant's shell is gated per command, in code: the
+            // hard-coded guard refuses anything that could destroy the system,
+            // then the user allows or denies what is left (unless this chat
+            // already allows every command). A refused command never runs.
+            if let Some(command) = terminal_command(state, &action, &params) {
+                if let Some(reason) = crate::services::terminal_guard::block_reason(&command) {
+                    tracing::warn!("Blocked dangerous terminal command: {command}");
+                    turn_events.push((
+                        "approval".into(),
+                        json!({ "command": &command, "decision": "blocked" }).to_string(),
+                    ));
+                    let step = UiText::keyed("step.commandBlocked", "Blocked a dangerous command");
+                    on_step(&step, Some(action.as_str()));
+                    actions_taken.push(ActionTaken {
+                        action: "terminal_exec".into(),
+                        result: "blocked".into(),
+                        data: Some(json!({
+                            "command": command,
+                            "reason": reason,
+                            "blocked": true,
+                        })),
+                    });
+                    let note = format!(
+                        "terminal_exec blocked by the built-in safety guard ({reason}): nothing \
+                         was run. Do not retry it. Tell the user briefly that the command was \
+                         blocked and, if a safer alternative exists, propose that instead."
+                    );
+                    continuation_messages.push(("user".to_string(), format!("[Done] {note}")));
+                    completed_steps.push(note);
+                    continue;
+                }
+
+                let authorization = match &input.approval {
+                    Some(gate) => {
+                        if gate.will_ask() {
+                            let step = UiText::keyed(
+                                "step.awaitingApproval",
+                                "Waiting for your approval…",
+                            );
+                            on_step(&step, Some(action.as_str()));
+                        }
+                        gate.authorize(&action, &command, cancel.as_ref()).await
+                    }
+                    None => Authorization::Unavailable(
+                        "no approval channel is configured for this turn. Nothing was run.",
+                    ),
+                };
+
+                let decision = match &authorization {
+                    Authorization::Allow => "allow",
+                    Authorization::Denied(_) => "deny",
+                    Authorization::Unavailable(_) => "unavailable",
+                };
+                turn_events.push((
+                    "approval".into(),
+                    json!({ "command": &command, "decision": decision }).to_string(),
+                ));
+
+                let denial = match authorization {
+                    Authorization::Allow => None,
+                    Authorization::Denied(reason) => {
+                        Some(("step.commandDenied", "Command denied", reason))
+                    }
+                    Authorization::Unavailable(reason) => Some((
+                        "step.commandNeedsApproval",
+                        "Command needs approval in the chat",
+                        reason,
+                    )),
+                };
+                if let Some((key, text, reason)) = denial {
+                    on_step(&UiText::keyed(key, text), Some(action.as_str()));
+                    actions_taken.push(ActionTaken {
+                        action: "terminal_exec".into(),
+                        result: "denied".into(),
+                        data: Some(json!({
+                            "command": command,
+                            "reason": reason,
+                            "denied": true,
+                        })),
+                    });
+                    let note = format!("terminal_exec was not run: {reason}");
+                    continuation_messages.push(("user".to_string(), format!("[Done] {note}")));
+                    completed_steps.push(note);
+                    continue;
+                }
+            }
+
             on_step(&ui_step(state, &action), Some(action.as_str()));
 
             match execute_action(state, traveler, &input.ctx, &action, &params).await {
@@ -324,6 +445,44 @@ where
                     open_file = outcome.data.get("open_file").cloned();
                 }
 
+                // Generated media is its own chat element, persisted as a
+                // `media` row and re-rendered when the conversation is opened
+                // again. The reply's markdown copy is stripped below, so it is
+                // never shown twice.
+                if outcome.result == "ok" {
+                    let media = match outcome.action.as_str() {
+                        "generate_image" => outcome
+                            .data
+                            .get("url")
+                            .and_then(Value::as_str)
+                            .map(|url| {
+                                json!({
+                                    "kind": "image",
+                                    "url": url,
+                                    "file": outcome.data.get("file").cloned().unwrap_or(Value::Null),
+                                    "path": outcome.data.get("path").cloned().unwrap_or(Value::Null),
+                                })
+                            }),
+                        "generate_song" => outcome
+                            .data
+                            .get("url")
+                            .and_then(Value::as_str)
+                            .map(|url| {
+                                json!({
+                                    "kind": "song",
+                                    "url": url,
+                                    "file": outcome.data.get("file").cloned().unwrap_or(Value::Null),
+                                    "path": outcome.data.get("path").cloned().unwrap_or(Value::Null),
+                                    "title": outcome.data.get("title").cloned().unwrap_or(Value::Null),
+                                })
+                            }),
+                        _ => None,
+                    };
+                    if let Some(media) = media {
+                        turn_events.push(("media".into(), media.to_string()));
+                    }
+                }
+
                 let mut produced: Vec<Artifact> = Vec::new();
                 if let Some(art) = outcome.artifact {
                     produced.push(art);
@@ -340,13 +499,6 @@ where
                     .await
                     {
                         tracing::warn!("Failed to autosave artifact: {}", e);
-                    }
-                    // Deterministic surface tracking: the plugin that produced
-                    // cards gets surfaced even if the model skips show_plugin.
-                    if let Some(owner) = &outcome.owner {
-                        if owner != "core" {
-                            produced_owners.insert(owner.clone());
-                        }
                     }
                     // Tag the response payload so the UI can group by plugin
                     // without refetching the summary list.
@@ -472,16 +624,14 @@ where
         }
     }
 
+    // Generated media is a conversation row of its own: drop its markdown from
+    // the answer so the live view and every reopen show it exactly once.
+    final_reply = crate::services::media::strip_generated_media(&final_reply);
+
     // A stopped turn has no answer yet: leave it empty so the caller stores an
     // honest "no reply was produced" rather than a fake "Done.".
     if final_reply.is_empty() && !interrupted {
         final_reply = "Done.".into();
-    }
-
-    // Fallback surface: cards came from exactly one plugin — show its window
-    // even when the model didn't call show_plugin explicitly.
-    if focus_plugin.is_none() && produced_owners.len() == 1 {
-        focus_plugin = produced_owners.into_iter().next();
     }
 
     Ok(AgentRunResult {
@@ -495,6 +645,7 @@ where
         open_file,
         steps: completed_steps,
         thinking: thinking_log,
+        events: turn_events,
         interrupted,
     })
 }

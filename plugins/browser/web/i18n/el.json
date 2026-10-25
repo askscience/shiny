@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Λήψεις",
   "plugin.browser.downloads.untitled": "λήψη",
 
-  "plugin.browser.home.brandNote": "φιλτραρισμένο από τον αποκλεισμό διαφημίσεων",
   "plugin.browser.home.emptyBody": "Αναζητήστε μερικά πράγματα και αυτή η σελίδα θα γεμίσει με ειδήσεις γι' αυτά.",
   "plugin.browser.home.emptyRetry": "Τίποτε να εμφανιστεί ακόμη — δοκιμάστε ανανέωση.",
   "plugin.browser.home.emptyTitle": "Δεν υπάρχουν ιστορίες ακόμη",
-  "plugin.browser.home.hint": "Πληκτρολογήστε διεύθυνση ή αναζήτηση παραπάνω. Οι σελίδες φορτώνουν μέσω του αποκλεισμού διαφημίσεων.",
   "plugin.browser.home.loadFailed": "Δεν ήταν δυνατή η φόρτωση των προτάσεων",
   "plugin.browser.home.recentSearches": "Με βάση τις πρόσφατες αναζητήσεις σας",
   "plugin.browser.home.refresh": "Ανανέωση",

@@ -61,11 +61,9 @@
   "plugin.browser.downloads.title": "Téléchargements",
   "plugin.browser.downloads.untitled": "téléchargement",
 
-  "plugin.browser.home.brandNote": "filtré par le bloqueur de publicités",
   "plugin.browser.home.emptyBody": "Recherchez quelques sujets et cette page se remplira d'actualités à leur sujet.",
   "plugin.browser.home.emptyRetry": "Rien à afficher pour l'instant — essayez d'actualiser.",
   "plugin.browser.home.emptyTitle": "Aucun article pour l'instant",
-  "plugin.browser.home.hint": "Saisissez une adresse ou une recherche ci-dessus. Les pages se chargent via le bloqueur de publicités.",
   "plugin.browser.home.loadFailed": "Impossible de charger les recommandations",
   "plugin.browser.home.recentSearches": "D'après vos recherches récentes",
   "plugin.browser.home.refresh": "Actualiser",

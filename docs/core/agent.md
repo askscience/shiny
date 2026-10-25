@@ -30,6 +30,8 @@ and the REST reference in [Chat & agent API](../api/chat-agent.md).
 | Prompt shapes & labels | `src/services/agent_steps.rs` | Planning/continuation prompts, `describe_tool_step`, step/done/failed labels, `thinking_label`. |
 | Action parsing & dispatch | `src/services/agent_tools.rs` | `parse_actions`, `strip_action_blocks`, `execute_action`, core built-ins, the focus-mode scope. |
 | Cancellation | `src/services/agent_cancel.rs` | `TurnRegistry`, `CancelHandle`, `StopOutcome`, late-stop annotation. |
+| Terminal approval | `src/services/approval.rs` | Pending allow/deny requests, per-chat consent, the `approval` round trip. |
+| Terminal safety guard | `src/services/terminal_guard.rs` | Hard-coded refusal of system-destroying commands. |
 | Provider resolution | `src/services/ai.rs` | `AiClient`, `ResolvedAi`, `resolve_for_user`. |
 | Providers | `src/services/openai.rs`, `crates/shiny-plugin-sdk/src/services.rs` | OpenAI-compatible and Ollama clients. |
 | Memory | `src/services/chat_memory.rs` | Conversations, history, turn saving, interrupted notes. |
@@ -82,7 +84,7 @@ pub async fn handle_agent_dispatch(
 | Mode | Handler | Transport |
 |---|---|---|
 | `stream: false` / omitted | `handle_agent` | One `application/json` response. |
-| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events then `done`/`error`. |
+| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events, an `approval` event when a terminal command needs consent, then `done`/`error`. |
 
 The frontend always sets `stream: true` (`web/js/agent.js`) and parses the SSE
 stream itself; the transport modes are the two rows above.
@@ -225,9 +227,10 @@ let context_lines = state.plugins.context_lines_for(&installed);
 description/summary and active flag. It drives three blocks:
 
 - `active_lines` / `inactive_lines` — for the `## Plugins` catalog block.
-- `plugin_windows_block` — a `## Plugin windows` block that tells the model how
-  to surface an active plugin's window (`show_plugin`), and either documents
-  the workspace tools or forbids them on a vertical screen.
+- `plugin_windows_block` — a `## Plugin windows` block that tells the model to
+  call `show_plugin` only when the user asks to open, show or focus a window
+  (never as a side effect of using a plugin's tools), and either documents the
+  workspace tools or forbids them on a vertical screen.
 - `plugins_hint` — a compact one-line catalog ("`traveler: Trip tracking;
   hello: Demo`", inactive plugins suffixed `(inactive)`) passed to the
   continuation prompt so the model can still activate/deactivate mid-loop.
@@ -325,6 +328,7 @@ pub struct AgentRunInput {
     pub ctx: AgentContext,
     pub craft_open: BTreeSet<String>,  // Craft apps whose windows are open
     pub craft_home: String,            // home the app CLIs are scoped to
+    pub approval: Option<ApprovalGate>, // terminal consent for this turn
 }
 ```
 
@@ -341,6 +345,7 @@ pub struct AgentRunResult {
     pub focus_plugin: Option<String>,
     pub steps: Vec<String>,      // full LLM-facing notes
     pub thinking: String,        // reasoning trace, joined; empty when off
+    pub events: Vec<(String, String)>, // persisted approval/media rows
     pub interrupted: bool,
 }
 ```
@@ -492,22 +497,19 @@ For each `ActionOutcome` the runner:
 4. **Saves artifacts** — `outcome.artifact` plus `outcome.extra_artifacts` are
    autosaved via `artifacts::save_artifact`, owner-tagged. Failures are logged
    (`Failed to autosave artifact`) and never fail the turn.
-5. **Tracks produced owners** — a non-`core` owner that produced cards is
-   remembered in `produced_owners` so the window is surfaced even if the model
-   never called `show_plugin`.
-6. **Tags the response payload** — each artifact value gets a `"plugin"` key
+5. **Tags the response payload** — each artifact value gets a `"plugin"` key
    so the UI can group surfaces by plugin without refetching.
-7. **Builds the LLM note** with `describe_tool_step`.
-8. **Injects plugin skills** — the first time a plugin's tool is used in a run
+6. **Builds the LLM note** with `describe_tool_step`.
+7. **Injects plugin skills** — the first time a plugin's tool is used in a run
    (`injected_skills`), its `skills_for(owner)` docs are appended to the step
    note so the model "remembers" the plugin's tools in the slim continuation
    prompt. This is why a `calc_create` can be followed by a `calc_write` that
    actually fills the sheet.
-9. **Injects activation skills** — after a successful `plugin_activate` that
+8. **Injects activation skills** — after a successful `plugin_activate` that
    was not already active, the plugin's skills are appended so its tools are
    usable immediately in the same conversation.
-10. **Pushes the note** into `completed_steps` and emits the short human "done"
-    line with `ui_done_label`.
+9. **Pushes the note** into `completed_steps` and emits the short human "done"
+   line with `ui_done_label`.
 
 ```rust
 let mut note = describe_tool_step(&outcome.action, &outcome.result, &outcome.data);
@@ -521,7 +523,60 @@ completed_steps.push(note.clone());
 on_step(&ui_done_label(state, &outcome.action, &outcome.result, &outcome.data));
 ```
 
-### 4.6 Final fallbacks
+### 4.6 Terminal command approval
+
+`terminal_exec` is a plugin tool, but its consent lives in the core **before**
+dispatch, so it cannot be sidestepped by an alias or a namespaced tool name
+(`terminal`, `shell`, `run_command`, `terminal.terminal_exec` all resolve through
+the registry to the canonical tool). For every model action that is the
+Terminal's exec tool, `run_agent` does, in order:
+
+1. **Hard-coded guard** — `services::terminal_guard::block_reason(command)`
+   refuses commands that destroy the system: removing `/` or a system directory,
+   raw writes to a disk device, `mkfs`/partitioning, power-off/reboot, fork
+   bombs, overwriting `/etc/passwd` / `/etc/sudoers`. The outcome is
+   `result: "blocked"`, the step line is `step.commandBlocked`, and the model is
+   told nothing ran. This runs even in a chat where commands are allowed
+   automatically: no consent can undo it. Deleting ordinary files and folders is
+   *not* blocked — that is what the per-command approval is for.
+2. **Approval gate** — `services::approval::ApprovalGate::authorize` asks the
+   chat. Unless the conversation has `terminal_auto_approve = 1`, the gate emits
+   an `approval` SSE event `{request_id, action, command}` and parks on a one-shot
+   channel. The client answers `<POST /api/agent/approve>` with `allow`, `deny`
+   or `allow_chat`; `allow_chat` also writes the consent to the conversation so
+   every later command in that same chat runs without a prompt (other chats still
+   ask). A deny produces `result: "denied"` / `step.commandDenied`. A transport
+   that cannot render the prompt (the one-shot JSON endpoint; a voice turn before
+   the text chat opens) yields `step.commandNeedsApproval` instead of running
+   the command.
+3. Only then does the normal step line and `execute_action` run.
+
+The gate is cancellation-aware: stopping the turn, closing the chat or losing
+the SSE consumer resolves the pending request as denied, so the loop can never
+park forever on an answer nobody can give. The request registry checks the
+traveler that started the turn, so another account cannot answer it.
+
+**Connection budget.** The prompt arrives on the turn's SSE stream, but
+answering it is a new `POST`. Chromium allows six HTTP/1.1 connections per
+origin: the four HUD event streams, the Terminal window's stream and the turn
+itself fill every slot, and the approval POST (like any other request) would
+queue forever — the card looks frozen and the turn never resumes. Two things
+keep the budget open: the client cancels the agent-stream reader as soon as the
+turn ends, and `hudStream` pauses the four HUD streams while `agent-awaiting` is
+set (they keep their last state and reconnect afterwards). The stream handler
+also drops its disconnect watcher's sender when the turn ends, so the SSE
+response really closes. See `web/js/agent.js` and `web/js/hudStream.js`.
+
+Every prompt is recorded with its outcome as an `approval` row
+(`{command, decision}`) between the user message and the reply, and each
+successful `generate_image` / `generate_song` outcome becomes a `media` row
+(`{kind, url, file, path, title?}`). The reply's generated-media markdown is
+stripped (`services::media::strip_generated_media`) and the picture/track is
+rendered from the row, so a reopened chat shows the command block with its
+green-check / red-cross and the media exactly once. See
+[chat § Tables](chat.md#tables).
+
+### 4.7 Final fallbacks
 
 After the loop:
 
@@ -529,15 +584,14 @@ After the loop:
 if final_reply.is_empty() && !interrupted {
     final_reply = "Done.".into();
 }
-if focus_plugin.is_none() && produced_owners.len() == 1 {
-    focus_plugin = produced_owners.into_iter().next();   // deterministic surface
-}
 ```
 
 - A stopped turn keeps an **empty** reply so the caller records "no reply was
   produced" rather than a fake `Done.`.
-- Cards from exactly one plugin surface that plugin's window even if the model
-  forgot `show_plugin`.
+- `focus_plugin` is set only by an explicit `show_plugin`. Activating a plugin
+  or calling an ordinary tool does not open a window; a tool whose result is
+  itself a window surface (browser page, video, radio player) still surfaces it
+  through its artifact, as the plugin's own contract documents.
 
 ---
 
@@ -575,8 +629,8 @@ Format: {"action":"tool_name","params":{...}}
   from **this** prompt, not the planning one.
 - `doc_line` always repeats the "confirm a document in one or two short
   sentences, do not restate it" rule.
-- `plugins_line` teaches `show_plugin` and `plugin_activate` from the compact
-  `plugins_hint`; omitted when empty.
+- `plugins_line` teaches `show_plugin` (only on an explicit user request) and
+  `plugin_activate` from the compact `plugins_hint`; omitted when empty.
 - `history_line` renders earlier turns as `role: content` lines; omitted when
   empty.
 - Completed steps are appended as `("user", "[Done] {note}")` messages.
@@ -704,6 +758,8 @@ contribute nothing (no persona, skills or context lines).
 | [`src/services/agent_steps.rs`](../../src/services/agent_steps.rs) | Continuation prompt, `describe_tool_step`, voice/long-form blocks. |
 | [`src/services/agent_tools.rs`](../../src/services/agent_tools.rs) | Core built-in actions, `AgentContext`, active-trip fetch. |
 | [`src/services/agent_cancel.rs`](../../src/services/agent_cancel.rs) | `TurnRegistry` / stop semantics. |
+| [`src/services/approval.rs`](../../src/services/approval.rs) | Pending allow/deny requests and per-chat consent. |
+| [`src/services/terminal_guard.rs`](../../src/services/terminal_guard.rs) | Hard-coded refusal of system-destroying commands. |
 | [`src/services/ai.rs`](../../src/services/ai.rs) | Provider resolution; `chat_ex` (answer + reasoning trace) and `thinking_support`. |
 | [`src/api/agent.rs`](../../src/api/agent.rs) | System-prompt assembly, JSON/SSE handlers, stop. |
 | [`src/plugins/registry.rs`](../../src/plugins/registry.rs) | Tool dispatch + activation gate. |

@@ -109,13 +109,15 @@ reload_service() {
     return 0
   fi
   if systemctl is-active --quiet "$SERVICE.service"; then
-    if systemctl restart "$SERVICE.service"; then
-      echo "  restarted the $SERVICE service"
+    # --no-block is important on T2: tiny-dfr binds to /dev/tiny_dfr_display
+    # and can otherwise make this installer wait for the device timeout.
+    if systemctl restart --no-block "$SERVICE.service"; then
+      echo "  queued a restart of the $SERVICE service"
     else
       echo "  note: could not restart $SERVICE; the bar updates on its next reload" >&2
     fi
-  elif systemctl enable --now "$SERVICE.service" >/dev/null 2>&1; then
-    echo "  started the $SERVICE service"
+  elif systemctl enable --now --no-block "$SERVICE.service" >/dev/null 2>&1; then
+    echo "  queued a start of the $SERVICE service"
   else
     echo "  note: could not start $SERVICE automatically — start it with: systemctl start $SERVICE" >&2
   fi

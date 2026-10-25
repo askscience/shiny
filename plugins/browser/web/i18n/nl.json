@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Downloads",
   "plugin.browser.downloads.untitled": "download",
 
-  "plugin.browser.home.brandNote": "gefilterd door de advertentieblokkering",
   "plugin.browser.home.emptyBody": "Zoek een paar dingen en deze pagina vult zich met nieuws daarover.",
   "plugin.browser.home.emptyRetry": "Nog niets te tonen — probeer te vernieuwen.",
   "plugin.browser.home.emptyTitle": "Nog geen verhalen",
-  "plugin.browser.home.hint": "Typ hierboven een adres of een zoekopdracht. Pagina's worden via de advertentieblokkering geladen.",
   "plugin.browser.home.loadFailed": "Kon aanbevelingen niet laden",
   "plugin.browser.home.recentSearches": "Op basis van je recente zoekopdrachten",
   "plugin.browser.home.refresh": "Vernieuwen",

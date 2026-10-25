@@ -41,7 +41,8 @@ T2 Mac that is `gmux_backlight`, otherwise `/sys/class/backlight/*`.
 | `POST` | `/api/screen/brightness` | **loopback** | Body `{ "value": 0..100 }` (or the driver's raw range). |
 
 On a machine with no controllable panel backlight the service reports
-`available:false` and the action is a no-op; the Settings slider hides.
+`available:false` and the action is a no-op; the battery quick menu shows the
+slider disabled.
 
 ---
 

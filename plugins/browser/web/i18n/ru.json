@@ -62,11 +62,9 @@
   "plugin.browser.downloads.title": "Загрузки",
   "plugin.browser.downloads.untitled": "загрузка",
 
-  "plugin.browser.home.brandNote": "фильтруется блокировщиком рекламы",
   "plugin.browser.home.emptyBody": "Поищите несколько вещей — и эта страница наполнится новостями о них.",
   "plugin.browser.home.emptyRetry": "Пока нечего показать — попробуйте обновить.",
   "plugin.browser.home.emptyTitle": "Пока нет материалов",
-  "plugin.browser.home.hint": "Введите адрес или запрос выше. Страницы загружаются через блокировщик рекламы.",
   "plugin.browser.home.loadFailed": "Не удалось загрузить рекомендации",
   "plugin.browser.home.recentSearches": "Из-за ваших недавних запросов",
   "plugin.browser.home.refresh": "Обновить",

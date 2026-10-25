@@ -62,11 +62,9 @@
   "plugin.browser.downloads.title": "Sťahovania",
   "plugin.browser.downloads.untitled": "sťahovanie",
 
-  "plugin.browser.home.brandNote": "s filtrovaním reklám",
   "plugin.browser.home.emptyBody": "Vyhľadajte pár vecí a táto stránka sa naplní novinkami o nich.",
   "plugin.browser.home.emptyRetry": "Zatiaľ nie je čo zobraziť — skúste obnoviť.",
   "plugin.browser.home.emptyTitle": "Zatiaľ žiadne novinky",
-  "plugin.browser.home.hint": "Napíšte vyššie adresu alebo hľadaný výraz. Stránky sa načítavajú cez blokátor reklám.",
   "plugin.browser.home.loadFailed": "Nepodarilo sa načítať odporúčania",
   "plugin.browser.home.recentSearches": "Podľa vašich nedávnych hľadaní",
   "plugin.browser.home.refresh": "Obnoviť",

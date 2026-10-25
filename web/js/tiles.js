@@ -22,7 +22,7 @@ import { CORE_WINDOWS, isCoreWindow, coreWindowTitle } from './coreWindows.js';
 import { getPluginLayout } from './preferences.js';
 import {
   initDesktop, ensureWindows, activeWindowNames, activeWorkspaceIndex,
-  applyLayout, renderWorkspaceBar,
+  applyLayout, renderWorkspaceBar, getLayout,
   focusWindow, clearFullscreen, clearFocus, getFullscreen,
   setSurfaceNamesProvider, isFocusOnlyChange, bumpZ, getWorkspacesList,
   isPluginFocused, togglePluginFocus, reconcilePluginFocus, revealWindow,
@@ -947,11 +947,12 @@ export function initTileManager() {
 
   // Desktop state changes (workspace/focus/fullscreen) re-tile the windows.
   window.addEventListener('desktop:changed', (e) => {
-    // A focus-only change has already repainted the focus classes; re-tiling
-    // every window and rebuilding the workspace bar for it was the click
-    // latency. Nothing else on screen depends on which window has focus. Focus
-    // mode still needs its ring and the eye button refreshed.
-    if (isFocusOnlyChange(e.detail)) {
+    // Focus is geometry in Tiling and Windows layouts: the focused window is
+    // the master pane, and in the floating layout it is the topmost one. A
+    // focus-only repaint there would leave the old master in place (or the old
+    // window in front) until some unrelated render happened to apply it.
+    // Only the Columns layout paints focus without moving anything.
+    if (isFocusOnlyChange(e.detail) && getLayout().mode === 'columns') {
       repaintWindowFocus();
       return;
     }

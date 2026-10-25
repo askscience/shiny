@@ -106,12 +106,38 @@ for (let mount = 0; mount < 3; mount++) {
   const panels = element.querySelectorAll('.settings-panel');
   assert.deepEqual(panels.map((panel) => panel.dataset.panel), expectedSections);
   assert.equal(panels.find((panel) => panel.dataset.panel === 'music').classList.contains('is-active'), true);
+  assert.equal(element.children[0].classList.contains('settings-chrome'), true, 'top bar is a direct tile child for the merged window header');
+  assert.equal(element.children[1].classList.contains('settings-window'), true);
+  const navItems = element.querySelectorAll('.settings-nav-item');
+  assert.deepEqual(navItems.map((item) => item.dataset.panelTarget), expectedSections);
+  assert.deepEqual(
+    navItems.map((item) => item.querySelectorAll('.settings-nav-kicker')[0].textContent),
+    expectedSections.map((_, index) => String(index + 1).padStart(2, '0')),
+    'the section rail is numbered',
+  );
+  assert.equal(element.querySelectorAll('.settings-manifest').length, 1);
+  assert.equal(element.querySelectorAll('.settings-footer').length, 1);
+  const subtitles = element.querySelectorAll('.settings-panel-subtitle');
+  assert.equal(subtitles.length, expectedSections.length, 'every panel has a description');
+  assert.ok(subtitles.every((subtitle) => subtitle.textContent.trim().length > 0), 'panel descriptions are translated');
+  const kickers = element.querySelectorAll('.settings-panel-kicker');
+  assert.equal(kickers.length, expectedSections.length);
+  assert.equal(kickers[0].textContent, `Section 1 of ${expectedSections.length}`);
+  assert.equal(kickers.at(-1).textContent, `Section ${expectedSections.length} of ${expectedSections.length}`);
   const listeners = window.count();
   window.dispatchEvent(new CustomEvent('locale:change'));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(window.count(), listeners, 'locale rerender does not accumulate window listeners');
   assert.equal(element.querySelectorAll('.settings-panel').length, expectedSections.length);
   assert.equal(element.querySelectorAll('.settings-panel').find((panel) => panel.dataset.panel === 'music').classList.contains('is-active'), true);
+  assert.equal(element.querySelectorAll('.settings-nav-item').length, expectedSections.length);
+  assert.equal(element.querySelectorAll('.settings-panel-subtitle').length, expectedSections.length);
+  // The rail still switches panels after the locale rerender replaced it.
+  const desktopItem = element.querySelectorAll('.settings-nav-item')
+    .find((item) => item.dataset.panelTarget === 'desktop');
+  desktopItem.dispatchEvent(new Event('click'));
+  assert.equal(element.querySelectorAll('.settings-panel').find((panel) => panel.dataset.panel === 'desktop').classList.contains('is-active'), true);
+  assert.equal(element.querySelectorAll('.settings-panel').find((panel) => panel.dataset.panel === 'music').classList.contains('is-active'), false);
   settings.unmount();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(window.count(), baseline, 'unmount restores the original listener count');

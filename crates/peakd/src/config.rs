@@ -25,6 +25,8 @@ pub struct PeakdConfig {
     pub lang: String,
     pub width: f64,
     pub height: f64,
+    /// True when `--size` supplied an explicit window geometry.
+    pub size_explicit: bool,
     /// Open with devtools (Chromium's remote debugging on loopback).
     pub devtools: bool,
     /// Where the QtWebEngine profile lives (cookies, cache). Relative paths
@@ -94,6 +96,7 @@ impl PeakdConfig {
             lang: default_lang(),
             width: 1280.0,
             height: 860.0,
+            size_explicit: false,
             devtools: env_flag("PEAKD_DEVTOOLS"),
             data_dir: env::var("PEAKD_DATA_DIR")
                 .ok()
@@ -224,6 +227,7 @@ impl PeakdConfig {
                             if let (Ok(w), Ok(h)) = (w.parse(), h.parse()) {
                                 cfg.width = w;
                                 cfg.height = h;
+                                cfg.size_explicit = true;
                             }
                         }
                         i += 1;
@@ -424,7 +428,7 @@ OPTIONS:
         --title <TITLE>  Window title
         --lang <CODE>    Interface language for the shell's own strings
                          (default: $LC_ALL/$LC_MESSAGES/$LANG)
-        --size <WxH>     Window size (default 1280x860)
+        --size <WxH>     Window size (app mode defaults to the monitor)
     -h, --help           Show this help
 
 ENVIRONMENT:

@@ -3,8 +3,8 @@
  *
  * There is no rendered orb any more: the assistant's presence is a small lip
  * with an accent-coloured shadow that rises from it and swells with the audio.
- * This module owns the gesture vocabulary (tap = listen, long-press = wake,
- * double-tap = type) and pushes the live audio level into CSS custom
+ * This module owns the gesture vocabulary (tap = type, long-press = wake,
+ * double-tap = listen) and pushes the live audio level into CSS custom
  * properties on the bar. The look lives in /css/sphere.css; the colour follows
  * the active theme's accent (or --error while the mic is unhappy).
  */
@@ -28,8 +28,8 @@ let pointerId = null;
 // Too tight a window lets the first tap's single-tap action fire mid-gesture.
 const DOUBLE_TAP_MS = 500;
 // If the single-tap action already fired and the second tap lands right after,
-// we still convert the pair into a double-tap (the action is cancelled by the
-// double-tap handler). Covers slow double-clicks up to ~800ms total.
+// we still convert the pair into a double-tap. Covers slow double-clicks up to
+// ~800ms total.
 const LATE_DOUBLE_TAP_MS = 300;
 let lastTapAt = 0;
 let singleTapTimer = null;

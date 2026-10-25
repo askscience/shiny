@@ -411,6 +411,7 @@ void install_profile_services(QQuickWebEngineProfile *profile, bool incognito) {
 QString g_window_title = QStringLiteral("peakd");
 int g_window_width = 1280;
 int g_window_height = 860;
+int g_window_fullscreen = 0;
 
 // The shell's own strings, from the shared catalogues (see `src/i18n.rs`).
 QHash<QString, QString> g_strings;
@@ -526,6 +527,10 @@ Item {
         objectName: "appView"
         anchors.fill: parent
         profile: appProfile
+        // The app's base canvas, painted before the page's own first frame and
+        // during the auth redirect. Without it the engine shows white first,
+        // which reads as a broken boot rather than the glitch splash.
+        backgroundColor: "#07080a"
         url: shell.appUrl
         onTitleChanged: shell.viewTitle("main", title)
         onUrlChanged: shell.viewUrl("main", url)
@@ -1093,6 +1098,10 @@ void peakd_qt_set_window(const char *title, int width, int height) {
     if (height > 0) g_window_height = height;
 }
 
+void peakd_qt_set_fullscreen(int fullscreen) {
+    g_window_fullscreen = fullscreen;
+}
+
 void peakd_qt_set_strings(const char *strings_json) {
     const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(strings_json));
     if (!doc.isObject()) return;
@@ -1158,6 +1167,9 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     window.setWindowTitle(g_window_title);
     auto *scene = new QQuickWidget(&window);
     scene->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    // Frames before the QML scene (and the WebEngineView) are up must be the
+    // app's base canvas, never the default white.
+    scene->setClearColor(QColor(0x07, 0x08, 0x0a));
     scene->engine()->addImageProvider(QStringLiteral("peakdmask"), g_masks);
     scene->rootContext()->setContextProperty(QStringLiteral("shell"), &g_shell);
     scene->engine()->setObjectOwnership(&g_shell, QQmlEngine::CppOwnership);
@@ -1185,7 +1197,11 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
     // (read back, not echoed: Qt silently refuses some of these paths depending
     // on the order they were set in).
     QTimer::singleShot(0, &app, [&window]() {
-        window.show();
+        if (g_window_fullscreen) {
+            window.showFullScreen();
+        } else {
+            window.show();
+        }
         if (g_ctx && g_ctx->profile) {
             std::printf("peakd: profile off-the-record %d\n", g_ctx->profile->isOffTheRecord());
             std::printf("peakd: profile storage %s\n",

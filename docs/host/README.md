@@ -134,7 +134,7 @@ Each host panel is a top-bar chip plus a popover menu:
 | Bluetooth | `web/js/hudBluetooth.js` | `web/js/bluetoothMenu.js` | `web/js/bluetoothShared.js` |
 | Battery | `web/js/hudBattery.js` | `web/js/batteryMenu.js` | `web/js/batteryShared.js` |
 | Power | `web/js/powerMenu.js` | (same popover) | `web/js/powerShared.js` |
-| Display | (Settings) | Settings → Appearance / Power | `web/js/display.js` |
+| Display | (Settings) | Settings → Appearance (scale) / battery quick menu (backlights) | `web/js/display.js` |
 | Touch Bar | (Settings) | Settings → Touch Bar | `web/js/touchbarShared.js` |
 
 Chips are `<button>`s in the HUD. Which text parts are shown (device **name**
@@ -145,8 +145,8 @@ CSS hides the spans without re-rendering (`web/js/hudChipsShared.js`,
 
 Power is the one cross-cutting per-user panel: modes and switches live in
 `preferences.js` (`power.mode`, `power.auto_saver`, `power.low_power_ai`) and
-are shared by the battery quick menu and Settings → Power. See
-[battery-power.md](./battery-power.md).
+are driven from the battery quick menu, together with the screen-brightness and
+keyboard-backlight sliders. See [battery-power.md](./battery-power.md).
 
 ## polkit and privilege notes
 

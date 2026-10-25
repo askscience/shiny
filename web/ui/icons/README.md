@@ -21,8 +21,8 @@ they draw differently:
 
 | Set | Default | Look | Source |
 |---|---|---|---|
-| `infinity` / `infinity-dark` | **yes** (auto light/dark) | coloured folders, apps and file types | [rogts/infinity-icon-theme](https://github.com/rogts/infinity-icon-theme), GPL-3.0 |
-| base (`/ui/icons/`) | — | monochrome line icons | KDE **Slot-Beauty** ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) + in-house art |
+| `infinity` / `infinity-dark` | — | coloured folders, apps and file types | [rogts/infinity-icon-theme](https://github.com/rogts/infinity-icon-theme), GPL-3.0 |
+| base (`/ui/icons/`) | **yes** | monochrome line icons | KDE **Slot-Beauty** ([L4ki/Slot-Plasma-Themes](https://github.com/L4ki/Slot-Plasma-Themes), GPL-3.0) + in-house art |
 
 ## How lookups resolve
 

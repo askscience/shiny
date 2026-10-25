@@ -23,6 +23,7 @@ under `crates/` and `src/`; see the *Source map* at the bottom of each page.
 | Remote over Tailscale Funnel | An `https://*.ts.net` reverse proxy to the local server | Settings → Remote → *Public URL* | [`remote-access.md`](remote-access.md) |
 | Server mode window | A small GTK window showing the link/QR/controls instead of the kiosk | `shiny-server-mode` (exit code `42` switch) | [`remote-access.md`](remote-access.md) |
 | T2 MacBook hardware | Userspace speaker DSP, a DKMS ALSA period fix, SBC-XQ and the Touch Bar | `scripts/install-t2-*`, `scripts/touchbar/` | [`t2-mac.md`](t2-mac.md) |
+| Debian package / APT | GitHub Actions builds `peakd` for every `v*` release tag and deploys the signed suite `peakd` to Pages | `.github/workflows/publish.yml` | [`packages.md`](packages.md) |
 
 ## Installers at a glance
 

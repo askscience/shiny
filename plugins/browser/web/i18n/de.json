@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Downloads",
   "plugin.browser.downloads.untitled": "Download",
 
-  "plugin.browser.home.brandNote": "vom Werbeblocker gefiltert",
   "plugin.browser.home.emptyBody": "Suchen Sie ein paar Dinge, und diese Seite füllt sich mit Nachrichten dazu.",
   "plugin.browser.home.emptyRetry": "Noch nichts anzuzeigen — versuchen Sie zu aktualisieren.",
   "plugin.browser.home.emptyTitle": "Noch keine Beiträge",
-  "plugin.browser.home.hint": "Geben Sie oben eine Adresse oder eine Suche ein. Seiten werden über den Werbeblocker geladen.",
   "plugin.browser.home.loadFailed": "Empfehlungen konnten nicht geladen werden",
   "plugin.browser.home.recentSearches": "Aufgrund Ihrer letzten Suchanfragen",
   "plugin.browser.home.refresh": "Aktualisieren",

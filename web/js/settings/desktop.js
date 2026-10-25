@@ -56,8 +56,11 @@ export function createDesktopSection({ on, cleanups, resources }) {
 
     const tilingControls = el('div', 'settings-tiling-controls');
     cleanups.push(() => disposeMotion(tilingControls));
-    tilingControls.append(field(t('settings.desktop.masterSide', null, 'Master side'), orientation), ratio.wrap, gap.wrap);
+    tilingControls.append(field(t('settings.desktop.masterSide', null, 'Master side'), orientation), ratio.wrap);
 
+    // The gap is not a tiling-only value: it also frames the top bar and the
+    // window-to-screen edges in every layout, Windows included. Only the
+    // master controls disappear with the floating layout.
     const syncTilingControls = () => {
       revealRegion(tilingControls, mode.value !== 'windows');
     };
@@ -71,6 +74,7 @@ export function createDesktopSection({ on, cleanups, resources }) {
         details: tilingControls,
         hint: t('settings.desktop.layoutHint', null, 'Tiling snaps windows into workspaces; Windows floats them as draggable, resizable desktop windows.'),
       }),
+      gap.wrap,
       shortcuts,
     ];
   }

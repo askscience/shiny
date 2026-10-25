@@ -1,0 +1,174 @@
+name: Publish PEAK'D!
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: peakd-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:13
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Verify signing key is configured
+        env:
+          PEAKD_GPG_PRIVATE_KEY: ${{ secrets.PEAKD_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PEAKD_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::error title=Missing signing key::Add the PEAKD_GPG_PRIVATE_KEY repository secret with the armored private key."
+            exit 1
+          fi
+
+      # debian:13 is minimal: checkout and the Rust toolchain actions need git
+      # and curl before the job can even fetch the repository.
+      - name: Install checkout prerequisites
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libsqlite3-dev libgtk-3-dev cmake nasm xz-utils \
+            qt6-base-dev qt6-declarative-dev qt6-webchannel-dev qt6-webengine-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Compute package version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9] ]] || { echo "invalid Debian version: $version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "PEAKD_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build release workspace
+        run: cargo build --release --workspace --exclude peakd-mac --locked
+
+      - name: Build Debian packages
+        env:
+          PEAKD_VERSION: ${{ steps.meta.outputs.version }}
+          PEAKD_DEB_BUILD: ${{ github.workspace }}/deb-out
+          PEAKD_KEYRING: ${{ github.workspace }}/packaging/peakd-archive.gpg
+        run: ./scripts/build-deb.sh
+
+      - name: Upload Debian packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: peakd-deb
+          path: deb-out/out
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install APT repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dpkg-dev apt-utils gnupg xz-utils
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: peakd-deb
+          path: deb-out/out
+
+      - name: Import signing key
+        id: signing
+        env:
+          PEAKD_GPG_PRIVATE_KEY: ${{ secrets.PEAKD_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PEAKD_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::error title=Missing signing key::Add the PEAKD_GPG_PRIVATE_KEY repository secret with the armored private key."
+            exit 1
+          fi
+          install -d -m 0700 "$RUNNER_TEMP/gnupg"
+          printf '%s\n' "$PEAKD_GPG_PRIVATE_KEY" | gpg --homedir "$RUNNER_TEMP/gnupg" --batch --import
+          key=$(gpg --homedir "$RUNNER_TEMP/gnupg" --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          expected=$(gpg --show-keys --with-colons packaging/peakd-archive.gpg | awk -F: '/^fpr:/ {print $10; exit}')
+          if [ "$key" != "$expected" ]; then
+            echo "::error::The secret key ($key) does not match packaging/peakd-archive.gpg ($expected)."
+            exit 1
+          fi
+          echo "fingerprint=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed APT repository
+        env:
+          PEAKD_VERSION: ${{ needs.build.outputs.version }}
+          PEAKD_DEB_BUILD: ${{ github.workspace }}/deb-out
+          PEAKD_APT_DIR: ${{ github.workspace }}/site/apt
+          PEAKD_KEYRING: ${{ github.workspace }}/packaging/peakd-archive.gpg
+          PEAKD_GNUPGHOME: ${{ runner.temp }}/gnupg
+          PEAKD_APT_SUITE: peakd
+        run: ./scripts/build-apt-repo.sh
+
+      - name: Assemble Pages site
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          cp -a peakd-web/www/. site/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.build.outputs.version }}"
+          tag="${GITHUB_REF_NAME}"
+          shopt -s nullglob
+          files=(deb-out/out/*.deb deb-out/out/SHA256SUMS)
+          [ "${#files[@]}" -gt 0 ] || { echo "no release assets" >&2; exit 1; }
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" \
+              --title "PEAK'D! ${tag}" \
+              --notes "Package version \`${version}\`." \
+              --verify-tag
+          fi

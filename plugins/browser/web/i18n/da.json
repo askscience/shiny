@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Overførsler",
   "plugin.browser.downloads.untitled": "overførsel",
 
-  "plugin.browser.home.brandNote": "filtreret af annonceblokeringen",
   "plugin.browser.home.emptyBody": "Søg efter et par ting, og denne side fyldes med nyheder om dem.",
   "plugin.browser.home.emptyRetry": "Der er ikke noget at vise endnu — prøv at opdatere.",
   "plugin.browser.home.emptyTitle": "Ingen historier endnu",
-  "plugin.browser.home.hint": "Skriv en adresse eller en søgning ovenfor. Sider indlæses gennem annonceblokeringen.",
   "plugin.browser.home.loadFailed": "Kunne ikke indlæse anbefalinger",
   "plugin.browser.home.recentSearches": "På grund af dine seneste søgninger",
   "plugin.browser.home.refresh": "Opdatér",

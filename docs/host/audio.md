@@ -156,8 +156,15 @@ as the `HiFi` profile (6-channel speakers, 3-channel mic). The optional
 `scripts/install-t2-audio-dsp.sh` installs the community FIR crossover/EQ graph
 so the six speakers are driven the way the hardware expects; after installing,
 the sound panel shows **"MacBook Pro T2 DSP Speakers"** instead of the raw
-`HiFi` sink. The microphone is left on the raw device. The script is gated to
+`HiFi` sink. When `triforce-lv2` is available it also exposes **"MacBook Pro T2
+DSP Mic"**; otherwise the raw microphone remains visible. The script is gated to
 `MacBookPro16,1` on purpose and refuses to run if its LV2 plugins are missing.
+
+The live image and installed T2 systems prepare this stack before login with
+`shiny-t2-live-setup.service`: the service waits for the ALSA card and enables
+the same PipeWire/PipeWire-Pulse/WirePlumber units as the working host, plus the
+watchdog below. Generic systems keep native PulseAudio; selecting the generic
+kernel on a T2 Mac restores that path when the T2 audio driver is unavailable.
 
 That graph maps the sink volume onto the loudness-compensator's **linear input
 gain** (unity at 100 %, real amplification above it) rather than its output

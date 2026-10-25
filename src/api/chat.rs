@@ -198,7 +198,7 @@ pub async fn list_conversations(
     let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
         "SELECT c.id, c.title, c.updated_at, \
                 (SELECT content FROM chat_messages m \
-                 WHERE m.conversation_id = c.id AND m.role != 'system' \
+                 WHERE m.conversation_id = c.id AND m.role IN ('user', 'assistant') \
                  ORDER BY m.timestamp DESC, m.rowid DESC LIMIT 1) AS preview \
          FROM chat_conversations c \
          WHERE c.traveler_id = ?1 \

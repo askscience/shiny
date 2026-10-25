@@ -62,11 +62,9 @@
   "plugin.browser.downloads.title": "Atsisiuntimai",
   "plugin.browser.downloads.untitled": "atsisiuntimas",
 
-  "plugin.browser.home.brandNote": "filtruoja reklamų blokavimas",
   "plugin.browser.home.emptyBody": "Paieškokite kelių dalykų ir šis puslapis prisipildys su jais susijusių naujienų.",
   "plugin.browser.home.emptyRetry": "Kol kas nėra ką rodyti — bandykite atnaujinti.",
   "plugin.browser.home.emptyTitle": "Dar nėra naujienų",
-  "plugin.browser.home.hint": "Viršuje įrašykite adresą arba paieškos užklausą. Puslapiai įkeliami per reklamų blokavimą.",
   "plugin.browser.home.loadFailed": "Nepavyko įkelti rekomendacijų",
   "plugin.browser.home.recentSearches": "Pagal jūsų neseniai atliktas paieškas",
   "plugin.browser.home.refresh": "Atnaujinti",

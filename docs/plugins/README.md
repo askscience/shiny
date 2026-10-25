@@ -125,6 +125,6 @@ Read [Runtime & ABI](runtime-abi.md) before writing any DB or HTTP code.
 | `src/main.rs` | `RouterHandle` hot swap + boot discovery. |
 | `web/js/pluginIcon.js` | Plugin icon resolution. |
 | `web/js/activePlugins.js` | Frontend active-plugin set. |
-| `web/js/webAppSurface.js` | Window surface for a `kind = "web"` plugin (the iframe). |
+| `web/js/webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe, the `shiny:context` theme/locale hand-off, and the live-control bridge. |
 | `web/js/craftStore.js` | Craft store data + the background updater. |
 | `PLUGINS.md` | The original root document (kept; this set supersedes it). |

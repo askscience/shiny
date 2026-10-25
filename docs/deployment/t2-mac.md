@@ -69,6 +69,24 @@ different failure ("no timestamp ever").
 
 ---
 
+## Live and installed audio startup
+
+The live image and an installed T2 system run the same
+`shiny-t2-live-setup.service` before the display manager. It detects the T2
+bridge, loads `t2bce_audio`, waits for the actual **Apple T2 Audio** ALSA card,
+reloads the sound udev rules, and only then enables the working host's user
+units: `pipewire`, `pipewire-pulse`, `wireplumber`, `filter-chain`, and the T2
+audio watchdog. Native PulseAudio is masked on T2 so it cannot take the Pulse
+socket from `pipewire-pulse`.
+
+A fresh account receives the vendored WirePlumber defaults and DSP state before
+its user manager starts; existing per-user state is preserved on later boots.
+The session does not switch audio stacks after login: it only waits for the T2
+DSP sink/source and records diagnostics. If the generic kernel is selected on a
+T2 Mac and the T2 audio card cannot be created, the boot service restores the
+generic PulseAudio units instead. Non-Apple/generic machines never enter this
+path and keep PulseAudio unchanged.
+
 ## Stuck "Dummy Output" after boot (watchdog)
 
 WirePlumber can bind the Apple T2 card **without its UCM profiles** while the

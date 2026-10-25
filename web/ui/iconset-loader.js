@@ -7,8 +7,8 @@
  * icon.js tries: active set → theme override → /ui/icons/ (the base set), so a
  * set only needs to carry what it draws differently.
  *
- * Storage is global, like the theme (`ui.theme.name`). The default is
- * 'infinity', whose light/dark variant follows the active theme's mode.
+ * Storage is global, like the theme (`ui.theme.name`). The default is the
+ * monochrome Slot-Beauty base set; Infinity is opt-in.
  */
 
 import { themeMode } from './theme-loader.js';
@@ -16,7 +16,7 @@ import { t } from '../js/i18n.js';
 
 const KEY = 'ui.iconset.name';
 const TINT_KEY = 'ui.tint.icons';
-const DEFAULT_CHOICE = 'infinity';
+const DEFAULT_CHOICE = 'base';
 
 /** Choices shown in Settings → Appearance. `auto` picks a dir per theme mode.
  *  Labels live in the catalogue (the table is built at import, before it loads). */

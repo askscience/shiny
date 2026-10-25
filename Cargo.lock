@@ -7033,6 +7033,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-installer-helper"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "shiny-installer-protocol",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "shiny-installer-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "serde",
+ "serde_json",
+ "shiny-installer-protocol",
+ "shiny-plugin-sdk",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "shiny-installer-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "shiny-iroh-client"
 version = "0.1.0"
 dependencies = [

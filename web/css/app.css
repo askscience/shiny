@@ -1164,6 +1164,7 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 .battery-menu {
   width: min(320px, calc(100vw - 24px));
   max-width: min(320px, calc(100vw - 24px));
+  max-height: min(440px, calc(100vh - 24px));
   padding: 0;
   gap: 0;
   overflow: hidden;
@@ -1210,7 +1211,10 @@ body:not(.fs-active) #fullscreen-bubble { display: none; }
 .battery-menu .ui-toggle-row { padding: 4px 2px; border-radius: var(--radius-sm); }
 .battery-menu .ui-toggle-row:hover { background: var(--glass-hover); }
 .battery-menu-summary { color: var(--muted); font-size: 12px; line-height: 1.45; }
-.battery-menu-actions { display: flex; justify-content: flex-end; }
+.battery-backlight { display: flex; flex-direction: column; gap: 7px; }
+.battery-backlight-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
+.battery-backlight-label { color: var(--text); }
+.battery-backlight-value { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .power-mode-row { display: flex; gap: 6px; }
 .power-mode-btn {
   flex: 1;

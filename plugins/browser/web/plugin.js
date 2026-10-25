@@ -1649,9 +1649,6 @@ function homeDocument(news) {
   const cards = Array.isArray(news?.cards) ? news.cards : [];
   const topics = Array.isArray(news?.topics) ? news.topics : [];
   const personal = news?.personalized && cards.length;
-  const brand = t('plugin.browser.home.brandNote', null, 'filtered by the ad blocker');
-  const hint = t('plugin.browser.home.hint', null,
-    'Type an address or a search above. Pages load through the ad blocker.');
   const recent = t('plugin.browser.home.recentSearches', null, 'Because of your recent searches');
   const refresh = t('plugin.browser.home.refresh', null, 'Refresh');
   const refreshing = t('plugin.browser.home.refreshing', null, 'Refreshing…');
@@ -1678,10 +1675,8 @@ function homeDocument(news) {
        font-family:var(--font-body,system-ui,-apple-system,sans-serif);
        -webkit-font-smoothing:antialiased}
   .home{max-width:60rem;margin:0 auto;padding:2.2rem 1.5rem 3rem}
-  .brand{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.35rem}
+  .brand{display:flex;align-items:baseline;gap:.6rem;margin-bottom:1.1rem}
   .brand b{font-size:1.15rem;font-weight:650;letter-spacing:-.01em}
-  .brand span{font-size:.8rem;opacity:.6}
-  .hint{font-size:.85rem;opacity:.65;margin:0 0 1.6rem}
   .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.1rem}
   .chip{font-size:.72rem;opacity:.8;padding:.22rem .6rem;border-radius:999px;
         border:1px solid color-mix(in srgb, currentColor 22%, transparent)}
@@ -1715,8 +1710,7 @@ function homeDocument(news) {
   .empty .s{font-size:.85rem;line-height:1.55;opacity:.7}
 </style></head><body>
 <div class="home">
-  <div class="brand"><b>Browser</b><span>${brand}</span></div>
-  <p class="hint">${hint}</p>
+  <div class="brand"><b>Browser</b></div>
   <div id="shelf">${shelf}</div>
 </div>
 <scr${'ipt'} id="home-data" type="application/json">${payload}</scr${'ipt'}>

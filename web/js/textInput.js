@@ -1,9 +1,9 @@
 import { controlButton } from '../ui/components/button.js';
 import { setSphereState } from './sphere.js';
-import { currentConversationId, loadConversationMessages, stopActiveTurn } from './agent.js';
+import { currentConversationId, loadConversationMessages, stopActiveTurn, respondToApproval } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
 import { ensureMarked } from './vendorLoader.js';
-import { icon } from '../ui/index.js';
+import { icon, button } from '../ui/index.js';
 import { t } from './i18n.js';
 
 const compose = document.getElementById('compose-mode');
@@ -23,6 +23,9 @@ let ignoreOutsideClick = false;
 let assistantBubble = null;
 let imagePlaceholder = null;
 let songPlaceholder = null;
+// Media URLs already shown in this thread (live tool outcome or a persisted
+// row), so the same generated image/track is never rendered twice.
+const renderedMedia = new Set();
 
 function isInsideComposeInput(target) {
   if (!target) return false;
@@ -54,6 +57,7 @@ function finishSending() {
   autoResizeField();
   isSending = false;
   setStopVisible(false);
+  expireApprovalCards();
   showComposeInput();
   setSphereState('idle');
   field.focus();
@@ -190,10 +194,180 @@ function showThinking(text) {
   scrollConversation();
 }
 
+/* ── Terminal command approval ───────────────────────────────
+ * The assistant's shell is gated per command. The live card asks; the same
+ * record is stored in the conversation, so reopening the chat still shows the
+ * command and its outcome as a green check or a red cross.
+ * ────────────────────────────────────────────────────────── */
+
+const approvalCards = new Set();
+
+function makeApprovalStatus(tone, label) {
+  const status = document.createElement('span');
+  status.className = `compose-approval-status is-${tone}`;
+  status.title = label;
+  status.setAttribute('aria-label', label);
+  status.append(icon(tone === 'allowed' ? 'ui/check' : 'ui/close', { size: 10 }));
+  return status;
+}
+
+function settleApprovalCard(card, tone, label) {
+  if (!card || card.classList.contains('is-resolved')) return;
+  card.classList.add('is-resolved', `is-${tone}`);
+  card.querySelector('.compose-approval-actions')?.remove();
+  card.appendChild(makeApprovalStatus(tone, label));
+  approvalCards.delete(card);
+}
+
+function makeApprovalCard(approval) {
+  const card = document.createElement('div');
+  card.className = 'compose-approval';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', t('chat.approval.title', null, 'Run this command?'));
+
+  const command = document.createElement('code');
+  command.className = 'compose-approval-command';
+  command.textContent = approval.command || '';
+
+  const actions = document.createElement('div');
+  actions.className = 'compose-approval-actions';
+
+  const send = async (decision) => {
+    const buttons = [...actions.querySelectorAll('button')];
+    buttons.forEach((b) => { b.disabled = true; });
+    try {
+      const res = await respondToApproval({
+        turnId: approval.turnId,
+        requestId: approval.requestId,
+        decision,
+      });
+      if (!res?.success) throw new Error(t('chat.approval.failed', null, 'Could not send your choice'));
+      if (decision === 'allow') {
+        settleApprovalCard(card, 'allowed', t('chat.approval.allowed', null, 'Allowed'));
+      } else if (decision === 'allow_chat') {
+        settleApprovalCard(card, 'allowed', t('chat.approval.allowedChat', null, 'Allowed for this chat'));
+      } else {
+        settleApprovalCard(card, 'denied', t('chat.approval.denied', null, 'Denied'));
+      }
+    } catch (e) {
+      buttons.forEach((b) => { b.disabled = false; });
+      window.dispatchEvent(new CustomEvent('app:toast', {
+        detail: {
+          message: e?.message || t('chat.approval.failed', null, 'Could not send your choice'),
+          type: 'error',
+        },
+      }));
+    }
+  };
+
+  actions.append(
+    button({
+      label: t('chat.approval.deny', null, 'Deny'),
+      variant: 'ghost',
+      size: 'sm',
+      onClick: () => void send('deny'),
+    }),
+    button({
+      label: t('chat.approval.allowChat', null, 'Allow for this chat'),
+      variant: 'quiet',
+      size: 'sm',
+      onClick: () => void send('allow_chat'),
+    }),
+    button({
+      label: t('chat.approval.allow', null, 'Allow'),
+      variant: 'primary',
+      size: 'sm',
+      onClick: () => void send('allow'),
+    }),
+  );
+
+  card.append(command, actions);
+  // The answer bubble is already reserved when the prompt arrives: put the
+  // card before it, matching the stored order (user, command, answer).
+  const anchor = assistantBubble?.parentElement === conversationEl
+    ? assistantBubble
+    : (composer || null);
+  conversationEl?.insertBefore(card, anchor);
+  approvalCards.add(card);
+  scrollConversation();
+  return card;
+}
+
+/** A command from the stored conversation: same block, no buttons, icon only. */
+function renderApprovalRecord(raw) {
+  let record;
+  try { record = JSON.parse(raw); } catch { return; }
+  if (!record?.command) return;
+
+  const allowed = record.decision === 'allow';
+  const tone = allowed ? 'allowed' : 'denied';
+  const label = t(allowed ? 'chat.approval.allowed' : 'chat.approval.denied', null,
+    allowed ? 'Allowed' : 'Denied');
+
+  const card = document.createElement('div');
+  card.className = `compose-approval is-resolved is-${tone}`;
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', t('chat.approval.title', null, 'Run this command?'));
+
+  const command = document.createElement('code');
+  command.className = 'compose-approval-command';
+  command.textContent = record.command;
+
+  card.append(command, makeApprovalStatus(tone, label));
+  conversationEl?.insertBefore(card, composer || null);
+}
+
+/** Insert one media block once per URL, in thread order. */
+function appendMediaBlock(block, url) {
+  if (!conversationEl || !block) return;
+  if (url && renderedMedia.has(url)) return;
+  if (url) renderedMedia.add(url);
+  conversationEl.insertBefore(block, composer || null);
+  scrollConversation();
+}
+
+/** A generated image/track stored in the conversation. */
+function renderMediaRecord(raw) {
+  let media;
+  try { media = JSON.parse(raw); } catch { return; }
+  if (media?.kind === 'image' && media.url) {
+    appendMediaBlock(makeImageBlock(media.url, media.file || '', ''), media.url);
+  } else if (media?.kind === 'song' && media.url) {
+    appendMediaBlock(makeSongBlock(media.url, media.title || ''), media.url);
+  }
+}
+
+/** Render the images/tracks a finished turn produced, from the tool payloads
+ *  (the reply's markdown copy is stripped server-side). */
+export function renderAgentMedia(actions) {
+  for (const action of actions || []) {
+    const data = action?.data;
+    if (action?.result !== 'ok' || !data?.url) continue;
+    if (action.action === 'generate_image') {
+      clearImagePlaceholder();
+      appendMediaBlock(makeImageBlock(data.url, data.file || '', ''), data.url);
+    } else if (action.action === 'generate_song') {
+      clearSongPlaceholder();
+      appendMediaBlock(makeSongBlock(data.url, data.title || ''), data.url);
+    }
+  }
+}
+
+/** The turn ended (done, stopped, closed) before the user chose: the pending
+ *  cards can no longer be answered, so make that visible instead of leaving
+ *  live-looking buttons behind. */
+function expireApprovalCards() {
+  for (const card of [...approvalCards]) {
+    settleApprovalCard(card, 'expired', t('chat.approval.expired', null, 'Turn ended'));
+  }
+}
+
 function clearConversation() {
   conversationEl
-    ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block, :scope > .compose-song-block')
+    ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block, :scope > .compose-song-block, :scope > .compose-approval')
     .forEach((b) => b.remove());
+  approvalCards.clear();
+  renderedMedia.clear();
   assistantBubble = null;
   imagePlaceholder = null;
   songPlaceholder = null;
@@ -203,16 +377,30 @@ function startAssistantBubble() {
   assistantBubble = makePendingBubble(t('chat.thinkingPending', null, 'Thinking…'))?.bubble || null;
 }
 
-/** Reserve the spot where a generated image will land (spinner + label). */
+/** Reserve the spot where a generated image will land. The assistant's pending
+ *  bubble is reused when it still holds the wheel, so generation never shows
+ *  two spinners at once. */
+function reuseAssistantPending(labelText) {
+  if (!assistantBubble) return null;
+  const row = assistantBubble.querySelector('.compose-pending-row');
+  if (!row) return null;
+  const label = row.querySelector('.compose-pending-label');
+  if (label) label.textContent = labelText;
+  return assistantBubble;
+}
+
 export function showImagePlaceholder() {
   if (imagePlaceholder) return;
-  imagePlaceholder =
-    makePendingBubble(t('chat.imagePending', null,
-      'Painting your image — this can take a few minutes…'))?.bubble || null;
+  const label = t('chat.imagePending', null,
+    'Painting your image — this can take a few minutes…');
+  imagePlaceholder = reuseAssistantPending(label)
+    || makePendingBubble(label)?.bubble
+    || null;
 }
 
 export function clearImagePlaceholder() {
-  imagePlaceholder?.remove();
+  // The reused assistant bubble belongs to the answer: never remove it here.
+  if (imagePlaceholder && imagePlaceholder !== assistantBubble) imagePlaceholder.remove();
   imagePlaceholder = null;
 }
 
@@ -295,10 +483,11 @@ function syncImageBlocks(bubble) {
       blocks = new Map();
       imageBlocks.set(bubble, blocks);
     }
-    if (blocks.has(src)) continue;
+    if (blocks.has(src) || renderedMedia.has(src)) continue;
     const block = makeImageBlock(src, src.slice(IMAGE_SRC_PREFIX.length), alt);
     bubble.after(block);
     blocks.set(src, block);
+    renderedMedia.add(src);
   }
   // A reply that is only the picture keeps no empty bubble behind it.
   bubble.classList.toggle('is-image-only', text.textContent.trim().length === 0);
@@ -321,16 +510,19 @@ function fmtTime(secs) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** Reserve the spot where the generated song will land (spinner + label). */
+/** Reserve the spot where the generated song will land, reusing the pending
+ *  answer bubble so only one wheel is ever visible. */
 export function showSongPlaceholder() {
   if (songPlaceholder) return;
-  songPlaceholder =
-    makePendingBubble(t('chat.songPending', null,
-      'Composing your song — this can take several minutes…'))?.bubble || null;
+  const label = t('chat.songPending', null,
+    'Composing your song — this can take several minutes…');
+  songPlaceholder = reuseAssistantPending(label)
+    || makePendingBubble(label)?.bubble
+    || null;
 }
 
 export function clearSongPlaceholder() {
-  songPlaceholder?.remove();
+  if (songPlaceholder && songPlaceholder !== assistantBubble) songPlaceholder.remove();
   songPlaceholder = null;
 }
 
@@ -456,10 +648,11 @@ function syncSongBlocks(bubble) {
       blocks = new Map();
       songBlocks.set(bubble, blocks);
     }
-    if (blocks.has(url)) continue;
+    if (blocks.has(url) || renderedMedia.has(url)) continue;
     const block = makeSongBlock(url, title);
     bubble.after(block);
     blocks.set(url, block);
+    renderedMedia.add(url);
   }
   bubble.classList.toggle('is-song-only', text.textContent.trim().length === 0);
 }
@@ -484,7 +677,9 @@ async function loadConversation() {
   if (!id) return;
   const entries = await loadConversationMessages(id).catch(() => []);
   for (const m of entries) {
-    renderBubble(m.role === 'user' ? 'user' : 'assistant', m.content, m.thinking || '');
+    if (m.role === 'approval') renderApprovalRecord(m.content);
+    else if (m.role === 'media') renderMediaRecord(m.content);
+    else renderBubble(m.role === 'user' ? 'user' : 'assistant', m.content, m.thinking || '');
   }
   scrollConversation();
 }
@@ -651,6 +846,7 @@ async function submitTextInput() {
       onStream: (partial) => {
         streamAssistantBubble(partial);
       },
+      onApproval: (approval) => makeApprovalCard(approval),
       onDone: () => {
         field.value = '';
         finishSending();

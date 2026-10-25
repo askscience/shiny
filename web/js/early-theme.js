@@ -5,7 +5,7 @@
 // for the check here. Loaded as a plain (blocking) script from <head>; it is a
 // separate file so a strict Content-Security-Policy can forbid inline scripts.
 (function () {
-  var DEFAULT = 'pitch'; // keep in step with theme-loader.js
+  var DEFAULT = 'neumorphic'; // keep in step with theme-loader.js
   var theme = DEFAULT;
   try {
     var stored = localStorage.getItem('ui.theme.name');

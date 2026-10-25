@@ -62,11 +62,9 @@
   "plugin.browser.downloads.title": "Завантаження",
   "plugin.browser.downloads.untitled": "завантаження",
 
-  "plugin.browser.home.brandNote": "відфільтровано блокувальником реклами",
   "plugin.browser.home.emptyBody": "Пошукайте кілька тем — і ця сторінка наповниться новинами про них.",
   "plugin.browser.home.emptyRetry": "Поки що нічого показати — спробуйте оновити.",
   "plugin.browser.home.emptyTitle": "Ще немає новин",
-  "plugin.browser.home.hint": "Введіть адресу або пошуковий запит вище. Сторінки завантажуються через блокувальник реклами.",
   "plugin.browser.home.loadFailed": "Не вдалося завантажити рекомендації",
   "plugin.browser.home.recentSearches": "Завдяки вашим останнім пошукам",
   "plugin.browser.home.refresh": "Оновити",

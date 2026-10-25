@@ -30,6 +30,22 @@ back; `timed_out: true` means the command is still running and was left alone.
 The AI can also open the window with the core `show_plugin` tool, and the user
 types there directly.
 
+## Command approval
+
+In the text chat, every `terminal_exec` command is a question: the SSE turn
+emits an `approval` event, the chat shows the exact command with **Deny**,
+**Allow** and **Allow for this chat**, and the run parks until
+`POST /api/agent/approve` answers. "Allow for this chat" persists on the
+conversation (`chat_conversations.terminal_auto_approve`), so only that thread
+runs commands without asking. See
+[agent § Terminal command approval](../../../docs/core/agent.md#46-terminal-command-approval).
+
+A hard-coded guard (`src/services/terminal_guard.rs`) runs before the prompt:
+commands that would destroy the system — removing `/` or a system directory,
+raw writes to a disk device, `mkfs`/partitioning, power-off/reboot, fork bombs —
+are refused and never offered, even in an auto-approved chat. Deleting ordinary
+files and folders is allowed; that is what the per-command approval is for.
+
 ## Output capture and recovery
 
 Command capture keeps a bounded prefix and rolling tail before applying the
@@ -43,9 +59,10 @@ in its existing PTY. The tool's result fields remain unchanged.
 The shell has the server user's privileges. Shiny refuses the Terminal from
 **remote** clients unless *Allow Terminal from remote clients* is enabled in
 Settings. See [remote access](../../../docs/deployment/remote-access.md).
-The `terminal_exec` tool currently runs for the agent regardless of that
-setting — the remote-clients preference only covers the REST routes (the tool
-has no access to the request's remote flag yet); treat it as roadmap.
+The `terminal_exec` tool is gated by the chat's allow/deny prompt and the
+hard-coded safety guard (above); the remote-clients preference still covers only
+the REST routes (the tool has no access to the request's remote flag yet) — treat
+that as roadmap.
 
 ## Source layout
 

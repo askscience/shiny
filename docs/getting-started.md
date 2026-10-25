@@ -93,10 +93,10 @@ The [kiosk shell](deployment/kiosk-shell.md) is a separate binary
 
 | Gesture | Action |
 |---|---|
-| Tap the voice bar | Listen once, reply spoken aloud |
+| Tap the voice bar | Type a message (Markdown replies) |
 | Long-press the voice bar | Wake mode — hold, say "Hey &lt;assistant name&gt;", keep talking, release to end |
-| Double-tap the voice bar | Type a message (Markdown replies) |
-| Tap while it is answering | Stop it and start listening again |
+| Double-tap the voice bar | Listen once, reply spoken aloud |
+| Double-tap while it is answering | Stop it and start listening again |
 
 Everything in the UI is also reachable by voice/typed instruction through the
 agent. See [agent](core/agent.md) and [voice](core/voice.md).

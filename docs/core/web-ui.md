@@ -58,7 +58,7 @@ The shell is split by concern. Grouped:
 | `linkRouter.js` | Kiosk link routing: sends external link clicks to the chosen link-handler plugin (see below). |
 | `menuState.js` | Shared menu state helpers. |
 | `menuFactory.js` | The shared HUD-popup lifecycle (build once, open/close, outside click, Escape, placement). |
-| `hudStream.js` | Shared SSE + poll fallback for the top-bar chips. |
+| `hudStream.js` | Shared SSE + poll fallback for the top-bar chips. Pauses while the page is hidden and during an agent turn, so the four HUD streams do not exhaust Chromium's six HTTP/1.1 connections when the chat and a terminal window need one. |
 | `officeMenu.js` | Shared document-menu footer and date label for Calc/Impress/Word/PDF. |
 
 ### HUD & host panels
@@ -79,9 +79,9 @@ The shell is split by concern. Grouped:
 
 | Module | Role |
 |---|---|
-| `agent.js` | Drives `/api/agent` (JSON + SSE), renders replies. |
+| `agent.js` | Drives `/api/agent` (JSON + SSE), renders replies, answers the terminal `approval` event. |
 | `chatHistory.js` | Conversation list + message bubbles. |
-| `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, close), the sphere. |
+| `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, the terminal command approval card, close), the sphere. |
 | `dockStep.js`, `voiceGlyph.js`, `toolIcons.js` | The assistant's status line and the voice bar's glyph: the dock bubble, the same line or the running tool's icon inside the bar (with its swap fade), and the tool → catalogue-icon map. |
 | `thinkToggle.js` | Chat head's brain button + voice-bar menu entry: Ollama thinking on/off, gated by the model's capability (`GET /api/ai/thinking`). |
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
@@ -92,10 +92,10 @@ The shell is split by concern. Grouped:
 
 | Module | Role |
 |---|---|
-| `settingsWindow.js`, `preferences.js` | Settings window + per-user preferences. |
+| `settingsWindow.js`, `preferences.js` | Settings window (section rail, panel stage, live manifest) + per-user preferences. |
 | `pluginsWindow.js`, `activePlugins.js`, `pluginIcon.js` | Plugin manager (installed list + the Craft store tab), active set, icon resolution (theme icon → `icon.svg` → `icon.png`). |
 | `craftStore.js` | Craft App Suite catalog + the background updater (install/update via `/api/plugins/store`, including an install still missing its AI control); also toggles an app's AI control (its MCP server). |
-| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site, plus the page half of live AI control (detects `window[<app>].request` and answers the core's control-channel proxy) and the file-input shim that gives every app's Open… the shell's picker. |
+| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site, the `shiny:context` hand-off (the PEAK'D interface language and theme, with `color-scheme` so `prefers-color-scheme` follows), plus the page half of live AI control (detects `window[<app>].request` and answers the core's control-channel proxy) and the file-input shim that gives every app's Open… the shell's picker. |
 | `filePicker.js` | The shell's file picker: a compact **floating window** (`ui/floating`: the desktop's own title bar with only close, outside the tiling) with the Files window's thumbnail grid (`files-*` classes, `/api/files/thumb`) browsing the user's home through the Files plugin. Returns picked entries, or real `File` objects for the caller's realm. Used by `files.js` and by every web app's `<input type=file>` through the surface shim. |
 | `appSaves.js` | Follows the shell's `shiny:file-saved` reports — a web app saved through the browser APIs inside its iframe — and turns them into the toast with the real path plus the `files:external` refresh the Files window listens for. |
 | `appearance.js` | Accent/gradient/theme. |
@@ -240,14 +240,17 @@ occluded renderer. Final styles belong to CSS, not a retained animation. Call
 owner. Only animate small controls, selection indicators and reveal regions;
 do not animate streaming content, large editor surfaces or window dragging.
 
-Settings keeps its 12 existing section IDs and direct navigation. Shared control
-cards sit in groups defined by existing translated headings; the grid gains two
-columns when the **window**, rather than the screen, is wide enough. A narrow
-window turns the section navigation into an icon-only strip — each tab keeps its
-`aria-label`/`title`, so nothing loses its name. Provider, voice engine and
-backdrop options reveal inside their owning card. Locale rerenders continue to
-dispose previous section resources. Visible labels reuse existing translation
-catalogs; new UI text must use `t()`/`tp()` keys.
+Settings keeps its 10 existing section IDs (Touch Bar appears only on hosts that
+expose one) and direct navigation. The surface follows the Installer's
+three-column grammar: a numbered section rail, the active panel on the middle
+stage, and a live "at a glance" manifest. A numbered kicker and one-line
+description lead each panel. As the **window** narrows, the manifest folds away
+first, then the rail becomes a horizontal strip, then an icon-only rail. Shared
+control cards sit in groups defined by existing translated headings; the grid
+gains a second column when the panel stage itself is wide enough. Provider, voice
+engine and backdrop options reveal inside their owning card. Locale rerenders
+continue to dispose previous section resources. Visible labels reuse existing
+translation catalogs; new UI text must use `t()`/`tp()` keys.
 
 Shared modal and sheet APIs retain `el`, `card`, `open`, `close`, and `isOpen`;
 modal also retains `body`. Both add `destroy()` for owner teardown and accept an

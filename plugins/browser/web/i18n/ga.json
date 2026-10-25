@@ -63,11 +63,9 @@
   "plugin.browser.downloads.title": "Íoslódálacha",
   "plugin.browser.downloads.untitled": "íoslódáil",
 
-  "plugin.browser.home.brandNote": "scagtha ag an mblocálaí fógraí",
   "plugin.browser.home.emptyBody": "Cuardaigh cúpla rud agus líonfaidh an leathanach seo le nuacht fúthu.",
   "plugin.browser.home.emptyRetry": "Níl aon rud le taispeáint fós — bain triail as athnuachan.",
   "plugin.browser.home.emptyTitle": "Níl aon scéal ann fós",
-  "plugin.browser.home.hint": "Clóscríobh seoladh nó cuardach thuas. Lódáiltear leathanaigh tríd an mblocálaí fógraí.",
   "plugin.browser.home.loadFailed": "Níorbh fhéidir moltaí a lódáil",
   "plugin.browser.home.recentSearches": "Mar gheall ar do chuardaigh le déanaí",
   "plugin.browser.home.refresh": "Athnuaigh",

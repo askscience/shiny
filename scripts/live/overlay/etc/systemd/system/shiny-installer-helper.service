@@ -6,7 +6,7 @@ ConditionPathExists=/run/live/medium
 [Service]
 Type=simple
 ExecStartPre=/bin/chgrp shiny /run/shiny
-ExecStart=/usr/libexec/shiny/shiny-installer-helper --socket /run/shiny/installer.sock --dry-run
+ExecStart=/usr/libexec/shiny/shiny-installer-helper --socket /run/shiny/installer.sock
 Restart=on-failure
 Group=shiny
 RuntimeDirectory=shiny

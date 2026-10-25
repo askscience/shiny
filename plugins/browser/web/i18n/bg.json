@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Изтегляния",
   "plugin.browser.downloads.untitled": "изтегляне",
 
-  "plugin.browser.home.brandNote": "филтрирано от блокировача на реклами",
   "plugin.browser.home.emptyBody": "Потърсете няколко неща и тази страница ще се напълни с новини за тях.",
   "plugin.browser.home.emptyRetry": "Още няма какво да се покаже — опитайте да опресните.",
   "plugin.browser.home.emptyTitle": "Още няма новини",
-  "plugin.browser.home.hint": "Въведете адрес или търсене отгоре. Страниците се зареждат през блокировача на реклами.",
   "plugin.browser.home.loadFailed": "Препоръките не можаха да се заредят",
   "plugin.browser.home.recentSearches": "Заради скорошните ви търсения",
   "plugin.browser.home.refresh": "Опресни",

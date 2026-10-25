@@ -4,18 +4,22 @@
 :where(.ui-field,.ui-stack,.ui-row,.ui-search,.ui-select-wrap,.ui-control-grid,.ui-segmented) { min-width: 0; max-width: 100%; }
 :where(.ui-input,.ui-select,.ui-textarea) { min-width: 0; box-sizing: border-box; }
 .ui-btn { max-width: 100%; }
-.ui-btn > span:not(.ui-icon,.ui-spinner) { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+/* Long translations wrap instead of overflowing. `break-word` (not `anywhere`)
+   keeps the longest word in the intrinsic size, so a shrinking flex row cannot
+   squeeze a label into one-letter lines; `text-wrap: balance` splits a word
+   that still has to break evenly instead of leaving a lone letter behind. */
+.ui-btn > span:not(.ui-icon,.ui-spinner) { min-width: 0; white-space: normal; overflow-wrap: break-word; text-wrap: balance; }
 .ui-tool.ui-btn { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); }
 .ui-tool--danger:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
 .ui-segmented { flex-wrap: wrap; }
-.ui-segmented > button { min-width: 0; overflow-wrap: anywhere; }
+.ui-segmented > button { min-width: 0; overflow-wrap: break-word; text-wrap: balance; }
 .ui-select-option[aria-disabled="true"] { opacity: .5; cursor: default; }
 .ui-modal,.ui-sheet { box-sizing: border-box; padding: max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
 .ui-modal-card,.ui-sheet-card { min-width: 0; max-width: 100%; max-height: calc(100dvh - 24px); box-sizing: border-box; }
 .ui-modal-card { padding: clamp(12px,4vw,26px); }
 .ui-modal-card > .ui-row { gap: 12px; }
-.ui-modal-card .ui-title { min-width: 0; overflow-wrap: anywhere; }
-.ui-empty { min-width: 0; max-width: 100%; padding: 20px 12px; overflow-wrap: anywhere; }
+.ui-modal-card .ui-title { min-width: 0; overflow-wrap: break-word; text-wrap: balance; }
+.ui-empty { min-width: 0; max-width: 100%; padding: 20px 12px; overflow-wrap: break-word; text-wrap: pretty; }
 
 /* Every title-bar action remains reachable: short windows use one scrollable
    row, so a long toolbar cannot consume the document's entire height. */
@@ -27,7 +31,9 @@
 .plugins-window > * { flex-shrink: 0; }
 .plugin-card { min-width: 0; }
 .plugin-card-head,.plugin-card-meta,.plugin-card-actions { flex-wrap: wrap; }
-.plugin-card-name,.plugin-card-meta,.settings-hint { overflow-wrap: anywhere; }
+.plugin-card-name,.plugin-card-meta,.settings-hint { overflow-wrap: break-word; }
+.plugin-card-name { text-wrap: balance; }
+.plugin-card-meta,.settings-hint { text-wrap: pretty; }
 .plugin-card-icon { flex-shrink: 0; }
 .settings-inline-actions,.background-image-row,.whisper-model-row { flex-wrap: wrap; }
 .settings-panel .ui-control-card .ui-row { flex-wrap: wrap; gap: 8px; }

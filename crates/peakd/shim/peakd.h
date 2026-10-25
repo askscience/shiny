@@ -59,6 +59,9 @@ void peakd_qt_set_filter_scripts(int on);
 /// Window title and size for `peakd_qt_run` (defaults when unset).
 void peakd_qt_set_window(const char *title, int width, int height);
 
+/// Show the main window fullscreen on the primary screen.
+void peakd_qt_set_fullscreen(int fullscreen);
+
 /// The shell's own strings (file-dialog titles, name filters) as one
 /// `{ "key": "text" }` JSON map from the shared catalogues; keys that are
 /// absent keep the English literals compiled in here.

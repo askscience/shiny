@@ -15,17 +15,27 @@ and [`008_chat_indexes.sql`](../../migrations/008_chat_indexes.sql).
 
 | Table | Columns (essence) |
 |---|---|
-| `chat_conversations` | `id`, `traveler_id`, `title`, `created_at`, `updated_at` |
+| `chat_conversations` | `id`, `traveler_id`, `title`, `created_at`, `updated_at`, `terminal_auto_approve` |
 | `chat_messages` | `id`, `traveler_id`, `conversation_id`, `role`, `content`, `thinking`, `timestamp` |
 
-`role` is `user`, `assistant` or `system`. **`system` rows are invisible notes**
-written for the model; the conversation list/detail endpoints filter them out, so
-the user never sees them as bubbles.
+`role` is `user`, `assistant`, `system`, `approval` or `media`.
+**`system` rows are invisible notes** written for the model; the conversation
+list/detail endpoints filter them out, so the user never sees them as bubbles.
+`approval` and `media` are mid-turn UI rows: a terminal command (JSON
+`{command, decision}`) and a generated image/track (JSON `{kind, url, file,
+path, title?}`). They store as `content` JSON, are rendered by the chat, and are
+**excluded from the agent's memory window** so the model only reads real turns.
+`GET /api/chat/conversations` previews the last `user`/`assistant` row.
 
 `thinking` (on assistant rows) is the reasoning trace a thinking model produced
 for that reply, when thinking was on. It is returned by
 `GET /api/chat/conversations/:id` and rendered as a collapsed "Thinking"
 disclosure above the answer — the same fold the live turn shows.
+
+A turn's rows are inserted in visual order in one transaction: the user message,
+any `approval` rows, the assistant reply, then any `media` rows. That is what
+makes a reopened chat show the terminal commands and generated pictures in the
+same place the live turn showed them.
 
 ---
 
@@ -104,7 +114,17 @@ list and message bubbles, and [`web/js/agent.js`](../../web/js/agent.js) drives
 the streaming turns. The compose panel itself is
 [`web/js/textInput.js`](../../web/js/textInput.js): the pending bubble's spinner
 plus live step line, the collapsed "Thinking" fold, generated-image/song blocks,
+the terminal **command approval card** (deny / allow once / allow for this chat),
 and the close button. [`web/js/thinkToggle.js`](../../web/js/thinkToggle.js) owns
 the chat head's brain button (and the voice-bar menu entry) — it shows
 `ui/brain` while thinking is on and the slashed `ui/brain-off` when it is off,
 and disables itself for a model that cannot think. See [web UI](web-ui.md).
+
+The approval card is a live thread element, not a modal: it appears above the
+composer exactly where the command will run, shows the command verbatim, and
+becomes an inert green circle-check (allowed) or red circle-cross (denied) once
+answered — no status text. Both the command and its outcome are stored as an
+`approval` row, so closing and reopening the chat shows the same command block
+and icon again. Generated images and songs are stored as `media` rows and
+re-rendered below the answer on reopen; the reply's markdown copy is stripped
+server-side so nothing appears twice.

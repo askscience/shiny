@@ -62,11 +62,9 @@
   "plugin.browser.downloads.title": "Pobrane",
   "plugin.browser.downloads.untitled": "pobieranie",
 
-  "plugin.browser.home.brandNote": "filtrowane przez bloker reklam",
   "plugin.browser.home.emptyBody": "Wyszukaj kilka rzeczy, a ta strona wypełni się wiadomościami na ich temat.",
   "plugin.browser.home.emptyRetry": "Nie ma jeszcze nic do pokazania — spróbuj odświeżyć.",
   "plugin.browser.home.emptyTitle": "Brak wiadomości",
-  "plugin.browser.home.hint": "Wpisz adres lub zapytanie powyżej. Strony wczytują się przez bloker reklam.",
   "plugin.browser.home.loadFailed": "Nie udało się wczytać propozycji",
   "plugin.browser.home.recentSearches": "Na podstawie Twoich ostatnich wyszukiwań",
   "plugin.browser.home.refresh": "Odśwież",

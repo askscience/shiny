@@ -31,7 +31,7 @@ and an optional web surface.
 | [docs/deployment/](docs/deployment/) | Kiosk shell, sidecars, server mode, greeter |
 | [docs/reference/](docs/reference/) | `crate-map.md`, `env-vars.md`, `glossary.md` |
 | [docs/configuration.md](docs/configuration.md) | Server configuration |
-| [ICONSETS_PLAN.md](ICONSETS_PLAN.md), [web/ui/icons/INDEX.md](web/ui/icons/INDEX.md) | Icon names/catalog (never hand-draw SVGs in UI code) |
+| [docs/core/themes-icons.md](docs/core/themes-icons.md), [web/ui/icons/INDEX.md](web/ui/icons/INDEX.md) | Icon names/catalog (never hand-draw SVGs in UI code) |
 
 ## Code map — where to edit what
 

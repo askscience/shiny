@@ -100,6 +100,16 @@ impl ToolRegistry {
             .unwrap_or_default()
     }
 
+    /// The tool's own name, whatever alias or synonym the model called it by.
+    /// Used by dispatch-layer guards that need to recognise a canonical tool
+    /// without replicating every plugin's alias list.
+    pub fn canonical_name(&self, name: &str) -> Option<String> {
+        self.tools
+            .read()
+            .get(&normalize_action_name(name))
+            .map(|tool| tool.name().to_string())
+    }
+
     pub async fn invoke(
         &self,
         action: &str,

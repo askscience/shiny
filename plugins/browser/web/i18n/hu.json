@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Letöltések",
   "plugin.browser.downloads.untitled": "letöltés",
 
-  "plugin.browser.home.brandNote": "a hirdetésblokkoló szűri",
   "plugin.browser.home.emptyBody": "Keressen rá néhány dologra, és ez az oldal megtelik a róluk szóló hírekkel.",
   "plugin.browser.home.emptyRetry": "Még nincs mit megjeleníteni — próbálja frissíteni.",
   "plugin.browser.home.emptyTitle": "Még nincsenek hírek",
-  "plugin.browser.home.hint": "Írjon be felül egy címet vagy egy keresést. Az oldalak a hirdetésblokkolón keresztül töltődnek be.",
   "plugin.browser.home.loadFailed": "Nem sikerült betölteni az ajánlásokat",
   "plugin.browser.home.recentSearches": "A legutóbbi keresései alapján",
   "plugin.browser.home.refresh": "Frissítés",

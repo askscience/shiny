@@ -12,8 +12,8 @@
  *   no battery     hidden
  *
  * No battery hardware → the chip hides itself, like the network chip with no
- * Wi-Fi. Clicking it opens the reduced power-management quick menu
- * (`batteryMenu.js`); the big controls live in Settings → Power.
+ * Wi-Fi. Clicking it opens the power-management menu (`batteryMenu.js`), which
+ * holds the modes, AI switches and the backlight sliders.
  */
 
 import { createHudStream } from './hudStream.js';

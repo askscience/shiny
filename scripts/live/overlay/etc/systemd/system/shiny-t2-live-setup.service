@@ -1,15 +1,14 @@
 [Unit]
-Description=PEAK'D! live T2 userspace setup
-ConditionPathExists=/run/live/medium
-After=local-fs.target systemd-udev-settle.service
+Description=PEAK'D! T2 hardware and audio setup
+After=local-fs.target shiny-live-seed.service
 Before=display-manager.service
-Wants=systemd-udev-settle.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/lib/shiny/t2-live-setup.sh
 RemainAfterExit=yes
-TimeoutStartSec=120
+TimeoutStartSec=30
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target

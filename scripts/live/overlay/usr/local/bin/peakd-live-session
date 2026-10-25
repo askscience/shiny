@@ -36,6 +36,90 @@ export PEAKD_APP_ORIGIN="http://127.0.0.1:8080"
 export PEAKD_DATA_DIR="$HOME/.local/share/shiny/peakd"
 export PEAKD_ADFILTER_DIR="$HOME/.local/share/shiny/adfilter"
 
+start_ollama() {
+    [ -x /usr/local/bin/ollama ] || return 0
+    if curl -sf --max-time 1 "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+        return 0
+    fi
+    mkdir -p "$HOME/.local/share/shiny/ollama-models"
+    OLLAMA_HOST=127.0.0.1:11434 \
+    OLLAMA_MODELS="$HOME/.local/share/shiny/ollama-models" \
+    OLLAMA_VULKAN=1 \
+    OLLAMA_FLASH_ATTENTION=1 \
+    OLLAMA_KEEP_ALIVE=15m \
+    LD_LIBRARY_PATH=/usr/local/lib/ollama/vulkan:/usr/local/lib/ollama \
+        /usr/local/bin/ollama serve >>"$LOG_DIR/ollama.log" 2>&1 &
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ollama pid=$!"
+}
+
+is_t2() {
+    [ -d /sys/module/t2bce_audio ] && return 0
+    grep -qiE 'Apple T2 Audio|AppleT2' /proc/asound/cards 2>/dev/null && return 0
+    return 1
+}
+
+start_t2_audio_units() {
+    # The boot service normally does this before LightDM. Keep a session-side
+    # fallback so a slow or interrupted setup still cannot leave native
+    # PulseAudio owning the socket and showing only "Dummy Output".
+    systemctl --user mask --runtime pulseaudio.socket pulseaudio.service >/dev/null 2>&1 || true
+    systemctl --user stop pulseaudio.socket pulseaudio.service >/dev/null 2>&1 || true
+    for unit in pipewire.socket pipewire.service pipewire-pulse.socket \
+        pipewire-pulse.service wireplumber.service filter-chain.service \
+        shiny-t2-audio-watchdog.service; do
+        systemctl --user start "$unit" >/dev/null 2>&1 || true
+    done
+}
+
+start_audio() {
+    if is_t2; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] T2 audio: starting host PipeWire/WirePlumber units"
+        start_t2_audio_units
+    else
+        systemctl --user unmask pulseaudio.socket pulseaudio.service >/dev/null 2>&1 || true
+        systemctl --user start pulseaudio.socket pulseaudio.service >/dev/null 2>&1 \
+            || pulseaudio --start >/dev/null 2>&1 || true
+    fi
+
+    # The boot service has already prepared the card and the host's user units.
+    # Wait for the same sink/source exposed by the working T2 host, without
+    # replacing them with a different fallback stack during session startup.
+    i=0
+    while [ "$i" -lt 60 ]; do
+        if is_t2; then
+            if pactl info 2>/dev/null | grep -qi 'PipeWire' \
+                && pactl list short sinks 2>/dev/null | grep -q 'audio_effect.t2-161-speakers' \
+                && pactl list short sources 2>/dev/null | grep -q 'audio_effect.t2-161-mic'; then
+                break
+            fi
+        elif pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -qv '^Dummy'; then
+            break
+        fi
+        i=$((i + 1)); sleep 0.5
+    done
+
+    # Prefer the tuned DSP nodes on T2. The host state normally does this, but
+    # make it deterministic on a fresh live account.
+    if is_t2; then
+        pactl set-default-sink audio_effect.t2-161-speakers >/dev/null 2>&1 || true
+        pactl set-default-source audio_effect.t2-161-mic >/dev/null 2>&1 || true
+    fi
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] audio info:" >>"$LOG_DIR/audio.log"
+    pactl info >>"$LOG_DIR/audio.log" 2>&1 || true
+    echo "audio sinks:" >>"$LOG_DIR/audio.log"
+    pactl list short sinks >>"$LOG_DIR/audio.log" 2>&1 || true
+    echo "audio sources:" >>"$LOG_DIR/audio.log"
+    pactl list short sources >>"$LOG_DIR/audio.log" 2>&1 || true
+    echo "wireplumber status:" >>"$LOG_DIR/audio.log"
+    wpctl status >>"$LOG_DIR/audio.log" 2>&1 || true
+    systemctl --user --no-pager --full status pipewire pipewire-pulse wireplumber \
+        shiny-t2-audio-watchdog >>"$LOG_DIR/audio.log" 2>&1 || true
+}
+
+start_ollama
+start_audio
+
 start_server() {
     /usr/bin/shiny >>"$LOG_DIR/shiny.log" 2>&1 &
     SERVER_PID=$!
@@ -82,11 +166,8 @@ if [ ! -s "$SHINY_SESSION_TOKEN_FILE" ]; then
     fi
 fi
 
-# The T2 watchdog is a no-op off T2; start it only when the unit exists.
-if [ -f /etc/systemd/user/shiny-t2-audio-watchdog.service ]; then
-    systemctl --user daemon-reload >/dev/null 2>&1 || true
-    systemctl --user start shiny-t2-audio-watchdog.service >/dev/null 2>&1 || true
-fi
+# Audio was selected before the server started: PulseAudio for generic,
+# PipeWire/WirePlumber + T2 DSP for a T2 machine.
 
 if [ -s "$SHINY_SESSION_TOKEN_FILE" ]; then
     export SHINY_BOOT_TOKEN="$(cat "$SHINY_SESSION_TOKEN_FILE")"

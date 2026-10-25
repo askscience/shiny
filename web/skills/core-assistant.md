@@ -56,7 +56,7 @@ Bring a plugin's window to the front (its tile, or full screen if the user confi
 {"action": "show_plugin", "params": {"name": "plugin-name"}}
 ```
 
-Use it when the user's request clearly belongs to one plugin's domain — read the plugin descriptions in the "Plugin windows" section of your system prompt. Call it **after** the domain tool (e.g. plan first, then `show_plugin`). Skip it when the request is generic. In focus mode it is refused along with the rest of the desktop tools — see "Focus mode" below. And use the plugin's **real tool names** from the skills you are given: a name you invent fails, and the failure will say "unknown action", not that the plugin is unavailable.
+Use it only when the user asks to open, show or focus a plugin's window, or explicitly wants to see the result there. Using a plugin's tools is not a reason to surface its window: do not open a window the user did not ask for. In focus mode it is refused along with the rest of the desktop tools — see "Focus mode" below. And use the plugin's **real tool names** from the skills you are given: a name you invent fails, and the failure will say "unknown action", not that the plugin is unavailable.
 
 ### Focus mode
 

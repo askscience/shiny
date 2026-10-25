@@ -122,7 +122,12 @@ fn write_cli(app: &support::TestApp, id: &str) -> PathBuf {
 /// One agent turn's worth of the host's view: these windows are open, these are
 /// focused.
 async fn sync(app: &support::TestApp, open: &[&str], focused: &[&str]) {
-    let set = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<BTreeSet<_>>();
+    let set = |names: &[&str]| {
+        names
+            .iter()
+            .map(|name| name.to_string())
+            .collect::<BTreeSet<_>>()
+    };
     let home = app.root.path().to_string_lossy().into_owned();
     app.state
         .craft_mcp
@@ -217,7 +222,10 @@ async fn the_mcp_server_follows_the_open_window_and_focus_mode_narrows_it() {
     // served — the other app's server is stopped and its tools disappear.
     sync(&app, &["photocraft", "wordcraft"], &["wordcraft"]).await;
     assert_eq!(running(&app).await, vec!["wordcraft".to_string()]);
-    assert!(!tools.has("photocraft_command_list"), "unfocused app's tools are gone");
+    assert!(
+        !tools.has("photocraft_command_list"),
+        "unfocused app's tools are gone"
+    );
     assert!(tools.has("wordcraft_command_list"));
 
     // Focus off: every open app serves again.
@@ -233,11 +241,20 @@ async fn the_mcp_server_follows_the_open_window_and_focus_mode_narrows_it() {
 
     // Windows closed: the servers stop and the tools leave the registry.
     sync(&app, &[], &[]).await;
-    assert!(running(&app).await.is_empty(), "closing the window stops the server");
+    assert!(
+        running(&app).await.is_empty(),
+        "closing the window stops the server"
+    );
     // …and they leave through the MCP lifecycle, not through SIGKILL.
     let exited = std::fs::read_to_string(format!("{}.exited", cli.display())).unwrap_or_default();
-    assert!(exited.contains("graceful-shutdown"), "shutdown was requested: {exited}");
-    assert!(exited.contains("graceful-exit"), "the server exited on request: {exited}");
+    assert!(
+        exited.contains("graceful-shutdown"),
+        "shutdown was requested: {exited}"
+    );
+    assert!(
+        exited.contains("graceful-exit"),
+        "the server exited on request: {exited}"
+    );
     assert!(!tools.has("photocraft_command_list") && !tools.has("wordcraft_command_list"));
     assert!(
         !app.state
@@ -287,18 +304,30 @@ async fn closing_a_window_stops_the_engine_without_deactivating_the_plugin() {
     assert_eq!(running(&app).await, vec!["photocraft".to_string()]);
 
     // The window-close endpoint: stop the engine now, gracefully.
-    app.state.craft_mcp.stop_app(&app.state.plugins, "photocraft").await;
-    assert!(running(&app).await.is_empty(), "the closed window's engine is stopped");
+    app.state
+        .craft_mcp
+        .stop_app(&app.state.plugins, "photocraft")
+        .await;
+    assert!(
+        running(&app).await.is_empty(),
+        "the closed window's engine is stopped"
+    );
     assert!(
         !app.state.plugins.tools().has("photocraft_command_list"),
         "its tools leave the registry with it"
     );
     let exited = std::fs::read_to_string(format!("{}.exited", cli.display())).unwrap_or_default();
-    assert!(exited.contains("graceful-shutdown") && exited.contains("graceful-exit"), "{exited}");
+    assert!(
+        exited.contains("graceful-shutdown") && exited.contains("graceful-exit"),
+        "{exited}"
+    );
 
     // Close ≠ deactivate: the plugin is still on for this user…
     assert!(
-        app.state.plugins.is_enabled_for(&traveler.id, "photocraft").await,
+        app.state
+            .plugins
+            .is_enabled_for(&traveler.id, "photocraft")
+            .await,
         "closing a window must not turn the plugin off"
     );
     // …and reopening the window brings the engine and its tools back.

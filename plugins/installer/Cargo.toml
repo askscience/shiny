@@ -1,0 +1,18 @@
+[package]
+name = "shiny-installer-plugin"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "shiny_installer_plugin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+shiny-installer-protocol = { path = "../../crates/shiny-installer-protocol" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+axum = { version = "0.7", features = ["json", "query"] }
+tokio = { version = "1", features = ["net", "io-util", "time"] }
+uuid = { version = "1", features = ["v4"] }

@@ -93,8 +93,8 @@ pub fn build_continuation_system(
         String::new()
     } else {
         format!(
-            "Plugin windows: {plugins_hint}. If the request belongs to one of them and you \
-             haven't shown its window yet, call show_plugin with its name before your final reply. \
+            "Plugin windows: {plugins_hint}. Call show_plugin only when the user asks to open, \
+             show or focus a plugin's window — do not call it just because you used its tools. \
              An (inactive) plugin needs {{\"action\":\"plugin_activate\",\"params\":{{\"name\":\"<plugin>\"}}}} \
              before you can use its tools.\n"
         )

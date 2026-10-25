@@ -104,6 +104,11 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "012_chat_read_indexes.sql",
         include_str!("../../migrations/012_chat_read_indexes.sql"),
     ),
+    (
+        13,
+        "013_chat_terminal_approval.sql",
+        include_str!("../../migrations/013_chat_terminal_approval.sql"),
+    ),
 ];
 
 pub async fn run_migrations(conn: &mut SqliteConnection) -> Result<(), AppError> {

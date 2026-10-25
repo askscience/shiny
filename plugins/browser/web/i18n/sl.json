@@ -62,11 +62,9 @@
   "plugin.browser.downloads.title": "Prenosi",
   "plugin.browser.downloads.untitled": "prenos",
 
-  "plugin.browser.home.brandNote": "filtrirano z blokirnikom oglasov",
   "plugin.browser.home.emptyBody": "Poiščite nekaj stvari in ta stran se bo napolnila z novicami o njih.",
   "plugin.browser.home.emptyRetry": "Ni še česa prikazati — poskusite osvežiti.",
   "plugin.browser.home.emptyTitle": "Ni še zgodb",
-  "plugin.browser.home.hint": "Vnesite naslov ali iskalni niz zgoraj. Strani se nalagajo prek blokirnika oglasov.",
   "plugin.browser.home.loadFailed": "Priporočil ni bilo mogoče naložiti",
   "plugin.browser.home.recentSearches": "Zaradi vaših nedavnih iskanj",
   "plugin.browser.home.refresh": "Osveži",

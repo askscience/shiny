@@ -1,0 +1,19 @@
+[Unit]
+Description=Ollama local AI engine
+After=network.target
+ConditionPathExists=/usr/local/bin/ollama
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ollama serve
+Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=OLLAMA_MODELS=/var/lib/ollama/models
+Environment=OLLAMA_VULKAN=1
+Environment=OLLAMA_FLASH_ATTENTION=1
+Environment=OLLAMA_KEEP_ALIVE=15m
+Environment=LD_LIBRARY_PATH=/usr/local/lib/ollama/vulkan:/usr/local/lib/ollama
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

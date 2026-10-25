@@ -231,12 +231,6 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
     // Left/right split → vertical seam dragged horizontally; top/bottom split →
     // horizontal seam dragged vertically. The stacked windows run the other way.
     const horizontal = isHorizontalSplit(layout);
-    addSplitter(grid, {
-      kind: 'master',
-      axis: horizontal ? 'y' : 'x',
-      side: layout.orientation,
-      onDown: (e) => startMasterSeamDrag(e, grid, master, stack),
-    });
     for (let i = 0; i < stack.length - 1; i += 1) {
       addSplitter(grid, {
         kind: 'stack',
@@ -245,6 +239,14 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
         onDown: (e) => startStackDrag(e, grid, master, stack, i),
       });
     }
+    // The seam handle is added last so it sits above the stack handles where a
+    // zero-width gap makes their hit areas overlap: the seam must always win.
+    addSplitter(grid, {
+      kind: 'master',
+      axis: horizontal ? 'y' : 'x',
+      side: layout.orientation,
+      onDown: (e) => startMasterSeamDrag(e, grid, master, stack),
+    });
 
     positionSplitters(grid, layout, master, stack);
   }
@@ -335,6 +337,7 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
     e.stopPropagation();
 
     const divider = e.currentTarget;
+    const pointerId = e.pointerId;
     const axis = isHorizontalSplit(layout) ? 'y' : 'x';
     const base = grid.getBoundingClientRect();
     const origin = axis === 'x' ? base.left : base.top;
@@ -344,11 +347,15 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
     const first = masterFirst(layout);
     let ratio = layout.master_ratio;
 
-    divider.setPointerCapture?.(e.pointerId);
+    // Pointer capture is a best-effort optimisation; the move/up listeners live
+    // on the window, so a pad/engine that drops the capture can never leave the
+    // seam drag stuck halfway.
+    try { divider.setPointerCapture?.(pointerId); } catch (_) { /* window tracks it */ }
     document.body.classList.add('is-tiling-resize');
     document.body.style.cursor = axis === 'x' ? 'col-resize' : 'row-resize';
 
     const move = (ev) => {
+      if (ev.pointerId !== pointerId) return;
       if (avail <= 0) return;
       const pos = (axis === 'x' ? ev.clientX : ev.clientY) - origin;
       const frac = clampNum((pos - gap / 2) / avail, 0.05, 0.95);
@@ -356,19 +363,20 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
       applyMasterRatio(grid, layout, ratio, master, stack);
     };
 
-    const up = () => {
-      divider.removeEventListener('pointermove', move);
-      divider.removeEventListener('pointerup', up);
-      divider.removeEventListener('pointercancel', up);
-      divider.releasePointerCapture?.(e.pointerId);
+    const up = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      try { divider.releasePointerCapture?.(pointerId); } catch (_) { /* already gone */ }
       document.body.classList.remove('is-tiling-resize');
       document.body.style.cursor = '';
       if (Math.abs(ratio - layout.master_ratio) > 0.001) setLayout({ master_ratio: ratio });
     };
 
-    divider.addEventListener('pointermove', move);
-    divider.addEventListener('pointerup', up);
-    divider.addEventListener('pointercancel', up);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   function startStackDrag(e, grid, master, stack, index) {
@@ -379,6 +387,7 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
     e.stopPropagation();
 
     const divider = e.currentTarget;
+    const pointerId = e.pointerId;
     const axis = isHorizontalSplit(layout) ? 'x' : 'y'; // drag axis
     const sizes = stack.map((it) => {
       const r = it.el.getBoundingClientRect();
@@ -393,11 +402,12 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
     const before = sizes[index];
     const start = axis === 'x' ? e.clientX : e.clientY;
 
-    divider.setPointerCapture?.(e.pointerId);
+    try { divider.setPointerCapture?.(pointerId); } catch (_) { /* window tracks it */ }
     document.body.classList.add('is-tiling-resize');
     document.body.style.cursor = axis === 'x' ? 'col-resize' : 'row-resize';
 
     const move = (ev) => {
+      if (ev.pointerId !== pointerId) return;
       const delta = (axis === 'x' ? ev.clientX : ev.clientY) - start;
       const newBefore = clampNum(before + delta, minSize, pairTotal - minSize);
       weights[stack[index].name] = newBefore;
@@ -405,19 +415,20 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
       applyStackWeights(grid, layout, master, stack, weights);
     };
 
-    const up = () => {
-      divider.removeEventListener('pointermove', move);
-      divider.removeEventListener('pointerup', up);
-      divider.removeEventListener('pointercancel', up);
-      divider.releasePointerCapture?.(e.pointerId);
+    const up = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      try { divider.releasePointerCapture?.(pointerId); } catch (_) { /* already gone */ }
       document.body.classList.remove('is-tiling-resize');
       document.body.style.cursor = '';
       setLayout({ stack_weights: { ...getDesktopLayout().stack_weights, ...weights } });
     };
 
-    divider.addEventListener('pointermove', move);
-    divider.addEventListener('pointerup', up);
-    divider.addEventListener('pointercancel', up);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   /**

@@ -7,7 +7,7 @@
  * module intercepts those clicks before the shell ever sees them and hands the
  * URL to the plugin the user picked as their link handler — the `browser`
  * plugin by default, or any installed plugin that declares the `open-urls`
- * capability (Settings → Browser → Links).
+ * capability (Settings → System → Links).
  *
  * The hand-off mirrors `openWithPlugin`/`onOpenFromFiles` in files.js: the
  * target is activated, a `url:open` event carries it the URL, and

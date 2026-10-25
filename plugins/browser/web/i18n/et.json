@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Allalaadimised",
   "plugin.browser.downloads.untitled": "allalaadimine",
 
-  "plugin.browser.home.brandNote": "reklaamiblokeerijaga filtreeritud",
   "plugin.browser.home.emptyBody": "Otsi mõnda asja ja see leht täitub nendega seotud uudistega.",
   "plugin.browser.home.emptyRetry": "Veel pole midagi näidata — proovi värskendada.",
   "plugin.browser.home.emptyTitle": "Lugusid veel pole",
-  "plugin.browser.home.hint": "Kirjuta ülal aadress või otsingusõna. Lehed laaditakse reklaamiblokeerija kaudu.",
   "plugin.browser.home.loadFailed": "Soovitusi ei saanud laadida",
   "plugin.browser.home.recentSearches": "Sinu hiljutiste otsingute põhjal",
   "plugin.browser.home.refresh": "Värskenda",

@@ -82,7 +82,7 @@ Type=simple
 ExecStart=$BIN
 Restart=on-failure
 RestartSec=10
-# One `pactl` call every ~10s: keep it out of the way.
+# One pactl call every ~10s: keep it out of the way.
 Nice=10
 
 [Install]

@@ -35,6 +35,9 @@ function check(name, condition, detail = '') {
 const created = [];
 
 globalThis.document = {
+  documentElement: { dataset: {}, lang: 'en', dir: 'ltr', setAttribute() {} },
+  getElementById() { return null; },
+  querySelectorAll() { return []; },
   createElement(tag) {
     const el = {
       tagName: String(tag).toUpperCase(),
@@ -43,6 +46,8 @@ globalThis.document = {
       attributes: {},
       children: [],
       listeners: {},
+      style: {},
+      lang: '',
       setAttribute(name, value) { this.attributes[name] = String(value); },
       getAttribute(name) { return Object.hasOwn(this.attributes, name) ? this.attributes[name] : null; },
       appendChild(child) { this.children.push(child); return child; },
@@ -58,6 +63,7 @@ globalThis.document = {
 
 const windowListeners = {};
 globalThis.window = {
+  location: { origin: 'http://localhost:8080' },
   addEventListener(type, listener) { (windowListeners[type] ||= []).push(listener); },
   removeEventListener(type, listener) {
     windowListeners[type] = (windowListeners[type] || []).filter((fn) => fn !== listener);
@@ -109,11 +115,39 @@ globalThis.fetch = async (url, options = {}) => {
   if (String(url).includes('/api/plugins/craft/control/reply')) {
     posted.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
   }
+  if (String(url).includes('/themes/themes.json')) {
+    return new Response('["neumorphic","pitch","light"]', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (String(url).includes('/themes/neumorphic/theme.json')) {
+    return new Response('{"name":"neumorphic","modes":["dark"]}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (String(url).includes('/themes/pitch/theme.json')) {
+    return new Response('{"name":"pitch","modes":["dark"]}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (String(url).includes('/themes/light/theme.json')) {
+    return new Response('{"name":"light","modes":["light"]}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   return new Response('{"success":true}', {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
 };
+
+const { initThemeLoader, setTheme } = await import('../../ui/theme-loader.js');
+const { setLocalePreference } = await import('../i18n.js');
+await initThemeLoader();
 
 const { webAppSurface, forgetWebAppSurface } = await import('../webAppSurface.js');
 const defaultExport = (await import('../webAppSurface.js')).default;
@@ -159,6 +193,36 @@ check('the frame may go fullscreen', frame.attributes.allowfullscreen === '');
 check('no sandbox attribute: a same-origin app keeps its storage',
   frame.getAttribute('sandbox') === null);
 check('the iframe lives inside the tile', tile.children.includes(frame));
+
+/* ── Host context: the PEAK'D language and theme ─────────────── */
+
+check('the frame boots with the active theme mode',
+  frame.style.colorScheme === 'dark', frame.style.colorScheme);
+check('the frame carries the host language', frame.lang === 'en', frame.lang);
+check('context is mirrored on the frame element',
+  frame.dataset.shinyTheme === 'neumorphic' && frame.dataset.shinyMode === 'dark'
+  && frame.dataset.shinyLocale === 'en', JSON.stringify(frame.dataset));
+
+const messages = [];
+frame.contentWindow = { postMessage: (data, origin) => messages.push({ data, origin }) };
+frame.fire('load');
+check('the app receives the host context on load',
+  messages.length === 1 && messages[0].data.type === 'shiny:context'
+  && messages[0].data.theme === 'neumorphic' && messages[0].data.mode === 'dark'
+  && messages[0].data.locale === 'en' && messages[0].data.language === 'en',
+  JSON.stringify(messages));
+check('the context is posted to the frame origin',
+  messages[0]?.origin === window.location.origin, messages[0]?.origin);
+
+await setTheme('light');
+check('a theme change updates the frame mode',
+  frame.style.colorScheme === 'light' && frame.dataset.shinyMode === 'light'
+  && messages.at(-1)?.data.mode === 'light', JSON.stringify(messages.at(-1)?.data));
+
+await setLocalePreference('it');
+check('a locale change updates the host language',
+  frame.lang === 'it' && frame.dataset.shinyLocale === 'it'
+  && messages.at(-1)?.data.locale === 'it', JSON.stringify(messages.at(-1)?.data));
 
 /* ── Stability across re-renders ─────────────────────────────── */
 

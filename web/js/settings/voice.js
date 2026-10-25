@@ -368,7 +368,7 @@ export function createVoiceSection({ on, cleanups, resources }) {
       label: t('settings.voice.conversation', null, 'Keep listening after a reply'),
       hint: t('settings.voice.conversationHint', null,
         'Once “Hey …” wakes it, the assistant stays in conversation: after each reply it keeps listening, '
-        + 'so a follow-up needs no phrase. A tap asks one thing only, a double tap switches to typing, '
+        + 'so a follow-up needs no phrase. A double tap asks one thing only, a tap switches to typing, '
         + 'and “basta” ends it. The assistant never listens while it is speaking.'),
       checked: getConversation(),
       onChange: (checked) => setConversation(checked),
@@ -418,7 +418,7 @@ export function createVoiceSection({ on, cleanups, resources }) {
       }),
       speed.wrap,
       field(t('settings.voice.stopListening', null, 'Stop listening after'), silence, {
-        hint: t('settings.voice.stopListeningHint', null, 'How long to wait for speech before canceling a tap-to-talk input.'),
+        hint: t('settings.voice.stopListeningHint', null, 'How long to wait for speech before canceling a voice input.'),
       }),
       wake,
       conversation,

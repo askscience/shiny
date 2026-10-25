@@ -194,6 +194,9 @@ pub struct AppState {
     pub diary_gen: Arc<DiaryGenerator>,
     /// In-flight agent turns, so a stop request can abort one mid-answer.
     pub agent_turns: crate::services::agent_cancel::TurnRegistry,
+    /// Terminal commands waiting for the user's allow/deny answer, plus the
+    /// conversations where commands were allowed for the whole chat.
+    pub approvals: crate::services::approval::ApprovalRegistry,
     pub supertonic: SupertonicClient,
     /// faster-whisper streaming STT sidecar (optional; Vosk is the fallback).
     pub whisper: WhisperClient,
@@ -676,6 +679,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chat/conversations/:id", get(chat::conversation_messages).delete(chat::delete_conversation))
         .route("/api/search", post(search::search_web))
         .route("/api/agent", post(agent::handle_agent_dispatch))
+        .route("/api/agent/approve", post(agent::handle_agent_approve))
         // Stop the answer currently being generated (voice barge-in, or the
         // stop button in text mode).
         .route("/api/agent/stop", post(agent::handle_agent_stop))

@@ -1,7 +1,8 @@
 import { logoutSession } from '../api.js';
-import { button, select, toggleRow } from '../../ui/index.js';
+import { button, select, toast, toggleRow } from '../../ui/index.js';
 import { getAvailableLocales, t } from '../i18n.js';
-import { flushPreferencesNow, getRemember, setRemember, getUiLocale, setUiLocale } from '../preferences.js';
+import { flushPreferencesNow, getLinkPlugin, getRemember, setLinkPlugin, setRemember, getUiLocale, setUiLocale } from '../preferences.js';
+import { linkCatalog, linkPlugins, resolveLinkPlugin } from '../linkRouter.js';
 import { el, field, heading } from './controls.js';
 
 /** Build the system section with resources owned by its current mount. */
@@ -27,6 +28,37 @@ export function createSystemSection({ on, cleanups, resources }) {
       checked: getRemember(),
       onChange: (checked) => setRemember(checked),
     });
+
+    // Which plugin opens links is an app-wide choice, not a browser-plugin
+    // setting: list every installed plugin declaring the `open-urls` capability.
+    const links = el('div', 'settings-links');
+    void (async () => {
+      const catalog = await linkCatalog();
+      const names = linkPlugins(catalog).map((p) => p.name);
+      if (!names.length) {
+        links.appendChild(el('p', 'settings-hint', t('settings.system.noLinkPlugin', null, 'No plugin that can open links is installed.')));
+        return;
+      }
+      const fallback = resolveLinkPlugin(catalog);
+      const stored = getLinkPlugin();
+      const label = (name) => name.charAt(0).toUpperCase() + name.slice(1);
+      const picker = select({
+        value: names.includes(stored) ? stored : fallback,
+        options: names.map((name) => ({
+          value: name,
+          label: name === fallback
+            ? t('settings.system.linkPluginDefault', { name: label(name) }, `${label(name)} (default)`)
+            : label(name),
+        })),
+        onChange: (value) => {
+          setLinkPlugin(value);
+          toast(t('settings.system.linkHandlerSaved', null, 'Link handler saved'));
+        },
+      });
+      links.appendChild(field(t('settings.system.links', null, 'Links'), picker, {
+        hint: t('settings.system.linkHandlerHint', null, 'Links clicked anywhere — chat, mail, documents — open in this plugin.'),
+      }));
+    })();
 
     const logoutBtn = button({
       label: t('settings.system.logOut', null, 'Log out'),
@@ -55,6 +87,7 @@ export function createSystemSection({ on, cleanups, resources }) {
       localeField,
       remember,
       el('p', 'settings-hint', t('settings.system.rememberBody', null, 'On: your windows, layout and workspaces come back exactly as you left them. Off: each sign-in starts with a clean desktop.')),
+      links,
       heading(t('settings.system.session', null, 'Session')),
       actions,
       logoutHint,

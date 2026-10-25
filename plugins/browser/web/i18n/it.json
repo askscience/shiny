@@ -61,11 +61,9 @@
   "plugin.browser.downloads.title": "Download",
   "plugin.browser.downloads.untitled": "download",
 
-  "plugin.browser.home.brandNote": "filtrato dal blocco degli annunci",
   "plugin.browser.home.emptyBody": "Cerca un paio di cose e questa pagina si riempie di notizie che le riguardano.",
   "plugin.browser.home.emptyRetry": "Ancora niente da mostrare — prova ad aggiornare.",
   "plugin.browser.home.emptyTitle": "Ancora nessuna notizia",
-  "plugin.browser.home.hint": "Scrivi un indirizzo o una ricerca qui sopra. Le pagine si caricano attraverso il blocco degli annunci.",
   "plugin.browser.home.loadFailed": "Impossibile caricare i suggerimenti",
   "plugin.browser.home.recentSearches": "In base alle tue ricerche recenti",
   "plugin.browser.home.refresh": "Aggiorna",

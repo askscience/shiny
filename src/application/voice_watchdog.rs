@@ -121,7 +121,8 @@ async fn run(state: AppState) {
             spawn_supertonic_sidecar(&state.config);
         }
 
-        if state.config.auto_start_whisper && whisper.observe(state.whisper.health().await.is_some(), now)
+        if state.config.auto_start_whisper
+            && whisper.observe(state.whisper.health().await.is_some(), now)
         {
             tracing::warn!(
                 "faster-whisper STT is not answering at {}; starting it (attempt {})",
@@ -131,7 +132,9 @@ async fn run(state: AppState) {
             spawn_whisper_sidecar(&state.config);
         }
 
-        if state.config.auto_start_qwen_tts && qwen.observe(state.qwen_tts.health().await.is_some(), now) {
+        if state.config.auto_start_qwen_tts
+            && qwen.observe(state.qwen_tts.health().await.is_some(), now)
+        {
             tracing::warn!(
                 "Qwen3-TTS is not answering at {}; starting it (attempt {})",
                 state.config.qwen_tts_url,
@@ -184,13 +187,21 @@ mod tests {
         }
         // Ten minutes of a sidecar that never comes back: four launcher runs,
         // not one every probe.
-        assert_eq!(attempts.len(), 4, "backoff must not allow an attempt per probe");
+        assert_eq!(
+            attempts.len(),
+            4,
+            "backoff must not allow an attempt per probe"
+        );
         assert_eq!(
             attempts[0],
             Duration::from_secs(30),
             "the first restart waits out the debounce"
         );
-        assert_eq!(attempts[1], Duration::from_secs(60), "then one backoff later");
+        assert_eq!(
+            attempts[1],
+            Duration::from_secs(60),
+            "then one backoff later"
+        );
         assert_eq!(attempts[2], Duration::from_secs(120));
         assert_eq!(attempts[3], Duration::from_secs(240));
     }

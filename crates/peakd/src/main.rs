@@ -532,8 +532,8 @@ fn resolve_iroh(cfg: PeakdConfig) -> Result<PeakdConfig, String> {
     Ok(cfg)
 }
 
-fn run(cfg: PeakdConfig) -> Result<i32, String> {
-    let cfg = resolve_iroh(cfg)?;
+fn run(mut cfg: PeakdConfig) -> Result<i32, String> {
+    cfg = resolve_iroh(cfg)?;
 
     wait_for_loopback_origin(&cfg.start_url, Duration::from_secs(30));
 
@@ -571,6 +571,10 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
 
     let dpi = shim::screen_dpi();
     let (width, height) = shim::screen_size();
+    if cfg.app_mode && !cfg.size_explicit && width > 0 && height > 0 {
+        cfg.width = f64::from(width);
+        cfg.height = f64::from(height);
+    }
     let auto = display::auto_scale(dpi);
     DISPLAY
         .set(Mutex::new(DisplayState {
@@ -590,6 +594,7 @@ fn run(cfg: PeakdConfig) -> Result<i32, String> {
     // view's collection actually carries it.
     shim::inject_script(youtube::SCRIPT_NAME, youtube::YOUTUBE_ADS_JS);
     shim::set_window(&cfg.window_title, cfg.width, cfg.height);
+    shim::set_fullscreen(cfg.app_mode && !cfg.size_explicit);
     // The Qt side's own strings (file dialogs, name filters) in the session's
     // language — the web UI follows the user's `ui.locale` preference instead.
     shim::set_strings(&i18n::shell_strings(&cfg.lang));

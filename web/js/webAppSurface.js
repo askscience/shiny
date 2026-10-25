@@ -21,9 +21,61 @@
 
 import { apiFetch } from './api.js';
 import { pickPaths, filesFromEntries, readFileBytes } from './filePicker.js';
+import { getLocale } from './i18n.js';
+import { getActiveTheme, themeMode } from '../ui/theme-loader.js';
 
 /** @type {Map<string, object>} */
 const surfaces = new Map();
+
+/**
+ * The host context a web-app plugin may adapt to: the interface language and
+ * the theme chosen inside PEAK'D — not the OS language or the browser's own
+ * color scheme. A framed app cannot read either through `navigator.language`:
+ * that follows the OS, and an iframe has no access to the shell's prefs.
+ *
+ * Delivered as a `shiny:context` message on every frame load and again when
+ * the theme or locale changes. The same values are mirrored on the frame
+ * element (`lang`, `data-shiny-*`, `color-scheme`), so an app that only reads
+ * `prefers-color-scheme` still gets the shell's dark/light choice for free.
+ */
+function hostContext() {
+  const locale = getLocale();
+  return {
+    type: 'shiny:context',
+    version: 1,
+    theme: getActiveTheme(),
+    mode: themeMode(),
+    locale,
+    language: locale,
+    dir: document.documentElement?.dir || 'ltr',
+  };
+}
+
+function applyHostContext(frame, { post = false } = {}) {
+  const ctx = hostContext();
+  if (ctx.mode) frame.style.colorScheme = ctx.mode;
+  frame.lang = ctx.locale;
+  frame.dataset.shinyTheme = ctx.theme || '';
+  frame.dataset.shinyMode = ctx.mode || '';
+  frame.dataset.shinyLocale = ctx.locale;
+  frame.dataset.shinyDir = ctx.dir;
+  if (!post) return;
+  try {
+    frame.contentWindow?.postMessage?.(ctx, window.location.origin);
+  } catch (_) {
+    /* the app navigated away; its next load re-sends */
+  }
+}
+
+function broadcastHostContext() {
+  for (const surface of surfaces.values()) {
+    if (surface.frame) applyHostContext(surface.frame, { post: true });
+  }
+}
+
+for (const type of ['theme:change', 'locale:change']) {
+  window.addEventListener(type, broadcastHostContext);
+}
 
 /**
  * Live AI control for a Craft app whose page exposes the vendor's documented
@@ -173,6 +225,8 @@ function ensureSurface(name) {
   // note `tiles.js` carries for plugin module imports.
   frame.src = new URL(`../plugins/${name}/`, import.meta.url).href;
   frame.title = name;
+  // Theme/language the app should boot with, before its own first paint.
+  applyHostContext(frame);
   // Capabilities the apps ask their frame for: their own fullscreen mode,
   // copy/paste through the clipboard, and media playback.
   frame.setAttribute('allow', 'fullscreen; clipboard-read; clipboard-write; autoplay');
@@ -186,6 +240,7 @@ function ensureSurface(name) {
 
   surface = {
     name,
+    frame,
     mount() { return tile; },
     // Detaching is the shell's business; the frame simply goes with the tile.
     unmount() {},
@@ -202,6 +257,7 @@ function ensureSurface(name) {
   frame.addEventListener('load', () => {
     attachControl(name, frame, surface);
     installFileInputShim(frame);
+    applyHostContext(frame, { post: true });
     const pending = window.__pendingFileOpen;
     if (pending?.plugin === name) {
       window.__pendingFileOpen = null;

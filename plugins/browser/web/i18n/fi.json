@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Lataukset",
   "plugin.browser.downloads.untitled": "lataus",
 
-  "plugin.browser.home.brandNote": "mainosten eston suodattama",
   "plugin.browser.home.emptyBody": "Hae muutama asia, niin tämä sivu täyttyy niitä koskevista uutisista.",
   "plugin.browser.home.emptyRetry": "Ei vielä näytettävää — yritä päivittää.",
   "plugin.browser.home.emptyTitle": "Ei vielä juttuja",
-  "plugin.browser.home.hint": "Kirjoita osoite tai haku yläpuolelle. Sivut ladataan mainosten eston kautta.",
   "plugin.browser.home.loadFailed": "Suosituksia ei voitu ladata",
   "plugin.browser.home.recentSearches": "Viimeaikaisten hakujesi perusteella",
   "plugin.browser.home.refresh": "Päivitä",

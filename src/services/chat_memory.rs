@@ -51,7 +51,8 @@ pub async fn recent_history(
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT role, content FROM (\
              SELECT role, content, timestamp, rowid FROM chat_messages \
-             WHERE conversation_id = ?1 ORDER BY timestamp DESC, rowid DESC LIMIT ?2\
+             WHERE conversation_id = ?1 AND role IN ('user', 'assistant', 'system') \
+             ORDER BY timestamp DESC, rowid DESC LIMIT ?2\
          ) ORDER BY timestamp ASC, rowid ASC",
     )
     .bind(conversation_id)
@@ -85,6 +86,7 @@ pub async fn save_turn_with_note(
     assistant_reply: &str,
     note: Option<&str>,
     assistant_thinking: Option<&str>,
+    events: &[(String, String)],
 ) -> Result<Option<String>, AppError> {
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
@@ -100,6 +102,23 @@ pub async fn save_turn_with_note(
     .await
     .map_err(AppError::Database)?;
 
+    // Terminal command records belong between the user's message and the
+    // answer — the same place the live approval cards appear.
+    for (role, content) in events.iter().filter(|(role, _)| role.as_str() != "media") {
+        sqlx::query(
+            "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
+             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(traveler_id)
+        .bind(conversation_id)
+        .bind(role.as_str())
+        .bind(content.as_str())
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+    }
+
     // A stopped turn may have produced nothing at all; an empty assistant
     // bubble in the history would be noise, so only the note is written.
     if !assistant_reply.trim().is_empty() {
@@ -112,6 +131,23 @@ pub async fn save_turn_with_note(
         .bind(conversation_id)
         .bind(assistant_reply)
         .bind(assistant_thinking)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+    }
+
+    // Generated images/tracks are their own chat elements below the answer,
+    // exactly where the live turn puts them.
+    for (role, content) in events.iter().filter(|(role, _)| role.as_str() == "media") {
+        sqlx::query(
+            "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \
+             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(traveler_id)
+        .bind(conversation_id)
+        .bind(role.as_str())
+        .bind(content.as_str())
         .execute(&mut *tx)
         .await
         .map_err(AppError::Database)?;

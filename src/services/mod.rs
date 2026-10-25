@@ -23,6 +23,8 @@ pub mod navigation;
 pub mod agent_steps;
 pub mod agent_runner;
 pub mod agent_cancel;
+pub mod approval;
+pub mod terminal_guard;
 pub mod chat_memory;
 pub mod display;
 pub mod touchbar;

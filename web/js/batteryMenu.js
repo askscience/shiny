@@ -1,19 +1,17 @@
 /**
- * batteryMenu.js — the top-bar battery quick menu: a reduced power-management
- * panel. It shows the live charge and lets you pick a power mode and the two
- * power switches without opening Settings. The full controls live in
- * Settings → Power (`settingsWindow.js` `buildPower`).
+ * batteryMenu.js — the top-bar battery quick menu: the full power-management
+ * panel. It shows the live charge, the power mode and switches, and the
+ * screen-brightness and keyboard-backlight sliders.
  *
  * The popover is appended to <body> (the HUD pill clips overflow), reuses the
  * shared `.ui-hud-menu-popup` glass, and is positioned under the battery chip.
  * It re-renders from `battery:changed` (the chip's stream) and `power:settings`
- * (a value changed here, in Settings, or automatically from the battery).
+ * (a value changed here or automatically from the battery).
  */
 
 import { apiFetch } from './api.js';
-import { button, emptyState, setIcon, toggleRow } from '../ui/index.js';
+import { emptyState, setIcon, slider, toggleRow } from '../ui/index.js';
 import { createMenu } from './menuFactory.js';
-import { openCoreWindowSection } from './tiles.js';
 import {
   getAutoPowerSaver, getEffectivePowerMode, getEffectiveSttEngine,
   getEffectiveTtsEngine, getLowPowerAi, getPowerMode, isLowPowerAiActive,
@@ -26,6 +24,18 @@ import {
 import { t } from './i18n.js';
 
 const chipEl = document.getElementById('hud-battery');
+
+const BACKLIGHTS = {
+  screen: { endpoint: '/api/screen/brightness' },
+  keyboard: { endpoint: '/api/keyboard/backlight' },
+};
+
+const backlights = {
+  screen: { loaded: false, available: false, writable: false, percent: null },
+  keyboard: { loaded: false, available: false, writable: false, percent: null },
+};
+const backlightWrites = { screen: null, keyboard: null };
+let adjustingBacklight = false;
 
 let body = null;
 let headIcon = null;
@@ -42,16 +52,13 @@ const menu = createMenu({
   restartAnimation: false,
   onOpen: () => {
     void refresh();
+    void refreshBacklights();
     render();
   },
 });
 
 export function openBatteryMenu(chip) {
   menu.show(chip || chipEl);
-}
-
-export function closeBatteryMenu() {
-  menu.close();
 }
 
 export function toggleBatteryMenu(chip) {
@@ -109,6 +116,32 @@ async function refresh() {
   }
 }
 
+/**
+ * Read both host backlights. The sliders write straight to sysfs through the
+ * server; a machine without the device reports `available:false`, and one
+ * without write permission reports `writable:false` — the control stays
+ * disabled either way instead of pretending to work.
+ */
+async function refreshBacklights() {
+  await Promise.all(Object.entries(BACKLIGHTS).map(async ([id, spec]) => {
+    const state = backlights[id];
+    try {
+      const res = await apiFetch(spec.endpoint, { authRedirect: false });
+      const data = res?.data;
+      state.loaded = true;
+      state.available = data?.available === true && data?.percent != null;
+      state.writable = data?.writable !== false;
+      state.percent = state.available ? data.percent : null;
+    } catch (_) {
+      state.loaded = true;
+      state.available = false;
+      state.writable = false;
+      state.percent = null;
+    }
+  }));
+  if (menu.isOpen()) render();
+}
+
 /* ── Rendering ─────────────────────────────────────────────── */
 
 function render() {
@@ -125,9 +158,9 @@ function render() {
   }
 
   body.appendChild(powerModeSection());
+  body.appendChild(displaySection());
   body.appendChild(switchesSection());
   body.appendChild(summarySection());
-  body.appendChild(settingsAction());
   requestAnimationFrame(() => menu.reposition());
 }
 
@@ -175,6 +208,65 @@ function powerModeSection() {
   return section(t('power.mode'), [row]);
 }
 
+function displaySection() {
+  return section(t('common.display', null, 'Display'), [
+    backlightField('screen'),
+    backlightField('keyboard'),
+  ]);
+}
+
+function backlightField(id) {
+  const spec = BACKLIGHTS[id];
+  const state = backlights[id];
+
+  const title = id === 'screen'
+    ? t('settings.power.screenBrightness', null, 'Screen brightness')
+    : t('settings.power.keyboardBacklight', null, 'Keyboard backlight');
+  const unavailable = id === 'screen'
+    ? t('settings.power.screenBacklightUnavailable', null, 'This machine does not expose a writable panel backlight to the app.')
+    : t('settings.power.keyboardBacklightUnavailable', null, 'This machine does not expose a writable keyboard backlight to the app.');
+
+  const value = el('span', 'battery-backlight-value');
+  const head = el('div', 'battery-backlight-head');
+  head.append(el('span', 'battery-backlight-label', title), value);
+
+  const control = slider({ min: 0, max: 100, value: state.percent ?? 50 });
+  control.setAttribute('aria-label', title);
+  const wrap = el('div', 'backlight-field battery-backlight');
+  wrap.append(head, control);
+
+  if (!state.loaded) {
+    value.textContent = '—';
+    control.disabled = true;
+    return wrap;
+  }
+  if (!state.available) {
+    value.textContent = t('settings.power.unavailable', null, 'Unavailable');
+    control.disabled = true;
+    wrap.appendChild(el('p', 'battery-menu-summary', unavailable));
+    return wrap;
+  }
+
+  value.textContent = `${state.percent}%`;
+  control.disabled = !state.writable;
+  if (!state.writable) {
+    wrap.appendChild(el('p', 'battery-menu-summary', t('settings.power.backlightReadOnly', null, 'The app cannot write this backlight on this machine.')));
+    return wrap;
+  }
+
+  control.addEventListener('pointerdown', () => { adjustingBacklight = true; });
+  control.addEventListener('input', () => {
+    const percent = Number(control.value);
+    state.percent = percent;
+    value.textContent = `${percent}%`;
+    clearTimeout(backlightWrites[id]);
+    backlightWrites[id] = setTimeout(() => {
+      apiFetch(spec.endpoint, { method: 'POST', body: JSON.stringify({ percent }) }).catch(() => {});
+    }, 150);
+  });
+  return wrap;
+}
+
 function switchesSection() {
   const auto = toggleRow({
     label: t('power.autoSaver'),
@@ -205,28 +297,22 @@ function summarySection() {
   return section(null, [line]);
 }
 
-function settingsAction() {
-  const actions = el('div', 'battery-menu-actions');
-  actions.appendChild(button({
-    label: t('power.settings'),
-    icon: 'ui/settings',
-    variant: 'quiet',
-    size: 'sm',
-    onClick: () => {
-      closeBatteryMenu();
-      void openCoreWindowSection('settings', 'power');
-    },
-  }));
-  return actions;
+/* ── Live updates ──────────────────────────────────────────── */
+
+/** A battery push must not rebuild the tree out from under a dragged slider. */
+function isAdjustingBacklight() {
+  const active = document.activeElement;
+  return adjustingBacklight || (!!active && active.type === 'range' && !!body?.contains(active));
 }
 
-/* ── Live updates ──────────────────────────────────────────── */
+window.addEventListener('pointerup', () => { adjustingBacklight = false; });
+window.addEventListener('pointercancel', () => { adjustingBacklight = false; });
 
 window.addEventListener('battery:changed', (event) => {
   status = event.detail || null;
-  if (menu.isOpen()) render();
+  if (menu.isOpen() && !isAdjustingBacklight()) render();
 });
 
 window.addEventListener('power:settings', () => {
-  if (menu.isOpen()) render();
+  if (menu.isOpen() && !isAdjustingBacklight()) render();
 });

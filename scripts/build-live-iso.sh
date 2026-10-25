@@ -14,10 +14,10 @@ OUTDIR=${PEAKD_ISO_OUT:-$BUILD/out}
 ISO_NAME=peakd-live-t2-amd64.iso
 LIVE_URL=${PEAKD_LIVE_URL:-https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.7.0-amd64-xfce.iso}
 T2_KVER=${T2_KVER:-$(uname -r)}
-PKG_VERSION=${PEAKD_VERSION:-0.1.0~trixie1}
+PKG_VERSION=${PEAKD_VERSION:-0.1.0}
 DEB_BUILD=${PEAKD_DEB_BUILD:-$BUILD/deb}
 APT_REPO=${PEAKD_APT_DIR:-$HOME/peakd-apt}
-APT_KEYRING=${PEAKD_KEYRING:-$DEB_BUILD/peakd-archive.gpg}
+APT_KEYRING=${PEAKD_KEYRING:-$REPO/packaging/peakd-archive.gpg}
 
 TOOLS="$BUILD/tools"
 DEBS="$BUILD/debs"
@@ -80,7 +80,9 @@ extract_base() {
 
 copy_missing_libs() {
     local binary=$1 lib src dest real real_dest
-    [ -x "$binary" ] || return 0
+    # Shared modules do not carry the executable bit, but ldd still works on
+    # them and their dependencies are exactly what we need to stage.
+    [ -f "$binary" ] || return 0
     while IFS= read -r lib; do
         [ -n "$lib" ] || continue
         [ -e "$lib" ] || continue
@@ -187,10 +189,11 @@ seed_live_account() {
 
 build_packages() {
     log "building peakd deb and signed APT repo"
-    (cd "$REPO" && PEAKD_DEB_BUILD="$DEB_BUILD" PEAKD_VERSION="$PKG_VERSION" \
-        ./scripts/build-deb.sh)
+    (cd "$REPO" && PEAKD_DEB_BUILD="$DEB_BUILD" PEAKD_KEYRING="$APT_KEYRING" \
+        PEAKD_VERSION="$PKG_VERSION" ./scripts/build-deb.sh)
     (cd "$REPO" && PEAKD_DEB_BUILD="$DEB_BUILD" PEAKD_APT_DIR="$APT_REPO" \
-        PEAKD_VERSION="$PKG_VERSION" ./scripts/build-apt-repo.sh)
+        PEAKD_KEYRING="$APT_KEYRING" PEAKD_VERSION="$PKG_VERSION" \
+        ./scripts/build-apt-repo.sh)
 }
 
 stage_package() {
@@ -217,7 +220,7 @@ stage_package() {
     cat > "$ROOTFS/etc/apt/sources.list.d/peakd.sources" <<'EOF'
 Types: deb
 URIs: file:///opt/peakd/repo
-Suites: trixie
+Suites: peakd
 Components: main
 Signed-By: /usr/share/keyrings/peakd-archive.gpg
 EOF
@@ -247,10 +250,80 @@ stage_qt() {
     copy_missing_libs "$ROOTFS/usr/lib/qt6/libexec/QtWebEngineProcess"
 }
 
+stage_ollama() {
+    log "staging Ollama runtime"
+    if [ ! -x /usr/local/bin/ollama ]; then
+        log "Ollama is not installed on the build host; skipping runtime"
+        return
+    fi
+    install -Dm0755 /usr/local/bin/ollama "$ROOTFS/usr/local/bin/ollama"
+    install -d "$ROOTFS/usr/local/lib/ollama" "$ROOTFS/var/lib/ollama/models"
+    if [ -d /usr/local/lib/ollama ]; then
+        local item name
+        for item in /usr/local/lib/ollama/*; do
+            name=$(basename "$item")
+            case "$name" in
+                cuda_v12|cuda_v13|rocm_v7_2) continue ;;
+            esac
+            cp -a "$item" "$ROOTFS/usr/local/lib/ollama/"
+        done
+    fi
+    copy_missing_libs "$ROOTFS/usr/local/bin/ollama"
+    local so
+    for so in "$ROOTFS"/usr/local/lib/ollama/*.so* "$ROOTFS"/usr/local/lib/ollama/vulkan/*.so*; do
+        [ -e "$so" ] && copy_missing_libs "$so"
+    done
+    log "Ollama runtime staged (CPU + Vulkan); models are downloaded on demand"
+}
+
+stage_audio_runtime() {
+    log "staging PipeWire/WirePlumber runtime"
+    local pkg deb
+    for pkg in pipewire pipewire-bin pipewire-pulse wireplumber \
+        libpipewire-0.3-0t64 libpipewire-0.3-modules libwireplumber-0.5-0 \
+        libspa-0.2-modules libspa-0.2-bluetooth liblua5.4-0; do
+        (cd "$DEBS" && apt-get download "$pkg" >/dev/null 2>&1) || true
+        for deb in "$DEBS/${pkg}_"*.deb; do
+            [ -f "$deb" ] || continue
+            dpkg-deb -x "$deb" "$ROOTFS"
+        done
+    done
+    local bin
+    for bin in "$ROOTFS/usr/bin/pipewire" "$ROOTFS/usr/bin/wireplumber" \
+        "$ROOTFS/usr/bin/wpctl" "$ROOTFS/usr/bin/pactl"; do
+        [ -e "$bin" ] && copy_missing_libs "$bin"
+    done
+    local so
+    for so in "$ROOTFS"/usr/lib/x86_64-linux-gnu/pipewire-0.3/*.so \
+        "$ROOTFS"/usr/lib/x86_64-linux-gnu/spa-0.2/*/*.so \
+        "$ROOTFS"/usr/lib/x86_64-linux-gnu/wireplumber-0.5/*.so; do
+        [ -e "$so" ] && copy_missing_libs "$so"
+    done
+}
+
+verify_audio_runtime() {
+    log "verifying PipeWire/WirePlumber runtime dependencies"
+    local missing
+    missing=$(unshare -Ur /usr/sbin/chroot "$ROOTFS" /bin/sh -c '
+        for f in /usr/bin/pipewire /usr/bin/pipewire-pulse /usr/bin/wireplumber \
+            /usr/bin/wpctl /usr/bin/filter-chain \
+            /usr/lib/x86_64-linux-gnu/wireplumber-0.5/*.so \
+            /usr/lib/x86_64-linux-gnu/pipewire-0.3/*.so \
+            /usr/lib/x86_64-linux-gnu/spa-0.2/*/*.so; do
+            [ -e "$f" ] || continue
+            /usr/bin/ldd "$f" 2>/dev/null
+        done
+    ' | grep 'not found' | sort -u || true)
+    if [ -n "$missing" ]; then
+        printf '%s\n' "$missing" >&2
+        die "audio runtime has unresolved shared-library dependencies"
+    fi
+}
+
 stage_extra_packages() {
-    log "staging parted"
+    log "staging parted and filesystem tools"
     local pkg
-    for pkg in parted libparted2t64; do
+    for pkg in parted libparted2t64 e2fsprogs dosfstools matchbox-window-manager; do
         (cd "$DEBS" && apt-get download "$pkg" >/dev/null 2>&1) || true
         local deb
         for deb in "$DEBS/${pkg}_"*.deb; do
@@ -259,12 +332,30 @@ stage_extra_packages() {
         done
     done
     local p
-    for p in "$ROOTFS"/usr/sbin/parted "$ROOTFS"/usr/bin/parted; do
+    for p in "$ROOTFS"/usr/sbin/parted "$ROOTFS"/usr/bin/parted \
+        "$ROOTFS"/usr/sbin/mke2fs "$ROOTFS"/usr/sbin/mkfs.fat \
+        "$ROOTFS"/usr/bin/matchbox-window-manager; do
         if [ -e "$p" ]; then
             copy_missing_libs "$p"
         fi
     done
+    if [ -e "$ROOTFS/usr/sbin/mke2fs" ] && [ ! -e "$ROOTFS/usr/sbin/mkfs.ext4" ]; then
+        ln -sf mke2fs "$ROOTFS/usr/sbin/mkfs.ext4"
+    fi
+    if [ -e "$ROOTFS/usr/sbin/mkfs.fat" ] && [ ! -e "$ROOTFS/usr/sbin/mkfs.vfat" ]; then
+        ln -sf mkfs.fat "$ROOTFS/usr/sbin/mkfs.vfat"
+    fi
     cp -a "$TOOLS"/usr/lib/x86_64-linux-gnu/libparted.so* "$ROOTFS/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
+
+    # grub-mkstandalone is in the base image, but its platform modules are not.
+    local grubdir=/usr/lib/grub/x86_64-efi
+    [ -d "$grubdir" ] || grubdir="$TOOLS/usr/lib/grub/x86_64-efi"
+    if [ -d "$grubdir" ]; then
+        mkdir -p "$ROOTFS/usr/lib/grub"
+        cp -a "$grubdir" "$ROOTFS/usr/lib/grub/"
+    else
+        die "GRUB x86_64-efi modules not found for the installer"
+    fi
 }
 
 stage_t2() {
@@ -273,6 +364,16 @@ stage_t2() {
     [ -d "/lib/modules/$T2_KVER" ] || die "T2 modules /lib/modules/$T2_KVER not found"
     install -d "$ROOTFS/lib/modules"
     cp -a "/lib/modules/$T2_KVER" "$ROOTFS/lib/modules/"
+
+    # T2 Macs use Apple-specific Broadcom firmware (BCM4364/4377/4387).
+    # The Debian live firmware package does not carry all of these, so copy the
+    # host's linux-firmware set; otherwise brcmfmac loads but never creates wlan0.
+    if [ -d /lib/firmware/brcm ]; then
+        install -d "$ROOTFS/lib/firmware/brcm"
+        cp -a /lib/firmware/brcm/. "$ROOTFS/lib/firmware/brcm/"
+    else
+        log "warning: /lib/firmware/brcm not found; T2 Wi-Fi firmware missing"
+    fi
 
     local pkg p
     for pkg in tiny-dfr t2fanrd t2-touchid t2-ncm apple-t2-audio-config; do
@@ -297,23 +398,22 @@ stage_t2() {
     cp -a "$REPO/scripts/shiny-wait-drm.sh" "$ROOTFS/usr/local/lib/shiny/t2/scripts/"
     cp -a "$REPO/scripts/t2-audio" "$ROOTFS/usr/local/lib/shiny/t2/scripts/"
     cp -a "$REPO/scripts/touchbar" "$ROOTFS/usr/local/lib/shiny/t2/scripts/"
+    install -m 0755 "$REPO/scripts/t2-audio/shiny-t2-audio-watchdog" "$ROOTFS/usr/local/bin/shiny-t2-audio-watchdog"
+    install -d "$ROOTFS/etc/systemd/user"
+    install -m 0644 "$REPO/scripts/live/overlay/etc/systemd/user/shiny-t2-audio-watchdog.service" \
+        "$ROOTFS/etc/systemd/user/shiny-t2-audio-watchdog.service"
     chmod 0755 "$ROOTFS/usr/local/lib/shiny/t2/scripts/"*.sh
     chmod 0755 "$ROOTFS/usr/local/lib/shiny/t2/scripts/touchbar/"*.sh 2>/dev/null || true
 
-    # The T2 kernel needs its bridge/HID/display modules in the live initrd:
-    # the internal keyboard, trackpad, Touch Bar and panel sit behind t2bce.
+    # Match the working T2 host initrd: only the BCE bridge/controller is
+    # required before the rootfs is mounted. Audio, Touch Bar, SPI and the GPU
+    # mux autoload from the rootfs once udev is up; forcing them into the
+    # initrd made T2 boots depend on unrelated hardware probes.
     install -d "$ROOTFS/etc/initramfs-tools"
     cat >> "$ROOTFS/etc/initramfs-tools/modules" <<'EOF'
-t2bce_core
 t2bce_dma
+t2bce_core
 t2bce_vhci
-t2bce_audio
-t2bce_ave
-apple-gmux
-appletbdrm
-applespi
-hid-appletb-kbd
-hid-appletb-bl
 EOF
 }
 
@@ -321,6 +421,7 @@ stage_overlay() {
     log "staging live session and installer helper"
     cp -a "$REPO/scripts/live/overlay/." "$ROOTFS/"
     chmod 0755 "$ROOTFS/usr/local/bin/peakd-live-session" \
+        "$ROOTFS/usr/local/bin/peakd-collect-logs" \
         "$ROOTFS/usr/local/lib/shiny/t2-live-setup.sh" \
         "$ROOTFS/usr/local/lib/shiny/seed-live-account.sh"
     install -d "$ROOTFS/etc/systemd/system/multi-user.target.wants"
@@ -328,8 +429,52 @@ stage_overlay() {
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-installer-helper.service"
     ln -sf /etc/systemd/system/shiny-t2-live-setup.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-t2-live-setup.service"
+    ln -sf /etc/systemd/system/peakd-collect-logs.service \
+        "$ROOTFS/etc/systemd/system/multi-user.target.wants/peakd-collect-logs.service"
     ln -sf /etc/systemd/system/shiny-live-seed.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-live-seed.service"
+    # peakd-live-session starts Ollama as the live user with a valid HOME.
+    # The system unit has no HOME and would restart forever in the live image.
+    rm -f "$ROOTFS/etc/systemd/system/multi-user.target.wants/ollama.service" \
+        "$ROOTFS/etc/systemd/system/graphical.target.wants/ollama.service"
+
+    # The Debian live base enables PulseAudio, which is what the generic
+    # profile used before. Keep it as the default; the T2 session switches to
+    # PipeWire/WirePlumber itself, because that is the stack the T2 DSP needs.
+    local user_units="$ROOTFS/etc/systemd/user"
+    install -d "$user_units/default.target.wants" "$user_units/sockets.target.wants"
+    ln -sf /usr/lib/systemd/user/pulseaudio.service "$user_units/default.target.wants/pulseaudio.service"
+    ln -sf /usr/lib/systemd/user/pulseaudio.socket "$user_units/sockets.target.wants/pulseaudio.socket"
+
+    # T2 DSP: the host setup uses WirePlumber's software DSP, the measured 16_1
+    # FIR graphs and the LV2 plugins. The raw UCM card alone can still present
+    # as Dummy Output in the live session, so transpose the working host files.
+    local wp_dir="$ROOTFS/etc/xdg/wireplumber/wireplumber.conf.d"
+    local t2_assets="$ROOTFS/usr/share/t2linux-audio/16_1"
+    install -d "$wp_dir" "$t2_assets" "$ROOTFS/etc/udev/rules.d" "$ROOTFS/usr/lib/lv2"
+    cp -a "$REPO/scripts/t2-audio/wireplumber.conf" "$wp_dir/50-t2-audio.conf"
+    cp -a "$REPO/scripts/t2-audio/16_1/." "$t2_assets/"
+    # The host's WirePlumber picks the T2 HiFi profile/route through this state;
+    # without it a fresh live user can bind the card without a usable sink.
+    install -d "$ROOTFS/usr/share/shiny/t2-wireplumber-state"
+    for state in default-nodes default-routes default-profile; do
+        [ -f "$HOME/.local/state/wireplumber/$state" ] && \
+            cp -a "$HOME/.local/state/wireplumber/$state" \
+                "$ROOTFS/usr/share/shiny/t2-wireplumber-state/"
+    done
+    sed 's/@MODEL_DIR@/16_1/g' "$REPO/scripts/t2-audio/99-t2-audio-rename.rules" \
+        > "$ROOTFS/etc/udev/rules.d/99-t2-audio-rename.rules"
+    chmod 0644 "$ROOTFS/etc/udev/rules.d/99-t2-audio-rename.rules"
+    local lv2
+    for lv2 in bankstown.lv2 lsp-plugins.lv2 triforce.lv2; do
+        if [ -d "/usr/lib/lv2/$lv2" ]; then
+            cp -a "/usr/lib/lv2/$lv2" "$ROOTFS/usr/lib/lv2/"
+        fi
+    done
+    local so
+    for so in "$ROOTFS"/usr/lib/lv2/*/*.so; do
+        [ -e "$so" ] && copy_missing_libs "$so"
+    done
 
     # The live session is the PEAK'D! kiosk, not an XFCE desktop session.
     rm -f "$ROOTFS/etc/xdg/autostart/peakd-live.desktop"
@@ -432,7 +577,7 @@ build_iso() {
   "package": "peakd $PKG_VERSION amd64",
   "apt_repo": "$APT_REPO",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "note": "rootless UEFI remaster; package payload; installer apply remains dry-run"
+  "note": "rootless UEFI remaster; package payload; real install engine enabled"
 }
 EOF
     log "done"
@@ -446,9 +591,12 @@ extract_base
 stage_package
 seed_live_account
 stage_qt
+stage_ollama
+stage_audio_runtime
 stage_extra_packages
 stage_t2
 stage_overlay
+verify_audio_runtime
 remove_xfce
 build_t2_initrd
 assemble_boot

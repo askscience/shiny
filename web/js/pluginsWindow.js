@@ -20,7 +20,7 @@ import {
 import { pluginIconEl } from './pluginIcon.js';
 import { pickFiles } from './files.js';
 import { getPluginLayout, setPluginLayout, getStoreAutoUpdate, setStoreAutoUpdate } from './preferences.js';
-import { loadStore, refreshStore, installCraftApp, setCraftMcp, craftAppBusy, storeSnapshot } from './craftStore.js';
+import { loadStore, refreshStore, installCraftApp, setCraftMcp, craftAppBusy, storeSnapshot, storeWaitingForNetwork, storeLoadFailed } from './craftStore.js';
 import { t } from './i18n.js';
 
 export const PLUGINS_WINDOW = 'plugins';
@@ -359,11 +359,15 @@ async function installFromStore(id, name) {
 /** Download and install every app that is missing, outdated — or installed
  *  without its AI control (the CLI installs with the app). */
 async function installAllFromStore() {
+  const catalogRefreshing = storeSnapshot()?.refreshing === true;
   const apps = (storeSnapshot()?.apps || [])
-    .filter((app) => !craftAppBusy(app)
+    .filter((app) => !craftAppBusy(app) && !app.waiting_for_network
+      && (!catalogRefreshing || app.latest_version)
       && (!app.installed_version || app.update_available || app.mcp_pending));
   if (!apps.length) {
-    toast(t('plugins.storeAllCurrent', null, 'Every Craft app is up to date'));
+    toast(storeWaitingForNetwork()
+      ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+      : t('plugins.storeAllCurrent', null, 'Every Craft app is up to date'));
     return;
   }
   // The app's AI control (its CLI) installs with the app, so the estimate has to
@@ -391,6 +395,11 @@ async function installAllFromStore() {
 
 function storeCard(app) {
   const installed = !!app.installed_version;
+  const catalogRefreshing = storeSnapshot()?.refreshing === true;
+  // Before the first lookup answers, the version is simply not known yet: show
+  // "Connecting…" rather than "Version unknown" on a booting live image.
+  const waitingForVersion = app.waiting_for_network
+    || (catalogRefreshing && !app.latest_version);
   const card = el('article', 'plugin-card store-card');
   card.dataset.plugin = app.id;
   card.classList.toggle('is-inactive', !installed);
@@ -423,6 +432,12 @@ function storeCard(app) {
   } else if (app.state === 'failed') {
     status.classList.add('is-error');
     status.textContent = app.error || t('plugins.installFailed', null, 'Install failed');
+  } else if (app.waiting_for_network) {
+    // The catalog has not reached GitHub yet. This is a normal state on a live
+    // image that booted before its network; never show the raw lookup error.
+    status.textContent = t('plugins.storeWaitingForConnection', null, 'Waiting for connection');
+  } else if (catalogRefreshing && !app.latest_version) {
+    status.textContent = t('plugins.storeConnecting', null, 'Connecting…');
   } else if (installed && app.update_available) {
     status.textContent = t('plugins.storeUpdateReady', null, 'Update available');
   } else if (installed && app.mcp_pending) {
@@ -452,6 +467,7 @@ function storeCard(app) {
       label: t('plugins.storeInstall', null, 'Install'),
       variant: 'primary',
       size: 'sm',
+      disabled: waitingForVersion,
       onClick: () => void installFromStore(app.id, app.name),
     }));
   } else {
@@ -565,18 +581,29 @@ function renderStore() {
   });
   refs.grid.textContent = '';
   const total = (data?.apps || []).length;
+  const waiting = storeWaitingForNetwork();
   refs.meta.textContent = data
-    ? t('plugins.storeMetaApps', { count: total }, `${total} apps · updated automatically`)
+    ? (data.waiting_for_network
+      ? t('plugins.storeMetaWaiting', { count: total }, `${total} apps · waiting for connection`)
+      : t('plugins.storeMetaApps', { count: total }, `${total} apps · updated automatically`))
     : '';
 
   if (!data) {
+    const failed = storeLoadFailed();
     refs.empty.classList.remove('hidden');
     refs.empty.textContent = '';
     refs.empty.appendChild(emptyState({
-      icon: 'ui/download',
-      title: t('plugins.storeUnavailable', null, 'Store unavailable'),
-      body: t('plugins.storeUnavailableBody', null,
-        'The catalog could not be loaded. Check the connection and try again.'),
+      icon: waiting ? 'ui/network' : (failed ? 'ui/warning' : 'ui/download'),
+      title: waiting
+        ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+        : failed
+          ? t('plugins.storeUnavailable', null, 'Store unavailable')
+          : t('plugins.storeConnecting', null, 'Connecting…'),
+      body: !failed || waiting
+        ? t('plugins.storeConnectingBody', null,
+          'The app catalog will load on its own as soon as the network is ready.')
+        : t('plugins.storeUnavailableBody', null,
+          'The catalog could not be loaded. Check the connection and try again.'),
     }));
     return;
   }
@@ -743,7 +770,9 @@ function mountPlugins() {
     try {
       await refreshStore();
     } catch (e) {
-      toast(e.message || t('plugins.storeUnavailable', null, 'Store unavailable'), { type: 'error' });
+      toast(storeWaitingForNetwork()
+        ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+        : (e.message || t('plugins.storeUnavailable', null, 'Store unavailable')), { type: 'error' });
     } finally {
       checkBtn.setLoading(false);
       if (refs && tab === 'store') render();
@@ -812,6 +841,11 @@ function mountPlugins() {
   });
 
   on(window, 'plugins:changed', () => void refreshActiveTab(true));
+  // The store retries catalog reads in the background while the network is
+  // coming up; repaint as soon as one succeeds (or reports waiting).
+  on(window, 'craft-store:changed', () => {
+    if (refs && tab === 'store') render();
+  });
   cleanups.push(() => {
     if (storePollTimer) clearTimeout(storePollTimer);
     storePollTimer = null;

@@ -38,6 +38,11 @@ use crate::plugins::installer::log_event;
 /// API allows 60 requests per hour per address; thirteen apps at one hour are
 /// far inside that, and a cached entry is served when a refresh fails.
 const RELEASE_TTL: Duration = Duration::from_secs(3600);
+/// A lookup that failed before it could reach GitHub (DNS, connect, timeout)
+/// is retried soon: the live image may still be bringing its network up when
+/// the shell first opens. Permanent answers (404, a release without a web
+/// build) keep the full TTL.
+const RELEASE_RETRY_TTL: Duration = Duration::from_secs(15);
 /// A larger download is not a Craft web build (they are 10–16 MB today).
 const MAX_DOWNLOAD_BYTES: u64 = 256 * 1024 * 1024;
 /// The CLI inside the Linux package (60–90 MB today); a bound on what one
@@ -309,6 +314,45 @@ struct CachedRelease {
     etag: Option<String>,
 }
 
+impl CachedRelease {
+    /// Whether this answer may still be served without another lookup. A
+    /// connectivity failure is not a real answer: retry it quickly so the
+    /// catalog recovers on its own when the network comes up.
+    fn fresh(&self) -> bool {
+        let ttl = match &self.release {
+            Err(error) if transient_lookup_error(error) => RELEASE_RETRY_TTL,
+            _ => RELEASE_TTL,
+        };
+        self.fetched.elapsed() < ttl
+    }
+}
+
+/// Failures that are about reaching GitHub, not about the answer it gave.
+/// These are worth retrying without waiting for the normal release TTL.
+fn transient_lookup_error(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    if error.contains("error sending request")
+        || error.contains("dns error")
+        || error.contains("failed to lookup address")
+        || error.contains("connection refused")
+        || error.contains("connection reset")
+        || error.contains("network is unreachable")
+        || error.contains("no route to host")
+        || error.contains("temporary failure")
+        || error.contains("operation timed out")
+        || error.contains("timed out")
+    {
+        return true;
+    }
+    // GitHub uses 403 for its unauthenticated rate limit; 429 and 5xx are
+    // equally temporary for a catalog read.
+    error
+        .strip_prefix("github answered ")
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|status| status.parse::<u16>().ok())
+        .is_some_and(|status| status == 403 || status == 429 || status >= 500)
+}
+
 // ── The store ───────────────────────────────────────────────────────────────
 
 /// Shared Craft-store state: the release cache, per-app install status and the
@@ -327,6 +371,10 @@ struct StoreInner {
     status: parking_lot::Mutex<HashMap<String, AppStatus>>,
     /// True while a background catalog refresh runs (deduplicates requests).
     refreshing: AtomicBool,
+    /// When the last catalog pass lost its connection to GitHub. Snapshot-driven
+    /// refreshes wait until then: a live image booting without a network must
+    /// not ask for all thirteen apps on every UI poll.
+    retry_after: parking_lot::Mutex<Option<Instant>>,
 }
 
 impl Default for Store {
@@ -351,6 +399,7 @@ impl Store {
                 releases: parking_lot::Mutex::new(HashMap::new()),
                 status: parking_lot::Mutex::new(HashMap::new()),
                 refreshing: AtomicBool::new(false),
+                retry_after: parking_lot::Mutex::new(None),
             }),
         }
     }
@@ -365,17 +414,33 @@ impl Store {
             .into_iter()
             .map(|manifest| (manifest.name, manifest.version.to_string()))
             .collect();
+        // A transient lookup error is the catalog saying "not yet": the shell
+        // waits and retries instead of presenting GitHub's error. Apps that
+        // never got an answer (the pass stopped at the first failure) inherit
+        // the same state.
+        let waiting_for_network = self
+            .inner
+            .releases
+            .lock()
+            .values()
+            .any(|entry| match &entry.release {
+                Err(error) => transient_lookup_error(error),
+                Ok(_) => false,
+            });
         let mut stale = false;
         let apps: Vec<serde_json::Value> = SUITE
             .iter()
             .map(|app| {
                 let cached = self.inner.releases.lock().get(app.id).cloned();
-                let fresh = cached
-                    .as_ref()
-                    .is_some_and(|entry| entry.fetched.elapsed() < RELEASE_TTL);
+                let fresh = cached.as_ref().is_some_and(CachedRelease::fresh);
                 if !fresh {
                     stale = true;
                 }
+                let app_waiting_for_network = match cached.as_ref().map(|entry| &entry.release) {
+                    Some(Err(error)) => transient_lookup_error(error),
+                    Some(Ok(_)) => false,
+                    None => waiting_for_network,
+                };
                 let status = self
                     .inner
                     .status
@@ -456,6 +521,7 @@ impl Store {
                     "state": status.state,
                     "progress": status.progress,
                     "error": status.error.or(latest_error),
+                    "waiting_for_network": app_waiting_for_network,
                     "mcp_available": mcp_available,
                     "mcp_installed": mcp_installed,
                     "mcp_enabled": mcp_enabled,
@@ -470,13 +536,25 @@ impl Store {
         }
         json!({
             "refreshing": self.inner.refreshing.load(Ordering::SeqCst),
+            "waiting_for_network": waiting_for_network,
             "apps": apps,
         })
     }
 
     /// Schedule a catalog refresh. `force` ignores the cache TTL; either way a
-    /// refresh already in flight wins and this call returns immediately.
+    /// refresh already in flight wins and this call returns immediately. A
+    /// recent connectivity failure also wins: wait for the retry window rather
+    /// than asking GitHub again on every snapshot.
     pub fn spawn_refresh(self: &Store, force: bool) {
+        if !force
+            && self
+                .inner
+                .retry_after
+                .lock()
+                .is_some_and(|until| until > Instant::now())
+        {
+            return;
+        }
         if self.inner.refreshing.swap(true, Ordering::SeqCst) {
             return;
         }
@@ -489,40 +567,75 @@ impl Store {
 
     /// Look each app's latest release up, keeping the previous entry when a
     /// lookup fails (GitHub rate-limits unauthenticated callers, and being
-    /// offline must not empty the store).
+    /// offline must not empty the store). A connectivity failure ends the pass:
+    /// the remaining apps are just as unreachable, and the shell shows them as
+    /// waiting until the next retry.
     async fn refresh_all(&self, force: bool) {
+        if !force
+            && self
+                .inner
+                .retry_after
+                .lock()
+                .is_some_and(|until| until > Instant::now())
+        {
+            return;
+        }
         for app in SUITE.iter() {
             let cached = self.inner.releases.lock().get(app.id).cloned();
             if !force {
                 if let Some(entry) = &cached {
-                    if entry.fetched.elapsed() < RELEASE_TTL {
+                    if entry.fresh() {
                         continue;
                     }
                 }
             }
             let etag = cached.as_ref().and_then(|entry| entry.etag.clone());
             let previous = cached.map(|entry| entry.release);
+            let mut stop = false;
             let (release, etag) = match self.fetch_latest(app, etag.as_deref()).await {
-                Ok(Latest::Fetched { release, etag }) => (release, etag),
-                // 304: nothing changed, so the previous answer stands.
-                Ok(Latest::Unchanged) => match previous {
-                    Some(release) => (release, etag),
-                    None => (Err("the release list did not change".into()), etag),
-                },
-                // Offline, or rate-limited: the last good answer — or the last
-                // error, which the UI shows — beats an empty store.
-                Err(error) => match previous {
-                    Some(cached) => {
-                        tracing::warn!("Craft store: keeping the cached release for {}: {error}", app.id);
-                        (cached, etag)
+                Ok(Latest::Fetched { release, etag }) => {
+                    *self.inner.retry_after.lock() = None;
+                    (release, etag)
+                }
+                // 304: nothing changed, so the previous answer stands. It also
+                // proves the connection is back.
+                Ok(Latest::Unchanged) => {
+                    *self.inner.retry_after.lock() = None;
+                    match previous {
+                        Some(release) => (release, etag),
+                        None => (Err("the release list did not change".into()), etag),
                     }
-                    None => (Err(error), etag),
-                },
+                }
+                // Offline, or rate-limited: the last good answer — or the last
+                // error, which the UI shows as "waiting" — beats an empty
+                // store. A real answer (404, no web build) is tried normally.
+                Err(error) => {
+                    if transient_lookup_error(&error) {
+                        *self.inner.retry_after.lock() =
+                            Some(Instant::now() + RELEASE_RETRY_TTL);
+                        stop = true;
+                    } else {
+                        *self.inner.retry_after.lock() = None;
+                    }
+                    match previous {
+                        Some(cached) => {
+                            tracing::warn!(
+                                "Craft store: keeping the cached release for {}: {error}",
+                                app.id
+                            );
+                            (cached, etag)
+                        }
+                        None => (Err(error), etag),
+                    }
+                }
             };
             self.inner.releases.lock().insert(
                 app.id.to_string(),
                 CachedRelease { release, fetched: Instant::now(), etag },
             );
+            if stop {
+                break;
+            }
         }
     }
 
@@ -531,7 +644,7 @@ impl Store {
         {
             let releases = self.inner.releases.lock();
             if let Some(entry) = releases.get(app.id) {
-                if entry.fetched.elapsed() < RELEASE_TTL {
+                if entry.fresh() {
                     return entry
                         .release
                         .clone()
@@ -547,34 +660,56 @@ impl Store {
             .and_then(|entry| entry.etag.clone());
         match self.fetch_latest(app, etag.as_deref()).await {
             Ok(Latest::Fetched { release, etag }) => {
+                *self.inner.retry_after.lock() = None;
                 self.inner.releases.lock().insert(
                     app.id.to_string(),
                     CachedRelease { release: release.clone(), fetched: Instant::now(), etag },
                 );
                 release.map_err(|error| AppError::Internal(format!("{} has no usable release: {error}", app.name)))
             }
-            Ok(Latest::Unchanged) => self
-                .inner
-                .releases
-                .lock()
-                .get(app.id)
-                .and_then(|entry| entry.release.clone().ok())
-                .ok_or_else(|| AppError::Internal(format!("{}: release lookup did not return data", app.name))),
+            Ok(Latest::Unchanged) => {
+                *self.inner.retry_after.lock() = None;
+                self.inner
+                    .releases
+                    .lock()
+                    .get(app.id)
+                    .and_then(|entry| entry.release.clone().ok())
+                    .ok_or_else(|| AppError::Internal(format!("{}: release lookup did not return data", app.name)))
+            }
             // Offline, or GitHub rate-limited: a stale entry is still a real
             // release, and installing a known version is better than refusing.
-            Err(error) => match self
-                .inner
-                .releases
-                .lock()
-                .get(app.id)
-                .map(|entry| entry.release.clone())
-            {
-                Some(Ok(release)) => {
-                    tracing::warn!("Craft store: using the cached release for {}: {error}", app.id);
-                    Ok(release)
+            // Without one, cache the failure too, so the catalog can show it as
+            // waiting instead of looking like it was never checked.
+            Err(error) => {
+                if transient_lookup_error(&error) {
+                    *self.inner.retry_after.lock() = Some(Instant::now() + RELEASE_RETRY_TTL);
+                } else {
+                    *self.inner.retry_after.lock() = None;
                 }
-                _ => Err(AppError::Internal(format!("could not check {}: {error}", app.name))),
-            },
+                let cached = self
+                    .inner
+                    .releases
+                    .lock()
+                    .get(app.id)
+                    .map(|entry| entry.release.clone());
+                match cached {
+                    Some(Ok(release)) => {
+                        tracing::warn!("Craft store: using the cached release for {}: {error}", app.id);
+                        Ok(release)
+                    }
+                    _ => {
+                        self.inner.releases.lock().insert(
+                            app.id.to_string(),
+                            CachedRelease {
+                                release: Err(error.clone()),
+                                fetched: Instant::now(),
+                                etag,
+                            },
+                        );
+                        Err(AppError::Internal(format!("could not check {}: {error}", app.name)))
+                    }
+                }
+            }
         }
     }
 
@@ -1264,10 +1399,64 @@ mod tests {
         assert_eq!(asset_sha256(&asset(Some("sha512:deadbeef"))), None);
     }
 
+    /// A connectivity failure is not a release answer: it is retried after a
+    /// few seconds, while a real answer (a release, a 404, no web build) keeps
+    /// the normal one-hour TTL. This is what lets a live image that boots
+    /// before its network comes up recover without waiting an hour.
+    #[test]
+    fn connectivity_failures_expire_sooner_than_release_answers() {
+        let release = Release {
+            version: semver::Version::new(0, 10, 0),
+            asset_name: "photocraft-web-0.10.0.zip".into(),
+            asset_url: String::new(),
+            asset_size: 1,
+            sha256: None,
+            cli: None,
+        };
+        let cached = |result: Result<Release, String>, age: Duration| CachedRelease {
+            release: result,
+            fetched: Instant::now() - age,
+            etag: None,
+        };
+
+        assert!(cached(Ok(release.clone()), Duration::from_secs(30)).fresh());
+        assert!(!cached(Ok(release), RELEASE_TTL + Duration::from_secs(1)).fresh());
+
+        let offline = || Err("error sending request: dns error: failed to lookup address".into());
+        assert!(cached(offline(), RELEASE_RETRY_TTL / 2).fresh());
+        assert!(!cached(offline(), RELEASE_RETRY_TTL + Duration::from_secs(1)).fresh());
+
+        // A 404 or a malformed release is a real answer: retrying it quickly
+        // would only waste GitHub's rate limit.
+        let missing = || Err("GitHub answered 404 Not Found for https://api.github.com/x".into());
+        assert!(cached(missing(), RELEASE_RETRY_TTL + Duration::from_secs(1)).fresh());
+    }
+
+    #[test]
+    fn transient_lookup_errors_are_recognised() {
+        for error in [
+            "error sending request for url (https://api.github.com/x): dns error: failed to lookup address information",
+            "error sending request for url (https://api.github.com/x): operation timed out",
+            "connection reset by peer",
+            "Network is unreachable",
+            "GitHub answered 403 Forbidden for https://api.github.com/x",
+            "GitHub answered 429 Too Many Requests for https://api.github.com/x",
+            "GitHub answered 503 Service Unavailable for https://api.github.com/x",
+        ] {
+            assert!(transient_lookup_error(error), "{error} must be retried");
+        }
+        for error in [
+            "GitHub answered 404 Not Found for https://api.github.com/x",
+            "photocraft: the release has no photocraft-web asset",
+            "the release list did not change",
+        ] {
+            assert!(!transient_lookup_error(error), "{error} is a real answer");
+        }
+    }
+
     /// Downloads are GitHub-only, whatever a (hostile) API response claims.
     #[test]
-    fn downloads_are_restricted_to_github() {
-        assert!(download_host_allowed(
+    fn downloads_are_restricted_to_github() {        assert!(download_host_allowed(
             "https://github.com/storytold/photocraft/releases/download/v0.10.0/photocraft-web-0.10.0.zip"
         ));
         assert!(download_host_allowed("https://objects.githubusercontent.com/x"));
@@ -1288,8 +1477,7 @@ mod tests {
     /// extracted. The archive nests it under the package directory
     /// (`photocraft-0.10.0-linux-x86_64/bin/`).
     #[test]
-    fn the_cli_is_pulled_out_of_the_linux_package() {
-        use flate2::write::GzEncoder;
+    fn the_cli_is_pulled_out_of_the_linux_package() {        use flate2::write::GzEncoder;
         use flate2::Compression;
         use std::io::Write as _;
 

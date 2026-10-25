@@ -131,13 +131,15 @@ commands just because a window is narrow.
 
 A direct child marked `data-window-bar` merges into the core title bar. On narrow
 or short windows, long toolbars scroll horizontally as one row. Inputs and
-selects inside toolbars use compact widths instead of full-form width. Below
-620px Settings drops the section-navigation labels and keeps an icon-only,
-scrolling strip — the tabs stay named through `aria-label`/`title`, and the
-active one keeps its accent tint. Mail adapts its panes,
-Files keeps its places available in a horizontal strip, and PDF/Impress move
-thumbnail rails above their content on narrow windows. Large document surfaces
-scroll inside their own pane, rather than expanding the whole window.
+selects inside toolbars use compact widths instead of full-form width. Settings
+keeps its rail, stage and manifest while the window is wide, drops the manifest
+below 1080px, turns the rail into a horizontal scrolling strip below 820px, and
+keeps an icon-only rail below 560px — the tabs stay named through
+`aria-label`/`title`, and the active one keeps its accent treatment. Mail adapts
+its panes, Files keeps its places available in a horizontal strip, and
+PDF/Impress move thumbnail rails above their content on narrow windows. Large
+document surfaces scroll inside their own pane, rather than expanding the whole
+window.
 
 Set `min-width: 0` and `min-height: 0` on flex/grid content panes; give the actual
 content pane `overflow: auto`. Keep long labels breakable and use

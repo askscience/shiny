@@ -5,16 +5,17 @@ set -euo pipefail
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD=${PEAKD_DEB_BUILD:-$HOME/peakd-iso/deb}
-VERSION=${PEAKD_VERSION:-0.1.0~trixie1}
+VERSION=${PEAKD_VERSION:-0.1.0}
 OUT="$BUILD/out"
 PKG="$BUILD/peakd"
 KEYRING="$BUILD/peakd-archive-keyring"
-KEYRING_FILE=${PEAKD_KEYRING:-$BUILD/peakd-archive.gpg}
+KEYRING_FILE=${PEAKD_KEYRING:-$REPO/packaging/peakd-archive.gpg}
 
 die() { echo "error: $*" >&2; exit 1; }
 [ -x "$REPO/target/release/peakd" ] || die "target/release/peakd missing"
 [ -x "$REPO/target/release/shiny" ] || die "target/release/shiny missing"
 mkdir -p "$OUT"
+rm -f "$OUT"/peakd_*.deb "$OUT"/peakd-archive-keyring_*.deb "$OUT"/SHA256SUMS
 
 rm -rf "$PKG"
 mkdir -p "$PKG/DEBIAN" \
@@ -61,7 +62,7 @@ Section: misc
 Priority: optional
 Architecture: amd64
 Maintainer: PEAK'D! <noreply@localhost>
-Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools
+Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools
 Recommends: lightdm, matchbox-window-manager, xinit
 Description: PEAK'D! AI desktop shell and server
  The PEAK'D! kiosk shell, the Shiny local server, the baseline plugins and the
@@ -107,5 +108,5 @@ Public keyring for the PEAK'D! APT repository. The private key is never shipped.
 EOF
 dpkg-deb --root-owner-group --build "$KEYRING" "$OUT/peakd-archive-keyring_${VERSION}_all.deb" >/dev/null
 
-sha256sum "$OUT"/*.deb > "$OUT/SHA256SUMS"
+( cd "$OUT" && sha256sum *.deb > SHA256SUMS )
 ls -lh "$OUT"/*.deb "$OUT/SHA256SUMS"

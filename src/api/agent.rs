@@ -48,6 +48,20 @@ pub struct AgentRequest {
     /// (`POST /api/agent/stop`) and lets the core tell "stopped" apart from
     /// "finished" when it saves the turn.
     pub turn_id: Option<String>,
+    /// True when this client can show the terminal allow/deny prompt mid-turn
+    /// (the text chat's SSE transport does). A turn that cannot ask never runs
+    /// an unapproved terminal command.
+    #[serde(default)]
+    pub approve_tools: bool,
+}
+
+#[derive(Deserialize)]
+pub struct AgentApproveRequest {
+    pub turn_id: String,
+    /// Id of the `approval` SSE event being answered.
+    pub request_id: String,
+    /// `allow`, `deny` or `allow_chat` (allow every command for this chat).
+    pub decision: String,
 }
 
 #[derive(Deserialize)]
@@ -146,6 +160,14 @@ enum AgentStreamEvent {
     },
     /// Reasoning trace of a thinking model, one block per tool-loop iteration.
     Thinking { message: String },
+    /// The turn is parked on a terminal command until the user answers. The
+    /// client shows the command with allow / deny / allow-for-this-chat and
+    /// posts the choice to `/api/agent/approve`.
+    Approval {
+        request_id: String,
+        action: String,
+        command: String,
+    },
     Done { data: AgentResponse },
     Error { message: String },
 }
@@ -407,6 +429,8 @@ struct PreparedAgent {
     requested_model: Option<String>,
     /// Client-generated id for this turn, used for stop/cancel.
     turn_id: Option<String>,
+    /// The client can render the terminal allow/deny prompt mid-turn.
+    can_approve: bool,
 }
 
 async fn prepare_agent(
@@ -615,9 +639,9 @@ async fn prepare_agent(
             "\n## Plugin windows\n\
              Each active plugin has its own window, tiled Hyprland-style and grouped on \
              numbered workspaces (desktops). Active plugins:\n{}\n\
-             When the request clearly belongs to a plugin's domain, call \
-             {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
-             this brings its window to the front. Use desktop_fullscreen to make it full screen, \
+             Call {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} only when the \
+             user asks to open, show or focus that plugin's window — do not call it just \
+             because you used the plugin's tools. Use desktop_fullscreen to make it full screen, \
              and workspace_create / workspace_remove / workspace_switch / workspace_move to \
              manage desktops. Focus mode is separate: while a window is focused only web \
              search and that plugin's tools run, and only the user changes it.\n",
@@ -627,9 +651,9 @@ async fn prepare_agent(
         format!(
             "\n## Plugin windows\n\
              Each active plugin has its own window. Active plugins:\n{}\n\
-             When the request clearly belongs to a plugin's domain, call \
-             {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} after using its tools — \
-             this brings its window to the front. Use desktop_fullscreen to make it full screen. \
+             Call {{\"action\":\"show_plugin\",\"params\":{{\"name\":\"<plugin>\"}}}} only when the \
+             user asks to open, show or focus that plugin's window — do not call it just \
+             because you used the plugin's tools. Use desktop_fullscreen to make it full screen. \
              This screen is vertical, so there is ONE column and no workspaces: the \
              workspace_create / workspace_remove / workspace_switch / workspace_move tools do \
              nothing here — never call them, and never tell the user you did.\n",
@@ -696,6 +720,20 @@ async fn prepare_agent(
     )
     .await?;
     let history = crate::services::chat_memory::recent_history(&state.pool, &conversation_id, 40).await?;
+    // "Allow for this chat" is a property of the conversation, not of a single
+    // turn: load it before the loop so no prompt is shown for a chat that
+    // already consented.
+    let auto_approve: i64 = sqlx::query_scalar(
+        "SELECT terminal_auto_approve FROM chat_conversations WHERE id = ?1 AND traveler_id = ?2",
+    )
+    .bind(&conversation_id)
+    .bind(&traveler.id)
+    .fetch_optional(&state.pool)
+    .await?
+    .unwrap_or(0);
+    if auto_approve != 0 {
+        state.approvals.set_auto_chat(&conversation_id, true);
+    }
     let history_block = if history.is_empty() {
         String::new()
     } else {
@@ -762,6 +800,7 @@ async fn prepare_agent(
         conversation_id,
         requested_model,
         turn_id: body.turn_id.filter(|id| !id.trim().is_empty()),
+        can_approve: body.approve_tools,
         input: AgentRunInput {
             message: body.message,
             mode,
@@ -776,6 +815,8 @@ async fn prepare_agent(
             ctx,
             craft_open: open,
             craft_home,
+            // Attached by the transport handler: it needs the SSE sink.
+            approval: None,
         },
     })
 }
@@ -810,12 +851,23 @@ pub async fn handle_agent(
     Extension(traveler): Extension<Traveler>,
     Json(body): Json<AgentRequest>,
 ) -> Result<Json<AgentResponse>, AppError> {
-    let prepared = prepare_agent(&state, &traveler, body).await?;
+    let mut prepared = prepare_agent(&state, &traveler, body).await?;
     let ai = state.resolve_ai(&traveler.id).await;
     let trip_id = prepared.trip_id.clone();
     let conversation_id = prepared.conversation_id.clone();
     let user_message = prepared.input.message.clone();
     let turn_id = prepared.turn_id.clone();
+    // The one-shot JSON transport cannot pop a prompt mid-turn: attach a
+    // non-interactive gate so a command is refused instead of running
+    // unapproved (an "allow for this chat" conversation still runs).
+    prepared.input.approval = Some(crate::services::approval::ApprovalGate::new(
+        state.approvals.clone(),
+        turn_id.clone().unwrap_or_default(),
+        traveler.id.clone(),
+        conversation_id.clone(),
+        false,
+        Box::new(|_| {}),
+    ));
     // Honor the model the client asked for on this request (Ollama only); the
     // OpenAI client bakes its configured model in.
     let model: Option<String> = if ai.client.is_openai() {
@@ -891,6 +943,7 @@ async fn finish_turn(
         &result.reply,
         note,
         thinking,
+        &result.events,
     )
     .await
     {
@@ -967,6 +1020,64 @@ pub async fn handle_agent_stop(
     })))
 }
 
+/// Answer the terminal command the turn is waiting on.
+///
+/// `allow_chat` also persists the consent on the conversation
+/// (`terminal_auto_approve`), so every later command in that same chat runs
+/// without a prompt — other chats still ask. The hard-coded safety guard runs
+/// before the prompt, so it can never be answered into allowing a destructive
+/// command.
+pub async fn handle_agent_approve(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<AgentApproveRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let (allow, remember) = match body.decision.as_str() {
+        "allow" => (true, false),
+        "deny" => (false, false),
+        "allow_chat" => (true, true),
+        other => {
+            return Err(AppError::BadRequest(format!(
+                "unknown decision '{other}' — use allow, deny or allow_chat"
+            )))
+        }
+    };
+
+    let resolved = state.approvals.resolve(
+        &body.turn_id,
+        &body.request_id,
+        &traveler.id,
+        allow,
+        remember,
+    );
+
+    let Some(conversation_id) = resolved else {
+        // The turn already ended, the request was answered twice, or it belongs
+        // to another account. Nothing to approve.
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "data": { "allowed": false, "reason": "no pending approval request" },
+        })));
+    };
+
+    if remember && allow {
+        sqlx::query(
+            "UPDATE chat_conversations SET terminal_auto_approve = 1 \
+             WHERE id = ?1 AND traveler_id = ?2",
+        )
+        .bind(&conversation_id)
+        .bind(&traveler.id)
+        .execute(&state.pool)
+        .await
+        .map_err(AppError::Database)?;
+    }
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "data": { "allowed": allow, "remembered": remember && allow },
+    })))
+}
+
 pub async fn handle_agent_stream(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
@@ -986,7 +1097,8 @@ pub async fn handle_agent_stream(
     let traveler = traveler.clone();
     let ai = ai.clone();
     let trip_id = prepared.trip_id.clone();
-    let input = prepared.input;
+    let can_approve = prepared.can_approve;
+    let mut input = prepared.input;
     let conversation_id = prepared.conversation_id.clone();
     let user_message = input.message.clone();
     let turn_id = prepared.turn_id.clone();
@@ -996,28 +1108,51 @@ pub async fn handle_agent_stream(
     let disconnect_cancel = cancel.clone();
     // Detect a closed SSE consumer immediately, not only when the next event
     // happens to be sent: a long model call should be abandoned as soon as the
-    // receiver disappears.
-    if let Some(handle) = disconnect_cancel.clone() {
+    // receiver disappears. The watcher's sender clone must be dropped when the
+    // turn ends — see the end of the spawned task.
+    let disconnect_watcher = disconnect_cancel.clone().map(|handle| {
         let closed_tx = tx.clone();
         tokio::spawn(async move {
             closed_tx.closed().await;
             handle.cancel();
-        });
-    }
+        })
+    });
 
     tokio::spawn(async move {
-        let emit = |event: AgentStreamEvent| {
-            if let Ok(json) = serde_json::to_string(&event) {
-                if tx.send(json).is_err() {
-                    // The SSE consumer is gone (tab closed, request aborted).
-                    // Stop the model and the tool loop instead of finishing an
-                    // answer nobody can receive.
-                    if let Some(handle) = disconnect_cancel.as_ref() {
-                        handle.cancel();
+        let emit: std::sync::Arc<dyn Fn(AgentStreamEvent) + Send + Sync> =
+            std::sync::Arc::new(move |event: AgentStreamEvent| {
+                if let Ok(json) = serde_json::to_string(&event) {
+                    if tx.send(json).is_err() {
+                        // The SSE consumer is gone (tab closed, request aborted).
+                        // Stop the model and the tool loop instead of finishing an
+                        // answer nobody can receive.
+                        if let Some(handle) = disconnect_cancel.as_ref() {
+                            handle.cancel();
+                        }
                     }
                 }
-            }
-        };
+            });
+        let emit_step = emit.clone();
+        let emit_thinking = emit.clone();
+        let emit_approval = emit.clone();
+
+        // The chat's allow/deny prompt is a mid-turn round trip: the gate emits
+        // an `approval` event over this same stream and parks until
+        // `/api/agent/approve` resolves it.
+        input.approval = Some(crate::services::approval::ApprovalGate::new(
+            state.approvals.clone(),
+            turn_id.clone().unwrap_or_default(),
+            traveler.id.clone(),
+            conversation_id.clone(),
+            can_approve,
+            Box::new(move |prompt| {
+                emit_approval(AgentStreamEvent::Approval {
+                    request_id: prompt.request_id,
+                    action: prompt.action,
+                    command: prompt.command,
+                })
+            }),
+        ));
 
         match run_agent(
             &state,
@@ -1027,13 +1162,13 @@ pub async fn handle_agent_stream(
             model.as_deref(),
             input,
             cancel.clone(),
-            |step, action| emit(AgentStreamEvent::Step {
+            |step, action| emit_step(AgentStreamEvent::Step {
                 message: step.text.clone(),
                 key: step.key.clone(),
                 params: (!step.params.is_empty()).then(|| serde_json::Value::Object(step.params.clone())),
                 action: action.map(str::to_string),
             }),
-            |msg| emit(AgentStreamEvent::Thinking {
+            |msg| emit_thinking(AgentStreamEvent::Thinking {
                 message: msg.to_string(),
             }),
         )
@@ -1064,6 +1199,16 @@ pub async fn handle_agent_stream(
                     message: crate::i18n::translate_current(&e.to_string()),
                 })
             }
+        }
+
+        // `closed()` can only fire while the receiver is alive, and the
+        // receiver (the SSE body) ends only once every sender is gone. The
+        // watcher holds one, so a finished turn must drop it here — otherwise
+        // the response never ends and the browser keeps the connection
+        // occupied for good.
+        if let Some(watcher) = disconnect_watcher {
+            watcher.abort();
+            let _ = watcher.await;
         }
     });
 

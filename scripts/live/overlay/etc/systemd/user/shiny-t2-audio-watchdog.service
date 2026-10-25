@@ -1,0 +1,13 @@
+[Unit]
+Description=PEAK'D! T2 audio watchdog
+After=wireplumber.service pipewire-pulse.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/shiny-t2-audio-watchdog
+Restart=on-failure
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=default.target

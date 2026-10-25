@@ -19,6 +19,13 @@ moment; a command still running after ~10 seconds returns the output so far
 (editors, `htop`, REPLs) — open the Terminal window instead so the user can
 drive them.
 
+Every command is shown to the user in the chat with **Allow / Deny / Allow for
+this chat** before it runs; the turn waits for that answer. A command that could
+destroy the system — wiping root or a system directory, writing raw to a disk,
+repartitioning, rebooting, a fork bomb — is refused by a hard-coded guard and
+never offered at all, even in a chat where commands are allowed automatically.
+When a command is denied or blocked, nothing ran: do not retry it.
+
 ## Window
 
 The window keeps its shells alive while it is closed: the tab list lives in

@@ -31,6 +31,7 @@ Request:
   "correction": false,           // true ⇒ this message corrects the previous one
   "turn_id": "<uuid>",           // client id, for /api/agent/stop
   "conversation_id": "<uuid>",   // continue an existing thread
+  "approve_tools": true,         // this client can render the terminal approval card
   "context": { "lat": 41.9, "lon": 12.5, "heading": 180 },
   "desktop": { "active": 1, "workspaces_enabled": true,
                "workspaces": [ { "index": 1, "windows": ["word", "files"] } ],
@@ -79,6 +80,7 @@ JSON response (`AgentResponse`):
 ```jsonc
 { "type": "step", "message": "Searching the web…", "key": "step.searchingWeb", "action": "web_search" }
 { "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
+{ "type": "approval", "request_id": "<uuid>", "action": "terminal_exec", "command": "rm -rf ./build" }
 { "type": "done", "data": { /* the full AgentResponse */ } }
 { "type": "error", "message": "…" }
 ```
@@ -97,6 +99,16 @@ returns; `AgentResponse.thinking` holds the turn's full trace (saved with the
 reply, so the chat can fold it under the answer again later).
 
 No thinking model — or thinking off — means no `thinking` events.
+
+`approval` means the turn is **parked**: it is waiting for the user to allow or
+deny a `terminal_exec` command. Answer it with `POST /api/agent/approve` (below).
+Only a request sent with `approve_tools: true` can receive one; both the JSON
+transport and voice turns without that flag refuse the command instead of
+running it unapproved. Commands the hard-coded guard considers destructive never
+produce an `approval` event at all — they are refused outright. See
+[agent § Terminal command approval](../core/agent.md#46-terminal-command-approval).
+
+---
 
 ### Language
 
@@ -150,6 +162,36 @@ Response:
 
 ---
 
+## `POST /api/agent/approve`
+
+Answer the `approval` event a running turn is parked on.
+
+```jsonc
+{
+  "turn_id": "<uuid>",        // the turn that sent the event
+  "request_id": "<uuid>",     // from the `approval` event
+  "decision": "allow"         // "allow" | "deny" | "allow_chat"
+}
+```
+
+Response:
+
+```json
+{ "success": true, "data": { "allowed": true, "remembered": false } }
+```
+
+- `allow` runs this one command; `deny` refuses it (the model is told nothing
+  ran and not to retry).
+- `allow_chat` runs it **and** sets `chat_conversations.terminal_auto_approve`,
+  so every later `terminal_exec` in that conversation skips the prompt. Other
+  conversations still ask. Destructive commands are still refused by the
+  hard-coded guard.
+- A request that is unknown, already answered, or belongs to another traveler
+  returns `{ "success": false, "data": { … } }` and changes nothing. Always a
+  `200`: answering a prompt that expired with its turn is not an API error.
+
+---
+
 ## Chat endpoints
 
 See [chat](../core/chat.md) for semantics.
@@ -160,7 +202,7 @@ See [chat](../core/chat.md) for semantics.
 | `GET` | `/api/chat/history?limit=N` | — | `{ success, data: [{ role, content, timestamp }] }` |
 | `GET` | `/api/chat/conversations` | — | `{ success, data: [{ id, title, updated_at, preview }] }` |
 | `POST` | `/api/chat/conversations` | — | `{ success, data: { id } }` |
-| `GET` | `/api/chat/conversations/:id` | — | `{ success, data: [{ role, content, timestamp }] }` (system rows hidden) |
+| `GET` | `/api/chat/conversations/:id` | — | `{ success, data: [{ role, content, timestamp }] }` (system rows hidden; `approval` / `media` rows are JSON payloads the chat renders) |
 | `DELETE` | `/api/chat/conversations/:id` | — | `{ success, data: { deleted: true } }` |
 
 ---

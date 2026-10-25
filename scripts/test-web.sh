@@ -8,6 +8,11 @@ for file in web/js/tests/*.test.mjs; do
     printf '== %s\n' "$file"
     node "$file"
 done
+for file in plugins/*/web/*.test.mjs; do
+    [ -f "$file" ] || continue
+    printf '== %s\n' "$file"
+    node "$file"
+done
 for file in plugins/*/web/plugin.smoke.mjs; do
     [ -f "$file" ] || continue
     printf '== %s\n' "$file"

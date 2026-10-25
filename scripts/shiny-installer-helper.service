@@ -1,0 +1,17 @@
+[Unit]
+Description=PEAK'D! installer helper (live only)
+After=local-fs.target
+ConditionPathExists=/run/live/medium
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/shiny/shiny-installer-helper --socket /run/shiny/installer.sock --dry-run
+Restart=on-failure
+RuntimeDirectory=shiny
+RuntimeDirectoryMode=0770
+SupplementaryGroups=shiny
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

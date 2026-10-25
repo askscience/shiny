@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Nedladdningar",
   "plugin.browser.downloads.untitled": "nedladdning",
 
-  "plugin.browser.home.brandNote": "filtrerat av annonsblockeraren",
   "plugin.browser.home.emptyBody": "Sök på några saker så fylls den här sidan med nyheter om dem.",
   "plugin.browser.home.emptyRetry": "Inget att visa än — prova att uppdatera.",
   "plugin.browser.home.emptyTitle": "Inga artiklar än",
-  "plugin.browser.home.hint": "Skriv en adress eller en sökning ovan. Sidor laddas via annonsblockeraren.",
   "plugin.browser.home.loadFailed": "Kunde inte läsa in rekommendationer",
   "plugin.browser.home.recentSearches": "Utifrån dina senaste sökningar",
   "plugin.browser.home.refresh": "Uppdatera",

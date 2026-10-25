@@ -437,12 +437,21 @@ Both isolate panics so one bad job cannot wedge the worker.
 | `POST` | `/api/plugins/window/closed` | Bearer | `{ "name": "..." }` — the shell closed a plugin window: stop its process now (graceful MCP lifecycle). Does **not** change `enabled`. |
 | `POST` | `/api/plugins/session/reset` | Bearer | Fresh-session boot (`session.remember` off): drop this user's session activations and stop every Craft MCP server. |
 | `GET` | `/api/plugins/install.log` | Bearer | Last 200 lines of the install log. |
-| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress, and per app `mcp_enabled` (the AI-control decision), `mcp_installed`, `mcp_pending`. |
-| `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag). |
+| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress, per app `mcp_enabled` (the AI-control decision), `mcp_installed`, `mcp_pending`, and `waiting_for_network` (the GitHub lookup is waiting for connectivity; also present at catalog level). |
+| `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag). Forces the connectivity retry window open. |
 | `POST` | `/api/plugins/store/install` | Bearer | `{ "id": "photocraft" }` — download, verify (SHA-256) and install one app's web build **and its command-line tool (AI control)**, in the background. |
 | `POST` | `/api/plugins/store/mcp` | Bearer | `{ "id": "photocraft", "enable": true }` — the AI-control switch: records the decision and installs/removes the app's CLI (its MCP server). On by default; off is remembered (`.craft-mcp/<id>/disabled`), so installs and updates respect it. |
 | `GET` | `/api/plugins/craft/control/events` | Bearer | SSE, the page's side of a live Craft app link (`?app=<id>`): each message is one control request the page runs through `window.<app>.request`. |
 | `POST` | `/api/plugins/craft/control/reply` | Bearer | `{ "app": "vectorcraft", "id": 42, "ok": true, "result": … }` — the page's answer to one forwarded request. |
+
+Connectivity failures are transient, not catalog answers. When a lookup cannot
+reach GitHub (DNS, connect, timeout, rate limit, 5xx), the store keeps previously
+cached releases, stops that pass at the first failure instead of asking for all
+thirteen apps, and retries after 15 seconds. Until a lookup succeeds the catalog
+reports `waiting_for_network`, and the shell shows a waiting state and retries on
+its own — including immediately on the browser's `online` event. A live ISO that
+boots before its network is up therefore fills in the Craft apps as soon as the
+connection arrives, without showing a raw GitHub error.
 
 There is **no admin role** — any logged-in user can install/uninstall; see
 [Security](security.md).

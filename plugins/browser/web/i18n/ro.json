@@ -61,11 +61,9 @@
   "plugin.browser.downloads.title": "Descărcări",
   "plugin.browser.downloads.untitled": "descărcare",
 
-  "plugin.browser.home.brandNote": "filtrat de blocantul de reclame",
   "plugin.browser.home.emptyBody": "Caută câteva lucruri și această pagină se umple cu știri despre ele.",
   "plugin.browser.home.emptyRetry": "Încă nimic de arătat — încearcă să reîmprospătezi.",
   "plugin.browser.home.emptyTitle": "Încă nicio știre",
-  "plugin.browser.home.hint": "Scrie sus o adresă sau o căutare. Paginile se încarcă prin blocantul de reclame.",
   "plugin.browser.home.loadFailed": "Recomandările nu au putut fi încărcate",
   "plugin.browser.home.recentSearches": "Pe baza căutărilor tale recente",
   "plugin.browser.home.refresh": "Reîmprospătează",

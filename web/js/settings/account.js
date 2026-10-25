@@ -60,6 +60,7 @@ export function createAccountSection({ on, cleanups, resources }) {
             localStorage.setItem('traveler', JSON.stringify(res.data));
             saveKnownUser(res.data);
             pendingAvatar = undefined;
+            window.dispatchEvent(new CustomEvent('profile:change'));
             toast(t('settings.account.saved', null, 'Profile saved'), { type: 'info' });
           }
         } catch (e) {

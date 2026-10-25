@@ -83,6 +83,11 @@ set of plugin windows open **in this session**:
 - `openPluginWindow(name, { focus })` adds to it (the tray, the Plugins page,
   the launcher, the AI's `show_plugin`); `closePluginWindow(name)` removes from
   it.
+- AI activation never opens a window: `plugin_activate` refreshes the catalog,
+  and whether a window appears is the user's decision (or an explicit
+  `show_plugin`). A tool whose result *is* the window's content — a browser
+  page, a video, a radio player — still surfaces that window through its
+  artifact, as the plugin's own contract documents.
 - `surfacePlugins()` is `openWindows` filtered to active plugins with a
   surface — the list the tiling layout, workspace bar, `desktop_*` tools and
   fullscreen machinery all see. No such list is consulted until

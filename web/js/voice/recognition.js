@@ -237,8 +237,8 @@ function armConversationTimer() {
   clearConversationTimer();
   conversationArmedAt = performance.now();
   const timeout = getConversationTimeout();
-  // No limit (the default): a conversation lasts until the user ends it — a tap
-  // for one thing only, a double tap to type, or a stop phrase.
+  // No limit (the default): a conversation lasts until the user ends it — a
+  // double tap for one thing only, a tap to type, or a stop phrase.
   if (!timeout) return;
   conversationTimer = setTimeout(() => {
     conversationTimer = null;
@@ -276,7 +276,7 @@ async function openConversationWindow() {
 /**
  * End the conversation without arming anything else.
  *
- * A tap means "one thing only" and a double tap means "I'll type": both leave
+ * A double tap means "one thing only" and a tap means "I'll type": both leave
  * the conversation, and neither should leave a wake listener running behind the
  * gesture that follows.
  */
@@ -853,7 +853,7 @@ export async function prepareVoice() {
     setSphereState('error');
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: {
-        message: t('voice.unavailable', null, 'Voice unavailable — you can still double-tap to type'),
+        message: t('voice.unavailable', null, 'Voice unavailable — you can still tap to type'),
         type: 'error',
       },
     }));

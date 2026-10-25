@@ -63,6 +63,47 @@ pub fn human_bytes(bytes: u64) -> String {
     }
 }
 
+/// Remove the generated image/song markdown from an assistant reply.
+///
+/// The picture/track is rendered from the tool outcome as its own chat element,
+/// and persisted as a `media` row, so keeping the markdown in the reply would
+/// render it twice (and reopen the chat with a duplicate). Only generated media
+/// URLs are removed; an image or link the user pasted stays.
+pub fn strip_generated_media(text: &str) -> String {
+    let mut out = text.to_string();
+    for prefix in ["/api/imagegen/images/", "/api/songgen/tracks/"] {
+        let mut cursor = 0;
+        while let Some(found) = out[cursor..].find(prefix) {
+            let pos = cursor + found;
+            let Some(close) = out[pos..].find(')').map(|i| pos + i) else { break };
+            let before = &out[..pos];
+            let start = before
+                .rfind("![")
+                .filter(|start| before[*start..].contains("]("))
+                .or_else(|| {
+                    before
+                        .rfind('[')
+                        .filter(|start| before[*start..].contains("]("))
+                });
+            match start {
+                Some(start) => {
+                    out.replace_range(start..=close, "");
+                    cursor = start;
+                }
+                None => {
+                    cursor = pos + prefix.len();
+                }
+            }
+        }
+    }
+    // Removing a media line on its own leaves a run of blank lines behind;
+    // markdown collapses them anyway, so keep the stored reply tidy.
+    while out.contains("\n\n\n") {
+        out = out.replace("\n\n\n", "\n\n");
+    }
+    out.trim().to_string()
+}
+
 /// True when an AMD GPU is present (vendor 0x1002 in DRM sysfs). The
 /// integer-dot workaround only matters for RADV, but the flag is harmless.
 pub fn amd_gpu_present() -> bool {
@@ -78,4 +119,21 @@ pub fn amd_gpu_present() -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_generated_media;
+
+    #[test]
+    fn removes_only_generated_media_markdown() {
+        let reply = "Here it is:\n\n![red fox](/api/imagegen/images/20260101-fox.png)\n\nEnjoy.";
+        assert_eq!(strip_generated_media(reply), "Here it is:\n\nEnjoy.");
+
+        let song = "Made this: [Night drive](/api/songgen/tracks/night.wav)";
+        assert_eq!(strip_generated_media(song), "Made this:");
+
+        let user_media = "![photo](/home/me/photo.png) and [site](https://example.com)";
+        assert_eq!(strip_generated_media(user_media), user_media);
+    }
 }

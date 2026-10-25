@@ -73,10 +73,11 @@ the [`host_remote_gate`](../../src/api/mod.rs) middleware.
 
 ## Power management (application profile)
 
-The battery chip opens a **reduced power quick menu** in the top bar; the full
-panel is **Settings → Power**. Everything is a per-user preference, so it syncs
-with the account. This is deliberately an **application** power profile — it
-changes what Shiny runs, not the CPU governor or any privileged system setting.
+The battery chip opens the **power quick menu** in the top bar. It holds the
+whole application power profile — modes, switches and the backlights. Everything
+is a per-user preference, so it syncs with the account. This is deliberately an
+**application** power profile — it changes what Shiny runs, not the CPU governor
+or any privileged system setting.
 
 **Modes.**
 
@@ -96,14 +97,16 @@ Settings → Voice; the swap never touches those settings. Engines re-resolve
 live: TTS on the next reply, STT at the next voice session.
 
 See [voice](../core/voice.md) for the engines and
-[display & input](display-input.md) for the backlight sliders in the same panel.
+[display & input](display-input.md) for the backlight sliders in the same menu.
 
 ---
 
-## Backlights in Settings → Power
+## Backlights in the battery menu
 
-The Power panel adds screen-brightness and keyboard-backlight sliders where the
-machine exposes them (plain sysfs; see [display & input](display-input.md)).
+The battery quick menu adds screen-brightness and keyboard-backlight sliders
+where the machine exposes them (plain sysfs; see
+[display & input](display-input.md)). A device the app cannot read or write is
+shown disabled rather than hidden.
 
 ---
 

@@ -1,0 +1,9 @@
+name = "installer"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+description = "Install PEAK'D! to a disk from the live session"
+summary = "Live installer: choose a disk and profile, watch the install"
+author = "shiny"
+web_dir = "web"
+category = "System"

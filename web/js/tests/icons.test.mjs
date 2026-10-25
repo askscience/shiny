@@ -175,7 +175,7 @@ check('plugin PNG icons follow the active set',
 check('the monochrome set converts vendor artwork',
   readFileSync(join(root, 'web', 'ui', 'ui.css'), 'utf8').includes('img.is-monochrome'));
 const loader = readFileSync(join(root, 'web', 'ui', 'iconset-loader.js'), 'utf8');
-check('iconset-loader defaults to infinity', loader.includes("DEFAULT_CHOICE = 'infinity'"));
+check('iconset-loader defaults to monochrome Slot-Beauty', loader.includes("DEFAULT_CHOICE = 'base'"));
 check('iconset-loader defaults to native colours',
   loader.includes("localStorage.getItem(TINT_KEY) === '1'"));
 check('iconset-loader resolves light/dark', loader.includes("light: 'infinity'")

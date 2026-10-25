@@ -61,11 +61,9 @@
   "plugin.browser.downloads.title": "Lejupielādes",
   "plugin.browser.downloads.untitled": "lejupielāde",
 
-  "plugin.browser.home.brandNote": "filtrē reklāmu bloķētājs",
   "plugin.browser.home.emptyBody": "Sameklējiet dažas lietas, un šī lapa piepildīsies ar jaunumiem par tām.",
   "plugin.browser.home.emptyRetry": "Vēl nav ko rādīt — mēģiniet atjaunināt.",
   "plugin.browser.home.emptyTitle": "Vēl nav jaunumu",
-  "plugin.browser.home.hint": "Ierakstiet augšā adresi vai meklējamo tekstu. Lapas tiek ielādētas caur reklāmu bloķētāju.",
   "plugin.browser.home.loadFailed": "Nevarēja ielādēt ieteikumus",
   "plugin.browser.home.recentSearches": "Pēc jūsu nesenajiem meklējumiem",
   "plugin.browser.home.refresh": "Atjaunināt",

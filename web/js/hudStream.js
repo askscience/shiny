@@ -25,9 +25,27 @@ export function createHudStream({ eventsUrl, statusUrl, pollMs, label, apply }) 
 
   const canObserveVisibility = typeof document !== 'undefined'
     && typeof document.addEventListener === 'function';
+  // Four permanent event streams hold most of Chromium's six HTTP/1.1
+  // connections per origin. During an agent turn the chat's SSE and the
+  // approval POST need one too — with the terminal window open the pool is
+  // full and every other request (a window, a HUD menu) sits in "loading"
+  // forever. The chips keep their last state and reconnect when the turn ends.
+  const canObserveBusy = canObserveVisibility
+    && typeof MutationObserver === 'function'
+    && document.body;
+  let bodyObserver = null;
 
   function isHidden() {
     return canObserveVisibility && document.hidden;
+  }
+
+  function isBusy() {
+    const body = canObserveBusy ? document.body : null;
+    return !!body?.classList?.contains('agent-awaiting');
+  }
+
+  function shouldPause() {
+    return isHidden() || isBusy();
   }
 
   function headers() {
@@ -63,7 +81,7 @@ export function createHudStream({ eventsUrl, statusUrl, pollMs, label, apply }) 
   }
 
   function startPolling() {
-    if (pollTimer || isHidden()) return;
+    if (pollTimer || shouldPause()) return;
     void poll();
     pollTimer = setInterval(() => void poll(), pollMs);
   }
@@ -75,7 +93,7 @@ export function createHudStream({ eventsUrl, statusUrl, pollMs, label, apply }) 
   }
 
   async function poll() {
-    if (isHidden()) return;
+    if (shouldPause()) return;
     try {
       const res = await apiFetch(statusUrl, { authRedirect: false });
       apply(res?.data);
@@ -117,9 +135,10 @@ export function createHudStream({ eventsUrl, statusUrl, pollMs, label, apply }) 
     }
   }
 
-  function onVisibility() {
+  function syncPause() {
     if (!started || stopped) return;
-    if (document.hidden) {
+    if (shouldPause()) {
+      if (paused) return;
       paused = true;
       stopStream();
       return;
@@ -132,8 +151,12 @@ export function createHudStream({ eventsUrl, statusUrl, pollMs, label, apply }) 
   function start() {
     if (started) return;
     started = true;
-    if (canObserveVisibility) document.addEventListener('visibilitychange', onVisibility);
-    if (isHidden()) {
+    if (canObserveVisibility) document.addEventListener('visibilitychange', syncPause);
+    if (canObserveBusy) {
+      bodyObserver = new MutationObserver(syncPause);
+      bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+    if (shouldPause()) {
       paused = true;
       return;
     }
@@ -145,7 +168,9 @@ export function createHudStream({ eventsUrl, statusUrl, pollMs, label, apply }) 
     stopped = true;
     paused = true;
     generation += 1;
-    if (canObserveVisibility) document.removeEventListener('visibilitychange', onVisibility);
+    bodyObserver?.disconnect();
+    bodyObserver = null;
+    if (canObserveVisibility) document.removeEventListener('visibilitychange', syncPause);
     stopStream();
   }
 

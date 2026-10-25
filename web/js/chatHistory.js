@@ -141,10 +141,26 @@ async function openMessages(c) {
     }));
   }
   for (const m of entries) {
-    const bubble = h('div', `chat-history-bubble chat-history-bubble--${m.role}`);
-    const role = m.role === 'user' ? t('chat.you', null, 'You') : "PEAK'D!";
+    const isUser = m.role === 'user';
+    let text = m.content;
+    // Mid-turn rows are not plain text: show the command or the generated
+    // media name instead of the stored JSON.
+    if (m.role === 'approval' || m.role === 'media') {
+      try {
+        const record = JSON.parse(m.content);
+        if (m.role === 'approval') {
+          text = `$ ${record.command || ''}`;
+        } else if (record.kind === 'song') {
+          text = `${t('chat.song', null, 'Song')}: ${record.title || record.file || ''}`;
+        } else {
+          text = `${t('chat.generatedImage', null, 'Generated image')}: ${record.file || ''}`;
+        }
+      } catch (_) { /* keep the raw content */ }
+    }
+    const bubble = h('div', `chat-history-bubble chat-history-bubble--${isUser ? 'user' : 'assistant'}`);
+    const role = isUser ? t('chat.you', null, 'You') : "PEAK'D!";
     bubble.appendChild(h('div', 'chat-history-bubble-role', role));
-    bubble.appendChild(h('div', 'chat-history-bubble-text', m.content));
+    bubble.appendChild(h('div', 'chat-history-bubble-text', text));
     msgs.appendChild(bubble);
   }
   panel.body.appendChild(msgs);

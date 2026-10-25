@@ -60,11 +60,9 @@
   "plugin.browser.downloads.title": "Downloads",
   "plugin.browser.downloads.untitled": "download",
 
-  "plugin.browser.home.brandNote": "filtered by the ad blocker",
   "plugin.browser.home.emptyBody": "Search for a few things and this page fills up with news about them.",
   "plugin.browser.home.emptyRetry": "Nothing to show yet — try refreshing.",
   "plugin.browser.home.emptyTitle": "No stories yet",
-  "plugin.browser.home.hint": "Type an address or a search above. Pages load through the ad blocker.",
   "plugin.browser.home.loadFailed": "Could not load recommendations",
   "plugin.browser.home.recentSearches": "Because of your recent searches",
   "plugin.browser.home.refresh": "Refresh",

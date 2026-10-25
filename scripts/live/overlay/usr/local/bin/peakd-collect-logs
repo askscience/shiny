@@ -1,0 +1,143 @@
+#!/bin/bash
+# PEAK'D! live test log collector.
+#
+# Writes boot diagnostics to the EFI partition of the live USB, split by kernel
+# profile (generic/ or t2/). It is enabled only in the live image and exits
+# silently when the USB EFI partition cannot be used. Nothing on the internal
+# disk is touched.
+set -u
+
+LOG_MOUNT=/run/peakd-logs
+STATE=/var/log/peakd-collector.log
+mkdir -p /var/log
+exec >>"$STATE" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] collector starting"
+
+medium="${PEAKD_LOG_MEDIUM:-}"
+[ -b "$medium" ] || medium=$(findmnt -n -o SOURCE /run/live/medium 2>/dev/null | head -1)
+[ -b "$medium" ] || medium=$(findmnt -n -o SOURCE /lib/live/mount/medium 2>/dev/null | head -1)
+if ! [ -b "$medium" ]; then
+    medium=$(lsblk -n -o PATH,LABEL 2>/dev/null | awk '$2=="ISOIMAGE"{print $1; exit}')
+fi
+if ! [ -b "$medium" ]; then
+    echo "live medium block device not found; nothing to do"
+    exit 0
+fi
+echo "live medium: $medium"
+
+disk=$(lsblk -n -o PKNAME "$medium" 2>/dev/null | head -1)
+if [ -n "$disk" ]; then
+    disk="/dev/$disk"
+else
+    disk="$medium"
+fi
+esp=$(lsblk -n -o PATH,FSTYPE "$disk" 2>/dev/null | awk '$2=="vfat"{print $1; exit}')
+if [ -z "$esp" ]; then
+    echo "no vfat EFI partition on $disk; nothing to do"
+    exit 0
+fi
+echo "EFI partition: $esp"
+
+mkdir -p "$LOG_MOUNT"
+if target=$(findmnt -n -o TARGET "$esp" 2>/dev/null | head -1) && [ -n "$target" ]; then
+    echo "EFI already mounted at $target"
+else
+    target="$LOG_MOUNT"
+    if ! mount -t vfat -o rw,utf8,umask=0000 "$esp" "$target" 2>/dev/null; then
+        echo "could not mount $esp read-write; nothing to do"
+        exit 0
+    fi
+    echo "mounted $esp at $target"
+fi
+
+if ! touch "$target/.peakd-write-test" 2>/dev/null; then
+    mount -o remount,rw "$target" 2>/dev/null || true
+fi
+if ! touch "$target/.peakd-write-test" 2>/dev/null; then
+    echo "EFI partition is not writable; nothing to do"
+    exit 0
+fi
+rm -f "$target/.peakd-write-test"
+
+if uname -r | grep -qi 't2'; then
+    profile=t2
+else
+    profile=generic
+fi
+dest="$target/peakd-logs/$profile"
+mkdir -p "$dest" || exit 0
+echo "writing logs to $dest"
+
+# Keep each snapshot bounded so the 2.8 MB EFI partition never fills up.
+snapshot() {
+    local ts tmp old
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    tmp="$dest/.next.$$"
+    old="$dest/.old.$$"
+    rm -rf "$tmp" "$old"
+    mkdir -p "$tmp" || return
+
+    {
+        echo "time=$ts"
+        echo "kernel=$(uname -r)"
+        echo "profile=$profile"
+        echo "cmdline=$(cat /proc/cmdline 2>/dev/null)"
+        echo "boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
+        echo "dmi_vendor=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)"
+        echo "dmi_product=$(cat /sys/class/dmi/id/product_name 2>/dev/null)"
+        echo "uptime=$(cut -d' ' -f1 /proc/uptime 2>/dev/null)"
+    } > "$tmp/boot.txt" 2>&1
+
+    dmesg --time-format iso 2>/dev/null | tail -n 3000 | gzip -9 > "$tmp/dmesg.txt.gz"
+    journalctl -b --no-pager -o short-iso 2>/dev/null | tail -n 5000 | gzip -9 > "$tmp/journal.txt.gz"
+    systemctl --no-pager --failed > "$tmp/systemctl-failed.txt" 2>&1
+    for unit in display-manager lightdm shiny-t2-live-setup peakd-collect-logs; do
+        systemctl --no-pager --full status "$unit" >> "$tmp/systemctl-failed.txt" 2>&1
+    done
+    lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS > "$tmp/lsblk.txt" 2>&1
+    cat /proc/asound/cards > "$tmp/asound-cards.txt" 2>&1
+    [ -f /var/log/shiny/t2-live-setup.log ] && \
+        gzip -9 -c /var/log/shiny/t2-live-setup.log > "$tmp/t2-live-setup.log.gz"
+
+    local u uid home
+    for u in $(awk -F: '$3>=1000 && $3<60000 && $7 !~ /(nologin|false)$/ {print $1}' /etc/passwd); do
+        uid=$(id -u "$u" 2>/dev/null) || continue
+        home=$(getent passwd "$u" | cut -d: -f6)
+        [ -d "$home/.local/share/shiny" ] || continue
+        mkdir -p "$tmp/user-$u"
+        local f
+        for f in "$home/.local/share/shiny"/*.log; do
+            [ -f "$f" ] || continue
+            gzip -9 -c "$f" > "$tmp/user-$u/$(basename "$f").gz" 2>/dev/null
+        done
+        if [ -d "/run/user/$uid" ]; then
+            runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" pactl info \
+                > "$tmp/user-$u/pactl-info.txt" 2>&1 || true
+            runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" pactl list short sinks \
+                > "$tmp/user-$u/pactl-sinks.txt" 2>&1 || true
+            runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" pactl list short sources \
+                > "$tmp/user-$u/pactl-sources.txt" 2>&1 || true
+            runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" wpctl status \
+                > "$tmp/user-$u/wpctl-status.txt" 2>&1 || true
+            runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+                systemctl --user --no-pager --failed \
+                > "$tmp/user-$u/user-failed.txt" 2>&1 || true
+        fi
+    done
+
+    rm -rf "$dest/previous"
+    [ -d "$dest/current" ] && mv "$dest/current" "$dest/previous" 2>/dev/null
+    mv "$tmp" "$dest/current" 2>/dev/null || { rm -rf "$tmp"; return; }
+    rm -rf "$dest/previous"
+    sync
+}
+
+if [ "${PEAKD_LOG_ONCE:-0}" = "1" ]; then
+    snapshot
+    exit 0
+fi
+
+while :; do
+    snapshot
+    sleep 5
+done

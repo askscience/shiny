@@ -208,6 +208,76 @@ body.compose-active #hud-transcript {
 .compose-bubble-text td { border: 1px solid var(--glass-border); padding: 4px 8px; }
 .compose-bubble-text img { max-width: 100%; border-radius: 8px; }
 
+/* ── Terminal command approval ───────────────────────────────
+   Only what the choice needs: the command in a rounded block, with the three
+   small buttons underneath. No card, no heading. */
+.compose-approval {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0;
+  animation: composeBubbleIn 0.2s var(--ease-out);
+}
+
+.compose-approval-command {
+  display: block;
+  max-height: 96px;
+  overflow: auto;
+  padding: 6px 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: none;
+}
+
+.compose-approval-command::-webkit-scrollbar { display: none; }
+
+.compose-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* Compact peers: the default .ui-btn--sm is still a settings-sized control. */
+.compose-approval-actions .ui-btn {
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+/* Outcome is an icon only: a green circle-check for allowed, a red
+   circle-cross for denied/blocked/expired. The label lives in the tooltip.
+   The command itself stays at full contrast — it is history, not a disabled
+   control. */
+.compose-approval-status {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.compose-approval-status .ui-icon { width: 10px; height: 10px; }
+.compose-approval-status.is-allowed { color: var(--ok); }
+.compose-approval-status.is-denied { color: var(--error); }
+.compose-approval-status.is-expired { color: var(--muted); }
+
 /* ── Waiting bubbles: the wheel + one live line ──────────────
    The pending answer bubble uses the same widget as the image and song
    placeholders — the line next to the wheel is the agent's current step. */
