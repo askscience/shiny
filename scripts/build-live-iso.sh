@@ -14,10 +14,10 @@ OUTDIR=${PEAKD_ISO_OUT:-$BUILD/out}
 ISO_NAME=peakd-live-t2-amd64.iso
 LIVE_URL=${PEAKD_LIVE_URL:-https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.7.0-amd64-xfce.iso}
 T2_KVER=${T2_KVER:-$(uname -r)}
-PKG_VERSION=${PEAKD_VERSION:-0.1.0}
+PKG_VERSION=${PEAKD_VERSION:-0.1.1}
 DEB_BUILD=${PEAKD_DEB_BUILD:-$BUILD/deb}
-APT_REPO=${PEAKD_APT_DIR:-$HOME/peakd-apt}
 APT_KEYRING=${PEAKD_KEYRING:-$REPO/packaging/peakd-archive.gpg}
+APT_URL=https://askscience.github.io/shiny/apt
 
 TOOLS="$BUILD/tools"
 DEBS="$BUILD/debs"
@@ -188,12 +188,9 @@ seed_live_account() {
 }
 
 build_packages() {
-    log "building peakd deb and signed APT repo"
+    log "building the peakd deb"
     (cd "$REPO" && PEAKD_DEB_BUILD="$DEB_BUILD" PEAKD_KEYRING="$APT_KEYRING" \
         PEAKD_VERSION="$PKG_VERSION" ./scripts/build-deb.sh)
-    (cd "$REPO" && PEAKD_DEB_BUILD="$DEB_BUILD" PEAKD_APT_DIR="$APT_REPO" \
-        PEAKD_KEYRING="$APT_KEYRING" PEAKD_VERSION="$PKG_VERSION" \
-        ./scripts/build-apt-repo.sh)
 }
 
 stage_package() {
@@ -212,26 +209,69 @@ stage_package() {
     dpkg-deb -x "$deb" "$ROOTFS"
     dpkg-deb -x "$keydeb" "$ROOTFS"
 
-    install -d "$ROOTFS/opt/peakd/repo" "$ROOTFS/etc/apt/sources.list.d" \
-        "$ROOTFS/etc/apt/preferences.d" "$ROOTFS/var/lib/shiny" "$ROOTFS/var/log/shiny" \
+    install -d "$ROOTFS/etc/apt/sources.list.d" "$ROOTFS/var/lib/shiny" "$ROOTFS/var/log/shiny" \
         "$ROOTFS/usr/share/fonts/truetype"
-    cp -a "$APT_REPO/pool" "$APT_REPO/dists" "$ROOTFS/opt/peakd/repo/"
+    rm -rf "$ROOTFS/opt/peakd/repo" "$ROOTFS/etc/apt/preferences.d/90-peakd.pref"
     install -m 0644 "$APT_KEYRING" "$ROOTFS/usr/share/keyrings/peakd-archive.gpg"
-    cat > "$ROOTFS/etc/apt/sources.list.d/peakd.sources" <<'EOF'
+    cat > "$ROOTFS/etc/apt/sources.list.d/peakd.sources" <<EOF
 Types: deb
-URIs: file:///opt/peakd/repo
+URIs: $APT_URL/
 Suites: peakd
 Components: main
 Signed-By: /usr/share/keyrings/peakd-archive.gpg
 EOF
-    cat > "$ROOTFS/etc/apt/preferences.d/90-peakd.pref" <<'EOF'
-Package: peakd peakd-archive-keyring
-Pin: origin ""
-Pin-Priority: 1001
-EOF
     if [ -d /usr/share/fonts/truetype/roboto ]; then
         cp -a /usr/share/fonts/truetype/roboto "$ROOTFS/usr/share/fonts/truetype/"
     fi
+}
+
+dpkg_in_root() {
+    unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        /bin/sh -c "$1"
+}
+
+register_payload() {
+    log "registering peakd in the image dpkg database"
+    local reg="$ROOTFS/tmp/peakd-register"
+    local dlog="$BUILD/dpkg-register.log"
+    local pkg
+    rm -rf "$reg"
+    mkdir -p "$reg/first" "$reg/deps" "$reg/main"
+    for pkg in libqt6serialport6 libqt6webenginequick6 libqt6webchannelquick6 \
+        libqt6positioning6-plugins fonts-roboto-unhinted; do
+        local target="$reg/deps"
+        [ "$pkg" = libqt6serialport6 ] && target="$reg/first"
+        if ! compgen -G "$DEBS/${pkg}_*.deb" >/dev/null; then
+            (cd "$DEBS" && apt-get download "$pkg" >/dev/null 2>&1) \
+                || die "could not download $pkg"
+        fi
+        cp "$DEBS/${pkg}_"*.deb "$target/"
+    done
+    cp "$DEB_BUILD/out/peakd_${PKG_VERSION}_amd64.deb" \
+        "$DEB_BUILD/out/peakd-archive-keyring_${PKG_VERSION}_all.deb" "$reg/main/"
+
+    : >"$dlog"
+    dpkg_in_root 'dpkg -i /tmp/peakd-register/first/*.deb' >>"$dlog" 2>&1 || {
+        tail -30 "$dlog" >&2
+        die "could not register the peakd dependencies"
+    }
+    dpkg_in_root 'dpkg -i /tmp/peakd-register/deps/*.deb' >>"$dlog" 2>&1 || {
+        tail -30 "$dlog" >&2
+        die "could not register the peakd dependencies"
+    }
+    dpkg_in_root 'dpkg -i /tmp/peakd-register/main/*.deb' >>"$dlog" 2>&1 || {
+        tail -30 "$dlog" >&2
+        die "could not register peakd"
+    }
+    rm -rf "$reg"
+
+    local status
+    status=$(unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        dpkg-query -W -f='${Status}' peakd 2>/dev/null || true)
+    [ "$status" = "install ok installed" ] \
+        || die "peakd is not registered in the image (status: ${status:-missing})"
 }
 
 stage_qt() {
@@ -575,7 +615,7 @@ build_iso() {
   "base_url": "$LIVE_URL",
   "t2_kernel": "$T2_KVER",
   "package": "peakd $PKG_VERSION amd64",
-  "apt_repo": "$APT_REPO",
+  "apt_repo": "$APT_URL",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "note": "rootless UEFI remaster; package payload; real install engine enabled"
 }
@@ -598,6 +638,7 @@ stage_t2
 stage_overlay
 verify_audio_runtime
 remove_xfce
+register_payload
 build_t2_initrd
 assemble_boot
 build_iso

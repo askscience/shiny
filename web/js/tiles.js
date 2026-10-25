@@ -62,9 +62,10 @@ let overlay = null;
 let overlayBody = null;
 let overlayTitle = null;
 
-let pluginCatalog = new Map(); // name -> { description, surface, web_app }
+let pluginCatalog = new Map(); // name -> { description, surface, web_app, version }
 let surfaceModules = new Map(); // name -> plugin.js surface module
 const surfaceUrls = new Map(); // name -> the module's URL (for catalog reloads)
+const surfaceVersions = new Map(); // name -> manifest version the module was loaded for
 const surfaceLoads = new Map(); // name -> in-flight surface import
 
 // Switching the interface language reloads every mounted plugin's catalog, so
@@ -118,10 +119,25 @@ function ensureWebAppSurface(name) {
  * fifteen modules at boot.
  */
 async function ensureSurface(name) {
-  if (name === MAP_TILE_PLUGIN || surfaceModules.has(name)) return true;
-  if (surfaceLoads.has(name)) return surfaceLoads.get(name);
+  if (name === MAP_TILE_PLUGIN) return true;
   const meta = pluginCatalog.get(name);
-  if (!meta || (!meta.surface && !meta.web_app)) return false;
+  if (!meta || (!meta.surface && !meta.web_app)) {
+    // The plugin went away while its surface was loaded: drop the stale module.
+    surfaceModules.get(name)?.unmount?.();
+    surfaceModules.delete(name);
+    surfaceVersions.delete(name);
+    return false;
+  }
+  if (surfaceModules.has(name)) {
+    // Web apps keep their iframe until the window is closed on purpose.
+    if (meta.web_app || surfaceVersions.get(name) === meta.version) return true;
+    // A newer manifest is installed: drop the old module so the import below
+    // fetches the new one instead of reusing the ES module cache.
+    surfaceModules.get(name)?.unmount?.();
+    surfaceModules.delete(name);
+    surfaceVersions.delete(name);
+  }
+  if (surfaceLoads.has(name)) return surfaceLoads.get(name);
 
   const load = (async () => {
     if (meta.web_app) return ensureWebAppSurface(name);
@@ -130,9 +146,14 @@ async function ensureSurface(name) {
       // URL, and the app can be served through the filtering proxy (the
       // kiosk), where the module URL lives under `/p/…`.
       const moduleUrl = new URL(`../plugins/${name}/plugin.js`, import.meta.url);
+      // The version is part of the URL: a plugin update produces a distinct
+      // module specifier, so reopening its window loads the new code even
+      // though the page itself was never reloaded.
+      if (meta.version) moduleUrl.searchParams.set('v', meta.version);
       await loadPluginCatalog(moduleUrl);
       const mod = await import(moduleUrl.href);
       surfaceModules.set(name, mod.default || mod);
+      surfaceVersions.set(name, meta.version);
       surfaceUrls.set(name, moduleUrl);
       surfaceModules.get(name)?.wireEvents?.();
       return true;
@@ -221,11 +242,13 @@ async function refreshCatalog(force = false) {
   // get loaded — so a fresh sign-in never mounts plugin windows.
   const activeSet = await refreshActivePlugins({ force });
   const plugins = await refreshPluginCatalog({ force });
+  const previousCatalog = pluginCatalog;
   pluginCatalog = new Map(
     plugins.map((p) => [p.name, {
       description: p.description || p.summary || '',
       surface: !!p.surface,
       web_app: !!p.web_app,
+      version: p.version || '',
     }]),
   );
 
@@ -260,8 +283,26 @@ async function refreshCatalog(force = false) {
       // resurrect the stale frame).
       if (webApps.has(name)) forgetWebAppSurface(name);
       surfaceModules.delete(name);
+      surfaceVersions.delete(name);
       webApps.delete(name);
     }
+  }
+  // Native surfaces follow their manifest version. A window that is not on
+  // screen (another workspace, or hidden) is rebuilt in place right away; a
+  // visible window keeps running and loads the new module when it is closed
+  // and reopened, so nothing the user is looking at disappears underneath.
+  for (const [name, meta] of pluginCatalog) {
+    const before = previousCatalog.get(name);
+    if (!before || !meta.surface || meta.web_app) continue;
+    if (before.version === meta.version) continue;
+    if (!openWindows.has(name) || !surfaceModules.has(name)) continue;
+    const el = tileForPlugin(name);
+    if (el && !el.classList.contains('hidden')) continue;
+    if (surfaceBusy(name)) continue;
+    surfaceModules.get(name)?.unmount?.();
+    surfaceModules.delete(name);
+    surfaceVersions.delete(name);
+    await ensureSurface(name);
   }
   // A window only lives while its plugin is active and has a surface. A
   // deactivation (or an uninstalled plugin) takes its saved window with it.
@@ -469,8 +510,13 @@ export function closePluginWindow(name) {
       webApps.delete(name);
     } else {
       // Native surfaces tear their tile down; the module itself stays cached
-      // (ES modules are singletons), and mount() rebuilds the window.
+      // (ES modules are singletons) unless the manifest changed while the
+      // window was open — then the reopen must import the new code.
       surfaceModules.get(name)?.unmount?.();
+      if (surfaceVersions.get(name) !== pluginCatalog.get(name)?.version) {
+        surfaceModules.delete(name);
+        surfaceVersions.delete(name);
+      }
     }
   }
   // Take it out of the saved arrangement too (a no-op in fresh mode, where
@@ -883,6 +929,17 @@ function tileForPlugin(name) {
   return surfaceModules.get(name)?.getElement?.()
     || grid?.querySelector(`[data-plugin="${CSS.escape(name)}"]`)
     || null;
+}
+
+/** Whether a mounted plugin window is doing something the user can still hear
+ *  or watch. Those are never rebuilt by an update, even when off screen. */
+function surfaceBusy(name) {
+  const el = tileForPlugin(name);
+  if (!el) return false;
+  for (const media of el.querySelectorAll('audio, video')) {
+    if (!media.paused && !media.ended) return true;
+  }
+  return false;
 }
 
 /**

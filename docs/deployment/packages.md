@@ -55,6 +55,23 @@ sudo apt update
 sudo apt install peakd
 ```
 
+## Live image
+
+The live ISO ships the package payload as plain files and points apt at this
+repository; there is no bundled `pool` snapshot:
+
+```text
+/etc/apt/sources.list.d/peakd.sources
+  URIs: https://askscience.github.io/shiny/apt/
+  Suites: peakd
+  Signed-By: /usr/share/keyrings/peakd-archive.gpg
+```
+
+Boot does not need the network, and the installer copies the live rootfs to the
+target, so the same source is present after installation. The payload is
+registered in the image's dpkg database during the build, so `apt upgrade`
+tracks `peakd` from the first boot.
+
 ## Signing key
 
 The public key is committed as
