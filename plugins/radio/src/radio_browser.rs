@@ -11,9 +11,9 @@ use shiny_plugin_sdk::errors::AppError;
 /// Mirrors the public API host list (DNS round-robin for api.radio-browser.info).
 /// Tried in order — the first host that answers is used for the request.
 const API_HOSTS: &[&str] = &[
+    "https://all.api.radio-browser.info",
     "https://de1.api.radio-browser.info",
     "https://de2.api.radio-browser.info",
-    "https://fi1.api.radio-browser.info",
 ];
 
 #[derive(Clone)]

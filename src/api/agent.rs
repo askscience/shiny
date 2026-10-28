@@ -168,6 +168,11 @@ enum AgentStreamEvent {
         action: String,
         command: String,
     },
+    /// A tool's artifact, saved and streamed while the turn is still running.
+    /// The UI ingests it immediately, so a plugin window opened by this card
+    /// exists for the rest of the turn (the Browser's AI tab control depends
+    /// on it).
+    Artifact { data: serde_json::Value },
     Done { data: AgentResponse },
     Error { message: String },
 }
@@ -890,6 +895,7 @@ pub async fn handle_agent(
         cancel.clone(),
         |_, _| {},
         |_| {},
+        |_| {},
     )
     .await?;
 
@@ -1135,6 +1141,7 @@ pub async fn handle_agent_stream(
         let emit_step = emit.clone();
         let emit_thinking = emit.clone();
         let emit_approval = emit.clone();
+        let emit_artifact = emit.clone();
 
         // The chat's allow/deny prompt is a mid-turn round trip: the gate emits
         // an `approval` event over this same stream and parks until
@@ -1171,6 +1178,7 @@ pub async fn handle_agent_stream(
             |msg| emit_thinking(AgentStreamEvent::Thinking {
                 message: msg.to_string(),
             }),
+            |data| emit_artifact(AgentStreamEvent::Artifact { data }),
         )
         .await
         {

@@ -8,6 +8,7 @@ privileged `shiny-auth` helper, and every session is a real logind session.
 
 Source: [`scripts/install-kiosk-greeter.sh`](../../scripts/install-kiosk-greeter.sh),
 [`scripts/shiny-greeter`](../../scripts/shiny-greeter),
+[`scripts/shiny-greeter-start`](../../scripts/shiny-greeter-start),
 [`scripts/shiny-session`](../../scripts/shiny-session),
 [`scripts/shiny-seat-stop.sh`](../../scripts/shiny-seat-stop.sh),
 [`scripts/shiny-wait-drm.sh`](../../scripts/shiny-wait-drm.sh),
@@ -22,10 +23,11 @@ Source: [`scripts/install-kiosk-greeter.sh`](../../scripts/install-kiosk-greeter
 ```
 boot ─▶ multi-user.target
         └─ shiny-greeter.service            User=shiny-greeter, PAMName=login, vt1
-             └─ /usr/local/bin/shiny-greeter
-                  ├─ shiny server           SHINY_GREETER=1, 127.0.0.1:8079, no plugins
-                  ├─ matchbox + xset + peakd --url http://127.0.0.1:8079
-                  └─ restart peakd (and the server) if either dies
+             └─ /usr/local/bin/shiny-greeter-start
+                  └─ xinit /usr/local/bin/shiny-greeter
+                       ├─ shiny server      SHINY_GREETER=1, 127.0.0.1:8079, no plugins
+                       ├─ matchbox + xset + peakd --url http://127.0.0.1:8079
+                       └─ restart peakd (and the server) if either dies
 
 login screen → POST /api/auth/login {user, password}
    └─ shiny-auth socket, op `login-session`        (root)
@@ -71,7 +73,15 @@ sign out (Alt+Q, or Log out → `peakd:logout`, exit 43)
 Both run `ExecStartPre=-/usr/bin/timeout 20 /usr/local/bin/shiny-wait-drm.sh`
 (the T2 dual-GPU race guard, bounded and failure-tolerant — it must never be
 what stops the seat) and `ExecStopPost=+/usr/local/bin/shiny-seat-stop.sh
-<role>` (root), which decides what comes next:
+<role>` (root), which decides what comes next.
+
+The greeter starts `/usr/local/bin/shiny-greeter-start`, a small `xinit`
+wrapper. A successful handover stops `shiny-greeter.service`, so Xorg shuts
+down and `xinit` exits 1; the wrapper checks `/run/shiny/handover` and returns 0
+in that case. Without it systemd records `status=1/FAILURE`, runs
+`OnFailure=shiny-greeter-fallback.service` and leaves the boot marked degraded
+even though the login succeeded. A real X failure still returns `xinit`'s
+status and is retried by `Restart=on-failure`.
 
 - greeter stopped **with** `/run/shiny/handover` present → a kiosk is taking
   over, do nothing.
@@ -135,7 +145,7 @@ out for unusual setups.
 |---|---|---|
 | `/run/shiny/handover` | `shiny-auth` on a successful `login-session` | Tells the greeter's stop script this stop is a handover. Cleared when the kiosk session ends. |
 | `/var/lib/shiny-greeter/.local/share/shiny/shiny.db` | greeter server | The greeter's own (account-free) database. |
-| `$HOME/.local/share/shiny/peakd/` | `peakd` in the session | Per-user QtWebEngine profile (cookies, localStorage, cache). |
+| `$HOME/.local/share/shiny/peakd/` | `peakd` in the session or greeter | QtWebEngine profile (cookies, localStorage, cache); the greeter gets its own under the system account's home. |
 | `$XDG_RUNTIME_DIR/shiny-session-token` | session server | Loopback boot token, single-use, re-read before every launch. |
 | `$XDG_RUNTIME_DIR/shiny-remote.state` | session server | `on`/`off`: server-mode window instead of the kiosk. |
 
@@ -145,6 +155,8 @@ out for unusual setups.
 |---|---|---|---|
 | `SHINY_GREETER` | `false` | server | Greeter mode: login starts a session instead of issuing a cookie. |
 | `SHINY_GREETER_PORT` | `8079` | greeter launcher | Port the greeter's server listens on (loopback). |
+| `PEAKD_DATA_DIR` | `$HOME/.local/share/shiny/peakd` | greeter launcher | QtWebEngine profile for the login screen. It must live in the greeter's own home: the repo's `data/peakd` belongs to the desktop user and QtWebEngine cannot write it. |
+| `PEAKD_UI_SCALE` | `1.5` (greeter) | greeter launcher | Login-card scale. The internal panel is 3072×1920 but Xorg reports 96 DPI, so the automatic scale is unreadable. |
 | `SHINY_LOGIN_SELF_ONLY` | = `SHINY_LINUX_USERS` | server | Refuse PAM logins for accounts other than the server's own uid. |
 | `SHINY_AUTH_KIOSK_UNIT` | `shiny-kiosk@%s.service` | helper | Unit the `login-session` op starts (`%s` = verified account). |
 | `SHINY_AUTH_SYSTEMCTL` | `/usr/bin/systemctl` | helper | systemctl path (tests/overrides). |

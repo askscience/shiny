@@ -5,7 +5,7 @@ and the plugin mounts a `section.tile.browser-tile` inside it. The chrome is
 HTML; the **page** is a web view **item in the shell's own scene**
 (`crates/peakd`), driven from here over `window.ipc`. The one thing rendered
 locally is the home surface: a sandboxed `srcdoc` iframe holding the
-related-news shelf.
+bookmarks grid (favicon + name) and the related-news shelf.
 
 Imports from core:
 
@@ -15,6 +15,7 @@ import { copyText, readClipboardText } from '../../js/clipboard.js';
 import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
+import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
 ```
@@ -70,7 +71,7 @@ Attaches, once:
 | `artifact:saved` (on `window`) | `onArtifactSaved` — an AI-created `browser_page` artifact navigates the active tab |
 | `url:open` (via core `onOpenUrl`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
 | `clipboard:paste` (on `window`) | `onClipboardPaste` — a pick in the top-bar Clipboard menu pastes into the focused page (see Clipboard below) |
-| `message` (on `window`) | `onFrameMessage` — the sandboxed home shelf's `browser:open-card` / `browser:refresh-news` |
+| `message` (on `window`) | `onFrameMessage` — the home surface's `browser:open-card` / `browser:open-bookmark` / `browser:refresh-news` |
 | `theme:change` | `pushSettings` — keeps pages' `prefers-color-scheme` in step with the app theme |
 
 Note `window.__peakdViewEvent` is defined at **module scope**, not inside
@@ -135,8 +136,14 @@ re-pushes (and reloads the open page) when that save lands.
 - The toolbar controls are **core components** (`iconButton`, `searchBar`,
   `icon`); `plugin.css` only arranges them. Back/forward share `ui/arrow-left`
   and forward is mirrored in CSS (`browser-nav--forward`).
-- The home shelf is a sandboxed iframe: `sandbox="allow-scripts"` with
-  `referrerpolicy="no-referrer"`, `srcdoc` set to `homeDocument(news)`.
+- The home surface is a sandboxed iframe: `sandbox="allow-scripts"` with
+  `referrerpolicy="no-referrer"`, `srcdoc` set to
+  `homeDocument(news, bookmarks)`. Its inline click handler is allowlisted by
+  an exact CSP hash (`web/js/tests/cspHomeShelfHash.test.mjs`).
+- The bookmarks grid shows each saved page as a favicon tile with the name
+  underneath (the site's own `/favicon.ico`, letter fallback). A grid card
+  posts `browser:open-bookmark`, and both the grid and the bookmarks popover
+  open the URL in a new tab.
 
 ## Custom events and globals
 
@@ -146,7 +153,7 @@ re-pushes (and reloads the open page) when that save lands.
 |---|---|---|
 | `artifact:saved` | core artifact store | `onArtifactSaved` navigates to `art.narrative` (falls back to `payload.url`/`params.url`/`title`) for `artifact_type === 'browser_page'` |
 | `url:open` | core link router (`web/js/linkRouter.js`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
-| `message` | sandboxed home shelf | `browser:open-card` → `news/click` POST + navigate; `browser:refresh-news` → reload the shelf |
+| `message` | sandboxed home surface | `browser:open-card` → `news/click` POST + navigate; `browser:open-bookmark` → open in a new tab; `browser:refresh-news` → reload the shelf |
 | `theme:change` | core theme | `pushSettings()` |
 | `settings:change` | core Settings window (browser section) | `onSettingsChanged` — re-fetches `/api/browser/settings`, re-pushes to the shell, and reloads the active page when `adblock` changed |
 | `resize`, `desktop:changed`, `overlay:open`, `fullscreen:change`, `menu:change` | core | `requestSync()` for native-view bounds/mask |
@@ -155,7 +162,7 @@ re-pushes (and reloads the open page) when that save lands.
 
 | Global | Payload | Purpose |
 |---|---|---|
-| `window.__peakdViewEvent(event)` | `{ id, type, ... }` | Per-tab `title`, `url`, `load` (`phase: started/finished`), `new-window`, `context-menu` (`menu` = `{x,y,linkUrl,editable,selection}`); and non-tab `download` events (`applyDownload`) |
+| `window.__peakdViewEvent(event)` | `{ id, type, ... }` | Per-tab `title`, `url`, `load` (`phase: started/finished`), `new-window`, `context-menu` (`menu` = `{x,y,linkUrl,editable,selection}`), `page-js` (`token`, `result` — the answer to `runJs`); and non-tab `download` events (`applyDownload`) |
 | `window.__peakdShield(state)` | `{ enabled, blocked, rules }` | Updates the shield button title / `browserSettings` |
 | `window.__peakdDownloads(list)` | `Download[]` | Replaces the live downloads list (answer to `peakd:downloads:list`) |
 
@@ -185,7 +192,9 @@ re-pushes (and reloads the open page) when that save lands.
 `open` (`url`, `rect`, `visible`, `incognito`), `navigate`, `setBounds`,
 `setVisible`, `setMask` (`holes`), `back`, `forward`, `reload`, `close`,
 `focus`, `paste` (`text`), `action` (`verb` — one engine action on the page's
-focused element: `Cut` / `Copy` / `Paste` / `SelectAll`).
+focused element: `Cut` / `Copy` / `Paste` / `SelectAll`), and `runJs` (`token`,
+`script` — evaluate a script in the page and answer with a `page-js` view event
+carrying the same token and the result).
 
 ## API calls (`apiFetch`)
 
@@ -231,11 +240,16 @@ to drop it (that was the old white flash). The window therefore:
 - hides it (`setVisible: false`) only for the states the app draws over
   everything: a `.hidden` tile (a workspace switch), `overview-active`,
   `launcher-active`;
-- computes `occluderHoles()` (open `.ctx-menu`, `.ui-hud-menu-popup`,
-  `.ui-modal`, notifications/toasts, this window's own popovers, and any higher
-  tile in the "Windows" layout) and sends `setMask`: the shell cuts the page
-  there and lets the presses through to the app, so a menu or a higher window
-  stays usable while the page keeps rendering everywhere else;
+- computes `occluderHoles()` and sends `setMask`: the shell cuts the page there
+  and lets the presses through to the app, so an overlay stays usable while the
+  page keeps rendering everywhere else. Core chrome comes from
+  `nativeOccluderHoles()` in `web/js/nativeOccluders.js` — the chat panel,
+  top/workspace bar, virtual keyboard, navigation HUD, travel panel, tile
+  overlay, and the shared menus/modals/sheets/floating
+  windows/toasts/notifications. Persistent non-modal chrome such as the voice
+  bar stays out on purpose: a hole disables page input, so only surfaces the
+  user is actively working in may take the page's pointer. This window adds its
+  own popovers and any higher tile in the "Windows" layout;
 - re-sends the mask on the way back from a hide, because a stale hole would
   otherwise clip the page once it moves.
 
@@ -247,8 +261,9 @@ exactly like a background tab in a normal browser. Idle hidden pages are still
 frozen (see `kPageQml` in `crates/peakd/shim/peakd.cpp`).
 
 `requestSync()` coalesces bursts into one sync per animation frame;
-`startBoundsSync()` adds a 250 ms fallback interval, a `ResizeObserver` on the
-frame wrapper, `MutationObserver`s on the tile grid and body class, and the
+`startBoundsSync()` adds a 1 s fallback interval, a `ResizeObserver` on the
+frame wrapper, `MutationObserver`s on the tile grid and body class, the core
+occluder watcher (which catches a panel's delayed `.hidden` class), and the
 window events listed above. `stopBoundsSync()` tears them all down.
 
 ## Right-click inside a page
@@ -300,8 +315,9 @@ menu.
 and asserts: mount/exports, the toolbar controls, settings push, one sandboxed
 home tab with news, navigation POST + `peakd:view: open`, `setBounds`/`setMask`,
 the shield (state + `peakd:filter:` + persistence), incognito tabs, downloads
-events + badge + panel mask hole, drag hide/restore, tab close, AI
-`artifact:saved` navigation, and the clipboard contract (context-menu entries,
+events + badge + panel mask hole, a core occluder (the chat-panel case) punching
+and clearing its hole, drag hide/restore, tab close, AI `artifact:saved`
+navigation, and the clipboard contract (context-menu entries,
 `clipboard:paste` → `peakd:view: paste`, picks for other windows ignored).
 
 ```bash
@@ -311,5 +327,6 @@ node --experimental-vm-modules plugins/browser/web/plugin.smoke.mjs
 ## Cross-references
 
 - [`README.md`](README.md) · [`architecture.md`](architecture.md) · [`tools.md`](tools.md) · [`routes.md`](routes.md)
+- [`../../../web/js/nativeOccluders.js`](../../../web/js/nativeOccluders.js) — the core surfaces that punch through a page.
 - [`../../../crates/peakd/src/browse.rs`](../../../crates/peakd/src/browse.rs) — the IPC contract.
 - [`../../../docs/core/desktop.md`](../../../docs/core/desktop.md) — tile/window host.

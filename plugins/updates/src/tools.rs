@@ -291,7 +291,16 @@ impl Tool for UpdatesApplyTool {
                 ok = ops::system_job(&job, manager.as_ref(), password.as_deref(), all, &pkgs);
             }
             if include_ollama {
-                ok = ops::ollama_job(&job, password.as_deref()) && ok;
+                if ok {
+                    ok = ops::ollama_job(&job, password.as_deref());
+                } else {
+                    job.log(
+                        "Skipping the Ollama update because the system upgrade failed. \
+                         Fix the package state first; replacing Ollama's GPU libraries \
+                         on top of a broken dpkg is unsafe.",
+                    );
+                    ok = false;
+                }
             }
             job.finish(ok, None);
         });

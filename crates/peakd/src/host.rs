@@ -52,6 +52,10 @@ impl ViewHost for QtHost {
         shim::view_action(id, verb);
     }
 
+    fn run_js(&mut self, id: &str, token: &str, script: &str) {
+        shim::view_run_js(id, token, script);
+    }
+
     fn close(&mut self, id: &str) {
         shim::view_close(id);
     }

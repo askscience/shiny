@@ -132,6 +132,14 @@ pub enum Command {
         id: String,
         verb: String,
     },
+    /// Evaluate a script in the page and report the result back to the app as
+    /// a `page-js` view event. The token ties the answer to the request (the
+    /// page reads the rendered document for the AI's read/click tools).
+    RunJs {
+        id: String,
+        token: String,
+        script: String,
+    },
 }
 
 impl Command {
@@ -192,6 +200,11 @@ impl Command {
                 id,
                 verb: value.get("verb")?.as_str()?.to_string(),
             },
+            "runJs" => Self::RunJs {
+                id,
+                token: value.get("token")?.as_str()?.to_string(),
+                script: value.get("script")?.as_str()?.to_string(),
+            },
             _ => return None,
         })
     }
@@ -249,6 +262,18 @@ impl ViewBus {
                 "type": "context-menu",
                 "menu": serde_json::from_str::<Value>(payload).unwrap_or(Value::Null),
             }),
+            // A page-script answer: `payload` is `{token, result}` as JSON.
+            // Merge it under the event envelope so the plugin sees one object.
+            "page-js" => {
+                let parsed = serde_json::from_str::<Value>(payload).unwrap_or(Value::Null);
+                let mut event = match parsed {
+                    Value::Object(map) => map,
+                    _ => serde_json::Map::new(),
+                };
+                event.insert("id".into(), json!(id));
+                event.insert("type".into(), json!("page-js"));
+                Value::Object(event)
+            }
             other => json!({ "id": id, "type": other, "payload": payload }),
         }
     }
@@ -274,6 +299,7 @@ pub trait ViewHost {
     fn focus(&mut self, id: &str);
     fn paste(&mut self, id: &str, text: &str);
     fn action(&mut self, id: &str, verb: &str);
+    fn run_js(&mut self, id: &str, token: &str, script: &str);
     fn close(&mut self, id: &str);
 }
 
@@ -384,6 +410,11 @@ impl<H: ViewHost> Views<H> {
                     self.host.action(&id, &verb);
                 }
             }
+            Command::RunJs { id, token, script } => {
+                if self.live.contains(&id) {
+                    self.host.run_js(&id, &token, &script);
+                }
+            }
         }
     }
 }
@@ -492,6 +523,9 @@ mod tests {
         fn action(&mut self, id: &str, verb: &str) {
             self.calls.push(format!("action {id} {verb}"));
         }
+        fn run_js(&mut self, id: &str, token: &str, script: &str) {
+            self.calls.push(format!("runJs {id} {token} {script}"));
+        }
         fn close(&mut self, id: &str) {
             self.calls.push(format!("close {id}"));
         }
@@ -557,6 +591,31 @@ mod tests {
             }
             other => panic!("wrong command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_a_run_js_command() {
+        let value: Value = serde_json::from_str(
+            r#"{"op":"runJs","id":"t1","token":"agent-1","script":"1+1"}"#,
+        )
+        .unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::RunJs { id, token, script } => {
+                assert_eq!(id, "t1");
+                assert_eq!(token, "agent-1");
+                assert_eq!(script, "1+1");
+            }
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_page_js_event_merges_its_token_and_result() {
+        let event = ViewBus::view_event("t1", "page-js", r#"{"token":"agent-1","result":"{\"ok\":true}"}"#);
+        assert_eq!(event["type"], "page-js");
+        assert_eq!(event["id"], "t1");
+        assert_eq!(event["token"], "agent-1");
+        assert_eq!(event["result"], "{\"ok\":true}");
     }
 
     #[test]

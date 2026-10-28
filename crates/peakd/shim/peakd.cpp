@@ -598,7 +598,7 @@ Item {
         var view = shell.pageItem(id);
         if (!view) return;
         view.runJavaScript(script, function (result) {
-            shell.pageJsResult(token, result === undefined ? "" : String(result));
+            shell.pageJsResult(id, token, result === undefined ? "" : String(result));
         });
     }
 
@@ -897,10 +897,24 @@ public:
                      detail.toUtf8().constData());
     }
 
-    /// The selection a page reported for a Ctrl+C made inside it.
-    Q_INVOKABLE void pageJsResult(const QString &, const QString &text) {
-        if (!g_clipboard_cb || text.isEmpty()) return;
-        g_clipboard_cb(g_cb_userdata, "copy", text.toUtf8().constData());
+    /// A page-script result.
+    ///
+    /// The clipboard filter uses the token `copy` and reports the selection to
+    /// the shared clipboard history; every other token is an AI-bridge request
+    /// and travels back to the app as a `page-js` view event.
+    Q_INVOKABLE void pageJsResult(const QString &id, const QString &token,
+                                  const QString &text) {
+        if (token == QLatin1String("copy")) {
+            if (!g_clipboard_cb || text.isEmpty()) return;
+            g_clipboard_cb(g_cb_userdata, "copy", text.toUtf8().constData());
+            return;
+        }
+        const QJsonObject result{
+            {QStringLiteral("token"), token},
+            {QStringLiteral("result"), text},
+        };
+        emit_view(id, "page-js",
+                  QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact)));
     }
 
     /// Results of `runJs`: id 1 is the benchmark, negative ids are the debug
@@ -1477,6 +1491,18 @@ void peakd_qt_view_action(const char *id, const char *verb) {
     QMetaObject::invokeMethod(g_ctx->scene_root, "pageAction",
                               Q_ARG(QVariant, QString::fromUtf8(id)),
                               Q_ARG(QVariant, QString::fromUtf8(verb)));
+}
+
+// Evaluate a script inside one page view. The QML side runs it and reports the
+// result through `pageJsResult`; the app's Browser window uses this for the
+// AI's read/click tools.
+void peakd_qt_view_run_js(const char *id, const char *token, const char *script) {
+    if (!g_ctx || !id || !token || !script) return;
+    if (!g_ctx->children.contains(QString::fromUtf8(id))) return;
+    QMetaObject::invokeMethod(g_ctx->scene_root, "pageJs",
+                              Q_ARG(QVariant, QString::fromUtf8(id)),
+                              Q_ARG(QVariant, QString::fromUtf8(token)),
+                              Q_ARG(QVariant, QString::fromUtf8(script)));
 }
 
 void peakd_qt_view_close(const char *id) {

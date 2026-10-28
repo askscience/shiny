@@ -80,6 +80,7 @@ JSON response (`AgentResponse`):
 ```jsonc
 { "type": "step", "message": "Searching the web…", "key": "step.searchingWeb", "action": "web_search" }
 { "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
+{ "type": "artifact", "data": { /* saved, plugin-tagged artifact */ } }
 { "type": "approval", "request_id": "<uuid>", "action": "terminal_exec", "command": "rm -rf ./build" }
 { "type": "done", "data": { /* the full AgentResponse */ } }
 { "type": "error", "message": "…" }
@@ -99,6 +100,12 @@ returns; `AgentResponse.thinking` holds the turn's full trace (saved with the
 reply, so the chat can fold it under the answer again later).
 
 No thinking model — or thinking off — means no `thinking` events.
+
+`artifact` is emitted as soon as a tool's artifact has been saved, before the
+turn ends. The client adopts the payload without saving it again, so a window
+the tool just opened exists for the next tool call in the same turn (the
+Browser's AI tab control relies on this). The final `done.artifacts` still
+carries every card.
 
 `approval` means the turn is **parked**: it is waiting for the user to allow or
 deny a `terminal_exec` command. Answer it with `POST /api/agent/approve` (below).

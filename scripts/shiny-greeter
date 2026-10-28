@@ -40,6 +40,18 @@ export PLUGINS_DIR="$HOME/.local/share/shiny/plugins"
 export WEB_DIR="$SHINY_REPO/web"
 export RUST_LOG=info
 
+# peakd's QtWebEngine profile (cookies, local storage, cache) must live in the
+# greeter's own home. Without this it falls back to <repo>/data/peakd, which is
+# owned by the desktop user and is not writable by shiny-greeter — QtWebEngine
+# then logs FILE_ERROR_ACCESS_DENIED and runs with a broken profile.
+export PEAKD_DATA_DIR="${PEAKD_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/peakd}"
+mkdir -p "$PEAKD_DATA_DIR"
+export PEAKD_APP_ORIGIN="http://127.0.0.1:$PORT"
+# The internal panel is 3072x1920, but Xorg reports 96 DPI, so peakd's automatic
+# scale comes out at 100% and the login card is unreadably small. Use the same
+# 150% the desktop session uses (the account's saved display choice).
+export PEAKD_UI_SCALE="${PEAKD_UI_SCALE:-1.5}"
+
 # The greeter *is* the login: it lists Linux accounts and verifies passwords
 # through the privileged helper. In this mode the login endpoint starts a
 # session instead of issuing a cookie (see src/api/auth.rs).
@@ -63,6 +75,11 @@ server=""
 # for a home created with a restrictive umask — makes every one of these fail
 # with a bare "Permission denied" and no window at all. Say so plainly instead.
 preflight() {
+    if [ ! -d "$PEAKD_DATA_DIR" ] || [ ! -w "$PEAKD_DATA_DIR" ]; then
+        echo "shiny-greeter: $PEAKD_DATA_DIR is not writable by $(id -un)." >&2
+        echo "shiny-greeter: QtWebEngine cannot start without a writable profile." >&2
+        exit 1
+    fi
     missing=""
     for path in "$SHINY_BIN" "$PEAKD_BIN"; do
         [ -x "$path" ] && [ -r "$path" ] || missing="$missing $path"

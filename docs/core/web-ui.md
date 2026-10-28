@@ -58,6 +58,7 @@ The shell is split by concern. Grouped:
 | `linkRouter.js` | Kiosk link routing: sends external link clicks to the chosen link-handler plugin (see below). |
 | `menuState.js` | Shared menu state helpers. |
 | `menuFactory.js` | The shared HUD-popup lifecycle (build once, open/close, outside click, Escape, placement). |
+| `nativeOccluders.js` | Core HTML that must stay above a native page: the occluder registry, `setMask` rects and the visibility watcher (see [desktop.md](desktop.md#native-pages-and-masks)). |
 | `hudStream.js` | Shared SSE + poll fallback for the top-bar chips. Pauses while the page is hidden and during an agent turn, so the four HUD streams do not exhaust Chromium's six HTTP/1.1 connections when the chat and a terminal window need one. |
 | `officeMenu.js` | Shared document-menu footer and date label for Calc/Impress/Word/PDF. |
 

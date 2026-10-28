@@ -126,6 +126,13 @@ pub enum Command {
     Focus {
         id: String,
     },
+    /// Evaluate a script in the page and report the answer as a `page-js`
+    /// event (the AI's read/click tools).
+    RunJs {
+        id: String,
+        token: String,
+        script: String,
+    },
 }
 
 impl Command {
@@ -160,6 +167,11 @@ impl Command {
             "reload" => Self::Reload { id },
             "close" => Self::Close { id },
             "focus" => Self::Focus { id },
+            "runJs" => Self::RunJs {
+                id,
+                token: value.get("token")?.as_str()?.to_string(),
+                script: value.get("script")?.as_str()?.to_string(),
+            },
             _ => return None,
         })
     }
@@ -300,6 +312,33 @@ impl Views {
             Command::Focus { id } => {
                 if let Some(view) = self.live.get(&id) {
                     let _ = view.focus();
+                }
+            }
+            Command::RunJs { id, token, script } => {
+                if let Some(view) = self.live.get(&id) {
+                    let bus = self.bus.clone();
+                    let event_id = id.clone();
+                    let event_token = token.clone();
+                    if let Err(err) = view.evaluate_script_with_callback(&script, move |value| {
+                        // wry serializes the JS result as JSON. Our scripts
+                        // return a JSON string, so unwrap that one layer before
+                        // handing it to the plugin (which parses it again).
+                        let result = serde_json::from_str::<Value>(&value)
+                            .ok()
+                            .map(|parsed| match parsed {
+                                Value::String(text) => text,
+                                other => other.to_string(),
+                            })
+                            .unwrap_or(value);
+                        bus.push_event(json!({
+                            "id": event_id,
+                            "type": "page-js",
+                            "token": event_token,
+                            "result": result,
+                        }));
+                    }) {
+                        tracing::debug!("peakd: could not run a page script: {err}");
+                    }
                 }
             }
         }
@@ -446,6 +485,22 @@ mod tests {
                 assert_eq!(url, "https://example.com/");
                 assert!(visible);
                 assert_eq!(rect.unwrap().w, 3.0);
+            }
+            other => panic!("wrong command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_a_run_js_command() {
+        let value: Value = serde_json::from_str(
+            r#"{"op":"runJs","id":"t1","token":"agent-1","script":"1+1"}"#,
+        )
+        .unwrap();
+        match Command::parse(&value).unwrap() {
+            Command::RunJs { id, token, script } => {
+                assert_eq!(id, "t1");
+                assert_eq!(token, "agent-1");
+                assert_eq!(script, "1+1");
             }
             other => panic!("wrong command: {other:?}"),
         }

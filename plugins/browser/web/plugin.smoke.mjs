@@ -267,6 +267,11 @@ const onOpenUrl = (plugin, handler) => { linkHandlers[plugin] = handler; };
 const openedMenus = [];
 const openContextMenu = (entries, x, y) => { openedMenus.push({ entries, x, y }); };
 
+/** Core chrome holes the real `nativeOccluders.js` would return. */
+let coreOccluderHoles = [];
+const nativeOccluderHoles = () => coreOccluderHoles.slice();
+const watchNativeOccluders = () => () => {};
+
 function findAll(root, predicate, out = []) {
   if (predicate(root)) out.push(root);
   for (const kid of root.children || []) findAll(kid, predicate, out);
@@ -294,6 +299,8 @@ const context = vm.createContext({
   openCoreWindow: () => {},
   copyText, readClipboardText,
   openContextMenu,
+  nativeOccluderHoles,
+  watchNativeOccluders,
   // The i18n runtime: resolve to the inline English fallback, as the catalog does.
   t: (key, params, fallback) => fallback ?? key,
   tp: (key, count, params, fallback) => fallback ?? key,
@@ -381,6 +388,25 @@ check('the address bar reflects the navigation', addressForm.input.value === 'ht
 check('the native view is told its bounds', !!lastView('setBounds'), JSON.stringify(lastView('setBounds')));
 check(
   'the native view starts with an empty mask',
+  lastView('setMask')?.holes?.length === 0,
+  JSON.stringify(lastView('setMask')),
+);
+
+/* Core chrome — the chat panel is the reported case — must punch through the
+   page too. The real helper computes these; here we inject one. */
+coreOccluderHoles = [{ x: 0, y: 0, w: 120, h: 120, dpr: 1 }];
+for (const fn of windowListeners.resize || []) fn();
+await tick(30);
+check(
+  'a core overlay punches a hole in the native page',
+  lastView('setMask')?.holes?.some((h) => h.w === 120 && h.h === 120),
+  JSON.stringify(lastView('setMask')),
+);
+coreOccluderHoles = [];
+for (const fn of windowListeners.resize || []) fn();
+await tick(30);
+check(
+  'clearing the core overlay clears its hole',
   lastView('setMask')?.holes?.length === 0,
   JSON.stringify(lastView('setMask')),
 );

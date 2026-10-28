@@ -84,7 +84,7 @@ pub async fn handle_agent_dispatch(
 | Mode | Handler | Transport |
 |---|---|---|
 | `stream: false` / omitted | `handle_agent` | One `application/json` response. |
-| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events, an `approval` event when a terminal command needs consent, then `done`/`error`. |
+| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events, an `artifact` event for each tool artifact saved mid-turn, an `approval` event when a terminal command needs consent, then `done`/`error`. |
 
 The frontend always sets `stream: true` (`web/js/agent.js`) and parses the SSE
 stream itself; the transport modes are the two rows above.
@@ -396,7 +396,9 @@ Key behaviours:
 - A prompt over 200 000 characters logs a warning but still proceeds ("slim
   context" is a debugging aid, not a hard cap).
 - `on_step` is the callback that powers SSE `step` events and the dock status
-  line; `on_thinking` carries the reasoning trace blocks (SSE `thinking`
+  line; `on_artifact` receives each saved, owner-tagged artifact for the SSE
+  `artifact` event (the client adopts it and surfaces its window immediately);
+  `on_thinking` carries the reasoning trace blocks (SSE `thinking`
   events) of each model call when thinking is on.
 
 ### 4.2 The cancellation-aware model call
@@ -499,17 +501,21 @@ For each `ActionOutcome` the runner:
    (`Failed to autosave artifact`) and never fail the turn.
 5. **Tags the response payload** — each artifact value gets a `"plugin"` key
    so the UI can group surfaces by plugin without refetching.
-6. **Builds the LLM note** with `describe_tool_step`.
-7. **Injects plugin skills** — the first time a plugin's tool is used in a run
+6. **Streams the artifact mid-turn** — `on_artifact` emits the same tagged value
+   as an SSE `artifact` event. The UI adopts it (no second save) and renders its
+   window, so a plugin window a tool just opened exists before the next tool
+   call in the same turn. The final `done.artifacts` still carries every card.
+7. **Builds the LLM note** with `describe_tool_step`.
+8. **Injects plugin skills** — the first time a plugin's tool is used in a run
    (`injected_skills`), its `skills_for(owner)` docs are appended to the step
    note so the model "remembers" the plugin's tools in the slim continuation
    prompt. This is why a `calc_create` can be followed by a `calc_write` that
    actually fills the sheet.
-8. **Injects activation skills** — after a successful `plugin_activate` that
+9. **Injects activation skills** — after a successful `plugin_activate` that
    was not already active, the plugin's skills are appended so its tools are
    usable immediately in the same conversation.
-9. **Pushes the note** into `completed_steps` and emits the short human "done"
-   line with `ui_done_label`.
+10. **Pushes the note** into `completed_steps` and emits the short human "done"
+    line with `ui_done_label`.
 
 ```rust
 let mut note = describe_tool_step(&outcome.action, &outcome.result, &outcome.data);

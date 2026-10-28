@@ -77,6 +77,27 @@ KVER=$(uname -r)
 KDIR=/lib/modules/$KVER/build
 [ -d "$KDIR" ] || { echo "error: kernel headers for $KVER not found" >&2; exit 1; }
 
+# ── Refuse to override the 0.04+ driver rewrite ─────────────────────────────
+# 0.04 replaced the old hrtimer playback path this patch was written for
+# (t2audio_pcm_io_work/DMA streams instead of t2audio_playback_timer). Overriding
+# it with this 0.02-derived module is both unwise and, because DKMS compares
+# MODULE_VERSION, breaks every later kernel postinst with:
+#   Error! Module version 0.02 ... is not newer than ... (0.04)
+# The fix is obsolete there; let the in-tree driver win.
+STOCK_MOD=$(find "/lib/modules/$KVER/kernel/drivers/staging/t2bce" \
+    -name 't2bce_audio.ko*' -print -quit 2>/dev/null || true)
+STOCK_VER=$(modinfo -F version "$STOCK_MOD" 2>/dev/null || true)
+case "$STOCK_VER" in
+    ""|0.0|0.00|0.01|0.02|0.03|0.0[0-3].*)
+        ;;
+    *)
+        echo "error: in-tree t2bce_audio is $STOCK_VER; this period patch targets" >&2
+        echo "       the pre-0.04 driver and must not override the newer rewrite." >&2
+        echo "       See scripts/t2-audio/period-fix/README.md." >&2
+        exit 1
+        ;;
+esac
+
 if [ ! -d "$SRC_DIR" ]; then
     echo "error: vendored driver source missing at $SRC_DIR" >&2
     exit 1

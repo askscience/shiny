@@ -1,6 +1,6 @@
 [package]
 name = "shiny-browser-plugin"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
 description = "The Browser window — a filtered viewport powered by the same adblock-rust engine as the native shell"
 

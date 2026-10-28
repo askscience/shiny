@@ -19,6 +19,7 @@
 # Installs:
 #   a `shiny-greeter` system account               (uid < 1000: never in the picker)
 #   /usr/local/bin/shiny-greeter                   (greeter session launcher)
+#   /usr/local/bin/shiny-greeter-start             (xinit handover wrapper)
 #   /usr/local/bin/shiny-wait-drm.sh               (X/GPU race guard)
 #   /usr/local/bin/shiny-seat-stop.sh              (seat handover/fallback logic)
 #   /etc/systemd/system/shiny-greeter.service      (the login screen)
@@ -60,6 +61,7 @@ KIOSK_UNIT=/etc/systemd/system/shiny-kiosk@.service
 GREETER_FALLBACK_UNIT=/etc/systemd/system/shiny-greeter-fallback.service
 KIOSK_FALLBACK_UNIT=/etc/systemd/system/shiny-kiosk-fallback.service
 GREETER_BIN=/usr/local/bin/shiny-greeter
+GREETER_START_BIN=/usr/local/bin/shiny-greeter-start
 WAIT_DRM_BIN=/usr/local/bin/shiny-wait-drm.sh
 SEAT_STOP_BIN=/usr/local/bin/shiny-seat-stop.sh
 LEGACY_UNITS="/etc/systemd/system/peakd.service /etc/systemd/system/peakd.service.d /etc/systemd/system/shiny.service /etc/systemd/system/shiny.service.bak /etc/systemd/system/shiny.service.d"
@@ -88,7 +90,7 @@ if [ "${1:-}" = "--uninstall" ]; then
     # Any live kiosk instance too — the template has no single name.
     systemctl stop 'shiny-kiosk@*' 2>/dev/null || true
     rm -f "$GREETER_UNIT" "$KIOSK_UNIT" "$GREETER_FALLBACK_UNIT" "$KIOSK_FALLBACK_UNIT" \
-        "$GREETER_BIN" "$WAIT_DRM_BIN" "$SEAT_STOP_BIN" "$AUTH_DROPIN"
+        "$GREETER_BIN" "$GREETER_START_BIN" "$WAIT_DRM_BIN" "$SEAT_STOP_BIN" "$AUTH_DROPIN"
     rmdir /etc/systemd/system/shiny-auth.service.d 2>/dev/null || true
     rm -f /run/shiny/handover
     if id "$GREETER_USER" >/dev/null 2>&1; then
@@ -263,6 +265,7 @@ sed -e "s|@SHINY_REPO@|$SHINY_REPO|g" \
     -e "s|@PEAKD_BIN@|$PEAKD_BIN|g" \
     "$REPO_DIR/scripts/shiny-greeter" > "$GREETER_BIN"
 chmod 0755 "$GREETER_BIN"
+install -m 0755 "$REPO_DIR/scripts/shiny-greeter-start" "$GREETER_START_BIN"
 
 # ── 4. Seat units ───────────────────────────────────────────────────────────
 cat > "$GREETER_UNIT" <<EOF
@@ -314,7 +317,7 @@ Environment=HOME=$GREETER_HOME
 # well below the 90s default TimeoutStartSec — an unbounded udevadm settle
 # here once held the whole seat in start-pre until systemd killed it.
 ExecStartPre=-/usr/bin/timeout 20 $WAIT_DRM_BIN
-ExecStart=/usr/bin/xinit $GREETER_BIN -- :0 -nolisten tcp vt1 -keeptty
+ExecStart=$GREETER_START_BIN
 # The login screen is the machine's fallback: if it dies, bring it back.
 Restart=on-failure
 RestartSec=5

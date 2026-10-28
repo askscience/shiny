@@ -103,6 +103,9 @@ void peakd_qt_view_paste(const char *id, const char *text);
 /// Cut / Copy / Paste / SelectAll), through the engine's own action so the
 /// page's handlers still win.
 void peakd_qt_view_action(const char *id, const char *verb);
+/// Evaluate `script` in the view's page. The result comes back through the
+/// view callback as kind `page-js` with payload `{token, result}`.
+void peakd_qt_view_run_js(const char *id, const char *token, const char *script);
 void peakd_qt_view_close(const char *id);
 
 /// Ad filtering + the Google sign-in User-Agent override. Callbacks are global

@@ -1,6 +1,7 @@
 import { apiFetch, apiRequest, getVoiceLang, getTraveler, ApiError } from './api.js';
 import { renderArtifact } from './artifacts.js';
 import {
+  adoptArtifact,
   upsertArtifact,
   applyDockDestinationGroup,
   destinationKeyForArtifact,
@@ -62,6 +63,18 @@ function pickPrimaryArtifact(artifacts) {
     artifacts.find((a) => (a.type || a.artifact_type) === 'travel_plan') ||
     artifacts[0]
   );
+}
+
+/**
+ * A tool's artifact arrived mid-turn (it is already saved server-side). Adopt
+ * it and surface its window now: the assistant's next tool may need to drive
+ * that window (the Browser's tab/read/click tools do exactly that).
+ */
+function handleAgentArtifact(artifact) {
+  if (!artifact || typeof artifact !== 'object') return;
+  const saved = adoptArtifact(artifact);
+  if (isNavigatorActive()) return;
+  renderArtifact(saved);
 }
 
 async function ingestAgentArtifacts(artifacts) {
@@ -314,7 +327,7 @@ export async function removeConversation(id) {
   }
 }
 
-async function readAgentStream(res, onStep, onThinking, onApproval) {
+async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact) {
   if (!res.body) {
     throw new ApiError(t('agent.streamUnavailable', null, 'Agent stream unavailable'), 500);
   }
@@ -355,6 +368,8 @@ async function readAgentStream(res, onStep, onThinking, onApproval) {
             action: event.action,
             command: event.command,
           });
+        } else if (event.type === 'artifact' && event.data) {
+          onArtifact?.(event.data);
         } else if (event.type === 'done') {
           return event.data;
         } else if (event.type === 'error') {
@@ -371,7 +386,7 @@ async function readAgentStream(res, onStep, onThinking, onApproval) {
   throw new ApiError(t('agent.streamEnded', null, 'Agent stream ended unexpectedly'), 500);
 }
 
-async function requestAgent(body, onStep, signal, onThinking, onApproval) {
+async function requestAgent(body, onStep, signal, onThinking, onApproval, onArtifact) {
   const res = await apiRequest('/api/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -389,7 +404,7 @@ async function requestAgent(body, onStep, signal, onThinking, onApproval) {
       const text = await res.text();
       throw new ApiError(text || res.statusText, res.status);
     }
-    return readAgentStream(res, onStep, onThinking, onApproval);
+    return readAgentStream(res, onStep, onThinking, onApproval, onArtifact);
   }
 
   const text = await res.text();
@@ -507,6 +522,9 @@ export async function sendToAgent(message, mode, context, correction = false) {
       buildAgentBody(message, mode, context, true, turn.id, correction),
       handleAgentStep,
       turn.controller.signal,
+      undefined,
+      undefined,
+      handleAgentArtifact,
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting
@@ -625,6 +643,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
       turn.controller.signal,
       onThinking,
       (approval) => onApproval?.({ ...approval, turnId: turn.id }),
+      handleAgentArtifact,
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting

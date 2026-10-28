@@ -15,6 +15,10 @@ export default {
 
 ## Behaviour
 
+- Fetches the station grid and search results from the public Radio Browser
+  API in the browser, and now-playing artwork from MusicBrainz / the Cover Art
+  Archive. Those hosts are allowlisted in the shell CSP (`connect-src`), and
+  external station streams are covered by `media-src`.
 - Keeps a **singleton `<audio>` player** across mounts, so playback survives
   closing/reopening the window.
 - AI playback arrives as a `radio_station` artifact; the window receives it via

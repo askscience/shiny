@@ -82,6 +82,77 @@ pub fn status() -> OllamaStatus {
     }
 }
 
+/// Check that the files the current Ollama needs are actually on disk.
+///
+/// The official installer deletes `/usr/local/lib/ollama` and extracts the new
+/// release into it. If that download/extract is interrupted (the machine froze
+/// during one such update), the command can look finished while the directory
+/// holds zero-byte CUDA libraries and no `llama-server`. Ollama then starts
+/// with CPU-only fallback and logs `llama-server binary not found`. Verify the
+/// install here, before reporting success.
+pub fn verify_installation() -> Result<String, String> {
+    let bin = binary().ok_or_else(|| "the ollama binary is missing".to_string())?;
+    let version = version()
+        .ok_or_else(|| format!("{bin} --version did not report a version"))?;
+
+    let lib = Path::new("/usr/local/lib/ollama");
+    if !lib.is_dir() {
+        return Ok(version);
+    }
+    if let Some(path) = zero_sized_file(lib, 0) {
+        return Err(format!(
+            "incomplete install: {} is empty (the download/extract was interrupted)",
+            path.display()
+        ));
+    }
+
+    // 0.40.11 runs the model in a separate llama-server process. An install
+    // from this series without that binary silently falls back to CPU.
+    let needs_server = semver::Version::parse(&version)
+        .map(|v| v >= semver::Version::new(0, 40, 11))
+        .unwrap_or(false);
+    let server = lib.join("llama-server");
+    if needs_server && !server.is_file() {
+        return Err(format!(
+            "incomplete install: {} is missing",
+            server.display()
+        ));
+    }
+
+    Ok(version)
+}
+
+/// Find a zero-byte shared library or `llama-server` under `dir`.
+fn zero_sized_file(dir: &Path, depth: usize) -> Option<std::path::PathBuf> {
+    if depth > 4 {
+        return None;
+    }
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            if let Some(found) = zero_sized_file(&path, depth + 1) {
+                return Some(found);
+            }
+            continue;
+        }
+        if !kind.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name != "llama-server" && !name.contains(".so") {
+            continue;
+        }
+        if entry.metadata().map(|m| m.len() == 0).unwrap_or(false) {
+            return Some(path);
+        }
+    }
+    None
+}
+
 /// The command that installs/upgrades Ollama.
 ///
 /// `OLLAMA_UPDATE_CMD` overrides the whole pipeline; `OLLAMA_INSTALL_URL`
@@ -110,12 +181,21 @@ pub fn update_spec() -> CmdSpec {
     // the GPU/desktop on some machines (notably AMD/Vulkan), which freezes the
     // whole app even though the server stays up. `OLLAMA_NO_START` is only
     // honored on macOS, so we prepend a tiny `systemctl` shim to PATH for the
-    // installer: `is-system-running`/`daemon-reload`/`enable` pass through, but
-    // start/stop/restart of `ollama` become a no-op. The new binary is on disk;
-    // the running service keeps the old one until the user restarts it.
+    // installer: it reports an unknown systemd state, so the installer skips
+    // service configuration/restart entirely. The plugin owns the service
+    // lifecycle and restores the unit file the installer rewrote on its way
+    // through. The new binary is on disk; the service stays stopped until the
+    // user starts it (or reboots).
     let pipeline = format!(
         r#"set -u
 SHIM="$(mktemp -d)"
+SYSTEMCTL="$(command -v systemctl || true)"
+SERVICE=/etc/systemd/system/ollama.service
+SAVED=""
+if [ -f "$SERVICE" ]; then
+    SAVED="$(mktemp)"
+    cp -p "$SERVICE" "$SAVED"
+fi
 cat > "$SHIM/systemctl" <<'SHIMEOF'
 #!/bin/sh
 # The installer configures and restarts the service through systemctl. Doing
@@ -128,7 +208,17 @@ SHIMEOF
 chmod +x "$SHIM/systemctl"
 PATH="$SHIM:$PATH" OLLAMA_NO_START=1 {fetch} | PATH="$SHIM:$PATH" OLLAMA_NO_START=1 sh
 rc=$?
+# Even with the systemctl shim the installer rewrites ollama.service before it
+# checks systemd. That copy contains this temporary shim in PATH, which stops
+# existing the moment this job ends. Put the machine's unit back.
+if [ -n "$SAVED" ] && [ -f "$SAVED" ]; then
+    cp -p "$SAVED" "$SERVICE"
+    if [ -n "$SYSTEMCTL" ] && [ -x "$SYSTEMCTL" ]; then
+        "$SYSTEMCTL" daemon-reload >/dev/null 2>&1 || true
+    fi
+fi
 rm -rf "$SHIM"
+[ -n "$SAVED" ] && rm -f "$SAVED"
 exit $rc"#
     );
     CmdSpec::new("sh").arg("-c").arg(pipeline).root()

@@ -1,5 +1,12 @@
 # T2 MacBook audio period fix (DKMS)
 
+> **Retired on kernels whose in-tree `t2bce_audio` is 0.04 or newer.**
+> 0.04 replaced the hrtimer playback path this patch was written for with a
+> DMA/`t2audio_pcm_io_work` design. Overriding that module with this 0.02-derived
+> source would revert the rewrite, and DKMS would also refuse it as "not newer"
+> on every later kernel postinst. The installer now refuses to run against a
+> 0.04+ in-tree module. Keep this tree only to patch older kernels.
+
 The `t2bce_audio` staging driver pins the ALSA period to a single packet, which
 on the internal speaker PCM is **one frame**. Every audio client is forced onto
 a one-frame period — one wakeup per frame — so a late wakeup starves the ring

@@ -34,14 +34,14 @@ Replace `sudo scripts/…` with the path under `scripts/` in the repo.
 |---|---|---|---|
 | `scripts/install-linux-auth.sh` | `shiny-auth` PAM helper, `shiny-auth.socket/.service`, `/etc/pam.d/shiny`, `/etc/tmpfiles.d/shiny-auth.conf`, and a `shiny.service` drop-in enabling Linux users + real-home + PAM | always; needs the server user | [`multi-user-linux.md`](multi-user-linux.md) |
 | `scripts/install-linux-session.sh` | `/etc/systemd/user/shiny.service`, `/usr/local/bin/shiny-session`; migrates the shared DB; disables the old single-user units | always; needs `SHINY_USER` | [`kiosk-greeter.md`](kiosk-greeter.md) |
-| `scripts/install-kiosk-greeter.sh` | The Shiny greeter (default seat): greeter account, `/usr/local/bin/shiny-greeter`, `shiny-wait-drm.sh`, `shiny-seat-stop.sh`, `shiny-greeter.service`, `shiny-kiosk@.service`; removes LightDM when present | root; runs the two above | [`kiosk-greeter.md`](kiosk-greeter.md) |
+| `scripts/install-kiosk-greeter.sh` | The Shiny greeter (default seat): greeter account, `/usr/local/bin/shiny-greeter`, `shiny-greeter-start`, `shiny-wait-drm.sh`, `shiny-seat-stop.sh`, `shiny-greeter.service`, `shiny-kiosk@.service`; removes LightDM when present | root; runs the two above | [`kiosk-greeter.md`](kiosk-greeter.md) |
 | `scripts/install-greeter.sh` | **Optional LightDM seat**: `lightdm` + `lightdm-gtk-greeter`, the `Shiny` GTK theme + artwork, `/usr/local/bin/shiny-xserver`, the session entry, `/etc/lightdm/lightdm.conf.d/50-shiny.conf`, `lightdm-gtk-greeter.conf` | root + apt | [`multi-user-linux.md`](multi-user-linux.md) |
 | `scripts/install-touchpad-gestures.sh` | `/etc/udev/rules.d/70-peakd-touchpad.rules` (logind `uaccess` tag on the internal trackpad) | always (no-op without the device) | [`kiosk-shell.md`](kiosk-shell.md) |
 | `scripts/install-fonts.sh` | `fonts-roboto`, `fonts-inter` and Google's DM Sans / Space Grotesk / Instrument Serif into `/usr/local/share/fonts/shiny` | root | — (UI fonts) |
 | `scripts/install-ollama-gpu.sh` | `/etc/systemd/system/ollama.service.d/override.conf` and, on AMD, `/usr/local/bin/ollama-wait-for-amd.sh` — the Ollama GPU backend env (`vulkan` / `rocm` / `cuda` / `cpu`) | any machine running Ollama; auto-detects the GPU vendor | — (GPU backend) |
 | `scripts/install-t2-audio-dsp.sh` | `/usr/share/t2linux-audio/16_1/*`, `/etc/xdg/wireplumber/wireplumber.conf.d/50-t2-audio.conf`, `/etc/udev/rules.d/99-t2-audio-rename.rules` | `MacBookPro16,1` + `t2bce_audio` + LV2 plugins | [`t2-mac.md`](t2-mac.md) |
 | `scripts/install-t2-audio-watchdog.sh` | `/usr/local/bin/shiny-t2-audio-watchdog`, `/etc/systemd/user/shiny-t2-audio-watchdog.service` — restarts WirePlumber when the T2 card binds without its UCM profiles | `t2bce_audio` + WirePlumber | [`t2-mac.md`](t2-mac.md) |
-| `scripts/install-t2-audio-period-fix.sh` | DKMS module `t2bce-audio-period/1.0` + `/etc/modprobe.d/t2bce-audio-fallback.conf` | `t2bce_audio` + DKMS toolchain | [`t2-mac.md`](t2-mac.md) |
+| `scripts/install-t2-audio-period-fix.sh` | DKMS module `t2bce-audio-period/1.0` + `/etc/modprobe.d/t2bce-audio-fallback.conf`; refuses to override an in-tree `t2bce_audio` 0.04+ | `t2bce_audio` < 0.04 + DKMS toolchain | [`t2-mac.md`](t2-mac.md) |
 | `scripts/install-t2-bluetooth-fix.sh` | `/etc/xdg/wireplumber/wireplumber.conf.d/52-bt-sbcxq.conf` | any `MacBook*` + WirePlumber | [`t2-mac.md`](t2-mac.md) |
 | `scripts/touchbar/install-touchbar.sh` | `/etc/tiny-dfr/config.toml` (backed up once), Shiny icons, `/etc/udev/rules.d/99-shiny-kbd-backlight.rules` | T2 `appletb` / iBridge hardware + `tiny-dfr` | [`t2-mac.md`](t2-mac.md) |
 | `scripts/bundle-app.sh` | macOS `.app` bundle (`dist/Peakd.app`) with `Info.plist` + ad-hoc codesign, or a Linux `.desktop` | builds `peakd-mac` | [`kiosk-shell.md`](kiosk-shell.md) |
@@ -50,9 +50,10 @@ Replace `sudo scripts/…` with the path under `scripts/` in the repo.
 
 ```
 shiny-greeter.service            (the Shiny login screen, vt1)
-  └── /usr/local/bin/shiny-greeter
-        ├── shiny server (SHINY_GREETER=1, 127.0.0.1:8079, no plugins)
-        └── peakd --url http://127.0.0.1:8079        (restarted on exit)
+  └── /usr/local/bin/shiny-greeter-start
+        └── xinit /usr/local/bin/shiny-greeter
+              ├── shiny server (SHINY_GREETER=1, 127.0.0.1:8079, no plugins)
+              └── peakd --url http://127.0.0.1:8079        (restarted on exit)
 
   sign-in ──▶ shiny-auth `login-session` ──▶ shiny-kiosk@<user>.service
                                                  │
@@ -81,7 +82,7 @@ codes live in `crates/peakd/src/main.rs` and `crates/shiny-server-mode/src/main.
 | `/etc/systemd/user/shiny-t2-audio-watchdog.service`, `/usr/local/bin/shiny-t2-audio-watchdog` | `install-t2-audio-watchdog.sh` | Per-user T2 stuck-card watchdog. |
 | `/usr/local/bin/shiny-session` | `install-linux-session.sh` | Session supervisor (placeholders substituted). |
 | `/etc/systemd/system/shiny-greeter.service`, `shiny-kiosk@.service` | `install-kiosk-greeter.sh` | Login screen + per-user session template. |
-| `/usr/local/bin/shiny-greeter`, `shiny-wait-drm.sh`, `shiny-seat-stop.sh` | `install-kiosk-greeter.sh` | Greeter launcher, DRM wait, seat handover logic. |
+| `/usr/local/bin/shiny-greeter`, `shiny-greeter-start`, `shiny-wait-drm.sh`, `shiny-seat-stop.sh` | `install-kiosk-greeter.sh` | Greeter launcher, xinit handover wrapper, DRM wait, seat handover logic. |
 | `/etc/systemd/system/ollama.service.d/override.conf`, `/usr/local/bin/ollama-wait-for-amd.sh` | `install-ollama-gpu.sh` | Ollama GPU backend env; AMD also waits for the render node before start. |
 | `/run/shiny/handover` | `shiny-auth` | Handover marker while a kiosk takes the seat. |
 | `/usr/share/xsessions/shiny.desktop` | `install-greeter.sh` | LightDM session entry (optional path). |
@@ -159,7 +160,7 @@ See the root `README.md` § *Graceful Degradation* for the full table.
 | `scripts/install-linux-session.sh` | Per-user server unit + session launcher installer. |
 | `scripts/install-kiosk-greeter.sh` | Shiny greeter (default seat): units, launchers, LightDM removal. |
 | `scripts/install-greeter.sh` | Optional LightDM + Noir greeter installer. |
-| `scripts/shiny-greeter`, `scripts/shiny-wait-drm.sh`, `scripts/shiny-seat-stop.sh` | Greeter session and seat-handover scripts. |
+| `scripts/shiny-greeter`, `scripts/shiny-greeter-start`, `scripts/shiny-wait-drm.sh`, `scripts/shiny-seat-stop.sh` | Greeter session, xinit handover wrapper and seat-handover scripts. |
 | `scripts/install-touchpad-gestures.sh` | Trackpad `uaccess` udev rule. |
 | `scripts/install-ollama-gpu.sh`, `scripts/ollama/` | Ollama GPU backend drop-in (`vulkan`/`rocm`/`cuda`/`cpu`) + AMD render-node wait script. |
 | `scripts/install-fonts.sh` | System UI fonts. |

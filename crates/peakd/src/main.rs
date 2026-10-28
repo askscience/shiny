@@ -319,7 +319,7 @@ extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_
 
     let Some(bus) = BUS.get() else { return };
     match kind.as_str() {
-        "load" | "title" | "url" | "new-window" => {
+        "load" | "title" | "url" | "new-window" | "page-js" => {
             if kind == "load"
                 && id == "main"
                 && payload == "finished"

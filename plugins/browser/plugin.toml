@@ -1,9 +1,9 @@
 name = "browser"
-version = "0.1.0"
+version = "0.2.1"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
-description = "Browse the web inside Shiny — an adblocked window with downloads, incognito and a news home ranked from your searches"
-summary = "Browser: adblock-filtered web browsing with a shield toggle, download manager, incognito tabs and related-news cards built from what you search for"
+description = "Browse the web inside Shiny — an adblocked window with a bookmark start page, downloads, incognito and news"
+summary = "Browser: adblock-filtered web browsing with a bookmark start page, download manager, incognito tabs and related-news cards"
 author = "shiny"
 migrations_dir = "migrations"
 skills_dir = "skills"

@@ -29,6 +29,7 @@ import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
+import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
 import { openCoreWindow } from '../../js/tiles.js';
 
 export const BROWSER_PLUGIN = 'browser';
@@ -48,11 +49,6 @@ const SEARCH_ENGINES = [
   { id: 'google', label: 'Google' },
   { id: 'bing', label: 'Bing' },
 ];
-
-/** Selectors for the HTML popups that have to punch through the page. */
-const POPUP_SELECTOR =
-  '.ctx-menu, .ui-hud-menu-popup:not(.hidden), .ui-modal:not(.hidden), '
-  + '.ui-notification-container, .ui-toast-container';
 
 /**
  * The native-view bridge.
@@ -150,9 +146,11 @@ function nativeShouldShow(tab) {
 
 /**
  * The CSS rects the page must show *through* — everything the HTML draws over
- * an otherwise always-on-top native view: open popups (the desktop context
- * menus, the HUD menus, this window's own popovers) and, in the free "Windows"
- * layout, any higher floating window that overlaps this one.
+ * an otherwise always-on-top native view. Core chrome comes from
+ * `nativeOccluderHoles` (chat panel, voice bar/dock, top bar, keyboard,
+ * navigation, travel panel, tile overlay and shared popups); this window adds
+ * its own popovers and, in the free "Windows" layout, any higher floating
+ * window that overlaps it.
  *
  * Each rect is in the same client-pixel space as `viewportRect`, so the shell
  * can subtract them directly from the view's geometry.
@@ -160,7 +158,7 @@ function nativeShouldShow(tab) {
 function occluderHoles() {
   const rect = viewportRect();
   if (!rect) return [];
-  const holes = [];
+  const holes = nativeOccluderHoles(rect);
   const add = (r) => {
     if (!r || r.width < 1 || r.height < 1) return;
     // Only a rect that actually covers part of the page is a hole.
@@ -169,9 +167,6 @@ function occluderHoles() {
     holes.push({ x: r.left, y: r.top, w: r.width, h: r.height, dpr: rect.dpr });
   };
 
-  for (const el of document.querySelectorAll(POPUP_SELECTOR)) {
-    add(el.getBoundingClientRect());
-  }
   // This window's own popovers (downloads / menu / history / bookmarks). They
   // live inside the tile, but the native view still stacks above them.
   for (const el of [downloadsPanel, browserMenu, historyPanel, bookmarksPanel]) {
@@ -1488,7 +1483,7 @@ async function openBookmarksPanel() {
   await loadBookmarks();
 }
 
-async function loadBookmarks() {
+async function fetchBookmarks() {
   try {
     const res = await apiFetch('/api/browser/bookmarks?limit=200');
     const rows = res?.data?.bookmarks;
@@ -1496,6 +1491,11 @@ async function loadBookmarks() {
   } catch (_) {
     /* best-effort */
   }
+  return bookmarks;
+}
+
+async function loadBookmarks() {
+  await fetchBookmarks();
   renderBookmarks();
   updateBookmarkButton();
 }
@@ -1528,7 +1528,7 @@ function renderBookmarks() {
     main.append(title, sub);
     main.addEventListener('click', () => {
       closeAllBrowserPanels();
-      void navigateTo(bookmark.url);
+      openInNewTab(null, bookmark.url);
     });
     const remove = iconButton({
       icon: 'ui/trash',
@@ -1644,14 +1644,22 @@ async function fetchNews({ refresh = false } = {}) {
   return res?.data || { cards: [], topics: [], personalized: false };
 }
 
-/** The home page markup, with the shelf's data embedded. */
-function homeDocument(news) {
+/** The home page markup, with the shelf and bookmarks' data embedded. */
+function homeDocument(news, saved = []) {
   const cards = Array.isArray(news?.cards) ? news.cards : [];
   const topics = Array.isArray(news?.topics) ? news.topics : [];
   const personal = news?.personalized && cards.length;
   const recent = t('plugin.browser.home.recentSearches', null, 'Because of your recent searches');
   const refresh = t('plugin.browser.home.refresh', null, 'Refresh');
   const refreshing = t('plugin.browser.home.refreshing', null, 'Refreshing…');
+  const bookmarkHeading = t('plugin.browser.bookmarks.title', null, 'Bookmarks');
+  const bookmarkList = Array.isArray(saved) ? saved : [];
+  const savedGrid = bookmarkList.length
+    ? `<div class="saved">
+         <div class="saved-head"><span class="eyebrow">${bookmarkHeading}</span></div>
+         <div class="saved-grid">${bookmarkList.map(bookmarkCardHtml).join('')}</div>
+       </div>`
+    : '';
   // The shelf's data block. Also where every *translated* string the handler
   // needs has to live: the handler's own text is allowlisted in the app's CSP
   // by an exact SHA-256 (src/api/mod.rs), so interpolating into the script
@@ -1675,11 +1683,26 @@ function homeDocument(news) {
        font-family:var(--font-body,system-ui,-apple-system,sans-serif);
        -webkit-font-smoothing:antialiased}
   .home{max-width:60rem;margin:0 auto;padding:2.2rem 1.5rem 3rem}
-  .brand{display:flex;align-items:baseline;gap:.6rem;margin-bottom:1.1rem}
-  .brand b{font-size:1.15rem;font-weight:650;letter-spacing:-.01em}
   .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.1rem}
   .chip{font-size:.72rem;opacity:.8;padding:.22rem .6rem;border-radius:999px;
         border:1px solid color-mix(in srgb, currentColor 22%, transparent)}
+  .saved{margin-bottom:1.4rem}
+  .saved-head{display:flex;align-items:center;margin-bottom:.6rem}
+  .saved-grid{display:grid;gap:.5rem;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr))}
+  a.bookmark{display:flex;flex-direction:column;align-items:center;gap:.45rem;padding:.7rem .45rem;
+             border-radius:14px;text-decoration:none;color:inherit;
+             border:1px solid transparent;transition:background .15s ease,border-color .15s ease}
+  a.bookmark:hover{border-color:color-mix(in srgb, currentColor 16%, transparent);
+                   background:color-mix(in srgb, currentColor 7%, transparent)}
+  .favicon-wrap{position:relative;display:flex;align-items:center;justify-content:center;
+                width:40px;height:40px;border-radius:11px;overflow:hidden;
+                background:color-mix(in srgb, currentColor 9%, transparent)}
+  .favicon-initial{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                   font-size:1.05rem;font-weight:650;text-transform:uppercase;
+                   color:var(--accent,#7aa2ff);opacity:.9}
+  img.favicon{position:relative;width:24px;height:24px;object-fit:contain;background:transparent}
+  .bookmark-name{max-width:100%;font-size:.72rem;line-height:1.25;text-align:center;
+                 display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.75rem}
   .eyebrow{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;opacity:.55}
   .again{cursor:pointer;font:inherit;font-size:.72rem;padding:.25rem .6rem;border-radius:8px;
@@ -1710,7 +1733,7 @@ function homeDocument(news) {
   .empty .s{font-size:.85rem;line-height:1.55;opacity:.7}
 </style></head><body>
 <div class="home">
-  <div class="brand"><b>Browser</b></div>
+  ${savedGrid}
   <div id="shelf">${shelf}</div>
 </div>
 <scr${'ipt'} id="home-data" type="application/json">${payload}</scr${'ipt'}>
@@ -1720,10 +1743,36 @@ function homeDocument(news) {
   try { data = JSON.parse(document.getElementById('home-data').textContent || '{}'); } catch (e) {}
   if (!data.cards.length) data.cards = [];
 
+  // A broken favicon falls back to the letter tile under it; a loaded one
+  // covers that tile.
+  function hideInitial(img) {
+    var wrap = img.parentNode;
+    var initial = wrap && wrap.querySelector ? wrap.querySelector('.favicon-initial') : null;
+    if (initial) initial.style.display = 'none';
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('img.favicon'), function (img) {
+    if (img.complete && img.naturalWidth) hideInitial(img);
+    img.addEventListener('load', function () { hideInitial(img); });
+  });
+  document.addEventListener('error', function (event) {
+    var img = event.target;
+    if (img && img.tagName === 'IMG' && img.classList && img.classList.contains('favicon')) {
+      img.style.display = 'none';
+    }
+  }, true);
+
   // A card navigates by asking the parent, which is the only frame allowed to
   // touch the proxy/session state. The sandbox gives this document no
   // same-origin access, so postMessage is the only channel — and it is enough.
   document.addEventListener('click', function (event) {
+    var saved = event.target && event.target.closest ? event.target.closest('a.bookmark') : null;
+    if (saved) {
+      event.preventDefault();
+      try {
+        parent.postMessage({ type: 'browser:open-bookmark', url: saved.getAttribute('data-url') || '' }, '*');
+      } catch (e) {}
+      return;
+    }
     var a = event.target && event.target.closest ? event.target.closest('a.card') : null;
     if (a) {
       event.preventDefault();
@@ -1773,6 +1822,48 @@ function cardHtml(card, index) {
   </a>`;
 }
 
+/**
+ * The page's own icon. Loading it from the site's origin keeps the start page
+ * free of a third-party favicon service; a site that does not serve
+ * `/favicon.ico` falls back to the letter tile drawn underneath.
+ */
+function faviconFor(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return `${parsed.origin}/favicon.ico`;
+  } catch (_) {
+    return '';
+  }
+}
+
+/** One saved page: favicon tile and its name underneath. */
+function bookmarkCardHtml(bookmark) {
+  const url = String(bookmark?.url || '');
+  if (!url) return '';
+  let name = String(bookmark?.title || '').trim();
+  if (!name) {
+    try {
+      name = new URL(url).hostname.replace(/^www\./, '');
+    } catch (_) {
+      name = url;
+    }
+  }
+  if (!name) name = url;
+  const initial = Array.from(name.trim())[0] || '•';
+  const icon = faviconFor(url);
+  const img = icon
+    ? `<img class="favicon" src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+    : '';
+  return `<a class="bookmark" href="#" data-url="${escapeHtml(url)}" title="${escapeHtml(url)}">
+    <span class="favicon-wrap">
+      <span class="favicon-initial">${escapeHtml(initial)}</span>
+      ${img}
+    </span>
+    <span class="bookmark-name">${escapeHtml(name)}</span>
+  </a>`;
+}
+
 /** What to show when there is nothing to personalise from. */
 function emptyShelf(news) {
   const reason = news?.error ? escapeHtml(news.error) : '';
@@ -1817,20 +1908,24 @@ async function showHome(tab) {
   tab.frameEl.src = 'about:blank';
 
   let news = { cards: [], topics: [], personalized: false };
+  let saved = bookmarks;
   try {
-    news = await fetchNews();
+    [news, saved] = await Promise.all([
+      fetchNews().catch(() => ({
+        cards: [], topics: [], personalized: false,
+        error: t('plugin.browser.home.loadFailed', null, 'Could not load recommendations'),
+      })),
+      fetchBookmarks(),
+    ]);
   } catch (_) {
-    news = {
-      cards: [], topics: [], personalized: false,
-      error: t('plugin.browser.home.loadFailed', null, 'Could not load recommendations'),
-    };
+    /* both helpers already fall back to what they have */
   }
   // Re-check: the user may have navigated this tab while the shelf was in
   // flight.
   if (!tab.frameEl || !tab.home) return;
   if (tab.id === activeTabId) setStatus('');
   tab.frameEl.src = 'about:blank';
-  tab.frameEl.srcdoc = homeDocument(news);
+  tab.frameEl.srcdoc = homeDocument(news, saved);
   renderTabs();
   if (tab.id === activeTabId) updateNavButtons();
 }
@@ -1897,6 +1992,11 @@ function onFrameMessage(event) {
 
   if (data.type === 'browser:open-card') {
     void onHomeCard(tab, String(data.url || ''), data.topic ? String(data.topic) : undefined);
+  } else if (data.type === 'browser:open-bookmark') {
+    // Both the start page's grid and the toolbar menu open saved pages in a
+    // fresh tab, so the start page stays where it is.
+    const url = String(data.url || '');
+    if (url) openInNewTab(tab, url);
   } else if (data.type === 'browser:refresh-news') {
     void showHome(tab);
   }
@@ -2041,6 +2141,7 @@ let boundsTimer = null;
 let boundsObserver = null;
 let tileObserver = null;
 let bodyObserver = null;
+let stopOccluderWatch = null;
 let syncQueued = false;
 let menuSyncTimer = null;
 /** Core menus slide in with `hudMenuIn`; re-sync once they have landed. */
@@ -2109,6 +2210,10 @@ function startBoundsSync() {
       bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
   }
+  // Core chrome toggles its visibility class after a short transition (chat,
+  // travel panel, tile overlay); refresh the mask as soon as it does instead of
+  // leaving a stale hole until the bounds fallback.
+  stopOccluderWatch = watchNativeOccluders(requestSync);
   window.addEventListener('resize', requestSync);
   window.addEventListener('desktop:changed', requestSync);
   window.addEventListener('overlay:open', requestSync);
@@ -2127,6 +2232,8 @@ function stopBoundsSync() {
   tileObserver = null;
   if (bodyObserver) bodyObserver.disconnect();
   bodyObserver = null;
+  if (stopOccluderWatch) stopOccluderWatch();
+  stopOccluderWatch = null;
   window.removeEventListener('resize', requestSync);
   window.removeEventListener('desktop:changed', requestSync);
   window.removeEventListener('overlay:open', requestSync);

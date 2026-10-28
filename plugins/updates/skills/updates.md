@@ -29,6 +29,18 @@ The plugin detects the distribution and uses its native package manager:
 - **`update_ollama`** — Install/update Ollama with the official installer.
   params: `{ password?: string }`. **Root** on a normal server.
 
+## Safety
+
+- After a system upgrade the plugin audits the package database and repairs
+  half-configured packages (`dpkg --configure -a && apt-get -f install` on
+  apt). If the audit still fails, tell the user the machine must be repaired
+  before rebooting.
+- An Ollama update stops the service, verifies the installed files (including
+  `llama-server` on 0.40.11+) and reports an incomplete install. Run it again
+  if it says the installation is incomplete; do not start Ollama in that state.
+- If the system upgrade fails, the Ollama step is skipped on purpose. Fix the
+  package state first.
+
 ## Passwords
 
 Shiny normally runs as a regular user, and installing updates needs root. The

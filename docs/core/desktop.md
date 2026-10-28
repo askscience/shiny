@@ -29,6 +29,7 @@ arrangement, never a rewrite of it.
 | `web/js/launcher.js` | Full-screen plugin launcher (three-finger swipe down) |
 | `web/js/gestures.js` | Trackpad gesture → desktop action vocabulary |
 | `web/js/contextMenu.js` | Right-click / long-press menus and the popup engine |
+| `web/js/nativeOccluders.js` | Core HTML surfaces that must punch through a native page's mask |
 | `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait and landscape) |
 | `web/js/preferences.js` | Per-user storage for all of the above |
 
@@ -158,6 +159,19 @@ the focus state onto the eye (`is-active`, `aria-pressed`, and the
 that chrome for a focus-only change, which deliberately skips the layout pass.
 The title bar doubles as the drag handle in Windows layout; `DRAG_IGNORE`
 keeps controls, inputs and ARIA roles from starting a drag.
+
+### Native pages and masks
+
+The Browser renders its pages as native items above the app webview
+(`crates/peakd`), so core HTML can only appear over a page when its rect is cut
+out of the page's mask. `web/js/nativeOccluders.js` owns that list: the chat
+panel, top and workspace bars, virtual keyboard, navigation HUD, travel panel,
+tile overlay, and the shared menus/modals/sheets/floating
+windows/toasts/notifications. It also watches those roots so a delayed
+`.hidden` class clears the hole immediately. The Browser adds its own popovers
+and higher floating windows. A new modal or actively-used fixed surface belongs
+in this registry; persistent non-modal chrome (voice bar, artifact dock,
+insight cards, transcript) stays out because a hole takes the page's pointer.
 
 ## Tile grid
 
@@ -683,6 +697,7 @@ and the `notify()` helper.
 | [`web/js/overview.js`](../../web/js/overview.js), [`launcher.js`](../../web/js/launcher.js) | Overview + launcher. |
 | [`web/js/gestures.js`](../../web/js/gestures.js) | `trackpad:gesture` mapping. |
 | [`web/js/contextMenu.js`](../../web/js/contextMenu.js) | Right-click engine. |
+| [`web/js/nativeOccluders.js`](../../web/js/nativeOccluders.js) | Core surfaces cut out of a native page's mask. |
 | [`web/js/hudLeft.js`](../../web/js/hudLeft.js), [`hudPlugins.js`](../../web/js/hudPlugins.js), [`hud*.js`](../../web/js) | HUD sections + chips. |
 | [`web/js/keyboard.js`](../../web/js/keyboard.js) | Virtual keyboard chrome. |
 | [`web/ui/appearance.js`](../../web/ui/appearance.js) | Accent/gradient, and the focus palette (`--focus-ring`, `--focus-bar`). |

@@ -86,6 +86,13 @@ use crate::services::song_gen::SongGenClient;
 /// - The top bar's weather chip and the clock read Open-Meteo directly from the
 ///   browser (free, no API key) for the forecast and the located place's
 ///   timezone, so `api.open-meteo.com` is in `connect-src`.
+/// - The Radio window queries the public Radio Browser directory (plus
+///   MusicBrainz and the Cover Art Archive for now-playing artwork) directly
+///   from the browser, and its `<audio>` element opens the station's real
+///   stream URL. Those API hosts are in `connect-src` — including
+///   `archive.org`/`*.archive.org`, where Cover Art Archive redirects its
+///   JSON — and `media-src` admits external `http(s)` streams (many stations
+///   are plain HTTP).
 /// - The Browser plugin's start page is a sandboxed `srcdoc` iframe whose
 ///   click/refresh handler is a **static** inline `<script>`; CSP hashes are the
 ///   only way to allow an inline script in a sandboxed (opaque-origin) frame, so
@@ -101,12 +108,12 @@ use crate::services::song_gen::SongGenClient;
 ///   native child webviews at the site's real origin, which our CSP never sees.
 ///   `frame-ancestors 'none'` still stops other sites from framing the app.
 const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; \
-script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' 'sha256-RTChVTGEv6ek9ksfULImRsV6YrFDk0+Pe14aCpe8NBc='; \
+script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' 'sha256-yOpwBkINKkE4q1liWuaOlZHIdUCiktnJo0YiJUzvW6g='; \
 style-src 'self' 'unsafe-inline'; \
 img-src 'self' data: blob: http: https:; \
-connect-src 'self' https://router.project-osrm.org https://api.open-meteo.com; \
+connect-src 'self' https://router.project-osrm.org https://api.open-meteo.com https://*.api.radio-browser.info https://musicbrainz.org https://coverartarchive.org https://archive.org https://*.archive.org; \
 font-src 'self' data:; \
-media-src 'self' blob:; \
+media-src 'self' blob: https: http:; \
 worker-src 'self' blob:; \
 object-src 'none'; \
 frame-src 'self' https: http: data: blob:; \

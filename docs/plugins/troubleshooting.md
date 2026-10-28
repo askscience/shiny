@@ -57,6 +57,7 @@ step is timestamped there.
 | Edits to `plugins/<name>/web/` do nothing | The app serves the **installed** copy | Copy to the root that wins — `PLUGINS_DIR/<name>/web/` (`~/.local/share/shiny/plugins` in a kiosk install) if a same-named plugin is installed there, else `data/plugins/<name>/web/` — or reinstall. |
 | Window mounts but looks unstyled | Plugin shipped CSS or wrong class | Build with the core UI library; use the `<name>-*` prefix. |
 | Plugin window blocked by CSP or `X-Frame-Options` | The window is an `<iframe>`, but the plugin is not a web app | Only a `kind = "web"` plugin may be framed: the core serves those routes with `X-Frame-Options: SAMEORIGIN` and a policy that admits their inline boot script and wasm. Everything else gets `DENY`, so a native plugin's window must be mounted in the tile as DOM. |
+| Plugin window shows "unreachable" / fetches nothing | Its `fetch()` goes to a third-party host not listed in the shell CSP's `connect-src` | Add the host (or `https://*.domain`) to `CONTENT_SECURITY_POLICY` in `src/api/mod.rs` and cover it with a test like `web/js/tests/cspRadioHosts.test.mjs`. External `<audio>`/`<video>` streams also need `https:`/`http:` in `media-src`. |
 | Icon not shown | No `apps/<name>` mapping and no `web/icon.svg` | Add one; see [themes & icons](../core/themes-icons.md). |
 
 ### Smoke-testing a window

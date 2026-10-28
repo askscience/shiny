@@ -63,6 +63,7 @@ extern "C" {
     pub fn peakd_qt_view_focus(id: *const c_char);
     pub fn peakd_qt_view_paste(id: *const c_char, text: *const c_char);
     pub fn peakd_qt_view_action(id: *const c_char, verb: *const c_char);
+    pub fn peakd_qt_view_run_js(id: *const c_char, token: *const c_char, script: *const c_char);
     pub fn peakd_qt_view_close(id: *const c_char);
     pub fn peakd_qt_set_filter_cb(cb: FilterCallback, userdata: *mut c_void);
     pub fn peakd_qt_set_ua_cb(cb: UaCallback, userdata: *mut c_void);
@@ -217,6 +218,20 @@ pub fn view_paste(id: &str, text: &str) {
 /// context menu over a page: Cut / Copy / Paste / SelectAll).
 pub fn view_action(id: &str, verb: &str) {
     unsafe { peakd_qt_view_action(cs(id).as_ptr(), cs(verb).as_ptr()) }
+}
+
+/// Run a page script; the answer arrives as a `page-js` view event. Scripts
+/// come from the Browser window's AI bridge, so they are UTF-8 JSON text, not
+/// shell-owned literals — a stray NUL truncates instead of panicking.
+pub fn view_run_js(id: &str, token: &str, script: &str) {
+    let script = CString::new(script).unwrap_or_default();
+    unsafe {
+        peakd_qt_view_run_js(
+            cs(id).as_ptr(),
+            cs(token).as_ptr(),
+            script.as_ptr(),
+        )
+    }
 }
 
 pub fn view_close(id: &str) {

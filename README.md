@@ -99,7 +99,7 @@ sudo apt install peakd
 ```
 
 The public key ships in [`packaging/peakd-archive.gpg`](packaging/peakd-archive.gpg).
-Tag a version (for example `v0.1.1`) to cut a release; the tag is the package
+Tag a version (for example `v0.1.2`) to cut a release; the tag is the package
 version. See [Debian package and APT repository](docs/deployment/packages.md)
 for the workflow, versioning and signing-key details.
 

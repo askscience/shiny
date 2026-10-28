@@ -62,7 +62,10 @@ grep period_size /proc/asound/card0/pcm0p/sub0/hw_params   # 1024 = fixed
 The module keeps `bytes_per_packet` as the period floor but lets clients pick a
 larger one; the driver's playback path is hrtimer-driven, so no DMA change is
 needed. It is DKMS (survives kernel updates), test-builds before installing, and
-falls back to the stock module if it fails to load. See
+falls back to the stock module if it fails to load. **This fix is retired on
+in-tree `t2bce_audio` 0.04+**, which replaced the hrtimer path with a DMA
+rewrite; the installer now refuses to override it (DKMS would also reject the
+0.02-derived module as "not newer" on later kernel postinstalls). See
 [`scripts/t2-audio/period-fix/README.md`](../../scripts/t2-audio/period-fix/README.md).
 This is independent of the community host-clock watchdog, which fixes a
 different failure ("no timestamp ever").

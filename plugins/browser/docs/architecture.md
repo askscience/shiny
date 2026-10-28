@@ -92,8 +92,8 @@ window.navigateTo(input)
 window.loadNative(tab, url)
   -> IPC "peakd:view:" { op: "open", id, url, rect, visible, incognito }
 shell positions the page item in its scene and pushes back
-window.__peakdViewEvent({ id, type: "url"|"title"|"load"|"new-window" })
-  recordLocation / recordVisit / tab title / new tab
+window.__peakdViewEvent({ id, type: "url"|"title"|"load"|"new-window"|"page-js" })
+  recordLocation / recordVisit / tab title / new tab / page-script answer
 ```
 
 Key rules:

@@ -2,8 +2,9 @@
 
 The `browser` plugin adds a **web browser window** to Shiny. The window chrome
 (tab strip, toolbar, address bar, downloads/history/bookmarks popovers and the
-related-news home shelf) is HTML shipped by the plugin; the **page itself is
-rendered by the shell** in a web view inside its own scene at the page's real origin, so
+home surface with a bookmark grid + related news) is HTML shipped by the
+plugin; the **page itself is rendered by the shell** in a web view inside its
+own scene at the page's real origin, so
 anti-bot challenges (Cloudflare) pass and cookies/TLS belong to the page, not a
 rewriting proxy. The plugin owns the window's sessions, browsing history and the
 news recommender, and it runs the **server half** of the shared ad-block engine
@@ -20,7 +21,7 @@ news recommender, and it runs the **server half** of the shared ad-block engine
 | Plugin name | `browser` |
 | Category | `Web` |
 | Capabilities | `open-urls` — the default link handler for the whole app |
-| Version | `0.1.0` |
+| Version | `0.2.1` |
 | `api_level` | `1` |
 | `entry_symbol` | `shiny_plugin_entry` |
 | Author | `shiny` |
@@ -35,11 +36,11 @@ news recommender, and it runs the **server half** of the shared ad-block engine
 
 ```toml
 name = "browser"
-version = "0.1.0"
+version = "0.2.1"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
-description = "Browse the web inside Shiny — an adblocked window with downloads, incognito and a news home ranked from your searches"
-summary = "Browser: adblock-filtered web browsing with a shield toggle, download manager, incognito tabs and related-news cards built from what you search for"
+description = "Browse the web inside Shiny — an adblocked window with a bookmark start page, downloads, incognito and news"
+summary = "Browser: adblock-filtered web browsing with a bookmark start page, download manager, incognito tabs and related-news cards"
 author = "shiny"
 migrations_dir = "migrations"
 skills_dir = "skills"
@@ -58,7 +59,7 @@ and `target_triple`/`signature` = `None`.
 |---|---|
 | Persona fragment | `"a web navigator; open pages and search the web in the browser window"` |
 | Skill markdown | `skills/browser.md`, embedded via `include_str!` and advertised to the LLM |
-| Context line | Enables `browser_open` / `browser_search` / `browser_read` and mentions the news home surface |
+| Context line | Enables `browser_open` / `browser_search` / `browser_read` and mentions the bookmark + news home surface |
 | Agent tools | `browser_open`, `browser_search`, `browser_read` (bridged via `tools::bridged`) |
 | REST routes | 22 routes under `/api/browser/*`, all `auth` |
 | Migrations | `002`–`006` creating `peakd_history`, `browser_settings`, `browser_downloads`, `browser_bookmarks` |
@@ -131,7 +132,7 @@ drops the stale `browser_history` table.
 | `src/preview.rs` | Link preview fetch/parse with SSRF guard + TTL cache |
 | `src/sessions.rs` | In-memory tab sessions (bounded to 64) |
 | `src/news.rs` | Interest profile, topic selection, engine HTML parsing, ranking, home shelf |
-| `web/plugin.js` | The window surface (chrome + native-view IPC + home shelf) |
+| `web/plugin.js` | The window surface (chrome + native-view IPC + core occluder holes + home shelf) |
 | `web/plugin.css` | Layout-only styles, scoped under `.browser-tile` |
 | `web/icon.svg` | Theme-aware flame glyph (`ui/launcher`) |
 | `web/plugin.smoke.mjs` | Node DOM-shim smoke test of the window surface |
@@ -242,5 +243,7 @@ Full detail in [`routes.md`](routes.md).
 - [`../../../crates/shiny-filter/src/lib.rs`](../../../crates/shiny-filter/src/lib.rs),
   [`../../../crates/shiny-filter-core/src/lib.rs`](../../../crates/shiny-filter-core/src/lib.rs),
   [`../../../crates/peakd/src/browse.rs`](../../../crates/peakd/src/browse.rs).
+- [`../../../web/js/nativeOccluders.js`](../../../web/js/nativeOccluders.js) —
+  core HTML that must punch through a native page's mask.
 - [`../../../docs/core/desktop.md`](../../../docs/core/desktop.md) for the
   scene host for the page items.

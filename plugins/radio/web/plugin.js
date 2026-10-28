@@ -26,10 +26,12 @@ import { t } from '../../js/i18n.js';
 
 export const RADIO_PLUGIN = 'radio';
 
+// `all` round-robins the live API servers via DNS; the named hosts are
+// fallbacks (the old fi1 host no longer resolves).
 const API_HOSTS = [
+  'https://all.api.radio-browser.info',
   'https://de1.api.radio-browser.info',
   'https://de2.api.radio-browser.info',
-  'https://fi1.api.radio-browser.info',
 ];
 
 const NOW_PLAYING_KEY = 'radio.now_playing';

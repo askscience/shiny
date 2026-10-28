@@ -1,0 +1,23 @@
+#!/bin/sh
+# Start X for the Shiny greeter and translate the *expected* handover exit into
+# success. Installed to /usr/local/bin/shiny-greeter-start by
+# scripts/install-kiosk-greeter.sh.
+#
+# Why the wrapper: when a login starts, shiny-auth writes /run/shiny/handover
+# and systemd stops shiny-greeter because shiny-kiosk@ conflicts with it. Xorg
+# then shuts down and xinit exits 1. systemd records that as
+# "status=1/FAILURE", triggers OnFailure=shiny-greeter-fallback.service and
+# leaves the boot marked degraded — even though the handover was a success.
+# The marker tells us the difference between a handover and X failing to start;
+# only the latter should be a failure (and get retried by Restart=on-failure).
+set -u
+
+GREETER_BIN=${SHINY_GREETER_BIN:-/usr/local/bin/shiny-greeter}
+
+/usr/bin/xinit "$GREETER_BIN" -- :0 -nolisten tcp vt1 -keeptty
+rc=$?
+
+if [ -e /run/shiny/handover ]; then
+    exit 0
+fi
+exit "$rc"

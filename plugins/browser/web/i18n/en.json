@@ -1,7 +1,7 @@
 {
   "plugin.browser.meta.category": "Web",
-  "plugin.browser.meta.description": "Browse the web inside Shiny — an adblocked window with downloads, incognito and a news home ranked from your searches",
-  "plugin.browser.meta.summary": "Browser: adblock-filtered web browsing with a shield toggle, download manager, incognito tabs and related-news cards built from what you search for",
+  "plugin.browser.meta.description": "Browse the web inside Shiny — an adblocked window with a bookmark start page, downloads, incognito and news",
+  "plugin.browser.meta.summary": "Browser: adblock-filtered web browsing with a bookmark start page, download manager, incognito tabs and related-news cards",
 
   "plugin.browser.toolbar.address": "Search or enter an address",
   "plugin.browser.toolbar.back": "Back",

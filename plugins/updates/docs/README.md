@@ -54,6 +54,25 @@ for the account's `sudo` password in a modal; the password is piped to
 `sudo -S` over stdin, used once, and never stored or logged. When the server
 already runs as root, no password is required.
 
+## Upgrade safety
+
+- **Package-state audit and repair.** After every system upgrade the plugin
+  runs the manager's audit (`dpkg --audit` on apt). If packages were left
+  unpacked or half-configured — a failed kernel postinst, an interrupted
+  upgrade — it runs the repair step (`dpkg --configure -a && apt-get -f
+  install`) and audits again. The job fails, with the command to run, if the
+  database is still inconsistent, instead of leaving the next boot broken.
+- **Ollama verification.** An Ollama update stops the service first and
+  refuses to replace libraries while it is still running. The official
+  installer runs with a `systemctl` shim, and the plugin restores the unit file
+  the installer rewrites. Before reporting success it verifies the install:
+  the binary reports a version, no zero-byte shared library or `llama-server`
+  is left behind, and 0.40.11+ actually ships `llama-server`. A failed or
+  interrupted install is reported instead of silently falling back to CPU.
+- **No Ollama on a broken system.** If the system upgrade fails, the Ollama
+  step is skipped: replacing GPU libraries on top of a half-configured dpkg is
+  unsafe.
+
 ## Source layout
 
 ```

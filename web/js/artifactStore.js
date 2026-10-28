@@ -308,6 +308,37 @@ export async function loadArtifacts() {
   }
 }
 
+/**
+ * Adopt an artifact the **server already saved** (the mid-turn stream) into the
+ * local cache and dock, without a second POST. Fires the same events a normal
+ * save does, so windows mounted later in the turn see it.
+ */
+export function adoptArtifact(artifact) {
+  const saved = normalizeArtifact(artifact);
+  cache.set(saved.id, saved);
+  const summary = {
+    id: saved.id,
+    type: saved.type,
+    title: saved.title,
+    theme: saved.theme || null,
+    destination: saved.destination || null,
+    subtitle: saved.subtitle || null,
+    plugin: saved.plugin || null,
+    updated_at: new Date().toISOString(),
+  };
+  const idx = summaries.findIndex((s) => s.id === saved.id);
+  if (idx >= 0) {
+    summaries[idx] = summary;
+    window.dispatchEvent(new CustomEvent('artifact:updated', { detail: saved }));
+  } else {
+    summaries.unshift(summary);
+    window.dispatchEvent(new CustomEvent('artifact:saved', { detail: saved }));
+  }
+  summaries = dedupeSummaries(summaries);
+  window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
+  return saved;
+}
+
 export async function upsertArtifact(artifact, tripId = null) {
   const normalized = normalizeArtifact(artifact);
   try {
@@ -315,29 +346,7 @@ export async function upsertArtifact(artifact, tripId = null) {
       method: 'POST',
       body: JSON.stringify({ artifact: normalized, trip_id: tripId }),
     });
-    const saved = normalizeArtifact(res.data);
-    cache.set(saved.id, saved);
-    const summary = {
-      id: saved.id,
-      type: saved.type,
-      title: saved.title,
-      theme: saved.theme || null,
-      destination: saved.destination || null,
-      subtitle: saved.subtitle || null,
-      plugin: normalized.plugin || null,
-      updated_at: new Date().toISOString(),
-    };
-    const idx = summaries.findIndex((s) => s.id === saved.id);
-    if (idx >= 0) {
-      summaries[idx] = summary;
-      window.dispatchEvent(new CustomEvent('artifact:updated', { detail: saved }));
-    } else {
-      summaries.unshift(summary);
-      window.dispatchEvent(new CustomEvent('artifact:saved', { detail: saved }));
-    }
-    summaries = dedupeSummaries(summaries);
-    window.dispatchEvent(new CustomEvent('artifact:dock', { detail: getDockSummaries() }));
-    return saved;
+    return adoptArtifact(res.data);
   } catch (e) {
     if (e.status !== 401) {
       console.warn('Failed to save artifact:', e);

@@ -43,6 +43,18 @@ pub trait PackageManager: Send + Sync {
     fn upgrade_all(&self) -> CmdSpec;
     /// Upgrade a single package, when the manager supports it.
     fn upgrade_one(&self, name: &str) -> Option<CmdSpec>;
+
+    /// Report an inconsistent package database (half-configured packages).
+    /// Returning `None` means the manager has no such repair/audit concept.
+    fn audit(&self) -> Option<CmdSpec> {
+        None
+    }
+
+    /// Finish an interrupted upgrade (e.g. `dpkg --configure -a` plus
+    /// `apt-get -f install`). Used only after a failed or suspicious upgrade.
+    fn repair(&self) -> Option<CmdSpec> {
+        None
+    }
 }
 
 /// The result of parsing `/etc/os-release`.

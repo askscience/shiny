@@ -82,6 +82,25 @@ impl PackageManager for Apt {
                 .env("DEBIAN_FRONTEND", "noninteractive"),
         )
     }
+
+    fn audit(&self) -> Option<CmdSpec> {
+        // `dpkg --audit` prints one paragraph per package that is unpacked but
+        // not configured (or half-configured). Empty output on success.
+        Some(CmdSpec::new("dpkg").arg("--audit"))
+    }
+
+    fn repair(&self) -> Option<CmdSpec> {
+        // A kernel postinst (DKMS, initramfs) can fail after the packages were
+        // unpacked, leaving apt's "Sub-process /usr/bin/dpkg returned an error
+        // code (1)" state behind. Configure what was unpacked first, then let
+        // apt resolve the rest; both steps are required for a usable system.
+        Some(
+            CmdSpec::new("sh")
+                .args(["-c", "dpkg --configure -a && apt-get -y -f install"])
+                .root()
+                .env("DEBIAN_FRONTEND", "noninteractive"),
+        )
+    }
 }
 
 #[cfg(test)]

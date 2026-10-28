@@ -178,7 +178,7 @@ pub struct AgentRunResult {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn run_agent<F, G>(
+pub async fn run_agent<F, G, H>(
     state: &AppState,
     traveler: &Traveler,
     trip_id: Option<&str>,
@@ -188,12 +188,17 @@ pub async fn run_agent<F, G>(
     cancel: Option<crate::services::agent_cancel::CancelHandle>,
     mut on_step: F,
     mut on_thinking: G,
+    mut on_artifact: H,
 ) -> Result<AgentRunResult, AppError>
 where
     // The step line, plus the tool it belongs to when it is a tool's
     // (`None` for the thinking opener and the refusals with no action).
     F: FnMut(&UiText, Option<&str>),
     G: FnMut(&str),
+    // A just-saved artifact, streamed to the UI before the turn ends. A window
+    // the tool opens (the Browser) must exist before the next tool call, not
+    // only when the final response renders the cards.
+    H: FnMut(Value),
 {
     let mut artifacts: Vec<Value> = Vec::new();
     let mut actions_taken: Vec<ActionTaken> = Vec::new();
@@ -506,6 +511,9 @@ where
                     if let (Some(owner), Value::Object(map)) = (&outcome.owner, &mut v) {
                         map.insert("plugin".into(), json!(owner));
                     }
+                    // Stream it now: the window a card belongs to may be what
+                    // the next tool in this same turn has to drive.
+                    on_artifact(v.clone());
                     artifacts.push(v);
                 }
 

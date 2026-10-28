@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD=${PEAKD_DEB_BUILD:-$HOME/peakd-iso/deb}
-VERSION=${PEAKD_VERSION:-0.1.0}
+VERSION=${PEAKD_VERSION:-0.1.2}
 OUT="$BUILD/out"
 PKG="$BUILD/peakd"
 KEYRING="$BUILD/peakd-archive-keyring"
