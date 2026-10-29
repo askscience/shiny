@@ -90,17 +90,30 @@ Each release tag (`v*`) builds the `peakd` Debian package, publishes the signed
 APT repository to <https://askscience.github.io/shiny/apt/>, and creates a
 GitHub Release with the `.deb`. Ordinary pushes do not build packages.
 
+### Add the APT repository
+
+The repository is signed. Add its public key and the `peakd` suite once:
+
 ```sh
-sudo install -m 0644 peakd-archive.gpg /usr/share/keyrings/peakd-archive.gpg
+sudo curl -fsSL https://askscience.github.io/shiny/apt/peakd-archive.gpg \
+  -o /usr/share/keyrings/peakd-archive.gpg
 echo 'deb [signed-by=/usr/share/keyrings/peakd-archive.gpg] https://askscience.github.io/shiny/apt/ peakd main' \
   | sudo tee /etc/apt/sources.list.d/peakd.list
 sudo apt update
-sudo apt install peakd
 ```
 
-The public key ships in [`packaging/peakd-archive.gpg`](packaging/peakd-archive.gpg).
-Tag a version (for example `v0.1.2`) to cut a release; the tag is the package
-version. See [Debian package and APT repository](docs/deployment/packages.md)
+The suite is called `peakd`, not a Debian codename. Then install or upgrade:
+
+```sh
+sudo apt install peakd      # first install
+sudo apt upgrade            # later updates
+```
+
+The same key is available in
+[`packaging/peakd-archive.gpg`](packaging/peakd-archive.gpg) and in the
+`peakd-archive-keyring` package, so a checkout or the live image can install it
+offline. Tag a version (for example `v0.1.2`) to cut a release; the tag is the
+package version. See [Debian package and APT repository](docs/deployment/packages.md)
 for the workflow, versioning and signing-key details.
 
 ---
