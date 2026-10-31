@@ -1,14 +1,17 @@
 import {
   menuSurface, menuItem, confirmDialog, toolButton, menuButton, toolbar, input as uiInput,
-  placePopover, icon, toast, setTileGlow, glowFromDrawable,
+  placePopover, toast, setTileGlow, glowFromDrawable, button, emptyState, listReveal,
   setIcon,
 } from '../../ui/index.js';
 
 /**
  * calc.js — the Calc plugin's window (simple spreadsheet).
  *
- * Flat editorial surface: a hairline toolbar (sheet menu + title), a formula
- * bar (selected cell ref + raw value), and an A1-style cell grid. Only
+ * Editorial surface: a slim bar (sheet menu, the sheet title, a mono save
+ * status, one save tool and a "New" pill — import/export/delete live in the
+ * sheet menu's footer), a formula bar of hairline-underlined fields (mono
+ * cell ref + raw value), and an A1-style grid with mono headers and a
+ * neutral ink selection. With no sheets the window shows an empty state. Only
  * non-empty cells are stored server-side as a JSON map ("A1" -> "value");
  * the window autosaves the whole map (PUT /api/spreadsheets/:id).
  *
@@ -34,7 +37,9 @@ let tileEl = null;
 let sheetMenuBtn = null;
 let titleInput = null;
 let statusEl = null;
-let saveDot = null;
+let saveStateEl = null;     // mono "SAVED 14:02" / "UNSAVED" / "SAVING…" in the bar
+let bodyEl = null;          // formula bar + grid + status (hidden with no sheets)
+let emptyEl = null;
 let formulaRefEl = null;
 let formulaInputEl = null;
 let gridEl = null;
@@ -345,7 +350,15 @@ function updateGlow() {
   const ctx = canvas.getContext('2d');
   if (!ctx) { setTileGlow(tileEl, null); return; }
 
-  ctx.fillStyle = 'rgb(8 10 16)'; // very dark base — transparent reads as black
+  // Theme tokens, resolved to concrete colours for the canvas: the window
+  // colour as the base (transparent reads as black), the accent pair for the
+  // values (low → --accent-2, high → --accent).
+  const css = getComputedStyle(tileEl);
+  const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+  const base = token('--bg-elevated', token('--bg', 'black'));
+  const low = token('--accent-2', token('--accent', 'gray'));
+  const high = token('--accent', low);
+  ctx.fillStyle = base;
   ctx.fillRect(0, 0, W, H);
 
   const seen = new Set();
@@ -367,30 +380,48 @@ function updateGlow() {
   const span = max - min || 1;
   for (const p of points) {
     const t = (p.v - min) / span;
-    ctx.fillStyle = `hsl(${200 - t * 160} 70% ${35 + t * 30}%)`;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = low;
+    ctx.fillRect(p.col % W, p.row % H, SCALE, SCALE);
+    ctx.globalAlpha = t;
+    ctx.fillStyle = high;
     ctx.fillRect(p.col % W, p.row % H, SCALE, SCALE);
   }
+  ctx.globalAlpha = 1;
 
   setTileGlow(tileEl, glowFromDrawable(canvas));
 }
 
 /* ── Status / persistence ───────────────────────────────────── */
 
+/** Save state in the bar as short mono capitals ("SAVED 14:02", "UNSAVED",
+ *  "SAVING…"); the mono status line under the grid counts the cells. */
 function setStatus(mode) {
-  if (!statusEl) return;
   const now = new Date();
   const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (mode === 'saving') {
-    statusEl.textContent = t('plugin.calc.status.saving', null, 'Saving…');
-    saveDot?.classList.add('is-active');
-  } else if (mode === 'dirty') {
-    statusEl.textContent = t('plugin.calc.status.dirty', null, 'Unsaved changes');
-    saveDot?.classList.add('is-active');
-  } else {
-    const n = current?.cells.size || 0;
-    statusEl.textContent = tp('plugin.calc.status.saved', n, { time });
-    saveDot?.classList.remove('is-active');
+  let short;
+  if (mode === 'saving') short = t('plugin.calc.status.saving', null, 'Saving…');
+  else if (mode === 'dirty') short = t('plugin.calc.status.unsaved', null, 'Unsaved');
+  else short = t('plugin.calc.status.savedAt', { time }, 'Saved {time}');
+  if (saveStateEl) {
+    saveStateEl.textContent = short;
+    saveStateEl.dataset.state = mode;
   }
+  if (statusEl) statusEl.textContent = tp('plugin.calc.status.cells', current?.cells.size || 0);
+}
+
+/** No sheet open (none exist, or the last was deleted): show the empty state
+ *  instead of a stale grid. */
+function syncEmpty() {
+  const empty = !current;
+  tileEl?.classList.toggle('is-empty', empty);
+  bodyEl?.classList.toggle('hidden', empty);
+  emptyEl?.classList.toggle('hidden', !empty);
+  if (titleInput) {
+    titleInput.disabled = empty;
+    if (empty) titleInput.value = '';
+  }
+  if (saveStateEl) saveStateEl.hidden = empty;
 }
 
 function markDirty() {
@@ -458,6 +489,7 @@ async function openSheet(sheet) {
     };
     titleInput.value = full.title;
     sel = { row: 1, col: 0 };
+    syncEmpty();
     renderGrid();
     setStatus('saved');
     updateGlow();
@@ -470,6 +502,7 @@ async function openNewest() {
   const list = await listSheets();
   sheets = list;
   if (list.length) await openSheet(list[0]);
+  else syncEmpty();
 }
 
 async function newSheet() {
@@ -564,6 +597,7 @@ function renderSheetMenuItems() {
       sheetMenuPopup.appendChild(item);
     });
   }
+  const listItems = [...sheetMenuPopup.querySelectorAll('.calc-sheet-menu-item, .calc-sheet-menu-empty')];
 
   appendMenuFooter(sheetMenuPopup, {
     prefix: 'calc-sheet',
@@ -576,12 +610,14 @@ function renderSheetMenuItems() {
       { icon: 'ui/trash', label: t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), danger: true, onClick: () => void removeCurrent() },
     ],
   });
+  return listItems;
 }
 
 function openSheetMenu() {
   ensureSheetMenu();
-  renderSheetMenuItems();
+  const items = renderSheetMenuItems();
   sheetMenuPopup.classList.remove('hidden');
+  void listReveal(items);
   placePopover(sheetMenuPopup, sheetMenuBtn);
   sheetMenuPopup.focusFirst();
   sheetMenuOpen = true;
@@ -856,7 +892,8 @@ export function mountCalcTile() {
   tileEl.className = 'tile calc-tile';
   tileEl.dataset.plugin = CALC_PLUGIN;
 
-  /* Top bar: sheet menu + title + save indicator */
+  /* Top bar: sheet menu + title + save status, one save tool and a "New"
+     pill. Import / export / delete live in the sheet menu's footer. */
   const bar = toolbar([], { className: 'calc-bar' });
   bar.dataset.windowBar = '';
 
@@ -872,24 +909,40 @@ export function mountCalcTile() {
     if (current) void persist();
   });
 
-  const toolBtn = (iconName, label, onClick, danger) => toolButton(iconName, label, onClick, { className: 'calc-tool', danger });
+  saveStateEl = document.createElement('span');
+  saveStateEl.className = 'calc-save-state';
+  saveStateEl.setAttribute('role', 'status');
 
-  saveDot = document.createElement('span');
-  saveDot.className = 'calc-save-dot';
-  saveDot.setAttribute('aria-hidden', 'true');
+  const saveBtn = toolButton('ui/save', t('plugin.calc.toolbar.saveNow', null, 'Save now'), () => void persist(), { className: 'calc-tool' });
+  const newLabel = t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet');
+  const newBtn = button({ label: t('plugin.calc.bar.new', null, 'New'), variant: 'ghost', size: 'sm', className: 'calc-new-btn', onClick: () => void newSheet() });
+  newBtn.title = newLabel;
+  newBtn.setAttribute('aria-label', newLabel);
 
-  // Single top bar (Studio-style): sheet menu + title + every action button.
-  bar.append(
-    sheetMenuBtn,
-    titleInput,
-    toolBtn('ui/plus', t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), () => void newSheet()),
-    toolBtn('ui/download', t('plugin.calc.toolbar.importOds', null, 'Import .ods'), pickOdsFile),
-    toolBtn('ui/save', t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), () => void exportOds()),
-    toolBtn('ui/save', t('plugin.calc.toolbar.saveNow', null, 'Save now'), () => void persist()),
-    toolBtn('ui/trash', t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), () => void removeCurrent(), true),
-    saveDot,
-  );
+  bar.append(sheetMenuBtn, titleInput, saveStateEl, saveBtn, newBtn);
   tileEl.appendChild(bar);
+
+  /* Body (formula bar, grid, status) — swapped for the empty state when
+     there is no sheet. */
+  bodyEl = document.createElement('div');
+  bodyEl.className = 'calc-body';
+  tileEl.appendChild(bodyEl);
+
+  const emptyActions = document.createElement('div');
+  emptyActions.className = 'calc-empty-actions';
+  emptyActions.append(
+    button({ label: newLabel, variant: 'primary', size: 'sm', arrow: true, onClick: () => void newSheet() }),
+    button({ label: t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), variant: 'ghost', size: 'sm', onClick: pickCsvFile }),
+    button({ label: t('plugin.calc.toolbar.importOds', null, 'Import .ods'), variant: 'ghost', size: 'sm', onClick: pickOdsFile }),
+  );
+  emptyEl = emptyState({
+    icon: 'ui/calc',
+    title: t('plugin.calc.menu.noSheets', null, 'No spreadsheets yet'),
+    body: t('plugin.calc.empty.body', null, 'Start a blank sheet, import a CSV or .ods file, or ask the AI to build one.'),
+    action: emptyActions,
+  });
+  emptyEl.classList.add('calc-empty', 'hidden');
+  tileEl.appendChild(emptyEl);
 
   /* Formula bar */
   const formulaBar = toolbar([], { className: 'calc-formula-bar' });
@@ -913,7 +966,7 @@ export function mountCalcTile() {
   });
   formulaInputEl.addEventListener('blur', commitFormula);
   formulaBar.append(formulaRefEl, formulaInputEl);
-  tileEl.appendChild(formulaBar);
+  bodyEl.appendChild(formulaBar);
 
   function commitFormula() {
     if (!current || document.activeElement === formulaInputEl && editing) return;
@@ -947,14 +1000,14 @@ export function mountCalcTile() {
       startEditing(e.key);
     }
   });
-  tileEl.appendChild(gridEl);
+  bodyEl.appendChild(gridEl);
 
   /* Status line */
   const status = document.createElement('div');
   status.className = 'calc-status';
   statusEl = document.createElement('span');
   status.appendChild(statusEl);
-  tileEl.appendChild(status);
+  bodyEl.appendChild(status);
 
   function moveSel(dr, dc) {
     const row = Math.max(1, Math.min(current?.rows || DEFAULT_ROWS, sel.row + dr));
@@ -981,7 +1034,9 @@ export function unmountCalcTile() {
   sheetMenuBtn = null;
   titleInput = null;
   statusEl = null;
-  saveDot = null;
+  saveStateEl = null;
+  bodyEl = null;
+  emptyEl = null;
   formulaRefEl = null;
   formulaInputEl = null;
 }

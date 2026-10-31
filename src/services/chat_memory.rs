@@ -102,8 +102,9 @@ pub async fn save_turn_with_note(
     .await
     .map_err(AppError::Database)?;
 
-    // Terminal command records belong between the user's message and the
-    // answer — the same place the live approval cards appear.
+    // Terminal command records and tool cards belong between the user's
+    // message and the answer — the same place the live cards appear. Neither
+    // is dialogue: `recent_history` never reads them back to the model.
     for (role, content) in events.iter().filter(|(role, _)| role.as_str() != "media") {
         sqlx::query(
             "INSERT INTO chat_messages (id, traveler_id, conversation_id, role, content, timestamp) \

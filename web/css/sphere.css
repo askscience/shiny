@@ -220,7 +220,7 @@ html[data-orb-style='bar'] #sphere-container {
   --voice-ink: var(--text);
   /* The plate's definition is its surface + hairline, the way the rail has it.
      `box-shadow` is NOT touched here: a theme that collapses its shadows
-     (`--shadow-glass: none`, pitch) would otherwise take the audio glow with it
+     (`--shadow-glass: none`) would otherwise take the audio glow with it
      — `none, <glow>` is an invalid list and drops the whole declaration. */
 }
 

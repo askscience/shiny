@@ -1,7 +1,7 @@
 import {
   confirmDialog, slider as uiSlider, toolbar, dial, element as h, input as uiInput,
   selectControl, controlButton, toast, icon, setIcon, button, searchBar, setTileGlow,
-  glowGradient,
+  glowGradient, toolButton, segmented, listReveal, decodeText, eyebrow,
 } from '../../ui/index.js';
 
 /**
@@ -651,10 +651,7 @@ let saveDotEl = null;   // saved/unsaved indicator (dot, not text)
 let playBtn = null;
 let loopBtn = null;
 let metroBtn = null;
-let arrToggleBtn = null;
-let lchToggleBtn = null;
-let synthmeToggleBtn = null;
-let gridToggleBtn = null;
+let viewSeg = null;
 let bodyEl = null;
 let arrWrapEl = null;
 let arrGridEl = null;
@@ -682,7 +679,7 @@ let gridSel = null;             // selected module id
 let gridDraft = null;           // { name, modules:[{id,kind,x,y,params}], cables:[] }
 let footerHintEl = null;
 let footerParamEl = null;
-let pageBtns = {};
+let pageSeg = null;
 let collapseBtn = null;
 
 /* ── api ────────────────────────────────────────────────────── */
@@ -1309,9 +1306,15 @@ function setStatus(s) {
     saveDotEl.title = t(isDirty ? 'plugin.studio.status.unsaved' : 'plugin.studio.status.saved', null, isDirty ? 'Unsaved changes' : 'Saved');
   }
   if (!statusEl) return;
-  const showText = busy || s === 'error';
-  statusEl.textContent = showText ? (LABELS[s] ? t(LABELS[s], null, s) : s) : '';
-  statusEl.hidden = !showText;
+  // Mono capitals next to the dot: SAVED / UNSAVED, or the busy/error state.
+  const text = busy || s === 'error'
+    ? (LABELS[s] ? t(LABELS[s], null, s) : s)
+    : t(isDirty ? 'plugin.studio.status.unsavedShort' : 'plugin.studio.status.saved', null, isDirty ? 'Unsaved' : 'Saved');
+  if (statusEl.dataset.text !== text) {
+    statusEl.dataset.text = text;
+    decodeText(statusEl, text, { duration: 360 });
+  }
+  statusEl.hidden = false;
   statusEl.dataset.state = s === 'error' ? 'error' : (busy ? 'busy' : (isDirty ? 'dirty' : 'ok'));
 }
 function markDirty() {
@@ -1346,17 +1349,37 @@ function withHint(el, text) {
 
 /* ── live oscilloscope / spectrum / meters (Bitwig-style) ───── */
 
-const SCOPE_TRACE = '#5ad1a8';
-const SCOPE_GRID = 'rgba(255,255,255,0.07)';
+/* Canvas colours come from the theme: `--studio-scope-trace` (the accent)
+   and `--studio-scope-ink` (the text colour; grid, peaks and clip previews
+   use it at a low alpha). Re-read on theme/appearance changes. */
+let canvasInk = { trace: '#5ad1a8', ink: '#ffffff' };
+let canvasInkRead = false;
+function readCanvasColors() {
+  canvasInkRead = !!tileEl?.isConnected;
+  const cs = tileEl ? getComputedStyle(tileEl) : null;
+  const v = (name, fallback) => (cs?.getPropertyValue(name).trim()) || fallback;
+  canvasInk = { trace: v('--studio-scope-trace', '#5ad1a8'), ink: v('--studio-scope-ink', '#ffffff') };
+}
+function onStudioThemeChange() {
+  readCanvasColors();
+  document.getElementById('theme-tokens')?.addEventListener('load', () => { readCanvasColors(); redrawClipPreviews(); }, { once: true });
+  redrawClipPreviews();
+}
+function redrawClipPreviews() {
+  if (!arrGridEl || !arrangement) return;
+  arrangement.clips.forEach((clip, i) => {
+    if (clip.peaks) drawClipWave(i);
+    else drawClipMidi(i);
+  });
+}
 
 function flashBeat(accent) {
   if (!beatDotEl) return;
   beatDotEl.classList.add('studio-beat--hit');
-  if (accent) beatDotEl.style.boxShadow = '0 0 10px 2px var(--accent)';
+  beatDotEl.classList.toggle('studio-beat--bar', !!accent);
   if (beatFlashTimer) clearTimeout(beatFlashTimer);
   beatFlashTimer = setTimeout(() => {
-    beatDotEl.classList.remove('studio-beat--hit');
-    beatDotEl.style.boxShadow = '';
+    beatDotEl?.classList.remove('studio-beat--hit', 'studio-beat--bar');
   }, 140);
 }
 
@@ -1382,6 +1405,8 @@ function stopScope() {
 }
 
 function drawScopeFrame() {
+  // Tokens resolve only once the window is in the document.
+  if (!canvasInkRead && tileEl?.isConnected) { readCanvasColors(); redrawClipPreviews(); }
   sizeScope();
   const live = !!analyser;
   let masterLevel = 0;
@@ -1402,12 +1427,13 @@ function drawScopeTrace(data) {
   const g = cv.getContext('2d');
   const w = cv.width, h = cv.height;
   g.clearRect(0, 0, w, h);
-  g.strokeStyle = SCOPE_GRID; g.lineWidth = 1;
+  g.strokeStyle = canvasInk.ink; g.globalAlpha = 0.09; g.lineWidth = 1;
   g.beginPath();
   g.moveTo(0, h / 2); g.lineTo(w, h / 2);
   g.moveTo(0, h / 4); g.lineTo(w, h / 4);
   g.moveTo(0, h * 3 / 4); g.lineTo(w, h * 3 / 4);
   g.stroke();
+  g.globalAlpha = 1;
   g.beginPath();
   if (data) {
     for (let i = 0; i < data.length; i++) {
@@ -1424,13 +1450,10 @@ function drawScopeTrace(data) {
       if (i) g.lineTo(x, y); else g.moveTo(x, y);
     }
   }
-  g.strokeStyle = SCOPE_TRACE;
+  g.strokeStyle = canvasInk.trace;
   g.lineWidth = Math.max(1, h * 0.06);
   g.lineJoin = 'round';
-  g.shadowColor = SCOPE_TRACE;
-  g.shadowBlur = 4;
   g.stroke();
-  g.shadowBlur = 0;
 }
 
 function drawScopeSpec(data) {
@@ -1449,12 +1472,15 @@ function drawScopeSpec(data) {
     }
     const bh = Math.max(0, v * h);
     scopePeaks[i] = Math.max(scopePeaks[i] * 0.92, bh);
-    const hue = 150 + (i / bars) * 120;
-    g.fillStyle = `hsl(${hue} 70% 60%)`;
+    // One hue (the accent), stepping in alpha from the lows to the highs.
+    g.fillStyle = canvasInk.trace;
+    g.globalAlpha = 0.45 + 0.5 * (i / bars);
     g.fillRect(Math.round(i * bw) + 1, h - bh, Math.max(1, bw - 2), bh);
     const pk = scopePeaks[i];
-    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.fillStyle = canvasInk.ink;
+    g.globalAlpha = 0.55;
     g.fillRect(Math.round(i * bw) + 1, h - pk, Math.max(1, bw - 2), 1);
+    g.globalAlpha = 1;
   }
 }
 
@@ -1730,19 +1756,19 @@ function renderAutomationLaneRow(tr, lane, catalog, beats, autoRow, isFirst, lan
   }, t('plugin.studio.hint.automationParam', null, 'Automation parameter')));
 
   if (isFirst) {
-    const add = h('button', 'studio-head-btn', '+');
+    const add = iconCtl('ui/plus');
     add.type = 'button';
     add.title = t('plugin.studio.automation.addLane', null, 'Add another automation lane');
     add.addEventListener('click', () => { lanes.push({ param: 'track.level', points: [] }); markDirty(); renderArranger(); });
     hd.appendChild(add);
   }
   if (lane) {
-    const clear = h('button', 'studio-head-btn', '×');
+    const clear = iconCtl('ui/eraser');
     clear.type = 'button';
     clear.title = t('plugin.studio.automation.clear', null, 'Clear breakpoints');
     clear.addEventListener('click', () => { lane.points = []; markDirty(); renderArranger(); });
     hd.appendChild(clear);
-    const rm = h('button', 'studio-head-btn', '⨯');
+    const rm = iconCtl('ui/close');
     rm.type = 'button';
     rm.title = t('plugin.studio.automation.removeLane', null, 'Remove lane');
     rm.addEventListener('click', () => { lanes.splice(lanes.indexOf(lane), 1); markDirty(); renderArranger(); });
@@ -1801,7 +1827,7 @@ function automatableKnob(label, path, min, max, step, value, onchange, resetTo) 
   const wrap = h('div', 'studio-knob-wrap');
   const k = knob(label, min, max, step, value, onchange, resetTo);
   wrap.append(k);
-  const auto = h('button', 'studio-knob-auto', '⌁');
+  const auto = iconCtl('ui/curves', 'studio-knob-auto');
   auto.type = 'button';
   auto.title = t('plugin.studio.automation.automate', { label }, `Automate ${label}`);
   auto.addEventListener('click', (e) => { e.stopPropagation(); connectKnobToAutomation(path, label); });
@@ -1907,7 +1933,7 @@ function renderArranger() {
     solo.title = t('plugin.studio.track.solo', null, 'Solo');
     solo.classList.toggle('studio-ms--on', soloTracks.has(tr.id));
     solo.addEventListener('click', (e) => { e.stopPropagation(); toggleSolo(tr.id); renderArranger(); });
-    const add = h('button', 'studio-head-btn', '+');
+    const add = iconCtl('ui/plus');
     add.type = 'button';
     add.title = t('plugin.studio.track.addClip', null, 'Add clip');
     add.addEventListener('click', (e) => { e.stopPropagation(); addArrClip(ti); });
@@ -1916,7 +1942,7 @@ function renderArranger() {
     auto.title = t('plugin.studio.track.toggleAutomation', null, 'Show/hide automation lane');
     auto.classList.toggle('studio-btn--on', !!tr.autoOpen);
     auto.addEventListener('click', (e) => { e.stopPropagation(); tr.autoOpen = !tr.autoOpen; renderArranger(); });
-    const del = h('button', 'studio-head-btn', '×');
+    const del = iconCtl('ui/close');
     del.type = 'button';
     del.title = t('plugin.studio.track.remove', null, 'Remove track');
     del.addEventListener('click', (e) => { e.stopPropagation(); removeArrTrack(ti); });
@@ -1944,7 +1970,7 @@ function renderArranger() {
   }
 
   /* add track row */
-  const addTrack = h('button', 'studio-arr-addtrack', t('plugin.studio.arranger.addTrack', null, '+ Add track'));
+  const addTrack = plusLabel(h('button', 'studio-arr-addtrack'), t('plugin.studio.arranger.addTrack', null, '+ Add track'));
   addTrack.type = 'button';
   addTrack.style.gridColumn = '1';
   addTrack.style.gridRow = String(addRow);
@@ -1970,14 +1996,14 @@ function renderArranger() {
     const cv = h('canvas', melodic ? 'studio-arr-clip-midi' : 'studio-arr-clip-wave');
     el.appendChild(cv);
     el.appendChild(h('span', 'studio-arr-clip-name', clip.pattern?.title || tr.name));
-    const send = h('button', 'studio-arr-clip-x', '▦');
+    const send = iconCtl('ui/launcher', 'studio-arr-clip-x');
     send.type = 'button';
     send.style.right = '22px';
     send.title = t('plugin.studio.clip.sendToLauncher', null, 'Send to Launcher');
     send.addEventListener('pointerdown', (e) => e.stopPropagation());
     send.addEventListener('click', (e) => { e.stopPropagation(); sendArrangementToLauncher(i); });
     el.appendChild(send);
-    const rm = h('button', 'studio-arr-clip-x', '×');
+    const rm = iconCtl('ui/close', 'studio-arr-clip-x');
     rm.type = 'button';
     rm.title = t('plugin.studio.clip.remove', null, 'Remove clip');
     rm.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -2115,7 +2141,8 @@ function drawClipMidi(i) {
   const pad = 2;
   const innerH = hgt - pad * 2;
   /* faint semitone lanes so it reads as a piano roll */
-  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.strokeStyle = canvasInk.ink;
+  ctx.globalAlpha = 0.08;
   ctx.lineWidth = 1;
   for (let d = degLo; d <= degHi + 1; d++) {
     const y = pad + ((degHi + 1 - d) / span) * innerH;
@@ -2130,10 +2157,9 @@ function drawClipMidi(i) {
     const wid = Math.max(1.5, len * stepW - 1);
     const y = pad + ((degHi + 1 - n.degree) / span) * innerH;
     const nh = Math.max(2, innerH / span - 1);
-    ctx.fillStyle = 'rgba(11,11,12,0.62)';
+    ctx.fillStyle = canvasInk.ink;
+    ctx.globalAlpha = 0.62;
     ctx.fillRect(x, y, wid, nh);
-    ctx.fillStyle = 'rgba(255,255,255,0.20)';
-    ctx.fillRect(x, y, wid, 1);
   }
 }
 
@@ -2151,7 +2177,8 @@ function drawClipWave(i) {
   const ctx = cv.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, hgt);
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillStyle = canvasInk.ink;
+  ctx.globalAlpha = 0.32;
   const peaks = clip.peaks;
   const nPk = peaks.length;
   const bw = w / nPk;
@@ -2215,7 +2242,7 @@ function renderLauncher() {
     head.addEventListener('click', () => launchScene(c));
     lchGridEl.appendChild(head);
   }
-  const addScene = h('button', 'studio-launch-scene studio-launch-scene--add', t('plugin.studio.launcher.addScene', null, '+ scene'));
+  const addScene = plusLabel(h('button', 'studio-launch-scene studio-launch-scene--add'), t('plugin.studio.launcher.addScene', null, '+ scene'));
   addScene.type = 'button';
   addScene.style.gridColumn = String(s + 2);
   addScene.style.gridRow = '1';
@@ -2247,11 +2274,11 @@ function renderLauncher() {
     solo.classList.toggle('studio-ms--on', soloTracks.has(tr.id));
     solo.setAttribute('aria-pressed', String(soloTracks.has(tr.id)));
     solo.addEventListener('click', (e) => { e.stopPropagation(); toggleSolo(tr.id); renderLauncher(); });
-    const stopBtn = h('button', 'studio-head-btn', '■');
+    const stopBtn = iconCtl('ui/stop');
     stopBtn.type = 'button';
     stopBtn.title = t('plugin.studio.launcher.stopTrackClips', null, 'Stop clips on this track');
     stopBtn.addEventListener('click', (e) => { e.stopPropagation(); stopLauncherTrack(tr.id, true); });
-    const del = h('button', 'studio-head-btn', '×');
+    const del = iconCtl('ui/close');
     del.type = 'button';
     del.title = t('plugin.studio.track.remove', null, 'Remove track');
     del.addEventListener('click', (e) => { e.stopPropagation(); removeLauncherTrack(ti); });
@@ -2259,7 +2286,7 @@ function renderLauncher() {
     head.appendChild(btns);
     lchGridEl.appendChild(head);
   }
-  const addTrack = h('button', 'studio-arr-addtrack', t('plugin.studio.arranger.addTrack', null, '+ Add track'));
+  const addTrack = plusLabel(h('button', 'studio-arr-addtrack'), t('plugin.studio.arranger.addTrack', null, '+ Add track'));
   addTrack.type = 'button';
   addTrack.style.gridColumn = '1';
   addTrack.style.gridRow = String(n + 2);
@@ -2291,12 +2318,12 @@ function renderLauncher() {
         playIc.addEventListener('click', (e) => { e.stopPropagation(); void launchClip(ti, c); });
         cell.appendChild(playIc);
         cell.appendChild(h('span', 'studio-arr-clip-name', clip.title || clip.pattern?.title || tr.name));
-        const send = h('button', 'studio-arr-clip-x', '↗');
+        const send = iconCtl('ui/arranger', 'studio-arr-clip-x');
         send.type = 'button';
         send.title = t('plugin.studio.clip.sendToArrangement', null, 'Send to Arrangement');
         send.addEventListener('click', (e) => { e.stopPropagation(); sendLauncherToArrangement(tr.id, c); });
         cell.appendChild(send);
-        const rm = h('button', 'studio-arr-clip-x', '×');
+        const rm = iconCtl('ui/close', 'studio-arr-clip-x');
         rm.type = 'button';
         rm.style.right = '22px';
         rm.title = t('plugin.studio.clip.remove', null, 'Remove clip');
@@ -2314,7 +2341,7 @@ function renderLauncher() {
       } else {
         cell.classList.add('studio-launch-empty');
         cell.title = t('plugin.studio.track.addClip', null, 'Add clip');
-        cell.appendChild(h('span', null, '+'));
+        cell.appendChild(icon('ui/plus', { size: 14 }));
         cell.addEventListener('click', () => addLauncherClip(ti, c));
       }
       lchGridEl.appendChild(cell);
@@ -2376,8 +2403,8 @@ function renderDetail() {
   // Collapse only the body — the rail (page buttons + toggle) stays visible so
   // the panel can always be re-expanded.
   if (detailBodyEl) detailBodyEl.classList.toggle('hidden', !detailOpen);
-  if (collapseBtn) collapseBtn.textContent = detailOpen ? '▾' : '▴';
-  for (const [page, btn] of Object.entries(pageBtns)) btn.classList.toggle('studio-btn--on', detailPage === page);
+  if (collapseBtn) collapseBtn.replaceChildren(icon(detailOpen ? 'ui/chevron-down' : 'ui/chevron-up', { size: 13 }));
+  pageSeg?.setValue(detailPage, { silent: true });
   if (!detailOpen) return;
   if (editorPageEl) editorPageEl.classList.toggle('hidden', detailPage !== 'editor');
   if (devicesEl) devicesEl.classList.toggle('hidden', detailPage !== 'devices');
@@ -2541,15 +2568,17 @@ function renderStepGrid() {
     head.appendChild(dot);
     head.appendChild(h('span', 'studio-track-name', KIND_INITIALS[current.voices[v].kind] || '?'));
     if (n > 1) {
-      const rm = h('span', 'studio-track-x', '×');
+      const rm = h('span', 'studio-track-x');
+      rm.appendChild(icon('ui/close', { size: 11 }));
       rm.title = t('plugin.studio.editor.removeVoice', null, 'Remove voice');
       rm.addEventListener('click', (e) => { e.stopPropagation(); removeVoice(v); });
       head.appendChild(rm);
     }
     gridEl.appendChild(head);
   }
-  const add = h('button', 'studio-track-add', t('plugin.studio.editor.addVoice', null, '+ voice'));
+  const add = h('button', 'studio-track-add');
   add.type = 'button';
+  plusLabel(add, t('plugin.studio.editor.addVoice', null, '+ voice'));
   add.style.gridColumn = '1';
   add.style.gridRow = String(n + 2);
   add.title = t('plugin.studio.editor.addVoiceHint', null, 'Add voice');
@@ -2926,12 +2955,12 @@ function renderDevices() {
   const instHead = h('div', 'studio-device-head');
   instHead.appendChild(h('span', 'studio-device-name', KIND_LABELS[v.kind]));
   const instBtns = h('span', 'studio-device-head-btns');
-  const presetBtn = h('button', 'studio-head-btn', '▾');
+  const presetBtn = iconCtl('ui/chevron-down');
   presetBtn.type = 'button';
   presetBtn.title = t('plugin.studio.device.presets', null, 'Presets');
   presetBtn.addEventListener('click', () => openBrowser('presets'));
   instBtns.appendChild(presetBtn);
-  const sp = h('button', 'studio-head-btn', '✦');
+  const sp = iconCtl('ui/star');
   sp.type = 'button';
   sp.title = t('plugin.studio.device.savePreset', null, 'Save preset');
   sp.addEventListener('click', () => void savePreset(v).catch((e) => toast(e.message, { type: 'error' })));
@@ -2994,7 +3023,7 @@ function renderDevices() {
     bypass.classList.toggle('studio-device-bypass--on', !f.bypass);
     bypass.addEventListener('click', () => { f.bypass = !f.bypass; markDirty(); renderDevices(); });
     btns.appendChild(bypass);
-    const rm = h('button', 'studio-head-btn', '×');
+    const rm = iconCtl('ui/close');
     rm.type = 'button';
     rm.title = t('plugin.studio.common.remove', null, 'Remove');
     rm.addEventListener('click', () => { v.fx.splice(i, 1); markDirty(); renderDevices(); });
@@ -3022,7 +3051,7 @@ function renderDevices() {
   /* add fx */
   const add = h('div', 'studio-device studio-device--add');
   const addSel = nativeSelect(EFFECT_KINDS.map((k) => [k, EFFECTS[k].label]), 'distortion', () => {});
-  const addBtn = h('button', 'studio-btn', t('plugin.studio.synthme.addFx', null, '+ FX'));
+  const addBtn = plusLabel(h('button', 'studio-btn'), t('plugin.studio.synthme.addFx', null, '+ FX'));
   addBtn.type = 'button';
   addBtn.addEventListener('click', () => {
     if (v.fx.length >= 8) { toast(t('plugin.studio.toast.maxFx8', null, 'Max 8 effects per voice'), { type: 'error' }); return; }
@@ -3084,14 +3113,14 @@ function renderDevices() {
         renderDevices();
       }, t('plugin.studio.hint.destination', null, 'Destination')));
       row.appendChild(knob(t('plugin.studio.device.amount', null, 'Amt'), -1, 1, 0.01, e.amount != null ? e.amount : 1, (n) => { e.amount = n; markDirty(); }, 1));
-      const rm = h('button', 'studio-head-btn', '×');
+      const rm = iconCtl('ui/close');
       rm.type = 'button';
       rm.title = t('plugin.studio.device.removeMapping', null, 'Remove mapping');
       rm.addEventListener('click', () => { mac.entries.splice(ei, 1); markDirty(); renderDevices(); });
       row.appendChild(rm);
       list.appendChild(row);
     });
-    const addEntry = h('button', 'studio-btn', '+');
+    const addEntry = iconCtl('ui/plus', 'studio-btn');
     addEntry.type = 'button';
     addEntry.title = t('plugin.studio.device.addMapping', null, 'Add a parameter to this macro');
     addEntry.addEventListener('click', () => {
@@ -3203,6 +3232,7 @@ function openBrowser(tab, mode = null) {
   browserMode = mode ? { type: mode, area: panels.launcher && !panels.arranger ? 'lch' : 'arr' } : null;
   browserEl?.classList.remove('hidden');
   browserBtn?.setAttribute('aria-expanded', 'true');
+  browserReveal = true;
   renderBrowser();
   browserEl?.querySelector('input')?.focus();
 }
@@ -3257,7 +3287,7 @@ function renderSynthme() {
   reset.type = 'button';
   reset.title = t('plugin.studio.synthme.resetHint', null, 'Reset the instrument to defaults');
   reset.addEventListener('click', () => { synthmeDraft = defaultSynthmeDraft(); renderSynthme(); });
-  const close = h('button', 'studio-head-btn', '×');
+  const close = iconCtl('ui/close');
   close.type = 'button';
   close.title = t('plugin.studio.common.backToPanels', null, 'Back to Arranger/Launcher');
   close.addEventListener('click', () => togglePanel('synthme'));
@@ -3301,7 +3331,7 @@ function renderSynthme() {
     const row = h('div', 'studio-synthme-fx-row');
     const sel = nativeSelect(MIDI_FX_KINDS.map((k) => [k, MIDI_FX[k].label]), m.kind, (val) => { m.kind = val; m.params = {}; renderSynthme(); }, t('plugin.studio.hint.midiEffect', null, 'MIDI effect'));
     row.appendChild(sel);
-    const rm = h('button', 'studio-head-btn', '×');
+    const rm = iconCtl('ui/close');
     rm.type = 'button';
     rm.title = t('plugin.studio.synthme.removeMidiFx', null, 'Remove MIDI effect');
     rm.addEventListener('click', () => { d.midi.splice(i, 1); renderSynthme(); });
@@ -3314,7 +3344,7 @@ function renderSynthme() {
   });
   const midiAddRow = h('div', 'studio-synthme-fx-row');
   const midiAddSel = nativeSelect(MIDI_FX_KINDS.map((k) => [k, MIDI_FX[k].label]), 'transpose', () => {});
-  const midiAddBtn = h('button', 'studio-btn', t('plugin.studio.synthme.addMidiFx', null, '+ MIDI FX'));
+  const midiAddBtn = plusLabel(h('button', 'studio-btn'), t('plugin.studio.synthme.addMidiFx', null, '+ MIDI FX'));
   midiAddBtn.type = 'button';
   midiAddBtn.addEventListener('click', () => {
     if (d.midi.length >= 6) { toast(t('plugin.studio.toast.maxMidiFx', null, 'Max 6 MIDI effects'), { type: 'error' }); return; }
@@ -3331,7 +3361,7 @@ function renderSynthme() {
   d.fx.forEach((f, i) => {
     const row = h('div', 'studio-synthme-fx-row');
     row.appendChild(h('span', 'studio-device-name', EFFECTS[f.kind]?.label || f.kind));
-    const rm = h('button', 'studio-head-btn', '×');
+    const rm = iconCtl('ui/close');
     rm.type = 'button';
     rm.title = t('plugin.studio.synthme.removeFx', null, 'Remove effect');
     rm.addEventListener('click', () => { d.fx.splice(i, 1); renderSynthme(); });
@@ -3344,7 +3374,7 @@ function renderSynthme() {
   });
   const addRow = h('div', 'studio-synthme-fx-row');
   const addSel = nativeSelect(EFFECT_KINDS.map((k) => [k, EFFECTS[k].label]), 'distortion', () => {});
-  const addBtn = h('button', 'studio-btn', t('plugin.studio.synthme.addFx', null, '+ FX'));
+  const addBtn = plusLabel(h('button', 'studio-btn'), t('plugin.studio.synthme.addFx', null, '+ FX'));
   addBtn.type = 'button';
   addBtn.addEventListener('click', () => {
     if (d.fx.length >= 6) { toast(t('plugin.studio.toast.maxFx6', null, 'Max 6 effects'), { type: 'error' }); return; }
@@ -3511,7 +3541,7 @@ function renderGrid() {
   const save = h('button', 'studio-btn', t('plugin.studio.common.save', null, 'Save'));
   save.type = 'button';
   save.addEventListener('click', () => void saveGridInstrument());
-  const close = h('button', 'studio-head-btn', '×');
+  const close = iconCtl('ui/close');
   close.type = 'button';
   close.title = t('plugin.studio.common.backToPanels', null, 'Back to Arranger/Launcher');
   close.addEventListener('click', () => togglePanel('grid'));
@@ -3567,7 +3597,7 @@ function renderGridModule(m) {
   const head = h('div', 'studio-grid-module-head', t(GRID_MODULE_LABELS[m.kind]));
   if (ports.precord) head.appendChild(h('span', 'studio-grid-precord', ports.precord === 'pitch' ? '♪' : '▮'));
   if (m.kind !== 'out') {
-    const rm = h('button', 'studio-head-btn studio-grid-module-x', '×');
+    const rm = iconCtl('ui/close', 'studio-head-btn studio-grid-module-x');
     rm.type = 'button';
     rm.title = t('plugin.studio.grid.removeModule', null, 'Remove module');
     rm.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -3748,31 +3778,58 @@ async function saveGridInstrument() {
   toast(t('plugin.studio.toast.patchSaved', { name: d.name.trim() }, `Saved Grid patch “${d.name.trim()}”`), { type: 'success' });
 }
 
-function browserRow({ label, sub, color, onClick, onDblClick, actions = [] }) {
+function browserRow({ label, sub, color, lead, onClick, onDblClick, actions = [] }) {
   const r = h('div', 'studio-browser-item');
   r.title = label;
+  if (lead) r.appendChild(icon(lead, { size: 14, className: 'studio-browser-lead' }));
   if (color) {
     const d = h('span', 'studio-track-dot');
     d.style.setProperty('--track', color);
     r.appendChild(d);
   }
-  r.appendChild(h('span', 'studio-browser-label', label));
-  if (sub) r.appendChild(h('span', 'studio-browser-sub', sub));
+  const text = h('span', 'studio-browser-text');
+  text.appendChild(h('span', 'studio-browser-label', label));
+  if (sub) text.appendChild(h('span', 'studio-browser-sub', sub));
+  r.appendChild(text);
   for (const a of actions) r.appendChild(a);
   if (onClick) r.addEventListener('click', onClick);
   if (onDblClick) r.addEventListener('dblclick', onDblClick);
   return r;
 }
-function smallBtn(text, title, onClick) {
-  const b = h('button', 'studio-head-btn', text);
-  b.type = 'button';
-  b.title = title;
+function smallBtn(iconName, title, onClick) {
+  const b = iconCtl(iconName, 'studio-head-btn', title);
   b.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
   return b;
 }
+/* "+ Add track"-style labels (every catalog writes them with a leading "+"):
+   the glyph becomes the catalog plus icon, the words stay. */
+function stripPlus(text) {
+  return String(text).replace(/^\+\s*/, '');
+}
+function plusLabel(el, text) {
+  el.replaceChildren(icon('ui/plus', { size: 12 }), h('span', null, stripPlus(text)));
+  return el;
+}
+/* A compact icon control (catalog icon, never a text glyph) on the shared
+   toolButton contract; Studio's CSS sizes it for the dense DAW rows. */
+function iconCtl(iconName, className = 'studio-head-btn', title = '') {
+  const b = toolButton(iconName, title, null, { className, iconSize: 13 });
+  b.type = 'button';
+  return b;
+}
 
+/* Rows cascade in when the list is (re)loaded — the browser opening or a tab
+   switch — not on every re-render (search keystrokes, a saved preset). */
+let browserReveal = false;
 function renderBrowser() {
   if (!browserListEl || browserEl.classList.contains('hidden')) return;
+  renderBrowserList();
+  if (browserReveal) {
+    browserReveal = false;
+    void listReveal(browserListEl.children);
+  }
+}
+function renderBrowserList() {
   /* tab buttons */
   browserEl.querySelectorAll('.studio-browser-tab').forEach((b) => {
     const on = b.dataset.tab === browserTab;
@@ -3789,12 +3846,12 @@ function renderBrowser() {
       if (!match(tr.title)) continue;
       browserListEl.appendChild(browserRow({
         label: tr.title,
-        sub: `${Math.round(t.bpm)} BPM`,
+        sub: `${Math.round(tr.bpm)} BPM`,
         onClick: () => void playSaved(tr.track_id),
         onDblClick: () => addSavedAsLauncherClip(tr.track_id),
         actions: [
-          smallBtn('+', t('plugin.studio.browser.addToTrack', null, 'Add to selected track'), () => void addSavedAsClip(tr.track_id)),
-          smallBtn('×', t('plugin.studio.browser.deletePattern', null, 'Delete pattern'), async () => {
+          smallBtn('ui/plus', t('plugin.studio.browser.addToTrack', null, 'Add to selected track'), () => void addSavedAsClip(tr.track_id)),
+          smallBtn('ui/trash', t('plugin.studio.browser.deletePattern', null, 'Delete pattern'), async () => {
             if (await confirmDialog(t('plugin.studio.dialog.delete', { name: tr.title }, `Delete "${tr.title}"?`))) await deleteTrack(tr.track_id).catch((e) => toast(e.message, { type: 'error' }));
           }),
         ],
@@ -3805,7 +3862,8 @@ function renderBrowser() {
 
   if (browserTab === 'arrangements') {
     browserListEl.appendChild(browserRow({
-      label: t('plugin.studio.browser.newArrangement', null, '+ New arrangement'),
+      label: stripPlus(t('plugin.studio.browser.newArrangement', null, '+ New arrangement')),
+      lead: 'ui/plus',
       onClick: () => {
         arrangement = blankArrangement();
         sel = arrangement.clips.length ? { area: 'arr', clipIndex: 0 } : null;
@@ -3822,7 +3880,7 @@ function renderBrowser() {
         label: a.title,
         sub: `${Math.round(a.bpm)} BPM`,
         onClick: () => void loadArrangement(a.id).catch((e) => toast(e.message, { type: 'error' })),
-        actions: [smallBtn('×', t('plugin.studio.browser.deleteArrangement', null, 'Delete arrangement'), async () => {
+        actions: [smallBtn('ui/trash', t('plugin.studio.browser.deleteArrangement', null, 'Delete arrangement'), async () => {
           if (await confirmDialog(t('plugin.studio.dialog.delete', { name: a.title }, `Delete "${a.title}"?`))) await deleteArrangement(a.id).catch((e) => toast(e.message, { type: 'error' }));
         })],
       }));
@@ -3932,6 +3990,7 @@ function renderBrowser() {
       if (!match(EFFECTS[k].label)) continue;
       browserListEl.appendChild(browserRow({
         label: EFFECTS[k].label,
+        sub: t('plugin.studio.browser.audioEffect', null, 'audio effect'),
         onClick: () => {
           if (!v) { toast(t('plugin.studio.toast.selectClipFirst', null, 'Select a clip first'), { type: 'error' }); return; }
           if (v.fx.length >= 8) { toast(t('plugin.studio.toast.maxFx8', null, 'Max 8 effects per voice'), { type: 'error' }); return; }
@@ -3950,14 +4009,15 @@ function renderBrowser() {
     const factory = FACTORY_PRESETS[v.kind] || [];
     for (const p of factory) {
       if (!match(p.name)) continue;
-      browserListEl.appendChild(browserRow({ label: `✦ ${p.name}`, color: trackColor(selectedVoice), onClick: () => applyPreset(v, p) }));
+      browserListEl.appendChild(browserRow({ label: p.name, sub: t('plugin.studio.browser.factoryPreset', null, 'factory'), color: trackColor(selectedVoice), onClick: () => applyPreset(v, p) }));
     }
     for (const p of presets) {
       if (p.kind !== v.kind || !match(p.name)) continue;
       browserListEl.appendChild(browserRow({
         label: p.name,
+        sub: t('plugin.studio.browser.savedPreset', null, 'saved'),
         onClick: () => applyPreset(v, p),
-        actions: [smallBtn('×', t('plugin.studio.browser.deletePreset', null, 'Delete preset'), async () => {
+        actions: [smallBtn('ui/trash', t('plugin.studio.browser.deletePreset', null, 'Delete preset'), async () => {
           await api(`/api/studio/presets/${p.id}`, { method: 'DELETE' }).catch((e) => toast(e.message, { type: 'error' }));
           await refreshPresets();
           renderBrowser();
@@ -4147,17 +4207,29 @@ function syncPanels() {
   lchWrapEl?.classList.toggle('hidden', builder || !panels.launcher);
   synthmeWrapEl?.classList.toggle('hidden', !panels.synthme);
   gridWrapEl?.classList.toggle('hidden', !panels.grid);
-  arrToggleBtn?.classList.toggle('studio-transport--on', !builder && panels.arranger);
-  lchToggleBtn?.classList.toggle('studio-transport--on', !builder && panels.launcher);
-  arrToggleBtn?.setAttribute('aria-pressed', String(!builder && !!panels.arranger));
-  lchToggleBtn?.setAttribute('aria-pressed', String(!builder && !!panels.launcher));
-  synthmeToggleBtn?.setAttribute('aria-pressed', String(!!panels.synthme));
-  gridToggleBtn?.setAttribute('aria-pressed', String(!!panels.grid));
+  viewSeg?.setValue(currentView(), { silent: true });
   if (titleInput) titleInput.value = arrangement.title;
   if (bpmInput) bpmInput.value = String(Math.round(arrangement.bpm));
   renderArranger();
   renderLauncher();
   if (detailPage === 'mixer') renderMixer();
+}
+/** The visible body view, as the header's segmented control names it. */
+function currentView() {
+  if (panels.synthme) return 'synthme';
+  if (panels.grid) return 'grid';
+  if (panels.arranger && panels.launcher) return 'split';
+  return panels.launcher ? 'launcher' : 'arranger';
+}
+/** Show one view from the segmented control. */
+function setView(view) {
+  panels.synthme = view === 'synthme';
+  panels.grid = view === 'grid';
+  panels.arranger = view === 'arranger' || view === 'split';
+  panels.launcher = view === 'launcher' || view === 'split';
+  syncPanels();
+  if (panels.synthme) renderSynthme();
+  if (panels.grid) renderGrid();
 }
 function togglePanel(which) {
   if (which === 'synthme' || which === 'grid') {
@@ -4203,32 +4275,28 @@ export function mountStudioTile() {
   barEl = toolbar([], { className: 'studio-bar' });
   barEl.dataset.windowBar = '';
 
-  arrToggleBtn = h('button', 'studio-transport studio-transport--on');
-  arrToggleBtn.type = 'button';
-  arrToggleBtn.title = t('plugin.studio.toolbar.arrangerHint', null, 'Show/hide the Arranger (timeline)');
-  arrToggleBtn.setAttribute('aria-label', t('plugin.studio.toolbar.arrangerLabel', null, 'Arranger timeline'));
-  arrToggleBtn.setAttribute('aria-pressed', 'true');
-  arrToggleBtn.appendChild(icon('ui/arranger', { size: 16 }));
-  arrToggleBtn.addEventListener('click', () => togglePanel('arranger'));
-  lchToggleBtn = h('button', 'studio-transport');
-  lchToggleBtn.type = 'button';
-  lchToggleBtn.title = t('plugin.studio.toolbar.launcherHint', null, 'Show/hide the Clip Launcher');
-  lchToggleBtn.setAttribute('aria-label', t('plugin.studio.toolbar.launcherLabel', null, 'Clip Launcher'));
-  lchToggleBtn.setAttribute('aria-pressed', 'false');
-  lchToggleBtn.appendChild(icon('ui/launcher', { size: 16 }));
-  lchToggleBtn.addEventListener('click', () => togglePanel('launcher'));
-
-  const synthmeBtn = button({ variant: 'ghost', icon: 'ui/synthme', label: '', onClick: () => togglePanel('synthme') });
-  synthmeBtn.classList.add('studio-transport');
-  synthmeBtn.title = t('plugin.studio.toolbar.synthmeHint', null, 'SynthMe — build and save custom instruments');
-  synthmeBtn.setAttribute('aria-label', t('plugin.studio.toolbar.synthmeLabel', null, 'SynthMe instrument builder'));
-  synthmeToggleBtn = synthmeBtn;
-
-  const gridBtn = button({ variant: 'ghost', icon: 'ui/grid', label: '', onClick: () => togglePanel('grid') });
-  gridBtn.classList.add('studio-transport');
-  gridBtn.title = t('plugin.studio.toolbar.gridHint', null, 'WaveMe — modular patch editor');
-  gridBtn.setAttribute('aria-label', t('plugin.studio.toolbar.gridLabel', null, 'WaveMe modular patch editor'));
-  gridToggleBtn = gridBtn;
+  // The views — Arranger, Launcher, both side by side, SynthMe, WaveMe — are
+  // one segmented control (icons; the names are the accessible labels).
+  const VIEWS = [
+    ['arranger', 'ui/arranger', 'plugin.studio.toolbar.arrangerLabel', 'Arranger timeline', 'plugin.studio.toolbar.arrangerLabel', 'Arranger timeline'],
+    ['launcher', 'ui/launcher', 'plugin.studio.toolbar.launcherLabel', 'Clip Launcher', 'plugin.studio.toolbar.launcherLabel', 'Clip Launcher'],
+    ['split', 'ui/layers', 'plugin.studio.toolbar.splitLabel', 'Arranger and Launcher', 'plugin.studio.toolbar.splitHint', 'Arranger and Clip Launcher side by side'],
+    ['synthme', 'ui/synthme', 'plugin.studio.toolbar.synthmeLabel', 'SynthMe instrument builder', 'plugin.studio.toolbar.synthmeHint', 'SynthMe — build and save custom instruments'],
+    ['grid', 'ui/grid', 'plugin.studio.toolbar.gridLabel', 'WaveMe modular patch editor', 'plugin.studio.toolbar.gridHint', 'WaveMe — modular patch editor'],
+  ];
+  viewSeg = segmented({
+    label: t('plugin.studio.toolbar.views', null, 'Views'),
+    options: VIEWS.map(([value, , key, fallback]) => ({ value, label: t(key, null, fallback) })),
+    value: currentView(),
+    onChange: setView,
+  });
+  viewSeg.classList.add('studio-seg', 'studio-views');
+  viewSeg.querySelectorAll('button').forEach((b, i) => {
+    const [, iconName, key, fallback, hintKey, hint] = VIEWS[i];
+    b.replaceChildren(icon(iconName, { size: 15 }));
+    b.setAttribute('aria-label', t(key, null, fallback));
+    b.title = t(hintKey, null, hint);
+  });
 
   const stopBtn = button({ variant: 'ghost', icon: 'ui/stop', label: '', onClick: () => { stopPlayback(); stopAllLauncher(); } });
   stopBtn.classList.add('studio-transport');
@@ -4301,7 +4369,7 @@ export function mountStudioTile() {
     markDirty();
   });
 
-  const exportBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => void exportWav() });
+  const exportBtn = button({ variant: 'ghost', icon: 'ui/download', label: '', onClick: () => void exportWav() });
   exportBtn.classList.add('studio-transport');
   exportBtn.title = t('plugin.studio.toolbar.export', null, 'Export WAV');
   exportBtn.setAttribute('aria-label', t('plugin.studio.toolbar.exportLabel', null, 'Export WAV to Music'));
@@ -4336,7 +4404,7 @@ export function mountStudioTile() {
   // Single top bar (Word/Calc convention): left menu button, title (flex: 1),
   // then transport/view toggles, then file actions (export → save), then the
   // save dot. Every control keeps the shared 32px metrics.
-  barEl.append(browserBtn, titleInput, arrToggleBtn, lchToggleBtn, synthmeBtn, gridBtn,
+  barEl.append(browserBtn, titleInput, viewSeg,
     h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
     beatDotEl, timeEl, bpmInput, bpmLabel, exportBtn, saveBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
@@ -4371,17 +4439,19 @@ export function mountStudioTile() {
   /* ── detail panel ── */
   detailEl = h('div', 'studio-detail');
   const rail = h('div', 'studio-detail-rail');
-  for (const [page, label] of [['editor', 'plugin.studio.panel.editor'], ['devices', 'plugin.studio.panel.devices'], ['mixer', 'plugin.studio.panel.mixer']]) {
-    const b = h('button', 'studio-btn studio-detail-page', t(label));
-    b.type = 'button';
-    b.classList.toggle('studio-btn--on', detailPage === page);
-    b.addEventListener('click', () => { detailPage = page; detailOpen = true; renderDetail(); });
-    pageBtns[page] = b;
-    rail.appendChild(b);
-  }
-  collapseBtn = h('button', 'studio-btn studio-detail-collapse', '▾');
-  collapseBtn.type = 'button';
-  collapseBtn.title = t('plugin.studio.panel.collapse', null, 'Show/hide detail panel');
+  // Editor / Devices / Mixer: one segmented control with mono labels. A click
+  // on the current page re-opens a collapsed panel.
+  pageSeg = segmented({
+    label: t('plugin.studio.panel.pages', null, 'Detail panel'),
+    options: [['editor', 'plugin.studio.panel.editor'], ['devices', 'plugin.studio.panel.devices'], ['mixer', 'plugin.studio.panel.mixer']]
+      .map(([value, key]) => ({ value, label: t(key) })),
+    value: detailPage,
+    onChange: (page) => { detailPage = page; detailOpen = true; renderDetail(); },
+  });
+  pageSeg.classList.add('studio-seg', 'studio-detail-pages');
+  pageSeg.addEventListener('click', () => { if (!detailOpen) { detailOpen = true; renderDetail(); } });
+  rail.appendChild(pageSeg);
+  collapseBtn = iconCtl('ui/chevron-down', 'studio-head-btn studio-detail-collapse', t('plugin.studio.panel.collapse', null, 'Show/hide detail panel'));
   collapseBtn.addEventListener('click', () => { detailOpen = !detailOpen; renderDetail(); });
   rail.appendChild(collapseBtn);
   detailEl.appendChild(rail);
@@ -4429,8 +4499,8 @@ export function mountStudioTile() {
   /* ── pop-up browser ── */
   browserEl = h('div', 'studio-browser hidden');
   const bHead = h('div', 'studio-browser-head');
-  bHead.appendChild(h('span', 'studio-browser-title', t('plugin.studio.toolbar.browser', null, 'Browser')));
-  const bClose = h('button', 'studio-head-btn', '×');
+  bHead.appendChild(eyebrow(t('plugin.studio.toolbar.browser', null, 'Browser')));
+  const bClose = iconCtl('ui/close');
   bClose.type = 'button';
   bClose.title = t('plugin.studio.common.close', null, 'Close');
   bClose.addEventListener('click', closeBrowser);
@@ -4447,7 +4517,7 @@ export function mountStudioTile() {
     b.dataset.tab = tab;
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', String(tab === browserTab));
-    b.addEventListener('click', () => { browserTab = tab; renderBrowser(); });
+    b.addEventListener('click', () => { if (browserTab !== tab) browserReveal = true; browserTab = tab; renderBrowser(); });
     tabsRow.appendChild(b);
   }
   browserEl.appendChild(tabsRow);
@@ -4476,6 +4546,8 @@ export function mountStudioTile() {
   startScope();
   void consumePendingAiTrack().catch(() => {});
   window.addEventListener('keydown', onStudioKeydown);
+  window.addEventListener('theme:change', onStudioThemeChange);
+  window.addEventListener('appearance:change', onStudioThemeChange);
 
   updateStudioGlow();
   return tileEl;
@@ -4484,6 +4556,9 @@ export function mountStudioTile() {
 export function unmountStudioTile() {
   tileEl?.querySelectorAll('.ui-dial').forEach(control => control.destroy());
   window.removeEventListener('keydown', onStudioKeydown);
+  window.removeEventListener('theme:change', onStudioThemeChange);
+  window.removeEventListener('appearance:change', onStudioThemeChange);
+  canvasInkRead = false;
   stopPlayback();
   stopAllLauncher();
   metroStop();
@@ -4492,7 +4567,9 @@ export function unmountStudioTile() {
   if (beatFlashTimer) { clearTimeout(beatFlashTimer); beatFlashTimer = 0; }
   if (tileEl) { tileEl.remove(); tileEl = null; }
   barEl = timeEl = titleInput = bpmInput = statusEl = saveDotEl = playBtn = loopBtn = metroBtn = null;
-  arrToggleBtn = lchToggleBtn = bodyEl = arrWrapEl = arrGridEl = arrPlayheadEl = null;
+  viewSeg?.destroy?.();
+  viewSeg = null;
+  bodyEl = arrWrapEl = arrGridEl = arrPlayheadEl = null;
   lchWrapEl = lchGridEl = detailEl = detailBodyEl = gridEl = pianoEl = devicesEl = mixerEl = null;
   synthmeWrapEl = null;
   synthmeDraft = null;
@@ -4510,7 +4587,8 @@ export function unmountStudioTile() {
   lastClockBeat = -1;
   arrStartBeat = 0;
   arrPlayOffset = 0;
-  pageBtns = {};
+  pageSeg?.destroy?.();
+  pageSeg = null;
   collapseBtn = null;
   soloTracks = new Set();
   trackAudio = {};

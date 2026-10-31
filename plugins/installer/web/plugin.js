@@ -1,6 +1,6 @@
 import {
   avatar, badge, button, controlButton, emptyState, field, icon, input,
-  keyValue, select, spinner, toast,
+  keyValue, select, spinner, toast, listReveal, rollNumber, decodeText,
 } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
@@ -53,6 +53,9 @@ let refs = {};
 let pollTimer = null;
 let state = null;
 let fieldUid = 0;
+/** The step whose rows last cascaded in (listReveal once per step entry). */
+let revealedStep = null;
+let revealedProgress = false;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -674,11 +677,9 @@ function stageIndex(stage) {
   return STAGE_KEYS.findIndex(([key]) => key === stage);
 }
 
-function statusPill(text, tone = 'neutral', { dot = false } = {}) {
-  const node = el('span', `installer-status-pill installer-status-pill--${tone}`);
-  if (dot) node.appendChild(el('span', 'installer-status-dot'));
-  node.appendChild(el('span', null, text));
-  return node;
+/** "02 / 05": the zero-padded mono counter used by the rail and step heads. */
+function counter(current, total) {
+  return `${String(current).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
 }
 
 function ensureStylesheet() {
@@ -814,33 +815,30 @@ function render() {
 function renderChrome() {
   const chrome = refs.chrome;
   clear(chrome);
-  const brand = el('div', 'installer-brand');
-  brand.appendChild(el('span', 'installer-mark app-icon'));
-  const brandCopy = el('div', 'installer-brand-copy');
-  brandCopy.append(
-    el('span', 'installer-brand-name', "PEAK'D!"),
-    el('span', 'installer-brand-sub', T('chrome.installer', 'Installer')),
-  );
-  brand.appendChild(brandCopy);
-
-  const status = el('div', 'installer-chrome-status');
+  // One mono status line: "LIVE SESSION · DRY RUN · STEP 2/5" (or the helper state).
+  const status = el('div', 'installer-chrome-status ui-meta');
+  const parts = [];
+  let tone = 'idle';
   if (state.health) {
-    status.appendChild(statusPill(T('chrome.live', 'Live session'), 'ok', { dot: true }));
-    if (state.health.dry_run) {
-      status.appendChild(statusPill(T('chrome.dryRun', 'Dry run'), 'accent'));
-    }
+    tone = 'ok';
+    parts.push(T('chrome.live', 'Live session'));
+    if (state.health.dry_run) parts.push(T('chrome.dryRun', 'Dry run'));
     const totalSteps = state.phase === 'progress' ? STEPS.length + 1 : STEPS.length;
     const currentStep = state.phase === 'progress' ? totalSteps : Math.min(state.step + 1, STEPS.length);
-    status.appendChild(statusPill(T('chrome.step', 'Step {current} of {total}', {
-      current: currentStep,
-      total: totalSteps,
-    }), 'neutral'));
+    parts.push(T('chrome.stepShort', 'Step {current}/{total}', { current: currentStep, total: totalSteps }));
   } else if (state.loading) {
-    status.appendChild(statusPill(T('chrome.connecting', 'Checking helper'), 'neutral'));
+    parts.push(T('chrome.connecting', 'Checking helper'));
   } else {
-    status.appendChild(statusPill(T('chrome.offline', 'Helper offline'), 'error', { dot: true }));
+    tone = 'error';
+    parts.push(T('chrome.offline', 'Helper offline'));
   }
-  chrome.append(brand, el('span', 'installer-chrome-spacer'), status);
+  status.append(el('span', `installer-status-dot installer-status-dot--${tone}`), el('span', null, parts.join(' · ')));
+  chrome.append(
+    el('span', 'installer-chrome-spacer'),
+    el('span', 'installer-chrome-title ui-meta', T('chrome.installer', 'Installer')),
+    el('span', 'installer-chrome-spacer'),
+    status,
+  );
 }
 
 function renderSteps() {
@@ -867,30 +865,20 @@ function renderSteps() {
     item.title = label;
     item.setAttribute('aria-label', `${label} — ${desc}`);
     item.addEventListener('click', () => goStep(index));
-    const dot = el('span', 'installer-step-dot');
-    dot.appendChild(icon(done ? 'ui/check' : step.icon, { size: 15 }));
-    const copy = el('span', 'installer-step-copy');
-    copy.append(
-      el('span', 'installer-step-kicker', `0${index + 1}`),
-      el('span', 'installer-step-label', label),
-      el('span', 'installer-step-desc', desc),
-    );
-    item.append(dot, copy);
+    // Flat rail: a mono number (a check once done) and the label.
+    const num = el('span', 'installer-step-num');
+    if (done) num.appendChild(icon('ui/check', { size: 12 }));
+    else num.textContent = String(index + 1).padStart(2, '0');
+    item.append(num, el('span', 'installer-step-label', label));
     list.appendChild(item);
   });
 
   if (state.phase === 'progress') {
     const item = el('div', 'installer-step-item is-active is-installing');
     item.setAttribute('aria-current', 'step');
-    const dot = el('span', 'installer-step-dot');
-    dot.appendChild(spinner({ size: 14 }));
-    const copy = el('span', 'installer-step-copy');
-    copy.append(
-      el('span', 'installer-step-kicker', '06'),
-      el('span', 'installer-step-label', T('steps.progress.label', 'Installing')),
-      el('span', 'installer-step-desc', T('steps.progress.desc', 'Live progress')),
-    );
-    item.append(dot, copy);
+    const num = el('span', 'installer-step-num');
+    num.appendChild(spinner({ size: 12 }));
+    item.append(num, el('span', 'installer-step-label', T('steps.progress.label', 'Installing')));
     list.appendChild(item);
   }
   nav.appendChild(list);
@@ -949,15 +937,11 @@ function renderHelperError() {
 function stepHead(step) {
   const index = STEPS.indexOf(step);
   const head = el('header', 'installer-step-head');
-  const mark = el('div', 'installer-step-mark');
-  mark.appendChild(icon(step.icon, { size: 22 }));
-  const copy = el('div', 'installer-step-head-copy');
-  const kicker = el('div', 'installer-step-kicker', index >= 0 ? `0${index + 1} / 05` : 'INSTALL');
+  const kicker = el('div', 'installer-step-kicker', index >= 0 ? counter(index + 1, STEPS.length) : 'INSTALL');
   const title = el('h2', 'installer-step-title', T(`steps.${step.id}.title`, step.id));
   title.tabIndex = -1;
   const subtitle = el('p', 'installer-step-subtitle', T(`steps.${step.id}.subtitle`, ''));
-  copy.append(kicker, title, subtitle);
-  head.append(mark, copy);
+  head.append(kicker, title, subtitle);
   return head;
 }
 
@@ -972,6 +956,13 @@ function renderStep() {
   if (step.id === 'profile') wrap.appendChild(renderProfile());
   if (step.id === 'review') wrap.appendChild(renderReview());
   refs.inner.appendChild(wrap);
+  // Rows cascade in once per step entry, not on every re-render of the step.
+  if (revealedStep !== step.id) {
+    revealedStep = step.id;
+    void listReveal(wrap.querySelectorAll(
+      '.installer-disk, .installer-intent, .installer-choice, .installer-partition, .installer-review-block',
+    ));
+  }
   if (step.id === 'review') {
     queueMicrotask(() => void maybeValidatePlan());
   }
@@ -1430,11 +1421,11 @@ function partitionCard(disk, part) {
   const title = part.mountpoints?.[0] || `${T('disk.partition.label', 'Partition')} ${part.name || part.path.split('/').pop()}`;
   main.append(
     el('span', 'installer-partition-title', title),
-    el('span', 'installer-partition-meta', `${formatBytes(part.size_bytes)} · ${part.fstype || T('disk.partition.blank', 'not formatted')}`),
+    el('span', 'installer-partition-meta ui-meta', `${formatBytes(part.size_bytes)} · ${part.fstype || T('disk.partition.blank', 'not formatted')}`),
     el('span', 'installer-partition-detail', active
       ? T('disk.existing.selected', 'PEAK’D! will be installed here. This partition will be formatted.')
       : T('disk.existing.other', 'Your files stay here. This partition will not be touched.')),
-    el('span', 'installer-partition-path', part.path),
+    el('span', 'installer-partition-path ui-meta', part.path),
   );
   const badges = el('div', 'installer-partition-badges');
   if (active) badges.appendChild(badge(T('disk.existing.selectedBadge', 'Selected'), { tone: 'accent' }));
@@ -1459,29 +1450,28 @@ function diskCard(disk) {
   card.setAttribute('aria-checked', String(active));
   card.addEventListener('click', () => selectDisk(disk.path));
 
-  const mark = el('span', 'installer-disk-icon');
-  mark.appendChild(icon('ui/monitor', { size: 20 }));
-
   const main = el('div', 'installer-disk-main');
   const title = el('div', 'installer-disk-title');
   title.append(
-    el('span', 'installer-disk-name', disk.path),
-    el('span', 'installer-disk-model', disk.model || T('disk.unknownModel', 'Disk')),
+    el('span', 'installer-disk-name', disk.model || T('disk.unknownModel', 'Disk')),
   );
   main.appendChild(title);
   const freeGap = diskGaps(disk)
     .filter((gap) => gap.eligible)
     .sort((a, b) => b.size_bytes - a.size_bytes)[0];
+  // Mono metadata: path, size, serial first, then the bus and the layout facts.
   const meta = [
+    disk.path,
+    formatBytes(disk.size_bytes),
+    disk.serial || T('disk.noSerial', 'No serial exposed'),
     disk.tran ? disk.tran.toUpperCase() : '',
     `${(disk.children || []).length} ${T('disk.partitionCount', 'partitions')}`,
     freeGap
       ? `${T('disk.free', 'Free space')} ${formatBytes(freeGap.size_bytes)}`
       : T('disk.noFreeShort', 'No free space'),
-    disk.serial ? `${T('common.serial', 'Serial')} ${disk.serial}` : '',
   ].filter(Boolean).join(' · ');
   if (reasons.length) card.title = reasons.map(reasonLabel).join(' · ');
-  main.appendChild(el('div', 'installer-disk-meta', meta));
+  main.appendChild(el('div', 'installer-disk-meta ui-meta', meta));
   const badges = el('div', 'installer-disk-badges');
   if (diskHasMounts(disk)) badges.appendChild(badge(T('disk.badge.mounted', 'Mounted'), { tone: 'warn' }));
   if (disk.removable) badges.appendChild(badge(T('disk.badge.removable', 'Removable'), { tone: 'warn' }));
@@ -1493,13 +1483,10 @@ function diskCard(disk) {
   main.appendChild(segmentBar(existingSegments(disk), { mini: true, label: T('disk.currentBar', 'Current partition layout for {path}', { path: disk.path }) }));
 
   const side = el('div', 'installer-disk-side');
-  side.append(
-    el('span', 'installer-disk-size', formatBytes(disk.size_bytes)),
-    el('span', 'installer-disk-serial', disk.serial || T('disk.noSerial', 'No serial exposed')),
-  );
+  side.append(el('span', 'installer-disk-size', formatBytes(disk.size_bytes)));
   const check = el('span', 'installer-disk-check');
   if (active) check.appendChild(icon('ui/check', { size: 14 }));
-  card.append(mark, main, side, check);
+  card.append(main, side, check);
   return card;
 }
 
@@ -2220,14 +2207,15 @@ function renderFooter() {
   } else {
     actions.appendChild(button({
       label: T('common.back', 'Back'),
-      variant: 'ghost',
+      variant: 'quiet',
       disabled: state.step === 0,
       onClick: () => goStep(state.step - 1),
     }));
     if (state.step < STEPS.length - 1) {
       actions.appendChild(button({
         label: T('common.next', 'Next'),
-        variant: 'primary',
+        variant: 'ghost',
+        arrow: true,
         onClick: goNext,
       }));
     } else {
@@ -2242,7 +2230,7 @@ function renderFooter() {
       const install = button({
         label: T('common.install', "Install PEAK'D!"),
         variant: 'primary',
-        icon: 'ui/download',
+        arrow: true,
         disabled: !installReady(),
         onClick: () => void startInstall(),
       });
@@ -2433,7 +2421,14 @@ function updateProgressDom() {
   if (!status || !refs.ring) return;
   refs.ring.style.setProperty('--p', String(Math.max(0, Math.min(100, status.progress || 0))));
   if (refs.ringValue) refs.ringValue.textContent = `${status.progress || 0}%`;
-  if (refs.progressStage) refs.progressStage.textContent = stageLabel(status.stage);
+  // The stage label decodes in place when the helper moves to the next stage.
+  if (refs.progressStage) {
+    const label = stageLabel(status.stage);
+    if (refs.progressStage.dataset.stage !== String(status.stage || '')) {
+      refs.progressStage.dataset.stage = String(status.stage || '');
+      decodeText(refs.progressStage, label);
+    }
+  }
   if (refs.progressStatus) refs.progressStatus.textContent = status.error || T('progress.running', 'Working…');
   if (refs.log) refs.log.textContent = (status.log || []).join('\n');
   const current = stageIndex(status.stage);
@@ -2445,17 +2440,13 @@ function updateProgressDom() {
 
 function progressHead() {
   const head = el('header', 'installer-step-head');
-  const mark = el('div', 'installer-step-mark');
-  mark.appendChild(icon('ui/download', { size: 22 }));
-  const copy = el('div', 'installer-step-head-copy');
   const title = el('h2', 'installer-step-title', T('progress.title', "Installing PEAK'D!"));
   title.tabIndex = -1;
-  copy.append(
-    el('div', 'installer-step-kicker', 'INSTALL'),
+  head.append(
+    el('div', 'installer-step-kicker', counter(STEPS.length + 1, STEPS.length + 1)),
     title,
     el('p', 'installer-step-subtitle', T('progress.body', 'The live session stays open while the helper prepares the target.')),
   );
-  head.append(mark, copy);
   return head;
 }
 
@@ -2478,6 +2469,7 @@ function renderProgress() {
     el('p', 'installer-progress-sub', T('progress.body', 'The live session stays open while the helper prepares the target.')),
   );
   refs.progressStage = el('div', 'installer-progress-stage', stageLabel(status.stage));
+  refs.progressStage.dataset.stage = String(status.stage || '');
   refs.progressStatus = el('div', 'installer-progress-status', status.error || T('progress.running', 'Working…'));
   copy.append(refs.progressStage, refs.progressStatus);
   hero.append(ring, copy);
@@ -2520,6 +2512,12 @@ function renderProgress() {
   logWrap.appendChild(refs.log);
   wrap.appendChild(logWrap);
   refs.inner.appendChild(wrap);
+  // The ring rolls up to its value and the stages cascade in when the view opens.
+  if (!revealedProgress) {
+    revealedProgress = true;
+    rollNumber(refs.ringValue, { duration: 700 });
+    void listReveal(stages.children);
+  }
 }
 
 async function cancelJob() {
@@ -2543,6 +2541,7 @@ function backToReview() {
   state.validation = null;
   state.validationKey = null;
   state.step = 4;
+  revealedProgress = false;
   render();
   refs.scroll.scrollTop = 0;
 }
@@ -2557,7 +2556,6 @@ function renderManifest() {
     el('h2', 'installer-manifest-title', T('manifest.title', 'Install manifest')),
   );
   head.appendChild(headCopy);
-  head.appendChild(state.health?.dry_run ? badge(T('manifest.dryRun', 'Dry run'), { tone: 'accent' }) : badge(T('manifest.live', 'Live'), { tone: 'ok' }));
   manifest.appendChild(head);
 
   const disk = selectedDisk();
@@ -2571,7 +2569,7 @@ function renderManifest() {
       el('strong', 'installer-manifest-value', disk.model || disk.path),
       el('span', 'installer-manifest-sub', `${disk.path} · ${formatBytes(disk.size_bytes)}`),
       segmentBar(existingSegments(disk), { mini: true, label: T('disk.currentBar', 'Current partition layout for {path}', { path: disk.path }) }),
-      el('span', 'installer-manifest-meta', disk.serial || T('disk.noSerial', 'No serial exposed')),
+      el('span', 'installer-manifest-meta ui-meta', disk.serial || T('disk.noSerial', 'No serial exposed')),
     );
     if (model?.gap) {
       target.appendChild(el('span', 'installer-manifest-sub', `${T('disk.timeline.zone', 'Install zone')}: ${formatBytes(model.gap.start_bytes)} – ${formatBytes(model.gap.start_bytes + model.gap.size_bytes)}`));
@@ -2632,6 +2630,8 @@ export function mountInstallerTile() {
   ensureStylesheet();
   state = initialState();
   fieldUid = 0;
+  revealedStep = null;
+  revealedProgress = false;
   tileEl = document.createElement('section');
   tileEl.className = 'tile installer-tile';
   tileEl.dataset.plugin = PLUGIN;

@@ -9,6 +9,10 @@
   "plugin.updates.toolbar.sections": "Sezioni",
   "plugin.updates.toolbar.check": "Controlla gli aggiornamenti",
 
+  "plugin.updates.hero.checking": "Controllo…",
+  "plugin.updates.hero.count.one": "{count} aggiornamento",
+  "plugin.updates.hero.count.other": "{count} aggiornamenti",
+
   "plugin.updates.status.checking": "Controllo degli aggiornamenti…",
   "plugin.updates.status.thisSystem": "questo sistema",
   "plugin.updates.status.unavailableOnSystem": "Gli aggiornamenti non sono disponibili su questo sistema",

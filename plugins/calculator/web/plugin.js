@@ -1,12 +1,14 @@
 import {
-  toolbar, toolButton, controlButton, button, emptyState, toast, setTileGlow, glowGradient,
+  toolbar, toolButton, controlButton, emptyState, toast, setTileGlow, glowGradient,
+  icon, eyebrow, hairlineList, listReveal, rollNumber,
 } from '../../ui/index.js';
 
 /**
  * calculator.js — the Calculator plugin's window (basic + scientific).
  *
- * A flat calculator: a display (expression + result), a keypad, and a
- * collapsible history panel. `=` sends the expression to POST
+ * An editorial calculator: a display (a small mono expression line over a
+ * large display-font result that rolls up when set), a keypad of flat grey
+ * pills with `=` as the ink pill, and a collapsible hairline history. `=` sends the expression to POST
  * /api/calculator/eval — the same Rust evaluator the AI tool uses — so the
  * window and the agent always agree. Results land in the shared
  * `calculator_history` log.
@@ -56,28 +58,37 @@ async function apiClearHistory() {
 /* ── Display / expression state ─────────────────────────────── */
 
 /**
- * Ambient glow mirrors the calculator's state (Tier 1): a warm red/orange
- * pair on error, a hue derived from the result's magnitude, otherwise the
- * theme's accent gradient.
+ * Ambient glow mirrors the calculator's state (Tier 1), from theme tokens
+ * only: the error colour on error, the accent pair otherwise — a result moves
+ * the blobs (their position follows the result's magnitude).
  */
 function updateGlow({ error = false } = {}) {
   if (error) {
-    setTileGlow(tileEl, glowGradient('hsl(6 75% 52%)', 'hsl(28 70% 30%)'));
+    setTileGlow(tileEl, glowGradient('var(--error)', 'var(--accent-2)'));
     return;
   }
   const n = Number(lastResult);
   if (lastResult != null && Number.isFinite(n)) {
-    const m = Math.min(Math.abs(n) % 360, 360);
-    setTileGlow(tileEl, glowGradient(`hsl(${m} 70% 55%)`, `hsl(${(m + 45) % 360} 65% 28%)`));
+    const m = Math.abs(n) % 100;
+    setTileGlow(tileEl, glowGradient('var(--accent)', 'var(--accent-2)', {
+      x: Math.round(m), y: 0, x2: Math.round(100 - m), y2: 100,
+    }));
     return;
   }
   setTileGlow(tileEl, glowGradient('var(--accent)', 'var(--accent-2)'));
 }
 
-function renderDisplay() {
+/** Repaint the display. `roll` animates a freshly set result (rollNumber). */
+function renderDisplay({ roll = false } = {}) {
   if (!exprEl || !resultEl) return;
   exprEl.textContent = expression || '\u200b';
-  resultEl.textContent = lastResult == null ? '' : String(lastResult);
+  const text = lastResult == null ? '' : String(lastResult);
+  // An empty display shows a muted 0, like a pocket calculator at rest.
+  resultEl.textContent = text || '0';
+  resultEl.classList.toggle('is-empty', !text);
+  resultEl.classList.remove('is-error');
+  resultEl.classList.toggle('is-long', text.length > 12);
+  if (roll && text) rollNumber(resultEl);
   updateGlow();
 }
 
@@ -116,10 +127,15 @@ async function equals() {
     const r = await apiEval(src);
     expression = '';
     lastResult = r?.result_text ?? null;
-    renderDisplay();
+    renderDisplay({ roll: true });
+    // Keep the evaluated expression visible above the result until the next
+    // key press (the expression state itself is already cleared).
+    exprEl.textContent = src;
     await refreshHistory();
   } catch (e) {
     resultEl.textContent = t('plugin.calculator.display.error', null, 'Error');
+    resultEl.classList.remove('is-empty');
+    resultEl.classList.add('is-error');
     // Sticky until the next successful renderDisplay() repaints the glow.
     updateGlow({ error: true });
     toast(e.message || t('plugin.calculator.toast.evaluateFailed', null, 'Could not evaluate'), { type: 'error' });
@@ -133,12 +149,21 @@ const OPERATOR_LABELS = {
   '^': 'pow', '%': 'mod', '√': 'sqrt',
 };
 
-function keyBtn(label, action, cls = '') {
+/** One keypad key. `iconName` swaps the label for a catalog icon (the label
+ *  then becomes the accessible name). */
+function keyBtn(label, action, cls = '', iconName = '') {
   const b = controlButton();
   b.type = 'button';
   b.className = `calculator-key ${cls}`.trim();
-  b.textContent = label;
-  if (label.length > 1 && !OPERATOR_LABELS[label]) b.classList.add('is-fn');
+  if (iconName) {
+    b.appendChild(icon(iconName, { size: 18 }));
+    b.setAttribute('aria-label', label);
+    b.title = label;
+  } else {
+    b.textContent = label;
+    if (label.length > 1 && !OPERATOR_LABELS[label]) b.classList.add('is-fn');
+  }
+  if (OPERATOR_LABELS[label]) b.classList.add('is-op');
   b.addEventListener('click', action);
   return b;
 }
@@ -148,8 +173,8 @@ function buildKeypad() {
 
   const rows = [
     [
-      keyBtn('C', clearAll, 'is-danger'),
-      keyBtn('⌫', backspace),
+      keyBtn('C', clearAll, 'is-clear'),
+      keyBtn(t('plugin.calculator.key.backspace', null, 'Backspace'), backspace, '', 'ui/arrow-left'),
       keyBtn('(', () => append('(')),
       keyBtn(')', () => append(')')),
       keyBtn('÷', () => { continueFromResult('/'); append('/'); }),
@@ -225,15 +250,25 @@ function toggleSci() {
   sciMode = !sciMode;
   sciEl.classList.toggle('hidden', !sciMode);
   sciToggleBtn?.classList.toggle('is-active', sciMode);
+  sciToggleBtn?.setAttribute('aria-pressed', String(sciMode));
 }
 
 /* ── History panel ──────────────────────────────────────────── */
 
-async function refreshHistory() {
+/** Reload the history list. `reveal` plays listReveal on the rows — only
+ *  when the panel opens, not on every refresh after `=`. */
+async function refreshHistory({ reveal = false } = {}) {
   if (!historyEl) return;
   try {
     const { history } = await apiHistory();
     historyEl.textContent = '';
+    const head = document.createElement('div');
+    head.className = 'calculator-history-head';
+    head.append(
+      eyebrow(t('plugin.calculator.toolbar.history', null, 'History')),
+      eyebrow(String(history?.length || 0)),
+    );
+    historyEl.appendChild(head);
     if (!history || !history.length) {
       historyEl.appendChild(emptyState({
         title: t('plugin.calculator.empty.noHistory', null, 'No history'),
@@ -241,26 +276,30 @@ async function refreshHistory() {
       }));
       return;
     }
+    const list = hairlineList('calculator-history-list');
     for (const item of history) {
       const row = controlButton();
       row.type = 'button';
       row.className = 'calculator-history-item';
+      row.setAttribute('role', 'listitem');
       row.title = t('plugin.calculator.history.reuse', null, 'Reuse this result');
       const expr = document.createElement('span');
       expr.className = 'calculator-history-expr';
       expr.textContent = item.expression;
       const res = document.createElement('span');
       res.className = 'calculator-history-res';
-      res.textContent = `= ${item.result}`;
+      res.textContent = String(item.result);
       row.append(expr, res);
       row.addEventListener('click', () => {
         lastResult = item.result;
         expression = '';
-        renderDisplay();
+        renderDisplay({ roll: true });
         closeHistory();
       });
-      historyEl.appendChild(row);
+      list.appendChild(row);
     }
+    historyEl.appendChild(list);
+    if (reveal) void listReveal(list.children);
   } catch (e) {
     toast(e.message || t('plugin.calculator.toast.historyFailed', null, 'Could not load history'), { type: 'error' });
   }
@@ -280,13 +319,15 @@ function toggleHistory() {
   historyOpen = !historyOpen;
   historyEl?.classList.toggle('hidden', !historyOpen);
   historyToggleBtn?.classList.toggle('is-active', historyOpen);
-  if (historyOpen) void refreshHistory();
+  historyToggleBtn?.setAttribute('aria-pressed', String(historyOpen));
+  if (historyOpen) void refreshHistory({ reveal: true });
 }
 
 function closeHistory() {
   historyOpen = false;
   historyEl?.classList.add('hidden');
   historyToggleBtn?.classList.remove('is-active');
+  historyToggleBtn?.setAttribute('aria-pressed', 'false');
 }
 
 /* ── Tile lifecycle ─────────────────────────────────────────── */
@@ -310,6 +351,8 @@ export function mountCalculatorTile() {
   historyToggleBtn = barBtn('ui/list', t('plugin.calculator.toolbar.history', null, 'History'), toggleHistory);
   sciToggleBtn = barBtn('ui/scientific', t('plugin.calculator.toolbar.scientific', null, 'Scientific'), toggleSci);
   const clearBtn = barBtn('ui/trash', t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), () => void clearHistory());
+  historyToggleBtn.setAttribute('aria-pressed', 'false');
+  sciToggleBtn.setAttribute('aria-pressed', 'false');
   bar.append(spacer, historyToggleBtn, sciToggleBtn, clearBtn);
   tileEl.appendChild(bar);
 
@@ -375,7 +418,8 @@ function onAgentActions(e) {
   if (evaled) {
     expression = '';
     lastResult = evaled.data?.result_text ?? null;
-    renderDisplay();
+    renderDisplay({ roll: true });
+    if (evaled.data?.expression) exprEl.textContent = evaled.data.expression;
   }
   if (historyOpen) void refreshHistory();
 }

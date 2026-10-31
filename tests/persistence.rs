@@ -224,3 +224,46 @@ async fn complete_legacy_migration_is_adopted_without_rewriting_profile_values()
             .unwrap();
     assert_eq!(profile, (None, "saved-avatar".into()));
 }
+
+#[tokio::test]
+async fn tool_card_rows_are_stored_in_order_and_kept_out_of_the_model_history() {
+    use shiny::services::chat_memory;
+    let app = support::TestApp::new().await;
+    sqlx::query("INSERT INTO travelers (id, name, email, password_hash) VALUES ('u', 'User', 'u@test', '!')")
+        .execute(&app.state.pool).await.unwrap();
+    let conversation = chat_memory::resolve_conversation(&app.state.pool, "u", None)
+        .await
+        .unwrap();
+    let card = shiny::services::tool_cards::card_record(
+        "calculator_eval",
+        "ok",
+        Some("calculator"),
+        Some(&serde_json::json!({ "expression": "2+2", "result": 4, "result_text": "4" })),
+        &serde_json::json!({ "expression": "2+2" }),
+    );
+    let events = vec![
+        ("approval".to_string(), "{\"command\":\"ls\",\"decision\":\"allow\"}".to_string()),
+        ("tool".to_string(), card.to_string()),
+        ("media".to_string(), "{\"kind\":\"image\",\"url\":\"/x.png\"}".to_string()),
+    ];
+    chat_memory::save_turn_with_note(
+        &app.state.pool, "u", &conversation, "what is 2+2", "4", None, None, &events,
+    )
+    .await
+    .unwrap();
+
+    let roles: Vec<String> = sqlx::query_scalar(
+        "SELECT role FROM chat_messages WHERE conversation_id = ?1 ORDER BY timestamp, rowid",
+    )
+    .bind(&conversation)
+    .fetch_all(&app.state.pool)
+    .await
+    .unwrap();
+    assert_eq!(roles, ["user", "approval", "tool", "assistant", "media"]);
+
+    let history = chat_memory::recent_history(&app.state.pool, &conversation, 40)
+        .await
+        .unwrap();
+    let history_roles: Vec<&str> = history.iter().map(|(role, _)| role.as_str()).collect();
+    assert_eq!(history_roles, ["user", "assistant"]);
+}

@@ -15,7 +15,7 @@
  */
 
 import { getImmersive } from './preferences.js';
-import { paintGlyph } from './voiceGlyph.js';
+import { paintGlyph, paintStateLabel } from './voiceGlyph.js';
 
 const stepEl = document.getElementById('artifact-dock-step');
 const dockEl = document.getElementById('artifact-dock');
@@ -33,6 +33,13 @@ function bubbleStillNeeded() {
   return document.body.classList.contains('compose-active'); // live composer
 }
 
+/** The state mode: the assistant's state, decoded letter by letter on change. */
+function paintBarState() {
+  glyphEl.classList.remove('hidden');
+  painted = null;
+  paintStateLabel(glyphEl, document.documentElement.dataset.voice || 'idle');
+}
+
 /** What the glyph was last painted with, so unrelated repaints do nothing. */
 let painted = null;
 
@@ -44,6 +51,7 @@ let painted = null;
 function paintBarGlyph() {
   if (!glyphEl) return;
   const mode = getImmersive().orb_status;
+  if (mode === 'state') { paintBarState(); return; }
   if (mode === 'off' || (mode === 'text' && !lastText)) {
     if (painted !== null) {
       glyphEl.classList.add('hidden');
@@ -92,6 +100,9 @@ export function clearDockStep() {
 /* A mode switch (off ↔ text ↔ icons) repaints the glyph in place — the line
    itself is already the last step's. */
 window.addEventListener('desktop:immersive', paintBarGlyph);
+/* The state label follows the assistant (sphere.js) and the language. */
+window.addEventListener('voice:state', () => { if (getImmersive().orb_status === 'state') paintBarGlyph(); });
+window.addEventListener('locale:change', () => { if (getImmersive().orb_status === 'state') paintBarGlyph(); });
 
 /* Boot: the icon mode carries its resting mark from the first frame, even
    though this module can load after the settings were published (modules load

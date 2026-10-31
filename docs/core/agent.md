@@ -84,7 +84,7 @@ pub async fn handle_agent_dispatch(
 | Mode | Handler | Transport |
 |---|---|---|
 | `stream: false` / omitted | `handle_agent` | One `application/json` response. |
-| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events, an `artifact` event for each tool artifact saved mid-turn, an `approval` event when a terminal command needs consent, then `done`/`error`. |
+| `stream: true` | `handle_agent_stream` | `text/event-stream` SSE: `step` (and, with thinking on, `thinking`) events, an `artifact` event for each tool artifact saved mid-turn, a `tool` event (the chat's tool-card record) after each tool call, an `approval` event when a terminal command needs consent, then `done`/`error`. |
 
 The frontend always sets `stream: true` (`web/js/agent.js`) and parses the SSE
 stream itself; the transport modes are the two rows above.
@@ -345,7 +345,7 @@ pub struct AgentRunResult {
     pub focus_plugin: Option<String>,
     pub steps: Vec<String>,      // full LLM-facing notes
     pub thinking: String,        // reasoning trace, joined; empty when off
-    pub events: Vec<(String, String)>, // persisted approval/media rows
+    pub events: Vec<(String, String)>, // persisted approval/tool/media rows
     pub interrupted: bool,
 }
 ```
@@ -399,7 +399,10 @@ Key behaviours:
   line; `on_artifact` receives each saved, owner-tagged artifact for the SSE
   `artifact` event (the client adopts it and surfaces its window immediately);
   `on_thinking` carries the reasoning trace blocks (SSE `thinking`
-  events) of each model call when thinking is on.
+  events) of each model call when thinking is on; `on_tool` receives each
+  finished call's tool-card record (`services::tool_cards::card_record`:
+  capped, credentials stripped) for the SSE `tool` event, and the same record
+  is pushed to `events` as a `tool` row.
 
 ### 4.2 The cancellation-aware model call
 

@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Kaust",
   "plugin.files.status.items.one": "{count} üksus",
   "plugin.files.status.items.other": "{count} üksust",
-  "plugin.files.status.selected": "“{name}” valitud ({what})",
-  "plugin.files.status.multiSelected.one": "{count} üksus valitud ({size})",
-  "plugin.files.status.multiSelected.other": "{count} üksust valitud ({size})",
 
   "plugin.files.when.today": "Täna {time}",
   "plugin.files.when.yesterday": "Eile {time}",

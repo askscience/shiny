@@ -122,8 +122,9 @@ for (let mount = 0; mount < 3; mount++) {
   assert.ok(subtitles.every((subtitle) => subtitle.textContent.trim().length > 0), 'panel descriptions are translated');
   const kickers = element.querySelectorAll('.settings-panel-kicker');
   assert.equal(kickers.length, expectedSections.length);
-  assert.equal(kickers[0].textContent, `Section 1 of ${expectedSections.length}`);
-  assert.equal(kickers.at(-1).textContent, `Section ${expectedSections.length} of ${expectedSections.length}`);
+  const total = String(expectedSections.length).padStart(2, '0');
+  assert.equal(kickers[0].textContent, `01 / ${total}`, 'panel kickers are mono "01 / 09" counters');
+  assert.equal(kickers.at(-1).textContent, `${total} / ${total}`);
   const listeners = window.count();
   window.dispatchEvent(new CustomEvent('locale:change'));
   await new Promise((resolve) => setImmediate(resolve));

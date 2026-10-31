@@ -20,7 +20,8 @@ typedef void (*peakd_ipc_cb)(void *userdata, const char *body);
 typedef void (*peakd_view_cb)(void *userdata, const char *id, const char *kind,
                               const char *payload);
 
-/// Called every ~100 ms on the Qt main thread: the shell's pump.
+/// Called every ~100 ms on the Qt main thread (faster while a trackpad gesture
+/// is live, see `peakd_qt_pump_rate`): the shell's pump.
 typedef void (*peakd_pump_cb)(void *userdata);
 
 /// Result of `peakd_qt_main_run_js`.
@@ -74,6 +75,16 @@ void peakd_qt_quit(void);
 void peakd_qt_main_load(const char *url);
 void peakd_qt_main_zoom(double factor);
 void peakd_qt_main_run_js(const char *script, int callback_id);
+/// Print a complete HTML document to PDF with Chromium's print pipeline (A4 or
+/// Letter, margins in mm: `{"size":"A4","landscape":false,"margins":[t,r,b,l]}`).
+/// The result reaches the app view as `window.__peakdPrinted({id, ok, data|error})`.
+void peakd_qt_print_html(const char *id, const char *html, const char *options_json);
+
+/// Set the pump timer's interval (ms, > 0) and, when `wake` is non-zero, run
+/// the pump once as soon as the GUI thread is free. The one shim call that is
+/// safe from any thread: both are queued onto the GUI thread. A no-op before
+/// `peakd_qt_run` has started the pump.
+void peakd_qt_pump_rate(int interval_ms, int wake);
 
 /// Colour scheme the pages should render for (`"dark"` / `"light"`), mirrored
 /// into Qt's style hint so `prefers-color-scheme` follows the app theme.

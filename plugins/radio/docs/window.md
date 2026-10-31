@@ -13,6 +13,25 @@ export default {
 };
 ```
 
+## Layout
+
+Compact, editorial (the Dusk/Ink skin; styles in the `Radio plugin window`
+block of `web/css/tiles.css`):
+
+- **Now-playing bar** — doubles as the window bar. Small rounded artwork (when
+  there is any), the track or station title in tight display type (`Radio`
+  when idle; long titles scroll on a marquee), and a mono uppercase meta line:
+  `ARTIST · STATION` once ICY metadata names the track, otherwise
+  `TAG · COUNTRY · 128 KBPS`. A small accent dot leads the meta while live.
+- **Transport** — play/pause is the ink pill (`button` variant `primary`),
+  stop the grey pill (`ghost`); tooltips and labels come from the catalogue.
+- **Search** — a flat grey pill (no shadow).
+- **Station grid** — rounded square artwork boxes on the theme surface, each
+  captioned below in mono: the two-digit number and the station name. The
+  station on air gets an ink outline around its artwork. Cells cascade in with
+  `listReveal` when a list loads; a track change decodes the title in
+  (`decodeText`).
+
 ## Behaviour
 
 - Fetches the station grid and search results from the public Radio Browser

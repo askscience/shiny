@@ -36,11 +36,6 @@
   "plugin.files.status.items.two": "{count} elementa",
   "plugin.files.status.items.few": "{count} elementi",
   "plugin.files.status.items.other": "{count} elementov",
-  "plugin.files.status.selected": "“{name}” izbrano ({what})",
-  "plugin.files.status.multiSelected.one": "{count} element izbran ({size})",
-  "plugin.files.status.multiSelected.two": "{count} elementa izbrana ({size})",
-  "plugin.files.status.multiSelected.few": "{count} elementi izbrani ({size})",
-  "plugin.files.status.multiSelected.other": "{count} elementov izbranih ({size})",
 
   "plugin.files.when.today": "Danes {time}",
   "plugin.files.when.yesterday": "Včeraj {time}",

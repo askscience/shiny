@@ -35,10 +35,6 @@
   "plugin.files.status.items.one": "{count} element",
   "plugin.files.status.items.few": "{count} elemente",
   "plugin.files.status.items.other": "{count} de elemente",
-  "plugin.files.status.selected": "“{name}” selectat ({what})",
-  "plugin.files.status.multiSelected.one": "{count} element selectat ({size})",
-  "plugin.files.status.multiSelected.few": "{count} elemente selectate ({size})",
-  "plugin.files.status.multiSelected.other": "{count} de elemente selectate ({size})",
 
   "plugin.files.when.today": "Astăzi {time}",
   "plugin.files.when.yesterday": "Ieri {time}",

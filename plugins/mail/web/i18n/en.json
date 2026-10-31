@@ -23,6 +23,7 @@
   "plugin.mail.reader.reply": "Reply",
   "plugin.mail.reader.forward": "Forward",
   "plugin.mail.reader.delete": "Delete",
+  "plugin.mail.reader.close": "Close message",
   "plugin.mail.reader.emptyBody": "(empty message)",
   "plugin.mail.reader.attachment": "attachment",
 
@@ -112,6 +113,47 @@
   "plugin.mail.empty.selectBody": "Pick a message to read it here.",
   "plugin.mail.empty.noMessages": "No messages",
   "plugin.mail.empty.nothingIn": "Nothing in {folder}.",
+  "plugin.mail.empty.noSearchResults": "No messages match “{query}”.",
+
+  "plugin.mail.chrome.unread.one": "{count} unread",
+  "plugin.mail.chrome.unread.other": "{count} unread",
+
+  "plugin.mail.rail.eyebrow": "Mailbox",
+  "plugin.mail.rail.title": "Mail",
+  "plugin.mail.rail.sub": "No account connected",
+
+  "plugin.mail.folder.inbox": "Inbox",
+  "plugin.mail.folder.sent": "Sent",
+  "plugin.mail.folder.drafts": "Drafts",
+  "plugin.mail.folder.trash": "Trash",
+  "plugin.mail.folder.archive": "Archive",
+  "plugin.mail.folder.junk": "Junk",
+  "plugin.mail.folder.spam": "Spam",
+  "plugin.mail.folder.messages.one": "{count} message",
+  "plugin.mail.folder.messages.other": "{count} messages",
+
+  "plugin.mail.folder.noMessages": "No messages",
+  "plugin.mail.folder.none": "No folders",
+
+  "plugin.mail.hero.new.one": "{count} new",
+  "plugin.mail.hero.new.other": "{count} new",
+
+  "plugin.mail.footer.step": "{folder} · {messages}",
+  "plugin.mail.footer.note": "Cached locally — sync to check for new mail.",
+
+  "plugin.mail.reader.eyebrow": "Message",
+  "plugin.mail.reader.fromLabel": "From",
+  "plugin.mail.reader.toLabel": "To",
+  "plugin.mail.reader.dateLabel": "Date",
+
+  "plugin.mail.setup.kicker": "Setup",
+
+  "plugin.mail.form.section.account": "Account",
+  "plugin.mail.form.section.imap": "Incoming mail (IMAP)",
+  "plugin.mail.form.section.smtp": "Outgoing mail (SMTP)",
+
+  "plugin.mail.settings.kicker": "Accounts",
+  "plugin.mail.settings.subtitle": "Add, test or remove the mailboxes this window uses.",
 
   "plugin.mail.notify.title": "New mail",
   "plugin.mail.notify.newMail.one": "{count} new message in {where}",

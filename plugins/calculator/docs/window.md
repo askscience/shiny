@@ -1,7 +1,11 @@
 # Calculator plugin — window surface (`web/plugin.js`)
 
-The Calculator window: a flat calculator with an expression/result display, a
-keypad, a collapsible scientific pad, and a collapsible shared history panel.
+The Calculator window, in the editorial language: a display with a small mono
+uppercase expression line over a large, tight display-font result (rolled up
+with `rollNumber` whenever a result is set), a keypad of flat grey pills with
+`=` as the single ink pill, a collapsible scientific pad, and a collapsible
+hairline history. Styles: the "Calculator plugin window" section of
+`web/css/tiles.css`.
 `=` posts to `/api/calculator/eval`, the same evaluator the AI tool uses.
 
 ## Exports
@@ -22,7 +26,7 @@ keypad, a collapsible scientific pad, and a collapsible shared history panel.
 
 1. If `tileEl` already exists, returns it (singleton).
 2. Creates `<section class="tile calculator-tile" data-plugin="calculator">`.
-3. Builds the **top bar** (`div.calculator-bar`, marked `dataset.windowBar = ''` so core merges it into the window controls): a spacer, a History toggle (`ui/list`), a Scientific toggle (`ui/scientific`), and Clear history (`ui/trash`).
+3. Builds the **top bar** (`div.calculator-bar`, marked `dataset.windowBar = ''` so core merges it into the window controls; no plate at rest): a spacer, a History toggle (`ui/list`), a Scientific toggle (`ui/scientific`), and Clear history (`ui/trash`). An "on" toggle is a grey pill fill (`--ed-pill`) with `aria-pressed`, not an accent box.
 4. Builds the **display** (`div.calculator-display` with `.calculator-display-expr` and `.calculator-display-result`).
 5. Builds the **scientific pad** (`div.calculator-sci hidden`) via `buildSciPad()`. Hidden by default; `toggleSci()` flips `is-active`.
 6. Builds the **keypad** (`div.calculator-keys`) via `buildKeypad()` in five `.calculator-key-row`s.
@@ -51,9 +55,11 @@ section.tile.calculator-tile[data-plugin=calculator]
 ├── div.calculator-keys
 │   └── div.calculator-key-row > button.calculator-key (×5)   (×5 rows)
 └── div.calculator-history.hidden
-    └── button.calculator-history-item
-        ├── span.calculator-history-expr
-        └── span.calculator-history-res
+    ├── div.calculator-history-head (eyebrow "HISTORY" + count)
+    └── div.ui-hairline-list.calculator-history-list
+        └── button.calculator-history-item
+            ├── span.calculator-history-expr   (mono, uppercase)
+            └── span.calculator-history-res    (display face)
 ```
 
 ### CSS class prefix
@@ -63,7 +69,8 @@ All classes are prefixed **`calculator-`**: `calculator-tile`, `calculator-bar`,
 `calculator-display-expr`, `calculator-display-result`, `calculator-sci`,
 `calculator-key`, `calculator-key-row`, `calculator-history`,
 `calculator-history-item`, `calculator-history-expr`, `calculator-history-res`.
-Modifiers: `is-fn`, `is-danger`, `is-equals`, `is-active`, `hidden`. Plugins
+Modifiers: `is-fn`, `is-op`, `is-clear`, `is-equals`, `is-active`, `hidden`;
+on the result `is-empty` (muted 0 at rest), `is-long`, `is-error`. Plugins
 ship no CSS — core styles these class names thematically.
 
 ## Behaviour & state
@@ -76,19 +83,25 @@ Module state: `expression` (string), `lastResult` (number-as-string or `null`),
 - `continueFromResult(text)`: after `=`, pressing an operator continues from
   the answer (pocket-calculator behaviour); pressing a digit starts fresh.
 - `equals()`: trims the expression, `apiEval`, clears the expression, sets
-  `lastResult` to `result_text`, repaints, and refreshes history. On failure it
-  shows `Error`, marks the glow red/orange, and `toast`s the message.
-- `updateGlow()` uses `setTileGlow` + `glowGradient`: red/orange on error, a hue
-  derived from the result's magnitude otherwise, theme accent while empty.
-- History rows are clickable: clicking one sets `lastResult` to that result and
-  closes the panel.
+  `lastResult` to `result_text`, repaints with `rollNumber`, keeps the
+  evaluated expression on the mono line, and refreshes history. On failure it
+  shows `Error`, switches the glow to the error token, and `toast`s the
+  message.
+- `updateGlow()` uses `setTileGlow` + `glowGradient` with theme tokens only:
+  `--error` on error, the `--accent`/`--accent-2` pair otherwise (a result
+  moves the blobs by its magnitude).
+- History rows are hairline rows (mono expression, display-face result); they
+  play `listReveal` when the panel opens (not on each refresh after `=`).
+  Clicking one sets `lastResult` to that result (rolled up) and closes the
+  panel.
 - `clearHistory()` calls `DELETE /api/calculator/history`, refreshes, toasts.
 
 ### Keypad
 
 - `OPERATOR_LABELS` maps display glyphs (`×`, `÷`, `√`, `^`, `%`) to class
   hints. Multi-character labels that are not operators get `is-fn`.
-- Base rows cover `C ⌫ ( ) ÷`, `7 8 9 × %`, `4 5 6 − ^`, `1 2 3 + π`,
+- Base rows cover `C`, Backspace (the `ui/arrow-left` catalog icon, labelled
+  `plugin.calculator.key.backspace`), `( ) ÷`, `7 8 9 × %`, `4 5 6 − ^`, `1 2 3 + π`,
   `± 0 . = e`.
 - Scientific pad: `sin cos tan √ asin acos atan x² ln log log₂ exp deg rad ! abs
   floor ceil round fact`, each appending the matching `fn(` token.
@@ -123,5 +136,6 @@ Returns entries core wraps with separators/window management: **Equals**
 
 ## UI library imports
 
-`../../ui/index.js`: `button`, `emptyState`, `toast`, `setTileGlow`,
-`glowGradient`, `setIcon`. `../../js/api.js`: `apiFetch`.
+`../../ui/index.js`: `toolbar`, `toolButton`, `controlButton`, `emptyState`,
+`toast`, `setTileGlow`, `glowGradient`, `icon`, `eyebrow`, `hairlineList`,
+`listReveal`, `rollNumber`. `../../js/api.js`: `apiFetch`.

@@ -1,0 +1,31 @@
+{
+  "name": "ink",
+  "label": "Ink",
+  "version": "1.0.0",
+  "author": "Shiny",
+  "modes": ["dark"],
+  "icons": ["ui/folder", "ui/folder-desktop", "ui/folder-documents", "ui/folder-downloads", "ui/folder-music", "ui/folder-pictures", "ui/folder-public", "ui/folder-templates", "ui/folder-videos"],
+  "app": "app.css",
+  "defaultAccent": "#ff6a3d",
+  "defaultGradient": "ember",
+  "defaultBackground": "ink",
+  "overview": "cloud",
+  "accents": [
+    { "id": "ember",  "label": "Ember",  "value": "#ff6a3d" },
+    { "id": "white",  "label": "White",  "value": "#f2f2f0" },
+    { "id": "mint",   "label": "Mint",   "value": "#34d399" },
+    { "id": "amber",  "label": "Amber",  "value": "#f59e0b" },
+    { "id": "sky",    "label": "Sky",    "value": "#0ea5e9" },
+    { "id": "violet", "label": "Violet", "value": "#8b5cf6" },
+    { "id": "cobalt", "label": "Cobalt", "value": "#2f5bff" },
+    { "id": "rose",   "label": "Rose",   "value": "#ec4899" }
+  ],
+  "gradients": [
+    { "id": "ember",  "label": "Ember",  "angle": 135, "stops": ["#ff6a3d", "#f59e0b"] },
+    { "id": "mono",   "label": "Mono",   "angle": 135, "stops": ["#f2f2f0", "#7a7a7e"] },
+    { "id": "dusk",   "label": "Dusk",   "angle": 160, "stops": ["#5a4a63", "#d3825a", "#f2b26b"] },
+    { "id": "ice",    "label": "Ice",    "angle": 135, "stops": ["#67e8f9", "#2f5bff"] },
+    { "id": "violet", "label": "Violet", "angle": 135, "stops": ["#8b5cf6", "#ec4899"] },
+    { "id": "mint",   "label": "Mint",   "angle": 135, "stops": ["#34d399", "#0ea5e9"] }
+  ]
+}

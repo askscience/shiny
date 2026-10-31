@@ -1,14 +1,15 @@
 import {
   mediaCard, icon, button, searchBar, spinner, emptyState, notify, toast,
-  setTileGlowFromUrl,
+  setTileGlowFromUrl, listReveal, decodeText,
 } from '../../ui/index.js';
 /**
- * radio.js — the Radio plugin's window (flat, square, artwork-driven).
+ * radio.js — the Radio plugin's window (compact, editorial, artwork-driven).
  *
- * Layout: a now-playing hero (album artwork from Cover Art Archive +
- * MusicBrainz, huge track title, CSS equalizer, square transport buttons) on
- * top of a square station grid from the Radio Browser directory. The artwork
- * is mirrored as a blurred ambient glow behind the whole surface.
+ * Layout: a compact now-playing bar that doubles as the window bar (small
+ * album artwork from Cover Art Archive + MusicBrainz, a tight display title,
+ * a mono meta line, an ink play pill and a grey stop pill) on top of a grid
+ * of station artwork from the Radio Browser directory, each captioned in mono
+ * below. The artwork is mirrored as a blurred ambient glow behind the surface.
  *
  * Now-playing track titles come from core's /api/radio/nowplaying route,
  * which parses ICY stream metadata server-side (browsers can't).
@@ -44,7 +45,6 @@ let gridEl = null;
 let artEl = null;
 let trackTitleEl = null;
 let trackSubEl = null;
-let equalizerEl = null;
 let toggleBtn = null;
 let stopBtn = null;
 
@@ -57,6 +57,8 @@ let nowPlaying = null;      // { title, artist }
 let artworkUrl = null;      // resolved image URL for the current track/station
 let glowSrc = null;         // artwork currently used for the window background
 let pollTimer = null;
+let titleFrame = 0;         // pending marquee measurement
+let lastTitle = null;       // hero title last rendered (decode only on change)
 
 const artworkCache = new Map(); // "artist|title" -> image URL | null
 
@@ -269,22 +271,11 @@ function toStation(raw) {
 
 /* ── Hero ───────────────────────────────────────────────────── */
 
-function equalizer() {
-  const el = document.createElement('div');
-  el.className = 'radio-eq';
-  for (let i = 0; i < 5; i++) {
-    const bar = document.createElement('span');
-    bar.style.setProperty('--i', i);
-    el.appendChild(bar);
-  }
-  return el;
-}
-
 function heroTitle() {
   if (nowPlaying?.title) return nowPlaying.title;
   if (current) return current.name;
-  // Idle: the window title bar already says "Radio" — don't repeat it here.
-  return '';
+  // Idle: the bar is the window bar, so it names the window.
+  return t('plugin.radio.title', null, 'Radio');
 }
 
 function heroSubtitle() {
@@ -294,7 +285,8 @@ function heroSubtitle() {
   }
   if (!current) return t('plugin.radio.status.pickStation', null, 'Pick a station');
   const tag = (current.tags || '').split(',').map((t) => t.trim()).filter(Boolean)[0];
-  return [tag, current.country].filter(Boolean).join(' · ') || t('plugin.radio.status.streaming', null, 'Streaming');
+  const rate = current.bitrate ? t('plugin.radio.status.kbps', { n: current.bitrate }, `${current.bitrate} kbps`) : '';
+  return [tag, current.country, rate].filter(Boolean).join(' · ') || t('plugin.radio.status.streaming', null, 'Streaming');
 }
 
 function heroArt() {
@@ -310,15 +302,25 @@ function renderHero() {
   tileEl.classList.toggle('radio-tile--live', hasStation && playing);
 
   const titleText = heroTitle();
-  trackTitleEl.textContent = titleText;
+  // A new ICY track (or station) decodes in; re-renders of the same title
+  // (play/pause, artwork arriving) leave it alone.
+  if (titleText !== lastTitle) {
+    if (lastTitle !== null && (nowPlaying?.title || current)) decodeText(trackTitleEl, titleText);
+    else trackTitleEl.textContent = titleText;
+    lastTitle = titleText;
+  }
   trackTitleEl.title = titleText;
-  // Long titles scroll on a marquee loop instead of truncating.
-  requestAnimationFrame(() => {
-    const over = trackTitleEl.scrollWidth - trackTitleEl.clientWidth;
-    trackTitleEl.classList.toggle('radio-hero-title--scroll', over > 8);
-    if (over > 8) {
-      trackTitleEl.style.setProperty('--scroll-dist', `${-(over + 28)}px`);
-    }
+  // Long titles scroll on a marquee loop instead of truncating. Measured on
+  // the next frame — by then the window may have been unmounted.
+  cancelAnimationFrame(titleFrame);
+  const titleNode = trackTitleEl;
+  titleFrame = requestAnimationFrame(() => {
+    titleFrame = 0;
+    if (!titleNode.isConnected) return;
+    titleNode.textContent = titleText;
+    const over = titleNode.scrollWidth - titleNode.clientWidth;
+    titleNode.classList.toggle('radio-hero-title--scroll', over > 8);
+    if (over > 8) titleNode.style.setProperty('--scroll-dist', `${-(over + 28)}px`);
   });
   trackSubEl.textContent = heroSubtitle();
 
@@ -349,13 +351,15 @@ function renderHero() {
 
   toggleBtn.disabled = !hasStation;
   toggleBtn.textContent = '';
-  toggleBtn.appendChild(icon(playing ? 'ui/pause' : 'ui/play', { size: 19 }));
-  toggleBtn.title = playing ? 'Pause' : 'Play';
+  toggleBtn.appendChild(icon(playing ? 'ui/pause' : 'ui/play', { size: 16 }));
+  toggleBtn.title = playing
+    ? t('plugin.radio.menu.pause', null, 'Pause')
+    : t('plugin.radio.menu.play', null, 'Play');
   toggleBtn.setAttribute('aria-label', toggleBtn.title);
 
   stopBtn.disabled = !hasStation;
-  stopBtn.title = 'Stop';
-  stopBtn.setAttribute('aria-label', 'Stop');
+  stopBtn.title = t('plugin.radio.menu.stop', null, 'Stop');
+  stopBtn.setAttribute('aria-label', stopBtn.title);
 
   renderGridCurrent();
 }
@@ -394,7 +398,9 @@ function renderGrid(stations, term) {
     gridEl.appendChild(wrap);
     return;
   }
-  stations.forEach((raw, i) => gridEl.appendChild(stationCell(toStation(raw), i)));
+  const cells = stations.map((raw, i) => stationCell(toStation(raw), i));
+  gridEl.append(...cells);
+  void listReveal(cells);
 }
 
 async function runSearch(text) {
@@ -485,15 +491,15 @@ export function mountRadioTile() {
   trackTitleEl.className = 'radio-hero-title';
   trackSubEl = document.createElement('div');
   trackSubEl.className = 'radio-hero-sub';
-  equalizerEl = equalizer();
-  heroText.append(trackTitleEl, trackSubEl, equalizerEl);
+  heroText.append(trackTitleEl, trackSubEl);
 
+  // Transport: play/pause is the ink pill, stop the grey pill.
   const transport = document.createElement('div');
   transport.className = 'radio-transport';
-  toggleBtn = button({ icon: 'ui/play', variant: 'ghost', onClick: togglePlayback });
-  toggleBtn.classList.add('ui-btn--icon', 'radio-t-btn', 'radio-t-btn--primary');
-  stopBtn = button({ icon: 'ui/stop', variant: 'ghost', onClick: stopPlayback });
-  stopBtn.classList.add('ui-btn--icon', 'radio-t-btn');
+  toggleBtn = button({ icon: 'ui/play', iconSize: 16, variant: 'primary', size: 'sm', onClick: togglePlayback });
+  toggleBtn.classList.add('radio-t-btn', 'radio-t-btn--primary');
+  stopBtn = button({ icon: 'ui/stop', iconSize: 16, variant: 'ghost', size: 'sm', onClick: stopPlayback });
+  stopBtn.classList.add('radio-t-btn');
   transport.append(toggleBtn, stopBtn);
 
   hero.append(artEl, heroText, transport);
@@ -524,6 +530,9 @@ export function mountRadioTile() {
 /** Deactivated mid-playback: stop audio, drop the window. */
 export function unmountRadioTile() {
   stopPlayback();
+  cancelAnimationFrame(titleFrame);
+  titleFrame = 0;
+  lastTitle = null;
   tileEl?.remove();
   // Drop references so a later mountRadioTile() builds a fresh tile
   // instead of returning the detached old one.
@@ -533,7 +542,6 @@ export function unmountRadioTile() {
   artEl = null;
   trackTitleEl = null;
   trackSubEl = null;
-  equalizerEl = null;
   toggleBtn = null;
   stopBtn = null;
 }

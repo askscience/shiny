@@ -12,8 +12,39 @@
  * own with the same look, so the option shows what it does.
  */
 
-import { setIcon } from '../ui/index.js';
+import { setIcon, decodeText } from '../ui/index.js';
 import { toolIcon } from './toolIcons.js';
+import { t } from './i18n.js';
+
+/** The voice states (sphere.js) and the word the bar wears for each. */
+const STATE_LABELS = {
+  idle: ['voice.state.ready', 'Ready'],
+  listening: ['voice.state.listening', 'Listening'],
+  conversation: ['voice.state.listening', 'Listening'],
+  processing: ['voice.state.thinking', 'Thinking'],
+  speaking: ['voice.state.speaking', 'Speaking'],
+  warming: ['voice.state.warming', 'Starting'],
+  disabled: ['voice.state.off', 'Voice off'],
+  error: ['voice.state.error', 'Error'],
+};
+
+/** The word for a voice state, in the interface language. */
+export function stateLabel(state) {
+  const [key, fallback] = STATE_LABELS[state] || STATE_LABELS.idle;
+  return t(key, null, fallback);
+}
+
+/**
+ * Paint the state label: the new word decodes in place (random glyphs settle
+ * left to right), so every change of state reads as one small event.
+ */
+export function paintStateLabel(el, state) {
+  const text = stateLabel(state);
+  if (el.dataset.stateText === text) return;
+  if (el.dataset.iconName || el.classList.contains(BRAND)) clearGlyph(el);
+  el.dataset.stateText = text;
+  decodeText(el, text);
+}
 
 /** The brand mark: the PEAK'D! favicon, masked and painted in the current ink. */
 const BRAND = 'app-icon';
@@ -21,6 +52,7 @@ const BRAND = 'app-icon';
 /** Drop whatever the glyph was showing (text, icon, mark) and its state. */
 export function clearGlyph(el) {
   el.textContent = '';
+  delete el.dataset.stateText;
   el.classList.remove('ui-icon', BRAND, 'is-fading', 'ui-icon--missing');
   delete el.dataset.iconName;
   delete el.dataset.tintable;

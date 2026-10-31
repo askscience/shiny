@@ -36,12 +36,14 @@ import { apiFetch } from './api.js';
 import { navigateToDestination } from './map.js';
 import {
   artifactPanel, icon, installGlow, refreshGlow, createRim, setGlow, glowFromDrawable,
+  windowEnter, windowExit, layoutShift,
 } from '../ui/index.js';
 import { getDockSummaries } from './artifactStore.js';
 import { loadPluginCatalog } from './i18n.js';
 import { webAppSurface, forgetWebAppSurface } from './webAppSurface.js';
 
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
+import { createWorkspaceSlide } from './desktop/workspaceSlide.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
 
@@ -79,6 +81,7 @@ let mapRimEl = null;           // the map's on-top ambient rim glow
 let mapGlowTimer = null;       // debounce for the map glow sample
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
 let lastWsIndex = null;        // last workspace index seen (for slide direction)
+let slide = null;              // the workspace carousel (desktop/workspaceSlide.js)
 
 function pluginLabel(name) {
   return isCoreWindow(name) ? coreWindowTitle(name) : name.charAt(0).toUpperCase() + name.slice(1);
@@ -220,7 +223,11 @@ export async function openCoreWindowSection(name, section) {
 
 /** Close a built-in window — its own gesture, not a plugin deactivation. */
 export function closeCoreWindow(name) {
-  if (!isCoreWindow(name)) return;
+  if (!isCoreWindow(name) || !coreOpen.has(name)) return;
+  animateClose(name, () => finishCloseCoreWindow(name));
+}
+
+function finishCloseCoreWindow(name) {
   // A fullscreen window that is closed must hand back its workspace and the
   // browser fullscreen. Plugin windows do this through `plugins:changed`;
   // built-in windows have no such signal, so do it here.
@@ -499,6 +506,11 @@ export function closePluginWindow(name) {
     return;
   }
   if (!openWindows.has(name)) return;
+  animateClose(name, () => finishClosePluginWindow(name));
+}
+
+function finishClosePluginWindow(name) {
+  if (!openWindows.has(name)) return;
   openWindows.delete(name);
   if (fullscreenWindow() === name) exitWindowFullscreen();
   if (name !== MAP_TILE_PLUGIN) {
@@ -530,6 +542,92 @@ export function closePluginWindow(name) {
     body: JSON.stringify({ name }),
   }).catch(() => { /* the next agent turn reconciles the process either way */ });
 }
+
+/* ── Window motion ─────────────────────────────────────────── */
+
+/** Windows playing their exit; a second close while one plays is a no-op. */
+const closing = new Set();
+
+/** The tray button a window belongs to, as the box it grows out of / falls into. */
+function trayBox(name) {
+  const btn = document.querySelector(`#hud-plugins [data-plugin="${CSS.escape(name)}"]`);
+  const box = btn?.getBoundingClientRect();
+  return box && box.width > 0 ? box : null;
+}
+
+/**
+ * Close with the user's motion language (web/ui/motionStyle.js): the window
+ * plays its exit, then `finish` tears it down exactly as before. Nothing to
+ * animate — not on screen, the overview owns the tiles, the phone layout —
+ * means the close is immediate.
+ */
+function animateClose(name, finish) {
+  if (closing.has(name)) return;
+  const el = getPluginTile(name);
+  if (!el?.isConnected || el.classList.contains('hidden')
+    || document.documentElement.dataset.overview || PHONE_QUERY.matches) {
+    finish();
+    return;
+  }
+  closing.add(name);
+  void windowExit(el, {
+    to: trayBox(name),
+    done: () => {
+      closing.delete(name);
+      finish();
+    },
+  });
+}
+
+/**
+ * Windows opened since boot that have not played their entrance yet. A name
+ * can appear in a render before its surface has an element (the module is
+ * still loading), so the entrance waits for the first render that lays the
+ * window out.
+ */
+const awaitingEntrance = new Set();
+
+/** Play the entrance of windows that were just opened (not the boot restore). */
+function animateOpenings(opening, items, names) {
+  for (const name of awaitingEntrance) if (!names.includes(name)) awaitingEntrance.delete(name);
+  if (!animateOpenWindows || PHONE_QUERY.matches || document.documentElement.dataset.overview) return;
+  for (const name of opening) awaitingEntrance.add(name);
+  for (const item of items) {
+    if (!awaitingEntrance.has(item.name) || item.el.classList.contains('hidden')) continue;
+    awaitingEntrance.delete(item.name);
+    const others = items.filter((it) => it !== item).map((it) => it.el);
+    void windowEnter(item.el, { from: trayBox(item.name), others });
+  }
+}
+
+/** Boxes of the windows currently on screen, by element (none while still booting). */
+function shiftableBoxes(ordered) {
+  const boxes = new Map();
+  if (!animateOpenWindows || document.documentElement.dataset.overview) return boxes;
+  for (const { el } of ordered) {
+    if (!el.isConnected || el.classList.contains('hidden')) continue;
+    const box = el.getBoundingClientRect();
+    if (box.width && box.height) boxes.set(el, box);
+  }
+  return boxes;
+}
+
+/**
+ * Re-tiling moves the windows that stay: the one that takes the space of a
+ * closed window grows into it, the others slide over (layoutShift). Windows
+ * being opened play their own entrance instead.
+ */
+function animateLayoutShift(items, before, opening) {
+  if (!before.size) return;
+  for (const { name, el } of items) {
+    if (opening.includes(name) || awaitingEntrance.has(name)) continue;
+    const from = before.get(el);
+    if (from) void layoutShift(el, from);
+  }
+}
+
+/** Off until the restored desktop has been laid out once: boot does not animate. */
+let animateOpenWindows = false;
 
 /** The loaded window-surface module for a plugin (or undefined). Used by the
  *  context menu to collect the app's own `contextMenu()` entries. */
@@ -690,6 +788,11 @@ let mountedNames = new Set();
 
 function renderTiles() {
   if (!grid) return;
+  // A transition that owns the tiles (the overview, a workspace slide) has
+  // pinned them with its own inline styles; a layout pass now would tear them
+  // out of its hands. Both re-render when they let go.
+  if (document.documentElement.dataset.overview) return;
+  if (slide?.holdsRender()) return;
   const names = surfacePlugins();
 
   // Names appearing for the first time are windows being opened now.
@@ -764,16 +867,23 @@ function renderTiles() {
       el.classList.toggle('hidden', !shown);
     }
   } else {
+    // Where each window on screen sits before this layout pass, so the
+    // windows that keep their place can move into the new one.
+    const before = shiftableBoxes(ordered);
     for (const { name, el } of ordered) {
       const inActiveWs = visible.includes(name);
       el.classList.toggle('hidden', !inActiveWs);
       if (inActiveWs) items.push({ name, el });
     }
     applyLayout(grid, items);
+    animateLayoutShift(items, before, opening);
   }
+  if (catalogReady && !animateOpenWindows) requestAnimationFrame(() => { animateOpenWindows = true; });
 
   grid.classList.toggle('hidden', names.length === 0);
   document.body.classList.toggle('tiles-active', names.length > 0);
+  // After the grid is shown: a first window opens into a grid that was hidden.
+  if (!phone) animateOpenings(opening, items, names);
   renderWorkspaceBar();
   // The dock moved into the traveler window — re-render it whenever tiles
   // change so it follows the tile (activation toggles, layout switches).
@@ -791,23 +901,12 @@ function renderTiles() {
   window.dispatchEvent(new CustomEvent('windows:changed', { detail: { names: [...names] } }));
 }
 
-/** Slide the visible windows into place after a workspace switch, coming from
- *  the side the switch moved away from (next → from the right, prev → from the
- *  left). Uses the Web Animations API so it never fights the focus pulse. */
-function animateWorkspaceSlide(dir) {
-  if (!grid || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const tiles = [...grid.querySelectorAll('.tile')].filter((t) => !t.classList.contains('hidden'));
-  if (!tiles.length) return;
-  const offset = (dir >= 0 ? 1 : -1) * 64;
-  tiles.forEach((t, i) => {
-    t.animate(
-      [
-        { transform: `translateX(${offset}px)`, opacity: 0.25 },
-        { transform: 'translateX(0px)', opacity: 1 },
-      ],
-      { duration: 340, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', delay: Math.min(i * 24, 160) },
-    );
-  });
+/** Start a finger-driven workspace slide towards `dir` (+1 next, −1
+ *  previous): a transition for gestures.js to drive, or null when there is
+ *  nowhere to slide (phone, workspaces off, one workspace). */
+export function beginWorkspaceSlide(dir) {
+  if (document.documentElement.dataset.overview) return null;
+  return slide?.begin(dir) || null;
 }
 
 /* ── Full-screen focus ─────────────────────────────────────── */
@@ -985,6 +1084,12 @@ export function initTileManager() {
   });
 
   initDesktop();
+  slide = createWorkspaceSlide({
+    grid,
+    render: () => renderTiles(),
+    applyLayout,
+    isPhone: () => PHONE_QUERY.matches,
+  });
   setSurfaceNamesProvider(() => surfacePlugins());
   setFullscreenSurfaceProvider(() => surfacePlugins());
 
@@ -1015,14 +1120,24 @@ export function initTileManager() {
     }
 
     const idx = activeWorkspaceIndex();
+    // A workspace switch slides the old desktop out and the new one in
+    // (desktop.js hints the true direction for wrap-around; otherwise infer
+    // from the index delta). Focus/fullscreen changes don't animate, and a
+    // slide committing its own switch has already shown the motion.
+    const switching = lastWsIndex !== null && idx !== lastWsIndex
+      && !slide?.isCommitting() && !document.documentElement.dataset.overview
+      && !!slide?.available() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let outgoing = null;
+    if (switching) {
+      // The state has switched but the DOM still shows the old workspace:
+      // capture it before the re-render hides it.
+      if (!slide.finishNow()) outgoing = slide.capture();
+    }
     renderTiles();
-    // A workspace switch slides the incoming windows into place (desktop.js
-    // hints the true direction for wrap-around; otherwise infer from the
-    // index delta). Focus/fullscreen changes don't animate.
-    if (lastWsIndex !== null && idx !== lastWsIndex) {
+    if (outgoing) {
       const hinted = Number(e.detail?.slide);
       const dir = (Number.isFinite(hinted) && hinted !== 0) ? hinted : (idx > lastWsIndex ? 1 : -1);
-      animateWorkspaceSlide(dir);
+      slide.play(outgoing, dir);
     }
     lastWsIndex = idx;
   });

@@ -34,9 +34,7 @@
   "plugin.files.status.folder": "Folder",
   "plugin.files.status.items.one": "{count} item",
   "plugin.files.status.items.other": "{count} items",
-  "plugin.files.status.selected": "“{name}” selected ({what})",
-  "plugin.files.status.multiSelected.one": "{count} item selected ({size})",
-  "plugin.files.status.multiSelected.other": "{count} items selected ({size})",
+  "plugin.files.status.countSelected": "{count} · {selected} selected",
 
   "plugin.files.when.today": "Today {time}",
   "plugin.files.when.yesterday": "Yesterday {time}",

@@ -1,0 +1,169 @@
+/* ─────────────────────────────────────────────────────────────
+   Motion — the static half of the user's motion language
+   (`<html data-motion="kinetic|fluid|depth">`, see motionStyle.js).
+
+   motionStyle.js animates arrivals and departures with WAAPI; this file
+   holds what is resting state or plain CSS: press feedback, how the active
+   window is told apart, the spoken words, the voice bar's state label,
+   the depth aura, and the theme view transitions. Loaded after flow.css,
+   so it refines the shared control motion without replacing it.
+   ───────────────────────────────────────────────────────────── */
+
+@property --pointer-x { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --pointer-y { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+.motion-letter { display: inline-block; white-space: pre; }
+
+/* HUD menus move with surfaceEnter/surfaceExit (menuFactory.js), not
+   flow.css's generic menu entrance. */
+html[data-motion] .ui-hud-menu-popup:not(.hidden) { animation: none !important; }
+
+/* ── Spoken reply: each word rises out of its line as it is said ── */
+#reply-text .reply-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.5em);
+  transition: transform 0.55s var(--ease-out), opacity 0.35s var(--ease-out), filter 0.45s var(--ease-out);
+}
+#reply-text .reply-word.is-said { opacity: 1; transform: none; filter: none; }
+html[data-motion='fluid'] #reply-text .reply-word { transition: transform var(--spring-bouncy-d, 0.6s) var(--spring-bouncy, ease-out), opacity 0.3s var(--ease-out); }
+html[data-motion='depth'] #reply-text .reply-word { transform: translateY(0.2em) scale(0.9); filter: blur(6px); }
+html[data-motion='depth'] #reply-text .reply-word.is-said { transform: none; filter: none; }
+
+/* ── Voice bar: the assistant's state as a decoded label ─────────── */
+html[data-orb-status='state'] .voice-step {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-overflow: clip;
+}
+/* The label stays while the reply is spoken: "Speaking" is the point. */
+html[data-orb-status='state'] body.orb-speaking .voice-step { visibility: visible; }
+
+/* ── Kinetic: titles set in mono capitals, a rule under the active one ── */
+html[data-motion='kinetic'] .tile-header-title {
+  position: relative;
+  justify-self: center;
+  width: fit-content;
+  max-width: 100%;
+  overflow: clip;
+  padding: 2px 0 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: opacity 0.5s var(--ease-out);
+}
+html[data-motion='kinetic'] .tile-header-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: 100% 50%;
+  transition: transform 0.7s var(--ease-cinematic, cubic-bezier(0.76, 0, 0.24, 1));
+}
+html[data-motion='kinetic'] .tile--focused .tile-header-title::after { transform: scaleX(1); transform-origin: 0 50%; }
+html[data-motion='kinetic'] .tile:not(.tile--focused) .tile-header-title { opacity: 0.55; }
+html[data-motion='kinetic'] :is([data-ui-control], .ui-btn, .tile-header-btn, .hud-plugin-btn, .icon-btn):active { scale: 0.95; }
+
+/* ── Fluid: presses squash and spring back ───────────────────────── */
+html[data-motion='fluid'] :is([data-ui-control], .ui-btn, .ui-chip, .tile-header-btn, .hud-plugin-btn, .icon-btn, .settings-nav-item) {
+  transition:
+    background-color var(--motion-feedback, 0.12s) var(--ease-out),
+    border-color var(--motion-feedback, 0.12s) var(--ease-out),
+    color var(--motion-feedback, 0.12s) var(--ease-out),
+    opacity var(--motion-feedback, 0.12s) var(--ease-out),
+    scale var(--spring-bouncy-d, 0.6s) var(--spring-bouncy, ease-out);
+}
+html[data-motion='fluid'] :is([data-ui-control], .ui-btn, .ui-chip, .tile-header-btn, .hud-plugin-btn, .icon-btn):active {
+  scale: 0.88;
+  transition-duration: var(--motion-feedback, 0.12s), var(--motion-feedback, 0.12s), var(--motion-feedback, 0.12s), var(--motion-feedback, 0.12s), 0.1s;
+}
+
+/* ── Depth: the active window forward, the rest a step back ──────── */
+html[data-motion='depth'] .tile--window {
+  transition: scale var(--spring-soft-d, 0.7s) var(--spring-soft, ease-out), box-shadow 0.7s var(--ease-out);
+}
+html[data-motion='depth'] .tile--window:not(.tile--focused) { scale: 0.985; }
+html[data-motion='depth'] :is([data-ui-control], .ui-btn, .tile-header-btn, .hud-plugin-btn, .icon-btn):active { scale: 0.96; translate: 0 1px; }
+/* The wallpaper and the greeting sit on planes of their own. */
+html[data-motion='depth'] { transition: --pointer-x 0.9s var(--ease-out), --pointer-y 0.9s var(--ease-out); }
+html[data-motion='depth'] #background { translate: calc(var(--pointer-x) * 14px) calc(var(--pointer-y) * 10px); scale: 1.03; }
+html[data-motion='depth'] #desk-greeting { translate: calc(var(--pointer-x) * 26px) calc(var(--pointer-y) * 16px); }
+
+/* An aura of the accent rises from the bottom edge while the assistant works. */
+#motion-aura { display: none; }
+html[data-motion='depth'] #motion-aura {
+  display: block;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: -180px;
+  height: 440px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.9s var(--ease-out);
+}
+#motion-aura span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 760px;
+  height: 300px;
+  margin: -150px 0 0 -380px;
+  border-radius: 50%;
+  filter: blur(36px);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 75%, transparent), transparent);
+}
+#motion-aura span + span {
+  width: 520px;
+  margin-left: -260px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 45%, #ffffff 25%), transparent);
+}
+html[data-motion='depth'][data-voice='listening'] #motion-aura,
+html[data-motion='depth'][data-voice='conversation'] #motion-aura { opacity: 0.7; }
+html[data-motion='depth'][data-voice='listening'] #motion-aura span,
+html[data-motion='depth'][data-voice='conversation'] #motion-aura span { animation: motion-aura-breathe 2.2s ease-in-out infinite; }
+html[data-motion='depth'][data-voice='processing'] #motion-aura { opacity: 0.5; }
+html[data-motion='depth'][data-voice='processing'] #motion-aura span { animation: motion-aura-orbit 3.2s linear infinite; }
+html[data-motion='depth'][data-voice='processing'] #motion-aura span + span { animation-delay: -1.6s; }
+html[data-motion='depth'][data-voice='speaking'] #motion-aura { opacity: 0.6; }
+html[data-motion='depth'][data-voice='speaking'] #motion-aura span { animation: motion-aura-breathe 1.1s ease-in-out infinite; }
+@keyframes motion-aura-breathe { 50% { scale: 1.12 0.9; } }
+@keyframes motion-aura-orbit {
+  from { transform: rotate(0deg) translateX(200px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(200px) rotate(-360deg); }
+}
+
+/* ── Theme change: one view transition per language ──────────────── */
+html[data-vt]::view-transition-group(root) { animation-duration: 0s; }
+
+html[data-vt='kinetic']::view-transition-old(root) { animation: vt-dim 0.9s cubic-bezier(0.76, 0, 0.24, 1) both; }
+html[data-vt='kinetic']::view-transition-new(root) { animation: vt-curtain 0.9s cubic-bezier(0.76, 0, 0.24, 1) both; }
+@keyframes vt-dim { to { transform: scale(0.97); filter: brightness(0.5); } }
+@keyframes vt-curtain { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+html[data-vt='fluid']::view-transition-old(root) { animation: none; }
+html[data-vt='fluid']::view-transition-new(root) { animation: vt-circle 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes vt-circle {
+  from { clip-path: circle(0% at var(--vt-x, 50%) var(--vt-y, 50%)); }
+  to { clip-path: circle(150% at var(--vt-x, 50%) var(--vt-y, 50%)); }
+}
+
+html[data-vt='depth']::view-transition-old(root) { animation: vt-recede 0.55s cubic-bezier(0.4, 0, 0.2, 1) both; }
+html[data-vt='depth']::view-transition-new(root) { animation: vt-arrive 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both; }
+@keyframes vt-recede { to { opacity: 0; transform: scale(0.92); filter: blur(6px); } }
+@keyframes vt-arrive { from { opacity: 0; transform: scale(1.06); filter: blur(10px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #reply-text .reply-word { transition: none; transform: none; filter: none; }
+  #motion-aura { display: none !important; }
+  html[data-motion] #background, html[data-motion] #desk-greeting { translate: none; }
+}

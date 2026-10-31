@@ -101,9 +101,14 @@ function loadSvg(name) {
   const set = getActiveIconset() || 'base';
   const theme = getActiveTheme();
   // `theme.json` declares whether the theme overrides any glyphs. Most themes
-  // (including the default pitch) do not; without this check every icon pays a
+  // do not, or list only the few they ship; without this check every icon pays a
   // 404 for `/themes/<theme>/icons/...` before falling back to the base set.
+  // `icons` may also list the exact names the theme ships, so the others skip
+  // the theme lookup entirely.
   const themeShipsIcons = getThemeManifest()?.icons;
+  const themeHasIcon = Array.isArray(themeShipsIcons)
+    ? themeShipsIcons.includes(name)
+    : themeShipsIcons !== false;
   const key = `${set}:${theme}:${name}`;
   if (!cache.has(key)) {
     cache.set(
@@ -113,9 +118,9 @@ function loadSvg(name) {
           return fetchSvg(`/ui/iconsets/${set}/${name}.svg`);
         }
         // Theme override first, then the unified base icon set.
-        const themeSvg = themeShipsIcons === false
-          ? null
-          : await fetchSvg(themeUrl(`icons/${name}.svg`));
+        const themeSvg = themeHasIcon
+          ? await fetchSvg(themeUrl(`icons/${name}.svg`))
+          : null;
         const svg = themeSvg || (await fetchSvg(`/ui/icons/${name}.svg`));
         if (svg) return svg;
         const alias = ALIASES[name];

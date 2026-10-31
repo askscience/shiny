@@ -1,0 +1,164 @@
+/* Typefaces: Inter / Inter Display come from fonts-inter (scripts/install-fonts.sh);
+   no remote font is ever requested. */
+
+/* ─────────────────────────────────────────────────────────────
+   Dusk — design tokens
+
+   After Locomotive's Wolverine Worldwide site: a photograph is the
+   desktop, windows are white sheets with hairlines, buttons are grey
+   pills with an arrow, type is a tight grotesk and metadata is set in
+   small mono capitals. The bottom bar is a compact black pill and the
+   chat is dark glass over the photo, so the shell reads the same on
+   any wallpaper. The accent is the user's (appearance.js).
+
+   The shared shell skin lives in ../editorial/; ./app.css only
+   sets what is Dusk-specific.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* Ramp — white sheets on a warm off-white canvas */
+  --black: #0b0b0c;
+  --bg: #f4f4f2;
+  --bg-elevated: #ffffff;
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-strong: #efefed;
+  --glass: rgba(11, 11, 12, 0.035);
+  --glass-strong: rgba(11, 11, 12, 0.07);
+  --glass-border: rgba(11, 11, 12, 0.09);
+  --glass-highlight: rgba(11, 11, 12, 0.16);
+  --glass-hover: rgba(11, 11, 12, 0.05);
+  --bubble: #f1f1ef;
+
+  /* Frosted glass — the chat panel and floating chrome */
+  --glass-blur: 18px;
+  --glass-blur-panel: 34px;
+  --glass-blur-light: 10px;
+  --glass-saturate: 1.5;
+
+  /* Text */
+  --text: #0b0b0c;
+  --text-secondary: rgba(11, 11, 12, 0.68);
+  --muted: rgba(11, 11, 12, 0.46);
+
+  /* Accent — user-selectable. appearance.js rewrites these. */
+  --accent: #ff6a3d;
+  --accent-2: #f59e0b;
+  --accent-soft: rgba(255, 106, 61, 0.12);
+  --accent-glow: rgba(255, 106, 61, 0.28);
+  --accent-contrast: #ffffff;
+
+  /* Gradients — derived from the user's gradient choice */
+  --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  --gradient-text: linear-gradient(120deg, var(--text) 0%, var(--accent) 45%, var(--accent-2) 100%);
+  --gradient-mesh:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(11, 11, 12, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(11, 11, 12, 0.04) 0%, transparent 50%);
+
+  /* Functional semantics */
+  --ok: #059669;
+  --warn: #d97706;
+  --error: #dc2626;
+  --error-soft: rgba(220, 38, 38, 0.1);
+  --danger: var(--error);
+  --accent-error: var(--error); /* legacy alias */
+  --accent-live: var(--ok);     /* legacy alias */
+
+  /* Typography — one grotesk, set tight; a mono for labels */
+  --font-display: 'Inter Display', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-editorial: ui-serif, Georgia, serif;
+  --font-mono: 'Noto Sans Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+
+  --type-hero: clamp(2.2rem, 4.6vw, 3.2rem);
+  --type-display: clamp(1.5rem, 3vw, 2.1rem);
+
+  /* Shape */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Desktop window surface — user-configurable (Settings → Appearance);
+     preferences.js overrides these inline per user. */
+  --window-radius: var(--radius-lg);
+  --window-opacity: 100%;
+  --window-shadow: 0 50px 100px -40px rgba(10, 4, 6, 0.6);
+  --tile-header-height: 36px;
+
+  /* Elevation */
+  --highlight-top: rgba(255, 255, 255, 0.9);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-glass: 0 12px 30px -12px rgba(0, 0, 0, 0.22);
+  --shadow-float: 0 30px 70px -24px rgba(10, 4, 6, 0.45), 0 0 0 1px rgba(11, 11, 12, 0.06);
+  --shadow-glow: 0 0 40px var(--accent-glow);
+
+  /* Motion — answers at once, settles slowly */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-cinematic: cubic-bezier(0.76, 0, 0.24, 1);
+  --duration-fast: 0.18s;
+  --duration-normal: 0.4s;
+  --duration-slow: 0.7s;
+  --reveal-duration: 0.9s;
+  --reveal-stagger: 60ms;
+
+  /* Compose dock */
+  --compose-bar-size: 84px;
+  --compose-dock-height: 52px;
+  --compose-stack-height: calc(
+    var(--compose-bar-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
+  );
+
+  /* HUD layout */
+  --hud-bar-height: 44px;
+  --hud-header-pad: max(var(--desktop-gap, 10px), env(safe-area-inset-top));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + var(--desktop-gap, 12px));
+
+  /* Layering */
+  --z-map: 0;
+  --z-hud: 20;
+  --z-transcript: 25;
+  --z-panel: 30;
+  --z-overlay: 40;
+  --z-toast: 50;
+  --z-grain: 9999;
+
+  /* Editorial skin (../editorial/app.css) */
+  --ed-bar-bg: #0b0b0c;
+  --ed-bar-border: 0;
+  --ed-bar-text: #ffffff;
+  --ed-bar-muted: rgba(255, 255, 255, 0.55);
+  --ed-bar-hover: rgba(255, 255, 255, 0.1);
+  --ed-chat-bg: rgba(20, 16, 20, 0.6);
+  --ed-pill: #ededeb;
+  --ed-pill-hover: #e2e2df;
+  --ed-pill-dark: #0b0b0c;
+  --ed-pill-dark-ink: #ffffff;
+  --ed-tile-header-line: #ededeb;
+  --scrollbar-thumb: rgba(11, 11, 12, 0.16);
+  --scrollbar-thumb-hover: rgba(11, 11, 12, 0.3);
+
+  /* Terminal — a light paper surface with an ANSI palette tuned for it
+     (every colour keeps ≥4.5:1 on the paper; "white" is a mid grey so
+     programs that print in white stay legible). */
+  --terminal-bg: #fbfbf9;
+  --terminal-fg: #1b1b1d;
+  --terminal-cursor: #0b0b0c;
+  --terminal-selection: rgba(11, 11, 12, 0.14);
+  --terminal-ansi-black: #1b1b1d;
+  --terminal-ansi-red: #b42318;
+  --terminal-ansi-green: #2f6f1f;
+  --terminal-ansi-yellow: #7a5a00;
+  --terminal-ansi-blue: #1f4fbf;
+  --terminal-ansi-magenta: #8e2b8e;
+  --terminal-ansi-cyan: #116672;
+  --terminal-ansi-white: #5f5f5b;
+  --terminal-ansi-bright-black: #55554f;
+  --terminal-ansi-bright-red: #c4321f;
+  --terminal-ansi-bright-green: #367a22;
+  --terminal-ansi-bright-yellow: #85640a;
+  --terminal-ansi-bright-blue: #2a5bd0;
+  --terminal-ansi-bright-magenta: #9d3399;
+  --terminal-ansi-bright-cyan: #136f7c;
+  --terminal-ansi-bright-white: #3a3a37;
+}

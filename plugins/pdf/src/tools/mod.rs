@@ -1,7 +1,7 @@
 //! PDF plugin tools: create/read/list/rotate/reorder/merge/delete PDFs.
 //!
 //! PDFs live in the plugin-owned `pdf_documents` table as real .pdf bytes
-//! (parsed and edited with pdf_oxide). All work goes through the SDK's
+//! (read and edited by the plugin's own lopdf-based engine). All work goes through the SDK's
 //! synchronous `ctx.db()` accessor — no async worker threads.
 
 use async_trait::async_trait;
@@ -56,18 +56,11 @@ fn load_pdf(ctx: &PluginCtx, user_id: &str, id: &str) -> Result<(String, Vec<u8>
     Ok((as_text(&row[0]), as_blob(&row[1])))
 }
 
-/// Replace a document's bytes and refresh its cached page count.
-fn commit(ctx: &PluginCtx, user_id: &str, id: &str, bytes: Vec<u8>) -> Result<usize, AppError> {
+/// Replace a document's bytes (keeping the previous version for undo) and
+/// refresh its cached page count.
+fn commit(ctx: &PluginCtx, user_id: &str, id: &str, bytes: Vec<u8>, label: &str) -> Result<usize, AppError> {
     let count = ops::page_count(&bytes)?;
-    let changed = ctx.db().execute(
-        "UPDATE pdf_documents SET bytes = ?1, page_count = ?2, updated_at = datetime('now') \
-         WHERE id = ?3 AND user_id = ?4",
-        &[DbValue::blob(bytes), DbValue::Int(count as i64), DbValue::text(id), DbValue::text(user_id)],
-    )?;
-    if changed == 0 {
-        return Err(AppError::NotFound("PDF not found".into()));
-    }
-    Ok(count)
+    crate::store::commit(ctx, user_id, id, bytes, count, label)
 }
 
 fn doc_summary_json(row: &[DbValue]) -> Value {
@@ -84,7 +77,7 @@ impl Tool for PdfCreate {
     fn aliases(&self) -> &[&str] { &["create_pdf", "new_pdf"] }
     fn step_label(&self) -> &str { "Creating PDF…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `pdf_create` — Create a professionally-styled PDF. params: `{ title?: string, content: string, format?: \"html\"|\"markdown\"|\"plain\" }` — default `format:\"html\"`: `content` is semantic HTML (`h1`-`h4`, `p`, `ul`/`ol`/`li`, `table`, `strong`/`b`, `em`/`i`, `blockquote`, `pre`/`code`, `hr`, `br`) or Markdown (both accepted). The renderer styles it automatically (bold sized headings, title rule, table header rule, lists, quotes) — CSS/colors are not applied, so express importance with structure and emphasis. Use `format:\"plain\"` only when the user explicitly asks for plain/raw text. Returns the new `pdf_id`.")
+        Some("- `pdf_create` — Create a professionally-styled A4 PDF. params: `{ title?: string, content: string, format?: \"markdown\"|\"html\"|\"plain\", page_numbers?: boolean }` — `content` is Markdown (preferred: `#` headings, `**bold**`, `*italic*`, `- ` / `1. ` lists, `|` tables, `> ` quotes, ``` code, `---` rules, `[text](url)` links, `\\pagebreak` on its own line) or semantic HTML (`h1`-`h4`, `p`, `ul`/`ol`/`li`, `table`, `strong`, `em`, `blockquote`, `pre`, `hr`, `br`, `a href`); without `format` it is detected. Tables wrap long cells and repeat their header across pages. CSS/colors are not applied — express importance with structure and emphasis. Returns the new `pdf_id`.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
@@ -101,17 +94,25 @@ impl Tool for PdfCreate {
             if req.params.param_bool("plain").unwrap_or(false) {
                 "plain".to_string()
             } else {
-                "html".to_string()
+                "auto".to_string()
             }
         });
-        let bytes = ops::create(&content, &css, &format)?;
+        let _ = css;
+        let opts = ops::CreateOptions {
+            title: Some(title.clone()),
+            page_numbers: req.params.param_bool("page_numbers").unwrap_or(false),
+        };
+        let bytes = ops::create_with(&content, &format, &opts)?;
         let count = ops::page_count(&bytes)?;
         let id = uuid::Uuid::new_v4().to_string();
 
         ctx.db().execute(
-            "INSERT INTO pdf_documents (id, user_id, title, bytes, page_count, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
-            &[DbValue::text(&id), DbValue::text(req.traveler_id), DbValue::text(&title), DbValue::blob(bytes), DbValue::Int(count as i64)],
+            "INSERT INTO pdf_documents (id, user_id, title, bytes, page_count, source, source_format, page_numbers, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            &[
+                DbValue::text(&id), DbValue::text(req.traveler_id), DbValue::text(&title), DbValue::blob(bytes), DbValue::Int(count as i64),
+                DbValue::text(&content), DbValue::text(&format), DbValue::Int(opts.page_numbers as i64),
+            ],
         )?;
 
         Ok(ActionOutcome::ok("pdf_create", json!({ "pdf_id": id, "title": title, "page_count": count })))
@@ -172,8 +173,7 @@ impl Tool for PdfRead {
             Some(p) => ops::extract_text(&bytes, p as usize)?,
             None => {
                 let mut joined = String::new();
-                for p in 0..total {
-                    let t = ops::extract_text(&bytes, p)?;
+                for (p, t) in ops::extract_all_text(&bytes)?.into_iter().enumerate() {
                     if !t.trim().is_empty() {
                         if !joined.is_empty() { joined.push_str("\n\n"); }
                         joined.push_str(&format!("--- Page {} ---\n", p + 1));
@@ -203,7 +203,7 @@ impl Tool for PdfRotate {
     fn aliases(&self) -> &[&str] { &["rotate_pdf", "rotate_pages"] }
     fn step_label(&self) -> &str { "Rotating pages…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `pdf_rotate` — Rotate page(s). params: `{ pdf_id?: string, pages?: number[], degrees: number, all?: boolean }` — degrees must be a multiple of 90 (clockwise). Omit `pages` (or set `all`) to rotate every page.")
+        Some("- `pdf_rotate` — Rotate page(s). params: `{ pdf_id?: string, pages?: number[], degrees: number, all?: boolean }` — degrees must be a multiple of 90 (positive = clockwise, negative = counter-clockwise). Omit `pages` (or set `all`) to rotate every page.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("PDF");
@@ -212,7 +212,10 @@ impl Tool for PdfRotate {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let id = resolve_pdf_id(ctx, req.traveler_id, req.params.param_str("pdf_id"))?;
-        let degrees = req.params.param_u32("degrees").unwrap_or(90) as i32;
+        // `param_u32` would turn -90 into "missing" and rotate the wrong way.
+        let degrees = req.params.get("degrees")
+            .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64)).or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())))
+            .unwrap_or(90) as i32;
         if degrees % 90 != 0 {
             return Err(AppError::BadRequest("degrees must be a multiple of 90".into()));
         }
@@ -226,7 +229,7 @@ impl Tool for PdfRotate {
         } else {
             ops::rotate(&bytes, Some(pages.as_ref().unwrap()), degrees)?
         };
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Rotate")?;
         Ok(ActionOutcome::ok("pdf_rotate", json!({ "pdf_id": id, "title": title, "page_count": count })))
     }
 }
@@ -258,7 +261,7 @@ impl Tool for PdfDeletePages {
         }
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
         let new_bytes = ops::delete_pages(&bytes, &pages)?;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Delete pages")?;
         Ok(ActionOutcome::ok("pdf_delete_pages", json!({ "pdf_id": id, "title": title, "page_count": count })))
     }
 }
@@ -290,7 +293,7 @@ impl Tool for PdfReorder {
         }
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
         let new_bytes = ops::select_pages(&bytes, &order)?;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Reorder pages")?;
         Ok(ActionOutcome::ok("pdf_reorder", json!({ "pdf_id": id, "title": title, "page_count": count })))
     }
 }
@@ -321,7 +324,7 @@ impl Tool for PdfMerge {
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
         let (_, other) = load_pdf(ctx, req.traveler_id, &other_id)?;
         let new_bytes = ops::merge(&bytes, &other)?;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Merge")?;
         Ok(ActionOutcome::ok("pdf_merge", json!({ "pdf_id": id, "title": title, "page_count": count })))
     }
 }
@@ -351,6 +354,7 @@ impl Tool for PdfDelete {
         if changed == 0 {
             return Ok(ActionOutcome::error("pdf_delete", "PDF not found"));
         }
+        crate::store::forget(ctx, req.traveler_id, &id)?;
         Ok(ActionOutcome::ok("pdf_delete", json!({ "pdf_id": id })))
     }
 }
@@ -381,7 +385,7 @@ impl Tool for PdfReplaceText {
     fn aliases(&self) -> &[&str] { &["replace_text", "edit_pdf_text", "find_and_replace"] }
     fn step_label(&self) -> &str { "Editing PDF text…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `pdf_replace_text` — Find & replace text on a page. params: `{ pdf_id?: string, page?: number, old: string, new: string }` — replaces every occurrence of `old` with `new` on `page` (default 0).")
+        Some("- `pdf_replace_text` — Find & replace text. params: `{ pdf_id?: string, page?: number, old: string, new: string }` — replaces every occurrence of `old` with `new` on `page`, or on every page when `page` is omitted. Fails (nothing saved) when `old` is not found. New characters must exist in the PDF's embedded font.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("PDF");
@@ -390,17 +394,25 @@ impl Tool for PdfReplaceText {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let id = resolve_pdf_id(ctx, req.traveler_id, req.params.param_str("pdf_id"))?;
-        let page = req.params.param_u32("page").unwrap_or(0) as usize;
+        let page = req.params.param_u32("page").map(|p| p as usize);
         let old = req.params.require_str("old")?;
         let new = req.params.param_str("new").unwrap_or_default();
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
-        // Content-stream edit (lopdf): pdf_oxide's modify_text left the
-        // original glyphs in place, so find & replace used to overlap text.
-        let (new_bytes, report) = crate::stream_edit::replace_text(&bytes, page, &old, &new)?;
-        let touched = report.replaced;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        // Content-stream edit (lopdf): font-aware, matches across operators.
+        let (new_bytes, report) = match page {
+            Some(p) => crate::stream_edit::replace_text(&bytes, p, &old, &new)?,
+            None => crate::stream_edit::replace_text_pages(&bytes, None, &old, &new)?,
+        };
+        if report.replaced == 0 {
+            return Ok(ActionOutcome::error(
+                "pdf_replace_text",
+                &format!("\"{old}\" was not found{} — check the exact wording with pdf_read", page.map(|p| format!(" on page {p}")).unwrap_or_default()),
+            ));
+        }
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Replace text")?;
         Ok(ActionOutcome::ok("pdf_replace_text", json!({
-            "pdf_id": id, "title": title, "page": page, "replaced": touched, "page_count": count,
+            "pdf_id": id, "title": title, "page": page, "replaced": report.replaced,
+            "pages_touched": report.pages_touched, "page_count": count,
         })))
     }
 }
@@ -415,7 +427,7 @@ impl Tool for PdfAnnotate {
     fn aliases(&self) -> &[&str] { &["add_annotation", "highlight_pdf", "add_note", "add_pdf_note", "annotate_pdf"] }
     fn step_label(&self) -> &str { "Annotating PDF…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `pdf_annotate` — Add an annotation to a page. params: `{ pdf_id?: string, page?: number, kind: string, rect: [x,y,width,height], text?: string, color?: [r,g,b] }` — `kind` is one of `highlight`, `underline`, `strikeout`, `squiggly`, `note`, `free_text`, `link`. `rect` is in PDF points (origin bottom-left; a Letter page is 612×792). For `link` the `text` is the URL; for `note`/`free_text` it is the note/box text. `color` is 0..1 RGB.")
+        Some("- `pdf_annotate` — Add an annotation to a page. params: `{ pdf_id?: string, page?: number, kind: string, rect: [x,y,width,height], text?: string, color?: [r,g,b] }` — `kind` is one of `highlight` (translucent marker), `underline`, `strikeout`, `squiggly`, `box`, `note`, `free_text`, `link`. `rect` is in PDF points (origin bottom-left; a Letter page is 612×792). For `link` the `text` is the URL; for `note`/`free_text` it is the note/box text. `color` is 0..1 RGB.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("PDF");
@@ -430,8 +442,8 @@ impl Tool for PdfAnnotate {
         let text = req.params.param_str("text").unwrap_or_default();
         let color: Option<[f32; 3]> = arr_f32(req.params.get("color"), 3).map(|v| [v[0], v[1], v[2]]);
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
-        let new_bytes = ops::annotate(&bytes, page, &kind, rect, &text, color, &ops::TextFormat::default())?;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let new_bytes = ops::annotate(&bytes, page, &kind, &[rect], &text, color, 12.0, "Assistant")?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Annotate")?;
         Ok(ActionOutcome::ok("pdf_annotate", json!({
             "pdf_id": id, "title": title, "page": page, "kind": kind, "page_count": count,
         })))
@@ -466,8 +478,8 @@ impl Tool for PdfAddNote {
             .param_f64("y")
             .map(|v| v as f32)
             .unwrap_or((h - 60.0).max(0.0));
-        let new_bytes = ops::annotate(&bytes, page, "note", [x, y, 20.0, 20.0], &text, None, &ops::TextFormat::default())?;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let new_bytes = ops::annotate(&bytes, page, "note", &[[x, y, 20.0, 20.0]], &text, None, 12.0, "Assistant")?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Add note")?;
         Ok(ActionOutcome::ok("pdf_add_note", json!({
             "pdf_id": id, "title": title, "page": page, "page_count": count,
         })))
@@ -500,9 +512,41 @@ impl Tool for PdfWatermark {
         let (title, bytes) = load_pdf(ctx, req.traveler_id, &id)?;
         let targets = if all { None } else { pages.as_deref() };
         let new_bytes = ops::add_watermark(&bytes, targets, &text)?;
-        let count = commit(ctx, req.traveler_id, &id, new_bytes)?;
+        let count = commit(ctx, req.traveler_id, &id, new_bytes, "Watermark")?;
         Ok(ActionOutcome::ok("pdf_watermark", json!({
             "pdf_id": id, "title": title, "page_count": count,
         })))
+    }
+}
+
+/* ── pdf_undo ───────────────────────────────────────────────── */
+
+pub struct PdfUndo;
+
+#[async_trait]
+impl Tool for PdfUndo {
+    fn name(&self) -> &str { "pdf_undo" }
+    fn aliases(&self) -> &[&str] { &["undo_pdf", "pdf_revert"] }
+    fn step_label(&self) -> &str { "Undoing PDF edit…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `pdf_undo` — Undo the last edit to a PDF (yours or the user's). params: `{ pdf_id?: string, redo?: boolean }` — `redo:true` re-applies an undone edit.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let label = data.get("label").and_then(|v| v.as_str()).unwrap_or("edit");
+        format!("Undid {label}")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let id = resolve_pdf_id(ctx, req.traveler_id, req.params.param_str("pdf_id"))?;
+        let redo = req.params.param_bool("redo").unwrap_or(false);
+        let res = if redo {
+            crate::store::redo(ctx, req.traveler_id, &id)
+        } else {
+            crate::store::undo(ctx, req.traveler_id, &id)
+        };
+        match res {
+            Ok((count, label)) => Ok(ActionOutcome::ok("pdf_undo", json!({ "pdf_id": id, "page_count": count, "label": label, "redo": redo }))),
+            Err(e) => Ok(ActionOutcome::error("pdf_undo", &e.to_string())),
+        }
     }
 }

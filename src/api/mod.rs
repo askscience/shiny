@@ -642,6 +642,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/craft/control/reply", post(crate::plugins::craft_control::reply))
         .route("/api/travelers/me", get(travelers::get_me).put(travelers::update_me))
         .route("/api/auth/logout", post(auth::logout))
+        .route("/api/auth/verify-password", post(auth::verify_password_route))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
         // Installed font families — the appearance "Global font" picker and the
         // Writer's font menu read the live fontconfig list (see fonts.rs).
@@ -882,7 +883,7 @@ mod shell_path_tests {
             "/js/app.js",
             "/css/tiles.css",
             "/ui/icons/ui/close.svg",
-            "/themes/pitch/theme.json",
+            "/themes/dusk/theme.json",
             "/vendor/leaflet/leaflet.js",
             "/plugins/files/plugin.js",
             "/i18n/en.json",

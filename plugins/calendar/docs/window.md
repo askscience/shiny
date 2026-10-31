@@ -15,9 +15,36 @@ export default {
 
 ## Layout
 
-- A month grid with navigation (previous/next/today) and a day-detail panel for
-  the selected date.
-- Clicking a day lists its events; create/edit lives in a small form.
+Editorial month view (the Mail pattern; styles in the "Calendar plugin
+window" section of `web/css/tiles.css`):
+
+- **Bar** (`div.calendar-bar[data-window-bar]`, merged into the window
+  controls, no plate at rest): previous/next month as grey pills (`ghost`,
+  `ui/chevron-left` / `ui/chevron-right`), the bar title
+  (`.calendar-month-label`, "October 2026") that fades in with `--sc`,
+  **Today** (grey pill) and **New event** (ink pill with a trailing arrow,
+  `button({ variant: 'primary', arrow: true })`).
+- **Scrolling body** (`div.calendar-scroll`) opening on a `largeTitle()` —
+  the month name ("October") with a mono meta line "2026 · 8 EVENTS"
+  (`plugin.calendar.count.events`, plural). As the body scrolls, the large
+  title fades out and the bar title + hairline fade in. A month change plays
+  `decodeText` on the title (not the first render or a same-month reload).
+- **Weekday labels and day numerals** are mono. The grid is hairline-divided;
+  **today** is an ink-pill numeral, the **selected day** a grey fill
+  (`--ed-pill`) — no accent outline. Up to three events per day show as small
+  monochrome dot lines (`.calendar-chip` > `.calendar-chip-dot` +
+  `.calendar-chip-label`, `+N` in mono for the rest); in windows narrower than
+  560px only the dots remain.
+- **Day detail** (`div.calendar-detail`): the date in the display face with a
+  mono event count, then the day's events as `hairlineRow`s in a
+  `hairlineList` — mono time column (lead), title + notes, mono location
+  (meta), and Edit / Delete. The rows play `listReveal` once per loaded day
+  (a new date or a changed event list), not on every repaint.
+- Clicking a day lists its events; create/edit lives in a modal form whose
+  action row uses the shared buttons (Cancel grey pill, Save event ink pill
+  with arrow).
+- The ambient glow uses theme tokens only (`--accent` / `--accent-2`), placed
+  by the selected day and strengthened by that day's load.
 
 ## Notifications
 

@@ -1,12 +1,17 @@
 import {
   confirmDialog, controlButton, button, emptyState, field, input, modal, notify, textarea, toast,
-  toggleRow, setTileGlow, glowGradient,
+  toggleRow, setTileGlow, glowGradient, largeTitle, metaLine, hairlineList, hairlineRow,
+  listReveal,
 } from '../../ui/index.js';
 /**
  * calendar.js — the Calendar plugin's window (month grid + day detail).
  *
- * A month grid with a hairline toolbar (prev/next/today/new event), a 7-column
- * day grid, and a detail strip for the selected day. Events live in the
+ * Editorial month view: a large month title with a mono "YEAR · N EVENTS"
+ * line that hands over to the window bar on scroll (largeTitle), grey-pill
+ * month arrows + Today and an ink "New event" pill, a hairline 7-column day
+ * grid (mono numerals, today as an ink pill, selection as a grey fill, events
+ * as small monochrome dot lines), and the selected day's events as hairline
+ * rows (mono time column, title, mono location). Events live in the
  * plugin-owned `calendar_events` table; the window lists/creates/updates/
  * deletes them via /api/calendar/events.
  *
@@ -15,7 +20,7 @@ import {
  */
 
 import { apiFetch } from '../../js/api.js';
-import { t } from '../../js/i18n.js';
+import { t, tp } from '../../js/i18n.js';
 
 export const CALENDAR_PLUGIN = 'calendar';
 
@@ -31,7 +36,12 @@ const MONTH_KEYS = ['plugin.calendar.month.january', 'plugin.calendar.month.febr
 
 let tileEl = null;
 let barEl = null;
-let monthLabelEl = null;
+let monthLabelEl = null;   // the bar's title (fades in as the large title scrolls away)
+let scrollEl = null;
+let hero = null;           // largeTitle() handle
+let detailMetaEl = null;
+let lastRevealKey = '';    // listReveal the day's rows once per (date, events) load
+let shownMonthKey = '';
 let weekdaysEl = null;
 let gridEl = null;
 let detailEl = null;
@@ -67,8 +77,12 @@ function parseIso(iso) {
   return { year: y, month: m - 1, day: d };
 }
 
+function monthName(month = viewMonth) {
+  return t(MONTH_KEYS[month], null, MONTHS[month]);
+}
+
 function monthLabel() {
-  return `${t(MONTH_KEYS[viewMonth], null, MONTHS[viewMonth])} ${viewYear}`;
+  return `${monthName()} ${viewYear}`;
 }
 
 function eventsOn(date) {
@@ -85,15 +99,16 @@ function fmtTime(ev) {
   return '—';
 }
 
-/** Ambient colour from the selected date, brightened by that day's load.
- *  The calendar always has a subject, so this never clears the glow. */
+/** Ambient glow from theme tokens: the accent pair, placed by the selected
+ *  date and strengthened by that day's load. The calendar always has a
+ *  subject, so this never clears the glow. */
 function updateCalendarGlow() {
   const d = parseIso(selectedDate);
-  const hue = (d.month * 30 + d.day * 6) % 360;
   const load = Math.min(eventsOn(selectedDate).length / 4, 1);
-  const a = `hsl(${hue} 68% ${52 + load * 8}%)`;
-  const b = `hsl(${(hue + 40) % 360} 60% ${24 + load * 10}%)`;
-  setTileGlow(tileEl, glowGradient(a, b, { x: 25, y: 0, x2: 85, y2: 100 }));
+  const a = `color-mix(in srgb, var(--accent) ${Math.round(70 + load * 30)}%, transparent)`;
+  const b = `color-mix(in srgb, var(--accent-2) ${Math.round(60 + load * 40)}%, transparent)`;
+  const x = Math.round(((d.day - 1) / 30) * 80 + 10);
+  setTileGlow(tileEl, glowGradient(a, b, { x, y: 0, x2: 100 - x, y2: 100 }));
 }
 
 /* ── API ────────────────────────────────────────────────────── */
@@ -127,6 +142,13 @@ async function apiDelete(id) {
 
 function renderBar() {
   if (monthLabelEl) monthLabelEl.textContent = monthLabel();
+  if (hero) {
+    // decodeText only when the month actually changes, not on every reload.
+    const key = `${viewYear}-${viewMonth}`;
+    hero.setTitle(monthName(), { decode: !!shownMonthKey && shownMonthKey !== key });
+    shownMonthKey = key;
+    hero.setMeta([String(viewYear), tp('plugin.calendar.count.events', events.length)]);
+  }
 }
 
 function renderWeekdays() {
@@ -172,17 +194,34 @@ function renderGrid() {
       num.textContent = String(dayNum);
       cell.appendChild(num);
 
-      const chips = eventsOn(date).slice(0, 3);
+      // Events read as small monochrome dot lines (title only where the
+      // cell is wide enough; the dots alone on narrow windows).
+      const dayEvents = eventsOn(date);
+      const chips = dayEvents.slice(0, 3);
       if (chips.length) {
         const wrap = document.createElement('span');
         wrap.className = 'calendar-day-chips';
         for (const ev of chips) {
           const chip = document.createElement('span');
           chip.className = 'calendar-chip';
-          chip.textContent = ev.title;
+          chip.title = ev.title;
+          const dot = document.createElement('span');
+          dot.className = 'calendar-chip-dot';
+          dot.setAttribute('aria-hidden', 'true');
+          const label = document.createElement('span');
+          label.className = 'calendar-chip-label';
+          label.textContent = ev.title;
+          chip.append(dot, label);
           wrap.appendChild(chip);
         }
+        if (dayEvents.length > chips.length) {
+          const more = document.createElement('span');
+          more.className = 'calendar-chip-more';
+          more.textContent = `+${dayEvents.length - chips.length}`;
+          wrap.appendChild(more);
+        }
         cell.appendChild(wrap);
+        cell.setAttribute('aria-label', `${dayNum} · ${tp('plugin.calendar.count.events', dayEvents.length)}`);
       }
 
       if (date === todayIso) cell.classList.add('is-today');
@@ -200,6 +239,7 @@ function renderDetail() {
   const d = parseIso(selectedDate);
   const label = `${t(MONTH_KEYS[d.month], null, MONTHS[d.month])} ${d.day}, ${d.year}`;
   detailHeadEl.textContent = label;
+  detailMetaEl?.set([tp('plugin.calendar.count.events', dayEvents.length)]);
 
   detailEl.textContent = '';
   if (!dayEvents.length) {
@@ -209,28 +249,11 @@ function renderDetail() {
     }));
     return;
   }
+  const list = hairlineList('calendar-detail-rows');
   for (const ev of dayEvents) {
-    const row = document.createElement('div');
-    row.className = 'calendar-detail-item';
-
     const time = document.createElement('span');
     time.className = 'calendar-detail-time';
     time.textContent = fmtTime(ev);
-    const main = document.createElement('div');
-    main.className = 'calendar-detail-main';
-    const title = document.createElement('div');
-    title.className = 'calendar-detail-title';
-    title.textContent = ev.title;
-    main.appendChild(title);
-    const meta = [];
-    if (ev.location) meta.push(ev.location);
-    if (ev.description) meta.push(ev.description);
-    if (meta.length) {
-      const sub = document.createElement('div');
-      sub.className = 'calendar-detail-sub';
-      sub.textContent = meta.join(' · ');
-      main.appendChild(sub);
-    }
 
     const actions = document.createElement('div');
     actions.className = 'calendar-detail-actions';
@@ -242,8 +265,24 @@ function renderDetail() {
     delBtn.title = t('plugin.calendar.detail.delete', null, 'Delete');
     actions.append(editBtn, delBtn);
 
-    row.append(time, main, actions);
-    detailEl.appendChild(row);
+    // Hairline row (the Mail pattern): mono time column, title + notes,
+    // mono location, then the row's actions.
+    const row = hairlineRow({
+      lead: time,
+      title: ev.title,
+      sub: ev.description || '',
+      meta: ev.location || '',
+      trail: actions,
+    });
+    row.classList.add('calendar-detail-item');
+    list.appendChild(row);
+  }
+  detailEl.appendChild(list);
+  // Reveal once per loaded day, not on every repaint of the same list.
+  const revealKey = `${selectedDate}|${dayEvents.map((ev) => ev.event_id).join(',')}`;
+  if (revealKey !== lastRevealKey) {
+    lastRevealKey = revealKey;
+    void listReveal(list.children);
   }
 }
 
@@ -301,11 +340,9 @@ function ensureModal() {
   descInput = textarea({ placeholder: t('plugin.calendar.dialog.notesPlaceholder', null, 'Notes (optional)'), rows: 3 });
 
   const actions = document.createElement('div');
-  actions.className = 'ui-row';
-  actions.style.justifyContent = 'flex-end';
-  actions.style.gap = '8px';
+  actions.className = 'ui-row calendar-dialog-actions';
   const cancelBtn = button({ label: t('plugin.calendar.dialog.cancel', null, 'Cancel'), variant: 'ghost', size: 'sm' });
-  const saveBtn = button({ label: t('plugin.calendar.dialog.save', null, 'Save event'), variant: 'primary', size: 'sm' });
+  const saveBtn = button({ label: t('plugin.calendar.dialog.save', null, 'Save event'), variant: 'primary', size: 'sm', arrow: true });
   actions.append(cancelBtn, saveBtn);
 
   eventModal = modal({
@@ -458,52 +495,68 @@ export function mountCalendarTile() {
   tileEl.className = 'tile calendar-tile';
   tileEl.dataset.plugin = CALENDAR_PLUGIN;
 
-  /* Top bar */
+  /* Top bar (merged with the window controls): grey-pill month arrows, the
+     month title that fades in as the large title scrolls away, Today, and
+     the ink "New event" pill. */
   barEl = document.createElement('div');
   barEl.className = 'calendar-bar';
   barEl.dataset.windowBar = '';
 
+  const prevLabel = t('plugin.calendar.toolbar.previousMonth', null, 'Previous month');
   const prevBtn = button({ icon: 'ui/chevron-left', variant: 'ghost', size: 'sm', onClick: () => changeMonth(-1) });
-  prevBtn.classList.add('ui-btn--icon', 'calendar-nav-btn');
-  prevBtn.title = t('plugin.calendar.toolbar.previousMonth', null, 'Previous month');
+  prevBtn.classList.add('calendar-nav-btn');
+  prevBtn.title = prevLabel;
+  prevBtn.setAttribute('aria-label', prevLabel);
+
+  const nextLabel = t('plugin.calendar.toolbar.nextMonth', null, 'Next month');
+  const nextBtn = button({ icon: 'ui/chevron-right', variant: 'ghost', size: 'sm', onClick: () => changeMonth(1) });
+  nextBtn.classList.add('calendar-nav-btn');
+  nextBtn.title = nextLabel;
+  nextBtn.setAttribute('aria-label', nextLabel);
 
   monthLabelEl = document.createElement('div');
   monthLabelEl.className = 'calendar-month-label';
 
-  const nextBtn = button({ icon: 'ui/chevron-right', variant: 'ghost', size: 'sm', onClick: () => changeMonth(1) });
-  nextBtn.classList.add('ui-btn--icon', 'calendar-nav-btn');
-  nextBtn.title = t('plugin.calendar.toolbar.nextMonth', null, 'Next month');
-
-  const spacer = document.createElement('div');
-  spacer.className = 'calendar-bar-spacer';
-
   const todayBtn = button({ label: t('plugin.calendar.toolbar.today', null, 'Today'), variant: 'ghost', size: 'sm', onClick: gotoToday });
-  const newBtn = button({ icon: 'ui/plus', label: t('plugin.calendar.toolbar.newEvent', null, 'New event'), variant: 'primary', size: 'sm', onClick: openNew });
+  const newBtn = button({ label: t('plugin.calendar.toolbar.newEvent', null, 'New event'), variant: 'primary', size: 'sm', arrow: true, onClick: openNew });
 
-  barEl.append(prevBtn, monthLabelEl, nextBtn, spacer, todayBtn, newBtn);
+  barEl.append(prevBtn, nextBtn, monthLabelEl, todayBtn, newBtn);
   tileEl.appendChild(barEl);
+
+  /* Scrolling body: large month title, weekday header, day grid, day detail. */
+  scrollEl = document.createElement('div');
+  scrollEl.className = 'calendar-scroll';
+  tileEl.appendChild(scrollEl);
+
+  hero = largeTitle({ title: monthName(), meta: [String(viewYear)], scroller: scrollEl });
+  hero.el.classList.add('calendar-hero');
+  scrollEl.appendChild(hero.el);
 
   /* Weekday header */
   weekdaysEl = document.createElement('div');
   weekdaysEl.className = 'calendar-weekdays';
-  tileEl.appendChild(weekdaysEl);
+  scrollEl.appendChild(weekdaysEl);
   renderWeekdays();
 
   /* Day grid */
   gridEl = document.createElement('div');
   gridEl.className = 'calendar-grid';
-  tileEl.appendChild(gridEl);
+  scrollEl.appendChild(gridEl);
 
   /* Day detail */
   const detail = document.createElement('div');
   detail.className = 'calendar-detail';
-  detailHeadEl = document.createElement('div');
-  detailHeadEl.className = 'calendar-detail-head';
-  detail.appendChild(detailHeadEl);
+  const detailHead = document.createElement('div');
+  detailHead.className = 'calendar-detail-head';
+  detailHeadEl = document.createElement('span');
+  detailHeadEl.className = 'calendar-detail-date';
+  detailMetaEl = metaLine([]);
+  detailHead.append(detailHeadEl, detailMetaEl);
+  detail.appendChild(detailHead);
   detailEl = document.createElement('div');
   detailEl.className = 'calendar-detail-list';
   detail.appendChild(detailEl);
-  tileEl.appendChild(detail);
+  scrollEl.appendChild(detail);
 
   renderBar();
   renderGrid();
@@ -517,10 +570,16 @@ export function mountCalendarTile() {
 export function unmountCalendarTile() {
   stopReminders();
   eventModal?.close();
+  hero?.dispose();
+  hero = null;
   tileEl?.remove();
   tileEl = null;
   barEl = null;
   monthLabelEl = null;
+  scrollEl = null;
+  detailMetaEl = null;
+  lastRevealKey = '';
+  shownMonthKey = '';
   weekdaysEl = null;
   gridEl = null;
   detailEl = null;

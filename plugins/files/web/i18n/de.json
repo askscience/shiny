@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Ordner",
   "plugin.files.status.items.one": "{count} Objekt",
   "plugin.files.status.items.other": "{count} Objekte",
-  "plugin.files.status.selected": "„{name}“ ausgewählt ({what})",
-  "plugin.files.status.multiSelected.one": "{count} Objekt ausgewählt ({size})",
-  "plugin.files.status.multiSelected.other": "{count} Objekte ausgewählt ({size})",
 
   "plugin.files.when.today": "Heute {time}",
   "plugin.files.when.yesterday": "Gestern {time}",

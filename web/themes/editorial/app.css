@@ -1,0 +1,273 @@
+/* ─────────────────────────────────────────────────────────────
+   Editorial — the app-surface skin shared by Dusk and Ink
+
+   Imported by each theme's app.css, which loads after /css/*.css and
+   so has the last word over the shell. Colours come from the theme's
+   tokens, including the --ed-* slots this file defines the meaning of:
+
+     --ed-bar-*       the bottom bar and workspace switcher (a dark pill
+                      on both themes, so it reads on any wallpaper)
+     --ed-chat-bg     the chat panel's glass tint
+     --ed-pill*       grey pill buttons and their dark "ink" variant
+     --ed-tile-header-line   the hairline under a window's title row
+
+   Four surfaces are dark on both themes — the bar, the chat glass, the
+   spoken reply and the top-bar status menus — so they re-scope the colour
+   tokens locally; the UI library, bubbles and tool cards inside them
+   follow automatically.
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Dark islands: re-scoped tokens ──────────────────────────── */
+.hud-header-main,
+#workspace-bar,
+.compose-conversation,
+.hud-menu {
+  --text: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.74);
+  --muted: rgba(255, 255, 255, 0.55);
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass-strong: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.13);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-hover: rgba(255, 255, 255, 0.1);
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface-strong: rgba(255, 255, 255, 0.1);
+  --bg-elevated: rgba(255, 255, 255, 0.06);
+  --bubble: rgba(255, 255, 255, 0.14);
+  --ed-pill: rgba(255, 255, 255, 0.12);
+  --ed-pill-hover: rgba(255, 255, 255, 0.2);
+  --ed-pill-dark: #ffffff;
+  --ed-pill-dark-ink: #0b0b0c;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+  color: var(--text);
+}
+
+/* ── Bottom bar ──────────────────────────────────────────────── */
+.hud-header-main {
+  background: var(--ed-bar-bg);
+  border: var(--ed-bar-border);
+  box-shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+.hud-header-main .hud-divider { background: var(--glass-border); }
+.hud-clock { font-family: var(--font-body); letter-spacing: -0.01em; }
+
+/* Plugin tray and status glyphs: bare monochrome icons, never a plate */
+.hud-plugin-btn,
+#hud-top .icon-btn,
+#hud-top .icon-btn:hover,
+#hud-top .icon-btn:active,
+#hud-top .icon-btn.is-open {
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+#hud-top .icon-btn { background: transparent; color: var(--muted); }
+#hud-top .icon-btn:hover,
+#hud-top .icon-btn.is-open { background: var(--glass-hover); color: var(--text); }
+.hud-network.is-open,
+.hud-audio.is-open,
+.hud-bluetooth.is-open,
+.hud-battery.is-open,
+.hud-updates.is-open { background: var(--glass-hover); border-color: transparent; color: var(--text); }
+
+/* Status menus (Sound, Network, Bluetooth, Battery): dark glass on both
+   themes, so they read as one family with the bar they open from. */
+.ui-hud-menu-popup.hud-menu {
+  background: rgba(16, 16, 18, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+}
+.hud-menu .hud-menu-head { border-bottom-color: rgba(255, 255, 255, 0.08); }
+
+/* Free-standing round buttons elsewhere lose the glass plate too */
+.icon-btn { box-shadow: none; }
+
+/* Workspace switcher: the same dark pill; the active dot stretches */
+#workspace-bar {
+  background: var(--ed-bar-bg);
+  border: var(--ed-bar-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+.workspace-bar-btn { border-color: transparent; box-shadow: none; }
+.workspace-bar-dot { transition: width var(--duration-slow) var(--ease-out), background var(--duration-normal) var(--ease-out); }
+.workspace-bar-dot.is-active { box-shadow: none; }
+
+/* ── Windows ─────────────────────────────────────────────────── */
+.tile { border-color: var(--glass-border); }
+.tile-header {
+  background: transparent;
+  border-bottom: 1px solid var(--ed-tile-header-line);
+}
+.tile-header--merged { border-bottom-color: var(--ed-tile-header-line); }
+.tile-header-title {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.tile-header-btn { border-radius: 50%; color: var(--muted); }
+.tile-header-btn:hover { background: var(--glass-hover); color: var(--text); }
+.tile-header-btn--close:hover { background: #ff5f57; color: #ffffff; }
+
+/* The ambient glow stays an ambient tint behind opaque windows */
+.tile { --glow-permeability: 70%; --glow-brightness: 0.7; --glow-opacity: 0.22; }
+.tile[data-glow-light] { --glow-brightness: 0.75; --glow-opacity: 0.16; }
+
+#grain { opacity: 0.02; }
+
+/* ── Chat: the left panel, translucent over a blur ───────────── */
+.compose-conversation {
+  background: var(--ed-chat-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 0;
+  border-radius: 0 22px 22px 0;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+}
+/* The user's turn is a soft white pill; the assistant speaks as plain text */
+.compose-bubble--user .compose-bubble-text {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border-radius: 16px 16px 4px 16px;
+}
+.compose-bubble--assistant { max-width: 94%; }
+.compose-bubble--assistant .compose-bubble-text {
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
+.compose-composer {
+  border-color: transparent;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.compose-send { border-radius: 10px; }
+.compose-cot-summary,
+.compose-pending-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; }
+
+/* ── Spoken reply: big, unboxed, words light up as they are said ── */
+#reply-text {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+/* A soft dark halo behind the words keeps them legible over a white window
+   or a bright photo without drawing a box. */
+/* `contain: paint` (core) would clip the halo to the text box. */
+#reply-text { position: relative; isolation: isolate; padding: 18px 30px; contain: layout style; }
+#reply-text::before {
+  content: '';
+  position: absolute;
+  inset: -24px -60px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(10, 10, 12, 0.6), rgba(10, 10, 12, 0.38) 55%, transparent);
+}
+/* The words themselves rise as they are said: /ui/motion.css. */
+#reply-text.is-error { font-size: 15px; font-family: var(--font-body); letter-spacing: 0; }
+
+/* ── Desktop greeting: type as image ─────────────────────────── */
+#desk-greeting {
+  display: block;
+  position: fixed;
+  left: 40px;
+  top: 30px;
+  z-index: 0; /* with #background, under the window grid */
+  pointer-events: none;
+  color: var(--ed-greeting, #ffffff);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(64px, 9.2vw, 136px);
+  line-height: 0.86;
+  letter-spacing: -0.055em;
+  opacity: calc(1 - var(--overview-p, 0));
+  transform: translateY(calc(var(--overview-p, 0) * -40px));
+}
+#desk-greeting .desk-line { display: block; overflow: clip; padding-bottom: 0.06em; margin-bottom: -0.06em; }
+#desk-greeting .desk-line > span { display: inline-block; animation: deskLineUp 1.4s var(--ease-out) both; animation-delay: calc(0.3s + var(--i, 0) * 0.12s); }
+html[data-bar-pos='top'] #desk-greeting { top: calc(var(--hud-header-total) + 20px); }
+@keyframes deskLineUp {
+  from { transform: translate3d(0, 108%, 0) rotate(3deg); }
+  to { transform: none; }
+}
+
+/* ── Overview: the wallpaper recedes into a rounded frame ────── */
+html[data-overview] { background: #050505; }
+html[data-overview] #background {
+  clip-path: inset(calc(var(--overview-p, 0) * var(--ed-frame-inset, 28px)) round calc(var(--overview-p, 0) * 26px));
+  transform: scale(calc(1 + var(--overview-p, 0) * var(--ed-frame-zoom, 0.05)));
+  filter: brightness(calc(1 - var(--overview-p, 0) * var(--ed-frame-dim, 0.4)));
+}
+html[data-overview] body::after {
+  content: '';
+  position: fixed;
+  inset: calc(var(--overview-p, 0) * var(--ed-frame-inset, 28px));
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, calc(var(--overview-p, 0) * var(--ed-frame-line, 0.5)));
+  border-radius: calc(var(--overview-p, 0) * 26px);
+  pointer-events: none;
+}
+/* The overview chrome sits on the dimmed desktop on both themes: white ink. */
+.overview-title,
+.overview-label,
+.overview-nav {
+  --text: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.74);
+  --muted: rgba(255, 255, 255, 0.5);
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-strong: rgba(255, 255, 255, 0.16);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-hover: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.overview-title { font-weight: 600; letter-spacing: -0.055em; }
+.overview-label-name { font-weight: 500; letter-spacing: -0.02em; }
+.overview-badge,
+.overview-label-ws {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border-radius: 6px;
+}
+
+/* ── Launcher ───────────────────────────────────────────────── */
+#plugin-launcher {
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
+}
+
+/* ── Settings ───────────────────────────────────────────────── */
+.settings-panel h2,
+.settings-section-title { font-family: var(--font-display); letter-spacing: -0.04em; }
+
+@media (prefers-reduced-motion: reduce) {
+  #desk-greeting .desk-line > span { animation: none; }
+}

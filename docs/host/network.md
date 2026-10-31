@@ -27,6 +27,16 @@ The chip shows the connected network (or Wi-Fi off), and its menu lists
 networks grouped by state, with a password prompt when connecting to a secured
 SSID. No adapter, or no `networkmanager` daemon, and the chip hides itself.
 
+The menu (`web/js/networkMenu.js`) uses the shared status-menu anatomy (see
+[README](README.md#ui-chips-menus-and-preferences)): a head row (Wi-Fi icon,
+interface or state, power switch); **Connected** — the active link with an
+accent check, its details on a sub line and Disconnect / Forget pills;
+**Available networks** — one row per SSID with its `hud/wifi-<level>` icon, a
+lock when secured and the strength in mono, the active one checked, a click
+connects (asking for a password when needed); **Saved networks** (click to
+connect, trash to forget); **Wired** links; and a footer **Scan for networks**
+pill.
+
 ---
 
 ## Endpoints

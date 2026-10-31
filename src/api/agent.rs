@@ -173,6 +173,11 @@ enum AgentStreamEvent {
     /// exists for the rest of the turn (the Browser's AI tab control depends
     /// on it).
     Artifact { data: serde_json::Value },
+    /// A finished tool call's card record (`services::tool_cards`):
+    /// `{action, result: "ok"|"error", plugin?, data?, params?, capped?}`.
+    /// The chat renders it as a small card right away; the same record is
+    /// stored as a `tool` row so a reopened conversation rebuilds it.
+    Tool(serde_json::Map<String, serde_json::Value>),
     Done { data: AgentResponse },
     Error { message: String },
 }
@@ -896,6 +901,7 @@ pub async fn handle_agent(
         |_, _| {},
         |_| {},
         |_| {},
+        |_| {},
     )
     .await?;
 
@@ -1142,6 +1148,7 @@ pub async fn handle_agent_stream(
         let emit_thinking = emit.clone();
         let emit_approval = emit.clone();
         let emit_artifact = emit.clone();
+        let emit_tool = emit.clone();
 
         // The chat's allow/deny prompt is a mid-turn round trip: the gate emits
         // an `approval` event over this same stream and parks until
@@ -1179,6 +1186,11 @@ pub async fn handle_agent_stream(
                 message: msg.to_string(),
             }),
             |data| emit_artifact(AgentStreamEvent::Artifact { data }),
+            |card| {
+                if let Some(map) = card.as_object() {
+                    emit_tool(AgentStreamEvent::Tool(map.clone()));
+                }
+            },
         )
         .await
         {

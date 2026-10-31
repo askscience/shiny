@@ -4,6 +4,7 @@
   "plugin.calc.meta.category": "Office",
 
   "plugin.calc.bar.spreadsheets": "Spreadsheets",
+  "plugin.calc.bar.new": "New",
 
   "plugin.calc.toolbar.newSheet": "New spreadsheet",
   "plugin.calc.toolbar.importOds": "Import .ods",
@@ -13,6 +14,7 @@
   "plugin.calc.toolbar.deleteSheet": "Delete spreadsheet",
 
   "plugin.calc.menu.noSheets": "No spreadsheets yet",
+  "plugin.calc.empty.body": "Start a blank sheet, import a CSV or .ods file, or ask the AI to build one.",
 
   "plugin.calc.sheet.untitled": "Untitled",
   "plugin.calc.sheet.importedCsv": "Imported CSV",
@@ -21,6 +23,10 @@
 
   "plugin.calc.status.saving": "Saving…",
   "plugin.calc.status.dirty": "Unsaved changes",
+  "plugin.calc.status.unsaved": "Unsaved",
+  "plugin.calc.status.savedAt": "Saved {time}",
+  "plugin.calc.status.cells.one": "{count} cell",
+  "plugin.calc.status.cells.other": "{count} cells",
   "plugin.calc.status.saved.one": "Saved {time} · {count} cell",
   "plugin.calc.status.saved.other": "Saved {time} · {count} cells",
 

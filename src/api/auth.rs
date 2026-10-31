@@ -730,6 +730,53 @@ pub async fn login(
     session_response(token, traveler.to_public(), request_is_https(&headers))
 }
 
+static VERIFY_LIMITER: std::sync::LazyLock<RateLimiter> =
+    std::sync::LazyLock::new(RateLimiter::new);
+
+#[derive(Debug, serde::Deserialize)]
+pub struct VerifyPasswordRequest {
+    pub password: String,
+}
+
+/// `POST /api/auth/verify-password` — does `password` match the signed-in
+/// account's own login password?
+///
+/// For features that protect data with the user's password (the Browser's
+/// password vault): they must not trust a password the client merely claims
+/// is the login one. A PAM account is checked by the `shiny-auth` helper, a
+/// local one against its stored hash; nothing is written and no session is
+/// touched. Throttled per account like `login`, since each check costs an
+/// Argon2 verify or a PAM round-trip.
+pub async fn verify_password_route(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(req): Json<VerifyPasswordRequest>,
+) -> Result<Response, AppError> {
+    if let Err(retry) =
+        VERIFY_LIMITER.check(&traveler.id, 10, Duration::from_secs(60))
+    {
+        return Ok(too_many_attempts(retry));
+    }
+    let valid = if traveler.password_hash == "!pam" {
+        let Some(user) = traveler.unix_user.as_deref().filter(|u| !u.is_empty()) else {
+            return Err(AppError::Internal("this account has no Linux user bound".into()));
+        };
+        match crate::services::auth_helper::verify(&state.config.auth_sock, user, &req.password)
+            .await
+        {
+            VerifyOutcome::Ok => true,
+            VerifyOutcome::Denied => false,
+            VerifyOutcome::Unavailable => {
+                return Err(AppError::Internal("the sign-in helper is not available".into()));
+            }
+        }
+    } else {
+        !matches!(verify_password(&traveler.password_hash, &req.password), PasswordCheck::NoMatch)
+    };
+    Ok(Json(serde_json::json!({ "success": true, "data": { "valid": valid }, "error": null }))
+        .into_response())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

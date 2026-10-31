@@ -1,17 +1,20 @@
 import {
-  searchBar, menuSurface, menuItem, confirmDialog, menuButton, toolbar, element as h,
-  toolButton, placePopover, button, emptyState, field, icon, input, modal, notify,
-  select, textarea, toast, setTileGlow, glowGradient, setIcon,
+  searchBar, menuSurface, menuItem, confirmDialog, menuButton, element as h,
+  toolButton, placePopover, button, emptyState, field, icon, iconButton, input,
+  listReveal, modal, notify, select, textarea, toast,
 } from '../../ui/index.js';
 
 /**
  * mail.js — the Mail plugin's window (IMAP/SMTP mail client).
  *
- * A three-pane mail client backed by io-email routes (`/api/mail/*`):
- * folders, message list and a reader, plus a compose modal and an account
- * settings panel. While no mail provider works yet, an onboarding card shows
- * per-provider help with links; once an account's Test connection succeeds
- * the card disappears and the mailbox appears.
+ * A mail surface backed by io-email routes (`/api/mail/*`): a folder rail and
+ * the message list, plus a reader that opens beside the list when a message is
+ * selected, under a window chrome with the account menu and live status. The
+ * list opens on a large folder title that hands over to the window bar as it
+ * scrolls (a scroll-linked `--sc` 0…1 on the window element); rows cascade in
+ * through the shared `listReveal()` motion. A compose modal and an account
+ * manager handle sending and configuration; onboarding appears while no
+ * provider works yet.
  *
  * AI wiring: `mail_*` tool outcomes arrive via `agent:actions` — the window
  * refreshes its account/status state.
@@ -74,17 +77,22 @@ const PROVIDER_HELP = {
 };
 
 let tileEl = null;
+let chromeStatusEl = null;
+/** The folder name in the window bar — fades in as the large title scrolls away. */
+let chromeTitleEl = null;
 let barAccountBtn = null;
 let barAccountLabel = null;
-let statusDot = null;
+let bodyEl = null;
+let footerEl = null;
+let railHeadEl = null;
 let foldersEl = null;
+let shellEl = null;
+let scrollEl = null;
+let heroEl = null;
 let listEl = null;
 let readerEl = null;
 /** The reader's HTML-message frame, or null when the message is plain text. */
 let readerFrameEl = null;
-let bodyEl = null;
-let searchInputEl = null;
-let searchTimer = null;
 
 let accounts = [];
 let presets = [];
@@ -93,12 +101,19 @@ let currentAccount = null;
 let folders = [];
 let currentFolder = 'INBOX';
 let messages = [];
+let messageTotal = 0;
 let selectedMessageId = null;
 let currentMessage = null;
+let activeQuery = '';
 // Bumped per openMessage so a slow fetch for message A can't overwrite the
 // reader after the user clicked message B.
 let openToken = 0;
 let busy = false;
+let searchTimer = null;
+// Set when fresh rows arrive (a folder loaded, a search answered): the next
+// renderMessages() plays the shared list cascade; selection re-renders don't.
+let revealRows = false;
+let scrollFrame = 0;
 
 /* Account picker popup (body-level). */
 let accountPopup = null;
@@ -107,6 +122,7 @@ let accountPopupOpen = false;
 /* Compose + settings modals. */
 let composeModal = null;
 let settingsModal = null;
+let settingsListEl = null;
 
 // Compose field elements (built once; prefilled on reply/forward).
 let composeFrom = null;
@@ -211,9 +227,63 @@ function pickAccount() {
   return currentAccount;
 }
 
-function setStatus(mode) {
-  if (!statusDot) return;
-  statusDot.classList.toggle('is-ok', mode === 'ok');
+function currentFolderInfo() {
+  return folders.find((folder) => folder.name === currentFolder) || null;
+}
+
+function folderIconName(name) {
+  if (/^inbox$/i.test(name)) return 'ui/mail';
+  if (/^(sent|sent mail|sent items)$/i.test(name)) return 'ui/send';
+  if (/^(drafts?|bozze)$/i.test(name)) return 'ui/file';
+  if (/^(trash|deleted|bin|cestino)$/i.test(name)) return 'ui/trash';
+  if (/^archive$/i.test(name)) return 'ui/archive';
+  if (/^(junk|spam|posta indesiderata)$/i.test(name)) return 'ui/warning';
+  return 'ui/folder';
+}
+
+function folderLabel(name) {
+  if (/^inbox$/i.test(name)) return t('plugin.mail.folder.inbox', null, 'Inbox');
+  if (/^(sent|sent mail|sent items)$/i.test(name)) return t('plugin.mail.folder.sent', null, 'Sent');
+  if (/^(drafts?|bozze)$/i.test(name)) return t('plugin.mail.folder.drafts', null, 'Drafts');
+  if (/^(trash|deleted|bin|cestino)$/i.test(name)) return t('plugin.mail.folder.trash', null, 'Trash');
+  if (/^archive$/i.test(name)) return t('plugin.mail.folder.archive', null, 'Archive');
+  if (/^(junk|posta indesiderata)$/i.test(name)) return t('plugin.mail.folder.junk', null, 'Junk');
+  if (/^spam$/i.test(name)) return t('plugin.mail.folder.spam', null, 'Spam');
+  return name;
+}
+
+function messagesLabel(count) {
+  return count
+    ? tp('plugin.mail.folder.messages', count, { count })
+    : t('plugin.mail.folder.noMessages', null, 'No messages');
+}
+
+function unreadLabel(count) {
+  return tp('plugin.mail.chrome.unread', count, { count });
+}
+
+function initialOf(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/[\p{L}\p{N}]/u);
+  return match ? match[0].toUpperCase() : '?';
+}
+
+function statusPill(text, tone = 'neutral', { dot = false, label = false } = {}) {
+  const node = h('span', `mail-status-pill mail-status-pill--${tone}${label ? ' mail-status-pill--label' : ''}`);
+  if (dot) {
+    const dotEl = h('span', 'mail-status-dot');
+    if (tone === 'ok') dotEl.classList.add('is-ok');
+    if (tone === 'error') dotEl.classList.add('is-error');
+    node.appendChild(dotEl);
+  }
+  node.appendChild(h('span', null, text));
+  return node;
+}
+
+function detailRow(label, value) {
+  const row = h('div', 'mail-detail-row');
+  row.append(h('span', 'mail-detail-key', label), h('span', 'mail-detail-val', value));
+  return row;
 }
 
 /* ── Refresh pipeline ───────────────────────────────────────── */
@@ -228,7 +298,6 @@ async function refreshStatus({ keepFolder = false } = {}) {
     toast(e.message || t('plugin.mail.toast.statusFailed', null, 'Could not load mail status'), { type: 'error' });
     return;
   }
-  setStatus(configured ? 'ok' : 'off');
   render();
   if (pickAccount() && (configured || accounts.length)) {
     if (!keepFolder) {
@@ -257,6 +326,7 @@ function onSearch(query) {
   if (searchTimer) window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(async () => {
     const q = (query || '').trim();
+    activeQuery = q;
     const account = pickAccount();
     if (!account) return;
     if (!q) {
@@ -266,6 +336,8 @@ function onSearch(query) {
     try {
       const r = await searchMessages(account.id, q, currentFolder);
       messages = r?.messages || [];
+      messageTotal = messages.length;
+      revealRows = true;
       renderMessages();
     } catch (e) {
       toast(e.message || t('plugin.mail.toast.searchFailed', null, 'Search failed'), { type: 'error' });
@@ -281,7 +353,12 @@ async function loadFolders() {
     folders = r?.folders || [];
     if (!folders.some((f) => f.name === currentFolder)) {
       currentFolder = folders.find((f) => /^inbox$/i.test(f.name))?.name || folders[0]?.name || 'INBOX';
+      selectedMessageId = null;
+      messages = [];
+      resetReader();
     }
+    messageTotal = 0;
+    activeQuery = '';
     renderFolders();
     await loadMessages();
   } catch (e) {
@@ -304,9 +381,12 @@ async function loadMessages() {
   const account = pickAccount();
   if (!account || busy) return;
   busy = true;
+  activeQuery = '';
   try {
     const r = await listMessages(account.id, currentFolder);
     messages = r?.messages || [];
+    messageTotal = Number(r?.total) || messages.length;
+    revealRows = true;
     renderMessages();
   } catch (e) {
     toast(e.message || t('plugin.mail.toast.messagesFailed', null, 'Could not load messages'), { type: 'error' });
@@ -323,39 +403,144 @@ async function openMessage(id) {
   selectedMessageId = id;
   currentMessage = null;
   renderMessages();
+  if (!readerEl) return;
   readerEl.textContent = '';
-  readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.loading', null, 'Loading…') }));
+  const loading = h('div', 'mail-reader-empty');
+  loading.appendChild(emptyState({ icon: 'ui/mail', title: t('plugin.mail.empty.loading', null, 'Loading…') }));
+  readerEl.appendChild(loading);
   try {
     const full = await fetchMessage(account.id, currentFolder, id);
     if (token !== openToken) return; // a newer open won
     currentMessage = full;
-    // Mail carries no images: glow with a colour pair derived from the sender.
-    const from = currentMessage.from;
-    setTileGlow(tileEl, senderGlow(Array.isArray(from) ? from[0] : from));
     renderMessage(full);
     if (msg && !msg.seen) {
       void markSeen(account.id, currentFolder, [id], true).catch(() => {});
       msg.seen = true;
+      const folder = currentFolderInfo();
+      if (folder) folder.unread = Math.max(0, (Number(folder.unread) || 0) - 1);
+      renderFolders();
+      renderMessages();
     }
   } catch (e) {
     if (token !== openToken) return;
+    currentMessage = null;
     readerEl.textContent = '';
-    readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.openFailed', null, 'Could not open message'), body: e.message }));
+    const failed = h('div', 'mail-reader-empty');
+    failed.appendChild(emptyState({ icon: 'ui/warning', title: t('plugin.mail.empty.openFailed', null, 'Could not open message'), body: e.message }));
+    readerEl.appendChild(failed);
   }
 }
 
-/* ── Rendering: top bar ─────────────────────────────────────── */
+/* ── Rendering: window chrome ───────────────────────────────── */
 
-function toolbarButton(iconName, label, onClick, danger = false) {
-  const btn = toolButton(iconName, label, onClick, { className: 'mail-tool', danger });
-  return btn;
-}
-
-function renderBar() {
+function renderChrome() {
+  if (!tileEl) return;
   const account = pickAccount();
-  barAccountLabel.textContent = account ? (account.label || account.email) : t('plugin.mail.bar.noAccount', null, 'No account');
-  barAccountBtn.setAttribute('aria-expanded', String(accountPopupOpen));
+  if (barAccountLabel) {
+    barAccountLabel.textContent = account
+      ? (account.label || account.email)
+      : t('plugin.mail.bar.noAccount', null, 'No account');
+  }
+  if (barAccountBtn) barAccountBtn.setAttribute('aria-expanded', String(accountPopupOpen));
+  if (chromeTitleEl) chromeTitleEl.textContent = configured ? folderLabel(currentFolder) : '';
+  if (!chromeStatusEl) return;
+
+  chromeStatusEl.textContent = '';
+  const tone = !account ? 'neutral' : account.verified ? 'ok' : 'error';
+  const text = !account
+    ? t('plugin.mail.bar.noAccount', null, 'No account')
+    : account.verified
+      ? t('plugin.mail.status.connected', null, 'connected')
+      : t('plugin.mail.status.notVerified', null, 'not verified');
+  chromeStatusEl.appendChild(statusPill(text, tone, { dot: !!account, label: true }));
+
+  const unread = Number(currentFolderInfo()?.unread) || 0;
+  if (configured && unread > 0) {
+    chromeStatusEl.appendChild(statusPill(unreadLabel(unread), 'accent'));
+  }
 }
+
+function renderRailHead() {
+  if (!railHeadEl) return;
+  const account = pickAccount();
+  railHeadEl.textContent = '';
+  railHeadEl.append(
+    h('span', 'mail-eyebrow', t('plugin.mail.rail.eyebrow', null, 'Mailbox')),
+    h('h2', 'mail-rail-title', account
+      ? (account.label || account.email)
+      : t('plugin.mail.rail.title', null, 'Mail')),
+    h('p', 'mail-rail-sub', account
+      ? account.email
+      : t('plugin.mail.rail.sub', null, 'No account connected')),
+  );
+}
+
+/** The large folder title at the top of the list, with its mono count. */
+function renderHero() {
+  if (!heroEl) return;
+  heroEl.textContent = '';
+  const counts = [];
+  const unread = Number(currentFolderInfo()?.unread) || 0;
+  if (unread > 0) counts.push(tp('plugin.mail.hero.new', unread, { count: unread }));
+  counts.push(messagesLabel(messageTotal || messages.length));
+  heroEl.append(
+    h('h2', 'mail-hero-title', folderLabel(currentFolder)),
+    h('span', 'mail-hero-count', counts.join(' · ')),
+  );
+}
+
+/** Scroll-linked handover: `--sc` runs 0…1 over the first 56px of the list,
+ *  fading the large title out and the window bar's title + hairline in. */
+function syncScroll() {
+  scrollFrame = 0;
+  if (!tileEl) return;
+  const y = configured && scrollEl ? scrollEl.scrollTop : 56;
+  tileEl.style.setProperty('--sc', String(Math.min(1, Math.max(0, y / 56)).toFixed(3)));
+}
+
+function onListScroll() {
+  if (!scrollFrame) scrollFrame = window.requestAnimationFrame(syncScroll);
+}
+
+/** The reader only takes room while a message is selected. */
+function syncReaderOpen() {
+  shellEl?.classList.toggle('has-reader', !!selectedMessageId);
+}
+
+function closeReader() {
+  selectedMessageId = null;
+  openToken += 1;
+  resetReader();
+  renderMessages();
+}
+
+function renderFooter() {
+  if (!footerEl) return;
+  footerEl.textContent = '';
+  const count = messageTotal || messages.length;
+  const account = pickAccount();
+  footerEl.append(
+    h('span', 'mail-footer-step', t(
+      'plugin.mail.footer.step',
+      { folder: folderLabel(currentFolder), messages: messagesLabel(count) },
+      '{folder} · {messages}',
+    )),
+    h('span', 'mail-footer-note', t('plugin.mail.footer.note', null,
+      'Cached locally — sync to check for new mail.')),
+  );
+  const status = h('span', `mail-footer-status${account?.verified ? ' is-ok' : ''}`);
+  status.append(
+    h('span', 'mail-footer-dot'),
+    h('span', null, !account
+      ? t('plugin.mail.bar.noAccount', null, 'No account')
+      : account.verified
+        ? t('plugin.mail.status.connected', null, 'connected')
+        : t('plugin.mail.status.notVerified', null, 'not verified')),
+  );
+  footerEl.appendChild(status);
+}
+
+/* ── Rendering: account menu ────────────────────────────────── */
 
 function toggleAccountMenu() {
   if (accountPopupOpen) closeAccountMenu();
@@ -372,7 +557,7 @@ function closeAccountMenu() {
   if (!accountPopupOpen) return;
   accountPopupOpen = false;
   accountPopup?.classList.add('hidden');
-  renderBar();
+  renderChrome();
   document.removeEventListener('pointerdown', onAccountMenuOutside, true);
 }
 
@@ -387,28 +572,35 @@ function openAccountMenu() {
   ensureAccountMenu();
   accountPopup.innerHTML = '';
   if (!accounts.length) {
-    const empty = h('div', 'mail-account-menu-empty', t('plugin.mail.menu.noAccounts', null, 'No accounts yet'));
-    accountPopup.appendChild(empty);
+    accountPopup.appendChild(h('div', 'mail-account-menu-empty', t('plugin.mail.menu.noAccounts', null, 'No accounts yet')));
   } else {
     for (const a of accounts) {
       const item = menuItem({ className: 'mail-account-menu-item' });
       item.type = 'button';
       item.setAttribute('role', 'menuitem');
       if (a.id === currentAccount?.id) item.classList.add('is-active');
-      const icon = h('span', 'mail-account-menu-icon');
-      item.appendChild(icon);
-      void setIcon(icon, 'ui/mail', { size: 14 });
-      const label = h('span', 'mail-account-menu-label', a.label || a.email);
+      const avatar = h('span', 'mail-account-menu-avatar', initialOf(a.label || a.email));
+      const copy = h('span', 'mail-account-menu-copy');
+      copy.append(
+        h('span', 'mail-account-menu-label', a.label || a.email),
+        h('span', 'mail-account-menu-email', a.email),
+      );
       const badgeText = a.verified
         ? t('plugin.mail.status.connected', null, 'connected')
         : t('plugin.mail.status.notVerified', null, 'not verified');
-      const badge = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, badgeText);
-      item.append(icon, label, badge);
+      const statusEl = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, badgeText);
+      item.append(avatar, copy, statusEl);
       item.addEventListener('click', () => {
         closeAccountMenu();
         currentAccount = a;
         selectedMessageId = null;
-        renderBar();
+        currentMessage = null;
+        messages = [];
+        messageTotal = 0;
+        activeQuery = '';
+        resetReader();
+        renderChrome();
+        renderMessages();
         void loadFolders();
       });
       accountPopup.appendChild(item);
@@ -424,55 +616,104 @@ function openAccountMenu() {
   placePopover(accountPopup, barAccountBtn);
   accountPopup.focusFirst();
   accountPopupOpen = true;
-  renderBar();
+  renderChrome();
   document.addEventListener('pointerdown', onAccountMenuOutside, true);
 }
 
-/* ── Rendering: main body ───────────────────────────────────── */
+/* ── Rendering: main surface ────────────────────────────────── */
 
 function render() {
-  renderBar();
-  bodyEl.innerHTML = '';
+  if (!tileEl || !bodyEl) return;
+  renderChrome();
+  bodyEl.textContent = '';
+  footerEl = h('footer', 'mail-footer');
+  shellEl = null;
+  scrollEl = null;
+  heroEl = null;
+  listEl = null;
+
   if (!configured) {
     renderSetup(bodyEl);
+    bodyEl.appendChild(footerEl);
+    renderFooter();
+    syncScroll();
     return;
   }
 
-  const foldersPane = h('div', 'mail-folders');
-  foldersEl = foldersPane;
+  const shell = h('div', 'mail-shell');
+  shellEl = shell;
 
-  const listPane = h('div', 'mail-list');
+  const rail = h('nav', 'mail-rail');
+  railHeadEl = h('div', 'mail-rail-head');
+  foldersEl = h('div', 'mail-rail-list');
+  const railFoot = h('div', 'mail-rail-foot');
+  const manage = button({
+    icon: 'ui/settings',
+    label: t('plugin.mail.toolbar.accounts', null, 'Mail accounts'),
+    variant: 'ghost',
+    size: 'sm',
+    onClick: openSettings,
+  });
+  manage.classList.add('mail-rail-manage');
+  railFoot.appendChild(withArrow(manage));
+  rail.append(railHeadEl, foldersEl, railFoot);
+
+  const stage = h('main', 'mail-stage');
+  scrollEl = h('div', 'mail-scroll');
+  scrollEl.addEventListener('scroll', onListScroll, { passive: true });
+  heroEl = h('header', 'mail-hero');
   const search = searchBar({
     placeholder: t('plugin.mail.search.placeholder', null, 'Search cached mail…'),
     label: t('plugin.mail.search.label', null, 'Search mail'), onInput: onSearch,
   });
-  searchInputEl = search.input;
   const searchWrap = h('div', 'mail-search');
   searchWrap.appendChild(search);
-  listPane.appendChild(searchWrap);
-  listEl = h('div', 'mail-list-items');
-  listPane.appendChild(listEl);
+  listEl = h('div', 'mail-list');
+  listEl.setAttribute('role', 'list');
+  scrollEl.append(heroEl, searchWrap, listEl);
+  stage.appendChild(scrollEl);
 
-  const readerPane = h('div', 'mail-reader');
-  readerEl = readerPane;
-  readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.selectTitle', null, 'Select a message'), body: t('plugin.mail.empty.selectBody', null, 'Pick a message to read it here.') }));
-  bodyEl.append(foldersPane, listPane, readerPane);
+  readerEl = h('aside', 'mail-reader');
+  shell.append(rail, stage, readerEl);
+  bodyEl.append(shell, footerEl);
+
+  if (currentMessage) renderMessage(currentMessage);
+  else renderReaderEmpty();
+
+  renderRailHead();
   renderFolders();
   renderMessages();
+  renderFooter();
+  syncScroll();
+}
+
+/** Editorial pill: a trailing arrow that nudges forward on hover. */
+function withArrow(btn) {
+  btn.classList.add('mail-pill');
+  btn.appendChild(h('span', 'mail-pill-arrow', '\u2192'));
+  btn.lastChild.setAttribute('aria-hidden', 'true');
+  return btn;
 }
 
 function renderSetup(root) {
   const wrap = h('div', 'mail-onboarding');
-  const intro = h('div', 'mail-help');
-  if (!accounts.length) {
-    intro.appendChild(h('h3', null, t('plugin.mail.setup.connectTitle', null, 'Connect your mail account')));
-    intro.appendChild(h('p', null, t('plugin.mail.setup.connectBody', null, 'Choose your provider and add your account. Provider instructions appear at the bottom of the form and disappear once the account is verified.')));
-  } else {
-    intro.appendChild(h('h3', null, t('plugin.mail.setup.verifyTitle', null, 'Verify your mail account')));
-    intro.appendChild(h('p', null, t('plugin.mail.setup.verifyBody', null, 'Your account is saved but the connection test hasn’t succeeded yet. Press Test connection below, or read the provider instructions at the bottom.')));
-  }
-  wrap.appendChild(intro);
-  wrap.appendChild(buildAccountForm({ onboarding: !accounts.length }));
+  const inner = h('div', 'mail-onboarding-inner');
+  const head = h('header', 'mail-step-head');
+  const mark = h('span', 'mail-step-mark');
+  mark.appendChild(icon('ui/mail', { size: 22 }));
+  const copy = h('div', 'mail-step-copy');
+  copy.append(
+    h('span', 'mail-step-kicker', t('plugin.mail.setup.kicker', null, 'Setup')),
+    h('h2', 'mail-step-title', accounts.length
+      ? t('plugin.mail.setup.verifyTitle', null, 'Verify your mail account')
+      : t('plugin.mail.setup.connectTitle', null, 'Connect your mail account')),
+    h('p', 'mail-step-sub', accounts.length
+      ? t('plugin.mail.setup.verifyBody', null, 'Your account is saved but the connection test hasn’t succeeded yet. Press Test connection below, or read the provider instructions at the bottom.')
+      : t('plugin.mail.setup.connectBody', null, 'Choose your provider and add your account. Provider instructions appear at the bottom of the form and disappear once the account is verified.')),
+  );
+  head.append(mark, copy);
+  inner.append(head, buildAccountForm({ onboarding: !accounts.length }));
+  wrap.appendChild(inner);
   root.appendChild(wrap);
 }
 
@@ -488,10 +729,10 @@ function defaultPresets() {
   ];
 }
 
-/** The add-account form: provider + email + password, optional custom servers. */
+/** The add-account form: provider, credentials and optional custom servers. */
 function buildAccountForm({ onboarding }) {
-  const form = h('div', 'mail-account-form');
-  form.appendChild(h('h4', null, onboarding
+  const form = h('div', 'mail-form-card');
+  form.appendChild(h('h4', 'mail-form-title', onboarding
     ? t('plugin.mail.form.addFirst', null, 'Add your first account')
     : t('plugin.mail.form.addAnother', null, 'Add another account')));
 
@@ -499,6 +740,16 @@ function buildAccountForm({ onboarding }) {
     options: (presets.length ? presets : defaultPresets()).map((p) => ({ value: p.provider, label: p.label })),
     value: 'gmail',
   });
+  const emailInput = input({ type: 'email', placeholder: t('plugin.mail.form.emailPlaceholder', null, 'you@example.com'), autocomplete: 'username' });
+  const userInput = input({ type: 'text', placeholder: t('plugin.mail.form.usernamePlaceholder', null, 'Usually your full email'), autocomplete: 'username' });
+  const passInput = input({ type: 'password', placeholder: t('plugin.mail.form.passwordPlaceholder', null, 'Password or app password'), autocomplete: 'current-password' });
+  const imapHost = input({ placeholder: t('plugin.mail.form.imapHostPlaceholder', null, 'imap.example.com') });
+  const imapPort = input({ type: 'number', value: '993', placeholder: '993' });
+  const imapSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
+  const smtpHost = input({ placeholder: t('plugin.mail.form.smtpHostPlaceholder', null, 'smtp.example.com') });
+  const smtpPort = input({ type: 'number', value: '465', placeholder: '465' });
+  const smtpSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
+
   providerSel.select.addEventListener('change', () => {
     const p = presets.find((x) => x.provider === providerSel.select.value)
       || defaultPresets().find((x) => x.provider === providerSel.select.value);
@@ -513,65 +764,75 @@ function buildAccountForm({ onboarding }) {
     }
     updateHelp(providerSel.select.value);
   });
-  form.appendChild(field({ label: t('plugin.mail.form.provider', null, 'Provider'), control: providerSel }));
 
-  const emailInput = input({ type: 'email', placeholder: t('plugin.mail.form.emailPlaceholder', null, 'you@example.com'), autocomplete: 'username' });
-  form.appendChild(field({ label: t('plugin.mail.form.email', null, 'Email'), control: emailInput }));
+  const accountSection = h('section', 'mail-form-section');
+  accountSection.appendChild(h('h5', 'mail-form-section-title', t('plugin.mail.form.section.account', null, 'Account')));
+  const accountGrid = h('div', 'mail-form-grid');
+  accountGrid.append(
+    field({ label: t('plugin.mail.form.provider', null, 'Provider'), control: providerSel }),
+    field({ label: t('plugin.mail.form.email', null, 'Email'), control: emailInput }),
+    field({ label: t('plugin.mail.form.username', null, 'Username (optional)'), control: userInput }),
+    field({ label: t('plugin.mail.form.password', null, 'Password'), control: passInput }),
+  );
+  accountSection.appendChild(accountGrid);
+  form.appendChild(accountSection);
 
-  const userInput = input({ type: 'text', placeholder: t('plugin.mail.form.usernamePlaceholder', null, 'Usually your full email'), autocomplete: 'username' });
-  form.appendChild(field({ label: t('plugin.mail.form.username', null, 'Username (optional)'), control: userInput }));
+  const imapSection = h('section', 'mail-form-section');
+  imapSection.appendChild(h('h5', 'mail-form-section-title', t('plugin.mail.form.section.imap', null, 'Incoming mail (IMAP)')));
+  const imapGrid = h('div', 'mail-form-grid mail-form-grid--server');
+  imapGrid.append(
+    field({ label: t('plugin.mail.form.imapServer', null, 'IMAP server'), control: imapHost }),
+    field({ label: t('plugin.mail.form.port', null, 'Port'), control: imapPort }),
+    field({ label: t('plugin.mail.form.security', null, 'Security'), control: imapSec }),
+  );
+  imapSection.appendChild(imapGrid);
+  form.appendChild(imapSection);
 
-  const passInput = input({ type: 'password', placeholder: t('plugin.mail.form.passwordPlaceholder', null, 'Password or app password'), autocomplete: 'current-password' });
-  form.appendChild(field({ label: t('plugin.mail.form.password', null, 'Password'), control: passInput }));
-
-  const imapHost = input({ placeholder: t('plugin.mail.form.imapHostPlaceholder', null, 'imap.example.com') });
-  const imapPort = input({ type: 'number', value: '993', placeholder: '993' });
-  const imapSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
-  form.appendChild(field({ label: t('plugin.mail.form.imapServer', null, 'IMAP server'), control: imapHost }));
-  const imapRow = h('div', 'ui-row');
-  imapRow.style.gap = '8px';
-  imapRow.append(field({ label: t('plugin.mail.form.port', null, 'Port'), control: imapPort }), field({ label: t('plugin.mail.form.security', null, 'Security'), control: imapSec }));
-  form.appendChild(imapRow);
-
-  const smtpHost = input({ placeholder: t('plugin.mail.form.smtpHostPlaceholder', null, 'smtp.example.com') });
-  const smtpPort = input({ type: 'number', value: '465', placeholder: '465' });
-  const smtpSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
-  form.appendChild(field({ label: t('plugin.mail.form.smtpServer', null, 'SMTP server'), control: smtpHost }));
-  const smtpRow = h('div', 'ui-row');
-  smtpRow.style.gap = '8px';
-  smtpRow.append(field({ label: t('plugin.mail.form.port', null, 'Port'), control: smtpPort }), field({ label: t('plugin.mail.form.security', null, 'Security'), control: smtpSec }));
-  form.appendChild(smtpRow);
-
-  const actions = h('div', 'mail-compose-actions');
-  const statusLine = h('span', 'mail-account-row-email');
-  statusLine.style.flex = '1';
-  const testBtn = button({ label: t('plugin.mail.form.testConnection', null, 'Test connection'), variant: 'ghost', size: 'sm' });
-  testBtn.setAttribute('aria-label', t('plugin.mail.form.testConnection', null, 'Test connection'));
-  const addBtn = button({ label: t('plugin.mail.form.addAccount', null, 'Add account'), variant: 'primary', size: 'sm' });
-  addBtn.setAttribute('aria-label', t('plugin.mail.form.addAccount', null, 'Add account'));
-  actions.append(statusLine, testBtn, addBtn);
-  form.appendChild(actions);
+  const smtpSection = h('section', 'mail-form-section');
+  smtpSection.appendChild(h('h5', 'mail-form-section-title', t('plugin.mail.form.section.smtp', null, 'Outgoing mail (SMTP)')));
+  const smtpGrid = h('div', 'mail-form-grid mail-form-grid--server');
+  smtpGrid.append(
+    field({ label: t('plugin.mail.form.smtpServer', null, 'SMTP server'), control: smtpHost }),
+    field({ label: t('plugin.mail.form.port', null, 'Port'), control: smtpPort }),
+    field({ label: t('plugin.mail.form.security', null, 'Security'), control: smtpSec }),
+  );
+  smtpSection.appendChild(smtpGrid);
+  form.appendChild(smtpSection);
 
   // Provider instructions live at the bottom and change with the selection.
   const helpEl = h('div', 'mail-provider-help');
+  const helpIcon = h('span', 'mail-provider-help-icon');
+  helpIcon.appendChild(icon('ui/info', { size: 16 }));
+  const helpCopy = h('div', 'mail-provider-help-copy');
+  helpEl.append(helpIcon, helpCopy);
   form.appendChild(helpEl);
+
   function updateHelp(provider) {
     const p = presets.find((x) => x.provider === provider) || defaultPresets().find((x) => x.provider === provider);
     const helpText = PROVIDER_HELP[provider] || PROVIDER_HELP.custom;
-    helpEl.textContent = '';
+    helpCopy.textContent = '';
     const label = h('strong', null, (p?.label || provider) + ': ');
-    helpEl.appendChild(label);
-    helpEl.appendChild(document.createTextNode(t(helpText.textKey) + ' '));
+    helpCopy.appendChild(label);
+    helpCopy.appendChild(document.createTextNode(t(helpText.textKey) + ' '));
     for (const link of helpText.links || []) {
       const a = h('a', null, t(link.labelKey));
       a.href = link.href;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
-      helpEl.appendChild(a);
-      helpEl.appendChild(document.createTextNode(' '));
+      helpCopy.appendChild(a);
+      helpCopy.appendChild(document.createTextNode(' '));
     }
   }
   updateHelp(providerSel.select.value);
+
+  const actions = h('div', 'mail-form-actions');
+  const statusLine = h('span', 'mail-form-status');
+  const testBtn = button({ icon: 'ui/refresh', label: t('plugin.mail.form.testConnection', null, 'Test connection'), variant: 'ghost', size: 'sm' });
+  testBtn.setAttribute('aria-label', t('plugin.mail.form.testConnection', null, 'Test connection'));
+  const addBtn = withArrow(button({ label: t('plugin.mail.form.addAccount', null, 'Add account'), variant: 'primary', size: 'sm' }));
+  addBtn.setAttribute('aria-label', t('plugin.mail.form.addAccount', null, 'Add account'));
+  actions.append(statusLine, testBtn, addBtn);
+  form.appendChild(actions);
 
   const collect = () => ({
     email: emailInput.value.trim(),
@@ -638,7 +899,7 @@ function buildAccountForm({ onboarding }) {
   return form;
 }
 
-/* ── Rendering: folders / list / reader ─────────────────────── */
+/* ── Rendering: folders / messages / reader ─────────────────── */
 
 function renderFolders() {
   if (!foldersEl) return;
@@ -648,73 +909,142 @@ function renderFolders() {
     return rank(a.name) - rank(b.name) || a.name.localeCompare(b.name);
   });
   if (!sorted.length) {
-    foldersEl.appendChild(h('div', 'mail-folder', '…'));
-    return;
+    foldersEl.appendChild(h('div', 'mail-rail-empty', t('plugin.mail.folder.none', null, 'No folders')));
   }
   for (const f of sorted) {
     const item = h('button', 'mail-folder');
     item.type = 'button';
-    if (f.name === currentFolder) item.classList.add('is-active');
-    const ic = h('span', 'mail-folder-icon');
-    item.appendChild(ic);
-    void setIcon(ic, 'ui/folder', { size: 13 });
-    item.appendChild(h('span', 'mail-folder-name', f.name));
-    const count = f.unread ? h('span', 'mail-folder-count', String(f.unread)) : null;
-    if (count) item.appendChild(count);
+    const active = f.name === currentFolder;
+    item.classList.toggle('is-active', active);
+    if (active) item.setAttribute('aria-current', 'page');
+    item.title = `${folderLabel(f.name)} · ${messagesLabel(Number(f.total) || 0)}`;
+    const glyph = h('span', 'mail-folder-icon');
+    glyph.appendChild(icon(folderIconName(f.name), { size: 15 }));
+    item.append(glyph, h('span', 'mail-folder-label', folderLabel(f.name)));
+    const unread = Number(f.unread) || 0;
+    item.appendChild(h('span', 'mail-folder-count', unread > 0 ? String(unread) : ''));
     item.addEventListener('click', () => {
+      if (currentFolder === f.name) return;
       currentFolder = f.name;
       selectedMessageId = null;
+      currentMessage = null;
+      messages = [];
+      messageTotal = 0;
+      activeQuery = '';
+      resetReader();
+      if (scrollEl) scrollEl.scrollTop = 0;
+      syncScroll();
       renderFolders();
+      renderMessages();
       void loadMessages();
     });
     foldersEl.appendChild(item);
   }
+  renderRailHead();
+  renderHero();
+  renderChrome();
+  renderFooter();
 }
 
 function renderMessages() {
   if (!listEl) return;
+  if (selectedMessageId && !messages.some((m) => m.id === selectedMessageId)) {
+    selectedMessageId = null;
+    currentMessage = null;
+    resetReader();
+  }
   listEl.textContent = '';
   if (!messages.length) {
+    const body = activeQuery
+      ? t('plugin.mail.empty.noSearchResults', { query: activeQuery }, 'No messages match “{query}”.')
+      : t('plugin.mail.empty.nothingIn', { folder: folderLabel(currentFolder) }, 'Nothing in {folder}.');
     listEl.appendChild(emptyState({
+      icon: 'ui/mail',
       title: t('plugin.mail.empty.noMessages', null, 'No messages'),
-      body: t('plugin.mail.empty.nothingIn', { folder: currentFolder }, 'Nothing in {folder}.'),
+      body,
     }));
-    return;
+  } else {
+    const rows = [];
+    for (const m of messages) {
+      const item = h('button', 'mail-row');
+      item.type = 'button';
+      item.dataset.id = m.id;
+      item.setAttribute('role', 'listitem');
+      if (m.id === selectedMessageId) {
+        item.classList.add('is-active');
+        item.setAttribute('aria-current', 'true');
+      }
+      if (!m.seen) item.classList.add('is-unread');
+      const subject = h('span', 'mail-row-subject');
+      subject.append(
+        h('b', null, m.subject || t('plugin.mail.list.noSubject', null, '(no subject)')),
+        h('span', 'mail-row-preview', m.snippet || ''),
+      );
+      item.append(
+        h('span', 'mail-row-dot'),
+        h('span', 'mail-row-from', m.from || m.from_addresses?.[0]?.email || t('plugin.mail.list.unknownSender', null, 'Unknown')),
+        subject,
+        h('span', 'mail-row-time', fmtWhen(m.date)),
+      );
+      item.addEventListener('click', () => void openMessage(m.id));
+      listEl.appendChild(item);
+      rows.push(item);
+    }
+    if (revealRows) void listReveal(rows);
   }
-  for (const m of messages) {
-    const item = h('button', 'mail-item');
-    item.type = 'button';
-    if (m.id === selectedMessageId) item.classList.add('is-active');
-    if (!m.seen) item.classList.add('is-unread');
-    const head = h('div', 'mail-item-head');
-    head.appendChild(h('span', 'mail-item-dot'));
-    head.appendChild(h('span', 'mail-item-from', m.from || t('plugin.mail.list.unknownSender', null, 'Unknown')));
-    head.appendChild(h('span', 'mail-item-time', fmtWhen(m.date)));
-    const subject = h('div', 'mail-item-subject', m.subject || t('plugin.mail.list.noSubject', null, '(no subject)'));
-    const snippet = h('div', 'mail-item-snippet', m.snippet || '');
-    item.append(head, subject, snippet);
-    item.addEventListener('click', () => void openMessage(m.id));
-    listEl.appendChild(item);
-  }
+  revealRows = false;
+  syncReaderOpen();
+  renderHero();
+  renderChrome();
+  renderFooter();
+}
+
+function renderReaderEmpty() {
+  if (!readerEl) return;
+  readerEl.textContent = '';
+  const wrap = h('div', 'mail-reader-empty');
+  wrap.appendChild(emptyState({
+    icon: 'ui/mail',
+    title: t('plugin.mail.empty.selectTitle', null, 'Select a message'),
+    body: t('plugin.mail.empty.selectBody', null, 'Pick a message to read it here.'),
+  }));
+  readerEl.appendChild(wrap);
+}
+
+function resetReader() {
+  currentMessage = null;
+  renderReaderEmpty();
+  syncReaderOpen();
 }
 
 function renderMessage(msg) {
   if (!readerEl) return;
   readerEl.textContent = '';
-  const subject = h('h2', 'mail-reader-subject', msg.subject || t('plugin.mail.list.noSubject', null, '(no subject)'));
   const from = (msg.from || []).join(', ');
   const to = (msg.to || []).join(', ');
-  const fromLine = t('plugin.mail.reader.from', { from: from || '—' }, 'From: {from}');
-  const toLine = to ? `\n${t('plugin.mail.reader.to', { to }, 'To: {to}')}` : '';
-  const meta = h('p', 'mail-reader-meta', `${fromLine}${toLine}${msg.date ? `\n${fmtWhen(msg.date)}` : ''}`);
+
+  const head = h('header', 'mail-reader-head');
+  head.append(
+    h('span', 'mail-eyebrow', t('plugin.mail.reader.eyebrow', null, 'Message')),
+    h('h2', 'mail-reader-subject', msg.subject || t('plugin.mail.list.noSubject', null, '(no subject)')),
+    h('p', 'mail-reader-sub', [from || '—', msg.date ? fmtWhen(msg.date) : ''].filter(Boolean).join(' · ')),
+  );
 
   const actions = h('div', 'mail-reader-actions');
   const replyBtn = button({ icon: 'ui/reply', label: t('plugin.mail.reader.reply', null, 'Reply'), variant: 'ghost', size: 'sm', onClick: () => openReply(msg) });
   const fwdBtn = button({ icon: 'ui/forward', label: t('plugin.mail.reader.forward', null, 'Forward'), variant: 'ghost', size: 'sm', onClick: () => openForward(msg) });
   const delBtn = button({ icon: 'ui/trash', label: t('plugin.mail.reader.delete', null, 'Delete'), variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
-  actions.append(replyBtn, fwdBtn, delBtn);
+  const closeBtn = toolButton('ui/close', t('plugin.mail.reader.close', null, 'Close message'), closeReader, { className: 'mail-reader-close' });
+  actions.append(withArrow(replyBtn), fwdBtn, delBtn, closeBtn);
 
-  readerEl.append(subject, meta, actions);
+  const details = h('div', 'mail-reader-details');
+  details.append(
+    detailRow(t('plugin.mail.reader.fromLabel', null, 'From'), from || '—'),
+    detailRow(t('plugin.mail.reader.toLabel', null, 'To'), to || '—'),
+  );
+  if (msg.date) details.appendChild(detailRow(t('plugin.mail.reader.dateLabel', null, 'Date'), fmtDate(msg.date)));
+
+  readerEl.append(head, actions, details);
 
   const content = h('div', 'mail-reader-content');
   const hasHtml = !!msg.html && msg.html.trim();
@@ -805,9 +1135,17 @@ function openCompose(prefill = {}) {
     composeSubject = input({ placeholder: t('plugin.mail.compose.subject', null, 'Subject') });
     composeBody = textarea({ placeholder: t('plugin.mail.compose.bodyPlaceholder', null, 'Write your message…'), rows: 12 });
     composeBody.classList.add('mail-compose-body');
-    composeFrom = h('p', 'mail-account-row-email', t('plugin.mail.compose.from', { email: '' }, 'From: {email}'));
+    composeFrom = h('span', 'mail-compose-from', t('plugin.mail.compose.from', { email: '' }, 'From: {email}'));
+
+    const addressGrid = h('div', 'mail-compose-grid');
+    addressGrid.append(
+      field({ label: t('plugin.mail.compose.to', null, 'To'), control: composeTo }),
+      field({ label: t('plugin.mail.compose.cc', null, 'Cc'), control: composeCc }),
+      field({ label: t('plugin.mail.compose.bcc', null, 'Bcc'), control: composeBcc }),
+    );
+
     const actions = h('div', 'mail-compose-actions');
-    const sendBtn = button({ icon: 'ui/send', label: t('plugin.mail.compose.send', null, 'Send'), variant: 'primary', size: 'sm' });
+    const sendBtn = withArrow(button({ label: t('plugin.mail.compose.send', null, 'Send'), variant: 'primary', size: 'sm' }));
     const closeBtn = button({ label: t('plugin.mail.compose.discard', null, 'Discard'), variant: 'ghost', size: 'sm' });
     actions.append(sendBtn, closeBtn);
 
@@ -816,9 +1154,7 @@ function openCompose(prefill = {}) {
       wide: true,
       body: [
         composeFrom,
-        field({ label: t('plugin.mail.compose.to', null, 'To'), control: composeTo }),
-        field({ label: t('plugin.mail.compose.cc', null, 'Cc'), control: composeCc }),
-        field({ label: t('plugin.mail.compose.bcc', null, 'Bcc'), control: composeBcc }),
+        addressGrid,
         field({ label: t('plugin.mail.compose.subject', null, 'Subject'), control: composeSubject }),
         field({ label: t('plugin.mail.compose.message', null, 'Message'), control: composeBody }),
         actions,
@@ -888,9 +1224,7 @@ async function deleteCurrent(msg) {
     toast(t('plugin.mail.toast.deleted', null, 'Message deleted'), { type: 'info' });
     currentMessage = null;
     selectedMessageId = null;
-    setTileGlow(tileEl, null);
-    readerEl.textContent = '';
-    readerEl.appendChild(emptyState({ title: t('plugin.mail.empty.selectTitle', null, 'Select a message'), body: t('plugin.mail.empty.selectBody', null, 'Pick a message to read it here.') }));
+    resetReader();
     await loadMessages();
   } catch (e) {
     toast(e.message || t('plugin.mail.toast.deleteFailed', null, 'Delete failed'), { type: 'error' });
@@ -899,7 +1233,7 @@ async function deleteCurrent(msg) {
 
 function quotedBody(msg) {
   const from = (msg.from || []).join(', ');
-  const date = msg.date ? fmtWhen(msg.date) : '';
+  const date = msg.date ? fmtDate(msg.date) : '';
   const text = (msg.text && msg.text.trim()) ? msg.text.trim() : '';
   const body = text || '(no body)';
   return `\n\n----------\nFrom: ${from}\nDate: ${date}\n\n${body}`;
@@ -907,92 +1241,99 @@ function quotedBody(msg) {
 
 /* ── Settings ───────────────────────────────────────────────── */
 
+function renderAccountList(list) {
+  if (!list) return;
+  list.textContent = '';
+  if (!accounts.length) {
+    list.appendChild(h('p', 'mail-accounts-empty', t('plugin.mail.settings.noAccounts', null, 'No accounts yet.')));
+    return;
+  }
+  for (const a of accounts) {
+    const row = h('div', 'mail-account-row');
+    const iconWrap = h('span', 'mail-account-row-icon');
+    iconWrap.appendChild(icon('ui/mail', { size: 16 }));
+    const meta = h('div', 'mail-account-row-copy');
+    meta.append(
+      h('div', 'mail-account-row-label', a.label || a.email),
+      h('div', 'mail-account-row-email', a.email),
+    );
+    const badgeText = a.verified
+      ? t('plugin.mail.status.connected', null, 'connected')
+      : a.last_error
+        ? t('plugin.mail.status.failed', null, 'failed')
+        : t('plugin.mail.status.notTested', null, 'not tested');
+    const badgeEl = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, badgeText);
+    const testBtn = button({ icon: 'ui/refresh', label: t('plugin.mail.settings.test', null, 'Test'), variant: 'ghost', size: 'sm' });
+    testBtn.title = t('plugin.mail.form.testConnection', null, 'Test connection');
+    const delBtn = iconButton({
+      icon: 'ui/trash',
+      variant: 'ghost',
+      size: 'sm',
+      label: t('plugin.mail.settings.removeAccount', null, 'Remove account'),
+    });
+    delBtn.classList.add('plugin-card-remove');
+    row.append(iconWrap, meta, badgeEl, testBtn, delBtn);
+
+    testBtn.addEventListener('click', async () => {
+      testBtn.disabled = true;
+      try {
+        const r = await testAccount({ id: a.id });
+        badgeEl.textContent = r?.ok
+          ? t('plugin.mail.status.connected', null, 'connected')
+          : (r?.error || t('plugin.mail.status.failed', null, 'failed'));
+        badgeEl.classList.toggle('is-ok', !!r?.ok);
+        if (r?.ok) toast(t('plugin.mail.toast.emailConnected', { email: a.email }, '{email} connected'), { type: 'info' });
+        await refreshStatus({ keepFolder: true });
+      } catch (e) {
+        toast(e.message, { type: 'error' });
+      } finally {
+        testBtn.disabled = false;
+      }
+    });
+    delBtn.addEventListener('click', async () => {
+      if (!await confirmDialog(t('plugin.mail.dialog.removeAccount', { email: a.email }, 'Remove mail account {email}?'))) return;
+      try {
+        await deleteAccount(a.id);
+        if (currentAccount?.id === a.id) currentAccount = null;
+        await refreshStatus({ keepFolder: true });
+        renderAccountList(list);
+      } catch (e) {
+        toast(e.message, { type: 'error' });
+      }
+    });
+    list.appendChild(row);
+  }
+}
+
 function openSettings() {
   if (!settingsModal) {
-    const body = h('div', 'ui-stack');
-    body.style.gap = '12px';
-    const list = h('div', 'ui-stack');
-    list.style.gap = '8px';
-    const form = buildAccountForm({ onboarding: false });
-    const actions = h('div', 'mail-compose-actions');
-    const doneBtn = button({ label: t('plugin.mail.settings.done', null, 'Done'), variant: 'primary', size: 'sm' });
+    const body = h('div', 'mail-settings');
+    const head = h('header', 'mail-settings-head');
+    head.append(
+      h('span', 'mail-eyebrow', t('plugin.mail.settings.kicker', null, 'Accounts')),
+      h('p', 'mail-settings-sub', t('plugin.mail.settings.subtitle', null, 'Add, test or remove the mailboxes this window uses.')),
+    );
+    settingsListEl = h('div', 'mail-accounts');
+    const add = h('section', 'mail-settings-add');
+    add.appendChild(h('h4', 'mail-form-section-title', t('plugin.mail.form.addAnother', null, 'Add another account')));
+    add.appendChild(buildAccountForm({ onboarding: false }));
+    const actions = h('div', 'mail-settings-actions');
+    const doneBtn = withArrow(button({ label: t('plugin.mail.settings.done', null, 'Done'), variant: 'primary', size: 'sm' }));
     actions.appendChild(doneBtn);
 
+    body.append(head, settingsListEl, add, actions);
     settingsModal = modal({
       title: t('plugin.mail.settings.title', null, 'Mail accounts'),
       wide: true,
-      body: [list, form, actions],
+      body: [body],
     });
     doneBtn.addEventListener('click', () => settingsModal.close());
-    settingsModal.el.addEventListener('open', () => {
-      list.textContent = '';
-      if (!accounts.length) {
-        list.appendChild(h('p', 'mail-account-row-email', t('plugin.mail.settings.noAccounts', null, 'No accounts yet.')));
-      }
-      for (const a of accounts) {
-        const row = h('div', 'mail-account-row');
-        const meta = h('div', 'ui-stack');
-        meta.style.flex = '1';
-        meta.style.gap = '2px';
-        meta.appendChild(h('div', 'mail-account-row-label', a.label || a.email));
-        meta.appendChild(h('div', 'mail-account-row-email', a.email));
-        const badgeText = a.verified
-          ? t('plugin.mail.status.connected', null, 'connected')
-          : a.last_error
-            ? t('plugin.mail.status.failed', null, 'failed')
-            : t('plugin.mail.status.notTested', null, 'not tested');
-        const badge = h('span', `mail-account-row-badge${a.verified ? ' is-ok' : ''}`, badgeText);
-        const testBtn = button({ label: t('plugin.mail.settings.test', null, 'Test'), variant: 'ghost', size: 'sm' });
-        testBtn.title = t('plugin.mail.form.testConnection', null, 'Test connection');
-        const delBtn = button({ icon: 'ui/trash', variant: 'ghost', size: 'sm' });
-        delBtn.title = t('plugin.mail.settings.removeAccount', null, 'Remove account');
-        delBtn.classList.add('ui-btn--icon', 'mail-tool--danger');
-        row.append(meta, badge, testBtn, delBtn);
-        testBtn.addEventListener('click', async () => {
-          testBtn.disabled = true;
-          try {
-            const r = await testAccount({ id: a.id });
-            badge.textContent = r?.ok
-              ? t('plugin.mail.status.connected', null, 'connected')
-              : (r?.error || t('plugin.mail.status.failed', null, 'failed'));
-            badge.classList.toggle('is-ok', !!r?.ok);
-            if (r?.ok) toast(t('plugin.mail.toast.emailConnected', { email: a.email }, '{email} connected'), { type: 'info' });
-            await refreshStatus({ keepFolder: true });
-          } catch (e) {
-            toast(e.message, { type: 'error' });
-          } finally {
-            testBtn.disabled = false;
-          }
-        });
-        delBtn.addEventListener('click', async () => {
-          if (!await confirmDialog(t('plugin.mail.dialog.removeAccount', { email: a.email }, 'Remove mail account {email}?'))) return;
-          try {
-            await deleteAccount(a.id);
-            if (currentAccount?.id === a.id) currentAccount = null;
-            await refreshStatus({ keepFolder: true });
-          } catch (e) {
-            toast(e.message, { type: 'error' });
-          }
-        });
-        list.appendChild(row);
-      }
-    });
   }
+  renderAccountList(settingsListEl);
   settingsModal.open();
 }
 
 /* ── misc helpers ───────────────────────────────────────────── */
-
-/** Stable ambient colour pair for a sender address (mail has no images):
- *  the same person always glows the same way, like Gmail letter avatars. */
-function senderGlow(addr) {
-  const s = String(addr || '').toLowerCase();
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  const a = `hsl(${Math.abs(h) % 360} 70% 55%)`;
-  const b = `hsl(${(Math.abs(h) * 7) % 360} 65% 32%)`;
-  return glowGradient(a, b, { x: 15, y: 0, x2: 80, y2: 100 });
-}
 
 function parseAddresses(value) {
   return value
@@ -1010,6 +1351,12 @@ function fmtWhen(iso) {
   return sameDay
     ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
 }
 
 function fmtSize(n) {
@@ -1075,31 +1422,32 @@ export function mountMailTile() {
   tileEl = document.createElement('section');
   tileEl.className = 'tile mail-tile';
   tileEl.dataset.plugin = MAIL_PLUGIN;
+  tileEl.style.setProperty('--sc', '1');
 
-  /* Top bar: account menu + title + status dot */
-  const bar = toolbar([], { className: 'mail-bar' });
-  bar.dataset.windowBar = '';
-  barAccountBtn = menuButton({ icon: 'ui/mail', label: t('plugin.mail.bar.accounts', null, 'Accounts'),
+  /* Window chrome: account menu, live status and window actions. */
+  const chrome = h('div', 'mail-chrome');
+  chrome.dataset.windowBar = '';
+
+  barAccountBtn = menuButton({
+    label: t('plugin.mail.bar.accounts', null, 'Accounts'),
     text: t('plugin.mail.bar.noAccount', null, 'No account'), onClick: toggleAccountMenu,
-    className: 'mail-account-btn' });
+    className: 'mail-account-btn',
+  });
   barAccountLabel = barAccountBtn.caption;
+  chromeStatusEl = h('span', 'mail-chrome-status');
+  chromeTitleEl = h('span', 'mail-chrome-title');
+  chromeTitleEl.setAttribute('aria-hidden', 'true');
 
-  const title = h('div', 'tile-bar-spacer');
-  statusDot = h('span', 'mail-status-dot');
-  statusDot.setAttribute('aria-hidden', 'true');
-
-  // Single top bar (Studio-style): account menu + title + actions + status dot.
-  bar.append(
+  chrome.append(
     barAccountBtn,
-    title,
-    toolbarButton('ui/plus', t('plugin.mail.toolbar.newMessage', null, 'New message'), openCompose),
-    toolbarButton('ui/refresh', t('plugin.mail.toolbar.sync', null, 'Sync mail'), () => void syncNow()),
-    toolbarButton('ui/settings', t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), openSettings),
-    statusDot,
+    chromeTitleEl,
+    chromeStatusEl,
+    toolButton('ui/plus', t('plugin.mail.toolbar.newMessage', null, 'New message'), openCompose),
+    toolButton('ui/refresh', t('plugin.mail.toolbar.sync', null, 'Sync mail'), () => void syncNow()),
+    toolButton('ui/settings', t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), openSettings),
   );
-  tileEl.appendChild(bar);
+  tileEl.appendChild(chrome);
 
-  /* Body */
   bodyEl = h('div', 'mail-body');
   tileEl.appendChild(bodyEl);
 
@@ -1117,14 +1465,31 @@ export function unmountMailTile() {
   window.removeEventListener('message', onReaderFrameMessage);
   tileEl?.remove();
   tileEl = null;
+  chromeStatusEl = null;
+  chromeTitleEl = null;
+  if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+  scrollFrame = 0;
   barAccountBtn = null;
   barAccountLabel = null;
-  statusDot = null;
+  bodyEl = null;
+  footerEl = null;
+  railHeadEl = null;
   foldersEl = null;
+  shellEl = null;
+  scrollEl = null;
+  heroEl = null;
   listEl = null;
   readerEl = null;
   readerFrameEl = null;
-  bodyEl = null;
+  accounts = [];
+  folders = [];
+  messages = [];
+  currentAccount = null;
+  configured = false;
+  selectedMessageId = null;
+  currentMessage = null;
+  messageTotal = 0;
+  activeQuery = '';
 }
 
 /** The tile element (or null when the Mail window is not mounted). */

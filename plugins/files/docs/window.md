@@ -16,10 +16,39 @@ export default {
 
 ## Layout
 
-- A single top bar with navigation (back/forward/up), a breadcrumb, view
-  toggles (grid/list), search, and file actions.
-- A main pane listing entries with lazy thumbnails (server `/thumb`), a
-  sidebar of classic places, and a selection model.
+- A sidebar of classic places (Home, Trash, the XDG folders) with a flat
+  menu button (new folder, upload, hidden files, view, empty trash).
+- One toolbar row, in the editorial style of the theme lab (`web/theme-lab/v4`):
+  round-cornered grey square back/forward buttons, a plain breadcrumb
+  ("Home / Documents": ancestors muted and clickable, the current folder in
+  500 weight, a small chevron for the path actions — new folder, upload, copy
+  path, hidden files), a grey search field with its glyph on the right
+  (typing searches the whole home after two characters; Escape clears;
+  Ctrl+F / Ctrl+L focus it), and the grid/list switcher with its options
+  chevron as one grey group.
+- **Grid view:** each entry is a rounded (12px) thumbnail box ~92px tall on the
+  theme's tile grey with the monochrome glyph centred — folders use the icon
+  catalog's `ui/folder*` names, which the Dusk/Ink themes override with their
+  monochrome folders — the name below (12.5px, 500, one line with an ellipsis)
+  and a mono uppercase meta line (`24 ITEMS`, `PDF · 2.4 MB`). Photos and video
+  posters fill the box (`object-fit: cover`, a slight zoom under the pointer);
+  PDFs show the top of page 1; text and Office files show a little sheet rising
+  out of the box. A selected entry's box turns the accent with the
+  accent-contrast glyph (a photo keeps its picture and wears an accent ring).
+- **List view:** Name / Size / Modified columns (click to sort) with mono
+  uppercase headers and meta; each row's glyph sits in a small grey box that
+  turns the accent when selected.
+- A **status line** along the bottom on a hairline: `8 ITEMS · 1 SELECTED` on
+  the left, the selection's total size on the right (shown only when the
+  selection has files — nothing is shown that the API does not report, so there
+  is no free-space figure).
+- When a folder's contents load they arrive through the shared
+  `listReveal(nodes)` (`web/ui/motionStyle.js`), in the user's motion language;
+  re-renders for a selection, sort or view switch do not animate.
+- Styling lives in core CSS — the *Files plugin window* section of
+  [`web/css/tiles.css`](../../../web/css/tiles.css) — from theme tokens only
+  (the `--ed-*` skin tokens with generic fallbacks). The shell's file picker
+  (`web/js/filePicker.js`) reuses the same grid classes.
 - **Double-click** opens a file: known types open in their owning app
   (`onOpenFromFiles`/`openWithPlugin` in
   [`web/js/files.js`](../../../web/js/files.js)), otherwise the OS handler.
@@ -65,8 +94,9 @@ export default {
 
 ## Development
 
-The app serves the **installed** copy at `data/plugins/files/web/`, not
-`plugins/files/web/`. Copy or reinstall after editing. `node --check
+The app serves the **installed** copy at `data/plugins/files/web/` (or the
+`PLUGINS_DIR` override, see AGENT.md), not `plugins/files/web/`. Copy or
+reinstall after editing. `node --check
 web/plugin.js` catches syntax errors; `node --experimental-vm-modules
 web/plugin.smoke.mjs` mounts the window and drives the quick look against a DOM
 shim.

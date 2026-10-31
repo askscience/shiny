@@ -60,6 +60,16 @@ because the core only builds the window chrome. The wizard uses the shared `ui/*
 components and theme tokens; the disk map and timeline are plugin-local layout, not
 new global components.
 
+The look is the editorial window language: the window bar carries one mono status
+line ("LIVE SESSION · DRY RUN · STEP 2/5"); the step rail is flat (mono number or a
+check, the label, the active step on the grey pill); each step opens with a mono
+"02 / 05" kicker over a large display title; disks, intents, choices and partitions
+are hairline rows whose selection is the grey `--ed-pill` fill (disk path, size and
+serial in mono); Next is a grey arrow pill and Install the ink arrow pill. Rows
+cascade in (`listReveal`) once per step entry, the progress ring's value rolls up
+(`rollNumber`) when the progress view opens, and the stage label decodes in place
+(`decodeText`) when the helper moves to the next stage.
+
 The Destination step is a **timeline aligned “now / after”**, in the spirit of a video
 editor: the disk is the track, existing partitions are locked clips, free extents are
 dashed zones with “Install here”, and the new EFI/swap/home/root clips can be resized

@@ -1,9 +1,16 @@
 # Word — window (`web/plugin.js`)
 
 The Word window is a single ES module served from the plugin's `web_dir`. It
-renders a flat editorial surface: a hairline toolbar (document menu + title +
-formatting), a `contentEditable` editor and a status line. It talks to the REST
-routes in [routes.md](routes.md) and reacts to agent activity.
+renders the editorial surface: the window bar (merged with the window
+controls, no glass plate at rest) carries the document menu, the formatting
+tools, one grey **New** pill and a mono save state (`SAVED 14:02` /
+`UNSAVED`). Above the `contentEditable` editor the document title sits large
+(display type, editable in place) with a mono meta line
+(`EDITED 14:02 · 812 WORDS`); as the page scrolls it hands over to a small
+title in the bar (`largeTitle()` from `web/ui`, `--sc` on the window). The file
+actions (import, save now, export, delete) live in the document menu's footer.
+It talks to the REST routes in [routes.md](routes.md) and reacts to agent
+activity.
 
 ## Exports
 
@@ -27,10 +34,12 @@ activates the window.
 `unmountWordTile()`:
 
 1. If a document is open and `dirty`, fires `void persist()` (best-effort flush).
-2. `closeDocMenu()` removes the body-level popup listeners.
-3. Removes the tile and sets `tileEl`, `editorEl`, `titleInput`, `docMenuBtn`,
-   `statusEl`, `saveDot`, `fontSelect`, `toolbarBtns` all to `null`, so a later
-   mount builds a fresh window instead of returning a detached one.
+2. `closeDocMenu()` removes the body-level popup listeners; `hero.dispose()`
+   drops the scroll handover.
+3. Removes the tile and nulls `tileEl`, `editorEl`, `scrollEl`, `hero`,
+   `titleEl`, `barTitleEl`, `docMenuBtn`, `stateEl`, `fontSelect`,
+   `toolbarBtns`, so a later mount builds a fresh window instead of returning
+   a detached one.
 
 `wireWordEvents()` is guarded by a module-level `wired` flag so the
 `agent:actions` / `files:open` / `beforeunload` listeners are bound once.
@@ -38,45 +47,57 @@ activates the window.
 ## DOM structure
 
 ```
-section.tile.word-tile[data-plugin="word"]
+section.tile.word-tile[data-plugin="word"][data-large-title]
 ├── div.word-bar[data-window-bar]
 │   ├── button.word-doc-btn            (icon ui/doc + chevron; toggles menu)
-│   ├── input.word-title               (maxlength 120, placeholder "Untitled")
-│   ├── button.word-tool               (bold / italic / underline / heading / list)
-│   ├── div.word-font                  (the `select` component for host fonts)
-│   ├── button.word-tool--secondary    (new / import / export / save / delete)
-│   └── span.word-save-dot[aria-hidden]
-├── div.word-editor[contenteditable="true"][role="textbox"][aria-multiline]
-└── div.word-status
-    └── span                           (status text)
+│   ├── span.word-bar-title            (fades in with --sc once scrolled)
+│   ├── div.word-tools
+│   │   ├── button.word-tool           (bold / italic / underline / heading / list)
+│   │   └── div.word-font              (the `select` component for host fonts)
+│   ├── button.word-new                (grey "New" pill)
+│   └── span.word-state[role=status]   (mono SAVED 14:02 / UNSAVED / SAVING)
+└── div.word-scroll                    (the scroller)
+    ├── header.ui-large-title.word-hero
+    │   └── h2.ui-large-title-text[contenteditable=plaintext-only]  + span.ui-meta
+    └── div.word-editor[contenteditable="true"][role="textbox"][aria-multiline]
 ```
+
+The large title is editable: typing marks the document dirty (autosave),
+`Enter` moves to the editor, the text is capped at 120 characters. Opening a
+document decodes its title in (`decodeText`). The editor's empty placeholder
+comes from `data-placeholder` (`plugin.word.editor.placeholder`).
 
 The document menu popup is appended to `document.body` (the tile clips
 overflow): `div.word-doc-menu` containing `button.word-doc-menu-item`
 (row → `.word-doc-menu-title`, `.word-doc-menu-time`, `.word-doc-menu-check`)
-and `div.word-doc-menu-foot` (new, import, save-to-Documents, delete). Empty
-state uses `.word-doc-menu-empty`.
+and `div.word-doc-menu-foot` (new `ui/plus`, import `ui/folder-open`, save now
+`ui/save`, Save to Documents `ui/upload`, delete). Its rows arrive with
+`listReveal` (`showDocumentMenu` in `web/js/officeMenu.js`). Empty state uses
+`.word-doc-menu-empty`.
 
 ## CSS class prefix
 
-All classes are `word-*`: `.word-tile`, `.word-bar`, `.word-doc-btn`,
-`.word-doc-btn-icon`, `.word-doc-btn-chevron`, `.word-title`, `.word-tool`,
-`.word-tool--secondary`, `.word-tool--danger`, `.word-font`, `.word-save-dot`,
-`.word-editor`, `.word-status`, `.word-doc-menu`, `.word-doc-menu-item`,
-`.word-doc-menu-title`, `.word-doc-menu-time`, `.word-doc-menu-check`,
-`.word-doc-menu-foot`, `.word-doc-menu-foot-icon`, `.word-doc-menu-empty`.
-Active states use `is-active` / `hidden`.
+All classes are `word-*` (styles in `web/css/tiles.css`, "Word plugin
+window"): `.word-tile`, `.word-bar`, `.word-doc-btn`, `.word-bar-title`,
+`.word-tools`, `.word-tool`, `.word-font`, `.word-new`, `.word-state`,
+`.word-scroll`, `.word-hero`, `.word-editor`, `.word-doc-menu`,
+`.word-doc-menu-item`, `.word-doc-menu-title`, `.word-doc-menu-time`,
+`.word-doc-menu-check`, `.word-doc-menu-foot`, `.word-doc-menu-foot-icon`,
+`.word-doc-menu-empty`. An active formatting tool is a grey fill
+(`.word-tool.is-active`), never an accent border.
 
 ## State & autosave
 
 Module state: `docs[]`, `currentDoc`, `dirty`, `saveTimer`, `saveSeq`.
 
-- `markDirty()` sets `dirty`, shows "Unsaved changes", and schedules
-  `persist()` after **1200 ms** (debounced).
+- `markDirty()` sets `dirty`, shows `UNSAVED`, and schedules `persist()` after
+  **1200 ms** (debounced). Editing the title also marks the document dirty.
 - `persist()` clears `dirty`, PUTs `{ title, html: editorEl.innerHTML }`, and
-  updates the status line (with word count) or reverts to dirty on failure.
-- `setStatus('saving'|'dirty'|'saved')` drives the status text and
-  `.word-save-dot.is-active`.
+  shows `SAVED <time>` or reverts to dirty on failure.
+- `setStatus('saving'|'dirty'|'saved')` drives `.word-state`; on `saved` it
+  also refreshes the large title's meta (edited time + word count — counted
+  once per save, not per keystroke). Times come from `formatMenuTime()` in
+  `web/js/officeMenu.js` (SQLite UTC stamps parsed as UTC).
 - `saveSeq` guards against out-of-order saves when switching documents.
 
 ## Editing
@@ -88,7 +109,7 @@ Module state: `docs[]`, `currentDoc`, `dirty`, `saveTimer`, `saveSeq`.
 - Fonts: `listFonts()` populates the picker from the host. A selection gets a
   wrapping `<span style="font-family…">` with `data-font`; with no selection the
   whole document default changes. `TF<n>` styles carry the family through ODT.
-- Status word count = `editorEl.innerText` split on whitespace.
+- Meta word count = `editorEl.innerText` split on whitespace.
 
 ## Menu & glow
 

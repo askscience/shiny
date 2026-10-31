@@ -1,5 +1,5 @@
 import { element as el } from '../../ui/index.js';
-import { icon, controlCard, controlGroup } from '../../ui/index.js';
+import { controlCard, controlGroup } from '../../ui/index.js';
 import { t } from '../i18n.js';
 
 let nextControlId = 0;
@@ -44,20 +44,15 @@ export function panel(id, iconName, title, children, { index = 0, total = 0, des
   const section = el('section', 'settings-section settings-panel');
   section.id = `panel-${id}`;
   section.dataset.panel = id;
-  const head = el('div', 'settings-panel-head');
-  const ring = el('span', 'settings-panel-icon');
-  ring.appendChild(icon(iconName, { size: 22 }));
-  const copy = el('div', 'settings-panel-copy');
+  // Editorial head: a mono "02 / 10" kicker over a large display title.
+  const head = el('header', 'settings-panel-head');
   if (index && total) {
-    copy.appendChild(el('span', 'settings-panel-kicker', t(
-      'settings.panel.kicker',
-      { current: index, total },
-      'Section {current} of {total}',
-    )));
+    const kicker = el('span', 'settings-panel-kicker', `${String(index).padStart(2, '0')} / ${String(total).padStart(2, '0')}`);
+    kicker.setAttribute('aria-label', t('settings.panel.kicker', { current: index, total }, 'Section {current} of {total}'));
+    head.appendChild(kicker);
   }
-  copy.appendChild(el('h3', 'settings-panel-title', title));
-  if (description) copy.appendChild(el('p', 'settings-panel-subtitle', description));
-  head.append(ring, copy);
+  head.appendChild(el('h3', 'settings-panel-title', title));
+  if (description) head.appendChild(el('p', 'settings-panel-subtitle', description));
   section.appendChild(head);
   section.append(...settingsGroups(children));
   return section;

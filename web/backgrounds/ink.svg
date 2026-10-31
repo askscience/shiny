@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <!-- Ink: near-black with four hairline columns and a faint low glow (the Ink theme default). -->
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="1.05" r="0.7">
+      <stop offset="0" stop-color="#2a2a2e" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#2a2a2e" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.05 0"/>
+    </filter>
+  </defs>
+  <rect width="1440" height="900" fill="#010101"/>
+  <rect width="1440" height="900" fill="url(#glow)"/>
+  <g stroke="#ffffff" stroke-opacity="0.055" stroke-width="1">
+    <line x1="360.5" y1="0" x2="360.5" y2="900"/>
+    <line x1="720.5" y1="0" x2="720.5" y2="900"/>
+    <line x1="1080.5" y1="0" x2="1080.5" y2="900"/>
+  </g>
+  <rect width="1440" height="900" filter="url(#grain)"/>
+</svg>

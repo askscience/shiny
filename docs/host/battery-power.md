@@ -99,6 +99,14 @@ live: TTS on the next reply, STT at the next voice session.
 See [voice](../core/voice.md) for the engines and
 [display & input](display-input.md) for the backlight sliders in the same menu.
 
+**Layout.** The menu (`web/js/batteryMenu.js`) uses the shared status-menu
+anatomy (see [README](README.md#ui-chips-menus-and-preferences)): the charge as
+a big percentage with the battery glyph and a mono state line (state, time
+left, plugged in), then **Power mode** as three rows with the active one
+checked (`role="radio"`; the mode's hint is the tooltip), **Display** as two
+slider rows (brightness, keyboard backlight), **AI & battery** as two rows
+with a switch, and the one-line summary of the effective mode.
+
 ---
 
 ## Backlights in the battery menu

@@ -26,6 +26,9 @@ support in the surfaces that cannot use the DOM's own clipboard
   which writes the OS clipboard (async Clipboard API, with an `execCommand`
   fallback for kiosk webviews that refuse the permission) and then records the
   text. The Files "Copy Path" and the Settings link/URL buttons go through it.
+  `copyText(text, { sensitive: true })` is for secrets (the Browser's saved
+  passwords): the text reaches the OS clipboard but never the history or the
+  paste mirror, and the `copy` event the fallback path raises is ignored.
 - **Browser pages**: the page is a native child view, so its Ctrl/Cmd+C never
   reaches the app DOM. The Qt shell's clipboard filter (`crates/peakd/shim/peakd.cpp`)
   runs the engine's Copy action for a focused child view and reports the

@@ -75,6 +75,33 @@ unreachable the endpoints error rather than silently returning junk.
 | `GET` | `/api/map/poi` | Nearby points of interest. |
 | `GET` | `/api/navigate/start` | Begin a navigation session (see below). |
 
+## The map window
+
+The traveler window is the Leaflet map (`web/js/map.js`) in a stage that
+`web/js/tiles.js` builds (`#map-stage` > `#map`). Leaflet's own controls are
+hidden (`web/css/app.css`); `map.js` adds the window's own inside the stage
+(`ensureMapControls()`), styled in `web/css/tiles.css` (map section):
+
+- **Meta line** (`.map-meta`, bottom-left): a mono pill with the view's centre
+  and zoom (`48.8566° N · 2.3522° E · Z16`), prefixed with `Navigating` /
+  `Route` while a route is live. Updated on `move`/`zoom` (one per frame).
+- **Controls** (`.map-controls`, bottom-right): grey-pill icon buttons — zoom
+  in (`ui/plus`), zoom out (`ui/minus`), show my position (`ui/pin`, centres
+  on the last fix, then asks for a fresh one). Hidden while the navigator's
+  follow camera owns the view.
+- **Colours** are tokens, resolved through a probe element for Leaflet's SVG
+  (`mapColors()`): markers and the live route `--accent`, marker rings
+  `--accent-contrast`, the dashed preview route `--accent-2`, the route's
+  halo `--bg`, the driven part `--text` at 40 %. `appearance:change` and
+  `theme:change` re-colour them (`applyMapColors()`).
+- **Saved-cards dock** (`#map-tile-dock`, top-right, built by `tiles.js` and
+  filled by `renderArtifactDock()` in `web/js/artifacts.js`): a flat row of
+  grey dock pills after a mono eyebrow (`.map-tile-dock-eyebrow`,
+  `SAVED · 3`) — no plate, blur or shadow. The dock arriving plays
+  `cardEnter` and reveals its icons; a card saved into a dock already showing
+  reveals just the newcomer (`listReveal`). Its accessible name is set from
+  `hud.savedCards`.
+
 ## Navigation
 
 [`navigation.rs`](../../src/services/navigation.rs) builds a

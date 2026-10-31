@@ -1,6 +1,6 @@
 # Browser plugin — REST routes
 
-All 22 routes are registered in `BrowserPlugin::register`
+All 30 routes are registered in `BrowserPlugin::register`
 (`plugins/browser/src/plugin.rs`) with `auth: "auth"`, dispatched by
 `routes::handle(ctx, tag)` (`plugins/browser/src/routes.rs`). Handlers are
 wrapped in `shiny_plugin_sdk::routes::bridged_route`, so their `async` work runs
@@ -393,6 +393,77 @@ Tag `browser_downloads_clear` · `routes.rs` → `downloads_clear` →
 
 **Response** `data`: `{ "cleared": true }`. Deletes rows in `completed`,
 `cancelled` or `interrupted` state only.
+
+---
+
+## Password vault
+
+`routes.rs` → `vault.rs`. Saved logins sealed under the user's **login
+password**: Argon2id (19 MiB, 2 passes) stretches it into a key that seals a
+random data key; AES-256-GCM seals the data key and every entry, each bound to
+its owner and id. The open data key lives only in the plugin's memory and locks
+itself after 15 minutes without use (and on any server/plugin restart).
+
+A wrong password is **never a 401** (the app reads that as an expired session):
+unlock answers `200` with a `status`. Routes that need the open vault answer
+`400 vault_locked` when it is not, which the window turns into the unlock prompt.
+
+The plugin confirms a login password with core's
+[`POST /api/auth/verify-password`](../../../docs/api/auth.md) over loopback,
+forwarding only the caller's own `Cookie`/`Authorization` — so PAM accounts work
+the same as local ones.
+
+### GET `/api/browser/vault`
+
+`data`: `{ "exists": bool, "unlocked": bool, "idle_lock_secs": 900 }`.
+
+### POST `/api/browser/vault/unlock`
+
+**Request**: `{ "password": "…", "previous_password"?: "…" }`.
+
+**Response** `data`: `{ "status": "unlocked" | "wrong_password" | "password_changed" | "too_many_attempts", "unlocked": bool }`.
+
+- No vault yet: the password must be the login password (core confirms it);
+  the vault is created and opened.
+- `password_changed`: the vault did not open, but the password *is* the current
+  login password — the login password changed since the vault was sealed. Send
+  it again with `previous_password` to re-seal the data key under the new one.
+- 8 failed attempts in 5 minutes → `too_many_attempts` (each costs an Argon2
+  derivation).
+
+### POST `/api/browser/vault/lock`
+
+Forgets the data key now. `data`: `{ "unlocked": false }`.
+
+### POST `/api/browser/vault/reset`
+
+**Request**: `{ "password": "…" }` (the current login password, confirmed by
+core). Deletes the vault and every saved login — the way out when the earlier
+password is forgotten. `data`: `{ "reset": true }` or
+`{ "reset": false, "status": "wrong_password" }`.
+
+### GET `/api/browser/passwords`
+
+`?url=` (optional) keeps only logins offered on that page: the same host, or a
+page on a subdomain of the saved host; an `https` login is never offered to an
+`http` page; explicit ports must match.
+
+`data`: `{ "entries": [ { "id", "origin", "username", "note", "updated_at" } ] }`
+— never a password.
+
+### POST `/api/browser/passwords/reveal`
+
+**Request**: `{ "id": "…" }`. `data`: `{ "username": "…", "password": "…" }`.
+
+### POST `/api/browser/passwords/save`
+
+**Request**: `{ "id"?: "…", "site": "<page URL or host>", "username": "…", "password": "…", "note"?: "…" }`.
+Without `id`, an entry with the same origin and username is updated rather
+than duplicated. `data`: `{ "entry": { … } }`.
+
+### POST `/api/browser/passwords/remove`
+
+**Request**: `{ "id": "…" }`. `data`: `{ "removed": bool }`.
 
 ---
 

@@ -36,11 +36,6 @@
   "plugin.files.status.items.few": "{count} položky",
   "plugin.files.status.items.many": "{count} položky",
   "plugin.files.status.items.other": "{count} položiek",
-  "plugin.files.status.selected": "Vybrané: “{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "Vybraná {count} položka ({size})",
-  "plugin.files.status.multiSelected.few": "Vybrané {count} položky ({size})",
-  "plugin.files.status.multiSelected.many": "Vybrané {count} položky ({size})",
-  "plugin.files.status.multiSelected.other": "Vybraných {count} položiek ({size})",
 
   "plugin.files.when.today": "Dnes {time}",
   "plugin.files.when.yesterday": "Včera {time}",

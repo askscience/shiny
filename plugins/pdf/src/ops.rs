@@ -1,1040 +1,57 @@
-//! Shared PDF operations engine (pdf_oxide), used by both the agent tools and
-//! the REST routes so they always agree. Everything here is synchronous and
-//! CPU-bound; it runs on the plugin's single-thread bridge runtime.
+//! The PDF operations engine, used by both the agent tools and the REST
+//! routes so the AI and the window always agree. Everything here is
+//! synchronous and CPU-bound; callers run it off the async runtime.
 //!
-//! Creation deliberately avoids pdf_oxide's HTML/CSS engine (its subset-embedded
-//! fonts render overlapping in the tiny-skia rasteriser) and instead lays text
-//! out manually with the low-level `DocumentBuilder` + Base-14 fonts, which
-//! render correctly everywhere. Annotations are drawn as page *content* for the
-//! same reason — pdf_oxide's rasteriser only paints annotations that carry an
-//! `/AP` appearance stream, which markup/note annotations don't get.
+//! One model backs the whole plugin: lopdf for the object graph, plus the
+//! plugin's own modules for the hard parts — `compose` (creation), `stream_edit`
+//! (reading and editing text), `doc` (page tree, resources, appended content)
+//! and `fonts` (Base-14 metrics and WinAnsi).
+//!
+//! Comments (highlights, notes, text boxes, drawings, links), page marks
+//! (watermark, header & footer) and page organisation go through PdfCraft's
+//! engine (`craft.rs`): real annotations with appearance streams that stay
+//! editable and deletable.
 
 use std::collections::HashSet;
 
-use pdf_oxide::editor::DocumentEditor;
-use pdf_oxide::elements::{FontSpec, PathContent, PathOperation, TextContent, TextStyle};
-use pdf_oxide::layout::FontWeight;
-use pdf_oxide::geometry::Rect;
-use pdf_oxide::layout::Color;
-use pdf_oxide::rendering::{render_page, RenderOptions};
-use pdf_oxide::writer::{DocumentBuilder, LineStyle, PageSize};
-use pdf_oxide::PdfDocument;
-
 use shiny_plugin_sdk::errors::AppError;
 
-/// Hard ceiling on page count — guards against pathological inputs.
-const MAX_PAGES: usize = 2000;
+use crate::doc;
 
-// Page geometry (A4, in points).
-const PAGE_W: f32 = 595.0;
-const PAGE_H: f32 = 842.0;
-const MARGIN: f32 = 64.0;
-const BOTTOM: f32 = 64.0;
+pub use crate::compose::CreateOptions;
+pub use crate::doc::MAX_PAGES;
 
-// Professional palette (RGB 0..1).
-const C_HEAD: [f32; 3] = [0.086, 0.196, 0.309]; // #16324f
-const C_RULE: [f32; 3] = [0.70, 0.75, 0.80];
-const C_YELLOW: [f32; 3] = [1.0, 0.85, 0.25];
-const C_RED: [f32; 3] = [0.85, 0.18, 0.18];
-const C_BLUE: [f32; 3] = [0.05, 0.35, 0.75];
 
-fn pdf_err(e: pdf_oxide::Error) -> AppError {
-    AppError::BadRequest(format!("PDF error: {e}"))
-}
-
-fn open_doc(bytes: &[u8]) -> Result<PdfDocument, AppError> {
-    PdfDocument::from_bytes(bytes.to_vec()).map_err(pdf_err)
-}
-
-fn open_editor(bytes: &[u8]) -> Result<DocumentEditor, AppError> {
-    DocumentEditor::from_bytes(bytes.to_vec()).map_err(pdf_err)
-}
-
-/* ── Read / render ──────────────────────────────────────────── */
+/* ── Read ───────────────────────────────────────────────────── */
 
 pub fn page_count(bytes: &[u8]) -> Result<usize, AppError> {
-    open_doc(bytes)?.page_count().map_err(pdf_err)
+    Ok(doc::load(bytes)?.get_pages().len())
 }
 
+/// Plain text of one page, in reading order (PdfCraft's text layout).
 pub fn extract_text(bytes: &[u8], page: usize) -> Result<String, AppError> {
-    open_doc(bytes)?.extract_text(page).map_err(pdf_err)
+    let n = page_count(bytes)?;
+    if page >= n {
+        return Err(AppError::NotFound(format!("page {} out of range", page + 1)));
+    }
+    Ok(crate::craft::text(bytes, Some(&[page]))?.pop().map(|(_, t)| t).unwrap_or_default())
 }
 
-pub fn render_png(bytes: &[u8], page: usize, dpi: u32) -> Result<Vec<u8>, AppError> {
-    let doc = open_doc(bytes)?;
-    let img = render_page(&doc, page, &RenderOptions::with_dpi(dpi)).map_err(pdf_err)?;
-    Ok(img.data)
+/// Plain text of every page, opening the document once.
+pub fn extract_all_text(bytes: &[u8]) -> Result<Vec<String>, AppError> {
+    Ok(crate::craft::text(bytes, None)?.into_iter().map(|(_, t)| t).collect())
 }
 
+/// Page size in points, as displayed (rotation applied).
 pub fn page_size_pt(bytes: &[u8], page: usize) -> Result<(f32, f32), AppError> {
-    let doc = open_doc(bytes)?;
-    let (x0, y0, x1, y1) = doc.get_page_media_box(page).map_err(pdf_err)?;
-    Ok((x1 - x0, y1 - y0))
+    let d = doc::load(bytes)?;
+    let id = doc::page_id(&d, page)?;
+    let mb = doc::media_box(&d, id);
+    let (w, h) = (mb[2] - mb[0], mb[3] - mb[1]);
+    Ok(if doc::rotation(&d, id) % 180 == 90 { (h, w) } else { (w, h) })
 }
 
-/* ── Create (reliable Base-14 layout) ───────────────────────── */
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum RunStyle {
-    Normal,
-    Bold,
-    Italic,
-    Code,
-}
-
-#[derive(Debug, Clone)]
-struct Run {
-    text: String,
-    style: RunStyle,
-}
-
-#[derive(Debug, Clone)]
-enum Block {
-    Heading(u32, Vec<Run>),
-    Para(Vec<Run>),
-    List { ordered: bool, items: Vec<Vec<Run>> },
-    Table { header: Vec<Vec<Run>>, rows: Vec<Vec<Vec<Run>>> },
-    Quote(Vec<Run>),
-    CodeBlock(String),
-    Hr,
-}
-
-fn font_of(s: RunStyle) -> &'static str {
-    match s {
-        RunStyle::Bold => "Helvetica-Bold",
-        RunStyle::Italic => "Helvetica-Oblique",
-        RunStyle::Code => "Courier",
-        RunStyle::Normal => "Helvetica",
-    }
-}
-
-fn run(r: &str, style: RunStyle) -> Run {
-    Run { text: r.to_string(), style }
-}
-
-/// Inline Markdown → runs: **bold**, `code`, *italic*.
-fn parse_inline(s: &str) -> Vec<Run> {
-    let mut out: Vec<Run> = Vec::new();
-    let mut rest = s;
-    let push_normal = |out: &mut Vec<Run>, t: &str| {
-        if !t.is_empty() {
-            out.push(run(t, RunStyle::Normal));
-        }
-    };
-    loop {
-        if let Some(pos) = rest.find("**") {
-            push_normal(&mut out, &rest[..pos]);
-            let after = &rest[pos + 2..];
-            match after.find("**") {
-                Some(end) => {
-                    out.push(run(&after[..end], RunStyle::Bold));
-                    rest = &after[end + 2..];
-                    continue;
-                }
-                None => {
-                    out.push(run("**", RunStyle::Normal));
-                    rest = after;
-                    continue;
-                }
-            }
-        }
-        if let Some(pos) = rest.find('`') {
-            push_normal(&mut out, &rest[..pos]);
-            let after = &rest[pos + 1..];
-            match after.find('`') {
-                Some(end) => {
-                    out.push(run(&after[..end], RunStyle::Code));
-                    rest = &after[end + 1..];
-                    continue;
-                }
-                None => {
-                    out.push(run("`", RunStyle::Normal));
-                    rest = after;
-                    continue;
-                }
-            }
-        }
-        if let Some(pos) = rest.find('*') {
-            push_normal(&mut out, &rest[..pos]);
-            let after = &rest[pos + 1..];
-            match after.find('*') {
-                Some(end) => {
-                    out.push(run(&after[..end], RunStyle::Italic));
-                    rest = &after[end + 1..];
-                    continue;
-                }
-                None => {
-                    out.push(run("*", RunStyle::Normal));
-                    rest = after;
-                    continue;
-                }
-            }
-        }
-        push_normal(&mut out, rest);
-        break;
-    }
-    out
-}
-
-fn split_table_row(line: &str) -> Vec<String> {
-    line.trim()
-        .trim_start_matches('|')
-        .trim_end_matches('|')
-        .split('|')
-        .map(|c| c.trim().to_string())
-        .collect()
-}
-
-fn is_sep_row(cells: &[String]) -> bool {
-    !cells.is_empty()
-        && cells.iter().all(|c| {
-            let inner = c.trim().trim_matches(':');
-            !inner.is_empty() && inner.chars().all(|ch| ch == '-')
-        })
-}
-
-fn strip_ordered_prefix(t: &str) -> Option<&str> {
-    let idx = t.find(". ")?;
-    if idx == 0 {
-        return None;
-    }
-    let num = &t[..idx];
-    if num.is_empty() || !num.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    Some(&t[idx + 2..])
-}
-
-/// Parse Markdown into blocks. Also accepts the light Markdown emitted by
-/// [`html_to_markdown`], so both inputs share one renderer.
-fn parse_blocks(md: &str) -> Vec<Block> {
-    let lines: Vec<&str> = md.lines().collect();
-    let mut blocks: Vec<Block> = Vec::new();
-    let mut para: Vec<Run> = Vec::new();
-    let mut in_code = false;
-    let mut code: String = String::new();
-    let mut i = 0;
-
-    macro_rules! flush_para {
-        () => {
-            if !para.is_empty() {
-                blocks.push(Block::Para(std::mem::take(&mut para)));
-            }
-        };
-    }
-
-    while i < lines.len() {
-        let line = lines[i];
-
-        if line.trim_start().starts_with("```") {
-            flush_para!();
-            if in_code {
-                blocks.push(Block::CodeBlock(std::mem::take(&mut code)));
-                in_code = false;
-            } else {
-                in_code = true;
-            }
-            i += 1;
-            continue;
-        }
-        if in_code {
-            code.push_str(line);
-            code.push('\n');
-            i += 1;
-            continue;
-        }
-
-        let t = line.trim();
-        if t.is_empty() {
-            flush_para!();
-            i += 1;
-            continue;
-        }
-        if t == "---" || t == "***" || t == "___" {
-            flush_para!();
-            blocks.push(Block::Hr);
-            i += 1;
-            continue;
-        }
-
-        // Table: a run of `|`-prefixed lines (first = header; optional `|---|`).
-        if t.starts_with('|') {
-            let header = split_table_row(line);
-            let mut rows: Vec<Vec<Vec<Run>>> = Vec::new();
-            let mut j = i + 1;
-            if j < lines.len() && is_sep_row(&split_table_row(lines[j])) {
-                j += 1; // skip the separator row
-            }
-            while j < lines.len() && lines[j].trim().starts_with('|') {
-                let cells = split_table_row(lines[j]);
-                if cells.is_empty() {
-                    break;
-                }
-                rows.push(cells.iter().map(|c| parse_inline(c)).collect());
-                j += 1;
-            }
-            flush_para!();
-            let header = header.iter().map(|c| parse_inline(c)).collect();
-            blocks.push(Block::Table { header, rows });
-            i = j;
-            continue;
-        }
-
-        if let Some(rest) = t.strip_prefix("#### ") {
-            flush_para!();
-            blocks.push(Block::Heading(4, parse_inline(rest)));
-        } else if let Some(rest) = t.strip_prefix("### ") {
-            flush_para!();
-            blocks.push(Block::Heading(3, parse_inline(rest)));
-        } else if let Some(rest) = t.strip_prefix("## ") {
-            flush_para!();
-            blocks.push(Block::Heading(2, parse_inline(rest)));
-        } else if let Some(rest) = t.strip_prefix("# ") {
-            flush_para!();
-            blocks.push(Block::Heading(1, parse_inline(rest)));
-        } else if let Some(rest) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
-            flush_para!();
-            blocks.push(Block::List { ordered: false, items: vec![parse_inline(rest)] });
-        } else if let Some(rest) = strip_ordered_prefix(t) {
-            flush_para!();
-            blocks.push(Block::List { ordered: true, items: vec![parse_inline(rest)] });
-        } else if let Some(rest) = t.strip_prefix("> ") {
-            flush_para!();
-            blocks.push(Block::Quote(parse_inline(rest)));
-        } else {
-            para.extend(parse_inline(t));
-        }
-        i += 1;
-    }
-    if in_code {
-        blocks.push(Block::CodeBlock(std::mem::take(&mut code)));
-    }
-    flush_para!();
-    blocks
-}
-
-/// A minimal HTML → Markdown conversion so `format:"html"` input (semantic
-/// tags) renders through the same reliable Base-14 layout. Arbitrary CSS is
-/// ignored — structure and emphasis are what drive the styling.
-fn html_to_markdown(html: &str) -> String {
-    let mut s = html.to_string();
-    s = s.replace("<h1>", "\n# ").replace("</h1>", "\n");
-    s = s.replace("<h2>", "\n## ").replace("</h2>", "\n");
-    s = s.replace("<h3>", "\n### ").replace("</h3>", "\n");
-    s = s.replace("<h4>", "\n#### ").replace("</h4>", "\n");
-    s = s.replace("<h5>", "\n#### ").replace("</h5>", "\n");
-    s = s.replace("<h6>", "\n#### ").replace("</h6>", "\n");
-    s = s.replace("<strong>", "**").replace("</strong>", "**");
-    s = s.replace("<b>", "**").replace("</b>", "**");
-    s = s.replace("<em>", "*").replace("</em>", "*");
-    s = s.replace("<i>", "*").replace("</i>", "*");
-    s = s.replace("<pre><code>", "\n```\n").replace("</code></pre>", "\n```\n");
-    s = s.replace("<code>", "`").replace("</code>", "`");
-    s = s.replace("<blockquote>", "\n> ").replace("</blockquote>", "\n");
-    s = s.replace("<li>", "\n- ").replace("</li>", "");
-    s = s.replace("<ul>", "\n").replace("</ul>", "\n");
-    s = s.replace("<ol>", "\n").replace("</ol>", "\n");
-    s = s.replace("<table>", "\n").replace("</table>", "\n");
-    s = s.replace("<thead>", "").replace("</thead>", "");
-    s = s.replace("<tbody>", "").replace("</tbody>", "");
-    s = s.replace("<tr>", "\n| ").replace("</tr>", " |");
-    s = s.replace("<th>", " ").replace("</th>", " |");
-    s = s.replace("<td>", " ").replace("</td>", " |");
-    s = s.replace("<hr>", "\n---\n").replace("<hr/>", "\n---\n").replace("<hr />", "\n---\n");
-    s = s.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n");
-    s = s.replace("<p>", "\n").replace("</p>", "\n");
-
-    // Strip remaining tags (and inline style attributes) without a regex.
-    let mut out = String::new();
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out
-}
-
-/// Split a block's runs into words (space-separated), keeping each word's runs.
-fn tokenize_words(runs: &[Run]) -> Vec<Vec<Run>> {
-    let mut words: Vec<Vec<Run>> = Vec::new();
-    let mut cur: Vec<Run> = Vec::new();
-    for r in runs {
-        for piece in r.text.split_inclusive(' ') {
-            let (chunk, has_space) = match piece.strip_suffix(' ') {
-                Some(c) => (c, true),
-                None => (piece, false),
-            };
-            if !chunk.is_empty() {
-                cur.push(run(chunk, r.style));
-            }
-            if has_space {
-                if !cur.is_empty() {
-                    words.push(std::mem::take(&mut cur));
-                }
-            }
-        }
-    }
-    if !cur.is_empty() {
-        words.push(cur);
-    }
-    words
-}
-
-/// Layout all blocks with the `DocumentBuilder` (Base-14 fonts).
-fn layout(blocks: &[Block]) -> Result<Vec<u8>, AppError> {
-    let mut builder = DocumentBuilder::new();
-    {
-        let mut page = builder.page(PageSize::A4);
-        let mut y = PAGE_H - MARGIN;
-        let max_w = PAGE_W - MARGIN * 2.0;
-        let body_size = 10.5;
-
-        // Measure a run's width in a given font/size.
-        macro_rules! measure {
-            ($page:expr, $font:expr, $size:expr, $text:expr) => {{
-                let p = $page.font($font, $size);
-                let w = p.measure($text);
-                (p, w)
-            }};
-        }
-
-        // Ensure `needed` vertical space; page-break otherwise.
-        macro_rules! ensure {
-            ($page:expr, $needed:expr) => {{
-                let mut p = $page;
-                if y - ($needed) < BOTTOM {
-                    p = p.new_page_same_size();
-                    y = PAGE_H - MARGIN;
-                }
-                (p)
-            }};
-        }
-
-        // Wrap `runs` to `max_w`; returns lines of (run, width).
-        macro_rules! wrap {
-            ($page:expr, $runs:expr, $size:expr, $maxw:expr) => {{
-                let mut p = $page;
-                let words = tokenize_words($runs);
-                let mut lines: Vec<Vec<(Run, f32)>> = Vec::new();
-                let mut line: Vec<(Run, f32)> = Vec::new();
-                let mut line_w = 0.0;
-                let sp = p.measure(" ");
-                for word in words {
-                    let mut ww = 0.0;
-                    let mut mw: Vec<(Run, f32)> = Vec::new();
-                    for r in &word {
-                        let (pp, w) = measure!(p, font_of(r.style), $size, &r.text);
-                        p = pp;
-                        ww += w;
-                        mw.push((r.clone(), w));
-                    }
-                    let sep = if line.is_empty() { 0.0 } else { sp };
-                    if !line.is_empty() && line_w + sep + ww > $maxw {
-                        lines.push(std::mem::take(&mut line));
-                        line_w = 0.0;
-                    }
-                    if !line.is_empty() {
-                        line.push((run(" ", RunStyle::Normal), sp));
-                        line_w += sp;
-                    }
-                    line.extend(mw);
-                    line_w += ww;
-                }
-                if !line.is_empty() {
-                    lines.push(line);
-                }
-                (p, lines, sp)
-            }};
-        }
-
-        for block in blocks {
-            match block {
-                Block::Heading(level, runs) => {
-                    let size = match level {
-                        1 => 22.0,
-                        2 => 16.0,
-                        3 => 13.0,
-                        _ => 11.5,
-                    };
-                    page = ensure!(page, size + 10.0);
-                    let mut cx = MARGIN;
-                    for r in runs {
-                        let (p, w) = measure!(page, "Helvetica-Bold", size, &r.text);
-                        page = p;
-                        page = page.at(cx, y).text(&r.text);
-                        cx += w;
-                    }
-                    y -= size * 1.3;
-                    if *level == 1 {
-                        // colored rule under the title
-                        let ry = y + size * 0.3;
-                        page = page.stroke_line(
-                            MARGIN,
-                            ry,
-                            PAGE_W - MARGIN,
-                            ry,
-                            LineStyle::new(1.5, C_HEAD[0], C_HEAD[1], C_HEAD[2]),
-                        );
-                    }
-                    y -= size * 0.6;
-                }
-                Block::Para(runs) => {
-                    let (p, lines, sp) = wrap!(page, runs, body_size, max_w);
-                    page = p;
-                    let lh = body_size * 1.35;
-                    for line in &lines {
-                        page = ensure!(page, lh);
-                        let mut cx = MARGIN;
-                        for (r, w) in line {
-                            page = page.font(font_of(r.style), body_size);
-                            page = page.at(cx, y).text(&r.text);
-                            cx += *w;
-                        }
-                        y -= lh;
-                    }
-                    let _ = sp;
-                    y -= body_size * 0.4;
-                }
-                Block::List { ordered, items } => {
-                    let lh = body_size * 1.35;
-                    for (idx, item) in items.iter().enumerate() {
-                        let (p, lines, _sp) = wrap!(page, item, body_size, max_w - 18.0);
-                        page = p;
-                        page = ensure!(page, lh);
-                        let marker = if *ordered {
-                            format!("{}.", idx + 1)
-                        } else {
-                            "•".to_string()
-                        };
-                        page = page.font("Helvetica", body_size);
-                        page = page.at(MARGIN, y).text(&marker);
-                        for line in &lines {
-                            let mut cx = MARGIN + 18.0;
-                            for (r, w) in line {
-                                page = page.font(font_of(r.style), body_size);
-                                page = page.at(cx, y).text(&r.text);
-                                cx += *w;
-                            }
-                            y -= lh;
-                            page = ensure!(page, lh);
-                        }
-                    }
-                    y -= body_size * 0.3;
-                }
-                Block::Table { header, rows } => {
-                    let ncols = header.len().max(rows.iter().map(|r| r.len()).max().unwrap_or(0));
-                    if ncols > 0 {
-                        let cell_size = 9.5;
-                        let pad = 6.0;
-                        let mut widths = vec![40.0; ncols];
-                        for c in 0..ncols {
-                            let mut w = 0.0_f32;
-                            for cell in std::iter::once(header).chain(rows.iter()) {
-                                if let Some(runs) = cell.get(c) {
-                                    let mut s = String::new();
-                                    for r in runs {
-                                        s.push_str(&r.text);
-                                    }
-                                    let (p, ww) = measure!(page, "Helvetica", cell_size, &s);
-                                    page = p;
-                                    w = w.max(ww);
-                                }
-                            }
-                            widths[c] = w + pad * 2.0;
-                        }
-                        let total: f32 = widths.iter().sum();
-                        if total > max_w {
-                            let scale = max_w / total;
-                            for w in widths.iter_mut() {
-                                *w *= scale;
-                            }
-                        }
-                        let row_h = cell_size * 1.5;
-                        if !header.is_empty() {
-                            page = ensure!(page, row_h);
-                            let mut x = MARGIN;
-                            for c in 0..ncols {
-                                let cell = header.get(c).cloned().unwrap_or_default();
-                                let mut cx = x + pad;
-                                for r in &cell {
-                                    let (p, w) = measure!(page, "Helvetica-Bold", cell_size, &r.text);
-                                    page = p;
-                                    page = page.at(cx, y).text(&r.text);
-                                    cx += w;
-                                }
-                                x += widths[c];
-                            }
-                            let rule_y = y - 3.0;
-                            page = page.stroke_line(
-                                MARGIN,
-                                rule_y,
-                                MARGIN + total.min(max_w),
-                                rule_y,
-                                LineStyle::new(1.0, C_RULE[0], C_RULE[1], C_RULE[2]),
-                            );
-                            y -= row_h;
-                        }
-                        for row in rows {
-                            page = ensure!(page, row_h);
-                            let mut x = MARGIN;
-                            for c in 0..ncols {
-                                let cell = row.get(c).cloned().unwrap_or_default();
-                                let mut cx = x + pad;
-                                for r in &cell {
-                                    let (p, w) = measure!(page, "Helvetica", cell_size, &r.text);
-                                    page = p;
-                                    page = page.at(cx, y).text(&r.text);
-                                    cx += w;
-                                }
-                                x += widths[c];
-                            }
-                            y -= row_h;
-                        }
-                        y -= 6.0;
-                    }
-                }
-                Block::Quote(runs) => {
-                    let (p, lines, _sp) = wrap!(page, runs, body_size, max_w - 22.0);
-                    page = p;
-                    let lh = body_size * 1.35;
-                    let qx = MARGIN + 12.0;
-                    for line in &lines {
-                        page = ensure!(page, lh);
-                        let mut cx = qx;
-                        for (r, w) in line {
-                            page = page.font(font_of(r.style), body_size);
-                            page = page.at(cx, y).text(&r.text);
-                            cx += *w;
-                        }
-                        y -= lh;
-                    }
-                    // left rule
-                    let rule_top = y + lines.len() as f32 * lh;
-                    let rule_bot = y;
-                    page = page.stroke_line(
-                        MARGIN,
-                        rule_top,
-                        MARGIN,
-                        rule_bot,
-                        LineStyle::new(2.0, C_RULE[0], C_RULE[1], C_RULE[2]),
-                    );
-                    y -= body_size * 0.4;
-                }
-                Block::CodeBlock(code) => {
-                    let lh = 9.0 * 1.3;
-                    for cline in code.lines() {
-                        page = ensure!(page, lh);
-                        page = page.font("Courier", 9.0);
-                        page = page.at(MARGIN + 6.0, y).text(cline);
-                        y -= lh;
-                    }
-                    y -= 6.0;
-                }
-                Block::Hr => {
-                    page = ensure!(page, 12.0);
-                    page = page.stroke_line(
-                        MARGIN,
-                        y,
-                        PAGE_W - MARGIN,
-                        y,
-                        LineStyle::new(1.0, C_RULE[0], C_RULE[1], C_RULE[2]),
-                    );
-                    y -= 12.0;
-                }
-            }
-        }
-        page.done();
-    }
-    builder.build().map_err(pdf_err)
-}
-
-/// Create a PDF. `format` = `"markdown"` (default), `"html"`, or `"plain"`.
-/// `css` is accepted for API compatibility but ignored — styling comes from
-/// structure (headings, emphasis, lists, tables) rendered with Base-14 fonts.
-pub fn create(content: &str, _css: &str, format: &str) -> Result<Vec<u8>, AppError> {
-    let md = match format.trim().to_lowercase().as_str() {
-        "plain" => {
-            // Plain text: one paragraph per blank-line-separated chunk.
-            let mut s = String::new();
-            for para in content.split("\n\n") {
-                let p = para.trim().replace('\n', " ");
-                if !p.is_empty() {
-                    s.push_str(&p);
-                    s.push_str("\n\n");
-                }
-            }
-            s
-        }
-        "html" => html_to_markdown(content),
-        _ => content.to_string(),
-    };
-    let md = if md.trim().is_empty() { " ".to_string() } else { md };
-    layout(&parse_blocks(&md))
-}
-
-/* ── Page operations ────────────────────────────────────────── */
-
-pub fn rotate(bytes: &[u8], pages: Option<&[usize]>, degrees: i32) -> Result<Vec<u8>, AppError> {
-    let mut ed = open_editor(bytes)?;
-    match pages {
-        None => ed.rotate_all_pages(degrees).map_err(pdf_err)?,
-        Some(ps) => {
-            for &p in ps {
-                ed.rotate_page_by(p, degrees).map_err(pdf_err)?;
-            }
-        }
-    }
-    ed.save_to_bytes().map_err(pdf_err)
-}
-
-pub fn select_pages(bytes: &[u8], pages: &[usize]) -> Result<Vec<u8>, AppError> {
-    let mut ed = open_editor(bytes)?;
-    ed.select_pages(pages).map_err(pdf_err)?;
-    ed.save_to_bytes().map_err(pdf_err)
-}
-
-pub fn delete_pages(bytes: &[u8], remove: &[usize]) -> Result<Vec<u8>, AppError> {
-    let mut ed = open_editor(bytes)?;
-    let total = ed.current_page_count();
-    let remove_set: HashSet<usize> = remove.iter().copied().collect();
-    let keep: Vec<usize> = (0..total).filter(|i| !remove_set.contains(i)).collect();
-    if keep.is_empty() {
-        return Err(AppError::BadRequest("cannot delete every page".into()));
-    }
-    ed.select_pages(&keep).map_err(pdf_err)?;
-    ed.save_to_bytes().map_err(pdf_err)
-}
-
-pub fn merge(bytes: &[u8], other: &[u8]) -> Result<Vec<u8>, AppError> {
-    let mut ed = open_editor(bytes)?;
-    ed.merge_from_bytes(other).map_err(pdf_err)?;
-    ed.save_to_bytes().map_err(pdf_err)
-}
-
-/* ── Content editing & annotations ──────────────────────────── */
-
-/* ── Inline text editing ────────────────────────────────────── */
-
-/// One editable run of text on a page, as the viewer needs it.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct TextRun {
-    pub text: String,
-    /// `[x, y, w, h]` in PDF points, bottom-left origin.
-    pub rect: [f32; 4],
-    pub font: String,
-    pub size: f32,
-    pub bold: bool,
-    pub italic: bool,
-    pub underline: bool,
-    pub strikethrough: bool,
-    /// `#rrggbb`, so the viewer can show the real colour in its toolbar.
-    pub color: String,
-}
-
-fn color_hex(c: &Color) -> String {
-    let to = |v: f32| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round() as u8 };
-    format!("#{:02x}{:02x}{:02x}", to(c.r), to(c.g), to(c.b))
-}
-
-/// Every text run on a page, in reading order.
-///
-/// This is what makes in-place editing possible: the viewer paints these as
-/// clickable overlays on top of the rendered page, so the user edits the text
-/// they can actually see instead of typing a search string.
-pub fn page_text_runs(bytes: &[u8], page: usize) -> Result<Vec<TextRun>, AppError> {
-    let mut ed = open_editor(bytes)?;
-    let mut out = Vec::new();
-    ed.edit_page(page, |p| {
-        for t in p.find_text(|_| true) {
-            if t.text().trim().is_empty() {
-                continue;
-            }
-            let b = t.bbox();
-            out.push(TextRun {
-                text: t.text().to_string(),
-                rect: [b.x, b.y, b.width, b.height],
-                font: t.font_name().to_string(),
-                size: t.font_size(),
-                bold: t.is_bold(),
-                italic: t.is_italic(),
-                underline: t.content.style.underline,
-                strikethrough: t.content.style.strikethrough,
-                color: color_hex(&t.content.style.color),
-            });
-        }
-        Ok(())
-    })
-    .map_err(pdf_err)?;
-    Ok(out)
-}
-
-/// A single in-place edit coming back from the viewer.
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct TextEdit {
-    /// The run's text as the viewer last saw it — the find side of the replace.
-    pub match_text: String,
-    /// `[x, y, w, h]` of that run, kept so the viewer's selection round-trips.
-    /// The content-stream engine matches by text, so this is informational.
-    pub match_rect: [f32; 4],
-    /// Replacement text.
-    pub text: String,
-}
-
-/// Apply in-place text edits to one page and return the new bytes.
-///
-/// Replacement goes through the raw operator stream (`stream_edit`), which is
-/// what makes it work on an existing page — see that module for why
-/// pdf_oxide's `modify_text` could not be used.
-///
-/// Text only, on purpose. Restyling a run means rewriting inherited graphics
-/// state: a run's `Tf`/`rg` stay in force for every following text object, and
-/// in a typical file most runs do not even set their own `Tf`. Doing that
-/// correctly is separate work.
-///
-/// The viewer's `match_text` comes from pdf_oxide, which synthesises a trailing
-/// space for an advance gap that is not a byte in the stream (`"TIM "` for a
-/// stream that holds `TIM`). The exact text is tried first; only when it finds
-/// nothing does the trimmed text get a turn, so a selected line still matches.
-pub fn edit_text_runs(
-    bytes: &[u8],
-    page: usize,
-    edits: &[TextEdit],
-) -> Result<(Vec<u8>, usize), AppError> {
-    if edits.is_empty() {
-        return Err(AppError::BadRequest("no edits supplied".into()));
-    }
-    let mut out = bytes.to_vec();
-    let mut applied = 0usize;
-    for edit in edits {
-        if edit.match_text.is_empty() {
-            continue;
-        }
-        if edit.match_text == edit.text {
-            continue;
-        }
-        // The viewer's text comes from pdf_oxide, which can synthesise a
-        // trailing space the content stream does not contain, so try the exact
-        // text first and the trimmed form after.
-        for needle in [edit.match_text.as_str(), edit.match_text.trim()] {
-            if needle.is_empty() {
-                continue;
-            }
-            let (new_bytes, report) =
-                crate::stream_edit::replace_text(&out, page, needle, &edit.text)?;
-            if report.replaced > 0 {
-                out = new_bytes;
-                applied += report.replaced;
-                break;
-            }
-        }
-    }
-    Ok((out, applied))
-}
-
-fn line_path(rect: [f32; 4], y_at: f32, color: Color, width: f32, dashed: bool) -> PathContent {
-    let mut p = PathContent::new(Rect::new(rect[0], rect[1], rect[2], rect[3]));
-    let ly = rect[1] + y_at;
-    p.operations.push(PathOperation::MoveTo(rect[0], ly));
-    p.operations.push(PathOperation::LineTo(rect[0] + rect[2], ly));
-    p.stroke_color = Some(color);
-    p.stroke_width = width;
-    if dashed {
-        p.dash_pattern = Some((vec![2.5, 2.0], 0.0));
-    }
-    p
-}
-
-fn rect_outline(rect: [f32; 4], color: Color, width: f32) -> PathContent {
-    let mut p = PathContent::new(Rect::new(rect[0], rect[1], rect[2], rect[3]));
-    p.operations
-        .push(PathOperation::Rectangle(rect[0], rect[1], rect[2], rect[3]));
-    p.stroke_color = Some(color);
-    p.stroke_width = width;
-    p
-}
-
-fn rect_fill(rect: [f32; 4], color: Color) -> PathContent {
-    let mut p = PathContent::new(Rect::new(rect[0], rect[1], rect[2], rect[3]));
-    p.operations
-        .push(PathOperation::Rectangle(rect[0], rect[1], rect[2], rect[3]));
-    p.fill_color = Some(color);
-    p
-}
-
-/// Add a visible markup/note to a page. Markups are drawn as page *content*
-/// (not annotations) so pdf_oxide's rasteriser — which only paints annotations
-/// that carry an `/AP` appearance stream — shows them. `rect` is
-/// `[x, y, width, height]` in PDF points (bottom-left origin).
-/// Formatting for text the user *adds* (the `free_text` annotation).
-///
-/// Unlike restyling an existing run, this has no inherited-graphics-state
-/// problem: the inserted text carries its own `Tf`, so size, weight and colour
-/// apply to it and to nothing else.
-#[derive(Debug, Clone)]
-pub struct TextFormat {
-    pub size: f32,
-    pub bold: bool,
-    pub italic: bool,
-    /// `#rrggbb`; defaults to black.
-    pub color: Option<String>,
-}
-
-impl Default for TextFormat {
-    fn default() -> Self {
-        Self { size: 11.0, bold: false, italic: false, color: None }
-    }
-}
-
-/// Resolve a format to the Base-14 font that best matches it. Only the standard
-/// families are used, so no font has to be embedded.
-fn format_font(f: &TextFormat) -> &'static str {
-    match (f.bold, f.italic) {
-        (true, true) => "Times-BoldItalic",
-        (true, false) => "Times-Bold",
-        (false, true) => "Times-Italic",
-        (false, false) => "Times-Roman",
-    }
-}
-
-fn format_color(f: &TextFormat) -> Color {
-    f.color
-        .as_deref()
-        .and_then(parse_hex_opt)
-        .unwrap_or_else(Color::black)
-}
-
-/// Parse `#rrggbb`. Public so the route can reject a bad value instead of
-/// silently drawing the text in black.
-pub fn parse_text_color(s: &str) -> Option<Color> {
-    parse_hex_opt(s)
-}
-
-fn parse_hex_opt(s: &str) -> Option<Color> {
-    let h = s.trim_start_matches('#');
-    if h.len() != 6 {
-        return None;
-    }
-    let b = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|v| v as f32 / 255.0);
-    Some(Color::new(b(0)?, b(2)?, b(4)?))
-}
-
-pub fn annotate(
-    bytes: &[u8],
-    page: usize,
-    kind: &str,
-    rect: [f32; 4],
-    text: &str,
-    color: Option<[f32; 3]>,
-    format: &TextFormat,
-) -> Result<Vec<u8>, AppError> {
-    let kind = kind.trim().to_lowercase();
-    let rgb = color.unwrap_or(match kind.as_str() {
-        "highlight" | "note" => C_YELLOW,
-        "link" => C_BLUE,
-        _ => C_RED,
-    });
-    let c = Color::new(rgb[0], rgb[1], rgb[2]);
-    let mut ed = open_editor(bytes)?;
-
-    ed.edit_page(page, |p| {
-        match kind.as_str() {
-            "highlight" => {
-                p.add_path(rect_outline(rect, c, 1.5));
-            }
-            "underline" => {
-                p.add_path(line_path(rect, 0.0, c, 1.2, false));
-            }
-            "strikeout" => {
-                p.add_path(line_path(rect, rect[3] / 2.0, c, 1.2, false));
-            }
-            "squiggly" => {
-                p.add_path(line_path(rect, 0.0, c, 1.2, true));
-            }
-            "note" => {
-                let bw = rect[2].max(150.0);
-                let bh = rect[3].max(34.0);
-                p.add_path(rect_fill([rect[0], rect[1], bw, bh], Color::new(1.0, 0.96, 0.6)));
-                p.add_text(TextContent::new(
-                    text,
-                    Rect::new(rect[0] + 4.0, rect[1] + bh - 12.0, bw - 8.0, 12.0),
-                    FontSpec::new("Helvetica", 9.0),
-                    TextStyle::new().with_color(Color::black()),
-                ));
-            }
-            "free_text" => {
-                // New text, its own font and size — so the formatting is the
-                // text's own and cannot leak into the rest of the page.
-                p.add_text(TextContent::new(
-                    text,
-                    Rect::new(rect[0], rect[1], rect[2], rect[3]),
-                    FontSpec::new(format_font(format), format.size),
-                    TextStyle::new()
-                        .with_weight(if format.bold {
-                            FontWeight::Bold
-                        } else {
-                            FontWeight::Normal
-                        })
-                        .with_italic(format.italic)
-                        .with_color(format_color(format)),
-                ));
-            }
-            "link" => {
-                p.add_path(line_path(rect, 0.0, c, 1.0, false));
-                if !text.is_empty() {
-                    p.add_annotation(pdf_oxide::writer::LinkAnnotation::uri(
-                        Rect::new(rect[0], rect[1], rect[2], rect[3]),
-                        text,
-                    ));
-                }
-            }
-            other => {
-                return Err(pdf_oxide::Error::Unsupported(format!(
-                    "unknown annotation kind: {other}"
-                )));
-            }
-        }
-        Ok(())
-    })
-    .map_err(pdf_err)?;
-
-    ed.save_to_bytes().map_err(pdf_err)
-}
-
-pub fn add_watermark(
-    bytes: &[u8],
-    pages: Option<&[usize]>,
-    text: &str,
-) -> Result<Vec<u8>, AppError> {
-    let total = page_count(bytes)?;
-    let mut ed = open_editor(bytes)?;
-    let targets: Vec<usize> = match pages {
-        Some(ps) => ps.to_vec(),
-        None => (0..total).collect(),
-    };
-    for p in targets {
-        let media = ed.get_page_media_box(p).map_err(pdf_err)?;
-        let rect = Rect::from_points(media[0], media[1], media[2], media[3]);
-        ed.edit_page(p, |page| {
-            page.add_annotation(
-                pdf_oxide::writer::WatermarkAnnotation::new(text)
-                    .with_rect(rect)
-                    .with_opacity(0.22)
-                    .with_rotation(45.0)
-                    .with_color(0.5, 0.5, 0.5),
-            );
-            Ok(())
-        })
-        .map_err(pdf_err)?;
-    }
-    ed.save_to_bytes().map_err(pdf_err)
-}
-
-/* ── Validation ─────────────────────────────────────────────── */
-
+/// Reject files we cannot work with, and return the page count.
 pub fn validate(bytes: &[u8]) -> Result<usize, AppError> {
     let n = page_count(bytes)?;
     if n == 0 || n > MAX_PAGES {
@@ -1042,4 +59,250 @@ pub fn validate(bytes: &[u8]) -> Result<usize, AppError> {
     } else {
         Ok(n)
     }
+}
+
+/* ── Create ─────────────────────────────────────────────────── */
+
+/// Create a PDF. `format` = `"markdown"`, `"html"` or `"plain"`. `css` is
+/// accepted for API compatibility but ignored — styling comes from structure.
+pub fn create(content: &str, _css: &str, format: &str) -> Result<Vec<u8>, AppError> {
+    crate::compose::create(content, format, &CreateOptions::default())
+}
+
+/// Create a PDF with options (title metadata, page numbers).
+pub fn create_with(content: &str, format: &str, opts: &CreateOptions) -> Result<Vec<u8>, AppError> {
+    crate::compose::create(content, format, opts)
+}
+
+/* ── Page operations ────────────────────────────────────────── */
+
+/// Rotate pages clockwise by a multiple of 90° (`None` = every page).
+pub fn rotate(bytes: &[u8], pages: Option<&[usize]>, degrees: i32) -> Result<Vec<u8>, AppError> {
+    crate::craft::rotate(bytes, pages, degrees as i64)
+}
+
+/// The document becomes exactly `order` (0-based). A permutation goes through
+/// PdfCraft; keeping a subset or repeating pages uses the page-tree rebuild.
+pub fn select_pages(bytes: &[u8], order: &[usize]) -> Result<Vec<u8>, AppError> {
+    let n = page_count(bytes)?;
+    let mut sorted = order.to_vec();
+    sorted.sort_unstable();
+    if sorted == (0..n).collect::<Vec<_>>() {
+        return crate::craft::reorder(bytes, order);
+    }
+    let mut d = doc::load(bytes)?;
+    let ids = doc::page_ids(&d);
+    let new: Vec<_> = order
+        .iter()
+        .map(|&p| ids.get(p).copied().ok_or_else(|| AppError::NotFound(format!("page {} out of range", p + 1))))
+        .collect::<Result<_, _>>()?;
+    doc::set_page_order(&mut d, &new)?;
+    doc::save(&mut d)
+}
+
+pub fn delete_pages(bytes: &[u8], remove: &[usize]) -> Result<Vec<u8>, AppError> {
+    let total = page_count(bytes)?;
+    let remove: HashSet<usize> = remove.iter().copied().collect();
+    if (0..total).all(|i| remove.contains(&i)) {
+        return Err(AppError::BadRequest("cannot delete every page".into()));
+    }
+    let mut list: Vec<usize> = remove.into_iter().filter(|&p| p < total).collect();
+    list.sort_unstable();
+    crate::craft::delete_pages(bytes, &list)
+}
+
+/// A new document made of `pages` (0-based, in this order).
+pub fn extract_pages(bytes: &[u8], pages: &[usize]) -> Result<Vec<u8>, AppError> {
+    crate::craft::extract(bytes, pages)
+}
+
+/// Duplicate page `page`; the copy lands right after it.
+pub fn duplicate_page(bytes: &[u8], page: usize) -> Result<Vec<u8>, AppError> {
+    if page >= page_count(bytes)? {
+        return Err(AppError::NotFound(format!("page {} out of range", page + 1)));
+    }
+    crate::craft::duplicate_page(bytes, page)
+}
+
+/// Insert `count` blank pages after page `after` (`None` = at the start),
+/// sized like the neighbouring page.
+pub fn insert_blank(bytes: &[u8], after: Option<usize>, count: usize) -> Result<Vec<u8>, AppError> {
+    let n = page_count(bytes)?;
+    let at = after.map(|a| (a + 1).min(n)).unwrap_or(0);
+    let like = after.unwrap_or(0).min(n.saturating_sub(1));
+    let mut out = bytes.to_vec();
+    for _ in 0..count.clamp(1, 50) {
+        out = crate::craft::insert_blank(&out, at, like)?;
+    }
+    Ok(out)
+}
+
+/// Append every page of `other` to `bytes`.
+pub fn merge(bytes: &[u8], other: &[u8]) -> Result<Vec<u8>, AppError> {
+    crate::craft::merge(bytes, other)
+}
+
+/* ── Inline text editing ────────────────────────────────────── */
+
+/// One editable run of text on a page, as the viewer needs it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TextRun {
+    pub text: String,
+    /// `[x, y, w, h]` in PDF points, bottom-left origin; `y` is the bottom of
+    /// the glyph box (baseline minus descent).
+    pub rect: [f32; 4],
+    /// Baseline y — what the editor sends back to pick this exact run.
+    pub baseline: f32,
+    pub font: String,
+    pub size: f32,
+    pub bold: bool,
+    pub italic: bool,
+    /// `#rrggbb`, so the viewer can draw the overlay in the real colour.
+    pub color: String,
+}
+
+fn hex(c: [f32; 3]) -> String {
+    let to = |v: f32| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round() as u8 };
+    format!("#{:02x}{:02x}{:02x}", to(c[0]), to(c[1]), to(c[2]))
+}
+
+/// Every text run on a page. These come from the same scanner the editor
+/// matches with, so every run the viewer offers can actually be edited.
+pub fn page_text_runs(bytes: &[u8], page: usize) -> Result<Vec<TextRun>, AppError> {
+    let d = doc::load(bytes)?;
+    let id = doc::page_id(&d, page)?;
+    Ok(crate::stream_edit::page_runs(&d, id)?
+        .into_iter()
+        .map(|r| {
+            let lower = r.font.to_ascii_lowercase();
+            TextRun {
+                rect: [r.x, r.y - r.size * 0.22, r.w.max(r.size * 0.3), r.size * 1.15],
+                baseline: r.y,
+                bold: lower.contains("bold") || lower.contains("black") || lower.contains("heavy"),
+                italic: lower.contains("italic") || lower.contains("oblique"),
+                size: r.size,
+                color: hex(r.color),
+                font: r.font,
+                text: r.text,
+            }
+        })
+        .collect())
+}
+
+/// A single in-place edit coming back from the viewer.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TextEdit {
+    /// The run's text as the viewer last saw it — the find side of the replace.
+    pub match_text: String,
+    /// `[x, y, w, h]` of that run: only the occurrence nearest to it changes,
+    /// so editing one "Total" does not rewrite every "Total" on the page.
+    pub match_rect: [f32; 4],
+    /// The run's baseline, when the viewer has it (more precise than the rect).
+    #[serde(default)]
+    pub baseline: Option<f32>,
+    /// Replacement text.
+    pub text: String,
+}
+
+/// Apply in-place text edits to one page and return the new bytes.
+pub fn edit_text_runs(bytes: &[u8], page: usize, edits: &[TextEdit]) -> Result<(Vec<u8>, usize), AppError> {
+    if edits.is_empty() {
+        return Err(AppError::BadRequest("no edits supplied".into()));
+    }
+    let mut out = bytes.to_vec();
+    let mut applied = 0usize;
+    for edit in edits {
+        if edit.match_text.trim().is_empty() || edit.match_text == edit.text {
+            continue;
+        }
+        let [x, y, _, h] = edit.match_rect;
+        let baseline = edit.baseline.unwrap_or(y + h * 0.19);
+        let (new_bytes, report) = crate::stream_edit::replace_text_target(
+            &out,
+            page,
+            edit.match_text.trim(),
+            edit.text.trim(),
+            crate::stream_edit::Target::Near(x, baseline),
+        )?;
+        if report.replaced > 0 {
+            out = new_bytes;
+            applied += report.replaced;
+        }
+    }
+    Ok((out, applied))
+}
+
+/* ── Marks: comments, links, watermark ──────────────────────── */
+
+/// Parse `#rrggbb` (0..1 RGB).
+pub fn parse_text_color(s: &str) -> Option<[f32; 3]> {
+    let h = s.trim().trim_start_matches('#');
+    if h.len() != 6 || !h.is_ascii() {
+        return None;
+    }
+    let b = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|v| v as f32 / 255.0);
+    Some([b(0)?, b(2)?, b(4)?])
+}
+
+/// Add a comment through PdfCraft: real annotations with appearance streams,
+/// which every viewer draws and which stay editable and deletable.
+///
+/// `rects` are `[x, y, width, height]` in PDF points (bottom-left origin); text
+/// markup takes one rect per line. Kinds: `highlight`, `underline`,
+/// `strikeout`, `squiggly`, `note`, `box`, `oval`, `free_text` (a text box),
+/// `link` (`text` is the URL).
+#[allow(clippy::too_many_arguments)]
+pub fn annotate(
+    bytes: &[u8],
+    page: usize,
+    kind: &str,
+    rects: &[[f32; 4]],
+    text: &str,
+    color: Option<[f32; 3]>,
+    font_size: f32,
+    author: &str,
+) -> Result<Vec<u8>, AppError> {
+    use crate::craft::Mark;
+    use pdfcraft_annot::Markup;
+    let r = |v: &[f32; 4]| [v[0] as f64, v[1] as f64, v[2] as f64, v[3] as f64];
+    let first = rects.first().map(r).ok_or_else(|| AppError::BadRequest("rect required".into()))?;
+    let markup = |k| Mark::Markup { kind: k, rects: rects.iter().map(r).collect() };
+    let mark = match kind.trim().to_ascii_lowercase().as_str() {
+        "highlight" => markup(Markup::Highlight),
+        "underline" => markup(Markup::Underline),
+        "strikeout" | "strike" => markup(Markup::StrikeOut),
+        "squiggly" => markup(Markup::Squiggly),
+        "note" => {
+            if text.trim().is_empty() {
+                return Err(AppError::BadRequest("a note needs text".into()));
+            }
+            Mark::Note { at: [first[0], first[1] + first[3]] }
+        }
+        "box" | "rectangle" => Mark::Rectangle { rect: first },
+        "oval" | "circle" => Mark::Oval { rect: first },
+        "free_text" | "text" => {
+            // A comfortable box when the caller only gave a point.
+            let w = if first[2] > 20.0 { first[2] } else { (text.lines().map(|l| l.chars().count()).max().unwrap_or(10) as f64 * font_size as f64 * 0.55).max(60.0) };
+            let lines = text.lines().count().max(1) as f64;
+            let h = if first[3] > lines * font_size as f64 { first[3] } else { lines * font_size as f64 * 1.3 + 6.0 };
+            let top = first[1] + first[3];
+            Mark::TextBox { rect: [first[0], top - h, w, h], font_size: font_size as f64 }
+        }
+        "link" => Mark::Link { rect: first, url: text.to_string() },
+        other => return Err(AppError::BadRequest(format!("unknown annotation kind: {other}"))),
+    };
+    let color = color.map(|c| [c[0] as f64, c[1] as f64, c[2] as f64]);
+    let note = if kind == "link" { "" } else { text };
+    Ok(crate::craft::add_mark(bytes, page, mark, note, color, author)?.0)
+}
+
+/// Freehand drawing (one or more strokes of `[x, y]` points).
+pub fn ink(bytes: &[u8], page: usize, strokes: Vec<Vec<[f64; 2]>>, color: Option<[f32; 3]>, author: &str) -> Result<Vec<u8>, AppError> {
+    let color = color.map(|c| [c[0] as f64, c[1] as f64, c[2] as f64]);
+    Ok(crate::craft::add_mark(bytes, page, crate::craft::Mark::Ink { strokes }, "", color, author)?.0)
+}
+
+/// A translucent diagonal watermark on every page (replaces an earlier one).
+pub fn add_watermark(bytes: &[u8], _pages: Option<&[usize]>, text: &str) -> Result<Vec<u8>, AppError> {
+    crate::craft::watermark(bytes, text, 0.25)
 }

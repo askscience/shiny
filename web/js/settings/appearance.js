@@ -1,9 +1,9 @@
 import { apiFetch } from '../api.js';
-import { toast, button, input, select, slider, toggleRow, listThemes, setTheme, getActiveTheme, getThemeManifest, applyAppearance, getAccent, setAccent, getGradient, setGradient, accentPresets, gradientPresets, gradientToCss, getFont, setFont, FONT_THEME, iconsetOptions, getIconsetChoice, setIconset, tintEnabled, setTint, refreshIcons } from '../../ui/index.js';
+import { icon, toast, button, input, select, slider, toggleRow, listThemes, getActiveTheme, getThemeManifest, applyAppearance, getAccent, setAccent, getGradient, setGradient, accentPresets, gradientPresets, gradientToCss, getFont, setFont, FONT_THEME, iconsetOptions, getIconsetChoice, setIconset, tintEnabled, setTint, refreshIcons, switchTheme } from '../../ui/index.js';
 import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
-import { getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, orbIsAttached } from '../preferences.js';
+import { MOTION_CHOICES, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
 import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
 import { pickFiles } from '../files.js';
@@ -13,18 +13,6 @@ import { revealRegion, disposeMotion } from '../../ui/motion.js';
 
 /** Build the appearance section with resources owned by its current mount. */
 export function createAppearancePanelSection({ on, cleanups, resources }) {
-  const NEUMORPHIC_DARK = 'neumorphic';
-  const NEUMORPHIC_LIGHT = 'neumorphic-light';
-  const BASE_DARK = 'noir';
-  const BASE_LIGHT = 'light';
-  function isNeumorphicTheme(name) {
-    return name === NEUMORPHIC_DARK || name === NEUMORPHIC_LIGHT;
-  }
-
-  function isLightTheme(name) {
-    return name === NEUMORPHIC_LIGHT || name === BASE_LIGHT;
-  }
-
   function buildAccentSwatches(container) {
     container.textContent = '';
     const current = getAccent();
@@ -49,7 +37,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     const custom = el('label', 'swatch swatch--custom');
     custom.dataset.accent = 'custom';
     custom.title = t('settings.appearance.customAccent', null, 'Custom accent');
-    custom.appendChild(el('span', null, '+'));
+    custom.appendChild(icon('ui/plus', { size: 16 }));
     const color = input({ type: 'color' });
     color.value = presets.some((p) => p.value === current) ? presets[0]?.value || '#ffffff' : current;
     color.setAttribute('aria-label', t('settings.appearance.customAccentColor', null, 'Custom accent color'));
@@ -394,6 +382,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     const orbStatus = select({
       options: [
         { value: 'off', label: t('settings.appearance.orbStatus.off', null, 'Nothing') },
+        { value: 'state', label: t('settings.appearance.orbStatus.state', null, 'Assistant state') },
         { value: 'text', label: t('settings.appearance.orbStatus.text', null, 'Step line') },
         { value: 'icons', label: t('settings.appearance.orbStatus.icons', null, 'Tool icons') },
       ],
@@ -452,6 +441,32 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     ];
   }
 
+  /* Content of the clock and weather chips: the clock's date and the weather
+   * description can each be hidden, leaving the time and the icon + degrees —
+   * see hudWidgetsShared.js + preferences.js. */
+  function buildHudWidgetControls() {
+    const widgets = getHudWidgets();
+    const clockDate = toggleRow({
+      label: t('settings.appearance.clockDate', null, 'Clock date'),
+      hint: t('settings.appearance.clockDateHint', null, 'Show the date beside the time in the top bar.'),
+      checked: widgets.clock_date,
+      onChange: (checked) => setHudWidgets({ clock_date: checked }),
+    });
+    const weatherText = toggleRow({
+      label: t('settings.appearance.weatherText', null, 'Weather description'),
+      hint: t('settings.appearance.weatherTextHint', null, 'Show the conditions in words beside the temperature. Off leaves just the icon and the degrees.'),
+      checked: widgets.weather_text,
+      onChange: (checked) => setHudWidgets({ weather_text: checked }),
+    });
+
+    return [
+      heading(t('settings.appearance.topBarWidgets', null, 'Top bar widgets')),
+      el('p', 'settings-hint', t('settings.appearance.topBarWidgetsHint', null, 'Choose what the clock and weather buttons in the top bar show.')),
+      clockDate,
+      weatherText,
+    ];
+  }
+
   /* Content of the top-bar host status chips: the device label and the numeric
    * percentage (volume / signal / battery) can each be hidden. Both off leaves
    * an icon-only button — see hudChipsShared.js + preferences.js. */
@@ -483,17 +498,12 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
   function buildAppearancePanel() {
     const theme = select({
       onChange: async (value) => {
-        await setTheme(value);
-        syncNeumorphic();
+        // The change plays the motion language's view transition, opening
+        // from the picker itself.
+        await switchTheme(value, { origin: theme.select });
         buildAccentSwatches(accentSwatches);
         buildGradientSwatches(gradientSwatches);
       },
-    });
-    const neumorphic = toggleRow({
-      label: t('settings.appearance.neumorphic', null, 'Neumorphic soft UI'),
-      hint: t('settings.appearance.neumorphicHint', null, 'Soft extruded-plastic surfaces with subtle dual shadows, in dark and light.'),
-      checked: isNeumorphicTheme(getActiveTheme()),
-      onChange: () => void toggleNeumorphic(),
     });
 
     const iconset = select({
@@ -534,7 +544,9 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     const customControls = el('div', 'gradient-custom-controls');
     customControls.append(stopA, stopB, angle);
     const custom = el('details', 'gradient-custom');
-    custom.appendChild(el('summary', null, t('settings.appearance.customGradient', null, 'Custom gradient')));
+    const summary = el('summary');
+    summary.append(icon('ui/chevron-right', { size: 12 }), el('span', null, t('settings.appearance.customGradient', null, 'Custom gradient')));
+    custom.appendChild(summary);
     custom.appendChild(customControls);
 
     function applyCustomGradient() {
@@ -571,6 +583,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     const backgroundChildren = buildBackgroundControls();
     const windowSurfaceChildren = buildWindowSurfaceControls();
     const topBarChildren = buildTopBarControls();
+    const hudWidgetChildren = buildHudWidgetControls();
     const hudChipChildren = buildHudChipControls();
 
     // Interface scale: a host setting, applied by the kiosk shell as page zoom.
@@ -617,22 +630,6 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       }
     }
 
-    function syncNeumorphic() {
-      neumorphic.toggle.setChecked(isNeumorphicTheme(getActiveTheme()), { silent: true });
-    }
-
-    async function toggleNeumorphic() {
-      const current = getActiveTheme();
-      const next = isNeumorphicTheme(current)
-        ? (isLightTheme(current) ? BASE_LIGHT : BASE_DARK)
-        : (isLightTheme(current) ? NEUMORPHIC_LIGHT : NEUMORPHIC_DARK);
-      const ok = await setTheme(next);
-      if (!ok) return;
-      neumorphic.toggle.setChecked(isNeumorphicTheme(next), { silent: true });
-      buildAccentSwatches(accentSwatches);
-      buildGradientSwatches(gradientSwatches);
-    }
-
     // Deferred so the swatches exist in the DOM before they are built.
     queueMicrotask(() => {
       buildAccentSwatches(accentSwatches);
@@ -654,11 +651,23 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       void refreshScale();
     });
 
+    const motionLabels = {
+      kinetic: t('settings.appearance.motion.kinetic', null, 'Kinetic — curtains, masks and moving type'),
+      fluid: t('settings.appearance.motion.fluid', null, 'Fluid — springs that grow out of where you tapped'),
+      depth: t('settings.appearance.motion.depth', null, 'Depth — things arrive from depth, the rest steps back'),
+    };
+    const motion = select({
+      options: MOTION_CHOICES.map((value) => ({ value, label: motionLabels[value] })),
+      onChange: (value) => setDesktopSurface({ motion: value }),
+    });
+    motion.select.value = getDesktopSurface().motion;
+    const motionField = field(t('settings.appearance.motion.label', null, 'Motion'), motion);
+
     return [
       field(t('settings.appearance.theme', null, 'Theme'), theme),
+      motionField,
       iconsetField,
       tintIcons,
-      neumorphic,
       field(t('settings.appearance.accent', null, 'Accent'), accentSwatches),
       field(t('settings.appearance.gradient', null, 'Gradient'), gradientSwatches),
       custom,
@@ -667,6 +676,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       scaleField,
       ...windowSurfaceChildren,
       ...topBarChildren,
+      ...hudWidgetChildren,
       ...hudChipChildren,
       heading(t('settings.appearance.background.heading', null, 'Background')),
       el('p', 'settings-hint', t('settings.appearance.background.hint', null, 'The full-screen backdrop behind the desktop — the default mesh, your gradient, a photo, or a subtle animation.')),

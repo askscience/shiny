@@ -1,8 +1,8 @@
 name = "pdf"
-version = "0.1.0"
+version = "0.3.0"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
-description = "PDF viewer & editor — render pages, extract text, edit text, add highlights/notes/links/watermarks, rotate/delete/reorder/merge pages, create PDFs"
+description = "PDF — write documents on A4 pages and export an exact PDF, read any PDF, comment (highlight, notes, text, drawing, shapes, links), header & footer, watermark, organise pages, undo every change"
 summary = "PDF: view pages, extract text, edit & annotate (highlight, note, link, watermark), rotate/reorder/merge, create PDFs"
 author = "shiny"
 skills_dir = "skills"

@@ -1,0 +1,147 @@
+/* Typefaces: Inter / Inter Display come from fonts-inter (scripts/install-fonts.sh);
+   no remote font is ever requested. */
+
+/* ─────────────────────────────────────────────────────────────
+   Ink — design tokens
+
+   After Locomotive's Wolverine Worldwide site: near-black (#010101)
+   surfaces, white grotesk type set tight, separation by hairlines
+   and by lighter nested cards rather than by shadows. Small mono
+   uppercase labels carry metadata. The accent is the user's and is
+   rewritten at runtime by appearance.js.
+
+   The shared shell skin (bar, voice bar, chat glass, spoken reply,
+   overview, tool cards) lives in ../editorial/ and reads these
+   tokens; ./app.css only sets the Ink-specific values.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* Ramp — black canvas, windows one step up, nested cards one more */
+  --black: #010101;
+  --bg: #010101;
+  --bg-elevated: #0d0d0e;
+  --surface: rgba(13, 13, 14, 0.92);
+  --surface-strong: #1a1a1b;
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-strong: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-hover: rgba(255, 255, 255, 0.07);
+  --bubble: #1a1a1b;
+
+  /* Frosted glass — used by the chat panel and floating chrome */
+  --glass-blur: 18px;
+  --glass-blur-panel: 34px;
+  --glass-blur-light: 10px;
+  --glass-saturate: 1.5;
+
+  /* Text */
+  --text: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --muted: rgba(255, 255, 255, 0.5);
+
+  /* Accent — user-selectable. appearance.js rewrites these. */
+  --accent: #ff6a3d;
+  --accent-2: #f59e0b;
+  --accent-soft: rgba(255, 106, 61, 0.14);
+  --accent-glow: rgba(255, 106, 61, 0.3);
+  --accent-contrast: #ffffff;
+
+  /* Gradients — derived from the user's gradient choice */
+  --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  --gradient-text: linear-gradient(120deg, var(--text) 0%, var(--accent) 45%, var(--accent-2) 100%);
+  --gradient-mesh:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(255, 255, 255, 0.04) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
+
+  /* Functional semantics — intentionally not accent-driven */
+  --ok: #6ee7a8;
+  --warn: #fcd34d;
+  --error: #f87171;
+  --error-soft: rgba(248, 113, 113, 0.14);
+  --danger: var(--error);
+  --accent-error: var(--error); /* legacy alias */
+  --accent-live: var(--ok);     /* legacy alias */
+
+  /* Typography — one grotesk, set tight; a mono for labels */
+  --font-display: 'Inter Display', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-editorial: ui-serif, Georgia, serif;
+  --font-mono: 'Noto Sans Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+
+  --type-hero: clamp(2.2rem, 4.6vw, 3.2rem);
+  --type-display: clamp(1.5rem, 3vw, 2.1rem);
+
+  /* Shape */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Desktop window surface — user-configurable (Settings → Appearance);
+     preferences.js overrides these inline per user. */
+  --window-radius: var(--radius-lg);
+  --window-opacity: 100%;
+  --window-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.9);
+  --tile-header-height: 36px;
+
+  /* Elevation — hairlines first, shadows only for floating things */
+  --highlight-top: rgba(255, 255, 255, 0.06);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-glass: 0 12px 32px -12px rgba(0, 0, 0, 0.8);
+  --shadow-float: 0 30px 70px -20px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-glow: 0 0 40px var(--accent-glow);
+
+  /* Motion — answers at once, settles slowly */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-cinematic: cubic-bezier(0.76, 0, 0.24, 1);
+  --duration-fast: 0.18s;
+  --duration-normal: 0.4s;
+  --duration-slow: 0.7s;
+  --reveal-duration: 0.9s;
+  --reveal-stagger: 60ms;
+
+  /* Compose dock */
+  --compose-bar-size: 84px;
+  --compose-dock-height: 52px;
+  --compose-stack-height: calc(
+    var(--compose-bar-size) + 14px + var(--compose-dock-height) + max(32px, env(safe-area-inset-bottom))
+  );
+
+  /* HUD layout */
+  --hud-bar-height: 44px;
+  --hud-header-pad: max(var(--desktop-gap, 10px), env(safe-area-inset-top));
+  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + var(--desktop-gap, 12px));
+
+  /* Layering */
+  --z-map: 0;
+  --z-hud: 20;
+  --z-transcript: 25;
+  --z-panel: 30;
+  --z-overlay: 40;
+  --z-toast: 50;
+  --z-grain: 9999;
+
+  /* Editorial skin (../editorial/app.css) */
+  --ed-bar-bg: rgba(10, 10, 11, 0.62);
+  --ed-bar-border: 1px solid rgba(255, 255, 255, 0.14);
+  --ed-bar-text: #ffffff;
+  --ed-bar-muted: rgba(255, 255, 255, 0.5);
+  --ed-bar-hover: rgba(255, 255, 255, 0.08);
+  --ed-chat-bg: rgba(22, 22, 24, 0.55);
+  --ed-pill: #1d1d1e;
+  --ed-pill-hover: #2a2a2c;
+  --ed-pill-dark: #ffffff;
+  --ed-pill-dark-ink: #010101;
+  --ed-tile-header-line: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
+
+  /* Terminal — the near-black sheet; xterm's default ANSI palette reads
+     well on it, so only the surface, text, cursor and selection are set. */
+  --terminal-bg: #0b0b0c;
+  --terminal-fg: #e6e6e3;
+  --terminal-cursor: #ffffff;
+  --terminal-selection: rgba(255, 255, 255, 0.2);
+}

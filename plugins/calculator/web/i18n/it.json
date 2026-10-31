@@ -8,6 +8,7 @@
   "plugin.calculator.toolbar.history": "Cronologia",
   "plugin.calculator.toolbar.scientific": "Scientifica",
   "plugin.calculator.toolbar.clearHistory": "Cancella cronologia",
+  "plugin.calculator.key.backspace": "Cancella ultima cifra",
 
   "plugin.calculator.menu.equals": "Uguale",
   "plugin.calculator.menu.clearAll": "Cancella tutto",

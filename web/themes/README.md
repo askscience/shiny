@@ -12,8 +12,11 @@ accent tokens rather than introduce their own colors.
 
 ```
 themes/
-  themes.json            ← installed theme index: ["noir", "yourtheme"]
-  noir/                  ← the default theme
+  themes.json            ← installed theme index: ["dusk", "ink"]
+  editorial/             ← the skin Dusk and Ink share (components.css +
+                           app.css, imported by each); not a theme itself
+  dusk/                  ← the default theme (light windows, photo desktop)
+  ink/                   ← near-black
     theme.json           ← manifest
     tokens.css           ← design tokens (:root custom properties)
     components.css       ← visual skin for every .ui-* component
@@ -31,9 +34,10 @@ Selectable icon sets (Infinity, Slot-Beauty) live in `/ui/iconsets/<set>/`, and
 the resolver in `web/ui/icon.js` tries the active set, then the theme, then the
 base. A theme's `icons/` is therefore a true **override set**: it only needs to
 ship the icons it draws differently — anything it omits falls back to the
-active icon set and then the base catalog. Bundled themes currently override
-just one glyph: the **light** themes (`light`, `neumorphic-light`) ship their
-own `icons/ui/folder.svg` artwork.
+active icon set and then the base catalog. Bundled themes override
+just the folder glyphs: Dusk and Ink ship monochrome `ui/folder*` icons and list
+them in `theme.json` (`"icons": [...]`), so no other icon is looked up in the
+theme folder.
 
 ### Icon sources
 
@@ -60,11 +64,12 @@ can't be listed over HTTP.
 
 ## Creating a theme
 
-1. Copy `noir/` to `themes/yourtheme/`.
+1. Copy `ink/` to `themes/yourtheme/` (it imports the shared `editorial/`
+   skin; drop the imports for a theme built from scratch).
 2. Edit `theme.json` — `name` must match the folder name. Declare your
    accent and gradient **presets** (shown as swatches in Settings).
 3. Rewrite `tokens.css` — the full token contract is documented inline in
-   `noir/tokens.css`. All of it is required; the UI will not render
+   `ink/tokens.css` (the `--ed-*` slots feed the editorial skin). All of it is required; the UI will not render
    correctly with missing tokens.
 4. Restyle `components.css` — one rule block per component. Only visual
    properties (color, background, border, shadow, font); layout lives in

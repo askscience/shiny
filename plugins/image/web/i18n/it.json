@@ -5,6 +5,12 @@
 
   "plugin.image.toolbar.menu": "Menu",
   "plugin.image.toolbar.fitToggle": "Alterna adatta / dimensioni reali",
+  "plugin.image.title": "Immagine",
+  "plugin.image.toolbar.fit": "Adatta",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Look: {name}",
+  "plugin.image.dock.looks": "Look",
+  "plugin.image.dock.adjust": "Regola",
 
   "plugin.image.dial.brightness": "Luminosità",
   "plugin.image.dial.contrast": "Contrasto",

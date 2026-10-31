@@ -8,6 +8,7 @@
   "plugin.calculator.toolbar.history": "History",
   "plugin.calculator.toolbar.scientific": "Scientific",
   "plugin.calculator.toolbar.clearHistory": "Clear history",
+  "plugin.calculator.key.backspace": "Backspace",
 
   "plugin.calculator.menu.equals": "Equals",
   "plugin.calculator.menu.clearAll": "Clear all",

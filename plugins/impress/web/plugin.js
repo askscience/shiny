@@ -1,8 +1,8 @@
 import {
   menuSurface, menuItem, confirmDialog, menuButton, toolbar, field as uiField,
-  textarea as uiTextarea, element as h, input as uiInput, selectControl, toolButton,
-  placePopover, icon, button, emptyState, toast, setTileGlow, glowGradient,
-  setIcon,
+  textarea as uiTextarea, element as h, input as uiInput, selectControl,
+  button, emptyState, toast, setTileGlow, glowGradient,
+  setIcon, listReveal, cardEnter, metaLine,
 } from '../../ui/index.js';
 
 /**
@@ -12,8 +12,11 @@ import {
  * model) and exported as real OpenDocument Presentation (.odp) files. This
  * window is the human editor: a slide strip (thumbnails + reorder/add), a
  * 16:9 stage whose text is edited directly (contentEditable), a slim
- * inspector (layout selector, speaker notes, slide ops), and a Present
- * overlay.
+ * editorial inspector (mono labels, hairline-underlined selects and notes,
+ * slide ops as small grey pills), and a Present overlay. The window bar keeps
+ * the deck menu, the title with its mono meta ("5 SLIDES · AURORA · SAVED
+ * 14:02"), the theme, a grey "New" pill and the Present pill; the file
+ * actions live in the deck menu's footer.
  *
  * AI wiring: `slide_*` tool outcomes arrive via the `agent:actions` event —
  * the window refreshes its deck list and opens what the AI touched.
@@ -21,7 +24,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
-import { formatMenuDate, appendMenuFooter } from '../../js/officeMenu.js';
+import { formatMenuDate, formatMenuTime, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
 export const IMPRESS_PLUGIN = 'impress';
@@ -36,6 +39,23 @@ const THEME_GLOW = {
   ember: { accent: '#f97316', darkB: '#2d1f14' },
 };
 const LAYOUTS = ['title', 'section', 'content', 'two-column', 'quote', 'blank'];
+// Display names for the slide themes and layouts (the stored values stay keys).
+const THEME_LABELS = {
+  aurora: ['plugin.impress.theme.aurora', 'Aurora'],
+  slate: ['plugin.impress.theme.slate', 'Slate'],
+  ocean: ['plugin.impress.theme.ocean', 'Ocean'],
+  mono: ['plugin.impress.theme.mono', 'Mono'],
+  ember: ['plugin.impress.theme.ember', 'Ember'],
+};
+const LAYOUT_LABELS = {
+  title: ['plugin.impress.layout.title', 'Title'],
+  section: ['plugin.impress.layout.section', 'Section'],
+  content: ['plugin.impress.layout.content', 'Content'],
+  'two-column': ['plugin.impress.layout.twoColumn', 'Two columns'],
+  quote: ['plugin.impress.layout.quote', 'Quote'],
+  blank: ['plugin.impress.layout.blank', 'Blank'],
+};
+const labelOf = (table, key) => (table[key] ? t(table[key][0], null, table[key][1]) : key);
 // Per-slide animation. TRANSITIONS must stay in sync with the SDK
 // `odp::TRANSITIONS` (the ODF export maps each one to a standard effect);
 // REVEALS matches `odp::REVEALS`.
@@ -58,8 +78,7 @@ let deckMenuBtn = null;
 let presentBtn = null;
 let titleInput = null;
 let themeSelect = null;
-let saveDot = null;
-let statusEl = null;
+let metaEl = null;        // mono "5 SLIDES · AURORA · SAVED 14:02" in the bar
 let stripEl = null;
 let stageEl = null;
 let presentEl = null;
@@ -314,7 +333,9 @@ function renderStage() {
   }
 }
 
-function renderStrip() {
+/** Draw the slide strip. `reveal` cascades the thumbnails in (a deck just
+ *  opened) — the debounced refresh while typing redraws without motion. */
+function renderStrip({ reveal = false } = {}) {
   if (!stripEl || !current) return;
   stripEl.innerHTML = '';
   const items = [];
@@ -323,20 +344,24 @@ function renderStrip() {
     item.type = 'button';
     item.dataset.index = String(i);
     if (i === selIndex) item.classList.add('is-active');
-    const num = h('span', 'impress-thumb-num', String(i + 1));
+    const num = h('span', 'impress-thumb-num', String(i + 1).padStart(2, '0'));
+    const frame = h('span', 'impress-thumb-frame');
     const mini = slideEl(slide, current.theme);
     mini.classList.add('impress-thumb-slide');
-    item.append(num, mini);
-    item.title = t('plugin.impress.strip.thumbTitle', { n: i + 1, title: slide.title || slide.layout }, `${i + 1}. ${slide.title || slide.layout}`);
+    frame.appendChild(mini);
+    item.append(num, frame);
+    item.title = t('plugin.impress.strip.thumbTitle', { n: i + 1, title: slide.title || labelOf(LAYOUT_LABELS, slide.layout) }, `${i + 1}. ${slide.title || slide.layout}`);
     item.addEventListener('click', () => selectSlide(i));
     items.push(item);
   });
   items.forEach((item) => stripEl.appendChild(item));
-  // Scale the 640px-wide logical slide to each thumbnail's real width.
+  // Scale the 640px-wide logical slide to each thumbnail frame's real width.
   items.forEach((item) => {
+    const frame = item.querySelector('.impress-thumb-frame');
     const mini = item.querySelector('.impress-slide');
-    if (mini) fitSlide(item, mini);
+    if (frame && mini) fitSlide(frame, mini);
   });
+  if (reveal) void listReveal(items);
 }
 
 /** Scale a 640×360 logical slide to fill a container's width. */
@@ -407,20 +432,23 @@ function scheduleThumbRefresh() {
 
 /* ── State / persistence ────────────────────────────────────── */
 
+/** The bar's mono meta: slide count, theme, save state. */
 function setStatus(mode) {
-  if (!statusEl) return;
-  const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (mode === 'saving') {
-    statusEl.textContent = t('plugin.impress.status.saving', null, 'Saving…');
-    saveDot?.classList.add('is-active');
-  } else if (mode === 'dirty') {
-    statusEl.textContent = t('plugin.impress.status.unsaved', null, 'Unsaved changes');
-    saveDot?.classList.add('is-active');
-  } else {
-    statusEl.textContent = tp('plugin.impress.status.saved', slideCount(), { time }, `Saved ${time} · ${slideCount()} slides`);
-    saveDot?.classList.remove('is-active');
+  if (!metaEl) return;
+  const n = slideCount();
+  let state;
+  if (mode === 'saving') state = t('plugin.impress.state.saving', null, 'Saving');
+  else if (mode === 'dirty') state = t('plugin.impress.state.unsaved', null, 'Unsaved');
+  else {
+    const time = formatMenuTime(current?.updated_at);
+    state = t('plugin.impress.state.saved', { time }, `Saved ${time}`);
   }
+  metaEl.classList.toggle('is-pending', mode !== 'saved');
+  metaEl.set(current ? [
+    tp('plugin.impress.info.slides', n, null, `${n} slides`),
+    labelOf(THEME_LABELS, current.theme),
+    state,
+  ] : []);
 }
 
 function markDirty() {
@@ -461,11 +489,13 @@ function updateGlow() {
 }
 
 function selectSlide(i) {
+  const prev = selIndex;
   selIndex = Math.max(0, Math.min(i, slideCount() - 1));
   renderStrip();
   renderStage();
   renderInspector();
   updateGlow();
+  if (selIndex !== prev && stageEl) void cardEnter(stageEl);
 }
 
 async function openDeck(deck) {
@@ -486,11 +516,12 @@ async function openDeck(deck) {
     titleInput.value = current.title;
     themeSelect.value = current.theme;
     selIndex = 0;
-    renderStrip();
+    renderStrip({ reveal: true });
     renderStage();
     renderInspector();
     setStatus('saved');
     updateGlow();
+    if (stageEl) void cardEnter(stageEl);
   } catch (e) {
     toast(e.message || t('plugin.impress.toast.openFailed', null, 'Could not open presentation'), { type: 'error' });
   }
@@ -595,8 +626,9 @@ function renderDeckMenuItems() {
     buttonType: true,
     items: [
       { icon: 'ui/plus', label: t('plugin.impress.menu.newDeck', null, 'New presentation'), onClick: () => void newDeck() },
-      { icon: 'ui/download', label: t('plugin.impress.menu.importOdp', null, 'Import .odp'), onClick: pickOdpFile },
-      { icon: 'ui/save', label: t('plugin.impress.menu.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportOdp() },
+      { icon: 'ui/folder-open', label: t('plugin.impress.menu.importOdp', null, 'Import .odp'), onClick: pickOdpFile },
+      { icon: 'ui/save', label: t('plugin.impress.menu.saveNow', null, 'Save now'), onClick: () => void persist() },
+      { icon: 'ui/upload', label: t('plugin.impress.menu.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportOdp() },
       { icon: 'ui/trash', label: t('plugin.impress.menu.deleteDeck', null, 'Delete presentation'), danger: true, onClick: () => void removeCurrent() },
     ],
   });
@@ -605,13 +637,8 @@ function renderDeckMenuItems() {
 function openDeckMenu() {
   ensureDeckMenu();
   renderDeckMenuItems();
-  deckMenuPopup.classList.remove('hidden');
-  placePopover(deckMenuPopup, deckMenuBtn);
-  deckMenuPopup.focusFirst();
   deckMenuOpen = true;
-  deckMenuBtn.setAttribute('aria-expanded', 'true');
-  document.addEventListener('pointerdown', onDeckMenuOutside, true);
-  document.addEventListener('keydown', onDeckMenuKey, true);
+  showDocumentMenu(deckMenuPopup, deckMenuBtn, onDeckMenuOutside, onDeckMenuKey);
 }
 
 function toggleDeckMenu() {
@@ -840,7 +867,7 @@ function renderPresent() {
       : [];
     revealFragments(0);
   }
-  const count = h('div', 'impress-present-count', `${presentIndex + 1} / ${slideCount()}`);
+  const count = h('div', 'impress-present-count', `${String(presentIndex + 1).padStart(2, '0')} / ${String(slideCount()).padStart(2, '0')}`);
   presentEl.appendChild(count);
   presentEl.appendChild(buildPresentControls());
 }
@@ -881,11 +908,6 @@ function prevSlide() {
 
 /* ── Tile lifecycle ─────────────────────────────────────────── */
 
-function toolbarButton(iconName, label, onClick, danger = false) {
-  const btn = toolButton(iconName, label, onClick, { className: 'impress-tool', danger });
-  return btn;
-}
-
 /** Create the Impress tile element (the plugin's window container). */
 export function mountImpressTile() {
   if (tileEl) return tileEl;
@@ -894,7 +916,7 @@ export function mountImpressTile() {
   tileEl.className = 'tile impress-tile';
   tileEl.dataset.plugin = IMPRESS_PLUGIN;
 
-  /* Top bar: deck menu + title + theme + save indicator */
+  /* Window bar: deck menu + title + mono meta, theme, New, Present */
   const bar = toolbar([], { className: 'impress-bar' });
   bar.dataset.windowBar = '';
 
@@ -913,13 +935,18 @@ export function mountImpressTile() {
     }
   });
 
+  metaEl = metaLine([], 'impress-meta');
+
+  const spacer = h('span', 'tile-bar-spacer');
+
   themeSelect = selectControl();
   themeSelect.classList.add('impress-theme');
   themeSelect.title = t('plugin.impress.toolbar.theme', null, 'Theme');
-  for (const t of THEMES) {
+  themeSelect.setAttribute('aria-label', t('plugin.impress.toolbar.theme', null, 'Theme'));
+  for (const name of THEMES) {
     const opt = document.createElement('option');
-    opt.value = t;
-    opt.textContent = t;
+    opt.value = name;
+    opt.textContent = labelOf(THEME_LABELS, name);
     themeSelect.appendChild(opt);
   }
   themeSelect.addEventListener('change', () => {
@@ -931,24 +958,14 @@ export function mountImpressTile() {
     updateGlow();
   });
 
-  saveDot = h('span', 'impress-save-dot');
-  saveDot.setAttribute('aria-hidden', 'true');
+  const newBtn = button({ label: t('plugin.impress.toolbar.new', null, 'New'), icon: 'ui/plus', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => void newDeck() });
+  newBtn.classList.add('impress-new');
+  newBtn.title = t('plugin.impress.toolbar.newDeck', null, 'New presentation');
 
-  presentBtn = toolbarButton('ui/play', t('plugin.impress.toolbar.present', null, 'Present'), startPresent);
+  presentBtn = button({ label: t('plugin.impress.toolbar.present', null, 'Present'), variant: 'ghost', size: 'sm', arrow: true, onClick: startPresent });
+  presentBtn.classList.add('impress-present-pill');
 
-  // Single top bar (Studio-style): deck menu + title + theme + action buttons.
-  bar.append(
-    deckMenuBtn,
-    titleInput,
-    themeSelect,
-    toolbarButton('ui/plus', t('plugin.impress.toolbar.newDeck', null, 'New presentation'), () => void newDeck()),
-    toolbarButton('ui/download', t('plugin.impress.toolbar.importOdp', null, 'Import .odp'), pickOdpFile),
-    toolbarButton('ui/save', t('plugin.impress.toolbar.saveToDocuments', null, 'Save to Documents'), () => void exportOdp()),
-    toolbarButton('ui/save', t('plugin.impress.toolbar.saveNow', null, 'Save now'), () => void persist()),
-    toolbarButton('ui/trash', t('plugin.impress.toolbar.deleteDeck', null, 'Delete presentation'), () => void removeCurrent(), true),
-    presentBtn,
-    saveDot,
-  );
+  bar.append(deckMenuBtn, titleInput, metaEl, spacer, themeSelect, newBtn, presentBtn);
   tileEl.appendChild(bar);
 
   /* Body: strip + stage + inspector */
@@ -971,12 +988,6 @@ export function mountImpressTile() {
 
   body.append(stripEl, stageWrap);
   tileEl.appendChild(body);
-
-  /* Status line */
-  const status = h('div', 'impress-status');
-  statusEl = h('span');
-  status.appendChild(statusEl);
-  tileEl.appendChild(status);
 
   // Keyboard: left/right move slides (ignore when typing in a field). While
   // presenting, the overlay owns the keyboard (it lives on <body>).
@@ -1004,7 +1015,7 @@ function buildInspector() {
     for (const l of LAYOUTS) {
       const opt = document.createElement('option');
       opt.value = l;
-      opt.textContent = l;
+      opt.textContent = labelOf(LAYOUT_LABELS, l);
       layoutSelect.appendChild(opt);
     }
     layoutSelect.addEventListener('change', () => {
@@ -1056,10 +1067,12 @@ function buildInspector() {
   // case — a per-slide-only editor would mean 20 edits for a 20-slide deck.
   const applyAll = button({
     icon: 'ui/loop',
+    iconSize: 14,
     variant: 'ghost',
+    size: 'sm',
     onClick: () => applyAnimationToAll(),
   });
-  applyAll.classList.add('ui-btn--icon', 'impress-anim-apply');
+  applyAll.classList.add('impress-anim-apply');
   applyAll.title = t('plugin.impress.inspector.applyAll', null, 'Apply this transition and bullet build to every slide');
   applyAll.setAttribute('aria-label', t('plugin.impress.inspector.applyAllLabel', null, 'Apply to all slides'));
   animation.appendChild(applyAll);
@@ -1081,20 +1094,22 @@ function buildInspector() {
   // Hint + slide operations.
   panel.appendChild(h('p', 'impress-hint', t('plugin.impress.inspector.hint', null, 'Click any text on the slide to edit it directly.')));
 
+  // Slide operations: small grey pills; "Add slide" carries its label.
   const ops = h('div', 'impress-ops');
-  const opBtn = (iconName, label, onClick, danger = false) => {
-    const btn = button({ icon: iconName, variant: 'ghost', onClick });
-    btn.classList.add('ui-btn--icon', 'impress-op');
+  const opBtn = (iconName, label, onClick, { danger = false, text = false } = {}) => {
+    const btn = button({ icon: iconName, iconSize: 14, label: text ? label : undefined, variant: 'ghost', size: 'sm', onClick });
+    btn.classList.add('impress-op');
+    if (!text) btn.classList.add('impress-op--icon');
     if (danger) btn.classList.add('impress-op--danger');
     btn.title = label;
     btn.setAttribute('aria-label', label);
     return btn;
   };
   ops.append(
-    opBtn('ui/plus', t('plugin.impress.ops.addSlide', null, 'Add slide'), addSlide),
+    opBtn('ui/plus', t('plugin.impress.ops.addSlide', null, 'Add slide'), addSlide, { text: true }),
     opBtn('ui/chevron-left', t('plugin.impress.ops.moveUp', null, 'Move up'), () => moveSlide(-1)),
     opBtn('ui/chevron-right', t('plugin.impress.ops.moveDown', null, 'Move down'), () => moveSlide(1)),
-    opBtn('ui/trash', t('plugin.impress.ops.deleteSlide', null, 'Delete slide'), removeSlide, true),
+    opBtn('ui/trash', t('plugin.impress.ops.deleteSlide', null, 'Delete slide'), removeSlide, { danger: true }),
   );
   panel.appendChild(ops);
 
@@ -1123,6 +1138,7 @@ function addSlide() {
   renderStrip();
   renderStage();
   renderInspector();
+  if (stageEl) void cardEnter(stageEl);
 }
 
 function removeSlide() {
@@ -1173,8 +1189,7 @@ export function unmountImpressTile() {
   presentPressFromOverlay = false;
   titleInput = null;
   themeSelect = null;
-  saveDot = null;
-  statusEl = null;
+  metaEl = null;
   layoutSelect = null;
   transitionSelect = null;
   revealSelect = null;

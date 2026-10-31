@@ -35,10 +35,6 @@
   "plugin.files.status.items.zero": "{count} vienumu",
   "plugin.files.status.items.one": "{count} vienums",
   "plugin.files.status.items.other": "{count} vienumi",
-  "plugin.files.status.selected": "“{name}” atlasīts ({what})",
-  "plugin.files.status.multiSelected.zero": "Atlasīti {count} vienumu ({size})",
-  "plugin.files.status.multiSelected.one": "Atlasīts {count} vienums ({size})",
-  "plugin.files.status.multiSelected.other": "Atlasīti {count} vienumi ({size})",
 
   "plugin.files.when.today": "Šodien {time}",
   "plugin.files.when.yesterday": "Vakar {time}",

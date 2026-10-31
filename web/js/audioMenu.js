@@ -14,8 +14,11 @@
  */
 
 import { apiFetch } from './api.js';
-import { emptyState, icon, iconButton, listItem, slider, toast, setIcon } from '../ui/index.js';
-import { currentNode, nodeIcon, nodeLabel, nodeSubtitle } from './audioShared.js';
+import { emptyState, iconButton, slider, toast, setIcon } from '../ui/index.js';
+import { currentNode, isHeadphones, nodeIcon, nodeLabel, nodeSubtitle } from './audioShared.js';
+import {
+  el, menuFoot, menuLabel, menuNote, menuPill, menuPopup, menuRow, menuSlider, syncSliderFill,
+} from './hudMenuShared.js';
 import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
 
@@ -66,30 +69,10 @@ export function toggleAudioMenu(chip) {
 /* ── Skeleton ──────────────────────────────────────────────── */
 
 function buildPopup() {
-  const popup = document.createElement('div');
-  popup.className = 'ui-hud-menu-popup audio-menu hidden';
-  popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', t('hud.sound'));
+  const { popup, body } = menuPopup('audio-menu', t('hud.sound'));
+  bodyEl = body;
 
-  const head = document.createElement('div');
-  head.className = 'audio-head';
-  const meta = document.createElement('div');
-  meta.className = 'audio-head-main';
-  const title = document.createElement('div');
-  title.className = 'audio-head-title';
-  title.appendChild(icon('ui/volume', { size: 15 }));
-  const label = document.createElement('span');
-  label.textContent = t('hud.sound');
-  title.appendChild(label);
-  hintEl = document.createElement('div');
-  hintEl.className = 'audio-head-hint';
-  meta.append(title, hintEl);
-  head.appendChild(meta);
-
-  bodyEl = document.createElement('div');
-  bodyEl.className = 'audio-body';
-
-  loadingEl = emptyState({ title: t('audio.loading') });
+  loadingEl = menuNote(t('audio.loading'));
   errorEl = emptyState({
     icon: 'ui/warning',
     title: t('audio.unavailable'),
@@ -101,51 +84,24 @@ function buildPopup() {
   refs.source = buildSection(t('audio.input'), 'source');
 
   bodyEl.append(loadingEl, errorEl, refs.sink.card, refs.source.card);
-  popup.append(head, bodyEl);
+
+  const testBtn = menuPill({ label: t('audio.testSound'), iconName: 'ui/play', arrow: false, onClick: playTest });
+  testBtn.title = t('audio.playTestSound');
+  const { foot, hintEl: footHint } = menuFoot(testBtn);
+  hintEl = footHint;
+  popup.append(bodyEl, foot);
   return popup;
 }
 
 function buildSection(label, target) {
-  const card = document.createElement('div');
-  card.className = 'audio-card hidden';
+  const card = el('div', 'hud-menu-section hidden');
 
-  const head = document.createElement('div');
-  head.className = 'audio-section-head';
-  const title = document.createElement('div');
-  title.className = 'audio-section-title';
-  title.textContent = label;
-  head.appendChild(title);
-  if (target === 'sink') {
-    head.appendChild(iconButton({
-      icon: 'ui/play',
-      label: t('audio.playTestSound'),
-      variant: 'quiet',
-      size: 'sm',
-      onClick: playTest,
-    }));
-  }
-
-  const device = document.createElement('div');
-  device.className = 'audio-device';
-  const iconEl = icon('hud/volume-0', { size: 18, className: 'audio-leading' });
-  const main = document.createElement('div');
-  main.className = 'audio-device-main';
-  const titleEl = document.createElement('div');
-  titleEl.className = 'audio-device-title';
-  const subEl = document.createElement('div');
-  subEl.className = 'audio-device-sub';
-  main.append(titleEl, subEl);
-  const pctEl = document.createElement('span');
-  pctEl.className = 'audio-pct';
-  device.append(iconEl, main, pctEl);
-
-  const controls = document.createElement('div');
-  controls.className = 'audio-controls';
   const muteBtn = iconButton({
     icon: target === 'source' ? 'ui/mic-off' : 'hud/volume-muted',
     label: target === 'source' ? t('audio.muteMic') : t('audio.muteOutput'),
     variant: 'quiet',
     size: 'sm',
+    className: 'hud-menu-lead-btn',
     onClick: () => void toggleMute(target),
   });
   const range = slider({
@@ -160,13 +116,15 @@ function buildSection(label, target) {
   });
   range.setAttribute('aria-label', target === 'source' ? t('audio.inputVolume') : t('audio.outputVolume'));
   range.addEventListener('change', () => void commitVolume(target));
-  controls.append(muteBtn, range);
+  const { row: controls, value: pctEl } = menuSlider({ leading: muteBtn, range });
 
-  const listEl = document.createElement('div');
-  listEl.className = 'ui-list audio-devices hidden';
+  // Shown instead of the list when the section has no device at all.
+  const emptyEl = menuNote('');
+  emptyEl.classList.add('hidden');
+  const listEl = el('div', 'hud-menu-list');
 
-  card.append(head, device, controls, listEl);
-  return { card, iconEl, titleEl, subEl, pctEl, muteBtn, range, listEl, current: null, listSig: '' };
+  card.append(menuLabel(label), controls, emptyEl, listEl);
+  return { card, pctEl, muteBtn, range, emptyEl, listEl, current: null, listSig: '' };
 }
 
 /* ── Data ──────────────────────────────────────────────────── */
@@ -211,6 +169,7 @@ function render(force = false) {
   }
 
   hintEl.textContent = status.server || 'PipeWire';
+  hintEl.title = hintEl.textContent;
   const sig = JSON.stringify([
     status.default_sink,
     status.default_source,
@@ -232,29 +191,32 @@ function updateSection(ref, target, nodes, defaultName) {
   ref.muteBtn.disabled = !node;
 
   if (!node) {
-    setIcon(ref.iconEl, nodeIcon(null, target), { size: 18 });
-    ref.titleEl.textContent = target === 'sink' ? t('audio.noOutputs') : t('audio.noInputs');
-    ref.subEl.textContent = t('audio.pipewireNone');
+    setButtonIcon(ref.muteBtn, nodeIcon(null, target));
+    ref.emptyEl.textContent = `${target === 'sink' ? t('audio.noOutputs') : t('audio.noInputs')} · ${t('audio.pipewireNone')}`;
+    ref.emptyEl.classList.remove('hidden');
     ref.pctEl.textContent = '';
     ref.listEl.classList.add('hidden');
+    ref.listSig = '';
     return;
   }
+  ref.emptyEl.classList.add('hidden');
 
-  setIcon(ref.iconEl, nodeIcon(node, target), { size: 18 });
-  ref.titleEl.textContent = nodeLabel(node);
-  ref.subEl.textContent = nodeSubtitle(node);
-  ref.pctEl.textContent = node.muted ? t('audio.muted') : `${node.volume_percent}%`;
+  ref.pctEl.textContent = node.muted ? t('audio.muted') : `${node.volume_percent}`;
   ref.pctEl.classList.toggle('is-over', !node.muted && node.volume_percent > 100);
+  ref.pctEl.classList.toggle('is-muted', !!node.muted);
   // The server tells us the ceiling: 150 % normally, more for the T2 speaker
   // DSP. Input stays at 100 % so a boosted microphone cannot clip the capture.
   ref.range.max = String(target === 'sink' ? (node.max_volume || 150) : 100);
   setButtonIcon(ref.muteBtn, nodeIcon(node, target));
+  ref.muteBtn.classList.toggle('is-muted', !!node.muted);
   ref.muteBtn.setAttribute('aria-label', node.muted
     ? (target === 'source' ? t('audio.unmuteMic') : t('audio.unmuteOutput'))
     : (target === 'source' ? t('audio.muteMic') : t('audio.muteOutput')));
+  ref.muteBtn.title = ref.muteBtn.getAttribute('aria-label');
   if (!dragging) ref.range.value = String(node.volume_percent);
+  syncSliderFill(ref.range);
 
-  renderDeviceList(ref, target, nodes);
+  renderDeviceList(ref, target, nodes, node);
 }
 
 /** Replace an icon-button's glyph (iconButton has no setter of its own). */
@@ -263,28 +225,33 @@ function setButtonIcon(button, name) {
   if (glyph) void setIcon(glyph, name, { size: 16 });
 }
 
-function renderDeviceList(ref, target, nodes) {
-  if (!nodes || nodes.length <= 1) {
-    ref.listEl.classList.add('hidden');
-    ref.listSig = '';
-    return;
-  }
-  ref.listEl.classList.remove('hidden');
+/** Every device of the section, the default one checked; a click switches. */
+function renderDeviceList(ref, target, nodes, current) {
+  const list = nodes || [];
+  ref.listEl.classList.toggle('hidden', !list.length);
 
-  const sig = nodes.map((node) => `${node.id}:${node.is_default ? 1 : 0}`).join(',');
+  const sig = list.map((node) => `${node.id}:${node === current ? 1 : 0}:${nodeLabel(node)}`).join(',');
   if (sig === ref.listSig) return;
   ref.listSig = sig;
 
   ref.listEl.textContent = '';
-  for (const node of nodes) {
-    ref.listEl.appendChild(listItem({
-      leading: icon(nodeIcon(node, target), { size: 17, className: 'audio-leading' }),
+  for (const node of list) {
+    const selected = node === current;
+    ref.listEl.appendChild(menuRow({
+      iconName: deviceIcon(node, target),
       title: nodeLabel(node),
-      subtitle: nodeSubtitle(node),
-      trailing: node.is_default ? icon('ui/check', { size: 14, className: 'audio-check' }) : null,
-      onClick: node.is_default ? undefined : () => void setDefault(target, node),
+      tooltip: nodeSubtitle(node) || nodeLabel(node),
+      selected,
+      onClick: selected ? undefined : () => void setDefault(target, node),
     }));
   }
+}
+
+/** A device row's glyph: what the device is, not its mute/level state. */
+function deviceIcon(node, target) {
+  if (isHeadphones(node)) return 'hud/headphones';
+  if (target === 'source') return 'ui/mic';
+  return /hdmi|displayport/i.test(`${node.active_port || ''} ${node.description || ''}`) ? 'ui/monitor' : 'ui/volume';
 }
 
 /* ── Interaction ───────────────────────────────────────────── */
@@ -293,7 +260,7 @@ function onVolumeInput(target, value) {
   const ref = refs[target];
   dragging = true;
   if (ref) {
-    ref.pctEl.textContent = `${value}%`;
+    ref.pctEl.textContent = `${value}`;
     ref.pctEl.classList.toggle('is-over', Number(value) > 100);
   }
   clearTimeout(volumeTimer);

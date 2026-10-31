@@ -539,6 +539,9 @@ async function runWizardIntegration() {
     select: uiSelect,
     spinner: () => integrationElement('span'),
     toast: (text) => { calls.push(`toast:${text}`); },
+    listReveal: () => Promise.resolve(),
+    rollNumber: () => {},
+    decodeText: (node, text) => { node.textContent = text; },
     apiFetch,
     t: translate,
   });

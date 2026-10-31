@@ -17,7 +17,7 @@ import {
   removeWorkspace, switchWorkspace,
 } from './desktop.js';
 import { toggleWindowFullscreenActive } from './fullscreen.js';
-import { setIcon } from '../ui/index.js';
+import { icon, setIcon } from '../ui/index.js';
 import { t } from './i18n.js';
 
 export const KEYBOARD_PLUGIN = 'keyboard';
@@ -330,13 +330,23 @@ function pressKey(k) {
 
 /* ── Render ─────────────────────────────────────────────────── */
 
-function keyButton(k, label, cls = '') {
+/**
+ * One key. Control keys (shift, backspace, enter) pass a catalog `iconName`:
+ * the key shows the monochrome icon and `label` becomes its accessible name.
+ */
+function keyButton(k, label, cls = '', iconName = '') {
   const b = controlButton();
   b.type = 'button';
   b.className = 'keyboard-key';
   if (cls) b.className += ` ${cls}`;
   b.dataset.k = k;
-  b.textContent = label;
+  if (iconName) {
+    b.appendChild(icon(iconName, { size: 18 }));
+    b.title = label;
+    b.setAttribute('aria-label', label);
+  } else {
+    b.textContent = label;
+  }
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     pressKey(k);
@@ -374,11 +384,11 @@ function stopRepeat() {
 function renderDesktopRow() {
   const row = document.createElement('div');
   row.className = 'keyboard-row keyboard-row--desktop';
-  const btn = (label, title, fn) => {
+  const btn = (iconName, title, fn) => {
     const b = controlButton();
     b.type = 'button';
     b.className = 'keyboard-key keyboard-key--fn keyboard-key--desktop';
-    b.textContent = label;
+    b.appendChild(icon(iconName, { size: 16 }));
     b.title = title;
     b.setAttribute('aria-label', title);
     b.addEventListener('pointerdown', (e) => {
@@ -387,16 +397,16 @@ function renderDesktopRow() {
     });
     row.appendChild(b);
   };
-  btn('\u2922', t('kb.fullscreen', null, 'Fullscreen (Alt+Enter)'),
+  btn('ui/expand', t('kb.fullscreen', null, 'Fullscreen (Alt+Enter)'),
     () => toggleWindowFullscreenActive());
-  btn('\u25C0', t('kb.prevWorkspace', null, 'Previous workspace (Alt+,)'),
+  btn('ui/chevron-left', t('kb.prevWorkspace', null, 'Previous workspace (Alt+,)'),
     () => switchWorkspace('prev'));
-  btn('\u25B6', t('kb.nextWorkspace', null, 'Next workspace (Alt+.)'),
+  btn('ui/chevron-right', t('kb.nextWorkspace', null, 'Next workspace (Alt+.)'),
     () => switchWorkspace('next'));
-  btn('+', t('kb.newWorkspace', null, 'New workspace (Alt+N)'), () => createWorkspace());
-  btn('\u2212', t('kb.removeWorkspace', null, 'Remove workspace (Alt+Shift+N)'),
+  btn('ui/plus', t('kb.newWorkspace', null, 'New workspace (Alt+N)'), () => createWorkspace());
+  btn('ui/minus', t('kb.removeWorkspace', null, 'Remove workspace (Alt+Shift+N)'),
     () => removeWorkspace());
-  btn('\u25C7', t('kb.focusWindow', null, 'Focus next window (Alt+L)'),
+  btn('ui/loop', t('kb.focusWindow', null, 'Focus next window (Alt+L)'),
     () => cycleFocusActive(1));
   return row;
 }
@@ -418,7 +428,8 @@ function render() {
 
     // Shift leads the third letter row (standard position).
     if (!symbols && i === 2 && !l.noShift) {
-      const sh = keyButton('shift', '⇧', 'keyboard-key--fn');
+      const sh = keyButton('shift', t('kb.shift', null, 'Shift'), 'keyboard-key--fn', 'ui/arrow-up');
+      sh.setAttribute('aria-pressed', String(shift));
       if (shift) sh.classList.add('is-active');
       r.appendChild(sh);
     }
@@ -429,17 +440,20 @@ function render() {
     }
 
     // Backspace ends the FIRST row (standard top-right position).
-    if (i === 0) r.appendChild(keyButton('backspace', '⌫', 'keyboard-key--fn'));
+    if (i === 0) r.appendChild(keyButton('backspace', t('kb.backspace', null, 'Backspace'), 'keyboard-key--fn', 'ui/arrow-left'));
     rowsEl.appendChild(r);
   });
 
   /* Bottom row: language, symbols toggle, space, enter. */
   const bot = document.createElement('div');
   bot.className = 'keyboard-row';
-  bot.appendChild(keyButton('lang', l.label, 'keyboard-key--fn'));
-  bot.appendChild(keyButton('sym', symbols ? 'ABC' : '123', 'keyboard-key--fn'));
-  bot.appendChild(keyButton('space', ' ', 'keyboard-key--space'));
-  bot.appendChild(keyButton('enter', '↵', 'keyboard-key--accent keyboard-key--fn'));
+  bot.appendChild(keyButton('lang', l.label, 'keyboard-key--fn keyboard-key--mono'));
+  bot.appendChild(keyButton('sym', symbols ? 'ABC' : '123', 'keyboard-key--fn keyboard-key--mono'));
+  const space = keyButton('space', ' ', 'keyboard-key--space');
+  space.setAttribute('aria-label', t('kb.space', null, 'Space'));
+  bot.appendChild(space);
+  // Enter is the ink key; its icon is the reply arrow turned into a return (CSS).
+  bot.appendChild(keyButton('enter', t('kb.enter', null, 'Enter'), 'keyboard-key--enter keyboard-key--fn', 'ui/reply'));
   rowsEl.appendChild(bot);
 }
 

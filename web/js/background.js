@@ -10,7 +10,7 @@ import { controlButton } from '../ui/components/button.js';
  *   animated  — a CSS-animated preset ("aurora" drift or "shimmer" sweep)
  */
 
-import { getGradient, gradientToCss, themeMode } from '../ui/index.js';
+import { getGradient, gradientToCss, icon, themeMode, getThemeManifest } from '../ui/index.js';
 import { t } from './i18n.js';
 
 const BG_KEY = 'ui.background';
@@ -42,6 +42,8 @@ export const BACKGROUND_PRESETS = [
   makePreset('halo',   'background.preset.halo',      'Halo',      '/backgrounds/halo.svg',    0.05),
   makePreset('offset', 'background.preset.ripple',    'Ripple',    '/backgrounds/ripple.svg',  0.18),
   makePreset('paper',  'background.preset.parchment', 'Parchment', '/backgrounds/paper.svg',   0.55),
+  makePreset('dusk',   'background.preset.dusk',      'Dusk',      '/backgrounds/dusk.svg',    0.08),
+  makePreset('ink',    'background.preset.ink',       'Ink',       '/backgrounds/ink.svg',     0),
 ];
 
 /**
@@ -87,9 +89,14 @@ function uploadScrim() {
   return canvasMode() === 'light' ? null : `rgba(0, 0, 0, ${UPLOAD_DIM})`;
 }
 
-/** The built-in wallpaper that stands in when the user has chosen nothing. */
+/**
+ * The built-in wallpaper that stands in when the user has chosen nothing: the
+ * active theme's own (`defaultBackground` in its theme.json), else the app's.
+ */
 export function defaultPreset() {
-  return presetById(DEFAULT_BG_PRESET) || BACKGROUND_PRESETS[0];
+  return presetById(getThemeManifest()?.defaultBackground)
+    || presetById(DEFAULT_BG_PRESET)
+    || BACKGROUND_PRESETS[0];
 }
 
 /**
@@ -239,6 +246,7 @@ export function renderBackgroundPresets(container, { onSelect, onUpload } = {}) 
     custom.querySelector('.bg-preset-label').textContent = t('background.yourImage', null, 'Your image');
   } else {
     custom.classList.add('bg-preset--empty');
+    custom.appendChild(icon('ui/plus', { size: 22, className: 'bg-preset-plus' }));
     custom.setAttribute('aria-label', t('background.useOwnImage', null, 'Use your own image'));
     custom.querySelector('.bg-preset-label').textContent = t('background.yourImage', null, 'Your image');
   }

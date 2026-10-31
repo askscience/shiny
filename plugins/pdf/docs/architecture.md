@@ -1,69 +1,54 @@
 # PDF — architecture
 
-A self-contained plugin that stores **real `.pdf` bytes** server-side and edits
-them with a mix of `pdf_oxide` and `lopdf`. The same engine powers both the
-agent tools and the window, so the AI and the human have identical capability.
-
 ```
-plugins/pdf/
-├── plugin.toml
-├── skills/pdf.md
-├── migrations/001_init.sql     pdf_documents
-├── src/
-│   ├── lib.rs                  module wiring
-│   ├── plugin.rs               manifest, routes, tools, entry
-│   ├── routes.rs               /api/pdfs/* handlers
-│   ├── ops.rs                  the single operations engine (shared by tools + routes)
-│   ├── stream_edit.rs          in-place content-stream text editing (lopdf)
-│   └── tools/mod.rs            12 pdf_* agent tools
-└── web/plugin.js               the PDF window (pdf.js)
+src/
+├── plugin.rs        manifest, routes, tools
+├── routes.rs        /api/pdfs/* handlers
+├── tools/mod.rs     pdf_* agent tools
+├── store.rs         commit with undo snapshot, undo/redo, history
+├── ops.rs           the API routes and tools call (delegates below)
+├── craft.rs         PdfCraft bridge: comments, marks, pages, text (bytes in → bytes out)
+├── compose.rs       Markdown/HTML/plain → PDF (assistant, export fallback) + Markdown → editor HTML
+├── stream_edit.rs   font-aware find & replace in existing PDFs (lopdf)
+├── doc.rs           lopdf helpers (page tree rebuild for subsets/repeats)
+└── fonts.rs, afm.rs Base-14 metrics + WinAnsi for compose/stream_edit
+web/
+├── plugin.js        the window: Write | PDF, markup tools, Comments panel, rail
+├── editor.js        A4 document editor + export (shell print / server fallback)
+├── doc-themes.js    one stylesheet for editor and print, themes, templates
+└── sanitize.js      the editor's HTML vocabulary (paste, load, save)
 ```
 
-## Engine split
+## Why documents are exported, not edited as PDFs
 
-| Concern | Crate |
-|---|---|
-| Rendering to PNG, creation, merge, rotate, annotate, watermark, text extraction, `match_text` | **`pdf_oxide`** |
-| In-place text replacement on existing content streams | **`lopdf`** (`stream_edit.rs`) |
+A PDF is positioned glyphs, not a document. Editing its text means rewriting
+content streams, which works for small corrections but breaks layout as soon
+as text grows — and in PDFs printed by Chromium it is unreliable even in
+PdfCraft (verified). So documents made here keep their HTML as the source of
+truth; the PDF is regenerated. Updating replaces comments made on the old PDF
+(the window warns; Undo restores them).
 
-`ops.rs` is the single entry point both call sites use. Creation goes through
-pdf_oxide's HTML+CSS engine (bundled DejaVu fonts) so long text wraps instead of
-running off the page; the plugin also ships a reliable built-in Base-14
-semantic-HTML renderer (the skill documents this).
+## Exact export (shell print)
 
-## Why `lopdf` for text replacement
+`editor.js` builds a standalone page (`doc-themes.js` `printHtml`) and posts
+`peakd:print:{id, html, options}`. peakd writes it to a private temp dir,
+loads it in an off-screen `QWebEnginePage` (own off-the-record profile,
+JavaScript off, no remote or file access) and calls `printToPdf` with the page
+size and margins; the bytes return as `window.__peakdPrinted({id, ok, data})`
+and the window uploads them (`POST /:id/replace-file`). The shell advertises the
+feature as `window.__peakdCaps.print`; without it the window uses
+`POST /:id/render-html` (compose fallback).
 
-`pdf_oxide`'s `modify_text` re-emits a run **without removing the original
-glyphs** — a PDF content stream is append-only — so find & replace produced old
-and new text on top of each other. `stream_edit.rs` edits the raw content
-stream instead. Two traps make a naive edit fail silently:
+## PdfCraft
 
-- **Text often lives in Form XObjects, not the page stream.** The engine
-  recurses into the page's Form XObjects (lopdf's own `replace_text` only scans
-  the page stream).
-- **Text usually arrives as a `TJ` array, not one string.** Glyphs are split by
-  kerning numbers (`[(T) -3 (I) 10 (M)]`); the array is flattened, edited, then
-  re-emitted with a **kerning correction placed after** the string so the line
-  keeps its width. (Putting it first shifted the replacement left of its margin
-  — a fixed bug.)
-
-Style changes (bold/size/colour) are **not supported** and the controls were
-removed; see the root [`PLUGINS.md` §19 "PDF window"](../../../PLUGINS.md) for
-the full record of why each attempted approach failed. `stream_edit::style_text`
-exists and is documented but has no route.
+Pinned git dependency (`plugins/pdf/Cargo.toml`) plus `[patch.crates-io]`
+entries in the workspace root for PdfCraft's forks of hayro, vello and lopdf
+(patches only apply at the root of a build). Each call opens the bytes,
+edits, and writes a full save; the plugin's own history keeps old versions.
 
 ## Data
 
-`pdf_documents` stores `id`, `traveler_id`, `title`, bytes/BLOB and metadata.
-Migrations live in `migrations/`. Uninstalling leaves the table.
+`pdf_documents` (bytes, title, page_count, source, source_format,
+page_numbers, pdf_stale), `pdf_revisions` (undo/redo snapshots).
 
-## Storage & routes
-
-The window fetches the document through `GET /api/pdfs/:id/file` (inline,
-`no-store`) — deliberately separate from `/export` (attachment). See
-[routes.md](routes.md).
-
-## Related
-
-[README](README.md) · [tools](tools.md) · [routes](routes.md) ·
-[window](window.md) · [plugin system](../../../docs/plugins/README.md).
+[README](README.md) · [tools](tools.md) · [routes](routes.md) · [window](window.md)

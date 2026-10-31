@@ -1,4 +1,12 @@
 {
+  "plugin.studio.browser.audioEffect": "effetto audio",
+  "plugin.studio.browser.factoryPreset": "di fabbrica",
+  "plugin.studio.browser.savedPreset": "salvato",
+  "plugin.studio.toolbar.views": "Viste",
+  "plugin.studio.toolbar.splitLabel": "Arranger e Launcher",
+  "plugin.studio.toolbar.splitHint": "Arranger e Clip Launcher affiancati",
+  "plugin.studio.panel.pages": "Pannello dei dettagli",
+  "plugin.studio.status.unsavedShort": "Non salvato",
   "plugin.studio.meta.category": "Media",
   "plugin.studio.meta.description": "Studio musicale — un sequencer a step di livello DAW, un polysynth, una drum machine e una Grid modulare che renderizzano gli arrangiamenti in audio nella finestra Studio",
   "plugin.studio.meta.summary": "Studio musicale: synth polifonico + drum machine + Grid modulare, renderizzati offline da un motore DSP autonomo",

@@ -116,25 +116,19 @@ globalThis.fetch = async (url, options = {}) => {
     posted.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
   }
   if (String(url).includes('/themes/themes.json')) {
-    return new Response('["neumorphic","pitch","light"]', {
+    return new Response('["dusk","ink"]', {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  if (String(url).includes('/themes/neumorphic/theme.json')) {
-    return new Response('{"name":"neumorphic","modes":["dark"]}', {
+  if (String(url).includes('/themes/ink/theme.json')) {
+    return new Response('{"name":"ink","modes":["dark"]}', {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  if (String(url).includes('/themes/pitch/theme.json')) {
-    return new Response('{"name":"pitch","modes":["dark"]}', {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-  if (String(url).includes('/themes/light/theme.json')) {
-    return new Response('{"name":"light","modes":["light"]}', {
+  if (String(url).includes('/themes/dusk/theme.json')) {
+    return new Response('{"name":"dusk","modes":["light"]}', {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -147,7 +141,11 @@ globalThis.fetch = async (url, options = {}) => {
 
 const { initThemeLoader, setTheme } = await import('../../ui/theme-loader.js');
 const { setLocalePreference } = await import('../i18n.js');
+// A stored choice of a retired theme carries over to its replacement.
+localStorage.setItem('ui.theme.name', 'pitch');
 await initThemeLoader();
+check('a retired dark theme maps to Ink', localStorage.getItem('ui.theme.name') === 'ink',
+  localStorage.getItem('ui.theme.name'));
 
 const { webAppSurface, forgetWebAppSurface } = await import('../webAppSurface.js');
 const defaultExport = (await import('../webAppSurface.js')).default;
@@ -200,7 +198,7 @@ check('the frame boots with the active theme mode',
   frame.style.colorScheme === 'dark', frame.style.colorScheme);
 check('the frame carries the host language', frame.lang === 'en', frame.lang);
 check('context is mirrored on the frame element',
-  frame.dataset.shinyTheme === 'neumorphic' && frame.dataset.shinyMode === 'dark'
+  frame.dataset.shinyTheme === 'ink' && frame.dataset.shinyMode === 'dark'
   && frame.dataset.shinyLocale === 'en', JSON.stringify(frame.dataset));
 
 const messages = [];
@@ -208,13 +206,13 @@ frame.contentWindow = { postMessage: (data, origin) => messages.push({ data, ori
 frame.fire('load');
 check('the app receives the host context on load',
   messages.length === 1 && messages[0].data.type === 'shiny:context'
-  && messages[0].data.theme === 'neumorphic' && messages[0].data.mode === 'dark'
+  && messages[0].data.theme === 'ink' && messages[0].data.mode === 'dark'
   && messages[0].data.locale === 'en' && messages[0].data.language === 'en',
   JSON.stringify(messages));
 check('the context is posted to the frame origin',
   messages[0]?.origin === window.location.origin, messages[0]?.origin);
 
-await setTheme('light');
+await setTheme('dusk');
 check('a theme change updates the frame mode',
   frame.style.colorScheme === 'light' && frame.dataset.shinyMode === 'light'
   && messages.at(-1)?.data.mode === 'light', JSON.stringify(messages.at(-1)?.data));

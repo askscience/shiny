@@ -5,9 +5,15 @@
    web/js/gestures.js) and are plain web layers, so they work the same on any
    input that can raise the `trackpad:gesture` event.
 
-   The overview does not clone windows: it re-sizes the real tiles in place
-   (web/js/overview.js), which is why `#tile-grid` is lifted above the rest of
-   the chrome and its tiles become absolutely positioned cards.
+   Both follow the fingers: one progress value each on the document element,
+   `--overview-p` / `--launcher-p` (0..1, updated every frame), with the phase
+   in `html[data-overview|data-launcher="opening|open|closing"]`. Themes key
+   their own looks (a receding wallpaper, a frame) off the same values.
+
+   The overview does not clone windows: overview.js pins the real tiles at
+   their rects and moves them with transforms, which is why `#tile-grid` is
+   lifted above the rest of the chrome while it is up. The arrangement comes
+   from the theme (`html[data-overview-style="strip|cloud"]`).
    ───────────────────────────────────────────────────────────── */
 
 .overview-backdrop {
@@ -19,35 +25,56 @@
   backdrop-filter: blur(10px) saturate(0.9);
   -webkit-backdrop-filter: blur(10px) saturate(0.9);
   pointer-events: auto;
-  animation: overlayFade var(--duration-normal) var(--ease-out);
+  opacity: var(--overview-p, 0);
 }
 
 /* The tiles themselves are the overview: lift the grid over the chrome and
    let it own the whole screen for as long as the overview is up. */
 body.overview-active #tile-grid {
   z-index: 45;
-  /* The tiles are absolutely positioned by overview.js; the layout engine's
-     own display/gap no longer matters, but stake the claim explicitly so the
+  /* The tiles are pinned absolutely by overview.js; the layout engine's own
+     display/gap no longer matters, but stake the claim explicitly so the
      manager's inline styles cannot change how the container is measured. */
   display: block !important;
   gap: 0 !important;
   overflow: visible;
 }
 
+html[data-overview-style='cloud'] body.overview-active #tile-grid {
+  perspective: 1500px;
+}
+
+/* Every frame writes the transform; nothing may ease it a second time. */
 body.overview-active .tile--overview {
   position: absolute;
+  margin: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  animation: none;
   transition:
-    left var(--motion-reveal) var(--motion-ease),
-    top var(--motion-reveal) var(--motion-ease),
-    width var(--motion-reveal) var(--motion-ease),
-    height var(--motion-reveal) var(--motion-ease),
-    box-shadow var(--motion-reveal) var(--motion-ease);
+    box-shadow var(--motion-reveal) var(--motion-ease),
+    filter var(--motion-reveal) var(--motion-ease);
   box-shadow: var(--shadow-float);
-  animation: overviewTileIn var(--duration-normal) var(--ease-out) backwards;
   cursor: pointer;
 }
 
-/* The "WS n" chip in each window's own header while the overview is up. */
+/* Cloud: the windows sit back a little and drift while the overview is open;
+   the one under the pointer comes forward, fully lit. */
+html[data-overview-style='cloud'] body.overview-active .tile--overview {
+  filter: brightness(calc(1 - var(--overview-p, 0) * 0.3));
+}
+
+html[data-overview='open'][data-overview-style='cloud'] body.overview-active .tile--overview {
+  animation: overviewDrift 5.5s ease-in-out calc(var(--overview-i, 0) * -1.7s) infinite alternate;
+}
+
+html[data-overview='open'][data-overview-style='cloud'] body.overview-active .tile--overview:hover {
+  filter: none;
+  z-index: 999 !important;
+}
+
+/* The "WS n" chip in each window's own header (cloud — the strip labels the
+   windows underneath instead). */
 .overview-badge {
   flex: none;
   margin-left: 8px;
@@ -61,6 +88,149 @@ body.overview-active .tile--overview {
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+
+/* ── Overview chrome: labels, headline, strip navigation ─────── */
+
+/* Structure only, from theme tokens; each theme skins it. */
+.overview-chrome {
+  position: fixed;
+  inset: 0;
+  /* Over the lifted grid (same layer, later in the DOM). */
+  z-index: 45;
+  pointer-events: none;
+  color: var(--text);
+}
+
+.overview-chrome.hidden { display: none; }
+
+/* The cloud floats its windows around the headline: keep the words behind
+   them (over the backdrop, under the lifted grid). */
+.overview-chrome[data-style='cloud'] { z-index: 44; }
+
+.overview-label {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+  opacity: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.overview-label-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-display, inherit);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.overview-label-ws {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs, 6px);
+  background: var(--glass, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--glass-border, transparent);
+}
+
+.overview-chrome[data-style='cloud'] .overview-labels { display: none; }
+
+/* The headline: each line rises out of its own mask as the overview opens. */
+.overview-title {
+  position: absolute;
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  color: var(--text);
+}
+
+.overview-title-line {
+  display: block;
+  overflow: clip;
+  padding-bottom: 0.06em;
+  margin-bottom: -0.06em;
+}
+
+.overview-title-line > span {
+  display: inline-block;
+  transform: translateY(calc(clamp(0, 1 - var(--overview-p, 0) * 1.6 + var(--i, 0) * 0.3, 1) * 108%));
+}
+
+.overview-title-line:last-child > span { color: var(--muted); }
+
+.overview-chrome[data-style='strip'] .overview-title {
+  left: max(24px, 5.3vw);
+  bottom: 6vh;
+  font-size: clamp(40px, 6.4vw, 92px);
+}
+
+.overview-chrome[data-style='cloud'] .overview-title {
+  left: 0;
+  right: 0;
+  top: 50%;
+  translate: 0 -50%;
+  text-align: center;
+  font-size: clamp(44px, 8.2vw, 118px);
+}
+
+.overview-nav {
+  position: absolute;
+  right: max(24px, 5.3vw);
+  bottom: 6vh;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: var(--overview-p, 0);
+}
+
+html[data-overview='open'] .overview-nav { pointer-events: auto; }
+.overview-nav.hidden { display: none; }
+
+.overview-nav-count {
+  margin-right: 14px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.overview-nav-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border, transparent);
+  background: var(--glass, rgba(255, 255, 255, 0.12));
+  backdrop-filter: var(--glass-blur, none);
+  -webkit-backdrop-filter: var(--glass-blur, none);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease), opacity var(--motion-feedback) var(--motion-ease);
+}
+
+.overview-nav-btn:hover:not(:disabled) { background: var(--glass-hover, var(--glass, rgba(255, 255, 255, 0.2))); }
+.overview-nav-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Workspace slide ─────────────────────────────────────────── */
+
+/* desktop/workspaceSlide.js writes the transform every frame. The splitter
+   handles belong to a layout that is mid-flight: hide them until it lands. */
+.tile--sliding {
+  transition: none !important;
+  animation: none !important;
+  will-change: transform;
+}
+
+body.workspace-sliding #tile-grid { overflow: hidden; }
+body.workspace-sliding .tile-splitters { visibility: hidden; }
 
 /* ── Plugin launcher ─────────────────────────────────────────── */
 
@@ -77,7 +247,8 @@ body.overview-active .tile--overview {
   background: rgba(6, 8, 12, 0.45);
   backdrop-filter: blur(22px) saturate(1.15);
   -webkit-backdrop-filter: blur(22px) saturate(1.15);
-  animation: overlayFade var(--duration-normal) var(--ease-out);
+  /* launcher.js drives the whole entrance from `--launcher-p`. */
+  opacity: var(--launcher-p, 1);
 }
 
 .plugin-launcher-grid {
@@ -90,6 +261,12 @@ body.overview-active .tile--overview {
   overflow-y: auto;
   scrollbar-width: none;
   padding: 10px;
+  /* Pulled down with the fingers: from a little above, slightly small. The
+     overshoot past either end (`--launcher-over`) stretches the travel. */
+  transform:
+    translateY(calc((1 - var(--launcher-p, 1)) * -56px + var(--launcher-over, 0) * 80px))
+    scale(calc(0.92 + var(--launcher-p, 1) * 0.08));
+  transform-origin: 50% 0;
 }
 
 .plugin-launcher-grid::-webkit-scrollbar { display: none; }
@@ -105,7 +282,8 @@ body.overview-active .tile--overview {
   color: var(--text);
   font: inherit;
   cursor: pointer;
-  animation: launcherItemIn var(--duration-normal) var(--ease-spring) backwards;
+  /* Rows land in a short cascade behind the panel. */
+  opacity: clamp(0, var(--launcher-p, 1) * 1.6 - 0.3, 1);
 }
 
 .launcher-item-icon {
@@ -158,27 +336,19 @@ body.overview-active .tile--overview {
   color: var(--muted);
 }
 
-@keyframes overlayFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes overviewDrift {
+  from { translate: 0 -9px; }
+  to { translate: 0 9px; }
 }
 
-@keyframes overviewTileIn {
-  from { opacity: 0; transform: scale(0.94); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes launcherItemIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.9); }
-  to { opacity: 1; transform: none; }
-}
-
+/* The progress itself jumps under reduced motion (gestureTransition.js); only
+   the ambient drift and the hover easing are left to switch off here. */
 @media (prefers-reduced-motion: reduce) {
   .overview-backdrop,
   .plugin-launcher,
   .launcher-item,
   body.overview-active .tile--overview {
-    animation: none;
+    animation: none !important;
     transition: none;
   }
 }

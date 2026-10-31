@@ -183,6 +183,21 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
         }
         return;
     }
+    // The document editor asks for an exact PDF of its pages (Chromium print).
+    if let Some(raw) = body.strip_prefix("peakd:print:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            let id = value.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+            let html = value.get("html").and_then(|v| v.as_str()).unwrap_or_default();
+            let options = value.get("options").cloned().unwrap_or(serde_json::Value::Null);
+            if !id.is_empty() && !html.is_empty() {
+                // A NUL cannot cross the C ABI (and would panic `cs`): drop it.
+                let id: String = id.chars().filter(|c| *c != '\0').collect();
+                let html: String = html.chars().filter(|c| *c != '\0').collect();
+                shim::print_html(&id, &html, &options.to_string());
+            }
+        }
+        return;
+    }
     if let Some(raw) = body.strip_prefix("peakd:filter:") {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
             if let Some(on) = value.get("enabled").and_then(|v| v.as_bool()) {
@@ -351,17 +366,30 @@ extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_
     }
 }
 
-/// The shell's pump (Qt timer, ~100 ms): drain view commands/events, dispatch
-/// gestures, apply scale changes.
+/// The shell's pump (Qt timer, ~100 ms; ~16 ms while a trackpad gesture is
+/// live): drain view commands/events, dispatch gestures, apply scale changes.
 extern "C" fn on_pump(_userdata: *mut c_void) {
     pump_views();
     if let Some(bridge) = GESTURES.get() {
-        for direction in bridge.drain() {
-            shim::main_run_js(&gestures::dispatch_script(direction), 0);
+        // One evaluation per tick: the bridge already coalesced the updates.
+        let script: String = bridge
+            .drain()
+            .iter()
+            .map(gestures::dispatch_script)
+            .collect();
+        if !script.is_empty() {
+            shim::main_run_js(&script, 0);
         }
     }
     display_tick();
     bench_tick();
+}
+
+/// Called on the gesture reader thread when a swipe goes live or idle: pump at
+/// frame rate while the fingers move, and deliver the begin/end at once rather
+/// than on the next tick.
+fn gesture_waker(live: bool) {
+    shim::pump_rate(if live { 16 } else { 100 }, true);
 }
 
 /// Drain the browser-view command and event queues. Called on the pump and,
@@ -567,7 +595,7 @@ fn run(mut cfg: PeakdConfig) -> Result<i32, String> {
     VIEWS
         .set(Mutex::new(Views::new(bus, QtHost)))
         .ok();
-    GESTURES.set(gestures::spawn()).ok();
+    GESTURES.set(gestures::spawn(gesture_waker)).ok();
 
     let dpi = shim::screen_dpi();
     let (width, height) = shim::screen_size();

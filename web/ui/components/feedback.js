@@ -1,6 +1,7 @@
 /** feedback — toast, spinner, skeleton, progress, empty state, badge. */
 
 import { icon } from '../icon.js';
+import { cardEnter, cardExit } from '../motionStyle.js';
 import { t } from '../../js/i18n.js';
 
 let toastContainer = null;
@@ -23,10 +24,13 @@ export function toast(message, { type = 'info', duration = 4000 } = {}) {
   el.className = `ui-toast glass-blur ui-toast--${type}`;
   el.textContent = message;
   ensureToastContainer().appendChild(el);
-  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('is-in')));
+  // The arrival and the exit move in the user's motion language; the
+  // `is-in` resting state is set at once so its CSS transition stays out.
+  el.style.transition = 'none';
+  el.classList.add('is-in');
+  void cardEnter(el);
   setTimeout(() => {
-    el.classList.remove('is-in');
-    setTimeout(() => el.remove(), 400);
+    void cardExit(el, { done: () => el.remove() });
   }, duration);
   return el;
 }

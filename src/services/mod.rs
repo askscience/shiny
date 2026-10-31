@@ -26,6 +26,7 @@ pub mod agent_cancel;
 pub mod approval;
 pub mod terminal_guard;
 pub mod chat_memory;
+pub mod tool_cards;
 pub mod display;
 pub mod touchbar;
 pub mod keyboard_backlight;

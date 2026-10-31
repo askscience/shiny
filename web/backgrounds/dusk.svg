@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <!-- Dusk: a "photographic" desert dusk, painted in vectors (the Dusk theme default). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2338"/>
+      <stop offset="0.38" stop-color="#5a4a63"/>
+      <stop offset="0.62" stop-color="#d3825a"/>
+      <stop offset="0.74" stop-color="#f2b26b"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.63" cy="0.66" r="0.34">
+      <stop offset="0" stop-color="#fff3d6" stop-opacity="1"/>
+      <stop offset="0.08" stop-color="#ffd690" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#f59a5a" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#f59a5a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="r1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9a5f55"/>
+      <stop offset="1" stop-color="#6d3f3f"/>
+    </linearGradient>
+    <linearGradient id="r2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b3a36"/>
+      <stop offset="1" stop-color="#3e2328"/>
+    </linearGradient>
+    <linearGradient id="r3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b2024"/>
+      <stop offset="1" stop-color="#1a1013"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1716"/>
+      <stop offset="1" stop-color="#0b0607"/>
+    </linearGradient>
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6b878" stop-opacity="0"/>
+      <stop offset="1" stop-color="#f6b878" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.09 0"/>
+    </filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="2.4"/></filter>
+  </defs>
+  <rect width="1440" height="900" fill="url(#sky)"/>
+  <rect width="1440" height="900" fill="url(#sun)"/>
+  <!-- far mesas -->
+  <path filter="url(#soft)" fill="url(#r1)" opacity="0.85" d="M0 560 L120 548 L150 520 L260 518 L282 540 L420 546 L520 530 L540 498 L640 494 L660 520 L760 526 L900 540 L1010 536 L1030 512 L1150 508 L1172 530 L1300 540 L1440 528 L1440 900 L0 900Z"/>
+  <rect y="480" width="1440" height="120" fill="url(#haze)"/>
+  <!-- mid ridge -->
+  <path fill="url(#r2)" d="M0 610 L90 596 L210 604 L330 580 L380 586 L470 570 L560 588 L700 600 L820 584 L940 596 L1080 574 L1200 590 L1320 578 L1440 590 L1440 900 L0 900Z"/>
+  <!-- near butte, left -->
+  <path fill="url(#r3)" d="M0 640 L60 636 L84 560 L96 548 L250 546 L262 560 L284 640 L420 652 L620 660 L860 668 L1100 660 L1260 650 L1440 646 L1440 900 L0 900Z"/>
+  <path fill="url(#ground)" d="M0 700 C300 684 620 690 900 704 C1120 714 1300 708 1440 700 L1440 900 L0 900Z"/>
+  <rect width="1440" height="900" filter="url(#grain)"/>
+</svg>

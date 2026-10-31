@@ -35,10 +35,6 @@
   "plugin.files.status.items.one": "{count} stavka",
   "plugin.files.status.items.few": "{count} stavke",
   "plugin.files.status.items.other": "{count} stavki",
-  "plugin.files.status.selected": "Odabrano: “{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "Odabrana {count} stavka ({size})",
-  "plugin.files.status.multiSelected.few": "Odabrane {count} stavke ({size})",
-  "plugin.files.status.multiSelected.other": "Odabrano {count} stavki ({size})",
 
   "plugin.files.when.today": "Danas {time}",
   "plugin.files.when.yesterday": "Jučer {time}",

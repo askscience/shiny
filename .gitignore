@@ -63,3 +63,7 @@ backpack/
 
 # Local checkout of the private reports-and-ideas repo (code audits, notes).
 /reports-and-ideas/
+
+# Theme Lab: standalone local previews used to design the themes. Scratch
+# material, not shipped — the chosen directions live in web/themes/.
+/web/theme-lab/

@@ -36,11 +36,6 @@
   "plugin.files.status.items.few": "{count} elementy",
   "plugin.files.status.items.many": "{count} elementów",
   "plugin.files.status.items.other": "{count} elementu",
-  "plugin.files.status.selected": "Zaznaczono „{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "Zaznaczono {count} element ({size})",
-  "plugin.files.status.multiSelected.few": "Zaznaczono {count} elementy ({size})",
-  "plugin.files.status.multiSelected.many": "Zaznaczono {count} elementów ({size})",
-  "plugin.files.status.multiSelected.other": "Zaznaczono {count} elementu ({size})",
 
   "plugin.files.when.today": "Dziś {time}",
   "plugin.files.when.yesterday": "Wczoraj {time}",

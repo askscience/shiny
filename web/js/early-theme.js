@@ -5,14 +5,22 @@
 // for the check here. Loaded as a plain (blocking) script from <head>; it is a
 // separate file so a strict Content-Security-Policy can forbid inline scripts.
 (function () {
-  var DEFAULT = 'neumorphic'; // keep in step with theme-loader.js
+  var DEFAULT = 'dusk'; // keep in step with theme-loader.js
+  // Retired themes → their replacement (RETIRED_THEMES in theme-loader.js).
+  var RETIRED = { pitch: 'ink', noir: 'ink', neumorphic: 'ink', light: 'dusk', 'neumorphic-light': 'dusk' };
   var theme = DEFAULT;
   try {
     var stored = localStorage.getItem('ui.theme.name');
     var list = JSON.parse(localStorage.getItem('ui.theme.list') || 'null');
     var known = Array.isArray(list) && list.length;
-    // Trust a stored choice unless the cached index says it is gone.
-    if (stored && (!known || list.indexOf(stored) >= 0)) theme = stored;
+    if (stored && RETIRED[stored]) {
+      // The cached index predates the retirement, so it can't vouch for the
+      // replacement; the replacement always ships.
+      theme = RETIRED[stored];
+    } else if (stored && (!known || list.indexOf(stored) >= 0)) {
+      // Trust a stored choice unless the cached index says it is gone.
+      theme = stored;
+    }
   } catch (e) {
     /* keep the default */
   }

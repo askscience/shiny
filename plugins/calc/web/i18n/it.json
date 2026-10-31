@@ -4,6 +4,7 @@
   "plugin.calc.meta.category": "Ufficio",
 
   "plugin.calc.bar.spreadsheets": "Fogli di calcolo",
+  "plugin.calc.bar.new": "Nuovo",
 
   "plugin.calc.toolbar.newSheet": "Nuovo foglio di calcolo",
   "plugin.calc.toolbar.importOds": "Importa .ods",
@@ -13,6 +14,7 @@
   "plugin.calc.toolbar.deleteSheet": "Elimina foglio di calcolo",
 
   "plugin.calc.menu.noSheets": "Ancora nessun foglio di calcolo",
+  "plugin.calc.empty.body": "Inizia un foglio vuoto, importa un file CSV o .ods, oppure chiedi all'AI di crearne uno.",
 
   "plugin.calc.sheet.untitled": "Senza titolo",
   "plugin.calc.sheet.importedCsv": "CSV importato",
@@ -21,6 +23,11 @@
 
   "plugin.calc.status.saving": "Salvataggio…",
   "plugin.calc.status.dirty": "Modifiche non salvate",
+  "plugin.calc.status.unsaved": "Non salvato",
+  "plugin.calc.status.savedAt": "Salvato {time}",
+  "plugin.calc.status.cells.one": "{count} cella",
+  "plugin.calc.status.cells.many": "{count} celle",
+  "plugin.calc.status.cells.other": "{count} celle",
   "plugin.calc.status.saved.one": "Salvato {time} · {count} cella",
   "plugin.calc.status.saved.other": "Salvato {time} · {count} celle",
   "plugin.calc.status.saved.many": "Salvato {time} · {count} celle",

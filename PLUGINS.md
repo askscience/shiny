@@ -1014,7 +1014,7 @@ Before publishing a plugin:
 | `plugins/word/` | **Self-contained** — `doc_*` tools, its own `documents` table (`migrations/`), the `/api/documents` REST routes (`RouteSpec` + `route_handler`), and the Word window (`web/plugin.js`) all live in the plugin folder. Documents are real OpenDocument Text (`.odt`) bytes via the SDK codec (`crates/shiny-plugin-sdk/src/odt.rs`). Zero core footprint. |
 | `plugins/calc/` | **Self-contained** — `calc_*` tools, its own `spreadsheets` table, `/api/spreadsheets` routes, and the Calc window (`web/plugin.js`) all in the plugin folder. Cell grids (A1 refs) stored as a JSON map; formulas (`=SUM(A1:A3)`) evaluate live in the window; real **`.ods` import/export** via `crates/shiny-plugin-sdk/src/ods.rs`. |
 | `plugins/impress/` | **Self-contained** — `slide_*` tools, its own `presentations` table, `/api/presentations` routes, and the Impress window (`web/plugin.js`) all in the plugin folder. Decks are a JSON array of slides (six layouts, five themes, per-slide `transition` + `reveal` build); real **`.odp` import/export** via `crates/shiny-plugin-sdk/src/odp.rs`, which writes transitions as ODF `presentation:transition-style`. |
-| `plugins/pdf/` | **Self-contained** — `pdf_*` tools, its own `pdf_documents` table, `/api/pdfs` routes, and the PDF window (`web/plugin.js`) all in the plugin folder. Documents are real **`.pdf` bytes** parsed/edited with **`pdf_oxide`** (`rendering` feature): the browser lays out and paints the real document with **pdf.js** (see §19 "PDF window"), while the server keeps the single operations engine (`src/ops.rs`) that powers both the AI tools and the window — page `rotate`/`reorder`/`delete-pages`/`merge`, content `replace_text`, and annotations (`highlight`/`underline`/`strikeout`/`squiggly`/`note`/`free_text`/`link`) plus `watermark`, and renders a page to PNG when the server needs one. Creation goes through pdf_oxide's HTML+CSS engine (bundled DejaVu fonts) so long text wraps instead of running off the page. |
+| `plugins/pdf/` | **Self-contained** — write documents and read PDFs. Documents made here are HTML on A4 pages (`web/editor.js`); their PDF is an *export* printed by the PEAK'D shell with Chromium (`peakd:print:` → `peakd_qt_print_html`), so it matches the editor exactly (server fallback: `src/compose.rs`). Any PDF opens in pdf.js; comments (highlight, notes, text boxes, ink, shapes, links), header & footer, watermark, page organisation and reading-order text go through **PdfCraft** (`src/craft.rs`, pinned git dependency, MIT OR Apache-2.0, forks patched in the root `Cargo.toml`). Every edit is undoable (`pdf_revisions`). |
 | `plugins/keyboard/` | Pure surface plugin — virtual multi-language keyboard bar (8 layouts). Still **chrome-integrated** (`web/js/keyboard.js` + HUD toggle live in core, not the plugin folder): it is not a tile, so it awaits the "chrome surface" contract (see §20 item 7). |
 | `plugins/youtube/` | **Self-contained** — `youtube_search`/`youtube_play` tools, the `/api/youtube/search` route (`RouteSpec`), and the YouTube window (`web/plugin.js`) all in the plugin folder. Search scrapes YouTube's public `ytInitialData` JSON (no API key); playback loads `youtube.com/embed/<id>`. |
 | `plugins/calendar/` | **Self-contained** — `calendar_*` tools, its own `calendar_events` table (`migrations/`), the `/api/calendar/events` routes (`RouteSpec`), and the Calendar window (`web/plugin.js`) all in the plugin folder. Events are `YYYY-MM-DD` dates with optional `HH:MM` times; the window is a month grid + day detail. `src/date.rs` normalizes friendly dates/times ("today", "9:30am"). |
@@ -1489,8 +1489,7 @@ readable. Light themes brighten instead of darken
 (`glow.js` sets `data-glow-light` on the tile), because a dark blur turns white
 pages gray. A theme tunes the effect from its `app.css` through the `.tile`
 tokens `--glow-brightness`, `--glow-opacity`, `--glow-permeability` and
-`--glow-veil`; the neumorphic themes additionally make the window chrome
-translucent inside `.tile` so the light reads through it. Colours repaint
+`--glow-veil`. Colours repaint
 automatically on `theme:change` / `appearance:change` (`refreshGlow()`).
 
 **User switch.** Settings → Appearance → *Window surface* has a **Blurred window
@@ -1559,41 +1558,23 @@ every zoom step costs a round-trip and a fresh image in memory.
   `reorder`, `delete-pages`, `merge`, `replace-text`, `annotate` and `watermark`
   all take this path — including when the agent triggers them (`agent:actions`).
 
-Server-side rendering has not gone away: `pdf_oxide` still powers rendering and
-the structural edit operations (create, merge, rotate, annotate, watermark), and
-still exposes `render_png` for anything that needs a bitmap. Text replacement is
-the exception — see below.
+**Documents are edited as documents; a PDF is their export.** Rewriting a
+PDF's text in place (pdf_oxide's `modify_text`, then a hand-written
+content-stream editor, then PdfCraft's own `replace_block`) was never reliable
+enough to be the way users edit what they wrote — especially on Chromium-made
+PDFs, where a rewritten paragraph landed on top of the table below it. The
+window therefore has a real editor (HTML on A4 paper) and **exports** it: the
+shell prints the same HTML with Chromium (`peakd:print:` →
+`window.__peakdPrinted`, capability flag `window.__peakdCaps.print`), so the
+PDF is exactly what was on screen. PDFs from elsewhere get comments, marks,
+page operations and find & replace — not in-place retyping.
 
-**In-place text editing uses lopdf, not pdf_oxide.** Replacing the text of an
-existing line edits the raw content stream with the **lopdf** crate
-(`plugins/pdf/src/stream_edit.rs`). `pdf_oxide` still does rendering and the
-structural operations (create, merge, rotate, annotate, watermark). The split is
-deliberate: a PDF content stream is **append-only**, so pdf_oxide's
-`modify_text` re-emits a run without removing the original glyphs — find &
-replace on an existing document produced the old and new text on top of each
-other.
-
-Two traps make a naive content-stream edit fail silently:
-
-- **Text often lives in Form XObjects, not the page stream.** A page's own
-  stream may be a few hundred bytes while its header is a `/TPL1` XObject with
-  thousands of operators. lopdf's own `replace_text` only scans the page stream,
-  so it can silently do nothing on such files. This engine recurses into the
-  page's Form XObjects.
-- **Text usually arrives as a `TJ` array, not one string.** Glyphs are split by
-  kerning numbers (`[(T) -3 (I) 10 (M)]`), so byte matching finds nothing. The
-  array is flattened, edited, then re-emitted with a kerning correction so the
-  line keeps its original width.
-
-The kern correction goes **after** the string in the rebuilt array. Putting it
-first shifted the replacement left of its own margin — a bug that was fixed.
-
-Both call sites — the agent tool `pdf_replace_text` and the window's inline
-editor (`POST /api/pdfs/:id/edit-text`) — go through this one engine, so the AI
-and the human have exactly the same capability. Keep that parity. The viewer's
-`match_text` comes from pdf_oxide, which can synthesise a trailing space that is
-not a byte in the stream, so the editor retries with the trimmed text when the
-exact string finds nothing.
+PdfCraft supplies the PDF-side engine (annotations with appearance streams,
+removable marks, page organisation, reading-order text); its patched
+hayro / vello / lopdf forks are pinned in the workspace `[patch]` to the same
+commit as the plugin's `pdfcraft-*` dependencies. Every edit from the window or
+the agent is undoable (`POST /api/pdfs/:id/undo` / `redo`, the `pdf_undo`
+tool).
 
 Style changes (bold, size, colour) are **not** supported, and the toolbar controls
 for them were removed rather than left pretending to work. This is worth spelling
@@ -1707,14 +1688,18 @@ stop it in `unmount()`, exactly like calendar/mail/radio do.
 
 The top bar follows one convention (Studio sets the standard):
 
-- **Single top bar, buttons inline.** Every window renders exactly one top bar
-  (`*-bar`); all action buttons — file actions (new/import/export/save/delete),
-  view toggles, transport — sit directly in it. No second toolbar row below the
-  bar: the bar wraps (`flex-wrap`) on narrow widths instead.
+- **Single top bar, working tools inline.** Every window renders exactly one
+  top bar (`*-bar`); its working tools — formatting, navigation, zoom, view
+  toggles, transport — sit directly in it. No second toolbar row below the
+  bar: the bar wraps (`flex-wrap`) on narrow widths instead. Document windows
+  (Word, Impress, PDF) keep only one grey **New** pill of the file actions in
+  the bar; import / save / export / delete live in the document menu's footer
+  (`appendMenuFooter` in `web/js/officeMenu.js`), in one order everywhere:
+  **new, import, save, export, delete** (import `ui/folder-open`, save
+  `ui/save`, export `ui/upload` — never the same icon for save and export).
 - **Order, left → right.** Menu button (icon + chevron, opens the documents /
-  sheets / decks / images list), title input (`flex: 1`), primary editing
-  actions, then file actions, then the save dot. File actions use one order
-  everywhere: **new, import, export, save, delete**.
+  sheets / decks / images list), title, primary editing actions, then the
+  New pill and the save state.
 - **One height.** All bars share Studio's metrics: `padding: 6px 10px`,
   `gap: 8px`, `32×32` icon buttons, title at 15px/600. Keep these values so
   every window's bar is the same height.
@@ -1722,11 +1707,12 @@ The top bar follows one convention (Studio sets the standard):
   plus the plugin's own `*-tool` class (e.g. `word-tool`, `calc-tool`,
   `studio-transport`), each with a `title` and `aria-label`. Menu buttons
   (icon + chevron) are 32px tall.
-- **Save state is a dot, never text.** The right end of the bar holds a small
-  round dot (`*-save-dot`, e.g. `word-save-dot` / `calc-save-dot` /
-  `studio-save-dot`): muted when saved, accent + glow (`.is-active`) while there
-  are unsaved changes. Transient feedback (Studio's "Rendering…") may sit to its
-  left, but the persistent saved/unsaved indicator is the dot.
+- **Save state.** The editorial windows (Word, Impress, PDF) show it as small
+  mono capitals — `SAVED 14:02` / `UNSAVED` (Word's `.word-state`, Impress's
+  bar meta, PDF's status line) — not a glowing dot. Windows not yet moved to
+  the editorial language still use a small round dot (`*-save-dot`, e.g.
+  `calc-save-dot` / `studio-save-dot`): muted when saved, accent (`.is-active`)
+  while there are unsaved changes.
 - **Merged into the window controls.** Mark a window's top bar with
   `bar.dataset.windowBar = ''` (the `data-window-bar` attribute) and the host
   merges it with the window's close/fullscreen controls into a single row — no

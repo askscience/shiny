@@ -18,8 +18,30 @@ const THEMES_KEY = 'ui.theme.list';
  * bootstrap each page runs (see the inline script in index/settings/plugins
  * .html), which cannot import this module — keep the two in step.
  */
-const DEFAULT_THEME = 'neumorphic';
+const DEFAULT_THEME = 'dusk';
 const FALLBACK_THEME = DEFAULT_THEME;
+
+/**
+ * Retired themes and the theme that replaced each, so a stored choice carries
+ * over instead of falling back blindly: dark themes became Ink, light ones
+ * Dusk. Mirrored in early-theme.js (keep the two in step).
+ */
+const RETIRED_THEMES = {
+  pitch: 'ink',
+  noir: 'ink',
+  neumorphic: 'ink',
+  light: 'dusk',
+  'neumorphic-light': 'dusk',
+};
+
+/** The stored theme name, with a retired one mapped (and saved) forward. */
+function storedTheme() {
+  const stored = localStorage.getItem(THEME_KEY);
+  const next = stored && RETIRED_THEMES[stored];
+  if (!next) return stored;
+  try { localStorage.setItem(THEME_KEY, next); } catch (_) { /* best-effort */ }
+  return next;
+}
 
 let activeTheme = FALLBACK_THEME;
 let manifest = null;
@@ -112,7 +134,7 @@ function applyTheme(theme) {
 /** Boot: pick stored theme, point the two <link> slots at it, load manifest. */
 export async function initThemeLoader() {
   const themes = await listThemes();
-  const stored = localStorage.getItem(THEME_KEY);
+  const stored = storedTheme();
   // A fresh install starts on DEFAULT_THEME, not on whichever theme happens to
   // be first in the index.
   const fallback = themes.includes(DEFAULT_THEME) ? DEFAULT_THEME : themes[0];

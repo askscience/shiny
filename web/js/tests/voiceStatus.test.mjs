@@ -64,6 +64,10 @@ assert.ok(/paintBarGlyph[\s\S]{0,600}?paintGlyph\(/.test(dock) && /action = ''/.
   'the bar repaints per step, with the tool');
 assert.ok(/mode === 'off' \|\| \(mode === 'text' && !lastText\)/.test(dock),
   'the icon mode always carries a mark — the app\'s own at rest');
+assert.ok(/mode === 'state'\) \{ paintBarState\(\)/.test(dock) && /voice:state/.test(dock),
+  'the state mode paints the assistant state and follows it');
+assert.ok(/decodeText\(el, text\)/.test(read('../voiceGlyph.js')),
+  'the state label decodes in place');
 assert.ok(/desktop:immersive[\s\S]{0,80}?paintBarGlyph/.test(dock),
   'a mode switch repaints the glyph in place');
 

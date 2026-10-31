@@ -1,0 +1,24 @@
+/* ─────────────────────────────────────────────────────────────
+   Dusk — app-surface overrides
+
+   The shared editorial shell skin, plus what is Dusk's own: white
+   window sheets on a photographic desktop, and in the overview the
+   photo recedes into a rounded frame with a white hairline while the
+   windows line up as a strip of cards.
+   ───────────────────────────────────────────────────────────── */
+@import url('../editorial/app.css');
+
+:root {
+  --ed-frame-inset: 28px;
+  --ed-frame-zoom: 0.05;
+  --ed-frame-dim: 0.4;
+  --ed-frame-line: 0.55;
+}
+
+/* White sheets: the header row is part of the sheet, not a grey band */
+.tile { background: color-mix(in srgb, #ffffff var(--window-opacity, 100%), transparent); }
+
+/* The ambient glow is only a breath of colour behind a white sheet; any more
+   and the sheets turn into tinted glass. */
+.tile,
+.tile[data-glow-light] { --glow-opacity: 0.08; --glow-brightness: 1; }

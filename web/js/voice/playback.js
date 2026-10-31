@@ -41,10 +41,14 @@ export function createVoicePlayback({ onIdle = () => {}, request = apiFetch } = 
   let lastSpoken = '';
   let pendingSpeech = null;
 
-  /** Tell the app whether a reply is audible, and what it is saying. */
+  /**
+   * Tell the app whether a reply is audible, and what it is saying. While it
+   * speaks, `audio` is the playing element, so a listener can follow its
+   * progress (the spoken-reply caption times its words against it).
+   */
   function announceSpeaking(speaking) {
     window.dispatchEvent(new CustomEvent('voice:speaking', {
-      detail: { speaking, text: lastSpoken },
+      detail: { speaking, text: lastSpoken, audio: speaking ? currentAudio : null },
     }));
   }
 

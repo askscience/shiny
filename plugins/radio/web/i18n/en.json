@@ -8,6 +8,8 @@
 
   "plugin.radio.status.pickStation": "Pick a station",
   "plugin.radio.status.streaming": "Streaming",
+  "plugin.radio.status.kbps": "{n} kbps",
+  "plugin.radio.title": "Radio",
 
   "plugin.radio.empty.noStations": "No stations found",
   "plugin.radio.empty.noMatch": "Nothing matched “{term}”.",

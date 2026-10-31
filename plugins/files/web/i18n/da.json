@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Mappe",
   "plugin.files.status.items.one": "{count} element",
   "plugin.files.status.items.other": "{count} elementer",
-  "plugin.files.status.selected": "“{name}” valgt ({what})",
-  "plugin.files.status.multiSelected.one": "{count} element valgt ({size})",
-  "plugin.files.status.multiSelected.other": "{count} elementer valgt ({size})",
 
   "plugin.files.when.today": "I dag {time}",
   "plugin.files.when.yesterday": "I går {time}",

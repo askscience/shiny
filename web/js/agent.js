@@ -16,7 +16,7 @@ import { getAiName, getOllamaModel, getThink } from './preferences.js';
 import { getDesktopSnapshot } from './desktop.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { setDockStep, clearDockStep } from './dockStep.js';
-import { showImagePlaceholder, clearImagePlaceholder, showSongPlaceholder, clearSongPlaceholder, renderAgentMedia } from './textInput.js';
+import { showImagePlaceholder, clearImagePlaceholder, showSongPlaceholder, clearSongPlaceholder, renderAgentMedia, appendToolCard } from './textInput.js';
 import {
   fetchNavigationSession,
   looksLikeNavigationRequest,
@@ -327,7 +327,7 @@ export async function removeConversation(id) {
   }
 }
 
-async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact) {
+async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact, onTool) {
   if (!res.body) {
     throw new ApiError(t('agent.streamUnavailable', null, 'Agent stream unavailable'), 500);
   }
@@ -370,6 +370,9 @@ async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact) 
           });
         } else if (event.type === 'artifact' && event.data) {
           onArtifact?.(event.data);
+        } else if (event.type === 'tool' && event.action) {
+          // A finished tool's card record (toolCards.js renders it).
+          onTool?.(event);
         } else if (event.type === 'done') {
           return event.data;
         } else if (event.type === 'error') {
@@ -386,7 +389,7 @@ async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact) 
   throw new ApiError(t('agent.streamEnded', null, 'Agent stream ended unexpectedly'), 500);
 }
 
-async function requestAgent(body, onStep, signal, onThinking, onApproval, onArtifact) {
+async function requestAgent(body, onStep, signal, onThinking, onApproval, onArtifact, onTool) {
   const res = await apiRequest('/api/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -404,7 +407,7 @@ async function requestAgent(body, onStep, signal, onThinking, onApproval, onArti
       const text = await res.text();
       throw new ApiError(text || res.statusText, res.status);
     }
-    return readAgentStream(res, onStep, onThinking, onApproval, onArtifact);
+    return readAgentStream(res, onStep, onThinking, onApproval, onArtifact, onTool);
   }
 
   const text = await res.text();
@@ -525,6 +528,9 @@ export async function sendToAgent(message, mode, context, correction = false) {
       undefined,
       undefined,
       handleAgentArtifact,
+      // The chat panel may be closed while the user speaks: the cards still
+      // land in the thread, so they are there when it opens.
+      appendToolCard,
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting
@@ -644,6 +650,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
       onThinking,
       (approval) => onApproval?.({ ...approval, turnId: turn.id }),
       handleAgentArtifact,
+      appendToolCard,
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting

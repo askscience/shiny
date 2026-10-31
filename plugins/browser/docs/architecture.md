@@ -37,6 +37,7 @@ rewriting rules, but not on the render path.
 | `src/preview.rs` | `Preview`, `is_allowed`, `fetch`, `parse` | Hover link metadata + SSRF guard + cache |
 | `src/sessions.rs` | `Session`, create/get/update/close/list | In-memory bounded tabs |
 | `src/news.rs` | `NewsCard`, `HomeNews`, `Profile`, `Interest`, `RawResult`, `tokenize`, `profile_from_history`, `select_topics`, `parse_results`, `rank_results`, `interests_for`, `home_news` | Related-news recommender |
+| `src/vault.rs` | `ensure_schema`, `unlock`, `Unlock`, `lock`, `is_unlocked`, `reset`, `list`, `reveal`, `save`, `SaveRequest`, `remove`, `Entry`, `origin_of`, `origin_matches`, `IDLE_LOCK` | Password vault sealed under the login password |
 
 ## Registration and lifecycle
 
@@ -209,9 +210,35 @@ metadata and absolutizes the image. Previews are best-effort; only the home
 shelf hovers actually reach this route now. (Fetches without a preview cache —
 `browser_read`, `navigate?format=text` — share the same guard and pinning.)
 
+### 7. Password vault (`/api/browser/vault*`, `/api/browser/passwords*`)
+
+```
+first unlock (no vault)
+  window -> POST vault/unlock { password }
+    confirm_login_password -> loopback POST /api/auth/verify-password (caller's cookie)
+    data key = 32 random bytes
+    kek = Argon2id(password, salt; 19 MiB, t=2, p=1)
+    browser_vault <- { salt, cost, wrapped_key = AES-GCM(kek, data key, aad=owner) }
+    OPEN[user] = data key (memory only, 15 min idle lock)
+
+fill on a page
+  window -> GET passwords?url=<page>      (entries for this origin, no passwords)
+  click   -> POST passwords/reveal { id }
+          -> peakd:view: runJs fillScript(origin, user, pass)
+  page    -> `location.origin === origin` checked inside the page, then fills
+          <- page-js { token, result: ok | user | nofield | origin }
+```
+
+- A changed login password: the stored key no longer opens; core confirms the
+  typed password is the *current* one, the window asks once for the previous
+  one, and only the 32-byte data key is re-sealed.
+- Every entry is one sealed JSON document; the table holds no site names.
+- Copying a password uses `copyText(…, { sensitive: true })`, so it never
+  enters the clipboard history.
+
 ## Schema and best-effort rule
 
-Every DB module follows the same contract (`PLUGINS.md` §15): plugin-owned
+Every DB module but the vault follows the same contract (`PLUGINS.md` §15): plugin-owned
 SQLite access is unreliable in the running server because multiple `libsqlite3`
 copies live in one process. Therefore:
 
@@ -232,6 +259,8 @@ copies live in one process. Therefore:
 | Bookmark dedupe/remove | `src/bookmarks.rs` |
 | Preview parsing + SSRF refusal | `src/preview.rs` |
 | Sessions bounded lifecycle | `src/sessions.rs` |
+| Vault sealing, re-sealing, origin matching, throttle, idle lock | `src/vault.rs` |
+| Password page scripts (origin guard, fields, escaping) | `web/passwords.test.mjs` |
 | Tokenizer/profile/topic/ranking | `src/news.rs` |
 | Window surface (DOM shim) | `web/plugin.smoke.mjs` |
 

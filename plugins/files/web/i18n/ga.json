@@ -37,12 +37,6 @@
   "plugin.files.status.items.few": "{count} mhír",
   "plugin.files.status.items.many": "{count} mír",
   "plugin.files.status.items.other": "{count} míreanna",
-  "plugin.files.status.selected": "Roghnaíodh “{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "{count} mír roghnaithe ({size})",
-  "plugin.files.status.multiSelected.two": "{count} mhír roghnaithe ({size})",
-  "plugin.files.status.multiSelected.few": "{count} mhír roghnaithe ({size})",
-  "plugin.files.status.multiSelected.many": "{count} mír roghnaithe ({size})",
-  "plugin.files.status.multiSelected.other": "{count} míreanna roghnaithe ({size})",
 
   "plugin.files.when.today": "Inniu {time}",
   "plugin.files.when.yesterday": "Inné {time}",

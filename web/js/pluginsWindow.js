@@ -1,10 +1,13 @@
-import { element as el, chip as uiChip } from '../ui/index.js';
+import { element as el, chip as uiChip, largeTitle, listReveal, rollNumber, eyebrow } from '../ui/index.js';
 /**
  * pluginsWindow.js — the Plugins window (built-in desktop surface).
  *
- * An app-store style view of the plugin collection: a search bar, category
- * chips, a card grid with each plugin's icon, description, version and
- * lifecycle actions, plus an install control and a collapsible activity log.
+ * An app-store style view of the plugin collection, in the editorial window
+ * language: the tabs, search and install control sit in the window bar; a
+ * large title with a mono count opens the scrolling area (and hands over to
+ * the bar as it scrolls); category chips; a grid of flat cards (a grey icon
+ * tile, name, one-line description, mono meta, pill actions); and a
+ * collapsible activity log on a hairline.
  *
  * Its second tab is the **Craft store**: the Craft App Suite listed from the
  * core's catalog (`/api/plugins/store`), where each app's own web build is
@@ -15,7 +18,7 @@ import { element as el, chip as uiChip } from '../ui/index.js';
 import { apiFetch, getToken } from './api.js';
 import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import {
-  toast, button, iconButton, badge, emptyState, searchBar, select, toggle, confirmDialog,
+  toast, button, iconButton, emptyState, searchBar, select, toggle, confirmDialog,
 } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { pickFiles } from './files.js';
@@ -38,6 +41,11 @@ let tab = 'installed';
 let storePollTimer = null;
 /** Apps that were mid-install at the last store render. */
 let storeBusySeen = new Set();
+/** Cascade the next grid that renders with cards (a tab opened, first load). */
+let revealNext = true;
+/** The window's large title (`largeTitle()`), and the last count it rolled. */
+let hero = null;
+let heroCount = null;
 
 
 
@@ -194,20 +202,21 @@ function pluginCard(p) {
 
   const head = el('div', 'plugin-card-head');
   const iconWrap = el('span', 'plugin-card-icon');
-  iconWrap.appendChild(pluginIconEl(p.name, { size: 26, fallback: 'ui/puzzle' }));
+  iconWrap.appendChild(pluginIconEl(p.name, { size: 22, fallback: 'ui/puzzle' }));
   const cat = (p.category || '').trim() || 'Other';
-  head.append(iconWrap, badge(categoryLabel(cat), { tone: active ? 'accent' : 'neutral' }));
+  head.appendChild(iconWrap);
+  if (active) head.appendChild(el('span', 'plugin-card-live', t('plugins.activeBadge', null, 'Active')));
 
   const name = el('h3', 'plugin-card-name');
   name.textContent = niceName(p);
   const desc = el('p', 'plugin-card-desc');
   desc.textContent = p.description || p.summary || '';
 
-  const meta = el('div', 'plugin-card-meta');
-  meta.append(
-    el('span', null, `v${p.version}`),
-    el('span', null, t('plugins.apiLevel', { level: p.api_level }, `API ${p.api_level}`)),
-  );
+  const meta = el('div', 'plugin-card-meta ui-meta', [
+    `v${p.version}`,
+    t('plugins.apiLevel', { level: p.api_level }, `API ${p.api_level}`),
+    categoryLabel(cat),
+  ].join(' · '));
 
   const actions = el('div', 'plugin-card-actions');
   const removeConfirm = inlineConfirm(actions, {
@@ -222,6 +231,7 @@ function pluginCard(p) {
         label: t('plugins.open', null, 'Open'),
         variant: 'primary',
         size: 'sm',
+        arrow: true,
         onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: p.name } })),
       });
       actions.appendChild(openBtn);
@@ -235,7 +245,7 @@ function pluginCard(p) {
   } else {
     actions.appendChild(button({
       label: t('ctx.activate'),
-      variant: 'primary',
+      variant: 'ghost',
       size: 'sm',
       onClick: () => void onPluginAction('activate', p.name),
     }));
@@ -248,7 +258,6 @@ function pluginCard(p) {
     onClick: () => removeConfirm.ask(),
   });
   removeBtn.classList.add('plugin-card-remove');
-  actions.appendChild(removeBtn);
 
   const card_children = [head, name, desc, meta, actions, removeConfirm.row];
 
@@ -270,11 +279,35 @@ function pluginCard(p) {
       },
     });
     mode.classList.add('plugin-card-mode');
-    card_children.push(mode);
+    mode.title = t('plugins.windowMode', null, 'Opens as');
+    mode.querySelector('select')?.setAttribute('aria-label', t('plugins.windowMode', null, 'Opens as'));
+    actions.appendChild(mode);
   }
+  actions.appendChild(removeBtn);
 
   card.append(...card_children);
   return card;
+}
+
+/** The large title: the tab's name over a mono count that rolls when it changes. */
+function setHero(title, meta) {
+  if (!hero) return;
+  hero.setTitle(title);
+  if (refs?.barTitle) refs.barTitle.textContent = title;
+  hero.setMeta([meta]);
+  const count = meta ? meta.match(/^\d+/)?.[0] ?? null : null;
+  if (count !== null && count !== heroCount) {
+    heroCount = count;
+    const metaEl = hero.el.querySelector('.ui-meta');
+    if (metaEl) rollNumber(metaEl, { duration: 700 });
+  }
+}
+
+/** Cascade the cards in once per loaded list, not on every repaint. */
+function revealGrid() {
+  if (!revealNext || !refs?.grid.children.length) return;
+  revealNext = false;
+  void listReveal(refs.grid.children);
 }
 
 function render() {
@@ -290,10 +323,10 @@ function renderInstalled() {
   const list = filtered();
   refs.grid.textContent = '';
 
-  refs.meta.textContent = plugins.length
-    ? t('plugins.storeMeta', { active: activeSet.size, total: plugins.length },
-      `${activeSet.size} active · ${plugins.length} installed`)
-    : '';
+  setHero(t('hud.plugins', null, 'Plugins'), plugins.length
+    ? t('plugins.metaInstalled', { active: activeSet.size, total: plugins.length },
+      `${plugins.length} installed · ${activeSet.size} active`)
+    : '');
 
   if (!plugins.length) {
     refs.empty.classList.remove('hidden');
@@ -319,6 +352,7 @@ function renderInstalled() {
 
   refs.empty.classList.add('hidden');
   for (const p of list) refs.grid.appendChild(pluginCard(p));
+  revealGrid();
 }
 
 /* ── Craft store ────────────────────────────────────────────── */
@@ -406,22 +440,22 @@ function storeCard(app) {
   const head = el('div', 'plugin-card-head');
   const iconWrap = el('span', 'plugin-card-icon');
   iconWrap.appendChild(storeIcon(app));
-  head.append(iconWrap, badge(
-    installed ? t('plugins.storeInstalled', null, 'Installed') : t('plugins.storeNew', null, 'New'),
-    { tone: installed ? 'accent' : 'neutral' },
-  ));
+  head.appendChild(iconWrap);
+  if (!installed) head.appendChild(el('span', 'plugin-card-live is-new', t('plugins.storeNew', null, 'New')));
 
   const name = el('h3', 'plugin-card-name');
   name.textContent = app.name;
   const desc = el('p', 'plugin-card-desc');
   desc.textContent = app.tagline || '';
 
-  const meta = el('div', 'plugin-card-meta');
-  if (installed) meta.append(el('span', null, `v${app.installed_version}`));
+  const metaParts = [];
+  if (installed) metaParts.push(`v${app.installed_version}`);
   if (app.latest_version && !(installed && app.latest_version === app.installed_version)) {
-    meta.append(el('span', null, `v${app.latest_version}`));
+    metaParts.push(installed ? `→ v${app.latest_version}` : `v${app.latest_version}`);
   }
-  if (app.asset_size) meta.append(el('span', null, formatSize(app.asset_size)));
+  if (app.asset_size) metaParts.push(formatSize(app.asset_size));
+  if (installed) metaParts.push(t('plugins.storeInstalled', null, 'Installed'));
+  const meta = el('div', 'plugin-card-meta ui-meta', metaParts.join(' · '));
 
   const status = el('p', 'store-card-status');
   if (craftAppBusy(app)) {
@@ -467,6 +501,7 @@ function storeCard(app) {
       label: t('plugins.storeInstall', null, 'Install'),
       variant: 'primary',
       size: 'sm',
+      arrow: true,
       disabled: waitingForVersion,
       onClick: () => void installFromStore(app.id, app.name),
     }));
@@ -476,13 +511,16 @@ function storeCard(app) {
         label: t('plugins.storeUpdate', null, 'Update'),
         variant: 'primary',
         size: 'sm',
+        arrow: true,
         onClick: () => void installFromStore(app.id, app.name),
       }));
     }
+    const pending = app.update_available || app.mcp_pending;
     actions.appendChild(button({
       label: t('plugins.open', null, 'Open'),
-      variant: app.update_available || app.mcp_pending ? 'ghost' : 'primary',
+      variant: pending ? 'ghost' : 'primary',
       size: 'sm',
+      arrow: !pending,
       onClick: () => void openCraftApp(app),
     }));
   }
@@ -582,11 +620,11 @@ function renderStore() {
   refs.grid.textContent = '';
   const total = (data?.apps || []).length;
   const waiting = storeWaitingForNetwork();
-  refs.meta.textContent = data
+  setHero(t('plugins.tabStore', null, 'Craft apps'), data
     ? (data.waiting_for_network
       ? t('plugins.storeMetaWaiting', { count: total }, `${total} apps · waiting for connection`)
       : t('plugins.storeMetaApps', { count: total }, `${total} apps · updated automatically`))
-    : '';
+    : '');
 
   if (!data) {
     const failed = storeLoadFailed();
@@ -619,6 +657,7 @@ function renderStore() {
   }
   refs.empty.classList.add('hidden');
   for (const app of apps) refs.grid.appendChild(storeCard(app));
+  revealGrid();
   reportFinishedInstalls(data.apps || []);
   scheduleStorePoll();
 }
@@ -724,6 +763,10 @@ function mountPlugins() {
   tileEl = el('section', 'tile plugins-tile');
   tileEl.dataset.plugin = PLUGINS_WINDOW;
 
+  // The window bar (merged into the core title row by tiles.js): the two tabs,
+  // the title the large title hands over to, search and Install.
+  const bar = el('div', 'plugins-bar');
+  bar.dataset.windowBar = '';
   const root = el('div', 'plugins-window');
 
   // Two views share the window: the installed plugins, and the Craft store —
@@ -750,13 +793,17 @@ function mountPlugins() {
     onInput: (value) => { query = value; render(); },
   });
   const installBtn = button({
-    label: t('plugins.install', null, 'Install'), icon: 'ui/upload', variant: 'primary', size: 'sm',
+    label: t('plugins.install', null, 'Install'), icon: 'ui/upload', variant: 'ghost', size: 'sm',
   });
   on(installBtn, 'click', async () => {
     const [file] = await pickFiles({ accept: '.zip,.tar.gz,.tgz,application/zip,application/gzip' });
     if (file) void uploadArchive(file);
   });
+  search.classList.add('plugins-search');
   toolbar.append(search, installBtn);
+  const barTitle = el('span', 'plugins-bar-title');
+  barTitle.setAttribute('aria-hidden', 'true');
+  bar.append(tabs, barTitle, toolbar);
 
   // Store-only controls. Auto-update is on by default: an installed app is a
   // static site the store can replace safely.
@@ -796,14 +843,15 @@ function mountPlugins() {
   const categories = el('div', 'plugins-categories');
   categories.setAttribute('role', 'toolbar');
   categories.setAttribute('aria-label', t('plugins.categories', null, 'Plugin categories'));
-  const meta = el('span', 'plugins-store-meta');
-  metaRow.append(categories, meta);
+  metaRow.append(categories);
 
   const grid = el('div', 'plugins-store-grid');
   const empty = el('div', 'plugins-empty hidden');
 
   const details = el('details', 'plugins-activity-details');
-  details.appendChild(el('summary', null, t('plugins.installActivity', null, 'Install activity')));
+  const summary = el('summary');
+  summary.appendChild(eyebrow(t('plugins.installActivity', null, 'Install activity')));
+  details.appendChild(summary);
   const activity = el('div', 'plugins-activity');
   activity.appendChild(
     el('div', 'plugins-activity-empty', t('plugins.activityLoading', null, 'Loading…')),
@@ -811,12 +859,16 @@ function mountPlugins() {
   details.appendChild(activity);
   on(details, 'toggle', () => { if (details.open) void refreshActivity(); });
 
-  root.append(tabs, toolbar, storeActions, metaRow, grid, empty, details);
-  tileEl.appendChild(root);
+  hero = largeTitle({ title: t('hud.plugins', null, 'Plugins'), scroller: root });
+  heroCount = null;
+  revealNext = true;
+  root.append(hero.el, storeActions, metaRow, grid, empty, details);
+  tileEl.append(bar, root);
+  cleanups.push(() => { hero?.dispose(); hero = null; });
 
   refs = {
-    grid, empty, meta, categories, categoriesRow: metaRow, activity, installBtn, details,
-    tabInstalled, tabStore, storeActions,
+    grid, empty, categories, categoriesRow: metaRow, activity, installBtn, details,
+    tabInstalled, tabStore, storeActions, barTitle,
   };
 
   // Drag a plugin archive anywhere over the window to install it.
@@ -859,6 +911,7 @@ function mountPlugins() {
 
 /** Switch between the installed list and the store. */
 function setTab(next) {
+  if (next !== tab) revealNext = true;
   tab = next;
   refs?.tabInstalled?.setActive(tab === 'installed');
   refs?.tabStore?.setActive(tab === 'store');

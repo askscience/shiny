@@ -272,6 +272,18 @@ let coreOccluderHoles = [];
 const nativeOccluderHoles = () => coreOccluderHoles.slice();
 const watchNativeOccluders = () => () => {};
 
+/** The password manager (passwords.js): its own tests cover the panel; the
+ *  window is checked for the wiring — a panel, an open, and the page bridge. */
+let passwordDeps = null;
+let passwordOpens = 0;
+const createPasswordsPanel = (deps) => {
+  passwordDeps = deps;
+  const element = deps.popover('browser-passwords-panel');
+  return { element, open: async () => { passwordOpens += 1; } };
+};
+const fillScript = (origin, username, password) => `FILL ${origin} ${username} ${password}`;
+const readScript = () => 'READ';
+
 function findAll(root, predicate, out = []) {
   if (predicate(root)) out.push(root);
   for (const kid of root.children || []) findAll(kid, predicate, out);
@@ -296,11 +308,16 @@ const context = vm.createContext({
   // Imported by the window from the core UI library; stubbed so mount() and the
   // settings/theming paths can run without the real shell.
   themeMode: () => 'dark',
+  // Motion: rows revealed when a panel opens.
+  listReveal: () => Promise.resolve(),
   openCoreWindow: () => {},
   copyText, readClipboardText,
   openContextMenu,
   nativeOccluderHoles,
   watchNativeOccluders,
+  createPasswordsPanel,
+  fillScript,
+  readScript,
   // The i18n runtime: resolve to the inline English fallback, as the catalog does.
   t: (key, params, fallback) => fallback ?? key,
   tp: (key, count, params, fallback) => fallback ?? key,
@@ -371,6 +388,10 @@ check('viewport has a frames container', !!frameWrap);
 check('one tab is open on mount', frames().length === 1, String(frames().length));
 check('the home surface is sandboxed', frames()[0]?.attrs?.sandbox === 'allow-scripts');
 check('the home surface lists news', String(frames()[0]?.srcdoc || '').includes('https://example.com/aurora-alert'));
+check('the home surface carries its own theme root and the editorial title',
+  /:root\{color-scheme:(dark|light);/.test(String(frames()[0]?.srcdoc || ''))
+  && String(frames()[0]?.srcdoc || '').includes('<h1 class="title'));
+check('the home frame is marked as the local start page', frames()[0]?.dataset?.home === '');
 
 /* Navigation: a URL submit reaches the server and opens a native view. */
 const addressForm = findAll(tile, (el) => String(el.className).includes('browser-address'))[0];
@@ -568,6 +589,44 @@ check(
   JSON.stringify(lastView('setVisible')),
 );
 
+/* Tab switcher: the count opens a list of every tab. */
+const tabCount = findAll(tile, (el) => String(el.className).includes('browser-tabcount'))[0];
+check('the strip shows the open-tab count', Number(tabCount?.textContent) >= 1, tabCount?.textContent);
+tabCount?.dispatch('click', {});
+await tick(20);
+const tabsPanelEl = findAll(tile, (el) => String(el.className).includes('browser-tabs-panel'))[0];
+check('the count opens the tab switcher', tabsPanelEl && !tabsPanelEl.classList.contains('hidden'));
+check(
+  'the switcher lists every tab',
+  findAll(tabsPanelEl, (el) => String(el.className).includes('browser-tabs-row')).length === Number(tabCount?.textContent),
+);
+check('an open switcher keeps its input over the page', lastView('setMask')?.holes?.length >= 1);
+tabCount?.dispatch('click', {});
+await tick(20);
+
+/* Passwords: the toolbar opens the manager, and its page bridge round-trips
+   through the shell's runJs / page-js contract. */
+byLabel('Passwords')?.dispatch('click', {});
+await tick(20);
+const passwordsPanelEl = findAll(tile, (el) => String(el.className).includes('browser-passwords-panel'))[0];
+check('the lock button opens the password manager', passwordOpens === 1 && passwordsPanelEl
+  && !passwordsPanelEl.classList.contains('hidden'));
+const pagePasswordUrl = passwordDeps?.pageUrl?.() || '';
+check('the manager sees the page address', /^https?:/.test(pagePasswordUrl), pagePasswordUrl);
+const filling = passwordDeps.fillPage('me', 'pw');
+await tick(10);
+const fillCmd = lastView('runJs');
+check(
+  'filling runs a script bound to the page origin',
+  fillCmd?.script === `FILL ${new URL(pagePasswordUrl).origin} me pw` && !!fillCmd?.token,
+  JSON.stringify(fillCmd),
+);
+windowStub.__peakdViewEvent({ id: fillCmd.id, type: 'page-js', token: fillCmd.token, result: 'ok' });
+check('the page answer resolves the fill', (await filling) === 'ok');
+check('a filled page gets the keyboard', lastView('focus')?.id === fillCmd.id);
+byLabel('Passwords')?.dispatch('click', {});
+await tick(20);
+
 /* Closing a tab tells the server. */
 const firstTabClose = findAll(tile, (el) => String(el.className).includes('browser-tab-close'))[0];
 firstTabClose.dispatch('click', { stopPropagation() {} });
@@ -685,6 +744,16 @@ check(
 
 mod.namespace.unmountBrowserTile?.();
 check('unmount is safe', true);
+
+/* Closed with its X and reopened: core does not call wireEvents again, so
+   the window must re-wire itself — the home shelf's clicks still land. */
+mod.namespace.unmountBrowserTile();
+check('closing drops the shelf listener', !(windowListeners.message || []).length);
+mod.namespace.mountBrowserTile();
+await tick(30);
+check('reopening wires the shelf listener again', (windowListeners.message || []).length === 1,
+  String((windowListeners.message || []).length));
+mod.namespace.unmountBrowserTile();
 
 /* No tile: the URL waits for mount. */
 const lateBefore = calls.navigate.length;

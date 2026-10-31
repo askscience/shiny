@@ -61,11 +61,11 @@ and `target_triple`/`signature` = `None`.
 | Skill markdown | `skills/browser.md`, embedded via `include_str!` and advertised to the LLM |
 | Context line | Enables `browser_open` / `browser_search` / `browser_read` and mentions the bookmark + news home surface |
 | Agent tools | `browser_open`, `browser_search`, `browser_read` (bridged via `tools::bridged`) |
-| REST routes | 22 routes under `/api/browser/*`, all `auth` |
-| Migrations | `002`–`006` creating `peakd_history`, `browser_settings`, `browser_downloads`, `browser_bookmarks` |
+| REST routes | 30 routes under `/api/browser/*`, all `auth` |
+| Migrations | `002`–`007` creating `peakd_history`, `browser_settings`, `browser_downloads`, `browser_bookmarks`, `browser_vault`, `browser_passwords` |
 | Window surface | `web/plugin.js` + `web/plugin.css` + `web/icon.svg`, served at `/plugins/browser/` |
 | Link handler | `capabilities = ["open-urls"]` — the default target of core's `web/js/linkRouter.js`; links clicked anywhere in the app open here as new tabs (see [`window.md`](window.md)) |
-| `on_load` work | Idempotent schema repairs (`history`, `settings`, `downloads`, `bookmarks`) and a background ad-filter load |
+| `on_load` work | Idempotent schema repairs (`history`, `settings`, `downloads`, `bookmarks`, `vault`) and a background ad-filter load |
 | Persona/window identity | `data-plugin="browser"`, route namespace `browser`, artifact owner `browser` |
 
 `on_load` runs on the plugin's own runtime for the async half
@@ -86,6 +86,8 @@ is needed. See [`architecture.md`](architecture.md) for why.
 | `chrono` | Interest-profile decay and related-news recency |
 | `parking_lot` | The compiled-filter slot and the per-topic news cache (RwLock/Mutex) |
 | `tracing` | Best-effort failure logging |
+| `argon2` / `aes-gcm` / `getrandom` / `zeroize` / `base64` | The password vault: Argon2id key stretching, AES-256-GCM sealing, key hygiene |
+| `reqwest` | Confirms the login password with core's `POST /api/auth/verify-password` over loopback |
 
 ### Runtime environment variables
 
@@ -98,8 +100,10 @@ is needed. See [`architecture.md`](architecture.md) for why.
 
 ## Database tables
 
-All four tables are **best-effort**: every read/write swallows DB errors and
-logs at `debug`/`warn`, so a broken plugin-owned database never stops browsing.
+The first four tables are **best-effort**: every read/write swallows DB errors
+and logs at `debug`/`warn`, so a broken plugin-owned database never stops
+browsing. The vault's two tables are not: a login that silently failed to save
+is worse than an error, so their failures reach the window.
 There is no foreign key; `traveler_id` is the core account id.
 
 | Table | Migration | Purpose | Key columns |
@@ -108,6 +112,8 @@ There is no foreign key; `traveler_id` is the core account id.
 | `browser_settings` | `003` (+`005`) | Per-user shield, incognito echo, search engine | `traveler_id` PK, `adblock`, `incognito`, `search_engine`, `updated_at` |
 | `browser_downloads` | `004` | Persisted download lifecycle rows | PK (`traveler_id`,`id`), `url`, `host`, `file_name`, `file_path`, `mime`, `total`, `received`, `state`, `error`, `incognito`, timestamps |
 | `browser_bookmarks` | `006` | Per-user saved pages | `id` PK, `traveler_id`, `url`, `title`, `created_at` |
+| `browser_vault` | `007` | One per account: Argon2id salt/cost and the data key sealed under the login password | `traveler_id` PK, `salt`, `m_cost`, `t_cost`, `p_cost`, `wrapped_key`, timestamps |
+| `browser_passwords` | `007` | Saved logins, each one sealed JSON document (site, username, password, note) | `id` PK, `traveler_id`, `sealed`, timestamps |
 
 `mode` is one of `page` (address-bar navigate), `text`, `visit` (an in-page
 click) or `news_click` (a click on a recommended card). `query` stores the raw
@@ -132,7 +138,10 @@ drops the stale `browser_history` table.
 | `src/preview.rs` | Link preview fetch/parse with SSRF guard + TTL cache |
 | `src/sessions.rs` | In-memory tab sessions (bounded to 64) |
 | `src/news.rs` | Interest profile, topic selection, engine HTML parsing, ranking, home shelf |
-| `web/plugin.js` | The window surface (chrome + native-view IPC + core occluder holes + home shelf) |
+| `src/vault.rs` | Password vault: key wrapping, unlock/idle lock/throttle, sealed entries, origin matching |
+| `web/plugin.js` | The window surface (chrome + native-view IPC + core occluder holes + home shelf + tab switcher) |
+| `web/passwords.js` | The password manager popover and the page scripts that fill/read login forms |
+| `web/passwords.test.mjs` | Page-script checks: origin guard, field choice, events, escaping |
 | `web/plugin.css` | Layout-only styles, scoped under `.browser-tile` |
 | `web/icon.svg` | Theme-aware flame glyph (`ui/launcher`) |
 | `web/plugin.smoke.mjs` | Node DOM-shim smoke test of the window surface |
@@ -231,6 +240,14 @@ Full detail in [`tools.md`](tools.md).
 | POST | `/api/browser/downloads/event` | `browser_download_event` |
 | POST | `/api/browser/downloads/remove` | `browser_download_remove` |
 | POST | `/api/browser/downloads/clear` | `browser_downloads_clear` |
+| GET | `/api/browser/vault` | `browser_vault` |
+| POST | `/api/browser/vault/unlock` | `browser_vault_unlock` |
+| POST | `/api/browser/vault/lock` | `browser_vault_lock` |
+| POST | `/api/browser/vault/reset` | `browser_vault_reset` |
+| GET | `/api/browser/passwords` | `browser_passwords` |
+| POST | `/api/browser/passwords/reveal` | `browser_password_reveal` |
+| POST | `/api/browser/passwords/save` | `browser_password_save` |
+| POST | `/api/browser/passwords/remove` | `browser_password_remove` |
 
 Full detail in [`routes.md`](routes.md).
 

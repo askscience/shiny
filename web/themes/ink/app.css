@@ -1,0 +1,20 @@
+/* ─────────────────────────────────────────────────────────────
+   Ink — app-surface overrides
+
+   The shared editorial shell skin, plus what is Ink's own: black
+   windows lifted by a hairline and lighter nested cards, and in the
+   overview the desktop falls back into darkness while the windows
+   float at different depths around a headline.
+   ───────────────────────────────────────────────────────────── */
+@import url('../editorial/app.css');
+
+:root {
+  /* No frame: the wallpaper only dims and pushes back */
+  --ed-frame-inset: 0px;
+  --ed-frame-zoom: -0.04;
+  --ed-frame-dim: 0.75;
+  --ed-frame-line: 0;
+}
+
+/* Nested cards inside windows sit one step up the ramp */
+.tile .ui-card { background: var(--surface-strong); border-color: transparent; }

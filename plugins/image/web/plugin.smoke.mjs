@@ -314,6 +314,16 @@ const context = vm.createContext({
   toolButton: (name, label, onClick) => button({ icon: name, label, onClick }),
   toolbar: (children = [], { className = '' } = {}) => { const node = makeElement('div'); node.className = `ui-toolbar ${className}`; node.append(...children); return node; },
   controlButton: () => { const node = makeElement('button'); node.type = 'button'; return node; },
+  eyebrow: (text, cls = '') => { const node = makeElement('span'); node.className = `ui-eyebrow ${cls}`; node.textContent = text; return node; },
+  metaLine: (parts = [], cls = '') => {
+    const node = makeElement('span');
+    node.className = `ui-meta ${cls}`;
+    node.set = (next) => { node.textContent = next.filter((p) => p !== '' && p != null).join(' · '); };
+    node.set(parts);
+    return node;
+  },
+  listReveal: () => Promise.resolve(),
+  cardEnter: () => Promise.resolve(),
   t: (key, params, fallback) => fallback ?? key,
   saveOrDownload, pickFiles, onOpenFromFiles, api,
   URL: {
@@ -373,7 +383,9 @@ await tick(80);
 /* The document loaded. */
 const title = findByClass(tile, 'image-appbar-title')[0];
 check('the title shows the open image', title?.textContent === 'photo.png', title?.textContent);
-check('the zoom chip shows a percentage', /%$/.test(findByClass(tile, 'image-zoom-chip')[0]?.textContent || ''), findByClass(tile, 'image-zoom-chip')[0]?.textContent);
+const metaText = () => findByClass(tile, 'image-appbar-meta')[0]?.textContent || '';
+check('the meta line shows size and zoom', /^4×4 · \d+%$/.test(metaText()), metaText());
+check('the zoom chip offers actual size while fitting', findByClass(tile, 'image-zoom-chip')[0]?.textContent === '1:1', findByClass(tile, 'image-zoom-chip')[0]?.textContent);
 check('the pixels rendered', calls.renders >= 1, String(calls.renders));
 
 /* The look filmstrip: one thumbnail per look, painted from the strip PNG. */
@@ -391,6 +403,7 @@ chips()[0].dispatch('click', {});
 await tick(40);
 check('a chip selects its look', calls.rawApply[before]?.body?.operations?.[0]?.op === 'look' && calls.rawApply[before]?.body?.operations?.[0]?.name === 'portra', JSON.stringify(calls.rawApply[before]));
 check('the selected chip is ringed', chips()[0].classList.contains('is-active'));
+check('the meta line names the look', /Look: Portra$/.test(metaText()), metaText());
 const looksBefore = calls.looks;
 chips()[2].dispatch('click', {});
 await tick(40);

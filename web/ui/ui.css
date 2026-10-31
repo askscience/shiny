@@ -788,3 +788,68 @@
 .ui-menu-item.is-active { color: var(--accent); }
 .ui-menu-item:disabled { opacity: .5; cursor: default; }
 @media (pointer: coarse) { .ui-menu-item { min-height: 44px; } }
+
+/* ── Editorial pieces (components/editorial.js) ───────────────
+   Mono labels and metadata, the large title that hands over to the
+   window bar, hairline lists, and the arrow pill. Tokens only. */
+.ui-btn-arrow { display: inline-block; transition: transform var(--duration-slow, .5s) var(--ease-out, ease-out); }
+.ui-btn--arrow:hover .ui-btn-arrow { transform: translateX(3px); }
+
+.ui-eyebrow, .ui-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ui-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ui-large-title { display: flex; flex-direction: column; gap: 6px; padding: 10px 18px 12px; }
+.ui-large-title-row { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.ui-large-title-text {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -.045em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+/* The handover: --sc (0…1) is set on the window by largeTitle() as its
+   area scrolls. At rest the bar melts into the window. */
+.tile[data-large-title] { --sc: 0; }
+.tile[data-large-title] .ui-large-title { opacity: calc(1 - var(--sc)); }
+.tile[data-large-title] > .tile-header .tile-header-title { opacity: var(--sc); }
+.tile[data-large-title] > .tile-header {
+  border-bottom-color: color-mix(in srgb, var(--text) calc(var(--sc) * 9%), transparent);
+  background: color-mix(in srgb, var(--glass) calc(var(--sc) * 100%), transparent);
+}
+
+.ui-hairline-list { display: flex; flex-direction: column; }
+.ui-hairline-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  width: 100%;
+  padding: 8px 18px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+button.ui-hairline-row { cursor: pointer; transition: background-color var(--motion-feedback, .12s); }
+button.ui-hairline-row:hover { background: var(--glass-hover); }
+.ui-hairline-lead { display: grid; place-items: center; flex: none; color: var(--text-secondary); }
+.ui-hairline-main { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
+.ui-hairline-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-hairline-sub { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-hairline-row > .ui-meta { flex: none; }

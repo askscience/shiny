@@ -22,6 +22,13 @@ export {
 export { icon, setIcon, clearIconCache, hydrateIcons, loadIconSvg, refreshIcons, refreshFolderIcons, colorizeFolder, tintSvg, decorateSvg } from './icon.js';
 export { reveal } from './reveal.js';
 export { transition, disposeMotion, revealRegion, enterSurface, reducedMotion, motionDuration } from './motion.js';
+export {
+  MOTION_STYLES, DEFAULT_MOTION_STYLE, motionStyle, spring, SPRINGS, EASE, installMotionTokens,
+  windowEnter, windowExit, layoutShift, surfaceEnter, surfaceExit, listReveal, cardEnter, cardExit,
+  decodeText, rollNumber,
+} from './motionStyle.js';
+export { switchTheme, nextTheme } from './themeTransition.js';
+export { eyebrow, metaLine, largeTitle, hairlineList, hairlineRow } from './components/editorial.js';
 export { controlGrid, controlCard, controlGroup, toolbar } from './components/layout.js';
 export { segmented } from './components/choice.js';
 

@@ -121,7 +121,7 @@ function thumbFor(entry) {
   thumb.className = 'files-thumb';
   if (entry.kind === 'dir') {
     thumb.classList.add('files-thumb--folder');
-    thumb.appendChild(icon(folderIconFor(entry.name), { size: 56 }));
+    thumb.appendChild(icon(folderIconFor(entry.name), { size: 24 }));
     return thumb;
   }
   if (entry.is_image) {
@@ -132,7 +132,7 @@ function thumbFor(entry) {
     const typeIcon = () => {
       img.remove();
       thumb.classList.add('files-thumb--icon');
-      thumb.appendChild(icon(entryIcon(entry), { size: 40 }));
+      thumb.appendChild(icon(entryIcon(entry), { size: 24 }));
     };
     img.addEventListener('error', () => {
       if (img.dataset.fallback) {
@@ -147,7 +147,7 @@ function thumbFor(entry) {
     return thumb;
   }
   thumb.classList.add('files-thumb--icon');
-  thumb.appendChild(icon(entryIcon(entry), { size: 40 }));
+  thumb.appendChild(icon(entryIcon(entry), { size: 24 }));
   return thumb;
 }
 

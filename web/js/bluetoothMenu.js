@@ -11,7 +11,8 @@
 import { apiFetch } from './api.js';
 import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
-import { badge, button, emptyState, icon, iconButton, listItem, modal, spinner, toast, toggle } from '../ui/index.js';
+import { button, emptyState, iconButton, modal, setIcon, spinner, toast, toggle } from '../ui/index.js';
+import { el, menuFoot, menuHead, menuLabel, menuNote, menuPill, menuPopup, menuRow, menuValue } from './hudMenuShared.js';
 import {
   batteryLabel, deviceIconName, signalLabel,
 } from './bluetoothShared.js';
@@ -22,6 +23,8 @@ let body = null;
 let powerToggle = null;
 let powerHint = null;
 let scanBtn = null;
+let headIcon = null;
+let scanning = false;
 let pollTimer = null;
 let status = null;
 /** id of the device with an action in flight, so its row can show progress. */
@@ -58,42 +61,25 @@ export function toggleBluetoothMenu(chip) {
 /* ── Skeleton ──────────────────────────────────────────────── */
 
 function buildPopup() {
-  const popup = document.createElement('div');
-  popup.className = 'ui-hud-menu-popup bluetooth-menu hidden';
-  popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', t('hud.bluetooth'));
+  const { popup, body: bodyEl } = menuPopup('bluetooth-menu', t('hud.bluetooth'));
+  body = bodyEl;
 
-  const head = document.createElement('div');
-  head.className = 'bluetooth-head';
-
-  const meta = document.createElement('div');
-  meta.className = 'bluetooth-head-main';
-  const title = document.createElement('div');
-  title.className = 'bluetooth-head-title';
-  title.appendChild(icon('hud/bluetooth', { size: 15 }));
-  const label = document.createElement('span');
-  label.textContent = t('bluetooth.label');
-  title.appendChild(label);
-  powerHint = document.createElement('div');
-  powerHint.className = 'bluetooth-head-hint';
-  meta.append(title, powerHint);
-
+  const head = menuHead({ iconName: 'hud/bluetooth', title: t('bluetooth.label') });
+  headIcon = head.iconEl;
+  powerHint = head.hintEl;
   powerToggle = toggle({ checked: false, onChange: (next) => void setPower(next) });
+  powerToggle.setAttribute('aria-label', t('bluetooth.label'));
+  head.actions.appendChild(powerToggle);
 
-  scanBtn = iconButton({
-    icon: 'ui/refresh',
+  scanBtn = menuPill({
     label: t('bt.scan'),
-    variant: 'quiet',
-    size: 'sm',
+    iconName: 'ui/refresh',
+    arrow: false,
     onClick: () => void scan(),
   });
+  const { foot } = menuFoot(scanBtn);
 
-  head.append(meta, powerToggle, scanBtn);
-
-  body = document.createElement('div');
-  body.className = 'bluetooth-body';
-
-  popup.append(head, body);
+  popup.append(head.head, body, foot);
   return popup;
 }
 
@@ -128,13 +114,23 @@ async function setPower(enabled) {
   }
 }
 
+function scanAllowed() {
+  return !!status?.available && !!status?.present && !!status?.powered;
+}
+
+function setScanning(on) {
+  scanning = on;
+  scanBtn?.classList.toggle('is-loading', on);
+  if (scanBtn) scanBtn.disabled = on || !scanAllowed();
+}
+
 async function scan() {
-  scanBtn?.setLoading?.(true);
+  setScanning(true);
   try {
     await apiFetch('/api/bluetooth/scan', { method: 'POST', body: '{}' });
-    setTimeout(() => { void refresh(); scanBtn?.setLoading?.(false); }, 3000);
+    setTimeout(() => { void refresh(); setScanning(false); }, 3000);
   } catch (err) {
-    scanBtn?.setLoading?.(false);
+    setScanning(false);
     toast(err.message || t('bt.scanFailed'), { type: 'error' });
   }
 }
@@ -212,7 +208,10 @@ function render() {
     powerToggle.setChecked(!!s?.powered, { silent: true });
     powerToggle.disabled = !s?.available || !s?.present || busy !== null;
   }
-  if (scanBtn) scanBtn.disabled = !s?.available || !s?.present || !s?.powered;
+  if (scanBtn) scanBtn.disabled = scanning || !scanAllowed();
+  if (headIcon) {
+    void setIcon(headIcon, s?.available && s?.present && s?.powered ? 'hud/bluetooth' : 'hud/bluetooth-off', { size: 18 });
+  }
   if (powerHint) {
     powerHint.textContent = !s
       ? t('bt.reading')
@@ -228,7 +227,7 @@ function render() {
   }
 
   if (!s) {
-    body.appendChild(emptyState({ title: t('bt.loading') }));
+    body.appendChild(menuNote(t('bt.loading')));
     return;
   }
   if (!s.available) {
@@ -240,14 +239,11 @@ function render() {
     return;
   }
   if (!s.present) {
-    body.appendChild(emptyState({ title: t('bt.noHardware') }));
+    body.appendChild(menuNote(t('bt.noHardware')));
     return;
   }
   if (!s.powered) {
-    body.appendChild(emptyState({
-      title: t('bluetooth.off'),
-      body: t('bt.turnOnBody'),
-    }));
+    body.appendChild(menuNote(t('bt.turnOnBody')));
     return;
   }
 
@@ -263,41 +259,28 @@ function render() {
   requestAnimationFrame(() => menu.reposition());
 }
 
-function sectionTitle(text) {
-  const el = document.createElement('div');
-  el.className = 'bluetooth-section-title';
-  el.textContent = text;
-  return el;
-}
-
 function deviceSection(title, devices, action, mode = null) {
-  const wrap = document.createElement('div');
-  wrap.className = 'bluetooth-card';
-
-  const header = document.createElement('div');
-  header.className = 'bluetooth-section-head';
-  header.appendChild(sectionTitle(title));
-  if (devices.length) header.appendChild(badge(String(devices.length)));
-  else if (mode === 'searching') header.appendChild(spinner({ size: 13 }));
-  wrap.appendChild(header);
+  const wrap = el('div', 'hud-menu-section');
+  wrap.appendChild(menuLabel(
+    title,
+    devices.length
+      ? menuValue(String(devices.length))
+      : mode === 'searching' ? spinner({ size: 12 }) : null,
+  ));
 
   if (!devices.length) {
-    const empty = document.createElement('div');
-    empty.className = 'bluetooth-idle';
-    empty.textContent = mode === 'searching'
+    wrap.appendChild(menuNote(mode === 'searching'
       ? t('bt.searching')
       : action === 'connected'
         ? t('bt.noneConnected')
         : action === 'connect'
           ? t('bt.nonePaired')
-          : t('bt.noneFound');
-    wrap.appendChild(empty);
+          : t('bt.noneFound')));
     if (mode === 'searching') wrap.classList.add('is-searching');
     return wrap;
   }
 
-  const listEl = document.createElement('div');
-  listEl.className = 'ui-list';
+  const listEl = el('div', 'hud-menu-list');
   for (const device of devices) {
     const isBusy = busy === device.id;
     const bits = [
@@ -306,13 +289,12 @@ function deviceSection(title, devices, action, mode = null) {
       signalLabel(device),
     ].filter(Boolean);
 
-    const trailing = document.createElement('span');
-    trailing.className = 'bluetooth-trailing';
+    const trailing = [];
     if (isBusy) {
-      trailing.appendChild(spinner({ size: 13 }));
+      trailing.push(spinner({ size: 13 }));
     } else if (action === 'connected') {
-      if (batteryLabel(device)) trailing.appendChild(batteryTag(device));
-      trailing.appendChild(iconButton({
+      if (batteryLabel(device)) trailing.push(menuValue(batteryLabel(device)));
+      trailing.push(iconButton({
         icon: 'ui/close',
         label: t('bt.disconnectName', { name: device.name }),
         variant: 'quiet',
@@ -320,8 +302,8 @@ function deviceSection(title, devices, action, mode = null) {
         onClick: (event) => { event.stopPropagation(); disconnect(device); },
       }));
     } else if (action === 'connect') {
-      if (batteryLabel(device)) trailing.appendChild(batteryTag(device));
-      trailing.appendChild(iconButton({
+      if (batteryLabel(device)) trailing.push(menuValue(batteryLabel(device)));
+      trailing.push(iconButton({
         icon: 'ui/trash',
         label: t('bt.forgetName', { name: device.name }),
         variant: 'quiet',
@@ -330,11 +312,12 @@ function deviceSection(title, devices, action, mode = null) {
       }));
     }
 
-    listEl.appendChild(listItem({
-      leading: icon(deviceIconName(device.kind), { size: 17, className: 'bluetooth-leading' }),
+    listEl.appendChild(menuRow({
+      iconName: deviceIconName(device.kind),
       title: device.name || device.address,
-      subtitle: bits.join(' · '),
+      sub: bits.join(' · '),
       trailing,
+      selected: action === 'connected',
       onClick: isBusy
         ? undefined
         : action === 'pair'
@@ -346,11 +329,4 @@ function deviceSection(title, devices, action, mode = null) {
   }
   wrap.appendChild(listEl);
   return wrap;
-}
-
-function batteryTag(device) {
-  const el = document.createElement('span');
-  el.className = 'bluetooth-battery';
-  el.textContent = batteryLabel(device);
-  return el;
 }

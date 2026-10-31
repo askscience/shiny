@@ -11,7 +11,7 @@ import {
 import { previewDestination } from './map.js';
 import { isPluginActive } from './activePlugins.js';
 import { openArtifactInTile } from './tiles.js';
-import { dockButton, iconForArtifact, labelForArtifact } from '../ui/index.js';
+import { dockButton, iconForArtifact, labelForArtifact, listReveal, cardEnter } from '../ui/index.js';
 import { artifactBelongsTo as belongsTo } from './artifactStore.js';
 import { t, tp } from './i18n.js';
 
@@ -24,6 +24,9 @@ let activeArtifactId = null;
 
 /** One dock icon per topic slot (overview + 3 themes). */
 const MAX_VISIBLE = 4;
+
+/** The tile dock's cards at its last render: only newcomers are revealed. */
+let tileDockSeen = new Set();
 
 function closePanel() {
   panel?.classList.remove('visible');
@@ -170,7 +173,9 @@ export function renderArtifactDock(artifacts) {
     ? (artifacts || []).filter((a) => belongsTo(a, dockPlugin))
     : artifacts) || [];
   document.body.classList.toggle('tile-dock-active', inTile);
+  const tileDockWasHidden = !tileDock || tileDock.classList.contains('hidden');
   if (tileDock) tileDock.classList.toggle('hidden', !inTile || !list.length);
+  if (tileDock) labelTileDock(tileDock, tileDockIcons, list.length);
 
   const container = inTile ? tileDock : dock;
   const iconsEl = inTile ? tileDockIcons : dockIcons;
@@ -208,13 +213,16 @@ export function renderArtifactDock(artifacts) {
   const visible = list.slice(0, MAX_VISIBLE);
   const overflow = list.length - visible.length;
 
+  const fresh = [];
   visible.forEach((item) => {
-    iconsEl.appendChild(dockButton({
+    const btn = dockButton({
       icon: iconForArtifact(item),
       label: labelForArtifact(item),
       active: item.id === activeArtifactId,
       onClick: () => openSavedArtifact(item.id),
-    }));
+    });
+    iconsEl.appendChild(btn);
+    if (!tileDockSeen.has(item.id)) fresh.push(btn);
   });
 
   if (overflow > 0) {
@@ -224,6 +232,35 @@ export function renderArtifactDock(artifacts) {
       onClick: () => openSavedArtifact(list[MAX_VISIBLE].id),
     }));
   }
+
+  // Motion for the traveler window's dock only: the dock arriving is a card
+  // entering; a card saved into a dock already showing is a list reveal of
+  // just the newcomer (not every re-render).
+  if (inTile) {
+    if (tileDockWasHidden && list.length) {
+      void cardEnter(tileDock);
+      void listReveal(iconsEl.children);
+    } else if (fresh.length) {
+      void listReveal(fresh);
+    }
+    tileDockSeen = new Set(visible.map((item) => item.id));
+  }
+}
+
+/**
+ * The tile dock's accessible name and its mono eyebrow ("SAVED · 3"). The dock
+ * element is built by tiles.js; the eyebrow is added here, once.
+ */
+function labelTileDock(tileDock, iconsEl, count) {
+  tileDock.setAttribute('aria-label', t('hud.savedCards', null, 'Saved cards'));
+  let eyebrow = tileDock.querySelector(':scope > .map-tile-dock-eyebrow');
+  if (!eyebrow) {
+    eyebrow = document.createElement('span');
+    eyebrow.className = 'map-tile-dock-eyebrow';
+    eyebrow.setAttribute('aria-hidden', 'true');
+    tileDock.insertBefore(eyebrow, iconsEl || tileDock.firstChild);
+  }
+  eyebrow.textContent = `${t('artifacts.dockEyebrow', null, 'Saved')} · ${count}`;
 }
 
 export function initArtifactDock() {

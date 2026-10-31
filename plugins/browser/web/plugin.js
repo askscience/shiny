@@ -1,5 +1,5 @@
 import {
-  toolbar, controlButton, icon, iconButton, searchBar, themeMode,
+  toolbar, controlButton, icon, iconButton, searchBar, themeMode, listReveal,
 } from '../../ui/index.js';
 /**
  * browser.js — the Browser plugin's window.
@@ -30,6 +30,7 @@ import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js'
 import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
+import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
 import { openCoreWindow } from '../../js/tiles.js';
 
 export const BROWSER_PLUGIN = 'browser';
@@ -124,7 +125,7 @@ function viewportRect() {
  * by the same renderer as the app's DOM: it follows its window frame for frame
  * and never has to be dropped while it moves. Only the states the app draws
  * over everything — a hidden tile (a workspace switch), the overview, the
- * launcher — hide it.
+ * launcher, a workspace slide in flight — hide it.
  *
  * Overlapping HTML (open menus, a higher floating window in the "Windows"
  * layout) is not a reason to hide it either: the shell cuts the page where the
@@ -137,9 +138,11 @@ function nativeShouldShow(tab) {
   const body = document.body;
   if (body && body.classList) {
     // The overview and launcher are full-screen HTML layers over the desktop;
-    // the page cannot be composited beneath them.
+    // the page cannot be composited beneath them. A workspace slide moves the
+    // tiles with DOM transforms the native item cannot follow.
     if (body.classList.contains('overview-active')) return false;
     if (body.classList.contains('launcher-active')) return false;
+    if (body.classList.contains('workspace-sliding')) return false;
   }
   return true;
 }
@@ -167,10 +170,11 @@ function occluderHoles() {
     holes.push({ x: r.left, y: r.top, w: r.width, h: r.height, dpr: rect.dpr });
   };
 
-  // This window's own popovers (downloads / menu / history / bookmarks). They
-  // live inside the tile, but the native view still stacks above them.
-  for (const el of [downloadsPanel, browserMenu, historyPanel, bookmarksPanel]) {
-    if (el && !el.classList.contains('hidden')) add(el.getBoundingClientRect());
+  // This window's own popovers (downloads / menu / history / bookmarks / tabs
+  // / passwords). They live inside the tile, but the native view still stacks
+  // above them.
+  for (const el of browserPopovers()) {
+    if (!el.classList.contains('hidden')) add(el.getBoundingClientRect());
   }
   // A higher floating window overlapping this one, in the "Windows" layout.
   // Compare by z-index, falling back to DOM order when equal (windows that
@@ -247,6 +251,7 @@ let shieldBtn = null;
 let downloadsBtn = null;
 let incognitoBtn = null;
 let bookmarkBtn = null;
+let passwordsBtn = null;
 let menuBtn = null;
 let downloadsPanel = null;
 let downloadsListEl = null;
@@ -255,6 +260,17 @@ let historyPanel = null;
 let historyListEl = null;
 let bookmarksPanel = null;
 let bookmarksListEl = null;
+let tabsPanel = null;
+let tabsListEl = null;
+let passwordsPanel = null;
+/** The password manager behind `passwordsPanel` (see passwords.js). */
+let passwords = null;
+
+/** Every popover this window owns, open or not. */
+function browserPopovers() {
+  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel]
+    .filter(Boolean);
+}
 
 /** The persisted history the panels show (newest first). */
 let history = [];
@@ -506,6 +522,20 @@ function renderTabs() {
     el.append(label, close);
     nodes.push(el);
   }
+  // The tab switcher's trigger: the open-tab count, as phone browsers show it.
+  // CSS only reveals it in a narrow window, where the strip keeps just the
+  // active tab (see `.browser-tabcount` in plugin.css).
+  const count = controlButton();
+  count.type = 'button';
+  count.className = 'browser-tabcount';
+  count.textContent = String(tabs.length);
+  const countLabel = tp('plugin.browser.tabs.count', tabs.length, null, `${tabs.length} open tabs`);
+  count.title = countLabel;
+  count.setAttribute('aria-label', countLabel);
+  count.setAttribute('aria-haspopup', 'dialog');
+  count.addEventListener('click', () => toggleTabsPanel());
+  nodes.push(count);
+
   const add = iconButton({
     icon: 'ui/plus',
     size: 'sm',
@@ -515,6 +545,113 @@ function renderTabs() {
   add.classList.add('browser-newtab');
   nodes.push(add);
   tabstripEl.replaceChildren(...nodes);
+  // A strip wider than the window scrolls; keep the active tab on screen.
+  tabstripEl.querySelector('.browser-tab.is-active')
+    ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  if (tabsPanel && !tabsPanel.classList.contains('hidden')) renderTabsPanel();
+}
+
+/* ── Tab switcher ─────────────────────────────────────────────── */
+
+/**
+ * The full list of tabs as large rows: the narrow-window (phone) way to see,
+ * switch and close tabs, since the strip then shows only the active one.
+ */
+function buildTabsPanel() {
+  const panel = popover('browser-tabs-panel');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', t('plugin.browser.tabs.label', null, 'Tabs'));
+
+  const head = document.createElement('div');
+  head.className = 'browser-popover-head';
+  head.append(labelSpan(t('plugin.browser.tabs.label', null, 'Tabs')));
+  const incognito = controlButton();
+  incognito.type = 'button';
+  incognito.className = 'browser-popover-action';
+  incognito.textContent = t('plugin.browser.tabs.newIncognito', null, 'New incognito tab');
+  incognito.addEventListener('click', () => {
+    closeAllBrowserPanels();
+    createTab({ incognito: true });
+  });
+  const fresh = controlButton();
+  fresh.type = 'button';
+  fresh.className = 'browser-popover-action';
+  fresh.textContent = t('plugin.browser.tabs.newTab', null, 'New tab');
+  fresh.addEventListener('click', () => {
+    closeAllBrowserPanels();
+    createTab({});
+  });
+  head.append(incognito, fresh);
+
+  const list = document.createElement('div');
+  list.className = 'browser-popover-list';
+  list.setAttribute('role', 'listbox');
+  tabsListEl = list;
+
+  panel.append(head, list);
+  return panel;
+}
+
+function renderTabsPanel() {
+  if (!tabsListEl) return;
+  tabsListEl.replaceChildren(...tabs.map((tab) => {
+    const row = document.createElement('div');
+    row.className = 'browser-tabs-row'
+      + (tab.id === activeTabId ? ' is-active' : '')
+      + (tab.incognito ? ' is-incognito' : '');
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', String(tab.id === activeTabId));
+
+    const pick = controlButton();
+    pick.type = 'button';
+    pick.className = 'browser-popover-row';
+    if (tab.incognito) {
+      const mask = icon('ui/incognito', { size: 14 });
+      mask.classList.add('browser-tab-mask');
+      pick.appendChild(mask);
+    }
+    const main = document.createElement('div');
+    main.className = 'browser-popover-main';
+    const title = document.createElement('div');
+    title.className = 'browser-popover-title';
+    title.textContent = tabTitle(tab);
+    const sub = document.createElement('div');
+    sub.className = 'browser-popover-sub';
+    sub.textContent = tab.url || t('plugin.browser.tabs.newTab', null, 'New tab');
+    main.append(title, sub);
+    pick.appendChild(main);
+    pick.addEventListener('click', () => {
+      closeAllBrowserPanels();
+      setActiveTab(tab.id);
+    });
+
+    const close = controlButton();
+    close.type = 'button';
+    close.className = 'browser-tab-close';
+    close.setAttribute(
+      'aria-label',
+      t('plugin.browser.tabs.close', { title: tabTitle(tab) }, `Close ${tabTitle(tab)}`),
+    );
+    close.appendChild(icon('ui/close', { size: 14 }));
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+
+    row.append(pick, close);
+    return row;
+  }));
+}
+
+function toggleTabsPanel() {
+  if (!tabsPanel) return;
+  const willOpen = tabsPanel.classList.contains('hidden');
+  closeAllBrowserPanels();
+  if (willOpen) {
+    renderTabsPanel();
+    tabsPanel.classList.remove('hidden');
+    requestSync();
+  }
 }
 
 /**
@@ -554,7 +691,10 @@ function loadNative(tab, url) {
     tab.frameEl.src = 'about:blank';
     tab.frameEl.classList.remove('is-active');
     tab.frameEl.classList.add('is-native-hidden');
+    delete tab.frameEl.dataset.home;
+    tab.frameEl.style.colorScheme = '';
   }
+  tab.homeData = null;
   const rect = viewportRect();
   nativeSend({
     op: 'open',
@@ -759,6 +899,15 @@ function buildToolbar() {
   });
   bookmarkBtn.classList.add('browser-bookmark');
 
+  // The password manager: saved logins for this page, filled on a click.
+  passwordsBtn = iconButton({
+    icon: 'ui/lock',
+    size: 'sm',
+    label: t('plugin.browser.passwords.title', null, 'Passwords'),
+    onClick: () => togglePasswordsPanel(),
+  });
+  passwordsBtn.classList.add('browser-passwords-btn');
+
   menuBtn = iconButton({
     icon: 'ui/more',
     size: 'sm',
@@ -769,7 +918,7 @@ function buildToolbar() {
 
   bar.append(
     backBtn, forwardBtn, reloadBtn, homeBtn, addressEl,
-    bookmarkBtn, shieldBtn, downloadsBtn, incognitoBtn, menuBtn,
+    bookmarkBtn, passwordsBtn, shieldBtn, downloadsBtn, incognitoBtn, menuBtn,
   );
   return bar;
 }
@@ -783,7 +932,7 @@ function buildViewport() {
   wrap.appendChild(frameWrapEl);
 
   statusEl = document.createElement('div');
-  statusEl.className = 'browser-status hidden';
+  statusEl.className = 'browser-status hud-menu hidden';
   wrap.appendChild(statusEl);
 
   return wrap;
@@ -879,7 +1028,7 @@ async function loadSettings() {
 /**
  * Tell the shell the current settings: ad blocking, where downloads go, and
  * which colour scheme pages should render for. The last one is what makes a
- * site's own dark/light styling follow the app's Noir/Light theme.
+ * site's own dark/light styling follow the app's Ink/Dusk theme.
  */
 function pushSettings() {
   shellSend('peakd:settings:', {
@@ -952,7 +1101,7 @@ function updateShield() {
 /** Build the (hidden) downloads popover. */
 function buildDownloadsPanel() {
   const panel = document.createElement('div');
-  panel.className = 'browser-downloads-panel hidden';
+  panel.className = 'browser-downloads-panel hud-menu hidden';
 
   const head = document.createElement('div');
   head.className = 'browser-downloads-head';
@@ -981,7 +1130,7 @@ function toggleDownloadsPanel() {
   if (willOpen) {
     downloadsPanel.classList.remove('hidden');
     requestSync();
-    void loadDownloads();
+    void loadDownloads().then(() => revealRows(downloadsPanel, downloadsListEl));
   }
 }
 
@@ -1239,9 +1388,17 @@ window.__peakdDownloads = function (list) {
  */
 
 /** A popover shell, hidden until its opener shows it. */
+/** A panel's rows have loaded: cascade them in (only while it is open). */
+function revealRows(panel, list) {
+  if (!panel || !list || panel.classList.contains('hidden')) return;
+  void listReveal(list.children);
+}
+
 function popover(className) {
   const el = document.createElement('div');
-  el.className = `browser-popover ${className} hidden`;
+  // `hud-menu` borrows the theme's dark-island token scope (the top-bar status
+  // menus'), so every popover reads as one family on both themes.
+  el.className = `browser-popover hud-menu ${className} hidden`;
   return el;
 }
 
@@ -1303,6 +1460,10 @@ function buildBrowserMenu() {
       closeBrowserMenu();
       openBookmarksPanel();
     }),
+    menuItem('ui/lock', t('plugin.browser.passwords.title', null, 'Passwords'), () => {
+      closeBrowserMenu();
+      void openPasswordsPanel();
+    }),
     popoverSeparator(),
     menuItem('ui/settings', t('plugin.browser.menu.settings', null, 'Settings'), () => {
       closeBrowserMenu();
@@ -1349,13 +1510,106 @@ function closeBrowserMenu() {
 /** Close every popover this window owns. */
 function closeAllBrowserPanels() {
   let changed = false;
-  for (const el of [browserMenu, historyPanel, bookmarksPanel, downloadsPanel]) {
-    if (el && !el.classList.contains('hidden')) {
+  for (const el of browserPopovers()) {
+    if (!el.classList.contains('hidden')) {
       el.classList.add('hidden');
       changed = true;
     }
   }
   if (changed) requestSync();
+}
+
+/* ── Page scripts ──────────────────────────────────────────────── */
+
+/** Answers to `runJs`, by token (see the `page-js` view event). */
+const pageJsWaiters = new Map();
+let pageJsSeq = 0;
+/** A page script that has not answered by then never will (a navigation). */
+const PAGE_JS_TIMEOUT_MS = 4000;
+
+/**
+ * Run `script` in a tab's native page and resolve to its result as a string,
+ * or '' when there is no page, no answer, or the shell is absent.
+ */
+function runPageJs(tab, script) {
+  if (!nativeAvailable || !tab?.native) return Promise.resolve('');
+  pageJsSeq += 1;
+  const token = `browser-${pageJsSeq}`;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pageJsWaiters.delete(token);
+      resolve('');
+    }, PAGE_JS_TIMEOUT_MS);
+    pageJsWaiters.set(token, (result) => {
+      clearTimeout(timer);
+      resolve(result);
+    });
+    nativeSend({ op: 'runJs', id: tab.id, token, script });
+  });
+}
+
+/* ── Passwords ─────────────────────────────────────────────────── */
+
+/** The active tab's address when it shows a web page, else ''. */
+function activePageUrl() {
+  const tab = activeTab();
+  return tab?.native && /^https?:/i.test(tab.url || '') ? tab.url : '';
+}
+
+/** Fill a login into the active page (see `fillScript` for the answers). */
+async function fillActivePage(username, password) {
+  const tab = activeTab();
+  const url = activePageUrl();
+  if (!tab || !url) return 'nofield';
+  let origin;
+  try {
+    origin = new URL(url).origin;
+  } catch (_) {
+    return 'nofield';
+  }
+  const result = await runPageJs(tab, fillScript(origin, username, password));
+  // Hand the keyboard to the page, so Enter submits the filled form.
+  if (result === 'ok' || result === 'user') nativeSend({ op: 'focus', id: tab.id });
+  return result;
+}
+
+/** What the user typed into the active page's login form, or null. */
+async function readActivePage() {
+  const tab = activeTab();
+  if (!tab || !activePageUrl()) return null;
+  try {
+    return JSON.parse(await runPageJs(tab, readScript()) || 'null');
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildPasswords() {
+  passwords = createPasswordsPanel({
+    popover,
+    pageUrl: activePageUrl,
+    fillPage: fillActivePage,
+    readPage: readActivePage,
+    onLayout: () => requestSync(),
+    closePanels: () => closeAllBrowserPanels(),
+  });
+  return passwords.element;
+}
+
+async function openPasswordsPanel() {
+  closeAllBrowserPanels();
+  if (!passwordsPanel || !passwords) return;
+  passwordsPanel.classList.remove('hidden');
+  requestSync();
+  await passwords.open();
+}
+
+function togglePasswordsPanel() {
+  if (passwordsPanel && !passwordsPanel.classList.contains('hidden')) {
+    closeAllBrowserPanels();
+    return;
+  }
+  void openPasswordsPanel();
 }
 
 /* ── History panel ─────────────────────────────────────────────── */
@@ -1390,6 +1644,7 @@ async function openHistoryPanel() {
     requestSync();
   }
   await loadHistory();
+  revealRows(historyPanel, historyListEl);
 }
 
 async function loadHistory() {
@@ -1481,6 +1736,7 @@ async function openBookmarksPanel() {
     requestSync();
   }
   await loadBookmarks();
+  revealRows(bookmarksPanel, bookmarksListEl);
 }
 
 async function fetchBookmarks() {
@@ -1616,7 +1872,10 @@ function recordVisit(tab) {
 function onBrowserPointerDown(event) {
   const target = event.target;
   if (target?.closest?.('.browser-popover')) return;
-  if (target?.closest?.('.browser-menu-btn, .browser-bookmark, .browser-downloads-btn')) return;
+  if (target?.closest?.('.browser-menu-btn, .browser-bookmark, .browser-downloads-btn, .browser-tabcount, .browser-passwords-btn')) return;
+  // A confirmation the window asked for (deleting a saved password) is not a
+  // click away from it.
+  if (target?.closest?.('.ui-modal')) return;
   closeAllBrowserPanels();
 }
 
@@ -1644,8 +1903,60 @@ async function fetchNews({ refresh = false } = {}) {
   return res?.data || { cards: [], topics: [], personalized: false };
 }
 
+/**
+ * The theme tokens the start page needs, resolved now.
+ *
+ * The sandboxed frame is a separate document: it inherits none of the app's
+ * custom properties, so the active theme's values are read from the shell's
+ * root and written into the page as its own `:root`. Re-rendered on
+ * `theme:change` / `appearance:change` (see `refreshHomeTheme`).
+ */
+const HOME_TOKENS = [
+  '--bg', '--bg-elevated', '--text', '--text-secondary', '--muted', '--accent',
+  '--accent-contrast', '--ed-pill', '--ed-pill-hover', '--ed-pill-dark',
+  '--ed-pill-dark-ink', '--font-display', '--font-body', '--font-mono',
+];
+
+function homePalette() {
+  const vars = {};
+  try {
+    const style = getComputedStyle(document.documentElement);
+    for (const name of HOME_TOKENS) {
+      // Only what can be a CSS value: a token must not be able to close the
+      // style block it is written into.
+      const value = style.getPropertyValue(name).trim().replace(/[<>{};]/g, '');
+      if (value) vars[name] = value;
+    }
+  } catch (_) {
+    /* no computed style (tests): the page falls back to its own defaults */
+  }
+  let mode = 'dark';
+  try {
+    mode = themeMode() === 'light' ? 'light' : 'dark';
+  } catch (_) {
+    /* theme manifest not loaded yet */
+  }
+  const motion = (typeof document !== 'undefined' && document.documentElement?.dataset?.motion) || 'kinetic';
+  return { vars, mode, motion: /^[a-z]+$/.test(motion) ? motion : 'kinetic' };
+}
+
+/** A palette's identity, to skip re-rendering when nothing changed. */
+function paletteKey(palette) {
+  return JSON.stringify(palette);
+}
+
+/** The large title's date eyebrow, in the UI language. */
+function homeDateLabel() {
+  try {
+    const lang = document.documentElement.lang || undefined;
+    return new Intl.DateTimeFormat(lang, { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date());
+  } catch (_) {
+    return '';
+  }
+}
+
 /** The home page markup, with the shelf and bookmarks' data embedded. */
-function homeDocument(news, saved = []) {
+function homeDocument(news, saved = [], { palette = homePalette(), animate = true } = {}) {
   const cards = Array.isArray(news?.cards) ? news.cards : [];
   const topics = Array.isArray(news?.topics) ? news.topics : [];
   const personal = news?.personalized && cards.length;
@@ -1653,12 +1964,27 @@ function homeDocument(news, saved = []) {
   const refresh = t('plugin.browser.home.refresh', null, 'Refresh');
   const refreshing = t('plugin.browser.home.refreshing', null, 'Refreshing…');
   const bookmarkHeading = t('plugin.browser.bookmarks.title', null, 'Bookmarks');
-  const bookmarkList = Array.isArray(saved) ? saved : [];
+  const title = t('plugin.browser.home.title', null, 'Home');
+  const bookmarkList = (Array.isArray(saved) ? saved : []).filter((b) => b?.url);
+  const meta = [
+    bookmarkList.length
+      ? tp('plugin.browser.home.metaBookmarks', bookmarkList.length, null, `${bookmarkList.length} bookmarks`)
+      : '',
+    personal ? tp('plugin.browser.home.metaStories', cards.length, null, `${cards.length} stories`) : '',
+  ].filter(Boolean);
+  // Each revealed block carries its place in the cascade (`--i`).
+  let step = 0;
+  const rv = () => `rv" style="--i:${step++}`;
+  const head = `<header class="hero">
+      <div class="eyebrow ${rv()}">${escapeHtml(homeDateLabel())}</div>
+      <h1 class="title ${rv()}">${escapeHtml(title)}</h1>
+      ${meta.length ? `<div class="eyebrow meta-line ${rv()}">${meta.map(escapeHtml).join(' · ')}</div>` : ''}
+    </header>`;
   const savedGrid = bookmarkList.length
-    ? `<div class="saved">
-         <div class="saved-head"><span class="eyebrow">${bookmarkHeading}</span></div>
-         <div class="saved-grid">${bookmarkList.map(bookmarkCardHtml).join('')}</div>
-       </div>`
+    ? `<section class="saved">
+         <div class="section-head ${rv()}"><span class="eyebrow">${escapeHtml(bookmarkHeading)}</span></div>
+         <div class="saved-grid">${bookmarkList.map((b) => bookmarkCardHtml(b, rv)).join('')}</div>
+       </section>`
     : '';
   // The shelf's data block. Also where every *translated* string the handler
   // needs has to live: the handler's own text is allowlisted in the app's CSP
@@ -1667,74 +1993,107 @@ function homeDocument(news, saved = []) {
   const payload = JSON.stringify({ cards, topics, refreshing }).replace(/<\//g, '<\\/');
 
   const shelf = personal
-    ? `<div class="chips">${topics
-        .map((t) => `<span class="chip">${escapeHtml(t)}</span>`)
-        .join('')}</div>
-       <div class="head"><span class="eyebrow">${recent}</span>
-         <button type="button" class="again" data-refresh>${refresh}</button></div>
-       <div class="cards">${cards.map(cardHtml).join('')}</div>`
-    : emptyShelf(news);
+    ? `<div class="section-head ${rv()}"><span class="eyebrow">${escapeHtml(recent)}</span>
+         <button type="button" class="again" data-refresh>${escapeHtml(refresh)}</button></div>
+       ${topics.length ? `<div class="chips ${rv()}">${topics
+        .map((topic) => `<span class="chip">${escapeHtml(topic)}</span>`)
+        .join('')}</div>` : ''}
+       <div class="cards">${cards.map((card, index) => cardHtml(card, index, rv)).join('')}</div>`
+    : emptyShelf(news, rv);
 
-  return `<!doctype html><html><head><meta charset="utf-8">
+  const root = Object.entries(palette.vars || {}).map(([k, v]) => `${k}:${v}`).join(';');
+  const motion = animate ? palette.motion : 'none';
+
+  return `<!doctype html><html data-motion="${escapeHtml(motion)}"><head><meta charset="utf-8">
 <style>
-  :root { color-scheme: dark light; }
-  html,body{height:100%;margin:0}
-  body{background:var(--bg,#101014);color:var(--text,#ececf1);
-       font-family:var(--font-body,system-ui,-apple-system,sans-serif);
+  :root{color-scheme:${palette.mode === 'light' ? 'light' : 'dark'};${root}}
+  html,body{min-height:100%;margin:0}
+  html{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text) 18%,transparent) transparent}
+  /* Transparent: the window's own surface shows through, as everywhere else. */
+  body{background:transparent;color:var(--text);
+       font-family:var(--font-body,system-ui,sans-serif);
        -webkit-font-smoothing:antialiased}
-  .home{max-width:60rem;margin:0 auto;padding:2.2rem 1.5rem 3rem}
-  .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.1rem}
-  .chip{font-size:.72rem;opacity:.8;padding:.22rem .6rem;border-radius:999px;
-        border:1px solid color-mix(in srgb, currentColor 22%, transparent)}
-  .saved{margin-bottom:1.4rem}
-  .saved-head{display:flex;align-items:center;margin-bottom:.6rem}
-  .saved-grid{display:grid;gap:.5rem;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr))}
-  a.bookmark{display:flex;flex-direction:column;align-items:center;gap:.45rem;padding:.7rem .45rem;
-             border-radius:14px;text-decoration:none;color:inherit;
-             border:1px solid transparent;transition:background .15s ease,border-color .15s ease}
-  a.bookmark:hover{border-color:color-mix(in srgb, currentColor 16%, transparent);
-                   background:color-mix(in srgb, currentColor 7%, transparent)}
+  .home{max-width:52rem;margin:0 auto;padding:44px 28px 56px}
+  .eyebrow{font-family:var(--font-mono,ui-monospace,monospace);font-size:10.5px;
+           letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .hero{margin-bottom:36px}
+  .title{margin:6px 0 8px;font-family:var(--font-display,var(--font-body));font-size:34px;
+         font-weight:600;letter-spacing:-.045em;line-height:1.05;color:var(--text)}
+  .hair{border:0;border-top:1px solid color-mix(in srgb,var(--text) 9%,transparent);margin:0}
+  .section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;
+                min-height:32px;padding-bottom:10px;margin-bottom:14px;
+                border-bottom:1px solid color-mix(in srgb,var(--text) 9%,transparent)}
+  .saved{margin-bottom:40px}
+  .saved-grid{display:grid;gap:18px 14px;grid-template-columns:repeat(auto-fill,minmax(84px,1fr))}
+  a.bookmark{display:flex;flex-direction:column;gap:8px;min-width:0;text-decoration:none;color:inherit}
   .favicon-wrap{position:relative;display:flex;align-items:center;justify-content:center;
-                width:40px;height:40px;border-radius:11px;overflow:hidden;
-                background:color-mix(in srgb, currentColor 9%, transparent)}
+                aspect-ratio:1;border-radius:14px;overflow:hidden;background:var(--ed-pill);
+                transition:background .18s ease}
+  a.bookmark:hover .favicon-wrap{background:var(--ed-pill-hover)}
   .favicon-initial{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                   font-size:1.05rem;font-weight:650;text-transform:uppercase;
-                   color:var(--accent,#7aa2ff);opacity:.9}
-  img.favicon{position:relative;width:24px;height:24px;object-fit:contain;background:transparent}
-  .bookmark-name{max-width:100%;font-size:.72rem;line-height:1.25;text-align:center;
-                 display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.75rem}
-  .eyebrow{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;opacity:.55}
-  .again{cursor:pointer;font:inherit;font-size:.72rem;padding:.25rem .6rem;border-radius:8px;
-         border:1px solid color-mix(in srgb, currentColor 22%, transparent);
-         background:transparent;color:inherit;opacity:.8}
-  .again:hover{opacity:1}
-  .cards{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))}
-  a.card{display:flex;flex-direction:row;gap:.7rem;padding:.7rem;border-radius:14px;
-         text-decoration:none;color:inherit;
-         border:1px solid color-mix(in srgb, currentColor 14%, transparent);
-         background:color-mix(in srgb, currentColor 4%, transparent);
-         transition:border-color .15s ease, background .15s ease, transform .15s ease}
-  a.card:hover{border-color:var(--accent,#7aa2ff);
-               background:color-mix(in srgb, currentColor 8%, transparent);transform:translateY(-1px)}
-  .thumb{flex:none;width:88px;height:88px;border-radius:10px;object-fit:cover;
-         background:color-mix(in srgb, currentColor 8%, transparent)}
-  .body{display:flex;flex-direction:column;gap:.4rem;min-width:0;flex:1 1 auto}
-  .meta{display:flex;align-items:center;gap:.4rem;font-size:.68rem;opacity:.6;min-width:0}
-  .meta b{font-weight:600;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .meta i{font-style:normal;opacity:.7;white-space:nowrap}
-  .topic{margin-left:auto;opacity:.75;white-space:nowrap}
-  .title{font-size:.88rem;font-weight:600;line-height:1.3;
-         display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-  .snip{font-size:.78rem;line-height:1.45;opacity:.7;
-        display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-  .empty{max-width:30rem;margin:3rem auto 0;text-align:center}
-  .empty .t{font-size:1.05rem;font-weight:600;margin-bottom:.4rem}
-  .empty .s{font-size:.85rem;line-height:1.55;opacity:.7}
+                   font-family:var(--font-display,var(--font-body));font-size:24px;font-weight:600;
+                   letter-spacing:-.04em;text-transform:uppercase;color:var(--text-secondary)}
+  img.favicon{position:relative;width:28px;height:28px;object-fit:contain;background:transparent}
+  .bookmark-name{max-width:100%;font-family:var(--font-mono,ui-monospace,monospace);font-size:10.5px;
+                 letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  a.bookmark:hover .bookmark-name{color:var(--text)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 8px}
+  .chip{font-family:var(--font-mono,ui-monospace,monospace);font-size:10.5px;letter-spacing:.06em;
+        text-transform:uppercase;color:var(--text-secondary);padding:5px 10px;border-radius:999px;
+        background:var(--ed-pill)}
+  .again{flex:none;display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 14px;
+         border:0;border-radius:999px;background:var(--ed-pill);color:var(--text);cursor:pointer;
+         font-family:var(--font-body,system-ui,sans-serif);font-size:12.5px;font-weight:500;
+         transition:background .18s ease}
+  .again::after{content:'\\2192';display:inline-block;transition:transform .25s cubic-bezier(.16,1,.3,1)}
+  .again:hover{background:var(--ed-pill-hover)}
+  .again:hover::after{transform:translateX(3px)}
+  .again:disabled{cursor:default;color:var(--muted)}
+  .again:focus-visible,a.card:focus-visible,a.bookmark:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .cards{display:flex;flex-direction:column}
+  a.card{display:flex;gap:16px;padding:16px 0;text-decoration:none;color:inherit;
+         border-bottom:1px solid color-mix(in srgb,var(--text) 9%,transparent)}
+  a.card:last-child{border-bottom:0}
+  .thumb-wrap{flex:none;width:88px;height:88px;border-radius:12px;overflow:hidden;background:var(--ed-pill)}
+  .thumb{display:block;width:100%;height:100%;object-fit:cover;transition:transform .5s cubic-bezier(.16,1,.3,1)}
+  a.card:hover .thumb{transform:scale(1.04)}
+  .body{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1 1 auto;padding-top:2px}
+  .meta{font-family:var(--font-mono,ui-monospace,monospace);font-size:10.5px;letter-spacing:.06em;
+        text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta b{font-weight:500;color:var(--text-secondary)}
+  .headline{font-family:var(--font-display,var(--font-body));font-size:17px;font-weight:600;
+            letter-spacing:-.02em;line-height:1.25;color:var(--text);
+            display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+            text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;
+            text-decoration-thickness:1px;transition:text-decoration-color .18s ease}
+  a.card:hover .headline{text-decoration-color:currentColor}
+  .snip{font-size:13px;line-height:1.5;color:var(--text-secondary);
+        display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .empty{padding:28px 0 0}
+  .empty .t{font-family:var(--font-display,var(--font-body));font-size:20px;font-weight:600;
+            letter-spacing:-.03em;margin:8px 0 6px}
+  .empty .s{max-width:32rem;font-size:13.5px;line-height:1.55;color:var(--text-secondary)}
+  @media (max-width:520px){
+    .home{padding:28px 16px 40px}
+    .thumb-wrap{width:64px;height:64px}
+    .snip{display:none}
+  }
+  /* The cascade: each block enters in turn, in the user's motion language
+     (the app's listReveal cannot reach into this frame). */
+  @keyframes rv-wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+  @keyframes rv-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes rv-depth{from{opacity:0;transform:scale(.96);filter:blur(6px)}to{opacity:1;transform:none;filter:blur(0)}}
+  .rv{animation:rv-wipe .64s cubic-bezier(.76,0,.24,1) both;animation-delay:calc(min(var(--i,0),18) * 45ms)}
+  [data-motion="fluid"] .rv{animation-name:rv-rise;animation-duration:.6s;animation-timing-function:cubic-bezier(.34,1.4,.64,1)}
+  [data-motion="depth"] .rv{animation-name:rv-depth;animation-duration:.7s;animation-timing-function:cubic-bezier(.16,1,.3,1)}
+  [data-motion="none"] .rv{animation:none}
+  @media (prefers-reduced-motion:reduce){.rv{animation:none}.again::after,.thumb{transition:none}}
 </style></head><body>
 <div class="home">
+  ${head}
   ${savedGrid}
-  <div id="shelf">${shelf}</div>
+  <section id="shelf">${shelf}</section>
 </div>
 <scr${'ipt'} id="home-data" type="application/json">${payload}</scr${'ipt'}>
 <scr${'ipt'}>
@@ -1797,26 +2156,28 @@ function homeDocument(news, saved = []) {
 }
 
 /** One card. Kept as a string because it is injected into the sandboxed frame. */
-function cardHtml(card, index) {
+function cardHtml(card, index, rv = () => '') {
+  // Mono metadata, one line: SOURCE · 2H · TOPIC.
   const meta = [
-    `<b>${escapeHtml(card.source || '')}</b>`,
-    card.age ? `<i>${escapeHtml(card.age)}</i>` : '',
-    card.topic ? `<span class="topic">${escapeHtml(card.topic)}</span>` : '',
+    card.source ? `<b>${escapeHtml(card.source)}</b>` : '',
+    card.age ? escapeHtml(card.age) : '',
+    card.topic ? escapeHtml(card.topic) : '',
   ]
     .filter(Boolean)
-    .join('');
-  const snippet = card.snippet ? `<div class="snip">${escapeHtml(card.snippet)}</div>` : '';
+    .join(' · ');
+  const snippet = card.snippet ? `<span class="snip">${escapeHtml(card.snippet)}</span>` : '';
   // The engine's thumbnail is loaded straight from its CDN. `no-referrer` keeps
   // the app's origin out of the request; the image is decorative (the title
-  // carries the meaning), so a failed load must not show a broken glyph.
+  // carries the meaning), so a failed load must not show a broken glyph — the
+  // grey tile under it stays.
   const thumb = card.image
     ? `<img class="thumb" src="${escapeHtml(card.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : '';
-  return `<a class="card" href="#" data-index="${index}" title="${escapeHtml(card.title || '')}">
-    ${thumb}
+  return `<a class="card ${rv()}" href="#" data-index="${index}" title="${escapeHtml(card.title || '')}">
+    <span class="thumb-wrap">${thumb}</span>
     <span class="body">
       <span class="meta">${meta}</span>
-      <span class="title">${escapeHtml(card.title || '')}</span>
+      <span class="headline">${escapeHtml(card.title || '')}</span>
       ${snippet}
     </span>
   </a>`;
@@ -1837,8 +2198,8 @@ function faviconFor(url) {
   }
 }
 
-/** One saved page: favicon tile and its name underneath. */
-function bookmarkCardHtml(bookmark) {
+/** One saved page: a grey square tile with its favicon, a mono caption under it. */
+function bookmarkCardHtml(bookmark, rv = () => '') {
   const url = String(bookmark?.url || '');
   if (!url) return '';
   let name = String(bookmark?.title || '').trim();
@@ -1855,7 +2216,7 @@ function bookmarkCardHtml(bookmark) {
   const img = icon
     ? `<img class="favicon" src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : '';
-  return `<a class="bookmark" href="#" data-url="${escapeHtml(url)}" title="${escapeHtml(url)}">
+  return `<a class="bookmark ${rv()}" href="#" data-url="${escapeHtml(url)}" title="${escapeHtml(url)}">
     <span class="favicon-wrap">
       <span class="favicon-initial">${escapeHtml(initial)}</span>
       ${img}
@@ -1865,16 +2226,20 @@ function bookmarkCardHtml(bookmark) {
 }
 
 /** What to show when there is nothing to personalise from. */
-function emptyShelf(news) {
+function emptyShelf(news, rv = () => '') {
   const reason = news?.error ? escapeHtml(news.error) : '';
   const body = news?.personalized === false && !reason
-    ? t('plugin.browser.home.emptyBody', null,
-      'Search for a few things and this page fills up with news about them.')
-    : reason || t('plugin.browser.home.emptyRetry', null, 'Nothing to show yet — try refreshing.');
-  return `<div class="empty">
-    <div class="t">${t('plugin.browser.home.emptyTitle', null, 'No stories yet')}</div>
-    <div class="s">${body}</div>
-  </div>`;
+    ? escapeHtml(t('plugin.browser.home.emptyBody', null,
+      'Search for a few things and this page fills up with news about them.'))
+    : reason || escapeHtml(t('plugin.browser.home.emptyRetry', null, 'Nothing to show yet — try refreshing.'));
+  return `<div class="section-head ${rv()}"><span class="eyebrow">${escapeHtml(
+    t('plugin.browser.home.news', null, 'News'),
+  )}</span>
+      <button type="button" class="again" data-refresh>${escapeHtml(t('plugin.browser.home.refresh', null, 'Refresh'))}</button></div>
+    <div class="empty ${rv()}">
+      <div class="t">${escapeHtml(t('plugin.browser.home.emptyTitle', null, 'No stories yet'))}</div>
+      <div class="s">${body}</div>
+    </div>`;
 }
 
 function escapeHtml(value) {
@@ -1903,6 +2268,7 @@ async function showHome(tab) {
   tab.frameEl.removeAttribute('allow');
   tab.frameEl.setAttribute('sandbox', 'allow-scripts');
   tab.frameEl.removeAttribute('srcdoc');
+  delete tab.frameEl.dataset.home;
   // Clear the previous page *before* awaiting the shelf, so going Home is
   // instant instead of leaving the last site on screen while it loads.
   tab.frameEl.src = 'about:blank';
@@ -1925,9 +2291,40 @@ async function showHome(tab) {
   if (!tab.frameEl || !tab.home) return;
   if (tab.id === activeTabId) setStatus('');
   tab.frameEl.src = 'about:blank';
-  tab.frameEl.srcdoc = homeDocument(news, saved);
+  // Kept so a theme change can repaint the page without refetching it.
+  tab.homeData = { news, saved };
+  tab.homePalette = homePalette();
+  tab.frameEl.dataset.home = '';
+  // Same colour scheme on both sides of the frame, or Chromium paints an
+  // opaque canvas behind the (transparent) page.
+  tab.frameEl.style.colorScheme = tab.homePalette.mode;
+  tab.frameEl.srcdoc = homeDocument(news, saved, { palette: tab.homePalette });
   renderTabs();
   if (tab.id === activeTabId) updateNavButtons();
+}
+
+/**
+ * The theme or accent changed: repaint every open start page with the new
+ * values, without the entrance cascade. A theme's stylesheet arrives a moment
+ * after its `theme:change`, so the palette is re-read a few times and a page
+ * is only rebuilt when its resolved values actually differ.
+ */
+let homeThemeTimers = [];
+function refreshHomeTheme() {
+  for (const timer of homeThemeTimers) clearTimeout(timer);
+  homeThemeTimers = [0, 160, 500, 1200].map((delay) => setTimeout(repaintHomes, delay));
+}
+
+function repaintHomes() {
+  const palette = homePalette();
+  const key = paletteKey(palette);
+  for (const tab of tabs) {
+    if (!tab.home || !tab.homeData || !tab.frameEl) continue;
+    if (tab.homePalette && paletteKey(tab.homePalette) === key) continue;
+    tab.homePalette = palette;
+    tab.frameEl.style.colorScheme = palette.mode;
+    tab.frameEl.srcdoc = homeDocument(tab.homeData.news, tab.homeData.saved, { palette, animate: false });
+  }
 }
 
 /** A card in the home shelf was clicked. */
@@ -2057,6 +2454,13 @@ function openPageContextMenu(tab, menu) {
     entries.push(
       {
         type: 'item',
+        label: t('plugin.browser.passwords.fillMenu', null, 'Fill password…'),
+        icon: 'ui/lock',
+        onClick: () => void openPasswordsPanel(),
+      },
+      { type: 'separator' },
+      {
+        type: 'item',
         label: t('plugin.browser.pageMenu.cut', null, 'Cut'),
         onClick: () => send('action', { verb: 'Cut' }),
       },
@@ -2132,6 +2536,12 @@ window.__peakdViewEvent = function (event) {
     openInNewTab(tab, event.url);
   } else if (event.type === 'context-menu') {
     openPageContextMenu(tab, event.menu);
+  } else if (event.type === 'page-js' && typeof event.token === 'string') {
+    const waiter = pageJsWaiters.get(event.token);
+    if (waiter) {
+      pageJsWaiters.delete(event.token);
+      waiter(typeof event.result === 'string' ? event.result : '');
+    }
   }
 };
 
@@ -2408,9 +2818,11 @@ export function mountBrowserTile() {
   browserMenu = buildBrowserMenu();
   historyPanel = buildHistoryPanel();
   bookmarksPanel = buildBookmarksPanel();
+  tabsPanel = buildTabsPanel();
+  passwordsPanel = buildPasswords();
   tileEl.append(
     tabstripEl, buildToolbar(), viewportEl,
-    downloadsPanel, browserMenu, historyPanel, bookmarksPanel,
+    downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel,
   );
 
   document.addEventListener('pointerdown', onBrowserPointerDown, true);
@@ -2428,6 +2840,12 @@ export function mountBrowserTile() {
     pendingCoreOpen = null;
     openInNewTab(null, url);
   }
+  // Core calls `wireEvents` once, when it first loads this module, but
+  // `unmountBrowserTile` drops those listeners (the home shelf's
+  // `message`, clipboard, settings). Re-wire on every mount (idempotent), or
+  // a window closed with its X and reopened would ignore every bookmark and
+  // news click until the plugin was reloaded.
+  wireBrowserEvents();
   // Settings (shield, search engine, colour scheme), downloads and bookmarks.
   void loadSettings();
   void loadDownloads();
@@ -2441,6 +2859,10 @@ export function unmountBrowserTile() {
   window.removeEventListener('message', onFrameMessage);
   window.removeEventListener('clipboard:paste', onClipboardPaste);
   window.removeEventListener('settings:change', onSettingsChanged);
+  window.removeEventListener('theme:change', refreshHomeTheme);
+  window.removeEventListener('appearance:change', refreshHomeTheme);
+  for (const timer of homeThemeTimers) clearTimeout(timer);
+  homeThemeTimers = [];
   document.removeEventListener('pointerdown', onBrowserPointerDown, true);
   document.removeEventListener('keydown', onBrowserKeydown, true);
   wired = false;
@@ -2470,6 +2892,13 @@ export function unmountBrowserTile() {
   historyPanel = null;
   historyListEl = null;
   bookmarksPanel = null;
+  tabsPanel = null;
+  tabsListEl = null;
+  passwordsPanel = null;
+  passwords = null;
+  passwordsBtn = null;
+  for (const resolve of pageJsWaiters.values()) resolve('');
+  pageJsWaiters.clear();
   bookmarksListEl = null;
 }
 
@@ -2492,6 +2921,9 @@ export function wireBrowserEvents() {
   window.addEventListener('settings:change', onSettingsChanged);
   // Keep the pages' `prefers-color-scheme` in step with the app theme.
   window.addEventListener('theme:change', pushSettings);
+  // The start page is a separate document holding the theme's resolved values.
+  window.addEventListener('theme:change', refreshHomeTheme);
+  window.addEventListener('appearance:change', refreshHomeTheme);
 }
 
 export default {

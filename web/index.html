@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="neumorphic" data-bar-pos="bottom" data-orb-pos="top-left" data-orb-color="accent" data-orb-border="palette" data-orb-attached="1" data-orb-style="bar" data-orb-status="icons" data-autohide-bar="0" data-autohide-orb="0" style="--voice-bar-width:64px;--voice-bar-height:24px">
+<html lang="en" data-theme="dusk" data-bar-pos="bottom" data-orb-pos="top-left" data-orb-color="accent" data-orb-border="palette" data-orb-attached="1" data-orb-style="bar" data-orb-status="state" data-motion="kinetic" data-autohide-bar="0" data-autohide-orb="0" style="--voice-bar-width:64px;--voice-bar-height:24px">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="/css/boot.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
   <link rel="stylesheet" href="/ui/flow.css">
+  <link rel="stylesheet" href="/ui/motion.css">
   <link rel="stylesheet" href="/ui/responsive.css">
   <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
        after boot, which would flash a different theme first. The
@@ -56,6 +57,9 @@
   <script src="/js/early-boot.js"></script>
 
   <div id="background" aria-hidden="true"></div>
+  <!-- The desktop greeting ("Good / afternoon, / Friday."), written by
+       js/deskGreeting.js; hidden unless the theme shows it. -->
+  <div id="desk-greeting" aria-hidden="true"></div>
   <div id="grain" aria-hidden="true"></div>
 
   <!-- Login overlay -->
@@ -164,6 +168,9 @@
           </button>
           <button type="button" id="hud-clipboard" class="icon-btn" title="Clipboard" data-i18n-title="hud.clipboard" aria-label="Clipboard history" data-i18n-aria-label="hud.clipboardHistory" aria-haspopup="dialog" aria-expanded="false">
             <span data-icon="ui/clipboard" data-icon-size="20" aria-hidden="true"></span>
+          </button>
+          <button type="button" id="hud-theme" class="icon-btn" title="Switch theme" data-i18n-title="hud.theme" aria-label="Switch theme" data-i18n-aria-label="hud.theme">
+            <span data-icon="ui/contrast" data-icon-size="20" aria-hidden="true"></span>
           </button>
           <button type="button" id="settings-btn" class="icon-btn" title="Settings" data-i18n-title="hud.settings" aria-label="Settings" data-i18n-aria-label="hud.settings">
             <span data-icon="ui/settings" data-icon-size="20" aria-hidden="true"></span>

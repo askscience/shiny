@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Map",
   "plugin.files.status.items.one": "{count} item",
   "plugin.files.status.items.other": "{count} items",
-  "plugin.files.status.selected": "“{name}” geselecteerd ({what})",
-  "plugin.files.status.multiSelected.one": "{count} item geselecteerd ({size})",
-  "plugin.files.status.multiSelected.other": "{count} items geselecteerd ({size})",
 
   "plugin.files.when.today": "Vandaag {time}",
   "plugin.files.when.yesterday": "Gisteren {time}",

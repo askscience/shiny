@@ -641,6 +641,345 @@ body.compose-awaiting .compose-composer .compose-send {
   }
 }
 
+/* ── Tool cards ────────────────────────────────────────────────
+ * One card per finished agent tool (web/js/toolCards.js). Layout and token
+ * colours only: themes skin `.tool-card*` on top. Same anatomy everywhere —
+ * a mono header (icon, label, open arrow), then a body shaped by the result.
+ * ──────────────────────────────────────────────────────────────── */
+.tool-card {
+  --tool-card-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  align-self: stretch;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 14px);
+  background: var(--glass);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  animation: composeBubbleIn 0.2s var(--ease-out);
+}
+
+.tool-card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.tool-card-icon { flex: none; }
+
+.tool-card-label,
+.tool-card-key,
+.tool-card-unit,
+.tool-card-meta,
+.tool-card-expr,
+.tool-card-more {
+  font-family: var(--tool-card-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tool-card-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tool-card-open {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -3px -4px -3px auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs, 8px);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* The catalogue has an up arrow: turned 45° it is the ↗ "open" mark. */
+.tool-card-open .ui-icon {
+  transform: rotate(45deg);
+  transition: transform var(--motion-feedback, 0.2s) var(--motion-ease, ease);
+}
+
+.tool-card-open:hover,
+.tool-card-open:focus-visible { color: var(--text); background: var(--surface-strong); }
+.tool-card-open:hover .ui-icon { transform: translate(1px, -1px) rotate(45deg); }
+
+.tool-card-big {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tool-card-big .tool-card-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-display, inherit);
+  font-size: 44px;
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  color: var(--text);
+}
+
+.tool-card-unit { margin-top: 5px; }
+.tool-card-big-icon { margin-left: auto; color: var(--text); }
+
+.tool-card-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.tool-card-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tool-card-cell b { font-weight: 500; font-size: 13.5px; overflow-wrap: anywhere; }
+
+.tool-card-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 0 0;
+  border: 0;
+  border-top: 1px solid var(--glass-border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+button.tool-card-row { cursor: pointer; }
+button.tool-card-row:hover .tool-card-row-title,
+button.tool-card-row:focus-visible .tool-card-row-title { color: var(--accent); }
+
+.tool-card-head + .tool-card-row { border-top: 0; padding-top: 0; }
+.tool-card-row-icon { flex: none; color: var(--muted); }
+
+.tool-card-thumb {
+  flex: none;
+  width: 52px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: var(--radius-xs, 8px);
+  background: var(--surface-strong);
+}
+
+.tool-card-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tool-card-row-title,
+.tool-card-row-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tool-card-row-title { font-weight: 500; }
+.tool-card-row-meta { font-size: 11.5px; color: var(--muted); }
+
+.tool-card-title { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
+.tool-card-sub { margin-top: -4px; font-size: 12px; color: var(--muted); }
+
+.tool-card-text {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.tool-card-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+  margin: 0;
+  align-items: baseline;
+}
+
+.tool-card-fields dd {
+  margin: 0;
+  min-width: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.tool-card-fields + .tool-card-text {
+  padding-top: 7px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.tool-card-pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-strong);
+  color: var(--text);
+  font-family: var(--tool-card-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre;
+  scrollbar-width: none;
+}
+
+.tool-card-pre::-webkit-scrollbar { display: none; }
+.tool-card-prompt { color: var(--accent); }
+
+.tool-card-now,
+.tool-card-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tool-card-cover {
+  flex: none;
+  box-sizing: content-box;
+  padding: 9px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-strong);
+}
+
+.tool-card-now-main,
+.tool-card-event-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tool-card-now-main b,
+.tool-card-event-main b { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
+.tool-card-now-main span,
+.tool-card-event-main span { font-size: 12px; color: var(--muted); }
+
+.tool-card-date {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 52px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-strong);
+}
+
+.tool-card-date .tool-card-key { color: var(--accent); }
+.tool-card-date b {
+  font-family: var(--font-display, inherit);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.tool-card-leg {
+  display: flex;
+  align-items: center;
+  padding: 2px 2px 0;
+}
+
+.tool-card-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+}
+
+.tool-card-dot--end { background: var(--accent); border-color: var(--accent); }
+.tool-card-line {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--text) 0 6px, transparent 6px 10px);
+  opacity: 0.6;
+}
+
+.tool-card-leg-names {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 500;
+}
+
+.tool-card-media {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface-strong);
+}
+
+.tool-card-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tool-card-media-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  box-sizing: content-box;
+  padding: 11px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.tool-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tool-card.is-removed .tool-card-title,
+.tool-card.is-removed .tool-card-row-title,
+.tool-card.is-removed .tool-card-event-main b { text-decoration: line-through; color: var(--muted); }
+
+.tool-card--error { border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--glass-border)); }
+.tool-card--error .tool-card-head { color: var(--danger, #e5484d); }
+.tool-card--error .tool-card-text { color: var(--muted); }
+
+/* A housekeeping-sized card: just the header line. */
+.tool-card:has(> .tool-card-head:only-child) { padding-bottom: 10px; }
+
+/* The history modal stacks them between its bubbles. */
+.chat-history-messages > .tool-card { max-width: 82%; }
+
 @media (prefers-reduced-motion: reduce) {
   .compose-spinner { animation-duration: 2.4s; }
+  .tool-card { animation: none; }
+  .tool-card-open .ui-icon { transition: none; }
 }

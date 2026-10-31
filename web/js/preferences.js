@@ -2,6 +2,7 @@ import { apiFetch, getTraveler } from './api.js';
 import { isMobilePortrait } from './viewport.js';
 import { normalizeTouchBarSetting } from './touchbarShared.js';
 import { DEFAULT_HUD_CHIPS, normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
+import { DEFAULT_HUD_WIDGETS, normalizeHudWidgets, hudWidgetsDataset } from './hudWidgetsShared.js';
 import { effectivePowerMode, normalizePowerMode } from './powerShared.js';
 import { voiceForEngine } from './voiceShared.js';
 import { getLocalePreference, setLocalePreference, refreshLocaleFromStorage } from './i18n.js';
@@ -108,6 +109,7 @@ export async function loadUserPreferences() {
   applyDesktopGap();
   applyImmersive();
   applyHudChips();
+  applyHudWidgets();
   // The interface language may have just arrived from the server; re-apply it
   // (i18n.js owns the value, this is only the persistence side of it).
   await refreshLocaleFromStorage();
@@ -402,14 +404,19 @@ export function setWindowsGeom(geom) {
 const DEFAULT_DESKTOP_SURFACE = {
   window_radius: 17,     // px corner radius (matches --radius-lg default)
   window_opacity: 86,    // % window background opacity
-  window_shadow: false,  // flat by default (noir hairline aesthetic)
+  window_shadow: false,  // flat by default (hairline aesthetic)
   glass_blur: 24,        // px backdrop blur: window transparency + frosted panels
   // The ambient "blurred mirror" behind a window (photo / PDF page / artwork /
   // accent glow — web/ui/components/glow.js + .tile-glow in tiles.css). Global,
   // so plugins keep calling setTileGlow*() and core decides whether it shows.
   window_background: false,
   title_height: 36,      // px window title bar height
+  // The motion language every surface moves in (web/ui/motionStyle.js).
+  motion: 'kinetic',
 };
+
+/** The motion languages Settings → Appearance offers. */
+export const MOTION_CHOICES = ['kinetic', 'fluid', 'depth'];
 
 function numOr(value, fallback) {
   const n = Number(value);
@@ -429,6 +436,7 @@ export function getDesktopSurface() {
       ? DEFAULT_DESKTOP_SURFACE.window_background
       : src.window_background !== false,
     title_height: Math.round(clamp(numOr(src.title_height, DEFAULT_DESKTOP_SURFACE.title_height), 28, 48)),
+    motion: MOTION_CHOICES.includes(src.motion) ? src.motion : DEFAULT_DESKTOP_SURFACE.motion,
   };
 }
 
@@ -464,6 +472,7 @@ export function applyDesktopSurface() {
   // the `.tile-glow` layer globally (plugins keep painting it; nothing shows).
   root.dataset.windowBackground = s.window_background ? '1' : '0';
   root.style.setProperty('--tile-header-height', `${s.title_height}px`);
+  root.dataset.motion = s.motion;
 }
 
 /* ── Fullscreen immersion (autohide + bar position) ───────────
@@ -504,14 +513,15 @@ const DEFAULT_IMMERSIVE = {
   orb_style: 'bar',
   /** Border of the bar: none, the accent hairline, or the palette ring. */
   orb_border: 'palette',
-  /** What the bar wears: `off`, the humanised tool step line as `text`, or
-   *  the running tool's `icons` (swapped per tool with a short fade). */
-  orb_status: 'icons',
+  /** What the bar wears: `off`, the assistant's `state` as a decoded label
+   *  (Ready → Listening → Thinking → Speaking), the humanised tool step line
+   *  as `text`, or the running tool's `icons` (swapped per tool with a fade). */
+  orb_status: 'state',
 };
 
 const ORB_COLORS = ['accent', 'palette'];
 const ORB_STYLES = ['accent', 'bar'];
-const ORB_STATUSES = ['off', 'text', 'icons'];
+const ORB_STATUSES = ['off', 'state', 'text', 'icons'];
 const ORB_BORDERS = ['none', 'hairline', 'palette'];
 
 /** Fullscreen chrome behaviour, merged over defaults. */
@@ -615,6 +625,36 @@ export function applyHudChips() {
   const root = document.documentElement;
   root.dataset.hudName = ds.hudName;
   root.dataset.hudPercent = ds.hudPercent;
+}
+
+/* ── Clock + weather chip content (top bar) ──────────────────
+ * The clock's date and the weather's description are optional text parts:
+ * hiding them leaves the time and the icon + degrees. Applied as data
+ * attributes on <html> so the stylesheet hides the spans without the chips
+ * re-rendering.
+ * ───────────────────────────────────────────────────────────── */
+
+const HUD_WIDGETS_KEY = 'hud.widgets';
+
+/** Which text parts of the clock and weather chips are visible. */
+export function getHudWidgets() {
+  return normalizeHudWidgets(readJson(scopedKey(HUD_WIDGETS_KEY), DEFAULT_HUD_WIDGETS));
+}
+
+export function setHudWidgets(patch) {
+  const merged = normalizeHudWidgets({ ...getHudWidgets(), ...patch });
+  const raw = JSON.stringify(merged);
+  localStorage.setItem(scopedKey(HUD_WIDGETS_KEY), raw);
+  persist(HUD_WIDGETS_KEY, raw);
+  applyHudWidgets();
+}
+
+/** Publish the chip text visibility to CSS via data attributes on <html>. */
+export function applyHudWidgets() {
+  const ds = hudWidgetsDataset(getHudWidgets());
+  const root = document.documentElement;
+  root.dataset.hudClockDate = ds.hudClockDate;
+  root.dataset.hudWeatherText = ds.hudWeatherText;
 }
 
 /* ── Clipboard history (per-user, server-backed) ─────────────
@@ -1056,4 +1096,5 @@ export function setRemoteAllowTerminal(on) {
 if (typeof document !== 'undefined') {
   applyDesktopSurface();
   applyDesktopGap();
+  applyHudWidgets();
 }

@@ -35,10 +35,7 @@
   "plugin.files.status.items.one": "{count} elemento",
   "plugin.files.status.items.other": "{count} elementi",
   "plugin.files.status.items.many": "{count} elementi",
-  "plugin.files.status.selected": "“{name}” selezionato ({what})",
-  "plugin.files.status.multiSelected.one": "{count} elemento selezionato ({size})",
-  "plugin.files.status.multiSelected.other": "{count} elementi selezionati ({size})",
-  "plugin.files.status.multiSelected.many": "{count} elementi selezionati ({size})",
+  "plugin.files.status.countSelected": "{count} · {selected} selezionati",
 
   "plugin.files.when.today": "Oggi {time}",
   "plugin.files.when.yesterday": "Ieri {time}",

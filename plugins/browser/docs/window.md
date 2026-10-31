@@ -16,6 +16,7 @@ import { openContextMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
+import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
 ```
@@ -126,7 +127,9 @@ re-pushes (and reloads the open page) when that save lands.
 - Root: `<section class="tile browser-tile" data-plugin="browser">`.
 - Every style is scoped under `.browser-tile`; class prefix is **`browser-`**:
   `browser-tabstrip`, `browser-tab`, `browser-tab-label`, `browser-tab-text`,
-  `browser-tab-close`, `browser-tab-mask`, `browser-newtab`, `browser-bar`,
+  `browser-tab-close`, `browser-tab-mask`, `browser-newtab`, `browser-tabcount`,
+  `browser-tabs-panel`, `browser-tabs-row`, `browser-passwords-panel`,
+  `browser-passwords-btn`, `browser-pw-*`, `browser-bar`,
   `browser-address`, `browser-nav--forward`, `browser-frames`, `browser-frame`,
   `browser-shield` (`.is-on`/`.is-off`), `browser-downloads-panel`,
   `browser-downloads-head`, `browser-downloads-title`, `browser-downloads-clear`,
@@ -134,16 +137,49 @@ re-pushes (and reloads the open page) when that save lands.
   `browser-download is-completed` (state class), `browser-menu`,
   `browser-history-panel`, `browser-bookmarks-panel`, `browser-status`.
 - The toolbar controls are **core components** (`iconButton`, `searchBar`,
-  `icon`); `plugin.css` only arranges them. Back/forward share `ui/arrow-left`
-  and forward is mirrored in CSS (`browser-nav--forward`).
+  `icon`); `plugin.css` only arranges them (geometry, no colours). Back/forward
+  share `ui/arrow-left` and forward is mirrored in CSS (`browser-nav--forward`).
+- **Look.** The window's colours, type and surfaces are core CSS:
+  `web/css/tiles.css`, section "Browser plugin window" (selectors prefixed
+  `.browser-tile` so they outrank the later-loaded plugin sheet). The editorial
+  skin: hairline under the bar and strip, no glass plate; tabs are flat with
+  mono labels and the active one is a grey pill (`--ed-pill`); popovers, the
+  downloads panel and the status strip carry `.hud-menu`, which gives them the
+  theme's dark-island token scope (the top-bar status menus'), with flat dark
+  glass (`--ed-bar-bg`), no drop shadow and mono uppercase headings. The accent
+  is kept for small signals (shield on, bookmarked star, downloads badge and
+  progress, the search engine's check). History, bookmarks and downloads rows
+  cascade in with `listReveal` when their panel opens (not on every
+  re-render).
 - The home surface is a sandboxed iframe: `sandbox="allow-scripts"` with
   `referrerpolicy="no-referrer"`, `srcdoc` set to
-  `homeDocument(news, bookmarks)`. Its inline click handler is allowlisted by
-  an exact CSP hash (`web/js/tests/cspHomeShelfHash.test.mjs`).
-- The bookmarks grid shows each saved page as a favicon tile with the name
-  underneath (the site's own `/favicon.ico`, letter fallback). A grid card
-  posts `browser:open-bookmark`, and both the grid and the bookmarks popover
-  open the URL in a new tab.
+  `homeDocument(news, bookmarks, { palette, animate })`. Its inline click
+  handler is allowlisted by an exact CSP hash
+  (`web/js/tests/cspHomeShelfHash.test.mjs`) — restyling the page never
+  touches that script.
+- **Theming the home surface.** A sandboxed document inherits no custom
+  properties, so `homePalette()` reads the theme's resolved values from the
+  shell's root (`--bg`, `--bg-elevated`, `--text`, `--text-secondary`,
+  `--muted`, `--accent`, `--accent-contrast`, `--ed-pill`, `--ed-pill-hover`,
+  `--ed-pill-dark`, `--ed-pill-dark-ink`, `--font-display`, `--font-body`,
+  `--font-mono`) plus the theme mode and the motion language, and writes them
+  into the page's own `:root`. The page background is transparent (the
+  window's surface shows through): the frame gets the same `color-scheme` as
+  the page and the viewport drops its white canvas while the active frame
+  carries `data-home`. `theme:change` / `appearance:change` →
+  `refreshHomeTheme()` re-reads the palette a few times (a theme's stylesheet
+  lands after its event) and rebuilds open home tabs from `tab.homeData`
+  without refetching and without the entrance cascade.
+- **Home layout.** A mono date eyebrow, a 34 px display title ("Home") and a
+  mono meta line (`N bookmarks · N stories`); bookmarks as grey square tiles
+  (favicon, letter fallback) with mono captions; the news as hairline rows with
+  a grey thumbnail tile, mono `SOURCE · 2H · TOPIC` meta, headline and snippet;
+  Refresh is a grey pill whose arrow is CSS (`::after`), so the handler's
+  "Refreshing…" text swap keeps it. Blocks enter in a CSS cascade inside the
+  frame (`.rv` with `--i`), following `data-motion` (kinetic wipe, fluid rise,
+  depth blur) and `prefers-reduced-motion`.
+- A bookmark tile posts `browser:open-bookmark`, and both the grid and the
+  bookmarks popover open the URL in a new tab.
 
 ## Custom events and globals
 
@@ -154,7 +190,8 @@ re-pushes (and reloads the open page) when that save lands.
 | `artifact:saved` | core artifact store | `onArtifactSaved` navigates to `art.narrative` (falls back to `payload.url`/`params.url`/`title`) for `artifact_type === 'browser_page'` |
 | `url:open` | core link router (`web/js/linkRouter.js`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
 | `message` | sandboxed home surface | `browser:open-card` → `news/click` POST + navigate; `browser:open-bookmark` → open in a new tab; `browser:refresh-news` → reload the shelf |
-| `theme:change` | core theme | `pushSettings()` |
+| `theme:change` | core theme | `pushSettings()`; `refreshHomeTheme()` repaints open home tabs |
+| `appearance:change` | core appearance (accent) | `refreshHomeTheme()` |
 | `settings:change` | core Settings window (browser section) | `onSettingsChanged` — re-fetches `/api/browser/settings`, re-pushes to the shell, and reloads the active page when `adblock` changed |
 | `resize`, `desktop:changed`, `overlay:open`, `fullscreen:change`, `menu:change` | core | `requestSync()` for native-view bounds/mask |
 
@@ -194,7 +231,9 @@ re-pushes (and reloads the open page) when that save lands.
 `focus`, `paste` (`text`), `action` (`verb` — one engine action on the page's
 focused element: `Cut` / `Copy` / `Paste` / `SelectAll`), and `runJs` (`token`,
 `script` — evaluate a script in the page and answer with a `page-js` view event
-carrying the same token and the result).
+carrying the same token and the result; the password manager's fill/read go
+through `runPageJs`). `setMask` (`holes`) is input only: the app view is drawn
+above the page.
 
 ## API calls (`apiFetch`)
 
@@ -211,12 +250,15 @@ carrying the same token and the result).
 | `POST /api/browser/downloads/remove` | `downloadAction(id, 'remove')` |
 | `POST /api/browser/downloads/clear` | `downloadAction('', 'clear')` |
 | `GET/POST/DELETE /api/browser/history*` | history panel open/clear |
+| `GET /api/browser/vault`, `POST …/vault/{unlock,lock,reset}`, `GET /api/browser/passwords`, `POST …/passwords/{reveal,save,remove}` | the password manager (`passwords.js`) |
 | `GET /api/browser/bookmarks`, `POST …/add`, `POST …/remove` | bookmarks panel and the star toggle |
 
 ## Tab model
 
 Each tab is `{ id, sessionId, title, url, home, incognito, native, history,
-historyIndex, loaded, watchdog, frameEl }`.
+historyIndex, loaded, watchdog, frameEl }`; a home tab also keeps
+`homeData` (`{ news, saved }`, so a theme change repaints without
+refetching) and `homePalette` (the resolved tokens it was drawn with).
 
 - `MAX_TABS = 8`; creating beyond the cap closes the oldest inactive tab.
 - `NATIVE_LOAD_TIMEOUT_MS = 45000`: a long, non-error watchdog that only drops
@@ -249,7 +291,8 @@ to drop it (that was the old white flash). The window therefore:
   windows/toasts/notifications. Persistent non-modal chrome such as the voice
   bar stays out on purpose: a hole disables page input, so only surfaces the
   user is actively working in may take the page's pointer. This window adds its
-  own popovers and any higher tile in the "Windows" layout;
+  own popovers (`browserPopovers()`, the tab switcher and password manager
+  included) and any higher tile in the "Windows" layout;
 - re-sends the mask on the way back from a hide, because a stale hole would
   otherwise clip the page once it moves.
 
@@ -265,6 +308,45 @@ frozen (see `kPageQml` in `crates/peakd/shim/peakd.cpp`).
 frame wrapper, `MutationObserver`s on the tile grid and body class, the core
 occluder watcher (which catches a panel's delayed `.hidden` class), and the
 window events listed above. `stopBoundsSync()` tears them all down.
+
+## Tab strip and switcher
+
+The strip lives in the window's title bar. Each tab is a label and a close
+button; the active one scrolls into view when the strip overflows. A
+`.browser-tabcount` button (the open-tab count, as phone browsers show it) opens
+the **tab switcher** (`.browser-tabs-panel`): one large row per tab (title,
+address, close), plus New tab / New incognito tab.
+
+- In a narrow window (`@container plugin-window (max-width: 560px)`) the strip
+  keeps only the active tab at full width next to the count, and every popover
+  spans the window.
+- On touch (`pointer: coarse`) tabs are 36 px tall and close buttons, rows and
+  popover actions grow to finger size.
+
+## Passwords
+
+`web/passwords.js` builds the password manager popover
+(`.browser-passwords-panel`), opened from the toolbar's lock button, the
+overflow menu, or "Fill password…" in the page's right-click menu on a field.
+It talks to the vault routes ([`routes.md`](routes.md#password-vault)) and
+reaches the page only through two callbacks this window passes in:
+
+- `fillPage(user, pass)` → `runPageJs(tab, fillScript(origin, user, pass))`.
+  The script checks `location.origin` **inside the page** before touching a
+  field, so a navigation between the click and the fill never hands the
+  password to another site; it sets fields through the native `value` setter
+  and raises `input`/`change`. Answers: `ok`, `user` (a username-first
+  sign-in), `nofield`, `origin`. A filled page gets the keyboard (`focus`).
+- `readPage()` → `readScript()`: what the user typed, for "Save from page".
+
+`runPageJs` sends a `peakd:view:` `runJs` with a fresh token and resolves on the
+matching `page-js` view event (4 s timeout, `''` on none).
+
+Views: locked (login-password prompt; first use creates the vault; after a
+login-password change it asks once for the previous one; Reset deletes
+everything), list (this site first, then all; click fills, copy uses
+`copyText(…, { sensitive: true })`), edit (site, username, password with a
+show toggle, note).
 
 ## Right-click inside a page
 
@@ -317,8 +399,11 @@ home tab with news, navigation POST + `peakd:view: open`, `setBounds`/`setMask`,
 the shield (state + `peakd:filter:` + persistence), incognito tabs, downloads
 events + badge + panel mask hole, a core occluder (the chat-panel case) punching
 and clearing its hole, drag hide/restore, tab close, AI `artifact:saved`
-navigation, and the clipboard contract (context-menu entries,
-`clipboard:paste` → `peakd:view: paste`, picks for other windows ignored).
+navigation, the clipboard contract (context-menu entries,
+`clipboard:paste` → `peakd:view: paste`, picks for other windows ignored), the tab
+switcher, and the password manager's wiring (`runJs` bound to the page origin, the
+`page-js` answer, focus after a fill). `web/passwords.test.mjs` covers the page
+scripts themselves.
 
 ```bash
 node --experimental-vm-modules plugins/browser/web/plugin.smoke.mjs

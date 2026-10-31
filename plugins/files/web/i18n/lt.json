@@ -36,11 +36,6 @@
   "plugin.files.status.items.few": "{count} elementai",
   "plugin.files.status.items.many": "{count} elementų",
   "plugin.files.status.items.other": "{count} elemento",
-  "plugin.files.status.selected": "“{name}” pasirinkta ({what})",
-  "plugin.files.status.multiSelected.one": "Pasirinktas {count} elementas ({size})",
-  "plugin.files.status.multiSelected.few": "Pasirinkti {count} elementai ({size})",
-  "plugin.files.status.multiSelected.many": "Pasirinkta {count} elementų ({size})",
-  "plugin.files.status.multiSelected.other": "Pasirinkta {count} elemento ({size})",
 
   "plugin.files.when.today": "Šiandien {time}",
   "plugin.files.when.yesterday": "Vakar {time}",

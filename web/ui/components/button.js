@@ -19,6 +19,7 @@ export function controlButton() {
  * @param {boolean} [o.block]     full width
  * @param {boolean} [o.loading]
  * @param {boolean} [o.disabled]
+ * @param {boolean} [o.arrow]     editorial pill: a trailing → that nudges forward on hover
  * @param {string} [o.type]       button type attr
  * @param {(e: MouseEvent) => void} [o.onClick]
  */
@@ -46,6 +47,13 @@ export function button(o = {}) {
       span.textContent = o.label;
       el.appendChild(span);
     }
+    if (o.arrow) {
+      const arrow = document.createElement('span');
+      arrow.className = 'ui-btn-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '\u2192';
+      el.appendChild(arrow);
+    }
   };
   setContent();
 
@@ -53,6 +61,7 @@ export function button(o = {}) {
   el.setLabel = (label) => { o.label = label; setContent(); };
   if (o.onClick) el.addEventListener('click', o.onClick);
   if (o.className) el.classList.add(...o.className.split(/\s+/).filter(Boolean));
+  if (o.arrow) el.classList.add('ui-btn--arrow');
   return el;
 }
 

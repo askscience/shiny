@@ -169,7 +169,8 @@ pub struct AgentRunResult {
     /// tool loop, joined). Empty unless thinking was on and the model has it.
     pub thinking: String,
     /// Mid-turn rows persisted with the conversation, in visual order:
-    /// `("approval", {command, decision})` and `("media", {kind, url, …})`.
+    /// `("approval", {command, decision})`, `("tool", <card record>)` (see
+    /// `services::tool_cards`) and `("media", {kind, url, …})`.
     pub events: Vec<(String, String)>,
     /// True when the user stopped this turn before it finished. The reply (if
     /// any) is a partial answer, and the caller records an invisible note so
@@ -178,7 +179,7 @@ pub struct AgentRunResult {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn run_agent<F, G, H>(
+pub async fn run_agent<F, G, H, I>(
     state: &AppState,
     traveler: &Traveler,
     trip_id: Option<&str>,
@@ -189,6 +190,7 @@ pub async fn run_agent<F, G, H>(
     mut on_step: F,
     mut on_thinking: G,
     mut on_artifact: H,
+    mut on_tool: I,
 ) -> Result<AgentRunResult, AppError>
 where
     // The step line, plus the tool it belongs to when it is a tool's
@@ -199,6 +201,9 @@ where
     // the tool opens (the Browser) must exist before the next tool call, not
     // only when the final response renders the cards.
     H: FnMut(Value),
+    // A finished tool's card record (`services::tool_cards::card_record`),
+    // streamed so the chat shows the card while the turn is still running.
+    I: FnMut(&Value),
 {
     let mut artifacts: Vec<Value> = Vec::new();
     let mut actions_taken: Vec<ActionTaken> = Vec::new();
@@ -604,6 +609,17 @@ where
                 continuation_messages
                     .push(("user".to_string(), format!("[Done] {note}")));
                 completed_steps.push(note);
+                // The chat's card for this call: capped and stripped of
+                // credentials, streamed now and stored with the turn.
+                let card = crate::services::tool_cards::card_record(
+                    &outcome.action,
+                    &outcome.result,
+                    outcome.owner.as_deref(),
+                    Some(&outcome.data),
+                    &params,
+                );
+                on_tool(&card);
+                turn_events.push(("tool".into(), card.to_string()));
                 // The model gets the full note above; the bubble gets a short
                 // human line (never the raw payload).
                 on_step(
@@ -618,6 +634,15 @@ where
                     data: None,
                 });
                 let note = describe_tool_step(&action, "error", &json!({ "error": e.to_string() }));
+                let card = crate::services::tool_cards::card_record(
+                    &action,
+                    "error",
+                    state.plugins.tools().has(&action).then(|| state.plugins.tools().owner_of(&action)).as_deref(),
+                    Some(&json!({ "error": crate::i18n::translate_current(&e.to_string()) })),
+                    &params,
+                );
+                on_tool(&card);
+                turn_events.push(("tool".into(), card.to_string()));
                 continuation_messages
                     .push(("user".to_string(), format!("[Done] {note}")));
                 completed_steps.push(note);

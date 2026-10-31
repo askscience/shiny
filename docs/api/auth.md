@@ -84,6 +84,19 @@ the cookie is `HttpOnly`, this server response is the only way JS can drop it.
 
 ---
 
+## `POST /api/auth/verify-password`
+
+Authenticated. `{ "password": "…" }` → `{ "success": true, "data": { "valid": bool } }`:
+does the password match the **signed-in account's** login password? A PAM
+account (`password_hash = "!pam"`) is checked by the `shiny-auth` helper, a
+local one against its Argon2id/legacy hash. Nothing is written and no session
+changes. For features that protect data with the login password (the Browser's
+password vault calls it over loopback with the caller's own cookie/bearer).
+Throttled to 10 checks per account per minute (`429` + `Retry-After`); `500`
+when a PAM account's helper is unreachable.
+
+---
+
 ## `GET /api/auth/unix-users`
 
 **Loopback only.** Lists the real Linux accounts the login picker can offer.

@@ -143,8 +143,15 @@ HTTP 422 (axum's rejection) or `BadRequest` (HTTP 400) from the service.
   a slider under the user's finger. A drag updates optimistically and pushes on
   a 120 ms debounce (`VOLUME_DEBOUNCE_MS`); release commits and refreshes. Output
   slider max is the node's `max_volume` (150 %, or 200 % on the T2 DSP), input
-  max 100. The Output section has a **test sound** button that plays a two-note
-  chime through the browser (i.e. through the sink being controlled).
+  max 100. Layout (the shared status-menu anatomy, see
+  [README](README.md#ui-chips-menus-and-preferences)): an **Output** and an
+  **Input** section, each a volume row (mute button, thin slider, value in mono;
+  past 100 the value turns `is-over`) followed by every device of that kind as
+  a 40px row, the default one marked by an accent check — clicking another
+  makes it the default. The device subtitle (`nodeSubtitle`) is the row's
+  tooltip. The footer names the sound server (mono) and holds the **Test
+  sound** pill, which plays a two-note chime through the browser (i.e. through
+  the sink being controlled).
 - **Shared helpers** — `web/js/audioShared.js`: `currentSink`, `nodeIcon`,
   `nodeLabel`, `nodeSubtitle` (e.g. `Apple Audio Device · [Out] Speaker · in use`).
 

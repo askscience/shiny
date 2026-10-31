@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Kansio",
   "plugin.files.status.items.one": "{count} kohde",
   "plugin.files.status.items.other": "{count} kohdetta",
-  "plugin.files.status.selected": "“{name}” valittu ({what})",
-  "plugin.files.status.multiSelected.one": "{count} kohde valittu ({size})",
-  "plugin.files.status.multiSelected.other": "{count} kohdetta valittu ({size})",
 
   "plugin.files.when.today": "Tänään {time}",
   "plugin.files.when.yesterday": "Eilen {time}",

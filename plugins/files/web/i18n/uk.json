@@ -36,11 +36,6 @@
   "plugin.files.status.items.few": "{count} елементи",
   "plugin.files.status.items.many": "{count} елементів",
   "plugin.files.status.items.other": "{count} елемента",
-  "plugin.files.status.selected": "Вибрано “{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "Вибрано {count} елемент ({size})",
-  "plugin.files.status.multiSelected.few": "Вибрано {count} елементи ({size})",
-  "plugin.files.status.multiSelected.many": "Вибрано {count} елементів ({size})",
-  "plugin.files.status.multiSelected.other": "Вибрано {count} елемента ({size})",
 
   "plugin.files.when.today": "Сьогодні {time}",
   "plugin.files.when.yesterday": "Учора {time}",

@@ -1,6 +1,8 @@
 {
   "plugin.word.toolbar.documents": "Documents",
   "plugin.word.toolbar.titlePlaceholder": "Untitled",
+  "plugin.word.toolbar.titleLabel": "Document title",
+  "plugin.word.toolbar.new": "New",
   "plugin.word.toolbar.newDocument": "New document",
   "plugin.word.toolbar.importOdt": "Import .odt",
   "plugin.word.toolbar.saveToDocuments": "Save to Documents",
@@ -19,9 +21,20 @@
   "plugin.word.status.saved.one": "Saved {time} · {count} word",
   "plugin.word.status.saved.other": "Saved {time} · {count} words",
 
+  "plugin.word.state.saving": "Saving",
+  "plugin.word.state.unsaved": "Unsaved",
+  "plugin.word.state.saved": "Saved {time}",
+
+  "plugin.word.hero.edited": "Edited {time}",
+  "plugin.word.hero.words.one": "{count} word",
+  "plugin.word.hero.words.other": "{count} words",
+
+  "plugin.word.editor.placeholder": "Write something…",
+
   "plugin.word.menu.empty": "No documents yet",
   "plugin.word.menu.newDocument": "New document",
   "plugin.word.menu.importOdt": "Import .odt",
+  "plugin.word.menu.saveNow": "Save now",
   "plugin.word.menu.saveToDocuments": "Save to Documents",
   "plugin.word.menu.deleteDocument": "Delete document",
 

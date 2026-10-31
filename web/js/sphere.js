@@ -53,6 +53,10 @@ export function setSphereState(state) {
   if (state !== 'idle') {
     container.classList.add(`state-${state}`);
   }
+  // Published for the shell at large: the voice bar's state label
+  // (dockStep.js) and the depth aura (/ui/motion.css) follow it.
+  document.documentElement.dataset.voice = state;
+  window.dispatchEvent(new CustomEvent('voice:state', { detail: { state } }));
 }
 
 export function getSphereState() {

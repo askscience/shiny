@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Φάκελος",
   "plugin.files.status.items.one": "{count} στοιχείο",
   "plugin.files.status.items.other": "{count} στοιχεία",
-  "plugin.files.status.selected": "Επιλέχθηκε το “{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "Επιλέχθηκε {count} στοιχείο ({size})",
-  "plugin.files.status.multiSelected.other": "Επιλέχθηκαν {count} στοιχεία ({size})",
 
   "plugin.files.when.today": "Σήμερα {time}",
   "plugin.files.when.yesterday": "Χθες {time}",

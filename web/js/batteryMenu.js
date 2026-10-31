@@ -3,14 +3,17 @@
  * panel. It shows the live charge, the power mode and switches, and the
  * screen-brightness and keyboard-backlight sliders.
  *
- * The popover is appended to <body> (the HUD pill clips overflow), reuses the
- * shared `.ui-hud-menu-popup` glass, and is positioned under the battery chip.
+ * The popover is appended to <body> (the HUD pill clips overflow), is built
+ * from the shared status-menu anatomy (hudMenuShared.js: a big-percentage
+ * hero, power-mode rows with a check, slider rows, switch rows) and is
+ * positioned against the battery chip.
  * It re-renders from `battery:changed` (the chip's stream) and `power:settings`
  * (a value changed here or automatically from the battery).
  */
 
 import { apiFetch } from './api.js';
-import { emptyState, setIcon, slider, toggleRow } from '../ui/index.js';
+import { icon, setIcon, slider, toggle } from '../ui/index.js';
+import { el, menuLabel, menuNote, menuPopup, menuRow, menuSlider } from './hudMenuShared.js';
 import { createMenu } from './menuFactory.js';
 import {
   getAutoPowerSaver, getEffectivePowerMode, getEffectiveSttEngine,
@@ -68,36 +71,20 @@ export function toggleBatteryMenu(chip) {
 /* ── Skeleton ──────────────────────────────────────────────── */
 
 function buildPopup() {
-  const popup = document.createElement('div');
-  popup.className = 'ui-hud-menu-popup battery-menu hidden';
-  popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', t('battery.title'));
+  const { popup, body: bodyEl } = menuPopup('battery-menu', t('battery.title'));
+  body = bodyEl;
 
-  const head = document.createElement('div');
-  head.className = 'battery-menu-head';
-  headIcon = document.createElement('span');
-  headIcon.className = 'battery-menu-head-icon';
-  const meta = document.createElement('div');
-  meta.className = 'battery-menu-head-main';
-  headTitle = document.createElement('div');
-  headTitle.className = 'battery-menu-title';
-  headHint = document.createElement('div');
-  headHint.className = 'battery-menu-hint';
-  meta.append(headTitle, headHint);
-  head.append(headIcon, meta);
+  // The hero: the charge as a big number, the state on a line under it.
+  const hero = el('div', 'hud-menu-hero');
+  const top = el('div', 'hud-menu-hero-top');
+  headTitle = el('div', 'hud-menu-hero-value');
+  headIcon = el('span', 'hud-menu-hero-icon');
+  top.append(headTitle, headIcon);
+  headHint = el('div', 'hud-menu-hero-hint');
+  hero.append(top, headHint);
 
-  body = document.createElement('div');
-  body.className = 'battery-menu-body';
-
-  popup.append(head, body);
+  popup.append(hero, body);
   return popup;
-}
-
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
 }
 
 /* ── Data ──────────────────────────────────────────────────── */
@@ -150,10 +137,7 @@ function render() {
   body.textContent = '';
 
   if (!status || !status.available || !status.present) {
-    body.appendChild(emptyState({
-      title: t('battery.none'),
-      body: t('battery.noneBody'),
-    }));
+    body.appendChild(menuNote(`${t('battery.none')} · ${t('battery.noneBody')}`));
     return;
   }
 
@@ -167,54 +151,61 @@ function render() {
 function renderHead() {
   if (!headTitle || !headIcon) return;
   const available = status && status.available && status.present;
-  headTitle.textContent = available
-    ? t('battery.headWithPercent', { percent: chipPercent(status) }).trim()
-    : t('battery.label');
-  void setIcon(headIcon, available ? batteryIconName(status) : 'hud/battery-4', { size: 18 });
+  headTitle.textContent = available ? chipPercent(status) : t('battery.label');
+  headTitle.classList.toggle('is-text', !available);
+  void setIcon(headIcon, available ? batteryIconName(status) : 'hud/battery-4', { size: 22 });
   const state = available ? chipStateClass(status) : '';
   headIcon.classList.toggle('is-charging', state === 'is-charging');
   headIcon.classList.toggle('is-low', state === 'is-low');
+  headTitle.classList.toggle('is-low', state === 'is-low');
 
   const bits = available
     ? [chipLabel(status), timeLabel(status), status.ac_online === true ? t('battery.pluggedIn') : null]
     : [];
-  headHint.textContent = bits.filter(Boolean).join(' · ');
+  // `chipLabel` already says "Plugged in" when idle on AC: name it once.
+  headHint.textContent = [...new Set(bits.filter(Boolean))].join(' · ');
 }
 
 function section(title, children) {
-  const wrap = el('div', 'battery-menu-section');
-  if (title) wrap.appendChild(el('div', 'battery-menu-section-title', title));
+  const wrap = el('div', 'hud-menu-section');
+  if (title) wrap.appendChild(menuLabel(title));
   for (const child of children) if (child) wrap.appendChild(child);
   return wrap;
 }
 
+const MODE_ICONS = { performance: 'ui/arrow-up', balanced: 'ui/contrast', saver: 'hud/battery-1' };
+
 function powerModeSection() {
-  const row = el('div', 'power-mode-row');
-  row.setAttribute('role', 'radiogroup');
-  row.setAttribute('aria-label', t('power.mode'));
+  const group = el('div', 'hud-menu-list');
+  group.setAttribute('role', 'radiogroup');
+  group.setAttribute('aria-label', t('power.mode'));
   for (const mode of POWER_MODES) {
     const active = getPowerMode() === mode;
-    const btn = el('button', `power-mode-btn${active ? ' is-active' : ''}`, powerModeLabel(mode));
-    btn.type = 'button';
-    btn.title = powerModeHint(mode);
-    btn.setAttribute('role', 'radio');
-    btn.setAttribute('aria-checked', String(active));
-    btn.addEventListener('click', () => {
-      setPowerMode(mode);
-      render();
+    const row = menuRow({
+      iconName: MODE_ICONS[mode],
+      title: powerModeLabel(mode),
+      tooltip: powerModeHint(mode),
+      selected: active,
+      role: 'radio',
+      onClick: () => {
+        setPowerMode(mode);
+        render();
+      },
     });
-    row.appendChild(btn);
+    row.setAttribute('aria-checked', String(active));
+    group.appendChild(row);
   }
-  return section(t('power.mode'), [row]);
+  return section(t('power.mode'), [group]);
 }
 
 function displaySection() {
   return section(t('common.display', null, 'Display'), [
-    backlightField('screen'),
-    backlightField('keyboard'),
+    ...backlightField('screen'),
+    ...backlightField('keyboard'),
   ]);
 }
 
+/** A slider row for one backlight, plus a note when it cannot be driven. */
 function backlightField(id) {
   const spec = BACKLIGHTS[id];
   const state = backlights[id];
@@ -226,56 +217,58 @@ function backlightField(id) {
     ? t('settings.power.screenBacklightUnavailable', null, 'This machine does not expose a writable panel backlight to the app.')
     : t('settings.power.keyboardBacklightUnavailable', null, 'This machine does not expose a writable keyboard backlight to the app.');
 
-  const value = el('span', 'battery-backlight-value');
-  const head = el('div', 'battery-backlight-head');
-  head.append(el('span', 'battery-backlight-label', title), value);
-
   const control = slider({ min: 0, max: 100, value: state.percent ?? 50 });
   control.setAttribute('aria-label', title);
-  const wrap = el('div', 'backlight-field battery-backlight');
-  wrap.append(head, control);
+  const lead = icon(id === 'screen' ? 'ui/brightness' : 'ui/keyboard', { size: 17, className: 'hud-menu-icon' });
+  lead.title = title;
+  const { row, value } = menuSlider({ leading: lead, range: control });
+  row.title = title;
 
   if (!state.loaded) {
     value.textContent = '—';
     control.disabled = true;
-    return wrap;
+    return [row];
   }
   if (!state.available) {
-    value.textContent = t('settings.power.unavailable', null, 'Unavailable');
+    value.textContent = '—';
     control.disabled = true;
-    wrap.appendChild(el('p', 'battery-menu-summary', unavailable));
-    return wrap;
+    return [row, menuNote(`${title}: ${t('settings.power.unavailable', null, 'Unavailable')}. ${unavailable}`)];
   }
 
-  value.textContent = `${state.percent}%`;
+  value.textContent = `${state.percent}`;
   control.disabled = !state.writable;
   if (!state.writable) {
-    wrap.appendChild(el('p', 'battery-menu-summary', t('settings.power.backlightReadOnly', null, 'The app cannot write this backlight on this machine.')));
-    return wrap;
+    return [row, menuNote(t('settings.power.backlightReadOnly', null, 'The app cannot write this backlight on this machine.'))];
   }
 
   control.addEventListener('pointerdown', () => { adjustingBacklight = true; });
   control.addEventListener('input', () => {
     const percent = Number(control.value);
     state.percent = percent;
-    value.textContent = `${percent}%`;
+    value.textContent = `${percent}`;
     clearTimeout(backlightWrites[id]);
     backlightWrites[id] = setTimeout(() => {
       apiFetch(spec.endpoint, { method: 'POST', body: JSON.stringify({ percent }) }).catch(() => {});
     }, 150);
   });
-  return wrap;
+  return [row];
+}
+
+function switchRow({ label, hint, checked, onChange }) {
+  const sw = toggle({ checked, onChange });
+  sw.setAttribute('aria-label', label);
+  return menuRow({ title: label, sub: hint, trailing: [sw] });
 }
 
 function switchesSection() {
-  const auto = toggleRow({
+  const auto = switchRow({
     label: t('power.autoSaver'),
     hint: t('power.autoSaverHint'),
     checked: getAutoPowerSaver(),
     onChange: (on) => { setAutoPowerSaver(on); render(); },
   });
 
-  const lowAi = toggleRow({
+  const lowAi = switchRow({
     label: t('power.lowAi'),
     hint: t('power.lowAiHint'),
     checked: getLowPowerAi(),
@@ -288,12 +281,11 @@ function switchesSection() {
 function summarySection() {
   const effective = getEffectivePowerMode();
   const saver = isLowPowerAiActive();
-  const line = el('div', 'battery-menu-summary');
-  line.textContent = effective === 'saver'
+  const line = menuNote(effective === 'saver'
     ? (saver
       ? t('power.saverWithEngines', { engines: describeEngines(getEffectiveSttEngine(), getEffectiveTtsEngine()) })
       : t('power.saverUnchanged'))
-    : t('power.modeFullAi', { mode: powerModeLabel(effective) });
+    : t('power.modeFullAi', { mode: powerModeLabel(effective) }));
   return section(null, [line]);
 }
 

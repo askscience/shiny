@@ -77,6 +77,14 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/downloads/event", "browser_download_event"),
             (HttpMethod::Post, "/api/browser/downloads/remove", "browser_download_remove"),
             (HttpMethod::Post, "/api/browser/downloads/clear", "browser_downloads_clear"),
+            (HttpMethod::Get, "/api/browser/vault", "browser_vault"),
+            (HttpMethod::Post, "/api/browser/vault/unlock", "browser_vault_unlock"),
+            (HttpMethod::Post, "/api/browser/vault/lock", "browser_vault_lock"),
+            (HttpMethod::Post, "/api/browser/vault/reset", "browser_vault_reset"),
+            (HttpMethod::Get, "/api/browser/passwords", "browser_passwords"),
+            (HttpMethod::Post, "/api/browser/passwords/reveal", "browser_password_reveal"),
+            (HttpMethod::Post, "/api/browser/passwords/save", "browser_password_save"),
+            (HttpMethod::Post, "/api/browser/passwords/remove", "browser_password_remove"),
         ].map(|(method, path, tag)| RouteSpec::new(method, path, tag)));
 
         // A URL the window should be showing right now, for the UI to poll.
@@ -106,6 +114,7 @@ impl Plugin for BrowserPlugin {
         crate::settings::ensure_schema(&ctx);
         crate::downloads::ensure_schema(&ctx);
         crate::bookmarks::ensure_schema(&ctx);
+        crate::vault::ensure_schema(&ctx);
 
         // Fetch + compile the ad-filter lists in the background so the compiled
         // engine exists for the shell's next start. Never blocks plugin load,

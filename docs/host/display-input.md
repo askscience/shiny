@@ -130,6 +130,35 @@ The reader distinguishes a scroll from a swipe by requiring fingers to move
 pressure outlier), since Apple's `bcm5974` never sends `MT_TOOL_PALM`. A pad
 that reports neither size nor pressure falls back to contact-travel alone.
 
+Swipes are continuous — the UI follows the fingers and, on release, completes
+or springs back. The reader emits a lifecycle:
+
+| Phase | When | Payload |
+|---|---|---|
+| `begin` | three synchronised fingers moved 30% of the reference distance (12% of the pad's axis) and locked the dominant axis | direction, progress |
+| `update` | the fingers moved (≥ 0.002 progress) | progress |
+| `end` | fewer than three fingers remain | last progress, velocity |
+| `cancel` | `SYN_DROPPED`, the device went away, or the fingers stopped moving together | — |
+
+Every phase is dispatched as `detail: { phase, axis, direction, progress,
+velocity }`. `direction` is the begin direction (kept for listeners of the
+older discrete `{ direction }` detail); `progress` is signed along it, 1.0 = two
+reference distances (a comfortable full swipe), clamped to ±1.5, negative once
+the fingers come back past the start; `velocity` is progress per second over
+the last 80 ms before the release (fingers that rested before lifting read
+as a slow release). The synchronisation check that used to gate the discrete
+swipe still runs once the swipe reaches the reference distance: a straggler
+there cancels the gesture. There is no time limit any more — a slow,
+deliberate swipe is fine. What the page does with the lifecycle is described
+in [Overview and launcher](../core/desktop.md#continuous-gestures).
+
+Delivery: the bridge coalesces updates (only the newest between two pump
+ticks survives; `begin`/`end`/`cancel` are never dropped). The shell's pump
+normally runs every 100 ms; on `begin` the reader thread calls
+`peakd_qt_pump_rate(16, wake)` — queued onto the GUI thread — so events are
+delivered at frame rate while the fingers move, and on `end`/`cancel` it goes
+back to 100 ms. Both transitions also wake the pump at once.
+
 Permission: opening `/dev/input/event*` as an unprivileged user needs a udev
 rule:
 

@@ -349,10 +349,23 @@ The window ends on gestures, not on a clock unless the user picks one:
   long-press leaves — or closes the microphone when the wake word is off.
 - The orb's `conversation` state is held for as long as the window is armed.
 
+### The spoken caption
+
+While a reply plays, [`spokenReply.js`](../../web/js/spokenReply.js) writes it
+into `#reply-text` (centred above the bar) as one span per word, and each word
+rises out of its line as it is said (`.is-said`; the rise itself is
+`web/ui/motion.css`: a spring in fluid, out of a blur in depth). The TTS clip carries no word timings, so the
+timing is estimated from the clip's progress (`currentTime / duration`) spread
+over the words by length (a fixed speech rate stands in until the duration is
+known). The caption lingers fully lit for 2.6 s after playback ends; reduced
+motion lights every word at once. The error banner `agent.js` writes into the
+same element is unaffected.
+
 ### The microphone rule
 
 The recogniser is open **only while the assistant is silent**. `playback.js`
-dispatches `voice:speaking { speaking, text }` around real playback;
+dispatches `voice:speaking { speaking, text, audio }` around real playback
+(`audio` is the playing element while `speaking` is true);
 `recognition.js` closes any live session on `speaking: true` and re-opens the
 window only after `speaking: false`. That is what makes the assistant unable to
 transcribe — and answer — itself: not echo cancellation, but the absence of a

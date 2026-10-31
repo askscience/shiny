@@ -75,11 +75,19 @@ function recordCopy(text, source = 'app') {
  * "Copy …" actions), so nothing can reach the clipboard without being
  * recorded.
  */
-export async function copyText(text, { source = 'app' } = {}) {
+export async function copyText(text, { source = 'app', sensitive = false } = {}) {
   const clean = normalizeText(text);
   if (!clean) return false;
-  const ok = await writeClipboard(clean);
-  recordCopy(clean, source);
+  // A secret (a saved password) reaches the OS clipboard but never the
+  // history or the paste mirror, and the copy event it raises is not recorded.
+  if (sensitive) quiet = true;
+  let ok;
+  try {
+    ok = await writeClipboard(clean);
+  } finally {
+    quiet = false;
+  }
+  if (!sensitive) recordCopy(clean, source);
   if (!ok) toast(t('clip.unavailable', null, 'Clipboard unavailable'), { type: 'error' });
   return ok;
 }
@@ -169,7 +177,11 @@ function sourceOf(target) {
 }
 
 /** copy / cut (capture phase): let the browser do its thing, then record it. */
+/** Set while a sensitive copy is in flight, so `onCopy` skips it. */
+let quiet = false;
+
 function onCopy(event) {
+  if (quiet) return;
   const fromEvent = event.clipboardData?.getData('text/plain');
   const text = (typeof fromEvent === 'string' && fromEvent)
     ? fromEvent

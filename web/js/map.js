@@ -1,4 +1,5 @@
-import { cssVar, getThemeManifest } from '../ui/index.js';
+import { cssVar, getThemeManifest, iconButton } from '../ui/index.js';
+import { t } from './i18n.js';
 import { ensureLeaflet } from './vendorLoader.js';
 
 let map = null;
@@ -11,14 +12,37 @@ const MAP_TILES = {
   light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
 };
 
-/** Map surfaces follow the active theme + accent. */
+/**
+ * Resolve a CSS colour expression (tokens, color-mix) to a concrete value.
+ * Leaflet writes colours into SVG attributes, which cannot see custom
+ * properties, so each token is computed through a probe element.
+ */
+function resolveColor(expr, fallback) {
+  if (typeof document === 'undefined' || !document.body) return fallback;
+  const probe = document.createElement('span');
+  probe.style.display = 'none';
+  probe.style.color = fallback;
+  probe.style.color = expr;
+  document.body.appendChild(probe);
+  const value = getComputedStyle(probe).color;
+  probe.remove();
+  return value || fallback;
+}
+
+/** Map surfaces follow the active theme + accent: every colour is a token. */
 function mapColors() {
+  const accent = cssVar('--accent') ? resolveColor('var(--accent)', 'currentColor') : 'currentColor';
   return {
-    accent: cssVar('--accent') || '#ffffff',
-    accent2: cssVar('--accent-2') || '#8a8a8a',
-    traveled: 'rgba(250, 250, 250, 0.32)',
-    casing: 'rgba(0, 0, 0, 0.55)',
-    white: '#ffffff',
+    accent,
+    // The dashed "preview" route: the theme's second accent, or a quiet grey.
+    accent2: cssVar('--accent-2') ? resolveColor('var(--accent-2)', accent) : resolveColor('var(--muted)', accent),
+    // Already-driven part of a route: a faint line in the text colour.
+    traveled: resolveColor('color-mix(in srgb, var(--text) 40%, transparent)', accent),
+    // The halo under the live route: the canvas colour, so it separates the
+    // line from the tiles on a light and a dark map alike.
+    casing: resolveColor('var(--bg)', accent),
+    // Marker rings sit on an accent fill.
+    ring: resolveColor('var(--accent-contrast)', accent),
   };
 }
 
@@ -88,18 +112,20 @@ export async function initMap() {
     radius: 7,
     fillColor: mapColors().accent,
     fillOpacity: 0.95,
-    color: '#fff',
+    color: mapColors().ring,
     weight: 2.5,
     className: 'user-marker',
   }).addTo(map);
 
-  window.addEventListener('appearance:change', () => {
-    const c = mapColors();
-    userMarker?.setStyle({ fillColor: c.accent });
-    destinationMarker?.setStyle({ fillColor: c.accent });
-    routeLayer?.setStyle({ color: routeDashed ? c.accent2 : c.accent });
-    routeTraveledLayer?.setStyle({ color: c.traveled });
+  window.addEventListener('appearance:change', applyMapColors);
+  // A theme's stylesheet lands a moment after its `theme:change`.
+  window.addEventListener('theme:change', () => {
+    applyMapColors();
+    setTimeout(applyMapColors, 300);
+    setTimeout(applyMapColors, 1000);
   });
+
+  ensureMapControls();
 
   window.addEventListener('gps:update', (e) => {
     updatePosition(e.detail);
@@ -127,6 +153,7 @@ export async function initMap() {
   window.addEventListener('map:resize', () => {
     if (!map) return;
     map.invalidateSize();
+    ensureMapControls();
     if (navigatorFollow && lastMapPan.lat != null) {
       centerMapOnNavPuck(lastMapPan.lat, lastMapPan.lon);
       setMapBearing(displayBearing);
@@ -142,6 +169,111 @@ export async function initMap() {
   emitMapView();
 
   return map;
+}
+
+/** Re-colour the markers and route from the current tokens. */
+function applyMapColors() {
+  const c = mapColors();
+  userMarker?.setStyle({ fillColor: c.accent, color: c.ring });
+  destinationMarker?.setStyle({ fillColor: c.accent, color: c.ring });
+  routeLayer?.setStyle({ color: routeDashed ? c.accent2 : c.accent });
+  routeCasingLayer?.setStyle({ color: c.casing });
+  routeTraveledLayer?.setStyle({ color: c.traveled });
+}
+
+/* ── On-map controls ─────────────────────────────────────────────
+ * Leaflet's own controls are hidden (app.css), so the map window carries
+ * its own: a mono meta line (where the view is, or the navigation state)
+ * bottom-left and grey-pill zoom / locate buttons bottom-right. They live in
+ * the map's stage (tiles.js builds it), above the Leaflet panes.
+ */
+let mapControlsEl = null;
+let mapMetaEl = null;
+let metaFrame = 0;
+
+function ensureMapControls() {
+  if (!map) return;
+  const stage = map.getContainer()?.parentElement;
+  if (!stage) return;
+  if (mapControlsEl && mapControlsEl.parentElement === stage) return;
+
+  const meta = document.createElement('div');
+  meta.className = 'map-meta';
+  meta.setAttribute('aria-live', 'off');
+
+  const controls = document.createElement('div');
+  controls.className = 'map-controls';
+  const zoomIn = iconButton({
+    icon: 'ui/plus',
+    variant: 'ghost',
+    label: t('map.zoomIn', null, 'Zoom in'),
+    onClick: () => map?.zoomIn(),
+  });
+  const zoomOut = iconButton({
+    icon: 'ui/minus',
+    variant: 'ghost',
+    label: t('map.zoomOut', null, 'Zoom out'),
+    onClick: () => map?.zoomOut(),
+  });
+  const locate = iconButton({
+    icon: 'ui/pin',
+    variant: 'ghost',
+    label: t('map.locate', null, 'Show my position'),
+    onClick: () => void locateMe(),
+  });
+  controls.append(zoomIn, zoomOut, locate);
+
+  // Pointer/wheel on the controls must not pan or zoom the map under them.
+  for (const el of [controls, meta]) {
+    el.addEventListener('pointerdown', (e) => e.stopPropagation());
+    el.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+    el.addEventListener('dblclick', (e) => e.stopPropagation());
+  }
+
+  mapControlsEl?.remove();
+  mapMetaEl?.remove();
+  stage.append(meta, controls);
+  mapControlsEl = controls;
+  mapMetaEl = meta;
+  map.off('move zoom', scheduleMapMeta);
+  map.on('move zoom', scheduleMapMeta);
+  window.removeEventListener('locale:change', updateMapMeta);
+  window.addEventListener('locale:change', updateMapMeta);
+  updateMapMeta();
+}
+
+async function locateMe() {
+  if (!map) return;
+  map.setView([currentPos.lat, currentPos.lon], Math.max(map.getZoom(), 15), { animate: true });
+  const pos = await refreshGpsPosition();
+  if (map && pos && !navigatorFollow) {
+    map.setView([pos.lat, pos.lon], Math.max(map.getZoom(), 15), { animate: true });
+  }
+}
+
+function scheduleMapMeta() {
+  if (metaFrame) return;
+  metaFrame = requestAnimationFrame(() => {
+    metaFrame = 0;
+    updateMapMeta();
+  });
+}
+
+function formatCoord(value, pos, neg) {
+  const abs = Math.abs(value);
+  return `${abs.toFixed(4)}° ${value >= 0 ? pos : neg}`;
+}
+
+/** COORDINATES · Z16, or the navigation state while a route is live. */
+function updateMapMeta() {
+  if (!map || !mapMetaEl) return;
+  const c = map.getCenter();
+  const zoom = `Z${Math.round(map.getZoom())}`;
+  const parts = [];
+  if (navigatorFollow) parts.push(t('map.meta.navigating', null, 'Navigating'));
+  else if (navigationActive) parts.push(t('map.meta.route', null, 'Route'));
+  parts.push(formatCoord(c.lat, 'N', 'S'), formatCoord(c.lng, 'E', 'W'), zoom);
+  mapMetaEl.textContent = parts.join(' · ');
 }
 
 export function setMapTheme(theme) {
@@ -403,6 +535,9 @@ function bindMapZoomGuards() {
 function setNavigationMode(active) {
   navigationActive = active;
   document.body.classList.toggle('nav-active', active && !navigatorFollow);
+  // The follow camera owns zoom and centre while navigating.
+  mapControlsEl?.classList.toggle('hidden', !!(active && navigatorFollow));
+  updateMapMeta();
   if (!map) return;
   if (active && navigatorFollow) {
     map.dragging.disable();
@@ -439,7 +574,7 @@ function showDestinationMarker(coords) {
     radius: 10,
     fillColor: mapColors().accent,
     fillOpacity: 1,
-    color: '#fff',
+    color: mapColors().ring,
     weight: 2.5,
   }).addTo(map);
 }

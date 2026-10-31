@@ -25,9 +25,11 @@ arrangement, never a rewrite of it.
 | `web/js/fullscreen.js` | Real (browser) fullscreen, dedicated workspace, chrome reveal |
 | `web/js/fullscreenBubble.js` | Top-bar bubble for a fullscreen window (close / exit) |
 | `web/js/coreWindows.js` | Registry of built-in windows (`settings`, `plugins`) |
-| `web/js/overview.js` | Mission-Control window grid (three-finger swipe up) |
+| `web/js/overview.js` | Window overview, strip or cloud (three-finger swipe up) |
 | `web/js/launcher.js` | Full-screen plugin launcher (three-finger swipe down) |
 | `web/js/gestures.js` | Trackpad gesture → desktop action vocabulary |
+| `web/js/gestureTransition.js` | Progress-driven transitions: commit/rollback decision, settle animation |
+| `web/js/desktop/workspaceSlide.js` | Workspace carousel (finger-driven and discrete switches) |
 | `web/js/contextMenu.js` | Right-click / long-press menus and the popup engine |
 | `web/js/nativeOccluders.js` | Core HTML surfaces that must punch through a native page's mask |
 | `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait and landscape) |
@@ -108,6 +110,19 @@ the surface down, exits fullscreen when needed and POSTs
 `/api/plugins/window/closed` so a Craft app's MCP engine stops gracefully. It
 never touches `enabled`: deactivate stays in the Plugins page, both context
 menus and the AI tools, and the tray can reopen a closed-but-active window.
+
+Opening and closing move in the user's motion language
+([web UI → Motion languages](web-ui.md#motion-languages)). `renderTiles()`
+plays `windowEnter()` for a window that appears after the desktop's first
+laid-out render (the boot restore does not animate); a name whose element is
+still loading waits in `awaitingEntrance` for the render that lays it out, and
+the entrance runs after the grid is unhidden, so the first window of an empty
+desk animates too. Fluid grows the window out of its tray button; depth sends
+the other windows a step back while it lands. `closePluginWindow()` and
+`closeCoreWindow()` first play `windowExit()` (fluid falls back into the tray
+button) and only then run the teardown above (`animateClose`); a second close
+while one plays is ignored. Nothing animates while the overview owns the tiles,
+in the phone layout, for a window that is not on screen, or with reduced motion.
 
 ### Core windows
 
@@ -194,8 +209,9 @@ restart). Classes on the grid select the layout:
 `<body>`; renders the workspace bar; re-emits `artifact:dock`; and nudges Leaflet
 with `map:resize`. It does **not** focus the window it just opened — an open
 raises a window, it never chooses it (see [Focus mode](#focus-mode)). Workspace
-switches animate with `animateWorkspaceSlide(dir)` (Web Animations API, skipped
-under `prefers-reduced-motion`).
+switches slide (see [Workspace slide](#workspace-slide)). While the overview or a
+slide owns the tiles, `renderTiles()` waits: both pin tiles with their own
+inline styles and re-render when they let go.
 
 ## Layouts
 
@@ -437,6 +453,8 @@ browser — except `Ctrl/Cmd+Shift+V`, which opens the Clipboard menu
 | `Alt+H` / `Alt+L` | Cycle focus to the previous / next window |
 | `Alt+,` / `Alt+.` | Previous / next workspace |
 | `Alt+N` | New workspace |
+| `Ctrl+Alt+↑` / `Ctrl+Alt+↓` | Window overview / plugin launcher (the vertical swipes; `gestures.js`) |
+| `Ctrl+Alt+←` / `Ctrl+Alt+→` | Next / previous workspace (the horizontal swipes) |
 | `Alt+Shift+N` | Remove the active workspace |
 | `Ctrl/Cmd+Shift+V` | Open / close the top-bar Clipboard menu (copied-items history) |
 
@@ -584,7 +602,7 @@ on `<html>` / a CSS variable):
 | `orb_width` / `orb_height` | 64–400 px / 24–72 px | Published as `--voice-bar-width` / `--voice-bar-height` and applied to the bar where it holds an edge alone. Riding the top bar's row the bar takes the rail's size instead, so the panel hides these two there. |
 | `orb_color` | `accent`, `palette` | The bar's own body: the theme accent, or `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. The audio bloom keeps the accent in both modes, so the voice-reactive shadow survives "all accents". |
 | `orb_border` | `none`, `hairline`, `palette` | The bar's own border — a line on the bar, not what makes it exist. The hairline is the accent's contrast ink, so it reads on the accent fill; `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
-| `orb_status` | `off`, `text`, `icons` | What the bar's own glyph wears (`#voice-step`, the one span inside it): nothing — the line stays in the bubble above — the humanised tool step line as **text** (in the accent's contrast ink; the slot grows to fit it in the top row), or the **icon** of the tool that is running. The icon mode always carries a mark: the app's own at rest, the tool's while one runs, and back — each swap a short fade ([`voiceGlyph.js`](../../web/js/voiceGlyph.js) paints it, `sphere.css` animates it). `toolIcons.js` maps a tool action to a catalogue icon by prefix; the action rides the step from the server (`agent_runner.rs` → the SSE `step` event → `agent.js`). With any mode but `off` the bubble's own line is hidden, so the line never shows twice, and the dock keeps the live region. |
+| `orb_status` | `off`, `state` (default), `text`, `icons` | What the bar's own glyph wears (`#voice-step`, the one span inside it): nothing — the line stays in the bubble above — the assistant's **state** as a small mono label (Ready, Listening, Thinking, Speaking…) that decodes letter by letter on every change (`paintStateLabel` in `voiceGlyph.js`, driven by `voice:state` from `sphere.js`; it stays up while the reply is spoken) — the humanised tool step line as **text** (in the accent's contrast ink; the slot grows to fit it in the top row), or the **icon** of the tool that is running. The icon mode always carries a mark: the app's own at rest, the tool's while one runs, and back — each swap a short fade ([`voiceGlyph.js`](../../web/js/voiceGlyph.js) paints it, `sphere.css` animates it). `toolIcons.js` maps a tool action to a catalogue icon by prefix; the action rides the step from the server (`agent_runner.rs` → the SSE `step` event → `agent.js`). With any mode but `off` the bubble's own line is hidden, so the line never shows twice, and the dock keeps the live region. |
 | `orb_style` | `accent`, `bar` | The bar's own look: `accent` is the accent body (the colour above), `bar` the same glass plate the top bar's rail wears (`--surface`, the glass hairline, the glass blur) — the accent then shows in the audio glow alone. The panel's preview follows the choice. |
 
 The corners are **not** a setting: the bar uses the top bar's rounding
@@ -595,9 +613,9 @@ presence: `--voice-glow`, the bar's own `box-shadow` — a halo that swells with
 that token rides the level, so a bar with the mic quiet casts **nothing**: the
 shadow is the audio effect and not a resting decoration. The top-bar look keeps
 it — it must not set `box-shadow` itself, or a theme that collapses its shadows
-(`--shadow-glass: none`, pitch) would take the glow down with it.
-Themes that flatten gradients scope those rules to the accent mode (pitch does),
-so the options keep working.
+(`--shadow-glass: none`) would take the glow down with it.
+Themes that flatten gradients scope those rules to the accent mode, so the
+options keep working.
 
 Constants:
 
@@ -618,7 +636,7 @@ stay visible — there is no hover to bring them back.
 ## Overview and launcher
 
 Both are plain web layers raised above the chrome and are opened by the native
-trackpad gestures. `web/js/gestures.js` maps a `trackpad:gesture` direction:
+trackpad gestures. `web/js/gestures.js` maps a `trackpad:gesture`:
 
 | Gesture | Action |
 |---|---|
@@ -628,22 +646,91 @@ trackpad gestures. `web/js/gestures.js` maps a `trackpad:gesture` direction:
 | swipe down | plugin launcher |
 
 While an overlay is open a vertical swipe only *pulls it back*; opening the
-other overlay needs a fresh swipe. `window.__shinyGesture(dir)` is a console
-hook for testing without the native reader.
+other overlay needs a fresh swipe, and a sideways swipe dismisses the overlay
+before switching. `window.__shinyGesture(dir)` is a console hook for testing
+without the native reader; `Ctrl+Alt+arrows` do the same from the keyboard.
 
-**Overview** (`web/js/overview.js`) lays out *every* mounted window from every
-workspace as a live grid — the real tiles resized in place, never clones, so a
-running video or half-typed document survives. `shape()` picks the column count
-nearest a 16:10 cell with a full last row (`PAD = 40`, `GAP = 16`). Each window
-gets a `WS n` badge; focusing one switches to its workspace and closes the
-overview. It exits real fullscreen first (which it cannot represent honestly)
-and blurs focus so typing cannot reach a window behind the grid. Escape or a
-backdrop click also closes.
+### Continuous gestures
+
+The shell sends a swipe as a lifecycle — `detail: { phase, axis, direction,
+progress, velocity }` with `phase` one of `begin`, `update`, `end`, `cancel`
+(see [Trackpad gestures](../host/display-input.md#trackpad-gestures)).
+`direction` is the direction the swipe began in and rides on every phase;
+`progress` is signed along it (1 ≈ a full swipe, negative once the fingers
+come back past the start). A detail without `phase` is the older discrete form
+and runs `applyGesture(direction)`.
+
+On `begin`, `gestures.js` picks the target — overview, launcher or workspace
+slide (or, with an overlay up, that overlay's close) — and asks it for a
+transition; `update`s feed the progress (coalesced to one paint per animation
+frame); `end` decides. `web/js/gestureTransition.js` holds the rule
+(`shouldCommit`): a release at or past half-way commits, a flick (≥ 1.2
+progress/s towards the target after at least 0.12) commits early, and a flick
+back always rolls back; `cancel` rolls back. The rest of the way is animated
+in 250–450 ms, proportional to the distance left (shorter after a fast
+release), and jumps under `prefers-reduced-motion`. Past either end the
+progress is rubber-banded. Discrete callers (`applyGesture`, keys, the Touch
+Bar) `play()` the very same transition, so a key and a swipe look alike.
+
+Each surface exposes the same shape: `begin…()`, `set…Progress(p)` and
+`end…(open)`, plus `overviewTransition(wantOpen)` / `launcherTransition(wantOpen)`
+for an interactive change, with `open…()` / `close…()` built on top.
+
+**Overview** (`web/js/overview.js`) shows *every* mounted window from every
+workspace — the real tiles, never clones, so a running video or half-typed
+document survives. At `beginOverview()` each tile is measured once and pinned
+(absolutely positioned at its current rect, so every layout mode works); each
+frame interpolates a transform from that rect to the tile's target (FLIP), in a
+short cascade. Windows of other workspaces fly in from the side their workspace
+lives on. Closing animates back and restores every tile's inline style exactly
+as it was, then re-tiles. The arrangement comes from the theme's
+`"overview"` key in `theme.json` (default `strip`):
+
+- `strip` — a horizontal row of equal boxes, windows on a common baseline, a
+  `.overview-label` under each (index, title, `WS n`), `.overview-nav` with
+  Prev / Next (and `←` / `→`) to scroll it, and a large two-line
+  `.overview-title` ("N windows, M spaces.") bottom-left.
+- `cloud` — windows scattered at different depths, with perspective, around a
+  centred headline; they drift gently while open, and the one under the
+  pointer comes forward fully lit. Each window carries a `WS n` badge in its
+  header.
+
+For theming, the document element carries `--overview-p` (0..1, every frame),
+`data-overview="opening|open|closing"` and `data-overview-style`. The chrome
+classes are styled structurally from tokens only (`web/css/overview.css`).
+Clicking a window closes the overview and then focuses it (switching to its
+workspace, which slides); Escape or a click outside the windows closes. The
+overview exits real fullscreen first (which it cannot represent honestly) and
+blurs focus so typing cannot reach a window behind it.
 
 **Launcher** (`web/js/launcher.js`) is a full-screen app grid over the blurred
 desktop — the top-bar tray at full size, same `/api/plugins` list and same
 activate/focus paths. Tapping an inactive plugin activates it; tapping an active
-one focuses its window. A running app gets a dot under its name.
+one focuses its window. A running app gets a dot under its name. It follows
+the fingers too: `--launcher-p` (and `--launcher-over` past the ends) drives
+the panel's fade and drop, with `data-launcher="opening|open|closing"`.
+
+### Workspace slide
+
+A workspace switch is a full-width carousel
+(`web/js/desktop/workspaceSlide.js`): the current workspace's windows leave
+with the fingers while the neighbour's come in from the edge, wrapping around
+like `switchWorkspace`. During a swipe nothing changes state: the outgoing
+tiles are pinned at their rects and the neighbour's tiles are laid out in place
+by the normal layout engine, so both are on screen. A commit restores the
+inline styles and calls `switchWorkspace`, whose re-render lands the windows
+where they already are (a 200 ms FLIP covers any difference, e.g. a different
+master pane); a rollback restores the styles and re-renders the current
+workspace. Discrete switches (dots, `Alt+1…9`, `Alt+,`/`Alt+.`) animate the
+same slide: `tiles.js` captures the outgoing tiles just before its re-render
+and the slide pins them back to animate out. The document element carries
+`--workspace-p` (signed, positive towards the next workspace) and
+`data-workspace-slide`. The phone layout, a disabled workspace system and a
+single workspace do not slide.
+
+Native Browser pages cannot follow DOM transforms: the Browser hides them
+while `<body>` carries `overview-active`, `launcher-active` or
+`workspace-sliding`, and shows them again when the class goes.
 
 ---
 
@@ -652,6 +739,16 @@ one focuses its window. A running app gets a dot under its name.
 Settings (`web/js/settingsWindow.js`), Plugins (`pluginsWindow.js`) and Chats
 (`chatHistory.js`) are built-in windows, not plugin tiles. They share the window
 chrome and the UI library, and are opened from the right of the HUD.
+
+The Plugins window (`web/css/plugins.css`) puts its two tabs (Installed / Craft
+apps), the search field and Install in the window bar (`data-window-bar`). The
+scrolling area opens with a `largeTitle()` ("Plugins" / "Craft apps" with a mono
+count that rolls when it changes) that hands over to the bar as it scrolls.
+Cards are flat cells on a hairline: a monochrome icon in a grey square tile, the
+name, a one-line description, mono meta ("V0.1.0 · API 1 · TRAVEL"), Open as the
+ink arrow pill, the other actions as grey pills, and the per-window mode as a
+compact grey select. Cards cascade in with `listReveal()` when a tab loads; the
+install log is a hairline section with a mono eyebrow and mono lines.
 
 ## Preferences
 
@@ -680,10 +777,24 @@ never opens a window by itself.
 See [`web/js/preferences.js`](../../web/js/preferences.js) and
 [configuration](../configuration.md).
 
+## Desktop greeting
+
+[`deskGreeting.js`](../../web/js/deskGreeting.js) writes the time-of-day
+greeting into `#desk-greeting` as three stacked lines ("Good / afternoon, /
+Friday.") from the `desk.greeting.*` catalogue keys and the weekday in the
+interface language, refreshed every minute and on `locale:change`. Core keeps
+the element `display: none`; a theme shows and sets it (Dusk and Ink do, in
+`web/themes/editorial/app.css`). It sits with `#background`, under the window
+grid.
+
 ## Theming & notifications
 
 Windows are styled by the active theme's tokens/components and use the shared
-icon library; see [themes & icons](themes-icons.md). Events use the core
+icon library; see [themes & icons](themes-icons.md). The top bar carries a
+theme button (`#hud-theme`, `ui/contrast`) next to Settings: one tap switches to
+the next installed theme through `switchTheme()`, whose view transition opens
+from the button itself (`shellMotion.js`); Settings → Appearance → Theme plays
+the same transition from the picker. Events use the core
 notification system ([`web/ui/components/notifications.js`](../../web/ui/components/notifications.js))
 and the `notify()` helper.
 
@@ -695,7 +806,8 @@ and the `notify()` helper.
 | [`web/js/tiles.js`](../../web/js/tiles.js) | Tile grid + window chrome + glow. |
 | [`web/js/fullscreen.js`](../../web/js/fullscreen.js), [`fullscreenBubble.js`](../../web/js/fullscreenBubble.js) | Fullscreen + chrome reveal. |
 | [`web/js/overview.js`](../../web/js/overview.js), [`launcher.js`](../../web/js/launcher.js) | Overview + launcher. |
-| [`web/js/gestures.js`](../../web/js/gestures.js) | `trackpad:gesture` mapping. |
+| [`web/js/gestures.js`](../../web/js/gestures.js), [`gestureTransition.js`](../../web/js/gestureTransition.js) | `trackpad:gesture` mapping + progress-driven transitions. |
+| [`web/js/desktop/workspaceSlide.js`](../../web/js/desktop/workspaceSlide.js) | Workspace carousel. |
 | [`web/js/contextMenu.js`](../../web/js/contextMenu.js) | Right-click engine. |
 | [`web/js/nativeOccluders.js`](../../web/js/nativeOccluders.js) | Core surfaces cut out of a native page's mask. |
 | [`web/js/hudLeft.js`](../../web/js/hudLeft.js), [`hudPlugins.js`](../../web/js/hudPlugins.js), [`hud*.js`](../../web/js) | HUD sections + chips. |

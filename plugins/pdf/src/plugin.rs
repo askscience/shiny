@@ -18,12 +18,12 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/pdfs", "pdf_list"),
         RouteSpec::post("/api/pdfs", "pdf_create"),
         RouteSpec::post("/api/pdfs/import", "pdf_import"),
+        RouteSpec::post("/api/pdfs/preview", "pdf_preview"),
         RouteSpec::get("/api/pdfs/:id", "pdf_get"),
         RouteSpec::put("/api/pdfs/:id", "pdf_rename"),
         RouteSpec::delete("/api/pdfs/:id", "pdf_delete"),
         RouteSpec::get("/api/pdfs/:id/export", "pdf_export"),
         RouteSpec::get("/api/pdfs/:id/file", "pdf_file"),
-        RouteSpec::get("/api/pdfs/:id/pages/:page", "pdf_render"),
         RouteSpec::get("/api/pdfs/:id/text/:page", "pdf_text"),
         RouteSpec::get("/api/pdfs/:id/runs/:page", "pdf_text_runs"),
         RouteSpec::post("/api/pdfs/:id/edit-text", "pdf_edit_text"),
@@ -34,6 +34,20 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::post("/api/pdfs/:id/replace-text", "pdf_replace_text"),
         RouteSpec::post("/api/pdfs/:id/annotate", "pdf_annotate"),
         RouteSpec::post("/api/pdfs/:id/watermark", "pdf_watermark"),
+        RouteSpec::post("/api/pdfs/:id/undo", "pdf_undo"),
+        RouteSpec::post("/api/pdfs/:id/redo", "pdf_redo"),
+        RouteSpec::post("/api/pdfs/:id/insert-blank", "pdf_insert_blank"),
+        RouteSpec::post("/api/pdfs/:id/duplicate-page", "pdf_duplicate_page"),
+        RouteSpec::post("/api/pdfs/:id/extract", "pdf_extract"),
+        RouteSpec::put("/api/pdfs/:id/source", "pdf_set_source"),
+        RouteSpec::get("/api/pdfs/:id/comments", "pdf_comments"),
+        RouteSpec::post("/api/pdfs/:id/comments/edit", "pdf_comment_edit"),
+        RouteSpec::post("/api/pdfs/:id/ink", "pdf_ink"),
+        RouteSpec::post("/api/pdfs/:id/header-footer", "pdf_header_footer"),
+        RouteSpec::get("/api/pdfs/:id/marks", "pdf_marks"),
+        RouteSpec::post("/api/pdfs/:id/marks/remove", "pdf_marks_remove"),
+        RouteSpec::post("/api/pdfs/:id/replace-file", "pdf_replace_file"),
+        RouteSpec::post("/api/pdfs/:id/render-html", "pdf_render_html"),
     ]
 }
 
@@ -67,7 +81,9 @@ impl Plugin for PdfPlugin {
             Arc::new(crate::tools::PdfAnnotate) as Arc<dyn Tool>,
             Arc::new(crate::tools::PdfAddNote) as Arc<dyn Tool>,
             Arc::new(crate::tools::PdfWatermark) as Arc<dyn Tool>,
-            Arc::new(crate::tools::PdfDelete) as Arc<dyn Tool>,]);
+            Arc::new(crate::tools::PdfDelete) as Arc<dyn Tool>,
+            Arc::new(crate::tools::PdfUndo) as Arc<dyn Tool>,
+        ]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {

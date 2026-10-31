@@ -18,7 +18,7 @@ use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::sessions;
-use crate::{bookmarks, downloads, filter, settings};
+use crate::{bookmarks, downloads, filter, settings, vault};
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -45,6 +45,14 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_downloads_clear" => Some(downloads_clear(ctx)),
         "browser_filter" => Some(filter_route(ctx)),
         "browser_filter_refresh" => Some(filter_refresh(ctx)),
+        "browser_vault" => Some(vault_state(ctx)),
+        "browser_vault_unlock" => Some(vault_unlock(ctx)),
+        "browser_vault_lock" => Some(vault_lock()),
+        "browser_vault_reset" => Some(vault_reset(ctx)),
+        "browser_passwords" => Some(passwords_route(ctx)),
+        "browser_password_reveal" => Some(password_reveal(ctx)),
+        "browser_password_save" => Some(password_save(ctx)),
+        "browser_password_remove" => Some(password_remove(ctx)),
         _ => None,
     }
 }
@@ -629,6 +637,198 @@ fn query_flag(req: &axum::extract::Request, key: &str) -> bool {
         query_param(req, key).as_deref(),
         Some("1") | Some("true") | Some("yes")
     )
+}
+
+
+/* ── Password vault ─────────────────────────────────────────────── */
+
+/// Like [`take_json`], keeping the request headers: the vault forwards the
+/// caller's credentials to core to confirm a login password.
+async fn take_json_with_headers<T: DeserializeOwned>(
+    req: axum::extract::Request,
+) -> Result<(axum::http::HeaderMap, T), AppError> {
+    let (parts, body) = req.into_parts();
+    let bytes = axum::body::to_bytes(body, 64 * 1024)
+        .await
+        .map_err(|e| AppError::BadRequest(format!("could not read body: {e}")))?;
+    let value = serde_json::from_slice(&bytes)
+        .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+    Ok((parts.headers, value))
+}
+
+/// Ask core whether `password` is the caller's login password
+/// (`POST /api/auth/verify-password`, PAM-aware), as the caller: their cookie
+/// or bearer token is forwarded over loopback and nothing else is.
+async fn confirm_login_password(
+    ctx: &PluginCtx,
+    headers: &axum::http::HeaderMap,
+    password: String,
+) -> Result<bool, AppError> {
+    let host = match ctx.config.server_host.as_str() {
+        "" | "0.0.0.0" | "::" | "[::]" => "127.0.0.1",
+        other => other,
+    };
+    let url = format!("http://{host}:{}/api/auth/verify-password", ctx.config.server_port);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
+    let mut request = client.post(url).json(&json!({ "password": password }));
+    for name in [axum::http::header::COOKIE, axum::http::header::AUTHORIZATION] {
+        if let Some(value) = headers.get(&name).and_then(|v| v.to_str().ok()) {
+            request = request.header(name.as_str(), value);
+        }
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("could not reach core: {e}")))?;
+    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return Err(AppError::BadRequest("too_many_attempts".into()));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("core answered oddly: {e}")))?;
+    Ok(body.pointer("/data/valid").and_then(Value::as_bool).unwrap_or(false))
+}
+
+/// GET /api/browser/vault — whether the vault exists and is open.
+fn vault_state(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            Ok(ok(json!({
+                "exists": vault::exists(&ctx, &uid)?,
+                "unlocked": vault::is_unlocked(&uid),
+                "idle_lock_secs": vault::IDLE_LOCK.as_secs(),
+            })))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct UnlockBody {
+    password: String,
+    /// The earlier login password, after a `password_changed` answer.
+    #[serde(default)]
+    previous_password: Option<String>,
+}
+
+/// POST /api/browser/vault/unlock — open (or create) the vault with the
+/// login password. Answers `{ status }`; a wrong password is a 200, never a
+/// 401 (which the app reads as an expired session).
+fn vault_unlock(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let (headers, body) = take_json_with_headers::<UnlockBody>(req).await?;
+            let status = vault::unlock(
+                &ctx,
+                &uid,
+                &body.password,
+                body.previous_password.as_deref(),
+                |password| {
+                    let ctx = ctx.clone();
+                    let headers = headers.clone();
+                    async move { confirm_login_password(&ctx, &headers, password).await }
+                },
+            )
+            .await?;
+            Ok(ok(json!({ "status": status, "unlocked": status == vault::Unlock::Unlocked })))
+        }
+    })
+}
+
+/// POST /api/browser/vault/lock — forget the key now.
+fn vault_lock() -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        let uid = user_id(&req)?;
+        vault::lock(&uid);
+        Ok(ok(json!({ "unlocked": false })))
+    })
+}
+
+#[derive(Deserialize)]
+struct PasswordBody {
+    password: String,
+}
+
+/// POST /api/browser/vault/reset — delete the vault and every saved login,
+/// for a user who no longer knows the password it was sealed with. Needs the
+/// current login password.
+fn vault_reset(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let (headers, body) = take_json_with_headers::<PasswordBody>(req).await?;
+            if !confirm_login_password(&ctx, &headers, body.password.clone()).await? {
+                return Ok(ok(json!({ "reset": false, "status": "wrong_password" })));
+            }
+            vault::reset(&ctx, &uid)?;
+            Ok(ok(json!({ "reset": true })))
+        }
+    })
+}
+
+/// GET /api/browser/passwords[?url=] — the saved logins (no passwords), only
+/// those for a page when `url` is given.
+fn passwords_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let page = req
+                .uri()
+                .query()
+                .and_then(|q| url::form_urlencoded::parse(q.as_bytes()).find(|(k, _)| k == "url"))
+                .map(|(_, v)| v.into_owned());
+            let entries = vault::list(&ctx, &uid, page.as_deref())?;
+            Ok(ok(json!({ "entries": entries })))
+        }
+    })
+}
+
+/// POST /api/browser/passwords/reveal — one login's username and password.
+fn password_reveal(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<SessionBody>(req).await?;
+            let (username, password) = vault::reveal(&ctx, &uid, &body.id)?;
+            Ok(ok(json!({ "username": username, "password": password.as_str() })))
+        }
+    })
+}
+
+/// POST /api/browser/passwords/save — add or update a login.
+fn password_save(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<vault::SaveRequest>(req).await?;
+            let entry = vault::save(&ctx, &uid, &body)?;
+            Ok(ok(json!({ "entry": entry })))
+        }
+    })
+}
+
+/// POST /api/browser/passwords/remove — drop a login.
+fn password_remove(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<SessionBody>(req).await?;
+            let removed = vault::remove(&ctx, &uid, &body.id)?;
+            Ok(ok(json!({ "removed": removed })))
+        }
+    })
 }
 
 #[cfg(test)]

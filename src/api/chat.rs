@@ -101,8 +101,11 @@ pub async fn send_message(
 
     // The user message was inserted above, so this window (most recent 20,
     // reversed back into order) already contains it — no duplicate append.
+    // Mid-turn UI rows (approval, tool, media) are JSON records for the chat,
+    // not dialogue: the model only ever sees user/assistant turns.
     let recent = sqlx::query_as::<_, (String, String, Option<String>)>(
         "SELECT role, content, timestamp FROM chat_messages WHERE traveler_id = ?1 \
+         AND role IN ('user', 'assistant') \
          ORDER BY timestamp DESC, rowid DESC LIMIT 20",
     )
     .bind(&traveler.id)

@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Mapp",
   "plugin.files.status.items.one": "{count} objekt",
   "plugin.files.status.items.other": "{count} objekt",
-  "plugin.files.status.selected": "“{name}” markerad ({what})",
-  "plugin.files.status.multiSelected.one": "{count} objekt markerat ({size})",
-  "plugin.files.status.multiSelected.other": "{count} objekt markerade ({size})",
 
   "plugin.files.when.today": "I dag {time}",
   "plugin.files.when.yesterday": "I går {time}",

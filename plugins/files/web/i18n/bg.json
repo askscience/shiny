@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Папка",
   "plugin.files.status.items.one": "{count} елемент",
   "plugin.files.status.items.other": "{count} елемента",
-  "plugin.files.status.selected": "Избран е “{name}” ({what})",
-  "plugin.files.status.multiSelected.one": "избран е {count} елемент ({size})",
-  "plugin.files.status.multiSelected.other": "избрани са {count} елемента ({size})",
 
   "plugin.files.when.today": "Днес {time}",
   "plugin.files.when.yesterday": "Вчера {time}",

@@ -10,6 +10,18 @@ resolver = "2"
 # system dylib omits.
 [patch.crates-io]
 libsqlite3-sys = { path = "vendor/libsqlite3-sys" }
+# PdfCraft's patched renderer and object-layer forks (the PDF plugin's engine),
+# from the same pinned PdfCraft commit as the plugin's pdfcraft-* crates.
+# They must be patched here: [patch] only applies in the root of the build.
+hayro = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+hayro-cmap = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+hayro-interpret = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+hayro-jbig2 = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+hayro-postscript = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+hayro-syntax = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+lopdf = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+vello_common = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+vello_cpu = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
 
 # The Studio DSP engine calls into `fundsp` per sample; without cross-crate
 # inlining those AudioNode::tick calls do not get inlined and the render is

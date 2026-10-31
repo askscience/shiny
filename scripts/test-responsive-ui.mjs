@@ -139,7 +139,7 @@ try{
  });
  for(const search of searches) assert.deepEqual(search,reference,'every search uses the shared rendered style');
  if(name==='mail') {
-   await page.locator('.mail-item').first().click();
+   await page.locator('.mail-row').first().click();
    const frame=page.locator('.mail-reader iframe'); await frame.waitFor();
    assert.ok((await frame.getAttribute('srcdoc')).includes('font-family: Georgia, serif; color: rgb(123, 45, 67)'), 'received email typography stays intact');
  }

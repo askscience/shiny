@@ -37,12 +37,6 @@
   "plugin.files.status.items.few": "{count} elementi",
   "plugin.files.status.items.many": "{count}-il element",
   "plugin.files.status.items.other": "{count} element",
-  "plugin.files.status.selected": "“{name}” magħżul ({what})",
-  "plugin.files.status.multiSelected.one": "{count} element magħżul ({size})",
-  "plugin.files.status.multiSelected.two": "{count} elementi magħżula ({size})",
-  "plugin.files.status.multiSelected.few": "{count} elementi magħżula ({size})",
-  "plugin.files.status.multiSelected.many": "{count}-il element magħżul ({size})",
-  "plugin.files.status.multiSelected.other": "{count} element magħżul ({size})",
 
   "plugin.files.when.today": "Illum {time}",
   "plugin.files.when.yesterday": "Ilbieraħ {time}",

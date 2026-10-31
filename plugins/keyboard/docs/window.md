@@ -62,7 +62,7 @@ body
 │       ├─ .keyboard-row                          (bottom row)
 │       │   ├─ .keyboard-key.keyboard-key--fn     (lang / sym)
 │       │   ├─ .keyboard-key.keyboard-key--space
-│       │   └─ .keyboard-key.keyboard-key--accent.keyboard-key--fn  (enter)
+│       │   └─ .keyboard-key.keyboard-key--enter.keyboard-key--fn  (enter)
 └─ #hud-top
     └─ #hud-keyboard-btn.icon-btn                (inserted before #settings-btn)
 ```
@@ -77,10 +77,21 @@ body
 | `keyboard-row--desktop` | The Hyprland-style desktop control row |
 | `keyboard-key` | Every key button |
 | `keyboard-key--fn` | Function keys (shift, backspace, lang, sym, enter) |
+| `keyboard-key--mono` | Language and `123`/`ABC` keys (mono uppercase labels) |
 | `keyboard-key--space` | Space bar |
-| `keyboard-key--accent` | Enter |
+| `keyboard-key--enter` | Enter — the ink key |
 | `keyboard-key--desktop` | Desktop control keys |
-| `is-active` | Shift currently engaged |
+| `is-active` | Shift currently engaged (ink fill) |
+
+Look (editorial skin, `web/css/keyboard.css`): keys are flat `--ed-pill` fills
+with no border (`--ed-pill-hover` on hover); a pressed key and a latched shift
+turn ink (`--ed-pill-dark`), never accent; Enter is the ink key. The bar has a
+hairline top edge instead of a drop shadow. Control keys use catalog icons
+(`icon()`), with their name as the accessible label: fullscreen `ui/expand`,
+previous/next workspace `ui/chevron-left` / `ui/chevron-right`, new/remove
+workspace `ui/plus` / `ui/minus`, focus next window `ui/loop`, shift
+`ui/arrow-up`, backspace `ui/arrow-left`, Enter `ui/reply` flipped vertically
+into a return arrow (the catalog has no dedicated return or backspace icon).
 
 ## Layouts
 

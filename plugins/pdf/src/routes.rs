@@ -20,6 +20,7 @@ use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHan
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::ops;
+use crate::store;
 
 const MIME_PDF: &str = "application/pdf";
 const MAX_UPLOAD: usize = 64 * 1024 * 1024;
@@ -35,7 +36,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "pdf_delete" => pdf_delete(ctx),
         "pdf_export" => pdf_export(ctx),
         "pdf_file" => pdf_file(ctx),
-        "pdf_render" => pdf_render(ctx),
         "pdf_text" => pdf_text(ctx),
         "pdf_text_runs" => pdf_text_runs(ctx),
         "pdf_edit_text" => pdf_edit_text(ctx),
@@ -46,6 +46,21 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "pdf_replace_text" => pdf_replace_text(ctx),
         "pdf_annotate" => pdf_annotate(ctx),
         "pdf_watermark" => pdf_watermark(ctx),
+        "pdf_undo" => pdf_history_step(ctx, true),
+        "pdf_redo" => pdf_history_step(ctx, false),
+        "pdf_insert_blank" => pdf_insert_blank(ctx),
+        "pdf_duplicate_page" => pdf_duplicate_page(ctx),
+        "pdf_extract" => pdf_extract(ctx),
+        "pdf_preview" => pdf_preview(ctx),
+        "pdf_set_source" => pdf_set_source(ctx),
+        "pdf_comments" => pdf_comments(ctx),
+        "pdf_comment_edit" => pdf_comment_edit(ctx),
+        "pdf_ink" => pdf_ink(ctx),
+        "pdf_header_footer" => pdf_header_footer(ctx),
+        "pdf_marks" => pdf_marks(ctx),
+        "pdf_marks_remove" => pdf_marks_remove(ctx),
+        "pdf_replace_file" => pdf_replace_file(ctx),
+        "pdf_render_html" => pdf_render_html(ctx),
         _ => return None,
     })
 }
@@ -152,16 +167,24 @@ fn commit_bytes_with_count(
     id: &str,
     bytes: Vec<u8>,
     count: usize,
+    label: &str,
 ) -> Result<usize, AppError> {
-    let changed = ctx.db().execute(
-        "UPDATE pdf_documents SET bytes = ?1, page_count = ?2, updated_at = datetime('now') \
-         WHERE id = ?3 AND user_id = ?4",
-        &[Value::blob(bytes), Value::Int(count as i64), Value::text(id), Value::text(uid)],
-    )?;
-    if changed == 0 {
-        return Err(AppError::NotFound("PDF not found".into()));
+    store::commit(ctx, uid, id, bytes, count, label)
+}
+
+/// The standard reply after an edit: new page count, real timestamp and the
+/// undo/redo state, so the window never has to guess.
+fn edited(ctx: &PluginCtx, uid: &str, id: &str, count: usize, extra: Json) -> Result<Json, AppError> {
+    let mut v = json!({
+        "pdf_id": id,
+        "page_count": count,
+        "updated_at": store::updated_at(ctx, uid, id),
+        "history": store::history(ctx, uid, id)?,
+    });
+    if let (Some(o), Json::Object(e)) = (v.as_object_mut(), extra) {
+        o.extend(e);
     }
-    Ok(count)
+    Ok(v)
 }
 
 fn normalize_degrees(degrees: i32) -> Result<i32, AppError> {
@@ -179,7 +202,7 @@ fn pdf_list(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let rows = ctx.db().query(
-                "SELECT id, title, page_count, updated_at FROM pdf_documents \
+                "SELECT id, title, page_count, updated_at, source_format, pdf_stale FROM pdf_documents \
                  WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 200",
                 &[Value::text(&uid)],
             )?;
@@ -190,6 +213,8 @@ fn pdf_list(ctx: Arc<PluginCtx>) -> RouteHandler {
                     "title": as_text(&r[1]),
                     "page_count": as_int(&r[2]),
                     "updated_at": as_text(&r[3]),
+                    "editable": !as_text(&r[4]).is_empty(),
+                    "pdf_stale": as_int(&r[5]) != 0,
                 }))
                 .collect();
             Ok(ok(json!(docs)))
@@ -204,10 +229,13 @@ fn pdf_create(ctx: Arc<PluginCtx>) -> RouteHandler {
     #[serde(default)]
     struct Create {
         title: Option<String>,
+        /// The documented field. `text` is accepted for older callers.
+        content: Option<String>,
         text: Option<String>,
         css: Option<String>,
         format: Option<String>,
         plain: Option<bool>,
+        page_numbers: Option<bool>,
     }
 
     bridged_route(move |req: axum::extract::Request| {
@@ -218,13 +246,20 @@ fn pdf_create(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
             let title = clean_title(body.title.as_deref().unwrap_or("Untitled"));
-            let text = body.text.unwrap_or_default();
-            let css = body.css.unwrap_or_default();
+            let text = body.content.or(body.text).unwrap_or_default();
+            let _css = body.css;
             let format = body.format.unwrap_or_else(|| {
-                if body.plain.unwrap_or(false) { "plain".to_string() } else { "html".to_string() }
+                if body.plain.unwrap_or(false) { "plain".to_string() } else { "auto".to_string() }
             });
+            let page_numbers = body.page_numbers.unwrap_or(false);
+            let opts = ops::CreateOptions { title: Some(title.clone()), page_numbers };
+            let source = text.clone();
+            let source_format = format.clone();
+            // An editor document's PDF is printed by the shell: start from a
+            // blank page and mark it out of date until the first export.
+            let stale = format == "html";
             let (bytes, count) = blocking(move || {
-                let bytes = ops::create(&text, &css, &format)?;
+                let bytes = if stale { ops::create_with("", "plain", &opts)? } else { ops::create_with(&text, &format, &opts)? };
                 let count = ops::page_count(&bytes)?;
                 Ok::<_, AppError>((bytes, count))
             })
@@ -232,12 +267,16 @@ fn pdf_create(ctx: Arc<PluginCtx>) -> RouteHandler {
             let id = uuid::Uuid::new_v4().to_string();
 
             ctx.db().execute(
-                "INSERT INTO pdf_documents (id, user_id, title, bytes, page_count, created_at, updated_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
-                &[Value::text(&id), Value::text(&uid), Value::text(&title), Value::blob(bytes), Value::Int(count as i64)],
+                "INSERT INTO pdf_documents (id, user_id, title, bytes, page_count, source, source_format, page_numbers, pdf_stale, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
+                &[
+                    Value::text(&id), Value::text(&uid), Value::text(&title), Value::blob(bytes), Value::Int(count as i64),
+                    Value::text(&source), Value::text(&source_format), Value::Int(page_numbers as i64), Value::Int(stale as i64),
+                ],
             )?;
 
-            Ok(ok(json!({ "pdf_id": id, "title": title, "page_count": count, "updated_at": "now" })))
+            let updated_at = store::updated_at(&ctx, &uid, &id);
+            Ok(ok(json!({ "pdf_id": id, "title": title, "page_count": count, "updated_at": updated_at })))
         }
     })
 }
@@ -281,7 +320,11 @@ fn pdf_import(ctx: Arc<PluginCtx>) -> RouteHandler {
             .await?;
             let stem = original_name
                 .as_deref()
-                .map(|n| n.rsplit('.').nth(1).unwrap_or(n))
+                .map(|n| n.rsplit(['/', '\\']).next().unwrap_or(n))
+                .map(|n| match n.rsplit_once('.') {
+                    Some((stem, ext)) if ext.eq_ignore_ascii_case("pdf") && !stem.is_empty() => stem,
+                    _ => n,
+                })
                 .unwrap_or("Imported PDF");
             let title = clean_title(q.name.as_deref().unwrap_or(stem));
             let id = uuid::Uuid::new_v4().to_string();
@@ -292,7 +335,8 @@ fn pdf_import(ctx: Arc<PluginCtx>) -> RouteHandler {
                 &[Value::text(&id), Value::text(&uid), Value::text(&title), Value::blob(data), Value::Int(count as i64)],
             )?;
 
-            Ok(ok(json!({ "pdf_id": id, "title": title, "page_count": count, "updated_at": "now" })))
+            let updated_at = store::updated_at(&ctx, &uid, &id);
+            Ok(ok(json!({ "pdf_id": id, "title": title, "page_count": count, "updated_at": updated_at })))
         }
     })
 }
@@ -306,15 +350,31 @@ fn pdf_get(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let id = take_id(&req)?;
             let rows = ctx.db().query(
-                "SELECT title, page_count, updated_at FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
+                "SELECT title, page_count, updated_at, source, source_format, page_numbers, pdf_stale FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
                 &[Value::text(&id), Value::text(&uid)],
             )?;
             let row = rows.first().ok_or_else(|| AppError::NotFound("PDF not found".into()))?;
+            let source = match &row[3] {
+                Value::Text(t) => Some(t.clone()),
+                _ => None,
+            };
             Ok(ok(json!({
                 "pdf_id": id,
                 "title": as_text(&row[0]),
                 "page_count": as_int(&row[1]),
                 "updated_at": as_text(&row[2]),
+                "source": source,
+                "source_format": as_text(&row[4]),
+                "page_numbers": as_int(&row[5]) != 0,
+                "pdf_stale": as_int(&row[6]) != 0,
+                // What the document editor opens: its own HTML, or the
+                // assistant's Markdown turned into editable HTML.
+                "editor_html": match (&row[3], as_text(&row[4]).as_str()) {
+                    (Value::Text(src), "html") => Some(src.clone()),
+                    (Value::Text(src), fmt) => Some(crate::compose::to_editor_html(src, fmt)),
+                    _ => None,
+                },
+                "history": store::history(&ctx, &uid, &id)?,
             })))
         }
     })
@@ -366,6 +426,7 @@ fn pdf_delete(ctx: Arc<PluginCtx>) -> RouteHandler {
             if changed == 0 {
                 return Err(AppError::NotFound("PDF not found".into()));
             }
+            store::forget(&ctx, &uid, &id)?;
             Ok(ok(json!({ "pdf_id": id, "deleted": true })))
         }
     })
@@ -417,36 +478,6 @@ fn pdf_file(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .header(CACHE_CONTROL, "no-store")
                 .body(axum::body::Body::from(bytes))
                 .map_err(|e| AppError::Internal(format!("PDF serve failed: {e}")))?)
-        }
-    })
-}
-
-/* ── GET /api/pdfs/:id/pages/:page (render PNG) ─────────────── */
-
-fn pdf_render(ctx: Arc<PluginCtx>) -> RouteHandler {
-    #[derive(Deserialize, Default)]
-    #[serde(default)]
-    struct RenderQuery {
-        dpi: Option<u32>,
-    }
-
-    bridged_route(move |req: axum::extract::Request| {
-        let ctx = ctx.clone();
-        async move {
-            let uid = user_id(&req)?;
-            let (id, page) = take_id_page(&req)?;
-            let (q, _req) = take_query::<RenderQuery>(req).await?;
-            let dpi = q.dpi.unwrap_or(150).clamp(24, 400);
-            let (bytes, count) = load_bytes_and_count(&ctx, &uid, &id)?;
-            if page >= count {
-                return Err(AppError::NotFound("page out of range".into()));
-            }
-            let png = blocking(move || ops::render_png(&bytes, page, dpi)).await?;
-            Ok(Response::builder()
-                .header(CONTENT_TYPE, "image/png")
-                .header(CACHE_CONTROL, "no-store")
-                .body(axum::body::Body::from(png))
-                .map_err(|e| AppError::Internal(format!("render failed: {e}")))?)
         }
     })
 }
@@ -520,8 +551,8 @@ fn pdf_edit_text(ctx: Arc<PluginCtx>) -> RouteHandler {
                     "no text run matched the supplied text and position".into(),
                 ));
             }
-            let count = commit_bytes_with_count(&ctx, &uid, &id, out, count)?;
-            Ok(ok(json!({ "applied": applied, "page_count": count })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, out, count, "Edit text")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({ "applied": applied }))?))
         }
     })
 }
@@ -559,8 +590,8 @@ fn pdf_rotate(ctx: Arc<PluginCtx>) -> RouteHandler {
                 Ok::<_, AppError>((new_bytes, count))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Rotate")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
         }
     })
 }
@@ -593,8 +624,8 @@ fn pdf_reorder(ctx: Arc<PluginCtx>) -> RouteHandler {
                 Ok::<_, AppError>((new_bytes, count))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Reorder pages")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
         }
     })
 }
@@ -627,8 +658,8 @@ fn pdf_delete_pages(ctx: Arc<PluginCtx>) -> RouteHandler {
                 Ok::<_, AppError>((new_bytes, count))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Delete pages")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
         }
     })
 }
@@ -662,8 +693,8 @@ fn pdf_merge(ctx: Arc<PluginCtx>) -> RouteHandler {
                 Ok::<_, AppError>((new_bytes, count))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Merge")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
         }
     })
 }
@@ -675,6 +706,8 @@ fn pdf_replace_text(ctx: Arc<PluginCtx>) -> RouteHandler {
     #[serde(default)]
     struct ReplaceText {
         page: Option<usize>,
+        /// Replace on every page (the default when `page` is absent).
+        all_pages: Option<bool>,
         old: Option<String>,
         new: Option<String>,
     }
@@ -687,26 +720,43 @@ fn pdf_replace_text(ctx: Arc<PluginCtx>) -> RouteHandler {
             let axum::Json(body) = axum::Json::<ReplaceText>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
-            let page = body.page.unwrap_or(0);
-            let old = body.old.ok_or_else(|| AppError::BadRequest("old required".into()))?;
+            let old = body.old.filter(|o| !o.trim().is_empty())
+                .ok_or_else(|| AppError::BadRequest("old required".into()))?;
             let new = body.new.unwrap_or_default();
-            let bytes = load_bytes(&ctx, &uid, &id)?;
+            let all = body.all_pages.unwrap_or(body.page.is_none());
+            let page = body.page.unwrap_or(0);
+            let (bytes, page_count) = load_bytes_and_count(&ctx, &uid, &id)?;
+            if !all && page >= page_count {
+                return Err(AppError::NotFound("page out of range".into()));
+            }
+            let needle = old.clone();
             // Same content-stream engine the agent's pdf_replace_text uses.
-            let (new_bytes, touched, count) = blocking(move || {
-                let (new_bytes, report) =
-                    crate::stream_edit::replace_text(&bytes, page, &old, &new)?;
-                let count = ops::page_count(&new_bytes)?;
-                Ok::<_, AppError>((new_bytes, report.replaced, count))
+            let (new_bytes, report, count) = blocking(move || {
+                let (new_bytes, report) = if all {
+                    crate::stream_edit::replace_text_pages(&bytes, None, &old, &new)?
+                } else {
+                    crate::stream_edit::replace_text(&bytes, page, &old, &new)?
+                };
+                let count = if report.replaced > 0 { ops::page_count(&new_bytes)? } else { 0 };
+                Ok::<_, AppError>((new_bytes, report, count))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page": page, "replaced": touched, "page_count": count, "updated_at": "now" })))
+            if report.replaced == 0 {
+                // Nothing changed: say so instead of saving an identical copy.
+                return Err(AppError::NotFound(format!("\"{needle}\" was not found")));
+            }
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Replace text")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({
+                "page": page, "replaced": report.replaced, "pages_touched": report.pages_touched,
+            }))?))
         }
     })
 }
 
 /* ── POST /api/pdfs/:id/annotate ────────────────────────────── */
 
+/// Add a comment (PdfCraft annotation). `rects` lets a multi-line text
+/// selection become one highlight with one quad per line.
 fn pdf_annotate(ctx: Arc<PluginCtx>) -> RouteHandler {
     #[derive(Deserialize, Default)]
     #[serde(default)]
@@ -714,18 +764,12 @@ fn pdf_annotate(ctx: Arc<PluginCtx>) -> RouteHandler {
         page: Option<usize>,
         kind: Option<String>,
         rect: Option<[f32; 4]>,
+        rects: Option<Vec<[f32; 4]>>,
         text: Option<String>,
+        /// 0..1 RGB, or `text_color` as `#rrggbb`.
         color: Option<[f32; 3]>,
-        /// Formatting for added text (`free_text` only).
-        #[serde(default)]
-        size: Option<f32>,
-        #[serde(default)]
-        bold: Option<bool>,
-        #[serde(default)]
-        italic: Option<bool>,
-        /// `#rrggbb` for added text.
-        #[serde(default)]
         text_color: Option<String>,
+        size: Option<f32>,
     }
 
     bridged_route(move |req: axum::extract::Request| {
@@ -733,57 +777,36 @@ fn pdf_annotate(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let id = take_id(&req)?;
-            let axum::Json(body) = axum::Json::<Annotate>::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
+            let body: Annotate = take_json(req).await?;
             let page = body.page.unwrap_or(0);
             let kind = body.kind.ok_or_else(|| AppError::BadRequest("kind required".into()))?;
-            let rect = body.rect.ok_or_else(|| AppError::BadRequest("rect required".into()))?;
-            let text = body.text.unwrap_or_default();
-            // Added text is the one kind that needs a body; an empty one would
-            // append a content stream that draws nothing and still grow the file.
-            if kind.eq_ignore_ascii_case("free_text") && text.trim().is_empty() {
-                return Err(AppError::BadRequest("text must not be empty".into()));
-            }
-            // Reject rather than clamp: silently substituting a different size
-            // than the caller asked for is how a "success" becomes a lie.
-            let size = body.size.unwrap_or(11.0);
-            if !(4.0..=144.0).contains(&size) {
-                return Err(AppError::BadRequest(
-                    "size must be between 4 and 144 points".into(),
-                ));
-            }
-            if let Some(c) = body.text_color.as_deref() {
-                if ops::parse_text_color(c).is_none() {
-                    return Err(AppError::BadRequest(
-                        "text_color must be #rrggbb".into(),
-                    ));
-                }
-            }
-            let format = ops::TextFormat {
-                size,
-                bold: body.bold.unwrap_or(false),
-                italic: body.italic.unwrap_or(false),
-                color: body.text_color,
+            let rects: Vec<[f32; 4]> = match (body.rects, body.rect) {
+                (Some(r), _) if !r.is_empty() => r.into_iter().take(500).collect(),
+                (_, Some(r)) => vec![r],
+                _ => return Err(AppError::BadRequest("rect required".into())),
             };
-            let bytes = load_bytes(&ctx, &uid, &id)?;
-            let kind_for_render = kind.clone();
+            let text = body.text.unwrap_or_default();
+            let size = body.size.unwrap_or(12.0);
+            if !(4.0..=144.0).contains(&size) {
+                return Err(AppError::BadRequest("size must be between 4 and 144 points".into()));
+            }
+            let color = match body.text_color.as_deref() {
+                Some(c) => Some(ops::parse_text_color(c).ok_or_else(|| AppError::BadRequest("text_color must be #rrggbb".into()))?),
+                None => body.color,
+            };
+            let (bytes, page_count) = load_bytes_and_count(&ctx, &uid, &id)?;
+            if page >= page_count {
+                return Err(AppError::NotFound("page out of range".into()));
+            }
+            let kind_c = kind.clone();
             let (new_bytes, count) = blocking(move || {
-                let new_bytes = ops::annotate(
-                    &bytes,
-                    page,
-                    &kind_for_render,
-                    rect,
-                    &text,
-                    body.color,
-                    &format,
-                )?;
-                let count = ops::page_count(&new_bytes)?;
-                Ok::<_, AppError>((new_bytes, count))
+                let b = ops::annotate(&bytes, page, &kind_c, &rects, &text, color, size, "")?;
+                let c = ops::page_count(&b)?;
+                Ok::<_, AppError>((b, c))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page": page, "kind": kind, "page_count": count, "updated_at": "now" })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Annotate")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({ "page": page, "kind": kind }))?))
         }
     })
 }
@@ -807,7 +830,8 @@ fn pdf_watermark(ctx: Arc<PluginCtx>) -> RouteHandler {
             let axum::Json(body) = axum::Json::<Watermark>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
-            let text = body.text.ok_or_else(|| AppError::BadRequest("text required".into()))?;
+            let text = body.text.filter(|t| !t.trim().is_empty())
+                .ok_or_else(|| AppError::BadRequest("text required".into()))?;
             let bytes = load_bytes(&ctx, &uid, &id)?;
             let pages = if body.all.unwrap_or(false) { None } else { body.pages.clone() };
             let (new_bytes, count) = blocking(move || {
@@ -816,8 +840,465 @@ fn pdf_watermark(ctx: Arc<PluginCtx>) -> RouteHandler {
                 Ok::<_, AppError>((new_bytes, count))
             })
             .await?;
-            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count)?;
-            Ok(ok(json!({ "pdf_id": id, "page_count": count, "updated_at": "now" })))
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Watermark")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/undo · /redo ────────────────────────── */
+
+fn pdf_history_step(ctx: Arc<PluginCtx>, undo: bool) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let (count, label) = if undo {
+                store::undo(&ctx, &uid, &id)?
+            } else {
+                store::redo(&ctx, &uid, &id)?
+            };
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({ "label": label }))?))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/insert-blank ────────────────────────── */
+
+fn pdf_insert_blank(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Insert {
+        /// Insert after this page (0-based); absent = at the start.
+        after: Option<usize>,
+        count: Option<usize>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let body: Insert = take_json(req).await?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            let (new_bytes, count) = blocking(move || {
+                let b = ops::insert_blank(&bytes, body.after, body.count.unwrap_or(1))?;
+                let c = ops::page_count(&b)?;
+                Ok::<_, AppError>((b, c))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Insert page")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/duplicate-page ──────────────────────── */
+
+fn pdf_duplicate_page(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize)]
+    struct Dup {
+        page: usize,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let body: Dup = take_json(req).await?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            let (new_bytes, count) = blocking(move || {
+                let b = ops::duplicate_page(&bytes, body.page)?;
+                let c = ops::page_count(&b)?;
+                Ok::<_, AppError>((b, c))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, new_bytes, count, "Duplicate page")?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({}))?))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/extract (pages → new PDF) ───────────── */
+
+fn pdf_extract(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Extract {
+        pages: Vec<usize>,
+        title: Option<String>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let body: Extract = take_json(req).await?;
+            if body.pages.is_empty() {
+                return Err(AppError::BadRequest("pages must not be empty".into()));
+            }
+            let rows = ctx.db().query(
+                "SELECT title, bytes FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            let row = rows.first().ok_or_else(|| AppError::NotFound("PDF not found".into()))?;
+            let src_title = as_text(&row[0]);
+            let bytes = as_blob(&row[1]);
+            let pages = body.pages.clone();
+            let (out, count) = blocking(move || {
+                let b = ops::extract_pages(&bytes, &pages)?;
+                let c = ops::page_count(&b)?;
+                Ok::<_, AppError>((b, c))
+            })
+            .await?;
+            let title = clean_title(body.title.as_deref().unwrap_or(&format!("{src_title} (extract)")));
+            let new_id = uuid::Uuid::new_v4().to_string();
+            ctx.db().execute(
+                "INSERT INTO pdf_documents (id, user_id, title, bytes, page_count, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
+                &[Value::text(&new_id), Value::text(&uid), Value::text(&title), Value::blob(out), Value::Int(count as i64)],
+            )?;
+            let updated_at = store::updated_at(&ctx, &uid, &new_id);
+            Ok(ok(json!({ "pdf_id": new_id, "title": title, "page_count": count, "updated_at": updated_at })))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/preview (render without saving) ─────────── */
+
+/// The composer's live preview: the same creation engine, returning the PDF
+/// bytes inline instead of storing a document.
+fn pdf_preview(_ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Preview {
+        title: Option<String>,
+        content: Option<String>,
+        format: Option<String>,
+        page_numbers: Option<bool>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| async move {
+        let _uid = user_id(&req)?;
+        let body: Preview = take_json(req).await?;
+        let content = body.content.unwrap_or_default();
+        if content.len() > 2 * 1024 * 1024 {
+            return Err(AppError::BadRequest("content too large".into()));
+        }
+        let format = body.format.unwrap_or_else(|| "markdown".into());
+        let opts = ops::CreateOptions { title: body.title, page_numbers: body.page_numbers.unwrap_or(false) };
+        let bytes = blocking(move || ops::create_with(&content, &format, &opts)).await?;
+        Ok(Response::builder()
+            .header(CONTENT_TYPE, MIME_PDF)
+            .header(CACHE_CONTROL, "no-store")
+            .body(axum::body::Body::from(bytes))
+            .map_err(|e| AppError::Internal(format!("preview failed: {e}")))?)
+    })
+}
+
+/* ── PUT /api/pdfs/:id/source (regenerate from text) ────────── */
+
+/// Re-create a document from its (edited) source text. An ordinary edit:
+/// the previous bytes stay one undo away.
+fn pdf_set_source(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Source {
+        title: Option<String>,
+        content: Option<String>,
+        format: Option<String>,
+        page_numbers: Option<bool>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let body: Source = take_json(req).await?;
+            let rows = ctx.db().query(
+                "SELECT title FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            let row = rows.first().ok_or_else(|| AppError::NotFound("PDF not found".into()))?;
+            let title = clean_title(body.title.as_deref().unwrap_or(&as_text(&row[0])));
+            let content = body.content.unwrap_or_default();
+            let format = body.format.unwrap_or_else(|| "markdown".into());
+            let page_numbers = body.page_numbers.unwrap_or(false);
+            if format == "html" {
+                // The editor's document: only the shell can print it, so the
+                // text is saved and the PDF marked out of date until export.
+                if content.len() > 32 * 1024 * 1024 {
+                    return Err(AppError::BadRequest("document too large".into()));
+                }
+                ctx.db().execute(
+                    "UPDATE pdf_documents SET title = ?1, source = ?2, source_format = 'html', pdf_stale = 1, updated_at = datetime('now') \
+                     WHERE id = ?3 AND user_id = ?4",
+                    &[Value::text(&title), Value::text(&content), Value::text(&id), Value::text(&uid)],
+                )?;
+                return Ok(ok(json!({ "pdf_id": id, "title": title, "pdf_stale": true, "updated_at": store::updated_at(&ctx, &uid, &id) })));
+            }
+            let opts = ops::CreateOptions { title: Some(title.clone()), page_numbers };
+            let (src, fmt) = (content.clone(), format.clone());
+            let (bytes, count) = blocking(move || {
+                let b = ops::create_with(&content, &format, &opts)?;
+                let c = ops::page_count(&b)?;
+                Ok::<_, AppError>((b, c))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, bytes, count, "Edit content")?;
+            ctx.db().execute(
+                "UPDATE pdf_documents SET title = ?1, source = ?2, source_format = ?3, page_numbers = ?4 WHERE id = ?5 AND user_id = ?6",
+                &[Value::text(&title), Value::text(&src), Value::text(&fmt), Value::Int(page_numbers as i64), Value::text(&id), Value::text(&uid)],
+            )?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({ "title": title }))?))
+        }
+    })
+}
+
+/* ── Shared: run a bytes → bytes edit and commit it ─────────── */
+
+async fn apply_edit<F>(ctx: &PluginCtx, uid: &str, id: &str, label: &str, extra: Json, f: F) -> Result<Json, AppError>
+where
+    F: FnOnce(Vec<u8>) -> Result<Vec<u8>, AppError> + Send + 'static,
+{
+    let bytes = load_bytes(ctx, uid, id)?;
+    let (new_bytes, count) = blocking(move || {
+        let b = f(bytes)?;
+        let c = ops::page_count(&b)?;
+        Ok::<_, AppError>((b, c))
+    })
+    .await?;
+    let count = commit_bytes_with_count(ctx, uid, id, new_bytes, count, label)?;
+    edited(ctx, uid, id, count, extra)
+}
+
+/* ── GET /api/pdfs/:id/comments ─────────────────────────────── */
+
+fn pdf_comments(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            let (list, marks) = blocking(move || Ok::<_, AppError>((crate::craft::comments(&bytes)?, crate::craft::marks(&bytes)?))).await?;
+            Ok(ok(json!({ "comments": list, "marks": marks })))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/comments/edit ───────────────────────── */
+
+/// One endpoint for what a comment can go through: `delete`, `text` (change
+/// its note), `move` (by `dx`, `dy` points) and `reply`.
+fn pdf_comment_edit(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct CommentEdit {
+        page: usize,
+        index: usize,
+        action: String,
+        text: Option<String>,
+        dx: Option<f64>,
+        dy: Option<f64>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let b: CommentEdit = take_json(req).await?;
+            let (page, index) = (b.page, b.index);
+            let text = b.text.unwrap_or_default();
+            let (label, action) = match b.action.as_str() {
+                "delete" => ("Delete comment", 0),
+                "text" => ("Edit comment", 1),
+                "move" => ("Move comment", 2),
+                "reply" => ("Reply", 3),
+                other => return Err(AppError::BadRequest(format!("unknown action: {other}"))),
+            };
+            let (dx, dy) = (b.dx.unwrap_or(0.0), b.dy.unwrap_or(0.0));
+            let res = apply_edit(&ctx, &uid, &id, label, json!({}), move |bytes| match action {
+                0 => crate::craft::delete_comment(&bytes, page, index),
+                1 => crate::craft::set_comment_text(&bytes, page, index, &text),
+                2 => crate::craft::move_comment(&bytes, page, index, dx, dy),
+                _ => crate::craft::reply(&bytes, page, index, &text, ""),
+            })
+            .await?;
+            Ok(ok(res))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/ink ─────────────────────────────────── */
+
+fn pdf_ink(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Ink {
+        page: usize,
+        strokes: Vec<Vec<[f64; 2]>>,
+        color: Option<String>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let b: Ink = take_json(req).await?;
+            let color = b.color.as_deref().and_then(ops::parse_text_color);
+            let page = b.page;
+            let strokes: Vec<Vec<[f64; 2]>> = b.strokes.into_iter().take(200).map(|s| s.into_iter().take(5000).collect()).collect();
+            let res = apply_edit(&ctx, &uid, &id, "Draw", json!({ "page": page }), move |bytes| ops::ink(&bytes, page, strokes, color, "")).await?;
+            Ok(ok(res))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/header-footer ───────────────────────── */
+
+fn pdf_header_footer(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Hf {
+        /// Header left/centre/right, footer left/centre/right.
+        slots: Vec<String>,
+        font_size: Option<f64>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let b: Hf = take_json(req).await?;
+            let mut slots: [String; 6] = Default::default();
+            for (i, s) in b.slots.into_iter().take(6).enumerate() {
+                slots[i] = s;
+            }
+            let size = b.font_size.unwrap_or(9.0);
+            let res = apply_edit(&ctx, &uid, &id, "Header & footer", json!({}), move |bytes| crate::craft::header_footer(&bytes, slots, size)).await?;
+            Ok(ok(res))
+        }
+    })
+}
+
+/* ── GET /api/pdfs/:id/marks · POST /marks/remove ───────────── */
+
+fn pdf_marks(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let bytes = load_bytes(&ctx, &uid, &id)?;
+            let marks = blocking(move || crate::craft::marks(&bytes)).await?;
+            Ok(ok(json!({ "marks": marks })))
+        }
+    })
+}
+
+fn pdf_marks_remove(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Remove {
+        kind: String,
+    }
+
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let b: Remove = take_json(req).await?;
+            let kind = b.kind.clone();
+            let res = apply_edit(&ctx, &uid, &id, "Remove marks", json!({ "kind": b.kind }), move |bytes| crate::craft::remove_marks(&bytes, &kind)).await?;
+            Ok(ok(res))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/replace-file (exported document) ───── */
+
+/// Replace a document's bytes with an uploaded PDF — the document editor's
+/// export (the shell prints the pages; the window uploads them here). An
+/// ordinary, undoable edit; it also marks the document's PDF as current.
+fn pdf_replace_file(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let mut multipart = Multipart::from_request(req, &())
+                .await
+                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
+            let mut bytes: Option<Vec<u8>> = None;
+            while let Some(field) = multipart
+                .next_field()
+                .await
+                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
+            {
+                if field.name() == Some("file") {
+                    bytes = Some(shiny_plugin_sdk::field_bytes_capped(field, MAX_UPLOAD).await?);
+                }
+            }
+            let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+            let (data, count) = blocking(move || {
+                let count = ops::validate(&data)?;
+                Ok::<_, AppError>((data, count))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, data, count, "Export")?;
+            ctx.db().execute(
+                "UPDATE pdf_documents SET pdf_stale = 0 WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({ "pdf_stale": false }))?))
+        }
+    })
+}
+
+/* ── POST /api/pdfs/:id/render-html (export without the shell) ─ */
+
+/// The editor's fallback when the shell cannot print: lay the stored HTML out
+/// with the plugin's own composer. Same content, the composer's typography.
+fn pdf_render_html(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let id = take_id(&req)?;
+            let rows = ctx.db().query(
+                "SELECT title, source, source_format FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            let row = rows.first().ok_or_else(|| AppError::NotFound("PDF not found".into()))?;
+            let title = as_text(&row[0]);
+            let source = match &row[1] {
+                Value::Text(s) => s.clone(),
+                _ => return Err(AppError::BadRequest("this PDF has no editable source".into())),
+            };
+            let format = as_text(&row[2]);
+            let numbers = source.starts_with("<!--pdfdoc") && source.split("-->").next().map_or(false, |m| m.contains("numbers=1"));
+            let opts = ops::CreateOptions { title: Some(title), page_numbers: numbers };
+            let (bytes, count) = blocking(move || {
+                let b = ops::create_with(&source, if format == "html" { "html" } else { &format }, &opts)?;
+                let c = ops::page_count(&b)?;
+                Ok::<_, AppError>((b, c))
+            })
+            .await?;
+            let count = commit_bytes_with_count(&ctx, &uid, &id, bytes, count, "Export")?;
+            ctx.db().execute(
+                "UPDATE pdf_documents SET pdf_stale = 0 WHERE id = ?1 AND user_id = ?2",
+                &[Value::text(&id), Value::text(&uid)],
+            )?;
+            Ok(ok(edited(&ctx, &uid, &id, count, json!({ "pdf_stale": false, "approximate": true }))?))
         }
     })
 }

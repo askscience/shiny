@@ -1,14 +1,16 @@
 import {
   confirmDialog, dial, toolbar, element as el, toolButton, button, toast,
-  emptyState,
+  emptyState, eyebrow, metaLine, listReveal, cardEnter,
 } from '../../../ui/index.js';
 
 /**
  * editor.js — the Image window: a minimal photo editor.
  *
- * Layout: one window bar (menu, title, zoom), a borderless canvas that fills
- * the window, and a bottom dock with the looks (thumbnail previews of every
- * effect applied to the open image) and the adjustments.
+ * Layout: one window bar (menu, a display-type title over a mono meta line —
+ * "4032×3024 · 63% · LOOK: NOIR" — and a fit / 1:1 toggle), a borderless
+ * canvas that fills the window, and a flat bottom dock on a hairline with the
+ * looks (grey square previews of every effect applied to the open image, the
+ * name in mono below) and the adjustments, each under a mono eyebrow.
  * Every pixel change goes through the plugin's Rust engine; this module only
  * builds DOM, tracks state and paints returned RGBA.
  *
@@ -66,6 +68,8 @@ export const S = {
   applying: false,
   drag: null,
   looksUrl: '',
+  looksRevealed: false, // the filmstrip cascades in once per document
+  enterPending: false,  // the next paint is a new image's first
   wired: false,
   resizeObs: null,
 };
@@ -85,16 +89,21 @@ export function buildWorkspace() {
   const appbar = toolbar([], { className: 'image-appbar' });
   appbar.dataset.windowBar = '';
   const menuBtn = toolButton('ui/list', t('plugin.image.toolbar.menu', null, 'Menu'), (e) => openMainMenu(e.currentTarget));
+  const appHead = el('div', 'image-appbar-head');
   const appTitle = el('span', 'image-appbar-title');
   S.els.appTitle = appTitle;
+  const appMeta = metaLine([], 'image-appbar-meta');
+  S.els.appMeta = appMeta;
+  appHead.append(appTitle, appMeta);
   const appRight = el('div', 'image-appbar-right');
+  // Fit ↔ actual size; the zoom itself reads in the meta line.
   const zoomChip = el('button', 'image-zoom-chip');
   zoomChip.type = 'button';
   zoomChip.title = t('plugin.image.toolbar.fitToggle', null, 'Toggle fit / actual size');
   zoomChip.addEventListener('click', () => (S.fit ? setZoom(1) : zoomToFit()));
   S.els.zoomChip = zoomChip;
   appRight.appendChild(zoomChip);
-  appbar.append(menuBtn, appTitle, appRight);
+  appbar.append(menuBtn, appHead, appRight);
   tile.appendChild(appbar);
 
   /* Stage: the borderless canvas fills the window. */
@@ -106,15 +115,17 @@ export function buildWorkspace() {
   wireCanvas(view, area);
   tile.appendChild(area);
 
-  /* Bottom dock: looks + adjustments. */
+  /* Bottom dock: looks + adjustments, each under a mono eyebrow. */
   const dock = el('div', 'image-dock');
   const body = el('div', 'image-dock-body');
 
+  body.appendChild(eyebrow(t('plugin.image.dock.looks', null, 'Looks'), 'image-dock-eyebrow'));
   const lookRow = el('div', 'image-look-row');
   S.els.lookRow = lookRow;
   body.appendChild(lookRow);
 
   body.appendChild(el('div', 'image-dock-divider'));
+  body.appendChild(eyebrow(t('plugin.image.dock.adjust', null, 'Adjust'), 'image-dock-eyebrow'));
   body.appendChild(buildAdjustBody());
 
   dock.appendChild(body);
@@ -136,14 +147,17 @@ export function renderLooks() {
   }
   row.textContent = '';
   row.style.removeProperty('--look-url');
+  S.looksRevealed = false;
   const looks = S.doc?.looks || [];
   if (!S.doc || !looks.length) return;
   looks.forEach((look, i) => {
+    // A grey square preview tile (a slice of the strip) with the name below.
     const chip = el('button', 'image-look-chip');
     chip.type = 'button';
     chip.title = look.name;
     chip.setAttribute('aria-label', look.name);
     chip.style.setProperty('--i', String(i));
+    chip.append(el('span', 'image-look-thumb'), el('span', 'image-look-name', look.name));
     if (look.key === S.doc.look) chip.classList.add('is-active');
     chip.addEventListener('click', () => {
       // Clicking the selected look clears it; otherwise swap the selection.
@@ -169,6 +183,12 @@ async function loadLooksStrip() {
     S.looksUrl = url;
     row.style.setProperty('--look-n', String(count));
     row.style.setProperty('--look-url', `url("${url}")`);
+    // First strip for this document: the previews cascade in (later
+    // refreshes after edits just repaint).
+    if (!S.looksRevealed) {
+      S.looksRevealed = true;
+      void listReveal(row.children || []);
+    }
   } catch (_) {
     /* previews are best-effort */
   }
@@ -192,6 +212,7 @@ function setActiveLook(look) {
   [...(row.children || [])].forEach((chip, i) => {
     chip.classList.toggle('is-active', keys[i] === active);
   });
+  updateChrome();
 }
 
 /** Apply a server-echoed dial state to the document + dials (no request). */
@@ -253,15 +274,13 @@ function buildAdjustBody() {
 
   const actions = el('div', 'image-oneclicks');
   for (const [op, key, label] of ONE_CLICKS) {
-    const b = el('button', 'image-oneclick', t(key, null, label));
-    b.type = 'button';
-    b.addEventListener('click', () => void applyOp({ op }));
+    const b = button({ label: t(key, null, label), variant: 'ghost', size: 'sm', onClick: () => void applyOp({ op }) });
+    b.classList.add('image-oneclick');
     actions.appendChild(b);
   }
-  const revert = el('button', 'image-oneclick image-oneclick--revert', t('plugin.image.oneClick.revert', null, 'Revert'));
-  revert.type = 'button';
+  const revert = button({ label: t('plugin.image.oneClick.revert', null, 'Revert'), variant: 'quiet', size: 'sm', onClick: () => void resetCurrent() });
+  revert.classList.add('image-oneclick', 'image-oneclick--revert');
   revert.title = t('plugin.image.oneClick.revertTitle', null, 'Restore the original upload');
-  revert.addEventListener('click', () => void resetCurrent());
   actions.appendChild(revert);
   wrap.appendChild(actions);
 
@@ -302,8 +321,8 @@ export function paintView() {
   // First paint after the window is laid out: fit the document to the view.
   if (S.fit && area.clientWidth > 60 && area.clientHeight > 60) {
     const z = Math.min(
-      (area.clientWidth - 32) / Math.max(1, w),
-      (area.clientHeight - 32) / Math.max(1, h),
+      (area.clientWidth - 40) / Math.max(1, w),
+      (area.clientHeight - 40) / Math.max(1, h),
       4,
     );
     S.zoom = Math.max(0.05, z);
@@ -318,6 +337,10 @@ export function paintView() {
   ctx.imageSmoothingEnabled = S.zoom < 1;
   ctx.clearRect(0, 0, zw, zh);
   if (offscreen && offscreen.width) ctx.drawImage(offscreen, 0, 0, zw, zh);
+  if (S.enterPending) {
+    S.enterPending = false;
+    void cardEnter(view);
+  }
   updateChrome();
 }
 
@@ -335,14 +358,29 @@ function renderEmptyState() {
     title: t('plugin.image.empty.title', null, 'No image open'),
     body: t('plugin.image.empty.body', null, 'Open or drop a picture to start.'),
   }));
-  const open = button({ label: t('plugin.image.empty.open', null, 'Open image'), onClick: () => void pickFile() });
+  const open = button({ label: t('plugin.image.empty.open', null, 'Open image'), arrow: true, onClick: () => void pickFile() });
   open.classList.add('image-empty-open');
   empty.appendChild(open);
 }
 
+/** "4032×3024 · 63% · LOOK: NOIR" — the open document at a glance. */
+function chromeMeta() {
+  if (!S.doc) return [];
+  const look = (S.doc.looks || []).find((l) => l.key === S.doc.look);
+  return [
+    S.doc.width && S.doc.height ? `${S.doc.width}×${S.doc.height}` : '',
+    `${Math.round(S.zoom * 100)}%`,
+    look ? t('plugin.image.status.look', { name: look.name }, `Look: ${look.name}`) : '',
+  ];
+}
+
 export function updateChrome() {
-  if (S.els.appTitle) S.els.appTitle.textContent = S.doc ? S.doc.title : 'Image';
-  if (S.els.zoomChip) S.els.zoomChip.textContent = S.doc ? `${Math.round(S.zoom * 100)}%` : '';
+  if (S.els.appTitle) S.els.appTitle.textContent = S.doc ? S.doc.title : t('plugin.image.title', null, 'Image');
+  S.els.appMeta?.set(chromeMeta());
+  if (S.els.zoomChip) {
+    S.els.zoomChip.textContent = !S.doc ? ''
+      : S.fit ? t('plugin.image.toolbar.actualSize', null, '1:1') : t('plugin.image.toolbar.fit', null, 'Fit');
+  }
 }
 
 /* ── Zoom & pan ─────────────────────────────────────────────────── */
@@ -510,6 +548,7 @@ export async function openImage(meta) {
   };
   S.render = null;
   S.fit = true;
+  S.enterPending = true;
   renderLooks();
   setSettings(S.doc.settings);
   await reloadComposite();

@@ -1,14 +1,18 @@
 import {
   menuSurface, menuItem, confirmDialog, menuButton, toolbar, input as uiInput, toolButton,
-  icon, button, toast, select, setTileGlow,
-  setTileGlowFromUrl, glowGradient, fontStackFor, setIcon,
+  button, toast, select, setTileGlow,
+  setTileGlowFromUrl, glowGradient, fontStackFor, setIcon, largeTitle,
 } from '../../ui/index.js';
 
 /**
  * word.js — the Word plugin's window (simple ODT word processor).
  *
- * Flat editorial surface: a hairline toolbar (doc menu + title + formatting),
- * a contentEditable editor with editorial typography, and a status line.
+ * Editorial surface: the window bar carries the document menu, the
+ * formatting tools, one grey "New" pill and a mono save state; the document
+ * title sits large above the editor (an editable display title with a mono
+ * "EDITED 14:02 · 812 WORDS" meta) and hands over to the bar as the page
+ * scrolls. File actions (import / export / save / delete) live in the
+ * document menu's footer.
  * Documents are real .odt files stored server-side (core routes) — the
  * editor works on HTML that the server converts to/from ODT.
  *
@@ -18,7 +22,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
-import { formatMenuDate, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
+import { formatMenuDate, formatMenuTime, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
 import { listFonts } from '../../js/fonts.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
 
@@ -26,10 +30,13 @@ export const WORD_PLUGIN = 'word';
 
 let tileEl = null;
 let editorEl = null;
-let titleInput = null;
+let scrollEl = null;
+let hero = null;          // largeTitle(): the editable document title + meta
+let titleEl = null;       // hero's title node (contentEditable)
+let titleText = '';       // canonical title (titleEl may be mid-decode)
+let barTitleEl = null;    // the small title the bar shows once scrolled
 let docMenuBtn = null;
-let statusEl = null;
-let saveDot = null;
+let stateEl = null;       // mono "SAVED 14:02" / "UNSAVED" in the bar
 let fontSelect = null;
 let toolbarBtns = {};
 
@@ -85,21 +92,38 @@ async function deleteDoc(id) {
 
 /* ── State ──────────────────────────────────────────────────── */
 
+/** The bar's save state plus the large title's meta line. */
 function setStatus(mode) {
-  if (!statusEl) return;
-  const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (!stateEl) return;
+  stateEl.classList.toggle('is-pending', mode !== 'saved');
   if (mode === 'saving') {
-    statusEl.textContent = t('plugin.word.status.saving', null, 'Saving…');
-    saveDot?.classList.add('is-active');
+    stateEl.textContent = t('plugin.word.state.saving', null, 'Saving');
   } else if (mode === 'dirty') {
-    statusEl.textContent = t('plugin.word.status.unsaved', null, 'Unsaved changes');
-    saveDot?.classList.add('is-active');
+    stateEl.textContent = t('plugin.word.state.unsaved', null, 'Unsaved');
   } else {
-    const words = wordCount();
-    statusEl.textContent = tp('plugin.word.status.saved', words, { time }, `Saved ${time} · ${words} words`);
-    saveDot?.classList.remove('is-active');
+    const time = formatMenuTime(currentDoc?.updated_at);
+    stateEl.textContent = t('plugin.word.state.saved', { time }, `Saved ${time}`);
+    // Counting words reads layout: once per save, not per keystroke.
+    syncHeroMeta();
   }
+}
+
+function syncHeroMeta() {
+  if (!hero) return;
+  if (!currentDoc) { hero.setMeta([]); return; }
+  const words = wordCount();
+  const edited = formatMenuTime(currentDoc.updated_at);
+  hero.setMeta([
+    t('plugin.word.hero.edited', { time: edited }, `Edited ${edited}`),
+    tp('plugin.word.hero.words', words, null, `${words} words`),
+  ]);
+}
+
+/** Show a title in the large title and the bar (decoded when a doc opens). */
+function showTitle(text, { decode = false } = {}) {
+  titleText = text;
+  hero?.setTitle(text, { decode });
+  if (barTitleEl) barTitleEl.textContent = text || t('plugin.word.toolbar.titlePlaceholder', null, 'Untitled');
 }
 
 function wordCount() {
@@ -142,7 +166,8 @@ async function persist() {
   dirty = false;
   setStatus('saving');
   try {
-    await saveDoc(titleInput.value.trim(), editorEl.innerHTML);
+    await saveDoc(titleText.trim(), editorEl.innerHTML);
+    currentDoc.title = titleText.trim();
     currentDoc.updated_at = new Date().toISOString();
     setStatus('saved');
   } catch (e) {
@@ -159,8 +184,9 @@ async function openDoc(doc) {
   try {
     const full = doc.html != null ? doc : await fetchDoc(doc.id);
     currentDoc = { id: doc.id, title: full.title, updated_at: full.updated_at };
-    titleInput.value = full.title;
     editorEl.innerHTML = full.html || '<p></p>';
+    showTitle(full.title || '', { decode: true });
+    if (scrollEl) scrollEl.scrollTop = 0;
     syncEditorFontFromContent();
     setStatus('saved');
     updateGlow();
@@ -267,15 +293,15 @@ function renderDocMenuItems() {
     });
   }
 
-  // Actions footer: new / import / export / delete. The compact window
-  // layout hides these from the toolbar — the menu is their home.
+  // Actions footer: the file actions live here, not in the window bar.
   appendMenuFooter(docMenuPopup, {
     prefix: 'word-doc',
     close: closeDocMenu,
     items: [
       { icon: 'ui/plus', label: t('plugin.word.menu.newDocument', null, 'New document'), onClick: () => void newDocument() },
-      { icon: 'ui/download', label: t('plugin.word.menu.importOdt', null, 'Import .odt'), onClick: pickOdtFile },
-      { icon: 'ui/save', label: t('plugin.word.menu.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportCurrent() },
+      { icon: 'ui/folder-open', label: t('plugin.word.menu.importOdt', null, 'Import .odt'), onClick: pickOdtFile },
+      { icon: 'ui/save', label: t('plugin.word.menu.saveNow', null, 'Save now'), onClick: () => void persist() },
+      { icon: 'ui/upload', label: t('plugin.word.menu.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportCurrent() },
       { icon: 'ui/trash', label: t('plugin.word.menu.deleteDocument', null, 'Delete document'), danger: true, onClick: () => void removeCurrent() },
     ],
   });
@@ -480,46 +506,23 @@ export function mountWordTile() {
   tileEl.className = 'tile word-tile';
   tileEl.dataset.plugin = WORD_PLUGIN;
 
-  /* Top bar: doc menu + title + save indicator */
+  /* Window bar: doc menu, the scrolled-in title, formatting, New, save state */
   const bar = toolbar([], { className: 'word-bar' });
   bar.dataset.windowBar = '';
 
   docMenuBtn = menuButton({ icon: 'ui/doc', label: t('plugin.word.toolbar.documents', null, 'Documents'), onClick: toggleDocMenu, className: 'word-doc-btn' });
 
-  titleInput = uiInput();
-  titleInput.classList.add('word-title');
-  titleInput.type = 'text';
-  titleInput.placeholder = t('plugin.word.toolbar.titlePlaceholder', null, 'Untitled');
-  titleInput.maxLength = 120;
-  titleInput.autocomplete = 'off';
-  titleInput.addEventListener('change', () => {
-    if (currentDoc) void persist();
-  });
+  barTitleEl = document.createElement('span');
+  barTitleEl.className = 'word-bar-title';
+  barTitleEl.setAttribute('aria-hidden', 'true');
 
-  // File actions — unified order across word/calc/impress: new, import,
-  // export, (save), delete.
-  const newBtn = button({ icon: 'ui/plus', variant: 'ghost', onClick: () => void newDocument() });
-  newBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'word-tool--secondary');
+  const newBtn = button({ label: t('plugin.word.toolbar.new', null, 'New'), icon: 'ui/plus', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => void newDocument() });
+  newBtn.classList.add('word-new');
   newBtn.title = t('plugin.word.toolbar.newDocument', null, 'New document');
-  newBtn.setAttribute('aria-label', t('plugin.word.toolbar.newDocument', null, 'New document'));
-  const importBtn = button({ icon: 'ui/download', variant: 'ghost', onClick: pickOdtFile });
-  importBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  importBtn.title = t('plugin.word.toolbar.importOdt', null, 'Import .odt');
-  importBtn.setAttribute('aria-label', t('plugin.word.toolbar.importOdt', null, 'Import .odt'));
-  const exportBtn = button({ icon: 'ui/upload', variant: 'ghost', onClick: () => void exportCurrent() });
-  exportBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'word-tool--secondary');
-  exportBtn.title = t('plugin.word.toolbar.saveToDocuments', null, 'Save to Documents');
-  exportBtn.setAttribute('aria-label', t('plugin.word.toolbar.saveToDocuments', null, 'Save to Documents'));
-  const saveBtn = toolbarButton('save', 'ui/save', t('plugin.word.toolbar.saveNow', null, 'Save now'), () => void persist());
-  saveBtn.classList.add('word-tool--secondary');
-  const delBtn = button({ icon: 'ui/trash', variant: 'ghost', onClick: () => void removeCurrent() });
-  delBtn.classList.add('ui-tool', 'ui-btn--icon', 'word-tool', 'ui-tool--danger', 'word-tool--secondary');
-  delBtn.title = t('plugin.word.toolbar.deleteDocument', null, 'Delete document');
-  delBtn.setAttribute('aria-label', t('plugin.word.toolbar.deleteDocument', null, 'Delete document'));
 
-  saveDot = document.createElement('span');
-  saveDot.className = 'word-save-dot';
-  saveDot.setAttribute('aria-hidden', 'true');
+  stateEl = document.createElement('span');
+  stateEl.className = 'word-state';
+  stateEl.setAttribute('role', 'status');
 
   // Font picker — populated from the host's installed fonts.
   fontSelect = select({
@@ -535,39 +538,62 @@ export function mountWordTile() {
     syncFontSelect();
   });
 
-  // Single top bar (Studio-style): doc menu + title + every action button.
-  bar.append(
-    docMenuBtn,
-    titleInput,
+  const tools = document.createElement('div');
+  tools.className = 'word-tools';
+  tools.append(
     toolbarButton('bold', 'ui/bold', t('plugin.word.toolbar.bold', null, 'Bold'), () => exec('bold')),
     toolbarButton('italic', 'ui/italic', t('plugin.word.toolbar.italic', null, 'Italic'), () => exec('italic')),
     toolbarButton('underline', 'ui/underline', t('plugin.word.toolbar.underline', null, 'Underline'), () => exec('underline')),
     toolbarButton('heading', 'ui/heading', t('plugin.word.toolbar.heading', null, 'Heading'), toggleHeading),
     toolbarButton('list', 'ui/list', t('plugin.word.toolbar.bulletList', null, 'Bullet list'), toggleList),
     fontSelect,
-    newBtn, importBtn, exportBtn, saveBtn, delBtn, saveDot,
   );
+
+  bar.append(docMenuBtn, barTitleEl, tools, newBtn, stateEl);
   tileEl.appendChild(bar);
+
+  /* Page: the large editable title, then the editor, in one scroller */
+  scrollEl = document.createElement('div');
+  scrollEl.className = 'word-scroll';
+
+  hero = largeTitle({ scroller: scrollEl });
+  hero.el.classList.add('word-hero');
+  titleEl = hero.el.querySelector('.ui-large-title-text');
+  titleEl.contentEditable = 'plaintext-only';
+  titleEl.spellcheck = false;
+  titleEl.setAttribute('role', 'textbox');
+  titleEl.setAttribute('aria-label', t('plugin.word.toolbar.titleLabel', null, 'Document title'));
+  titleEl.dataset.placeholder = t('plugin.word.toolbar.titlePlaceholder', null, 'Untitled');
+  titleEl.addEventListener('input', () => {
+    let text = titleEl.textContent.replace(/\s+/g, ' ');
+    if (text.length > 120) { text = text.slice(0, 120); titleEl.textContent = text; }
+    titleText = text;
+    if (barTitleEl) barTitleEl.textContent = text.trim() || t('plugin.word.toolbar.titlePlaceholder', null, 'Untitled');
+    if (currentDoc) markDirty();
+  });
+  titleEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); editorEl?.focus(); }
+  });
+  titleEl.addEventListener('blur', () => {
+    if (titleEl.textContent !== titleText) titleEl.textContent = titleText;
+    if (currentDoc && dirty) void persist();
+  });
 
   /* Editor */
   editorEl = document.createElement('div');
   editorEl.className = 'word-editor';
   editorEl.contentEditable = 'true';
   editorEl.spellcheck = true;
+  editorEl.dataset.placeholder = t('plugin.word.editor.placeholder', null, 'Write something…');
   editorEl.setAttribute('role', 'textbox');
   editorEl.setAttribute('aria-multiline', 'true');
   editorEl.addEventListener('input', markDirty);
   editorEl.addEventListener('selectionchange', () => window.setTimeout(syncToolbar, 0));
   editorEl.addEventListener('keyup', syncToolbar);
   editorEl.addEventListener('mouseup', syncToolbar);
-  tileEl.appendChild(editorEl);
 
-  /* Status line */
-  const status = document.createElement('div');
-  status.className = 'word-status';
-  statusEl = document.createElement('span');
-  status.appendChild(statusEl);
-  tileEl.appendChild(status);
+  scrollEl.append(hero.el, editorEl);
+  tileEl.appendChild(scrollEl);
 
   document.addEventListener('selectionchange', () => {
     if (tileEl?.isConnected && document.activeElement === editorEl) syncToolbar();
@@ -582,15 +608,19 @@ export function mountWordTile() {
 export function unmountWordTile() {
   if (currentDoc && dirty) void persist();
   closeDocMenu();
+  hero?.dispose();
   tileEl?.remove();
   // Drop ALL references so a later mountWordTile() builds a fresh tile
   // instead of returning the detached old one.
   tileEl = null;
   editorEl = null;
-  titleInput = null;
+  scrollEl = null;
+  hero = null;
+  titleEl = null;
+  titleText = '';
+  barTitleEl = null;
   docMenuBtn = null;
-  statusEl = null;
-  saveDot = null;
+  stateEl = null;
   fontSelect = null;
   toolbarBtns = {};
 }
@@ -664,7 +694,7 @@ export function wordContextMenu() {
   return [
     { type: 'item', label: t('plugin.word.ctx.newDocument', null, 'New document'), icon: 'ui/plus', onClick: () => void newDocument() },
     { type: 'item', label: t('plugin.word.ctx.saveNow', null, 'Save now'), icon: 'ui/save', disabled: !hasDoc, onClick: () => void persist() },
-    { type: 'item', label: t('plugin.word.ctx.saveToDocuments', null, 'Save to Documents'), icon: 'ui/save', disabled: !hasDoc, onClick: () => void exportCurrent() },
+    { type: 'item', label: t('plugin.word.ctx.saveToDocuments', null, 'Save to Documents'), icon: 'ui/upload', disabled: !hasDoc, onClick: () => void exportCurrent() },
     { type: 'separator' },
     { type: 'item', label: t('plugin.word.ctx.bold', null, 'Bold'), icon: 'ui/bold', disabled: !hasDoc, onClick: () => exec('bold') },
     { type: 'item', label: t('plugin.word.ctx.italic', null, 'Italic'), icon: 'ui/italic', disabled: !hasDoc, onClick: () => exec('italic') },

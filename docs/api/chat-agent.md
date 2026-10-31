@@ -82,6 +82,9 @@ JSON response (`AgentResponse`):
 { "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
 { "type": "artifact", "data": { /* saved, plugin-tagged artifact */ } }
 { "type": "approval", "request_id": "<uuid>", "action": "terminal_exec", "command": "rm -rf ./build" }
+{ "type": "tool", "action": "calculator_eval", "result": "ok", "plugin": "calculator",
+  "data": { "expression": "18% * 2340", "result": 421.2, "result_text": "421.2" },
+  "params": { "expression": "18% * 2340" } }
 { "type": "done", "data": { /* the full AgentResponse */ } }
 { "type": "error", "message": "…" }
 ```
@@ -106,6 +109,25 @@ turn ends. The client adopts the payload without saving it again, so a window
 the tool just opened exists for the next tool call in the same turn (the
 Browser's AI tab control relies on this). The final `done.artifacts` still
 carries every card.
+
+`tool` is emitted right after each tool call finishes (successful or not), so
+the chat can draw that call's **tool card** while the turn is still running.
+Fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `action` | string | The tool's canonical name (`radio_play`, `map_route`, …). |
+| `result` | `"ok"` \| `"error"` | A tool's own non-`ok` result (a refusal) folds to `error`. |
+| `plugin` | string? | Owning plugin (absent for core tools such as `web_search`): the card's open arrow focuses this window. |
+| `data` | object? | The tool's result JSON, **capped and sanitised**: credential-looking keys (`password`, `token`, `api_key`, `secret`, `cookie`, `authorization`, …) are removed at any depth; heavy keys (`geometry`, `html`, `raw`, `headers`) and long `data:` URIs are dropped; strings, arrays and object widths are capped, tightening until the payload fits 48 KB. On `error` it is `{ "error": "…" }`. |
+| `params` | object? | The call's parameters, through the same filter (6 KB budget). |
+| `capped` | bool? | `true` when anything was cut or removed. |
+
+The same record is stored as a `tool` row of the conversation (see below), so a
+reopened chat rebuilds the same cards. Housekeeping tools (`show_plugin`,
+`plugin_*`, `workspace_*`, `desktop_*`, …) still emit the event; the client
+draws no card for them. `done.actions_taken[].data` is unchanged and still
+carries the full payload.
 
 `approval` means the turn is **parked**: it is waiting for the user to allow or
 deny a `terminal_exec` command. Answer it with `POST /api/agent/approve` (below).
@@ -209,7 +231,7 @@ See [chat](../core/chat.md) for semantics.
 | `GET` | `/api/chat/history?limit=N` | — | `{ success, data: [{ role, content, timestamp }] }` |
 | `GET` | `/api/chat/conversations` | — | `{ success, data: [{ id, title, updated_at, preview }] }` |
 | `POST` | `/api/chat/conversations` | — | `{ success, data: { id } }` |
-| `GET` | `/api/chat/conversations/:id` | — | `{ success, data: [{ role, content, timestamp }] }` (system rows hidden; `approval` / `media` rows are JSON payloads the chat renders) |
+| `GET` | `/api/chat/conversations/:id` | — | `{ success, data: [{ role, content, timestamp }] }` (system rows hidden; `approval` / `tool` / `media` rows are JSON payloads the chat renders) |
 | `DELETE` | `/api/chat/conversations/:id` | — | `{ success, data: { deleted: true } }` |
 
 ---

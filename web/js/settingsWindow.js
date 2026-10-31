@@ -23,8 +23,8 @@
  * (modes, switches and backlights) lives in the battery quick menu.
  */
 import {
-  avatar, badge, disposeMotion, FONT_THEME, getAccent, getActiveTheme, getFont,
-  getThemeManifest, icon, transition,
+  avatar, disposeMotion, eyebrow, FONT_THEME, getAccent, getActiveTheme, getFont,
+  getThemeManifest, listReveal,
 } from '../ui/index.js';
 import { t, getAvailableLocales, getLocale } from './i18n.js';
 import { getTraveler, getVoiceLang } from './api.js';
@@ -146,16 +146,9 @@ function clear(node) {
   if (node) node.textContent = '';
 }
 
-function statusPill(text, tone = 'neutral', { dot = false } = {}) {
-  const node = el('span', `settings-status-pill settings-status-pill--${tone}`);
-  if (dot) node.appendChild(el('span', 'settings-status-dot'));
-  node.appendChild(el('span', null, text));
-  return node;
-}
-
 function manifestSection(label) {
   const section = el('section', 'settings-manifest-section');
-  section.appendChild(el('span', 'settings-manifest-label', label));
+  section.appendChild(eyebrow(label, 'settings-manifest-label'));
   return section;
 }
 
@@ -356,39 +349,34 @@ function mountSettings() {
     });
   }
 
+  function sectionCounter() {
+    return `${String(sectionNumber()).padStart(2, '0')} / ${String(sections.length).padStart(2, '0')}`;
+  }
+
+  // The bar keeps one mono status line; the panel head carries the title.
   function renderChrome() {
     clear(chrome);
-    const brand = el('div', 'settings-chrome-brand');
-    const mark = el('span', 'settings-chrome-mark');
-    mark.appendChild(icon('ui/settings', { size: 16 }));
-    const brandCopy = el('div', 'settings-chrome-brand-copy');
-    brandCopy.append(
-      el('span', 'settings-chrome-brand-name', t('app.name', null, "PEAK'D!")),
-      el('span', 'settings-chrome-brand-sub', t('settings.rail.title', null, 'Settings')),
-    );
-    brand.append(mark, brandCopy);
-
-    const status = el('div', 'settings-chrome-status');
+    const status = el('div', 'settings-chrome-status ui-meta');
     status.append(
-      statusPill(t('settings.chrome.saved', null, 'Saved automatically'), 'ok', { dot: true }),
-      statusPill(t('settings.manifest.section', {
-        current: sectionNumber(),
-        total: sections.length,
-      }, 'Section {current} of {total}'), 'neutral'),
+      el('span', 'settings-status-dot'),
+      el('span', null, t('settings.chrome.saved', null, 'Saved automatically')),
     );
-    chrome.append(brand, el('span', 'settings-chrome-spacer'), status);
+    chrome.append(
+      el('span', 'settings-chrome-spacer'),
+      el('span', 'settings-chrome-title ui-meta', t('settings.rail.title', null, 'Settings')),
+      el('span', 'settings-chrome-spacer'),
+      status,
+    );
   }
 
   function renderFooter() {
     clear(footer);
-    const step = el('div', 'settings-footer-step', t('settings.manifest.section', {
+    const step = el('div', 'settings-footer-step ui-meta', sectionCounter());
+    step.setAttribute('aria-label', t('settings.manifest.section', {
       current: sectionNumber(),
       total: sections.length,
     }, 'Section {current} of {total}'));
-    const note = el('div', 'settings-footer-note', t('settings.footer.note', null, 'Changes apply immediately'));
-    const saved = el('div', 'settings-footer-saved');
-    saved.append(el('span', 'settings-status-dot'), el('span', null, t('settings.chrome.saved', null, 'Saved automatically')));
-    footer.append(step, note, saved);
+    footer.append(step, el('div', 'settings-footer-note ui-meta', t('settings.footer.note', null, 'Changes apply immediately')));
   }
 
   function renderManifest() {
@@ -397,28 +385,22 @@ function mountSettings() {
     clear(manifest);
 
     const head = el('div', 'settings-manifest-head');
-    const headCopy = el('div', 'settings-manifest-head-copy');
-    headCopy.append(
-      el('span', 'settings-eyebrow', t('settings.manifest.eyebrow', null, 'Active section')),
+    head.append(
+      eyebrow(t('settings.manifest.eyebrow', null, 'Active section')),
       el('h2', 'settings-manifest-title', t('settings.manifest.title', null, 'At a glance')),
     );
-    head.append(headCopy, badge(t('settings.manifest.live', null, 'Auto-saved'), { tone: 'ok' }));
     manifest.appendChild(head);
 
     const current = manifestSection(t('settings.manifest.section', {
       current: sectionNumber(),
       total: sections.length,
     }, 'Section {current} of {total}'));
-    const currentRow = el('div', 'settings-manifest-current');
-    const mark = el('span', 'settings-manifest-mark');
-    mark.appendChild(icon(section.icon, { size: 18 }));
-    const currentCopy = el('div', 'settings-manifest-current-copy');
+    const currentCopy = el('div', 'settings-manifest-current');
     currentCopy.append(
       el('strong', 'settings-manifest-value', t(section.labelKey)),
       el('span', 'settings-manifest-sub', t(section.descKey)),
     );
-    currentRow.append(mark, currentCopy);
-    current.appendChild(currentRow);
+    current.appendChild(currentCopy);
     manifest.appendChild(current);
 
     const details = sectionDetails(section.id);
@@ -477,7 +459,10 @@ function mountSettings() {
       disposeMotion(p);
       p.hidden = !selected;
       p.classList.toggle('is-active', selected);
-      if (selected && animate) transition(p, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }]);
+      // The panel's head and controls arrive in a cascade (the motion language).
+      if (selected && animate) {
+        listReveal(p.querySelectorAll(':scope > .settings-panel-head, .ui-control-group > h4, .ui-control-grid > .ui-control-card'));
+      }
     });
     renderChrome();
     renderFooter();
@@ -504,9 +489,8 @@ function mountSettings() {
 
     const navHead = el('div', 'settings-nav-head');
     navHead.append(
-      el('span', 'settings-eyebrow', t('settings.rail.eyebrow', null, 'Preferences')),
+      eyebrow(t('settings.rail.eyebrow', null, 'Preferences')),
       el('h2', 'settings-nav-title', t('settings.rail.title', null, 'Settings')),
-      el('p', 'settings-nav-sub', t('settings.rail.subtitle', null, 'Everything applies as you change it.')),
     );
     nav.appendChild(navHead);
 
@@ -515,17 +499,13 @@ function mountSettings() {
       const btn = el('button', 'settings-nav-item');
       btn.type = 'button';
       btn.dataset.panelTarget = section.id;
-      const ring = el('span', 'settings-nav-icon');
-      ring.appendChild(icon(section.icon, { size: 16 }));
       const label = t(section.labelKey);
       const desc = t(section.descKey);
-      const copy = el('span', 'settings-nav-copy');
-      copy.append(
+      // Flat rail: a mono number and the label; the active row wears the grey pill.
+      btn.append(
         el('span', 'settings-nav-kicker', String(index + 1).padStart(2, '0')),
         el('span', 'settings-nav-label', label),
-        el('span', 'settings-nav-desc', desc),
       );
-      btn.append(ring, copy);
       btn.title = label;
       btn.setAttribute('aria-label', `${label} — ${desc}`);
       sectionResources.on(btn, 'click', () => show(section.id));

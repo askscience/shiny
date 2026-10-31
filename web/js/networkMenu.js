@@ -12,13 +12,19 @@
 import { apiFetch } from './api.js';
 import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
-import { badge, button, emptyState, icon, iconButton, input, listItem, modal, spinner, toast, toggle } from '../ui/index.js';
+import { button, emptyState, icon, iconButton, input, modal, setIcon, spinner, toast, toggle } from '../ui/index.js';
+import {
+  el, menuFoot, menuHead, menuLabel, menuNote, menuPill, menuPopup, menuRow, menuValue,
+} from './hudMenuShared.js';
 
 const POLL_MS = 3000;
 
 let body = null;
 let wifiToggle = null;
 let wifiHint = null;
+let headIcon = null;
+let scanBtn = null;
+let scanning = false;
 let pollTimer = null;
 let status = null;
 /** SSID of the in-flight connect, so its row can show progress. */
@@ -55,43 +61,25 @@ export function toggleNetworkMenu(chip) {
 /* ── Skeleton ──────────────────────────────────────────────── */
 
 function buildPopup() {
-  const popup = document.createElement('div');
-  popup.className = 'ui-hud-menu-popup network-menu hidden';
-  popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', t('hud.network'));
+  const { popup, body: bodyEl } = menuPopup('network-menu', t('hud.network'));
+  body = bodyEl;
 
-  const head = document.createElement('div');
-  head.className = 'network-head';
-
-  const meta = document.createElement('div');
-  meta.className = 'network-head-main';
-  const title = document.createElement('div');
-  title.className = 'network-head-title';
-  title.appendChild(icon('ui/network', { size: 15 }));
-  const label = document.createElement('span');
-  label.textContent = t('net.wifi');
-  title.appendChild(label);
-  wifiHint = document.createElement('div');
-  wifiHint.className = 'network-head-hint';
-  meta.append(title, wifiHint);
-
+  const head = menuHead({ iconName: 'hud/wifi-4', title: t('net.wifi') });
+  headIcon = head.iconEl;
+  wifiHint = head.hintEl;
   wifiToggle = toggle({ checked: false, onChange: (next) => void setWifiPower(next) });
+  wifiToggle.setAttribute('aria-label', t('net.wifi'));
+  head.actions.appendChild(wifiToggle);
 
-  let scanBtn;
-  scanBtn = iconButton({
-    icon: 'ui/refresh',
+  scanBtn = menuPill({
     label: t('net.scan'),
-    variant: 'quiet',
-    size: 'sm',
-    onClick: () => void scan(scanBtn),
+    iconName: 'ui/refresh',
+    arrow: false,
+    onClick: () => void scan(),
   });
+  const { foot } = menuFoot(scanBtn);
 
-  head.append(meta, wifiToggle, scanBtn);
-
-  body = document.createElement('div');
-  body.className = 'network-body';
-
-  popup.append(head, body);
+  popup.append(head.head, body, foot);
   return popup;
 }
 
@@ -110,14 +98,26 @@ async function refresh() {
   }
 }
 
-async function scan(buttonEl) {
-  buttonEl?.setLoading?.(true);
+function setScanning(on) {
+  if (!scanBtn) return;
+  scanning = on;
+  scanBtn.classList.toggle('is-loading', on);
+  scanBtn.disabled = on || !scanAllowed();
+}
+
+/** Scanning needs NetworkManager and a Wi-Fi device. */
+function scanAllowed() {
+  return !!status?.available && !!status?.wifi?.present;
+}
+
+async function scan() {
+  setScanning(true);
   try {
     await apiFetch('/api/network/scan', { method: 'POST', body: '{}' });
     // NetworkManager scans asynchronously; give it a moment, then re-read.
-    setTimeout(() => { void refresh(); buttonEl?.setLoading?.(false); }, 2500);
+    setTimeout(() => { void refresh(); setScanning(false); }, 2500);
   } catch (err) {
-    buttonEl?.setLoading?.(false);
+    setScanning(false);
     toast(err.message || t('net.scanFailed'), { type: 'error' });
   }
 }
@@ -267,7 +267,7 @@ function render() {
   body.textContent = '';
 
   if (!status) {
-    body.appendChild(emptyState({ title: t('net.loading') }));
+    body.appendChild(menuNote(t('net.loading')));
     return;
   }
 
@@ -278,6 +278,12 @@ function render() {
     wifiToggle.setChecked(!!wifi.enabled, { silent: true });
     wifiToggle.disabled = !s.available || !wifi.present || wifi.hardware_enabled === false
       || connecting !== null;
+  }
+  if (headIcon) {
+    const on = s.available && wifi.present && wifi.enabled;
+    void setIcon(headIcon, on
+      ? `hud/wifi-${s.connection?.kind === 'wifi' ? s.connection.level ?? 4 : 4}`
+      : wifi.hardware_enabled === false ? 'hud/wifi-blocked' : 'hud/wifi-off', { size: 18 });
   }
   if (wifiHint) {
     wifiHint.textContent = !s.available
@@ -290,6 +296,7 @@ function render() {
             ? (wifi.interfaces || []).join(', ')
             : t('net.wifiOffHint');
   }
+  if (scanBtn) scanBtn.disabled = scanning || !scanAllowed();
 
   if (!s.available) {
     body.appendChild(emptyState({
@@ -312,38 +319,24 @@ function render() {
   requestAnimationFrame(() => menu.reposition());
 }
 
-function sectionTitle(text) {
-  const el = document.createElement('div');
-  el.className = 'network-section-title';
-  el.textContent = text;
-  return el;
+function section(label, ...children) {
+  const wrap = el('div', 'hud-menu-section');
+  wrap.appendChild(label);
+  for (const child of children) if (child) wrap.appendChild(child);
+  return wrap;
 }
 
 function strengthTrailing(net) {
-  const wrap = document.createElement('span');
-  wrap.className = 'network-trailing';
-  if (connecting === net.ssid) wrap.appendChild(spinner({ size: 13 }));
-  if (net.secured) wrap.appendChild(icon('ui/lock', { size: 12, className: 'network-lock' }));
-  const pct = document.createElement('span');
-  pct.className = 'network-pct';
-  pct.textContent = `${net.strength}%`;
-  wrap.appendChild(pct);
-  return wrap;
+  const bits = [];
+  if (connecting === net.ssid) bits.push(spinner({ size: 13 }));
+  if (net.secured) bits.push(icon('ui/lock', { size: 12, className: 'hud-menu-dim' }));
+  bits.push(menuValue(`${net.strength}%`));
+  return bits;
 }
 
 function connectionSection(s) {
   const link = s.connection;
-  const wrap = document.createElement('div');
-  wrap.className = 'network-card';
-  wrap.appendChild(sectionTitle(t('net.connected')));
-
-  if (!link) {
-    const idle = document.createElement('div');
-    idle.className = 'network-idle';
-    idle.textContent = t('net.notConnected');
-    wrap.appendChild(idle);
-    return wrap;
-  }
+  if (!link) return section(menuLabel(t('net.connected')), menuNote(t('net.notConnected')));
 
   const isWifi = link.kind === 'wifi';
   const subtitleBits = [
@@ -354,109 +347,82 @@ function connectionSection(s) {
     link.managed === false ? t('net.systemManaged') : null,
   ].filter(Boolean);
 
-  const trailing = document.createElement('span');
-  trailing.className = 'network-trailing';
-  if (isWifi && link.strength != null) {
-    const pct = document.createElement('span');
-    pct.className = 'network-pct';
-    pct.textContent = `${link.strength}%`;
-    trailing.appendChild(pct);
-  }
+  const trailing = [];
+  if (isWifi && link.strength != null) trailing.push(menuValue(`${link.strength}%`));
+  if (!isWifi) trailing.push(menuValue(t('net.wired')));
 
-  wrap.appendChild(listItem({
-    leading: icon(isWifi ? `hud/wifi-${link.level}` : 'hud/ethernet', {
-      size: 18,
-      className: 'network-leading',
-    }),
+  const row = menuRow({
+    iconName: isWifi ? `hud/wifi-${link.level}` : 'hud/ethernet',
     title: isWifi ? (link.ssid || t('net.wifi')) : t('net.ethernet'),
-    subtitle: subtitleBits.join(' · '),
+    sub: subtitleBits.join(' · '),
     trailing,
-  }));
+    selected: true,
+  });
 
-  const actions = document.createElement('div');
-  actions.className = 'ui-row network-actions';
+  let actions = null;
   if (isWifi) {
-    actions.appendChild(button({
+    actions = el('div', 'hud-menu-actions');
+    actions.appendChild(menuPill({
       label: t('net.disconnect'),
-      variant: 'quiet',
-      size: 'sm',
-      icon: 'ui/close',
+      iconName: 'ui/close',
+      arrow: false,
       onClick: () => void disconnect(),
     }));
     const profile = (s.saved || []).find((p) => p.ssid === link.ssid);
     if (profile) {
-      actions.appendChild(button({
+      const forgetBtn = menuPill({
         label: t('common.forget'),
-        variant: 'danger',
-        size: 'sm',
-        icon: 'ui/trash',
+        iconName: 'ui/trash',
+        arrow: false,
         onClick: () => confirmForget(profile),
-      }));
+      });
+      forgetBtn.classList.add('is-danger');
+      actions.appendChild(forgetBtn);
     }
-  } else {
-    actions.appendChild(badge(t('net.wired'), { tone: 'ok' }));
   }
-  wrap.appendChild(actions);
-  return wrap;
+  return section(menuLabel(t('net.connected')), row, actions);
 }
 
 function networksSection(s) {
-  const wrap = document.createElement('div');
   const networks = s.networks || [];
-  const header = document.createElement('div');
-  header.className = 'network-section-head';
-  header.appendChild(sectionTitle(t('net.available')));
-  if (networks.length) header.appendChild(badge(String(networks.length)));
-  wrap.appendChild(header);
+  const label = menuLabel(t('net.available'), networks.length ? menuValue(String(networks.length)) : null);
 
-  if (!networks.length) {
-    const empty = document.createElement('div');
-    empty.className = 'network-idle';
-    empty.textContent = t('net.noneFound');
-    wrap.appendChild(empty);
-    return wrap;
-  }
+  if (!networks.length) return section(label, menuNote(t('net.noneFound')));
 
-  const listEl = document.createElement('div');
-  listEl.className = 'ui-list';
+  const listEl = el('div', 'hud-menu-list');
   for (const net of networks) {
     const bits = [net.security || t('net.open'), net.band].filter(Boolean);
     if (net.active) bits.unshift(t('net.connected'));
     else if (net.known) bits.unshift(t('net.known'));
     if (net.hidden || !net.ssid) bits.unshift(t('net.hidden'));
 
-    listEl.appendChild(listItem({
-      leading: icon(`hud/wifi-${net.level}`, { size: 17, className: 'network-leading' }),
+    listEl.appendChild(menuRow({
+      iconName: `hud/wifi-${net.level}`,
       title: net.ssid || t('net.hiddenNetwork'),
-      subtitle: bits.join(' · '),
+      sub: bits.join(' · '),
       trailing: strengthTrailing(net),
+      selected: !!net.active,
       onClick: () => onNetworkClick(net),
     }));
   }
-  wrap.appendChild(listEl);
-  return wrap;
+  return section(label, listEl);
 }
 
 function savedSection(saved, s) {
-  const wrap = document.createElement('div');
-  wrap.appendChild(sectionTitle(t('net.saved')));
-  const listEl = document.createElement('div');
-  listEl.className = 'ui-list';
+  const listEl = el('div', 'hud-menu-list');
   for (const profile of saved) {
-    const trailing = document.createElement('span');
-    trailing.className = 'network-trailing';
-    trailing.appendChild(iconButton({
+    const forgetBtn = iconButton({
       icon: 'ui/trash',
       label: t('net.forgetName', { name: profile.ssid }),
       variant: 'quiet',
       size: 'sm',
       onClick: () => confirmForget(profile),
-    }));
-    listEl.appendChild(listItem({
-      leading: icon('ui/lock', { size: 15, className: 'network-leading' }),
+    });
+    listEl.appendChild(menuRow({
+      iconName: 'ui/lock',
       title: profile.ssid || profile.id,
-      subtitle: profile.autoconnect ? t('net.autoconnect') : t('net.manual'),
-      trailing,
+      sub: profile.autoconnect ? t('net.autoconnect') : t('net.manual'),
+      trailing: [forgetBtn],
       onClick: () => {
         const net = (s.networks || []).find((n) => n.ssid === profile.ssid)
           || { ssid: profile.ssid, interface: profile.interface, secured: true, known: true };
@@ -464,16 +430,12 @@ function savedSection(saved, s) {
       },
     }));
   }
-  wrap.appendChild(listEl);
-  return wrap;
+  return section(menuLabel(t('net.saved')), listEl);
 }
 
 /** Wired interfaces + any kernel link NetworkManager does not list. */
 function linksSection(s) {
-  const wrap = document.createElement('div');
-  wrap.appendChild(sectionTitle(t('net.wired')));
-  const listEl = document.createElement('div');
-  listEl.className = 'ui-list';
+  const listEl = el('div', 'hud-menu-list');
 
   const seen = new Set();
   for (const wired of s.wired || []) {
@@ -484,10 +446,10 @@ function linksSection(s) {
       wired.speed_mbps ? `${wired.speed_mbps} Mb/s` : null,
       wired.managed === false ? t('net.systemManaged') : null,
     ].filter(Boolean);
-    listEl.appendChild(listItem({
-      leading: icon('hud/ethernet', { size: 17, className: 'network-leading' }),
+    listEl.appendChild(menuRow({
+      iconName: 'hud/ethernet',
       title: wired.interface,
-      subtitle: bits.join(' · '),
+      sub: bits.join(' · '),
     }));
   }
   for (const link of s.links || []) {
@@ -499,12 +461,11 @@ function linksSection(s) {
       link.speed_mbps ? `${link.speed_mbps} Mb/s` : null,
       t('net.systemManaged'),
     ].filter(Boolean);
-    listEl.appendChild(listItem({
-      leading: icon('hud/ethernet', { size: 17, className: 'network-leading' }),
+    listEl.appendChild(menuRow({
+      iconName: 'hud/ethernet',
       title: link.interface,
-      subtitle: bits.join(' · '),
+      sub: bits.join(' · '),
     }));
   }
-  wrap.appendChild(listEl);
-  return wrap;
+  return section(menuLabel(t('net.wired')), listEl);
 }

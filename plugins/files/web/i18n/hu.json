@@ -34,9 +34,6 @@
   "plugin.files.status.folder": "Mappa",
   "plugin.files.status.items.one": "{count} elem",
   "plugin.files.status.items.other": "{count} elem",
-  "plugin.files.status.selected": "„{name}” kijelölve ({what})",
-  "plugin.files.status.multiSelected.one": "{count} elem kijelölve ({size})",
-  "plugin.files.status.multiSelected.other": "{count} elem kijelölve ({size})",
 
   "plugin.files.when.today": "Ma {time}",
   "plugin.files.when.yesterday": "Tegnap {time}",

@@ -232,7 +232,7 @@ class IntersectionObserverStub {
 
 /* ── Module stubs for the core imports ────────────────────────── */
 
-const calls = { toasts: [], notices: [], fetches: [] };
+const calls = { toasts: [], notices: [], fetches: [], reveals: [] };
 
 const ENTRIES = [
   { name: 'Pictures', path: 'Pictures', kind: 'dir', count: 4 },
@@ -352,6 +352,7 @@ const context = vm.createContext({
   setTileGlow: () => {},
   setTileGlowFromUrl: async () => {},
   glowGradient: (a) => a,
+  listReveal: (nodes) => { calls.reveals.push([...nodes].length); return Promise.resolve(); },
   // plugin-side core imports
   openContextMenu: (entries) => { const el = makeElement('div'); el.entries = entries; return el; },
   copyText: async () => true,
@@ -410,6 +411,15 @@ await tick(80);
 check('the listing rendered one entry per file',
   byClass(tile, 'files-entry').length === ENTRIES.length,
   String(byClass(tile, 'files-entry').length));
+check('the loaded folder is revealed through the shared motion helper',
+  calls.reveals.length === 1 && calls.reveals[0] === ENTRIES.length, JSON.stringify(calls.reveals));
+const metas = byClass(tile, 'files-grid-meta').map((el) => el.textContent);
+check('each grid entry carries its meta line',
+  metas[0] === '4 items' && metas[1] === 'png · 243 KB', JSON.stringify(metas));
+const statusline = byClass(tile, 'files-statusline')[0];
+check('the status line counts the folder',
+  statusline?.children[0]?.textContent === '4 items' && statusline?.children[1]?.textContent === '',
+  statusline?.children.map((el) => el.textContent).join(' | '));
 check('nothing is open before Space', !first('files-look'));
 
 /* Space opens the quick look on the selected file. */
@@ -461,6 +471,10 @@ check('the arrow steps to the next file',
 check('stepping reuses the open overlay', first('files-look') === look);
 check('the file behind it stays selected',
   byClass(tile, 'files-entry')[2].classList.contains('is-selected'));
+check('the status line reports the selection and its size',
+  statusline.children[0].textContent === '4 items · 1 selected'
+  && statusline.children[1].textContent === '46 MB',
+  statusline.children.map((el) => el.textContent).join(' | '));
 check('a player keeps the bottom edge for its controls',
   first('files-look-surface')?.classList.contains('is-media')
   && !!first('files-player-bar') && !!first('files-player-seek'));

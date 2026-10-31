@@ -59,7 +59,11 @@
 #include <QUrl>
 #include <QVariant>
 #include <QtWebChannelQuick/qqmlwebchannel.h>
+#include <QPageLayout>
+#include <QPageSize>
+#include <QTemporaryDir>
 #include <QWebEngineDownloadRequest>
+#include <QWebEnginePage>
 #include <QWebEnginePermission>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
@@ -70,6 +74,8 @@
 #include <QtWebEngineQuick/qquickwebengineprofile.h>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 
+#include <atomic>
+#include <memory>
 #include <cstdio>
 #include <cstdlib>
 
@@ -117,6 +123,10 @@ struct Context {
 
 // One shell per process (the kiosk); free functions reach it through this.
 Context *g_ctx = nullptr;
+
+// The pump timer, published for `peakd_qt_pump_rate`, which the gesture reader
+// calls from its own thread. Null outside `peakd_qt_run`'s event loop.
+static std::atomic<QTimer *> g_pump_timer{nullptr};
 
 // Scripts injected into every page, registered before the shell starts.
 QList<InjectedScript> g_pending_scripts;
@@ -438,6 +448,8 @@ void emit_view(const QString &id, const char *kind, const QString &payload) {
 QString bootstrap_script(const QString &qwebchannel_js) {
     return qwebchannel_js + QStringLiteral(R"JS(
 (function () {
+  // What this shell can do for the app (the PDF editor checks `print`).
+  window.__peakdCaps = Object.assign(window.__peakdCaps || {}, { print: true });
   if (window.ipc) return;
   var queue = [];
   window.ipc = { postMessage: function (s) { queue.push(String(s)); } };
@@ -1225,12 +1237,14 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
         }
     });
 
-    // The shell's pump: queues are drained on this 100 ms tick.
+    // The shell's pump: queues are drained on this 100 ms tick (16 ms while
+    // a trackpad gesture is live, see `peakd_qt_pump_rate`).
     auto *timer = new QTimer(&app);
     QObject::connect(timer, &QTimer::timeout, &app, [&context]() {
         if (context.pump_cb) context.pump_cb(context.userdata);
     });
     timer->start(100);
+    g_pump_timer.store(timer);
 
     // Debug hook: run one script on the app view after the page has settled.
     // Used by the migration checks; useful on the kiosk when something needs
@@ -1250,7 +1264,9 @@ int peakd_qt_run(const char *url, const char *data_dir, int probe, peakd_ipc_cb 
 
     std::printf("peakd: Qt %s (Quick scene)\n", qVersion());
     std::fflush(stdout);
-    return app.exec();
+    const int rc = app.exec();
+    g_pump_timer.store(nullptr);
+    return rc;
 }
 
 void peakd_qt_quit(void) { QCoreApplication::quit(); }
@@ -1268,6 +1284,20 @@ void peakd_qt_main_run_js(const char *script, int callback_id) {
     QMetaObject::invokeMethod(g_ctx->scene_root, "runJs",
                               Q_ARG(QVariant, QString::fromUtf8(script)),
                               Q_ARG(QVariant, callback_id));
+}
+
+void peakd_qt_pump_rate(int interval_ms, int wake) {
+    QTimer *timer = g_pump_timer.load();
+    if (!timer) return;
+    // Queued onto the timer's (GUI) thread: QTimer is not thread-safe, and the
+    // pump callback must run where the webview lives.
+    QMetaObject::invokeMethod(
+        timer,
+        [timer, interval_ms, wake]() {
+            if (interval_ms > 0 && timer->interval() != interval_ms) timer->setInterval(interval_ms);
+            if (wake && g_ctx && g_ctx->pump_cb) g_ctx->pump_cb(g_ctx->userdata);
+        },
+        Qt::QueuedConnection);
 }
 
 double peakd_qt_screen_dpi(void) {
@@ -1552,6 +1582,117 @@ void peakd_qt_download_action(const char *id, const char *action) {
             g_download_cb(g_cb_userdata, id, "removed", "{}");
         }
     }
+}
+
+
+// ── Print HTML to PDF ──────────────────────────────────────────────────────
+//
+// The app's document editor hands over a complete HTML document; it is
+// written to a private temporary directory, loaded in an invisible
+// QWebEnginePage (its own off-the-record profile, JavaScript off, no remote
+// loads) and printed with Chromium's own print pipeline — the same layout,
+// fonts and line breaks the user saw in the editor. The PDF goes back to the
+// app view base64-encoded through `window.__peakdPrinted({id, ok, data|error})`;
+// the app uploads it to the server itself, so the server never has to trust a
+// file path from the shell.
+
+namespace {
+
+void deliver_printed(const QString &id, bool ok, const QByteArray &pdf, const QString &error) {
+    QJsonObject result;
+    result.insert(QStringLiteral("id"), id);
+    result.insert(QStringLiteral("ok"), ok);
+    if (ok) {
+        result.insert(QStringLiteral("data"), QString::fromLatin1(pdf.toBase64()));
+    } else {
+        result.insert(QStringLiteral("error"), error);
+    }
+    const QString script = QStringLiteral("window.__peakdPrinted && window.__peakdPrinted(%1)")
+                               .arg(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact)));
+    peakd_qt_main_run_js(script.toUtf8().constData(), 0);
+}
+
+void print_html_now(const QString &id, const QString &html, const QJsonObject &options) {
+    auto *dir = new QTemporaryDir();
+    if (!dir->isValid()) {
+        delete dir;
+        deliver_printed(id, false, {}, QStringLiteral("no temporary directory"));
+        return;
+    }
+    const QString html_path = dir->filePath(QStringLiteral("document.html"));
+    const QString pdf_path = dir->filePath(QStringLiteral("document.pdf"));
+    {
+        QFile file(html_path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(html.toUtf8()) < 0) {
+            delete dir;
+            deliver_printed(id, false, {}, QStringLiteral("could not write the document"));
+            return;
+        }
+    }
+
+    // Page size and margins (millimetres) from the editor's page setup.
+    const QString size_name = options.value(QStringLiteral("size")).toString(QStringLiteral("A4"));
+    const QPageSize size(size_name == QLatin1String("Letter") ? QPageSize::Letter : QPageSize::A4);
+    const bool landscape = options.value(QStringLiteral("landscape")).toBool(false);
+    const QJsonArray m = options.value(QStringLiteral("margins")).toArray();
+    auto margin = [&m](int i, double fallback) { return m.size() == 4 ? m.at(i).toDouble(fallback) : fallback; };
+    const QMarginsF margins(margin(3, 20), margin(0, 18), margin(1, 20), margin(2, 18));
+    const QPageLayout layout(size, landscape ? QPageLayout::Landscape : QPageLayout::Portrait, margins,
+                             QPageLayout::Millimeter);
+
+    auto *profile = new QWebEngineProfile();  // off-the-record, nothing persisted
+    auto *page = new QWebEnginePage(profile);
+    page->settings()->setAttribute(QWebEngineSettings::JavascriptEnabled, false);
+    page->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
+    page->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, false);
+
+    auto done = std::make_shared<bool>(false);
+    auto finish = [=](bool ok, const QByteArray &pdf, const QString &error) {
+        if (*done) return;
+        *done = true;
+        deliver_printed(id, ok, pdf, error);
+        // The profile must outlive its page: release it (and the temporary
+        // files) only once the page is really gone.
+        QObject::connect(page, &QObject::destroyed, profile, [profile, dir]() {
+            profile->deleteLater();
+            delete dir;
+        });
+        page->deleteLater();
+    };
+    QObject::connect(page, &QWebEnginePage::loadFinished, page, [=](bool ok) {
+        if (!ok) {
+            finish(false, {}, QStringLiteral("the document did not load"));
+            return;
+        }
+        page->printToPdf(pdf_path, layout);
+    });
+    QObject::connect(page, &QWebEnginePage::pdfPrintingFinished, page,
+                     [=](const QString &path, bool ok) {
+                         if (!ok) {
+                             finish(false, {}, QStringLiteral("printing failed"));
+                             return;
+                         }
+                         QFile file(path);
+                         if (!file.open(QIODevice::ReadOnly)) {
+                             finish(false, {}, QStringLiteral("could not read the PDF"));
+                             return;
+                         }
+                         finish(true, file.readAll(), {});
+                     });
+    // A page that never finishes must not leave the editor waiting forever.
+    QTimer::singleShot(60000, page, [=]() { finish(false, {}, QStringLiteral("timed out")); });
+    page->load(QUrl::fromLocalFile(html_path));
+}
+
+}  // namespace
+
+void peakd_qt_print_html(const char *id, const char *html, const char *options_json) {
+    const QString id_s = QString::fromUtf8(id);
+    const QString html_s = QString::fromUtf8(html);
+    const QJsonObject options = QJsonDocument::fromJson(QByteArray(options_json)).object();
+    // Queued onto the GUI thread, where QtWebEngine objects must live.
+    QMetaObject::invokeMethod(
+        qApp, [id_s, html_s, options]() { print_html_now(id_s, html_s, options); }, Qt::QueuedConnection);
 }
 
 #include "peakd.moc"

@@ -25,6 +25,12 @@ other code changes.
 - An **Updates window**: detected distro + package manager, pending packages
   (with selection), one-click install, Ollama version/update, live job log and
   recent history.
+  The window follows the editorial window language (styles: the "Updates
+  plugin window" section of `web/css/tiles.css`): flat tabs in the window bar;
+  a large title ("8 updates" / "Up to date", the count rolls up) under a mono
+  eyebrow ("DEBIAN · APT"); the install action as the ink arrow pill; hairline
+  package rows with the name on the left and mono "1.2 → 1.3 · MAIN" on the
+  right; the job log in mono. Packages and history cascade in when loaded.
 - **Agent tools**: `updates_status`, `updates_distro`, `updates_refresh`,
   `updates_apply`, `update_ollama`.
 - **REST routes** under `/api/updates/*`.

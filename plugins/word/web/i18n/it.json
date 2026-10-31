@@ -1,11 +1,9 @@
 {
   "plugin.word.toolbar.documents": "Documenti",
   "plugin.word.toolbar.titlePlaceholder": "Senza titolo",
+  "plugin.word.toolbar.titleLabel": "Titolo del documento",
+  "plugin.word.toolbar.new": "Nuovo",
   "plugin.word.toolbar.newDocument": "Nuovo documento",
-  "plugin.word.toolbar.importOdt": "Importa .odt",
-  "plugin.word.toolbar.saveToDocuments": "Salva in Documenti",
-  "plugin.word.toolbar.saveNow": "Salva ora",
-  "plugin.word.toolbar.deleteDocument": "Elimina documento",
   "plugin.word.toolbar.bold": "Grassetto",
   "plugin.word.toolbar.italic": "Corsivo",
   "plugin.word.toolbar.underline": "Sottolineato",
@@ -14,15 +12,21 @@
   "plugin.word.toolbar.font": "Carattere",
   "plugin.word.toolbar.fontHint": "Carattere — si applica alla selezione, o all'intero documento quando non c'è nulla di selezionato",
 
-  "plugin.word.status.saving": "Salvataggio…",
-  "plugin.word.status.unsaved": "Modifiche non salvate",
-  "plugin.word.status.saved.one": "Salvato {time} · {count} parola",
-  "plugin.word.status.saved.other": "Salvato {time} · {count} parole",
-  "plugin.word.status.saved.many": "Salvato {time} · {count} parole",
+  "plugin.word.state.saving": "Salvataggio",
+  "plugin.word.state.unsaved": "Non salvato",
+  "plugin.word.state.saved": "Salvato {time}",
+
+  "plugin.word.hero.edited": "Modificato {time}",
+  "plugin.word.hero.words.one": "{count} parola",
+  "plugin.word.hero.words.other": "{count} parole",
+  "plugin.word.hero.words.many": "{count} parole",
+
+  "plugin.word.editor.placeholder": "Scrivi qualcosa…",
 
   "plugin.word.menu.empty": "Ancora nessun documento",
   "plugin.word.menu.newDocument": "Nuovo documento",
   "plugin.word.menu.importOdt": "Importa .odt",
+  "plugin.word.menu.saveNow": "Salva ora",
   "plugin.word.menu.saveToDocuments": "Salva in Documenti",
   "plugin.word.menu.deleteDocument": "Elimina documento",
 

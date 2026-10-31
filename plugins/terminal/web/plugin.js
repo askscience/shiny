@@ -31,7 +31,7 @@
  * and replays recent output.
  */
 
-import { controlButton, icon, iconButton, toast } from '../../ui/index.js';
+import { controlButton, icon, iconButton, toast, decodeText } from '../../ui/index.js';
 import * as coreApi from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
@@ -69,6 +69,8 @@ let tabSeq = 0;
 // never arrived and its input POSTs queued behind the limit. One tagged
 // stream per window cannot.
 let streamAbort = null;
+/** `ready` frames that arrived before their tab knew its session id. */
+const earlyReady = new Map();
 let reconnectTimer = null;
 
 // Output is coalesced before it reaches xterm. A TUI redraws continuously
@@ -148,36 +150,82 @@ function b64ToBytes(b64) {
   return out;
 }
 
-function accentColor() {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--accent');
-  return value.trim() || '#8ab4ff';
-}
-
 /** Read a themed custom property off the tile (falling back to the root),
- *  so the xterm palette follows `--terminal-bg` / `--terminal-fg`. */
+ *  so the xterm palette follows the theme's `--terminal-*` tokens. */
 function tileVar(name, fallback) {
   const el = tileEl || document.documentElement;
   const value = getComputedStyle(el).getPropertyValue(name);
   return value.trim() || fallback;
 }
 
+/** The sixteen ANSI colours a theme may set as `--terminal-ansi-<name>`
+ *  (Dusk does, so `ls --color` stays readable on its light paper). Missing
+ *  ones keep xterm's defaults. */
+const ANSI_KEYS = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+  'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'];
+const cssName = (key) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+
+/** The xterm theme, built fresh from the tokens (a theme switch must drop a
+ *  previous theme's ANSI overrides, so this never merges). */
 function terminalTheme() {
-  return {
+  const accent = tileVar('--accent', '#8ab4ff');
+  const theme = {
     background: tileVar('--terminal-bg', '#0b0b0c'),
     foreground: tileVar('--terminal-fg', '#d8d8dc'),
-    cursor: accentColor(),
-    selectionBackground: 'rgba(255,255,255,.18)',
+    cursor: tileVar('--terminal-cursor', accent),
+    cursorAccent: tileVar('--terminal-bg', '#0b0b0c'),
+    selectionBackground: tileVar('--terminal-selection', 'rgba(255,255,255,.18)'),
   };
+  for (const key of ANSI_KEYS) {
+    const value = tileVar(`--terminal-ansi-${cssName(key)}`, '');
+    if (value) theme[key] = value;
+  }
+  return theme;
 }
 
+/** The terminal face: the theme's mono (`--font-mono`). */
+function terminalFont() {
+  return tileVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace');
+}
+
+/** Re-apply palette and face to every open terminal (theme/appearance change). */
+function applyTerminalTheme() {
+  const theme = terminalTheme();
+  const font = terminalFont();
+  for (const tab of tabs) {
+    if (!tab.term) continue;
+    tab.term.options.theme = theme;
+    if (tab.term.options.fontFamily !== font) {
+      tab.term.options.fontFamily = font;
+      fit(tab);
+    }
+  }
+}
+
+/** Shorten a path under a home directory to `~/…`. */
+function tildePath(path) {
+  return String(path || '').replace(/^\/(?:home|Users)\/[^/]+(?=\/|$)|^\/root(?=\/|$)/, '~');
+}
+
+/** The status meta line: `ZSH · ~/SHINY · CONNECTED` (upper-cased by CSS). */
+function statusText(tab) {
+  if (!tab) return '';
+  const shell = (tab.shell || '').split('/').pop();
+  return [shell, tildePath(tab.cwd), tab.status].filter(Boolean).join(' · ');
+}
+
+let statusShown = '';
 function setStatus(text) {
-  if (statusEl) statusEl.textContent = text;
+  if (!statusEl || text === statusShown) return;
+  statusShown = text;
+  statusEl.title = text;
+  decodeText(statusEl, text, { duration: 360 });
 }
 
 /** Update a tab's status line; only the active tab's text is on screen. */
 function updateTabStatus(tab, text) {
   tab.status = text;
-  if (tab.id === activeTabId) setStatus(text);
+  if (tab.id === activeTabId) setStatus(statusText(tab));
 }
 
 /* ── tile DOM ─────────────────────────────────────────────────── */
@@ -191,7 +239,8 @@ function buildTile() {
 
   statusEl = document.createElement('div');
   statusEl.className = 'terminal-status';
-  statusEl.textContent = t('plugin.terminal.status.starting', null, 'starting terminal…');
+  statusShown = t('plugin.terminal.status.starting', null, 'starting terminal…');
+  statusEl.textContent = statusShown;
 
   tileEl.append(tabstripEl, statusEl);
   return tileEl;
@@ -268,7 +317,7 @@ function renderTabs() {
 function createTerminalFor(tab) {
   const term = new window.Terminal({
     cursorBlink: true,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    fontFamily: terminalFont(),
     fontSize: 13,
     scrollback: 5000,
     theme: terminalTheme(),
@@ -557,7 +606,7 @@ function setActiveTab(id) {
     }
   }
   onHostResized(tab);
-  setStatus(tab.status || '');
+  setStatus(statusText(tab));
   persist();
   renderTabs();
   // Clicking a tab (or the `+`) must leave the keyboard in the shell, like
@@ -648,6 +697,11 @@ async function attachSession(tab, stored = null) {
     return;
   }
   updateTabStatus(tab, t('plugin.terminal.status.connecting', null, 'connecting…'));
+  const early = earlyReady.get(tab.sessionId);
+  if (early) {
+    earlyReady.delete(tab.sessionId);
+    applyReady(tab, early);
+  }
   persist();
 }
 
@@ -784,23 +838,17 @@ function handleFrame(data) {
     return;
   }
   const tab = tabs.find((t) => t.sessionId === session);
-  if (!tab) return; // a session this window no longer shows
-  if (msg.type === 'ready') {
-    tab.shell = msg.shell || '';
-    tab.cwd = msg.cwd || '';
-    if (tab.resyncing) {
-      // Reconnect: the server is about to replay this session's scrollback
-      // from the start, so drop what the terminal already shows first.
-      tab.resyncing = false;
-      try {
-        tab.term?.reset();
-      } catch (_) {
-        /* reset is best-effort */
-      }
+  if (!tab) {
+    // A new shell's `ready` can beat the POST that names its session to the
+    // tab: keep it so `attachSession` can apply it (shell/cwd for the status).
+    if (msg.type === 'ready') {
+      earlyReady.set(session, msg);
+      if (earlyReady.size > MAX_TABS * 2) earlyReady.delete(earlyReady.keys().next().value);
     }
-    updateTabStatus(tab, t('plugin.terminal.status.connected', null, 'connected'));
-    renderTabs(); // the tooltip can name the shell now
-    onHostResized(tab);
+    return; // otherwise a session this window no longer shows
+  }
+  if (msg.type === 'ready') {
+    applyReady(tab, msg);
   } else if (msg.type === 'out') {
     queueOutput(tab, b64ToBytes(msg.data));
   } else if (msg.type === 'exit') {
@@ -808,6 +856,25 @@ function handleFrame(data) {
     // last tab opens a fresh one (see `closeTab`).
     closeTab(tab.id);
   }
+}
+
+/** A session announced itself: name its shell and cwd, resync a reconnect. */
+function applyReady(tab, msg) {
+  tab.shell = msg.shell || '';
+  tab.cwd = msg.cwd || '';
+  if (tab.resyncing) {
+    // Reconnect: the server is about to replay this session's scrollback
+    // from the start, so drop what the terminal already shows first.
+    tab.resyncing = false;
+    try {
+      tab.term?.reset();
+    } catch (_) {
+      /* reset is best-effort */
+    }
+  }
+  updateTabStatus(tab, t('plugin.terminal.status.connected', null, 'connected'));
+  renderTabs(); // the tooltip can name the shell now
+  onHostResized(tab);
 }
 
 /** Buffer a chunk of a tab's output and schedule the coalesced write. */
@@ -871,6 +938,7 @@ export function unmountTerminalTile() {
   tileEl = null;
   tabstripEl = null;
   statusEl = null;
+  statusShown = '';
 }
 
 export function getTerminalTileElement() {
@@ -879,11 +947,12 @@ export function getTerminalTileElement() {
 
 export function wireTerminalEvents() {
   /* Re-read the themed palette when the user changes appearance/theme. */
-  window.addEventListener('appearance:change', () => {
-    for (const tab of tabs) {
-      if (!tab.term) continue;
-      tab.term.options.theme = { ...tab.term.options.theme, ...terminalTheme() };
-    }
+  window.addEventListener('appearance:change', applyTerminalTheme);
+  /* A theme switch swaps the token stylesheet: re-read once it has loaded. */
+  window.addEventListener('theme:change', () => {
+    applyTerminalTheme();
+    document.getElementById('theme-tokens')?.addEventListener('load', applyTerminalTheme, { once: true });
+    window.setTimeout(applyTerminalTheme, 400);
   });
   /* A pick in the top-bar Clipboard menu with this window focused: paste it
    * straight into the active shell (the menu already put it on the OS clipboard). */

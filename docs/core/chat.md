@@ -18,13 +18,18 @@ and [`008_chat_indexes.sql`](../../migrations/008_chat_indexes.sql).
 | `chat_conversations` | `id`, `traveler_id`, `title`, `created_at`, `updated_at`, `terminal_auto_approve` |
 | `chat_messages` | `id`, `traveler_id`, `conversation_id`, `role`, `content`, `thinking`, `timestamp` |
 
-`role` is `user`, `assistant`, `system`, `approval` or `media`.
+`role` is `user`, `assistant`, `system`, `approval`, `tool` or `media`.
 **`system` rows are invisible notes** written for the model; the conversation
 list/detail endpoints filter them out, so the user never sees them as bubbles.
-`approval` and `media` are mid-turn UI rows: a terminal command (JSON
-`{command, decision}`) and a generated image/track (JSON `{kind, url, file,
-path, title?}`). They store as `content` JSON, are rendered by the chat, and are
-**excluded from the agent's memory window** so the model only reads real turns.
+`approval`, `tool` and `media` are mid-turn UI rows: a terminal command (JSON
+`{command, decision}`), one finished tool call (the tool-card record
+`{action, result, plugin?, data?, params?, capped?}` — capped and stripped of
+credentials by `src/services/tool_cards.rs`, the same object the `tool` SSE
+event carries) and a generated image/track (JSON `{kind, url, file, path,
+title?}`). They store as `content` JSON, are rendered by the chat, and are
+**excluded from the agent's memory window** so the model only reads real turns
+(`chat_memory::recent_history` reads `user`/`assistant`/`system` only; the
+legacy diary chat reads `user`/`assistant`).
 `GET /api/chat/conversations` previews the last `user`/`assistant` row.
 
 `thinking` (on assistant rows) is the reasoning trace a thinking model produced
@@ -33,9 +38,10 @@ for that reply, when thinking was on. It is returned by
 disclosure above the answer — the same fold the live turn shows.
 
 A turn's rows are inserted in visual order in one transaction: the user message,
-any `approval` rows, the assistant reply, then any `media` rows. That is what
-makes a reopened chat show the terminal commands and generated pictures in the
-same place the live turn showed them.
+any `approval` and `tool` rows in the order they happened, the assistant reply,
+then any `media` rows. That is what makes a reopened chat show the terminal
+commands, tool cards and generated pictures in the same place the live turn
+showed them.
 
 ---
 
@@ -128,3 +134,32 @@ answered — no status text. Both the command and its outcome are stored as an
 and icon again. Generated images and songs are stored as `media` rows and
 re-rendered below the answer on reopen; the reply's markdown copy is stripped
 server-side so nothing appears twice.
+
+### Tool cards
+
+Every finished tool call leaves a small card in the thread
+([`web/js/toolCards.js`](../../web/js/toolCards.js), `renderToolCard(record)`).
+The anatomy is shared: a header row with the tool's monochrome icon
+(`toolIcons.js`), a mono uppercase label ("Radio · Now playing", "Mail · Sent",
+"Route · Driving") and an ↗ open arrow that focuses the tool's plugin window
+(`plugin:focus`); then a body shaped by the result — big numbers where they
+matter (a calculation, a route's minutes, a temperature), rows for lists
+(stations, events, messages, files, search results, places, videos), a pre block
+for terminal output. Families: radio, calendar, mail, files, calculator,
+terminal, browser, web search, YouTube, image, route/trip/places (traveler),
+documents (Word, Impress, PDF, Calc, Studio), weather (whenever a payload
+carries current weather), and a generic key/value card for any other tool. A
+failed call is a compact error card. Housekeeping tools (window, workspace,
+desktop, plugin plumbing) and `generate_image`/`generate_song` (already media
+blocks) get none.
+
+Live cards arrive as `tool` SSE events and are inserted above the pending
+answer, so the spinner stays last while the turn runs; the voice path appends
+them too (into the closed panel, which rebuilds from history when it opens).
+Reopened chats render the stored `tool` rows in place, and the chat-history
+modal shows the same cards. Styles live under `.tool-card` in
+`web/css/text-input.css` (layout plus theme tokens only); themes skin the
+semantic classes — `.tool-card`, `.tool-card-head`, `.tool-card-label`,
+`.tool-card-open`, `.tool-card-big`, `.tool-card-unit`, `.tool-card-cells`,
+`.tool-card-row`, `.tool-card-actions`, `.tool-card--<family>`,
+`.tool-card--error`. All model/tool text is set with `textContent`.

@@ -1,16 +1,17 @@
 import {
   searchBar, confirmDialog, promptDialog, slider as uiSlider, toolbar, toolButton,
   controlButton, icon, setIcon, iconButton, button, emptyState, toast, notify, modal, setTileGlow,
-  setTileGlowFromUrl, glowGradient,
+  setTileGlowFromUrl, glowGradient, listReveal,
 } from '../../ui/index.js';
 
 /**
  * files.js — the Files plugin's window (GNOME Files / Nautilus style).
  *
- * Layout mirrors modern GNOME Files: a full-height Places sidebar, a header
- * with back/forward, a path-bar pill and a grid/list view switcher, a grid of
- * large tiles or a column list, a Sushi-style Space quick-look, and a floating
- * selection status pill. Lazy thumbnails (server PNG / PDF.js / video frame /
+ * Layout: a full-height Places sidebar, a toolbar (square back/forward
+ * buttons, a plain breadcrumb, a search field and a grid/list switcher), a
+ * grid of rounded thumbnail boxes with a name and a small meta line, or a
+ * column list, a Sushi-style Space quick-look, and a status line along the
+ * bottom edge (item count · selection). Lazy thumbnails (server PNG / PDF.js / video frame /
  * text mini) and AI wiring (`file_*` outcomes) work as before.
  */
 
@@ -32,7 +33,10 @@ let headerEl = null;
 let pathbarEl = null;
 let contentEl = null;
 let statusEl = null;
-let searchBtn = null;
+let statusCountEl = null;
+let statusSizeEl = null;
+let searchWrap = null;
+let searchInput = null;
 let viewBtn = null;
 let navBack = null;
 let navFwd = null;
@@ -52,6 +56,8 @@ let forward = [];
 let searchMode = false;
 let query = '';
 let mounted = false;
+let shownCount = 0;      // entries on screen, for the status line
+let revealNext = false;  // the next render follows a folder load: reveal it
 
 const textCache = new Map();   // rel -> Promise<string>
 const renderCache = new Map(); // rel -> Promise<render data | null> (office)
@@ -205,21 +211,14 @@ function selectionEntries() {
 function updateStatus() {
   if (!statusEl) return;
   const sel = selectionEntries();
-  statusEl.classList.toggle('hidden', sel.length === 0);
-  if (!sel.length) return;
-  if (sel.length === 1) {
-    const e = sel[0];
-    const what = e.kind === 'dir'
-      ? (e.count != null
-        ? tp('plugin.files.status.items', e.count, null, `${e.count} items`)
-        : t('plugin.files.status.folder', null, 'Folder'))
-      : formatSize(e.size);
-    statusEl.textContent = t('plugin.files.status.selected', { name: e.name, what }, `“${e.name}” selected (${what})`);
-  } else {
-    const bytes = sel.reduce((n, e) => n + (e.kind === 'file' ? (e.size || 0) : 0), 0);
-    statusEl.textContent = tp('plugin.files.status.multiSelected', sel.length, { size: formatSize(bytes) },
-      `${sel.length} items selected (${formatSize(bytes)})`);
-  }
+  const count = tp('plugin.files.status.items', shownCount, null, `${shownCount} items`);
+  statusCountEl.textContent = sel.length
+    ? t('plugin.files.status.countSelected', { count, selected: sel.length }, `${count} · ${sel.length} selected`)
+    : count;
+  // The right edge carries the selection's size — only when there is one to
+  // report (folders have no size of their own).
+  const bytes = sel.reduce((n, e) => n + (e.kind === 'file' ? (e.size || 0) : 0), 0);
+  statusSizeEl.textContent = bytes ? formatSize(bytes) : '';
 }
 function cssEscape(s) {
   return String(s).replace(/["\\]/g, '\\$&');
@@ -256,7 +255,7 @@ function thumbIcon(host, entry) {
   host.innerHTML = '';
   host.classList.remove('files-thumb--mini');
   host.classList.add('files-thumb--icon');
-  const ic = icon(entryIcon(entry), { size: entry.kind === 'dir' ? 56 : 40 });
+  const ic = icon(entryIcon(entry), { size: 24 });
   host.appendChild(ic);
 }
 function imageThumb(host, entry) {
@@ -352,7 +351,7 @@ function officeBadge(host, entry) {
   const badge = document.createElement('span');
   badge.className = 'files-doc-badge';
   badge.textContent = (entry.ext || '').toUpperCase();
-  host.append(icon(which, { size: 38 }), badge);
+  host.append(icon(which, { size: 24 }), badge);
 }
 
 function renderOfficeMini(page, data) {
@@ -398,7 +397,7 @@ function hydrateThumb(host, entry) {
   if (entry.kind === 'dir' || entry.kind === 'symlink') { thumbIcon(host, entry); return; }
   if (entry.is_image) { imageThumb(host, entry); return; }
   if (entry.is_video) { videoThumb(host, entry); return; }
-  if (entry.is_pdf) { void cachedThumb(host, entry, () => renderPdfPage(entry.path, 1, 260).then((c) => (c ? c.toDataURL('image/jpeg', 0.72) : null))); return; }
+  if (entry.is_pdf) { host.classList.add('files-thumb--page'); void cachedThumb(host, entry, () => renderPdfPage(entry.path, 1, 260).then((c) => (c ? c.toDataURL('image/jpeg', 0.72) : null))); return; }
   if (entry.is_office) { void officeThumb(host, entry); return; }
   if (entry.is_text) { void textThumb(host, entry); return; }
   thumbIcon(host, entry);
@@ -448,11 +447,10 @@ function buildSidebar() {
 
   const head = document.createElement('div');
   head.className = 'files-sidebar-head';
-  searchBtn = iconBtn('ui/search', t('plugin.files.toolbar.search', null, 'Search'), toggleSearch);
   const spacer = document.createElement('span');
   spacer.className = 'tile-bar-spacer';
-  const menuBtn = iconBtn('ui/list', t('plugin.files.toolbar.menu', null, 'Menu'), (e) => openAppMenu(e.currentTarget));
-  head.append(searchBtn, spacer, menuBtn);
+  const menuBtn = iconBtn('ui/more', t('plugin.files.toolbar.menu', null, 'Menu'), (e) => openAppMenu(e.currentTarget));
+  head.append(spacer, menuBtn);
   sidebarEl.appendChild(head);
 
   placesEl = document.createElement('nav');
@@ -498,11 +496,26 @@ function buildHeader() {
   headerEl = document.createElement('div');
   headerEl.className = 'files-header';
 
-  navBack = iconBtn('ui/chevron-left', t('plugin.files.toolbar.back', null, 'Back'), goBack);
-  navFwd = iconBtn('ui/chevron-right', t('plugin.files.toolbar.forward', null, 'Forward'), goForward);
+  navBack = iconBtn('ui/arrow-left', t('plugin.files.toolbar.back', null, 'Back'), goBack);
+  navFwd = iconBtn('ui/arrow-left', t('plugin.files.toolbar.forward', null, 'Forward'), goForward);
+  navFwd.classList.add('files-icon-btn--forward');
 
-  pathbarEl = document.createElement('div');
+  pathbarEl = document.createElement('nav');
   pathbarEl.className = 'files-pathbar';
+
+  searchWrap = searchBar({
+    placeholder: t('plugin.files.search.placeholder', null, 'Search…'),
+    label: t('plugin.files.toolbar.search', null, 'Search'),
+  });
+  searchWrap.classList.add('files-search');
+  searchInput = searchWrap.input;
+  searchInput.addEventListener('input', () => {
+    window.clearTimeout(searchInput.__t);
+    searchInput.__t = window.setTimeout(() => void runSearch(searchInput.value), 250);
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); exitSearch(); searchInput.blur(); }
+  });
 
   const actions = document.createElement('div');
   actions.className = 'files-header-actions';
@@ -515,7 +528,20 @@ function buildHeader() {
   split.append(viewBtn, viewChevron);
   actions.append(split);
 
-  headerEl.append(navBack, navFwd, pathbarEl, actions);
+  headerEl.append(navBack, navFwd, pathbarEl, searchWrap, actions);
+}
+
+/** A crumb: muted and clickable for an ancestor, plain text for the folder on screen. */
+function crumb(label, target) {
+  const current = target == null;
+  const el = current ? document.createElement('span') : controlButton();
+  el.className = 'files-path-crumb' + (current ? ' is-current' : '');
+  el.textContent = label;
+  if (!current) {
+    el.type = 'button';
+    el.addEventListener('click', () => navigate(target));
+  }
+  return el;
 }
 
 function renderHeader() {
@@ -527,57 +553,18 @@ function renderHeader() {
   void setIcon(viewBtn, view === 'grid' ? 'ui/grid' : 'ui/list', { size: 16 });
 
   pathbarEl.innerHTML = '';
-  pathbarEl.classList.toggle('is-searching', searchMode);
-  if (searchMode) {
-    const wrap = searchBar({
-      placeholder: t('plugin.files.search.placeholder', null, 'Search…'), value: query,
-      clearLabel: t('plugin.files.search.clear', null, 'Clear'),
-      onClear: () => void runSearch(''),
-    });
-    const input = wrap.input;
-    input.addEventListener('input', () => {
-      window.clearTimeout(input.__t);
-      input.__t = window.setTimeout(() => void runSearch(input.value), 250);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); exitSearch(); }
-    });
-    pathbarEl.appendChild(wrap);
-    requestAnimationFrame(() => input.focus());
-    return;
-  }
-
-  const root = controlButton();
-  root.type = 'button';
-  root.className = 'files-path-crumb' + (cwd === '' ? ' is-current' : '');
-  root.appendChild(icon('ui/home', { size: 14 }));
-  const rootLabel = document.createElement('span');
-  rootLabel.textContent = homeLabel;
-  root.appendChild(rootLabel);
-  if (cwd !== '') root.addEventListener('click', () => navigate(''));
-  pathbarEl.appendChild(root);
-
   const segs = cwd.split('/').filter(Boolean);
+  pathbarEl.appendChild(crumb(homeLabel, segs.length ? '' : null));
   let acc = '';
   segs.forEach((seg, i) => {
     acc = acc ? `${acc}/${seg}` : seg;
     const sep = document.createElement('span');
     sep.className = 'files-path-sep';
     sep.textContent = '/';
-    pathbarEl.appendChild(sep);
-    const last = i === segs.length - 1;
-    const el = document.createElement(last ? 'span' : 'button');
-    el.className = 'files-path-crumb' + (last ? ' is-current' : '');
-    el.textContent = seg;
-    if (!last) {
-      el.type = 'button';
-      const target = acc;
-      el.addEventListener('click', () => navigate(target));
-    }
-    pathbarEl.appendChild(el);
+    pathbarEl.append(sep, crumb(seg, i === segs.length - 1 ? null : acc));
   });
 
-  const menu = iconBtn('ui/list', t('plugin.files.toolbar.pathActions', null, 'Path actions'), (e) => openPathMenu(e.currentTarget));
+  const menu = iconBtn('ui/chevron-down', t('plugin.files.toolbar.pathActions', null, 'Path actions'), (e) => openPathMenu(e.currentTarget));
   menu.classList.add('files-path-menu');
   pathbarEl.appendChild(menu);
 }
@@ -589,9 +576,12 @@ function render() {
   contentEl.innerHTML = '';
   observer?.disconnect();
   observer = null;
-  updateStatus();
 
   const list = visibleEntries();
+  shownCount = list.length;
+  updateStatus();
+  const reveal = revealNext;
+  revealNext = false;
   if (!list.length) {
     contentEl.appendChild(emptyState({
       icon: query ? 'ui/search' : 'ui/folder-open',
@@ -630,6 +620,9 @@ function render() {
     contentEl.appendChild(rows);
   }
   syncSelectionDom();
+  // A folder that just loaded arrives in the user's motion language; re-renders
+  // for a selection, a sort or a view switch stay put.
+  if (reveal) void listReveal(contentEl.querySelectorAll('.files-entry'));
 }
 
 function columnHeader() {
@@ -686,6 +679,19 @@ function baseEntry(entry, cls) {
   return el;
 }
 
+/** The small line under a name: "24 items" for a folder, "PDF · 2.4 MB" for a file. */
+function entryMeta(entry) {
+  if (entry.kind === 'dir') {
+    return entry.count != null
+      ? tp('plugin.files.status.items', entry.count, null, `${entry.count} items`)
+      : t('plugin.files.status.folder', null, 'Folder');
+  }
+  const dot = entry.name.lastIndexOf('.');
+  const ext = entry.ext || (dot > 0 ? entry.name.slice(dot + 1) : '');
+  const size = formatSize(entry.size);
+  return ext ? `${ext} · ${size}` : size;
+}
+
 function gridEntry(entry) {
   const el = baseEntry(entry, 'files-entry--grid');
   const thumb = document.createElement('div');
@@ -693,16 +699,23 @@ function gridEntry(entry) {
   const name = document.createElement('div');
   name.className = 'files-grid-name';
   name.textContent = entry.name;
-  el.append(thumb, name);
+  const meta = document.createElement('div');
+  meta.className = 'files-grid-meta';
+  meta.textContent = entryMeta(entry);
+  el.append(thumb, name, meta);
   observer.observe(el);
   return el;
 }
 
 function rowEntry(entry) {
   const el = baseEntry(entry, 'files-entry--row');
+  // The glyph sits in a small box (setIcon sizes the node it fills, so the
+  // box is its parent).
   const ic = document.createElement('span');
   ic.className = 'files-row-icon';
-  void setIcon(ic, entryIcon(entry), { size: 16 });
+  const glyph = document.createElement('span');
+  void setIcon(glyph, entryIcon(entry), { size: 16 });
+  ic.appendChild(glyph);
   if (entry.kind === 'dir') ic.classList.add('is-folder');
   const name = document.createElement('div');
   name.className = 'files-row-name';
@@ -729,18 +742,18 @@ function syncSelectionDom() {
 /* ── navigation ─────────────────────────────────────────────── */
 
 async function navigate(rel, { push = true, clearForward = true } = {}) {
-  if (searchMode) exitSearch(true);
+  if (searchMode || searchInput?.value) exitSearch(true);
   if (push && rel !== cwd) {
     history.push(cwd);
     if (clearForward) forward = [];
   }
   cwd = rel;
-  query = '';
   selection.clear();
   await load();
 }
 
 async function load() {
+  revealNext = true;
   try {
     const data = await apiList(cwd);
     if (!mounted) return;
@@ -836,24 +849,31 @@ function downloadEntry(entry) {
 
 /* ── search ─────────────────────────────────────────────────── */
 
+/** Ctrl+F / Ctrl+L: the search field lives in the toolbar, so they focus it. */
 function toggleSearch() {
-  if (searchMode) exitSearch();
-  else { searchMode = true; renderHeader(); }
+  if (!searchInput) return;
+  if (document.activeElement === searchInput) { exitSearch(); searchInput.blur(); return; }
+  searchInput.focus();
+  searchInput.select?.();
 }
 function exitSearch(quiet = false) {
   searchMode = false;
   query = '';
-  if (!quiet) { entries = allEntries; renderHeader(); render(); }
+  if (searchInput) { window.clearTimeout(searchInput.__t); searchInput.value = ''; }
+  if (!quiet) { entries = allEntries; selection.clear(); render(); }
 }
 async function runSearch(q) {
   query = q.trim();
   if (query.length < 2) {
-    if (!query) { entries = allEntries; render(); }
+    if (!query) { searchMode = false; entries = allEntries; render(); }
     return;
   }
+  searchMode = true;
   try {
-    entries = await apiSearch(query, '');
-    if (!mounted) return;
+    const found = await apiSearch(query, '');
+    if (!mounted || !searchMode || q.trim() !== query) return;
+    entries = found;
+    selection.clear();
     render();
   } catch (e) {
     toast(e.message || t('plugin.files.toast.searchFailed', null, 'Search failed'), { type: 'error' });
@@ -1598,7 +1618,10 @@ export function mountFilesTile() {
   main.appendChild(contentEl);
 
   statusEl = document.createElement('div');
-  statusEl.className = 'files-status-pill hidden';
+  statusEl.className = 'files-statusline';
+  statusCountEl = document.createElement('span');
+  statusSizeEl = document.createElement('span');
+  statusEl.append(statusCountEl, statusSizeEl);
   main.appendChild(statusEl);
 
   shellEl.append(sidebarEl, main);
@@ -1634,7 +1657,8 @@ export function unmountFilesTile() {
   tileEl?.remove();
   tileEl = null; shellEl = null; sidebarEl = null; placesEl = null;
   headerEl = null; pathbarEl = null; contentEl = null; statusEl = null;
-  searchBtn = null; viewBtn = null; navBack = null; navFwd = null;
+  statusCountEl = null; statusSizeEl = null; searchWrap = null; searchInput = null;
+  viewBtn = null; navBack = null; navFwd = null; shownCount = 0; revealNext = false;
   allEntries = []; entries = []; selection.clear(); lastAnchor = null;
   history = []; forward = []; searchMode = false; query = '';
   textCache.clear(); thumbCache.clear(); renderCache.clear();

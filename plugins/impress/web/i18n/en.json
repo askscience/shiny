@@ -3,6 +3,7 @@
   "plugin.impress.toolbar.titlePlaceholder": "Untitled",
   "plugin.impress.toolbar.theme": "Theme",
   "plugin.impress.toolbar.present": "Present",
+  "plugin.impress.toolbar.new": "New",
   "plugin.impress.toolbar.newDeck": "New presentation",
   "plugin.impress.toolbar.importOdp": "Import .odp",
   "plugin.impress.toolbar.saveToDocuments": "Save to Documents",
@@ -12,6 +13,7 @@
   "plugin.impress.menu.empty": "No presentations yet",
   "plugin.impress.menu.newDeck": "New presentation",
   "plugin.impress.menu.importOdp": "Import .odp",
+  "plugin.impress.menu.saveNow": "Save now",
   "plugin.impress.menu.saveToDocuments": "Save to Documents",
   "plugin.impress.menu.deleteDeck": "Delete presentation",
 
@@ -26,6 +28,25 @@
   "plugin.impress.status.unsaved": "Unsaved changes",
   "plugin.impress.status.saved.one": "Saved {time} · {count} slide",
   "plugin.impress.status.saved.other": "Saved {time} · {count} slides",
+
+  "plugin.impress.state.saving": "Saving",
+  "plugin.impress.state.unsaved": "Unsaved",
+  "plugin.impress.state.saved": "Saved {time}",
+  "plugin.impress.info.slides.one": "{count} slide",
+  "plugin.impress.info.slides.other": "{count} slides",
+
+  "plugin.impress.theme.aurora": "Aurora",
+  "plugin.impress.theme.slate": "Slate",
+  "plugin.impress.theme.ocean": "Ocean",
+  "plugin.impress.theme.mono": "Mono",
+  "plugin.impress.theme.ember": "Ember",
+
+  "plugin.impress.layout.title": "Title",
+  "plugin.impress.layout.section": "Section",
+  "plugin.impress.layout.content": "Content",
+  "plugin.impress.layout.twoColumn": "Two columns",
+  "plugin.impress.layout.quote": "Quote",
+  "plugin.impress.layout.blank": "Blank",
 
   "plugin.impress.empty.noDeck": "No presentation",
   "plugin.impress.empty.noDeckBody": "Create one, or ask the AI to build a deck",

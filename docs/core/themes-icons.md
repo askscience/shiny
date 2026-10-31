@@ -19,8 +19,20 @@ A theme is a folder under `web/themes/<name>/`. Installed themes are listed in
 | `app.css` | Theme-specific overrides (declared via `"app"` in `theme.json`). |
 | `icons/` | Optional per-theme **icon overrides** (SVG, `currentColor`). |
 
-Bundled themes: **noir**, **neumorphic**, **pitch** (dark) and **light**,
-**neumorphic-light** (light). The default is `pitch`.
+Bundled themes: **Dusk** (light windows on a photographic desktop, the
+default) and **Ink** (near-black). Both are built on one shared skin,
+`web/themes/editorial/` (not a theme itself — each theme's `components.css` and
+`app.css` import it, and its `tokens.css` colours it). A stored choice of a
+retired theme (pitch, noir, neumorphic → Ink; light, neumorphic-light → Dusk) is
+carried over by `theme-loader.js` / `early-theme.js`.
+
+`theme.json` may also declare:
+
+| Key | Meaning |
+|---|---|
+| `defaultBackground` | The built-in wallpaper (`background.js` preset id) used while the user has not picked one. |
+| `overview` | The window-overview layout: `strip` (Dusk) or `cloud` (Ink). |
+| `icons` | `false`, `true`, or the list of icon names the theme ships under `icons/` (only those are looked up there). |
 
 ### Centralized scrollbar
 
@@ -40,6 +52,15 @@ swapping the `#theme-tokens` and `#theme-components` `<link>` elements and then
 the app-level `#theme-app` link. The inline bootstrap in `index.html` applies the
 stored theme before first paint. A change dispatches a **`theme:change`** window
 event so live surfaces (maps, canvases, glow) can repaint.
+
+Interactive changes (the top bar's theme button, Settings → Appearance → Theme)
+go through [`web/ui/themeTransition.js`](../../web/ui/themeTransition.js):
+`switchTheme(name, { origin })` wraps `setTheme()` in a view transition and only
+lets the new state be captured once the three theme `<link>`s have loaded (1 s
+cap each), so the page never shows half-styled. The transition follows the
+motion language — a rising curtain (kinetic), a circle opening from `origin`
+(fluid), the old desk receding (depth); see `web/ui/motion.css`. Without the
+View Transitions API, or with reduced motion, it is a plain `setTheme()`.
 
 ### Accent & gradient
 

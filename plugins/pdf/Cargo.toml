@@ -1,6 +1,6 @@
 [package]
 name = "shiny-pdf-plugin"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 
 [lib]
@@ -9,10 +9,19 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
-pdf_oxide = { version = "0.3", features = ["rendering"] }
-# In-place text editing needs raw content-stream access, which pdf_oxide does
-# not expose. Both engines share the same .pdf bytes.
+# The whole engine sits on lopdf's object model; creation, text reading and
+# editing, marks and page operations are the plugin's own (src/*.rs).
 lopdf = "0.45"
+# PdfCraft's engine (MIT OR Apache-2.0, pinned commit): real annotations,
+# page marks, page organisation and reading-order text.
+pdfcraft-cos = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+pdfcraft-annot = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+pdfcraft-edit = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+pdfcraft-organize = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+pdfcraft-render = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+# Stream compression at a sane level (lopdf's own compress() uses best(),
+# which is slow on large pages).
+flate2 = "1"
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

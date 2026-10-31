@@ -25,7 +25,7 @@ the **Browser** plugin's tabs as real child web views at the page's true origin.
 | `browse.rs` | Child web views for Browser tabs; request interceptor hookup. |
 | `downloads.rs` | Download manager plumbing. |
 | `filter.rs` | Loads the compiled ad-filter cache the server shares and asks the engine per request. |
-| `gestures.rs` | Reads the touchpad evdev stream and dispatches `trackpad:gesture`. |
+| `gestures.rs` | Reads the touchpad evdev stream and dispatches the `trackpad:gesture` lifecycle (`begin`/`update`/`end`/`cancel`); speeds the pump up to ~16 ms while a swipe is live. |
 | `host.rs` | Host shims (page/app integration). |
 | `shim.rs` | Compatibility shims. |
 | `bench.rs` | Benchmarks. |

@@ -34,5 +34,6 @@ pub mod routes;
 pub mod sessions;
 pub mod settings;
 pub mod tools;
+pub mod vault;
 
 pub use plugin::BrowserPlugin;

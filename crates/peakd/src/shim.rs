@@ -1,7 +1,8 @@
 //! The C ABI declared in `shim/peakd_qt.h`, plus small safe wrappers.
 //!
-//! Every function here must be called on the Qt main thread. The shell's
-//! callbacks (extern "C" fns in `main.rs`) are invoked on that thread too.
+//! Every function here must be called on the Qt main thread — except
+//! [`pump_rate`], which is safe from any thread. The shell's callbacks
+//! (extern "C" fns in `main.rs`) are invoked on that thread too.
 
 use std::ffi::{c_char, c_void, CString};
 
@@ -40,6 +41,8 @@ extern "C" {
     pub fn peakd_qt_main_load(url: *const c_char);
     pub fn peakd_qt_main_zoom(factor: f64);
     pub fn peakd_qt_main_run_js(script: *const c_char, callback_id: i32);
+    pub fn peakd_qt_print_html(id: *const c_char, html: *const c_char, options_json: *const c_char);
+    pub fn peakd_qt_pump_rate(interval_ms: i32, wake: i32);
     pub fn peakd_qt_set_color_scheme(scheme: *const c_char);
     pub fn peakd_qt_screen_dpi() -> f64;
     pub fn peakd_qt_screen_size(width: *mut i32, height: *mut i32);
@@ -128,6 +131,19 @@ pub fn main_run_js(script: &str, callback_id: i32) {
     unsafe { peakd_qt_main_run_js(cs(script).as_ptr(), callback_id) }
 }
 
+/// Print an HTML document to PDF (see `peakd_qt_print_html`); the bytes come
+/// back to the app view as `window.__peakdPrinted`.
+pub fn print_html(id: &str, html: &str, options_json: &str) {
+    unsafe { peakd_qt_print_html(cs(id).as_ptr(), cs(html).as_ptr(), cs(options_json).as_ptr()) }
+}
+
+/// Set the pump's interval and, with `wake`, run the pump once as soon as the
+/// GUI thread is free. Thread-safe: both are queued onto the GUI thread, and
+/// the call is a no-op before the event loop is up.
+pub fn pump_rate(interval_ms: i32, wake: bool) {
+    unsafe { peakd_qt_pump_rate(interval_ms, i32::from(wake)) }
+}
+
 pub fn screen_dpi() -> f64 {
     unsafe { peakd_qt_screen_dpi() }
 }
@@ -185,7 +201,7 @@ pub fn view_mask(id: &str, holes: &[crate::browse::CssRect]) {
 }
 
 /// Tell Qt (and through it, the pages) which colour scheme the app is using,
-/// so `prefers-color-scheme` matches the Noir/Light theme.
+/// so `prefers-color-scheme` matches the Ink/Dusk theme.
 pub fn set_color_scheme(scheme: &str) {
     unsafe { peakd_qt_set_color_scheme(cs(scheme).as_ptr()) }
 }

@@ -1,6 +1,7 @@
 import {
   toolbar, element as el, button, chip, emptyState, field, icon, iconButton,
-  input, list, listItem, modal, notify, row, spinner,
+  input, modal, notify, row, spinner, largeTitle, hairlineList, hairlineRow,
+  listReveal, rollNumber,
 } from '../../ui/index.js';
 
 /**
@@ -10,10 +11,13 @@ import {
  * folds `data-window-bar` into the title row, so the tabs sit where the window
  * title normally is. Tabs: Updates · Ollama · History.
  *
- * The Updates tab is deliberately flat (GNOME-Software-ish): a status line, one
- * primary install action, and a plain list with one row per package. Progress
- * is a spinner + the last line, with a Details toggle. Ollama and the audit
- * trail live in their own tabs.
+ * The Updates tab is deliberately flat, in the editorial window language: a
+ * large title ("4 updates" / "Up to date") under a mono eyebrow ("DEBIAN ·
+ * APT"), one ink install pill, and hairline rows with the package name on the
+ * left and its mono "1.2 → 1.3 · MAIN" on the right. Progress is a spinner +
+ * the last line, with a Details toggle that shows the mono log. Ollama and the
+ * audit trail live in their own tabs. Styles: the "Updates plugin window"
+ * section of web/css/tiles.css.
  *
  * The persistent top-bar chip lives in `hud.js`; this file is only the window.
  */
@@ -46,6 +50,12 @@ let lastResult = null; // 'ok' | 'error' | null
 let logFrom = 0;
 let lastLineEl = null;
 let detailsPreEl = null;
+/** The window's large title (`largeTitle()`), kept across renders. */
+let hero = null;
+let heroCount = null;
+/** Cascade the next package / history list that renders (a check finished). */
+let revealPackages = true;
+let revealHistory = true;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -54,7 +64,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function loadStatus(force = false) {
   try {
     const res = await apiFetch(`/api/updates/status${force ? '?force=true' : ''}`);
-    if (res?.data) status = res.data;
+    if (res?.data) {
+      status = res.data;
+      revealPackages = true;
+    }
   } catch (err) {
     if (tileEl) {
       notify({
@@ -90,9 +103,11 @@ export function mountUpdatesTile() {
 
   contentEl = document.createElement('div');
   contentEl.className = 'updates-content';
-  contentEl.style.cssText =
-    'flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:18px 20px 24px;gap:18px;';
   tileEl.appendChild(contentEl);
+  hero = largeTitle({ scroller: contentEl, eyebrow: ' ' });
+  heroCount = null;
+  revealPackages = true;
+  revealHistory = true;
 
   render();
   void loadStatus(false);
@@ -102,7 +117,6 @@ export function mountUpdatesTile() {
 function buildBar() {
   const bar = toolbar([], { className: 'updates-bar' });
   bar.dataset.windowBar = '';
-  bar.style.cssText = 'display:flex;align-items:center;gap:6px;width:100%;padding:0 4px;';
   bar.setAttribute('role', 'tablist');
   bar.setAttribute('aria-label', t('plugin.updates.toolbar.sections', null, 'Sections'));
 
@@ -120,11 +134,11 @@ function buildBar() {
   }
 
   const spacer = document.createElement('div');
-  spacer.style.cssText = 'flex:1;min-width:0;';
+  spacer.className = 'updates-bar-spacer';
   bar.appendChild(spacer);
 
   checkBtn = iconButton({
-    icon: 'ui/search',
+    icon: 'ui/refresh',
     label: t('plugin.updates.toolbar.check', null, 'Check for updates'),
     onClick: () => void loadStatus(true),
   });
@@ -133,6 +147,8 @@ function buildBar() {
 }
 
 export function unmountUpdatesTile() {
+  hero?.dispose();
+  hero = null;
   tileEl?.remove();
   tileEl = null;
   contentEl = null;
@@ -154,29 +170,46 @@ function render() {
   for (const [id, c] of Object.entries(tabChips)) c.setActive(id === activeTab);
 
   contentEl.textContent = '';
+  if (hero) contentEl.appendChild(hero.el);
   if (activeTab === 'ollama') renderOllama();
   else if (activeTab === 'history') renderHistory();
   else renderUpdates();
 }
 
-function statusLine() {
-  if (!status) return t('plugin.updates.status.checking', null, 'Checking for updates…');
-  const where = status.distro?.name || t('plugin.updates.status.thisSystem', null, 'this system');
-  if (status.error) return t('plugin.updates.status.unavailableOnSystem', null, 'Updates are unavailable on this system');
-  if (status.count === 0) return t('plugin.updates.status.upToDate', { where }, 'Everything is up to date · {where}');
-  return tp('plugin.updates.status.available', status.count, { where }, '{count} updates available · {where}');
+function errorLine() {
+  return el('p', 'updates-error', status.error);
 }
 
-function errorLine() {
-  const p = el('p', 'ui-subtitle', status.error);
-  p.style.color = 'var(--warn)';
-  return p;
+/** The large title: `title` over a mono `eyebrow`; a leading count rolls up when it changes. */
+function setHero(title, { eyebrow = '', meta = [] } = {}) {
+  if (!hero) return;
+  hero.setTitle(title);
+  hero.setEyebrow(eyebrow || ' ');
+  hero.setMeta(meta);
+  const count = title.match(/^\d+/)?.[0] ?? null;
+  if (count !== heroCount) {
+    heroCount = count;
+    if (count !== null) rollNumber(hero.el.querySelector('.ui-large-title-text'), { duration: 700 });
+  }
+}
+
+/** "DEBIAN · APT": the distro and its package manager as a mono eyebrow. */
+function distroEyebrow() {
+  const d = status?.distro;
+  return [d?.id, d?.manager].filter(Boolean).join(' · ');
+}
+
+function heroTitle() {
+  if (!status) return t('plugin.updates.hero.checking', null, 'Checking…');
+  if (status.error) return t('plugin.updates.status.unavailable', null, 'Updates unavailable');
+  if (!status.count) return t('plugin.updates.empty.upToDate', null, 'Up to date');
+  return tp('plugin.updates.hero.count', status.count, null, '{count} updates');
 }
 
 /* ── Updates tab ────────────────────────────────────────────── */
 
 function renderUpdates() {
-  contentEl.appendChild(el('p', 'ui-subtitle', statusLine()));
+  setHero(heroTitle(), { eyebrow: distroEyebrow() });
   if (!status) {
     contentEl.appendChild(spinner({ size: 18 }));
     return;
@@ -186,32 +219,32 @@ function renderUpdates() {
   if (status && !status.error && status.count > 0) contentEl.appendChild(installAction());
   if (busy || lastResult) contentEl.appendChild(progressLine());
 
-  const manager = status?.distro?.manager_label;
-  if (manager) contentEl.appendChild(el('p', 'ui-subtitle', manager));
-
   const packages = status?.packages || [];
   if (!packages.length) {
-    contentEl.appendChild(emptyState({
-      icon: status?.error ? 'ui/close' : 'ui/check',
-      title: status?.error
-        ? t('plugin.updates.status.unavailable', null, 'Updates unavailable')
-        : t('plugin.updates.empty.upToDate', null, 'Up to date'),
-      body: status?.error ? undefined : t('plugin.updates.empty.noUpdates', null, 'No system updates are waiting.'),
-      action: status?.error ? null : refreshButton(),
-    }));
+    // The large title already says "Up to date" / "Updates unavailable".
+    if (!status.error) {
+      const quiet = el('div', 'updates-actions');
+      quiet.append(
+        el('p', 'updates-status', t('plugin.updates.empty.noUpdates', null, 'No system updates are waiting.')),
+        refreshButton(),
+      );
+      contentEl.appendChild(quiet);
+    }
     return;
   }
-  contentEl.appendChild(list(packages, (p) => listItem({
-    leading: icon('ui/archive', { size: 26 }),
-    title: p.name,
-    subtitle: versionLine(p),
-  })));
+  const rows = hairlineList('updates-list');
+  for (const p of packages) rows.appendChild(hairlineRow({ title: p.name, meta: versionLine(p) }));
+  contentEl.appendChild(rows);
+  if (revealPackages) {
+    revealPackages = false;
+    void listReveal(rows.children);
+  }
 }
 
 function refreshButton() {
   return button({
     label: t('plugin.updates.action.refresh', null, 'Refresh lists'),
-    icon: 'ui/download',
+    icon: 'ui/refresh',
     variant: 'quiet',
     size: 'sm',
     disabled: busy || status?.distro?.supported === false,
@@ -227,14 +260,13 @@ function versionLine(p) {
 }
 
 function installAction() {
-  const wrap = el('div');
-  wrap.style.cssText = 'display:flex;gap:8px;align-items:center;';
+  const wrap = el('div', 'updates-actions');
   wrap.appendChild(button({
     label: busy
       ? t('plugin.updates.action.installing', null, 'Installing…')
       : tp('plugin.updates.action.install', status.count, null, 'Install {count} Updates'),
-    icon: 'ui/download',
     variant: 'primary',
+    arrow: !busy,
     loading: busy,
     disabled: busy,
     onClick: () => void startInstallAll(),
@@ -244,13 +276,12 @@ function installAction() {
 }
 
 function progressLine() {
-  const wrap = el('div');
-  wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+  const wrap = el('div', 'updates-progress');
+  if (lastResult === 'error' && !busy) wrap.classList.add('is-error');
 
-  const line = el('div');
-  line.style.cssText = 'display:flex;align-items:center;gap:10px;';
+  const line = el('div', 'updates-progress-line');
   if (busy) line.appendChild(spinner({ size: 16 }));
-  lastLineEl = el('span', 'ui-subtitle', busy
+  lastLineEl = el('span', 'updates-progress-text', busy
     ? (lastLine || t('plugin.updates.status.working', null, 'Working…'))
     : (lastResult === 'ok'
       ? t('plugin.updates.status.finished', null, 'Update finished')
@@ -269,10 +300,7 @@ function progressLine() {
   }));
 
   if (detailsOpen) {
-    detailsPreEl = el('pre');
-    detailsPreEl.style.cssText =
-      'margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.45;' +
-      'max-height:220px;overflow:auto;color:var(--muted);';
+    detailsPreEl = el('pre', 'updates-log');
     detailsPreEl.textContent = fullLog || lastLine || '';
     wrap.appendChild(detailsPreEl);
   } else {
@@ -301,20 +329,18 @@ function renderOllama() {
   }
   const o = status.ollama;
   const installed = !!o?.installed;
+  setHero('Ollama', { eyebrow: o?.version ? `v${o.version}` : '' });
 
-  const info = el('div');
-  info.style.cssText = 'display:flex;align-items:center;gap:14px;';
-  info.appendChild(icon('ui/download', { size: 34 }));
+  const info = el('div', 'updates-ollama');
   const text = el('div');
-  text.appendChild(el('div', 'ui-title', 'Ollama'));
-  text.appendChild(el('p', 'ui-subtitle', installed
+  text.appendChild(el('p', 'updates-status', installed
     ? t('plugin.updates.ollama.installed', {
       version: o.version ? t('plugin.updates.ollama.version', { version: o.version }, ' · version {version}') : '',
       path: o.path ? ` · ${o.path}` : '',
     }, 'Installed{version}{path}')
     : t('plugin.updates.ollama.notInstalled', null, 'Not installed (or not found on PATH)')));
   if (installed && o.service) {
-    text.appendChild(el('p', 'ui-subtitle', t('plugin.updates.ollama.service', { name: o.service }, 'Service: {name}')));
+    text.appendChild(el('p', 'updates-status', t('plugin.updates.ollama.service', { name: o.service }, 'Service: {name}')));
   }
   info.appendChild(text);
   contentEl.appendChild(info);
@@ -326,8 +352,8 @@ function renderOllama() {
         : (installed
           ? t('plugin.updates.ollama.update', null, 'Update Ollama')
           : t('plugin.updates.ollama.install', null, 'Install Ollama')),
-      icon: 'ui/download',
       variant: 'primary',
+      arrow: !busy,
       loading: busy,
       disabled: busy,
       onClick: () => void startOllama(),
@@ -340,7 +366,8 @@ function renderOllama() {
 /* ── History tab ────────────────────────────────────────────── */
 
 function renderHistory() {
-  const wrap = el('div');
+  setHero(t('plugin.updates.tab.history', null, 'History'), { eyebrow: distroEyebrow() });
+  const wrap = el('div', 'updates-history');
   contentEl.appendChild(wrap);
   wrap.appendChild(spinner({ size: 18 }));
   void (async () => {
@@ -354,11 +381,22 @@ function renderHistory() {
       }));
       return;
     }
-    wrap.appendChild(list(rows, (r) => listItem({
-      leading: r.status === 'ok' ? 'ui/check' : 'ui/close',
-      title: t('plugin.updates.history.entry', { action: r.action, manager: r.manager || t('plugin.updates.history.system', null, 'system') }, '{action} · {manager}'),
-      subtitle: [r.detail, r.at].filter(Boolean).join(' · '),
-    })));
+    const listEl = hairlineList('updates-list');
+    for (const r of rows) {
+      const item = hairlineRow({
+        lead: icon(r.status === 'ok' ? 'ui/check' : 'ui/close', { size: 16 }),
+        title: t('plugin.updates.history.entry', { action: r.action, manager: r.manager || t('plugin.updates.history.system', null, 'system') }, '{action} · {manager}'),
+        sub: r.detail || '',
+        meta: r.at || '',
+      });
+      item.classList.toggle('is-error', r.status !== 'ok');
+      listEl.appendChild(item);
+    }
+    wrap.appendChild(listEl);
+    if (revealHistory) {
+      revealHistory = false;
+      void listReveal(listEl.children);
+    }
   })();
 }
 
@@ -442,6 +480,7 @@ function finishJob(success, error) {
     urgency: success ? 'low' : 'normal',
   });
   history = null;
+  revealHistory = true;
   render();
   void loadStatus(true);
 }

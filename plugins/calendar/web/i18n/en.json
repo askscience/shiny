@@ -2,6 +2,8 @@
   "plugin.calendar.meta.description": "Calendar — schedule, list and organize events in the Calendar window",
   "plugin.calendar.meta.summary": "Calendar: schedule and organize events",
   "plugin.calendar.meta.category": "Office",
+  "plugin.calendar.count.events.one": "{count} event",
+  "plugin.calendar.count.events.other": "{count} events",
 
   "plugin.calendar.month.january": "January",
   "plugin.calendar.month.february": "February",

@@ -3,6 +3,7 @@
   "plugin.impress.toolbar.titlePlaceholder": "Senza titolo",
   "plugin.impress.toolbar.theme": "Tema",
   "plugin.impress.toolbar.present": "Presenta",
+  "plugin.impress.toolbar.new": "Nuova",
   "plugin.impress.toolbar.newDeck": "Nuova presentazione",
   "plugin.impress.toolbar.importOdp": "Importa .odp",
   "plugin.impress.toolbar.saveToDocuments": "Salva in Documenti",
@@ -12,6 +13,7 @@
   "plugin.impress.menu.empty": "Ancora nessuna presentazione",
   "plugin.impress.menu.newDeck": "Nuova presentazione",
   "plugin.impress.menu.importOdp": "Importa .odp",
+  "plugin.impress.menu.saveNow": "Salva ora",
   "plugin.impress.menu.saveToDocuments": "Salva in Documenti",
   "plugin.impress.menu.deleteDeck": "Elimina presentazione",
 
@@ -27,6 +29,26 @@
   "plugin.impress.status.saved.one": "Salvato {time} · {count} diapositiva",
   "plugin.impress.status.saved.other": "Salvato {time} · {count} diapositive",
   "plugin.impress.status.saved.many": "Salvato {time} · {count} diapositive",
+
+  "plugin.impress.state.saving": "Salvataggio",
+  "plugin.impress.state.unsaved": "Non salvata",
+  "plugin.impress.state.saved": "Salvata {time}",
+  "plugin.impress.info.slides.one": "{count} diapositiva",
+  "plugin.impress.info.slides.other": "{count} diapositive",
+  "plugin.impress.info.slides.many": "{count} diapositive",
+
+  "plugin.impress.theme.aurora": "Aurora",
+  "plugin.impress.theme.slate": "Ardesia",
+  "plugin.impress.theme.ocean": "Oceano",
+  "plugin.impress.theme.mono": "Mono",
+  "plugin.impress.theme.ember": "Brace",
+
+  "plugin.impress.layout.title": "Titolo",
+  "plugin.impress.layout.section": "Sezione",
+  "plugin.impress.layout.content": "Contenuto",
+  "plugin.impress.layout.twoColumn": "Due colonne",
+  "plugin.impress.layout.quote": "Citazione",
+  "plugin.impress.layout.blank": "Vuota",
 
   "plugin.impress.empty.noDeck": "Nessuna presentazione",
   "plugin.impress.empty.noDeckBody": "Creane una, oppure chiedi all'AI di costruire una presentazione",

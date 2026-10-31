@@ -1,4 +1,12 @@
 {
+  "plugin.studio.browser.audioEffect": "audio effect",
+  "plugin.studio.browser.factoryPreset": "factory",
+  "plugin.studio.browser.savedPreset": "saved",
+  "plugin.studio.toolbar.views": "Views",
+  "plugin.studio.toolbar.splitLabel": "Arranger and Launcher",
+  "plugin.studio.toolbar.splitHint": "Arranger and Clip Launcher side by side",
+  "plugin.studio.panel.pages": "Detail panel",
+  "plugin.studio.status.unsavedShort": "Unsaved",
   "plugin.studio.meta.category": "Media",
   "plugin.studio.meta.description": "Music studio — a DAW-grade step sequencer, polysynth, drum machine and modular Grid that renders arrangements to audio in the Studio window",
   "plugin.studio.meta.summary": "Music studio: polyphonic synth + drum machine + modular Grid, rendered offline by a self-contained DSP engine",

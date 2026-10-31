@@ -27,3 +27,12 @@ url = "2"
 chrono = { version = "0.4", features = ["serde"] }
 # The related-news cache: a small, rarely-written map read from the request path.
 parking_lot = "0.12"
+# The password vault (src/vault.rs): Argon2id turns the login password into a
+# key-encryption key, AES-256-GCM seals the data key and every entry.
+argon2 = "0.5"
+aes-gcm = "0.10"
+getrandom = "0.2"
+zeroize = "1"
+base64 = "0.22"
+# Checks the login password through core's `/api/auth/verify-password`.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }

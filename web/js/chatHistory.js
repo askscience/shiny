@@ -12,6 +12,7 @@ import {
   listConversations, loadConversationMessages, removeConversation,
 } from './agent.js';
 import { t } from './i18n.js';
+import { renderToolCard } from './toolCards.js';
 
 let panel = null;
 let view = 'list'; // 'list' | 'messages'
@@ -141,6 +142,13 @@ async function openMessages(c) {
     }));
   }
   for (const m of entries) {
+    // A tool call is its own card, the same one the live chat showed (none
+    // for housekeeping tools).
+    if (m.role === 'tool') {
+      const card = renderToolCard(m.content);
+      if (card) msgs.appendChild(card);
+      continue;
+    }
     const isUser = m.role === 'user';
     let text = m.content;
     // Mid-turn rows are not plain text: show the command or the generated

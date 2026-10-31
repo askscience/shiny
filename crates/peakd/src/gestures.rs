@@ -14,6 +14,14 @@
 //! `trackpad:gesture` event in the page (`web/js/gestures.js` maps it onto the
 //! desktop), the same shape as the Touch Bar bridge.
 //!
+//! Swipes are continuous: once three synchronised fingers have moved far
+//! enough to lock an axis the reader emits `begin`, then `update`s carrying a
+//! signed progress along that axis while the fingers move, and `end` (with the
+//! last progress and the release velocity) when they lift — or `cancel` when
+//! the stream breaks. The page follows the fingers and decides on `end`
+//! whether the transition completes or springs back. While a gesture is live
+//! the bridge asks the shell to pump at frame rate (see [`GestureBridge`]).
+//!
 //! Reading the evdev node needs permission. The kiosk runs as an unprivileged
 //! user, so the device must carry a logind `uaccess` tag (an ACL for the active
 //! seat session); `scripts/install-touchpad-gestures.sh` installs the rule.
@@ -50,18 +58,29 @@ use std::io::{BufReader, Read};
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 
-/// How far the fingers must travel, as a fraction of the pad's axis range.
+/// The reference swipe distance, as a fraction of the pad's axis range. It
+/// used to be the whole discrete swipe; the continuous one locks its axis at
+/// [`LOCK_FRACTION`] of it and reaches progress 1.0 at [`FULL_FACTOR`] times it.
 const SWIPE_FRACTION: f64 = 0.12;
 /// The floor for a pad whose range could not be read (units are arbitrary).
 const SWIPE_MIN_UNITS: i64 = 120;
-/// A swipe slower than this is a drag, not a gesture. The clock starts when the
-/// fingers actually move, not when they land, so resting a hand on the pad
-/// first does not spend the gesture.
-const SWIPE_MAX_MS: u128 = 900;
+/// The centre travel, as a fraction of the reference distance, at which three
+/// synchronised fingers lock an axis and the gesture begins. Small, so the UI
+/// starts following the fingers almost at once.
+const LOCK_FRACTION: f64 = 0.3;
+/// Progress 1.0 is this many reference distances: a comfortable full swipe.
+const FULL_FACTOR: f64 = 2.0;
+/// Progress is clamped to this magnitude either way along the locked axis.
+const PROGRESS_LIMIT: f64 = 1.5;
+/// The release velocity is measured over this trailing window.
+const VELOCITY_WINDOW: Duration = Duration::from_millis(80);
+/// Updates closer than this to the last one sent are not worth a page event.
+const PROGRESS_EPSILON: f64 = 0.002;
 /// Movement below this is hand jitter while the fingers rest; the origin and
 /// the clock keep resetting until the fingers really move.
 const MOVE_EPSILON: i64 = 8;
@@ -110,39 +129,119 @@ impl Direction {
             Direction::Down => "down",
         }
     }
+
+    fn axis(self) -> &'static str {
+        match self {
+            Direction::Left | Direction::Right => "x",
+            Direction::Up | Direction::Down => "y",
+        }
+    }
 }
 
-/// Queue of recognised swipes, filled by the reader thread and drained on the
+/// Where a continuous swipe is in its life.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Phase {
+    Begin,
+    Update,
+    End,
+    Cancel,
+}
+
+impl Phase {
+    fn as_str(self) -> &'static str {
+        match self {
+            Phase::Begin => "begin",
+            Phase::Update => "update",
+            Phase::End => "end",
+            Phase::Cancel => "cancel",
+        }
+    }
+}
+
+/// One step of a swipe. `direction` is the direction the gesture began in and
+/// stays the same for its whole life; `progress` is signed along that
+/// direction (1.0 ≈ a full swipe, negative once the fingers reverse past the
+/// origin); `velocity` is progress per second, only meaningful on `End`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GestureEvent {
+    pub phase: Phase,
+    pub direction: Direction,
+    pub progress: f64,
+    pub velocity: f64,
+}
+
+/// Called on the reader thread when a gesture goes live (`true`) or idle
+/// (`false`), so the shell can pump at frame rate only while fingers move.
+pub type Waker = fn(bool);
+
+/// Queue of swipe events, filled by the reader thread and drained on the
 /// event loop (the only thread allowed to touch the webview). Cheap to clone.
+///
+/// Consecutive updates coalesce — only the latest one between two drains is
+/// worth sending, the page only renders frames — while `begin`, `end` and
+/// `cancel` are never dropped.
 #[derive(Clone, Default)]
 pub struct GestureBridge {
-    queue: Arc<Mutex<Vec<Direction>>>,
+    queue: Arc<Mutex<Vec<GestureEvent>>>,
+    waker: Option<Waker>,
 }
 
 impl GestureBridge {
-    fn push(&self, dir: Direction) {
-        self.queue.lock().push(dir);
+    fn with_waker(waker: Waker) -> Self {
+        Self {
+            queue: Arc::default(),
+            waker: Some(waker),
+        }
     }
 
-    pub fn drain(&self) -> Vec<Direction> {
+    fn push(&self, event: GestureEvent) {
+        {
+            let mut queue = self.queue.lock();
+            match queue.last_mut() {
+                Some(last) if last.phase == Phase::Update && event.phase == Phase::Update => {
+                    *last = event;
+                }
+                _ => queue.push(event),
+            }
+        }
+        // Outside the lock: the waker queues work onto the GUI thread, whose
+        // pump takes the same lock.
+        if let Some(wake) = self.waker {
+            match event.phase {
+                Phase::Begin => wake(true),
+                Phase::End | Phase::Cancel => wake(false),
+                Phase::Update => {}
+            }
+        }
+    }
+
+    pub fn drain(&self) -> Vec<GestureEvent> {
         std::mem::take(&mut *self.queue.lock())
     }
 }
 
-/// The page-side launch for one swipe. Kept in one place so the event name and
-/// payload cannot drift between the Rust and JS halves.
-pub fn dispatch_script(dir: Direction) -> String {
+/// The page-side launch for one swipe event. Kept in one place so the event
+/// name and payload cannot drift between the Rust and JS halves. `direction`
+/// rides on every phase, so a listener that only knows the old discrete
+/// `{ direction }` detail still reads something sensible.
+pub fn dispatch_script(event: &GestureEvent) -> String {
+    let finite = |v: f64| if v.is_finite() { v } else { 0.0 };
     format!(
         "window.dispatchEvent(new CustomEvent('trackpad:gesture', \
-         {{ detail: {{ direction: \"{}\" }} }}));",
-        dir.as_str()
+         {{ detail: {{ phase: \"{}\", axis: \"{}\", direction: \"{}\", \
+         progress: {:.4}, velocity: {:.4} }} }}));",
+        event.phase.as_str(),
+        event.direction.axis(),
+        event.direction.as_str(),
+        finite(event.progress),
+        finite(event.velocity),
     )
 }
 
 /// Start the reader if a touchpad can be found and opened. Never fails the
 /// shell: a missing device or rule leaves an empty bridge behind.
-pub fn spawn() -> GestureBridge {
-    let bridge = GestureBridge::default();
+pub fn spawn(waker: Waker) -> GestureBridge {
+    let bridge = GestureBridge::with_waker(waker);
     let Some((path, name)) = find_touchpad() else {
         eprintln!("peakd: no touchpad found; three-finger gestures disabled");
         return bridge;
@@ -239,7 +338,7 @@ fn parse_touchpad(text: &str) -> Option<(PathBuf, String)> {
         let Some(event) = handlers.split_whitespace().find(|h| h.starts_with("event")) else {
             continue;
         };
-        if best.as_ref().map_or(true, |b| score > b.0) {
+        if best.as_ref().is_none_or(|b| score > b.0) {
             best = Some((
                 score,
                 PathBuf::from(format!("/dev/input/{event}")),
@@ -315,28 +414,52 @@ impl Slot {
 
 /// One in-flight three-finger contact.
 struct Swipe {
-    started: Instant,
     x0: i64,
     y0: i64,
+    /// The centre and finger count on the previous frame, so a finger joining
+    /// or leaving can shift the origin instead of jumping the progress.
+    cx: i64,
+    cy: i64,
+    fingers: usize,
     /// Per-slot origin, captured when each contact joins the gesture. Tracking
     /// every finger separately is what lets a stationary palm/thumb be ignored
     /// instead of dragging the average along with the two scrolling fingers.
     anchors: Vec<Option<(i64, i64)>>,
-    /// Set once the fingers have moved off the spot; until then the origin and
-    /// clock are re-anchored every frame.
+    /// Set once the fingers have moved off the spot; until then the origin is
+    /// re-anchored every frame.
     moving: bool,
-    fired: bool,
+    /// The direction the gesture locked onto at `begin`; `None` until then.
+    live: Option<Direction>,
+    /// Set once the swipe passed the old discrete threshold and three fingers
+    /// were still travelling together there.
+    verified: bool,
+    /// The gesture was cancelled (or never qualified); ignore the rest of the
+    /// touch until the fingers lift.
+    spent: bool,
+    /// The latest progress, and the last one actually sent as an update.
+    progress: f64,
+    sent: f64,
+    /// Recent `(time, progress)` samples for the release velocity: the newest
+    /// ones plus a single sample at or before the start of the window.
+    samples: VecDeque<(Instant, f64)>,
 }
 
 impl Swipe {
     fn start(slots: &[Slot], cx: i64, cy: i64) -> Self {
         Self {
-            started: Instant::now(),
             x0: cx,
             y0: cy,
+            cx,
+            cy,
+            fingers: slots.iter().filter(|s| s.is_finger()).count(),
             anchors: Self::origins(slots),
             moving: false,
-            fired: false,
+            live: None,
+            verified: false,
+            spent: false,
+            progress: 0.0,
+            sent: 0.0,
+            samples: VecDeque::new(),
         }
     }
 
@@ -349,12 +472,41 @@ impl Swipe {
             .collect()
     }
 
-    /// Re-anchor resting contacts and restart the clock.
+    /// Re-anchor resting contacts.
     fn reanchor(&mut self, slots: &[Slot], cx: i64, cy: i64) {
         self.anchors = Self::origins(slots);
         self.x0 = cx;
         self.y0 = cy;
-        self.started = Instant::now();
+    }
+
+    /// Remember the progress at `now` for the release velocity.
+    fn record(&mut self, now: Instant, progress: f64) {
+        self.progress = progress;
+        self.samples.push_back((now, progress));
+        if let Some(cutoff) = now.checked_sub(VELOCITY_WINDOW) {
+            while self.samples.len() > 2 && self.samples[1].0 <= cutoff {
+                self.samples.pop_front();
+            }
+        }
+    }
+
+    /// Progress per second over the trailing [`VELOCITY_WINDOW`], measured up
+    /// to `now` (the release), so fingers that stopped before lifting read as
+    /// a slow release rather than as their last flick.
+    fn velocity(&self, now: Instant) -> f64 {
+        let Some(&(_, last)) = self.samples.back() else {
+            return 0.0;
+        };
+        let cutoff = now.checked_sub(VELOCITY_WINDOW);
+        let (t_ref, p_ref) = self
+            .samples
+            .iter()
+            .rev()
+            .find(|(t, _)| cutoff.is_some_and(|c| *t <= c))
+            .copied()
+            .unwrap_or(self.samples[0]);
+        let dt = now.saturating_duration_since(t_ref).as_secs_f64().max(0.008);
+        ((last - p_ref) / dt).clamp(-50.0, 50.0)
     }
 
     /// Record contacts that joined after the gesture began and count how many
@@ -418,7 +570,7 @@ impl Swipe {
 
 struct Reader {
     bridge: GestureBridge,
-    /// Per-axis travel that counts as a swipe.
+    /// Per-axis reference swipe distance (the old discrete threshold).
     threshold_x: i64,
     threshold_y: i64,
     /// The largest y is the bottom edge of the pad. At or above `thumb_zone_y`
@@ -433,6 +585,8 @@ struct Reader {
     legacy: Option<(i32, i32)>,
     tool: [bool; 5], // 1..=4 fingers, from BTN_TOOL_*
     swipe: Option<Swipe>,
+    /// A fixed clock for the tests; `None` reads the real one.
+    clock: Option<Instant>,
 }
 
 impl Reader {
@@ -495,7 +649,61 @@ impl Reader {
             legacy: None,
             tool: [false; 5],
             swipe: None,
+            clock: None,
         }
+    }
+
+    fn now(&self) -> Instant {
+        self.clock.unwrap_or_else(Instant::now)
+    }
+
+    /// Signed progress along `dir` for a centre displacement: 1.0 is a full
+    /// swipe, negative once the fingers came back past the origin.
+    fn progress(&self, dir: Direction, dx: i64, dy: i64) -> f64 {
+        let full_x = self.threshold_x as f64 * FULL_FACTOR;
+        let full_y = self.threshold_y as f64 * FULL_FACTOR;
+        let along = match dir {
+            Direction::Left => -dx as f64 / full_x,
+            Direction::Right => dx as f64 / full_x,
+            // evdev y grows downward: fingers moving up mean y decreasing.
+            Direction::Up => -dy as f64 / full_y,
+            Direction::Down => dy as f64 / full_y,
+        };
+        along.clamp(-PROGRESS_LIMIT, PROGRESS_LIMIT)
+    }
+
+    /// The fingers lifted: a live gesture ends with its last progress and the
+    /// release velocity.
+    fn finish(&mut self, swipe: Swipe) {
+        let Some(direction) = swipe.live else { return };
+        if swipe.spent {
+            return;
+        }
+        let now = self.now();
+        self.bridge.push(GestureEvent {
+            phase: Phase::End,
+            direction,
+            progress: swipe.progress,
+            velocity: swipe.velocity(now),
+        });
+    }
+
+    /// The stream broke (dropped events, device gone): a live gesture is
+    /// cancelled so the page never stays half-way.
+    fn cancel(&mut self) {
+        let Some(swipe) = self.swipe.as_mut() else { return };
+        let Some(direction) = swipe.live else { return };
+        if swipe.spent {
+            return;
+        }
+        swipe.spent = true;
+        let progress = swipe.progress;
+        self.bridge.push(GestureEvent {
+            phase: Phase::Cancel,
+            direction,
+            progress,
+            velocity: 0.0,
+        });
     }
 
     fn slot(&mut self, index: usize) -> &mut Slot {
@@ -545,7 +753,7 @@ impl Reader {
                 slot.thumb = false;
                 continue;
             }
-            if zone.map_or(false, |z| slot.y as i64 >= z) {
+            if zone.is_some_and(|z| slot.y as i64 >= z) {
                 slot.thumb = true;
             }
         }
@@ -625,14 +833,17 @@ impl Reader {
     fn on_frame(&mut self) {
         // Re-classify palms/thumbs for this frame before counting fingers: a
         // thumb that drifted onto the pad mid-scroll must not become the third
-        // finger that fires the gesture.
+        // finger that starts the gesture.
         self.classify_thumbs();
 
         let count = self.finger_count();
         if count < 3 {
-            // Gesture over (or never started): the next three-finger contact
-            // starts a fresh swipe even while the pad still sees a finger.
-            self.swipe = None;
+            // Gesture over (or never started): a live one ends here, and the
+            // next three-finger contact starts a fresh swipe even while the
+            // pad still sees a finger.
+            if let Some(swipe) = self.swipe.take() {
+                self.finish(swipe);
+            }
             return;
         }
 
@@ -646,10 +857,21 @@ impl Reader {
             self.swipe = Some(Swipe::start(&self.slots, cx, cy));
             return;
         };
-        if swipe.fired {
+        if swipe.spent {
             self.swipe = Some(swipe);
             return;
         }
+
+        // A fourth finger landing (or lifting) moves the centre without the
+        // hand moving: shift the origin by the jump so progress stays put.
+        let fingers = self.slots.iter().filter(|s| s.is_finger()).count();
+        if fingers != swipe.fingers {
+            swipe.x0 += cx - swipe.cx;
+            swipe.y0 += cy - swipe.cy;
+            swipe.fingers = fingers;
+        }
+        swipe.cx = cx;
+        swipe.cy = cy;
 
         // How many individual contacts have moved off their own origin. A
         // resting palm/thumb/ghost stays put and never contributes, so a
@@ -660,42 +882,81 @@ impl Reader {
         let dy = cy - swipe.y0;
         let (adx, ady) = (dx.abs(), dy.abs());
 
-        if !swipe.moving {
-            if moving == 0 {
-                // Resting fingers: keep the origin under them and restart the
-                // clock, so only the actual swipe counts against the timeout.
-                swipe.reanchor(&self.slots, cx, cy);
-                self.swipe = Some(swipe);
-                return;
+        let Some(dir) = swipe.live else {
+            if !swipe.moving {
+                if moving == 0 {
+                    // Resting fingers: keep the origin under them.
+                    swipe.reanchor(&self.slots, cx, cy);
+                    self.swipe = Some(swipe);
+                    return;
+                }
+                swipe.moving = true;
             }
-            swipe.moving = true;
-            swipe.started = Instant::now();
-        }
-
-        if swipe.started.elapsed() > Duration::from_millis(SWIPE_MAX_MS as u64) {
-            swipe.fired = true; // too slow: spend the gesture without acting
-            self.swipe = Some(swipe);
-            return;
-        }
-
-        let dir = if adx >= self.threshold_x && adx > ady {
-            Some(if dx < 0 { Direction::Left } else { Direction::Right })
-        } else if ady >= self.threshold_y && ady > adx {
-            // evdev y grows downward: fingers moving up mean y decreasing.
-            Some(if dy < 0 { Direction::Up } else { Direction::Down })
-        } else {
-            None
-        };
-
-        if let Some(dir) = dir {
+            let lock_x = (self.threshold_x as f64 * LOCK_FRACTION) as i64;
+            let lock_y = (self.threshold_y as f64 * LOCK_FRACTION) as i64;
+            let dir = if adx >= lock_x && adx > ady {
+                Some(if dx < 0 { Direction::Left } else { Direction::Right })
+            } else if ady >= lock_y && ady > adx {
+                Some(if dy < 0 { Direction::Up } else { Direction::Down })
+            } else {
+                None
+            };
             // Require at least three real contacts to have travelled *with*
             // the gesture: two fingers scrolling beside a resting thumb (a
             // palm, a thumb or a ghost slot) is not a swipe, and neither is a
             // thumb dragged along by the hand.
-            if swipe.synced(&self.slots, dir, adx.max(ady)) >= 3 {
-                swipe.fired = true;
-                self.bridge.push(dir);
+            if let Some(dir) = dir {
+                if swipe.synced(&self.slots, dir, adx.max(ady)) >= 3 {
+                    let progress = self.progress(dir, dx, dy);
+                    swipe.live = Some(dir);
+                    swipe.sent = progress;
+                    swipe.record(self.now(), progress);
+                    self.bridge.push(GestureEvent {
+                        phase: Phase::Begin,
+                        direction: dir,
+                        progress,
+                        velocity: 0.0,
+                    });
+                }
             }
+            self.swipe = Some(swipe);
+            return;
+        };
+
+        // The axis is locked early, so check synchronisation once more where
+        // the discrete swipe used to fire: three fingers must still be moving
+        // together at the reference distance, or it was a scroll with a
+        // straggler all along and the page rolls back.
+        let (signed, threshold) = match dir {
+            Direction::Left | Direction::Right => (dx, self.threshold_x),
+            Direction::Up | Direction::Down => (dy, self.threshold_y),
+        };
+        let travel = signed.abs();
+        if !swipe.verified && travel >= threshold {
+            let now_dir = match (dir, signed < 0) {
+                (Direction::Left | Direction::Right, true) => Direction::Left,
+                (Direction::Left | Direction::Right, false) => Direction::Right,
+                (_, true) => Direction::Up,
+                (_, false) => Direction::Down,
+            };
+            if swipe.synced(&self.slots, now_dir, travel) < 3 {
+                self.swipe = Some(swipe);
+                self.cancel();
+                return;
+            }
+            swipe.verified = true;
+        }
+
+        let progress = self.progress(dir, dx, dy);
+        swipe.record(self.now(), progress);
+        if (progress - swipe.sent).abs() >= PROGRESS_EPSILON {
+            swipe.sent = progress;
+            self.bridge.push(GestureEvent {
+                phase: Phase::Update,
+                direction: dir,
+                progress,
+                velocity: 0.0,
+            });
         }
         self.swipe = Some(swipe);
     }
@@ -703,6 +964,7 @@ impl Reader {
     /// The kernel dropped events: every cached contact and tool bit may be
     /// stale, so forget them and wait for fresh state.
     fn reset(&mut self) {
+        self.cancel();
         self.slots.clear();
         self.current_slot = 0;
         self.legacy = None;
@@ -775,7 +1037,9 @@ fn run(file: File, bridge: &GestureBridge) {
     loop {
         if input.read_exact(&mut buf).is_err() {
             // Device gone (unplug, suspend): stop quietly. The kiosk keeps the
-            // pointer either way; only gestures are lost.
+            // pointer either way; only gestures are lost — and a live one is
+            // cancelled so the page does not stay half-way.
+            reader.cancel();
             return;
         }
         if !live {
@@ -864,6 +1128,34 @@ mod tests {
         Reader::with_thresholds(GestureBridge::default(), 300, 300)
     }
 
+    /// The directions of the gestures that began since the last drain.
+    fn begins(r: &Reader) -> Vec<Direction> {
+        r.bridge
+            .drain()
+            .iter()
+            .filter(|e| e.phase == Phase::Begin)
+            .map(|e| e.direction)
+            .collect()
+    }
+
+    fn phases(events: &[GestureEvent]) -> Vec<Phase> {
+        events.iter().map(|e| e.phase).collect()
+    }
+
+    /// Lift every finger: tracking id -1 on each slot.
+    fn lift(r: &mut Reader, slots: i32) {
+        for slot in 0..slots {
+            r.handle(EV_ABS, ABS_MT_SLOT, slot);
+            r.handle(EV_ABS, ABS_MT_TRACKING_ID, -1);
+        }
+        r.handle(EV_SYN, SYN_REPORT, 0);
+    }
+
+    /// Advance the reader's clock to `ms` after `base`.
+    fn at(r: &mut Reader, base: Instant, ms: u64) {
+        r.clock = Some(base + Duration::from_millis(ms));
+    }
+
     /// A reader whose pad spans y = 0..2000. evdev y grows downward, so the
     /// bottom edge is 2000, the definitive thumb zone starts at 1800 and the
     /// size-outlier zone at 1600.
@@ -919,7 +1211,7 @@ B: ABS=67f800001000003
         let mut r = reader();
         frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+        assert_eq!(begins(&r), vec![Direction::Left]);
     }
 
     #[test]
@@ -927,7 +1219,7 @@ B: ABS=67f800001000003
         let mut r = reader();
         frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut r, &[(1300, 1000), (1500, 1000), (1100, 1000)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Right]);
+        assert_eq!(begins(&r), vec![Direction::Right]);
     }
 
     #[test]
@@ -935,12 +1227,12 @@ B: ABS=67f800001000003
         let mut up = reader();
         frame(&mut up, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut up, &[(1000, 700), (1200, 700), (800, 700)]);
-        assert_eq!(up.bridge.drain(), vec![Direction::Up]);
+        assert_eq!(begins(&up), vec![Direction::Up]);
 
         let mut down = reader();
         frame(&mut down, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut down, &[(1000, 1300), (1200, 1300), (800, 1300)]);
-        assert_eq!(down.bridge.drain(), vec![Direction::Down]);
+        assert_eq!(begins(&down), vec![Direction::Down]);
     }
 
     #[test]
@@ -1043,7 +1335,7 @@ B: ABS=67f800001000003
         let mut r = reader();
         frame_sized(&mut r, &[(1000, 1000, 20), (1200, 1000, 22), (800, 1000, 24)]);
         frame_sized(&mut r, &[(700, 1000, 20), (900, 1000, 22), (500, 1000, 24)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+        assert_eq!(begins(&r), vec![Direction::Left]);
     }
 
     #[test]
@@ -1055,7 +1347,7 @@ B: ABS=67f800001000003
         frame_sized(&mut r, &[(1000, 500, 560), (1200, 500, 160), (800, 500, 170)]);
         frame_sized(&mut r, &[(700, 500, 50), (900, 500, 500), (500, 500, 60)]);
         frame_sized(&mut r, &[(400, 500, 200), (600, 500, 90), (200, 500, 420)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+        assert_eq!(begins(&r), vec![Direction::Left]);
     }
 
     #[test]
@@ -1065,7 +1357,7 @@ B: ABS=67f800001000003
         let mut r = reader();
         frame_sized(&mut r, &[(1000, 1000, 90), (1200, 1000, 92), (800, 1000, 94)]);
         frame_sized(&mut r, &[(700, 1000, 90), (900, 1000, 92), (500, 1000, 94)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+        assert_eq!(begins(&r), vec![Direction::Left]);
     }
 
     #[test]
@@ -1075,7 +1367,7 @@ B: ABS=67f800001000003
         let mut r = reader();
         frame_sized(&mut r, &[(1000, 1000, 30), (1200, 1000, 22), (800, 1000, 24)]);
         frame_sized(&mut r, &[(700, 1000, 30), (900, 1000, 22), (500, 1000, 24)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+        assert_eq!(begins(&r), vec![Direction::Left]);
     }
 
     #[test]
@@ -1102,21 +1394,212 @@ B: ABS=67f800001000003
     }
 
     #[test]
-    fn a_short_move_is_not_a_swipe() {
+    fn a_tiny_move_does_not_begin() {
+        // Below the lock distance (30% of the reference swipe) nothing starts.
         let mut r = reader();
         frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
-        frame(&mut r, &[(900, 1000), (1100, 1000), (700, 1000)]);
+        frame(&mut r, &[(950, 1000), (1150, 1000), (750, 1000)]);
+        lift(&mut r, 3);
         assert!(r.bridge.drain().is_empty());
     }
 
     #[test]
-    fn one_swipe_fires_once() {
+    fn a_short_move_begins_and_ends_short() {
+        // Past the lock distance the page starts following, but a short swipe
+        // ends well below half-way, so the page rolls it back.
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(900, 1000), (1100, 1000), (700, 1000)]);
+        lift(&mut r, 3);
+        let events = r.bridge.drain();
+        assert_eq!(phases(&events), vec![Phase::Begin, Phase::End]);
+        assert!(events[1].progress > 0.0 && events[1].progress < 0.5);
+    }
+
+    #[test]
+    fn one_swipe_begins_once() {
         let mut r = reader();
         frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
         frame(&mut r, &[(400, 1000), (600, 1000), (200, 1000)]);
         frame(&mut r, &[(100, 1000), (300, 1000), (0, 1000)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left]);
+        assert_eq!(begins(&r), vec![Direction::Left]);
+    }
+
+    #[test]
+    fn a_swipe_is_begin_update_end() {
+        let base = Instant::now();
+        let mut r = reader();
+        at(&mut r, base, 0);
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        at(&mut r, base, 16);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        let first = r.bridge.drain();
+        assert_eq!(phases(&first), vec![Phase::Begin]);
+        assert_eq!(first[0].direction, Direction::Left);
+        // 120 units of a 600-unit full swipe.
+        assert!((first[0].progress - 0.2).abs() < 1e-9);
+
+        at(&mut r, base, 32);
+        frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
+        let second = r.bridge.drain();
+        assert_eq!(phases(&second), vec![Phase::Update]);
+        assert!((second[0].progress - 0.5).abs() < 1e-9);
+
+        at(&mut r, base, 48);
+        frame(&mut r, &[(520, 1000), (720, 1000), (320, 1000)]);
+        at(&mut r, base, 56);
+        lift(&mut r, 3);
+        let last = r.bridge.drain();
+        assert_eq!(phases(&last), vec![Phase::Update, Phase::End]);
+        assert!((last[1].progress - 0.8).abs() < 1e-9);
+        // 0.6 progress in the 56 ms since the begin sample: a fast flick.
+        assert!(last[1].velocity > 5.0, "velocity {}", last[1].velocity);
+    }
+
+    #[test]
+    fn updates_coalesce_between_drains() {
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        frame(&mut r, &[(800, 1000), (1000, 1000), (600, 1000)]);
+        frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
+        frame(&mut r, &[(640, 1000), (840, 1000), (440, 1000)]);
+        lift(&mut r, 3);
+        let events = r.bridge.drain();
+        // Begin and end are kept; only the newest update survives in between.
+        assert_eq!(phases(&events), vec![Phase::Begin, Phase::Update, Phase::End]);
+        assert!((events[1].progress - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn reversing_past_the_origin_goes_negative() {
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(1000, 880), (1200, 880), (800, 880)]);
+        frame(&mut r, &[(1000, 1150), (1200, 1150), (800, 1150)]);
+        let events = r.bridge.drain();
+        assert_eq!(events[0].direction, Direction::Up);
+        assert_eq!(events[1].phase, Phase::Update);
+        assert_eq!(events[1].direction, Direction::Up);
+        assert!(events[1].progress < 0.0);
+    }
+
+    #[test]
+    fn a_slow_swipe_is_still_a_swipe() {
+        // The discrete recogniser dropped anything slower than 900 ms; a
+        // deliberate continuous swipe is fine now.
+        let base = Instant::now();
+        let mut r = reader();
+        at(&mut r, base, 0);
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        at(&mut r, base, 1500);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        at(&mut r, base, 3000);
+        frame(&mut r, &[(600, 1000), (800, 1000), (400, 1000)]);
+        at(&mut r, base, 3010);
+        lift(&mut r, 3);
+        let events = r.bridge.drain();
+        assert_eq!(phases(&events), vec![Phase::Begin, Phase::Update, Phase::End]);
+        assert!(events[2].progress > 0.6);
+    }
+
+    #[test]
+    fn resting_before_lifting_is_a_slow_release() {
+        // A flick reads fast, but fingers that stopped and rested before
+        // lifting release with (almost) no velocity.
+        let base = Instant::now();
+        let mut r = reader();
+        at(&mut r, base, 0);
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        at(&mut r, base, 16);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        at(&mut r, base, 32);
+        frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
+        at(&mut r, base, 600);
+        lift(&mut r, 3);
+        let events = r.bridge.drain();
+        let end = events.last().unwrap();
+        assert_eq!(end.phase, Phase::End);
+        assert!(end.velocity.abs() < 1.0, "velocity {}", end.velocity);
+    }
+
+    #[test]
+    fn syn_dropped_cancels_a_live_swipe() {
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        r.handle(EV_SYN, SYN_DROPPED, 0);
+        lift(&mut r, 3);
+        let events = r.bridge.drain();
+        assert_eq!(phases(&events), vec![Phase::Begin, Phase::Cancel]);
+    }
+
+    #[test]
+    fn a_straggler_at_the_reference_distance_cancels() {
+        // Three fingers lock the axis together, but by the old discrete
+        // threshold the third has stopped: a scroll with a stray contact, so
+        // the page is told to roll back and nothing else follows.
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        frame(&mut r, &[(300, 1000), (500, 1000), (670, 1000)]);
+        frame(&mut r, &[(200, 1000), (400, 1000), (670, 1000)]);
+        lift(&mut r, 3);
+        let events = r.bridge.drain();
+        assert_eq!(phases(&events), vec![Phase::Begin, Phase::Cancel]);
+    }
+
+    #[test]
+    fn a_fourth_finger_does_not_jump_the_progress() {
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        // A fourth finger lands far to the right, then the hand keeps going.
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000), (1900, 1000)]);
+        let events = r.bridge.drain();
+        assert_eq!(phases(&events), vec![Phase::Begin]);
+        frame(&mut r, &[(820, 1000), (1020, 1000), (620, 1000), (1840, 1000)]);
+        let events = r.bridge.drain();
+        assert_eq!(phases(&events), vec![Phase::Update]);
+        assert!((events[0].progress - 0.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_bridge_wakes_the_pump_on_begin_and_end() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static LIVE: AtomicUsize = AtomicUsize::new(0);
+        static IDLE: AtomicUsize = AtomicUsize::new(0);
+        fn wake(live: bool) {
+            if live {
+                LIVE.fetch_add(1, Ordering::SeqCst);
+            } else {
+                IDLE.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        let mut r = Reader::with_thresholds(GestureBridge::with_waker(wake), 300, 300);
+        frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
+        frame(&mut r, &[(880, 1000), (1080, 1000), (680, 1000)]);
+        frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
+        lift(&mut r, 3);
+        assert_eq!(LIVE.load(Ordering::SeqCst), 1);
+        assert_eq!(IDLE.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn dispatch_carries_phase_axis_and_direction() {
+        let script = dispatch_script(&GestureEvent {
+            phase: Phase::Update,
+            direction: Direction::Up,
+            progress: 0.25,
+            velocity: f64::NAN,
+        });
+        assert!(script.contains("'trackpad:gesture'"));
+        assert!(script.contains("phase: \"update\""));
+        assert!(script.contains("axis: \"y\""));
+        assert!(script.contains("direction: \"up\""));
+        assert!(script.contains("progress: 0.2500"));
+        assert!(script.contains("velocity: 0.0000"));
     }
 
     #[test]
@@ -1125,14 +1608,10 @@ B: ABS=67f800001000003
         frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut r, &[(700, 1000), (900, 1000), (500, 1000)]);
         // Fingers up: tracking id -1 on every slot.
-        for slot in 0..3 {
-            r.handle(EV_ABS, ABS_MT_SLOT, slot);
-            r.handle(EV_ABS, ABS_MT_TRACKING_ID, -1);
-        }
-        r.handle(EV_SYN, SYN_REPORT, 0);
+        lift(&mut r, 3);
         // A second, opposite swipe is recognised independently.
         frame(&mut r, &[(1000, 1000), (1200, 1000), (800, 1000)]);
         frame(&mut r, &[(1300, 1000), (1500, 1000), (1100, 1000)]);
-        assert_eq!(r.bridge.drain(), vec![Direction::Left, Direction::Right]);
+        assert_eq!(begins(&r), vec![Direction::Left, Direction::Right]);
     }
 }

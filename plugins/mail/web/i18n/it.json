@@ -23,6 +23,7 @@
   "plugin.mail.reader.reply": "Rispondi",
   "plugin.mail.reader.forward": "Inoltra",
   "plugin.mail.reader.delete": "Elimina",
+  "plugin.mail.reader.close": "Chiudi messaggio",
   "plugin.mail.reader.emptyBody": "(messaggio vuoto)",
   "plugin.mail.reader.attachment": "allegato",
 
@@ -112,6 +113,49 @@
   "plugin.mail.empty.selectBody": "Scegli un messaggio per leggerlo qui.",
   "plugin.mail.empty.noMessages": "Nessun messaggio",
   "plugin.mail.empty.nothingIn": "Niente in {folder}.",
+  "plugin.mail.empty.noSearchResults": "Nessun messaggio corrisponde a “{query}”.",
+
+  "plugin.mail.chrome.unread.one": "{count} non letto",
+  "plugin.mail.chrome.unread.other": "{count} non letti",
+  "plugin.mail.chrome.unread.many": "{count} non letti",
+
+  "plugin.mail.rail.eyebrow": "Casella",
+  "plugin.mail.rail.title": "Posta",
+  "plugin.mail.rail.sub": "Nessun account collegato",
+
+  "plugin.mail.folder.inbox": "Posta in arrivo",
+  "plugin.mail.folder.sent": "Inviati",
+  "plugin.mail.folder.drafts": "Bozze",
+  "plugin.mail.folder.trash": "Cestino",
+  "plugin.mail.folder.archive": "Archivio",
+  "plugin.mail.folder.junk": "Posta indesiderata",
+  "plugin.mail.folder.spam": "Spam",
+  "plugin.mail.folder.messages.one": "{count} messaggio",
+  "plugin.mail.folder.messages.other": "{count} messaggi",
+  "plugin.mail.folder.messages.many": "{count} messaggi",
+  "plugin.mail.folder.noMessages": "Nessun messaggio",
+  "plugin.mail.folder.none": "Nessuna cartella",
+
+  "plugin.mail.hero.new.one": "{count} nuovo",
+  "plugin.mail.hero.new.other": "{count} nuovi",
+  "plugin.mail.hero.new.many": "{count} nuovi",
+
+  "plugin.mail.footer.step": "{folder} · {messages}",
+  "plugin.mail.footer.note": "Memorizzata localmente — sincronizza per controllare la posta.",
+
+  "plugin.mail.reader.eyebrow": "Messaggio",
+  "plugin.mail.reader.fromLabel": "Da",
+  "plugin.mail.reader.toLabel": "A",
+  "plugin.mail.reader.dateLabel": "Data",
+
+  "plugin.mail.setup.kicker": "Configurazione",
+
+  "plugin.mail.form.section.account": "Account",
+  "plugin.mail.form.section.imap": "Posta in arrivo (IMAP)",
+  "plugin.mail.form.section.smtp": "Posta in uscita (SMTP)",
+
+  "plugin.mail.settings.kicker": "Account",
+  "plugin.mail.settings.subtitle": "Aggiungi, prova o rimuovi le caselle usate da questa finestra.",
 
   "plugin.mail.notify.title": "Nuova posta",
   "plugin.mail.notify.newMail.one": "{count} nuovo messaggio in {where}",

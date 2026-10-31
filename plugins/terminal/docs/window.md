@@ -25,6 +25,20 @@ export default {
   new-tab `+` sit next to the window controls. A tab is labelled with the
   shell's OSC title, falling back to `Terminal 1`, `Terminal 2`…; its tooltip
   names the shell and start directory.
+- Look: the tabs are flat mono uppercase labels; the active one is a grey
+  pill, and its close control is the catalog `ui/close` icon (shown on hover /
+  for the active tab). The status line under the terminal is a mono uppercase
+  meta line — `SHELL · ~/CWD · STATE` (e.g. `ZSH · ~/SHINY · CONNECTED`),
+  built from the session's `ready` frame and decoded (`decodeText`) when it
+  changes.
+- Theme: xterm reads its face from `--font-mono` and its colours from the
+  theme tokens `--terminal-bg`, `--terminal-fg`, `--terminal-cursor`,
+  `--terminal-selection` and the optional `--terminal-ansi-<name>` (e.g.
+  `--terminal-ansi-bright-blue`). Dusk defines a light paper palette with an
+  ANSI set tuned for it (every colour ≥ 4.5:1 on the paper); Ink keeps the
+  near-black sheet with xterm's ANSI defaults; other themes fall back to a dark
+  surface. The palette is rebuilt (not merged) on `theme:change` — after the
+  token stylesheet has loaded — and on `appearance:change`.
 - Closing a tab (its X) terminates that shell; a shell that exits closes its
   tab; closing the last tab opens a fresh shell.
 - The shells persist across closing/reopening the window and across page

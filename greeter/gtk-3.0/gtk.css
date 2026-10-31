@@ -5,7 +5,7 @@
  *              mark sits above the login card and the wordmark below it;
  *   surfaces   near-black glass, white hairlines instead of grey fills, one
  *              top-left light source (the app's Noir tokens, see
- *              web/themes/noir/tokens.css);
+ *              web/themes/ink/tokens.css);
  *   accent     white — the app's default appearance accent.
  *
  * The wallpaper itself is set from lightdm-gtk-greeter.conf; every GTK layer

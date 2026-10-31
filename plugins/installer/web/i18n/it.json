@@ -28,6 +28,7 @@
   "plugin.installer.chrome.live": "Sessione live",
   "plugin.installer.chrome.offline": "Helper offline",
   "plugin.installer.chrome.step": "Passo {current} di {total}",
+  "plugin.installer.chrome.stepShort": "Passo {current}/{total}",
   "plugin.installer.common.acknowledged": "Confermato",
   "plugin.installer.common.back": "Indietro",
   "plugin.installer.common.device": "Dispositivo",

@@ -5,9 +5,13 @@
  * (the HUD pill clips overflow), unhides it under its chip, and closes on an
  * outside pointerdown or Escape. The menu owns that plumbing; the module owns
  * the content and any live-update timers through the `onOpen`/`onClose` hooks.
+ *
+ * Opening and closing move in the user's motion language (surfaceEnter /
+ * surfaceExit, web/ui/motionStyle.js): the popup unrolls, stretches or tilts
+ * out of its chip and goes back the same way.
  */
 
-import { placeMenu } from '../ui/index.js';
+import { placeMenu, surfaceEnter, surfaceExit } from '../ui/index.js';
 import { notifyMenuChange } from './menuState.js';
 
 export function createMenu({
@@ -21,6 +25,8 @@ export function createMenu({
   let popup = null;
   let trigger = null;
   let open = false;
+  /** Bumped on every show/close, so a late exit never hides a reopened menu. */
+  let generation = 0;
 
   function ensurePopup() {
     if (popup) return;
@@ -32,12 +38,10 @@ export function createMenu({
     trigger = chip || trigger;
     ensurePopup();
     open = true;
+    generation += 1;
     popup.classList.remove('hidden');
-    if (restartAnimation) {
-      popup.style.animation = 'none';
-      void popup.offsetHeight;
-      popup.style.animation = '';
-    }
+    // The CSS entrance some menus carry would fight the motion language.
+    if (restartAnimation) popup.style.animation = 'none';
     onOpen?.();
     document.addEventListener('pointerdown', onOutside, true);
     document.addEventListener('keydown', onKey, true);
@@ -45,13 +49,15 @@ export function createMenu({
     trigger?.setAttribute('aria-expanded', 'true');
     trigger?.classList.add('is-open');
     reposition();
+    void surfaceEnter(popup, trigger);
     notifyMenuChange();
   }
 
   function close() {
     if (!open) return;
     open = false;
-    popup?.classList.add('hidden');
+    const ticket = ++generation;
+    void surfaceExit(popup, { done: () => { if (ticket === generation) popup?.classList.add('hidden'); } });
     document.removeEventListener('pointerdown', onOutside, true);
     document.removeEventListener('keydown', onKey, true);
     window.removeEventListener('resize', reposition);

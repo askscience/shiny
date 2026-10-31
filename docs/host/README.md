@@ -137,6 +137,18 @@ Each host panel is a top-bar chip plus a popover menu:
 | Display | (Settings) | Settings → Appearance (scale) / battery quick menu (backlights) | `web/js/display.js` |
 | Touch Bar | (Settings) | Settings → Touch Bar | `web/js/touchbarShared.js` |
 
+The four status menus (Sound, Network, Bluetooth, Battery) share one anatomy,
+built by `web/js/hudMenuShared.js` and styled by the `.hud-menu-*` family in
+`web/css/app.css`: a ~300px panel with an 18px radius; an optional head row
+(icon, title + hint, a power switch); sections introduced by small mono
+capital labels; 40px rows with a 10px radius, a subtle hover, a leading
+monochrome icon and an accent check on the selected row; slider rows (thin
+track, white knob, value in mono); and a footer with a mono hint and a grey
+pill button. On the Dusk and Ink themes the panel is dark glass on both
+(`web/themes/editorial/app.css` re-scopes the colour tokens on `.hud-menu`,
+like the bar). Opening and closing motion belongs to `menuFactory.js`, so the
+panel has no CSS entrance of its own.
+
 Chips are `<button>`s in the HUD. Which text parts are shown (device **name**
 and **percent**) is a per-user, server-backed preference stored under
 `hud.chips` and applied as `data-hud-name` / `data-hud-percent` on `<html>` so

@@ -74,6 +74,7 @@ The shell is split by concern. Grouped:
 | `hudNetwork.js`, `networkMenu.js` | Network chip + menu. |
 | `powerMenu.js`, `powerShared.js` | Power actions. |
 | `hudChipsShared.js` | Shared chip rendering. |
+| `hudMenuShared.js` | Shared anatomy of the Sound, Network, Bluetooth and Battery menus (`.hud-menu-*`: head, mono labels, 40px rows with a check, slider rows, pill footer). |
 | `display.js` | Interface scale control. |
 
 ### Chat, voice, agent
@@ -124,6 +125,11 @@ CSS may arrange domain content; shared styling and motion remain in core:
 | `appearance.js` | Accent + gradient; dispatches `appearance:change`. |
 | `icon.js` | Resolves an icon name via active icon set → theme override → base catalog. |
 | `reveal.js` | Reveal-on-scroll helper. |
+| `motion.js` | Finite, interruptible control motion (Flow, below). |
+| `motionStyle.js` | The user's motion language: window, menu, list and card entrances/exits, decoded labels, rolling numbers, springs as `linear()` easings. |
+| `motion.css` | The CSS half of the motion language: press feedback, active-window treatment, spoken words, voice-bar state label, depth aura, theme view transitions. |
+| `components/editorial.js` | The editorial window language: `eyebrow()` (mono label), `metaLine()` (mono `A · B · C`), `largeTitle({ title, meta, scroller })` (the large title that hands over to the window bar on scroll via `--sc` on the `.tile`), `hairlineList()` / `hairlineRow()`. `button({ arrow: true })` adds the trailing → pill arrow. |
+| `themeTransition.js` | `switchTheme(name, { origin })` / `nextTheme()`: a theme change through a view transition. |
 | `components/button.js`, `field.js`, `card.js`, `overlay.js`, `feedback.js`, `data.js` | The `.ui-*` primitives. |
 | `components/composites.js` | Higher-level composites (e.g. the artifact panel). |
 | `components/notifications.js` | GNOME-style banners. |
@@ -222,7 +228,8 @@ tokens in `ui.css` are `--motion-feedback` (120 ms), `--motion-reveal` (200 ms),
 `--motion-connect` (280 ms), and `--motion-ease`. Themes may override these roles;
 plugins consume them rather than define independent timings. Existing window
 radius, opacity, blur, shadow, title height, font, icon and accent settings remain
-authoritative. There is no additional appearance preference to migrate.
+authoritative. On top of these roles sits one appearance preference, the motion
+language (below).
 
 The [component inventory and responsive contract](ui-components.md) documents
 all shared controls, font policy and browser verification.
@@ -241,12 +248,60 @@ occluded renderer. Final styles belong to CSS, not a retained animation. Call
 owner. Only animate small controls, selection indicators and reveal regions;
 do not animate streaming content, large editor surfaces or window dragging.
 
+### Motion languages
+
+Settings → Appearance → **Motion** picks how the whole interface moves. The choice
+is `motion` in the window-surface preference (`desktop.surface`, default
+`kinetic`), published by `preferences.js` as `<html data-motion>`; nothing is
+stored per plugin.
+
+| Language | Windows | Menus & popovers | Lists, cards | Theme change |
+|---|---|---|---|---|
+| `kinetic` (default) | rise behind a curtain (clip-path, cinematic ease); title letters rise from their line; leave by rolling up | unroll from the chip, rows rise in a cascade | rows wiped in left to right; big numbers roll up | the new theme rises like a curtain |
+| `fluid` | grow out of their tray icon on a spring with a little bounce, and fall back into it | stretch out of the chip on the spring | rows spring up | a circle opens from where it was asked |
+| `depth` | arrive from depth out of a blur while the other windows step back; leave into depth | tilt up into place in perspective | rows settle out of a blur | the old desk recedes, the new one arrives |
+
+`web/ui/motionStyle.js` is the one place these motions live, exported from
+`web/ui/index.js` for core and plugins alike:
+
+- `windowEnter(el, { from, others })` / `windowExit(el, { to, done })` — `tiles.js`
+  plays them when a window opens (not the boot restore) and before it is torn
+  down on close; `from`/`to` is the tray button's box.
+- `surfaceEnter(el, anchor)` / `surfaceExit(el, { done })` — every HUD menu built
+  with `menuFactory.js`.
+- `listReveal(nodes)` — a list or grid that has just loaded (Mail rows, Files
+  items).
+- `cardEnter(el)` / `cardExit(el, { done })` — a live tool card in the chat, toasts.
+- `decodeText(el, text)` — letters cycle through glyphs and settle left to right
+  (the voice bar's state label); `rollNumber(el)` — a number counts up to its
+  value (`[data-roll]` in a card).
+
+Entrances animate towards the element's own styles and leave nothing behind;
+exits hold their last frame only until `done` has hidden or removed the element.
+Every helper is a no-op with reduced motion, and a watchdog settles an animation
+an occluded renderer never paints. The springs are damped springs sampled into
+CSS `linear()` easings and published as `--spring-bouncy|snappy|soft` (+ `-d`
+durations) by `shellMotion.js`, so CSS transitions share the same curves.
+
+`web/ui/motion.css` (loaded after `flow.css`) holds the static half: press
+feedback (a squash that springs back in fluid), the active window (a rule drawn
+under its mono title in kinetic, the others a step back in depth), the spoken
+words rising as they are said, the voice bar's state label, depth's accent aura
+(`#motion-aura`, following `<html data-voice>`) and pointer parallax, and the
+three theme view transitions (`<html data-vt>` while one runs).
+
 Settings keeps its 10 existing section IDs (Touch Bar appears only on hosts that
 expose one) and direct navigation. The surface follows the Installer's
 three-column grammar: a numbered section rail, the active panel on the middle
-stage, and a live "at a glance" manifest. A numbered kicker and one-line
-description lead each panel. As the **window** narrows, the manifest folds away
-first, then the rail becomes a horizontal strip, then an icon-only rail. Shared
+stage, and a live "at a glance" manifest, in the editorial window language
+(`web/css/settings.css`): the window bar carries a mono "SETTINGS" name and one
+mono "Saved automatically" status; the rail is flat (a mono number and the label
+per row, the active row on the grey `--ed-pill`, no icon discs); each panel opens
+with a mono "02 / 10" kicker over a large display title and a one-line
+description; the manifest is mono key/value rows on hairlines; the footer is a
+mono status line. Switching section cascades the panel's head and controls in
+with `listReveal()`. As the **window** narrows, the manifest folds away first,
+then the rail becomes a horizontal strip, then a label-only strip. Shared
 control cards sit in groups defined by existing translated headings; the grid
 gains a second column when the panel stage itself is wide enough. Provider, voice
 engine and backdrop options reveal inside their owning card. Locale rerenders
