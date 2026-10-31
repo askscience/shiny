@@ -3,7 +3,8 @@ import { icon, toast, button, input, select, slider, toggleRow, listThemes, getA
 import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
-import { MOTION_CHOICES, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached } from '../preferences.js';
+import { isPluginActive } from '../activePlugins.js';
+import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
 import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
 import { pickFiles } from '../files.js';
@@ -495,6 +496,29 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
 
   /* ── System ─────────────────────────────────────────────────── */
 
+  /** Terminal style — only when the Terminal plugin is installed. A style
+   *  is the cursor's motion and the surface's shape; colours stay the theme's. */
+  function buildTerminalControls() {
+    if (!isPluginActive('terminal')) return [];
+    const labels = {
+      smear: t('settings.appearance.terminal.smear', null, 'Minimal — bare text, a block cursor that smears as it moves'),
+      glass: t('settings.appearance.terminal.glass', null, 'Glass — translucent, an accent beam that sheds sparks'),
+      paper: t('settings.appearance.terminal.paper', null, 'Paper — command marks in the margin, a highlighter trail'),
+      blocks: t('settings.appearance.terminal.blocks', null, 'Blocks — every command a card, a springy block cursor'),
+    };
+    const style = select({
+      options: TERMINAL_STYLES.map((value) => ({ value, label: labels[value] })),
+      onChange: (value) => setTerminalStyle(value),
+    });
+    style.select.value = getTerminalStyle();
+    return [
+      heading(t('settings.appearance.terminal.heading', null, 'Terminal')),
+      field(t('settings.appearance.terminal.style', null, 'Terminal style'), style, {
+        hint: t('settings.appearance.terminal.hint', null, 'Colours follow the theme and your accent. Command marks and blocks need bash or zsh; reduced motion and the power saver turn the cursor trail off.'),
+      }),
+    ];
+  }
+
   function buildAppearancePanel() {
     const theme = select({
       onChange: async (value) => {
@@ -672,6 +696,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       field(t('settings.appearance.gradient', null, 'Gradient'), gradientSwatches),
       custom,
       fontField,
+      ...buildTerminalControls(),
       heading(t('common.display', null, 'Display')),
       scaleField,
       ...windowSurfaceChildren,

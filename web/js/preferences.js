@@ -110,6 +110,8 @@ export async function loadUserPreferences() {
   applyImmersive();
   applyHudChips();
   applyHudWidgets();
+  // An open Terminal window picks up the style stored on the server.
+  announceTerminalStyle();
   // The interface language may have just arrived from the server; re-apply it
   // (i18n.js owns the value, this is only the persistence side of it).
   await refreshLocaleFromStorage();
@@ -1083,6 +1085,36 @@ export function setRemoteAllowTerminal(on) {
   if (on) localStorage.setItem(key, 'true');
   else localStorage.removeItem(key);
   persist(REMOTE_ALLOW_TERMINAL_KEY, on ? 'true' : '');
+}
+
+/* ── Terminal look ────────────────────────────────────────────── */
+
+const TERMINAL_STYLE_KEY = 'terminal.style';
+
+/**
+ * The Terminal window's style — cursor motion and surface, never colour (the
+ * theme's `--terminal-*` tokens and the accent colour every style). The ids
+ * match `TERMINAL_STYLES` in plugins/terminal/web/fx.js.
+ */
+export const TERMINAL_STYLES = ['smear', 'glass', 'paper', 'blocks'];
+export const DEFAULT_TERMINAL_STYLE = 'smear';
+
+export function getTerminalStyle() {
+  const value = localStorage.getItem(scopedKey(TERMINAL_STYLE_KEY));
+  return TERMINAL_STYLES.includes(value) ? value : DEFAULT_TERMINAL_STYLE;
+}
+
+export function setTerminalStyle(style) {
+  const value = TERMINAL_STYLES.includes(style) ? style : DEFAULT_TERMINAL_STYLE;
+  localStorage.setItem(scopedKey(TERMINAL_STYLE_KEY), value);
+  persist(TERMINAL_STYLE_KEY, value);
+  announceTerminalStyle();
+}
+
+function announceTerminalStyle() {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('terminal:style', { detail: { style: getTerminalStyle() } }));
+  }
 }
 
 /* ── Early surface application ─────────────────────────────────

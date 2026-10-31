@@ -1274,5 +1274,12 @@
   "settings.appearance.motion.label": "Motion",
   "settings.appearance.motion.kinetic": "Kinetic — curtains, masks and moving type",
   "settings.appearance.motion.fluid": "Fluid — springs that grow out of where you tapped",
-  "settings.appearance.motion.depth": "Depth — things arrive from depth, the rest steps back"
+  "settings.appearance.motion.depth": "Depth — things arrive from depth, the rest steps back",
+  "settings.appearance.terminal.heading": "Terminal",
+  "settings.appearance.terminal.style": "Terminal style",
+  "settings.appearance.terminal.smear": "Minimal — bare text, a block cursor that smears as it moves",
+  "settings.appearance.terminal.glass": "Glass — translucent, an accent beam that sheds sparks",
+  "settings.appearance.terminal.paper": "Paper — command marks in the margin, a highlighter trail",
+  "settings.appearance.terminal.blocks": "Blocks — every command a card, a springy block cursor",
+  "settings.appearance.terminal.hint": "Colours follow the theme and your accent. Command marks and blocks need bash or zsh; reduced motion and the power saver turn the cursor trail off."
 }

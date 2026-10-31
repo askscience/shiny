@@ -25,6 +25,10 @@
  *   render → WebGL where the platform allows it, else canvas, else the built-in
  *            DOM renderer (see `selectRenderer`) — an agent TUI redrawing in
  *            here is what makes the renderer choice matter
+ *   look   → one of four styles (Settings → Appearance → Terminal): the
+ *            cursor and its trail, command marks/blocks and the status line's
+ *            shape. `fx.js` draws them on canvases around xterm; colours are
+ *            always the theme's tokens
  *
  * Closing the window does NOT kill the shells: the tab list lives in
  * `sessionStorage`, so reopening (or reloading the page) reattaches every tab
@@ -35,6 +39,13 @@ import { controlButton, icon, iconButton, toast, decodeText } from '../../ui/ind
 import * as coreApi from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
+// A namespace import: a hot-installed plugin may meet an older core that has
+// no terminal-style preference yet (a missing named export would fail the
+// whole module), and then simply uses the default style.
+import * as corePrefs from '../../js/preferences.js';
+import {
+  createTerminalFx, normalizeTerminalStyle, transparentBackground, commandMeta,
+} from './fx.js';
 
 const { apiFetch, getToken } = coreApi;
 
@@ -50,6 +61,20 @@ const MAX_TABS = 8;
 let tileEl = null;
 let tabstripEl = null;
 let statusEl = null;
+
+/** The active style (see fx.js) and the line spacing each one sets. */
+let terminalStyle = readTerminalStyle();
+const LINE_HEIGHT = { smear: 1.2, glass: 1.15, paper: 1.25, blocks: 1.2 };
+
+function readTerminalStyle() {
+  return normalizeTerminalStyle(corePrefs.getTerminalStyle?.());
+}
+
+/** Reduced motion or the power saver: the cursor snaps and leaves no trail. */
+const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+function calmCursor() {
+  return !!reducedMotionQuery?.matches || corePrefs.getEffectivePowerMode?.() === 'saver';
+}
 
 let assetsPromise = null;
 
@@ -168,12 +193,15 @@ const cssName = (key) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 /** The xterm theme, built fresh from the tokens (a theme switch must drop a
  *  previous theme's ANSI overrides, so this never merges). */
 function terminalTheme() {
-  const accent = tileVar('--accent', '#8ab4ff');
+  const bg = tileVar('--terminal-bg', '#0b0b0c');
   const theme = {
-    background: tileVar('--terminal-bg', '#0b0b0c'),
+    // The host paints the surface (and fx.js the layer under the text), so
+    // xterm's own background is the theme colour at zero alpha.
+    background: transparentBackground(bg),
     foreground: tileVar('--terminal-fg', '#d8d8dc'),
-    cursor: tileVar('--terminal-cursor', accent),
-    cursorAccent: tileVar('--terminal-bg', '#0b0b0c'),
+    // fx.js draws the cursor; xterm's stays invisible.
+    cursor: 'rgba(0, 0, 0, 0)',
+    cursorAccent: bg,
     selectionBackground: tileVar('--terminal-selection', 'rgba(255,255,255,.18)'),
   };
   for (const key of ANSI_KEYS) {
@@ -199,7 +227,30 @@ function applyTerminalTheme() {
       tab.term.options.fontFamily = font;
       fit(tab);
     }
+    tab.fx?.refreshColors();
   }
+}
+
+/** Switch every open terminal to `style` (Settings → Appearance → Terminal). */
+function applyTerminalStyle(style) {
+  terminalStyle = normalizeTerminalStyle(style);
+  if (tileEl) tileEl.dataset.terminalStyle = terminalStyle;
+  if (tabstripEl) tabstripEl.dataset.terminalStyle = terminalStyle;
+  for (const tab of tabs) {
+    if (!tab.term) continue;
+    tab.fx?.setStyle(terminalStyle);
+    if (tab.term.options.lineHeight !== LINE_HEIGHT[terminalStyle]) {
+      tab.term.options.lineHeight = LINE_HEIGHT[terminalStyle];
+    }
+    // The new line height re-measures the cell on xterm's next render; fit
+    // again after it so the grid matches the host.
+    if (tab.id === activeTabId) {
+      onHostResized(tab);
+      window.requestAnimationFrame(() => onHostResized(tab));
+    }
+  }
+  statusShown = '';
+  renderStatus();
 }
 
 /** Shorten a path under a home directory to `~/…`. */
@@ -215,17 +266,88 @@ function statusText(tab) {
 }
 
 let statusShown = '';
+let statusMainEl = null;
+let statusSideEl = null;
+
+/** A plain message (before any tab exists, e.g. xterm failed to load). */
 function setStatus(text) {
-  if (!statusEl || text === statusShown) return;
+  if (!statusEl) return;
+  ensureStatusParts();
+  if (text === statusShown) return;
   statusShown = text;
   statusEl.title = text;
-  decodeText(statusEl, text, { duration: 360 });
+  decodeText(statusMainEl, text, { duration: 360 });
+}
+
+function ensureStatusParts() {
+  if (statusMainEl?.parentNode === statusEl && statusSideEl?.parentNode === statusEl) return;
+  statusMainEl = document.createElement('span');
+  statusMainEl.className = 'terminal-status-main';
+  statusSideEl = document.createElement('span');
+  statusSideEl.className = 'terminal-status-side';
+  statusEl.replaceChildren(statusMainEl, statusSideEl);
+  statusShown = '';
+}
+
+function statusChip(text, cls = '') {
+  const chip = document.createElement('span');
+  chip.className = `terminal-chip${cls ? ` ${cls}` : ''}`;
+  chip.textContent = text;
+  return chip;
+}
+
+/**
+ * The status line for the active tab, shaped by the style: chips for glass;
+ * a meta line (`ZSH · ~/SHINY · CONNECTED` + the grid size or the last
+ * command) for the others — smear shows it as a pill on hover only.
+ */
+function renderStatus() {
+  if (!statusEl) return;
+  const tab = activeTab();
+  if (!tab) return;
+  const size = tab.term ? `${tab.term.cols}×${tab.term.rows}` : '';
+  const last = tab.last ? commandMeta({ state: 'done', ...tab.last }) : '';
+  if (terminalStyle === 'glass') {
+    const shell = (tab.shell || '').split('/').pop();
+    const connected = tab.status === t('plugin.terminal.status.connected', null, 'connected');
+    const chips = [statusChip(tab.status, connected ? 'is-live' : '')];
+    if (shell) chips.push(statusChip(shell));
+    if (tab.cwd) chips.push(statusChip(tildePath(tab.cwd)));
+    if (last) chips.push(statusChip(last, tab.last.code ? 'is-bad' : 'is-ok'));
+    const spacer = document.createElement('span');
+    spacer.className = 'terminal-status-grow';
+    chips.push(spacer, statusChip(size));
+    statusEl.replaceChildren(...chips);
+    statusEl.title = statusText(tab);
+    statusMainEl = null;
+    statusSideEl = null;
+    statusShown = '';
+    return;
+  }
+  ensureStatusParts();
+  const text = statusText(tab);
+  if (text !== statusShown) {
+    statusShown = text;
+    statusEl.title = text;
+    decodeText(statusMainEl, text, { duration: 360 });
+  }
+  statusSideEl.textContent = terminalStyle === 'blocks' && last ? last : size;
+  statusSideEl.classList.toggle('is-bad', terminalStyle === 'blocks' && !!tab.last?.code);
 }
 
 /** Update a tab's status line; only the active tab's text is on screen. */
 function updateTabStatus(tab, text) {
   tab.status = text;
-  if (tab.id === activeTabId) setStatus(statusText(tab));
+  if (tab.id === activeTabId) renderStatus();
+}
+
+/** Show the status pill (smear) for a moment while the grid size changes. */
+let resizeFlashTimer = null;
+function flashResizing() {
+  if (!tileEl) return;
+  tileEl.classList.add('is-resizing');
+  window.clearTimeout(resizeFlashTimer);
+  resizeFlashTimer = window.setTimeout(() => tileEl?.classList.remove('is-resizing'), 900);
 }
 
 /* ── tile DOM ─────────────────────────────────────────────────── */
@@ -234,13 +356,15 @@ function buildTile() {
   tileEl = document.createElement('section');
   tileEl.className = 'tile terminal-tile';
   tileEl.dataset.plugin = TERMINAL_PLUGIN;
+  tileEl.dataset.terminalStyle = terminalStyle;
 
   tabstripEl = buildTabStrip();
 
   statusEl = document.createElement('div');
   statusEl.className = 'terminal-status';
+  ensureStatusParts();
   statusShown = t('plugin.terminal.status.starting', null, 'starting terminal…');
-  statusEl.textContent = statusShown;
+  statusMainEl.textContent = statusShown;
 
   tileEl.append(tabstripEl, statusEl);
   return tileEl;
@@ -256,6 +380,7 @@ function buildTabStrip() {
   // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
   // and the centered "Terminal" label is dropped — the browser's arrangement.
   strip.dataset.windowBar = '';
+  strip.dataset.terminalStyle = terminalStyle;
   return strip;
 }
 
@@ -316,9 +441,16 @@ function renderTabs() {
 
 function createTerminalFor(tab) {
   const term = new window.Terminal({
-    cursorBlink: true,
+    // The cursor is fx.js's (see terminalTheme): xterm's is a transparent
+    // 1px bar that never blinks, so it cannot show through or hide a glyph.
+    cursorBlink: false,
+    cursorStyle: 'bar',
+    cursorWidth: 1,
+    cursorInactiveStyle: 'none',
+    allowTransparency: true,
     fontFamily: terminalFont(),
     fontSize: 13,
+    lineHeight: LINE_HEIGHT[terminalStyle],
     scrollback: 5000,
     theme: terminalTheme(),
   });
@@ -327,6 +459,26 @@ function createTerminalFor(tab) {
   term.loadAddon(tab.fitAddon);
   term.open(tab.hostEl);
   selectRenderer(tab);
+  tab.fx = createTerminalFx({
+    term,
+    host: tab.hostEl,
+    style: terminalStyle,
+    calm: calmCursor,
+    // OSC 7 from the shell integration: the status line follows `cd`.
+    onCwd: (cwd) => {
+      tab.cwd = cwd;
+      if (tab.id === activeTabId) renderStatus();
+    },
+    onCommand: ({ code, ms }) => {
+      tab.last = { code, ms };
+      if (tab.id === activeTabId) renderStatus();
+    },
+  });
+  term.onResize(() => {
+    if (tab.id !== activeTabId) return;
+    renderStatus();
+    flashResizing();
+  });
 
   term.onData((data) => queueInput(tab, data));
   // Ctrl/Cmd+C and Ctrl/Cmd+V have to be decided by the terminal, not the
@@ -489,7 +641,9 @@ function createTab({ sessionId = null, activate = true } = {}) {
     shell: '',
     cwd: '',
     status: t('plugin.terminal.status.connecting', null, 'connecting…'),
+    last: null,
     term: null,
+    fx: null,
     fitAddon: null,
     canvasAddon: null,
     hostEl: null,
@@ -537,6 +691,12 @@ function destroyTab(tab) {
   tab.inputQueue = [];
   tab.outQueue = [];
   tab.outBytes = 0;
+  try {
+    tab.fx?.dispose();
+  } catch (_) {
+    /* already gone */
+  }
+  tab.fx = null;
   try {
     tab.term?.dispose();
   } catch (_) {
@@ -606,7 +766,8 @@ function setActiveTab(id) {
     }
   }
   onHostResized(tab);
-  setStatus(statusText(tab));
+  tab.fx?.relayout();
+  renderStatus();
   persist();
   renderTabs();
   // Clicking a tab (or the `+`) must leave the keyboard in the shell, like
@@ -935,9 +1096,12 @@ export function unmountTerminalTile() {
   for (const tab of tabs) destroyTab(tab);
   tabs = [];
   activeTabId = null;
+  window.clearTimeout(resizeFlashTimer);
   tileEl = null;
   tabstripEl = null;
   statusEl = null;
+  statusMainEl = null;
+  statusSideEl = null;
   statusShown = '';
 }
 
@@ -953,6 +1117,11 @@ export function wireTerminalEvents() {
     applyTerminalTheme();
     document.getElementById('theme-tokens')?.addEventListener('load', applyTerminalTheme, { once: true });
     window.setTimeout(applyTerminalTheme, 400);
+  });
+  /* Settings → Appearance → Terminal, or the stored value arriving after sign-in. */
+  window.addEventListener('terminal:style', (event) => {
+    const next = normalizeTerminalStyle(event.detail?.style ?? readTerminalStyle());
+    if (next !== terminalStyle || tileEl?.dataset.terminalStyle !== next) applyTerminalStyle(next);
   });
   /* A pick in the top-bar Clipboard menu with this window focused: paste it
    * straight into the active shell (the menu already put it on the OS clipboard). */

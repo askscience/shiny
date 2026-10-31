@@ -34,7 +34,9 @@ export default {
 - Theme: xterm reads its face from `--font-mono` and its colours from the
   theme tokens `--terminal-bg`, `--terminal-fg`, `--terminal-cursor`,
   `--terminal-selection` and the optional `--terminal-ansi-<name>` (e.g.
-  `--terminal-ansi-bright-blue`). Dusk defines a light paper palette with an
+  `--terminal-ansi-bright-blue`). xterm draws on a transparent background
+  (the theme colour at alpha 0, so inverse video keeps its colour) over the
+  host, which paints `--terminal-bg`. Dusk defines a light paper palette with an
   ANSI set tuned for it (every colour ≥ 4.5:1 on the paper); Ink keeps the
   near-black sheet with xterm's ANSI defaults; other themes fall back to a dark
   surface. The palette is rebuilt (not merged) on `theme:change` — after the
@@ -46,6 +48,39 @@ export default {
   remount every session is reattached and its recent output replayed.
 - `terminalContextMenu()` contributes **Copy** / **Paste**, **New tab** /
   **Clear scrollback** / **Close tab**.
+
+## Styles
+
+*Settings → Appearance → Terminal* picks one of four styles (preference
+`terminal.style`, `getTerminalStyle`/`setTerminalStyle` in
+`web/js/preferences.js`, announced as `terminal:style`). A style is shape and
+motion only — every colour is a theme token or the accent, so each style
+follows Dusk, Ink or any other theme. The Terminal plugin must be installed
+for the setting to show.
+
+| id | Settings label | Cursor | Surface |
+|---|---|---|---|
+| `smear` (default) | Minimal | block whose corners chase the target at different speeds (the Ghostty/Neovide smear); the glyph under it is redrawn in `--terminal-bg` | generous margins, tabs underlined, no status bar — a pill shows on hover and while resizing |
+| `glass` | Glass | accent beam with a glow that sheds sparks and drags a tail | surface at 58% so the window's glass shows; status chips (state, shell, cwd, last command, size) |
+| `paper` | Paper | ink beam that leaves a fading accent highlighter stroke | a left gutter with a mark per command (hollow = prompt, accent = running, green/red = exit), duration on the right, a band behind the running command; the meta status line |
+| `blocks` | Blocks | accent block on an underdamped spring that squashes/stretches with speed, ribbon tail | every command a card (red-tinted on failure, accent rule while running, accent ring on the live prompt), duration and exit on the card |
+
+How it is drawn (`web/fx.js`, one controller per tab):
+
+- xterm's own cursor is a transparent, non-blinking 1px bar; fx.js reads the
+  position from the buffer and draws on a canvas **over** the xterm element.
+  It follows `?25l/h` (hidden cursor) and an app asking for a bar (DECSCUSR
+  5/6). The loop runs only while something moves; at rest the canvas blinks in
+  CSS. Reduced motion or the power saver: the cursor snaps, no trail.
+- Command marks and cards are drawn on a canvas **under** the xterm element,
+  from the shell integration's OSC 133 marks (see
+  [architecture § Shell integration](architecture.md#shell-integration)).
+  Nothing is drawn in the alternate screen (vim, htop). A prompt that ran
+  nothing (empty Enter, Ctrl+C) leaves no mark. Without the integration (a
+  shell other than bash/zsh) the styles still work, just without marks.
+- The text inset is padding on `.xterm` (the fit addon subtracts it), set per
+  style in `web/css/tiles.css` under `[data-terminal-style]`; the line height
+  is per style too (`LINE_HEIGHT` in `plugin.js`).
 
 ## Clipboard
 

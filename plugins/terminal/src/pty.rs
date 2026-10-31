@@ -229,7 +229,6 @@ fn spawn(user_id: &str, cols: u16, rows: u16, agent: bool) -> Result<Arc<Session
         .map_err(|e| AppError::Internal(format!("openpty failed: {e}")))?;
 
     let mut cmd = CommandBuilder::new(&shell);
-    cmd.arg("-l");
     cmd.cwd(&cwd);
     // A minimal environment: inheriting the server's env would expose every
     // operator secret it carries (ADMIN_TOKEN, provider keys) to `env` in the
@@ -248,6 +247,13 @@ fn spawn(user_id: &str, cols: u16, rows: u16, agent: bool) -> Result<Arc<Session
     cmd.env("SHELL", &shell);
     if let Ok(runtime) = std::env::var("XDG_RUNTIME_DIR") {
         cmd.env("XDG_RUNTIME_DIR", runtime);
+    }
+    // The window's shells print the OSC 133/7 marks its command blocks and
+    // status line read; the AI's shell stays a plain login shell.
+    if agent {
+        cmd.arg("-l");
+    } else {
+        crate::integration::configure(&mut cmd, &shell);
     }
 
     let child = pair

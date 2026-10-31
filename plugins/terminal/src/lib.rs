@@ -3,6 +3,7 @@
 //! The Rust half owns PTY sessions and streams their output over SSE; the web
 //! half (`web/plugin.js`) renders it with xterm.js and posts keystrokes back.
 
+pub mod integration;
 pub mod plugin;
 pub mod pty;
 pub mod routes;

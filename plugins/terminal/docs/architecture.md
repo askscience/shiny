@@ -4,14 +4,17 @@
 plugins/terminal/
 ├── plugin.toml
 ├── skills/terminal.md
+├── shell/            shell integration hooks (bash init file, zsh .zshenv)
 ├── src/
 │   ├── lib.rs        module wiring
 │   ├── plugin.rs     manifest, persona, routes + tool registration
 │   ├── routes.rs     /api/terminal/* handlers (SSE stream)
 │   ├── pty.rs        PTY session management
+│   ├── integration.rs starts the window's shells with the OSC 133/7 hooks
 │   └── tool.rs       terminal_exec — run a command in a session
 └── web/
     ├── plugin.js     the Terminal window
+    ├── fx.js         the four styles: cursor trails, command marks/blocks
     ├── icon.svg
     └── vendor/       xterm.js + addon-fit/-webgl/-canvas + xterm.css
 ```
@@ -43,6 +46,28 @@ replays each tab's recent output and reattaches to the same session. The strip
 is the window's top bar — one shell per tab. Closing a tab terminates that
 shell, a shell that exits (`exit`, a crash, a server restart) closes its own
 tab, and closing the last tab opens a fresh shell.
+
+## Shell integration
+
+The window's shells (never the AI's) start with small hooks that print the
+OSC 133 command marks (`A` prompt, `C` output starts, `D;<code>` finished) and
+OSC 7 (working directory) — the protocol Ghostty, WezTerm and VS Code use.
+`integration.rs` writes the scripts from `shell/` into
+`$XDG_RUNTIME_DIR/shiny/terminal-integration/` (or `~/.cache/shiny/…`, never a
+shared temp dir) and starts:
+
+- **bash** as `bash --init-file <script>`: the script replays a login shell's
+  startup files (`/etc/profile`, then the first of `~/.bash_profile`,
+  `~/.bash_login`, `~/.profile`), then prepends its hook to `PROMPT_COMMAND`
+  (so it still sees `$?`) and appends the output mark to `PS0`;
+- **zsh** as `zsh -l` with `ZDOTDIR` pointing at the hook dir: its `.zshenv`
+  unsets `ZDOTDIR`, sources the user's own `.zshenv` and adds `precmd` /
+  `preexec` hooks before the user's rc files load;
+- any other shell as a plain login shell (fish ≥ 4 prints the marks itself).
+
+If the scripts cannot be written the shell starts as a plain login shell. The
+window reads the marks in `web/fx.js` (command marks and blocks, the last
+command's duration and exit status) and OSC 7 for the status line's cwd.
 
 ## Streaming
 

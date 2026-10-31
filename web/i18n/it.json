@@ -1190,5 +1190,12 @@
   "settings.appearance.motion.label": "Movimento",
   "settings.appearance.motion.kinetic": "Kinetic — tendine, maschere e testo in movimento",
   "settings.appearance.motion.fluid": "Fluid — molle che nascono da dove hai toccato",
-  "settings.appearance.motion.depth": "Depth — le cose arrivano dal fondo, il resto arretra"
+  "settings.appearance.motion.depth": "Depth — le cose arrivano dal fondo, il resto arretra",
+  "settings.appearance.terminal.heading": "Terminale",
+  "settings.appearance.terminal.style": "Stile del terminale",
+  "settings.appearance.terminal.smear": "Nero — solo testo, cursore a blocco che si allunga muovendosi",
+  "settings.appearance.terminal.glass": "Vetro — traslucido, cursore d'accento che lascia scintille",
+  "settings.appearance.terminal.paper": "Carta — segni dei comandi a margine, scia a evidenziatore",
+  "settings.appearance.terminal.blocks": "Blocchi — ogni comando è un riquadro, cursore a molla",
+  "settings.appearance.terminal.hint": "I colori seguono il tema e il tuo accento. Segni e blocchi dei comandi richiedono bash o zsh; con movimento ridotto o risparmio energetico la scia del cursore si spegne."
 }
