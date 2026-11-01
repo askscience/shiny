@@ -59,6 +59,8 @@ function buildButton(p) {
   btn.type = 'button';
   btn.className = 'hud-plugin-btn';
   btn.dataset.plugin = p.name;
+  // The "strip" bar style sets the tray in type: the name, not the glyph.
+  btn.dataset.label = label(p.name);
   btn.classList.toggle('is-active', active);
   btn.classList.toggle('is-focused', isPluginFocused(p.name));
   btn.title = active

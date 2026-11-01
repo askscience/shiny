@@ -1,34 +1,35 @@
 {
-  "plugin.calc.meta.description": "Kalkulatur ta' spreadsheets — folji maħżuna bħala grilji ta' ċelloli miftuħa, editabbli fit-tieqa Calc",
+  "plugin.calc.meta.description": "Spreadsheets — oħloq u editja folji fit-tieqa Calc, importa fajls CSV jew .ods u salvahom bħala .ods",
   "plugin.calc.meta.summary": "Calc: oħloq, editja u kkalkula bi spreadsheets",
   "plugin.calc.meta.category": "Uffiċċju",
-
   "plugin.calc.bar.spreadsheets": "Spreadsheets",
-
+  "plugin.calc.bar.new": "Ġdid",
   "plugin.calc.toolbar.newSheet": "Spreadsheet ġdid",
   "plugin.calc.toolbar.importOds": "Importa .ods",
   "plugin.calc.toolbar.importCsv": "Importa CSV",
   "plugin.calc.toolbar.saveToDocuments": "Salva fid-Dokumenti",
   "plugin.calc.toolbar.saveNow": "Salva issa",
   "plugin.calc.toolbar.deleteSheet": "Ħassar l-ispreadsheet",
-
   "plugin.calc.menu.noSheets": "Għad m'hemmx spreadsheets",
-
+  "plugin.calc.empty.body": "Ibda folja vojta, importa fajl CSV jew .ods, jew staqsi lill-AI biex tibni waħda.",
   "plugin.calc.sheet.untitled": "Bla titlu",
   "plugin.calc.sheet.importedCsv": "CSV importat",
-
   "plugin.calc.formula.placeholder": "Valur jew formula (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Qed jiġi salvat…",
   "plugin.calc.status.dirty": "Bidliet mhux salvati",
+  "plugin.calc.status.unsaved": "Mhux salvat",
+  "plugin.calc.status.savedAt": "Salvat {time}",
+  "plugin.calc.status.cells.one": "{count} ċellola",
+  "plugin.calc.status.cells.two": "{count} ċelloli",
+  "plugin.calc.status.cells.few": "{count} ċelloli",
+  "plugin.calc.status.cells.many": "{count}-il ċellola",
+  "plugin.calc.status.cells.other": "{count} ċellola",
   "plugin.calc.status.saved.one": "Salvat {time} · {count} ċellola",
   "plugin.calc.status.saved.two": "Salvat {time} · {count} ċelloli",
   "plugin.calc.status.saved.few": "Salvat {time} · {count} ċelloli",
   "plugin.calc.status.saved.many": "Salvat {time} · {count}-il ċellola",
   "plugin.calc.status.saved.other": "Salvat {time} · {count} ċellola",
-
   "plugin.calc.dialog.delete": "Ħassar \"{title}\"?",
-
   "plugin.calc.toast.saveFailed": "Ma setax jiġi salvat",
   "plugin.calc.toast.openFailed": "L-ispreadsheet ma setax jinfetaħ",
   "plugin.calc.toast.createFailed": "L-ispreadsheet ma setax jinħoloq",

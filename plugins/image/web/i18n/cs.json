@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Editor fotografií — úpravy tónu a barev, rozmazání/zostření/vinětace a filmové vzhledy na jedno klepnutí v okně Obrázky",
   "plugin.image.meta.summary": "Editor fotografií: úpravy a filmové vzhledy",
   "plugin.image.meta.category": "Média",
-
   "plugin.image.toolbar.menu": "Nabídka",
   "plugin.image.toolbar.fitToggle": "Přepnout přizpůsobení / skutečnou velikost",
-
+  "plugin.image.title": "Obrázky",
+  "plugin.image.toolbar.fit": "Přizpůsobit",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Vzhled: {name}",
+  "plugin.image.dock.looks": "Vzhledy",
+  "plugin.image.dock.adjust": "Úpravy",
   "plugin.image.dial.brightness": "Jas",
   "plugin.image.dial.contrast": "Kontrast",
   "plugin.image.dial.exposure": "Expozice",
@@ -14,19 +18,16 @@
   "plugin.image.dial.blur": "Rozmazání",
   "plugin.image.dial.sharpen": "Zostření",
   "plugin.image.dial.vignette": "Vinětace",
-
   "plugin.image.oneClick.autoTone": "Automatický tón",
   "plugin.image.oneClick.autoContrast": "Automatický kontrast",
   "plugin.image.oneClick.invert": "Invertovat",
   "plugin.image.oneClick.grayscale": "ČB",
   "plugin.image.oneClick.sepia": "Sépie",
   "plugin.image.oneClick.revert": "Vrátit",
-  "plugin.image.oneClick.revertTitle": "Obnovit původně nahraný obrázek",
-
+  "plugin.image.oneClick.revertTitle": "Obnovit původní obrázek",
   "plugin.image.empty.title": "Není otevřen žádný obrázek",
   "plugin.image.empty.body": "Otevřete nebo přetáhněte obrázek a začněte.",
   "plugin.image.empty.open": "Otevřít obrázek",
-
   "plugin.image.menu.file": "Soubor",
   "plugin.image.menu.image": "Obrázek",
   "plugin.image.menu.view": "Zobrazení",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Oddálit",
   "plugin.image.menu.fit": "Přizpůsobit",
   "plugin.image.menu.actualSize": "Skutečná velikost",
-
   "plugin.image.ctx.open": "Otevřít obrázek…",
-
   "plugin.image.dialog.deleteConfirm": "Smazat “{title}”?",
   "plugin.image.dialog.thisImage": "tento obrázek",
-
   "plugin.image.toast.openFirst": "Nejprve otevřete obrázek",
   "plugin.image.toast.opened": "Otevřeno {title}",
   "plugin.image.toast.editFailed": "Úprava se nezdařila",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Uložení se nezdařilo",
   "plugin.image.toast.deleted": "Obrázek smazán",
   "plugin.image.toast.deleteFailed": "Obrázek se nepodařilo smazat",
-  "plugin.image.toast.reverted": "Vráceny původní pixely",
+  "plugin.image.toast.reverted": "Obnoven původní obrázek",
   "plugin.image.toast.openFailed": "Soubor se nepodařilo otevřít",
-
   "plugin.image.error.emptyFile": "tento soubor je prázdný",
   "plugin.image.error.notAnImage": "“{name}” není obrázek, který by editor uměl otevřít",
   "plugin.image.error.unnamedFile": "soubor"

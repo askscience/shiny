@@ -62,7 +62,7 @@ function build(name) {
   });
 
   const exit = makeButton('fullscreen-bubble-btn--exit', 'ui/compress',
-    t('desktop.exitFullscreenFor', { name: shown }, `Exit full screen ${shown}`));
+    t('desktop.exitFullscreenFor', { name: shown }, `Exit full screen (${shown})`));
   exit.addEventListener('click', (e) => {
     e.stopPropagation();
     exitWindowFullscreen();

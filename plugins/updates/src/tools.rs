@@ -206,7 +206,7 @@ impl Tool for UpdatesRefreshTool {
         let job = jobs::start("refresh", move |job| {
             let ok = ops::refresh_job(&job, manager.as_ref(), password.as_deref());
             job.finish(ok, None);
-        });
+        })?;
         crate::history::record_when_done(
             ctx.clone(),
             req.user_id.to_string(),
@@ -303,7 +303,7 @@ impl Tool for UpdatesApplyTool {
                 }
             }
             job.finish(ok, None);
-        });
+        })?;
         crate::history::record_when_done(
             ctx.clone(),
             req.user_id.to_string(),
@@ -354,7 +354,7 @@ impl Tool for OllamaUpdateTool {
         let job = jobs::start("ollama", move |job| {
             let ok = ops::ollama_job(&job, password.as_deref());
             job.finish(ok, None);
-        });
+        })?;
         crate::history::record_when_done(
             ctx.clone(),
             req.user_id.to_string(),

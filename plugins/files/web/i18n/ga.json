@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Poiblí",
   "plugin.files.place.templates": "Teimpléid",
   "plugin.files.place.videos": "Físeáin",
-
   "plugin.files.toolbar.search": "Cuardaigh",
   "plugin.files.toolbar.menu": "Roghchlár",
   "plugin.files.toolbar.back": "Ar ais",
@@ -17,47 +16,39 @@
   "plugin.files.toolbar.toggleView": "Scoránaigh an t-amharc",
   "plugin.files.toolbar.viewOptions": "Roghanna amhairc",
   "plugin.files.toolbar.pathActions": "Gníomhartha an chosáin",
-
   "plugin.files.search.placeholder": "Cuardaigh…",
   "plugin.files.search.clear": "Glan",
-
   "plugin.files.empty.noResults": "Níor aimsíodh aon toradh",
   "plugin.files.empty.trash": "Tá an Bosca Bruscair folamh",
   "plugin.files.empty.folder": "Tá an fillteán folamh",
   "plugin.files.empty.noMatch": "Níl aon chomhad ag teacht le “{query}”.",
   "plugin.files.empty.dropHint": "Tarraing comhaid anseo nó úsáid an roghchlár chun uaslódáil.",
-
   "plugin.files.column.name": "Ainm",
   "plugin.files.column.size": "Méid",
   "plugin.files.column.modified": "Athraithe",
-
   "plugin.files.status.folder": "Fillteán",
   "plugin.files.status.items.one": "{count} mír",
   "plugin.files.status.items.two": "{count} mhír",
   "plugin.files.status.items.few": "{count} mhír",
   "plugin.files.status.items.many": "{count} mír",
   "plugin.files.status.items.other": "{count} míreanna",
-
+  "plugin.files.status.countSelected": "{count} · {selected} roghnaithe",
   "plugin.files.when.today": "Inniu {time}",
   "plugin.files.when.yesterday": "Inné {time}",
-
   "plugin.files.menu.newFolder": "Fillteán nua",
   "plugin.files.menu.uploadFiles": "Uaslódáil comhaid…",
   "plugin.files.menu.showHidden": "Taispeáin comhaid fholaithe",
   "plugin.files.menu.view": "Amharc",
   "plugin.files.menu.copyPath": "Cóipeáil an cosán",
   "plugin.files.menu.emptyTrash": "Folmhaigh an Bosca Bruscair",
-
   "plugin.files.view.grid": "Greille",
   "plugin.files.view.list": "Liosta",
-
   "plugin.files.ctx.open": "Oscail",
   "plugin.files.ctx.download": "Íoslódáil",
   "plugin.files.ctx.restore": "Aisigh",
   "plugin.files.ctx.deletePermanently": "Scrios go buan",
   "plugin.files.ctx.rename": "Athainmnigh…",
   "plugin.files.ctx.moveToTrash": "Bog chuig an mBosca Bruscair",
-
   "plugin.files.dialog.newFolderTitle": "Ainm an fhillteáin nua",
   "plugin.files.dialog.newFolderDefault": "Fillteán nua",
   "plugin.files.dialog.renameTitle": "Athainmnigh go",
@@ -74,7 +65,6 @@
   "plugin.files.dialog.trashMany.many": "Bog {count} mír chuig an mBosca Bruscair?",
   "plugin.files.dialog.trashMany.other": "Bog {count} míreanna chuig an mBosca Bruscair?",
   "plugin.files.dialog.emptyTrash": "Folmhaigh an Bosca Bruscair? Ní féidir é seo a chealú.",
-
   "plugin.files.toast.openFailed": "Níorbh fhéidir an fillteán a oscailt",
   "plugin.files.toast.searchFailed": "Theip ar an gcuardach",
   "plugin.files.toast.pathCopied": "Cóipeáladh an cosán",
@@ -97,7 +87,6 @@
   "plugin.files.toast.restored.other": "Aisghabhadh {count} míreanna",
   "plugin.files.toast.trashEmptied": "Folmhaíodh an Bosca Bruscair",
   "plugin.files.toast.emptyTrashFailed": "Níorbh fhéidir an Bosca Bruscair a fholmhú",
-
   "plugin.files.notify.downloading": "Á íoslódáil",
   "plugin.files.notify.uploadComplete": "Uaslódáil críochnaithe",
   "plugin.files.notify.uploaded.one": "Cuireadh {count} comhad leis",
@@ -111,13 +100,11 @@
   "plugin.files.notify.movedItems.few": "{count} mhír",
   "plugin.files.notify.movedItems.many": "{count} mír",
   "plugin.files.notify.movedItems.other": "{count} míreanna",
-
   "plugin.files.player.seek": "Lorg",
   "plugin.files.player.mute": "Balbhaigh",
   "plugin.files.player.fullscreen": "Lánscáileán",
   "plugin.files.player.thisFormat": "An fhormáid seo",
   "plugin.files.player.cannotDecode": "Ní féidir leis an mbrabhsálaí seo {codec} a dhíchódú.",
-
   "plugin.files.preview.zoomHint": "Cliceáil an íomhá chun zúmáil",
   "plugin.files.preview.loading": "Á lódáil…",
   "plugin.files.preview.cannotPreview": "Ní féidir réamhamharc: {message}",
@@ -131,7 +118,8 @@
   "plugin.files.preview.navHint.other": "{count} míreanna · ← → chun bogadh",
   "plugin.files.preview.pdfFailed": "Níorbh fhéidir an PDF a rindreáil",
   "plugin.files.preview.page": "Leathanach {n}",
-
+  "plugin.files.preview.prev": "An comhad roimhe seo",
+  "plugin.files.preview.next": "An chéad chomhad eile",
   "plugin.files.meta.description": "Brabhsálaí comhad — brabhsáil, réamhamharc agus bainistigh do fhillteáin bhaile",
   "plugin.files.meta.summary": "Brabhsálaí comhad ar nós GNOME: greille/liosta, mionsamhlacha, réamhamharc tapa, uaslódáil agus bosca bruscair",
   "plugin.files.meta.category": "Córas"

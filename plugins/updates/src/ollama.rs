@@ -7,6 +7,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use crate::progress::Event;
 use crate::exec::{self, CmdSpec};
 use crate::model::OllamaStatus;
 
@@ -221,7 +222,47 @@ rm -rf "$SHIM"
 [ -n "$SAVED" ] && rm -f "$SAVED"
 exit $rc"#
     );
-    CmdSpec::new("sh").arg("-c").arg(pipeline).root()
+    // On a machine with an NVIDIA/AMD GPU and no driver the installer may run
+    // the distro's package manager itself: keep that unattended too.
+    CmdSpec::new("sh")
+        .arg("-c")
+        .arg(pipeline)
+        .root()
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .env("NEEDRESTART_MODE", "a")
+        .env("LC_ALL", "C")
+}
+
+/// Structured progress from the official installer's output.
+///
+/// The installer announces each step on stderr as `>>> Downloading Linux amd64
+/// bundle`, and `curl --progress-bar` redraws a `####…  42.7%` bar with `\r`
+/// (which `exec` splits into lines — hundreds of them per download). Steps
+/// become [`Event::Step`] (logged), bar ticks become [`Event::Download`] (not
+/// logged), so the window shows "Downloading · 42%" instead of a log flood.
+pub fn progress_event(line: &str) -> Option<Event> {
+    let line = line.trim();
+    if let Some(step) = line.strip_prefix(">>>") {
+        let step = step.trim();
+        return (!step.is_empty()).then(|| Event::Step { message: step.to_string() });
+    }
+    if let Some(err) = line.strip_prefix("ERROR:") {
+        return Some(Event::Error { package: None, message: err.trim().to_string() });
+    }
+    // curl's bar: `######                 12.3%`; before the size is known it
+    // draws `#=#=#`, `-=O=-` frames instead, which carry no information.
+    if !line.is_empty() && line.chars().all(|c| matches!(c, '#' | '=' | 'O' | '-' | ' ')) {
+        return Some(Event::Download { percent: 0.0, message: String::new() });
+    }
+    if let Some(num) = line.strip_suffix('%') {
+        let (bar, pct) = num.rsplit_once(' ').unwrap_or(("", num));
+        if bar.chars().all(|c| c == '#' || c == ' ') {
+            if let Ok(percent) = pct.trim().parse::<f32>() {
+                return Some(Event::Download { percent, message: String::new() });
+            }
+        }
+    }
+    None
 }
 
 /// Stop the Ollama service before replacing its files. The installer deletes
@@ -250,4 +291,26 @@ pub fn is_active() -> bool {
 }
 fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_installer_progress() {
+        assert_eq!(
+            progress_event(">>> Downloading Linux amd64 bundle"),
+            Some(Event::Step { message: "Downloading Linux amd64 bundle".into() })
+        );
+        assert_eq!(
+            progress_event("##########                                        14.3%"),
+            Some(Event::Download { percent: 14.3, message: String::new() })
+        );
+        assert_eq!(progress_event("100.0%"), Some(Event::Download { percent: 100.0, message: String::new() }));
+        assert!(matches!(progress_event("#=#=#"), Some(Event::Download { .. })));
+        assert!(matches!(progress_event("ERROR: no GPU"), Some(Event::Error { .. })));
+        assert_eq!(progress_event("WARNING: Unable to detect NVIDIA/AMD GPU."), None);
+        assert_eq!(progress_event("disk is 95% full"), None);
+    }
 }

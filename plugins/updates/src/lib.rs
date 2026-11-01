@@ -17,6 +17,7 @@ pub mod model;
 pub mod ollama;
 pub mod ops;
 pub mod plugin;
+pub mod progress;
 pub mod routes;
 pub mod status;
 pub mod tools;

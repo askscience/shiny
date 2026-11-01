@@ -2,7 +2,8 @@
   "plugin.calendar.meta.description": "Kalenteri — ajoita, listaa ja järjestä tapahtumia Kalenteri-ikkunassa",
   "plugin.calendar.meta.summary": "Kalenteri: ajoita ja järjestä tapahtumia",
   "plugin.calendar.meta.category": "Toimisto",
-
+  "plugin.calendar.count.events.one": "{count} tapahtuma",
+  "plugin.calendar.count.events.other": "{count} tapahtumaa",
   "plugin.calendar.month.january": "tammikuu",
   "plugin.calendar.month.february": "helmikuu",
   "plugin.calendar.month.march": "maaliskuu",
@@ -15,7 +16,6 @@
   "plugin.calendar.month.october": "lokakuu",
   "plugin.calendar.month.november": "marraskuu",
   "plugin.calendar.month.december": "joulukuu",
-
   "plugin.calendar.grid.sun": "su",
   "plugin.calendar.grid.mon": "ma",
   "plugin.calendar.grid.tue": "ti",
@@ -23,22 +23,16 @@
   "plugin.calendar.grid.thu": "to",
   "plugin.calendar.grid.fri": "pe",
   "plugin.calendar.grid.sat": "la",
-
   "plugin.calendar.event.allDay": "Koko päivä",
-
   "plugin.calendar.toolbar.previousMonth": "Edellinen kuukausi",
   "plugin.calendar.toolbar.nextMonth": "Seuraava kuukausi",
   "plugin.calendar.toolbar.today": "Tänään",
   "plugin.calendar.toolbar.newEvent": "Uusi tapahtuma",
-
   "plugin.calendar.ctx.refresh": "Päivitä",
-
   "plugin.calendar.detail.edit": "Muokkaa",
   "plugin.calendar.detail.delete": "Poista",
-
   "plugin.calendar.empty.noEvents": "Ei tapahtumia",
   "plugin.calendar.empty.noEventsBody": "Ei ajoitettuja tapahtumia. Lisää tapahtuma tai pyydä tekoälyä ajoittamaan se.",
-
   "plugin.calendar.dialog.title": "Tapahtuma",
   "plugin.calendar.dialog.editTitle": "Muokkaa tapahtumaa",
   "plugin.calendar.dialog.titleField": "Otsikko",
@@ -52,7 +46,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Muistiinpanot (valinnainen)",
   "plugin.calendar.dialog.cancel": "Peruuta",
   "plugin.calendar.dialog.save": "Tallenna tapahtuma",
-
   "plugin.calendar.toast.titleRequired": "Otsikko vaaditaan",
   "plugin.calendar.toast.dateRequired": "Päivämäärä vaaditaan",
   "plugin.calendar.toast.updated": "Tapahtuma päivitetty",
@@ -61,8 +54,6 @@
   "plugin.calendar.toast.loadFailed": "Tapahtumia ei voitu ladata",
   "plugin.calendar.toast.saveFailed": "Tapahtumaa ei voitu tallentaa",
   "plugin.calendar.toast.deleteFailed": "Tapahtumaa ei voitu poistaa",
-
   "plugin.calendar.confirm.deleteEvent": "Poistetaanko \"{title}\"?",
-
   "plugin.calendar.notify.eventSoon": "Tapahtuma alkaa pian"
 }

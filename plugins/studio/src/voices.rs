@@ -219,6 +219,7 @@ static MELODIC_PARAMS: &[ParamDef] = &[
     def("pw", "Pulse Width", "Oscillator", 0.05, 0.95, 0.01, 0.5),
     def("unison", "Unison", "Oscillator", 1.0, 8.0, 1.0, 1.0),
     def("spread", "Uni Spread", "Oscillator", 0.0, 1.0, 0.01, 0.5),
+    def("uni_detune", "Uni Detune", "Oscillator", 0.0, 100.0, 0.5, 22.0),
     def("sub", "Sub", "Oscillator", 0.0, 1.0, 0.01, 0.0),
     def("noise", "Noise", "Oscillator", 0.0, 1.0, 0.01, 0.0),
     def("ring", "Ring Mod", "Oscillator", 0.0, 1.0, 0.01, 0.0),

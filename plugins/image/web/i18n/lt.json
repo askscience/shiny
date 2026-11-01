@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Nuotraukų rengyklė — tono ir spalvų koregavimas, suliejimas / ryškinimas / vinjetė ir vieno bakstelėjimo filmo efektai Vaizdų lange",
   "plugin.image.meta.summary": "Nuotraukų rengyklė: koregavimas ir filmo efektai",
   "plugin.image.meta.category": "Medija",
-
   "plugin.image.toolbar.menu": "Meniu",
   "plugin.image.toolbar.fitToggle": "Perjungti pritaikymą / tikrąjį dydį",
-
+  "plugin.image.title": "Vaizdas",
+  "plugin.image.toolbar.fit": "Pritaikyti",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Efektas: {name}",
+  "plugin.image.dock.looks": "Efektai",
+  "plugin.image.dock.adjust": "Koregavimas",
   "plugin.image.dial.brightness": "Ryškumas",
   "plugin.image.dial.contrast": "Kontrastas",
   "plugin.image.dial.exposure": "Ekspozicija",
@@ -14,22 +18,19 @@
   "plugin.image.dial.blur": "Suliejimas",
   "plugin.image.dial.sharpen": "Ryškinimas",
   "plugin.image.dial.vignette": "Vinjetė",
-
   "plugin.image.oneClick.autoTone": "Automatinis tonas",
   "plugin.image.oneClick.autoContrast": "Automatinis kontrastas",
   "plugin.image.oneClick.invert": "Invertuoti",
   "plugin.image.oneClick.grayscale": "Nespalvotas",
   "plugin.image.oneClick.sepia": "Sepija",
   "plugin.image.oneClick.revert": "Grąžinti",
-  "plugin.image.oneClick.revertTitle": "Atkurti pirminį įkeltą vaizdą",
-
+  "plugin.image.oneClick.revertTitle": "Atkurti pirminį vaizdą",
   "plugin.image.empty.title": "Nėra atidaryto vaizdo",
   "plugin.image.empty.body": "Atidarykite arba nuvilkite paveikslėlį, kad pradėtumėte.",
   "plugin.image.empty.open": "Atidaryti vaizdą",
-
   "plugin.image.menu.file": "Failas",
   "plugin.image.menu.image": "Vaizdas",
-  "plugin.image.menu.view": "Rodymas",
+  "plugin.image.menu.view": "Rodinys",
   "plugin.image.menu.open": "Atidaryti…",
   "plugin.image.menu.saveCopy": "Išsaugoti kopiją…",
   "plugin.image.menu.delete": "Ištrinti vaizdą",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Nutolinti",
   "plugin.image.menu.fit": "Pritaikyti",
   "plugin.image.menu.actualSize": "Tikrasis dydis",
-
   "plugin.image.ctx.open": "Atidaryti vaizdą…",
-
   "plugin.image.dialog.deleteConfirm": "Ištrinti “{title}”?",
   "plugin.image.dialog.thisImage": "šį vaizdą",
-
   "plugin.image.toast.openFirst": "Pirmiausia atidarykite vaizdą",
   "plugin.image.toast.opened": "Atidaryta {title}",
   "plugin.image.toast.editFailed": "Redagavimas nepavyko",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Išsaugoti nepavyko",
   "plugin.image.toast.deleted": "Vaizdas ištrintas",
   "plugin.image.toast.deleteFailed": "Nepavyko ištrinti vaizdo",
-  "plugin.image.toast.reverted": "Grąžinti pirminiai pikseliai",
+  "plugin.image.toast.reverted": "Grąžintas pirminis vaizdas",
   "plugin.image.toast.openFailed": "Nepavyko atidaryti failo",
-
   "plugin.image.error.emptyFile": "tas failas tuščias",
   "plugin.image.error.notAnImage": "“{name}” nėra vaizdas, kurį rengyklė gali atidaryti",
   "plugin.image.error.unnamedFile": "failas"

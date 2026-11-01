@@ -49,7 +49,6 @@ import { reloadUserSession } from './session.js';
 import { loadUserPreferences, getRemember, getWakeWord } from './preferences.js';
 import { initI18n } from './i18n.js';
 import { initBackground } from './background.js';
-import { initDeskGreeting } from './deskGreeting.js';
 import { initSpokenReply } from './spokenReply.js';
 import { initShellMotion } from './shellMotion.js';
 import { hideBootScreen } from './bootScreen.js';
@@ -84,7 +83,6 @@ async function boot() {
   initIconLoader(); // resolve the stored icon set against the theme's mode
   initAppearance({ getScope: () => getTraveler()?.id });
   initBackground({ getScope: () => getTraveler()?.id });
-  initDeskGreeting();
   initSpokenReply();
   initShellMotion();
   wireToastEvents();

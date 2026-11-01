@@ -1,7 +1,7 @@
 import {
   toolbar, element as el, button, chip, emptyState, field, icon, iconButton,
   input, modal, notify, row, spinner, largeTitle, hairlineList, hairlineRow,
-  listReveal, rollNumber,
+  listReveal, rollNumber, progress as progressBar,
 } from '../../ui/index.js';
 
 /**
@@ -14,8 +14,12 @@ import {
  * The Updates tab is deliberately flat, in the editorial window language: a
  * large title ("4 updates" / "Up to date") under a mono eyebrow ("DEBIAN ·
  * APT"), one ink install pill, and hairline rows with the package name on the
- * left and its mono "1.2 → 1.3 · MAIN" on the right. Progress is a spinner +
- * the last line, with a Details toggle that shows the mono log. Ollama and the
+ * left and its mono "1.2 → 1.3 · MAIN" on the right. Progress is a bar with
+ * the phase and percent when the package manager reports structured progress
+ * (apt's status-fd, the Ollama installer's steps and download bar), else
+ * the last log line; the only spinner is the action button's. A Details
+ * toggle shows the mono log. While an install runs every package row shows its
+ * own state (queued · unpacking · configuring · done), updated in place. Ollama and the
  * audit trail live in their own tabs. Styles: the "Updates plugin window"
  * section of web/css/tiles.css.
  *
@@ -28,6 +32,8 @@ import { t, tp } from '../../js/i18n.js';
 export const UPDATES_PLUGIN = 'updates';
 
 const JOB_POLL_MS = 700;
+/** Lines kept in the window's log (the server keeps its own, larger copy). */
+const MAX_LOG_LINES = 3000;
 const TABS = [
   ['updates', 'Updates', 'plugin.updates.tab.updates'],
   ['ollama', 'Ollama'],
@@ -45,7 +51,14 @@ let history = null;
 let busy = false;
 let detailsOpen = false;
 let lastLine = '';
-let fullLog = '';
+let logLines = [];
+/** The job's structured progress (`{ phase, percent, message, current, packages, failed }`). */
+let jobProgress = null;
+/** Package name → its row, so progress updates touch rows in place. */
+const pkgRows = new Map();
+let pkgListEl = null;
+let barEl = null;
+let barLabelEl = null;
 let lastResult = null; // 'ok' | 'error' | null
 let logFrom = 0;
 let lastLineEl = null;
@@ -111,6 +124,7 @@ export function mountUpdatesTile() {
 
   render();
   void loadStatus(false);
+  void reattach();
   return tileEl;
 }
 
@@ -156,6 +170,10 @@ export function unmountUpdatesTile() {
   for (const id of Object.keys(tabChips)) delete tabChips[id];
   lastLineEl = null;
   detailsPreEl = null;
+  barEl = null;
+  barLabelEl = null;
+  pkgListEl = null;
+  pkgRows.clear();
 }
 
 export function getUpdatesTileElement() {
@@ -226,14 +244,22 @@ function renderUpdates() {
       const quiet = el('div', 'updates-actions');
       quiet.append(
         el('p', 'updates-status', t('plugin.updates.empty.noUpdates', null, 'No system updates are waiting.')),
-        refreshButton(),
+        refreshButton({ spin: true }),
       );
       contentEl.appendChild(quiet);
     }
     return;
   }
   const rows = hairlineList('updates-list');
-  for (const p of packages) rows.appendChild(hairlineRow({ title: p.name, meta: versionLine(p) }));
+  pkgListEl = rows;
+  pkgRows.clear();
+  for (const p of packages) addPackageRow(p.name, versionLine(p));
+  // apt full-upgrade can pull in packages that were not in the list (a new
+  // kernel, a new dependency): show them too while the install runs.
+  for (const p of showingProgress() ? jobProgress.packages : []) {
+    if (!pkgRows.has(p.name)) addPackageRow(p.name, '');
+  }
+  applyPackageStates();
   contentEl.appendChild(rows);
   if (revealPackages) {
     revealPackages = false;
@@ -241,15 +267,93 @@ function renderUpdates() {
   }
 }
 
-function refreshButton() {
+/** `spin`: this is the only control on screen, so it carries the busy spinner. */
+function refreshButton({ spin = false } = {}) {
   return button({
-    label: t('plugin.updates.action.refresh', null, 'Refresh lists'),
+    label: t('plugin.updates.action.refresh', null, 'Refresh package lists'),
     icon: 'ui/refresh',
     variant: 'quiet',
     size: 'sm',
+    loading: spin && busy,
     disabled: busy || status?.distro?.supported === false,
     onClick: () => void startRefresh(),
   });
+}
+
+/** Whether package rows show per-package install states. */
+function showingProgress() {
+  return !!jobProgress?.packages && (busy || lastResult === 'error');
+}
+
+function addPackageRow(name, meta) {
+  const lead = el('span', 'updates-pkg-state');
+  const rowEl = hairlineRow({ lead, title: name, meta });
+  rowEl.classList.add('updates-pkg');
+  pkgRows.set(name, { row: rowEl, lead, state: undefined });
+  pkgListEl?.appendChild(rowEl);
+  return pkgRows.get(name);
+}
+
+const STATE_LABELS = {
+  queued: ['plugin.updates.pkg.queued', 'Waiting'],
+  unpacking: ['plugin.updates.pkg.unpacking', 'Unpacking'],
+  configuring: ['plugin.updates.pkg.configuring', 'Configuring'],
+  done: ['plugin.updates.pkg.done', 'Installed'],
+  removing: ['plugin.updates.pkg.removing', 'Removing'],
+  removed: ['plugin.updates.pkg.removed', 'Removed'],
+  error: ['plugin.updates.pkg.error', 'Failed'],
+};
+
+/** Paint every package row's state from `jobProgress`, touching only rows that changed. */
+function applyPackageStates() {
+  const active = showingProgress();
+  const states = new Map((active ? jobProgress.packages : []).map((p) => [p.name, p.state]));
+  const failed = new Set(active ? jobProgress.failed || [] : []);
+  if (active) {
+    for (const name of states.keys()) {
+      if (!pkgRows.has(name)) addPackageRow(name, '');
+    }
+  }
+  for (const [name, entry] of pkgRows) {
+    let state = null;
+    if (active) {
+      state = failed.has(name) ? 'error' : (states.get(name) || (busy ? 'queued' : null));
+      // A package still mid-step when the job ended did not finish.
+      if (!busy && (state === 'unpacking' || state === 'configuring')) state = 'error';
+    }
+    if (entry.state === state) continue;
+    entry.state = state;
+    const { row, lead } = entry;
+    row.classList.remove('is-queued', 'is-working', 'is-done', 'is-error', 'is-removed');
+    lead.textContent = '';
+    lead.removeAttribute('title');
+    if (!state) continue;
+    if (state === 'queued') {
+      row.classList.add('is-queued');
+      lead.appendChild(el('span', 'updates-pkg-dot'));
+    } else if (state === 'unpacking' || state === 'configuring' || state === 'removing') {
+      row.classList.add('is-working');
+      lead.appendChild(spinner({ size: 14 }));
+    } else if (state === 'done') {
+      row.classList.add('is-done');
+      lead.appendChild(icon('ui/check', { size: 16 }));
+    } else if (state === 'removed') {
+      row.classList.add('is-removed');
+      lead.appendChild(icon('ui/minus', { size: 16 }));
+    } else {
+      row.classList.add('is-error');
+      lead.appendChild(icon('ui/close', { size: 16 }));
+    }
+    const [key, fallback] = STATE_LABELS[state];
+    lead.title = t(key, null, fallback);
+    lead.setAttribute('aria-label', lead.title);
+  }
+  // Keep the package being worked on in view.
+  const current = busy && jobProgress?.current ? pkgRows.get(jobProgress.current) : null;
+  if (current && current.row.isConnected && !current.row.dataset.seen) {
+    current.row.dataset.seen = '1';
+    current.row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 }
 
 function versionLine(p) {
@@ -264,7 +368,7 @@ function installAction() {
   wrap.appendChild(button({
     label: busy
       ? t('plugin.updates.action.installing', null, 'Installing…')
-      : tp('plugin.updates.action.install', status.count, null, 'Install {count} Updates'),
+      : tp('plugin.updates.action.install', status.count, null, 'Install {count} updates'),
     variant: 'primary',
     arrow: !busy,
     loading: busy,
@@ -279,8 +383,21 @@ function progressLine() {
   const wrap = el('div', 'updates-progress');
   if (lastResult === 'error' && !busy) wrap.classList.add('is-error');
 
+  barEl = null;
+  barLabelEl = null;
+  if (busy) {
+    // Structured progress (apt): phase · percent · counts over a bar. The bar
+    // stays hidden until the first progress event arrives.
+    const meter = el('div', 'updates-meter');
+    barLabelEl = el('div', 'updates-meter-label');
+    barEl = progressBar({ value: 0 });
+    meter.append(barLabelEl, barEl);
+    wrap.appendChild(meter);
+    paintMeter();
+  }
+
+  // No spinner here: the action button already spins while the job runs.
   const line = el('div', 'updates-progress-line');
-  if (busy) line.appendChild(spinner({ size: 16 }));
   lastLineEl = el('span', 'updates-progress-text', busy
     ? (lastLine || t('plugin.updates.status.working', null, 'Working…'))
     : (lastResult === 'ok'
@@ -301,22 +418,82 @@ function progressLine() {
 
   if (detailsOpen) {
     detailsPreEl = el('pre', 'updates-log');
-    detailsPreEl.textContent = fullLog || lastLine || '';
+    detailsPreEl.textContent = logLines.length ? logLines.join('\n') : (lastLine || '');
     wrap.appendChild(detailsPreEl);
+    requestAnimationFrame(() => {
+      if (detailsPreEl) detailsPreEl.scrollTop = detailsPreEl.scrollHeight;
+    });
   } else {
     detailsPreEl = null;
   }
   return wrap;
 }
 
-/** Append a job line without rebuilding the tree. */
-function appendLog(line) {
-  fullLog += (fullLog ? '\n' : '') + line;
-  if (line.trim()) lastLine = line;
-  if (lastLineEl) lastLineEl.textContent = lastLine;
+/** The bar's fill and its "Installing · 42% · 12 of 40 packages" label. */
+function paintMeter() {
+  if (!barEl || !barLabelEl) return;
+  const p = jobProgress;
+  const meter = barEl.parentElement;
+  const step = p?.phase === 'step';
+  const has = p?.phase && (step || typeof p.percent === 'number');
+  meter?.classList.toggle('is-idle', !has);
+  // A step without a percent (stopping Ollama, extracting, verifying): the bar
+  // keeps moving so the window never looks frozen; the text line says what.
+  meter?.classList.toggle('is-indeterminate', !!step);
+  if (!has) {
+    barLabelEl.textContent = '';
+    barEl.set(0);
+    return;
+  }
+  if (step) {
+    barLabelEl.textContent = t('plugin.updates.status.working', null, 'Working…');
+    return;
+  }
+  const pct = Math.round(p.percent);
+  const phase = p.phase === 'download'
+    ? t('plugin.updates.progress.download', null, 'Downloading')
+    : t('plugin.updates.progress.install', null, 'Installing');
+  const parts = [phase, `${pct}%`];
+  const pkgs = p.packages || [];
+  if (p.phase === 'install' && pkgs.length) {
+    const total = Math.max(pkgRows.size, pkgs.length);
+    const done = pkgs.filter((x) => x.state === 'done' || x.state === 'removed').length;
+    parts.push(t('plugin.updates.progress.packages', { done, total }, '{done} of {total} packages'));
+  }
+  barLabelEl.textContent = parts.join(' · ');
+  barEl.set(p.percent);
+}
+
+/** Apply a polled progress snapshot: bar, current step, package rows. */
+function applyProgress(p) {
+  if (!p) return;
+  jobProgress = p;
+  paintMeter();
+  if (p.message && lastLineEl && busy) {
+    lastLine = p.current && !p.message.includes(p.current) ? `${p.current} · ${p.message}` : p.message;
+    lastLineEl.textContent = lastLine;
+  }
+  if (activeTab === 'updates') applyPackageStates();
+}
+
+/**
+ * Append job lines without rebuilding the tree. The open log gets new text
+ * nodes (never a full rewrite per line, which made long upgrades stall the
+ * window) and only follows the output while scrolled to the bottom.
+ */
+function appendLog(lines) {
+  if (!lines.length) return;
+  logLines.push(...lines);
+  if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim()) { lastLine = lines[i]; break; }
+  }
+  if (lastLineEl && !(busy && jobProgress?.message)) lastLineEl.textContent = lastLine;
   if (detailsPreEl) {
-    detailsPreEl.textContent = fullLog;
-    detailsPreEl.scrollTop = detailsPreEl.scrollHeight;
+    const pinned = detailsPreEl.scrollHeight - detailsPreEl.scrollTop - detailsPreEl.clientHeight < 24;
+    const prefix = detailsPreEl.textContent ? '\n' : '';
+    detailsPreEl.appendChild(document.createTextNode(prefix + lines.join('\n')));
+    if (pinned) detailsPreEl.scrollTop = detailsPreEl.scrollHeight;
   }
 }
 
@@ -338,7 +515,7 @@ function renderOllama() {
       version: o.version ? t('plugin.updates.ollama.version', { version: o.version }, ' · version {version}') : '',
       path: o.path ? ` · ${o.path}` : '',
     }, 'Installed{version}{path}')
-    : t('plugin.updates.ollama.notInstalled', null, 'Not installed (or not found on PATH)')));
+    : t('plugin.updates.ollama.notInstalled', null, 'Not installed (or not found)')));
   if (installed && o.service) {
     text.appendChild(el('p', 'updates-status', t('plugin.updates.ollama.service', { name: o.service }, 'Service: {name}')));
   }
@@ -360,7 +537,7 @@ function renderOllama() {
     }),
   ]));
 
-  if (logFrom || lastResult) contentEl.appendChild(progressLine());
+  if (busy || lastResult) contentEl.appendChild(progressLine());
 }
 
 /* ── History tab ────────────────────────────────────────────── */
@@ -415,7 +592,8 @@ async function startJob(path, body, label) {
   busy = true;
   detailsOpen = false;
   lastLine = '';
-  fullLog = '';
+  logLines = [];
+  jobProgress = null;
   lastResult = null;
   logFrom = 0;
   render();
@@ -427,18 +605,39 @@ async function startJob(path, body, label) {
   } catch (err) {
     busy = false;
     lastResult = 'error';
-    lastLine = err.message || t('plugin.updates.status.couldNot', { label: label.toLowerCase() }, 'Could not {label}');
+    lastLine = err.message || t('plugin.updates.status.couldNot', { label }, 'Could not start: {label}');
     render();
     return;
   }
   if (!jobId) {
     busy = false;
     lastResult = 'error';
-    lastLine = t('plugin.updates.status.noJobId', null, 'The server did not return a job id');
+    lastLine = t('plugin.updates.status.noJobId', null, 'The update service did not respond as expected');
     render();
     return;
   }
   await pollJob(jobId);
+}
+
+/** A reopened window (or a reloaded shell) picks up an install that is still running. */
+async function reattach() {
+  if (busy) return;
+  let data;
+  try {
+    data = (await apiFetch('/api/updates/jobs'))?.data;
+  } catch {
+    return;
+  }
+  if (!data?.job || data.done || busy) return;
+  busy = true;
+  detailsOpen = false;
+  lastLine = '';
+  logLines = [];
+  jobProgress = null;
+  lastResult = null;
+  logFrom = 0;
+  render();
+  await pollJob(data.job);
 }
 
 async function pollJob(id) {
@@ -448,14 +647,15 @@ async function pollJob(id) {
       const res = await apiFetch(`/api/updates/jobs?job=${encodeURIComponent(id)}&from=${logFrom}`);
       data = res?.data;
     } catch (err) {
-      finishJob(false, err.message || t('plugin.updates.status.lostConnection', null, 'Lost the job connection'));
+      finishJob(false, err.message || t('plugin.updates.status.lostConnection', null, 'Lost the connection to the update service'));
       return;
     }
     if (!data) {
-      finishJob(false, t('plugin.updates.status.jobDisappeared', null, 'The job disappeared'));
+      finishJob(false, t('plugin.updates.status.jobDisappeared', null, 'The update stopped unexpectedly'));
       return;
     }
-    for (const line of data.lines || []) appendLog(line);
+    appendLog(data.lines || []);
+    applyProgress(data.progress);
     logFrom = data.total ?? (logFrom + (data.lines?.length || 0));
     if (data.done) {
       finishJob(data.success === true, data.error || null);
@@ -468,7 +668,7 @@ async function pollJob(id) {
 function finishJob(success, error) {
   busy = false;
   lastResult = success ? 'ok' : 'error';
-  if (error) appendLog(`!! ${error}`);
+  if (error) appendLog([`!! ${error}`]);
   // One notification, through the centralized system — never a toast as well.
   notify({
     app: 'Updates',
@@ -489,7 +689,7 @@ function finishJob(success, error) {
 
 function askPassword({ title, message }) {
   return new Promise((resolve) => {
-    const pw = input({ type: 'password', placeholder: t('plugin.updates.dialog.passwordPlaceholder', null, 'sudo password'), autocomplete: 'current-password' });
+    const pw = input({ type: 'password', placeholder: t('plugin.updates.dialog.passwordPlaceholder', null, 'Your password'), autocomplete: 'current-password' });
     const submit = () => {
       api.close();
       resolve(pw.value);
@@ -506,7 +706,7 @@ function askPassword({ title, message }) {
         field({
           label: t('plugin.updates.dialog.passwordField', null, 'Administrator password'),
           control: pw,
-          hint: message || t('plugin.updates.dialog.passwordHint', null, 'Used once to run the command with sudo. It is never stored.'),
+          hint: message || t('plugin.updates.dialog.passwordHint', null, 'Used once to run the update as administrator. It is never stored.'),
         }),
         row([cancel, go]),
       ],
@@ -530,11 +730,11 @@ async function startInstallAll() {
 
 async function startRefresh() {
   const password = await askPassword({
-    title: t('plugin.updates.action.refresh', null, 'Refresh lists'),
-    message: t('plugin.updates.dialog.refreshRights', { cmd: '`apt update`' }, 'Refreshing package metadata (e.g. {cmd}) requires administrator rights.'),
+    title: t('plugin.updates.action.refresh', null, 'Refresh package lists'),
+    message: t('plugin.updates.dialog.refreshRights', { cmd: '`apt update`' }, 'Refreshing the package lists ({cmd}) requires administrator rights.'),
   });
   if (password == null) return;
-  await startJob('/api/updates/refresh', { password }, t('plugin.updates.label.refreshing', null, 'Refreshing lists'));
+  await startJob('/api/updates/refresh', { password }, t('plugin.updates.label.refreshing', null, 'Refreshing package lists'));
 }
 
 async function startOllama() {

@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Veřejné",
   "plugin.files.place.templates": "Šablony",
   "plugin.files.place.videos": "Videa",
-
   "plugin.files.toolbar.search": "Hledat",
   "plugin.files.toolbar.menu": "Nabídka",
   "plugin.files.toolbar.back": "Zpět",
@@ -17,46 +16,38 @@
   "plugin.files.toolbar.toggleView": "Přepnout zobrazení",
   "plugin.files.toolbar.viewOptions": "Možnosti zobrazení",
   "plugin.files.toolbar.pathActions": "Akce s cestou",
-
   "plugin.files.search.placeholder": "Hledat…",
   "plugin.files.search.clear": "Vymazat",
-
   "plugin.files.empty.noResults": "Nenalezeny žádné výsledky",
   "plugin.files.empty.trash": "Koš je prázdný",
   "plugin.files.empty.folder": "Složka je prázdná",
   "plugin.files.empty.noMatch": "Žádné soubory neodpovídají “{query}”.",
   "plugin.files.empty.dropHint": "Přetáhněte sem soubory nebo je nahrajte přes nabídku.",
-
   "plugin.files.column.name": "Název",
   "plugin.files.column.size": "Velikost",
   "plugin.files.column.modified": "Změněno",
-
   "plugin.files.status.folder": "Složka",
   "plugin.files.status.items.one": "{count} položka",
   "plugin.files.status.items.few": "{count} položky",
   "plugin.files.status.items.many": "{count} položky",
   "plugin.files.status.items.other": "{count} položek",
-
+  "plugin.files.status.countSelected": "{count} · vybráno: {selected}",
   "plugin.files.when.today": "Dnes {time}",
   "plugin.files.when.yesterday": "Včera {time}",
-
   "plugin.files.menu.newFolder": "Nová složka",
   "plugin.files.menu.uploadFiles": "Nahrát soubory…",
   "plugin.files.menu.showHidden": "Zobrazit skryté soubory",
   "plugin.files.menu.view": "Zobrazení",
   "plugin.files.menu.copyPath": "Kopírovat cestu",
   "plugin.files.menu.emptyTrash": "Vysypat koš",
-
   "plugin.files.view.grid": "Mřížka",
   "plugin.files.view.list": "Seznam",
-
   "plugin.files.ctx.open": "Otevřít",
   "plugin.files.ctx.download": "Stáhnout",
   "plugin.files.ctx.restore": "Obnovit",
   "plugin.files.ctx.deletePermanently": "Smazat trvale",
   "plugin.files.ctx.rename": "Přejmenovat…",
   "plugin.files.ctx.moveToTrash": "Přesunout do koše",
-
   "plugin.files.dialog.newFolderTitle": "Název nové složky",
   "plugin.files.dialog.newFolderDefault": "Nová složka",
   "plugin.files.dialog.renameTitle": "Přejmenovat na",
@@ -71,7 +62,6 @@
   "plugin.files.dialog.trashMany.many": "Přesunout {count} položky do koše?",
   "plugin.files.dialog.trashMany.other": "Přesunout {count} položek do koše?",
   "plugin.files.dialog.emptyTrash": "Vysypat koš? Tuto akci nelze vrátit.",
-
   "plugin.files.toast.openFailed": "Složku se nepodařilo otevřít",
   "plugin.files.toast.searchFailed": "Hledání se nezdařilo",
   "plugin.files.toast.pathCopied": "Cesta zkopírována",
@@ -92,7 +82,6 @@
   "plugin.files.toast.restored.other": "Obnoveno {count} položek",
   "plugin.files.toast.trashEmptied": "Koš vysypán",
   "plugin.files.toast.emptyTrashFailed": "Koš se nepodařilo vysypat",
-
   "plugin.files.notify.downloading": "Stahování",
   "plugin.files.notify.uploadComplete": "Nahrání dokončeno",
   "plugin.files.notify.uploaded.one": "Přidán {count} soubor",
@@ -104,13 +93,11 @@
   "plugin.files.notify.movedItems.few": "{count} položky",
   "plugin.files.notify.movedItems.many": "{count} položky",
   "plugin.files.notify.movedItems.other": "{count} položek",
-
   "plugin.files.player.seek": "Přetáčení",
   "plugin.files.player.mute": "Ztlumit",
   "plugin.files.player.fullscreen": "Celá obrazovka",
   "plugin.files.player.thisFormat": "Tento formát",
   "plugin.files.player.cannotDecode": "{codec} tento prohlížeč nedokáže dekódovat.",
-
   "plugin.files.preview.zoomHint": "Kliknutím na obrázek zvětšíte",
   "plugin.files.preview.loading": "Načítání…",
   "plugin.files.preview.cannotPreview": "Nelze zobrazit náhled: {message}",
@@ -123,7 +110,8 @@
   "plugin.files.preview.navHint.other": "{count} položek · ← → pro pohyb",
   "plugin.files.preview.pdfFailed": "PDF se nepodařilo vykreslit",
   "plugin.files.preview.page": "Strana {n}",
-
+  "plugin.files.preview.prev": "Předchozí soubor",
+  "plugin.files.preview.next": "Další soubor",
   "plugin.files.meta.description": "Prohlížeč souborů — procházejte, prohlížejte a spravujte své domovské složky",
   "plugin.files.meta.summary": "Prohlížeč souborů ve stylu GNOME: mřížka/seznam, náhledy, rychlý náhled, nahrávání a koš",
   "plugin.files.meta.category": "Systém"

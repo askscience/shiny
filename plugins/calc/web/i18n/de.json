@@ -1,31 +1,29 @@
 {
-  "plugin.calc.meta.description": "Tabellenrechner — Tabellen liegen als offene Zellraster vor und sind im Calc-Fenster bearbeitbar",
+  "plugin.calc.meta.description": "Tabellenkalkulation — Tabellen im Calc-Fenster erstellen und bearbeiten, CSV- oder .ods-Dateien importieren und als .ods speichern",
   "plugin.calc.meta.summary": "Calc: Tabellen erstellen, bearbeiten und berechnen",
   "plugin.calc.meta.category": "Office",
-
   "plugin.calc.bar.spreadsheets": "Tabellen",
-
+  "plugin.calc.bar.new": "Neu",
   "plugin.calc.toolbar.newSheet": "Neue Tabelle",
   "plugin.calc.toolbar.importOds": ".ods importieren",
   "plugin.calc.toolbar.importCsv": "CSV importieren",
   "plugin.calc.toolbar.saveToDocuments": "In Dokumente speichern",
   "plugin.calc.toolbar.saveNow": "Jetzt speichern",
   "plugin.calc.toolbar.deleteSheet": "Tabelle löschen",
-
   "plugin.calc.menu.noSheets": "Noch keine Tabellen",
-
+  "plugin.calc.empty.body": "Beginnen Sie eine leere Tabelle, importieren Sie eine CSV- oder .ods-Datei oder lassen Sie die KI eine erstellen.",
   "plugin.calc.sheet.untitled": "Ohne Titel",
   "plugin.calc.sheet.importedCsv": "Importierte CSV",
-
   "plugin.calc.formula.placeholder": "Wert oder Formel (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Wird gespeichert…",
   "plugin.calc.status.dirty": "Ungespeicherte Änderungen",
+  "plugin.calc.status.unsaved": "Nicht gespeichert",
+  "plugin.calc.status.savedAt": "Gespeichert {time}",
+  "plugin.calc.status.cells.one": "{count} Zelle",
+  "plugin.calc.status.cells.other": "{count} Zellen",
   "plugin.calc.status.saved.one": "Gespeichert {time} · {count} Zelle",
   "plugin.calc.status.saved.other": "Gespeichert {time} · {count} Zellen",
-
   "plugin.calc.dialog.delete": "„{title}“ löschen?",
-
   "plugin.calc.toast.saveFailed": "Speichern fehlgeschlagen",
   "plugin.calc.toast.openFailed": "Die Tabelle konnte nicht geöffnet werden",
   "plugin.calc.toast.createFailed": "Die Tabelle konnte nicht erstellt werden",

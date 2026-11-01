@@ -718,6 +718,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/songgen/status", get(songgen::status))
         .route("/api/songgen/download", post(songgen::download))
         .route("/api/songgen/tracks/:name", get(songgen::serve))
+        // Background song jobs for the Studio window (the chat uses the
+        // `generate_song` tool instead).
+        .route("/api/songgen/generate", post(songgen::generate))
+        .route("/api/songgen/jobs/:id", get(songgen::job))
         .route("/api/voice/stt/chunk", post(voice::voice_stt_chunk))
         .route("/api/voice/stt/close", post(voice::voice_stt_close));
 

@@ -1,79 +1,82 @@
 # Studio — agent tools
 
-You compose music. A **track** is one pattern (a set of voices) rendered to audio; every
-track you create is added to the Studio **Arranger** timeline as its own instrument track,
-where the user sees and plays it. You never hear audio — you send JSON and read back
-metadata and measurements.
-
-**The engine is a real synth engine.** Voices are polyphonic, oscillators are
-band-limited, filters are resonant and velocity-aware, effects are per-voice, and the
-master bus has glue + limiting + optional loudness normalisation. Use `studio_catalog`
-when you need exact parameter names and ranges, and `studio_analyze` when you want to
-*check* a mix instead of guessing.
+You are the producer at the desk of a real DAW. A **pattern** (track config) is a set of
+voices; an **arrangement** places pattern clips and **audio clips** (WAV files, e.g. songs
+made with `generate_song`) on tracks, mixes them (faders, pan, inserts, reverb/delay sends,
+master bus) and masters the result. The Studio window shows whatever you build, live.
+You never hear audio — you send JSON and read back measurements (`studio_analyze`,
+`studio_mix_analyze`), then fix what they report.
 
 ## Tools
 
-- `studio_catalog` — **call this first when unsure.** Every instrument kind with its
-  parameter ranges/defaults, every effect, every Grid module and its ports, MIDI effects,
-  tunings, master-FX keys and engine limits. `params: {}`.
-- `studio_list` — the user's tracks. `params: {}` → `tracks` (`track_id`, `title`, `bpm`,
-  `steps`, `tuning`, `duration_ms`, `has_audio`, `kinds`, `updated_at`) + `count`.
-- `studio_create` — compose **and** render a track. One call = one instrument group
-  (drums as one track, bass as another, …). Returns `track_id`, `duration_ms`, `lufs`,
-  `peak`, `has_audio`.
-- `studio_get` — metadata + full `config` for one track (`track_id` is a UUID or exact title).
-- `studio_render` — re-render a stored track from its config. Returns `lufs`/`peak`.
-- `studio_update` — replace a stored track's config (no render). Pass the full config.
-- `studio_delete` — delete a track (`{"track_id":…,"confirm":true}`).
-- `studio_analyze` — render a config and **measure** it (nothing is stored):
-  `{...track config...}` → `{ lufs, peak, rms_db, crest_db, clipped, range_lu,
-  bands:[sub,low,mid,highmid,air], duration_ms }`. Targets: `lufs ≈ -14` for streaming,
-  `clipped ≈ 0`, `crest_db` 8–14 keeps transients alive, and `bands` reveals a mix that is
-  too sub-heavy or too bright.
-- `studio_preset_list` / `studio_preset_save` / `studio_preset_delete` — reusable
-  instruments and patches (`{kind,name,params}`).
-- `studio_arrangement_list` / `studio_arrangement_save` / `studio_arrangement_get` /
-  `studio_arrangement_delete` — multi-clip timelines.
+Patterns
+- `studio_catalog` — every instrument kind, parameter (range/default), effect, Grid module,
+  MIDI effect, tuning and master key. **Call it when unsure of a name or range.** `{}`.
+- `studio_create` — compose **and** render a pattern (stored in the library). Returns
+  `track_id`, `duration_ms`, `lufs`, `peak`.
+- `studio_list` / `studio_get` / `studio_update` / `studio_render` / `studio_delete`
+  (`{"track_id":…,"confirm":true}`) — library CRUD.
+- `studio_analyze` — render a pattern config and measure it (nothing stored):
+  `{ lufs, peak, rms_db, crest_db, clipped, range_lu, bands:[sub,low,mid,highmid,air] }`.
 
-## Track config
+Arrangements (songs)
+- `studio_arrangement_save` — create (or replace, with `id`) a whole arrangement. It becomes
+  the open project in the window.
+- `studio_arrangement_get` / `studio_arrangement_list` / `studio_arrangement_delete`.
+- `studio_arrangement_edit` — **preferred for changes**: small ops on an existing arrangement
+  (default: the most recent) — `set`, `add_track`, `update_track`, `remove_track`,
+  `add_clip`, `update_clip`, `remove_clip`, `set_automation`. Tracks are addressed by id or
+  name, clips by `index` (from `studio_arrangement_get`).
+- `studio_mix_analyze` — render the arrangement and measure the master **and every track**
+  (post-fader LUFS/peak). Use it to balance the mix.
+- `studio_export` — master and save the mix as WAV in the user's Files
+  (`Music/Studio/<name>.wav`). `{ arrangement_id?, name?, bits? }`.
+
+Audio / AI songs
+- `studio_audio_info` — `{ path }` → duration, rate, detected `bpm` (may be null), loudness.
+  Without `path`: the WAV files under `Music/` (newest first; `generated:true` = made by
+  `generate_song`).
+- `studio_import_audio` — put a WAV on a new audio track:
+  `{ path, arrangement_id?, create?, track_name?, start_beat?, match_tempo?, level? }`.
+  `create:true` starts a new arrangement around the song (tempo matched).
+
+**AI song workflow:** `generate_song` (core tool, slow — minutes) returns `path`
+(`Music/Generated/…wav`) → `studio_import_audio {path, create:true}` (or into the open
+arrangement with `match_tempo:true`) → add drums/bass/pads as pattern clips on top with
+`studio_arrangement_edit` → `studio_mix_analyze` → `studio_export`. A generated song is a
+full mix: keep its fader around 0.7–0.9 and leave headroom for what you add.
+
+## Pitch — read this
+
+`degree` + `octave` resolve against **A4 = 440 Hz at octave 0** (`degree` in steps of the
+tuning, 12 per octave in `edo12`; degree 3 = C5, degree −9 = C4). So:
+bass/sub **octave −2 or −3**, chords/pads/keys **−1**, leads/plucks **0**, bells 0…1.
+`octave: 2` would be 1760 Hz — almost never what you want.
+
+## Pattern (track config)
 
 ```
 { title, bpm (40–240), steps (4|8|16|32|64), swing (0–1), tuning, ref_hz,
-  voices: [ … ], fx: { …master… } }
+  voices: [ … ], fx: { …master options… } }
 ```
 
-- `swing` — delays every other 16th; `0.3–0.7` is musical, `1` is full triplet.
-- `tuning` — `edo12` (default), `edo19`, `edo24`, `edo31`, `ji7` (just intonation),
-  `pyth` (Pythagorean), `harm` (harmonic series).
-- `fx` (master bus): `delay_mix`, `delay_time`, `feedback`, `delay_ping_pong`,
-  `delay_damp`, `reverb_mix`, `reverb_size`, `reverb_damp`, `reverb_predelay`,
-  `reverb_width`, `master_gain`, `master_drive`, `master_width`, `glue` (bus
-  compression), `ceiling` (limiter, dBFS), `loudness` (target integrated LUFS, `-14`
-  is streaming-normal; `0` disables), `wav_bits` (`16` default, `24` for a
-  higher-resolution export), `sample_rate` (Hz, default `44100`; `48000`/`96000`
-  also fine), `master_oversample` (`1` default; `2`/`4`/`8` oversample the bus
-  saturation for a cleaner master when you push `master_drive`).
+- `swing` delays every other 16th (`0.3–0.7` musical, `1` = triplet).
+- `tuning`: `edo12` (default), `edo19`, `edo24`, `edo31`, `ji7`, `pyth`, `harm`.
+- `fx` for a standalone pattern: `reverb_mix`/`delay_mix` are its **sends** into a shared
+  reverb/delay (parallel, 0–1), plus the master keys below.
 
-## Voice config
-
+Voice:
 ```
 { kind, rhythm, degree, octave, wave, notes, level, pan, accent,
-  synth: { … }, fx: [ … ], midi: [ … ], pads: [ … ], macros: [ … ], grid: { … },
-  soundfont }
+  synth: {…}, fx: [ … ], midi: [ … ], pads: [ … ], macros: [ … ], grid: { … }, soundfont }
 ```
-
-- `rhythm` — `"e<hits>,<rot>"` (Euclidean, e.g. `"e5,2"`) or explicit `"x..x..x."`
-  (`steps` characters).
-- `notes` — per-step overrides: `[{"step":0,"length":2,"degree":4,"octave":4,"velocity":0.9}]`.
-  `length` is in steps; `velocity` 0.05–1.
-- `degree`/`octave` — scale degree + octave for pitched voices (negative octaves are bass).
-- `level` (0–2), `pan` (−1..1), `accent` (0–0.6: boosts quarter notes, softens off-beats).
-- `soundfont` — bank filename for `sampler`/`sfkit` voices (see **Sampled instruments**).
-- `midi` (note processing, in order): `transpose {steps}`, `velocity {amount}`,
-  `gate {amount}`, `ratchet {count}`, `probability {amount}`, `humanize {amount}`.
-- `macros` — 8 knobs the **engine applies**:
-  `[{"value":0.5,"entries":[{"path":"cutoff","amount":1,"base":800}]}]` — `value` 0..1,
-  `amount` bipolar depth, `base` the centre value (`0` = current value).
+- `rhythm`: `"e<hits>,<rot>"` (Euclidean) or `"x..x.."` (`steps` chars).
+- `notes`: `[{"step":0,"length":2,"degree":0,"octave":-1,"velocity":0.9}]` — `length` in
+  steps; several notes on one step = a chord. Melodic voices with `notes` ignore `rhythm`.
+- `level` 0–2 (default per kind), `pan` −1..1, `accent` 0–0.6.
+- `midi` (in order): `transpose {steps}`, `velocity {amount}`, `gate {amount}`,
+  `ratchet {count}`, `probability {amount}`, `humanize {amount}`.
+- `macros`: `[{"value":0.5,"entries":[{"path":"cutoff","amount":1,"base":800}]}]`.
 
 ## Kinds
 
@@ -81,121 +84,99 @@ when you need exact parameter names and ranges, and `studio_analyze` when you wa
 | --- | --- |
 | Drums | `kick`, `snare`, `hat`, `clap`, `tom`, `perc`, `rim`, `cowbell`, `shaker`, `crash`, `ride` |
 | Synths | `bass`, `sub`, `pluck`, `lead`, `pad`, `organ`, `ep`, `bell`, `strings`, `brass`, `synthme`, `fm` |
-| Sampled | `sampler` (a preset from a user-supplied `.sf2` bank) |
-| Collections | `drumkit` (16 pads), `grid` (modular patch), `sfkit` (SoundFont drum kit) |
+| Sampled | `sampler` (preset from a user `.sf2`), `sfkit` (SoundFont drum kit) |
+| Collections | `drumkit` (16 pads), `grid` (modular patch) |
 
-Every synth kind shares one parameter set (kinds differ only in defaults), all polyphonic
-(`poly` 1–16, default 8–12; `bass`/`sub` default to mono with glide). Key parameters:
-`o1w`/`o2w` (waveform 0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, 5 noise, 6 organ,
-7 Hammond, 8 soft-saw, 9 PolyBLEP saw, 10 PolyBLEP square, 11 PolyBLEP pulse),
-`a_level`/`b_level`, `b_semi` (detune in semitones), `b_octave`, `pw`, `unison` (1–8),
-`spread`, `sub`, `noise`, `ring`, `fm_ratio`/`fm_index`, `ftype` (0 LP, 1 HP, 2 BP,
-3 notch, 4 peak, 5 Moog ladder), `cutoff`, `res`,
-`drive`, `poles` (1 = 12 dB, 2 = 24 dB), `fenv` (filter-env depth in octaves), `keytrack`,
-`fattack`/`fdecay`/`fsustain`/`frelease`, `attack`/`decay`/`sustain`/`release`,
-`env_shape`, `vel_amp`, `vel_filter`, `lfo_rate`/`lfo_wave`/`lfo_pitch`/`lfo_depth`/
-`lfo_amp`/`lfo_pan`, `glide`, `poly`, `pan_spread`, `analog`.
+**Drums** — every decay-like control means *bigger = longer*: kick `pitch` (Hz, end
+pitch), `decay`, `sweep` (pitch drop amount), `click`, `drive`, `hold`; snare `tone`,
+`body`, `noise`, `snap`, `buzz`, `drive`; hat `decay` (40 closed … 200 open), `tone`,
+`metal`, `drive`; clap `tone`, `body`, `noise`, `spread`; tom `pitch`, `decay`, `sweep`,
+`noise`; perc `decay`, `tone`, `metal`; rim/cowbell/shaker `decay`, `tone`; crash/ride
+`decay` (seconds), `tone`, ride `bell`.
 
-Example — a warm supersaw pad:
+**Synths** share one parameter set (kinds only differ in defaults), all polyphonic
+(`poly` 1–16; `bass`/`sub` mono with legato glide). Oscillators are alias-free wavetables.
+- Osc: `o1w`/`o2w` (0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, 5 noise, 6 organ,
+  7 Hammond, 8 soft-saw), `a_level`/`b_level`, `b_semi` (semitones), `b_octave`, `pw`,
+  `unison` (1–8), `uni_detune` (cents, default 22), `spread` (stereo), `sub`, `noise`,
+  `ring`, `fm_ratio`/`fm_index` (radians of phase deviation; 1–4 is bell-like).
+- Filter: `ftype` (0 LP, 1 HP, 2 BP, 3 notch, 4 peak, 5 ladder), `cutoff`, `res`, `drive`,
+  `poles` (1 = 12 dB, 2 = 24 dB), `fenv` (octaves), `keytrack`,
+  `fattack`/`fdecay`/`fsustain`/`frelease`.
+- Amp: `attack`/`decay`/`sustain`/`release` (seconds; decay/release = time to −60 dB),
+  `env_shape`, `vel_amp`, `vel_filter`.
+- LFO: `lfo_rate`, `lfo_wave`, `lfo_pitch` (semitones), `lfo_depth` (cutoff, octaves),
+  `lfo_amp`, `lfo_pan`. Voice: `glide`, `poly`, `pan_spread`, `analog` (drift).
 
+Examples:
 ```json
-{"kind":"pad","rhythm":"x...x...","degree":0,"octave":3,
- "synth":{"unison":5,"spread":0.8,"cutoff":1200,"fenv":1.2,"res":0.8,
-          "attack":0.5,"release":1.1,"lfo_rate":0.2,"lfo_depth":0.3}}
+{"kind":"pad","octave":-1,"notes":[{"step":0,"length":16,"degree":0,"octave":-1},
+  {"step":0,"length":16,"degree":3,"octave":-1},{"step":0,"length":16,"degree":7,"octave":-1}],
+ "synth":{"unison":5,"spread":0.8,"cutoff":1400,"fenv":1.0,"attack":0.6,"release":1.4}}
+{"kind":"bass","octave":-3,"rhythm":"x..x..x.x..x..x.","synth":{"cutoff":500,"fenv":2,"fdecay":0.15,"poles":2}}
+{"kind":"bell","octave":0,"rhythm":"x..x..x.","synth":{"fm_ratio":3.5,"fm_index":2.5,"fm_decay":0.8,"sustain":0,"decay":1.4}}
 ```
 
-Example — an FM bell:
+`drumkit`: `pads` maps pads to kinds, `notes[].degree` picks the pad (0–15).
+`sampler`/`sfkit`: `soundfont` = bank file (see `studio_catalog.soundfonts`); fails with a
+clear message when no bank is installed — use a synth kind then.
 
-```json
-{"kind":"bell","rhythm":"x..x..x.","octave":4,
- "synth":{"fm_ratio":3.5,"fm_index":1.6,"fm_decay":1.0,"decay":1.4,"sustain":0,"release":1.4}}
-```
+## Effects (voice `fx`, track `fx`, `master_fx`; in order, ≤ 8 each)
 
-`drumkit` — 16 pads; `pads` maps pads to kinds (`[{"name":"Kick","kind":"kick"}]`), and
-`notes[].degree` selects the pad (0–15):
-
-```json
-{"kind":"drumkit","pads":[{"name":"Kick","kind":"kick"},{"name":"Snare","kind":"snare"}],
- "notes":[{"step":0,"degree":0},{"step":8,"degree":1}]}
-```
-
-## Sampled instruments (`kind: "sampler"` / `"sfkit"`)
-
-These render a preset from a **user-supplied SoundFont** (`.sf2`) placed in the
-plugin's `soundfonts/` directory — there is no bundled bank. `studio_catalog`
-lists the available banks and their presets under `soundfonts`; pass the bank
-filename in the voice's `soundfont` field (omit it to use the first bank).
-
-```json
-{"kind":"sampler","soundfont":"198_Legato_strings.sf2","rhythm":"x...x...","octave":4,
- "synth":{"program":0,"bank":0}}
-```
-
-- `sampler` — melodic; `program`/`bank` pick the preset, and pattern degrees play
-  the usual scale. If no bank is installed this kind fails to render with a clear
-  message; use a synth kind instead when unsure.
-- `sfkit` — a percussion kit on the MIDI drum channel; `program` selects the kit
-  (bank defaults to `128`), and `notes[].degree` selects the pad (0–15 → GM keys
-  36–51).
-
-## Effects (`fx` array, in order)
-
+`{"kind":"…","params":{…},"bypass":false}` —
 `distortion {mode 0 soft/1 hard/2 fold/3 tube/4 fuzz, drive, mix, tone, out}`,
-`filter {type 0 LP/1 HP/2 BP/3 notch/4 peak/5 ladder, cutoff, resonance, drive, poles}`,
-`eq {low_gain, mid_gain, hi_gain}`, `compressor {threshold, ratio, attack, release,
-knee, makeup, mix}`, `delay {time, feedback, mix, ping_pong, damp, mod, offset}`,
-`reverb {size, damping, mix, predelay, width, mod}`,
-`chorus {rate, depth, mix, spread}`, `phaser {rate, depth, mix, feedback, stages}`,
-`bitcrush {bits, downsample, mix}`. Each entry: `{"kind":"…","params":{…},"bypass":false}`.
+`filter {type, cutoff, resonance, drive, poles}`, `eq {low_gain, mid_gain, hi_gain}` (dB;
+shelves at 200 Hz / 6 kHz, bell at 1 kHz), `compressor {threshold, ratio, attack, release,
+knee, makeup, mix}`, `delay {time ms, feedback, mix, ping_pong, damp, mod, offset}`,
+`reverb {size, damping, mix, predelay, width, mod}`, `chorus {rate, depth, mix, spread}`,
+`phaser {rate, depth, mix, feedback, stages}`, `bitcrush {bits, downsample, mix}`.
+Prefer the shared returns (sends) over a reverb insert on every track.
 
-## The Grid (`kind: "grid"`) — modular patches
-
-```json
-{"modules":[{"id":"o","kind":"osc","params":{"wave":2}},
-            {"id":"f","kind":"filter","params":{"cutoff":800,"res":3}},
-            {"id":"e","kind":"env","params":{"attack":0.01}},
-            {"id":"l","kind":"lfo","params":{"rate":0.5,"depth":0.8}},
-            {"id":"out","kind":"out","params":{}}],
- "cables":[{"from":["o","out"],"to":["f","in"]},
-           {"from":["f","out"],"to":["e","in"]},
-           {"from":["e","out"],"to":["out","in"]},
-           {"from":["l","out"],"to":["f","mod"],"amount":0.6}]}
-```
-
-- Modules: `osc`, `noise`, `filter`, `drive`, `gain`, `mixer` (ports `a`/`b`),
-  `env` (ADSR, `ctrl` output), `lfo` (`ctrl` output), `delay`, `reverb`, `chorus`, `out`.
-- Audio cables connect `out` → an input port (`in`, or `mixer.a`/`mixer.b`).
-- Control cables target a module's `mod` port and modulate its main parameter
-  (`filter` cutoff, `drive`, `gain`, `mixer` balance, `osc` detune). `amount` scales the
-  modulation (−4…4); the modulation is smooth (control-rate, ramped), never stepped.
-- A patch must end at an `out` module. Grid voices are monophonic.
-
-## Arrangements
+## Arrangement
 
 ```
 { title, bpm, length_beats, master,
-  fx: { …master options, incl. loudness… },
-  tracks: [{ id, name, color, mute, solo, level, pan,
+  fx: { loudness, ceiling, glue, master_gain, master_drive, master_width, sample_rate, wav_bits },
+  master_fx: [ …effects… ],
+  returns: { reverb: {size, damping, predelay, width}, delay: {sync|time, feedback, damp, ping_pong},
+             reverb_level?, delay_level? },
+  tracks: [{ id, name, kind: "instrument"|"audio", color, mute, solo, level, pan,
+             fx: [ …inserts… ], sends: {reverb, delay},
              automation: { lanes: [ {param, points:[{beat,value}]} ] } }],
-  clips:  [{ track, start, length_beats?, gain_db?, pattern: {…track config…} }] }
+  clips:  [{ track, start, length_beats?, loop?, gain_db?, pattern: {…} }
+          |{ track, start, length_beats?, gain_db?, audio: {src, offset?, fade_in?, fade_out?} }] }
 ```
 
-- Automation paths: `track.level`, `track.pan`, `voice.<i>.level`, `voice.<i>.pan`,
-  `voice.<i>.<synth param>`, `voice.<i>.fx.<j>.<param>`, `master.<key>`.
-- `solo` is honoured by the renderer as well as the UI.
-- After `studio_arrangement_save`, the arrangement becomes the open project in the Studio
-  window — always give it a meaningful `title`.
+- Beats: 4 per bar. A pattern clip **loops** to fill `length_beats` (`loop:false` plays
+  once); without `length_beats` it plays the pattern once.
+- `level` is linear (1.0 = 0 dB, 0.5 ≈ −6 dB); `pan` −1..1.
+- `sends` 0–1 post-fader into the shared returns; delay `sync` is in beats
+  (0.75 = dotted 8th, 0.5 = 8th).
+- Master chain: `master_fx` → bus (`master_gain`, `master_drive`, `master_width`) →
+  `glue` (0–1 bus compression) → look-ahead limiter at `ceiling` (dBFS, default −1) →
+  `loudness` (target integrated LUFS, applied before the limiter; `-14` streaming, `-11`
+  loud pop/EDM; `0` = off).
+- Automation `param`: `track.level`, `track.pan`, `send.reverb`, `send.delay`,
+  `voice.<i>.<synth param>`, `voice.<i>.level`, `voice.<i>.pan`, `voice.<i>.fx.<j>.<key>`,
+  `fx.<j>.<key>` (track insert), `master.master_gain`, `master.master_width`.
+- `solo`/`mute` are honoured by the renderer.
+
+## Mixing rules of thumb
+
+- Start every track around `level` 0.6–0.8 and balance with `studio_mix_analyze`: kick and
+  bass roughly equal, lead/vocal 2–4 LU above pads, nothing peaking at the ceiling alone.
+- Reverb sends 0.1–0.25 (pads/leads/snare), delay sends 0.1–0.2 on leads; keep kick and
+  bass dry. `glue` 0.2–0.4 and `loudness: -14` for a finished track.
+- `bands` too high in `sub` → cut bass `level`/`sub` or add an `eq` low cut on non-bass
+  tracks; too much `air` → lower hat level or `tone`.
+- Use `swing` 0.3–0.6 and `accent` 0.2–0.4 so grooves breathe; Euclidean rhythms sound
+  intentional.
 
 ## Rules
 
-- Prefer one `studio_create` per instrument group with a clear `title` ("Drums", "Bass");
-  or one `studio_arrangement_save` for a full song in a single step.
-- Favor Euclidean rhythms (`e<hits>,<rot>`) — they sound intentional — and use
-  `swing` (0.3–0.7) plus `accent` (0.2–0.4) so beats breathe.
-- Use the synth's polyphony: `notes` with several notes at the same `step` build chords.
-- Add a little `reverb_mix` (0.08–0.2) and `glue` (0.2–0.4) on the master for polish, and
-  set `loudness` to `-14` when the track is meant to be played back next to commercial music.
-- Check a mix with `studio_analyze` before declaring it done; fix what it reports.
-- Never `studio_delete` unless the user asks, and set `confirm:true`.
-- You can't hear the result — describe what you composed (BPM, voices/kinds, rhythm,
-  patch structure, measured loudness) rather than judging the sound.
+- Prefer `studio_arrangement_edit` over resaving whole arrangements; always give new
+  arrangements a meaningful `title`.
+- Check with `studio_analyze` / `studio_mix_analyze` before declaring a mix done.
+- Never delete unless the user asks (`confirm:true`).
+- You can't hear the result — describe what you built (tempo, instruments, structure,
+  measured loudness), not how it "sounds".

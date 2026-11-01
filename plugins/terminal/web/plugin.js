@@ -1082,8 +1082,8 @@ async function boot() {
   try {
     await ensureAssets();
   } catch (err) {
-    setStatus(t('plugin.terminal.status.xtermFailed', null, 'could not load xterm.js'));
-    toast(t('plugin.terminal.toast.xtermFailed', null, 'Terminal: xterm.js failed to load'), { type: 'error' });
+    setStatus(t('plugin.terminal.status.xtermFailed', null, 'could not load the terminal display'));
+    toast(t('plugin.terminal.toast.xtermFailed', null, 'Terminal: the terminal display failed to load'), { type: 'error' });
     return;
   }
   if (!tileEl) return; // unmounted while loading

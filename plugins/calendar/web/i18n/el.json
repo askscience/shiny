@@ -2,7 +2,8 @@
   "plugin.calendar.meta.description": "Ημερολόγιο — προγραμματισμός, απαρίθμηση και οργάνωση συμβάντων στο παράθυρο του Ημερολογίου",
   "plugin.calendar.meta.summary": "Ημερολόγιο: προγραμματισμός και οργάνωση συμβάντων",
   "plugin.calendar.meta.category": "Γραφείο",
-
+  "plugin.calendar.count.events.one": "{count} συμβάν",
+  "plugin.calendar.count.events.other": "{count} συμβάντα",
   "plugin.calendar.month.january": "Ιανουάριος",
   "plugin.calendar.month.february": "Φεβρουάριος",
   "plugin.calendar.month.march": "Μάρτιος",
@@ -15,7 +16,6 @@
   "plugin.calendar.month.october": "Οκτώβριος",
   "plugin.calendar.month.november": "Νοέμβριος",
   "plugin.calendar.month.december": "Δεκέμβριος",
-
   "plugin.calendar.grid.sun": "Κυρ",
   "plugin.calendar.grid.mon": "Δευ",
   "plugin.calendar.grid.tue": "Τρι",
@@ -23,22 +23,16 @@
   "plugin.calendar.grid.thu": "Πεμ",
   "plugin.calendar.grid.fri": "Παρ",
   "plugin.calendar.grid.sat": "Σαβ",
-
   "plugin.calendar.event.allDay": "Όλη μέρα",
-
   "plugin.calendar.toolbar.previousMonth": "Προηγούμενος μήνας",
   "plugin.calendar.toolbar.nextMonth": "Επόμενος μήνας",
   "plugin.calendar.toolbar.today": "Σήμερα",
   "plugin.calendar.toolbar.newEvent": "Νέο συμβάν",
-
   "plugin.calendar.ctx.refresh": "Ανανέωση",
-
   "plugin.calendar.detail.edit": "Επεξεργασία",
   "plugin.calendar.detail.delete": "Διαγραφή",
-
   "plugin.calendar.empty.noEvents": "Δεν υπάρχουν συμβάντα",
   "plugin.calendar.empty.noEventsBody": "Τίποτε προγραμματισμένο. Προσθέστε ένα συμβάν ή ζητήστε από την AI να προγραμματίσει ένα.",
-
   "plugin.calendar.dialog.title": "Συμβάν",
   "plugin.calendar.dialog.editTitle": "Επεξεργασία συμβάντος",
   "plugin.calendar.dialog.titleField": "Τίτλος",
@@ -52,7 +46,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Σημειώσεις (προαιρετικό)",
   "plugin.calendar.dialog.cancel": "Άκυρο",
   "plugin.calendar.dialog.save": "Αποθήκευση συμβάντος",
-
   "plugin.calendar.toast.titleRequired": "Ο τίτλος είναι υποχρεωτικός",
   "plugin.calendar.toast.dateRequired": "Η ημερομηνία είναι υποχρεωτική",
   "plugin.calendar.toast.updated": "Το συμβάν ενημερώθηκε",
@@ -61,8 +54,6 @@
   "plugin.calendar.toast.loadFailed": "Δεν ήταν δυνατή η φόρτωση των συμβάντων",
   "plugin.calendar.toast.saveFailed": "Δεν ήταν δυνατή η αποθήκευση του συμβάντος",
   "plugin.calendar.toast.deleteFailed": "Δεν ήταν δυνατή η διαγραφή του συμβάντος",
-
   "plugin.calendar.confirm.deleteEvent": "Διαγραφή του \"{title}\";",
-
   "plugin.calendar.notify.eventSoon": "Ένα συμβάν ξεκινά σύντομα"
 }

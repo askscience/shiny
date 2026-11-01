@@ -99,6 +99,8 @@ function folderIconFor(name) {
 
 const enc = encodeURIComponent;
 const rawUrl = (rel) => `/api/files/raw?path=${enc(rel)}`;
+/** Drag payload type for a file dragged out of this window (see `web/js/files.js`). */
+const SHINY_FILE_MIME = 'application/x-shiny-file';
 const thumbUrl = (rel, size = 256) => `/api/files/thumb?path=${enc(rel)}&size=${size}`;
 const videoInfoUrl = (rel) => `/api/files/video-info?path=${enc(rel)}`;
 const videoFrameUrl = (rel, t = 1, size = 640) => `/api/files/video-frame?path=${enc(rel)}&t=${enc(t)}&size=${size}`;
@@ -672,6 +674,17 @@ function baseEntry(entry, cls) {
     selectEntry(entry, e);
   });
   el.addEventListener('dblclick', () => openEntry(entry));
+  if (entry.kind !== 'dir') {
+    // Drag a file into another window (e.g. a picture into Word). The payload
+    // is the home-relative path; the target fetches the bytes itself.
+    el.draggable = true;
+    el.addEventListener('dragstart', (e) => {
+      if (!e.dataTransfer) return;
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData(SHINY_FILE_MIME, JSON.stringify({ path: entry.path, name: entry.name }));
+      e.dataTransfer.setData('text/plain', entry.name);
+    });
+  }
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); openEntry(entry); }
     if (e.key === ' ') { e.preventDefault(); void openPreview(entry); }
@@ -901,10 +914,10 @@ function openAppMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   const trashed = isTrashPath(cwd);
   openContextMenu([
-    { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New Folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
-    { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload Files…'), icon: 'ui/upload', onClick: pickUpload },
+    { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
+    { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload files…'), icon: 'ui/upload', onClick: pickUpload },
     { type: 'separator' },
-    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
+    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
     { type: 'item', label: t('plugin.files.menu.view', null, 'View'), icon: view === 'grid' ? 'ui/grid' : 'ui/list', onClick: toggleView },
     { type: 'separator' },
     { type: 'item', label: t('plugin.files.menu.emptyTrash', null, 'Empty Trash'), icon: 'ui/trash', danger: true, disabled: !trashed, onClick: () => void emptyTrash() },
@@ -917,18 +930,18 @@ function openViewMenu(anchor) {
     { type: 'item', label: t('plugin.files.view.grid', null, 'Grid'), icon: 'ui/grid', checked: view === 'grid', onClick: () => setView('grid') },
     { type: 'item', label: t('plugin.files.view.list', null, 'List'), icon: 'ui/list', checked: view === 'list', onClick: () => setView('list') },
     { type: 'separator' },
-    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
+    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
   ], r.left, r.bottom + 6);
 }
 
 function openPathMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   openContextMenu([
-    { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New Folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
-    { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload Files…'), icon: 'ui/upload', onClick: pickUpload },
+    { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
+    { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload files…'), icon: 'ui/upload', onClick: pickUpload },
     { type: 'separator' },
-    { type: 'item', label: t('plugin.files.menu.copyPath', null, 'Copy Path'), icon: 'ui/copy', onClick: () => copyPath() },
-    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
+    { type: 'item', label: t('plugin.files.menu.copyPath', null, 'Copy path'), icon: 'ui/copy', onClick: () => copyPath() },
+    { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
   ], r.left, r.bottom + 6);
 }
 
@@ -1036,7 +1049,7 @@ async function emptyTrash() {
     await refresh();
     toast(t('plugin.files.toast.trashEmptied', null, 'Trash emptied'));
   } catch (e) {
-    toast(e.message || t('plugin.files.toast.emptyTrashFailed', null, 'Could not empty trash'), { type: 'error' });
+    toast(e.message || t('plugin.files.toast.emptyTrashFailed', null, 'Could not empty the Trash'), { type: 'error' });
   }
 }
 
@@ -1812,18 +1825,18 @@ export function filesContextMenu(ctx) {
     items.push({ type: 'item', label: t('plugin.files.ctx.open', null, 'Open'), icon: 'ui/expand', onClick: () => openEntry(entry) });
     if (entry.kind === 'file') items.push({ type: 'item', label: t('plugin.files.ctx.download', null, 'Download'), icon: 'ui/download', onClick: () => downloadEntry(entry) });
   }
-  items.push({ type: 'item', label: t('plugin.files.menu.newFolder', null, 'New Folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() });
-  items.push({ type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload Files…'), icon: 'ui/upload', onClick: pickUpload });
+  items.push({ type: 'item', label: t('plugin.files.menu.newFolder', null, 'New folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() });
+  items.push({ type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload files…'), icon: 'ui/upload', onClick: pickUpload });
   items.push({ type: 'separator' });
   if (trashed) {
     items.push({ type: 'item', label: t('plugin.files.ctx.restore', null, 'Restore'), icon: 'ui/refresh', disabled: !targets.length, onClick: () => void restoreEntries(targets) });
-    items.push({ type: 'item', label: t('plugin.files.ctx.deletePermanently', null, 'Delete Permanently'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.deletePermanently', null, 'Delete permanently'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
   } else {
     items.push({ type: 'item', label: t('plugin.files.ctx.rename', null, 'Rename…'), icon: 'ui/pencil', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void renameEntry(targets[0]) });
     items.push({ type: 'item', label: t('plugin.files.ctx.moveToTrash', null, 'Move to Trash'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, false) });
   }
   items.push({ type: 'separator' });
-  items.push({ type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show Hidden Files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden });
+  items.push({ type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden });
   if (isTrashPath(cwd)) {
     items.push({ type: 'separator' });
     items.push({ type: 'item', label: t('plugin.files.menu.emptyTrash', null, 'Empty Trash'), icon: 'ui/warning', danger: true, onClick: () => void emptyTrash() });

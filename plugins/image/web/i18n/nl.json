@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Fotobewerker — toon- en kleuraanpassingen, vervagen/verscherpen/vignettering en filmlooks met één tik in het Afbeeldingen-venster",
   "plugin.image.meta.summary": "Fotobewerker: aanpassingen en filmlooks",
   "plugin.image.meta.category": "Media",
-
   "plugin.image.toolbar.menu": "Menu",
   "plugin.image.toolbar.fitToggle": "Passend / werkelijke grootte wisselen",
-
+  "plugin.image.title": "Afbeelding",
+  "plugin.image.toolbar.fit": "Passend",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Look: {name}",
+  "plugin.image.dock.looks": "Looks",
+  "plugin.image.dock.adjust": "Aanpassen",
   "plugin.image.dial.brightness": "Helderheid",
   "plugin.image.dial.contrast": "Contrast",
   "plugin.image.dial.exposure": "Belichting",
@@ -14,19 +18,16 @@
   "plugin.image.dial.blur": "Vervagen",
   "plugin.image.dial.sharpen": "Verscherpen",
   "plugin.image.dial.vignette": "Vignettering",
-
   "plugin.image.oneClick.autoTone": "Automatische toon",
   "plugin.image.oneClick.autoContrast": "Automatisch contrast",
   "plugin.image.oneClick.invert": "Omkeren",
   "plugin.image.oneClick.grayscale": "Zwart-wit",
   "plugin.image.oneClick.sepia": "Sepia",
   "plugin.image.oneClick.revert": "Terugzetten",
-  "plugin.image.oneClick.revertTitle": "De oorspronkelijke upload herstellen",
-
+  "plugin.image.oneClick.revertTitle": "De originele afbeelding herstellen",
   "plugin.image.empty.title": "Geen afbeelding geopend",
   "plugin.image.empty.body": "Open of sleep een afbeelding om te beginnen.",
   "plugin.image.empty.open": "Afbeelding openen",
-
   "plugin.image.menu.file": "Bestand",
   "plugin.image.menu.image": "Afbeelding",
   "plugin.image.menu.view": "Weergave",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Uitzoomen",
   "plugin.image.menu.fit": "Passend maken",
   "plugin.image.menu.actualSize": "Werkelijke grootte",
-
   "plugin.image.ctx.open": "Afbeelding openen…",
-
   "plugin.image.dialog.deleteConfirm": "\"{title}\" verwijderen?",
   "plugin.image.dialog.thisImage": "deze afbeelding",
-
   "plugin.image.toast.openFirst": "Open eerst een afbeelding",
   "plugin.image.toast.opened": "{title} geopend",
   "plugin.image.toast.editFailed": "Bewerken mislukt",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Opslaan mislukt",
   "plugin.image.toast.deleted": "Afbeelding verwijderd",
   "plugin.image.toast.deleteFailed": "Kon de afbeelding niet verwijderen",
-  "plugin.image.toast.reverted": "Teruggezet naar de originele pixels",
+  "plugin.image.toast.reverted": "Teruggezet naar de originele afbeelding",
   "plugin.image.toast.openFailed": "Kon het bestand niet openen",
-
   "plugin.image.error.emptyFile": "dat bestand is leeg",
   "plugin.image.error.notAnImage": "“{name}” is geen afbeelding die de editor kan openen",
   "plugin.image.error.unnamedFile": "bestand"

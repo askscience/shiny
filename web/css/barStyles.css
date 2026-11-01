@@ -1,0 +1,375 @@
+/* ─────────────────────────────────────────────────────────────
+   Top bar styles — Settings → Appearance → "Top bar style"
+   (`<html data-bar-style="rail|isles|strip|capsule">`, preferences.js).
+
+   The bar keeps one DOM (index.html) and one behaviour (position, autohide,
+   fullscreen — fullscreen.css; the voice bar riding it — sphere.css). A style
+   only changes how that DOM is drawn, so every style docks to every position:
+
+     rail     one pill along the edge — the classic bar, no overrides here
+     isles    three pills spread along the edge: time, apps, status
+     strip    a thin edge-to-edge strip, the tray set in type
+     capsule  a compact pill (time, running apps, battery) that opens on
+              approach and folds back a moment after the pointer leaves
+
+   Loaded after the theme's app.css, so it has the last word over the
+   editorial rail (themes/editorial/app.css).
+   ───────────────────────────────────────────────────────────── */
+
+/* The groups only exist as boxes in the isles style. */
+.hud-group { display: contents; }
+
+/* How long a style's shape change takes, per motion language. */
+:root {
+  --bar-morph: 0.42s;
+  --bar-morph-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+html[data-motion='kinetic'] { --bar-morph: 0.38s; --bar-morph-ease: cubic-bezier(0.76, 0, 0.24, 1); }
+html[data-motion='fluid'] { --bar-morph: 0.55s; --bar-morph-ease: cubic-bezier(0.34, 1.32, 0.64, 1); }
+html[data-motion='depth'] { --bar-morph: 0.6s; --bar-morph-ease: cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ── Any style, docked to a side ─────────────────────────────── */
+
+/* The time stays on a side rail — small, without the date — instead of the
+   clock button going blank (fullscreen.css hid its text). */
+html:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-clock-text { display: flex; }
+html:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-clock-date { display: none; }
+html:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-clock-time { font-size: 12px; letter-spacing: -0.01em; }
+
+/* Status chips stack their number under the icon, so it stays in the rail. */
+html:is([data-bar-pos='left'], [data-bar-pos='right']) :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-battery, .hud-updates) {
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 4px 0;
+  font-size: 9.5px;
+}
+html:is([data-bar-pos='left'], [data-bar-pos='right']) :is(.hud-network-label, .hud-audio-label, .hud-bluetooth-label, .hud-battery-label) { display: none; }
+
+/* ═══ Isles ═══════════════════════════════════════════════════ */
+
+/* The rail itself steps back: it is only the row the three pills sit on. */
+html[data-bar-style='isles'] .hud-header-main {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  overflow: visible;
+  contain: layout style;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* `:where` keeps the id out of the specificity, so the per-pill rules below win. */
+html[data-bar-style='isles'] :where(.hud-group--time, .hud-group--apps, #hud-top) {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  min-width: 0;
+  height: var(--hud-bar-height);
+  padding: 0 4px;
+  margin: 0;
+  background: var(--ed-bar-bg, var(--surface));
+  border: var(--ed-bar-border, 1px solid var(--glass-border));
+  border-radius: 999px;
+  box-shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  pointer-events: auto;
+}
+
+/* The apps sit in the middle, the status pill at the far end. */
+html[data-bar-style='isles'] #hud-top { padding: 0 4px; margin: 0; }
+html[data-bar-style='isles'] .hud-group--apps { flex: 0 1 auto; margin-inline: auto; padding: 0 10px; }
+html[data-bar-style='isles'] .hud-divider--push,
+html[data-bar-style='isles'] .hud-group--time > .hud-divider:last-child { display: none; }
+/* No plugins and no saved places: no empty pill in the middle. */
+html[data-bar-style='isles'] .hud-group--apps:not(:has(> :not(.hidden, .empty))) { visibility: hidden; }
+html[data-bar-style='isles'] #hud-plugins { flex: 0 1 auto; }
+
+/* The tray magnifies under the pointer like a dock; its neighbours follow. */
+html[data-bar-style='isles'] .hud-plugin-btn {
+  transition: color var(--motion-feedback) var(--motion-ease), scale var(--bar-morph) var(--bar-morph-ease);
+}
+html[data-bar-style='isles'] .hud-plugin-btn:hover { scale: 1.18; }
+html[data-bar-style='isles'] .hud-plugin-btn:has(+ .hud-plugin-btn:hover),
+html[data-bar-style='isles'] .hud-plugin-btn:hover + .hud-plugin-btn { scale: 1.07; }
+
+/* On a side, the pills stack along the edge: time on top, apps in the
+   middle, status at the bottom. */
+html[data-bar-style='isles']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main {
+  padding: 0;
+  gap: var(--desktop-gap, 10px);
+}
+html[data-bar-style='isles']:is([data-bar-pos='left'], [data-bar-pos='right']) :where(.hud-group--time, .hud-group--apps, #hud-top) {
+  flex-direction: column;
+  width: var(--hud-bar-height);
+  height: auto;
+  padding: 6px 0;
+}
+html[data-bar-style='isles']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-group--apps {
+  margin: auto 0;
+  padding: 10px 0;
+  min-height: 0;
+}
+html[data-bar-style='isles']:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-top { margin: 0; padding: 6px 0; }
+/* A side pill carries no leading separator. */
+html[data-bar-style='isles']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-group--time > .hud-divider:first-child { display: none; }
+
+/* Centred: the three pills gather in the middle of the top edge. */
+html[data-bar-style='isles'][data-bar-pos='center'] .hud-header-main { gap: var(--desktop-gap, 10px); max-width: none; }
+html[data-bar-style='isles'][data-bar-pos='center'] .hud-group--apps { margin-inline: 0; }
+
+/* ═══ Strip ═══════════════════════════════════════════════════ */
+
+html[data-bar-style='strip'] {
+  --hud-bar-height: 32px;
+  --hud-header-pad: 0px;
+}
+
+/* The whole header is the strip: flush with the edge, a hairline on the
+   inner side, no float. The rail and the workspace switcher lie flat in it. */
+html[data-bar-style='strip'] #hud-header {
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-right: 10px;
+  gap: 0;
+  background: var(--ed-bar-bg, var(--surface));
+  border: 0 solid var(--ed-bar-line, rgba(255, 255, 255, 0.12));
+  border-bottom-width: 1px;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  pointer-events: auto;
+}
+html[data-bar-style='strip']:not([data-orb-attached='1']) #hud-header { padding-left: 10px; }
+html[data-bar-style='strip'][data-bar-pos='bottom'] #hud-header {
+  padding-bottom: env(safe-area-inset-bottom);
+  border-bottom-width: 0;
+  border-top-width: 1px;
+}
+html[data-bar-style='strip']:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-header {
+  padding: max(8px, env(safe-area-inset-top)) 6px max(8px, env(safe-area-inset-bottom));
+  border-bottom-width: 0;
+}
+html[data-bar-style='strip'][data-bar-pos='left'] #hud-header { border-right-width: 1px; }
+html[data-bar-style='strip'][data-bar-pos='right'] #hud-header { border-left-width: 1px; }
+/* Centred makes no sense for an edge-to-edge strip: it reads as a top one. */
+html[data-bar-style='strip'][data-bar-pos='center'] .hud-header-main { flex: 1; max-width: none; }
+
+html[data-bar-style='strip'] :is(.hud-header-main, #workspace-bar) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-bar-style='strip'] .hud-header-main { padding: 0; }
+
+/* Type, not plates: mono capitals for the date and the status chips. */
+html[data-bar-style='strip'] :is(.hud-clock, .hud-meteo) { padding: 0 10px; border-radius: 6px; }
+html[data-bar-style='strip'] #hud-clock-time { font-size: 13px; }
+html[data-bar-style='strip'] :is(#hud-clock-date, #hud-meteo-label),
+html[data-bar-style='strip'] :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-battery, .hud-updates) {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[data-bar-style='strip'] :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-battery, .hud-updates) {
+  height: 26px;
+  border-radius: 6px;
+}
+html[data-bar-style='strip'] #hud-top .icon-btn { width: 28px; height: 28px; border-radius: 6px; }
+
+/* The tray in type: each plugin is its name, and a rule grows from the
+   centre under the running ones (the kinetic window titles' language). */
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) #hud-plugins {
+  justify-content: safe start;
+  gap: 0;
+  align-self: stretch;
+}
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn {
+  width: auto;
+  height: 100%;
+  padding: 0 9px;
+  border-radius: 0;
+}
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn .ui-icon { display: none; }
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn::before {
+  content: attr(data-label);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn.is-active { color: var(--text); }
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-line {
+  left: 9px;
+  right: 9px;
+  width: auto;
+  height: 2px;
+  margin-left: 0;
+  border-radius: 0;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: opacity var(--motion-feedback), transform var(--bar-morph) var(--bar-morph-ease);
+}
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn:hover .hud-plugin-line { opacity: 0.6; transform: scaleX(0.35); }
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn.is-active .hud-plugin-line { opacity: 1; transform: scaleX(1); }
+html[data-bar-style='strip']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn.is-focused .hud-plugin-line {
+  width: auto;
+  margin-left: 0;
+  background: var(--focus-bar, var(--accent));
+}
+/* Docked at the bottom, the rule sits on the strip's inner (top) side. */
+html[data-bar-style='strip'][data-bar-pos='bottom'] .hud-plugin-line { top: 0; bottom: auto; }
+
+/* The voice bar rides the strip as a slim pill inside it. */
+html[data-bar-style='strip'][data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center']) #sphere-container {
+  top: 4px;
+  height: calc(var(--hud-bar-height) - 8px);
+}
+html[data-bar-style='strip'][data-orb-pos='top-left'][data-bar-pos='bottom'] #sphere-container {
+  bottom: max(4px, env(safe-area-inset-bottom));
+  height: calc(var(--hud-bar-height) - 8px);
+}
+html[data-bar-style='strip'][data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']) #sphere-container {
+  top: max(8px, env(safe-area-inset-top));
+  width: calc(var(--hud-bar-height) - 6px);
+}
+html[data-bar-style='strip'][data-orb-pos='top-left'][data-bar-pos='left'] #sphere-container { left: 9px; }
+html[data-bar-style='strip'][data-orb-pos='top-left'][data-bar-pos='right'] #sphere-container { right: 9px; }
+
+/* ═══ Capsule ═════════════════════════════════════════════════ */
+
+/* It hugs its content and sits at the start of the edge, right after the
+   voice bar when that rides along — the two read as one row that grows. */
+html[data-bar-style='capsule'] .hud-header-main {
+  flex: 0 1 auto;
+  max-width: calc(100vw - 2 * var(--desktop-gap, 14px));
+}
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main {
+  flex: 0 1 auto;
+  max-height: 100%;
+}
+html[data-bar-style='capsule'] #hud-top { gap: 0; padding-left: 0; }
+html[data-bar-style='capsule'] #hud-plugins { gap: 0; flex: 0 1 auto; }
+html[data-bar-style='capsule'] .hud-divider--push { margin: 0; }
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-top { margin-top: 0; }
+
+/* What folds away: the weather, the separators, saved places, the plugins
+   that are not running, and every status / action icon except the battery.
+   The clock, the running apps and the battery are the capsule at rest. */
+html[data-bar-style='capsule'] :is(
+  #hud-meteo,
+  .hud-divider,
+  #hud-saved-trips,
+  .hud-plugin-btn:not(.is-active),
+  #hud-top > :not(.hud-battery)
+) {
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-width var(--bar-morph) var(--bar-morph-ease) 0.45s,
+    max-height var(--bar-morph) var(--bar-morph-ease) 0.45s,
+    width var(--bar-morph) var(--bar-morph-ease) 0.45s,
+    height var(--bar-morph) var(--bar-morph-ease) 0.45s,
+    padding var(--bar-morph) var(--bar-morph-ease) 0.45s,
+    margin var(--bar-morph) var(--bar-morph-ease) 0.45s,
+    opacity calc(var(--bar-morph) * 0.6) ease 0.45s,
+    color var(--motion-feedback),
+    background var(--motion-feedback);
+}
+
+/* Folded along a row: no width, no padding. */
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) :is(
+  #hud-meteo,
+  .hud-divider,
+  #hud-saved-trips,
+  .hud-plugin-btn:not(.is-active),
+  #hud-top > :not(.hud-battery)
+) {
+  max-width: 0;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: 0;
+  margin-right: 0;
+  border-left-width: 0;
+  border-right-width: 0;
+}
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) :is(.hud-plugin-btn:not(.is-active), #hud-top > .icon-btn) {
+  width: 0;
+}
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn { margin: 0 4px; }
+
+/* Folded along a column: no height. */
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) :is(
+  #hud-meteo,
+  .hud-divider,
+  #hud-saved-trips,
+  .hud-plugin-btn:not(.is-active),
+  #hud-top > :not(.hud-battery)
+) {
+  max-height: 0;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+}
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) :is(.hud-plugin-btn:not(.is-active), #hud-top > .icon-btn) {
+  height: 0;
+}
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-plugin-btn { margin: 4px 0; }
+
+/* Open: on approach, while keyboard focus is inside, and while one of its
+   menus is open (the pointer is in the menu then, not on the bar). Opening
+   has no delay; folding waits a moment (the delay above). */
+html[data-bar-style='capsule'] .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) :is(
+  #hud-meteo,
+  .hud-divider,
+  #hud-saved-trips,
+  .hud-plugin-btn:not(.is-active),
+  #hud-top > :not(.hud-battery)
+) {
+  opacity: 1;
+  max-width: 400px;
+  max-height: 400px;
+  transition-delay: 0s;
+}
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) #hud-meteo { padding: 0 14px; }
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) #hud-top > :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-updates) { padding: 0 6px; border-width: 1px; }
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) #hud-top > .icon-btn { width: 32px; border-width: 1px; }
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) .hud-plugin-btn { width: 30px; }
+html[data-bar-style='capsule']:not([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) .hud-divider { margin: 0 6px; }
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) #hud-meteo { padding: 6px 0; }
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) #hud-top > .icon-btn { height: 32px; border-width: 1px; }
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) .hud-plugin-btn { height: 30px; }
+html[data-bar-style='capsule']:is([data-bar-pos='left'], [data-bar-pos='right']) .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) .hud-divider { margin: 6px 0; }
+
+/* Depth: what unfolds comes into focus rather than just appearing. */
+html[data-motion='depth'][data-bar-style='capsule'] :is(#hud-meteo, .hud-plugin-btn:not(.is-active), #hud-top > :not(.hud-battery)) { filter: blur(4px); }
+html[data-motion='depth'][data-bar-style='capsule'] .hud-header-main:is(:hover, :has(:focus-visible, .is-open, [aria-expanded='true'])) :is(#hud-meteo, .hud-plugin-btn:not(.is-active), #hud-top > :not(.hud-battery)) { filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-bar-style] .hud-header-main * { transition-duration: 0s !important; transition-delay: 0s !important; }
+}
+
+/* ── The voice bar riding a side rail ───────────────────────── */
+
+/* Its state label runs up the rail instead of being cut to two letters. */
+html[data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']):not([data-orb-status='icons']) .voice-step {
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+  max-height: 100%;
+}

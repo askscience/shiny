@@ -52,6 +52,13 @@ the plugin system.
 | 18 | POST | `/api/studio/presets` | `studio_preset_save` | yes | `{kind,name,params}` | JSON `{ id, kind, name }` |
 | 19 | DELETE | `/api/studio/presets/:id` | `studio_preset_delete` | yes | — | JSON `{ id, name }` |
 | 20 | DELETE | `/api/studio/:id` | `studio_delete` | yes | — | JSON `{ track_id, title }` |
+| 21 | POST | `/api/studio/mix/stems` | `studio_mix_stems` | yes | arrangement | JSON stem manifest |
+| 22 | GET | `/api/studio/mix/stem/:key` | `studio_mix_stem` | yes | — | `audio/wav` (24-bit, cached by key) |
+| 23 | POST | `/api/studio/mix/analyze` | `studio_mix_analyze` | yes | arrangement | JSON `{ master, trim_db, tracks[] }` |
+| 24 | POST | `/api/studio/export` | `studio_export` | yes | `{ arrangement, name?, bits? }` | JSON `{ path, lufs, peak, duration_ms, … }` |
+| 25 | GET | `/api/studio/audio/library` | `studio_audio_library` | yes | — | JSON `{ files[], count }` |
+| 26 | GET | `/api/studio/audio/info?path=&buckets=` | `studio_audio_info` | yes | — | JSON `{ duration, sample_rate, channels, bpm, lufs, peak, peaks }` |
+| 27 | GET | `/api/studio/audio/file?path=` | `studio_audio_file` | yes | — | `audio/wav` bytes |
 
 ---
 
@@ -296,3 +303,66 @@ Response `data`: `{ id, name }`. Unknown id → `404 preset not found`.
 
 Route specs are declared in `src/plugin.rs::route_specs()`; `StudioPlugin::route_handler`
 dispatches a tag to `routes::handle` using the context stored at registration.
+
+## Mixer, export and audio routes
+
+All of these resolve audio paths **relative to the caller's Files home** (their OS home
+when bound to a Linux account, else `~/.shiny/home/<id>`); absolute paths, `..` and
+non-`.wav` names are rejected. Bodies are limited to 8 MB.
+
+### `POST /api/studio/mix/stems`
+
+Renders the arrangement into pre-fader per-track stems (cached server-side by a content
+hash — fader, pan, mute, solo and send changes never invalidate them) plus the reverb and
+delay returns, and measures the mastered mix:
+
+```json
+{ "sample_rate": 44100, "frames": 882000, "duration_ms": 20000, "bpm": 120,
+  "stems": [{ "track_id": "drums", "key": "…", "url": "/api/studio/mix/stem/…",
+              "scale": 1.0, "silent": false, "lufs": -18.2, "peak": 0.71 }],
+  "returns": { "reverb": { "key": "…", "url": "…", "scale": 1.0, "level": 1.0 }, "delay": null },
+  "master": { "lufs": -14.0, "peak": 0.89, "pre_lufs": -17.3, "trim_db": 3.3, "ceiling": -1.0, "glue": 0.3 },
+  "tracks": [{ "track_id": "drums", "name": "Drums", "lufs": -18.2, "peak": 0.71, "muted": false }] }
+```
+
+The window multiplies each decoded stem by `scale` (stems above 0 dBFS are stored
+normalised), then applies its own fader (`GainNode`) and pan (`StereoPannerNode`) — the
+same laws the renderer uses — and the master gain `trim_db` before a limiter.
+
+### `GET /api/studio/mix/stem/:key`
+
+One cached stem as 24-bit WAV. `404` once evicted (the cache holds ≈ 40 M frames) —
+request the manifest again.
+
+### `POST /api/studio/mix/analyze`
+
+`{ master: Analysis, trim_db, tracks: [{track_id, name, lufs, peak, muted}] }`.
+
+### `POST /api/studio/export`
+
+Masters the arrangement (limiter + `fx.loudness`) and writes
+`Music/Studio/<slug(name|title)>.wav` (a numeric suffix avoids overwriting). `bits` 16
+(dithered, default) or 24.
+
+### `GET /api/studio/audio/library`
+
+WAV files under `Music/` (three levels deep, newest first, ≤ 500):
+`{ path, name, bytes, modified, generated }` — `generated` marks `Music/Generated/` (songs
+from `generate_song` / `/api/songgen/generate`).
+
+### `GET /api/studio/audio/info`
+
+Decodes (cached) and reports duration, rate, channels, estimated `bpm` (or `null`),
+integrated LUFS, peak and `buckets` (16–4096, default 800) min/max peaks for drawing.
+
+### `GET /api/studio/audio/file`
+
+The WAV file itself (preview playback in the library).
+
+### Core: background song jobs
+
+The window starts AI songs through core routes (documented in
+[`docs/api/chat-agent.md`](../../../docs/api/chat-agent.md)): `POST /api/songgen/generate`
+`{ style, lyrics?, title?, duration?, quality?, seed? }` → `{ job_id }` (or
+`success:false` with `data.needs_download`/`data.engine_missing`), then
+`GET /api/songgen/jobs/:id` → `{ status: running|done|failed, elapsed_secs, result: { path, url, duration_secs, … }, error }`.

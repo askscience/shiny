@@ -329,7 +329,7 @@ export async function removeConversation(id) {
 
 async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact, onTool) {
   if (!res.body) {
-    throw new ApiError(t('agent.streamUnavailable', null, 'Agent stream unavailable'), 500);
+    throw new ApiError(t('agent.streamUnavailable', null, 'The assistant is unavailable'), 500);
   }
 
   const reader = res.body.getReader();
@@ -376,7 +376,7 @@ async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact, 
         } else if (event.type === 'done') {
           return event.data;
         } else if (event.type === 'error') {
-          throw new ApiError(event.message || t('agent.failed', null, 'Agent failed'), 500);
+          throw new ApiError(event.message || t('agent.failed', null, 'The assistant ran into an error'), 500);
         }
       }
     }
@@ -386,7 +386,7 @@ async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact, 
     try { await reader.cancel(); } catch (_) { /* already closed */ }
   }
 
-  throw new ApiError(t('agent.streamEnded', null, 'Agent stream ended unexpectedly'), 500);
+  throw new ApiError(t('agent.streamEnded', null, 'The assistant stopped responding unexpectedly'), 500);
 }
 
 async function requestAgent(body, onStep, signal, onThinking, onApproval, onArtifact, onTool) {
@@ -585,7 +585,7 @@ export async function sendToAgent(message, mode, context, correction = false) {
     // The user stopped it: not an error, and the core has already recorded it.
     if (e?.name === 'AbortError' || activeTurn !== turn) return null;
     setSphereState('error');
-    const msg = e.message || t('agent.unavailable', null, 'Agent unavailable');
+    const msg = e.message || t('agent.unavailable', null, 'Assistant unavailable');
     window.dispatchEvent(new CustomEvent('app:toast', {
       detail: { message: msg, type: 'error' },
     }));
@@ -683,7 +683,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
     return res;
   } catch (e) {
     if (e?.name === 'AbortError' || activeTurn !== turn) return null;
-    const msg = e.message || t('agent.unavailable', null, 'Agent unavailable');
+    const msg = e.message || t('agent.unavailable', null, 'Assistant unavailable');
     setSphereState('error');
     setTimeout(() => setSphereState('idle'), 2000);
     onError?.(msg);

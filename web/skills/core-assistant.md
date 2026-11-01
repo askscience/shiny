@@ -115,6 +115,7 @@ Create a song with a local music model (YuE2). The result is a 48 kHz stereo tra
 - Always end your reply with the track on its own line, using the `url` from the result: `[short title](<url>)`.
 - If the result says the song models are not downloaded yet: tell the user how large the download is (see `download_size`) and ask whether to fetch it. Only after they agree, call `generate_song` again with the same style plus `"allow_download": true`.
 - If the result says the song engine is not installed: tell the user it needs a one-time setup (`scripts/install-yue2-engine.sh` or the `YUE2_ENGINE` variable).
+- The result's `path` (`Music/Generated/…wav`) can be opened in the Studio when its plugin is active: `studio_import_audio` with that `path` puts the song on an audio track (tempo matched), where it can be layered, mixed and exported.
 
 ### plugin_activate
 

@@ -1,23 +1,17 @@
 {
-  "plugin.mail.meta.description": "Client di posta — casella IMAP + composizione SMTP, basato su io-email",
+  "plugin.mail.meta.description": "Client di posta — leggi la tua casella e invia email dai tuoi account (IMAP/SMTP)",
   "plugin.mail.meta.summary": "Client di posta: configura gli account, leggi la posta in arrivo e invia email",
   "plugin.mail.meta.category": "Ufficio",
-
   "plugin.mail.bar.accounts": "Account",
   "plugin.mail.bar.noAccount": "Nessun account",
-
   "plugin.mail.toolbar.newMessage": "Nuovo messaggio",
   "plugin.mail.toolbar.sync": "Sincronizza la posta",
   "plugin.mail.toolbar.accounts": "Account di posta",
-
   "plugin.mail.menu.noAccounts": "Ancora nessun account",
-
-  "plugin.mail.search.placeholder": "Cerca nella posta salvata…",
+  "plugin.mail.search.placeholder": "Cerca nella posta scaricata…",
   "plugin.mail.search.label": "Cerca nella posta",
-
   "plugin.mail.list.unknownSender": "Sconosciuto",
   "plugin.mail.list.noSubject": "(nessun oggetto)",
-
   "plugin.mail.reader.from": "Da: {from}",
   "plugin.mail.reader.to": "A: {to}",
   "plugin.mail.reader.reply": "Rispondi",
@@ -26,10 +20,8 @@
   "plugin.mail.reader.close": "Chiudi messaggio",
   "plugin.mail.reader.emptyBody": "(messaggio vuoto)",
   "plugin.mail.reader.attachment": "allegato",
-
   "plugin.mail.ctx.markAllRead": "Segna tutto come letto",
   "plugin.mail.ctx.deleteMessage": "Elimina messaggio",
-
   "plugin.mail.compose.title": "Nuovo messaggio",
   "plugin.mail.compose.from": "Da: {email}",
   "plugin.mail.compose.to": "A",
@@ -45,12 +37,10 @@
   "plugin.mail.compose.discard": "Scarta",
   "plugin.mail.compose.replySubject": "Re: {subject}",
   "plugin.mail.compose.forwardSubject": "I: {subject}",
-
   "plugin.mail.setup.connectTitle": "Collega il tuo account di posta",
   "plugin.mail.setup.connectBody": "Scegli il tuo provider e aggiungi il tuo account. Le istruzioni del provider compaiono in fondo al modulo e spariscono quando l'account è verificato.",
   "plugin.mail.setup.verifyTitle": "Verifica il tuo account di posta",
   "plugin.mail.setup.verifyBody": "Il tuo account è salvato ma il test di connessione non è ancora riuscito. Premi Test connessione qui sotto, oppure leggi le istruzioni del provider in fondo.",
-
   "plugin.mail.form.addFirst": "Aggiungi il tuo primo account",
   "plugin.mail.form.addAnother": "Aggiungi un altro account",
   "plugin.mail.form.provider": "Provider",
@@ -68,16 +58,13 @@
   "plugin.mail.form.security": "Sicurezza",
   "plugin.mail.form.testConnection": "Test connessione",
   "plugin.mail.form.addAccount": "Aggiungi account",
-
   "plugin.mail.settings.title": "Account di posta",
   "plugin.mail.settings.done": "Fatto",
   "plugin.mail.settings.noAccounts": "Ancora nessun account.",
   "plugin.mail.settings.test": "Prova",
   "plugin.mail.settings.removeAccount": "Rimuovi account",
-
   "plugin.mail.dialog.delete": "Eliminare questo messaggio da {folder}?",
   "plugin.mail.dialog.removeAccount": "Rimuovere l'account di posta {email}?",
-
   "plugin.mail.status.connected": "connesso",
   "plugin.mail.status.notVerified": "non verificato",
   "plugin.mail.status.failed": "non riuscito",
@@ -88,9 +75,8 @@
   "plugin.mail.status.connectedCheck": "✓ Connesso",
   "plugin.mail.status.adding": "Aggiunta in corso…",
   "plugin.mail.status.addedUnverified": "Aggiunto ma non verificato — {error}",
-
   "plugin.mail.toast.statusFailed": "Impossibile caricare lo stato della posta",
-  "plugin.mail.toast.synced": "Posta sincronizzata — {new} nuovi, {cached} in cache",
+  "plugin.mail.toast.synced": "Posta sincronizzata — {new} nuovi, {cached} in totale",
   "plugin.mail.toast.syncFailed": "Sincronizzazione della posta non riuscita",
   "plugin.mail.toast.searchFailed": "Ricerca non riuscita",
   "plugin.mail.toast.foldersFailed": "Impossibile caricare le cartelle",
@@ -106,7 +92,6 @@
   "plugin.mail.toast.sendFailed": "Invio non riuscito",
   "plugin.mail.toast.deleted": "Messaggio eliminato",
   "plugin.mail.toast.deleteFailed": "Eliminazione non riuscita",
-
   "plugin.mail.empty.loading": "Caricamento…",
   "plugin.mail.empty.openFailed": "Impossibile aprire il messaggio",
   "plugin.mail.empty.selectTitle": "Seleziona un messaggio",
@@ -114,15 +99,12 @@
   "plugin.mail.empty.noMessages": "Nessun messaggio",
   "plugin.mail.empty.nothingIn": "Niente in {folder}.",
   "plugin.mail.empty.noSearchResults": "Nessun messaggio corrisponde a “{query}”.",
-
   "plugin.mail.chrome.unread.one": "{count} non letto",
   "plugin.mail.chrome.unread.other": "{count} non letti",
   "plugin.mail.chrome.unread.many": "{count} non letti",
-
   "plugin.mail.rail.eyebrow": "Casella",
   "plugin.mail.rail.title": "Posta",
   "plugin.mail.rail.sub": "Nessun account collegato",
-
   "plugin.mail.folder.inbox": "Posta in arrivo",
   "plugin.mail.folder.sent": "Inviati",
   "plugin.mail.folder.drafts": "Bozze",
@@ -135,33 +117,25 @@
   "plugin.mail.folder.messages.many": "{count} messaggi",
   "plugin.mail.folder.noMessages": "Nessun messaggio",
   "plugin.mail.folder.none": "Nessuna cartella",
-
   "plugin.mail.hero.new.one": "{count} nuovo",
   "plugin.mail.hero.new.other": "{count} nuovi",
   "plugin.mail.hero.new.many": "{count} nuovi",
-
   "plugin.mail.footer.step": "{folder} · {messages}",
-  "plugin.mail.footer.note": "Memorizzata localmente — sincronizza per controllare la posta.",
-
+  "plugin.mail.footer.note": "Salvata su questo computer — sincronizza per controllare se c'è posta nuova.",
   "plugin.mail.reader.eyebrow": "Messaggio",
   "plugin.mail.reader.fromLabel": "Da",
   "plugin.mail.reader.toLabel": "A",
   "plugin.mail.reader.dateLabel": "Data",
-
   "plugin.mail.setup.kicker": "Configurazione",
-
   "plugin.mail.form.section.account": "Account",
   "plugin.mail.form.section.imap": "Posta in arrivo (IMAP)",
   "plugin.mail.form.section.smtp": "Posta in uscita (SMTP)",
-
   "plugin.mail.settings.kicker": "Account",
   "plugin.mail.settings.subtitle": "Aggiungi, prova o rimuovi le caselle usate da questa finestra.",
-
   "plugin.mail.notify.title": "Nuova posta",
   "plugin.mail.notify.newMail.one": "{count} nuovo messaggio in {where}",
   "plugin.mail.notify.newMail.other": "{count} nuovi messaggi in {where}",
   "plugin.mail.notify.newMail.many": "{count} nuovi messaggi in {where}",
-
   "plugin.mail.provider.gmail.text": "Gmail non accetta più la tua password normale dalle app di terze parti. Attiva IMAP, abilita la verifica in due passaggi, poi crea una password per app e incollala nel campo password. (Le nuove configurazioni di Google Workspace possono richiedere OAuth2 — questa prima versione usa le password per app.)",
   "plugin.mail.provider.gmail.imapLabel": "Impostazioni IMAP/SMTP di Gmail",
   "plugin.mail.provider.gmail.appPasswordLabel": "Crea una password per app",
@@ -175,7 +149,7 @@
   "plugin.mail.provider.zoho.settingsLabel": "Impostazioni dell'app Zoho Mail",
   "plugin.mail.provider.fastmail.text": "Fastmail funziona con una password per app (Impostazioni → Password e sicurezza → Password per app) invece che con la password di accesso.",
   "plugin.mail.provider.fastmail.settingsLabel": "Impostazioni SMTP/IMAP di Fastmail",
-  "plugin.mail.provider.proton.text": "Proton Mail non ha IMAP diretto — installa Proton Mail Bridge, poi aggiungilo qui come account personalizzato su 127.0.0.1 (porta IMAP 1143, porta SMTP 1025) con le tue credenziali Proton.",
+  "plugin.mail.provider.proton.text": "Proton Mail non ha IMAP diretto — installa Proton Mail Bridge, poi aggiungilo qui come account personalizzato su 127.0.0.1 (porta IMAP 1143, porta SMTP 1025) con il nome utente e la password che ti mostra Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
   "plugin.mail.provider.custom.text": "Usa gli indirizzi dei server IMAP e SMTP del tuo provider, le porte e la sicurezza. Oggi la maggior parte dei provider richiede una password per app o OAuth2 invece della password normale."
 }

@@ -776,7 +776,7 @@ async fn image_model_pref(state: &AppState, user_id: &str) -> Option<String> {
 
 /// The user's saved song-quality preference (Settings → Music). Unknown values
 /// are ignored so a stale or hand-edited row can't break generation.
-async fn music_quality_pref(state: &AppState, user_id: &str) -> Option<String> {
+pub(crate) async fn music_quality_pref(state: &AppState, user_id: &str) -> Option<String> {
     let value = sqlx::query_scalar::<_, String>(
         "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'music.quality'",
     )

@@ -55,6 +55,14 @@ pub trait PackageManager: Send + Sync {
     fn repair(&self) -> Option<CmdSpec> {
         None
     }
+
+    /// Parse one line of upgrade output as a structured progress event
+    /// (e.g. apt's `APT::Status-Fd` lines). Lines that are events are not
+    /// written to the job log. Managers without machine-readable progress
+    /// keep the default and the window shows the last log line instead.
+    fn progress_event(&self, _line: &str) -> Option<crate::progress::Event> {
+        None
+    }
 }
 
 /// The result of parsing `/etc/os-release`.

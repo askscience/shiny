@@ -45,13 +45,13 @@ fn main() {
         "steps": 16,
         "tuning": "edo12",
         "voices": [
-            { "kind": "bass", "rhythm": "", "octave": 2,
+            { "kind": "bass", "rhythm": "", "octave": -2,
               "notes": [
-                {"step": 0, "length": 3, "degree": 0, "octave": 2},
-                {"step": 4, "length": 2, "degree": 0, "octave": 2},
-                {"step": 6, "length": 2, "degree": 3, "octave": 2},
-                {"step": 8, "length": 3, "degree": 5, "octave": 2},
-                {"step": 12, "length": 4, "degree": 4, "octave": 2}
+                {"step": 0, "length": 3, "degree": 0, "octave": -2},
+                {"step": 4, "length": 2, "degree": 0, "octave": -2},
+                {"step": 6, "length": 2, "degree": 3, "octave": -2},
+                {"step": 8, "length": 3, "degree": 5, "octave": -2},
+                {"step": 12, "length": 4, "degree": 4, "octave": -2}
               ],
               "synth": { "o1w": 2, "o2w": 3, "b_level": 0.3, "sub": 0.45,
                          "cutoff": 620, "res": 1.5, "poles": 2, "fenv": 1.8,
@@ -68,14 +68,14 @@ fn main() {
         "steps": 16,
         "tuning": "edo12",
         "voices": [
-            { "kind": "lead", "rhythm": "", "octave": 4,
+            { "kind": "lead", "rhythm": "", "octave": 0,
               "notes": [
-                {"step": 0, "length": 2, "degree": 4, "octave": 4},
-                {"step": 2, "length": 2, "degree": 7, "octave": 4},
-                {"step": 4, "length": 4, "degree": 9, "octave": 4},
-                {"step": 8, "length": 2, "degree": 7, "octave": 4},
-                {"step": 10, "length": 2, "degree": 4, "octave": 4},
-                {"step": 12, "length": 4, "degree": 2, "octave": 4}
+                {"step": 0, "length": 2, "degree": 4, "octave": 0},
+                {"step": 2, "length": 2, "degree": 7, "octave": 0},
+                {"step": 4, "length": 4, "degree": 9, "octave": 0},
+                {"step": 8, "length": 2, "degree": 7, "octave": 0},
+                {"step": 10, "length": 2, "degree": 4, "octave": 0},
+                {"step": 12, "length": 4, "degree": 2, "octave": 0}
               ],
               "synth": { "unison": 3, "spread": 0.6, "cutoff": 2600, "res": 1.8, "fenv": 1.6,
                          "lfo_rate": 4.5, "lfo_pitch": 0.05, "attack": 0.006,
@@ -92,14 +92,14 @@ fn main() {
         "steps": 16,
         "tuning": "edo12",
         "voices": [
-            { "kind": "pad", "rhythm": "", "octave": 3, "level": 0.32,
+            { "kind": "pad", "rhythm": "", "octave": -1, "level": 0.32,
               "notes": [
-                {"step": 0, "length": 8, "degree": 0, "octave": 3},
-                {"step": 0, "length": 8, "degree": 2, "octave": 3},
-                {"step": 0, "length": 8, "degree": 4, "octave": 3},
-                {"step": 8, "length": 8, "degree": 5, "octave": 3},
-                {"step": 8, "length": 8, "degree": 7, "octave": 3},
-                {"step": 8, "length": 8, "degree": 9, "octave": 3}
+                {"step": 0, "length": 8, "degree": 0, "octave": -1},
+                {"step": 0, "length": 8, "degree": 2, "octave": -1},
+                {"step": 0, "length": 8, "degree": 4, "octave": -1},
+                {"step": 8, "length": 8, "degree": 5, "octave": -1},
+                {"step": 8, "length": 8, "degree": 7, "octave": -1},
+                {"step": 8, "length": 8, "degree": 9, "octave": -1}
               ],
               "synth": { "unison": 5, "spread": 0.85, "cutoff": 1300, "res": 0.8,
                          "attack": 0.5, "decay": 0.6, "sustain": 0.8, "release": 1.1,
@@ -126,14 +126,14 @@ fn main() {
                     { "beat": 16, "value": 0.6 }, { "beat": 24, "value": 0.75 } ] } ] } }
         ],
         "clips": [
-            { "track": "drums", "start": 0,  "pattern": kit },
-            { "track": "drums", "start": 16, "pattern": kit },
-            { "track": "bass",  "start": 0,  "pattern": bass },
-            { "track": "bass",  "start": 16, "pattern": bass },
-            { "track": "lead",  "start": 8,  "pattern": lead },
-            { "track": "lead",  "start": 24, "pattern": lead },
-            { "track": "pad",   "start": 0,  "pattern": pad },
-            { "track": "pad",   "start": 16, "pattern": pad }
+            { "track": "drums", "start": 0, "length_beats": 16, "pattern": kit },
+            { "track": "drums", "start": 16, "length_beats": 16, "pattern": kit },
+            { "track": "bass", "start": 0, "length_beats": 16, "pattern": bass },
+            { "track": "bass", "start": 16, "length_beats": 16, "pattern": bass },
+            { "track": "lead", "start": 8, "length_beats": 8, "pattern": lead },
+            { "track": "lead", "start": 24, "length_beats": 8, "pattern": lead },
+            { "track": "pad", "start": 0, "length_beats": 16, "pattern": pad },
+            { "track": "pad", "start": 16, "length_beats": 16, "pattern": pad }
         ]
     });
 

@@ -137,7 +137,7 @@ mod linux {
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let reveal = gtk::Button::with_label(&tr(&strings, "servermode.revealLink", "Reveal link"));
         let copy = gtk::Button::with_label(&tr(&strings, "servermode.copy", "Copy"));
-        let rotate = gtk::Button::with_label(&tr(&strings, "servermode.rotateKey", "Rotate key"));
+        let rotate = gtk::Button::with_label(&tr(&strings, "servermode.rotateKey", "New link"));
         let pair = gtk::Button::with_label(&tr(&strings, "servermode.pairDevice", "Pair device"));
         let forget = gtk::Button::with_label(&tr(
             &strings,
@@ -183,7 +183,7 @@ mod linux {
         let auto_label = gtk::Label::new(Some(&tr(
             &strings,
             "servermode.autostart",
-            "Autostart server mode on login",
+            "Start server mode at sign-in",
         )));
         auto_label.set_halign(gtk::Align::Start);
         auto_label.set_hexpand(true);
@@ -425,7 +425,7 @@ mod linux {
                     .post(format!("{base}/api/remote/rotate"))
                     .bearer_auth(&token)
                     .send();
-                status.set_text(&tr(&strings, "servermode.rotating", "Rotating…"));
+                status.set_text(&tr(&strings, "servermode.rotating", "Creating a new link…"));
             });
         }
 

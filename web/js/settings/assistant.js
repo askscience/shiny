@@ -14,7 +14,7 @@ export function createAssistantSection({ on, cleanups, resources }) {
     });
     const nameHint = el('p', 'settings-hint');
     const syncNameHint = () => {
-      nameHint.textContent = t('settings.assistant.nameHint', { name: getAiName() }, `Say “Hey, ${getAiName()}” to activate voice on long press.`);
+      nameHint.textContent = t('settings.assistant.nameHint', { name: getAiName() }, `Long-press, then say “Hey, ${getAiName()}” to give a voice command.`);
     };
     syncNameHint();
     on(nameInput, 'input', () => {

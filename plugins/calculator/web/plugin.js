@@ -272,7 +272,7 @@ async function refreshHistory({ reveal = false } = {}) {
     if (!history || !history.length) {
       historyEl.appendChild(emptyState({
         title: t('plugin.calculator.empty.noHistory', null, 'No history'),
-        body: t('plugin.calculator.empty.noHistoryBody', null, 'Calculations you run here or ask the AI for appear below.'),
+        body: t('plugin.calculator.empty.noHistoryBody', null, 'Calculations you run here or ask the AI for appear here.'),
       }));
       return;
     }

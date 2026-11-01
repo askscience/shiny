@@ -339,9 +339,13 @@ The window ends on gestures, not on a clock unless the user picks one:
   tap opens a single request (`leaveConversation()` before
   `startListening('single')`).
 - **A tap** switches to typing, which ends the conversation too.
-- An utterance that is **only** a stop phrase ("basta", "stop") ends it. The list
-  is whole-utterance matched, so "stop the music" still reaches the agent
-  (`isStopPhrase()` in `voice/wake.js`).
+- An utterance that is **only** a stop phrase ("stop", "basta", "arrête",
+  "hör auf", "хватит", …) ends it. One list covers every interface language;
+  matching is whole-utterance and folds case, accents and punctuation in any
+  script, so "stop the music" still reaches the agent (`isStopPhrase()` in
+  `voice/wake.js`). Each catalogue's `settings.voice.conversationHint` quotes
+  its own phrase, and `web/js/tests/voiceStopPhrases.test.mjs` fails if that
+  phrase is not in the list.
 - `voice.conversation_timeout` is **0 by default ("until I stop it")**.
   A non-zero value arms `armConversationTimer()`, which **restarts on every burst
   of speech** so thinking out loud does not end it; on expiry

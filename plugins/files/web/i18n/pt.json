@@ -30,6 +30,7 @@
   "plugin.files.status.items.one": "{count} item",
   "plugin.files.status.items.many": "{count} itens",
   "plugin.files.status.items.other": "{count} itens",
+  "plugin.files.status.countSelected": "{count} · {selected} selecionados",
   "plugin.files.when.today": "Hoje {time}",
   "plugin.files.when.yesterday": "Ontem {time}",
   "plugin.files.menu.newFolder": "Nova pasta",
@@ -101,6 +102,8 @@
   "plugin.files.preview.navHint.other": "{count} itens · ← → para navegar",
   "plugin.files.preview.pdfFailed": "Não foi possível renderizar o PDF",
   "plugin.files.preview.page": "Página {n}",
+  "plugin.files.preview.prev": "Arquivo anterior",
+  "plugin.files.preview.next": "Próximo arquivo",
   "plugin.files.meta.description": "Navegador de arquivos — navegue, pré-visualize e gerencie as pastas pessoais",
   "plugin.files.meta.summary": "Navegador de arquivos no estilo GNOME: grade/lista, miniaturas, pré-visualização rápida, envio de arquivos e uma lixeira",
   "plugin.files.meta.category": "Sistema"

@@ -21,7 +21,7 @@ use crate::catalog;
 use crate::engine;
 use crate::store;
 
-const MAX_BODY: usize = 1024 * 1024;
+const MAX_BODY: usize = 8 * 1024 * 1024;
 
 type WaveformPeaks = (Vec<(f32, f32)>, u32);
 type WaveformCache = Mutex<HashMap<u64, WaveformPeaks>>;
@@ -76,7 +76,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "studio_preset_delete" => studio_preset_delete(ctx),
         "studio_catalog" => studio_catalog(ctx),
         "studio_analyze" => studio_analyze(ctx),
-        _ => return None,
+        other => return crate::routes_mix::handle(&ctx, other),
     })
 }
 fn take_path(req: &Request) -> Result<String, AppError> {
@@ -265,11 +265,14 @@ fn studio_render(ctx: Arc<PluginCtx>) -> RouteHandler {
 fn studio_arrangement_render(_ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: Request| {
         async move {
-            let _uid = user_id(&req)?;
+            let uid = user_id(&req)?;
+            let home = crate::routes_mix::files_home(&uid, shiny_plugin_sdk::routes::os_home_from_request(&req).as_deref());
             let value = read_json(req).await?;
             let arr = engine::parse_arrangement(&value).map_err(AppError::BadRequest)?;
             let rendered = blocking(move || {
-                engine::render_arrangement(&arr).map_err(AppError::BadRequest)
+                let res = crate::audio::HomeResolver { home };
+                let m = crate::mix::render_mix(&arr, &res, &crate::mix::MixOptions::export()).map_err(AppError::BadRequest)?;
+                Ok(engine::encode_rendered(&m.master, engine::arrangement_bits(&arr)))
             })
             .await?;
             Response::builder()

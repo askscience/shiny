@@ -2,7 +2,8 @@
   "plugin.calendar.meta.description": "Kalender — planlæg, vis og organisér begivenheder i Kalender-vinduet",
   "plugin.calendar.meta.summary": "Kalender: planlæg og organisér begivenheder",
   "plugin.calendar.meta.category": "Kontor",
-
+  "plugin.calendar.count.events.one": "{count} begivenhed",
+  "plugin.calendar.count.events.other": "{count} begivenheder",
   "plugin.calendar.month.january": "Januar",
   "plugin.calendar.month.february": "Februar",
   "plugin.calendar.month.march": "Marts",
@@ -15,7 +16,6 @@
   "plugin.calendar.month.october": "Oktober",
   "plugin.calendar.month.november": "November",
   "plugin.calendar.month.december": "December",
-
   "plugin.calendar.grid.sun": "Søn",
   "plugin.calendar.grid.mon": "Man",
   "plugin.calendar.grid.tue": "Tir",
@@ -23,22 +23,16 @@
   "plugin.calendar.grid.thu": "Tor",
   "plugin.calendar.grid.fri": "Fre",
   "plugin.calendar.grid.sat": "Lør",
-
   "plugin.calendar.event.allDay": "Hele dagen",
-
   "plugin.calendar.toolbar.previousMonth": "Forrige måned",
   "plugin.calendar.toolbar.nextMonth": "Næste måned",
   "plugin.calendar.toolbar.today": "I dag",
   "plugin.calendar.toolbar.newEvent": "Ny begivenhed",
-
   "plugin.calendar.ctx.refresh": "Opdatér",
-
   "plugin.calendar.detail.edit": "Redigér",
   "plugin.calendar.detail.delete": "Slet",
-
   "plugin.calendar.empty.noEvents": "Ingen begivenheder",
   "plugin.calendar.empty.noEventsBody": "Intet planlagt. Tilføj en begivenhed, eller bed AI'en om at planlægge en.",
-
   "plugin.calendar.dialog.title": "Begivenhed",
   "plugin.calendar.dialog.editTitle": "Redigér begivenhed",
   "plugin.calendar.dialog.titleField": "Titel",
@@ -52,7 +46,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Noter (valgfrit)",
   "plugin.calendar.dialog.cancel": "Annuller",
   "plugin.calendar.dialog.save": "Gem begivenhed",
-
   "plugin.calendar.toast.titleRequired": "Titel er påkrævet",
   "plugin.calendar.toast.dateRequired": "Dato er påkrævet",
   "plugin.calendar.toast.updated": "Begivenheden er opdateret",
@@ -61,8 +54,6 @@
   "plugin.calendar.toast.loadFailed": "Kunne ikke indlæse begivenheder",
   "plugin.calendar.toast.saveFailed": "Kunne ikke gemme begivenheden",
   "plugin.calendar.toast.deleteFailed": "Kunne ikke slette begivenheden",
-
   "plugin.calendar.confirm.deleteEvent": "Slet \"{title}\"?",
-
   "plugin.calendar.notify.eventSoon": "Begivenhed starter snart"
 }

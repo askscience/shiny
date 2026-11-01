@@ -138,6 +138,7 @@ drops the stale `browser_history` table.
 | `src/preview.rs` | Link preview fetch/parse with SSRF guard + TTL cache |
 | `src/sessions.rs` | In-memory tab sessions (bounded to 64) |
 | `src/news.rs` | Interest profile, topic selection, engine HTML parsing, ranking, home shelf |
+| `src/sites.rs` | Most visited sites, RSS/Atom feed discovery + parsing, site cards for the shelf |
 | `src/vault.rs` | Password vault: key wrapping, unlock/idle lock/throttle, sealed entries, origin matching |
 | `web/plugin.js` | The window surface (chrome + native-view IPC + core occluder holes + home shelf + tab switcher) |
 | `web/passwords.js` | The password manager popover and the page scripts that fill/read login forms |

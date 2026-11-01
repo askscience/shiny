@@ -177,7 +177,7 @@ impl OsmClient {
                     "Driving directions service unreachable. Check your internet connection.".into(),
                 )
             } else if e.is_timeout() {
-                AppError::BadRequest("Driving directions timed out. Try again.".into())
+                AppError::BadRequest("Route planning timed out. Try again.".into())
             } else {
                 AppError::Http(e)
             }
@@ -203,7 +203,7 @@ impl OsmClient {
         let route = data["routes"]
             .as_array()
             .and_then(|arr| arr.first())
-            .ok_or_else(|| AppError::BadRequest("Routing returned no routes".into()))?
+            .ok_or_else(|| AppError::BadRequest("No route found".into()))?
             .clone();
         let legs = route["legs"][0].clone();
 

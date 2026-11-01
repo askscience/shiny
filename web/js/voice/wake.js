@@ -59,25 +59,63 @@ function matchWakeName(tokens, nameTokens) {
  * closes the window, while "stop the music" is a request the agent has to see.
  * The list stays short and unambiguous — "grazie" or "ok" are things people say
  * constantly and must never end a conversation.
+ *
+ * One phrase set serves every interface language (recognition already runs in
+ * the voice language, so cross-language overlap is harmless). "stop" works in
+ * all of them; the settings hint of each catalogue quotes its own phrase, which
+ * must stay in this list.
  */
-const STOP_PHRASES = new Set([
-  'basta',
-  'basta cosi',
-  'basta grazie',
-  'smetti',
-  'smettere',
-  'stop',
-  'stop it',
-  'stop listening',
-  'stop ascoltare',
-  'that s all',
-  'that s it',
-  'we are done',
-]);
+const STOP_PHRASE_LIST = [
+  // English
+  'stop', 'stop it', 'stop listening', "that's all", "that's it", 'we are done', "we're done",
+  // Italian
+  'basta', 'basta così', 'basta grazie', 'smetti', 'smettila', 'smettere', 'stop ascoltare',
+  // French
+  'arrête', 'arrêtez', "c'est tout", 'ça suffit',
+  // German
+  'stopp', 'hör auf', 'aufhören', "das war's", 'das wars', 'genug',
+  // Spanish / Portuguese
+  'para', 'pare', 'detente', 'ya basta', 'eso es todo', 'chega', 'é só isso',
+  // Dutch / Danish / Swedish
+  'hou op', 'stoppen', 'dat was het', 'genoeg', 'hold op', 'det var det', 'sluta', 'det var allt',
+  // Finnish / Estonian
+  'lopeta', 'riittää', 'lõpeta', 'aitab',
+  // Polish / Czech / Slovak / Slovenian / Croatian
+  'przestań', 'wystarczy', 'to wszystko', 'koniec', 'přestaň', 'dost', 'konec', 'to je vše',
+  'prestaň', 'dosť', 'to je všetko', 'nehaj', 'dovolj', 'prestani', 'dosta', 'kraj',
+  // Bulgarian / Russian / Ukrainian
+  'стоп', 'спри', 'достатъчно', 'това е всичко', 'хватит', 'достаточно', 'это всё',
+  'досить', 'вистачить', 'припини',
+  // Greek
+  'στοπ', 'σταμάτα', 'φτάνει', 'τέλος',
+  // Hungarian / Romanian
+  'állj', 'elég', 'ennyi', 'oprește', 'ajunge', 'gata',
+  // Lithuanian / Latvian
+  'sustok', 'gana', 'užteks', 'beidz', 'pietiek', 'apstājies',
+  // Irish / Maltese
+  'stad', 'sin é', 'ieqaf', 'biżżejjed', 'hekk biss',
+];
+
+/**
+ * Normalization for stop phrases: Unicode-aware (Cyrillic and Greek survive),
+ * accents folded ("così" = "cosi", "ё" = "е"), every punctuation mark —
+ * commas included — reduced to a space.
+ */
+function normalizeStop(text) {
+  return String(text)
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const STOP_PHRASES = new Set(STOP_PHRASE_LIST.map(normalizeStop));
 
 /** True when `text` is nothing but a phrase that ends the conversation. */
 export function isStopPhrase(text) {
-  return STOP_PHRASES.has(normalizeSpeech(text));
+  return STOP_PHRASES.has(normalizeStop(text));
 }
 
 /**

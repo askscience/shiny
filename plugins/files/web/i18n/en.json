@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Public",
   "plugin.files.place.templates": "Templates",
   "plugin.files.place.videos": "Videos",
-
   "plugin.files.toolbar.search": "Search",
   "plugin.files.toolbar.menu": "Menu",
   "plugin.files.toolbar.back": "Back",
@@ -17,45 +16,36 @@
   "plugin.files.toolbar.toggleView": "Toggle view",
   "plugin.files.toolbar.viewOptions": "View options",
   "plugin.files.toolbar.pathActions": "Path actions",
-
   "plugin.files.search.placeholder": "Search…",
   "plugin.files.search.clear": "Clear",
-
   "plugin.files.empty.noResults": "No results found",
   "plugin.files.empty.trash": "Trash is empty",
   "plugin.files.empty.folder": "Folder is empty",
   "plugin.files.empty.noMatch": "No files match “{query}”.",
   "plugin.files.empty.dropHint": "Drag files here or use the menu to upload.",
-
   "plugin.files.column.name": "Name",
   "plugin.files.column.size": "Size",
   "plugin.files.column.modified": "Modified",
-
   "plugin.files.status.folder": "Folder",
   "plugin.files.status.items.one": "{count} item",
   "plugin.files.status.items.other": "{count} items",
   "plugin.files.status.countSelected": "{count} · {selected} selected",
-
   "plugin.files.when.today": "Today {time}",
   "plugin.files.when.yesterday": "Yesterday {time}",
-
-  "plugin.files.menu.newFolder": "New Folder",
-  "plugin.files.menu.uploadFiles": "Upload Files…",
-  "plugin.files.menu.showHidden": "Show Hidden Files",
+  "plugin.files.menu.newFolder": "New folder",
+  "plugin.files.menu.uploadFiles": "Upload files…",
+  "plugin.files.menu.showHidden": "Show hidden files",
   "plugin.files.menu.view": "View",
-  "plugin.files.menu.copyPath": "Copy Path",
+  "plugin.files.menu.copyPath": "Copy path",
   "plugin.files.menu.emptyTrash": "Empty Trash",
-
   "plugin.files.view.grid": "Grid",
   "plugin.files.view.list": "List",
-
   "plugin.files.ctx.open": "Open",
   "plugin.files.ctx.download": "Download",
   "plugin.files.ctx.restore": "Restore",
-  "plugin.files.ctx.deletePermanently": "Delete Permanently",
+  "plugin.files.ctx.deletePermanently": "Delete permanently",
   "plugin.files.ctx.rename": "Rename…",
   "plugin.files.ctx.moveToTrash": "Move to Trash",
-
   "plugin.files.dialog.newFolderTitle": "New folder name",
   "plugin.files.dialog.newFolderDefault": "New folder",
   "plugin.files.dialog.renameTitle": "Rename to",
@@ -66,7 +56,6 @@
   "plugin.files.dialog.trashMany.one": "Move {count} item to Trash?",
   "plugin.files.dialog.trashMany.other": "Move {count} items to Trash?",
   "plugin.files.dialog.emptyTrash": "Empty the Trash? This cannot be undone.",
-
   "plugin.files.toast.openFailed": "Could not open folder",
   "plugin.files.toast.searchFailed": "Search failed",
   "plugin.files.toast.pathCopied": "Path copied",
@@ -82,8 +71,7 @@
   "plugin.files.toast.restored.one": "Restored {count} item",
   "plugin.files.toast.restored.other": "Restored {count} items",
   "plugin.files.toast.trashEmptied": "Trash emptied",
-  "plugin.files.toast.emptyTrashFailed": "Could not empty trash",
-
+  "plugin.files.toast.emptyTrashFailed": "Could not empty the Trash",
   "plugin.files.notify.downloading": "Downloading",
   "plugin.files.notify.uploadComplete": "Upload complete",
   "plugin.files.notify.uploaded.one": "{count} file added",
@@ -91,13 +79,11 @@
   "plugin.files.notify.movedToTrash": "Moved to Trash",
   "plugin.files.notify.movedItems.one": "{count} item",
   "plugin.files.notify.movedItems.other": "{count} items",
-
   "plugin.files.player.seek": "Seek",
   "plugin.files.player.mute": "Mute",
   "plugin.files.player.fullscreen": "Full screen",
   "plugin.files.player.thisFormat": "This format",
   "plugin.files.player.cannotDecode": "{codec} can't be decoded by this browser.",
-
   "plugin.files.preview.zoomHint": "Click image to zoom",
   "plugin.files.preview.loading": "Loading…",
   "plugin.files.preview.cannotPreview": "Cannot preview: {message}",
@@ -110,7 +96,6 @@
   "plugin.files.preview.page": "Page {n}",
   "plugin.files.preview.prev": "Previous file",
   "plugin.files.preview.next": "Next file",
-
   "plugin.files.meta.description": "File browser — browse, preview and manage your home folders",
   "plugin.files.meta.summary": "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash",
   "plugin.files.meta.category": "System"

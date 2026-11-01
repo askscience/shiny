@@ -54,7 +54,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
         toast(ok ? t('settings.remote.linkCopied', null, 'Link copied') : t('settings.remote.copyFailed', null, 'Could not copy the link'), ok ? undefined : { type: 'error' });
       },
     });
-    const rotateBtn = button({ label: t('settings.remote.rotateKey', null, 'Rotate key'), variant: 'danger', onClick: rotate });
+    const rotateBtn = button({ label: t('settings.remote.rotateKey', null, 'New link'), variant: 'danger', onClick: rotate });
     const pairBtn = button({ label: t('settings.remote.pairDevice', null, 'Pair a new device'), variant: 'ghost', onClick: pair });
     const unpairBtn = button({ label: t('settings.remote.forgetDevices', null, 'Forget devices'), variant: 'quiet', onClick: unpair });
 
@@ -210,7 +210,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
         render();
         toast(t('settings.remote.newLink', null, 'New link generated'));
       } catch (e) {
-        toast(e.message || t('settings.remote.rotateFailed', null, 'Could not rotate the link'), { type: 'error' });
+        toast(e.message || t('settings.remote.rotateFailed', null, 'Could not create a new link'), { type: 'error' });
       }
     }
 

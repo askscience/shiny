@@ -371,7 +371,7 @@ impl GridEngine {
                 })),
                 "delay" => {
                     let mix = p(m, "mix", 0.35);
-                    let mut d = StereoDelay::new(p(m, "time", 250.0), p(m, "feedback", 0.4), mix);
+                    let mut d = StereoDelay::new(p(m, "time", 250.0), p(m, "feedback", 0.4), 1.0);
                     d.set_sample_rate(sr);
                     d.ping_pong = p(m, "ping_pong", 0.4);
                     d.damp = p(m, "damp", 0.4);
@@ -380,7 +380,7 @@ impl GridEngine {
                 }
                 "reverb" => {
                     let mix = p(m, "mix", 0.3);
-                    let mut r = Reverb::new(p(m, "size", 0.5), p(m, "damping", 0.5), mix);
+                    let mut r = Reverb::new(p(m, "size", 0.5), p(m, "damping", 0.5), 1.0);
                     r.set_sample_rate(sr);
                     r.predelay_ms = p(m, "predelay", 12.0);
                     r.width = p(m, "width", 1.0);
@@ -389,7 +389,7 @@ impl GridEngine {
                 }
                 "chorus" => {
                     let mix = p(m, "mix", 0.4);
-                    let mut c = Chorus::new(p(m, "rate", 0.6), p(m, "depth", 0.5), mix);
+                    let mut c = Chorus::new(p(m, "rate", 0.6), p(m, "depth", 0.5), 1.0);
                     c.set_sample_rate(sr);
                     c.spread = p(m, "spread", 0.6);
                     Node::Chorus(Box::new(ChorusNode { c, mix }))
@@ -651,7 +651,6 @@ impl GridEngine {
                         r.r.damping = value;
                         r.r.update_damping();
                     }
-                    "mix" => r.r.mix = value,
                     "predelay" => r.r.predelay_ms = value,
                     "width" => r.r.width = value,
                     "mod" => r.r.mod_amount = value,
@@ -665,7 +664,6 @@ impl GridEngine {
                 match key {
                     "rate" => c.c.rate = value,
                     "depth" => c.c.depth = value,
-                    "mix" => c.c.mix = value,
                     "spread" => c.c.spread = value,
                     _ => {}
                 }

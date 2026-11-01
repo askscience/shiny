@@ -42,7 +42,7 @@ export function createDesktopSection({ on, cleanups, resources }) {
         setDesktopLayout({ ...getDesktopLayout(), master_ratio: value / 100 });
       },
     });
-    const ratio = sliderField(t('settings.desktop.masterSize', null, 'Master size'), `${Math.round(layout.master_ratio * 100)}%`, ratioControl);
+    const ratio = sliderField(t('settings.desktop.masterSize', null, 'Main window size'), `${Math.round(layout.master_ratio * 100)}%`, ratioControl);
 
     const gapControl = slider({
       min: 0, max: 40, step: 2, value: layout.gap,
@@ -52,11 +52,11 @@ export function createDesktopSection({ on, cleanups, resources }) {
       },
     });
     const gap = sliderField(t('settings.desktop.gap', null, 'Gap'), `${layout.gap}px`, gapControl);
-    gap.wrap.appendChild(el('p', 'settings-hint', t('settings.desktop.gapHint', null, 'Window gaps — and the frame around them: the top bar\u2019s margins, the space to the workspace switcher and the window-to-screen edges.')));
+    gap.wrap.appendChild(el('p', 'settings-hint', t('settings.desktop.gapHint', null, 'The space between windows and around them: the top bar\'s margins, the gap by the workspace switcher and the distance to the screen edges.')));
 
     const tilingControls = el('div', 'settings-tiling-controls');
     cleanups.push(() => disposeMotion(tilingControls));
-    tilingControls.append(field(t('settings.desktop.masterSide', null, 'Master side'), orientation), ratio.wrap);
+    tilingControls.append(field(t('settings.desktop.masterSide', null, 'Main window side'), orientation), ratio.wrap);
 
     // The gap is not a tiling-only value: it also frames the top bar and the
     // window-to-screen edges in every layout, Windows included. Only the
@@ -67,12 +67,12 @@ export function createDesktopSection({ on, cleanups, resources }) {
     syncTilingControls();
 
     const shortcuts = el('p', 'settings-hint');
-    shortcuts.innerHTML = t('settings.desktop.shortcuts', null, 'Shortcuts: <strong>Alt+Enter</strong> fullscreen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.');
+    shortcuts.innerHTML = t('settings.desktop.shortcuts', null, 'Shortcuts: <strong>Alt+Enter</strong> full screen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.');
 
     return [
       field(t('settings.desktop.layout', null, 'Layout'), mode, {
         details: tilingControls,
-        hint: t('settings.desktop.layoutHint', null, 'Tiling snaps windows into workspaces; Windows floats them as draggable, resizable desktop windows.'),
+        hint: t('settings.desktop.layoutHint', null, 'Tiling snaps windows into workspaces; Columns lines them up side by side; Windows floats them as draggable, resizable desktop windows.'),
       }),
       gap.wrap,
       shortcuts,

@@ -314,7 +314,7 @@ async function syncNow() {
   if (!account) return;
   try {
     const r = await syncMail(account.id, currentFolder);
-    toast(t('plugin.mail.toast.synced', { new: r?.new ?? 0, cached: r?.total ?? 0 }, 'Mail synced — {new} new, {cached} cached'), { type: 'info' });
+    toast(t('plugin.mail.toast.synced', { new: r?.new ?? 0, cached: r?.total ?? 0 }, 'Mail synced — {new} new, {cached} in total'), { type: 'info' });
   } catch (e) {
     toast(e.message || t('plugin.mail.toast.syncFailed', null, 'Mail sync failed'), { type: 'error' });
   }
@@ -526,7 +526,7 @@ function renderFooter() {
       '{folder} · {messages}',
     )),
     h('span', 'mail-footer-note', t('plugin.mail.footer.note', null,
-      'Cached locally — sync to check for new mail.')),
+      'Stored on this computer — sync to check for new mail.')),
   );
   const status = h('span', `mail-footer-status${account?.verified ? ' is-ok' : ''}`);
   status.append(
@@ -663,7 +663,7 @@ function render() {
   scrollEl.addEventListener('scroll', onListScroll, { passive: true });
   heroEl = h('header', 'mail-hero');
   const search = searchBar({
-    placeholder: t('plugin.mail.search.placeholder', null, 'Search cached mail…'),
+    placeholder: t('plugin.mail.search.placeholder', null, 'Search downloaded mail…'),
     label: t('plugin.mail.search.label', null, 'Search mail'), onInput: onSearch,
   });
   const searchWrap = h('div', 'mail-search');
@@ -1165,7 +1165,7 @@ function openCompose(prefill = {}) {
     sendBtn.addEventListener('click', async () => {
       const to = parseAddresses(composeTo.value);
       if (!to.length) {
-        toast(t('plugin.mail.toast.recipientRequired', null, 'At least one recipient required'), { type: 'error' });
+        toast(t('plugin.mail.toast.recipientRequired', null, 'At least one recipient is required'), { type: 'error' });
         return;
       }
       sendBtn.disabled = true;

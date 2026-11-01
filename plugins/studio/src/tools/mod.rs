@@ -3,6 +3,9 @@
 //! Tools write through the plugin's own SQLite pool (`ctx.pool()`) and share
 //! the same render engine as the REST routes (`crate::engine`).
 
+mod mix;
+pub use mix::{StudioArrangementEdit, StudioAudioInfo, StudioExport, StudioImportAudio, StudioMixAnalyze};
+
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
@@ -403,7 +406,7 @@ impl Tool for StudioArrangementSave {
     fn aliases(&self) -> &[&str] { &["save_arrangement", "create_arrangement"] }
     fn step_label(&self) -> &str { "Saving studio arrangement…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `studio_arrangement_save` — Create (or update, when `id` is given) an arrangement. params: `{ title?, bpm?, length_beats?, master?, tracks: [{ id, name?, color?, mute?, level?, pan?, automation? }], clips: [{ track, start, pattern }], id? }` — `pattern` is a track config (same voice shape as `studio_create`). Returns `{ id, title }`.")
+        Some("- `studio_arrangement_save` — Create (or update, when `id` is given) an arrangement. params: `{ title?, bpm?, length_beats?, master?, fx?, master_fx?, returns?, tracks: [{ id, name?, kind?, color?, mute?, solo?, level?, pan?, fx?, sends?:{reverb,delay}, automation? }], clips: [{ track, start, length_beats?, loop?, gain_db?, pattern | audio:{src} }], id? }` — `pattern` is a track config (same voice shape as `studio_create`, octave 0 = A4); pattern clips loop to `length_beats`; `audio.src` is a WAV path in the user's Files. Returns `{ id, title }`. For later changes prefer `studio_arrangement_edit`.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("arrangement");

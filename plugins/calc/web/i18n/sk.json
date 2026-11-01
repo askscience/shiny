@@ -1,33 +1,33 @@
 {
-  "plugin.calc.meta.description": "Tabuľkový kalkulátor — tabuľky uložené ako otvorené mriežky buniek, upraviteľné v okne Calc",
+  "plugin.calc.meta.description": "Tabuľky — vytvárajte a upravujte tabuľky v okne Calc, importujte súbory CSV alebo .ods a ukladajte ich ako .ods",
   "plugin.calc.meta.summary": "Calc: vytvárajte, upravujte a počítajte s tabuľkami",
   "plugin.calc.meta.category": "Kancelária",
-
   "plugin.calc.bar.spreadsheets": "Tabuľky",
-
+  "plugin.calc.bar.new": "Nová",
   "plugin.calc.toolbar.newSheet": "Nová tabuľka",
   "plugin.calc.toolbar.importOds": "Importovať .ods",
   "plugin.calc.toolbar.importCsv": "Importovať CSV",
   "plugin.calc.toolbar.saveToDocuments": "Uložiť do Dokumentov",
   "plugin.calc.toolbar.saveNow": "Uložiť teraz",
   "plugin.calc.toolbar.deleteSheet": "Odstrániť tabuľku",
-
   "plugin.calc.menu.noSheets": "Zatiaľ žiadne tabuľky",
-
+  "plugin.calc.empty.body": "Začnite prázdnu tabuľku, importujte súbor CSV alebo .ods, alebo požiadajte AI, aby ju vytvorila.",
   "plugin.calc.sheet.untitled": "Bez názvu",
   "plugin.calc.sheet.importedCsv": "Importované CSV",
-
   "plugin.calc.formula.placeholder": "Hodnota alebo vzorec (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Ukladá sa…",
   "plugin.calc.status.dirty": "Neuložené zmeny",
+  "plugin.calc.status.unsaved": "Neuložené",
+  "plugin.calc.status.savedAt": "Uložené {time}",
+  "plugin.calc.status.cells.one": "{count} bunka",
+  "plugin.calc.status.cells.few": "{count} bunky",
+  "plugin.calc.status.cells.many": "{count} bunky",
+  "plugin.calc.status.cells.other": "{count} buniek",
   "plugin.calc.status.saved.one": "Uložené {time} · {count} bunka",
   "plugin.calc.status.saved.few": "Uložené {time} · {count} bunky",
   "plugin.calc.status.saved.many": "Uložené {time} · {count} bunky",
   "plugin.calc.status.saved.other": "Uložené {time} · {count} buniek",
-
   "plugin.calc.dialog.delete": "Odstrániť \"{title}\"?",
-
   "plugin.calc.toast.saveFailed": "Uloženie zlyhalo",
   "plugin.calc.toast.openFailed": "Nepodarilo sa otvoriť tabuľku",
   "plugin.calc.toast.createFailed": "Nepodarilo sa vytvoriť tabuľku",

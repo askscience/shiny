@@ -6,6 +6,8 @@
   "plugin.radio.toast.streamRefused": "Não foi possível reproduzir o stream — tente outra estação",
   "plugin.radio.status.pickStation": "Escolha uma estação",
   "plugin.radio.status.streaming": "Transmitindo",
+  "plugin.radio.status.kbps": "{n} kbps",
+  "plugin.radio.title": "Rádio",
   "plugin.radio.empty.noStations": "Nenhuma estação encontrada",
   "plugin.radio.empty.noMatch": "Nada corresponde a “{term}”.",
   "plugin.radio.error.unreachable": "Radio Browser inacessível",

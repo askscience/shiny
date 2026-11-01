@@ -475,6 +475,9 @@ struct SettingsBody {
     /// [`settings::set`].
     #[serde(default)]
     search_engine: Option<String>,
+    /// Related news on/off (the browser menu's "News" switch).
+    #[serde(default)]
+    news: Option<bool>,
 }
 
 /// The directory downloads should land in.
@@ -510,6 +513,7 @@ fn settings_route(ctx: Arc<PluginCtx>) -> RouteHandler {
                 "adblock": current.adblock,
                 "incognito": current.incognito,
                 "search_engine": current.search_engine,
+                "news": current.news,
                 "downloads_dir": dir.to_string_lossy(),
                 "rules": filter::rules(),
             })))
@@ -530,11 +534,13 @@ fn settings_set(ctx: Arc<PluginCtx>) -> RouteHandler {
                 body.adblock,
                 body.incognito,
                 body.search_engine.as_deref(),
+                body.news,
             );
             Ok(ok(json!({
                 "adblock": next.adblock,
                 "incognito": next.incognito,
                 "search_engine": next.search_engine,
+                "news": next.news,
             })))
         }
     })

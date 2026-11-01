@@ -58,8 +58,9 @@ impl Biquad {
         self.x2 = self.x1;
         self.x1 = x;
         self.y2 = self.y1;
-        self.y1 = y;
-        y
+        // Flush decaying tails so silence never turns into slow denormals.
+        self.y1 = super::util::flush(y);
+        self.y1
     }
 }
 
@@ -105,13 +106,17 @@ pub fn measure(channels: &[Vec<f32>], sample_rate: f64) -> LoudnessReport {
         return LoudnessReport { integrated_lufs: -70.0, range_lu: 0.0, peak: 0.0, rms_db: -120.0, crest_db: 0.0, clipped: 0.0 };
     }
 
-    // K-weight each channel into a scratch buffer.
-    let mut weighted: Vec<Vec<f64>> = vec![Vec::with_capacity(n); channels.len().max(1)];
+    // K-weight each channel and accumulate the mean square per 100 ms
+    // segment; a 400 ms gating block is then the sum of four segments (the
+    // 75 % overlap the standard asks for) — one pass, no scratch buffers.
+    let segs = n / step + 1;
+    let mut seg_ms = vec![0.0f64; segs];
     for (ci, ch) in channels.iter().enumerate() {
         let (s1, s2) = &mut kf[ci];
-        for &s in ch {
+        for (i, &s) in ch.iter().enumerate() {
             let x = s as f64;
-            weighted[ci].push(s2.tick(s1.tick(x)));
+            let w = s2.tick(s1.tick(x));
+            seg_ms[i / step] += w * w;
             let a = s.abs();
             if a > peak {
                 peak = a;
@@ -123,20 +128,13 @@ pub fn measure(channels: &[Vec<f32>], sample_rate: f64) -> LoudnessReport {
             }
         }
     }
-
-    let mut pos = 0usize;
-    while pos + block <= n {
-        let mut sum = 0.0f64;
-        for ch in &weighted {
-            let mut ms = 0.0f64;
-            for &s in &ch[pos..pos + block] {
-                ms += s * s;
-            }
-            sum += ms / block as f64;
-        }
-        let l = -0.691 + 10.0 * sum.max(1e-12).log10();
-        block_loudness.push(l);
-        pos += step;
+    let per_block = block as f64;
+    let full_segs = n / step;
+    let mut k = 0usize;
+    while k + 4 <= full_segs {
+        let sum = (seg_ms[k] + seg_ms[k + 1] + seg_ms[k + 2] + seg_ms[k + 3]) / per_block;
+        block_loudness.push(-0.691 + 10.0 * sum.max(1e-12).log10());
+        k += 1;
     }
 
     // Absolute gate at -70 LUFS.

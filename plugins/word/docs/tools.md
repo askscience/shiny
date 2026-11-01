@@ -11,11 +11,18 @@ Shared conventions:
   message)`. Hard failures return `Err(AppError)`.
 - Parameters are read with `ParamHelpers` (`param_str`, `param_u32`,
   `param_bool`, `require_str`).
-- **`doc_id` is optional on most tools**: when omitted, the target is the user's
-  most recently updated document (`last_doc_id`, ordered by `updated_at DESC`).
+- **`doc_id` is optional on most tools**: when omitted, the target is the
+  document the user has open — the latest of `updated_at` and `opened_at`
+  (`last_doc_id`; the window sets `opened_at` whenever it opens a document).
   If none exists the call fails with `No document yet — call doc_create first`.
-- Content conventions: plain text, one paragraph per line, `#`/`##`/`###`
-  headings, `**bold**`, `*italic*`.
+- Content is **Markdown** (CommonMark + GFM tables), read by WordCraft's
+  Markdown reader (`engine::markdown_to_doc`): `#`–`###` headings, paragraphs,
+  `- `/`1. ` lists, `| a | b |` tables, `**bold**`, `*italic*`, `> quotes`,
+  links. Two consecutive text lines become two paragraphs
+  (`separate_lines`), as models often write one paragraph per line; tables,
+  list items and fenced code keep their lines together.
+- `doc_read` returns Markdown too, so read → write round trips keep headings,
+  lists and tables.
 - Every tool is scoped to `req.traveler_id`, so there is no cross-user access.
 
 ## `doc_create`
@@ -81,14 +88,15 @@ Errors:
 Behaviour:
 
 1. Reads the document and converts it to HTML.
-2. If `html.contains(old)`, replaces the **first** occurrence
-   (`replacen(old, new, 1)`).
-3. Otherwise tries a case-insensitive match (`find_ci`, byte-safe via
-   `char_indices`) and splices `new` over the matched range.
-4. If neither matches, returns `ActionOutcome::error` whose message includes the
-   current plain text, so the model can produce a correct full rewrite. Nothing
-   is written in that case.
-5. On success re-encodes and updates `odt` + `updated_at`.
+2. HTML-escapes `old` and `new` (`wordcraft_formats::html::esc`), so text with
+   `<`, `&` or `"` matches the escaped HTML and can't inject markup.
+3. If the HTML contains the escaped `old`, replaces the **first** occurrence.
+4. Otherwise tries a case-insensitive match (`find_ci`, byte-safe via
+   `char_indices`) and splices the escaped `new` over the matched range.
+5. If neither matches, returns `ActionOutcome::error` whose message includes the
+   current content as Markdown, so the model can produce a correct full
+   rewrite. Nothing is written in that case.
+6. On success re-encodes and updates `odt` + `updated_at`.
 
 Errors:
 
@@ -119,7 +127,7 @@ Errors: same shape as `doc_write` (`content required`, no document, not found).
 
 ## `doc_read`
 
-**Read a document's plain text.**
+**Read a document as Markdown.**
 
 | | |
 |---|---|
@@ -127,11 +135,11 @@ Errors: same shape as `doc_write` (`content required`, no document, not found).
 | `step_label` | `Reading document…` |
 | Code | `DocRead::invoke`, `src/tools/mod.rs` |
 | Params | `doc_id?: string` |
-| Returns | `{ doc_id, title, content, hint }` |
+| Returns | `{ doc_id, title, content, format: "markdown", hint }` |
 | Humanised | `Read "«title»"` |
 
-Behaviour: `content` is `odt::odt_to_plain_text` — one line per paragraph,
-`- ` prefixes for list items. A `hint` string reminds the model to prefer
+Behaviour: `content` is `engine::odt_to_markdown` — headings, lists, tables
+and emphasis as Markdown. A `hint` string reminds the model to prefer
 `doc_edit`/`doc_append` and use `doc_write` only for full rewrites. `doc_open`
 is the alias the embedded skill writes about; it behaves exactly like
 `doc_read` and does not itself raise the window (the window reacts to the
@@ -180,6 +188,74 @@ Errors:
 - Missing required param → parameter error from `require_str`.
 - Outcome error `Document not found`.
 
+## `doc_design`
+
+**Set how a document is composed on export.**
+
+| | |
+|---|---|
+| Aliases | `doc_layout`, `format_document`, `style_document` |
+| `step_label` | `Designing document…` |
+| Code | `DocDesign::invoke`, `src/tools/mod.rs` |
+| Params | `doc_id?`, `template?: plain\|classic\|modern\|minimal`, `cover?`, `toc?`, `header?`, `page_numbers?` (bools), `paper?: a4\|letter`, `subtitle?`, `author?`, `date?`, `lang?`, `accent?: #RRGGBB` |
+| Returns | `{ doc_id, title, design }` |
+| Humanised | `Designed "«title»"` |
+
+Behaviour: reads the stored `design` JSON and changes only the keys passed.
+Choosing a non-plain `template` also turns on `header` and `page_numbers`
+(`Design::with_template_defaults`) unless the call passes them. Invalid values
+(unknown template, bad colour, text over 200 characters) return an outcome
+error naming the allowed values. The content is not touched. See
+[architecture.md](architecture.md#composition) for what each option draws.
+
+## `doc_export`
+
+**Save a document as a file.**
+
+| | |
+|---|---|
+| Aliases | `export_document`, `save_document_as`, `doc_save_as` |
+| `step_label` | `Exporting document…` |
+| Code | `DocExport::invoke`, `src/tools/mod.rs` |
+| Params | `doc_id?`, `format?: docx\|pdf\|odt\|md\|html` (default `docx`) |
+| Returns | `{ doc_id, title, format, filename, url }` |
+| Humanised | `Exported "«filename»"` |
+
+Behaviour: validates the format and the document and returns the export
+route's `url` (`/api/documents/:id/export?format=…`). The Word window reacts to
+the `doc_export` action by fetching that URL and saving the file to
+`~/Documents` (`saveOrDownload`), so the file lands where the user is and the
+plugin needs no filesystem access of its own.
+
+## `doc_insert_image`
+
+**Put a picture from the user's files into a document.**
+
+| | |
+|---|---|
+| Aliases | `insert_image`, `doc_add_image`, `add_picture` |
+| `step_label` | `Adding picture…` |
+| Code | `DocInsertImage::invoke`, `src/tools/mod.rs` |
+| Params | `doc_id?`, `path: string` (alias `file`), `after?: string`, `caption?: string`, `width?: number` (10–100, % of the text width) |
+| Returns | `{ doc_id, title, note? }` |
+| Humanised | `Added a picture to "«title»"` |
+
+Behaviour: resolves `path` against the user's files home (the OS home in
+Linux-user mode, else `~/.shiny/home/<id>`; `~/` and absolute paths inside
+the home are accepted) and refuses anything that resolves outside it, a
+folder, or a file over 25 MB (`home_file`). `engine::picture_html` keeps a
+small PNG/JPEG as is and scales/re-encodes anything else (longest side
+1600 px; JPEG, or PNG with transparency); the picture is centred and sized to
+`width` % of 600 px, never wider than itself. With `caption`, an italic
+centred caption follows. `engine::insert_after_block` places it after the
+heading or paragraph containing `after` (case-insensitive; past the whole
+list or table when the text is inside one), else at the end with a `note`.
+This is how the agent illustrates documents: `generate_image` returns a
+home-relative `path`, which goes straight into `doc_insert_image`.
+
+Errors: `BadRequest("path required …")`; outcome errors for a missing or
+outside file, a file that is not a picture, or one too large.
+
 ## Tool-to-route correspondence
 
 The tools and the REST routes share the same storage but are separate surfaces.
@@ -187,14 +263,15 @@ Routes use the HTML view; tools use the plain-text/HTML view.
 
 | Tool | Closest route | Difference |
 |---|---|---|
-| `doc_create` | `POST /api/documents` | Tool takes plain-text `content`; route takes `html` |
+| `doc_create` | `POST /api/documents` | Tool takes Markdown `content`; route takes `html` |
 | `doc_write` | `PUT /api/documents/:id` | Tool always replaces content; route merges title if omitted |
 | `doc_edit` / `doc_append` | — | Tool-only (HTML-level edits) |
-| `doc_read` | `GET /api/documents/:id` | Tool returns plain text; route returns HTML |
+| `doc_read` | `GET /api/documents/:id` | Tool returns Markdown; route returns HTML + `design` |
 | `doc_list` | `GET /api/documents` | Same fields, different key (`doc_id` vs `id`) |
 | `doc_delete` | `DELETE /api/documents/:id` | Both delete |
-| — | `POST /api/documents/import` | Route-only (`.odt` upload) |
-| — | `GET /api/documents/:id/export` | Route-only (`.odt` download) |
+| `doc_design` | `PUT /api/documents/:id/design` | Tool merges keys; route replaces the design |
+| `doc_export` | `GET /api/documents/:id/export?format=` | Tool returns the URL; the window downloads it |
+| — | `POST /api/documents/import` | Route-only (file upload) |
 
 ## More
 

@@ -221,7 +221,7 @@ function pluginCard(p) {
   const actions = el('div', 'plugin-card-actions');
   const removeConfirm = inlineConfirm(actions, {
     message: t('plugins.uninstallConfirm', { name: niceName(p) },
-      `Remove plugin "${niceName(p)}"? Its database tables will remain.`),
+      `Remove plugin “${niceName(p)}”? Its saved data will be kept.`),
     confirmLabel: t('plugins.remove', { name: niceName(p) }, `Remove ${niceName(p)}`),
     onConfirm: () => void onPluginAction('uninstall', p.name),
   });
@@ -273,8 +273,8 @@ function pluginCard(p) {
       onChange: (value) => {
         setPluginLayout(p.name, value);
         toast(value === 'full'
-          ? t('plugins.opensAsFull', { name: niceName(p) }, `${niceName(p)}: opens as full screen`)
-          : t('plugins.opensAsTile', { name: niceName(p) }, `${niceName(p)}: opens as tile`),
+          ? t('plugins.opensAsFull', { name: niceName(p) }, `${niceName(p)}: opens full screen`)
+          : t('plugins.opensAsTile', { name: niceName(p) }, `${niceName(p)}: opens as a tile`),
         { type: 'info' });
       },
     });
@@ -335,7 +335,7 @@ function renderInstalled() {
       icon: 'ui/puzzle',
       title: t('plugins.none', null, 'No plugins installed'),
       body: t('plugins.noneBody', null,
-        "PEAK'D! is running in its bare form. Install a plugin to add tools, routes, and skills."),
+        "PEAK'D! is running in its bare form. Install a plugin to add apps and new skills for the assistant."),
     }));
     return;
   }
@@ -490,7 +490,7 @@ function storeCard(app) {
   const actions = el('div', 'plugin-card-actions');
   const removeConfirm = inlineConfirm(actions, {
     message: t('plugins.uninstallConfirm', { name: app.name },
-      `Remove plugin "${app.name}"? Its database tables will remain.`),
+      `Remove plugin “${app.name}”? Its saved data will be kept.`),
     confirmLabel: t('plugins.remove', { name: app.name }, `Remove ${app.name}`),
     onConfirm: () => void onPluginAction('uninstall', app.id),
   });

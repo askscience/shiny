@@ -40,7 +40,7 @@ const STAGE_KEYS = [
   ['prepare', 'progress.stage.prepare', 'Preparing'],
   ['partition', 'progress.stage.partition', 'Partitioning'],
   ['format', 'progress.stage.format', 'Formatting'],
-  ['unpack', 'progress.stage.unpack', 'Unpacking rootfs'],
+  ['unpack', 'progress.stage.unpack', 'Copying the system'],
   ['configure', 'progress.stage.configure', 'Configuring'],
   ['bootloader', 'progress.stage.bootloader', 'Bootloader'],
   ['finish', 'progress.stage.finish', 'Finishing'],
@@ -199,13 +199,13 @@ function reasonLabel(reason) {
     missing: T('disk.reason.missing', 'Disk not found'),
     removable: T('disk.reason.removable', 'Removable device'),
     readOnly: T('disk.reason.readOnly', 'Read-only device'),
-    loop: T('disk.reason.loop', 'Loop device'),
-    optical: T('disk.reason.optical', 'Optical device'),
+    loop: T('disk.reason.loop', 'Virtual disk'),
+    optical: T('disk.reason.optical', 'CD/DVD drive'),
     mounted: T('disk.reason.mounted', 'A partition is mounted'),
-    live: T('disk.reason.live', 'This is the live medium'),
-    serial: T('disk.reason.serial', 'No serial exposed'),
+    live: T('disk.reason.live', 'This is the drive PEAK’D! is running from'),
+    serial: T('disk.reason.serial', 'No serial number reported'),
     small: T('disk.reason.small', 'Smaller than 8 GiB'),
-    table: T('disk.reason.table', 'Only GPT is supported'),
+    table: T('disk.reason.table', 'Uses an old partition table (only GPT is supported)'),
   };
   return values[reason] || reason;
 }
@@ -230,7 +230,7 @@ function modelBarSegment(segment) {
     kind: segment.kind,
     size: segment.size,
     label: label || segment.kind,
-    detail: segment.part?.path || (segment.kind === 'free' ? T('disk.freeDetail', 'No partition table entry') : ''),
+    detail: segment.part?.path || (segment.kind === 'free' ? T('disk.freeDetail', 'Not part of any partition') : ''),
   };
 }
 
@@ -453,7 +453,7 @@ function localFieldErrors() {
     errors[key].push(message);
   };
 
-  if (!state.locale.trim()) add('locale', T('region.locale.required', 'Locale is required'));
+  if (!state.locale.trim()) add('locale', T('region.locale.required', 'Choose a language and formats'));
   if (!state.keyboard.trim()) add('keyboard', T('region.keyboard.required', 'Keyboard layout is required'));
   if (!state.timezone.trim()) add('timezone', T('region.timezone.required', 'Timezone is required'));
 
@@ -484,7 +484,7 @@ function localFieldErrors() {
       add('cudaLicense', T('profile.nvidia.cudaLicense.required', 'Accept the CUDA EULA'));
     }
     if (state.health?.hardware?.secure_boot && !state.mokAccepted) {
-      add('mok', T('profile.nvidia.mok.required', 'Acknowledge the MOK enrollment step'));
+      add('mok', T('profile.nvidia.mok.required', 'Confirm that you understand the security-key step'));
     }
   }
 
@@ -501,8 +501,8 @@ function modelErrorLabel(code) {
     homeTooBig: T('disk.manual.homeTooBig', 'Leave at least 20 GiB for the PEAK’D! system'),
     rootTooBig: T('disk.timeline.rootTooBig', 'The system does not fit in this free space.'),
     rootSmall: T('disk.manual.rootSmall', 'Leave at least 20 GiB for the system.'),
-    noRoot: T('disk.existing.noRoot', 'Select an unmounted ext4 partition to use as root'),
-    noEsp: T('disk.existing.noEsp', 'No EFI system partition found on this disk'),
+    noRoot: T('disk.existing.noRoot', 'Choose a partition for PEAK’D! (ext4 or empty, not in use)'),
+    noEsp: T('disk.existing.noEsp', 'No startup partition found on this disk'),
   };
   return values[code] || code;
 }
@@ -517,27 +517,27 @@ function diskLocalErrors() {
   if (state.partitionMode === MODE_EXISTING) {
     const root = selectedExistingRoot();
     const esp = selectedExistingEsp();
-    if (!root) errors.push(T('disk.existing.noRoot', 'Select an unmounted ext4 partition to use as root'));
-    if (!esp) errors.push(T('disk.existing.noEsp', 'No EFI system partition found on this disk'));
+    if (!root) errors.push(T('disk.existing.noRoot', 'Choose a partition for PEAK’D! (ext4 or empty, not in use)'));
+    if (!esp) errors.push(T('disk.existing.noEsp', 'No startup partition found on this disk'));
     if (root) {
       if ((root.mountpoints || []).length) {
-        errors.push(T('disk.existing.rootMounted', 'The selected root partition is mounted'));
+        errors.push(T('disk.existing.rootMounted', 'The selected partition is in use'));
       }
       if ((root.holders || []).length) {
-        errors.push(T('disk.existing.rootBusy', 'The selected root partition has active holders'));
+        errors.push(T('disk.existing.rootBusy', 'The selected partition is being used by the system'));
       }
       if (root.fstype && root.fstype !== 'ext4') {
-        errors.push(T('disk.existing.rootFilesystem', 'The root partition must be ext4 or empty'));
+        errors.push(T('disk.existing.rootFilesystem', 'The partition for PEAK’D! must be ext4 or empty'));
       }
       if (String(root.fstype || '').trim() && !state.existingConfirmed) {
         errors.push(T('disk.existing.needConfirm', 'Confirm that this partition will be formatted'));
       }
     }
     if (esp && esp.fstype !== 'vfat') {
-      errors.push(T('disk.existing.espFilesystem', 'The startup partition must be vfat'));
+      errors.push(T('disk.existing.espFilesystem', 'The startup partition must be FAT32'));
     }
     if (root && esp && root.path === esp.path) {
-      errors.push(T('disk.existing.samePartition', 'Root and startup partitions must differ'));
+      errors.push(T('disk.existing.samePartition', 'The system and startup partitions must be different'));
     }
   } else if (state.partitionMode === MODE_MANUAL) {
     if (state.manualHome && Number(state.manualHomeGiB) <= 0) {
@@ -827,10 +827,10 @@ function renderChrome() {
     const currentStep = state.phase === 'progress' ? totalSteps : Math.min(state.step + 1, STEPS.length);
     parts.push(T('chrome.stepShort', 'Step {current}/{total}', { current: currentStep, total: totalSteps }));
   } else if (state.loading) {
-    parts.push(T('chrome.connecting', 'Checking helper'));
+    parts.push(T('chrome.connecting', 'Connecting to the installer service'));
   } else {
     tone = 'error';
-    parts.push(T('chrome.offline', 'Helper offline'));
+    parts.push(T('chrome.offline', 'Installer service offline'));
   }
   status.append(el('span', `installer-status-dot installer-status-dot--${tone}`), el('span', null, parts.join(' · ')));
   chrome.append(
@@ -923,7 +923,7 @@ function renderHelperError() {
   wrap.appendChild(emptyState({
     icon: 'ui/warning',
     title: T('state.helperDown.title', 'The installer helper is not running'),
-    body: state.healthError || T('state.helperDown.body', 'Start shiny-installer-helper in the live session, then retry.'),
+    body: state.healthError || T('state.helperDown.body', 'Its background service (shiny-installer-helper) is not running. Restart the live session, then press Retry.'),
     action: button({
       label: T('common.retry', 'Retry'),
       variant: 'primary',
@@ -982,8 +982,8 @@ function renderRegion() {
   const timezone = hasOptions ? createSelect('timezone', options.timezones) : createInput('timezone');
   grid.append(
     fieldWithError({
-      label: T('region.locale.label', 'Locale'),
-      hint: T('region.locale.hint', 'Locale installed on this system.'),
+      label: T('region.locale.label', 'Language and formats'),
+      hint: T('region.locale.hint', 'Languages and formats installed on this system.'),
       control: locale,
       error: state.showErrors ? errors.locale?.[0] : '',
     }),
@@ -1012,7 +1012,7 @@ function renderRegion() {
     'accent',
     'ui/info',
     T('region.live.title', 'The live session stays yours'),
-    T('region.live.body', "Keep using PEAK'D while the installer prepares the target. Nothing is written until you press Install."),
+    T('region.live.body', "Keep using PEAK'D while the installer prepares the disk. Nothing is written until you press Install."),
   ));
   const detected = el('div', 'installer-detected');
   detected.append(
@@ -1045,7 +1045,7 @@ function renderDisk() {
     wrap.appendChild(emptyState({
       icon: 'ui/monitor',
       title: T('disk.empty.title', 'No installable disks'),
-      body: T('disk.empty.body', 'The live medium, loop devices and optical drives are hidden. Plug in a target disk or refresh.'),
+      body: T('disk.empty.body', 'The drive PEAK’D! is running from, virtual disks and CD/DVD drives are hidden. Plug in a disk or refresh.'),
       action: button({
         label: T('disk.refresh', 'Refresh disks'),
         variant: 'ghost',
@@ -1115,12 +1115,12 @@ function updateTimelineSummaryState() {
 function renderDiskShelf(disks) {
   const wrap = el('section', 'installer-disks');
   wrap.appendChild(sectionHeading(
-    T('disk.device', 'Install target'),
-    T('disk.deviceHint', 'One disk. The helper re-checks the exact model, serial and size before it touches anything.'),
+    T('disk.device', 'Installation disk'),
+    T('disk.deviceHint', 'Pick one disk. Before anything is written, the installer checks the disk\'s model, serial number and size again.'),
   ));
   const shelf = el('div', 'installer-diskshelf');
   shelf.setAttribute('role', 'radiogroup');
-  shelf.setAttribute('aria-label', T('disk.device', 'Install target'));
+  shelf.setAttribute('aria-label', T('disk.device', 'Installation disk'));
   const ordered = [...disks].sort((a, b) => {
     const aBad = diskReasons(a).length ? 1 : 0;
     const bBad = diskReasons(b).length ? 1 : 0;
@@ -1168,7 +1168,7 @@ function renderIntentSelector(disk) {
       title: T('disk.intent.partition', 'Use one partition'),
       desc: roots.length && esp
         ? T('disk.intent.partition.desc', 'Format one existing partition and keep the others.')
-        : T('disk.intent.partition.none', 'This disk has no suitable partition and startup partition.'),
+        : T('disk.intent.partition.none', 'This disk has no suitable partition, or no startup partition.'),
       disabled: !roots.length || !esp,
     },
   ];
@@ -1384,7 +1384,7 @@ function renderGuidedNotes(disk, model) {
     wrap.appendChild(alertBlock(
       'danger',
       T('disk.existing.noEspTitle', 'Startup partition missing'),
-      T('disk.existing.noEspBody', 'This disk has no FAT32 startup partition. PEAK’D! needs one to boot; use “Use the free space” or erase the disk.'),
+      T('disk.existing.noEspBody', 'This disk has no FAT32 startup partition. PEAK’D! needs one to start; choose “Create the partitions” or erase the whole disk.'),
     ));
   }
   return wrap;
@@ -1395,7 +1395,7 @@ function renderPartitionListFallback(disk) {
   const details = el('details', 'installer-list-fallback');
   details.appendChild(el('summary', 'installer-list-fallback-summary', T('disk.view.list', 'Partition list')));
   if (!roots.length) {
-    details.appendChild(el('p', 'installer-hint', T('disk.existing.noRootBody', 'This disk has no unused or formattable partition with at least 20 GiB.')));
+    details.appendChild(el('p', 'installer-hint', T('disk.existing.noRootBody', 'This disk has no unused or formattable partition with at least 20 GiB. Choose “Erase the whole disk” or “Create the partitions” instead.')));
     return details;
   }
   const list = el('div', 'installer-partition-list');
@@ -1463,7 +1463,7 @@ function diskCard(disk) {
   const meta = [
     disk.path,
     formatBytes(disk.size_bytes),
-    disk.serial || T('disk.noSerial', 'No serial exposed'),
+    disk.serial || T('disk.noSerial', 'No serial number reported'),
     disk.tran ? disk.tran.toUpperCase() : '',
     `${(disk.children || []).length} ${T('disk.partitionCount', 'partitions')}`,
     freeGap
@@ -1476,7 +1476,7 @@ function diskCard(disk) {
   if (diskHasMounts(disk)) badges.appendChild(badge(T('disk.badge.mounted', 'Mounted'), { tone: 'warn' }));
   if (disk.removable) badges.appendChild(badge(T('disk.badge.removable', 'Removable'), { tone: 'warn' }));
   if (disk.read_only) badges.appendChild(badge(T('disk.badge.readOnly', 'Read-only'), { tone: 'warn' }));
-  if (diskIsLive(disk)) badges.appendChild(badge(T('disk.badge.live', 'Live medium'), { tone: 'error' }));
+  if (diskIsLive(disk)) badges.appendChild(badge(T('disk.badge.live', 'Installer drive'), { tone: 'error' }));
   if (!reasons.length) badges.appendChild(badge(T('disk.badge.eligible', 'Eligible'), { tone: 'ok' }));
   else badges.appendChild(badge(T('disk.badge.notEligible', 'Not eligible'), { tone: 'error' }));
   main.appendChild(badges);
@@ -1606,7 +1606,7 @@ function renderAccount() {
       error: state.showErrors ? errors.username?.[0] : '',
     }),
     fieldWithError({
-      label: T('account.hostname.label', 'Hostname'),
+      label: T('account.hostname.label', 'Computer name'),
       hint: T('account.hostname.hint', 'The name other machines see on the network.'),
       control: hostname,
       error: state.showErrors ? errors.hostname?.[0] : '',
@@ -1663,10 +1663,10 @@ function renderProfile() {
   const copy = el('div', 'installer-hardware-copy');
   copy.append(
     el('span', 'installer-hardware-name', hw.product || T('profile.unknownHardware', 'Unknown hardware')),
-    el('span', 'installer-hardware-meta', [hw.vendor, hw.board].filter(Boolean).join(' · ') || T('profile.hardwareMeta', 'DMI information unavailable')),
+    el('span', 'installer-hardware-meta', [hw.vendor, hw.board].filter(Boolean).join(' · ') || T('profile.hardwareMeta', 'Hardware details unavailable')),
   );
   const badges = el('div', 'installer-hardware-badges');
-  badges.appendChild(badge(hw.is_t2 ? T('profile.detectedT2', 'T2 bridge detected') : T('profile.detectedGeneric', 'Generic x86_64'), {
+  badges.appendChild(badge(hw.is_t2 ? T('profile.detectedT2', 'Apple T2 chip detected') : T('profile.detectedGeneric', 'Generic x86_64'), {
     tone: hw.is_t2 ? 'accent' : 'neutral',
   }));
   hardware.append(mark, copy, badges);
@@ -1674,7 +1674,7 @@ function renderProfile() {
 
   wrap.appendChild(sectionHeading(
     T('profile.kernel.title', 'Kernel profile'),
-    T('profile.kernel.hint', 'Two kernels ship in the live image. This choice decides what the installed system boots.'),
+    T('profile.kernel.hint', 'Two system versions are on this USB stick. This choice decides which one the installed system uses.'),
   ));
   const profiles = el('div', 'installer-layout-choices');
   profiles.setAttribute('role', 'radiogroup');
@@ -1685,7 +1685,7 @@ function renderProfile() {
       current: state.profile === 'backports',
       iconName: 'ui/monitor',
       title: T('profile.generic.title', 'Generic PC'),
-      desc: T('profile.generic.desc', 'Pinned backports kernel, Mesa and PipeWire for x86_64.'),
+      desc: T('profile.generic.desc', 'For most PCs: an up-to-date kernel with current graphics and audio drivers.'),
       meta: T('profile.generic.meta', 'linux-image-amd64 · backports'),
       onClick: () => {
         state.profile = 'backports';
@@ -1700,8 +1700,8 @@ function renderProfile() {
       current: state.profile === 't2',
       iconName: 'ui/shield',
       title: T('profile.t2.title', 'T2 Mac'),
-      desc: T('profile.t2.desc', 'linux-t2 and its companions for the Apple T2 bridge.'),
-      meta: hw.is_t2 ? T('profile.t2.meta', 'linux-t2 · detected') : T('profile.t2.missing', 'T2 bridge not detected'),
+      desc: T('profile.t2.desc', 'For Intel Macs with the Apple T2 chip: keyboard, trackpad, Wi-Fi and audio support.'),
+      meta: hw.is_t2 ? T('profile.t2.meta', 'linux-t2 · detected') : T('profile.t2.missing', 'Apple T2 chip not detected'),
       disabled: !hw.is_t2,
       onClick: () => {
         state.profile = 't2';
@@ -1724,12 +1724,12 @@ function renderProfile() {
     'accent',
     'ui/layers',
     T('profile.kernel.noteTitle', 'One live image, two profiles'),
-    T('profile.kernel.noteBody', 'The generic profile installs the pinned backports kernel. The T2 profile installs linux-t2 and does not install the generic kernel.'),
+    T('profile.kernel.noteBody', 'The Generic PC profile installs the standard kernel. The T2 Mac profile installs only the kernel for Macs with the T2 chip.'),
   ));
 
   wrap.appendChild(sectionHeading(
     T('profile.ai.title', 'AI tier'),
-    T('profile.ai.hint', 'Choose how much of the local AI stack to provision. You can add models later.'),
+    T('profile.ai.hint', 'Choose how much of the local AI to install. You can add models later.'),
   ));
   const tiers = el('div', 'installer-layout-choices installer-layout-choices--ai');
   tiers.setAttribute('role', 'radiogroup');
@@ -1806,7 +1806,7 @@ function renderNvidiaSection() {
       current: state.gpuDriver === 'nouveau',
       iconName: 'ui/monitor',
       title: T('profile.nvidia.open.title', 'Open driver'),
-      desc: T('profile.nvidia.open.desc', 'In-tree nouveau, no third-party license, lower performance.'),
+      desc: T('profile.nvidia.open.desc', 'Built into Linux (nouveau): no extra license, lower performance.'),
       onClick: () => {
         state.gpuDriver = 'nouveau';
         state.installCuda = false;
@@ -1848,7 +1848,7 @@ function renderNvidiaSection() {
       'warn',
       'ui/warning',
       T('profile.nvidia.warnTitle', 'Proprietary driver'),
-      T('profile.nvidia.warnBody', 'nouveau is unloaded and the kernel is tainted. You can switch back after install.'),
+      T('profile.nvidia.warnBody', 'The open driver (nouveau) is turned off and the system runs NVIDIA’s closed-source driver. You can switch back after installation.'),
     ));
     wrap.appendChild(licenseRow(NVIDIA_DRIVER_LICENSE, T('profile.nvidia.license.driver', 'NVIDIA Driver License')));
     const cudaRow = el('label', 'installer-confirm-check installer-consent');
@@ -1876,16 +1876,16 @@ function renderNvidiaSection() {
         renderFooter();
         renderManifest();
       });
-      mokRow.append(mokCheck, el('span', 'installer-confirm-check-text', T('profile.nvidia.mok', 'I understand the MOK enrollment step will be required at first boot')));
+      mokRow.append(mokCheck, el('span', 'installer-confirm-check-text', T('profile.nvidia.mok', 'I understand that at the first restart I must confirm a security key (MOK) on a setup screen')));
       wrap.appendChild(mokRow);
-      wrap.appendChild(el('p', 'installer-hint', T('profile.nvidia.mokHint', 'Secure Boot needs the NVIDIA DKMS module signed through MOK.')));
+      wrap.appendChild(el('p', 'installer-hint', T('profile.nvidia.mokHint', 'With Secure Boot on, the NVIDIA driver must be signed with a key that you confirm once at the first restart.')));
     }
     if (nvidia.is_hybrid) {
       wrap.appendChild(note(
         'accent',
         'ui/info',
         T('profile.nvidia.hybridTitle', 'Hybrid graphics'),
-        T('profile.nvidia.hybridBody', 'The integrated GPU stays enabled. PEAK\'D! uses PRIME/offload for the NVIDIA GPU.'),
+        T('profile.nvidia.hybridBody', 'The integrated GPU stays on. PEAK\'D! uses the NVIDIA GPU only for apps that need it.'),
       ));
     }
   }
@@ -1954,7 +1954,7 @@ function renderReview() {
 
   const reviewGrid = el('div', 'installer-review-grid');
   reviewGrid.appendChild(reviewBlock(T('review.region', 'Language & region'), keyValue([
-    [T('region.locale.label', 'Locale'), state.locale],
+    [T('region.locale.label', 'Language and formats'), state.locale],
     [T('region.keyboard.label', 'Keyboard layout'), state.keyboard],
     [T('region.timezone.label', 'Timezone'), state.timezone],
   ])));
@@ -1994,7 +1994,7 @@ function renderReview() {
   reviewGrid.appendChild(reviewBlock(T('review.account', 'Account'), keyValue([
     [T('account.fullName.label', 'Full name'), state.fullName || '—'],
     [T('account.username.label', 'Username'), state.username || '—'],
-    [T('account.hostname.label', 'Hostname'), state.hostname || '—'],
+    [T('account.hostname.label', 'Computer name'), state.hostname || '—'],
     [T('account.password.label', 'Password'), T('review.passwordValue', 'Set during install')],
   ])));
 
@@ -2006,7 +2006,7 @@ function renderReview() {
     [T('review.cuda', 'CUDA'), state.gpuDriver === 'nvidia' && state.installCuda ? T('common.yes', 'Yes') : T('common.no', 'No')],
   ];
   if (state.health?.hardware?.secure_boot && state.gpuDriver === 'nvidia') {
-    systemRows.push([T('review.mok', 'Secure Boot MOK'), state.mokAccepted ? T('common.acknowledged', 'Acknowledged') : T('common.required', 'Required')]);
+    systemRows.push([T('review.mok', 'Secure Boot key (MOK)'), state.mokAccepted ? T('common.acknowledged', 'Acknowledged') : T('common.required', 'Required')]);
   }
   reviewGrid.appendChild(reviewBlock(T('review.system', 'System'), keyValue(systemRows)));
 
@@ -2020,7 +2020,7 @@ function renderReview() {
 
   if (state.validating) {
     const validating = el('div', 'installer-validation is-loading');
-    validating.append(spinner({ size: 16 }), el('span', null, T('review.validating', 'Checking target with the helper…')));
+    validating.append(spinner({ size: 16 }), el('span', null, T('review.validating', 'Checking the disk…')));
     wrap.appendChild(validating);
   } else if (state.validationError) {
     wrap.appendChild(alertBlock('danger', T('review.validationFailed', 'Validation failed'), state.validationError));
@@ -2031,12 +2031,12 @@ function renderReview() {
       wrap.appendChild(note(
         'ok',
         'ui/check',
-        T('review.valid', 'Target validated'),
-        T('review.validBody', 'The helper matched the disk identity and the plan is ready for the engine.'),
+        T('review.valid', 'Disk checked'),
+        T('review.validBody', 'The installer confirmed this is the right disk and the plan is ready.'),
       ));
     }
     if (errorsList.length) {
-      wrap.appendChild(alertBlock('danger', T('review.errors', 'Target needs attention'), errorsList.join(' · ')));
+      wrap.appendChild(alertBlock('danger', T('review.errors', 'The disk needs attention'), errorsList.join(' · ')));
     }
     if (warnings.length) {
       wrap.appendChild(alertBlock('warn', T('review.warnings', 'Warnings'), warnings.join(' · ')));
@@ -2056,7 +2056,7 @@ function renderReview() {
   confirmMark.appendChild(icon('ui/warning', { size: 20 }));
   const confirmCopy = el('div', 'installer-confirm-copy');
   confirmCopy.append(
-    el('h3', 'installer-confirm-title', T('review.confirm.title', 'Confirm the target')),
+    el('h3', 'installer-confirm-title', T('review.confirm.title', 'Confirm the disk')),
     el('p', 'installer-confirm-body', T('review.confirm.body', 'Type the disk serial exactly, then acknowledge the operation.')),
   );
   confirmHead.append(confirmMark, confirmCopy);
@@ -2074,7 +2074,7 @@ function renderReview() {
   serial.id = 'installer-confirm-serial';
   confirm.appendChild(field({
     label: T('review.confirm.serial', 'Disk serial'),
-    hint: disk?.serial ? `${T('review.confirm.expected', 'Expected')}: ${disk.serial}` : T('review.confirm.noSerial', 'This disk exposes no serial; install is unavailable.'),
+    hint: disk?.serial ? `${T('review.confirm.expected', 'Expected')}: ${disk.serial}` : T('review.confirm.noSerial', 'This disk does not report a serial number, so PEAK\'D! cannot be installed on it.'),
     control: serial,
   }));
   if (disk?.serial && state.confirmSerial && state.confirmSerial.trim() !== disk.serial) {
@@ -2295,7 +2295,7 @@ async function startInstall() {
     return;
   }
   if (!state.confirmed) {
-    toast(T('review.needConfirm', 'Acknowledge the erase first'), { type: 'error' });
+    toast(T('review.needConfirm', 'Tick the confirmation box first'), { type: 'error' });
     return;
   }
   if (state.confirmSerial.trim() !== disk.serial) {
@@ -2305,7 +2305,7 @@ async function startInstall() {
   if (!state.validation?.ok || state.validationKey !== planKey()) {
     await validatePlan();
     if (!state.validation?.ok) {
-      toast(T('review.targetNotValid', 'The helper has not validated this target'), { type: 'error' });
+      toast(T('review.targetNotValid', 'The installer has not checked this disk yet'), { type: 'error' });
       return;
     }
   }
@@ -2333,7 +2333,7 @@ async function startInstall() {
     });
     if (!tileEl) return;
     state.job = response?.data?.job || null;
-    if (!state.job) throw new Error(T('progress.noJob', 'The helper did not return a job'));
+    if (!state.job) throw new Error(T('progress.noJob', 'The installer could not start the installation'));
     startPolling();
   } catch (error) {
     if (!tileEl) return;
@@ -2445,7 +2445,7 @@ function progressHead() {
   head.append(
     el('div', 'installer-step-kicker', counter(STEPS.length + 1, STEPS.length + 1)),
     title,
-    el('p', 'installer-step-subtitle', T('progress.body', 'The live session stays open while the helper prepares the target.')),
+    el('p', 'installer-step-subtitle', T('progress.body', 'You can keep using this live session while PEAK\'D! is installed on the disk.')),
   );
   return head;
 }
@@ -2465,8 +2465,8 @@ function renderProgress() {
   const copy = el('div', 'installer-progress-copy');
   copy.append(
     el('div', 'installer-progress-kicker', dryRun ? T('progress.dryBadge', 'Simulation') : T('progress.liveBadge', 'Install')),
-    el('h3', 'installer-progress-title', T('progress.stepTitle', 'Preparing the target')),
-    el('p', 'installer-progress-sub', T('progress.body', 'The live session stays open while the helper prepares the target.')),
+    el('h3', 'installer-progress-title', T('progress.stepTitle', 'Preparing the disk')),
+    el('p', 'installer-progress-sub', T('progress.body', 'You can keep using this live session while PEAK\'D! is installed on the disk.')),
   );
   refs.progressStage = el('div', 'installer-progress-stage', stageLabel(status.stage));
   refs.progressStage.dataset.stage = String(status.stage || '');
@@ -2482,7 +2482,7 @@ function renderProgress() {
       dryRun ? T('progress.dryDoneTitle', 'Simulation complete') : T('progress.installDoneTitle', 'Installation complete'),
       dryRun
         ? T('progress.dryDoneBody', 'No disk was modified. The helper accepted this plan for testing.')
-        : T('progress.installDoneBody', 'The target is ready. Restart the computer and remove the USB.'),
+        : T('progress.installDoneBody', 'PEAK\'D! is installed. Restart the computer and remove the USB stick.'),
     ));
   } else if (status.done && !status.success) {
     wrap.appendChild(alertBlock('danger', T('progress.failed', 'Installation failed'), status.error || T('progress.failedBody', 'The installer stopped.')));
@@ -2506,7 +2506,7 @@ function renderProgress() {
   wrap.appendChild(stages);
 
   const logWrap = el('section', 'installer-log-wrap');
-  logWrap.appendChild(sectionHeading(T('progress.log', 'Live log'), T('progress.logHint', 'The helper reports each stage here.')));
+  logWrap.appendChild(sectionHeading(T('progress.log', 'Live log'), T('progress.logHint', 'Each step of the installation is shown here.')));
   refs.log = el('pre', 'installer-log');
   refs.log.textContent = (status.log || []).join('\n') || T('progress.noLog', 'Waiting for the helper…');
   logWrap.appendChild(refs.log);
@@ -2552,15 +2552,15 @@ function renderManifest() {
   const head = el('div', 'installer-manifest-head');
   const headCopy = el('div', 'installer-manifest-head-copy');
   headCopy.append(
-    el('span', 'installer-eyebrow', T('manifest.eyebrow', 'Live plan')),
-    el('h2', 'installer-manifest-title', T('manifest.title', 'Install manifest')),
+    el('span', 'installer-eyebrow', T('manifest.eyebrow', 'Your plan')),
+    el('h2', 'installer-manifest-title', T('manifest.title', 'Installation summary')),
   );
   head.appendChild(headCopy);
   manifest.appendChild(head);
 
   const disk = selectedDisk();
   const target = el('section', 'installer-manifest-section');
-  target.appendChild(el('span', 'installer-manifest-label', T('manifest.target', 'Target')));
+  target.appendChild(el('span', 'installer-manifest-label', T('manifest.target', 'Disk')));
   const model = disk ? buildPlanModel(disk, state) : null;
   if (disk) {
     const root = selectedExistingRoot();
@@ -2569,7 +2569,7 @@ function renderManifest() {
       el('strong', 'installer-manifest-value', disk.model || disk.path),
       el('span', 'installer-manifest-sub', `${disk.path} · ${formatBytes(disk.size_bytes)}`),
       segmentBar(existingSegments(disk), { mini: true, label: T('disk.currentBar', 'Current partition layout for {path}', { path: disk.path }) }),
-      el('span', 'installer-manifest-meta ui-meta', disk.serial || T('disk.noSerial', 'No serial exposed')),
+      el('span', 'installer-manifest-meta ui-meta', disk.serial || T('disk.noSerial', 'No serial number reported')),
     );
     if (model?.gap) {
       target.appendChild(el('span', 'installer-manifest-sub', `${T('disk.timeline.zone', 'Install zone')}: ${formatBytes(model.gap.start_bytes)} – ${formatBytes(model.gap.start_bytes + model.gap.size_bytes)}`));

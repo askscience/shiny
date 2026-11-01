@@ -309,7 +309,7 @@ async function exportCurrentDoc() {
 /* ── PDF modes (markup tools) ───────────────────────────────── */
 
 const MODES = {
-  note: { icon: 'ui/message-circle', fallback: 'Comment — click where the note goes (C)' },
+  note: { icon: 'ui/message-circle', fallback: 'Comment — click where the comment goes (C)' },
   text: { icon: 'ui/type', fallback: 'Text box — click to type on the page (T)' },
   draw: { icon: 'ui/pencil', fallback: 'Draw — freehand (D)' },
   shape: { icon: 'ui/marquee-rect', fallback: 'Shape — drag a box or an oval (R)' },
@@ -1072,7 +1072,7 @@ function openFindReplace(prefill = '') {
   });
   const note = document.createElement('p');
   note.className = 'ui-hint';
-  note.textContent = t('plugin.pdf.find.note', null, 'Replaces the text in place, keeping its font. Letters the PDF does not contain cannot be typed.');
+  note.textContent = t('plugin.pdf.find.note', null, 'Replaces the text in place, keeping its font. Only letters the PDF\'s fonts already contain can be typed.');
   const form = document.createElement('form');
   form.className = 'ui-stack pdf-find-form';
   const actions = document.createElement('div');

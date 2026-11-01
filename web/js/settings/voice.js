@@ -369,7 +369,7 @@ export function createVoiceSection({ on, cleanups, resources }) {
       hint: t('settings.voice.conversationHint', null,
         'Once “Hey …” wakes it, the assistant stays in conversation: after each reply it keeps listening, '
         + 'so a follow-up needs no phrase. A double tap asks one thing only, a tap switches to typing, '
-        + 'and “basta” ends it. The assistant never listens while it is speaking.'),
+        + 'and “stop” ends it. The assistant never listens while it is speaking.'),
       checked: getConversation(),
       onChange: (checked) => setConversation(checked),
     });

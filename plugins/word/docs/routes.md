@@ -44,14 +44,14 @@ the response is the literal `"now"` (the DB value is authoritative on the next
 
 Errors: `BadRequest("invalid JSON body: …")`, `Unauthorized`, `Internal` (codec).
 
-## `POST /api/documents/import` — import a `.odt`
+## `POST /api/documents/import` — import a document
 
 | | |
 |---|---|
 | Handler tag | `doc_import` |
 | Auth | required |
 | Request | `multipart/form-data` with a `file` field; optional query `?name=…` |
-| Response | `{ success: true, data: { title } }` |
+| Response | `{ success: true, data: { id, title } }` |
 | Code | `doc_import()`, `src/routes.rs` |
 
 Behaviour: parses the query into `ImportQuery { name: Option<String> }`, then
@@ -59,12 +59,17 @@ reads the multipart stream and captures the field named `file` (its bytes and
 original filename). The title is `?name=` when present, otherwise the filename
 stem, else `"Imported document"`, passed through `clean_title`.
 
-Validation: `odt::odt_to_html(&data)?` is called first, so a corrupt file is
-rejected before insertion. The **original bytes are stored unchanged** (no
-re-encode), preserving foreign formatting.
+Formats: `.odt`, `.docx` (also `.docm`/`.dotx`), `.rtf`, `.md`, `.html`,
+`.txt`, picked by the file name's extension or, without one, sniffed from the
+bytes (`engine::import`). The file is parsed first, so an unreadable file is
+rejected before insertion. An `.odt` is **stored unchanged**; every other
+format is converted to `.odt` content with WordCraft's ODT writer. Headers,
+footers and section layout of an imported `.docx` are not kept (the design
+regenerates them on export); its text, styles, lists, tables and images are.
 
-Errors: `BadRequest("multipart error: …")`, `BadRequest("read error: …")`,
-`BadRequest("missing 'file' field")`, `BadRequest` (invalid ODT/zip).
+Errors: `BadRequest("multipart error: …")`, `BadRequest("missing 'file'
+field")`, `BadRequest("Unsupported file type: …")`, `BadRequest("Not a
+readable Word document: …")`, `BadRequest("Could not read …")`.
 
 ## `GET /api/documents/:id` — get
 
@@ -73,7 +78,7 @@ Errors: `BadRequest("multipart error: …")`, `BadRequest("read error: …")`,
 | Handler tag | `doc_get` |
 | Auth | required |
 | Request | path `:id` |
-| Response | `{ success: true, data: { id, title, html, updated_at } }` |
+| Response | `{ success: true, data: { id, title, html, updated_at, design } }` |
 | Code | `doc_get()`, `src/routes.rs` |
 
 Reads `title, odt, updated_at` scoped by `id` and `user_id`, converts the blob
@@ -112,21 +117,71 @@ Errors: `NotFound("Document not found")`, `BadRequest("invalid JSON body: …")`
 
 Scoped `DELETE`; zero rows affected → `NotFound("Document not found")`.
 
-## `GET /api/documents/:id/export` — export `.odt`
+## `GET /api/documents/:id/export` — export
 
 | | |
 |---|---|
 | Handler tag | `doc_export` |
 | Auth | required |
-| Request | path `:id` |
-| Response | **raw bytes**, `Content-Type: application/vnd.oasis.opendocument.text`, `Content-Disposition: attachment; filename="<title>.odt"` |
-| Code | `doc_export()`, `src/routes.rs` |
+| Request | path `:id`; query `?format=odt\|docx\|pdf\|md\|html\|rtf\|txt` (default `odt`) |
+| Response | **raw bytes** with the format's `Content-Type`, `Content-Disposition: attachment; filename="<title>.<ext>"` |
+| Code | `doc_export()` → `export_document()`, `src/routes.rs` |
 
-The stored `odt` blob is streamed back unmodified, so the download is byte-for-
-byte the file LibreOffice would open. `filename_for_title()` sanitises the name
-and strips `"` from the header. Not wrapped in the JSON envelope.
+The content is composed with the document's design (`engine::compose`) and
+written in the requested format (`engine::export`): `.docx` by
+`wordcraft-docx`, `.pdf` by `wordcraft-pdf` (fonts embedded and subset, text
+selectable, outline from headings, tagged), the rest by `wordcraft-formats`.
+With a plain design an `.odt` export is the stored blob, byte for byte.
+`filename_for_title()` sanitises the name. Not wrapped in the JSON envelope.
 
-Errors: `NotFound("Document not found")`, `Internal("Export failed: …")`.
+Errors: `BadRequest("Unknown export format: …")`, `NotFound("Document not
+found")`, `Internal("… export failed: …")`.
+
+## `PUT /api/documents/:id/design` — set the design
+
+| | |
+|---|---|
+| Handler tag | `doc_design` |
+| Auth | required |
+| Request | JSON `Design`: `{ template, paper, cover, toc, header, page_numbers, subtitle, author, date, lang, accent, margin_top, margin_right, margin_bottom, margin_left }` (all optional; margins in mm, 0 = 25 mm) |
+| Response | `{ success: true, data: { success: true, design } }` |
+| Code | `doc_design()`, `src/routes.rs` |
+
+Replaces the stored design after `Design::validate()` and bumps `updated_at`.
+`GET /api/documents/:id` returns the current design beside the HTML.
+
+Errors: `BadRequest` (invalid JSON, unknown template, paper, colour, or text
+over 200 characters), `NotFound("Document not found")`.
+
+## `POST /api/documents/:id/opened` — the window opened it
+
+Handler tag `doc_opened`. Sets `opened_at` (migration `003_opened.sql`), so the
+document on screen becomes the default target of the `doc_*` tools (they
+order by the later of `updated_at` and `opened_at`). Response
+`{ success: true }`; `NotFound` for another user's document.
+
+## `GET /api/documents/:id/pages` — preview pages
+
+Handler tag `doc_pages`. Composes the document with its design and lays it
+out (`engine::Preview`, WordCraft layout). Response
+`{ count, pages: [{ w, h }] }`, sizes in points. The laid-out document is
+cached per (document, `updated_at`, title, design) — four entries — so the
+page requests that follow reuse it.
+
+## `GET /api/documents/:id/page/:n` — one rendered page
+
+Handler tag `doc_page`. Query `?scale=` pixels per point (0.25–4, default
+1.5). Renders page `n` (1-based) with `wordcraft-render` and returns
+`image/png`, `Cache-Control: private, no-store`. `BadRequest` for a page
+that is not a number from 1, `NotFound` past the last page.
+
+## `GET /api/word-fonts/:name` — document faces (public)
+
+Handler tag `doc_font`, `RouteSpec::public()`. Serves one of the fonts
+WordCraft bundles (`engine::FONT_FILES`: Source Sans 3, Source Serif 4,
+Inter, JetBrains Mono; OFL) as `font/ttf` with a one-year immutable cache, so
+the window sets the page in the faces the PDF embeds. Unknown names are
+`NotFound`; names are matched exactly against the list (no paths).
 
 ## Handler dispatch
 
@@ -141,6 +196,11 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "doc_delete" => doc_delete(ctx),
         "doc_export" => doc_export(ctx),
         "doc_import" => doc_import(ctx),
+        "doc_design" => doc_design(ctx),
+        "doc_pages" => doc_pages(ctx),
+        "doc_opened" => doc_opened(ctx),
+        "doc_page" => doc_page(ctx),
+        "doc_font" => doc_font(),
         _ => return None,
     })
 }

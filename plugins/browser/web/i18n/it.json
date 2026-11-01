@@ -1,48 +1,40 @@
 {
   "plugin.browser.meta.category": "Web",
-  "plugin.browser.meta.description": "Naviga il web dentro Shiny — una finestra con blocco degli annunci, download, navigazione in incognito e una home di notizie ordinata dalle tue ricerche",
-  "plugin.browser.meta.summary": "Browser: navigazione web filtrata dall'adblock con scudo attivabile, gestore dei download, schede in incognito e schede di notizie correlate costruite da ciò che cerchi",
-
+  "plugin.browser.meta.description": "Naviga il web dentro Shiny — un browser con blocco degli annunci, pagina iniziale con i segnalibri, download, schede in incognito e notizie",
+  "plugin.browser.meta.summary": "Browser: navigazione web filtrata dall'adblock con pagina iniziale dei segnalibri, gestore dei download, schede in incognito e schede di notizie correlate",
   "plugin.browser.toolbar.address": "Cerca o inserisci un indirizzo",
   "plugin.browser.toolbar.back": "Indietro",
   "plugin.browser.toolbar.forward": "Avanti",
   "plugin.browser.toolbar.home": "Home",
   "plugin.browser.toolbar.reload": "Ricarica",
-
   "plugin.browser.shield.label": "Blocco degli annunci",
-  "plugin.browser.shield.off": "Blocco degli annunci: off",
-  "plugin.browser.shield.on": "Blocco degli annunci: on",
-  "plugin.browser.shield.onBlocked.one": "Blocco degli annunci: on — {count} bloccato",
-  "plugin.browser.shield.onBlocked.other": "Blocco degli annunci: on — {count} bloccati",
-  "plugin.browser.shield.onBlocked.many": "Blocco degli annunci: on — {count} bloccati",
-
+  "plugin.browser.shield.off": "Blocco degli annunci: disattivato",
+  "plugin.browser.shield.on": "Blocco degli annunci: attivo",
+  "plugin.browser.shield.onBlocked.one": "Blocco degli annunci: attivo — {count} bloccato",
+  "plugin.browser.shield.onBlocked.many": "Blocco degli annunci: attivo — {count} bloccati",
+  "plugin.browser.shield.onBlocked.other": "Blocco degli annunci: attivo — {count} bloccati",
   "plugin.browser.tabs.close": "Chiudi {title}",
   "plugin.browser.tabs.count.one": "{count} scheda aperta",
-  "plugin.browser.tabs.count.other": "{count} schede aperte",
   "plugin.browser.tabs.count.many": "{count} schede aperte",
+  "plugin.browser.tabs.count.other": "{count} schede aperte",
   "plugin.browser.tabs.incognito": "Incognito — {url}",
   "plugin.browser.tabs.label": "Schede",
   "plugin.browser.tabs.newIncognito": "Nuova scheda in incognito",
   "plugin.browser.tabs.newTab": "Nuova scheda",
-
   "plugin.browser.status.loading": "Caricamento…",
   "plugin.browser.status.loadingRecommendations": "Caricamento dei suggerimenti…",
   "plugin.browser.status.openFailed": "Impossibile aprire la pagina",
-
   "plugin.browser.menu.searchEngine": "Motore di ricerca",
   "plugin.browser.menu.settings": "Impostazioni",
-  "plugin.browser.menu.title": "Menu di Browser",
-
+  "plugin.browser.menu.title": "Menu del browser",
   "plugin.browser.history.clear": "Cancella",
   "plugin.browser.history.empty": "Nessuna cronologia",
   "plugin.browser.history.search": "Ricerca — {query}",
   "plugin.browser.history.title": "Cronologia",
-
   "plugin.browser.bookmarks.add": "Aggiungi questa pagina ai segnalibri",
   "plugin.browser.bookmarks.empty": "Nessun segnalibro — usa la ☆ nella barra degli strumenti",
   "plugin.browser.bookmarks.remove": "Rimuovi segnalibro",
   "plugin.browser.bookmarks.title": "Segnalibri",
-
   "plugin.browser.downloads.cancel": "Annulla",
   "plugin.browser.downloads.clearFinished": "Rimuovi i completati",
   "plugin.browser.downloads.empty": "Nessun download",
@@ -63,7 +55,6 @@
   "plugin.browser.downloads.state.requested": "richiesto",
   "plugin.browser.downloads.title": "Download",
   "plugin.browser.downloads.untitled": "download",
-
   "plugin.browser.home.emptyBody": "Cerca un paio di cose e questa pagina si riempie di notizie che le riguardano.",
   "plugin.browser.home.emptyRetry": "Ancora niente da mostrare — prova ad aggiornare.",
   "plugin.browser.home.emptyTitle": "Ancora nessuna notizia",
@@ -73,21 +64,20 @@
   "plugin.browser.home.refreshing": "Aggiornamento…",
   "plugin.browser.home.title": "Home",
   "plugin.browser.home.news": "Notizie",
-  "plugin.browser.home.metaBookmarks.one": "{count} preferito",
-  "plugin.browser.home.metaBookmarks.other": "{count} preferiti",
+  "plugin.browser.home.metaBookmarks.one": "{count} segnalibro",
+  "plugin.browser.home.metaBookmarks.many": "{count} segnalibri",
+  "plugin.browser.home.metaBookmarks.other": "{count} segnalibri",
   "plugin.browser.home.metaStories.one": "{count} notizia",
+  "plugin.browser.home.metaStories.many": "{count} notizie",
   "plugin.browser.home.metaStories.other": "{count} notizie",
-
   "plugin.browser.ctx.copyAddress": "Copia l'indirizzo della pagina",
   "plugin.browser.ctx.focusAddress": "Vai alla barra degli indirizzi",
   "plugin.browser.ctx.pasteAndGo": "Incolla e vai",
-
   "plugin.browser.pageMenu.copy": "Copia",
   "plugin.browser.pageMenu.copyLink": "Copia l'indirizzo del link",
   "plugin.browser.pageMenu.cut": "Taglia",
   "plugin.browser.pageMenu.paste": "Incolla",
   "plugin.browser.pageMenu.selectAll": "Seleziona tutto",
-
   "plugin.browser.passwords.title": "Password",
   "plugin.browser.passwords.lockedIntro": "Le password salvate sono bloccate. Inserisci la password di accesso per aprirle.",
   "plugin.browser.passwords.createIntro": "Salva le password che usi sui siti web, protette dalla tua password di accesso.",
@@ -130,5 +120,7 @@
   "plugin.browser.passwords.needSiteAndPassword": "Servono un sito web e una password.",
   "plugin.browser.passwords.saved": "Password salvata.",
   "plugin.browser.passwords.saveFailed": "Impossibile salvare questa password.",
-  "plugin.browser.passwords.deleteConfirm": "Eliminare la password salvata per {site}?"
+  "plugin.browser.passwords.deleteConfirm": "Eliminare la password salvata per {site}?",
+  "plugin.browser.menu.news": "Notizie nella pagina iniziale",
+  "plugin.browser.home.searchesAndSites": "Dalle tue ricerche e dai siti che visiti di più"
 }

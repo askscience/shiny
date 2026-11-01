@@ -978,7 +978,7 @@ export function mountImpressTile() {
   stageEl = h('div', 'impress-stage');
   stageEl.appendChild(emptyState({
     title: t('plugin.impress.empty.noDeck', null, 'No presentation'),
-    body: t('plugin.impress.empty.noDeckBody', null, 'Create one, or ask the AI to build a deck'),
+    body: t('plugin.impress.empty.noDeckBody', null, 'Create one, or ask the AI to build a deck.'),
   }));
   stageWrap.appendChild(stageEl);
 

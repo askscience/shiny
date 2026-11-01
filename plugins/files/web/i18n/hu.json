@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Nyilvános",
   "plugin.files.place.templates": "Sablonok",
   "plugin.files.place.videos": "Videók",
-
   "plugin.files.toolbar.search": "Keresés",
   "plugin.files.toolbar.menu": "Menü",
   "plugin.files.toolbar.back": "Vissza",
@@ -17,44 +16,36 @@
   "plugin.files.toolbar.toggleView": "Nézet váltása",
   "plugin.files.toolbar.viewOptions": "Nézet beállításai",
   "plugin.files.toolbar.pathActions": "Elérési út műveletei",
-
   "plugin.files.search.placeholder": "Keresés…",
   "plugin.files.search.clear": "Törlés",
-
   "plugin.files.empty.noResults": "Nincs találat",
   "plugin.files.empty.trash": "A kuka üres",
   "plugin.files.empty.folder": "A mappa üres",
   "plugin.files.empty.noMatch": "Nincs találat erre: „{query}”.",
   "plugin.files.empty.dropHint": "Húzzon ide fájlokat, vagy használja a menüt a feltöltéshez.",
-
   "plugin.files.column.name": "Név",
   "plugin.files.column.size": "Méret",
   "plugin.files.column.modified": "Módosítva",
-
   "plugin.files.status.folder": "Mappa",
   "plugin.files.status.items.one": "{count} elem",
   "plugin.files.status.items.other": "{count} elem",
-
+  "plugin.files.status.countSelected": "{count} · {selected} kijelölve",
   "plugin.files.when.today": "Ma {time}",
   "plugin.files.when.yesterday": "Tegnap {time}",
-
   "plugin.files.menu.newFolder": "Új mappa",
   "plugin.files.menu.uploadFiles": "Fájlok feltöltése…",
   "plugin.files.menu.showHidden": "Rejtett fájlok megjelenítése",
   "plugin.files.menu.view": "Nézet",
   "plugin.files.menu.copyPath": "Útvonal másolása",
   "plugin.files.menu.emptyTrash": "Kuka ürítése",
-
   "plugin.files.view.grid": "Rács",
   "plugin.files.view.list": "Lista",
-
   "plugin.files.ctx.open": "Megnyitás",
   "plugin.files.ctx.download": "Letöltés",
   "plugin.files.ctx.restore": "Visszaállítás",
   "plugin.files.ctx.deletePermanently": "Végleges törlés",
   "plugin.files.ctx.rename": "Átnevezés…",
   "plugin.files.ctx.moveToTrash": "Áthelyezés a kukába",
-
   "plugin.files.dialog.newFolderTitle": "Az új mappa neve",
   "plugin.files.dialog.newFolderDefault": "Új mappa",
   "plugin.files.dialog.renameTitle": "Átnevezés erre",
@@ -65,7 +56,6 @@
   "plugin.files.dialog.trashMany.one": "Áthelyez {count} elemet a kukába?",
   "plugin.files.dialog.trashMany.other": "Áthelyez {count} elemet a kukába?",
   "plugin.files.dialog.emptyTrash": "Üríti a kukát? Ez nem vonható vissza.",
-
   "plugin.files.toast.openFailed": "Nem sikerült megnyitni a mappát",
   "plugin.files.toast.searchFailed": "A keresés nem sikerült",
   "plugin.files.toast.pathCopied": "Útvonal másolva",
@@ -82,7 +72,6 @@
   "plugin.files.toast.restored.other": "{count} elem visszaállítva",
   "plugin.files.toast.trashEmptied": "A kuka kiürítve",
   "plugin.files.toast.emptyTrashFailed": "Nem sikerült üríteni a kukát",
-
   "plugin.files.notify.downloading": "Letöltés",
   "plugin.files.notify.uploadComplete": "A feltöltés befejeződött",
   "plugin.files.notify.uploaded.one": "{count} fájl hozzáadva",
@@ -90,13 +79,11 @@
   "plugin.files.notify.movedToTrash": "Áthelyezve a kukába",
   "plugin.files.notify.movedItems.one": "{count} elem",
   "plugin.files.notify.movedItems.other": "{count} elem",
-
   "plugin.files.player.seek": "Ugrás",
   "plugin.files.player.mute": "Némítás",
   "plugin.files.player.fullscreen": "Teljes képernyő",
   "plugin.files.player.thisFormat": "Ez a formátum",
   "plugin.files.player.cannotDecode": "A(z) {codec} formátumot ez a böngésző nem tudja dekódolni.",
-
   "plugin.files.preview.zoomHint": "Kattintson a képre a nagyításhoz",
   "plugin.files.preview.loading": "Betöltés…",
   "plugin.files.preview.cannotPreview": "Nem készíthető előnézet: {message}",
@@ -107,7 +94,8 @@
   "plugin.files.preview.navHint.other": "{count} elem · ← → a mozgatáshoz",
   "plugin.files.preview.pdfFailed": "Nem sikerült megjeleníteni a PDF-et",
   "plugin.files.preview.page": "{n}. oldal",
-
+  "plugin.files.preview.prev": "Előző fájl",
+  "plugin.files.preview.next": "Következő fájl",
   "plugin.files.meta.description": "Fájlböngésző — a saját mappáinak böngészése, előnézete és kezelése",
   "plugin.files.meta.summary": "GNOME-stílusú fájlböngésző: rács/lista, bélyegképek, gyors előnézet, feltöltés és kuka",
   "plugin.files.meta.category": "Rendszer"

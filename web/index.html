@@ -28,6 +28,8 @@
   <link id="theme-app" rel="stylesheet" href="" disabled>
   <link rel="stylesheet" href="/ui/flow.css">
   <link rel="stylesheet" href="/ui/motion.css">
+  <!-- After the theme's app.css: the bar styles restyle the editorial rail. -->
+  <link rel="stylesheet" href="/css/barStyles.css">
   <link rel="stylesheet" href="/ui/responsive.css">
   <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
        after boot, which would flash a different theme first. The
@@ -57,9 +59,6 @@
   <script src="/js/early-boot.js"></script>
 
   <div id="background" aria-hidden="true"></div>
-  <!-- The desktop greeting ("Good / afternoon, / Friday."), written by
-       js/deskGreeting.js; hidden unless the theme shows it. -->
-  <div id="desk-greeting" aria-hidden="true"></div>
   <div id="grain" aria-hidden="true"></div>
 
   <!-- Login overlay -->
@@ -86,7 +85,7 @@
              ignored. -->
         <input type="text" id="login-username" class="ui-input hidden" placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off" spellcheck="false">
         <input type="password" id="login-password" class="ui-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="current-password">
-        <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.signIn">Sign In</button>
+        <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.signIn">Sign in</button>
         <button type="button" id="login-to-register" class="login-link ui-btn ui-btn--quiet ui-btn--sm hidden" data-i18n="login.createProfileLink">New here? Create a profile</button>
       </div>
 
@@ -100,7 +99,7 @@
         </label>
         <input type="text" id="register-username" class="ui-input" placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off">
         <input type="password" id="register-password" class="ui-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="new-password">
-        <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.createAccount">Create Account</button>
+        <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.createAccount">Create profile</button>
         <button type="button" id="register-to-login" class="login-link ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.haveProfile">Already have a profile? Sign in</button>
       </div>
 
@@ -125,26 +124,32 @@
       <!-- Fullscreen a window and its title-bar stripe is replaced by this
            bubble (fullscreenBubble.js): app name + close / exit-fullscreen,
            same glass pill as the workspace switcher. -->
-      <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Fullscreen window" data-i18n-aria-label="hud.fullscreenWindow"></div>
+      <div id="fullscreen-bubble" class="fullscreen-bubble hidden" role="toolbar" aria-label="Full-screen window" data-i18n-aria-label="hud.fullscreenWindow"></div>
       <div class="hud-header-main">
         <!-- Group separators (clock | weather | tray | status chips | actions)
              are mounted by js/hudDivider.js — one element, one style. -->
         <!-- Clock and weather are the bar's two popover triggers: the clock
              opens the location time + the calendar's month, the weather chip
              the 5-day forecast. -->
-        <button type="button" class="hud-clock" aria-haspopup="dialog" aria-expanded="false" title="Time and calendar" data-i18n-title="hud.timeCalendar">
-          <span class="hud-clock-text" aria-live="polite">
-            <span id="hud-clock-time">--:--</span>
-            <span id="hud-clock-date"></span>
-          </span>
-        </button>
-        <button type="button" class="hud-meteo" id="hud-meteo" title="Weather at your position" data-i18n-title="hud.weather" aria-haspopup="dialog" aria-expanded="false">
-          <span id="hud-meteo-icon" data-icon="insights/weather-cloud" aria-hidden="true"></span>
-          <span id="hud-meteo-temp">—°</span>
-          <span id="hud-meteo-label">…</span>
-        </button>
-        <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins" data-i18n-aria-label="hud.plugins"></div>
-        <div id="hud-saved-trips" class="empty" aria-label="Saved places" data-i18n-aria-label="hud.savedPlaces"></div>
+        <!-- Groups are `display: contents` (no box) except in the "isles" bar
+             style, where each one becomes its own pill (css/barStyles.css). -->
+        <div class="hud-group hud-group--time">
+          <button type="button" class="hud-clock" aria-haspopup="dialog" aria-expanded="false" title="Time and calendar" data-i18n-title="hud.timeCalendar">
+            <span class="hud-clock-text" aria-live="polite">
+              <span id="hud-clock-time">--:--</span>
+              <span id="hud-clock-date"></span>
+            </span>
+          </button>
+          <button type="button" class="hud-meteo" id="hud-meteo" title="Weather at your location" data-i18n-title="hud.weather" aria-haspopup="dialog" aria-expanded="false">
+            <span id="hud-meteo-icon" data-icon="insights/weather-cloud" aria-hidden="true"></span>
+            <span id="hud-meteo-temp">—°</span>
+            <span id="hud-meteo-label">…</span>
+          </button>
+        </div>
+        <div class="hud-group hud-group--apps">
+          <div id="hud-plugins" class="hud-plugins" role="toolbar" aria-label="Plugins" data-i18n-aria-label="hud.plugins"></div>
+          <div id="hud-saved-trips" class="empty" aria-label="Saved places" data-i18n-aria-label="hud.savedPlaces"></div>
+        </div>
         <div id="hud-top">
           <button type="button" id="hud-audio" class="hud-audio hidden" title="Sound" data-i18n-title="hud.sound" aria-label="Sound" data-i18n-aria-label="hud.sound">
             <span class="hud-audio-icon" id="hud-audio-icon" aria-hidden="true"></span>

@@ -5,7 +5,7 @@
  * - the top bar's theme button: one tap switches to the next theme through
  *   the language's view transition, opening from the button itself;
  * - depth: the accent aura element behind the voice states, and the pointer
- *   position the wallpaper and the greeting drift with (/ui/motion.css).
+ *   position the wallpaper drifts with (/ui/motion.css).
  *
  * The motion language itself is a preference (Settings → Appearance →
  * Motion, `desktop.surface.motion`), applied by preferences.js.

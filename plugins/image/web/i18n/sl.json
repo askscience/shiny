@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Urejevalnik fotografij — prilagajanje tonov in barv, zameglitev/ostrenje/vinjeta in filmski videzi z enim dotikom v oknu Slika",
   "plugin.image.meta.summary": "Urejevalnik fotografij: prilagoditve in filmski videzi",
   "plugin.image.meta.category": "Predstavnost",
-
   "plugin.image.toolbar.menu": "Meni",
   "plugin.image.toolbar.fitToggle": "Preklopi med prilagoditvijo in dejansko velikostjo",
-
+  "plugin.image.title": "Slika",
+  "plugin.image.toolbar.fit": "Prilagodi",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Videz: {name}",
+  "plugin.image.dock.looks": "Videzi",
+  "plugin.image.dock.adjust": "Prilagodi",
   "plugin.image.dial.brightness": "Svetlost",
   "plugin.image.dial.contrast": "Kontrast",
   "plugin.image.dial.exposure": "Osvetlitev",
@@ -14,19 +18,16 @@
   "plugin.image.dial.blur": "Zameglitev",
   "plugin.image.dial.sharpen": "Ostrenje",
   "plugin.image.dial.vignette": "Vinjeta",
-
   "plugin.image.oneClick.autoTone": "Samodejni ton",
   "plugin.image.oneClick.autoContrast": "Samodejni kontrast",
   "plugin.image.oneClick.invert": "Negativ",
   "plugin.image.oneClick.grayscale": "ČB",
   "plugin.image.oneClick.sepia": "Sepija",
   "plugin.image.oneClick.revert": "Povrni",
-  "plugin.image.oneClick.revertTitle": "Obnovi prvotno naloženo sliko",
-
+  "plugin.image.oneClick.revertTitle": "Obnovi izvirno sliko",
   "plugin.image.empty.title": "Ni odprte slike",
   "plugin.image.empty.body": "Odprite ali spustite sliko za začetek.",
   "plugin.image.empty.open": "Odpri sliko",
-
   "plugin.image.menu.file": "Datoteka",
   "plugin.image.menu.image": "Slika",
   "plugin.image.menu.view": "Pogled",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Pomanjšaj",
   "plugin.image.menu.fit": "Prilagodi",
   "plugin.image.menu.actualSize": "Dejanska velikost",
-
   "plugin.image.ctx.open": "Odpri sliko…",
-
   "plugin.image.dialog.deleteConfirm": "Izbrišem \"{title}\"?",
   "plugin.image.dialog.thisImage": "to sliko",
-
   "plugin.image.toast.openFirst": "Najprej odprite sliko",
   "plugin.image.toast.opened": "Odprto {title}",
   "plugin.image.toast.editFailed": "Urejanje ni uspelo",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Shranjevanje ni uspelo",
   "plugin.image.toast.deleted": "Slika izbrisana",
   "plugin.image.toast.deleteFailed": "Slike ni bilo mogoče izbrisati",
-  "plugin.image.toast.reverted": "Povrnjeno na izvirne slikovne pike",
+  "plugin.image.toast.reverted": "Povrnjeno na izvirno sliko",
   "plugin.image.toast.openFailed": "Datoteke ni bilo mogoče odpreti",
-
   "plugin.image.error.emptyFile": "ta datoteka je prazna",
   "plugin.image.error.notAnImage": "“{name}” ni slika, ki bi jo urejevalnik lahko odprl",
   "plugin.image.error.unnamedFile": "datoteka"

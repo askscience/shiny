@@ -73,6 +73,27 @@ function usableAccent(accent) {
   return getThemeManifest()?.defaultAccent || DEFAULT_ACCENT;
 }
 
+/* Some surfaces stay dark on every theme (the top bar, the chat glass, the
+ * status menus — see themes/editorial/app.css). On a light theme the user may
+ * pick an accent that reads on the canvas but not there — Dusk's own "Ink"
+ * accent is the very colour of its bar — so those islands paint with a lifted
+ * variant instead: a near-grey accent becomes white, a coloured one is mixed
+ * toward white until it clears the dark-canvas floor. */
+const ON_DARK_TARGET = 0.5;
+
+function accentOnDark(accent) {
+  if (luminance(accent) >= DARK_CANVAS_MIN_INK) return accent;
+  const [r, g, b] = hexToRgb(accent);
+  const chroma = (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+  if (chroma < 0.15) return '#ffffff';
+  for (let t = 0.1; t <= 1; t += 0.05) {
+    const mix = [r, g, b].map((c) => Math.round(c + (255 - c) * t));
+    const hex = `#${mix.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+    if (luminance(hex) >= ON_DARK_TARGET) return hex;
+  }
+  return '#ffffff';
+}
+
 /** Current computed value of a CSS variable on :root (for canvas/JS rendering). */
 export function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -173,6 +194,11 @@ export function applyAppearance({ accent = getAccent(), gradient = getGradient()
   root.style.setProperty('--accent-soft', rgba(accent, 0.1));
   root.style.setProperty('--accent-glow', rgba(accent, 0.24));
   root.style.setProperty('--accent-contrast', contrastFor(accent));
+  const onDark = accentOnDark(accent);
+  root.style.setProperty('--accent-on-dark', onDark);
+  root.style.setProperty('--accent-on-dark-soft', rgba(onDark, 0.14));
+  root.style.setProperty('--accent-on-dark-glow', rgba(onDark, 0.3));
+  root.style.setProperty('--accent-on-dark-contrast', contrastFor(onDark));
   root.style.setProperty('--gradient-accent', gradientToCss(gradient));
   root.style.setProperty('--gradient-text',
     `linear-gradient(120deg, var(--text) 0%, ${stops[0]} 45%, ${tail} 100%)`);

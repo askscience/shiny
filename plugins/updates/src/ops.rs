@@ -7,6 +7,7 @@ use crate::distro::PackageManager;
 use crate::exec::{self, CmdSpec};
 use crate::jobs::Job;
 use crate::ollama;
+use crate::progress::Event;
 
 const REFRESH_TIMEOUT: Duration = Duration::from_secs(900);
 const UPGRADE_ALL_TIMEOUT: Duration = Duration::from_secs(3600);
@@ -15,16 +16,53 @@ const REPAIR_TIMEOUT: Duration = Duration::from_secs(1800);
 const AUDIT_TIMEOUT: Duration = Duration::from_secs(120);
 
 fn run_spec(job: &Job, spec: &CmdSpec, password: Option<&str>, timeout: Duration) -> bool {
+    run_spec_with(job, spec, password, timeout, None)
+}
+
+/// A line → structured-progress parser (apt's status-fd, the Ollama installer).
+type ProgressParser<'a> = &'a dyn Fn(&str) -> Option<Event>;
+
+/// Run a package-manager command with its progress parser.
+fn run_manager(
+    job: &Job,
+    spec: &CmdSpec,
+    password: Option<&str>,
+    timeout: Duration,
+    manager: &dyn PackageManager,
+) -> bool {
+    run_spec_with(job, spec, password, timeout, Some(&|line: &str| manager.progress_event(line)))
+}
+
+/// Run `spec`, streaming its output into the job log. With `parser`, lines
+/// that are structured progress update the job's progress instead of the log
+/// (steps and errors are logged as well).
+fn run_spec_with(
+    job: &Job,
+    spec: &CmdSpec,
+    password: Option<&str>,
+    timeout: Duration,
+    parser: Option<ProgressParser<'_>>,
+) -> bool {
     job.log(format!("$ {}", spec.display()));
-    match exec::run_streaming(spec, password, timeout, &mut |line| job.log(line)) {
+    let mut on_line = |line: &str| {
+        if let Some(event) = parser.and_then(|p| p(line)) {
+            match &event {
+                Event::Error { package: Some(p), message } => job.log(format!("!! {p}: {message}")),
+                Event::Error { package: None, message } => job.log(format!("!! {message}")),
+                Event::Step { message } => job.log(message),
+                _ => {}
+            }
+            job.progress(event);
+        } else {
+            job.log(line);
+        }
+    };
+    match exec::run_streaming(spec, password, timeout, &mut on_line) {
         Ok(out) => {
             if out.timed_out {
                 job.log("!! command timed out and was cancelled");
-            }
-            if !out.stderr.trim().is_empty() {
-                for line in out.stderr.lines().take(100) {
-                    job.log(line);
-                }
+            } else if !out.success {
+                job.log(format!("!! exited with code {:?}", out.code));
             }
             out.success
         }
@@ -96,7 +134,7 @@ fn repair_package_state(
                 return false;
             };
             job.log("Package state is inconsistent; finishing the interrupted configuration…");
-            let repaired = run_spec(job, &spec, password, REPAIR_TIMEOUT);
+            let repaired = run_manager(job, &spec, password, REPAIR_TIMEOUT, manager);
             if !repaired {
                 job.log("!! the repair command failed");
             }
@@ -145,7 +183,7 @@ pub fn system_job(
 ) -> bool {
     if all {
         let spec = manager.upgrade_all();
-        let upgraded = run_spec(job, &spec, password, UPGRADE_ALL_TIMEOUT);
+        let upgraded = run_manager(job, &spec, password, UPGRADE_ALL_TIMEOUT, manager);
         if !upgraded {
             job.log("The upgrade command reported failure; checking the package state…");
         }
@@ -158,7 +196,9 @@ pub fn system_job(
         let mut ok = true;
         for name in packages {
             match manager.upgrade_one(name) {
-                Some(spec) => ok &= run_spec(job, &spec, password, UPGRADE_ONE_TIMEOUT),
+                Some(spec) => {
+                    ok &= run_manager(job, &spec, password, UPGRADE_ONE_TIMEOUT, manager)
+                }
                 None => {
                     job.log(format!(
                         "!! {name}: this package manager cannot upgrade a single package"
@@ -171,6 +211,12 @@ pub fn system_job(
         crate::status::invalidate();
         ok && healthy
     }
+}
+
+/// Announce a step: in the log and as the window's current progress line.
+fn step(job: &Job, message: &str) {
+    job.log(message);
+    job.progress(Event::Step { message: message.to_string() });
 }
 
 /// Install/upgrade Ollama with the official script, safely.
@@ -186,7 +232,7 @@ pub fn ollama_job(job: &Job, password: Option<&str>) -> bool {
     let was_active = ollama::is_active();
     if let Some(stop) = ollama::stop_spec() {
         if was_active {
-            job.log("Stopping Ollama so its GPU libraries can be replaced safely…");
+            step(job, "Stopping Ollama so its GPU libraries can be replaced safely…");
             if !run_spec(job, &stop, password, Duration::from_secs(120)) {
                 job.log("!! systemctl stop ollama failed");
             }
@@ -208,8 +254,9 @@ pub fn ollama_job(job: &Job, password: Option<&str>) -> bool {
         }
     }
 
+    step(job, "Running the official Ollama installer…");
     let spec = ollama::update_spec();
-    let ok = run_spec(job, &spec, password, Duration::from_secs(1800));
+    let ok = run_spec_with(job, &spec, password, Duration::from_secs(1800), Some(&ollama::progress_event));
     if !ok {
         job.log(
             "!! the Ollama installer failed. The previous libraries may have been \
@@ -218,6 +265,7 @@ pub fn ollama_job(job: &Job, password: Option<&str>) -> bool {
         return false;
     }
 
+    step(job, "Verifying the installation…");
     match ollama::verify_installation() {
         Ok(version) => {
             job.log(format!(

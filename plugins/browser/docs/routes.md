@@ -232,13 +232,22 @@ Tag `browser_news` · `routes.rs` → `news_route` → `news::home_news`.
       "image": null, "topic": "aurora", "age": "2 hours ago", "score": 7.1 }
   ],
   "topics": ["aurora", "…"],
+  "sites": ["ilpost.it"],
   "personalized": true,
-  "error": null
+  "error": null,
+  "disabled": false
 }
 ```
 
+Two sources feed the shelf: the search-interest topics (`news.rs`) and the
+user's most visited sites (`sites.rs`: hosts opened at least 3 times, decayed
+over 14 days, read through their RSS/Atom feed). `sites` lists the sites whose
+feeds produced cards; such a card's `topic` is the host.
+
 `error` is set when all fetches failed or the profile produced nothing; a
-personalisation-free payload reports `personalized: false`.
+personalisation-free payload reports `personalized: false`. With the News
+switch off (`settings.news = false`) the route returns `disabled: true` and an
+empty shelf without reading history or fetching anything.
 
 ---
 
@@ -289,7 +298,7 @@ Tag `browser_settings` · `routes.rs` → `settings_route`.
 **Response** `data`:
 
 ```json
-{ "adblock": true, "incognito": false, "search_engine": "duckduckgo",
+{ "adblock": true, "incognito": false, "search_engine": "duckduckgo", "news": true,
   "downloads_dir": "/home/<user>/.shiny/home/<id>/Downloads", "rules": 12345 }
 ```
 
@@ -309,13 +318,16 @@ Tag `browser_settings_set` · `routes.rs` → `settings_set`.
 **Request** (all optional; omitted fields are left unchanged):
 
 ```json
-{ "adblock": false, "incognito": true, "search_engine": "brave" }
+{ "adblock": false, "incognito": true, "search_engine": "brave", "news": false }
 ```
+
+`news` is the browser menu's News switch: off stops the related-news engine
+behind the home page.
 
 `search_engine` must be one of `duckduckgo`, `brave`, `google`, `bing`; an
 unknown name is ignored and the stored value kept.
 
-**Response** `data`: `{ "adblock": …, "incognito": …, "search_engine": "…" }`.
+**Response** `data`: `{ "adblock": …, "incognito": …, "search_engine": "…", "news": … }`.
 
 ---
 

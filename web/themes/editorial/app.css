@@ -40,6 +40,12 @@
   --ed-pill-dark-ink: #0b0b0c;
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+  /* The accent as ink on dark glass: appearance.js lifts one too dark to read
+     here (Dusk's "Ink" accent is the colour of this very bar). */
+  --accent: var(--accent-on-dark);
+  --accent-soft: var(--accent-on-dark-soft);
+  --accent-glow: var(--accent-on-dark-glow);
+  --accent-contrast: var(--accent-on-dark-contrast);
   color: var(--text);
 }
 
@@ -192,31 +198,6 @@
 /* The words themselves rise as they are said: /ui/motion.css. */
 #reply-text.is-error { font-size: 15px; font-family: var(--font-body); letter-spacing: 0; }
 
-/* ── Desktop greeting: type as image ─────────────────────────── */
-#desk-greeting {
-  display: block;
-  position: fixed;
-  left: 40px;
-  top: 30px;
-  z-index: 0; /* with #background, under the window grid */
-  pointer-events: none;
-  color: var(--ed-greeting, #ffffff);
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(64px, 9.2vw, 136px);
-  line-height: 0.86;
-  letter-spacing: -0.055em;
-  opacity: calc(1 - var(--overview-p, 0));
-  transform: translateY(calc(var(--overview-p, 0) * -40px));
-}
-#desk-greeting .desk-line { display: block; overflow: clip; padding-bottom: 0.06em; margin-bottom: -0.06em; }
-#desk-greeting .desk-line > span { display: inline-block; animation: deskLineUp 1.4s var(--ease-out) both; animation-delay: calc(0.3s + var(--i, 0) * 0.12s); }
-html[data-bar-pos='top'] #desk-greeting { top: calc(var(--hud-header-total) + 20px); }
-@keyframes deskLineUp {
-  from { transform: translate3d(0, 108%, 0) rotate(3deg); }
-  to { transform: none; }
-}
-
 /* ── Overview: the wallpaper recedes into a rounded frame ────── */
 html[data-overview] { background: #050505; }
 html[data-overview] #background {
@@ -267,7 +248,3 @@ html[data-overview] body::after {
 /* ── Settings ───────────────────────────────────────────────── */
 .settings-panel h2,
 .settings-section-title { font-family: var(--font-display); letter-spacing: -0.04em; }
-
-@media (prefers-reduced-motion: reduce) {
-  #desk-greeting .desk-line > span { animation: none; }
-}

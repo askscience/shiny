@@ -515,6 +515,14 @@ check('out-of-range sizes are clamped and unknown values fall back',
   && clamped.orb_color === 'accent' && clamped.orb_border === 'palette',
   JSON.stringify(clamped));
 
+/* Top bar style (Settings → Appearance → "Top bar style"). */
+check('the top bar has four styles', prefs.BAR_STYLES.join() === 'rail,isles,strip,capsule');
+localStorage.setItem('desktop.immersive', JSON.stringify({ bar_style: 'capsule' }));
+prefs.applyImmersive();
+check('the chosen bar style reaches CSS', documentElement.dataset.barStyle === 'capsule');
+localStorage.setItem('desktop.immersive', JSON.stringify({ bar_style: 'nope' }));
+check('an unknown bar style falls back to the rail', prefs.getImmersive().bar_style === 'rail');
+
 /* ── 14. Closing a window (close ≠ deactivate) ─────────────────
    The window's X closes the window: it leaves every workspace, focus mode,
    fullscreen and the saved arrangement — the plugin's activation is not this

@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Éditeur de photos — réglages de tonalité et de couleur, flou/netteté/vignettage et rendus argentiques en un geste dans la fenêtre Image",
   "plugin.image.meta.summary": "Éditeur de photos : réglages et rendus argentiques",
   "plugin.image.meta.category": "Médias",
-
   "plugin.image.toolbar.menu": "Menu",
   "plugin.image.toolbar.fitToggle": "Basculer entre ajustement et taille réelle",
-
+  "plugin.image.title": "Image",
+  "plugin.image.toolbar.fit": "Ajuster",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Rendu : {name}",
+  "plugin.image.dock.looks": "Rendus",
+  "plugin.image.dock.adjust": "Réglages",
   "plugin.image.dial.brightness": "Luminosité",
   "plugin.image.dial.contrast": "Contraste",
   "plugin.image.dial.exposure": "Exposition",
@@ -14,19 +18,16 @@
   "plugin.image.dial.blur": "Flou",
   "plugin.image.dial.sharpen": "Netteté",
   "plugin.image.dial.vignette": "Vignettage",
-
   "plugin.image.oneClick.autoTone": "Tonalité auto",
   "plugin.image.oneClick.autoContrast": "Contraste auto",
   "plugin.image.oneClick.invert": "Inverser",
   "plugin.image.oneClick.grayscale": "N&B",
   "plugin.image.oneClick.sepia": "Sépia",
   "plugin.image.oneClick.revert": "Rétablir",
-  "plugin.image.oneClick.revertTitle": "Restaurer l'image d'origine téléversée",
-
+  "plugin.image.oneClick.revertTitle": "Restaurer l'image d'origine",
   "plugin.image.empty.title": "Aucune image ouverte",
   "plugin.image.empty.body": "Ouvrez ou déposez une image pour commencer.",
   "plugin.image.empty.open": "Ouvrir une image",
-
   "plugin.image.menu.file": "Fichier",
   "plugin.image.menu.image": "Image",
   "plugin.image.menu.view": "Affichage",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Zoom arrière",
   "plugin.image.menu.fit": "Ajuster",
   "plugin.image.menu.actualSize": "Taille réelle",
-
   "plugin.image.ctx.open": "Ouvrir une image…",
-
   "plugin.image.dialog.deleteConfirm": "Supprimer \"{title}\" ?",
   "plugin.image.dialog.thisImage": "cette image",
-
   "plugin.image.toast.openFirst": "Ouvrez d'abord une image",
   "plugin.image.toast.opened": "{title} ouvert",
   "plugin.image.toast.editFailed": "Échec de la modification",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Échec de l'enregistrement",
   "plugin.image.toast.deleted": "Image supprimée",
   "plugin.image.toast.deleteFailed": "Impossible de supprimer l'image",
-  "plugin.image.toast.reverted": "Rétablie à partir des pixels d'origine",
+  "plugin.image.toast.reverted": "Image d'origine rétablie",
   "plugin.image.toast.openFailed": "Impossible d'ouvrir le fichier",
-
   "plugin.image.error.emptyFile": "ce fichier est vide",
   "plugin.image.error.notAnImage": "“{name}” n'est pas une image que l'éditeur peut ouvrir",
   "plugin.image.error.unnamedFile": "fichier"

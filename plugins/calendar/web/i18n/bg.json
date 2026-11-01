@@ -2,7 +2,8 @@
   "plugin.calendar.meta.description": "Календар — планирайте, изброявайте и подреждайте събития в прозореца Календар",
   "plugin.calendar.meta.summary": "Календар: планиране и подреждане на събития",
   "plugin.calendar.meta.category": "Офис",
-
+  "plugin.calendar.count.events.one": "{count} събитие",
+  "plugin.calendar.count.events.other": "{count} събития",
   "plugin.calendar.month.january": "Януари",
   "plugin.calendar.month.february": "Февруари",
   "plugin.calendar.month.march": "Март",
@@ -15,7 +16,6 @@
   "plugin.calendar.month.october": "Октомври",
   "plugin.calendar.month.november": "Ноември",
   "plugin.calendar.month.december": "Декември",
-
   "plugin.calendar.grid.sun": "Нед",
   "plugin.calendar.grid.mon": "Пон",
   "plugin.calendar.grid.tue": "Вт",
@@ -23,22 +23,16 @@
   "plugin.calendar.grid.thu": "Чет",
   "plugin.calendar.grid.fri": "Пет",
   "plugin.calendar.grid.sat": "Съб",
-
   "plugin.calendar.event.allDay": "Цял ден",
-
   "plugin.calendar.toolbar.previousMonth": "Предишен месец",
   "plugin.calendar.toolbar.nextMonth": "Следващ месец",
   "plugin.calendar.toolbar.today": "Днес",
   "plugin.calendar.toolbar.newEvent": "Ново събитие",
-
   "plugin.calendar.ctx.refresh": "Опресни",
-
   "plugin.calendar.detail.edit": "Редактирай",
   "plugin.calendar.detail.delete": "Изтрий",
-
   "plugin.calendar.empty.noEvents": "Няма събития",
   "plugin.calendar.empty.noEventsBody": "Нищо не е планирано. Добавете събитие или помолете ИИ да планира едно.",
-
   "plugin.calendar.dialog.title": "Събитие",
   "plugin.calendar.dialog.editTitle": "Редактиране на събитие",
   "plugin.calendar.dialog.titleField": "Заглавие",
@@ -52,7 +46,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Бележки (по избор)",
   "plugin.calendar.dialog.cancel": "Отказ",
   "plugin.calendar.dialog.save": "Запази събитието",
-
   "plugin.calendar.toast.titleRequired": "Заглавието е задължително",
   "plugin.calendar.toast.dateRequired": "Датата е задължителна",
   "plugin.calendar.toast.updated": "Събитието е обновено",
@@ -61,8 +54,6 @@
   "plugin.calendar.toast.loadFailed": "Събитията не можаха да се заредят",
   "plugin.calendar.toast.saveFailed": "Събитието не можа да се запази",
   "plugin.calendar.toast.deleteFailed": "Събитието не можа да се изтрие",
-
   "plugin.calendar.confirm.deleteEvent": "Да се изтрие ли “{title}”?",
-
   "plugin.calendar.notify.eventSoon": "Събитието започва скоро"
 }

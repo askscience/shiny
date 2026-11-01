@@ -16,3 +16,17 @@ semver = { version = "1", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite-unbundled", "chrono", "uuid"] }
 axum = { version = "0.7", features = ["json", "query", "multipart"] }
+tokio = { version = "1", features = ["fs"] }
+# Pictures: decode, scale and re-encode inserted images; PNG page previews.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# WordCraft (MIT OR Apache-2.0, https://github.com/storytold/wordcraft): its
+# document model, .docx reader/writer, text-format codecs (ODT, HTML,
+# Markdown, RTF) and PDF exporter are used as libraries, pinned to one commit.
+wordcraft-doc = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }
+wordcraft-docx = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }
+wordcraft-formats = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }
+wordcraft-layout = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }
+wordcraft-pdf = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }
+wordcraft-fonts = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }
+wordcraft-render = { git = "https://github.com/storytold/wordcraft", rev = "a88e005256087285bc7d34310cc0f5f932bc8562" }

@@ -5,13 +5,16 @@
 //! [`dsp`]) to WAV, and expose them to the AI assistant via tools + REST routes
 //! and to the user via the Studio window.
 
+pub mod audio;
 pub mod catalog;
 pub mod dsp;
 pub mod engine;
 pub mod fx;
 pub mod grid;
+pub mod mix;
 pub mod plugin;
 pub mod routes;
+pub mod routes_mix;
 pub mod store;
 pub mod tools;
 pub mod voices;

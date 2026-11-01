@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Publiczny",
   "plugin.files.place.templates": "Szablony",
   "plugin.files.place.videos": "Wideo",
-
   "plugin.files.toolbar.search": "Szukaj",
   "plugin.files.toolbar.menu": "Menu",
   "plugin.files.toolbar.back": "Wstecz",
@@ -17,46 +16,38 @@
   "plugin.files.toolbar.toggleView": "Przełącz widok",
   "plugin.files.toolbar.viewOptions": "Opcje widoku",
   "plugin.files.toolbar.pathActions": "Działania na ścieżce",
-
   "plugin.files.search.placeholder": "Szukaj…",
   "plugin.files.search.clear": "Wyczyść",
-
   "plugin.files.empty.noResults": "Brak wyników",
   "plugin.files.empty.trash": "Kosz jest pusty",
   "plugin.files.empty.folder": "Folder jest pusty",
   "plugin.files.empty.noMatch": "Żaden plik nie pasuje do „{query}”.",
   "plugin.files.empty.dropHint": "Przeciągnij pliki tutaj lub użyj menu, aby je wgrać.",
-
   "plugin.files.column.name": "Nazwa",
   "plugin.files.column.size": "Rozmiar",
   "plugin.files.column.modified": "Zmodyfikowano",
-
   "plugin.files.status.folder": "Folder",
   "plugin.files.status.items.one": "{count} element",
   "plugin.files.status.items.few": "{count} elementy",
   "plugin.files.status.items.many": "{count} elementów",
   "plugin.files.status.items.other": "{count} elementu",
-
+  "plugin.files.status.countSelected": "{count} · zaznaczono: {selected}",
   "plugin.files.when.today": "Dziś {time}",
   "plugin.files.when.yesterday": "Wczoraj {time}",
-
   "plugin.files.menu.newFolder": "Nowy folder",
   "plugin.files.menu.uploadFiles": "Wgraj pliki…",
   "plugin.files.menu.showHidden": "Pokaż ukryte pliki",
   "plugin.files.menu.view": "Widok",
   "plugin.files.menu.copyPath": "Kopiuj ścieżkę",
   "plugin.files.menu.emptyTrash": "Opróżnij kosz",
-
   "plugin.files.view.grid": "Siatka",
   "plugin.files.view.list": "Lista",
-
   "plugin.files.ctx.open": "Otwórz",
   "plugin.files.ctx.download": "Pobierz",
   "plugin.files.ctx.restore": "Przywróć",
   "plugin.files.ctx.deletePermanently": "Usuń trwale",
   "plugin.files.ctx.rename": "Zmień nazwę…",
   "plugin.files.ctx.moveToTrash": "Przenieś do kosza",
-
   "plugin.files.dialog.newFolderTitle": "Nazwa nowego folderu",
   "plugin.files.dialog.newFolderDefault": "Nowy folder",
   "plugin.files.dialog.renameTitle": "Zmień nazwę na",
@@ -71,7 +62,6 @@
   "plugin.files.dialog.trashMany.many": "Przenieść {count} elementów do kosza?",
   "plugin.files.dialog.trashMany.other": "Przenieść {count} elementu do kosza?",
   "plugin.files.dialog.emptyTrash": "Opróżnić kosz? Tej operacji nie można cofnąć.",
-
   "plugin.files.toast.openFailed": "Nie udało się otworzyć folderu",
   "plugin.files.toast.searchFailed": "Wyszukiwanie nie powiodło się",
   "plugin.files.toast.pathCopied": "Skopiowano ścieżkę",
@@ -92,7 +82,6 @@
   "plugin.files.toast.restored.other": "Przywrócono {count} elementu",
   "plugin.files.toast.trashEmptied": "Kosz opróżniony",
   "plugin.files.toast.emptyTrashFailed": "Nie udało się opróżnić kosza",
-
   "plugin.files.notify.downloading": "Pobieranie",
   "plugin.files.notify.uploadComplete": "Wgrywanie zakończone",
   "plugin.files.notify.uploaded.one": "Dodano {count} plik",
@@ -104,13 +93,11 @@
   "plugin.files.notify.movedItems.few": "{count} elementy",
   "plugin.files.notify.movedItems.many": "{count} elementów",
   "plugin.files.notify.movedItems.other": "{count} elementu",
-
   "plugin.files.player.seek": "Przewiń",
   "plugin.files.player.mute": "Wycisz",
   "plugin.files.player.fullscreen": "Pełny ekran",
   "plugin.files.player.thisFormat": "Ten format",
   "plugin.files.player.cannotDecode": "{codec} nie może zostać zdekodowany przez tę przeglądarkę.",
-
   "plugin.files.preview.zoomHint": "Kliknij obraz, aby powiększyć",
   "plugin.files.preview.loading": "Wczytywanie…",
   "plugin.files.preview.cannotPreview": "Nie można wyświetlić podglądu: {message}",
@@ -123,7 +110,8 @@
   "plugin.files.preview.navHint.other": "{count} elementu · ← → aby przejść",
   "plugin.files.preview.pdfFailed": "Nie udało się wyrenderować pliku PDF",
   "plugin.files.preview.page": "Strona {n}",
-
+  "plugin.files.preview.prev": "Poprzedni plik",
+  "plugin.files.preview.next": "Następny plik",
   "plugin.files.meta.description": "Przeglądarka plików — przeglądaj, podglądaj i zarządzaj folderami domowymi",
   "plugin.files.meta.summary": "Przeglądarka plików w stylu GNOME: siatka i lista, miniatury, szybki podgląd, wgrywanie plików i kosz",
   "plugin.files.meta.category": "System"

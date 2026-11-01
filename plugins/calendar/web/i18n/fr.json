@@ -2,7 +2,9 @@
   "plugin.calendar.meta.description": "Calendrier — planifiez, listez et organisez vos événements dans la fenêtre Calendrier",
   "plugin.calendar.meta.summary": "Calendrier : planifier et organiser des événements",
   "plugin.calendar.meta.category": "Bureau",
-
+  "plugin.calendar.count.events.one": "{count} événement",
+  "plugin.calendar.count.events.many": "{count} événements",
+  "plugin.calendar.count.events.other": "{count} événements",
   "plugin.calendar.month.january": "Janvier",
   "plugin.calendar.month.february": "Février",
   "plugin.calendar.month.march": "Mars",
@@ -15,7 +17,6 @@
   "plugin.calendar.month.october": "Octobre",
   "plugin.calendar.month.november": "Novembre",
   "plugin.calendar.month.december": "Décembre",
-
   "plugin.calendar.grid.sun": "Dim",
   "plugin.calendar.grid.mon": "Lun",
   "plugin.calendar.grid.tue": "Mar",
@@ -23,22 +24,16 @@
   "plugin.calendar.grid.thu": "Jeu",
   "plugin.calendar.grid.fri": "Ven",
   "plugin.calendar.grid.sat": "Sam",
-
   "plugin.calendar.event.allDay": "Toute la journée",
-
   "plugin.calendar.toolbar.previousMonth": "Mois précédent",
   "plugin.calendar.toolbar.nextMonth": "Mois suivant",
   "plugin.calendar.toolbar.today": "Aujourd'hui",
   "plugin.calendar.toolbar.newEvent": "Nouvel événement",
-
   "plugin.calendar.ctx.refresh": "Actualiser",
-
   "plugin.calendar.detail.edit": "Modifier",
   "plugin.calendar.detail.delete": "Supprimer",
-
   "plugin.calendar.empty.noEvents": "Aucun événement",
   "plugin.calendar.empty.noEventsBody": "Rien de planifié. Ajoutez un événement ou demandez à l'IA d'en planifier un.",
-
   "plugin.calendar.dialog.title": "Événement",
   "plugin.calendar.dialog.editTitle": "Modifier l'événement",
   "plugin.calendar.dialog.titleField": "Titre",
@@ -52,7 +47,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Notes (facultatif)",
   "plugin.calendar.dialog.cancel": "Annuler",
   "plugin.calendar.dialog.save": "Enregistrer l'événement",
-
   "plugin.calendar.toast.titleRequired": "Le titre est obligatoire",
   "plugin.calendar.toast.dateRequired": "La date est obligatoire",
   "plugin.calendar.toast.updated": "Événement mis à jour",
@@ -61,8 +55,6 @@
   "plugin.calendar.toast.loadFailed": "Impossible de charger les événements",
   "plugin.calendar.toast.saveFailed": "Impossible d'enregistrer l'événement",
   "plugin.calendar.toast.deleteFailed": "Impossible de supprimer l'événement",
-
   "plugin.calendar.confirm.deleteEvent": "Supprimer \"{title}\" ?",
-
   "plugin.calendar.notify.eventSoon": "Un événement commence bientôt"
 }

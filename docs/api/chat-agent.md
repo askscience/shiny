@@ -284,6 +284,8 @@ Music and the audio endpoint the chat's track player embeds.
 | `GET` | `/api/songgen/status` | — | `{ success, data: { inventory, downloads } }` — engine path, per-tier presence, live download bytes. |
 | `POST` | `/api/songgen/download` | `{ "quality": "q4" \| "q8" \| "all" }` | `{ success, data: { status: "downloading" } }` — background; poll status. |
 | `GET` | `/api/songgen/tracks/:name` | — | The WAV itself (`audio/wav`; cookie or Bearer auth; range requests served as `206` windows). Files live in the user's Files home under `Music/Generated/`. |
+| `POST` | `/api/songgen/generate` | `{ "style", "lyrics"?, "title"?, "duration"? (30–300), "quality"?, "seed"? }` | `{ success, data: { job_id, status: "running", title } }` — renders in the background (used by the Studio window). Missing weights → `success:false`, `data: { needs_download, quality, missing, download_bytes, download_size }` (nothing is fetched implicitly); no engine → `success:false`, `data.engine_missing`. |
+| `GET` | `/api/songgen/jobs/:id` | — | `{ success, data: { job_id, status: "running"\|"done"\|"failed", title, elapsed_secs, result: { path, file, url, title, duration_secs, seconds, quality }, error } }` — only the job's owner can read it; finished jobs are forgotten after a day. |
 
 The default tier is `q4` (Q4_K_M-imat). One `ace-server` process runs per song
 (nothing stays resident), a render takes minutes, and without downloaded models

@@ -1,31 +1,29 @@
 {
-  "plugin.calc.meta.description": "Калкулатор с таблици — листовете се съхраняват като отворени мрежи от клетки, редактируеми в прозореца Calc",
+  "plugin.calc.meta.description": "Електронни таблици — създавайте и редактирайте листове в прозореца Calc, импортирайте CSV или .ods файлове и ги запазвайте като .ods",
   "plugin.calc.meta.summary": "Calc: създаване, редактиране и изчисления с таблици",
   "plugin.calc.meta.category": "Офис",
-
   "plugin.calc.bar.spreadsheets": "Таблици",
-
+  "plugin.calc.bar.new": "Нова",
   "plugin.calc.toolbar.newSheet": "Нова таблица",
   "plugin.calc.toolbar.importOds": "Импортирай .ods",
   "plugin.calc.toolbar.importCsv": "Импортирай CSV",
   "plugin.calc.toolbar.saveToDocuments": "Запази в “Документи”",
   "plugin.calc.toolbar.saveNow": "Запази сега",
   "plugin.calc.toolbar.deleteSheet": "Изтрий таблицата",
-
   "plugin.calc.menu.noSheets": "Още няма таблици",
-
+  "plugin.calc.empty.body": "Започнете празна таблица, импортирайте CSV или .ods файл или помолете ИИ да създаде такава.",
   "plugin.calc.sheet.untitled": "Без заглавие",
   "plugin.calc.sheet.importedCsv": "Импортиран CSV",
-
   "plugin.calc.formula.placeholder": "Стойност или формула (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Запазване…",
   "plugin.calc.status.dirty": "Незапазени промени",
+  "plugin.calc.status.unsaved": "Незапазено",
+  "plugin.calc.status.savedAt": "Запазено {time}",
+  "plugin.calc.status.cells.one": "{count} клетка",
+  "plugin.calc.status.cells.other": "{count} клетки",
   "plugin.calc.status.saved.one": "Запазено {time} · {count} клетка",
   "plugin.calc.status.saved.other": "Запазено {time} · {count} клетки",
-
   "plugin.calc.dialog.delete": "Да се изтрие ли “{title}”?",
-
   "plugin.calc.toast.saveFailed": "Запазването не успя",
   "plugin.calc.toast.openFailed": "Таблицата не можа да се отвори",
   "plugin.calc.toast.createFailed": "Таблицата не можа да се създаде",

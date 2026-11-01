@@ -14,7 +14,7 @@ shiny_plugin_sdk::ctx_plugin!(StudioPlugin);
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str =
-    "a music studio AI; compose rhythmic patterns with exact (Euclidean) rhythms and multiple instruments, and render them to audio";
+    "a music producer AI; compose patterns and arrangements (synths, drums, modular Grid), place AI-generated songs on audio tracks, balance and master the mix, and export it";
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
@@ -37,6 +37,13 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/studio/presets", "studio_preset_list"),
         RouteSpec::post("/api/studio/presets", "studio_preset_save"),
         RouteSpec::delete("/api/studio/presets/:id", "studio_preset_delete"),
+        RouteSpec::post("/api/studio/mix/stems", "studio_mix_stems"),
+        RouteSpec::get("/api/studio/mix/stem/:key", "studio_mix_stem"),
+        RouteSpec::post("/api/studio/mix/analyze", "studio_mix_analyze"),
+        RouteSpec::post("/api/studio/export", "studio_export"),
+        RouteSpec::get("/api/studio/audio/library", "studio_audio_library"),
+        RouteSpec::get("/api/studio/audio/info", "studio_audio_info"),
+        RouteSpec::get("/api/studio/audio/file", "studio_audio_file"),
         RouteSpec::delete("/api/studio/:id", "studio_delete"),
     ]
 }
@@ -64,7 +71,7 @@ impl Plugin for StudioPlugin {
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/studio.md"))
-            .context_line("Studio: enabled — compose and render patterns and arrangements (polyphonic synth, drum machine, modular Grid) to audio in the Studio window.");
+            .context_line("Studio: enabled — a DAW: compose patterns/arrangements, put generate_song results on audio tracks (studio_import_audio), mix (sends, inserts, master), measure (studio_mix_analyze) and export (studio_export).");
         builder.routes(route_specs());
         builder.tools([
             Arc::new(crate::tools::StudioList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
@@ -81,7 +88,13 @@ impl Plugin for StudioPlugin {
             Arc::new(crate::tools::StudioArrangementGet) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioArrangementDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::StudioCatalog) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-            Arc::new(crate::tools::StudioAnalyze) as Arc<dyn shiny_plugin_sdk::tools::Tool>,]);
+            Arc::new(crate::tools::StudioAnalyze) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioImportAudio) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioArrangementEdit) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioMixAnalyze) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioExport) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+            Arc::new(crate::tools::StudioAudioInfo) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+        ]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {

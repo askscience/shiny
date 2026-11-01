@@ -1,31 +1,29 @@
 {
-  "plugin.calc.meta.description": "Spreadsheet-rekenmachine — bladen worden opgeslagen als open celerasters, te bewerken in het Calc-venster",
+  "plugin.calc.meta.description": "Spreadsheets — maak en bewerk bladen in het Calc-venster, importeer CSV- of .ods-bestanden en sla ze op als .ods",
   "plugin.calc.meta.summary": "Calc: spreadsheets maken, bewerken en berekenen",
   "plugin.calc.meta.category": "Kantoor",
-
   "plugin.calc.bar.spreadsheets": "Spreadsheets",
-
+  "plugin.calc.bar.new": "Nieuw",
   "plugin.calc.toolbar.newSheet": "Nieuwe spreadsheet",
   "plugin.calc.toolbar.importOds": ".ods importeren",
   "plugin.calc.toolbar.importCsv": "CSV importeren",
   "plugin.calc.toolbar.saveToDocuments": "Opslaan in Documenten",
   "plugin.calc.toolbar.saveNow": "Nu opslaan",
   "plugin.calc.toolbar.deleteSheet": "Spreadsheet verwijderen",
-
   "plugin.calc.menu.noSheets": "Nog geen spreadsheets",
-
+  "plugin.calc.empty.body": "Begin met een leeg blad, importeer een CSV- of .ods-bestand, of vraag de AI er een te bouwen.",
   "plugin.calc.sheet.untitled": "Zonder titel",
   "plugin.calc.sheet.importedCsv": "Geïmporteerde CSV",
-
   "plugin.calc.formula.placeholder": "Waarde of formule (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Opslaan…",
   "plugin.calc.status.dirty": "Niet-opgeslagen wijzigingen",
+  "plugin.calc.status.unsaved": "Niet opgeslagen",
+  "plugin.calc.status.savedAt": "Opgeslagen {time}",
+  "plugin.calc.status.cells.one": "{count} cel",
+  "plugin.calc.status.cells.other": "{count} cellen",
   "plugin.calc.status.saved.one": "Opgeslagen {time} · {count} cel",
   "plugin.calc.status.saved.other": "Opgeslagen {time} · {count} cellen",
-
   "plugin.calc.dialog.delete": "\"{title}\" verwijderen?",
-
   "plugin.calc.toast.saveFailed": "Opslaan mislukt",
   "plugin.calc.toast.openFailed": "Kon de spreadsheet niet openen",
   "plugin.calc.toast.createFailed": "Kon de spreadsheet niet aanmaken",

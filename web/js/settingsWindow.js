@@ -253,7 +253,7 @@ function sectionDetails(id) {
     const layout = getDesktopLayout();
     return [
       manifestRow(t('settings.manifest.layout', null, 'Layout'), layoutLabel(layout.mode)),
-      manifestRow(t('settings.desktop.masterSize', null, 'Master size'), `${Math.round(layout.master_ratio * 100)}%`),
+      manifestRow(t('settings.desktop.masterSize', null, 'Main window size'), `${Math.round(layout.master_ratio * 100)}%`),
       manifestRow(t('settings.manifest.gap', null, 'Gap'), `${layout.gap}px`),
     ];
   }

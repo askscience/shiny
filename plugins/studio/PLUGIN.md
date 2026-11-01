@@ -8,7 +8,7 @@ Bitwig-style window and a full agent tool surface so the AI can build all of it.
 ```
 plugins/studio/
 ├── plugin.toml              manifest (name, version, web_dir, skills_dir)
-├── Cargo.toml               cdylib + rlib; fundsp + rustysynth for the DSP
+├── Cargo.toml               cdylib + rlib; rustysynth for SoundFonts; own DSP
 ├── skills/studio.md         the contract the model reads (tools + JSON schema)
 ├── migrations/              studio_tracks / arrangements / presets tables
 ├── web/plugin.js            the Studio window (ES module, loaded by the host)
@@ -29,55 +29,32 @@ plugins/studio/
 
 ## The engine
 
-Everything is rendered **offline, in one block-based pass**. The DSP layer is
-built on [`fundsp`](https://github.com/SamiPerttu/fundsp) for oscillators and
-filters, with self-contained code for envelopes, drums, effects and the master
-chain.
+Everything is rendered **offline, block by block** by the plugin's own DSP code (no DSP
+framework; `rustysynth` only for SoundFonts), then mixed by `mix.rs`. Full detail in
+[`docs/architecture.md`](docs/architecture.md).
 
 | Module | What it provides |
 | --- | --- |
-| `dsp/osc.rs` | band-limited wavetable saw/square/triangle/pulse/organ/Hammond/soft-saw plus PolyBLEP fallbacks (all rendered by `fundsp`), in-house sine (for FM) and seeded noise; unison stacks with stereo spread |
-| `dsp/env.rs` | analog-style exponential ADSR (with a linear blend) and a percussive one-shot envelope |
-| `dsp/filter.rs` | TPT state-variable filter (LP/HP/BP/notch/peak), 12 or 24 dB/oct, input drive + saturation, DC blocking, and a resonant nonlinear Moog ladder from `fundsp` |
-| `dsp/drums.rs` | eleven drum models: kick, snare, hat, clap, tom, perc, rim, cowbell, shaker, crash, ride — layered transients, pitch envelopes, band-passed noise |
-| `dsp/synth.rs` | the polyphonic voice: two unison oscillators (ring + FM), sub, noise, filter with envelope/LFO/key tracking, glide, per-voice drift, voice stealing |
-| `dsp/delay.rs` | fractional delay lines, all-pass, ping-pong stereo delay, chorus, phaser |
-| `dsp/reverb.rs` | 8-line feedback-delay-network reverb with diffusion, damping, pre-delay, width and modulated taps |
-| `dsp/fx.rs` | the insert-effect enum (distortion with 5 modes, filter, 3-band EQ, compressor, delay, reverb, chorus, phaser, bitcrush) |
-| `dsp/sampler.rs` | SoundFont (`.sf2`) sampler via `rustysynth` — user-supplied banks in `soundfonts/`, melodic presets (`sampler`) and GM drum kits (`sfkit`) |
-| `dsp/limiter.rs` | soft-knee stereo compressor, look-ahead brickwall limiter, master bus (DC block, saturation, width) |
-| `dsp/loudness.rs` | ITU-R BS.1770-4 K-weighting, gated integrated LUFS, LRA, true-peak/clip detection |
-| `dsp/util.rs` | deterministic xorshift RNG, saturators, DC blocker, parameter smoother, 2× oversampler for nonlinear stages |
+| `dsp/osc.rs` | mip-mapped additive wavetables (saw, square, triangle, PWM pulse, organ, Hammond, soft-saw) that cannot alias; f64 sine for FM; unison stacks with detune curve and stereo spread |
+| `dsp/env.rs` | ADSR: RC attack landing on time, decay/release in time-to-−60 dB, exact zero at −90 dB |
+| `dsp/filter.rs` | TPT SVF (LP/HP/BP/notch/peak, 12/24 dB) and ZDF ladder with **independent stereo state** |
+| `dsp/synth.rs` | polyphonic voice engine (two unison oscs, sub, noise, FM, ring), 3 ms steal fades, mono legato/glide, analog drift |
+| `dsp/drums.rs` | eleven drum models (band-limited 808-style metal, filtered noise, click-free retrigger) |
+| `dsp/delay.rs`, `dsp/reverb.rs` | Hermite delays, ping-pong, chorus, phaser; 8-line FDN reverb with RT60 from `size` |
+| `dsp/fx.rs`, `dsp/limiter.rs` | inserts (4×-oversampled distortion, filter, EQ3, compressor, delay, reverb, chorus, phaser, bitcrush); compressor, look-ahead brickwall limiter, master bus |
+| `dsp/loudness.rs` | BS.1770 LUFS, LRA, peaks |
+| `audio.rs`, `wav.rs` | audio clips (sandboxed WAV import, sinc resampling, peaks, tempo estimate); dithered WAV export |
+| `mix.rs` | tracks → inserts → cached stems → faders/pan → sends → reverb/delay returns → master inserts → bus → glue → limiter → loudness |
 
-Design rules that matter for *sound*:
+Design rules that matter for *sound*: nothing aliases (wavetables, oversampled
+nonlinearities), recursive state is `f64` and flushed to exact zero, filters are
+truly stereo, every transition is click-free (envelopes from the current level, steal
+fades, smoothed parameters, clip fades), loudness is reached before the limiter, and 16-bit
+exports are dithered.
 
-- **Band-limited everything.** Saw/square/pulse are `fundsp` band-limited
-  wavetables (organ/Hammond/soft-saw too), and PWM stays clean at any width;
-  the PolyBLEP shapes remain available as a cheaper option. In-house sine is
-  kept for phase-modulation (FM).
-- **Real polyphony.** Every synth is a voice pool (1–16) with voice stealing, so chords,
-  overlapping notes and long releases work. Drums are one-shots with natural tails.
-- **Envelopes that move.** Exponential attack/decay/release, velocity → amp *and* filter,
-  filter envelope in octaves, key tracking, LFO to pitch/cutoff/amp/pan.
-- **Filters that sound like filters.** TPT SVF (unconditionally stable at any cutoff and
-  resonance) with 12/24 dB slopes, resonance, input drive and a DC blocker.
-- **Continuous modulation.** Device automation and Grid modulation change live processors
-  at control rate — a filter sweep is a real exponential sweep, not a chain of crossfaded
-  re-renders. This is also why the engine is fast.
-- **A master bus that glues.** Delay → reverb → bus saturation → optional parallel glue
-  compression → look-ahead limiter, then an optional loudness trim.
-
-Design rules that matter for *performance*:
-
-- Block processing (64 frames) with no per-sample dynamic dispatch in the hot loops.
-- f64 state (no drift over long renders), f32 buffers.
-- Clips are rendered in parallel across CPU cores with scoped threads (each clip owns its
-  buffers) and mixed with per-sample level/pan automation.
-- Nonlinear stages (distortion, drum drive, master bus) use an oversampled path; the
-  master bus factor is configurable (1/2/4/8×).
-- Sample-rate-aware: coefficients are derived from the render rate, so a 48/96 kHz
-  render is genuinely higher-fidelity, not a resample.
-- Everything is deterministic: a config always renders bit-identically.
+Design rules that matter for *speed*: stems are cached by content hash (editing one track
+re-renders one track), tracks render in parallel (≤ 4 threads), modulation runs at an
+8-sample control rate, render threads run with FTZ/DAZ, and everything is deterministic.
 
 ## The JSON contract
 

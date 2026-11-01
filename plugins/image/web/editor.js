@@ -280,7 +280,7 @@ function buildAdjustBody() {
   }
   const revert = button({ label: t('plugin.image.oneClick.revert', null, 'Revert'), variant: 'quiet', size: 'sm', onClick: () => void resetCurrent() });
   revert.classList.add('image-oneclick', 'image-oneclick--revert');
-  revert.title = t('plugin.image.oneClick.revertTitle', null, 'Restore the original upload');
+  revert.title = t('plugin.image.oneClick.revertTitle', null, 'Restore the original image');
   actions.appendChild(revert);
   wrap.appendChild(actions);
 
@@ -627,7 +627,7 @@ export async function deleteCurrent(imageId = S.doc?.image_id, title = S.doc?.ti
 export async function resetCurrent() {
   if (!S.doc) return;
   await applyOp({ op: 'reset' });
-  toast(t('plugin.image.toast.reverted', null, 'Reverted to the original pixels'), { type: 'info' });
+  toast(t('plugin.image.toast.reverted', null, 'Reverted to the original image'), { type: 'info' });
 }
 
 export async function rotateCurrent(dir) {
@@ -724,7 +724,7 @@ export async function importFromFiles(path, name) {
   try {
     if (!S.tile) mountEditor();
     const blob = await api.blobFromHome(path);
-    if (!blob || blob.size === 0) throw new Error(t('plugin.image.error.emptyFile', null, 'that file is empty'));
+    if (!blob || blob.size === 0) throw new Error(t('plugin.image.error.emptyFile', null, 'That file is empty'));
     const type = blob.type || '';
     const ext = String(name || '').toLowerCase().split('.').pop();
     const knownImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext);

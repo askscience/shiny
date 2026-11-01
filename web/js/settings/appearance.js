@@ -97,7 +97,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
         syncBackground();
       },
     });
-    const gradientNote = el('div', 'settings-hint hidden', t('settings.appearance.background.gradientNote', null, 'Gradient uses your Appearance gradient — change it under Appearance.'));
+    const gradientNote = el('div', 'settings-hint hidden', t('settings.appearance.background.gradientNote', null, 'Uses the gradient chosen under Gradient in this section.'));
 
     const presetGrid = el('div', 'bg-preset-grid');
     presetGrid.setAttribute('role', 'radiogroup');
@@ -277,6 +277,16 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       },
     });
     barPosition.select.value = immersive.bar_position;
+    const barStyle = select({
+      options: [
+        { value: 'rail', label: t('settings.appearance.barStyle.rail', null, 'Rail — one bar along the edge') },
+        { value: 'isles', label: t('settings.appearance.barStyle.isles', null, 'Isles — three pills along the edge') },
+        { value: 'strip', label: t('settings.appearance.barStyle.strip', null, 'Strip — a thin edge-to-edge line of type') },
+        { value: 'capsule', label: t('settings.appearance.barStyle.capsule', null, 'Capsule — compact, opens on approach') },
+      ],
+      onChange: (value) => setImmersive({ bar_style: value }),
+    });
+    barStyle.select.value = immersive.bar_style;
     const autohideOrb = toggleRow({
       label: t('settings.appearance.autohideOrb', null, 'Autohide the voice bar'),
       hint: t('settings.appearance.autohideOrbHint', null, 'Slide the voice bar away until the pointer reaches the edge it docks to.'),
@@ -410,13 +420,17 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     return [
       heading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar')),
       autohideBar,
+      field(t('settings.appearance.topBarStyle', null, 'Top bar style'), barStyle, {
+        hint: t('settings.appearance.topBarStyleHint', null,
+          'Every style works in every position, and the voice bar moves with the top bar when it is placed there.'),
+      }),
       field(t('settings.appearance.topBarPosition', null, 'Top bar position'), barPosition),
       autohideOrb,
       field(t('settings.appearance.orbPosition', null, 'Voice bar position'), orbPosition, {
         hint: t('settings.appearance.orbPositionHint', null,
-          'In the top bar the bar rides the top bar\'s row at its height and rounding, and follows '
-          + 'it — down to the bottom edge included — hiding and revealing with it. The width, '
-          + 'height and its own autohide apply where it holds an edge alone.'),
+          'In the top bar, the voice bar sits in the top bar\'s row, takes its height and rounding, '
+          + 'and moves and hides with it — even when the top bar is docked to the bottom edge. '
+          + 'Width, height and the voice bar\'s own autohide apply only in the other positions.'),
       }),
       field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor, {
         hint: t('settings.appearance.orbColorHint', null,
@@ -425,8 +439,8 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       }),
       field(t('settings.appearance.orbStyle', null, 'Voice bar style'), orbStyle, {
         hint: t('settings.appearance.orbStyleHint', null,
-          'The accent (or every accent at once) as the bar\'s own body, or the same glass plate '
-          + 'the top bar wears — which leaves the accent to the audio shadow.'),
+          'Fill the bar with the accent (or every accent at once), or give it the same glass surface '
+          + 'as the top bar — the accent then shows only in the glow that follows the audio.'),
       }),
       orbWidth.wrap,
       orbHeight.wrap,
@@ -435,9 +449,9 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       }),
       field(t('settings.appearance.orbStatus', null, 'Tool status'), orbStatusRow, {
         hint: t('settings.appearance.orbStatusHint', null,
-          'What the bar itself wears: nothing, the humanised tool step line as text, or the icon '
-          + 'of the tool that is running — swapped per tool. With no tool at all (thinking) it '
-          + 'wears the app\'s own mark.'),
+          'What the voice bar shows while the assistant works: nothing, the assistant\'s state, '
+          + 'a short text line describing the current step, or the icon of the running tool. '
+          + 'While it is only thinking, the icon option shows the app\'s own logo.'),
       }),
     ];
   }
@@ -487,7 +501,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
 
     return [
-      heading(t('settings.appearance.hostStatusChips', null, 'Host status chips')),
+      heading(t('settings.appearance.hostStatusChips', null, 'Status buttons')),
       el('p', 'settings-hint', t('settings.appearance.hostStatusChipsHint', null, 'Choose what the sound, network, Bluetooth and battery buttons in the top bar show.')),
       names,
       percent,
@@ -601,7 +615,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     font.select.value = getFont();
     const fontField = field(t('settings.appearance.globalFont', null, 'Global font'), font, {
-      hint: t('settings.appearance.globalFontHint', null, 'Every installed system font is listed. "Theme default" restores the active theme’s own fonts.'),
+      hint: t('settings.appearance.globalFontHint', null, 'Every installed system font is listed. “Theme default” restores the active theme’s own fonts.'),
     });
 
     const backgroundChildren = buildBackgroundControls();
@@ -633,11 +647,11 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
           ? Math.round(resolved * 100) : null;
         const dpi = data?.dpi;
         const panel = typeof dpi === 'number' && dpi > 0
-          ? t('settings.appearance.scale.panel', { dpi: Math.round(dpi) }, ` on this ${Math.round(dpi)}-DPI panel`)
+          ? t('settings.appearance.scale.panel', { dpi: Math.round(dpi) }, ` on this ${Math.round(dpi)}-DPI screen`)
           : '';
         scaleHint.textContent = pct
-          ? t('settings.appearance.scale.applied', { percent: pct, panel }, `The shell applies ${pct}%${panel}. Scales the whole desktop. Auto follows this panel's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`)
-          : t('settings.appearance.scale.hint', null, `Scales the whole desktop. Auto follows this panel's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`);
+          ? t('settings.appearance.scale.applied', { percent: pct, panel }, `Currently ${pct}%${panel}. Scales the whole desktop. Auto follows this screen's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`)
+          : t('settings.appearance.scale.hint', null, `Scales the whole desktop. Auto follows this screen's pixel density — the right default on a high-DPI screen, and it also cuts rendering cost.`);
       } catch (_) {
         scaleHint.textContent = t('settings.appearance.scale.readFailed', null, 'Could not read the current scale.');
       }

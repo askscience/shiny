@@ -92,10 +92,9 @@ html[data-motion='depth'] .tile--window {
 }
 html[data-motion='depth'] .tile--window:not(.tile--focused) { scale: 0.985; }
 html[data-motion='depth'] :is([data-ui-control], .ui-btn, .tile-header-btn, .hud-plugin-btn, .icon-btn):active { scale: 0.96; translate: 0 1px; }
-/* The wallpaper and the greeting sit on planes of their own. */
+/* The wallpaper sits on a plane of its own. */
 html[data-motion='depth'] { transition: --pointer-x 0.9s var(--ease-out), --pointer-y 0.9s var(--ease-out); }
 html[data-motion='depth'] #background { translate: calc(var(--pointer-x) * 14px) calc(var(--pointer-y) * 10px); scale: 1.03; }
-html[data-motion='depth'] #desk-greeting { translate: calc(var(--pointer-x) * 26px) calc(var(--pointer-y) * 16px); }
 
 /* An aura of the accent rises from the bottom edge while the assistant works. */
 #motion-aura { display: none; }
@@ -165,5 +164,5 @@ html[data-vt='depth']::view-transition-new(root) { animation: vt-arrive 0.8s cub
 @media (prefers-reduced-motion: reduce) {
   #reply-text .reply-word { transition: none; transform: none; filter: none; }
   #motion-aura { display: none !important; }
-  html[data-motion] #background, html[data-motion] #desk-greeting { translate: none; }
+  html[data-motion] #background { translate: none; }
 }

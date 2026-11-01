@@ -75,9 +75,10 @@ impl Lfo {
             LfoShape::Square => if p < 0.5 { 1.0 } else { -1.0 },
             LfoShape::SampleHold => self.hold as f32,
             LfoShape::Random => {
-                // Fixed ~15 ms glide so the random source is a "drift", not a
-                // step, and stays independent of the LFO rate.
-                self.smooth += (self.hold - self.smooth) * 0.0015;
+                // Glide over about a third of a cycle, so the random source is
+                // a smooth "drift" at any rate and sample rate.
+                let coef = (dt * 3.0).clamp(1e-6, 1.0);
+                self.smooth += (self.hold - self.smooth) * coef;
                 self.smooth as f32
             }
         }

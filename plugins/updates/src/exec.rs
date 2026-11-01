@@ -11,7 +11,7 @@
 //!    worker; stdout is streamed line-by-line to the callback and the child is
 //!    killed once the timeout passes.
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
@@ -153,8 +153,67 @@ fn wait_deadline(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
     }
 }
 
-/// Run a command with a timeout, invoking `on_line` for each stdout line as it
-/// arrives. stderr is collected and appended to the returned [`Output`].
+/// Lower the child's CPU and I/O priority before it starts. A system upgrade
+/// (dpkg, DKMS module builds, initramfs regeneration) otherwise competes with
+/// the kiosk webview at full priority and the whole desktop stutters or
+/// freezes. Niceness and the I/O class are inherited through `sudo` and by
+/// every process the package manager spawns.
+fn lower_priority(cmd: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        cmd.pre_exec(|| {
+            // Best effort: failure only means normal priority.
+            libc::setpriority(libc::PRIO_PROCESS, 0, 10);
+            // IOPRIO_WHO_PROCESS = 1; best-effort class (2) at its lowest level (7).
+            const IOPRIO_CLASS_BE: libc::c_long = 2;
+            libc::syscall(libc::SYS_ioprio_set, 1, 0, (IOPRIO_CLASS_BE << 13) | 7);
+            Ok(())
+        });
+    }
+}
+
+/// Split a raw output chunk into lines. Both `\n` and `\r` end a line (apt and
+/// wget redraw progress with `\r`), and invalid UTF-8 is replaced instead of
+/// stopping the reader — a reader that stops leaves the pipe full and the
+/// package manager blocked on its next write.
+fn pump_lines(mut src: impl Read, tx: mpsc::Sender<Stream>, wrap: fn(String) -> Stream) {
+    let mut buf = [0u8; 8192];
+    let mut pending: Vec<u8> = Vec::new();
+    loop {
+        let n = match src.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        };
+        for &b in &buf[..n] {
+            if b == b'\n' || b == b'\r' {
+                if !pending.is_empty() {
+                    let line = String::from_utf8_lossy(&pending).into_owned();
+                    pending.clear();
+                    // The receiver gone means the run is over; keep draining
+                    // anyway so the child never blocks on a full pipe.
+                    let _ = tx.send(wrap(line));
+                }
+            } else if pending.len() < 16 * 1024 {
+                pending.push(b);
+            }
+        }
+    }
+    if !pending.is_empty() {
+        let _ = tx.send(wrap(String::from_utf8_lossy(&pending).into_owned()));
+    }
+}
+
+enum Stream {
+    Out(String),
+    Err(String),
+}
+
+/// Run a command with a timeout, invoking `on_line` for each output line as it
+/// arrives (stdout and stderr, interleaved in arrival order). Both streams are
+/// drained to the end no matter how much they print; only the copies kept in
+/// the returned [`Output`] are capped.
 pub fn run_streaming(
     spec: &CmdSpec,
     password: Option<&str>,
@@ -179,19 +238,28 @@ pub fn run_streaming(
             ));
         }
         cmd = Command::new("sudo");
-        cmd.arg("-S")
-            .arg("-p")
-            .arg("")
-            .arg("--")
-            .arg(&spec.program)
-            .args(&spec.args);
+        cmd.arg("-S").arg("-p").arg("").arg("--");
+        // sudo's env_reset drops the caller's environment, so variables such
+        // as DEBIAN_FRONTEND=noninteractive must travel through `env` on the
+        // elevated side — otherwise debconf/dpkg try to ask questions on a
+        // terminal that does not exist.
+        if !spec.env.is_empty() {
+            cmd.arg("env");
+            for (k, v) in &spec.env {
+                cmd.arg(format!("{k}={v}"));
+            }
+        }
+        cmd.arg(&spec.program).args(&spec.args);
         sudo_pw = Some(pw.as_bytes().to_vec());
     } else {
         cmd = Command::new(&spec.program);
         cmd.args(&spec.args);
+        for (k, v) in &spec.env {
+            cmd.env(k, v);
+        }
     }
-    for (k, v) in &spec.env {
-        cmd.env(k, v);
+    if spec.root {
+        lower_priority(&mut cmd);
     }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if sudo_pw.is_some() {
@@ -208,7 +276,8 @@ pub fn run_streaming(
         }
     })?;
 
-    // Feed the password to sudo, then close stdin. `sudo -S` reads one line.
+    // Feed the password to sudo, then close stdin (EOF): `sudo -S` reads one
+    // line, and anything that later tries to prompt gets EOF instead of hanging.
     if let Some(pw) = sudo_pw.take() {
         if let Some(mut si) = child.stdin.take() {
             let _ = si.write_all(&pw);
@@ -217,35 +286,21 @@ pub fn run_streaming(
         }
     }
 
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-
-    let (line_tx, line_rx) = mpsc::channel::<String>();
-    let out_thread = stdout.map(|out| {
-        std::thread::spawn(move || {
-            let reader = BufReader::new(out);
-            for line in reader.lines() {
-                match line {
-                    Ok(l) => {
-                        if line_tx.send(l).is_err() {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        })
-    });
-    let err_thread = stderr.map(|err| {
-        std::thread::spawn(move || -> String {
-            let mut buf = Vec::new();
-            let _ = err.take(OUTPUT_CAP as u64).read_to_end(&mut buf);
-            String::from_utf8_lossy(&buf).into_owned()
-        })
-    });
+    let (line_tx, line_rx) = mpsc::channel::<Stream>();
+    let mut readers = Vec::new();
+    if let Some(out) = child.stdout.take() {
+        let tx = line_tx.clone();
+        readers.push(std::thread::spawn(move || pump_lines(out, tx, Stream::Out)));
+    }
+    if let Some(err) = child.stderr.take() {
+        let tx = line_tx.clone();
+        readers.push(std::thread::spawn(move || pump_lines(err, tx, Stream::Err)));
+    }
+    drop(line_tx);
 
     let deadline = Instant::now() + timeout;
     let mut stdout_accum = String::new();
+    let mut stderr_accum = String::new();
     let mut timed_out = false;
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -254,19 +309,21 @@ pub fn run_streaming(
             break;
         }
         match line_rx.recv_timeout(remaining.min(Duration::from_millis(200))) {
-            Ok(line) => {
+            Ok(Stream::Out(line)) => {
                 if stdout_accum.len() < OUTPUT_CAP {
                     stdout_accum.push_str(&line);
                     stdout_accum.push('\n');
                 }
                 on_line(&line);
             }
-            Err(RecvTimeoutError::Timeout) => {
-                if Instant::now() >= deadline {
-                    timed_out = true;
-                    break;
+            Ok(Stream::Err(line)) => {
+                if stderr_accum.len() < OUTPUT_CAP {
+                    stderr_accum.push_str(&line);
+                    stderr_accum.push('\n');
                 }
+                on_line(&line);
             }
+            Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
@@ -282,11 +339,14 @@ pub fn run_streaming(
         let _ = child.kill();
         let _ = child.wait();
     }
-
-    if let Some(t) = out_thread {
-        let _ = t.join();
+    // Once the child is gone its pipes close and the readers finish. A
+    // grandchild that inherited the pipe could keep one open, so do not wait
+    // on readers after a timeout.
+    if !timed_out {
+        for r in readers {
+            let _ = r.join();
+        }
     }
-    let stderr_accum = err_thread.and_then(|t| t.join().ok()).unwrap_or_default();
 
     let code = exit_status.and_then(|s| s.code());
     let mut success = false;
@@ -306,4 +366,32 @@ pub fn run_streaming(
         stderr: stderr_accum,
         timed_out,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn streams_invalid_utf8_and_carriage_returns() {
+        let spec = CmdSpec::new("sh").args(["-c", r"printf 'a\rb\n\377c\nlast'; printf 'e1\n' >&2"]);
+        let mut seen = Vec::new();
+        let out = run_streaming(&spec, None, Duration::from_secs(10), &mut |l| seen.push(l.to_string())).unwrap();
+        assert!(out.success);
+        assert!(seen.contains(&"a".to_string()));
+        assert!(seen.contains(&"b".to_string()));
+        assert!(seen.contains(&"\u{FFFD}c".to_string()));
+        assert!(seen.contains(&"last".to_string()));
+        assert!(seen.contains(&"e1".to_string()));
+        assert_eq!(out.stderr.trim(), "e1");
+    }
+
+    #[test]
+    fn drains_large_stderr_without_blocking() {
+        // 4 MiB on stderr: far past OUTPUT_CAP; the child must still exit 0.
+        let spec = CmdSpec::new("sh").args(["-c", "head -c 4194304 /dev/zero | tr '\\0' 'x' | fold -w 100 >&2; exit 0"]);
+        let out = run_streaming(&spec, None, Duration::from_secs(30), &mut |_| {}).unwrap();
+        assert!(out.success, "{out:?}");
+        assert!(!out.timed_out);
+    }
 }

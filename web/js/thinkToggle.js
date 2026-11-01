@@ -30,8 +30,8 @@ export function canThink() {
 
 function unsupportedReason() {
   if (support?.provider === 'openai') return t('chat.thinkingNeedsOllama', null, 'Thinking needs an Ollama model');
-  if (support?.model) return t('chat.modelCannotThink', { model: support.model }, `${support.model} cannot think`);
-  return t('chat.thisModelCannotThink', null, 'This model cannot think');
+  if (support?.model) return t('chat.modelCannotThink', { model: support.model }, `${support.model} does not support thinking`);
+  return t('chat.thisModelCannotThink', null, 'This model does not support thinking');
 }
 
 function syncSurface() {

@@ -3,7 +3,7 @@
  *
  * Catalogs are flat JSON objects in `web/i18n/<code>.json`:
  *
- *   { "login.signIn": "Sign In",
+ *   { "login.signIn": "Sign in",
  *     "settings.remote.connections.one": "{count} connection",
  *     "settings.remote.connections.other": "{count} connections" }
  *

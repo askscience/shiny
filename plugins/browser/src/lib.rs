@@ -33,6 +33,7 @@ pub mod preview;
 pub mod routes;
 pub mod sessions;
 pub mod settings;
+pub mod sites;
 pub mod tools;
 pub mod vault;
 

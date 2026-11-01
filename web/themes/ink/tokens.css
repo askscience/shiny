@@ -45,6 +45,11 @@
   --accent-soft: rgba(255, 106, 61, 0.14);
   --accent-glow: rgba(255, 106, 61, 0.3);
   --accent-contrast: #ffffff;
+  /* The accent on the always-dark islands (top bar, chat glass, menus) */
+  --accent-on-dark: var(--accent);
+  --accent-on-dark-soft: var(--accent-soft);
+  --accent-on-dark-glow: var(--accent-glow);
+  --accent-on-dark-contrast: var(--accent-contrast);
 
   /* Gradients — derived from the user's gradient choice */
   --gradient-accent: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);

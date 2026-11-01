@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Edytor zdjęć — korekta tonów i kolorów, rozmycie, wyostrzanie i winieta oraz efekty filmowe jednym kliknięciem w oknie Obrazów",
   "plugin.image.meta.summary": "Edytor zdjęć: korekty i efekty filmowe",
   "plugin.image.meta.category": "Media",
-
   "plugin.image.toolbar.menu": "Menu",
   "plugin.image.toolbar.fitToggle": "Przełącz dopasowanie / rzeczywisty rozmiar",
-
+  "plugin.image.title": "Obraz",
+  "plugin.image.toolbar.fit": "Dopasuj",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Efekt: {name}",
+  "plugin.image.dock.looks": "Efekty",
+  "plugin.image.dock.adjust": "Korekty",
   "plugin.image.dial.brightness": "Jasność",
   "plugin.image.dial.contrast": "Kontrast",
   "plugin.image.dial.exposure": "Ekspozycja",
@@ -14,7 +18,6 @@
   "plugin.image.dial.blur": "Rozmycie",
   "plugin.image.dial.sharpen": "Wyostrzanie",
   "plugin.image.dial.vignette": "Winieta",
-
   "plugin.image.oneClick.autoTone": "Automatyczny ton",
   "plugin.image.oneClick.autoContrast": "Automatyczny kontrast",
   "plugin.image.oneClick.invert": "Odwróć",
@@ -22,11 +25,9 @@
   "plugin.image.oneClick.sepia": "Sepia",
   "plugin.image.oneClick.revert": "Przywróć",
   "plugin.image.oneClick.revertTitle": "Przywróć oryginalny obraz",
-
   "plugin.image.empty.title": "Brak otwartego obrazu",
   "plugin.image.empty.body": "Otwórz lub przeciągnij zdjęcie, aby rozpocząć.",
   "plugin.image.empty.open": "Otwórz obraz",
-
   "plugin.image.menu.file": "Plik",
   "plugin.image.menu.image": "Obraz",
   "plugin.image.menu.view": "Widok",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Pomniejsz",
   "plugin.image.menu.fit": "Dopasuj",
   "plugin.image.menu.actualSize": "Rzeczywisty rozmiar",
-
   "plugin.image.ctx.open": "Otwórz obraz…",
-
   "plugin.image.dialog.deleteConfirm": "Usunąć „{title}”?",
   "plugin.image.dialog.thisImage": "ten obraz",
-
   "plugin.image.toast.openFirst": "Najpierw otwórz obraz",
   "plugin.image.toast.opened": "Otwarto {title}",
   "plugin.image.toast.editFailed": "Edycja nie powiodła się",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Zapisywanie nie powiodło się",
   "plugin.image.toast.deleted": "Obraz usunięty",
   "plugin.image.toast.deleteFailed": "Nie udało się usunąć obrazu",
-  "plugin.image.toast.reverted": "Przywrócono oryginalne piksele",
+  "plugin.image.toast.reverted": "Przywrócono oryginalny obraz",
   "plugin.image.toast.openFailed": "Nie udało się otworzyć pliku",
-
   "plugin.image.error.emptyFile": "ten plik jest pusty",
   "plugin.image.error.notAnImage": "„{name}” nie jest obrazem, który edytor może otworzyć",
   "plugin.image.error.unnamedFile": "plik"

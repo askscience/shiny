@@ -22,22 +22,18 @@ hayro-syntax = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289b
 lopdf = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
 vello_common = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
 vello_cpu = { git = "https://github.com/storytold/pdfcraft", rev = "f137a289baadefbd29e0e46930899896068cc41d" }
+# WordCraft's PDF exporter (the Word plugin) writes through craft-pdf, which
+# needs craft-libs' patched krilla (same commit WordCraft pins).
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
 
-# The Studio DSP engine calls into `fundsp` per sample; without cross-crate
-# inlining those AudioNode::tick calls do not get inlined and the render is
-# ~2x slower. Thin LTO (plus a single codegen unit) recovers it and then some.
+# Thin LTO plus a single codegen unit: the per-sample DSP hot loops (Studio)
+# benefit from cross-crate inlining.
 [profile.release]
 lto = "thin"
 codegen-units = 1
 
-# fundsp's per-sample DSP is unusably slow at opt-level 0 (every tick becomes a
-# real call chain). Optimize the dependency even in dev builds so debug renders
-# and the test suite stay quick — our own crate stays unoptimised for debugging.
-[profile.dev.package.fundsp]
-opt-level = 2
-
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 
 [package]

@@ -690,7 +690,7 @@ check(
   'the page menu carries navigation + edit entries',
   opened?.entries?.some((e) => e.label === 'Back')
     && opened?.entries?.some((e) => e.label === 'Reload')
-    && opened?.entries?.some((e) => e.label === 'Select All')
+    && opened?.entries?.some((e) => e.label === 'Select all')
     && opened?.entries?.find((e) => e.label === 'Copy')?.disabled === false,
   JSON.stringify(opened?.entries?.map((e) => e.label)),
 );
@@ -715,7 +715,7 @@ check(
     && editableMenu?.entries?.some((e) => e.label === 'Paste'),
   JSON.stringify(editableMenu?.entries?.map((e) => e.label)),
 );
-check('a link adds Copy Link Address', editableMenu?.entries?.[0]?.label === 'Copy Link Address');
+check('a link adds Copy link address', editableMenu?.entries?.[0]?.label === 'Copy link address');
 const actionsBefore = viewCommands().filter((c) => c.op === 'action').length;
 editableMenu?.entries?.find((e) => e.label === 'Cut')?.onClick?.();
 const action = lastView('action');

@@ -51,6 +51,9 @@ pub struct Settings {
     /// A name from [`SEARCH_ENGINES`]; `SEARXNG_URL` still overrides it when
     /// the window builds a search URL.
     pub search_engine: String,
+    /// Related news on the home page. Off means the news engine does not run
+    /// at all: no history read, no fetch.
+    pub news: bool,
 }
 
 impl Default for Settings {
@@ -60,6 +63,7 @@ impl Default for Settings {
             adblock: true,
             incognito: false,
             search_engine: DEFAULT_SEARCH_ENGINE.to_string(),
+            news: true,
         }
     }
 }
@@ -75,6 +79,7 @@ pub fn ensure_schema(ctx: &PluginCtx) {
              adblock INTEGER NOT NULL DEFAULT 1, \
              incognito INTEGER NOT NULL DEFAULT 0, \
              search_engine TEXT NOT NULL DEFAULT 'duckduckgo', \
+             news INTEGER NOT NULL DEFAULT 1, \
              updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
         &[],
     );
@@ -85,6 +90,8 @@ pub fn ensure_schema(ctx: &PluginCtx) {
     // shape unless this upgrades it. SQLite has no conditional DDL: a duplicate
     // column is success, and anything else is logged and ignored so a broken
     // database still cannot stop the browser.
+    add_news_column(ctx);
+
     let has_column = db
         .query(
             "SELECT COUNT(*) FROM pragma_table_info('browser_settings') WHERE name = 'search_engine'",
@@ -110,6 +117,19 @@ pub fn ensure_schema(ctx: &PluginCtx) {
     }
 }
 
+/// Add the `news` column to a table created before it existed. Same reasoning
+/// as the `search_engine` repair below: a duplicate column is success.
+fn add_news_column(ctx: &PluginCtx) {
+    match ctx.db().execute(
+        "ALTER TABLE browser_settings ADD COLUMN news INTEGER NOT NULL DEFAULT 1",
+        &[],
+    ) {
+        Ok(_) => tracing::info!("browser: added the settings `news` column"),
+        Err(err) if err.to_string().contains("duplicate column") => {}
+        Err(err) => tracing::debug!("browser: could not add the settings `news` column: {err}"),
+    }
+}
+
 /// Column the search-engine setting needs, and the schema repair that adds it.
 ///
 /// See [`ensure_schema`] for why this is code and not only a migration: the
@@ -126,7 +146,7 @@ pub fn get(ctx: &Arc<PluginCtx>, user_id: &str) -> Settings {
     let rows = ctx
         .db()
         .query(
-            "SELECT adblock, incognito, search_engine FROM browser_settings WHERE traveler_id = ?1",
+            "SELECT adblock, incognito, search_engine, news FROM browser_settings WHERE traveler_id = ?1",
             &[Value::text(user_id.to_string())],
         )
         .unwrap_or_default();
@@ -142,6 +162,7 @@ pub fn get(ctx: &Arc<PluginCtx>, user_id: &str) -> Settings {
         search_engine: value_text(it.next())
             .filter(|engine| is_search_engine(engine))
             .unwrap_or_else(|| DEFAULT_SEARCH_ENGINE.to_string()),
+        news: int_bool(it.next()).unwrap_or(true),
     }
 }
 
@@ -155,6 +176,7 @@ pub fn set(
     adblock: Option<bool>,
     incognito: Option<bool>,
     search_engine: Option<&str>,
+    news: Option<bool>,
 ) -> Settings {
     let current = get(ctx, user_id);
     let search_engine = match search_engine {
@@ -167,17 +189,19 @@ pub fn set(
         adblock: adblock.unwrap_or(current.adblock),
         incognito: incognito.unwrap_or(current.incognito),
         search_engine,
+        news: news.unwrap_or(current.news),
     };
     let _ = ctx.db().execute(
-        "INSERT INTO browser_settings (traveler_id, adblock, incognito, search_engine, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, datetime('now')) \
+        "INSERT INTO browser_settings (traveler_id, adblock, incognito, search_engine, news, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, datetime('now')) \
          ON CONFLICT(traveler_id) DO UPDATE SET \
-             adblock = ?2, incognito = ?3, search_engine = ?4, updated_at = datetime('now')",
+             adblock = ?2, incognito = ?3, search_engine = ?4, news = ?5, updated_at = datetime('now')",
         &[
             Value::text(user_id.to_string()),
             Value::Int(i64::from(next.adblock)),
             Value::Int(i64::from(next.incognito)),
             Value::text(next.search_engine.clone()),
+            Value::Int(i64::from(next.news)),
         ],
     );
     next
@@ -217,6 +241,7 @@ mod tests {
                 adblock: true,
                 incognito: false,
                 search_engine: "duckduckgo".into(),
+                news: true,
             }
         );
     }
@@ -225,21 +250,35 @@ mod tests {
     fn set_round_trips_and_keeps_the_other_field() {
         let ctx = ctx("/tmp/browser-settings-roundtrip.db");
         ensure_schema(&ctx);
-        let updated = set(&ctx, "u1", Some(false), None, None);
+        let updated = set(&ctx, "u1", Some(false), None, None, None);
         assert_eq!(
             updated,
             Settings {
                 adblock: false,
                 incognito: false,
                 search_engine: "duckduckgo".into(),
+                news: true,
             }
         );
-        let incog = set(&ctx, "u1", None, Some(true), None);
+        let incog = set(&ctx, "u1", None, Some(true), None, None);
         assert_eq!(incog.adblock, false);
         assert_eq!(incog.incognito, true);
         assert_eq!(incog.search_engine, "duckduckgo");
         // A different user is unaffected.
         assert_eq!(get(&ctx, "u2").adblock, true);
+    }
+
+    #[test]
+    fn news_switch_round_trips() {
+        let ctx = ctx("/tmp/browser-settings-news.db");
+        ensure_schema(&ctx);
+        assert!(get(&ctx, "u1").news);
+        let off = set(&ctx, "u1", None, None, None, Some(false));
+        assert!(!off.news);
+        assert!(!get(&ctx, "u1").news);
+        // Other settings writes keep it off.
+        assert!(!set(&ctx, "u1", Some(true), None, None, None).news);
+        assert!(get(&ctx, "u2").news);
     }
 
     #[test]
@@ -250,18 +289,18 @@ mod tests {
 
         // Every allowed name is stored and read back.
         for engine in SEARCH_ENGINES {
-            let next = set(&ctx, "u1", None, None, Some(engine));
+            let next = set(&ctx, "u1", None, None, Some(engine), None);
             assert_eq!(next.search_engine, engine);
             assert_eq!(get(&ctx, "u1").search_engine, engine);
         }
 
         // An unknown name is ignored: the stored choice is kept, not replaced.
-        let kept = set(&ctx, "u1", None, None, Some("askjeeves"));
+        let kept = set(&ctx, "u1", None, None, Some("askjeeves"), None);
         assert_eq!(kept.search_engine, "bing");
         assert_eq!(get(&ctx, "u1").search_engine, "bing");
 
         // `None` leaves the stored engine alone too.
-        let untouched = set(&ctx, "u1", Some(false), None, None);
+        let untouched = set(&ctx, "u1", Some(false), None, None, None);
         assert_eq!(untouched.search_engine, "bing");
         assert_eq!(untouched.adblock, false);
     }
@@ -297,7 +336,7 @@ mod tests {
         let ctx = ctx("/tmp/browser-settings-missing.db");
         assert_eq!(get(&ctx, "u1").adblock, true);
         assert_eq!(get(&ctx, "u1").search_engine, DEFAULT_SEARCH_ENGINE);
-        let _ = set(&ctx, "u1", Some(false), None, Some("google"));
+        let _ = set(&ctx, "u1", Some(false), None, Some("google"), None);
         let _ = Db::open("sqlite:///tmp/browser-settings-missing.db").unwrap();
     }
 }

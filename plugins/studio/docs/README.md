@@ -5,9 +5,11 @@ plugin: a step sequencer, a polyphonic subtractive/FM synthesiser, a drum machin
 patch editor ("the Grid" / WaveMe), a mixer with per-voice insert effects, a Bitwig-style
 window, and a full agent tool surface so the AI can compose and render music.
 
-It renders **offline, in one block-based pass** through its own self-contained DSP engine
-(built on [`fundsp`](https://github.com/SamiPerttu/fundsp) for oscillators/filters/ladder, plus
-in-house code for envelopes, drums, effects, mastering and analysis). Everything is
+It renders **offline, block by block** through its own self-contained DSP engine
+(alias-free wavetable oscillators, stereo ZDF filters, drums, effects, a real mixer with
+inserts, sends/returns and a look-ahead mastering chain). Audio tracks play WAV files —
+including songs made by the local AI song model — next to the synthesised parts. The
+window plays cached per-track stems through a live Web Audio mixer. Everything is
 deterministic: the same config always renders bit-identically.
 
 This directory is the complete reference for the plugin. Start here, then follow the
@@ -17,7 +19,7 @@ per-topic documents:
 | --- | --- |
 | [`architecture.md`](architecture.md) | the render engine, the DSP modules, scheduling/mixing/analysis, the SQL data tables |
 | [`tools.md`](tools.md) | every `studio_*` agent tool: params, returns, examples |
-| [`routes.md`](routes.md) | every `/api/studio/*` REST route, auth, request/response, `GET /:id/audio` |
+| [`routes.md`](routes.md) | every `/api/studio/*` REST route (patterns, arrangements, mixer stems, export, audio import) |
 | [`window.md`](window.md) | the Studio window (`web/plugin.js`): Arranger, Launcher, detail panels, transport, shortcuts |
 | [`soundfonts.md`](soundfonts.md) | user-supplied `.sf2` banks, `sampler`/`sfkit`, `install.sh`, catalog listing |
 
@@ -161,11 +163,11 @@ It prints render time, realtime factor, LUFS, peak, sample rate and channel coun
 
 **Synthesis / DSP**
 
-- Band-limited wavetables (fundsp) for saw/square/triangle/pulse/organ/Hammond/soft-saw plus
-  PolyBLEP fallbacks; in-house sine for FM and seeded noise (`dsp/osc.rs`).
-- Exponential ADSR with a linear blend, and a percussive one-shot envelope (`dsp/env.rs`).
-- TPT state-variable filter (LP/HP/BP/notch/peak), 12/24 dB slopes, input drive, DC blocker,
-  and a resonant Moog ladder (`dsp/filter.rs`).
+- Mip-mapped additive wavetables for saw/square/triangle/PWM pulse/organ/Hammond/soft-saw
+  (alias-free at any pitch and rate); f64 sine for FM and seeded noise (`dsp/osc.rs`).
+- ADSR with RC attack, dB-linear decay/release and a linear blend (`dsp/env.rs`).
+- TPT state-variable filter (LP/HP/BP/notch/peak), 12/24 dB slopes, input drive, and a ZDF
+  ladder — all with independent stereo state (`dsp/filter.rs`).
 - Stereo delay, ping-pong, chorus and phaser (`dsp/delay.rs`); 8-line FDN reverb with
   diffusion, damping, pre-delay, width, modulation (`dsp/reverb.rs`).
 - Insert effects: distortion (5 modes), filter, 3-band EQ, compressor, delay, reverb,
@@ -199,7 +201,7 @@ It prints render time, realtime factor, LUFS, peak, sample rate and channel coun
 ```
 plugins/studio/
 ├── plugin.toml                 manifest (name, version, web_dir, skills_dir)
-├── Cargo.toml                  cdylib + rlib; fundsp + rustysynth
+├── Cargo.toml                  cdylib + rlib; rustysynth (SoundFonts)
 ├── install.sh                  build + copy into data/plugins/studio/
 ├── PLUGIN.md                   legacy prose overview (kept)
 ├── skills/studio.md            the model-facing tool contract

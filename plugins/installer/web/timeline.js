@@ -294,7 +294,7 @@ export function renderTimelinePanel(options) {
     exactBody.appendChild(zone);
 
     if (state.partitionMode === MODE_EXISTING) {
-      exactBody.appendChild(el('p', 'installer-exact-hint', t('disk.timeline.existingExact', 'Sizes are managed by the existing partition; no new partition is created.')));
+      exactBody.appendChild(el('p', 'installer-exact-hint', t('disk.timeline.existingExact', 'The existing partition keeps its size; no new partition is created.')));
       return;
     }
 
@@ -473,7 +473,7 @@ export function renderTimelinePanel(options) {
         node.appendChild(button);
       }
     }
-    const detail = segment.part?.path || (isGap ? t('disk.freeDetail', 'No partition table entry') : '');
+    const detail = segment.part?.path || (isGap ? t('disk.freeDetail', 'Not part of any partition') : '');
     node.title = `${clipTitle(segment)}${detail ? ` · ${detail}` : ''}`;
     track.appendChild(node);
   }
@@ -576,8 +576,8 @@ export function renderTimelinePanel(options) {
       homeTooBig: t('disk.timeline.homeTooBig', 'The personal-files partition does not fit in this free space.'),
       rootTooBig: t('disk.timeline.rootTooBig', 'The system does not fit in this free space.'),
       rootSmall: t('disk.manual.rootSmall', 'Leave at least 20 GiB for the system.'),
-      noRoot: t('disk.existing.noRoot', 'Select an unmounted ext4 partition to use as root'),
-      noEsp: t('disk.existing.noEsp', 'No EFI system partition found on this disk'),
+      noRoot: t('disk.existing.noRoot', 'Choose a partition for PEAK’D! (ext4 or empty, not in use)'),
+      noEsp: t('disk.existing.noEsp', 'No startup partition found on this disk'),
     };
     return values[code] || code;
   }

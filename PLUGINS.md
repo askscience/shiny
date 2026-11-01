@@ -97,7 +97,7 @@ shiny/
 │       ├── plugin.toml
 │       ├── skills/radio.md
 │       └── src/{lib.rs, plugin.rs, radio_browser.rs, tools/mod.rs}
-│   └── word/                         # simple word processor (.odt documents) + editor window
+│   └── word/                         # word processor (.odt documents, .docx/PDF export via WordCraft) + editor window
 │       ├── Cargo.toml
 │       ├── plugin.toml
 │       ├── skills/word.md

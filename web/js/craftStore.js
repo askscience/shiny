@@ -217,7 +217,7 @@ export async function craftUpdateTick({ force = false } = {}) {
         title: outdated.length === 1
           ? t('plugins.storeUpdatingOne', { name: outdated[0].name }, `Updating ${outdated[0].name}`)
           : t('plugins.storeUpdatingMany', { count: outdated.length }, `Updating ${outdated.length} apps`),
-        body: t('plugins.storeUpdatingBody', null, 'They keep working while they update.'),
+        body: t('plugins.storeUpdatingBody', null, 'Apps keep working while they update.'),
         icon: 'ui/download',
       });
     }

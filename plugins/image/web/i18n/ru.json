@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Фоторедактор — настройка тона и цвета, размытие, резкость, виньетка и плёночные эффекты в одно нажатие в окне Изображение",
   "plugin.image.meta.summary": "Фоторедактор: настройки и плёночные эффекты",
   "plugin.image.meta.category": "Медиа",
-
   "plugin.image.toolbar.menu": "Меню",
   "plugin.image.toolbar.fitToggle": "Переключить вписывание и реальный размер",
-
+  "plugin.image.title": "Изображение",
+  "plugin.image.toolbar.fit": "Вписать",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Эффект: {name}",
+  "plugin.image.dock.looks": "Эффекты",
+  "plugin.image.dock.adjust": "Настройка",
   "plugin.image.dial.brightness": "Яркость",
   "plugin.image.dial.contrast": "Контраст",
   "plugin.image.dial.exposure": "Экспозиция",
@@ -14,7 +18,6 @@
   "plugin.image.dial.blur": "Размытие",
   "plugin.image.dial.sharpen": "Резкость",
   "plugin.image.dial.vignette": "Виньетка",
-
   "plugin.image.oneClick.autoTone": "Автотон",
   "plugin.image.oneClick.autoContrast": "Автоконтраст",
   "plugin.image.oneClick.invert": "Инвертировать",
@@ -22,11 +25,9 @@
   "plugin.image.oneClick.sepia": "Сепия",
   "plugin.image.oneClick.revert": "Вернуть",
   "plugin.image.oneClick.revertTitle": "Восстановить исходное изображение",
-
   "plugin.image.empty.title": "Изображение не открыто",
   "plugin.image.empty.body": "Откройте или перетащите изображение, чтобы начать.",
   "plugin.image.empty.open": "Открыть изображение",
-
   "plugin.image.menu.file": "Файл",
   "plugin.image.menu.image": "Изображение",
   "plugin.image.menu.view": "Вид",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Уменьшить",
   "plugin.image.menu.fit": "Вписать",
   "plugin.image.menu.actualSize": "Реальный размер",
-
   "plugin.image.ctx.open": "Открыть изображение…",
-
   "plugin.image.dialog.deleteConfirm": "Удалить “{title}”?",
   "plugin.image.dialog.thisImage": "это изображение",
-
   "plugin.image.toast.openFirst": "Сначала откройте изображение",
   "plugin.image.toast.opened": "Открыто: {title}",
   "plugin.image.toast.editFailed": "Не удалось изменить",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Не удалось сохранить",
   "plugin.image.toast.deleted": "Изображение удалено",
   "plugin.image.toast.deleteFailed": "Не удалось удалить изображение",
-  "plugin.image.toast.reverted": "Возвращены исходные пиксели",
+  "plugin.image.toast.reverted": "Возвращено исходное изображение",
   "plugin.image.toast.openFailed": "Не удалось открыть файл",
-
   "plugin.image.error.emptyFile": "этот файл пуст",
   "plugin.image.error.notAnImage": "“{name}” — не изображение, которое редактор может открыть",
   "plugin.image.error.unnamedFile": "файл"

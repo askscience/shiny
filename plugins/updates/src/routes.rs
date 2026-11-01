@@ -151,12 +151,20 @@ fn job_handler() -> RouteHandler {
     bridged_route(move |req: Request| async move {
         let _uid = user_id(&req)?;
         let q: JobQuery = take_query(req).await?;
-        let id = q
-            .job
-            .ok_or_else(|| AppError::BadRequest("job required".into()))?;
-        let job = jobs::get(&id).ok_or_else(|| AppError::NotFound("job not found".into()))?;
+        // Without `job`, report the job still running (if any) so a reopened
+        // window can re-attach to an install already in progress.
+        let job = match q.job {
+            Some(id) => jobs::get(&id).ok_or_else(|| AppError::NotFound("job not found".into()))?,
+            None => match jobs::running() {
+                Some(job) => job,
+                None => return Ok(ok(json!({ "job": null }))),
+            },
+        };
         let snap = job.snapshot(q.from.unwrap_or(0));
         Ok(ok(json!({
+            "job": job.id,
+            "kind": job.kind,
+            "progress": snap.progress,
             "lines": snap.lines,
             "done": snap.done,
             "success": snap.success,
@@ -198,7 +206,7 @@ fn refresh_handler(ctx: Arc<PluginCtx>) -> RouteHandler {
             let job = jobs::start("refresh", move |job| {
                 let ok = ops::refresh_job(&job, manager.as_ref(), password.as_deref());
                 job.finish(ok, None);
-            });
+            })?;
             crate::history::record_when_done(
                 (*ctx).clone(),
                 uid,
@@ -280,7 +288,7 @@ fn apply_handler(ctx: Arc<PluginCtx>) -> RouteHandler {
                     }
                 }
                 job.finish(ok, None);
-            });
+            })?;
             crate::history::record_when_done(
                 (*ctx).clone(),
                 uid,
@@ -310,7 +318,7 @@ fn ollama_handler(ctx: Arc<PluginCtx>) -> RouteHandler {
             let job = jobs::start("ollama", move |job| {
                 let ok = ops::ollama_job(&job, password.as_deref());
                 job.finish(ok, None);
-            });
+            })?;
             crate::history::record_when_done(
                 (*ctx).clone(),
                 uid,

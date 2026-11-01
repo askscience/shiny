@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Επεξεργαστής φωτογραφιών — ρυθμίσεις τόνου και χρώματος, θόλωση/όξυνση/βινιέτα και κινηματογραφικά φίλτρα με ένα πάτημα στο παράθυρο της Εικόνας",
   "plugin.image.meta.summary": "Επεξεργαστής φωτογραφιών: ρυθμίσεις και φίλτρα",
   "plugin.image.meta.category": "Πολυμέσα",
-
   "plugin.image.toolbar.menu": "Μενού",
   "plugin.image.toolbar.fitToggle": "Εναλλαγή προσαρμογής / πραγματικού μεγέθους",
-
+  "plugin.image.title": "Εικόνα",
+  "plugin.image.toolbar.fit": "Προσαρμογή",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Φίλτρο: {name}",
+  "plugin.image.dock.looks": "Φίλτρα",
+  "plugin.image.dock.adjust": "Ρυθμίσεις",
   "plugin.image.dial.brightness": "Φωτεινότητα",
   "plugin.image.dial.contrast": "Αντίθεση",
   "plugin.image.dial.exposure": "Έκθεση",
@@ -14,19 +18,16 @@
   "plugin.image.dial.blur": "Θόλωση",
   "plugin.image.dial.sharpen": "Όξυνση",
   "plugin.image.dial.vignette": "Βινιέτα",
-
   "plugin.image.oneClick.autoTone": "Αυτόματος τόνος",
   "plugin.image.oneClick.autoContrast": "Αυτόματη αντίθεση",
   "plugin.image.oneClick.invert": "Αντιστροφή",
   "plugin.image.oneClick.grayscale": "Α/Μ",
   "plugin.image.oneClick.sepia": "Σέπια",
   "plugin.image.oneClick.revert": "Επαναφορά",
-  "plugin.image.oneClick.revertTitle": "Επαναφορά του αρχικού αρχείου",
-
+  "plugin.image.oneClick.revertTitle": "Επαναφορά της αρχικής εικόνας",
   "plugin.image.empty.title": "Δεν υπάρχει ανοιχτή εικόνα",
   "plugin.image.empty.body": "Ανοίξτε ή σύρετε μια φωτογραφία για να ξεκινήσετε.",
   "plugin.image.empty.open": "Άνοιγμα εικόνας",
-
   "plugin.image.menu.file": "Αρχείο",
   "plugin.image.menu.image": "Εικόνα",
   "plugin.image.menu.view": "Προβολή",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Σμίκρυνση",
   "plugin.image.menu.fit": "Προσαρμογή",
   "plugin.image.menu.actualSize": "Πραγματικό μέγεθος",
-
   "plugin.image.ctx.open": "Άνοιγμα εικόνας…",
-
   "plugin.image.dialog.deleteConfirm": "Διαγραφή του \"{title}\";",
   "plugin.image.dialog.thisImage": "αυτή η εικόνα",
-
   "plugin.image.toast.openFirst": "Ανοίξτε πρώτα μια εικόνα",
   "plugin.image.toast.opened": "Άνοιξε το {title}",
   "plugin.image.toast.editFailed": "Η επεξεργασία απέτυχε",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Η αποθήκευση απέτυχε",
   "plugin.image.toast.deleted": "Η εικόνα διαγράφηκε",
   "plugin.image.toast.deleteFailed": "Δεν ήταν δυνατή η διαγραφή της εικόνας",
-  "plugin.image.toast.reverted": "Έγινε επαναφορά στα αρχικά pixel",
+  "plugin.image.toast.reverted": "Έγινε επαναφορά στην αρχική εικόνα",
   "plugin.image.toast.openFailed": "Δεν ήταν δυνατό το άνοιγμα του αρχείου",
-
   "plugin.image.error.emptyFile": "αυτό το αρχείο είναι κενό",
   "plugin.image.error.notAnImage": "Το “{name}” δεν είναι εικόνα που μπορεί να ανοίξει ο επεξεργαστής",
   "plugin.image.error.unnamedFile": "αρχείο"

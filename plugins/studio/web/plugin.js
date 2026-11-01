@@ -433,20 +433,22 @@ function kitPattern(steps = 16) {
   return { title: 'Kit', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: defaultKit(), fx: defaultFx() };
 }
 function bassPattern(steps = 16) {
-  return { title: 'Bass', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('bass', 'x...x...x...x...', { octave: 2, wave: 'triangle' })], fx: defaultFx() };
+  return { title: 'Bass', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('bass', 'x...x...x...x...', { octave: -2, wave: 'triangle' })], fx: defaultFx() };
 }
 function leadPattern(steps = 16) {
-  return { title: 'Lead', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('lead', 'x.x.x.x.x.x.x.x.', { degree: 4, octave: 3, wave: 'saw' })], fx: defaultFx() };
+  return { title: 'Lead', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('lead', 'x.x.x.x.x.x.x.x.', { degree: 4, octave: 0, wave: 'saw' })], fx: defaultFx() };
 }
 function padPattern(steps = 16) {
-  return { title: 'Pad', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('pad', 'x...x...x...x...', { degree: 0, octave: 3 })], fx: defaultFx() };
+  return { title: 'Pad', bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('pad', 'x...x...x...x...', { degree: 0, octave: -1 })], fx: defaultFx() };
 }
 function simplePattern(kind, steps = 16) {
   if (kind === 'drumkit') {
     const notes = [0, 4, 8, 12].map((s) => ({ step: s, length: 1, degree: 0, octave: 0, velocity: null }));
     return { title: KIND_LABELS[kind], bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice('drumkit', '', { pads: defaultPads(), notes })], fx: defaultFx() };
   }
-  const oct = (kind === 'bass' || kind === 'sub') ? 2 : 3;
+  /* Octave 0 is the A4 octave (440 Hz): basses sit two below, pads and keys
+     one below, leads/bells at it. */
+  const oct = (kind === 'bass' || kind === 'sub') ? -2 : (['lead', 'bell', 'pluck', 'synthme', 'fm'].includes(kind) ? 0 : -1);
   return { title: KIND_LABELS[kind], bpm: 120, steps, swing: 0, tuning: 'edo12', voices: [voice(kind, 'x.x.x.x.x.x.x.x.', { degree: 0, octave: oct })], fx: defaultFx() };
 }
 
@@ -458,6 +460,9 @@ function blankArrangement() {
     bpm: 120,
     length_beats: 32,
     master: 0.9,
+    fx: { ceiling: -1 },
+    master_fx: [],
+    returns: { reverb: {}, delay: {}, reverb_level: null, delay_level: null },
     tracks: [],
     clips: [],
   };
@@ -502,6 +507,7 @@ function normalizeVoice(v) {
     macros: normalizeMacros(v?.macros),
     pads: Array.isArray(v?.pads) ? v.pads.map((p) => ({ name: p.name || 'Pad', kind: KINDS.includes(p.kind) ? p.kind : 'kick' })) : [],
     midi: normalizeMidiFx(v?.midi),
+    soundfont: typeof v?.soundfont === 'string' ? v.soundfont : undefined,
     grid: (v?.grid && Array.isArray(v.grid.modules)) ? { modules: v.grid.modules.map((m) => ({ id: m.id, kind: m.kind, params: { ...(m.params || {}) } })), cables: Array.isArray(v.grid.cables) ? v.grid.cables.map((c) => ({ from: [c.from[0], c.from[1]], to: [c.to[0], c.to[1]] })) : [] } : null,
   };
 }
@@ -552,9 +558,28 @@ function serializePattern(p) {
       pads: v.pads,
       midi: v.midi,
       grid: v.grid,
+      ...(v.soundfont ? { soundfont: v.soundfont } : {}),
     })),
     fx: p.fx || {},
   };
+}
+function serializeEffects(list) {
+  return (Array.isArray(list) ? list : []).map((f) => ({ kind: f.kind, params: { ...(f.params || {}) }, bypass: !!f.bypass }));
+}
+function serializeClip(c) {
+  const out = { track: c.track, start: c.start, gain_db: c.gain_db || 0, loop: c.loop !== false };
+  if (Number.isFinite(c.length_beats)) out.length_beats = c.length_beats;
+  if (c.audio) {
+    out.audio = {
+      src: c.audio.src, name: c.audio.name || '', offset: c.audio.offset || 0,
+      fade_in: c.audio.fade_in || 0, fade_out: c.audio.fade_out || 0,
+      ...(Number.isFinite(c.audio.bpm) ? { bpm: c.audio.bpm } : {}),
+    };
+    out.pattern = { steps: 16, voices: [] };
+  } else {
+    out.pattern = serializePattern(normalizePattern(c.pattern));
+  }
+  return out;
 }
 function arrangementPayload() {
   return {
@@ -562,9 +587,82 @@ function arrangementPayload() {
     bpm: arrangement.bpm,
     length_beats: arrangement.length_beats,
     master: arrangement.master ?? 0.9,
-    tracks: arrangement.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, mute: t.mute, level: t.level, pan: t.pan, automation: t.automation || { lanes: [] } })),
-    clips: arrangement.clips.map((c) => ({ track: c.track, start: c.start, pattern: c.pattern })),
+    fx: { ...(arrangement.fx || {}) },
+    master_fx: serializeEffects(arrangement.master_fx),
+    returns: {
+      reverb: { ...(arrangement.returns?.reverb || {}) },
+      delay: { ...(arrangement.returns?.delay || {}) },
+      ...(Number.isFinite(arrangement.returns?.reverb_level) ? { reverb_level: arrangement.returns.reverb_level } : {}),
+      ...(Number.isFinite(arrangement.returns?.delay_level) ? { delay_level: arrangement.returns.delay_level } : {}),
+    },
+    tracks: arrangement.tracks.map((t) => ({
+      id: t.id, name: t.name, kind: t.kind || 'instrument', color: t.color, mute: !!t.mute, solo: soloTracks.has(t.id),
+      level: t.level, pan: t.pan, fx: serializeEffects(t.fx),
+      ...(t.sends ? { sends: { reverb: t.sends.reverb || 0, delay: t.sends.delay || 0 } } : {}),
+      automation: t.automation || { lanes: [] },
+    })),
+    clips: arrangement.clips.map(serializeClip),
   };
+}
+/* Normalize an arrangement from the server (or the AI) into the window's
+   model, keeping every field the engine understands. */
+function normalizeArrangement(data) {
+  const tracks = (data?.tracks || []).map((t, i) => ({
+    id: t.id || `t${Date.now()}${i}`,
+    name: t.name || `Track ${i + 1}`,
+    kind: t.kind === 'audio' ? 'audio' : 'instrument',
+    color: t.color ?? i,
+    mute: !!t.mute,
+    solo: !!t.solo,
+    level: Number.isFinite(t.level) ? t.level : 0.8,
+    pan: Number.isFinite(t.pan) ? t.pan : 0,
+    fx: normalizeEffects(t.fx),
+    sends: t.sends ? { reverb: t.sends.reverb || 0, delay: t.sends.delay || 0 } : null,
+    automation: normalizeAutomation(t.automation),
+  }));
+  const clips = (data?.clips || []).map((c) => {
+    const clip = {
+      track: c.track,
+      start: Number.isFinite(c.start) ? c.start : 0,
+      length_beats: Number.isFinite(c.length_beats) ? c.length_beats : null,
+      loop: c.loop !== false,
+      gain_db: Number.isFinite(c.gain_db) ? c.gain_db : 0,
+      audio: null,
+      pattern: null,
+    };
+    if (c.audio && typeof c.audio.src === 'string') {
+      clip.audio = {
+        src: c.audio.src, name: c.audio.name || c.audio.src.split('/').pop().replace(/\.wav$/i, ''),
+        offset: c.audio.offset || 0, fade_in: c.audio.fade_in || 0, fade_out: c.audio.fade_out || 0,
+        bpm: Number.isFinite(c.audio.bpm) ? c.audio.bpm : null,
+      };
+    } else {
+      clip.pattern = normalizePattern(c.pattern || {});
+    }
+    return clip;
+  });
+  return {
+    id: data?.id || null,
+    title: data?.title || 'Untitled',
+    bpm: data?.bpm ?? 120,
+    length_beats: data?.length_beats ?? 32,
+    master: data?.master ?? 0.9,
+    fx: (data?.fx && typeof data.fx === 'object') ? { ...data.fx } : {},
+    master_fx: normalizeEffects(data?.master_fx),
+    returns: {
+      reverb: { ...(data?.returns?.reverb || {}) },
+      delay: { ...(data?.returns?.delay || {}) },
+      reverb_level: Number.isFinite(data?.returns?.reverb_level) ? data.returns.reverb_level : null,
+      delay_level: Number.isFinite(data?.returns?.delay_level) ? data.returns.delay_level : null,
+    },
+    tracks,
+    clips,
+  };
+}
+function normalizeEffects(list) {
+  return Array.isArray(list) ? list.filter((f) => f && typeof f.kind === 'string').map((f) => ({
+    kind: f.kind, params: (f.params && typeof f.params === 'object') ? { ...f.params } : {}, bypass: !!f.bypass,
+  })) : [];
 }
 /* Render-only payload: solo/mute logic applied without persisting it. */
 function arrangementRenderPayload() {
@@ -604,10 +702,8 @@ let soloTracks = new Set();      // frontend-only solo state (track ids)
 
 /* audio */
 let audioCtx = null;
-let arrSource = null;            // arrangement buffer source
 let arrPlaying = false;
 let arrPlayStart = 0;
-let arrPlayDur = 0;
 let arrPlayOffset = 0;           // seconds into the buffer playback began at
 let arrLoop = false;
 let arrStartBeat = 0;            // ruler-clicked playback start (beats)
@@ -626,16 +722,6 @@ let lastConsumedAiTrackId = null; // de-dupe re-delivered agent:actions
 let metroOn = false;
 let metroTimer = 0;
 let clockUiTimer = 0;
-let masterGain = null;          // stereo passthrough bus (all audible sources)
-let analyser = null;            // master tap → oscilloscope + spectrum + master meter
-let scopeTraceEl = null;        // oscilloscope canvas
-let scopeSpecEl = null;         // spectrum canvas
-let scopeTimeData = null;
-let scopeFreqData = null;
-let scopePeaks = null;
-let scopeRaf = 0;
-let scopeMeter = null;          // footer master meter { fill, peakEl, level, pk }
-let mixerMeters = [];           // mixer strip meters (rebuilt each renderMixer)
 let beatDotEl = null;
 let beatFlashTimer = 0;
 let lastClockBeat = -1;
@@ -800,6 +886,36 @@ async function loadCatalog() {
 
 /* ── audio plumbing ─────────────────────────────────────────── */
 
+/* ── mix engine: server-rendered stems + a live Web Audio mixer ──────────
+   The Rust engine renders every track to a cached pre-fader stem (clips +
+   inserts) plus the shared reverb/delay returns (POST /api/studio/mix/stems).
+   The window plays those stems through its own channel strips —
+   input (stem scale) → fader → StereoPanner → meter → mute/solo gate → master
+   — so faders, pan, mute, solo and return levels react instantly, and only a
+   change to the music itself (clips, patterns, inserts, sends, tempo…) asks
+   the server for new stems. The browser's GainNode + StereoPannerNode laws
+   are exactly the ones the offline mixer uses, so monitoring matches the
+   export (master inserts, bus drive/width and the true-peak limiter are
+   approximated by the Web Audio master chain). */
+
+const STEM_MEMORY_LIMIT = 400 * 1024 * 1024;
+const RETURN_IDS = { reverb: 'ret:reverb', delay: 'ret:delay' };
+let stemBuffers = new Map();     // stem key → AudioBuffer
+let mixManifest = null;          // last /mix/stems manifest
+let mixManifestSig = '';         // arrangement signature it was rendered for
+let mixContentSig = '';          // content-only part of that signature
+let mixInflight = null;          // { sig, promise }
+let mixRefreshTimer = 0;
+let mixdownBuffer = null;        // fallback: one mixed WAV when stems are too big
+let channels = new Map();        // channel id → { input, fader, pan, meter, gate }
+let masterNodes = null;          // { input, glue, limiter, meter }
+let playSources = [];
+let meterRaf = 0;
+let meterViews = [];             // { node: () => AnalyserNode, fill, hold, clip, peak, holdT, clipT }
+let playLoopEnd = 0;             // seconds
+let playTotal = 0;               // seconds
+let playWraps = 0;
+
 function audioCtxOr() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
@@ -810,38 +926,443 @@ function fmtTime(sec) {
   const ms = Math.floor((sec - Math.floor(sec)) * 1000);
   return `${m}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
 }
+function dbToGain(db) { return Math.pow(10, db / 20); }
+function gainToDb(g) { return g > 0 ? 20 * Math.log10(g) : -Infinity; }
+function fmtDb(g) {
+  const db = gainToDb(g);
+  if (!Number.isFinite(db) || db < -60) return '−∞';
+  const r = Math.round(db * 10) / 10;
+  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(1)}`;
+}
 
-/* Master output bus — every audible node routes through this stereo
-   passthrough gain. A parallel AnalyserNode taps the summed signal for the
-   oscilloscope / spectrum / master meter without downmixing the audio to mono. */
+/* Master chain: input (master fader × loudness trim) → glue → limiter →
+   meter → speakers. Every audible source (stems, previews, launcher,
+   metronome) goes through it. */
 function masterOut() {
   const ctx = audioCtxOr();
-  if (!masterGain) {
-    masterGain = ctx.createGain();
-    masterGain.gain.value = 1;
-    masterGain.connect(ctx.destination);
-    analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.85;
-    analyser.minDecibels = -95;
-    analyser.maxDecibels = -10;
-    masterGain.connect(analyser);   // tap only — analyser output is intentionally unused
+  if (!masterNodes) {
+    const input = ctx.createGain();
+    const glue = ctx.createDynamicsCompressor();
+    const limiter = ctx.createDynamicsCompressor();
+    const meter = ctx.createAnalyser();
+    meter.fftSize = 2048;
+    input.connect(glue);
+    glue.connect(limiter);
+    limiter.connect(meter);
+    meter.connect(ctx.destination);
+    masterNodes = { input, glue, limiter, meter };
+    updateMasterNodes();
   }
-  return masterGain;
+  return masterNodes.input;
 }
-/* RMS level of a time-domain buffer, scaled for a musical meter. */
-function levelFromTime(buf) {
-  if (!buf) return 0;
-  let sum = 0;
-  for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
-  return Math.min(1, Math.sqrt(sum / buf.length) * 3.2);
+function masterGainValue() {
+  const fx = arrangement?.fx || {};
+  const trim = mixManifest?.master?.trim_db || 0;
+  return (arrangement?.master ?? 0.9) * (Number.isFinite(fx.master_gain) ? fx.master_gain : 1) * dbToGain(trim);
 }
-function analyserLevel(an) {
-  if (!an) return 0;
-  const n = an.fftSize || 1024;
-  if (!an._lvlBuf || an._lvlBuf.length !== n) an._lvlBuf = new Uint8Array(n);
-  an.getByteTimeDomainData(an._lvlBuf);
-  return levelFromTime(an._lvlBuf);
+function updateMasterNodes() {
+  if (!masterNodes || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const fx = arrangement?.fx || {};
+  masterNodes.input.gain.setTargetAtTime(masterGainValue(), now, 0.01);
+  const glue = clamp(Number(fx.glue) || 0, 0, 1);
+  const g = masterNodes.glue;
+  g.threshold.setValueAtTime(glue > 0 ? -18 : 0, now);
+  g.ratio.setValueAtTime(1 + glue, now);
+  g.knee.setValueAtTime(8, now);
+  g.attack.setValueAtTime(0.03, now);
+  g.release.setValueAtTime(0.2, now);
+  const l = masterNodes.limiter;
+  l.threshold.setValueAtTime(clamp(Number.isFinite(fx.ceiling) ? fx.ceiling : -1, -24, 0), now);
+  l.ratio.setValueAtTime(20, now);
+  l.knee.setValueAtTime(0, now);
+  l.attack.setValueAtTime(0.001, now);
+  l.release.setValueAtTime(0.08, now);
+}
+
+/* One mixer channel (track or return). */
+function ensureChannel(id) {
+  const ctx = audioCtxOr();
+  let ch = channels.get(id);
+  if (!ch) {
+    const input = ctx.createGain();
+    const fader = ctx.createGain();
+    const pan = ctx.createStereoPanner();
+    const meter = ctx.createAnalyser();
+    meter.fftSize = 1024;
+    const gate = ctx.createGain();
+    input.connect(fader);
+    fader.connect(pan);
+    pan.connect(meter);
+    meter.connect(gate);
+    gate.connect(masterOut());
+    ch = { input, fader, pan, meter, gate, automated: new Set() };
+    channels.set(id, ch);
+  }
+  return ch;
+}
+function dropChannels(keep) {
+  for (const [id, ch] of channels) {
+    if (keep.has(id)) continue;
+    try { ch.gate.disconnect(); } catch (_) { /* noop */ }
+    channels.delete(id);
+  }
+}
+function returnLevel(which) {
+  const v = arrangement?.returns?.[`${which}_level`];
+  return Number.isFinite(v) ? v : 1;
+}
+/* Push the model's fader/pan/mute/solo values into the live graph. */
+function refreshLiveMix() {
+  if (!audioCtx || !arrangement) return;
+  const now = audioCtx.currentTime;
+  for (const tr of arrangement.tracks) {
+    const ch = channels.get(tr.id);
+    if (!ch) continue;
+    if (!ch.automated.has('level')) ch.fader.gain.setTargetAtTime(tr.level ?? 0.8, now, 0.008);
+    if (!ch.automated.has('pan')) ch.pan.pan.setTargetAtTime(clamp(tr.pan ?? 0, -1, 1), now, 0.008);
+    ch.gate.gain.setTargetAtTime(arrTrackAudible(tr) ? 1 : 0, now, 0.006);
+  }
+  for (const which of ['reverb', 'delay']) {
+    const ch = channels.get(RETURN_IDS[which]);
+    if (ch) ch.fader.gain.setTargetAtTime(returnLevel(which), now, 0.008);
+  }
+  updateMasterNodes();
+}
+
+/* The arrangement as the stems route wants it (solo state included). */
+function stemsPayload() {
+  const p = arrangementPayload();
+  p.tracks = p.tracks.map((t) => ({ ...t, solo: soloTracks.has(t.id) }));
+  return p;
+}
+/* Content signature: everything that changes the stems themselves. Fader,
+   pan, mute and solo are live controls and stay out of it. */
+function contentSignature(p) {
+  return JSON.stringify({
+    bpm: p.bpm, length: p.length_beats, fx: p.fx, master_fx: p.master_fx, returns: { reverb: p.returns.reverb, delay: p.returns.delay },
+    tracks: p.tracks.map((t) => ({ id: t.id, fx: t.fx, sends: t.sends, automation: t.automation })),
+    clips: p.clips,
+  });
+}
+function invalidateMix() {
+  mixManifestSig = '';
+}
+
+async function fetchStem(url) {
+  const blob = await apiFetch(url, { responseType: 'blob' });
+  return audioCtxOr().decodeAudioData(await blob.arrayBuffer());
+}
+async function mapLimit(items, n, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  const worker = async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
+  return out;
+}
+
+/* Render (or reuse) the mix for the current arrangement. */
+async function ensureMix({ allowStale = false } = {}) {
+  const payload = stemsPayload();
+  const sig = JSON.stringify(payload);
+  if (sig === mixManifestSig && mixManifest) return mixManifest;
+  if (allowStale && mixManifest && !mixdownBuffer && contentSignature(payload) === mixContentSig) {
+    // Only live controls changed: play the stems we have right away and
+    // refresh the returns/loudness readout in the background.
+    void ensureMix().catch(() => {});
+    return mixManifest;
+  }
+  if (mixInflight?.sig === sig) return mixInflight.promise;
+  const promise = (async () => {
+    const manifest = await api('/api/studio/mix/stems', { method: 'POST', body: JSON.stringify(payload) });
+    const bytes = (manifest.frames || 0) * 2 * 4 * ((manifest.stems || []).filter((s) => !s.silent).length + 2);
+    let mixdown = null;
+    if (bytes > STEM_MEMORY_LIMIT) {
+      // Too much audio to hold every stem: fall back to one mixed render
+      // (mixer changes then apply on the next play).
+      const blob = await apiFetch('/api/studio/arrangement/render', { method: 'POST', body: JSON.stringify(arrangementRenderPayload()), responseType: 'blob' });
+      mixdown = await audioCtxOr().decodeAudioData(await blob.arrayBuffer());
+      stemBuffers = new Map();
+    } else {
+      const want = [
+        ...(manifest.stems || []).filter((s) => !s.silent),
+        ...['reverb', 'delay'].map((w) => manifest.returns?.[w]).filter(Boolean),
+      ];
+      const missing = want.filter((s) => !stemBuffers.has(s.key));
+      const decoded = await mapLimit(missing, 3, (s) => fetchStem(s.url));
+      missing.forEach((s, i) => stemBuffers.set(s.key, decoded[i]));
+      const keep = new Set(want.map((s) => s.key));
+      for (const k of [...stemBuffers.keys()]) if (!keep.has(k)) stemBuffers.delete(k);
+    }
+    return { manifest, mixdown, sig, content: contentSignature(payload) };
+  })();
+  mixInflight = { sig, promise };
+  try {
+    const r = await promise;
+    if (mixInflight?.sig === sig) {
+      mixManifest = r.manifest;
+      mixdownBuffer = r.mixdown;
+      mixManifestSig = r.sig;
+      mixContentSig = r.content;
+      updateMasterReadout();
+      if (detailPage === 'mixer') renderMixerReadouts();
+    }
+    return r.manifest;
+  } finally {
+    if (mixInflight?.sig === sig) mixInflight = null;
+  }
+}
+
+/* Schedule an automation lane onto an AudioParam from `fromBeat`. */
+function scheduleLane(param, lane, when, fromBeat, endBeat, spb, lo, hi) {
+  const span = Math.max(0.01, endBeat - fromBeat);
+  const n = Math.max(2, Math.min(4000, Math.ceil(span * spb * 60)));
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const beat = fromBeat + (span * i) / (n - 1);
+    curve[i] = clamp(sampleEnv(lane.points, beat, lane.points[0].value), lo, hi);
+  }
+  param.cancelScheduledValues(0);
+  param.setValueAtTime(curve[0], when);
+  try { param.setValueCurveAtTime(curve, when, span * spb); } catch (_) { /* overlapping curve: keep the start value */ }
+}
+function scheduleAutomation(when, fromBeat) {
+  const spb = 60 / arrangement.bpm;
+  const end = arrangement.length_beats;
+  for (const tr of arrangement.tracks) {
+    const ch = channels.get(tr.id);
+    if (!ch) continue;
+    ch.automated.clear();
+    const lv = autoLanes(tr).find((l) => l.param === 'track.level' && l.points.length);
+    const pn = autoLanes(tr).find((l) => l.param === 'track.pan' && l.points.length);
+    if (lv) { ch.automated.add('level'); scheduleLane(ch.fader.gain, lv, when, fromBeat, end, spb, 0, 4); }
+    else { ch.fader.gain.cancelScheduledValues(0); ch.fader.gain.setValueAtTime(tr.level ?? 0.8, when); }
+    if (pn) { ch.automated.add('pan'); scheduleLane(ch.pan.pan, pn, when, fromBeat, end, spb, -1, 1); }
+    else { ch.pan.pan.cancelScheduledValues(0); ch.pan.pan.setValueAtTime(clamp(tr.pan ?? 0, -1, 1), when); }
+  }
+}
+
+function clearArrPlayhead() {
+  if (arrPlayheadEl) arrPlayheadEl.style.opacity = '0';
+  if (timeEl) timeEl.textContent = fmtPosition(arrStartBeat, arrStartBeat * 60 / (arrangement?.bpm || 120));
+}
+function fmtPosition(beats, sec) {
+  return `${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1}.${Math.floor((beats % 1) * 4) + 1}  ${fmtTime(sec)}`;
+}
+function stopSources() {
+  for (const s of playSources) { try { s.onended = null; s.stop(); } catch (_) { /* noop */ } }
+  playSources = [];
+}
+function stopPlayback() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  stopSources();
+  for (const ch of channels.values()) ch.automated.clear();
+  refreshLiveMix();
+  arrPlaying = false;
+  stopAudition();
+  metroStop();
+  clearArrPlayhead();
+  clearPrevPlayhead();
+  stopMeters();
+  updateTransport();
+  updateStudioGlow();
+}
+
+/* Start every stem at `fromBeat`. */
+function startSources(manifest, fromBeat) {
+  const ctx = audioCtxOr();
+  const spb = 60 / arrangement.bpm;
+  const when = ctx.currentTime + 0.06;
+  const offset = Math.max(0, fromBeat * spb);
+  playLoopEnd = arrangement.length_beats * spb;
+  playTotal = Math.max(playLoopEnd, (manifest.frames || 0) / (manifest.sample_rate || 44100));
+  const loop = arrLoop && offset < playLoopEnd;
+  const begin = (buf, dest) => {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    if (loop) { src.loop = true; src.loopStart = 0; src.loopEnd = Math.min(playLoopEnd, buf.duration); }
+    src.connect(dest);
+    src.start(when, Math.min(offset, Math.max(0, buf.duration - 0.001)));
+    playSources.push(src);
+  };
+  const keep = new Set();
+  if (mixdownBuffer) {
+    begin(mixdownBuffer, masterOut());
+  } else {
+    for (const s of manifest.stems || []) {
+      keep.add(s.track_id);
+      const ch = ensureChannel(s.track_id);
+      ch.input.gain.value = s.scale || 1;
+      const buf = stemBuffers.get(s.key);
+      if (buf && !s.silent) begin(buf, ch.input);
+    }
+    for (const which of ['reverb', 'delay']) {
+      const r = manifest.returns?.[which];
+      const id = RETURN_IDS[which];
+      keep.add(id);
+      const ch = ensureChannel(id);
+      ch.input.gain.value = r?.scale || 1;
+      ch.fader.gain.value = returnLevel(which);
+      const buf = r && stemBuffers.get(r.key);
+      if (buf) begin(buf, ch.input);
+    }
+  }
+  dropChannels(keep);
+  refreshLiveMix();
+  if (!mixdownBuffer) scheduleAutomation(when, fromBeat);
+  return { when, offset, loop };
+}
+
+async function renderArrangementAndPlay(fromBeat = arrStartBeat) {
+  if (busy || !arrangement) return;
+  if (!arrangement.tracks.length || !arrangement.clips.length) {
+    toast(t('plugin.studio.toast.needTrackAndClip', null, 'Add a track and a clip to the Arranger first (or use the Launcher)'), { type: 'error' });
+    return;
+  }
+  busy = true;
+  setStatus('Rendering…');
+  try {
+    const ctx = audioCtxOr();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const manifest = await ensureMix({ allowStale: true });
+    stopSources();
+    beginTransport(manifest, fromBeat);
+    setStatus('Playing');
+  } catch (e) {
+    console.error('studio: arrangement render/play failed', e);
+    toast(e.message || t('plugin.studio.toast.renderFailed', null, 'Render failed'), { type: 'error' });
+    setStatus('error');
+  } finally {
+    busy = false;
+    updateTransport();
+  }
+}
+function beginTransport(manifest, fromBeat) {
+  const { when, offset, loop } = startSources(manifest, fromBeat);
+  arrPlaying = true;
+  arrPlayStart = when;
+  arrPlayOffset = offset;
+  playWraps = 0;
+  metroStop();
+  metroStart(when, arrangement.bpm, fromBeat);
+  updateStudioGlow();
+  startMeters();
+  if (rafId) cancelAnimationFrame(rafId);
+  const spb = 60 / arrangement.bpm;
+  const tick = () => {
+    if (!arrPlaying || !audioCtx) return;
+    const raw = audioCtx.currentTime - arrPlayStart;
+    let pos = arrPlayOffset + Math.max(0, raw);
+    if (loop && pos >= playLoopEnd) {
+      const wraps = Math.floor(pos / playLoopEnd);
+      pos -= wraps * playLoopEnd;
+      if (wraps !== playWraps) {
+        playWraps = wraps;
+        // Each pass replays the automation from the top.
+        scheduleAutomation(audioCtx.currentTime, pos / spb);
+        metroStop();
+        metroStart(audioCtx.currentTime - pos, arrangement.bpm, 0);
+      }
+    } else if (!loop && pos >= playTotal) { stopPlayback(); return; }
+    const beats = pos / spb;
+    if (arrPlayheadEl) { arrPlayheadEl.style.opacity = '1'; arrPlayheadEl.style.transform = `translateX(${HEAD_W + beats * PPB}px)`; }
+    if (timeEl) timeEl.textContent = fmtPosition(beats, pos);
+    updateAutoKnobs(beats);
+    rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
+}
+/* Current playhead position in beats (while playing). */
+function currentBeat() {
+  if (!arrPlaying || !audioCtx) return arrStartBeat;
+  let pos = arrPlayOffset + Math.max(0, audioCtx.currentTime - arrPlayStart);
+  if (arrLoop && playLoopEnd > 0) pos %= playLoopEnd;
+  return pos / (60 / arrangement.bpm);
+}
+
+/* Called after every model change: live controls update now; a change to
+   the music re-renders (debounced) and, while playing, swaps the stems in at
+   the current position. */
+function scheduleMixRefresh() {
+  refreshLiveMix();
+  if (!arrangement) return;
+  if (mixRefreshTimer) clearTimeout(mixRefreshTimer);
+  mixRefreshTimer = setTimeout(async () => {
+    mixRefreshTimer = 0;
+    if (!arrPlaying) return;   // rendered on the next play
+    const content = contentSignature(stemsPayload());
+    if (content === mixContentSig) return;
+    try {
+      setStatus('Rendering…');
+      const manifest = await ensureMix();
+      if (!arrPlaying) return;
+      const beat = currentBeat();
+      stopSources();
+      beginTransport(manifest, beat);
+      setStatus('Playing');
+    } catch (e) {
+      console.warn('studio: live re-render failed', e);
+      setStatus('error');
+    }
+  }, 400);
+}
+
+/* ── meters (run only while something plays) ── */
+
+function meterNode(getNode, { vertical = true, compact = false } = {}) {
+  const wrap = h('div', `studio-vu${vertical ? '' : ' studio-vu--h'}${compact ? ' studio-vu--compact' : ''}`);
+  const fill = h('span', 'studio-vu-fill');
+  const hold = h('span', 'studio-vu-hold');
+  const clip = h('span', 'studio-vu-clip');
+  clip.title = t('plugin.studio.mixer.clipLed', null, 'Clip — click to reset');
+  clip.addEventListener('click', (e) => { e.stopPropagation(); clip.classList.remove('is-on'); });
+  wrap.append(fill, hold, clip);
+  meterViews.push({ getNode, fill, hold, clip, peak: 0, holdV: 0, holdT: 0, vertical });
+  return wrap;
+}
+const METER_FLOOR_DB = -60;
+function meterFrac(peak) {
+  const db = gainToDb(peak);
+  if (!Number.isFinite(db) || db <= METER_FLOOR_DB) return 0;
+  return clamp((db - METER_FLOOR_DB) / (6 - METER_FLOOR_DB), 0, 1);
+}
+let meterBuf = null;
+function paintMeters() {
+  const now = performance.now();
+  meterViews = meterViews.filter((m) => m.fill.isConnected);
+  for (const m of meterViews) {
+    const node = m.getNode();
+    let peak = 0;
+    if (node && arrPlaying + Object.keys(trackLoops).length) {
+      if (!meterBuf || meterBuf.length !== node.fftSize) meterBuf = new Float32Array(node.fftSize);
+      node.getFloatTimeDomainData(meterBuf);
+      for (let i = 0; i < meterBuf.length; i++) { const a = Math.abs(meterBuf[i]); if (a > peak) peak = a; }
+    }
+    // Fast attack, ~20 dB/s release; 1.5 s peak hold; latching clip LED.
+    m.peak = peak > m.peak ? peak : m.peak * 0.89;
+    if (m.peak >= m.holdV || now - m.holdT > 1500) { m.holdV = m.peak; m.holdT = now; }
+    const f = meterFrac(m.peak);
+    m.fill.style.transform = m.vertical ? `scaleY(${f.toFixed(4)})` : `scaleX(${f.toFixed(4)})`;
+    const hf = meterFrac(m.holdV);
+    if (m.vertical) m.hold.style.bottom = `${(hf * 100).toFixed(2)}%`;
+    else m.hold.style.left = `${(hf * 100).toFixed(2)}%`;
+    m.hold.style.opacity = hf > 0.01 ? '1' : '0';
+    if (peak >= 0.999) m.clip.classList.add('is-on');
+  }
+}
+function startMeters() {
+  if (meterRaf) return;
+  const tick = () => {
+    if (!arrPlaying && !Object.keys(trackLoops).length) { meterRaf = 0; paintMeters(); return; }
+    if (!document.hidden) paintMeters();
+    meterRaf = requestAnimationFrame(tick);
+  };
+  meterRaf = requestAnimationFrame(tick);
+}
+function stopMeters() {
+  if (meterRaf) { cancelAnimationFrame(meterRaf); meterRaf = 0; }
+  for (const m of meterViews) { m.peak = 0; m.holdV = 0; }
+  paintMeters();
 }
 
 /* ── metronome (WebAudio lookahead scheduler) ───────────────── */
@@ -864,7 +1385,11 @@ function metroStart(startTime, bpm, startBeat = 0) {
   if (!metroOn) return;
   const beat = 60 / bpm;
   let nextBeat = startTime;
-  let beatIdx = Math.max(0, Math.round(startBeat));
+  let beatIdx = Math.max(0, Math.ceil(startBeat - 1e-6));
+  // Start on the first beat line at or after `startBeat`, never in the past.
+  nextBeat += (beatIdx - startBeat) * beat;
+  const now0 = audioCtxOr().currentTime;
+  while (nextBeat < now0 - 0.005) { nextBeat += beat; beatIdx += 1; }
   metroTimer = setInterval(() => {
     if (!audioCtx) return;
     while (nextBeat < audioCtx.currentTime + 0.12) {
@@ -876,84 +1401,6 @@ function metroStart(startTime, bpm, startBeat = 0) {
 }
 function metroStop() {
   if (metroTimer) { clearInterval(metroTimer); metroTimer = 0; }
-}
-
-/* ── arrangement playback ───────────────────────────────────── */
-
-function clearArrPlayhead() {
-  if (arrPlayheadEl) arrPlayheadEl.style.opacity = '0';
-  if (timeEl) timeEl.textContent = '';
-}
-function stopPlayback() {
-  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
-  try { arrSource?.stop(); } catch (_) { /* noop */ }
-  arrSource = null;
-  arrPlaying = false;
-  stopAudition();
-  metroStop();
-  clearArrPlayhead();
-  clearPrevPlayhead();
-  updateTransport();
-  updateStudioGlow();
-}
-
-async function renderArrangementAndPlay() {
-  if (busy || !arrangement) return;
-  if (!arrangement.tracks.length || !arrangement.clips.length) {
-    toast(t('plugin.studio.toast.needTrackAndClip', null, 'Add a track and a clip to the Arranger first (or use the Launcher)'), { type: 'error' });
-    return;
-  }
-  busy = true;
-  setStatus('Rendering…');
-  try {
-    const blob = await apiFetch('/api/studio/arrangement/render', {
-      method: 'POST', body: JSON.stringify(arrangementRenderPayload()), responseType: 'blob',
-    });
-    const buf = await blob.arrayBuffer();
-    const ctx = audioCtxOr();
-    if (ctx.state === 'suspended') await ctx.resume();
-    const decoded = await ctx.decodeAudioData(buf);
-    stopPlayback();
-    const src = ctx.createBufferSource();
-    src.buffer = decoded;
-    src.loop = arrLoop;
-    src.connect(masterOut());
-    src.onended = () => { if (!arrLoop) { arrPlaying = false; clearArrPlayhead(); metroStop(); updateTransport(); } };
-    const startAt = ctx.currentTime + 0.05;
-    /* Start from the ruler-clicked beat (Ableton-style scrub). */
-    const spb = 60 / arrangement.bpm;
-    arrPlayOffset = Math.max(0, Math.min(arrStartBeat * spb, Math.max(0, decoded.duration - 0.02)));
-    src.start(startAt, arrPlayOffset);
-    arrSource = src;
-    arrPlaying = true;
-    arrPlayStart = startAt;
-    arrPlayDur = decoded.duration;
-    metroStart(startAt, arrangement.bpm, arrStartBeat);
-    setStatus('Playing');
-    updateStudioGlow();
-    const totalBeats = arrangement.length_beats;
-    const tick = () => {
-      if (!arrPlaying || !audioCtx) return;
-      const raw = audioCtx.currentTime - arrPlayStart;
-      if (raw < 0) { rafId = requestAnimationFrame(tick); return; }
-      let pos = arrPlayOffset + raw;                  // position within the buffer
-      if (arrLoop) pos = pos % arrPlayDur;
-      else if (pos >= arrPlayDur) { stopPlayback(); return; }
-      const beats = (pos / arrPlayDur) * totalBeats;
-      if (arrPlayheadEl) { arrPlayheadEl.style.opacity = '1'; arrPlayheadEl.style.transform = `translateX(${HEAD_W + beats * PPB}px)`; }
-      if (timeEl) timeEl.textContent = `${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1} · ${fmtTime(pos)}`;
-      updateAutoKnobs(beats);
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-  } catch (e) {
-    console.error('studio: arrangement render/play failed', e);
-    toast(e.message || t('plugin.studio.toast.renderFailed', null, 'Render failed'), { type: 'error' });
-    setStatus('error');
-  } finally {
-    busy = false;
-    updateTransport();
-  }
 }
 
 /* ── editor preview playback ────────────────────────────────── */
@@ -1099,6 +1546,7 @@ async function launchClip(ti, si) {
     const when = nextBarTime();
     src.start(when);
     trackLoops[tr.id] = { source: src, slotKey: key, when, state: 'queued' };
+    startMeters();
     setStatus('Queued');
   } catch (e) {
     console.error('studio: launch clip failed', e);
@@ -1203,15 +1651,9 @@ async function saveArrangement() {
 }
 async function loadArrangement(id) {
   const data = await api(`/api/studio/arrangement/${id}`);
-  arrangement = {
-    id: data.id,
-    title: data.title || 'Untitled',
-    bpm: data.bpm ?? 120,
-    length_beats: data.length_beats ?? 32,
-    master: data.master ?? 0.9,
-    tracks: (data.tracks || []).map((t) => ({ id: t.id, name: t.name, color: t.color ?? 0, mute: !!t.mute, level: t.level ?? 0.8, pan: t.pan ?? 0, automation: normalizeAutomation(t.automation) })),
-    clips: (data.clips || []).map((c) => ({ track: c.track, start: c.start ?? 0, pattern: normalizePattern(c.pattern || {}) })),
-  };
+  arrangement = normalizeArrangement(data);
+  soloTracks = new Set(arrangement.tracks.filter((t) => t.solo).map((t) => t.id));
+  invalidateMix();
   sel = arrangement.clips.length ? { area: 'arr', clipIndex: 0 } : null;
   syncSelection();
   dirty = false;
@@ -1242,7 +1684,7 @@ async function savePatternToLibrary() {
   const data = await api('/api/studio', { method: 'POST', body: JSON.stringify(serializePattern(current)) });
   await refreshTracks();
   renderBrowser();
-  toast(t('plugin.studio.toast.patternSaved', { name: data?.title || title }, `Saved pattern "${data?.title || title}"`), { type: 'success' });
+  toast(t('plugin.studio.toast.patternSaved', { name: data?.title || title }, `Saved pattern “${data?.title || title}”`), { type: 'success' });
 }
 async function savePreset(v) {
   const sameKind = presets.filter((p) => p.kind === v.kind).length;
@@ -1259,7 +1701,7 @@ async function savePreset(v) {
   await refreshPresets();
   renderDevices();
   renderBrowser();
-  toast(t('plugin.studio.toast.presetSaved', { name }, `Saved preset "${name}"`), { type: 'success' });
+  toast(t('plugin.studio.toast.presetSaved', { name }, `Saved preset “${name}”`), { type: 'success' });
 }
 
 /* ── selection ──────────────────────────────────────────────── */
@@ -1320,6 +1762,7 @@ function setStatus(s) {
 function markDirty() {
   dirty = true;
   setStatus('dirty');
+  scheduleMixRefresh();
 }
 function updateTransport() {
   if (playBtn) {
@@ -1347,7 +1790,7 @@ function withHint(el, text) {
   return el;
 }
 
-/* ── live oscilloscope / spectrum / meters (Bitwig-style) ───── */
+/* ── canvas colours (clip previews) ─────────────────────────── */
 
 /* Canvas colours come from the theme: `--studio-scope-trace` (the accent)
    and `--studio-scope-ink` (the text colour; grid, peaks and clip previews
@@ -1368,7 +1811,8 @@ function onStudioThemeChange() {
 function redrawClipPreviews() {
   if (!arrGridEl || !arrangement) return;
   arrangement.clips.forEach((clip, i) => {
-    if (clip.peaks) drawClipWave(i);
+    if (clip.audio) drawAudioClip(i);
+    else if (clip.peaks) drawClipWave(i);
     else drawClipMidi(i);
   });
 }
@@ -1381,130 +1825,6 @@ function flashBeat(accent) {
   beatFlashTimer = setTimeout(() => {
     beatDotEl?.classList.remove('studio-beat--hit', 'studio-beat--bar');
   }, 140);
-}
-
-function sizeScope() {
-  if (!scopeTraceEl || !scopeSpecEl) return;
-  const dpr = window.devicePixelRatio || 1;
-  for (const cv of [scopeTraceEl, scopeSpecEl]) {
-    const w = Math.max(2, Math.round(cv.clientWidth * dpr));
-    const h = Math.max(2, Math.round(cv.clientHeight * dpr));
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-  }
-}
-function startScope() {
-  if (scopeRaf) return;
-  const tick = () => {
-    scopeRaf = requestAnimationFrame(tick);
-    if (!document.hidden) drawScopeFrame();
-  };
-  scopeRaf = requestAnimationFrame(tick);
-}
-function stopScope() {
-  if (scopeRaf) { cancelAnimationFrame(scopeRaf); scopeRaf = 0; }
-}
-
-function drawScopeFrame() {
-  // Tokens resolve only once the window is in the document.
-  if (!canvasInkRead && tileEl?.isConnected) { readCanvasColors(); redrawClipPreviews(); }
-  sizeScope();
-  const live = !!analyser;
-  let masterLevel = 0;
-  if (live) {
-    if (!scopeTimeData || scopeTimeData.length !== analyser.fftSize) scopeTimeData = new Uint8Array(analyser.fftSize);
-    if (!scopeFreqData || scopeFreqData.length !== analyser.frequencyBinCount) scopeFreqData = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteTimeDomainData(scopeTimeData);
-    analyser.getByteFrequencyData(scopeFreqData);
-    masterLevel = levelFromTime(scopeTimeData);
-  }
-  drawScopeTrace(live ? scopeTimeData : null);
-  drawScopeSpec(live ? scopeFreqData : null);
-  updateMeters(masterLevel);
-}
-
-function drawScopeTrace(data) {
-  const cv = scopeTraceEl; if (!cv) return;
-  const g = cv.getContext('2d');
-  const w = cv.width, h = cv.height;
-  g.clearRect(0, 0, w, h);
-  g.strokeStyle = canvasInk.ink; g.globalAlpha = 0.09; g.lineWidth = 1;
-  g.beginPath();
-  g.moveTo(0, h / 2); g.lineTo(w, h / 2);
-  g.moveTo(0, h / 4); g.lineTo(w, h / 4);
-  g.moveTo(0, h * 3 / 4); g.lineTo(w, h * 3 / 4);
-  g.stroke();
-  g.globalAlpha = 1;
-  g.beginPath();
-  if (data) {
-    for (let i = 0; i < data.length; i++) {
-      const x = (i / (data.length - 1)) * w;
-      const y = h / 2 - ((data[i] - 128) / 128) * (h / 2 - 1);
-      if (i) g.lineTo(x, y); else g.moveTo(x, y);
-    }
-  } else {
-    /* idle shimmer — a gentle near-flat line so the scope never looks frozen */
-    const t = performance.now() / 1000;
-    for (let i = 0; i <= 64; i++) {
-      const x = (i / 64) * w;
-      const y = h / 2 + Math.sin(t * 3 + i * 0.35) * 0.6;
-      if (i) g.lineTo(x, y); else g.moveTo(x, y);
-    }
-  }
-  g.strokeStyle = canvasInk.trace;
-  g.lineWidth = Math.max(1, h * 0.06);
-  g.lineJoin = 'round';
-  g.stroke();
-}
-
-function drawScopeSpec(data) {
-  const cv = scopeSpecEl; if (!cv) return;
-  const g = cv.getContext('2d');
-  const w = cv.width, h = cv.height;
-  g.clearRect(0, 0, w, h);
-  const bars = 48;
-  if (!scopePeaks || scopePeaks.length !== bars) scopePeaks = new Float32Array(bars);
-  const bw = w / bars;
-  for (let i = 0; i < bars; i++) {
-    let v = 0;
-    if (data) {
-      const idx = Math.min(data.length - 1, Math.floor(Math.pow(i / bars, 1.6) * (data.length * 0.55)));
-      v = data[idx] / 255;
-    }
-    const bh = Math.max(0, v * h);
-    scopePeaks[i] = Math.max(scopePeaks[i] * 0.92, bh);
-    // One hue (the accent), stepping in alpha from the lows to the highs.
-    g.fillStyle = canvasInk.trace;
-    g.globalAlpha = 0.45 + 0.5 * (i / bars);
-    g.fillRect(Math.round(i * bw) + 1, h - bh, Math.max(1, bw - 2), bh);
-    const pk = scopePeaks[i];
-    g.fillStyle = canvasInk.ink;
-    g.globalAlpha = 0.55;
-    g.fillRect(Math.round(i * bw) + 1, h - pk, Math.max(1, bw - 2), 1);
-    g.globalAlpha = 1;
-  }
-}
-
-function paintMeter(m, target) {
-  if (!m) return;
-  m.level += (target - m.level) * 0.5;
-  m.pk = Math.max(m.pk * 0.93, m.level);
-  m.fill.style.transform = `scaleX(${m.level.toFixed(4)})`;
-  m.peakEl.style.left = `${(m.pk * 100).toFixed(2)}%`;
-  m.peakEl.style.opacity = m.pk > 0.02 ? '1' : '0';
-  m.fill.classList.toggle('studio-meter-fill--clip', m.level > 0.97);
-}
-function updateMeters(masterLevel) {
-  if (scopeMeter) paintMeter(scopeMeter, masterLevel);
-  for (const m of mixerMeters) paintMeter(m, m.getAnalyser ? analyserLevel(m.getAnalyser()) : 0);
-}
-/* Build a mixer meter; registers itself for the render loop. */
-function meterNode(getAnalyser) {
-  const wrap = h('div', 'studio-meter');
-  const fill = h('span', 'studio-meter-fill');
-  const peakEl = h('span', 'studio-meter-peak');
-  wrap.append(fill, peakEl);
-  mixerMeters.push({ fill, peakEl, getAnalyser, level: 0, pk: 0 });
-  return wrap;
 }
 
 /* ── native-ish controls ────────────────────────────────────── */
@@ -1543,34 +1863,42 @@ function knob(label, min, max, step, value, onchange, resetTo) {
   return k;
 }
 
-/* Thin vertical fader (mixer strips). */
-function fader(label, value, onchange) {
-  const wrap = h('div', 'studio-mixer-fader');
-  wrap.dataset.param = label;
-  const inp = uiSlider();
-  inp.classList.add(...('studio-fader-input').split(/\s+/));
-  inp.min = '0';
-  inp.max = '2';
-  inp.step = '0.01';
-  inp.value = String(value);
-  inp.setAttribute('orient', 'vertical');
-  const val = h('span', 'studio-mixer-fader-val', fmt(value));
-  inp.addEventListener('input', () => {
-    const n = parseFloat(inp.value);
-    val.textContent = fmt(n);
-    wrap.dataset.value = fmt(n);
-    setReadout(t('plugin.studio.readout.param', { label, value: fmt(n) }, `${label} — ${fmt(n)}`));
-    onchange(n);
-  });
-  wrap.append(inp, val);
-  wrap.addEventListener('mouseenter', () => setReadout(t('plugin.studio.readout.param', { label, value: val.textContent }, `${label} — ${val.textContent}`)));
-  return wrap;
-}
-
 /* ── arranger (timeline) ────────────────────────────────────── */
 
+/* Beats in one pass of a clip's pattern. */
+function patternBeats(c) {
+  return Math.max(1, (c.pattern?.steps || 16) / 4);
+}
+/* Audio file metadata (duration, rate, tempo, peaks) cached by path. */
+const audioInfoCache = new Map();
+function audioInfo(path) {
+  return audioInfoCache.get(path)?.data || null;
+}
+async function loadAudioInfo(path) {
+  const hit = audioInfoCache.get(path);
+  if (hit) return hit.promise;
+  const promise = api(`/api/studio/audio/info?path=${encodeURIComponent(path)}&buckets=2000`)
+    .then((data) => { audioInfoCache.set(path, { data, promise }); return data; })
+    .catch((e) => { audioInfoCache.delete(path); throw e; });
+  audioInfoCache.set(path, { data: null, promise });
+  return promise;
+}
+/* Clip length in beats: explicit, else one pattern pass / the rest of the file. */
 function clipDurBeats(c) {
-  return Math.max(1, Math.round((c.pattern?.steps || 16) / 4));
+  if (Number.isFinite(c.length_beats) && c.length_beats > 0) return c.length_beats;
+  if (c.audio) {
+    const info = audioInfo(c.audio.src);
+    if (info?.duration) return Math.max(0.25, (info.duration - (c.audio.offset || 0)) * (arrangement?.bpm || 120) / 60);
+    return 4;
+  }
+  return patternBeats(c);
+}
+/* Grow the arrangement so every clip fits. */
+function fitArrangementLength() {
+  let end = 4;
+  for (const c of arrangement.clips) end = Math.max(end, c.start + clipDurBeats(c));
+  const need = Math.ceil(end / 4) * 4;
+  if (need > arrangement.length_beats) arrangement.length_beats = need;
 }
 /* A pattern is "MIDI" when it carries melodic voices (piano-roll preview). */
 function patternIsMelodic(p) {
@@ -1946,12 +2274,15 @@ function renderArranger() {
     del.type = 'button';
     del.title = t('plugin.studio.track.remove', null, 'Remove track');
     del.addEventListener('click', (e) => { e.stopPropagation(); removeArrTrack(ti); });
+    if (tr.kind === 'audio') add.classList.add('hidden');
     btns.append(mute, solo, auto, add, del);
     head.appendChild(btns);
+    head.appendChild(meterNode(() => channels.get(tr.id)?.meter, { vertical: false, compact: true }));
     arrGridEl.appendChild(head);
 
     /* lane background */
     const lane = h('div', 'studio-arr-lane');
+    lane.dataset.trackId = tr.id;
     lane.style.gridColumn = `2 / ${beats + 2}`;
     lane.style.gridRow = String(rowFor[ti].track);
     lane.style.setProperty('--track', trackColor(tr.color));
@@ -1983,37 +2314,68 @@ function renderArranger() {
     const tIndex = arrTrackIndex(clip.track);
     if (tIndex < 0) continue;
     const tr = arrangement.tracks[tIndex];
-    const start = Math.max(0, Math.round(clip.start));
+    const start = Math.max(0, clip.start);
     const dur = clipDurBeats(clip);
-    const el = h('div', 'studio-arr-clip');
-    el.style.gridColumn = `${start + 2} / ${start + dur + 2}`;
+    const isAudio = !!clip.audio;
+    const name = isAudio ? (clip.audio.name || clip.audio.src.split('/').pop()) : (clip.pattern?.title || tr.name);
+    const el = h('div', `studio-arr-clip${isAudio ? ' studio-arr-clip--audio' : ''}`);
+    // Absolute placement inside the lane row so fractional starts/lengths draw exactly.
+    el.style.gridColumn = `2 / ${beats + 2}`;
     el.style.gridRow = String(rowFor[tIndex].track);
+    el.style.marginLeft = `${start * PPB}px`;
+    el.style.width = `${Math.max(6, Math.min(dur, beats - start) * PPB - 2)}px`;
     el.style.setProperty('--track', trackColor(tr.color));
     el.dataset.clipIndex = i;
-    el.title = t('plugin.studio.clip.hint', { name: clip.pattern?.title || tr.name }, `${clip.pattern?.title || tr.name} — drag to move, double-click to edit`);
+    el.title = t('plugin.studio.clip.hint2', { name }, `${name} — drag to move, drag the right edge to resize, double-click to edit`);
     if (sel?.area === 'arr' && sel.clipIndex === i) el.classList.add('studio-arr-clip--sel');
-    const melodic = patternIsMelodic(clip.pattern);
-    const cv = h('canvas', melodic ? 'studio-arr-clip-midi' : 'studio-arr-clip-wave');
+    if (!arrTrackAudible(tr)) el.classList.add('studio-arr-clip--muted');
+    const melodic = !isAudio && patternIsMelodic(clip.pattern);
+    const cv = h('canvas', isAudio ? 'studio-arr-clip-wave studio-arr-clip-audio' : (melodic ? 'studio-arr-clip-midi' : 'studio-arr-clip-wave'));
     el.appendChild(cv);
-    el.appendChild(h('span', 'studio-arr-clip-name', clip.pattern?.title || tr.name));
-    const send = iconCtl('ui/launcher', 'studio-arr-clip-x');
-    send.type = 'button';
-    send.style.right = '22px';
-    send.title = t('plugin.studio.clip.sendToLauncher', null, 'Send to Launcher');
-    send.addEventListener('pointerdown', (e) => e.stopPropagation());
-    send.addEventListener('click', (e) => { e.stopPropagation(); sendArrangementToLauncher(i); });
-    el.appendChild(send);
+    /* loop repetitions of a pattern clip */
+    if (!isAudio && clip.loop !== false) {
+      const pass = patternBeats(clip);
+      for (let k = pass; k < dur - 0.01; k += pass) {
+        const mark = h('span', 'studio-arr-clip-loopmark');
+        mark.style.left = `${k * PPB}px`;
+        el.appendChild(mark);
+      }
+    }
+    if (isAudio && (clip.audio.fade_in > 0.02 || clip.audio.fade_out > 0.06)) {
+      const spb = 60 / arrangement.bpm;
+      if (clip.audio.fade_in > 0.02) { const f = h('span', 'studio-arr-clip-fade studio-arr-clip-fade--in'); f.style.width = `${(clip.audio.fade_in / spb) * PPB}px`; el.appendChild(f); }
+      if (clip.audio.fade_out > 0.06) { const f = h('span', 'studio-arr-clip-fade studio-arr-clip-fade--out'); f.style.width = `${(clip.audio.fade_out / spb) * PPB}px`; el.appendChild(f); }
+    }
+    const label = h('span', 'studio-arr-clip-name', name);
+    if (clip.gain_db) label.appendChild(h('span', 'studio-arr-clip-gain', `${clip.gain_db > 0 ? '+' : ''}${clip.gain_db.toFixed(1)} dB`));
+    el.appendChild(label);
+    if (!isAudio) {
+      const send = iconCtl('ui/launcher', 'studio-arr-clip-x');
+      send.type = 'button';
+      send.style.right = '22px';
+      send.title = t('plugin.studio.clip.sendToLauncher', null, 'Send to Launcher');
+      send.addEventListener('pointerdown', (e) => e.stopPropagation());
+      send.addEventListener('click', (e) => { e.stopPropagation(); sendArrangementToLauncher(i); });
+      el.appendChild(send);
+    }
     const rm = iconCtl('ui/close', 'studio-arr-clip-x');
     rm.type = 'button';
     rm.title = t('plugin.studio.clip.remove', null, 'Remove clip');
     rm.addEventListener('pointerdown', (e) => e.stopPropagation());
     rm.addEventListener('click', (e) => { e.stopPropagation(); removeArrClip(i); });
     el.appendChild(rm);
+    const grip = h('span', 'studio-arr-clip-resize');
+    grip.title = t('plugin.studio.clip.resize', null, 'Drag to change the clip length');
+    grip.addEventListener('pointerdown', (e) => startClipResize(e, i));
+    el.appendChild(grip);
     el.addEventListener('click', () => selectArrClip(i));
     el.addEventListener('dblclick', () => selectArrClip(i, { openEditor: true }));
     el.addEventListener('pointerdown', (e) => startClipDrag(e, i));
     arrGridEl.appendChild(el);
-    if (melodic) requestAnimationFrame(() => drawClipMidi(i));
+    if (isAudio) {
+      if (audioInfo(clip.audio.src)) requestAnimationFrame(() => drawAudioClip(i));
+      else void loadAudioInfo(clip.audio.src).then(() => renderArranger()).catch(() => {});
+    } else if (melodic) requestAnimationFrame(() => drawClipMidi(i));
     else if (clip.peaks) requestAnimationFrame(() => drawClipWave(i));
     else void loadWave(i);
   }
@@ -2049,15 +2411,16 @@ function toggleSolo(id) {
   if (soloTracks.has(id)) soloTracks.delete(id);
   else soloTracks.add(id);
   for (const tr of launcher.tracks) ensureTrackAudio(tr);
+  refreshLiveMix();
 }
 
 function addArrTrack(kind) {
   const i = arrangement.tracks.length;
   const label = kind ? KIND_LABELS[kind] : `Track ${i + 1}`;
-  const tr = { id: `t${Date.now()}`, name: label, color: i % TRACK_COLORS.length, mute: false, level: 0.8, pan: 0 };
+  const tr = { id: `t${Date.now()}`, name: label, kind: 'instrument', color: i % TRACK_COLORS.length, mute: false, level: 0.8, pan: 0, fx: [], sends: null, automation: { lanes: [] } };
   arrangement.tracks.push(tr);
   const pattern = kind ? simplePattern(kind, 16) : (i % 3 === 0 ? kitPattern(16) : (i % 3 === 1 ? bassPattern(16) : leadPattern(16)));
-  arrangement.clips.push({ track: tr.id, start: 0, pattern });
+  arrangement.clips.push({ track: tr.id, start: 0, length_beats: null, loop: true, gain_db: 0, audio: null, pattern });
   markDirty();
   renderArranger();
 }
@@ -2070,12 +2433,41 @@ function removeArrTrack(t) {
   syncSelection();
   renderArranger();
 }
+/* Put a WAV (Files-relative path) on a new audio track at `startBeat`. */
+async function addAudioTrack(path, { startBeat = null, name = null, matchTempo = false } = {}) {
+  let info = null;
+  try { info = await loadAudioInfo(path); } catch (e) {
+    toast(e.message || t('plugin.studio.toast.audioFailed', null, 'Could not read the audio file'), { type: 'error' });
+    return;
+  }
+  if (matchTempo && Number.isFinite(info?.bpm)) {
+    arrangement.bpm = info.bpm;
+    if (launcher) launcher.bpm = info.bpm;
+    if (bpmInput) bpmInput.value = String(Math.round(info.bpm * 100) / 100);
+  }
+  const i = arrangement.tracks.length;
+  const label = name || path.split('/').pop().replace(/\.wav$/i, '');
+  const tr = { id: `a${Date.now()}`, name: label, kind: 'audio', color: i % TRACK_COLORS.length, mute: false, level: 0.8, pan: 0, fx: [], sends: { reverb: 0, delay: 0 }, automation: { lanes: [] } };
+  arrangement.tracks.push(tr);
+  const start = startBeat ?? (arrPlaying ? Math.floor(currentBeat()) : arrStartBeat);
+  arrangement.clips.push({
+    track: tr.id, start, length_beats: null, loop: false, gain_db: 0, pattern: null,
+    audio: { src: path, name: label, offset: 0, fade_in: 0.005, fade_out: 0.05, bpm: Number.isFinite(info?.bpm) ? info.bpm : null },
+  });
+  fitArrangementLength();
+  selectArrClip(arrangement.clips.length - 1);
+  markDirty();
+  renderArranger();
+  if (detailPage === 'mixer') renderMixer();
+  toast(t('plugin.studio.toast.audioAdded', { name: label }, `Added “${label}”`), { type: 'success' });
+}
 function addArrClip(t) {
   const tr = arrangement.tracks[t];
   if (!tr) return;
   const start = arrangement.clips.filter((c) => c.track === tr.id).length * 4;
   const pattern = t % 3 === 0 ? kitPattern(16) : (t % 3 === 1 ? bassPattern(16) : leadPattern(16));
-  arrangement.clips.push({ track: tr.id, start: Math.min(start, Math.round(arrangement.length_beats) - 4), pattern });
+  arrangement.clips.push({ track: tr.id, start, length_beats: null, loop: true, gain_db: 0, audio: null, pattern });
+  fitArrangementLength();
   markDirty();
   renderArranger();
 }
@@ -2090,6 +2482,10 @@ function removeArrClip(i) {
   renderArranger();
 }
 
+function snapBeat(v, e) {
+  const q = e.shiftKey ? 0.25 : (e.altKey ? 4 : 1);
+  return Math.round(v / q) * q;
+}
 function startClipDrag(e, clipIndex) {
   if (e.button !== 0) return;
   e.preventDefault();
@@ -2097,20 +2493,52 @@ function startClipDrag(e, clipIndex) {
   const clip = arrangement.clips[clipIndex];
   const el = e.currentTarget;
   const startX = e.clientX;
-  const startBeat = Math.round(clip.start);
-  const dur = clipDurBeats(clip);
-  const maxBeat = Math.max(0, Math.round(arrangement.length_beats) - dur);
+  const startY = e.clientY;
+  const startBeat = clip.start;
   let moved = false;
   const move = (ev) => {
-    const delta = Math.round((ev.clientX - startX) / PPB);
-    if (delta !== 0) moved = true;
-    clip.start = Math.min(maxBeat, Math.max(0, startBeat + delta));
-    el.style.gridColumn = `${clip.start + 2} / ${clip.start + dur + 2}`;
+    const delta = (ev.clientX - startX) / PPB;
+    if (Math.abs(ev.clientX - startX) > 3) moved = true;
+    clip.start = Math.max(0, snapBeat(startBeat + delta, ev));
+    el.style.marginLeft = `${clip.start * PPB}px`;
+    // Vertical drag moves the clip to another track.
+    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.studio-arr-lane');
+    if (target && Math.abs(ev.clientY - startY) > TRACK_H / 2) {
+      const id = target.dataset.trackId;
+      if (id && id !== clip.track) { clip.track = id; moved = true; }
+    }
   };
   const up = () => {
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
-    if (moved) { markDirty(); renderArranger(); }
+    if (moved) { fitArrangementLength(); markDirty(); renderArranger(); }
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+function startClipResize(e, clipIndex) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const clip = arrangement.clips[clipIndex];
+  const el = e.currentTarget.parentElement;
+  const startX = e.clientX;
+  const startDur = clipDurBeats(clip);
+  let maxDur = Infinity;
+  if (clip.audio) {
+    const info = audioInfo(clip.audio.src);
+    if (info?.duration) maxDur = (info.duration - (clip.audio.offset || 0)) * arrangement.bpm / 60;
+  }
+  let changed = false;
+  const move = (ev) => {
+    const d = clamp(snapBeat(startDur + (ev.clientX - startX) / PPB, ev), 0.25, maxDur);
+    if (d !== clip.length_beats) { clip.length_beats = d; changed = true; }
+    el.style.width = `${Math.max(6, d * PPB - 2)}px`;
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    if (changed) { fitArrangementLength(); markDirty(); renderArranger(); }
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
@@ -2160,6 +2588,42 @@ function drawClipMidi(i) {
     ctx.fillStyle = canvasInk.ink;
     ctx.globalAlpha = 0.62;
     ctx.fillRect(x, y, wid, nh);
+  }
+}
+
+/* Audio clip: the file's waveform from `offset` for the clip's length. */
+function drawAudioClip(i) {
+  const clip = arrangement.clips[i];
+  const info = clip?.audio && audioInfo(clip.audio.src);
+  if (!info?.peaks?.length) return;
+  const cv = arrGridEl?.querySelector(`.studio-arr-clip[data-clip-index="${i}"] .studio-arr-clip-audio`);
+  if (!cv) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 100;
+  const hgt = cv.clientHeight || 24;
+  cv.width = Math.max(1, Math.round(w * dpr));
+  cv.height = Math.max(1, Math.round(hgt * dpr));
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, hgt);
+  const peaks = info.peaks;
+  const secs = info.duration || 1;
+  const spb = 60 / arrangement.bpm;
+  const t0 = clip.audio.offset || 0;
+  const t1 = t0 + clipDurBeats(clip) * spb;
+  const gain = dbToGain(clip.gain_db || 0);
+  ctx.fillStyle = canvasInk.ink;
+  ctx.globalAlpha = 0.42;
+  const mid = hgt / 2;
+  for (let x = 0; x < w; x++) {
+    const a = t0 + ((t1 - t0) * x) / w;
+    const b = t0 + ((t1 - t0) * (x + 1)) / w;
+    const k0 = Math.floor((a / secs) * peaks.length);
+    const k1 = Math.max(k0 + 1, Math.ceil((b / secs) * peaks.length));
+    let mn = 0, mx = 0;
+    for (let k = k0; k < k1 && k < peaks.length; k++) { if (k < 0) continue; mn = Math.min(mn, peaks[k][0]); mx = Math.max(mx, peaks[k][1]); }
+    mn = Math.max(-1, mn * gain); mx = Math.min(1, mx * gain);
+    ctx.fillRect(x, mid - mx * mid, 1, Math.max(1, (mx - mn) * mid));
   }
 }
 
@@ -2242,7 +2706,7 @@ function renderLauncher() {
     head.addEventListener('click', () => launchScene(c));
     lchGridEl.appendChild(head);
   }
-  const addScene = plusLabel(h('button', 'studio-launch-scene studio-launch-scene--add'), t('plugin.studio.launcher.addScene', null, '+ scene'));
+  const addScene = plusLabel(h('button', 'studio-launch-scene studio-launch-scene--add'), t('plugin.studio.launcher.addScene', null, '+ Scene'));
   addScene.type = 'button';
   addScene.style.gridColumn = String(s + 2);
   addScene.style.gridRow = '1';
@@ -2320,7 +2784,7 @@ function renderLauncher() {
         cell.appendChild(h('span', 'studio-arr-clip-name', clip.title || clip.pattern?.title || tr.name));
         const send = iconCtl('ui/arranger', 'studio-arr-clip-x');
         send.type = 'button';
-        send.title = t('plugin.studio.clip.sendToArrangement', null, 'Send to Arrangement');
+        send.title = t('plugin.studio.clip.sendToArrangement', null, 'Send to Arranger');
         send.addEventListener('click', (e) => { e.stopPropagation(); sendLauncherToArrangement(tr.id, c); });
         cell.appendChild(send);
         const rm = iconCtl('ui/close', 'studio-arr-clip-x');
@@ -2381,7 +2845,7 @@ function sendLauncherToArrangement(trackId, sceneIdx) {
   arrangement.clips.push({ track: destTrack.id, start: Math.min(start, Math.round(arrangement.length_beats) - dur), pattern: normalizePattern(clip.pattern) });
   markDirty();
   renderArranger();
-  toast(t('plugin.studio.toast.sentToArrangement', null, 'Sent clip to Arrangement'), { type: 'success' });
+  toast(t('plugin.studio.toast.sentToArrangement', null, 'Sent clip to Arranger'), { type: 'success' });
 }
 function sendArrangementToLauncher(clipIndex) {
   const c = arrangement.clips[clipIndex];
@@ -2416,8 +2880,8 @@ function renderDetail() {
     const kind = current?.voices?.[selectedVoice]?.kind;
     const base = !current ? t('plugin.studio.hint.selectClip', null, 'Select a clip in the Arranger or Launcher to edit it')
       : MELODIC.has(kind) ? t('plugin.studio.hint.editorNotes', null, 'Click the grid to add notes · drag to move · drag the right edge to resize')
-        : kind === 'drumkit' ? t('plugin.studio.hint.editorPads', null, 'Click a pad row to place hits · Fill = euclidean rhythm')
-          : t('plugin.studio.hint.editorSteps', null, 'Click cells to toggle hits · Fill = euclidean rhythm');
+        : kind === 'drumkit' ? t('plugin.studio.hint.editorPads', null, 'Click a pad row to place hits · Fill = Euclidean rhythm')
+          : t('plugin.studio.hint.editorSteps', null, 'Click cells to toggle hits · Fill = Euclidean rhythm');
     setHint(`${base}${keysHint()}`);
   } else {
     setHint((detailPage === 'devices'
@@ -2425,14 +2889,65 @@ function renderDetail() {
       : t('plugin.studio.hint.mixer', null, 'Click a strip to select its track · M/S mute & solo')) + keysHint());
   }
 }
-function keysHint() { return t('plugin.studio.hint.keys', null, ' — Space: play · ⌘S: save · ⌘E: export · Del: remove clip'); }
+function keysHint() { return t('plugin.studio.hint.keys2', null, ' — Space play · Enter back to start · L loop · M/S mute/solo · Ctrl+D duplicate · Ctrl+S save · Ctrl+E export'); }
 
 /* ── editor page ────────────────────────────────────────────── */
 
 let edToolbarEl = null;
 
+function selectedArrClip() {
+  return sel?.area === 'arr' ? arrangement.clips[sel.clipIndex] || null : null;
+}
+/* Inspector for an audio clip: gain, trim offset, fades, length, tempo. */
+function renderAudioClipEditor(clip) {
+  edToolbarEl.textContent = '';
+  gridEl.textContent = '';
+  gridEl.classList.remove('hidden');
+  pianoEl?.classList.add('hidden');
+  const a = clip.audio;
+  const info = audioInfo(a.src);
+  const name = uiInput();
+  name.type = 'text';
+  name.classList.add('studio-title', 'studio-title--clip');
+  name.value = a.name || '';
+  name.title = t('plugin.studio.editor.clipName', null, 'Clip name');
+  name.addEventListener('change', () => { a.name = name.value.trim() || a.src.split('/').pop(); markDirty(); renderArranger(); });
+  edToolbarEl.appendChild(name);
+  edToolbarEl.appendChild(h('span', 'studio-audio-src', a.src));
+  const wrap = h('div', 'studio-audio-inspector');
+  const spb = 60 / arrangement.bpm;
+  const dur = info?.duration || 0;
+  const row = h('div', 'studio-knob-row');
+  const change = () => { markDirty(); renderArranger(); };
+  row.appendChild(knob(t('plugin.studio.clip.gain', null, 'Gain (dB)'), -24, 12, 0.1, clip.gain_db || 0, (n) => { clip.gain_db = n; change(); }, 0));
+  row.appendChild(knob(t('plugin.studio.clip.offset', null, 'Start (s)'), 0, Math.max(0.01, dur), 0.01, a.offset || 0, (n) => { a.offset = n; change(); }, 0));
+  row.appendChild(knob(t('plugin.studio.clip.fadeIn', null, 'Fade in (s)'), 0, 10, 0.01, a.fade_in || 0, (n) => { a.fade_in = n; change(); }, 0.005));
+  row.appendChild(knob(t('plugin.studio.clip.fadeOut', null, 'Fade out (s)'), 0, 10, 0.01, a.fade_out || 0, (n) => { a.fade_out = n; change(); }, 0.05));
+  wrap.appendChild(row);
+  const facts = h('div', 'studio-audio-facts');
+  const fact = (label, value) => { const f = h('span', 'studio-fact'); f.append(h('span', 'studio-fact-label', label), h('span', 'studio-fact-value', value)); facts.appendChild(f); };
+  fact(t('plugin.studio.clip.duration', null, 'Duration'), dur ? fmtTime(dur) : '—');
+  fact(t('plugin.studio.clip.length', null, 'Clip length'), `${(clipDurBeats(clip) / 4).toFixed(2)} ${t('plugin.studio.clip.bars', null, 'bars')}`);
+  fact(t('plugin.studio.clip.tempo', null, 'Detected tempo'), Number.isFinite(info?.bpm) ? `${info.bpm} BPM` : '—');
+  fact(t('plugin.studio.clip.loudness', null, 'Loudness'), Number.isFinite(info?.lufs) ? `${info.lufs.toFixed(1)} LUFS` : '—');
+  wrap.appendChild(facts);
+  const actions = h('div', 'studio-audio-actions');
+  if (Number.isFinite(info?.bpm) && Math.abs(info.bpm - arrangement.bpm) > 0.05) {
+    actions.appendChild(button({ variant: 'ghost', label: t('plugin.studio.clip.matchTempo', { bpm: info.bpm }, `Set project tempo to ${info.bpm} BPM`), onClick: () => {
+      arrangement.bpm = info.bpm; if (launcher) launcher.bpm = info.bpm;
+      if (bpmInput) bpmInput.value = String(info.bpm);
+      markDirty(); renderArranger(); renderEditor();
+    } }));
+  }
+  actions.appendChild(button({ variant: 'ghost', label: t('plugin.studio.clip.fullLength', null, 'Use the whole file'), onClick: () => { clip.length_beats = null; a.offset = 0; fitArrangementLength(); change(); renderEditor(); } }));
+  wrap.appendChild(actions);
+  gridEl.appendChild(wrap);
+  if (!info) void loadAudioInfo(a.src).then(() => { if (selectedArrClip() === clip) renderEditor(); }).catch(() => {});
+}
 function renderEditor() {
   if (!gridEl) return;
+  const audioClip = selectedArrClip();
+  if (audioClip?.audio) { renderAudioClipEditor(audioClip); return; }
   renderEditorToolbar();
   if (!current) {
     gridEl.textContent = '';
@@ -2473,6 +2988,16 @@ function renderEditorToolbar() {
     renderLauncher();
   }, t('plugin.studio.hint.patternLength', null, 'Pattern length')));
 
+  const arrClip = selectedArrClip();
+  if (arrClip && !arrClip.audio) {
+    const loopBtn = button({ variant: 'ghost', label: t('plugin.studio.clip.loop', null, 'Loop'), onClick: () => {
+      arrClip.loop = arrClip.loop === false; markDirty(); renderArranger(); renderEditorToolbar();
+    } });
+    loopBtn.classList.add('studio-toggle');
+    loopBtn.classList.toggle('studio-btn--on', arrClip.loop !== false);
+    loopBtn.title = t('plugin.studio.clip.loopHint', null, 'Repeat the pattern to fill the clip length');
+    edToolbarEl.appendChild(loopBtn);
+  }
   edToolbarEl.appendChild(nativeSelect(TUNINGS, current.tuning, (val) => { current.tuning = val; markDirty(); renderEditor(); }, t('plugin.studio.hint.tuning', null, 'Tuning')));
 
   /* Swing — groove that delays every other 16th-note step (1 = triplet) */
@@ -2578,7 +3103,7 @@ function renderStepGrid() {
   }
   const add = h('button', 'studio-track-add');
   add.type = 'button';
-  plusLabel(add, t('plugin.studio.editor.addVoice', null, '+ voice'));
+  plusLabel(add, t('plugin.studio.editor.addVoice', null, '+ Voice'));
   add.style.gridColumn = '1';
   add.style.gridRow = String(n + 2);
   add.title = t('plugin.studio.editor.addVoiceHint', null, 'Add voice');
@@ -3167,68 +3692,326 @@ function renderPadGrid(v, container) {
 /* ── mixer page ─────────────────────────────────────────────── */
 
 /* A mixer group's title doubles as its identity (the Launcher tap below), so only the display is translated. */
-const MIXER_GROUP_LABELS = { Arranger: 'plugin.studio.mixer.arranger', Launcher: 'plugin.studio.mixer.launcher' };
+/* ── mixer page ───────────────────────────────────────────────
+   Console-style strips: inserts, sends, pan, a dB fader with a peak meter,
+   mute/solo. Then the Reverb and Delay returns and the Master (fader,
+   loudness target, ceiling, glue, width, measured LUFS). Fader, pan, mute,
+   solo and return levels are live; everything else re-renders the stems. */
+
+/* Audio-taper fader: position 0..1 ↔ gain 0..2 (+6 dB); 0 dB sits at ~79 %. */
+function faderPosToGain(p) { return Math.pow(clamp(p, 0, 1), 3) * 2; }
+function faderGainToPos(g) { return Math.cbrt(clamp(g, 0, 2) / 2); }
+
+function dbFader(label, value, onchange, { meter = null } = {}) {
+  const wrap = h('div', 'studio-dbfader');
+  wrap.dataset.param = label;
+  const track = h('div', 'studio-dbfader-track');
+  const thumb = h('div', 'studio-dbfader-thumb');
+  thumb.tabIndex = 0;
+  thumb.setAttribute('role', 'slider');
+  thumb.setAttribute('aria-label', label);
+  const scale = h('div', 'studio-dbfader-scale');
+  for (const db of [6, 0, -6, -12, -24, -48]) {
+    const tick = h('span', 'studio-dbfader-tick', db > 0 ? `+${db}` : String(db));
+    tick.style.bottom = `${faderGainToPos(dbToGain(db)) * 100}%`;
+    scale.appendChild(tick);
+  }
+  track.appendChild(thumb);
+  const body = h('div', 'studio-dbfader-body');
+  body.append(scale, track);
+  if (meter) body.appendChild(meter);
+  const val = h('span', 'studio-dbfader-val');
+  let cur = value;
+  const paint = () => {
+    thumb.style.bottom = `${faderGainToPos(cur) * 100}%`;
+    val.textContent = `${fmtDb(cur)} dB`;
+    thumb.setAttribute('aria-valuetext', `${fmtDb(cur)} dB`);
+  };
+  const set = (g, fire = true) => {
+    cur = clamp(g, 0, 2);
+    paint();
+    if (fire) { onchange(cur); setReadout(t('plugin.studio.readout.param', { label, value: `${fmtDb(cur)} dB` }, `${label} — ${fmtDb(cur)} dB`)); }
+  };
+  const fromEvent = (e) => {
+    const r = track.getBoundingClientRect();
+    return faderPosToGain(1 - (e.clientY - r.top) / Math.max(1, r.height));
+  };
+  track.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const fine = e.shiftKey;
+    const startY = e.clientY;
+    const startPos = faderGainToPos(cur);
+    if (e.target !== thumb) set(fromEvent(e));
+    const move = (ev) => {
+      if (fine || ev.shiftKey) set(faderPosToGain(startPos - (ev.clientY - startY) / 600));
+      else set(fromEvent(ev));
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+  track.addEventListener('dblclick', () => set(1));
+  val.addEventListener('dblclick', () => set(1));
+  thumb.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 0.1 : 1;
+    const db = gainToDb(cur);
+    if (e.key === 'ArrowUp') { e.preventDefault(); set(dbToGain(Math.min(6, (Number.isFinite(db) ? db : -60) + step))); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); set(db <= -59 ? 0 : dbToGain(db - step)); }
+  });
+  wrap.title = t('plugin.studio.mixer.faderHint', null, 'Drag (Shift = fine) · double-click = 0 dB');
+  wrap.append(body, val);
+  paint();
+  return wrap;
+}
+
+function msButtons(tr, after) {
+  const ms = h('span', 'studio-mixer-ms');
+  const m = h('button', 'studio-ms', 'M');
+  m.type = 'button';
+  m.title = t('plugin.studio.track.mute', null, 'Mute');
+  m.classList.toggle('studio-ms--on', !!tr.mute);
+  m.addEventListener('click', () => { tr.mute = !tr.mute; markDirty(); after(); });
+  const s = h('button', 'studio-ms studio-ms--solo', 'S');
+  s.type = 'button';
+  s.title = t('plugin.studio.track.solo', null, 'Solo');
+  s.classList.toggle('studio-ms--on', soloTracks.has(tr.id));
+  s.addEventListener('click', () => { toggleSolo(tr.id); after(); });
+  ms.append(m, s);
+  return ms;
+}
+
+let openInsert = null;   // { owner: 'track:<id>' | 'master', index }
+/* Insert slots for a chain (track inserts or master inserts). */
+function insertSlots(owner, list, onChange) {
+  const box = h('div', 'studio-inserts');
+  list.forEach((f, i) => {
+    const slot = h('div', 'studio-insert');
+    slot.classList.toggle('is-bypassed', !!f.bypass);
+    const isOpen = openInsert && openInsert.owner === owner && openInsert.index === i;
+    slot.classList.toggle('is-open', !!isOpen);
+    const name = h('button', 'studio-insert-name', EFFECTS[f.kind]?.label || f.kind);
+    name.type = 'button';
+    name.title = t('plugin.studio.mixer.insertEdit', null, 'Edit parameters');
+    name.addEventListener('click', () => { openInsert = isOpen ? null : { owner, index: i }; renderMixer(); });
+    const by = h('button', 'studio-insert-btn', f.bypass ? '○' : '●');
+    by.type = 'button';
+    by.title = t('plugin.studio.mixer.bypass', null, 'Bypass');
+    by.addEventListener('click', () => { f.bypass = !f.bypass; onChange(); renderMixer(); });
+    const rm = iconCtl('ui/close', 'studio-insert-btn', t('plugin.studio.mixer.removeInsert', null, 'Remove effect'));
+    rm.addEventListener('click', () => { list.splice(i, 1); openInsert = null; onChange(); renderMixer(); });
+    slot.append(by, name, rm);
+    box.appendChild(slot);
+  });
+  if (list.length < 8) {
+    const add = nativeSelect([['', t('plugin.studio.mixer.addInsert', null, '+ Insert')], ...EFFECT_KINDS.map((k) => [k, EFFECTS[k]?.label || k])], '', (kind) => {
+      if (!kind) return;
+      list.push({ kind, params: { ...(EFFECTS[kind]?.defaults || {}) }, bypass: false });
+      openInsert = { owner, index: list.length - 1 };
+      onChange();
+      renderMixer();
+    }, t('plugin.studio.mixer.addInsertHint', null, 'Add an insert effect'));
+    add.classList.add('studio-insert-add');
+    box.appendChild(add);
+  }
+  return box;
+}
+/* Parameter knobs of the open insert, shown under the console. */
+function insertEditor(list, index, title, onChange) {
+  const f = list[index];
+  if (!f) return null;
+  const panel = h('div', 'studio-insert-editor');
+  const head = h('div', 'studio-insert-editor-head');
+  head.append(eyebrow(`${title} · ${EFFECTS[f.kind]?.label || f.kind}`));
+  const close = iconCtl('ui/close', 'studio-head-btn', t('plugin.studio.common.close', null, 'Close'));
+  close.addEventListener('click', () => { openInsert = null; renderMixer(); });
+  head.appendChild(close);
+  panel.appendChild(head);
+  const row = h('div', 'studio-knob-row');
+  for (const p of (EFFECTS[f.kind]?.params || [])) {
+    const v = f.params[p.key] ?? p.def;
+    if (p.choices?.length) {
+      row.appendChild(nativeSelect(p.choices.map((c, ci) => [String(ci), c]), String(Math.round(v)), (val) => { f.params[p.key] = Number(val); onChange(); }, p.label));
+    } else {
+      row.appendChild(knob(p.label, p.min, p.max, p.step, v, (n) => { f.params[p.key] = n; onChange(); }, p.def));
+    }
+  }
+  panel.appendChild(row);
+  return panel;
+}
+
+function sendKnob(label, value, onchange) {
+  return knob(label, 0, 1, 0.01, value, onchange, 0);
+}
+
+const DELAY_SYNC = [['0.25', '1/16'], ['0.5', '1/8'], ['0.75', '1/8 ·'], ['1', '1/4'], ['1.5', '1/4 ·'], ['2', '1/2'], ['0.333', '1/8 T']];
+const LOUDNESS_TARGETS = [['0', 'plugin.studio.mixer.loudnessOff'], ['-14', '−14 LUFS'], ['-11', '−11 LUFS'], ['-9', '−9 LUFS']];
+
+let masterReadoutEl = null;
+function updateMasterReadout() {
+  if (!masterReadoutEl?.isConnected) return;
+  const m = mixManifest?.master;
+  masterReadoutEl.textContent = '';
+  const fact = (label, value) => { const f = h('span', 'studio-fact'); f.append(h('span', 'studio-fact-label', label), h('span', 'studio-fact-value', value)); masterReadoutEl.appendChild(f); };
+  fact(t('plugin.studio.mixer.integrated', null, 'Integrated'), m && Number.isFinite(m.lufs) && m.lufs > -69 ? `${m.lufs.toFixed(1)} LUFS` : '—');
+  fact(t('plugin.studio.mixer.peak', null, 'Peak'), m && m.peak > 0 ? `${fmtDb(m.peak)} dBFS` : '—');
+  if (m && Math.abs(m.trim_db || 0) > 0.05) fact(t('plugin.studio.mixer.trim', null, 'Loudness trim'), `${m.trim_db > 0 ? '+' : ''}${m.trim_db.toFixed(1)} dB`);
+}
+function renderMixerReadouts() {
+  updateMasterReadout();
+  if (!mixerEl || !mixManifest) return;
+  for (const r of (mixManifest.tracks || [])) {
+    const el = mixerEl.querySelector(`[data-lufs-track="${CSS.escape(r.track_id)}"]`);
+    if (el) el.textContent = r.muted || !Number.isFinite(r.lufs) || r.lufs <= -69 ? '' : `${r.lufs.toFixed(1)} LU`;
+  }
+}
+
 function renderMixer() {
   if (!mixerEl || detailPage !== 'mixer') return;
   mixerEl.textContent = '';
-  mixerMeters = [];   // strips are rebuilt; re-register their meters
-  /* One strip per track of each visible panel + MAIN. */
-  const groups = [];
-  if (panels.arranger) groups.push({ title: 'Arranger', list: arrangement.tracks, onChange: renderArranger });
-  if (panels.launcher) groups.push({ title: 'Launcher', list: launcher.tracks, onChange: renderLauncher });
-  if (!groups.length) groups.push({ title: 'Arranger', list: arrangement.tracks, onChange: renderArranger });
+  const content = () => { markDirty(); };
+  const live = () => { markDirty(); renderArranger(); };
+  const console_ = h('div', 'studio-console');
 
-  for (const g of groups) {
-    const sec = h('div', 'studio-mixer-group');
-    sec.appendChild(h('span', 'studio-rack-label', t(MIXER_GROUP_LABELS[g.title], null, g.title)));
-    const row = h('div', 'studio-mixer-row');
-    g.list.forEach((tr) => {
-      const strip = h('div', 'studio-mixer-strip');
-      strip.style.setProperty('--track', trackColor(tr.color));
-      strip.appendChild(h('span', 'studio-track-stripe'));
-      const name = h('span', 'studio-mixer-name', tr.name);
-      name.title = t('plugin.studio.track.renameHint', null, 'Double-click to rename');
-      name.addEventListener('dblclick', () => inlineRename(name, tr.name, (v) => { tr.name = v; markDirty(); renderMixer(); g.onChange(); }));
-      strip.appendChild(name);
-      const ms = h('span', 'studio-mixer-ms');
-      const m = h('button', 'studio-ms', 'M');
-      m.type = 'button';
-      m.classList.toggle('studio-ms--on', !!tr.mute);
-      m.addEventListener('click', () => { tr.mute = !tr.mute; ensureTrackAudio(tr); markDirty(); renderMixer(); g.onChange(); });
-      const s = h('button', 'studio-ms studio-ms--solo', 'S');
-      s.type = 'button';
-      s.classList.toggle('studio-ms--on', soloTracks.has(tr.id));
-      s.addEventListener('click', () => { toggleSolo(tr.id); renderMixer(); renderArranger(); renderLauncher(); });
-      ms.append(m, s);
-      strip.appendChild(ms);
-      strip.appendChild(knob(t('plugin.studio.param.pan', null, 'Pan'), -1, 1, 0.01, tr.pan ?? 0, (n) => { tr.pan = n; ensureTrackAudio(tr); markDirty(); }, 0));
-      strip.appendChild(fader(t('plugin.studio.mixer.trackLevel', { name: tr.name }, `${tr.name} Level`), tr.level ?? 0.8, (n) => { tr.level = n; ensureTrackAudio(tr); markDirty(); }));
-      /* Launcher tracks carry a live analyser tap; arrangement audio is a
-         single offline render, so those strips meter only via MAIN. */
-      strip.appendChild(meterNode(g.title === 'Launcher' ? () => trackAudio[tr.id]?.analyser : () => null));
-      row.appendChild(strip);
-    });
-    sec.appendChild(row);
-    mixerEl.appendChild(sec);
+  /* Arranger tracks */
+  const row = h('div', 'studio-mixer-row');
+  if (!arrangement.tracks.length) row.appendChild(h('div', 'studio-empty', t('plugin.studio.mixer.empty', null, 'No tracks yet — add one in the Arranger.')));
+  for (const tr of arrangement.tracks) {
+    if (!Array.isArray(tr.fx)) tr.fx = [];
+    const strip = h('div', 'studio-mixer-strip');
+    strip.style.setProperty('--track', trackColor(tr.color));
+    strip.classList.toggle('is-muted', !arrTrackAudible(tr));
+    const name = h('span', 'studio-mixer-name', tr.name);
+    name.title = t('plugin.studio.track.renameHint', null, 'Double-click to rename');
+    name.addEventListener('dblclick', () => inlineRename(name, tr.name, (v) => { tr.name = v; markDirty(); renderMixer(); renderArranger(); }));
+    strip.appendChild(h('span', 'studio-track-stripe'));
+    strip.appendChild(name);
+    strip.appendChild(h('span', 'studio-mixer-kind', tr.kind === 'audio' ? t('plugin.studio.mixer.audioTrack', null, 'Audio') : t('plugin.studio.mixer.instrumentTrack', null, 'Instrument')));
+    strip.appendChild(insertSlots(`track:${tr.id}`, tr.fx, content));
+    const sends = h('div', 'studio-mixer-sends');
+    const cur = tr.sends || effectiveSends(tr);
+    sends.appendChild(sendKnob(t('plugin.studio.mixer.sendReverb', null, 'Reverb'), cur.reverb, (n) => { tr.sends = { ...(tr.sends || effectiveSends(tr)), reverb: n }; content(); }));
+    sends.appendChild(sendKnob(t('plugin.studio.mixer.sendDelay', null, 'Delay'), cur.delay, (n) => { tr.sends = { ...(tr.sends || effectiveSends(tr)), delay: n }; content(); }));
+    strip.appendChild(sends);
+    strip.appendChild(knob(t('plugin.studio.param.pan', null, 'Pan'), -1, 1, 0.01, tr.pan ?? 0, (n) => { tr.pan = n; markDirty(); }, 0));
+    strip.appendChild(dbFader(t('plugin.studio.mixer.trackLevel', { name: tr.name }, `${tr.name} Level`), tr.level ?? 0.8, (g) => { tr.level = g; markDirty(); }, { meter: meterNode(() => channels.get(tr.id)?.meter) }));
+    strip.appendChild(msButtons(tr, () => { renderMixer(); renderArranger(); }));
+    const lu = h('span', 'studio-mixer-lufs');
+    lu.dataset.lufsTrack = tr.id;
+    lu.title = t('plugin.studio.mixer.trackLoudness', null, 'Track loudness (post-fader, last render)');
+    strip.appendChild(lu);
+    row.appendChild(strip);
   }
 
-  const masterSec = h('div', 'studio-mixer-group');
-  masterSec.appendChild(h('span', 'studio-rack-label', t('plugin.studio.mixer.main', null, 'Main')));
-  const master = h('div', 'studio-mixer-strip studio-mixer-strip--master');
-  master.appendChild(h('span', 'studio-mixer-name', t('plugin.studio.mixer.mainName', null, 'MAIN')));
-  master.appendChild(fader(t('plugin.studio.mixer.mainGain', null, 'Main gain'), arrangement.master ?? 0.9, (n) => { arrangement.master = n; markDirty(); }));
-  master.appendChild(meterNode(() => analyser));
-  masterSec.appendChild(master);
-  mixerEl.appendChild(masterSec);
+  /* Returns */
+  const ret = arrangement.returns || (arrangement.returns = { reverb: {}, delay: {} });
+  const rv = ret.reverb || (ret.reverb = {});
+  const dl = ret.delay || (ret.delay = {});
+  const rstrip = h('div', 'studio-mixer-strip studio-mixer-strip--return');
+  rstrip.appendChild(h('span', 'studio-mixer-name', t('plugin.studio.mixer.reverbReturn', null, 'Reverb')));
+  const rk = h('div', 'studio-mixer-sends studio-mixer-sends--grid');
+  rk.appendChild(knob(t('plugin.studio.mixer.size', null, 'Size'), 0.05, 1.6, 0.01, rv.size ?? 0.55, (n) => { rv.size = n; content(); }, 0.55));
+  rk.appendChild(knob(t('plugin.studio.mixer.damping', null, 'Damp'), 0, 1, 0.01, rv.damping ?? 0.45, (n) => { rv.damping = n; content(); }, 0.45));
+  rk.appendChild(knob(t('plugin.studio.mixer.predelay', null, 'Pre-delay (ms)'), 0, 250, 1, rv.predelay ?? 18, (n) => { rv.predelay = n; content(); }, 18));
+  rk.appendChild(knob(t('plugin.studio.mixer.width', null, 'Width'), 0, 2, 0.01, rv.width ?? 1, (n) => { rv.width = n; content(); }, 1));
+  rstrip.appendChild(rk);
+  rstrip.appendChild(dbFader(t('plugin.studio.mixer.reverbReturn', null, 'Reverb'), returnLevel('reverb'), (g) => { ret.reverb_level = g; markDirty(); }, { meter: meterNode(() => channels.get(RETURN_IDS.reverb)?.meter) }));
+  row.appendChild(rstrip);
+
+  const dstrip = h('div', 'studio-mixer-strip studio-mixer-strip--return');
+  dstrip.appendChild(h('span', 'studio-mixer-name', t('plugin.studio.mixer.delayReturn', null, 'Delay')));
+  const dk = h('div', 'studio-mixer-sends studio-mixer-sends--grid');
+  const syncVal = dl.sync != null ? String(dl.sync) : (dl.time != null ? '' : '0.75');
+  dk.appendChild(nativeSelect([...(syncVal === '' ? [['', `${Math.round(dl.time)} ms`]] : []), ...DELAY_SYNC], syncVal, (v) => { if (v) { dl.sync = Number(v); delete dl.time; } content(); }, t('plugin.studio.mixer.delayTime', null, 'Delay time (tempo-synced)')));
+  dk.appendChild(knob(t('plugin.studio.mixer.feedback', null, 'Feedback'), 0, 0.95, 0.01, dl.feedback ?? 0.35, (n) => { dl.feedback = n; content(); }, 0.35));
+  dk.appendChild(knob(t('plugin.studio.mixer.damping', null, 'Damp'), 0, 1, 0.01, dl.damp ?? 0.4, (n) => { dl.damp = n; content(); }, 0.4));
+  dk.appendChild(knob(t('plugin.studio.mixer.pingPong', null, 'Ping-pong'), 0, 1, 0.01, dl.ping_pong ?? 0.5, (n) => { dl.ping_pong = n; content(); }, 0.5));
+  dstrip.appendChild(dk);
+  dstrip.appendChild(dbFader(t('plugin.studio.mixer.delayReturn', null, 'Delay'), returnLevel('delay'), (g) => { ret.delay_level = g; markDirty(); }, { meter: meterNode(() => channels.get(RETURN_IDS.delay)?.meter) }));
+  row.appendChild(dstrip);
+
+  /* Master */
+  if (!Array.isArray(arrangement.master_fx)) arrangement.master_fx = [];
+  if (!arrangement.fx) arrangement.fx = {};
+  const fx = arrangement.fx;
+  const mstrip = h('div', 'studio-mixer-strip studio-mixer-strip--master');
+  mstrip.appendChild(h('span', 'studio-mixer-name', t('plugin.studio.mixer.mainName', null, 'MASTER')));
+  mstrip.appendChild(insertSlots('master', arrangement.master_fx, content));
+  const mk = h('div', 'studio-mixer-sends studio-mixer-sends--grid');
+  mk.appendChild(knob(t('plugin.studio.mixer.glue', null, 'Glue'), 0, 1, 0.01, fx.glue ?? 0, (n) => { fx.glue = n; markDirty(); }, 0));
+  mk.appendChild(knob(t('plugin.studio.mixer.ceiling', null, 'Ceiling'), -6, 0, 0.1, fx.ceiling ?? -1, (n) => { fx.ceiling = n; markDirty(); }, -1));
+  mk.appendChild(knob(t('plugin.studio.mixer.width', null, 'Width'), 0, 2, 0.01, fx.master_width ?? 1, (n) => { fx.master_width = n; content(); }, 1));
+  mk.appendChild(knob(t('plugin.studio.mixer.drive', null, 'Drive'), 0, 1, 0.01, fx.master_drive ?? 0, (n) => { fx.master_drive = n; content(); }, 0));
+  mstrip.appendChild(mk);
+  const lsel = nativeSelect(LOUDNESS_TARGETS.map(([v, k]) => [v, k.startsWith('plugin.') ? t(k, null, 'Off') : k]), String(Math.round(fx.loudness || 0)) === '0' ? '0' : String(Math.round(fx.loudness)), (v) => {
+    const n = Number(v);
+    if (n) fx.loudness = n; else delete fx.loudness;
+    content();
+  }, t('plugin.studio.mixer.loudnessHint', null, 'Loudness target — the export is trimmed to this integrated loudness'));
+  lsel.classList.add('studio-mixer-loudness');
+  mstrip.appendChild(lsel);
+  mstrip.appendChild(dbFader(t('plugin.studio.mixer.mainGain', null, 'Master'), arrangement.master ?? 0.9, (g) => { arrangement.master = g; markDirty(); }, { meter: meterNode(() => masterNodes?.meter) }));
+  masterReadoutEl = h('div', 'studio-master-readout');
+  mstrip.appendChild(masterReadoutEl);
+  row.appendChild(mstrip);
+
+  console_.appendChild(row);
+  mixerEl.appendChild(console_);
+
+  /* Open insert editor */
+  if (openInsert) {
+    let ed = null;
+    if (openInsert.owner === 'master') ed = insertEditor(arrangement.master_fx, openInsert.index, t('plugin.studio.mixer.mainName', null, 'MASTER'), content);
+    else {
+      const tr = arrangement.tracks.find((x) => `track:${x.id}` === openInsert.owner);
+      if (tr) ed = insertEditor(tr.fx, openInsert.index, tr.name, content);
+    }
+    if (ed) mixerEl.appendChild(ed); else openInsert = null;
+  }
+
+  /* Launcher strips (when the Launcher is visible): simple level/pan/M/S. */
+  if (panels.launcher && launcher?.tracks?.length) {
+    const sec = h('div', 'studio-mixer-group');
+    sec.appendChild(h('span', 'studio-rack-label', t('plugin.studio.mixer.launcher', null, 'Launcher')));
+    const lrow = h('div', 'studio-mixer-row');
+    for (const tr of launcher.tracks) {
+      const strip = h('div', 'studio-mixer-strip studio-mixer-strip--compact');
+      strip.style.setProperty('--track', trackColor(tr.color));
+      strip.appendChild(h('span', 'studio-track-stripe'));
+      strip.appendChild(h('span', 'studio-mixer-name', tr.name));
+      strip.appendChild(knob(t('plugin.studio.param.pan', null, 'Pan'), -1, 1, 0.01, tr.pan ?? 0, (n) => { tr.pan = n; ensureTrackAudio(tr); }, 0));
+      strip.appendChild(dbFader(tr.name, tr.level ?? 0.8, (g) => { tr.level = g; ensureTrackAudio(tr); }, { meter: meterNode(() => trackAudio[tr.id]?.analyser) }));
+      strip.appendChild(msButtons(tr, () => { for (const x of launcher.tracks) ensureTrackAudio(x); renderMixer(); renderLauncher(); }));
+      lrow.appendChild(strip);
+    }
+    sec.appendChild(lrow);
+    mixerEl.appendChild(sec);
+  }
+  renderMixerReadouts();
+  paintMeters();
+}
+
+/* Sends a track gets when it has none set: the max pattern reverb/delay mix
+   of its clips (how projects stored their sends before the mixer had them). */
+function effectiveSends(tr) {
+  let reverb = 0;
+  let delay = 0;
+  for (const c of arrangement.clips) {
+    if (c.track !== tr.id || !c.pattern) continue;
+    reverb = Math.max(reverb, Number(c.pattern.fx?.reverb_mix) || 0);
+    delay = Math.max(delay, Number(c.pattern.fx?.delay_mix) || 0);
+  }
+  return { reverb, delay };
 }
 
 /* ── pop-up browser ─────────────────────────────────────────── */
 
 let browserQuery = '';
-const BROWSER_TABS = [['patterns', 'plugin.studio.browser.tab.patterns'], ['arrangements', 'plugin.studio.browser.tab.arrangements'], ['instruments', 'plugin.studio.browser.tab.instruments'], ['effects', 'plugin.studio.browser.tab.effects'], ['presets', 'plugin.studio.browser.tab.presets']];
+const BROWSER_TABS = [['audio', 'plugin.studio.browser.tab.audio'], ['patterns', 'plugin.studio.browser.tab.patterns'], ['arrangements', 'plugin.studio.browser.tab.arrangements'], ['instruments', 'plugin.studio.browser.tab.instruments'], ['effects', 'plugin.studio.browser.tab.effects'], ['presets', 'plugin.studio.browser.tab.presets']];
 
 function openBrowser(tab, mode = null) {
   browserTab = tab || browserTab;
+  if (browserTab === 'audio') libraryFiles = null;   // re-list on open
   browserMode = mode ? { type: mode, area: panels.launcher && !panels.arranger ? 'lch' : 'arr' } : null;
   browserEl?.classList.remove('hidden');
   browserBtn?.setAttribute('aria-expanded', 'true');
@@ -3237,6 +4020,7 @@ function openBrowser(tab, mode = null) {
   browserEl?.querySelector('input')?.focus();
 }
 function closeBrowser() {
+  stopLibraryPreview();
   browserEl?.classList.add('hidden');
   browserBtn?.setAttribute('aria-expanded', 'false');
   browserMode = null;
@@ -3746,7 +4530,7 @@ function applyGridDraft() {
   markDirty();
   renderEditor();
   renderDevices();
-  toast(t('plugin.studio.toast.gridApplied', null, 'Grid patch applied'), { type: 'success' });
+  toast(t('plugin.studio.toast.gridApplied', null, 'WaveMe patch applied'), { type: 'success' });
 }
 async function previewGridDraft() {
   if (auditionSource) { stopAudition(); setStatus(dirty ? 'dirty' : 'saved'); renderGrid(); return; }
@@ -3775,7 +4559,7 @@ async function saveGridInstrument() {
   });
   await refreshPresets();
   renderBrowser();
-  toast(t('plugin.studio.toast.patchSaved', { name: d.name.trim() }, `Saved Grid patch “${d.name.trim()}”`), { type: 'success' });
+  toast(t('plugin.studio.toast.patchSaved', { name: d.name.trim() }, `Saved WaveMe patch “${d.name.trim()}”`), { type: 'success' });
 }
 
 function browserRow({ label, sub, color, lead, onClick, onDblClick, actions = [] }) {
@@ -3820,6 +4604,281 @@ function iconCtl(iconName, className = 'studio-head-btn', title = '') {
 
 /* Rows cascade in when the list is (re)loaded — the browser opening or a tab
    switch — not on every re-render (search keystrokes, a saved preset). */
+/* ── audio library (WAV files under Music/, AI songs first-class) ── */
+
+let libraryFiles = null;         // [{ path, name, bytes, modified, generated }]
+let libraryLoading = false;
+let libraryPreview = null;       // { path, audio, url }
+async function refreshLibrary() {
+  if (libraryLoading) return;
+  libraryLoading = true;
+  try {
+    const data = await api('/api/studio/audio/library');
+    libraryFiles = data?.files || [];
+  } catch (e) {
+    libraryFiles = [];
+    console.warn('studio: audio library unavailable', e);
+  } finally {
+    libraryLoading = false;
+  }
+  if (browserTab === 'audio') renderBrowser();
+}
+function stopLibraryPreview() {
+  if (!libraryPreview) return;
+  try { libraryPreview.audio.pause(); } catch (_) { /* noop */ }
+  URL.revokeObjectURL(libraryPreview.url);
+  libraryPreview = null;
+}
+async function toggleLibraryPreview(path) {
+  const same = libraryPreview?.path === path;
+  stopLibraryPreview();
+  if (same) { renderBrowser(); return; }
+  try {
+    const blob = await apiFetch(`/api/studio/audio/file?path=${encodeURIComponent(path)}`, { responseType: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener('ended', () => { stopLibraryPreview(); renderBrowser(); });
+    libraryPreview = { path, audio, url };
+    await audio.play();
+  } catch (e) {
+    toast(e.message || t('plugin.studio.toast.playFailed', null, 'Play failed'), { type: 'error' });
+  }
+  renderBrowser();
+}
+function fmtBytes(n) {
+  if (n >= 1048576) return `${(n / 1048576).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+function renderLibraryList(match) {
+  if (libraryFiles == null) {
+    browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.library.loading', null, 'Loading your audio…')));
+    void refreshLibrary();
+    return;
+  }
+  browserListEl.appendChild(browserRow({
+    label: t('plugin.studio.library.generate', null, 'Generate a song with AI…'),
+    lead: 'ui/magic-wand',
+    onClick: () => { closeBrowser(); openAiPanel(); },
+  }));
+  if (!libraryFiles.length) {
+    browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.library.empty', null, 'No WAV files in Music/ yet. Songs you generate with AI land in Music/Generated.')));
+    return;
+  }
+  for (const f of libraryFiles) {
+    if (!match(f.name) && !match(f.path)) continue;
+    const playing = libraryPreview?.path === f.path;
+    browserListEl.appendChild(browserRow({
+      label: f.name.replace(/\.wav$/i, ''),
+      sub: `${f.generated ? t('plugin.studio.library.aiTag', null, 'AI song') + ' · ' : ''}${f.path.replace(/\/[^/]*$/, '')} · ${fmtBytes(f.bytes)}`,
+      lead: f.generated ? 'ui/magic-wand' : 'ui/music',
+      onDblClick: () => { void addAudioTrack(f.path); closeBrowser(); },
+      actions: [
+        smallBtn(playing ? 'ui/stop' : 'ui/play', t('plugin.studio.library.preview', null, 'Preview'), (e) => { e?.stopPropagation?.(); void toggleLibraryPreview(f.path); }),
+        smallBtn('ui/plus', t('plugin.studio.library.add', null, 'Add to the arrangement at the play position'), (e) => { e?.stopPropagation?.(); void addAudioTrack(f.path); }),
+      ],
+    }));
+  }
+}
+
+/* ── AI song generation (local model, background job) ─────────
+   POST /api/songgen/generate starts a render on the user's machine and
+   returns a job id; we poll /api/songgen/jobs/:id. Renders take minutes, so
+   the panel can be closed — finished songs are added to the arrangement. */
+
+let aiPanelEl = null;
+let aiJobs = [];                 // { id, title, status, elapsed, result, error, match, added }
+let aiPollTimer = 0;
+let aiDraft = { style: '', lyrics: '', title: '', duration: 90, match: true };
+let aiNotice = null;             // { kind: 'download' | 'engine' | 'error', text, quality, size }
+
+function openAiPanel() {
+  if (!aiPanelEl) return;
+  aiPanelEl.classList.remove('hidden');
+  renderAiPanel();
+  aiPanelEl.querySelector('textarea')?.focus();
+}
+function closeAiPanel() {
+  aiPanelEl?.classList.add('hidden');
+}
+function aiField(label, control, hint) {
+  const f = h('label', 'studio-ai-field');
+  f.appendChild(h('span', 'studio-ai-label', label));
+  f.appendChild(control);
+  if (hint) f.appendChild(h('span', 'studio-ai-hint', hint));
+  return f;
+}
+function renderAiPanel() {
+  if (!aiPanelEl || aiPanelEl.classList.contains('hidden')) return;
+  aiPanelEl.textContent = '';
+  const head = h('div', 'studio-browser-head');
+  head.appendChild(eyebrow(t('plugin.studio.ai.title', null, 'AI song')));
+  const close = iconCtl('ui/close', 'studio-head-btn', t('plugin.studio.common.close', null, 'Close'));
+  close.addEventListener('click', closeAiPanel);
+  head.appendChild(close);
+  aiPanelEl.appendChild(head);
+  aiPanelEl.appendChild(h('p', 'studio-ai-intro', t('plugin.studio.ai.intro', null, 'Describe a song and the local music model writes it — vocals included. It runs on this computer and takes several minutes; the result lands on a new audio track.')));
+
+  const style = document.createElement('textarea');
+  style.className = 'studio-ai-text';
+  style.rows = 2;
+  style.placeholder = t('plugin.studio.ai.stylePlaceholder', null, 'e.g. dreamy synth-pop, female vocals, 100 BPM, warm analog pads');
+  style.value = aiDraft.style;
+  style.addEventListener('input', () => { aiDraft.style = style.value; });
+  aiPanelEl.appendChild(aiField(t('plugin.studio.ai.style', null, 'Style'), style));
+
+  const lyrics = document.createElement('textarea');
+  lyrics.className = 'studio-ai-text studio-ai-text--lyrics';
+  lyrics.rows = 6;
+  lyrics.placeholder = '[Verse]\n…\n[Chorus]\n…';
+  lyrics.value = aiDraft.lyrics;
+  lyrics.addEventListener('input', () => { aiDraft.lyrics = lyrics.value; });
+  aiPanelEl.appendChild(aiField(t('plugin.studio.ai.lyrics', null, 'Lyrics (optional)'), lyrics, t('plugin.studio.ai.lyricsHint', null, 'Mark sections with [Verse], [Chorus], [Bridge]… Leave empty for an instrumental feel.')));
+
+  const row = h('div', 'studio-ai-row');
+  const title = uiInput();
+  title.type = 'text';
+  title.placeholder = t('plugin.studio.ai.titlePlaceholder', null, 'Title');
+  title.value = aiDraft.title;
+  title.addEventListener('input', () => { aiDraft.title = title.value; });
+  row.appendChild(aiField(t('plugin.studio.ai.songTitle', null, 'Title'), title));
+  const dur = uiInput();
+  dur.type = 'number';
+  dur.min = 30;
+  dur.max = 300;
+  dur.step = 10;
+  dur.value = String(aiDraft.duration);
+  dur.addEventListener('change', () => { aiDraft.duration = clamp(parseInt(dur.value, 10) || 90, 30, 300); dur.value = String(aiDraft.duration); });
+  row.appendChild(aiField(t('plugin.studio.ai.duration', null, 'Length (s)'), dur));
+  aiPanelEl.appendChild(row);
+
+  const match = h('label', 'studio-ai-check');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = aiDraft.match;
+  cb.addEventListener('change', () => { aiDraft.match = cb.checked; });
+  match.append(cb, h('span', null, t('plugin.studio.ai.matchTempo', null, 'Set the project tempo to the song’s tempo')));
+  aiPanelEl.appendChild(match);
+
+  if (aiNotice) {
+    const n = h('div', `studio-ai-notice studio-ai-notice--${aiNotice.kind}`);
+    n.appendChild(h('span', null, aiNotice.text));
+    if (aiNotice.kind === 'download') {
+      n.appendChild(button({ variant: 'primary', label: t('plugin.studio.ai.downloadModels', { size: aiNotice.size }, `Download (${aiNotice.size})`), onClick: () => void startModelDownload(aiNotice.quality) }));
+    }
+    aiPanelEl.appendChild(n);
+  }
+
+  const go = button({ variant: 'primary', label: t('plugin.studio.ai.generate', null, 'Generate'), onClick: () => void startSongJob() });
+  go.classList.add('studio-ai-go');
+  aiPanelEl.appendChild(go);
+
+  if (aiJobs.length) {
+    const list = h('div', 'studio-ai-jobs');
+    for (const j of aiJobs.slice().reverse()) {
+      const r = h('div', `studio-ai-job studio-ai-job--${j.status}`);
+      r.appendChild(h('span', 'studio-ai-job-title', j.title));
+      const mins = Math.floor((j.elapsed || 0) / 60);
+      const secs = String((j.elapsed || 0) % 60).padStart(2, '0');
+      const label = j.status === 'running' ? t('plugin.studio.ai.running', { time: `${mins}:${secs}` }, `Composing… ${mins}:${secs}`)
+        : j.status === 'done' ? (j.added ? t('plugin.studio.ai.added', null, 'Added to the arrangement') : t('plugin.studio.ai.done', null, 'Ready'))
+          : (j.error || t('plugin.studio.ai.failed', null, 'Failed'));
+      r.appendChild(h('span', 'studio-ai-job-status', label));
+      if (j.status === 'done' && j.result?.path && !j.added) {
+        r.appendChild(smallBtn('ui/plus', t('plugin.studio.library.add', null, 'Add to the arrangement at the play position'), () => { j.added = true; void addAudioTrack(j.result.path, { name: j.title, matchTempo: j.match }); renderAiPanel(); }));
+      }
+      list.appendChild(r);
+    }
+    aiPanelEl.appendChild(list);
+  }
+}
+
+async function startSongJob() {
+  const style = aiDraft.style.trim();
+  if (!style) { toast(t('plugin.studio.ai.needStyle', null, 'Describe the style first'), { type: 'error' }); return; }
+  aiNotice = null;
+  try {
+    const res = await apiFetch('/api/songgen/generate', { method: 'POST', body: JSON.stringify({
+      style, lyrics: aiDraft.lyrics, title: aiDraft.title.trim() || undefined, duration: aiDraft.duration,
+    }) });
+    if (res?.success === false) {
+      const d = res.data || {};
+      if (d.needs_download) aiNotice = { kind: 'download', quality: d.quality, size: d.download_size, text: t('plugin.studio.ai.needsDownload', { size: d.download_size }, `The music model is not downloaded yet (${d.download_size}).`) };
+      else if (d.engine_missing) aiNotice = { kind: 'engine', text: t('plugin.studio.ai.engineMissing', null, 'The local song engine is not installed on this computer (see Settings → Music).') };
+      else aiNotice = { kind: 'error', text: res.error || t('plugin.studio.ai.failed', null, 'Failed') };
+      renderAiPanel();
+      return;
+    }
+    const d = res?.data || res;
+    aiJobs.push({ id: d.job_id, title: d.title || aiDraft.title || style, status: 'running', elapsed: 0, match: aiDraft.match });
+    startAiPolling();
+    renderAiPanel();
+    updateAiBadge();
+  } catch (e) {
+    aiNotice = { kind: 'error', text: e.message || String(e) };
+    renderAiPanel();
+  }
+}
+async function startModelDownload(quality) {
+  try {
+    await apiFetch('/api/songgen/download', { method: 'POST', body: JSON.stringify({ quality: quality || 'q4' }) });
+    aiNotice = { kind: 'engine', text: t('plugin.studio.ai.downloading', null, 'Downloading the music model… you can keep working; press Generate again once it finishes.') };
+    renderAiPanel();
+    const poll = setInterval(async () => {
+      try {
+        const st = await apiFetch('/api/songgen/status');
+        const downloads = st?.data?.downloads || {};
+        const active = Object.values(downloads).some((d) => d?.status === 'downloading' || d?.status === 'running');
+        if (!active) {
+          clearInterval(poll);
+          aiNotice = { kind: 'engine', text: t('plugin.studio.ai.downloaded', null, 'Download finished — press Generate.') };
+          renderAiPanel();
+        }
+      } catch (_) { clearInterval(poll); }
+    }, 5000);
+  } catch (e) {
+    aiNotice = { kind: 'error', text: e.message || String(e) };
+    renderAiPanel();
+  }
+}
+function startAiPolling() {
+  if (aiPollTimer) return;
+  aiPollTimer = setInterval(async () => {
+    const running = aiJobs.filter((j) => j.status === 'running');
+    if (!running.length) { clearInterval(aiPollTimer); aiPollTimer = 0; updateAiBadge(); return; }
+    for (const j of running) {
+      try {
+        const res = await apiFetch(`/api/songgen/jobs/${encodeURIComponent(j.id)}`);
+        const d = res?.data || {};
+        j.elapsed = d.elapsed_secs || j.elapsed;
+        if (d.status === 'done') {
+          j.status = 'done';
+          j.result = d.result;
+          libraryFiles = null;
+          if (tileEl && arrangement && d.result?.path) {
+            j.added = true;
+            await addAudioTrack(d.result.path, { name: j.title, matchTempo: j.match });
+          }
+          toast(t('plugin.studio.ai.ready', { name: j.title }, `“${j.title}” is ready`), { type: 'success' });
+        } else if (d.status === 'failed') {
+          j.status = 'failed';
+          j.error = d.error || t('plugin.studio.ai.failed', null, 'Failed');
+        }
+      } catch (e) {
+        if (e.status === 404) { j.status = 'failed'; j.error = t('plugin.studio.ai.lost', null, 'The song was lost because the system restarted'); }
+      }
+    }
+    renderAiPanel();
+    updateAiBadge();
+  }, 3000);
+}
+let aiBtnEl = null;
+function updateAiBadge() {
+  if (!aiBtnEl) return;
+  const n = aiJobs.filter((j) => j.status === 'running').length;
+  aiBtnEl.classList.toggle('studio-transport--on', n > 0);
+  aiBtnEl.dataset.badge = n ? String(n) : '';
+}
+
 let browserReveal = false;
 function renderBrowser() {
   if (!browserListEl || browserEl.classList.contains('hidden')) return;
@@ -3839,6 +4898,8 @@ function renderBrowserList() {
   browserListEl.textContent = '';
   const q = browserQuery.trim().toLowerCase();
   const match = (s) => !q || String(s).toLowerCase().includes(q);
+
+  if (browserTab === 'audio') { renderLibraryList(match); return; }
 
   if (browserTab === 'patterns') {
     if (!tracks.length) { browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.empty.noPatterns', null, 'No saved patterns yet — save one from the Editor toolbar.'))); return; }
@@ -4127,7 +5188,33 @@ function addConfigAsLauncherClip(cfg) {
 
 /* ── wav export ─────────────────────────────────────────────── */
 
+/* Export: master the arrangement on the server into Files → Music/Studio. */
 async function exportWav() {
+  if (busy) return;
+  if (!panels.arranger && current) { await downloadWav(); return; }
+  if (!arrangement?.clips?.length) {
+    toast(t('plugin.studio.toast.needTrackAndClip', null, 'Add a track and a clip to the Arranger first (or use the Launcher)'), { type: 'error' });
+    return;
+  }
+  busy = true;
+  setStatus('Rendering…');
+  try {
+    const data = await api('/api/studio/export', { method: 'POST', body: JSON.stringify({ arrangement: arrangementPayload(), name: arrangement.title }) });
+    const lufs = Number.isFinite(data?.lufs) ? data.lufs.toFixed(1) : '—';
+    toast(t('plugin.studio.toast.exported', { path: data?.path, lufs }, `Exported to ${data?.path} · ${lufs} LUFS`), { type: 'success' });
+    libraryFiles = null;
+    setStatus(dirty ? 'dirty' : 'saved');
+  } catch (e) {
+    console.error('studio: export failed', e);
+    toast(e.message || t('plugin.studio.toast.saveFailed', null, 'Save failed'), { type: 'error' });
+    setStatus('error');
+  } finally {
+    busy = false;
+  }
+}
+/* Render and hand the WAV to the browser / Files picker (arrangement or the
+   pattern open in the editor). */
+async function downloadWav() {
   if (busy) return;
   busy = true;
   setStatus('Rendering…');
@@ -4145,12 +5232,29 @@ async function exportWav() {
     await saveOrDownload(blob, { name: filename, dir: 'Music', app: 'Studio' });
     setStatus(dirty ? 'dirty' : 'saved');
   } catch (e) {
-    console.error('studio: export failed', e);
+    console.error('studio: download failed', e);
     toast(e.message || t('plugin.studio.toast.saveFailed', null, 'Save failed'), { type: 'error' });
     setStatus('error');
   } finally {
     busy = false;
   }
+}
+
+/* Duplicate the selected arrangement clip right after itself. */
+function duplicateSelectedClip() {
+  const c = selectedArrClip();
+  if (!c) return;
+  const copy = JSON.parse(JSON.stringify(serializeClip(c)));
+  const clip = normalizeArrangement({ tracks: [], clips: [copy] }).clips[0];
+  clip.start = c.start + clipDurBeats(c);
+  arrangement.clips.push(clip);
+  fitArrangementLength();
+  selectArrClip(arrangement.clips.length - 1);
+  markDirty();
+}
+function selectedTrack() {
+  const c = selectedArrClip();
+  return c ? arrangement.tracks.find((x) => x.id === c.track) || null : null;
 }
 
 /* ── keyboard shortcuts (Ableton/Bitwig-style) ─────────────── */
@@ -4182,6 +5286,32 @@ function onStudioKeydown(e) {
   } else if (meta && (e.key === 'e' || e.key === 'E')) {
     e.preventDefault();
     void exportWav();
+  } else if (meta && (e.key === 'd' || e.key === 'D')) {
+    e.preventDefault();
+    duplicateSelectedClip();
+  } else if (!meta && e.key === 'Enter') {
+    e.preventDefault();
+    const was = arrPlaying;
+    if (was) stopPlayback();
+    arrStartBeat = 0;
+    renderArranger();
+    clearArrPlayhead();
+    if (was) void renderArrangementAndPlay(0);
+  } else if (!meta && !e.altKey && (e.key === 'l' || e.key === 'L')) {
+    e.preventDefault();
+    loopBtn?.click();
+  } else if (!meta && !e.altKey && (e.key === 'm' || e.key === 'M') && selectedTrack()) {
+    e.preventDefault();
+    const tr = selectedTrack();
+    tr.mute = !tr.mute;
+    markDirty();
+    renderArranger();
+    if (detailPage === 'mixer') renderMixer();
+  } else if (!meta && !e.altKey && (e.key === 's' || e.key === 'S') && selectedTrack()) {
+    e.preventDefault();
+    toggleSolo(selectedTrack().id);
+    renderArranger();
+    if (detailPage === 'mixer') renderMixer();
   } else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
     e.preventDefault();
     if (sel.area === 'arr') {
@@ -4314,7 +5444,7 @@ export function mountStudioTile() {
 
   loopBtn = button({ variant: 'ghost', icon: 'ui/loop', label: '', onClick: () => {
     arrLoop = !arrLoop;
-    if (arrSource) arrSource.loop = arrLoop;
+    if (arrPlaying) { const beat = currentBeat(); stopSources(); if (mixManifest) beginTransport(mixManifest, beat); }
     updateTransport();
     renderArranger();
   } });
@@ -4353,6 +5483,7 @@ export function mountStudioTile() {
     if (launcher) launcher.bpm = b;
     if (clockRunning && metroOn) { metroStop(); metroStart(clockT0, b); }
     markDirty();
+    renderArranger();
   });
   const bpmLabel = h('span', 'studio-bpm-label', 'BPM');
 
@@ -4371,8 +5502,20 @@ export function mountStudioTile() {
 
   const exportBtn = button({ variant: 'ghost', icon: 'ui/download', label: '', onClick: () => void exportWav() });
   exportBtn.classList.add('studio-transport');
-  exportBtn.title = t('plugin.studio.toolbar.export', null, 'Export WAV');
+  exportBtn.title = t('plugin.studio.toolbar.exportMaster', null, 'Export the master to Music/Studio (Ctrl+E)');
   exportBtn.setAttribute('aria-label', t('plugin.studio.toolbar.exportLabel', null, 'Export WAV to Music'));
+
+  aiBtnEl = button({ variant: 'ghost', icon: 'ui/magic-wand', label: '', onClick: () => {
+    if (aiPanelEl?.classList.contains('hidden')) openAiPanel(); else closeAiPanel();
+  } });
+  aiBtnEl.classList.add('studio-transport', 'studio-ai-btn');
+  aiBtnEl.title = t('plugin.studio.toolbar.ai', null, 'AI song — generate a full song with the local music model');
+  aiBtnEl.setAttribute('aria-label', t('plugin.studio.toolbar.aiLabel', null, 'AI song'));
+
+  const mixBtn = button({ variant: 'ghost', icon: 'ui/channels', label: '', onClick: () => { detailOpen = true; detailPage = 'mixer'; renderDetail(); } });
+  mixBtn.classList.add('studio-transport');
+  mixBtn.title = t('plugin.studio.toolbar.mixer', null, 'Mixer');
+  mixBtn.setAttribute('aria-label', t('plugin.studio.toolbar.mixer', null, 'Mixer'));
 
   const saveBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => saveProjectNow() });
   saveBtn.classList.add('studio-transport');
@@ -4406,7 +5549,7 @@ export function mountStudioTile() {
   // save dot. Every control keeps the shared 32px metrics.
   barEl.append(browserBtn, titleInput, viewSeg,
     h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
-    beatDotEl, timeEl, bpmInput, bpmLabel, exportBtn, saveBtn, statusEl, saveDotEl);
+    beatDotEl, timeEl, bpmInput, bpmLabel, h('span', 'studio-bar-sep'), aiBtnEl, mixBtn, exportBtn, saveBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
 
   /* ── body: arranger + launcher side by side ── */
@@ -4469,24 +5612,11 @@ export function mountStudioTile() {
   detailEl.appendChild(detailBodyEl);
   tileEl.appendChild(detailEl);
 
-  /* ── footer (hints + live oscilloscope/spectrum/meter) ── */
+  /* ── footer: a slim, static hint + parameter readout line ── */
   const footer = h('div', 'studio-footer');
   footerHintEl = h('span', 'studio-footer-hint');
-  const scopeWrap = h('div', 'studio-scope');
-  scopeWrap.title = t('plugin.studio.panel.scope', null, 'Live output — oscilloscope + spectrum analyser');
-  scopeTraceEl = document.createElement('canvas');
-  scopeTraceEl.className = 'studio-scope-trace';
-  scopeSpecEl = document.createElement('canvas');
-  scopeSpecEl.className = 'studio-scope-spec';
-  scopeWrap.append(scopeTraceEl, scopeSpecEl);
-  const scopeMeterWrap = h('div', 'studio-meter studio-meter--scope');
-  const scopeMeterFill = h('span', 'studio-meter-fill');
-  const scopeMeterPeak = h('span', 'studio-meter-peak');
-  scopeMeterWrap.append(scopeMeterFill, scopeMeterPeak);
-  scopeWrap.appendChild(scopeMeterWrap);
-  scopeMeter = { fill: scopeMeterFill, peakEl: scopeMeterPeak, level: 0, pk: 0 };
   footerParamEl = h('span', 'studio-footer-param');
-  footer.append(footerHintEl, scopeWrap, footerParamEl);
+  footer.append(footerHintEl, footerParamEl);
   tileEl.appendChild(footer);
   tileEl.addEventListener('mouseover', (e) => {
     const t = e.target.closest?.('[data-hint]');
@@ -4525,7 +5655,13 @@ export function mountStudioTile() {
   browserEl.appendChild(browserListEl);
   tileEl.appendChild(browserEl);
 
-  tileEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBrowser(); });
+  /* ── AI song panel ── */
+  aiPanelEl = h('div', 'studio-browser studio-ai hidden');
+  aiPanelEl.setAttribute('role', 'dialog');
+  aiPanelEl.setAttribute('aria-label', t('plugin.studio.ai.title', null, 'AI song'));
+  tileEl.appendChild(aiPanelEl);
+
+  tileEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBrowser(); closeAiPanel(); } });
   tileEl.addEventListener('pointerdown', (e) => {
     if (!browserEl.classList.contains('hidden') && !browserEl.contains(e.target) && e.target !== browserBtn && !browserBtn.contains(e.target)) closeBrowser();
   });
@@ -4543,7 +5679,7 @@ export function mountStudioTile() {
   void refreshArrangements().then(renderBrowser).catch(() => {});
   void refreshPresets().then(renderBrowser).catch(() => {});
   void loadCatalog();
-  startScope();
+  requestAnimationFrame(() => { if (tileEl?.isConnected) { readCanvasColors(); redrawClipPreviews(); } });
   void consumePendingAiTrack().catch(() => {});
   window.addEventListener('keydown', onStudioKeydown);
   window.addEventListener('theme:change', onStudioThemeChange);
@@ -4562,7 +5698,8 @@ export function unmountStudioTile() {
   stopPlayback();
   stopAllLauncher();
   metroStop();
-  stopScope();
+  if (mixRefreshTimer) { clearTimeout(mixRefreshTimer); mixRefreshTimer = 0; }
+  stopMeters();
   if (clockUiTimer) { clearInterval(clockUiTimer); clockUiTimer = 0; }
   if (beatFlashTimer) { clearTimeout(beatFlashTimer); beatFlashTimer = 0; }
   if (tileEl) { tileEl.remove(); tileEl = null; }
@@ -4578,10 +5715,20 @@ export function unmountStudioTile() {
   gridDraft = null;
   browserEl = browserListEl = footerHintEl = footerParamEl = edToolbarEl = editorPageEl = null;
   browserBtn = null;
-  scopeTraceEl = scopeSpecEl = beatDotEl = null;
-  scopeTimeData = scopeFreqData = scopePeaks = null;
-  scopeMeter = null;
-  mixerMeters = [];
+  aiPanelEl = null;
+  aiBtnEl = null;
+  stopLibraryPreview();
+  beatDotEl = null;
+  meterViews = [];
+  channels = new Map();
+  masterNodes = null;
+  stemBuffers = new Map();
+  mixManifest = null;
+  mixManifestSig = '';
+  mixContentSig = '';
+  mixdownBuffer = null;
+  aiJobs = [];
+  if (aiPollTimer) { clearInterval(aiPollTimer); aiPollTimer = 0; }
   autoKnobs = [];
   auditionSource = null;
   lastClockBeat = -1;
@@ -4616,16 +5763,31 @@ function onAgentActions(e) {
 
   const created = studio.find((a) => a.action === 'studio_create' && a.result === 'ok');
   const rendered = studio.find((a) => a.action === 'studio_render' && a.result === 'ok');
-  const savedArr = studio.find((a) => a.action === 'studio_arrangement_save' && a.result === 'ok' && a.data?.id);
+  // Every tool that changes (or measures) an arrangement reports its id; the
+  // last one wins and becomes / refreshes the open project.
+  const ARR_TOOLS = ['studio_arrangement_save', 'studio_import_audio', 'studio_arrangement_edit', 'studio_export', 'studio_mix_analyze'];
+  const savedArr = [...studio].reverse().find((a) => ARR_TOOLS.includes(a.action) && a.result === 'ok' && a.data?.id);
+  const changedArr = savedArr && savedArr.action !== 'studio_export' && savedArr.action !== 'studio_mix_analyze';
   const deleted = studio.some((a) => a.action === 'studio_delete' && a.result === 'ok');
   const touchedId = (created || rendered)?.data?.track_id;
 
   void (async () => {
     if (savedArr) {
-      // A new/updated arrangement becomes the open project — replace the
-      // default "Untitled Arrangement" with what the AI just created.
+      const id = savedArr.data.id;
+      libraryFiles = null;
       await refreshArrangements().catch(() => {});
-      await loadArrangement(savedArr.data.id).catch(() => {});
+      const isOpen = arrangement?.id === id;
+      if (!changedArr && isOpen) { renderBrowser(); return; }   // nothing changed
+      if (dirty && arrangement?.clips?.length && (isOpen || arrangement?.id)) {
+        // Never drop the user's unsaved edits silently.
+        const ok = await confirmDialog(t('plugin.studio.dialog.agentReload', { name: savedArr.data.title || '' },
+          'The assistant changed an arrangement. Load it and discard your unsaved changes?'));
+        if (!ok) { renderBrowser(); return; }
+      }
+      const wasPlaying = arrPlaying;
+      if (wasPlaying) stopPlayback();
+      await loadArrangement(id).catch(() => {});
+      if (wasPlaying) void renderArrangementAndPlay();
       renderBrowser();
       return;
     }

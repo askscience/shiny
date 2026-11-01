@@ -1,78 +1,23 @@
-//! Word plugin tools: create/write/read/list/delete documents.
+//! Word plugin tools: create/write/edit/read/list/delete documents, set how
+//! they are composed (`doc_design`) and export them (`doc_export`).
 //!
-//! Documents live in the core-owned `documents` table as real .odt bytes
-//! (SDK `odt` codec). The plugin writes through its own SQLite pool, exactly
-//! like the traveler plugin writes the shared trips/locations tables.
+//! Documents live in the plugin's `documents` table as real .odt bytes
+//! (WordCraft codecs, see `engine.rs`). The agent writes and reads Markdown.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::odt;
+use crate::engine::{self, Design, Format};
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
-/// Light markdown-ish → HTML for AI-generated content.
-/// Each non-empty LINE becomes a paragraph (doc_read emits one line per
-/// paragraph, so doc_read → doc_write round-trips keep their structure).
+/// The agent's Markdown (headings, lists, tables, emphasis, links) as the
+/// editor's HTML fragment, through WordCraft's Markdown reader.
 pub fn content_to_html(content: &str) -> String {
-    let mut html = String::new();
-    for para in content.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
-        if let Some(rest) = para.strip_prefix("### ") {
-            html.push_str(&format!("<h3>{}</h3>", inline_html(rest)));
-        } else if let Some(rest) = para.strip_prefix("## ") {
-            html.push_str(&format!("<h2>{}</h2>", inline_html(rest)));
-        } else if let Some(rest) = para.strip_prefix("# ") {
-            html.push_str(&format!("<h1>{}</h1>", inline_html(rest)));
-        } else {
-            html.push_str(&format!("<p>{}</p>", inline_html(para)));
-        }
-    }
-    if html.is_empty() {
-        html.push_str("<p></p>");
-    }
-    html
-}
-
-/// Inline **bold** / *italic* / `code` conversion.
-fn inline_html(text: &str) -> String {
-    let mut out = String::new();
-    let mut rest = text;
-    loop {
-        if let Some(pos) = rest.find("**") {
-            let (pre, after) = rest.split_at(pos);
-            out.push_str(pre);
-            let after = &after[2..];
-            if let Some(end) = after.find("**") {
-                let (bold, tail) = after.split_at(end);
-                out.push_str(&format!("<b>{}</b>", bold));
-                rest = &tail[2..];
-                continue;
-            }
-            out.push_str("**");
-            rest = after;
-            continue;
-        }
-        if let Some(pos) = rest.find('*') {
-            let (pre, after) = rest.split_at(pos);
-            out.push_str(pre);
-            let after = &after[1..];
-            if let Some(end) = after.find('*') {
-                let (ital, tail) = after.split_at(end);
-                out.push_str(&format!("<i>{}</i>", ital));
-                rest = &tail[1..];
-                continue;
-            }
-            out.push('*');
-            rest = after;
-            continue;
-        }
-        out.push_str(rest);
-        break;
-    }
-    out
+    engine::markdown_to_html(content)
 }
 
 /// Byte range of the first case-insensitive occurrence of `needle` in `hay`.
@@ -103,7 +48,8 @@ fn find_ci(hay: &str, needle: &str) -> Option<std::ops::Range<usize>> {
 
 async fn last_doc_id(pool: &SqlitePool, user_id: &str) -> Result<Option<String>, AppError> {
     Ok(sqlx::query_scalar(
-        "SELECT id FROM documents WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1",
+        "SELECT id FROM documents WHERE user_id = ?1 \
+         ORDER BY max(updated_at, COALESCE(opened_at, '')) DESC LIMIT 1",
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -124,7 +70,7 @@ impl Tool for DocCreate {
     fn aliases(&self) -> &[&str] { &["create_document", "new_document"] }
     fn step_label(&self) -> &str { "Creating document…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `doc_create` — Create a new document. params: `{ title?: string, content?: string }` — content is plain text with `#` headings, `**bold**`, `*italic*`, paragraphs split by blank lines. Returns the new `doc_id`.")
+        Some("- `doc_create` — Create a new document. params: `{ title?: string, content?: string }` — content is Markdown: `#`/`##`/`###` headings, paragraphs, `- ` and `1. ` lists, `| a | b |` tables, `**bold**`, `*italic*`, `> quotes`, links. Returns the new `doc_id`.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
@@ -139,7 +85,7 @@ impl Tool for DocCreate {
             .unwrap_or_else(|| "Untitled".into());
         let content = req.params.param_str("content").unwrap_or_default();
         let html = content_to_html(&content);
-        let odt_bytes = odt::html_to_odt(&title, &html)?;
+        let odt_bytes = engine::html_to_odt(&html)?;
         let id = uuid::Uuid::new_v4().to_string();
 
         sqlx::query(
@@ -202,7 +148,7 @@ impl Tool for DocWrite {
         let title = title.ok_or_else(|| AppError::NotFound("Document not found".into()))?;
 
         let html = content_to_html(&content);
-        let odt_bytes = odt::html_to_odt(&title, &html)?;
+        let odt_bytes = engine::html_to_odt(&html)?;
         let result = sqlx::query(
             "UPDATE documents SET odt = ?1, updated_at = datetime('now') \
              WHERE id = ?2 AND user_id = ?3",
@@ -268,17 +214,20 @@ impl Tool for DocEdit {
         .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
         let (title, odt_bytes) = row;
 
-        let html = odt::odt_to_html(&odt_bytes)?;
-        let edited = if html.contains(&old) {
-            html.replacen(&old, &new, 1)
-        } else if let Some(range) = find_ci(&html, &old) {
+        let html = engine::odt_to_html(&odt_bytes)?;
+        // The HTML carries the text escaped: match and insert it that way.
+        let old_html = wordcraft_formats::html::esc(&old);
+        let new_html = wordcraft_formats::html::esc(&new);
+        let edited = if html.contains(&old_html) {
+            html.replacen(&old_html, &new_html, 1)
+        } else if let Some(range) = find_ci(&html, &old_html) {
             let mut s = html;
-            s.replace_range(range, &new);
+            s.replace_range(range, &new_html);
             s
         } else {
             // The model must not guess: tell it to rewrite in full. Include
             // the complete current content so it can produce a correct rewrite.
-            let preview: String = odt::odt_to_plain_text(&odt_bytes)?;
+            let preview: String = engine::odt_to_markdown(&odt_bytes)?;
             return Ok(ActionOutcome::error(
                 "doc_edit",
                 format!(
@@ -287,7 +236,7 @@ impl Tool for DocEdit {
             ));
         };
 
-        let new_odt = odt::html_to_odt(&title, &edited)?;
+        let new_odt = engine::html_to_odt(&edited)?;
         sqlx::query(
             "UPDATE documents SET odt = ?1, updated_at = datetime('now') \
              WHERE id = ?2 AND user_id = ?3",
@@ -347,9 +296,9 @@ impl Tool for DocAppend {
         let (title, odt_bytes) = row;
 
         // Append at the HTML level so existing formatting survives.
-        let existing = odt::odt_to_html(&odt_bytes)?;
+        let existing = engine::odt_to_html(&odt_bytes)?;
         let html = format!("{}\n{}", existing, content_to_html(&content));
-        let new_odt = odt::html_to_odt(&title, &html)?;
+        let new_odt = engine::html_to_odt(&html)?;
         sqlx::query(
             "UPDATE documents SET odt = ?1, updated_at = datetime('now') \
              WHERE id = ?2 AND user_id = ?3",
@@ -405,7 +354,7 @@ impl Tool for DocRead {
         .await?
         .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
         let (title, odt_bytes) = row;
-        let text = odt::odt_to_plain_text(&odt_bytes)?;
+        let text = engine::odt_to_markdown(&odt_bytes)?;
 
         Ok(ActionOutcome::ok(
             "doc_read",
@@ -413,6 +362,7 @@ impl Tool for DocRead {
                 "doc_id": doc_id,
                 "title": title,
                 "content": text,
+                "format": "markdown",
                 "hint": "To change a word or sentence use doc_edit {old,new}; to add content use doc_append; use doc_write only for a complete rewrite.",
             }),
         ))
@@ -480,5 +430,249 @@ impl Tool for DocDelete {
             return Ok(ActionOutcome::error("doc_delete", "Document not found"));
         }
         Ok(ActionOutcome::ok("doc_delete", json!({ "doc_id": doc_id })))
+    }
+}
+/* ── shared ─────────────────────────────────────────────────── */
+
+/// `doc_id` from the params, else the most recently used document.
+async fn target_doc(ctx: &PluginCtx, req: &ToolRequest<'_>) -> Result<String, AppError> {
+    match req.params.param_str("doc_id") {
+        Some(id) if !id.trim().is_empty() => Ok(id),
+        _ => last_doc_id(ctx.pool().await, req.traveler_id)
+            .await?
+            .ok_or_else(|| AppError::BadRequest("No document yet — call doc_create first".into())),
+    }
+}
+
+/* ── doc_design ─────────────────────────────────────────────── */
+
+pub struct DocDesign;
+
+#[async_trait]
+impl Tool for DocDesign {
+    fn name(&self) -> &str { "doc_design" }
+    fn aliases(&self) -> &[&str] { &["doc_layout", "format_document", "style_document"] }
+    fn step_label(&self) -> &str { "Designing document…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `doc_design` — Set how a document looks when exported (Word/PDF): params: `{ doc_id?, template?: \"plain\"|\"classic\"|\"modern\"|\"minimal\", cover?: bool, toc?: bool, header?: bool, page_numbers?: bool, paper?: \"a4\"|\"letter\", subtitle?, author?, date?, lang?, accent?: \"#RRGGBB\" }` — only the keys you pass change. Choosing a template turns on the header and page numbers unless you pass them.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("document");
+        format!("Designed \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let doc_id = target_doc(ctx, &req).await?;
+        let row = sqlx::query_as::<_, (String, String)>(
+            "SELECT title, design FROM documents WHERE id = ?1 AND user_id = ?2",
+        )
+        .bind(&doc_id)
+        .bind(req.traveler_id)
+        .fetch_optional(ctx.pool().await)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+        let (title, stored) = row;
+
+        let p = req.params;
+        let mut design = Design::from_json(&stored);
+        if let Some(t) = p.param_str("template") {
+            let t = t.trim().to_ascii_lowercase();
+            design = design.with_template_defaults(if t == "plain" { "" } else { &t });
+        }
+        let flag = |k: &str| p.get(k).and_then(|v| v.as_bool().or_else(|| v.as_str().map(|s| s == "true")));
+        if let Some(v) = flag("cover") { design.cover = v; }
+        if let Some(v) = flag("toc") { design.toc = v; }
+        if let Some(v) = flag("header") { design.header = v; }
+        if let Some(v) = flag("page_numbers") { design.page_numbers = v; }
+        for (key, slot) in [
+            ("paper", &mut design.paper),
+            ("subtitle", &mut design.subtitle),
+            ("author", &mut design.author),
+            ("date", &mut design.date),
+            ("lang", &mut design.lang),
+            ("accent", &mut design.accent),
+        ] {
+            if let Some(v) = p.param_str(key) {
+                *slot = v.trim().to_string();
+            }
+        }
+        if let Err(AppError::BadRequest(msg)) = design.validate() {
+            return Ok(ActionOutcome::error("doc_design", msg));
+        }
+        sqlx::query("UPDATE documents SET design = ?1, updated_at = datetime('now') WHERE id = ?2 AND user_id = ?3")
+            .bind(design.to_json())
+            .bind(&doc_id)
+            .bind(req.traveler_id)
+            .execute(ctx.pool().await)
+            .await?;
+
+        Ok(ActionOutcome::ok(
+            "doc_design",
+            json!({ "doc_id": doc_id, "title": title, "design": design }),
+        ))
+    }
+}
+
+/* ── doc_export ─────────────────────────────────────────────── */
+
+pub struct DocExport;
+
+#[async_trait]
+impl Tool for DocExport {
+    fn name(&self) -> &str { "doc_export" }
+    fn aliases(&self) -> &[&str] { &["export_document", "save_document_as", "doc_save_as"] }
+    fn step_label(&self) -> &str { "Exporting document…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `doc_export` — Save a document as a file in the user's Documents folder. params: `{ doc_id?, format: \"docx\"|\"pdf\"|\"odt\"|\"md\"|\"html\" }` — uses the document's design (see `doc_design`).")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let name = data.get("filename").and_then(|v| v.as_str()).unwrap_or("document");
+        format!("Exported \"{name}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let doc_id = target_doc(ctx, &req).await?;
+        let name = req.params.param_str("format").unwrap_or_else(|| "docx".into());
+        let Some(format) = Format::parse(&name) else {
+            return Ok(ActionOutcome::error("doc_export", format!("Unknown format \"{name}\" — use docx, pdf, odt, md or html")));
+        };
+        let title: Option<String> =
+            sqlx::query_scalar("SELECT title FROM documents WHERE id = ?1 AND user_id = ?2")
+                .bind(&doc_id)
+                .bind(req.traveler_id)
+                .fetch_optional(ctx.pool().await)
+                .await?;
+        let title = title.ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+        let filename = shiny_plugin_sdk::util::filename_for_title(&title, format.ext(), "document");
+        // The window fetches the file from this route and saves it to Documents.
+        Ok(ActionOutcome::ok(
+            "doc_export",
+            json!({
+                "doc_id": doc_id,
+                "title": title,
+                "format": format.ext(),
+                "filename": filename,
+                "url": format!("/api/documents/{doc_id}/export?format={}", format.ext()),
+            }),
+        ))
+    }
+}
+
+/* ── doc_insert_image ───────────────────────────────────────── */
+
+/// Largest picture file read from the user's home.
+const MAX_PICTURE: u64 = 25 * 1024 * 1024;
+
+/// A home-relative (or absolute, inside the home) path, resolved and
+/// confined to the user's files home.
+fn home_file(user_id: &str, os_home: Option<&str>, raw: &str) -> Result<std::path::PathBuf, AppError> {
+    let home = match os_home.map(str::trim).filter(|h| !h.is_empty()) {
+        Some(h) => std::path::PathBuf::from(h),
+        None => {
+            let base = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(|| ".".into());
+            base.join(".shiny").join("home").join(shiny_plugin_sdk::util::sanitize_user(user_id))
+        }
+    };
+    let raw = raw.trim().trim_start_matches("~/");
+    let candidate = if std::path::Path::new(raw).is_absolute() { std::path::PathBuf::from(raw) } else { home.join(raw) };
+    let real = candidate.canonicalize().map_err(|_| AppError::NotFound(format!("No file at {raw}")))?;
+    let home_real = home.canonicalize().unwrap_or(home);
+    if !real.starts_with(&home_real) || !real.is_file() {
+        return Err(AppError::BadRequest("The picture must be a file in the user's home".into()));
+    }
+    Ok(real)
+}
+
+pub struct DocInsertImage;
+
+#[async_trait]
+impl Tool for DocInsertImage {
+    fn name(&self) -> &str { "doc_insert_image" }
+    fn aliases(&self) -> &[&str] { &["insert_image", "doc_add_image", "add_picture"] }
+    fn step_label(&self) -> &str { "Adding picture…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `doc_insert_image` — Put a picture from the user's files into a document (e.g. one `generate_image` just made). params: `{ doc_id?, path: string, after?: string, caption?: string, width?: 10-100 }` — `path` is the file's path in the home (use the `path` `generate_image` returns); `after` is text of the heading or paragraph to place it after (default: the end); `width` is a percentage of the text width (default 100, never wider than the picture).")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("document");
+        format!("Added a picture to \"{title}\"")
+    }
+
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let raw = req
+            .params
+            .param_str("path")
+            .or_else(|| req.params.param_str("file"))
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| AppError::BadRequest("path required — the picture's path in the user's files".into()))?;
+        let doc_id = target_doc(ctx, &req).await?;
+        let file = match home_file(req.user_id, req.os_home, &raw) {
+            Ok(f) => f,
+            Err(e) => return Ok(ActionOutcome::error("doc_insert_image", e.to_string())),
+        };
+        let meta = tokio::fs::metadata(&file).await.map_err(|e| AppError::Internal(format!("read error: {e}")))?;
+        if meta.len() > MAX_PICTURE {
+            return Ok(ActionOutcome::error("doc_insert_image", "The picture is too large (max 25 MB)"));
+        }
+        let bytes = tokio::fs::read(&file).await.map_err(|e| AppError::Internal(format!("read error: {e}")))?;
+        let caption = req.params.param_str("caption").map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+        let alt = caption.clone().unwrap_or_else(|| {
+            file.file_stem().map(|s| s.to_string_lossy().replace(['-', '_'], " ")).unwrap_or_default()
+        });
+        let width = req.params.param_f64("width").map(|w| w as f32).unwrap_or(100.0);
+        let img = match engine::picture_html(&bytes, &alt, width) {
+            Ok(h) => h,
+            Err(e) => return Ok(ActionOutcome::error("doc_insert_image", e.to_string())),
+        };
+        let mut block = format!("<p style=\"text-align:center\">{img}</p>");
+        if let Some(c) = &caption {
+            block.push_str(&format!("<p style=\"text-align:center\"><em>{}</em></p>", wordcraft_formats::html::esc(c)));
+        }
+
+        let row = sqlx::query_as::<_, (String, Vec<u8>)>("SELECT title, odt FROM documents WHERE id = ?1 AND user_id = ?2")
+            .bind(&doc_id)
+            .bind(req.traveler_id)
+            .fetch_optional(ctx.pool().await)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
+        let (title, odt_bytes) = row;
+        let html = engine::odt_to_html(&odt_bytes)?;
+        let after = req.params.param_str("after");
+        let (edited, placed) = engine::insert_after_block(&html, after.as_deref(), &block);
+        let new_odt = engine::html_to_odt(&edited)?;
+        sqlx::query("UPDATE documents SET odt = ?1, updated_at = datetime('now') WHERE id = ?2 AND user_id = ?3")
+            .bind(&new_odt)
+            .bind(&doc_id)
+            .bind(req.traveler_id)
+            .execute(ctx.pool().await)
+            .await?;
+
+        let mut data = json!({ "doc_id": doc_id, "title": title });
+        if !placed {
+            data["note"] = json!("The `after` text was not found; the picture was added at the end.");
+        }
+        Ok(ActionOutcome::ok("doc_insert_image", data))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::home_file;
+
+    #[test]
+    fn pictures_must_live_in_the_home() {
+        let base = std::env::temp_dir().join(format!("word-home-{}", std::process::id()));
+        let home = base.join("home");
+        std::fs::create_dir_all(home.join("Pictures")).unwrap();
+        std::fs::write(home.join("Pictures/a.png"), b"x").unwrap();
+        std::fs::write(base.join("secret.png"), b"x").unwrap();
+        let h = home.to_str().unwrap();
+        assert!(home_file("u", Some(h), "Pictures/a.png").is_ok());
+        assert!(home_file("u", Some(h), "~/Pictures/a.png").is_ok());
+        assert!(home_file("u", Some(h), "../secret.png").is_err(), "no escaping the home");
+        assert!(home_file("u", Some(h), base.join("secret.png").to_str().unwrap()).is_err(), "absolute paths stay inside");
+        assert!(home_file("u", Some(h), "Pictures").is_err(), "a folder is not a picture");
+        assert!(home_file("u", Some(h), "missing.png").is_err());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

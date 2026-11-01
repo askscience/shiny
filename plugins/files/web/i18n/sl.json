@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Javno",
   "plugin.files.place.templates": "Predloge",
   "plugin.files.place.videos": "Videoposnetki",
-
   "plugin.files.toolbar.search": "Iskanje",
   "plugin.files.toolbar.menu": "Meni",
   "plugin.files.toolbar.back": "Nazaj",
@@ -17,46 +16,38 @@
   "plugin.files.toolbar.toggleView": "Preklopi pogled",
   "plugin.files.toolbar.viewOptions": "Možnosti pogleda",
   "plugin.files.toolbar.pathActions": "Dejanja poti",
-
   "plugin.files.search.placeholder": "Iskanje…",
   "plugin.files.search.clear": "Počisti",
-
   "plugin.files.empty.noResults": "Ni zadetkov",
   "plugin.files.empty.trash": "Smetnjak je prazen",
   "plugin.files.empty.folder": "Mapa je prazna",
   "plugin.files.empty.noMatch": "Ni datotek, ki bi ustrezale “{query}”.",
   "plugin.files.empty.dropHint": "Povlecite datoteke sem ali uporabite meni za nalaganje.",
-
   "plugin.files.column.name": "Ime",
   "plugin.files.column.size": "Velikost",
   "plugin.files.column.modified": "Spremenjeno",
-
   "plugin.files.status.folder": "Mapa",
   "plugin.files.status.items.one": "{count} element",
   "plugin.files.status.items.two": "{count} elementa",
   "plugin.files.status.items.few": "{count} elementi",
   "plugin.files.status.items.other": "{count} elementov",
-
+  "plugin.files.status.countSelected": "{count} · izbrano: {selected}",
   "plugin.files.when.today": "Danes {time}",
   "plugin.files.when.yesterday": "Včeraj {time}",
-
   "plugin.files.menu.newFolder": "Nova mapa",
   "plugin.files.menu.uploadFiles": "Naloži datoteke…",
   "plugin.files.menu.showHidden": "Pokaži skrite datoteke",
   "plugin.files.menu.view": "Pogled",
   "plugin.files.menu.copyPath": "Kopiraj pot",
   "plugin.files.menu.emptyTrash": "Izprazni smetnjak",
-
   "plugin.files.view.grid": "Mreža",
   "plugin.files.view.list": "Seznam",
-
   "plugin.files.ctx.open": "Odpri",
   "plugin.files.ctx.download": "Prenesi",
   "plugin.files.ctx.restore": "Obnovi",
   "plugin.files.ctx.deletePermanently": "Izbriši trajno",
   "plugin.files.ctx.rename": "Preimenuj…",
   "plugin.files.ctx.moveToTrash": "Premakni v smetnjak",
-
   "plugin.files.dialog.newFolderTitle": "Ime nove mape",
   "plugin.files.dialog.newFolderDefault": "Nova mapa",
   "plugin.files.dialog.renameTitle": "Preimenuj v",
@@ -71,7 +62,6 @@
   "plugin.files.dialog.trashMany.few": "Premaknem {count} elemente v smetnjak?",
   "plugin.files.dialog.trashMany.other": "Premaknem {count} elementov v smetnjak?",
   "plugin.files.dialog.emptyTrash": "Izpraznim smetnjak? Tega ni mogoče razveljaviti.",
-
   "plugin.files.toast.openFailed": "Mape ni bilo mogoče odpreti",
   "plugin.files.toast.searchFailed": "Iskanje ni uspelo",
   "plugin.files.toast.pathCopied": "Pot kopirana",
@@ -92,7 +82,6 @@
   "plugin.files.toast.restored.other": "Obnovljenih {count} elementov",
   "plugin.files.toast.trashEmptied": "Smetnjak izpraznjen",
   "plugin.files.toast.emptyTrashFailed": "Smetnjaka ni bilo mogoče izprazniti",
-
   "plugin.files.notify.downloading": "Prenašanje",
   "plugin.files.notify.uploadComplete": "Nalaganje končano",
   "plugin.files.notify.uploaded.one": "Dodana {count} datoteka",
@@ -104,13 +93,11 @@
   "plugin.files.notify.movedItems.two": "{count} elementa",
   "plugin.files.notify.movedItems.few": "{count} elementi",
   "plugin.files.notify.movedItems.other": "{count} elementov",
-
   "plugin.files.player.seek": "Pomik po posnetku",
   "plugin.files.player.mute": "Utišaj",
   "plugin.files.player.fullscreen": "Celoten zaslon",
   "plugin.files.player.thisFormat": "Ta oblika zapisa",
   "plugin.files.player.cannotDecode": "{codec}: tega zapisa ta brskalnik ne more dekodirati.",
-
   "plugin.files.preview.zoomHint": "Kliknite sliko za povečavo",
   "plugin.files.preview.loading": "Nalaganje…",
   "plugin.files.preview.cannotPreview": "Predogled ni mogoč: {message}",
@@ -123,7 +110,8 @@
   "plugin.files.preview.navHint.other": "{count} elementov · ← → za premikanje",
   "plugin.files.preview.pdfFailed": "PDF-ja ni bilo mogoče upodobiti",
   "plugin.files.preview.page": "Stran {n}",
-
+  "plugin.files.preview.prev": "Prejšnja datoteka",
+  "plugin.files.preview.next": "Naslednja datoteka",
   "plugin.files.meta.description": "Brskalnik datotek — brskajte po domačih mapah, si jih oglejte in jih upravljajte",
   "plugin.files.meta.summary": "Brskalnik datotek v slogu GNOME: mreža/seznam, sličice, hitri predogled, nalaganje in smetnjak",
   "plugin.files.meta.category": "Sistem"

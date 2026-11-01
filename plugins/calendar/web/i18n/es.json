@@ -2,7 +2,9 @@
   "plugin.calendar.meta.description": "Calendario — programa, lista y organiza eventos en la ventana del calendario",
   "plugin.calendar.meta.summary": "Calendario: programa y organiza eventos",
   "plugin.calendar.meta.category": "Ofimática",
-
+  "plugin.calendar.count.events.one": "{count} evento",
+  "plugin.calendar.count.events.many": "{count} eventos",
+  "plugin.calendar.count.events.other": "{count} eventos",
   "plugin.calendar.month.january": "Enero",
   "plugin.calendar.month.february": "Febrero",
   "plugin.calendar.month.march": "Marzo",
@@ -15,7 +17,6 @@
   "plugin.calendar.month.october": "Octubre",
   "plugin.calendar.month.november": "Noviembre",
   "plugin.calendar.month.december": "Diciembre",
-
   "plugin.calendar.grid.sun": "Dom",
   "plugin.calendar.grid.mon": "Lun",
   "plugin.calendar.grid.tue": "Mar",
@@ -23,22 +24,16 @@
   "plugin.calendar.grid.thu": "Jue",
   "plugin.calendar.grid.fri": "Vie",
   "plugin.calendar.grid.sat": "Sáb",
-
   "plugin.calendar.event.allDay": "Todo el día",
-
   "plugin.calendar.toolbar.previousMonth": "Mes anterior",
   "plugin.calendar.toolbar.nextMonth": "Mes siguiente",
   "plugin.calendar.toolbar.today": "Hoy",
   "plugin.calendar.toolbar.newEvent": "Nuevo evento",
-
   "plugin.calendar.ctx.refresh": "Actualizar",
-
   "plugin.calendar.detail.edit": "Editar",
   "plugin.calendar.detail.delete": "Eliminar",
-
   "plugin.calendar.empty.noEvents": "No hay eventos",
   "plugin.calendar.empty.noEventsBody": "No hay nada programado. Añade un evento o pídele a la IA que programe uno.",
-
   "plugin.calendar.dialog.title": "Evento",
   "plugin.calendar.dialog.editTitle": "Editar evento",
   "plugin.calendar.dialog.titleField": "Título",
@@ -52,7 +47,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Notas (opcional)",
   "plugin.calendar.dialog.cancel": "Cancelar",
   "plugin.calendar.dialog.save": "Guardar el evento",
-
   "plugin.calendar.toast.titleRequired": "El título es obligatorio",
   "plugin.calendar.toast.dateRequired": "La fecha es obligatoria",
   "plugin.calendar.toast.updated": "Evento actualizado",
@@ -61,8 +55,6 @@
   "plugin.calendar.toast.loadFailed": "No se han podido cargar los eventos",
   "plugin.calendar.toast.saveFailed": "No se ha podido guardar el evento",
   "plugin.calendar.toast.deleteFailed": "No se ha podido eliminar el evento",
-
   "plugin.calendar.confirm.deleteEvent": "¿Eliminar \"{title}\"?",
-
   "plugin.calendar.notify.eventSoon": "Un evento empieza pronto"
 }

@@ -61,7 +61,7 @@ export function createSystemSection({ on, cleanups, resources }) {
     })();
 
     const logoutBtn = button({
-      label: t('settings.system.logOut', null, 'Log out'),
+      label: t('settings.system.logOut', null, 'Sign out'),
       variant: 'danger',
       onClick: async () => {
         try {
@@ -79,7 +79,7 @@ export function createSystemSection({ on, cleanups, resources }) {
         window.location.href = '/';
       },
     });
-    const logoutHint = el('p', 'settings-hint', t('settings.system.logOutHint', null, 'Logging out returns you to the sign-in screen. Your plugins and chats stay as you set them.'));
+    const logoutHint = el('p', 'settings-hint', t('settings.system.logOutHint', null, 'Signing out returns you to the sign-in screen. Your plugins and chats stay as you set them.'));
     const actions = el('div', 'settings-inline-actions');
     actions.appendChild(logoutBtn);
 

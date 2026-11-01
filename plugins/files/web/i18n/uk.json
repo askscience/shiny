@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Спільні",
   "plugin.files.place.templates": "Шаблони",
   "plugin.files.place.videos": "Відео",
-
   "plugin.files.toolbar.search": "Пошук",
   "plugin.files.toolbar.menu": "Меню",
   "plugin.files.toolbar.back": "Назад",
@@ -17,46 +16,38 @@
   "plugin.files.toolbar.toggleView": "Перемкнути вигляд",
   "plugin.files.toolbar.viewOptions": "Параметри вигляду",
   "plugin.files.toolbar.pathActions": "Дії зі шляхом",
-
   "plugin.files.search.placeholder": "Пошук…",
   "plugin.files.search.clear": "Очистити",
-
   "plugin.files.empty.noResults": "Нічого не знайдено",
   "plugin.files.empty.trash": "Кошик порожній",
   "plugin.files.empty.folder": "Тека порожня",
   "plugin.files.empty.noMatch": "Жоден файл не відповідає “{query}”.",
   "plugin.files.empty.dropHint": "Перетягніть файли сюди або скористайтеся меню, щоб завантажити.",
-
   "plugin.files.column.name": "Назва",
   "plugin.files.column.size": "Розмір",
   "plugin.files.column.modified": "Змінено",
-
   "plugin.files.status.folder": "Тека",
   "plugin.files.status.items.one": "{count} елемент",
   "plugin.files.status.items.few": "{count} елементи",
   "plugin.files.status.items.many": "{count} елементів",
   "plugin.files.status.items.other": "{count} елемента",
-
+  "plugin.files.status.countSelected": "{count} · вибрано: {selected}",
   "plugin.files.when.today": "Сьогодні {time}",
   "plugin.files.when.yesterday": "Учора {time}",
-
   "plugin.files.menu.newFolder": "Нова тека",
   "plugin.files.menu.uploadFiles": "Завантажити файли…",
   "plugin.files.menu.showHidden": "Показати приховані файли",
   "plugin.files.menu.view": "Вигляд",
   "plugin.files.menu.copyPath": "Копіювати шлях",
   "plugin.files.menu.emptyTrash": "Спорожнити кошик",
-
   "plugin.files.view.grid": "Сітка",
   "plugin.files.view.list": "Список",
-
   "plugin.files.ctx.open": "Відкрити",
   "plugin.files.ctx.download": "Завантажити",
   "plugin.files.ctx.restore": "Відновити",
   "plugin.files.ctx.deletePermanently": "Видалити назавжди",
   "plugin.files.ctx.rename": "Перейменувати…",
   "plugin.files.ctx.moveToTrash": "Перемістити у кошик",
-
   "plugin.files.dialog.newFolderTitle": "Назва нової теки",
   "plugin.files.dialog.newFolderDefault": "Нова тека",
   "plugin.files.dialog.renameTitle": "Перейменувати на",
@@ -71,7 +62,6 @@
   "plugin.files.dialog.trashMany.many": "Перемістити {count} елементів у кошик?",
   "plugin.files.dialog.trashMany.other": "Перемістити {count} елемента у кошик?",
   "plugin.files.dialog.emptyTrash": "Спорожнити кошик? Цю дію не можна скасувати.",
-
   "plugin.files.toast.openFailed": "Не вдалося відкрити теку",
   "plugin.files.toast.searchFailed": "Пошук не вдався",
   "plugin.files.toast.pathCopied": "Шлях скопійовано",
@@ -92,7 +82,6 @@
   "plugin.files.toast.restored.other": "Відновлено {count} елемента",
   "plugin.files.toast.trashEmptied": "Кошик спорожнено",
   "plugin.files.toast.emptyTrashFailed": "Не вдалося спорожнити кошик",
-
   "plugin.files.notify.downloading": "Завантаження",
   "plugin.files.notify.uploadComplete": "Завантаження завершено",
   "plugin.files.notify.uploaded.one": "Додано {count} файл",
@@ -104,13 +93,11 @@
   "plugin.files.notify.movedItems.few": "{count} елементи",
   "plugin.files.notify.movedItems.many": "{count} елементів",
   "plugin.files.notify.movedItems.other": "{count} елемента",
-
   "plugin.files.player.seek": "Перемотування",
   "plugin.files.player.mute": "Вимкнути звук",
   "plugin.files.player.fullscreen": "На весь екран",
   "plugin.files.player.thisFormat": "Цей формат",
   "plugin.files.player.cannotDecode": "{codec} не декодується цим браузером.",
-
   "plugin.files.preview.zoomHint": "Натисніть на зображення, щоб збільшити",
   "plugin.files.preview.loading": "Завантаження…",
   "plugin.files.preview.cannotPreview": "Не можна переглянути: {message}",
@@ -123,7 +110,8 @@
   "plugin.files.preview.navHint.other": "{count} елемента · ← → для переходу",
   "plugin.files.preview.pdfFailed": "Не вдалося відобразити PDF",
   "plugin.files.preview.page": "Сторінка {n}",
-
+  "plugin.files.preview.prev": "Попередній файл",
+  "plugin.files.preview.next": "Наступний файл",
   "plugin.files.meta.description": "Файловий менеджер — переглядайте теки у своїй домівці та керуйте ними",
   "plugin.files.meta.summary": "Файловий менеджер у стилі GNOME: сітка/список, мініатюри, швидкий перегляд, завантаження та кошик",
   "plugin.files.meta.category": "Система"

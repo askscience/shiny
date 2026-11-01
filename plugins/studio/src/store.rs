@@ -239,15 +239,24 @@ pub fn arr_meta_json(r: &ArrRow) -> Value {
     })
 }
 
-/// Full arrangement (flattened) for loading.
+/// Full arrangement for loading: the stored config (tracks, clips, master
+/// fx, returns, …) with the row's id/metadata on top.
 pub fn arr_full_json(r: &ArrRow) -> Value {
-    let cfg = arr_cfg(r);
-    json!({
-        "id": r.0, "title": r.1, "bpm": r.2, "length_beats": r.3, "master": r.4,
-        "tracks": cfg.get("tracks").cloned().unwrap_or(json!([])),
-        "clips": cfg.get("clips").cloned().unwrap_or(json!([])),
-        "updated_at": r.6,
-    })
+    let mut cfg = arr_cfg(r);
+    if !cfg.is_object() {
+        cfg = json!({});
+    }
+    if let Some(o) = cfg.as_object_mut() {
+        o.insert("id".into(), json!(r.0));
+        o.insert("title".into(), json!(r.1));
+        o.insert("bpm".into(), json!(r.2));
+        o.insert("length_beats".into(), json!(r.3));
+        o.insert("master".into(), json!(r.4));
+        o.insert("updated_at".into(), json!(r.6));
+        o.entry("tracks").or_insert(json!([]));
+        o.entry("clips").or_insert(json!([]));
+    }
+    cfg
 }
 
 pub async fn list_arrangements(pool: &SqlitePool, user_id: &str) -> sqlx::Result<Vec<ArrRow>> {

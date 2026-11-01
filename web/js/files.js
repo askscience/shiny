@@ -152,9 +152,18 @@ export function revealInFiles(dir = '') {
 
 /* ── Open a file with the right app (desktop "double-click") ─────────────── */
 
+/**
+ * Drag payload type for a file dragged out of the Files window:
+ * JSON `{ path, name }` (home-relative path). Fetch the bytes with
+ * `fileFromHome(path, name)`.
+ */
+export const SHINY_FILE_MIME = 'application/x-shiny-file';
+
 /** Extension → plugin that opens it. (Audio/WAV is intentionally absent.) */
 export const FILE_OPENERS = {
   odt: 'word',
+  docx: 'word',
+  rtf: 'word',
   ods: 'calc',
   odp: 'impress',
   pdf: 'pdf',

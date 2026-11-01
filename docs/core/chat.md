@@ -126,6 +126,15 @@ the chat head's brain button (and the voice-bar menu entry) — it shows
 `ui/brain` while thinking is on and the slashed `ui/brain-off` when it is off,
 and disables itself for a model that cannot think. See [web UI](web-ui.md).
 
+**Asking from a window.** `askInChat(text)` (exported by `textInput.js`) opens
+the chat and sends `text` as the user's own message, so the request, its tool
+cards and the answer appear in the thread exactly like a typed one. It returns
+`false` when a turn is already running. Plugin windows use it for in-context
+AI actions — Word's AI menu sends requests like *In the Word document "…":
+improve the selected text …* with the selection quoted; the agent acts on the
+open document (the window marks it with `POST /api/documents/:id/opened`, see
+the Word plugin's [tools](../../plugins/word/docs/tools.md)).
+
 The approval card is a live thread element, not a modal: it appears above the
 composer exactly where the command will run, shows the command verbatim, and
 becomes an inert green circle-check (allowed) or red circle-cross (denied) once

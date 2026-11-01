@@ -1,17 +1,15 @@
 {
-  "plugin.image.meta.description": "Editor fotografico — regolazioni di tono e colore, sfocatura/contrasto/vignettatura e look cinematografici con un tocco nella finestra Image",
+  "plugin.image.meta.description": "Editor fotografico — regolazioni di tono e colore, sfocatura/nitidezza/vignettatura e look cinematografici con un tocco nella finestra Image",
   "plugin.image.meta.summary": "Editor fotografico: regolazioni e look da pellicola",
   "plugin.image.meta.category": "Media",
-
   "plugin.image.toolbar.menu": "Menu",
   "plugin.image.toolbar.fitToggle": "Alterna adatta / dimensioni reali",
   "plugin.image.title": "Immagine",
   "plugin.image.toolbar.fit": "Adatta",
   "plugin.image.toolbar.actualSize": "1:1",
-  "plugin.image.status.look": "Look: {name}",
+  "plugin.image.status.look": "Stile: {name}",
   "plugin.image.dock.looks": "Look",
   "plugin.image.dock.adjust": "Regola",
-
   "plugin.image.dial.brightness": "Luminosità",
   "plugin.image.dial.contrast": "Contrasto",
   "plugin.image.dial.exposure": "Esposizione",
@@ -20,19 +18,16 @@
   "plugin.image.dial.blur": "Sfocatura",
   "plugin.image.dial.sharpen": "Nitidezza",
   "plugin.image.dial.vignette": "Vignettatura",
-
   "plugin.image.oneClick.autoTone": "Tono automatico",
   "plugin.image.oneClick.autoContrast": "Contrasto automatico",
   "plugin.image.oneClick.invert": "Inverti",
   "plugin.image.oneClick.grayscale": "B&N",
   "plugin.image.oneClick.sepia": "Seppia",
   "plugin.image.oneClick.revert": "Ripristina",
-  "plugin.image.oneClick.revertTitle": "Ripristina il file originale caricato",
-
+  "plugin.image.oneClick.revertTitle": "Ripristina l'immagine originale",
   "plugin.image.empty.title": "Nessuna immagine aperta",
   "plugin.image.empty.body": "Apri o trascina un'immagine per iniziare.",
   "plugin.image.empty.open": "Apri immagine",
-
   "plugin.image.menu.file": "File",
   "plugin.image.menu.image": "Immagine",
   "plugin.image.menu.view": "Vista",
@@ -48,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Riduci",
   "plugin.image.menu.fit": "Adatta",
   "plugin.image.menu.actualSize": "Dimensioni reali",
-
   "plugin.image.ctx.open": "Apri immagine…",
-
   "plugin.image.dialog.deleteConfirm": "Eliminare \"{title}\"?",
   "plugin.image.dialog.thisImage": "questa immagine",
-
   "plugin.image.toast.openFirst": "Apri prima un'immagine",
   "plugin.image.toast.opened": "Aperta {title}",
   "plugin.image.toast.editFailed": "Modifica non riuscita",
@@ -63,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Salvataggio non riuscito",
   "plugin.image.toast.deleted": "Immagine eliminata",
   "plugin.image.toast.deleteFailed": "Impossibile eliminare l'immagine",
-  "plugin.image.toast.reverted": "Ripristinati i pixel originali",
+  "plugin.image.toast.reverted": "Ripristinata l'immagine originale",
   "plugin.image.toast.openFailed": "Impossibile aprire il file",
-
   "plugin.image.error.emptyFile": "il file è vuoto",
   "plugin.image.error.notAnImage": "“{name}” non è un'immagine che l'editor può aprire",
   "plugin.image.error.unnamedFile": "file"

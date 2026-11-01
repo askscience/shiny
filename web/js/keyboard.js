@@ -397,7 +397,7 @@ function renderDesktopRow() {
     });
     row.appendChild(b);
   };
-  btn('ui/expand', t('kb.fullscreen', null, 'Fullscreen (Alt+Enter)'),
+  btn('ui/expand', t('kb.fullscreen', null, 'Full screen (Alt+Enter)'),
     () => toggleWindowFullscreenActive());
   btn('ui/chevron-left', t('kb.prevWorkspace', null, 'Previous workspace (Alt+,)'),
     () => switchWorkspace('prev'));

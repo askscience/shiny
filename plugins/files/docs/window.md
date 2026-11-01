@@ -83,6 +83,11 @@ export default {
   and falls back to a browser download when Files is not installed;
   `pickFiles()` returns a file picker; `fileFromHome(path)` fetches bytes;
   `onOpenFromFiles`/`openWithPlugin` handle double-click routing.
+- Files (not folders) are **draggable** into other windows: `dragstart` sets
+  `application/x-shiny-file` (`SHINY_FILE_MIME` in `web/js/files.js`) to JSON
+  `{ path, name }` plus the name as `text/plain`. The target fetches the bytes
+  with `fileFromHome(path, name)`; Word inserts dropped pictures and imports
+  dropped documents.
 
 ## Thumbnails & previews
 

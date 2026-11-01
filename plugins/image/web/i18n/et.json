@@ -2,10 +2,14 @@
   "plugin.image.meta.description": "Fotoredaktor — tooni- ja värvikohandused, hägustus/teravustamine/vignett ja ühe puutega filmistiilid Pildi aknas",
   "plugin.image.meta.summary": "Fotoredaktor: kohandused ja filmistiilid",
   "plugin.image.meta.category": "Meedia",
-
   "plugin.image.toolbar.menu": "Menüü",
   "plugin.image.toolbar.fitToggle": "Vaheta sobivuse ja tegeliku suuruse vahel",
-
+  "plugin.image.title": "Pilt",
+  "plugin.image.toolbar.fit": "Mahuta",
+  "plugin.image.toolbar.actualSize": "1:1",
+  "plugin.image.status.look": "Stiil: {name}",
+  "plugin.image.dock.looks": "Stiilid",
+  "plugin.image.dock.adjust": "Kohanda",
   "plugin.image.dial.brightness": "Heledus",
   "plugin.image.dial.contrast": "Kontrast",
   "plugin.image.dial.exposure": "Säritus",
@@ -14,19 +18,16 @@
   "plugin.image.dial.blur": "Hägustus",
   "plugin.image.dial.sharpen": "Teravustamine",
   "plugin.image.dial.vignette": "Vignett",
-
   "plugin.image.oneClick.autoTone": "Automaatne toon",
   "plugin.image.oneClick.autoContrast": "Automaatne kontrast",
   "plugin.image.oneClick.invert": "Inverteeri",
   "plugin.image.oneClick.grayscale": "M/V",
   "plugin.image.oneClick.sepia": "Seepia",
   "plugin.image.oneClick.revert": "Taasta",
-  "plugin.image.oneClick.revertTitle": "Taasta algne üleslaaditud pilt",
-
+  "plugin.image.oneClick.revertTitle": "Taasta algne pilt",
   "plugin.image.empty.title": "Ühtegi pilti pole avatud",
   "plugin.image.empty.body": "Alustamiseks ava pilt või lohista see siia.",
   "plugin.image.empty.open": "Ava pilt",
-
   "plugin.image.menu.file": "Fail",
   "plugin.image.menu.image": "Pilt",
   "plugin.image.menu.view": "Vaade",
@@ -42,12 +43,9 @@
   "plugin.image.menu.zoomOut": "Vähenda",
   "plugin.image.menu.fit": "Mahuta",
   "plugin.image.menu.actualSize": "Tegelik suurus",
-
   "plugin.image.ctx.open": "Ava pilt…",
-
   "plugin.image.dialog.deleteConfirm": "Kustutada \"{title}\"?",
   "plugin.image.dialog.thisImage": "see pilt",
-
   "plugin.image.toast.openFirst": "Ava esmalt pilt",
   "plugin.image.toast.opened": "Avatud {title}",
   "plugin.image.toast.editFailed": "Muutmine ebaõnnestus",
@@ -57,9 +55,8 @@
   "plugin.image.toast.saveFailed": "Salvestamine ebaõnnestus",
   "plugin.image.toast.deleted": "Pilt kustutatud",
   "plugin.image.toast.deleteFailed": "Pilti ei saanud kustutada",
-  "plugin.image.toast.reverted": "Algsed pikslid taastatud",
+  "plugin.image.toast.reverted": "Algne pilt taastatud",
   "plugin.image.toast.openFailed": "Faili ei saanud avada",
-
   "plugin.image.error.emptyFile": "see fail on tühi",
   "plugin.image.error.notAnImage": "“{name}” ei ole pilt, mida redaktor saab avada",
   "plugin.image.error.unnamedFile": "fail"

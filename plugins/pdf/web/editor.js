@@ -479,7 +479,7 @@ export function createEditor(doc, { onState } = {}) {
       const fallback = async () => {
         const res = await apiFetch(`/api/pdfs/${enc(doc.pdf_id)}/render-html`, { method: 'POST', body: '{}' });
         doc.pdf_stale = false;
-        toast(t('plugin.pdf.toast.approxExport', null, 'PDF made without the shell print engine: the layout may differ a little'), { type: 'info' });
+        toast(t('plugin.pdf.toast.approxExport', null, 'PDF made with the backup engine: the layout may differ a little'), { type: 'info' });
         return res?.data;
       };
       if (!canShellPrint()) return await fallback();

@@ -112,7 +112,7 @@ const JUNK_MARKERS: &[&str] = &[
 ];
 
 /// Hosts whose whole purpose is not journalism, whatever the article says.
-const JUNK_HOSTS: &[&str] = &[
+pub(crate) const JUNK_HOSTS: &[&str] = &[
     "fandom.com", "wikia.com", "game8.co", "gamewith.net", "op.gg", "u.gg", "mobalytics.gg",
     "leagueofgraphs.com", "probuilds.net",
 ];
@@ -167,6 +167,10 @@ pub struct HomeNews {
     /// Set when the fetch failed, so the UI can say so instead of showing an
     /// empty shelf that looks like "no news exists".
     pub error: Option<String>,
+    /// The favourite sites whose feeds fed the shelf (see [`crate::sites`]).
+    pub sites: Vec<String>,
+    /// The user switched news off (browser menu): nothing was fetched.
+    pub disabled: bool,
 }
 
 /// A remembered token and its current weight (used by the API and tests).
@@ -361,7 +365,7 @@ const SEARCH_HOSTS: &[&str] = &[
 ///
 /// Used only as a *boost*: an unknown-but-real domain can still be shown, it
 /// just has to out-score the known-publisher bonus on recency and relevance.
-const NEWS_DOMAINS: &[&str] = &[
+pub(crate) const NEWS_DOMAINS: &[&str] = &[
     "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "nytimes.com", "washingtonpost.com",
     "theguardian.com", "guardian.co.uk", "aljazeera.com", "npr.org", "cnn.com", "cnbc.com",
     "bloomberg.com", "ft.com", "wsj.com", "economist.com", "forbes.com", "time.com",
@@ -380,7 +384,7 @@ const NEWS_DOMAINS: &[&str] = &[
 /// Hosts that are never a news card: shops, content farms, social feeds.
 ///
 /// Cheaper and more predictable than trying to classify them positively.
-const BLOCKED_HOSTS: &[&str] = &[
+pub(crate) const BLOCKED_HOSTS: &[&str] = &[
     "pinterest.", "quora.com", "facebook.com", "instagram.com", "tiktok.com", "x.com",
     "twitter.com", "reddit.com", "youtube.com", "amazon.", "ebay.", "aliexpress.",
     "walmart.com", "etsy.com", "temu.com", "booking.com", "tripadvisor.", "yelp.",
@@ -439,7 +443,7 @@ pub fn host_of(url: &str) -> String {
 }
 
 /// Whether `host` belongs to a known search engine.
-fn is_search_host(host: &str) -> bool {
+pub(crate) fn is_search_host(host: &str) -> bool {
     SEARCH_HOSTS
         .iter()
         .any(|s| host == *s || host.ends_with(&format!(".{s}")))
@@ -449,7 +453,7 @@ fn is_search_host(host: &str) -> bool {
 ///
 /// Entries ending in `.` are prefix matches (`amazon.` catches every regional
 /// Amazon); everything else matches the host or a subdomain of it.
-fn host_matches(host: &str, patterns: &[&str]) -> bool {
+pub(crate) fn host_matches(host: &str, patterns: &[&str]) -> bool {
     patterns.iter().any(|p| {
         if let Some(prefix) = p.strip_suffix('.') {
             host == prefix || host.starts_with(&format!("{prefix}.")) || host.contains(&format!(".{prefix}."))
@@ -571,7 +575,7 @@ pub fn profile_from_history(rows: &[HistoryRow], now: chrono::DateTime<chrono::U
 }
 
 /// Age of a history row in days; `INFINITY` when the timestamp is unusable.
-fn elapsed_days(created_at: &str, now: chrono::DateTime<chrono::Utc>) -> f64 {
+pub(crate) fn elapsed_days(created_at: &str, now: chrono::DateTime<chrono::Utc>) -> f64 {
     let parsed = chrono::NaiveDateTime::parse_from_str(created_at, "%Y-%m-%d %H:%M:%S")
         .map(|naive| naive.and_utc());
     match parsed {
@@ -865,7 +869,7 @@ fn first_content_image(block: &str) -> Option<String> {
 ///
 /// The name is matched on a word boundary so `data-src=` is never read as
 /// `src=`.
-fn attribute_value(tag: &str, name: &str) -> Option<String> {
+pub(crate) fn attribute_value(tag: &str, name: &str) -> Option<String> {
     let needle = format!("{name}=");
     let mut from = 0usize;
     while let Some(rel) = tag[from..].find(&needle) {
@@ -960,7 +964,7 @@ fn anchor_text(block: &str) -> String {
 }
 
 /// Remove tags and unescape entities.
-fn strip_tags(html: &str) -> String {
+pub(crate) fn strip_tags(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut in_tag = false;
     for ch in html.chars() {
@@ -975,7 +979,7 @@ fn strip_tags(html: &str) -> String {
 }
 
 /// Collapse whitespace and drop the engine's comment markers.
-fn clean_text(text: &str) -> String {
+pub(crate) fn clean_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut last_space = false;
     for ch in text.chars() {
@@ -993,7 +997,7 @@ fn clean_text(text: &str) -> String {
 }
 
 /// Decode the entities the engine actually emits in titles and snippets.
-fn html_unescape(text: &str) -> String {
+pub(crate) fn html_unescape(text: &str) -> String {
     if !text.contains('&') {
         return text.to_string();
     }
@@ -1150,7 +1154,7 @@ pub fn rank_results(
 }
 
 /// Whether a result's URL says it is not a news article.
-fn is_junk_url(url: &str) -> bool {
+pub(crate) fn is_junk_url(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
     JUNK_MARKERS.iter().any(|marker| lower.contains(marker))
 }
@@ -1191,7 +1195,7 @@ fn age_in_days(age: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> Option<
 }
 
 /// Strip tracking parameters so the same story is not shown twice.
-fn canonical_url(url: &str) -> String {
+pub(crate) fn canonical_url(url: &str) -> String {
     match url::Url::parse(url) {
         Ok(mut parsed) => {
             let keep: Vec<(String, String)> = parsed
@@ -1224,7 +1228,7 @@ fn canonical_url(url: &str) -> String {
 /// three-week-old story because it matched the user's strongest interest
 /// perfectly is not doing its job — verified against the live engine, where a
 /// flat scale let two- and three-week-old items hold the top three slots.
-fn recency_factor(age: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> f64 {
+pub(crate) fn recency_factor(age: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> f64 {
     let Some(age) = age else { return 0.5 };
     let lower = age.to_ascii_lowercase();
 
@@ -1298,7 +1302,7 @@ fn headline_overlap(title: &str, snippet: &str, topic_weights: &HashMap<String, 
     total / max
 }
 
-fn truncate_chars(text: &str, max: usize) -> String {
+pub(crate) fn truncate_chars(text: &str, max: usize) -> String {
     if text.chars().count() <= max {
         return text.to_string();
     }
@@ -1399,18 +1403,34 @@ async fn fetch_topic(topic: &str, searxng: Option<&str>) -> Result<Vec<RawResult
     store(&url, results.clone());
     Ok(results)
 }
-/// Build the home shelf: profile → topics → fetch → rank → best N.
+/// Build the home shelf: (profile → topics) + (favourite sites → feeds) →
+/// fetch → rank → best N.
 ///
-/// `refresh` skips the cache when the user asked for new cards.
+/// `refresh` skips the cache when the user asked for new cards. When the user
+/// switched news off, nothing is read or fetched.
 pub async fn home_news(
     ctx: &std::sync::Arc<shiny_plugin_sdk::services::PluginCtx>,
     user_id: &str,
     limit: usize,
     refresh: bool,
 ) -> Result<HomeNews, AppError> {
-    let rows = history::recent_rows(ctx, user_id, 200).unwrap_or_default();
-    let profile = profile_from_history(&rows, chrono::Utc::now());
-    let personalized = !profile.is_empty();
+    if !crate::settings::get(ctx, user_id).news {
+        return Ok(HomeNews {
+            cards: Vec::new(),
+            topics: Vec::new(),
+            personalized: false,
+            error: None,
+            sites: Vec::new(),
+            disabled: true,
+        });
+    }
+    // Searches decay fast, so the profile reads the newest 200 rows; visit
+    // habits are counted over a longer stretch of the same history.
+    let rows = history::recent_rows(ctx, user_id, 500).unwrap_or_default();
+    let now = chrono::Utc::now();
+    let profile = profile_from_history(&rows[..rows.len().min(200)], now);
+    let sites = crate::sites::top_sites(&rows, now, crate::sites::MAX_SITES);
+    let personalized = !profile.is_empty() || !sites.is_empty();
 
     let weights: HashMap<String, f64> = profile
         .interests
@@ -1419,12 +1439,14 @@ pub async fn home_news(
         .collect();
     let topics = select_topics(&profile, MAX_TOPIC_FETCHES);
 
-    if topics.is_empty() {
+    if topics.is_empty() && sites.is_empty() {
         return Ok(HomeNews {
             cards: Vec::new(),
             topics: Vec::new(),
             personalized: false,
             error: None,
+            sites: Vec::new(),
+            disabled: false,
         });
     }
 
@@ -1438,7 +1460,6 @@ pub async fn home_news(
     }
 
     let searxng = std::env::var("SEARXNG_URL").ok();
-    let now = chrono::Utc::now();
     let mut cards: Vec<NewsCard> = Vec::new();
     let mut error: Option<String> = None;
 
@@ -1449,9 +1470,29 @@ pub async fn home_news(
         .iter()
         .take(MAX_TOPIC_FETCHES)
         .map(|topic| fetch_topic(topic, searxng.as_deref()));
-    for (topic, result) in topics.iter().take(MAX_TOPIC_FETCHES).zip(
-        futures::future::join_all(fetches).await,
-    ) {
+    let site_fetches = sites
+        .iter()
+        .map(|site| crate::sites::site_items(&site.host, refresh));
+    let (topic_results, site_results) = futures::future::join(
+        futures::future::join_all(fetches),
+        futures::future::join_all(site_fetches),
+    )
+    .await;
+    let max_site_weight = sites.iter().map(|s| s.weight).fold(0.0f64, f64::max);
+    let mut fed_sites: Vec<String> = Vec::new();
+    for (site, result) in sites.iter().zip(site_results) {
+        match result {
+            Ok(items) => {
+                let site_cards = crate::sites::site_cards(&items, site, max_site_weight, now);
+                if !site_cards.is_empty() {
+                    fed_sites.push(site.host.clone());
+                }
+                cards.extend(site_cards);
+            }
+            Err(err) => tracing::debug!("browser: feed for '{}' failed: {err}", site.host),
+        }
+    }
+    for (topic, result) in topics.iter().take(MAX_TOPIC_FETCHES).zip(topic_results) {
         match result {
             Ok(results) => cards.extend(rank_results(&results, topic, &weights, now)),
             Err(err) => {
@@ -1468,7 +1509,7 @@ pub async fn home_news(
             .partial_cmp(&a.score)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let per_topic_cap = (limit / topics.len().max(1)).max(3);
+    let per_topic_cap = (limit / (topics.len() + fed_sites.len()).max(1)).max(3);
     let mut counts: HashMap<String, usize> = HashMap::new();
     let mut picked: Vec<NewsCard> = Vec::new();
     for card in cards.iter() {
@@ -1495,6 +1536,11 @@ pub async fn home_news(
     if picked.is_empty() && error.is_none() {
         error = Some("no results for your recent searches".into());
     }
+    // A site's feed working is enough: a failed search topic is not an error
+    // worth showing next to a full shelf.
+    if !picked.is_empty() {
+        error = None;
+    }
 
     Ok(HomeNews {
         cards: picked,
@@ -1515,6 +1561,8 @@ pub async fn home_news(
         },
         personalized,
         error,
+        sites: fed_sites,
+        disabled: false,
     })
 }
 

@@ -40,9 +40,6 @@ html, body {
   }
 }
 
-/* Desktop greeting (js/deskGreeting.js): off unless a theme turns it on. */
-#desk-greeting { display: none; }
-
 /* Film grain overlay */
 #grain {
   position: fixed;

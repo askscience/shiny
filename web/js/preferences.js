@@ -490,6 +490,15 @@ const IMMERSIVE_KEY = 'desktop.immersive';
 export const BAR_POSITIONS = ['top', 'left', 'right', 'bottom', 'center'];
 
 /**
+ * How the top bar is built (Settings → Appearance → "Top bar style"):
+ * `rail` — one pill along the edge (the classic bar); `isles` — three pills
+ * (time, apps, status) spread along the edge; `strip` — a thin edge-to-edge
+ * strip set in type; `capsule` — a compact pill that opens on approach.
+ * The look lives in css/barStyles.css; every style docks to every position.
+ */
+export const BAR_STYLES = ['rail', 'isles', 'strip', 'capsule'];
+
+/**
  * Where the voice bar is: `top-left` rides the top bar's row at its start (at
  * the rail's height and rounding) and follows the bar to whichever edge it
  * docks to; the bottom variants dock it to that corner of the bottom edge on
@@ -503,6 +512,7 @@ export const ORB_ATTACHED = 'top-left';
 const DEFAULT_IMMERSIVE = {
   autohide_bar: false,
   bar_position: 'bottom',
+  bar_style: 'rail',
   autohide_orb: false,
   orb_position: 'top-left',
   /** Width and height of the bar on its own edge. Riding the top bar it takes
@@ -536,6 +546,7 @@ export function getImmersive() {
   return {
     autohide_bar: src.autohide_bar === undefined ? d.autohide_bar : src.autohide_bar !== false,
     bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : d.bar_position,
+    bar_style: BAR_STYLES.includes(src.bar_style) ? src.bar_style : d.bar_style,
     autohide_orb: src.autohide_orb === undefined ? d.autohide_orb : src.autohide_orb !== false,
     orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : d.orb_position,
     orb_width: Number.isFinite(width) ? Math.round(clamp(width, 64, 400)) : d.orb_width,
@@ -584,6 +595,7 @@ export function applyImmersive() {
   const s = getImmersive();
   const root = document.documentElement;
   root.dataset.barPos = s.bar_position;
+  root.dataset.barStyle = s.bar_style;
   root.dataset.orbPos = effectiveOrbPosition(s);
   root.dataset.orbAttached = orbIsAttached(s) ? '1' : '0';
   root.dataset.orbColor = s.orb_color;

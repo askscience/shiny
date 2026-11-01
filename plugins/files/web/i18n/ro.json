@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Public",
   "plugin.files.place.templates": "Șabloane",
   "plugin.files.place.videos": "Videoclipuri",
-
   "plugin.files.toolbar.search": "Caută",
   "plugin.files.toolbar.menu": "Meniu",
   "plugin.files.toolbar.back": "Înapoi",
@@ -17,45 +16,37 @@
   "plugin.files.toolbar.toggleView": "Comută vizualizarea",
   "plugin.files.toolbar.viewOptions": "Opțiuni de vizualizare",
   "plugin.files.toolbar.pathActions": "Acțiuni pentru cale",
-
   "plugin.files.search.placeholder": "Caută…",
   "plugin.files.search.clear": "Golește",
-
   "plugin.files.empty.noResults": "Niciun rezultat",
   "plugin.files.empty.trash": "Coșul de gunoi este gol",
   "plugin.files.empty.folder": "Dosarul este gol",
   "plugin.files.empty.noMatch": "Niciun fișier nu se potrivește cu “{query}”.",
   "plugin.files.empty.dropHint": "Trage fișiere aici sau folosește meniul pentru a încărca.",
-
   "plugin.files.column.name": "Nume",
   "plugin.files.column.size": "Dimensiune",
   "plugin.files.column.modified": "Modificat",
-
   "plugin.files.status.folder": "Dosar",
   "plugin.files.status.items.one": "{count} element",
   "plugin.files.status.items.few": "{count} elemente",
   "plugin.files.status.items.other": "{count} de elemente",
-
+  "plugin.files.status.countSelected": "{count} · {selected} selectate",
   "plugin.files.when.today": "Astăzi {time}",
   "plugin.files.when.yesterday": "Ieri {time}",
-
   "plugin.files.menu.newFolder": "Dosar nou",
   "plugin.files.menu.uploadFiles": "Încarcă fișiere…",
   "plugin.files.menu.showHidden": "Arată fișierele ascunse",
   "plugin.files.menu.view": "Vizualizare",
   "plugin.files.menu.copyPath": "Copiază calea",
   "plugin.files.menu.emptyTrash": "Golește coșul de gunoi",
-
   "plugin.files.view.grid": "Grilă",
   "plugin.files.view.list": "Listă",
-
   "plugin.files.ctx.open": "Deschide",
   "plugin.files.ctx.download": "Descarcă",
   "plugin.files.ctx.restore": "Restaurează",
   "plugin.files.ctx.deletePermanently": "Șterge definitiv",
   "plugin.files.ctx.rename": "Redenumește…",
   "plugin.files.ctx.moveToTrash": "Mută în coșul de gunoi",
-
   "plugin.files.dialog.newFolderTitle": "Numele dosarului nou",
   "plugin.files.dialog.newFolderDefault": "Dosar nou",
   "plugin.files.dialog.renameTitle": "Redenumește în",
@@ -68,7 +59,6 @@
   "plugin.files.dialog.trashMany.few": "Muți {count} elemente în coșul de gunoi?",
   "plugin.files.dialog.trashMany.other": "Muți {count} de elemente în coșul de gunoi?",
   "plugin.files.dialog.emptyTrash": "Golești coșul de gunoi? Această acțiune nu poate fi anulată.",
-
   "plugin.files.toast.openFailed": "Dosarul nu a putut fi deschis",
   "plugin.files.toast.searchFailed": "Căutarea a eșuat",
   "plugin.files.toast.pathCopied": "Cale copiată",
@@ -87,7 +77,6 @@
   "plugin.files.toast.restored.other": "Am restaurat {count} de elemente",
   "plugin.files.toast.trashEmptied": "Coșul de gunoi a fost golit",
   "plugin.files.toast.emptyTrashFailed": "Coșul de gunoi nu a putut fi golit",
-
   "plugin.files.notify.downloading": "Se descarcă",
   "plugin.files.notify.uploadComplete": "Încărcare finalizată",
   "plugin.files.notify.uploaded.one": "{count} fișier adăugat",
@@ -97,13 +86,11 @@
   "plugin.files.notify.movedItems.one": "{count} element",
   "plugin.files.notify.movedItems.few": "{count} elemente",
   "plugin.files.notify.movedItems.other": "{count} de elemente",
-
   "plugin.files.player.seek": "Derulează",
   "plugin.files.player.mute": "Mut",
   "plugin.files.player.fullscreen": "Ecran complet",
   "plugin.files.player.thisFormat": "Acest format",
   "plugin.files.player.cannotDecode": "{codec} nu poate fi decodat de acest browser.",
-
   "plugin.files.preview.zoomHint": "Dă clic pe imagine pentru a mări",
   "plugin.files.preview.loading": "Se încarcă…",
   "plugin.files.preview.cannotPreview": "Nu se poate previzualiza: {message}",
@@ -115,7 +102,8 @@
   "plugin.files.preview.navHint.other": "{count} de elemente · ← → pentru a naviga",
   "plugin.files.preview.pdfFailed": "PDF-ul nu a putut fi randat",
   "plugin.files.preview.page": "Pagina {n}",
-
+  "plugin.files.preview.prev": "Fișierul anterior",
+  "plugin.files.preview.next": "Fișierul următor",
   "plugin.files.meta.description": "Explorator de fișiere — răsfoiește, previzualizează și gestionează dosarele tale personale",
   "plugin.files.meta.summary": "Explorator de fișiere în stil GNOME: grilă/listă, miniaturi, previzualizare rapidă, încărcare și un coș de gunoi",
   "plugin.files.meta.category": "Sistem"

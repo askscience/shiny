@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
 
+use crate::progress::{Event, Progress};
 use crate::status::now_secs;
 
 /// Maximum log lines retained per job.
@@ -27,6 +28,7 @@ struct Inner {
     success: Option<bool>,
     error: Option<String>,
     lines: Vec<String>,
+    progress: Progress,
 }
 
 pub struct Job {
@@ -42,9 +44,17 @@ pub struct Snapshot {
     pub done: bool,
     pub success: Option<bool>,
     pub error: Option<String>,
+    pub progress: Progress,
 }
 
 impl Job {
+    /// Fold a structured progress event into the job state.
+    pub fn progress(&self, event: Event) {
+        if let Ok(mut g) = self.inner.lock() {
+            g.progress.apply(event);
+        }
+    }
+
     pub fn log(&self, line: impl AsRef<str>) {
         if let Ok(mut g) = self.inner.lock() {
             if g.lines.len() < MAX_LINES {
@@ -73,12 +83,14 @@ impl Job {
                 done: g.state != State::Running,
                 success: g.success,
                 error: g.error.clone(),
+                progress: g.progress.clone(),
             },
             Err(_) => Snapshot {
                 lines: Vec::new(),
                 done: true,
                 success: Some(false),
                 error: Some("job state lock poisoned".into()),
+                progress: Progress::default(),
             },
         }
     }
@@ -111,8 +123,28 @@ pub fn get(id: &str) -> Option<Arc<Job>> {
     registry().lock().ok()?.get(id).cloned()
 }
 
+/// The job that is still running, if any. Package managers hold an exclusive
+/// lock, so the plugin runs one job at a time; a reopened window uses this to
+/// re-attach to an install already in progress.
+pub fn running() -> Option<Arc<Job>> {
+    registry()
+        .lock()
+        .ok()?
+        .values()
+        .filter(|j| !j.state().0)
+        .max_by_key(|j| j.started)
+        .cloned()
+}
+
 /// Create a job and run `work` on a dedicated thread. Returns immediately.
-pub fn start(kind: &str, work: impl FnOnce(Arc<Job>) + Send + 'static) -> Arc<Job> {
+///
+/// Refused while another job is still running: two package-manager runs at
+/// once only fight over the dpkg/rpm lock, and an Ollama install on top of a
+/// running upgrade is exactly the unsafe overlap `ops` tries to avoid.
+pub fn start(
+    kind: &str,
+    work: impl FnOnce(Arc<Job>) + Send + 'static,
+) -> Result<Arc<Job>, shiny_plugin_sdk::errors::AppError> {
     let job = Arc::new(Job {
         id: uuid::Uuid::new_v4().to_string(),
         kind: kind.to_string(),
@@ -122,10 +154,19 @@ pub fn start(kind: &str, work: impl FnOnce(Arc<Job>) + Send + 'static) -> Arc<Jo
             success: None,
             error: None,
             lines: Vec::new(),
+            progress: Progress::default(),
         }),
     });
 
-    if let Ok(mut g) = registry().lock() {
+    {
+        let mut g = registry()
+            .lock()
+            .map_err(|_| shiny_plugin_sdk::errors::AppError::Internal("job registry lock poisoned".into()))?;
+        if g.values().any(|j| !j.state().0) {
+            return Err(shiny_plugin_sdk::errors::AppError::BadRequest(
+                "An update is already running; wait for it to finish".into(),
+            ));
+        }
         // Opportunistic GC: never let finished jobs accumulate without bound.
         if g.len() > 64 {
             g.retain(|_, j| !j.state().0);
@@ -135,5 +176,5 @@ pub fn start(kind: &str, work: impl FnOnce(Arc<Job>) + Send + 'static) -> Arc<Jo
 
     let thread_job = job.clone();
     std::thread::spawn(move || work(thread_job));
-    job
+    Ok(job)
 }

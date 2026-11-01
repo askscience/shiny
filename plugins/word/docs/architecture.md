@@ -1,8 +1,8 @@
 # Word — architecture
 
 This document maps the `word` plugin module by module, describes the document
-model, and documents the ODT codec it shares with core
-(`crates/shiny-plugin-sdk/src/odt.rs`).
+model, and documents its engine (`src/engine.rs`), built on WordCraft's
+libraries.
 
 See also: [README.md](README.md) · [tools.md](tools.md) · [routes.md](routes.md)
 · [window.md](window.md) · [plugins overview](../../../docs/plugins/README.md).
@@ -11,12 +11,14 @@ See also: [README.md](README.md) · [tools.md](tools.md) · [routes.md](routes.m
 
 | File | Items | Responsibility |
 |---|---|---|
-| `src/lib.rs` | `pub mod plugin/routes/tools`, `pub use plugin::WordPlugin` | Crate facade |
+| `src/lib.rs` | `pub mod engine/plugin/routes/tools`, `pub use plugin::WordPlugin` | Crate facade |
+| `src/engine.rs` | `Format`, `import()`, content codecs, `Design`, `compose()`, `export()`, `Preview`, `FONT_FILES`/`font_file()`, `picture_html()`, `insert_after_block()` | WordCraft model, codecs, composition, page rendering, pictures |
 | `src/plugin.rs` | `WordPlugin`, `PERSONA`, `route_specs()`, `register()`, `route_handler()`, `shiny_plugin_entry()` | Manifest, route registration, tool registration, handler dispatch |
-| `src/routes.rs` | `handle()`, `user_id()`, `ok()`, `clean_title()`, `filename_for_title()`, `as_text()`, `as_blob()`, `take_path()`, `take_query()`, seven handlers | REST surface — a bridge that turns core HTTP requests into DB + codec work |
-| `src/tools/mod.rs` | `content_to_html()`, `inline_html()`, `find_ci()`, `last_doc_id()`, `doc_summary_json()`, `DocCreate/Write/Edit/Append/Read/List/Delete` | Agent tool surface |
+| `src/routes.rs` | `handle()`, `as_blob()`, `take_path()`, `take_query()`, `export_document()`, eight handlers | REST surface — a bridge that turns core HTTP requests into DB + engine work |
+| `src/tools/mod.rs` | `content_to_html()`, `find_ci()`, `last_doc_id()`, `target_doc()`, `DocCreate/Write/Edit/Append/Read/List/Delete/Design/Export` | Agent tool surface |
 | `web/plugin.js` | window, API, editor, menu, AI wiring | Front end |
-| `migrations/001_init.sql` | `documents` table | Storage |
+| `migrations/001_init.sql`, `002_design.sql`, `003_opened.sql` | `documents` table, `design` and `opened_at` columns | Storage |
+| `web/page.js` | `themeVars()`, `geometry()`, `installDocumentFonts()` | The window's page model (mirrors the engine) |
 | `skills/word.md` | agent instructions | Embedded into the prompt by `register()` |
 
 ### `WordPlugin` lifecycle
@@ -27,7 +29,7 @@ See also: [README.md](README.md) · [tools.md](tools.md) · [routes.md](routes.m
 1. stores the `PluginCtx`,
 2. appends the persona (`PERSONA`), the embedded skill and a context line,
 3. registers each `RouteSpec` from `route_specs()`,
-4. registers the seven tools, each wrapped in `tools::bridged(tool)`.
+4. registers the nine tools, each wrapped in `tools::bridged(tool)`.
 
 Core calls `route_handler(tag)` per HTTP request; the returned closure is the
 handler for that tag. The plugin's tools run through `ctx.pool()` (its own
@@ -46,6 +48,7 @@ GET    /api/documents/:id          doc_get
 PUT    /api/documents/:id          doc_save
 DELETE /api/documents/:id          doc_delete
 GET    /api/documents/:id/export   doc_export
+PUT    /api/documents/:id/design   doc_design
 ```
 
 `handle(ctx, tag)` matches the tag to a handler closure; unknown tags return
@@ -60,21 +63,25 @@ A document is one row in `documents`:
 | `id` | `TEXT` PK | UUID v4 |
 | `user_id` | `TEXT` | FK → `travelers(id)`; ownership scope |
 | `title` | `TEXT` | default `Untitled`, capped at 120 chars on write |
-| `odt` | `BLOB` | complete `.odt` ZIP bytes |
+| `odt` | `BLOB` | complete `.odt` ZIP bytes (the content) |
+| `design` | `TEXT` | JSON `engine::Design`, default `{}` (plain) |
 | `created_at` / `updated_at` | `TEXT` | SQLite `datetime('now')` |
 
-At the HTML layer the document is a body fragment (`<p>`, `<h1>`…`<h6>`,
-`<ul>`, `<b>`, `<i>`, `<u>`, `<a>`, `<span style="font-family:…">`). At the AI
-layer it is plain text (one paragraph per line). The conversions:
+Every conversion goes through WordCraft's `Document` model. At the HTML layer
+the document is a body fragment with inline CSS (`<p>`, `<h1>`…`<h6>`,
+`<ul>`/`<ol>`, `<table>`, `<blockquote>`, `<strong>`, `<em>`, `<u>`, `<a>`,
+`<span style="font-family:…;color:…">`). At the AI layer it is Markdown. The
+conversions:
 
 ```
-AI plain text ──content_to_html──▶ editor HTML ──html_to_odt──▶ .odt bytes ──DB
-                                                                     │
-AI plain text ◀──odt_to_plain_text── HTML ◀──odt_to_html── .odt bytes ◀┘
+AI Markdown ──markdown_to_doc──▶ Document ──export_fragment──▶ editor HTML
+editor HTML ──html::import──▶ Document ──odt::export──▶ .odt bytes ──▶ DB
+DB ──▶ .odt bytes ──odt::import──▶ Document ──▶ HTML (window) / Markdown (doc_read)
+                                      └──compose(design)──▶ .docx / .pdf / .odt / .md / .html
 ```
 
-`doc_read` uses the plain-text path; `doc_edit`/`doc_append` operate on the
-HTML path so existing formatting and fonts survive a targeted change.
+`doc_edit`/`doc_append` operate on the HTML so existing formatting and fonts
+survive a targeted change.
 
 ### Title handling
 
@@ -83,81 +90,107 @@ HTML path so existing formatting and fonts survive a targeted change.
 returns `<name>.odt` (falling back to `document.odt`). Export replaces `"` in
 the Content-Disposition header.
 
-## ODT codec (`crates/shiny-plugin-sdk/src/odt.rs`)
+## Engine (`src/engine.rs`)
 
-A minimal, valid, dependency-light ODT codec. A `.odt` is a ZIP whose **first,
-stored (uncompressed)** entry is `mimetype`, followed by
-`META-INF/manifest.xml` and deflated `content.xml`.
+The engine wraps five WordCraft crates (MIT OR Apache-2.0, git dependencies
+pinned to one commit, see [NOTICE](../NOTICE.md)):
 
-### Public API
+| Crate | Used for |
+|---|---|
+| `wordcraft-doc` | The document model: paragraphs, runs, styles, numbering, tables, sections, header/footer parts, fields |
+| `wordcraft-formats` | ODT, HTML, Markdown, RTF and text import/export |
+| `wordcraft-docx` | `.docx` read and write |
+| `wordcraft-layout` | Pagination, for the table of contents' page numbers |
+| `wordcraft-pdf` | PDF export (embedded subset fonts, selectable text, links, outline, tagged) |
+| `wordcraft-render` | Page rasters for the window's Preview (CPU, `vello_cpu` 0.2 from crates.io — the workspace's patched 0.0.8 fork serves PdfCraft only) |
+| `wordcraft-fonts` | The bundled faces, served to the window |
 
-| Function | Direction | Notes |
-|---|---|---|
-| `html_to_odt(title, html) -> Result<Vec<u8>, AppError>` | HTML → `.odt` | Writes the ZIP; `title` is accepted but lives in the DB row, not the file |
-| `odt_to_html(odt) -> Result<String, AppError>` | `.odt` → HTML | Parses `content.xml` with `roxmltree` |
-| `odt_to_plain_text(odt) -> Result<String, AppError>` | `.odt` → text | `strip_html(odt_to_html(..))`, one line per paragraph, `- ` for list items |
+`wordcraft-pdf` writes through craft-libs' `craft-pdf`, which needs its patched
+`krilla`; the workspace `Cargo.toml` applies that `[patch]` (only the root of
+a build can).
 
-Errors are `AppError::Internal` with a prefixed message: *"Not a valid .odt
-file"*, *"Missing content.xml in .odt"*, *"Invalid ODT content.xml"*, or *"ODT
-write failed"*.
+### Formats and import
 
-### HTML → ODT
+`Format::parse` maps extensions and names (`docx`, `pdf`, `markdown`, …) to
+formats; `Format::mime`/`ext` drive export headers and file names.
+`import(name, bytes)` picks the format from the extension, or sniffs ZIP
+packages (ODT by its `mimetype`, otherwise DOCX), RTF and HTML; PDF is
+refused. Readers are WordCraft's: lenient, depth-limited and size-capped, so a
+hostile file fails cleanly.
 
-`convert_blocks()` runs a hand-written recursive-descent parser over the HTML
-(`struct P`, fields `c`/`i`/`fonts`):
+### Content codecs
 
-- Block tags (`p`, `div`, `blockquote`, headings, lists, tables, `pre`, …) are
-  emitted as `<text:p>` / `<text:h text:outline-level="n">`; `<ul>`/`<ol>`
-  become `<text:list>` with `<text:list-item>`.
-- Inline `<b>`/`<strong>` → span `T1`, `<i>`/`<em>` → `T2`, `<u>` → `T3`,
-  `<br>` → `<text:line-break/>`, `<a href>` → `<text:a xlink:href>`.
-- Style masks combine: bold=1, italic=2, underline=4, mapped by `style_name()`
-  to `T1`,`T2`,`T3`,`T4`(bold+italic),`T5`,`T6`,`T7`. Note the codec's naming:
-  underline-only is `T3`, bold-italic is `T4`, bold-underline `T5`,
-  italic-underline `T6`, all three `T7`.
-- `font-family` (inline `style`, legacy `<font face>`, or a block default) is
-  registered in first-use order and written as automatic character styles
-  `TF1`, `TF2`, … via `automatic_styles()`.
-- `<img>`, `<script>`, `<style>`, `<iframe>`, `<svg>`, `<video>`, `<audio>` are
-  skipped entirely.
-- Text is XML-escaped and whitespace-collapsed by `escape_and_collapse()`;
-  literal `<` in prose is escaped so "5 < 6" survives.
+`html_to_odt`, `odt_to_html`, `odt_to_markdown`, `markdown_to_html` and their
+`Document` halves. Documents written by the old SDK codec (`T1`–`T7`, `TF<n>`
+automatic styles) read back with their formatting (test
+`reads_documents_written_by_the_old_codec`). `separate_lines` makes the
+agent's one-paragraph-per-line habit valid Markdown.
 
-### ODT → HTML
+### Composition
 
-`read_content_xml()` unzips and reads `content.xml`. `collect_font_styles()`
-builds a `style name → fo:font-family` map so `TF<n>` spans round-trip back to
-`<span style="font-family:…">`. Then `render_block()`/`render_inline()` walk
-the tree:
+`Design` (stored as JSON) says how `compose(content, title, design)` builds the
+exported document. The editor never holds the composed parts: they are
+regenerated from the current content on every export.
 
-- `text:p` → `<p>`, `text:h` → `<h{n}>` (outline level clamped 1–6).
-- `text:list` → `<ul>`/`<ol>` (ordered when its style name contains
-  `"number"`), `text:list-item` → `<li>`.
-- `text:span` style masks → `<b>`/`<i>`/`<u>` (`style_mask`, `style_wrap`).
-- `text:a` → `<a href>`, `text:line-break` → `<br>`, `text:s` → spaces,
-  `text:tab` → tab.
-- Other elements are flattened by recursing into their inline content.
+| Option | Effect |
+|---|---|
+| `template` | Theme: `classic` (Source Serif 4, navy, centred title, ruled Heading 1), `modern` (Source Sans 3, blue), `minimal` (Source Sans 3, black/grey); restyles Normal, Heading 1–6, Title, Subtitle, Quote and a `ShinyTable` table style (accent header row, light banding) applied to unstyled tables. Empty/`plain` keeps the content's own styles. |
+| `paper` | A4 (default) or Letter |
+| `margin_top`, `margin_right`, `margin_bottom`, `margin_left` | Millimetres (5–80); 0 = 25 mm (`Design::margins_pt`) |
+| `cover` | Title (accent rule), subtitle, author and date on page 1, with empty first-page header/footer (`title_page`) |
+| `toc` | A contents heading (localised for the 26 UI languages via `lang`) and one entry per Heading 1–3, with dot leaders and page numbers |
+| `header` | Title left, subtitle (or author) right, thin accent rule |
+| `page_numbers` | `PAGE / NUMPAGES` fields in the footer |
+| `subtitle`, `author`, `date` | Cover/title block and document properties (`core.subject`, `core.creator`) |
+| `lang` | Text language (hyphenation, labels) |
+| `accent` | `#RRGGBB` override of the theme colour |
 
-`strip_html()` is the plain-text reader; it keeps paragraph/list breaks and
-turns list items into `- …`.
+Without a cover, a themed document starts with a Title block. A first heading
+repeating the title is dropped. Content after a cover or contents starts on a
+new page.
 
-### Round-trip guarantees (tests in the codec)
+**Contents page numbers** are real: `compose` inserts the entries with empty
+numbers, lays the document out once (`wordcraft_layout::layout`), reads each
+heading's page with `DocLayout::page_of` and writes it into its entry. The
+entries are static text, so they are right in every format, including `.docx`
+opened in Word (where no field update is needed).
 
-`roundtrip_keeps_formatting`, `roundtrip_keeps_inline_font`,
-`roundtrip_keeps_block_font_and_weight`, `roundtrip_keeps_legacy_font_tag`,
-`literal_angle_brackets_are_escaped`. These lock in the heading, bold/italic,
-list, font and angle-bracket behaviours the window and AI rely on.
+### Preview
 
-### Limitations
+`Preview::new(content, title, design)` composes and lays the document out
+once; `pages()` lists page sizes and `page_png(i, scale)` renders one page
+with `wordcraft_render::render_page` and encodes it as PNG (`image` crate).
+The routes cache a few previews per (document, `updated_at`, title, design).
 
-- Only automatic character styles for bold/italic/underline and fonts; no
-  colours, sizes (beyond heading level), alignment or images are modelled.
-- `title` is not embedded in `content.xml`.
-- Foreign ODT files are read as best effort: unknown inline markup is
-  flattened, lists/tables may reduce to paragraphs.
+### Pictures
+
+`picture_html(bytes, alt, width_pct)` decodes any PNG/JPEG/WebP/GIF/BMP with
+the `image` crate, keeps small PNG/JPEG byte for byte and otherwise scales to
+1600 px and re-encodes (JPEG 86, or PNG with alpha), returning an `<img>` with
+a `data:` URI and a width capped at 600 px × `width_pct`.
+`insert_after_block(html, after, block)` finds the block holding `after`
+(ASCII case folding, so byte offsets stay aligned) and inserts after it, or
+after the enclosing list/table.
+
+### Export
+
+`export(doc, format)`: `.docx` via `wordcraft_docx::write`, `.pdf` via
+`wordcraft_pdf::export` (title and author in the metadata), `.odt`, `.md`,
+`.html`, `.rtf`, `.txt` via `wordcraft_formats`. Fonts: themes use faces
+WordCraft bundles, so PDF output is identical on every machine; a `.docx`
+names them and Word substitutes when they are not installed.
+
+### Tests
+
+`cargo test -p shiny-word-plugin --lib engine` covers Markdown and ODT round
+trips (tables, fonts), old-codec documents, composition with a contents page
+and every export format, `.docx` read-back, sniffing and validation.
+`WORD_SAMPLE_DIR=… cargo test -p shiny-word-plugin --lib write_samples --
+--ignored` writes a sample in every theme as `.pdf` and `.docx` to look at.
 
 ## Cross-links
 
-- [SDK ODT codec](../../../crates/shiny-plugin-sdk/src/odt.rs)
+- [WordCraft](https://github.com/storytold/wordcraft) · [NOTICE](../NOTICE.md)
+- [SDK ODT codec](../../../crates/shiny-plugin-sdk/src/odt.rs) (still used by the Files preview)
 - [SDK overview](../../../crates/shiny-plugin-sdk/src/lib.rs)
 - [Agent injection fallback](../../../PLUGINS.md)

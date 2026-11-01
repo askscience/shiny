@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Общедоступные",
   "plugin.files.place.templates": "Шаблоны",
   "plugin.files.place.videos": "Видео",
-
   "plugin.files.toolbar.search": "Поиск",
   "plugin.files.toolbar.menu": "Меню",
   "plugin.files.toolbar.back": "Назад",
@@ -17,46 +16,38 @@
   "plugin.files.toolbar.toggleView": "Переключить вид",
   "plugin.files.toolbar.viewOptions": "Параметры вида",
   "plugin.files.toolbar.pathActions": "Действия с путём",
-
   "plugin.files.search.placeholder": "Поиск…",
   "plugin.files.search.clear": "Очистить",
-
   "plugin.files.empty.noResults": "Ничего не найдено",
   "plugin.files.empty.trash": "Корзина пуста",
   "plugin.files.empty.folder": "Папка пуста",
   "plugin.files.empty.noMatch": "Нет файлов, соответствующих “{query}”.",
   "plugin.files.empty.dropHint": "Перетащите файлы сюда или используйте меню, чтобы загрузить их.",
-
   "plugin.files.column.name": "Имя",
   "plugin.files.column.size": "Размер",
   "plugin.files.column.modified": "Изменён",
-
   "plugin.files.status.folder": "Папка",
   "plugin.files.status.items.one": "{count} элемент",
   "plugin.files.status.items.few": "{count} элемента",
   "plugin.files.status.items.many": "{count} элементов",
   "plugin.files.status.items.other": "{count} элементов",
-
+  "plugin.files.status.countSelected": "{count} · выбрано: {selected}",
   "plugin.files.when.today": "Сегодня {time}",
   "plugin.files.when.yesterday": "Вчера {time}",
-
   "plugin.files.menu.newFolder": "Новая папка",
   "plugin.files.menu.uploadFiles": "Загрузить файлы…",
   "plugin.files.menu.showHidden": "Показывать скрытые файлы",
   "plugin.files.menu.view": "Вид",
   "plugin.files.menu.copyPath": "Копировать путь",
   "plugin.files.menu.emptyTrash": "Очистить корзину",
-
   "plugin.files.view.grid": "Сетка",
   "plugin.files.view.list": "Список",
-
   "plugin.files.ctx.open": "Открыть",
   "plugin.files.ctx.download": "Скачать",
   "plugin.files.ctx.restore": "Восстановить",
   "plugin.files.ctx.deletePermanently": "Удалить навсегда",
   "plugin.files.ctx.rename": "Переименовать…",
   "plugin.files.ctx.moveToTrash": "Переместить в корзину",
-
   "plugin.files.dialog.newFolderTitle": "Имя новой папки",
   "plugin.files.dialog.newFolderDefault": "Новая папка",
   "plugin.files.dialog.renameTitle": "Переименовать в",
@@ -71,7 +62,6 @@
   "plugin.files.dialog.trashMany.many": "Переместить {count} элементов в корзину?",
   "plugin.files.dialog.trashMany.other": "Переместить {count} элементов в корзину?",
   "plugin.files.dialog.emptyTrash": "Очистить корзину? Это нельзя отменить.",
-
   "plugin.files.toast.openFailed": "Не удалось открыть папку",
   "plugin.files.toast.searchFailed": "Не удалось выполнить поиск",
   "plugin.files.toast.pathCopied": "Путь скопирован",
@@ -92,7 +82,6 @@
   "plugin.files.toast.restored.other": "Восстановлено {count} элементов",
   "plugin.files.toast.trashEmptied": "Корзина очищена",
   "plugin.files.toast.emptyTrashFailed": "Не удалось очистить корзину",
-
   "plugin.files.notify.downloading": "Скачивание",
   "plugin.files.notify.uploadComplete": "Загрузка завершена",
   "plugin.files.notify.uploaded.one": "Добавлен {count} файл",
@@ -104,13 +93,11 @@
   "plugin.files.notify.movedItems.few": "{count} элемента",
   "plugin.files.notify.movedItems.many": "{count} элементов",
   "plugin.files.notify.movedItems.other": "{count} элементов",
-
   "plugin.files.player.seek": "Перемотка",
   "plugin.files.player.mute": "Выключить звук",
   "plugin.files.player.fullscreen": "Во весь экран",
   "plugin.files.player.thisFormat": "Этот формат",
   "plugin.files.player.cannotDecode": "{codec} не может быть декодирован этим браузером.",
-
   "plugin.files.preview.zoomHint": "Нажмите на изображение, чтобы увеличить",
   "plugin.files.preview.loading": "Загрузка…",
   "plugin.files.preview.cannotPreview": "Предпросмотр невозможен: {message}",
@@ -123,7 +110,8 @@
   "plugin.files.preview.navHint.other": "{count} элементов · ← → для перехода",
   "plugin.files.preview.pdfFailed": "Не удалось отобразить PDF",
   "plugin.files.preview.page": "Страница {n}",
-
+  "plugin.files.preview.prev": "Предыдущий файл",
+  "plugin.files.preview.next": "Следующий файл",
   "plugin.files.meta.description": "Файловый менеджер — просматривайте домашние папки и управляйте ими",
   "plugin.files.meta.summary": "Файловый менеджер в стиле GNOME: сетка и список, миниатюры, быстрый просмотр, загрузка и корзина",
   "plugin.files.meta.category": "Система"

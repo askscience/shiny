@@ -1,26 +1,20 @@
 {
-  "plugin.calc.meta.description": "Foglio di calcolo — fogli salvati come griglie di celle aperte, modificabili nella finestra Calc",
+  "plugin.calc.meta.description": "Fogli di calcolo — crea e modifica fogli nella finestra Calc, importa file CSV o .ods e salvali come .ods",
   "plugin.calc.meta.summary": "Calc: crea, modifica e calcola con i fogli di calcolo",
   "plugin.calc.meta.category": "Ufficio",
-
   "plugin.calc.bar.spreadsheets": "Fogli di calcolo",
   "plugin.calc.bar.new": "Nuovo",
-
   "plugin.calc.toolbar.newSheet": "Nuovo foglio di calcolo",
   "plugin.calc.toolbar.importOds": "Importa .ods",
   "plugin.calc.toolbar.importCsv": "Importa CSV",
   "plugin.calc.toolbar.saveToDocuments": "Salva in Documenti",
   "plugin.calc.toolbar.saveNow": "Salva ora",
   "plugin.calc.toolbar.deleteSheet": "Elimina foglio di calcolo",
-
   "plugin.calc.menu.noSheets": "Ancora nessun foglio di calcolo",
   "plugin.calc.empty.body": "Inizia un foglio vuoto, importa un file CSV o .ods, oppure chiedi all'AI di crearne uno.",
-
   "plugin.calc.sheet.untitled": "Senza titolo",
   "plugin.calc.sheet.importedCsv": "CSV importato",
-
   "plugin.calc.formula.placeholder": "Valore o formula (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Salvataggio…",
   "plugin.calc.status.dirty": "Modifiche non salvate",
   "plugin.calc.status.unsaved": "Non salvato",
@@ -31,9 +25,7 @@
   "plugin.calc.status.saved.one": "Salvato {time} · {count} cella",
   "plugin.calc.status.saved.other": "Salvato {time} · {count} celle",
   "plugin.calc.status.saved.many": "Salvato {time} · {count} celle",
-
   "plugin.calc.dialog.delete": "Eliminare \"{title}\"?",
-
   "plugin.calc.toast.saveFailed": "Salvataggio non riuscito",
   "plugin.calc.toast.openFailed": "Impossibile aprire il foglio di calcolo",
   "plugin.calc.toast.createFailed": "Impossibile creare il foglio di calcolo",

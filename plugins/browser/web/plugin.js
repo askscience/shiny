@@ -287,6 +287,8 @@ let browserSettings = {
   incognito: false,
   downloadsDir: '',
   searchEngine: 'duckduckgo',
+  /** Related news on the home page; off stops the news engine. */
+  news: true,
 };
 
 /** Live downloads, newest first, keyed by the shell's id. */
@@ -1017,6 +1019,7 @@ async function loadSettings() {
     browserSettings.incognito = !!d.incognito;
     browserSettings.downloadsDir = d.downloads_dir || '';
     browserSettings.searchEngine = d.search_engine || 'duckduckgo';
+    browserSettings.news = d.news !== false;
   } catch (_) {
     /* defaults stay in place */
   }
@@ -1450,7 +1453,21 @@ function buildBrowserMenu() {
   }
   menu.appendChild(engines);
 
+  // News on/off: the whole related-news engine behind the home shelf. Off
+  // means no history is read and nothing is fetched.
+  const news = controlButton();
+  news.type = 'button';
+  news.className = 'browser-menu-item browser-check-item browser-news-toggle';
+  news.setAttribute('role', 'menuitemcheckbox');
+  news.append(
+    icon('ui/check', { size: 14, className: 'browser-check-mark' }),
+    labelSpan(t('plugin.browser.menu.news', null, 'News on the home page')),
+  );
+  news.addEventListener('click', () => setNewsEnabled(!browserSettings.news));
+
   menu.append(
+    popoverSeparator(),
+    news,
     popoverSeparator(),
     menuItem('ui/history', t('plugin.browser.history.title', null, 'History'), () => {
       closeBrowserMenu();
@@ -1480,6 +1497,25 @@ function updateEngineChecks() {
     el.classList.toggle('is-active', on);
     el.setAttribute('aria-checked', String(on));
   }
+  const news = browserMenu.querySelector('.browser-news-toggle');
+  if (news) {
+    news.classList.toggle('is-active', browserSettings.news);
+    news.setAttribute('aria-checked', String(browserSettings.news));
+  }
+}
+
+/** Switch related news on/off, persist it, and refresh every open Home tab. */
+function setNewsEnabled(on) {
+  browserSettings.news = on;
+  updateEngineChecks();
+  void apiFetch('/api/browser/settings', {
+    method: 'POST',
+    body: JSON.stringify({ news: on }),
+  })
+    .catch(() => {})
+    .then(() => {
+      for (const tab of tabs) if (tab.home) void showHome(tab);
+    });
 }
 
 function setSearchEngine(id) {
@@ -1958,9 +1994,12 @@ function homeDateLabel() {
 /** The home page markup, with the shelf and bookmarks' data embedded. */
 function homeDocument(news, saved = [], { palette = homePalette(), animate = true } = {}) {
   const cards = Array.isArray(news?.cards) ? news.cards : [];
-  const topics = Array.isArray(news?.topics) ? news.topics : [];
+  const sites = Array.isArray(news?.sites) ? news.sites : [];
+  const topics = [...new Set([...(Array.isArray(news?.topics) ? news.topics : []), ...sites])];
   const personal = news?.personalized && cards.length;
-  const recent = t('plugin.browser.home.recentSearches', null, 'Because of your recent searches');
+  const recent = sites.length
+    ? t('plugin.browser.home.searchesAndSites', null, 'From your searches and the sites you visit most')
+    : t('plugin.browser.home.recentSearches', null, 'Because of your recent searches');
   const refresh = t('plugin.browser.home.refresh', null, 'Refresh');
   const refreshing = t('plugin.browser.home.refreshing', null, 'Refreshing…');
   const bookmarkHeading = t('plugin.browser.bookmarks.title', null, 'Bookmarks');
@@ -1999,7 +2038,7 @@ function homeDocument(news, saved = [], { palette = homePalette(), animate = tru
         .map((topic) => `<span class="chip">${escapeHtml(topic)}</span>`)
         .join('')}</div>` : ''}
        <div class="cards">${cards.map((card, index) => cardHtml(card, index, rv)).join('')}</div>`
-    : emptyShelf(news, rv);
+    : (news?.disabled ? '' : emptyShelf(news, rv));
 
   const root = Object.entries(palette.vars || {}).map(([k, v]) => `${k}:${v}`).join(';');
   const motion = animate ? palette.motion : 'none';
@@ -2423,7 +2462,7 @@ function openPageContextMenu(tab, menu) {
   if (menu.linkUrl) {
     entries.push({
       type: 'item',
-      label: t('plugin.browser.pageMenu.copyLink', null, 'Copy Link Address'),
+      label: t('plugin.browser.pageMenu.copyLink', null, 'Copy link address'),
       icon: 'ui/link',
       onClick: () => void copyText(menu.linkUrl),
     });
@@ -2489,7 +2528,7 @@ function openPageContextMenu(tab, menu) {
   }
   entries.push({
     type: 'item',
-    label: t('plugin.browser.pageMenu.selectAll', null, 'Select All'),
+    label: t('plugin.browser.pageMenu.selectAll', null, 'Select all'),
     icon: 'ui/select-all',
     onClick: () => send('action', { verb: 'SelectAll' }),
   });

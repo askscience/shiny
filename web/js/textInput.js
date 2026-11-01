@@ -855,6 +855,23 @@ export function isTextInputOpen() {
   return isOpen;
 }
 
+/**
+ * Ask the assistant from a window: open the chat and send `text` as the
+ * user's message, so the request, the tool cards and the answer show in the
+ * thread like a typed one. Returns false when a turn is already running.
+ * Used by plugin windows (e.g. Word's AI menu); see docs/core/chat.md.
+ */
+export async function askInChat(text) {
+  const message = String(text || '').trim();
+  if (!message || !compose || isSending) return false;
+  if (!isOpen) await openTextInput();
+  if (!field) return false;
+  field.value = message;
+  autoResizeField();
+  await submitTextInput();
+  return true;
+}
+
 function autoResizeField() {
   if (!field) return;
   field.style.height = '38px';

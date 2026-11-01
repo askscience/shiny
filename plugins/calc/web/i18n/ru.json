@@ -1,33 +1,33 @@
 {
-  "plugin.calc.meta.description": "Табличный калькулятор — таблицы хранятся как открытые сетки ячеек и редактируются в окне Calc",
+  "plugin.calc.meta.description": "Электронные таблицы — создавайте и редактируйте таблицы в окне Calc, импортируйте файлы CSV или .ods и сохраняйте их в формате .ods",
   "plugin.calc.meta.summary": "Calc: создание, редактирование и вычисления в таблицах",
   "plugin.calc.meta.category": "Офис",
-
   "plugin.calc.bar.spreadsheets": "Таблицы",
-
+  "plugin.calc.bar.new": "Создать",
   "plugin.calc.toolbar.newSheet": "Новая таблица",
   "plugin.calc.toolbar.importOds": "Импорт .ods",
   "plugin.calc.toolbar.importCsv": "Импорт CSV",
   "plugin.calc.toolbar.saveToDocuments": "Сохранить в Документы",
   "plugin.calc.toolbar.saveNow": "Сохранить сейчас",
   "plugin.calc.toolbar.deleteSheet": "Удалить таблицу",
-
   "plugin.calc.menu.noSheets": "Таблиц пока нет",
-
+  "plugin.calc.empty.body": "Создайте пустую таблицу, импортируйте файл CSV или .ods или попросите ИИ собрать её.",
   "plugin.calc.sheet.untitled": "Без названия",
   "plugin.calc.sheet.importedCsv": "Импортированный CSV",
-
   "plugin.calc.formula.placeholder": "Значение или формула (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Сохранение…",
   "plugin.calc.status.dirty": "Несохранённые изменения",
+  "plugin.calc.status.unsaved": "Не сохранено",
+  "plugin.calc.status.savedAt": "Сохранено {time}",
+  "plugin.calc.status.cells.one": "{count} ячейка",
+  "plugin.calc.status.cells.few": "{count} ячейки",
+  "plugin.calc.status.cells.many": "{count} ячеек",
+  "plugin.calc.status.cells.other": "{count} ячейки",
   "plugin.calc.status.saved.one": "Сохранено {time} · {count} ячейка",
   "plugin.calc.status.saved.few": "Сохранено {time} · {count} ячейки",
   "plugin.calc.status.saved.many": "Сохранено {time} · {count} ячеек",
   "plugin.calc.status.saved.other": "Сохранено {time} · {count} ячеек",
-
   "plugin.calc.dialog.delete": "Удалить “{title}”?",
-
   "plugin.calc.toast.saveFailed": "Не удалось сохранить",
   "plugin.calc.toast.openFailed": "Не удалось открыть таблицу",
   "plugin.calc.toast.createFailed": "Не удалось создать таблицу",

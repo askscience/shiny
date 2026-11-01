@@ -22,6 +22,161 @@ use crate::models::Traveler;
 /// whole file in RAM per request.
 const RANGE_WINDOW: usize = 16 * 1024 * 1024;
 
+/// One background song render started from the Studio window.
+#[derive(Clone)]
+struct SongJob {
+    owner: String,
+    title: String,
+    status: &'static str,
+    started: std::time::Instant,
+    result: Option<serde_json::Value>,
+    error: Option<String>,
+}
+
+fn jobs() -> &'static std::sync::Mutex<std::collections::HashMap<String, SongJob>> {
+    static JOBS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, SongJob>>> =
+        std::sync::OnceLock::new();
+    JOBS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+#[derive(Deserialize)]
+pub struct SongGenerateBody {
+    pub style: String,
+    #[serde(default)]
+    pub lyrics: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub duration: Option<u32>,
+    #[serde(default)]
+    pub quality: Option<String>,
+    #[serde(default)]
+    pub seed: Option<u64>,
+}
+
+/// POST /api/songgen/generate — start a song render in the background and
+/// return its job id at once; the Studio polls `/api/songgen/jobs/:id`.
+/// Missing weights are reported (with the download size) instead of being
+/// fetched implicitly — the window asks the user first.
+pub async fn generate(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<SongGenerateBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let style = body.style.trim().to_string();
+    if style.is_empty() {
+        return Err(AppError::BadRequest("style required".into()));
+    }
+    if state.song_gen.engine().is_none() {
+        return Ok(Json(json!({
+            "success": false,
+            "error": "the song engine is not installed",
+            "data": { "engine_missing": true }
+        })));
+    }
+    let quality = match body.quality.filter(|q| !q.trim().is_empty()) {
+        Some(q) => q,
+        None => crate::services::agent_tools::music_quality_pref(&state, &traveler.id)
+            .await
+            .unwrap_or_else(|| crate::services::song_gen::DEFAULT_TIER.to_string()),
+    };
+    let tier = crate::services::song_gen::resolve_tier(&quality)
+        .ok_or_else(|| AppError::BadRequest(format!("unknown song quality '{quality}' (use q4 or q8)")))?;
+    let missing = state.song_gen.missing_for(tier.key);
+    if !missing.is_empty() {
+        let bytes = state.song_gen.missing_bytes_for(tier.key);
+        return Ok(Json(json!({
+            "success": false,
+            "error": "the song models are not downloaded yet",
+            "data": {
+                "needs_download": true,
+                "quality": tier.key,
+                "missing": missing,
+                "download_bytes": bytes,
+                "download_size": crate::services::media::human_bytes(bytes),
+            }
+        })));
+    }
+    let title = body.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| style.clone());
+    let os_home = state.os_identity_for(&traveler).map(|u| u.home);
+    let home = crate::services::media::files_home(&traveler.id, os_home.as_deref());
+    let req = crate::services::song_gen::SongRequest {
+        style,
+        lyrics: body.lyrics,
+        title: title.clone(),
+        duration_secs: body.duration.unwrap_or(90).clamp(30, 300),
+        seed: body.seed,
+        quality: tier.key.to_string(),
+        home,
+    };
+    let id = uuid::Uuid::new_v4().to_string();
+    if let Ok(mut map) = jobs().lock() {
+        // Forget finished jobs older than a day.
+        map.retain(|_, j| j.status == "running" || j.started.elapsed().as_secs() < 86_400);
+        map.insert(
+            id.clone(),
+            SongJob { owner: traveler.id.clone(), title: title.clone(), status: "running", started: std::time::Instant::now(), result: None, error: None },
+        );
+    }
+    let client = state.song_gen.clone();
+    let job_id = id.clone();
+    tokio::spawn(async move {
+        let outcome = tokio::task::spawn_blocking(move || client.generate(&req)).await;
+        let mut map = match jobs().lock() {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+        let Some(job) = map.get_mut(&job_id) else { return };
+        match outcome {
+            Ok(Ok(res)) => {
+                job.status = "done";
+                job.result = Some(json!({
+                    "path": res.rel_path,
+                    "file": res.file,
+                    "url": res.url,
+                    "title": job.title,
+                    "duration_secs": res.duration_secs,
+                    "seconds": res.seconds,
+                    "quality": res.quality,
+                }));
+            }
+            Ok(Err(e)) => {
+                job.status = "failed";
+                job.error = Some(e);
+            }
+            Err(e) => {
+                job.status = "failed";
+                job.error = Some(format!("song task panicked: {e}"));
+            }
+        }
+    });
+    Ok(Json(json!({ "success": true, "data": { "job_id": id, "status": "running", "title": title } })))
+}
+
+/// GET /api/songgen/jobs/:id — status of a background song render.
+pub async fn job(
+    Extension(traveler): Extension<Traveler>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let job = jobs()
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&id).cloned())
+        .filter(|j| j.owner == traveler.id)
+        .ok_or_else(|| AppError::NotFound("song job not found".into()))?;
+    Ok(Json(json!({
+        "success": true,
+        "data": {
+            "job_id": id,
+            "status": job.status,
+            "title": job.title,
+            "elapsed_secs": job.started.elapsed().as_secs(),
+            "result": job.result,
+            "error": job.error,
+        }
+    })))
+}
+
 #[derive(Deserialize)]
 pub struct SongDownloadBody {
     pub quality: String,

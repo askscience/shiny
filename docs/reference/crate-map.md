@@ -62,7 +62,7 @@ ecosystem. See the plugin's `docs/` folder and
 | Archives | `zip`, `flate2`, `tar` |
 | Config | `dotenvy` |
 | Office codecs | `roxmltree` + `zip` (ODT/ODS/ODP) |
-| Studio DSP | `fundsp`, `rustysynth` |
+| Studio DSP | in-house (`plugins/studio/src/dsp`), `rustysynth` for SoundFonts |
 | Host (Linux) | `nmrs` (NetworkManager), `zbus` (BlueZ/logind), `if-addrs`, `libc` |
 | Remote (optional) | `iroh` 1.2 + `shiny-iroh-proto` behind the `iroh` feature |
 | QR codes | `qrcode` |
@@ -73,8 +73,6 @@ ecosystem. See the plugin's `docs/` folder and
 
 - **`[profile.release]`** — thin LTO + one codegen unit so the Studio DSP
   engine's per-sample calls inline (~2× faster renders).
-- **`[profile.dev.package.fundsp]`** — `opt-level = 2` even in dev builds,
-  because fundsp's per-sample DSP is unusably slow at opt-level 0.
 - **`[patch.crates-io]`** — `libsqlite3-sys` is patched to the vendored shim in
   [`vendor/libsqlite3-sys`](../../vendor) so every dlopen'd plugin links the one
   system SQLite instead of bundling its own (multiple bundled copies segfault).

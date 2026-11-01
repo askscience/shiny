@@ -1,17 +1,14 @@
-//! Filters — a topological-preserving-transform (TPT) state-variable filter
-//! with a switchable second pole, input saturation, and an optional Moog
-//! ladder from [`fundsp`].
+//! Filters: a zero-delay-feedback (TPT) state-variable filter with 12 or
+//! 24 dB/oct slopes and input drive, and a ZDF four-pole "Moog-style" ladder.
 //!
-//! Two cascaded SVF sections give the classic 24 dB/oct "ladder-ish" slope
-//! without the numerical fragility of a nonlinear feedback ladder: each
-//! section is unconditionally stable at any cutoff/resonance, and the input
-//! `tanh` supplies the drive character. The `Ladder` kind instead routes
-//! through fundsp's resonant Moog ladder for its characteristic saturation and
-//! resonance colour.
+//! Both are unconditionally stable at any cutoff/resonance, keep their state
+//! in `f64`, and process **stereo with independent per-channel state** while
+//! sharing one set of coefficients (the old engine ran L and R through one
+//! state, which turned every stereo voice into a Nyquist-rate rattle).
+//! Cutoff changes are cheap (`tan` once per sample, shared by both channels),
+//! so per-sample envelope/LFO modulation is exact rather than stepped.
 
-use fundsp::prelude::{moog, An, Frame, Moog, U3};
-
-use super::util::soft_clip;
+use super::util::{flush, soft_clip};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FilterKind {
@@ -20,7 +17,7 @@ pub enum FilterKind {
     BandPass,
     Notch,
     Peak,
-    /// Resonant nonlinear Moog ladder lowpass (fundsp).
+    /// Four-pole resonant ladder low-pass.
     Ladder,
 }
 
@@ -56,30 +53,72 @@ struct Svf {
 
 impl Svf {
     #[inline]
-    fn tick(&mut self, x: f64, g: f64, k: f64, kind: FilterKind) -> f64 {
-        let a1 = 1.0 / (1.0 + g * (g + k));
-        let a2 = g * a1;
-        let a3 = g * a2;
+    fn tick(&mut self, x: f64, c: &Coefs, kind: FilterKind) -> f64 {
         let v3 = x - self.ic2;
-        let v1 = a1 * self.ic1 + a2 * v3;
-        let v2 = self.ic2 + a2 * self.ic1 + a3 * v3;
-        self.ic1 = 2.0 * v1 - self.ic1;
-        self.ic2 = 2.0 * v2 - self.ic2;
+        let v1 = c.a1 * self.ic1 + c.a2 * v3;
+        let v2 = self.ic2 + c.a2 * self.ic1 + c.a3 * v3;
+        self.ic1 = flush(2.0 * v1 - self.ic1);
+        self.ic2 = flush(2.0 * v2 - self.ic2);
+        let k = c.k;
         match kind {
-            FilterKind::LowPass => v2,
+            FilterKind::LowPass | FilterKind::Ladder => v2,
             FilterKind::HighPass => x - k * v1 - v2,
-            FilterKind::BandPass => v1,
+            // Normalised band-pass: unity gain at the centre for any Q.
+            FilterKind::BandPass => k * v1,
             FilterKind::Notch => x - k * v1,
+            // Low minus high: a resonant peak at the cutoff, flat elsewhere.
             FilterKind::Peak => 2.0 * v2 - x + k * v1,
-            // `Ladder` is routed through fundsp's Moog before reaching here.
-            FilterKind::Ladder => v2,
         }
     }
+}
 
-    fn reset(&mut self) {
-        self.ic1 = 0.0;
-        self.ic2 = 0.0;
+#[derive(Clone, Copy, Default)]
+struct Ladder {
+    s: [f64; 4],
+}
+
+impl Ladder {
+    #[inline]
+    fn tick(&mut self, x: f64, c: &Coefs) -> f64 {
+        let g = c.g;
+        let big_g = g / (1.0 + g);
+        let inv = 1.0 / (1.0 + g);
+        // Zero-delay feedback: solve the loop for the 4th-stage output.
+        let s = &self.s;
+        let sigma = big_g * big_g * big_g * s[0] * inv
+            + big_g * big_g * s[1] * inv
+            + big_g * s[2] * inv
+            + s[3] * inv;
+        let g4 = big_g * big_g * big_g * big_g;
+        let k = c.ladder_k;
+        let y4_est = (g4 * x + sigma) / (1.0 + k * g4);
+        // Saturate the loop input (the "Moog" character), then run the four
+        // one-pole stages with the solved input.
+        let mut u = soft_clip_f64(x - k * y4_est);
+        for st in self.s.iter_mut() {
+            let v = (u - *st) * big_g;
+            let y = v + *st;
+            *st = flush(y + v);
+            u = y;
+        }
+        // Compensate the passband loss that resonance causes in a ladder.
+        u * (1.0 + 0.5 * k)
     }
+}
+
+#[inline]
+fn soft_clip_f64(x: f64) -> f64 {
+    soft_clip(x as f32) as f64
+}
+
+#[derive(Clone, Copy, Default)]
+struct Coefs {
+    g: f64,
+    k: f64,
+    a1: f64,
+    a2: f64,
+    a3: f64,
+    ladder_k: f64,
 }
 
 #[derive(Clone)]
@@ -89,62 +128,62 @@ pub struct Filter {
     q: f64,
     /// Input drive as a linear pre-gain (1.0 = clean).
     drive: f64,
-    /// 1 = 12 dB/oct, 2 = 24 dB/oct.
+    /// 1 = 12 dB/oct, 2 = 24 dB/oct (SVF kinds).
     pub poles: u8,
-    g: f64,
-    k: f64,
-    a: Svf,
-    b: Svf,
+    c: Coefs,
+    a: [Svf; 2],
+    b: [Svf; 2],
+    ladder: [Ladder; 2],
     /// Post-drive make-up so `drive` changes character, not loudness.
     makeup: f64,
     sample_rate: f64,
     dirty: bool,
-    dc: super::util::DcBlocker,
-    /// Optional output trim used by the voice to keep resonance peaks sane.
+    /// Optional output trim.
     pub out_trim: f64,
-    /// The fundsp Moog ladder, used when `kind == Ladder`.
-    moog: An<Moog<f32, U3>>,
 }
 
 impl Filter {
     pub fn new(kind: FilterKind, cutoff: f64, q: f64) -> Self {
         let mut f = Self {
             kind,
-            cutoff,
+            cutoff: cutoff.max(10.0),
             q,
             drive: 1.0,
             poles: 1,
-            g: 0.0,
-            k: 0.0,
-            a: Svf::default(),
-            b: Svf::default(),
+            c: Coefs::default(),
+            a: [Svf::default(); 2],
+            b: [Svf::default(); 2],
+            ladder: [Ladder::default(); 2],
             makeup: 1.0,
             sample_rate: super::SR,
             dirty: true,
-            dc: super::util::DcBlocker::default(),
             out_trim: 1.0,
-            moog: moog(),
         };
         f.recompute();
         f
     }
 
     pub fn set_sample_rate(&mut self, sr: f64) {
-        self.sample_rate = sr;
-        self.dirty = true;
-        self.moog.set_sample_rate(sr);
+        if sr != self.sample_rate {
+            self.sample_rate = sr;
+            self.dirty = true;
+        }
     }
 
     pub fn set_cutoff(&mut self, hz: f64) {
-        let hz = hz.clamp(10.0, 22000.0);
-        if (hz - self.cutoff).abs() > 1e-6 {
+        let hz = hz.clamp(10.0, 40_000.0);
+        if hz != self.cutoff {
             self.cutoff = hz;
             self.dirty = true;
         }
     }
 
+    pub fn cutoff(&self) -> f64 {
+        self.cutoff
+    }
+
     pub fn set_q(&mut self, q: f64) {
-        if (q - self.q).abs() > 1e-9 {
+        if q != self.q {
             self.q = q;
             self.dirty = true;
         }
@@ -152,10 +191,10 @@ impl Filter {
 
     pub fn set_drive(&mut self, drive: f64) {
         let d = drive.clamp(0.05, 64.0);
-        if (d - self.drive).abs() > 1e-9 {
+        if d != self.drive {
             self.drive = d;
-            // tanh-ish make-up: keep perceived level roughly constant.
-            self.makeup = 1.0 / (1.0 + (d - 1.0) * 0.55).max(0.15);
+            // Keep perceived level roughly constant as the saturator works.
+            self.makeup = if d > 1.0 { 1.0 / (1.0 + (d - 1.0) * 0.35).sqrt() } else { 1.0 };
         }
     }
 
@@ -164,81 +203,94 @@ impl Filter {
     }
 
     fn recompute(&mut self) {
-        let nyq = self.sample_rate * 0.5;
-        let fc = self.cutoff.clamp(10.0, nyq * 0.94);
-        let g = (std::f64::consts::PI * fc / self.sample_rate).tan();
-        self.g = g.clamp(1e-6, 20.0);
-        // Q in [0.5, 24] → damping k in [2, 0.0417]. A small floor stops the
-        // self-oscillation blow-up that a true k=0 would allow.
-        let q = self.q.clamp(0.4, 24.0);
-        self.k = (1.0 / q).max(0.035);
+        let sr = self.sample_rate;
+        let fc = self.cutoff.clamp(10.0, sr * 0.49);
+        let g = (std::f64::consts::PI * fc / sr).tan();
+        // Q in [0.5, 24] → damping k in [2, ~0.04]. With two cascaded
+        // sections the per-section Q is softened so a 24 dB slope does not
+        // double the resonant peak.
+        let q = self.q.clamp(0.5, 24.0);
+        let q_eff = if self.poles >= 2 { 0.5 + (q - 0.5) * 0.6 } else { q };
+        let k = 1.0 / q_eff;
+        let a1 = 1.0 / (1.0 + g * (g + k));
+        let a2 = g * a1;
+        let a3 = g * a2;
+        // Ladder feedback 0 … 3.95 (self-oscillation sits at 4).
+        let ladder_k = (4.0 * (1.0 - 0.5 / q)).clamp(0.0, 3.95);
+        self.c = Coefs { g, k, a1, a2, a3, ladder_k };
         self.dirty = false;
     }
 
     pub fn reset(&mut self) {
-        self.a.reset();
-        self.b.reset();
-        self.dc.reset();
-        self.moog.reset();
+        self.a = [Svf::default(); 2];
+        self.b = [Svf::default(); 2];
+        self.ladder = [Ladder::default(); 2];
     }
 
     #[inline]
-    pub fn tick(&mut self, x: f32) -> f32 {
-        if self.kind == FilterKind::Ladder {
-            let cut = self.cutoff.clamp(10.0, self.sample_rate * 0.47) as f32;
-            // The ladder's feedback becomes unstable at high Q; keep it in the
-            // musical range that the SVF path also covers.
-            let q = self.q.clamp(0.5, 4.0) as f32;
-            let mut s = x as f64;
-            if self.drive > 1.0001 {
-                s = (s * self.drive).tanh() * self.makeup;
-            }
-            let input: Frame<f32, U3> = [s as f32, cut, q].into();
-            let y = self.moog.tick(&input)[0];
-            return self.dc.process((y as f64 * self.out_trim) as f32);
+    fn run(&mut self, ch: usize, x: f64) -> f64 {
+        let mut s = x;
+        if self.drive > 1.0001 {
+            s = soft_clip_f64(s * self.drive) * self.makeup;
+        } else if self.drive < 0.9999 {
+            s *= self.drive;
         }
+        let y = if self.kind == FilterKind::Ladder {
+            self.ladder[ch].tick(s, &self.c)
+        } else {
+            let y = self.a[ch].tick(s, &self.c, self.kind);
+            if self.poles >= 2 {
+                self.b[ch].tick(y, &self.c, self.kind)
+            } else {
+                y
+            }
+        };
+        y * self.out_trim
+    }
+
+    /// Mono processing (channel 0 state).
+    #[inline]
+    pub fn tick(&mut self, x: f32) -> f32 {
         if self.dirty {
             self.recompute();
         }
-        let mut s = x as f64;
-        if self.drive > 1.0001 {
-            s = (s * self.drive).tanh() * self.makeup;
+        self.run(0, x as f64) as f32
+    }
+
+    /// Stereo processing with independent state per channel.
+    #[inline]
+    pub fn tick_stereo(&mut self, l: f32, r: f32) -> (f32, f32) {
+        if self.dirty {
+            self.recompute();
         }
-        let g = self.g;
-        let k = self.k;
-        let mut y = self.a.tick(s, g, k, self.kind);
-        if self.poles >= 2 {
-            y = self.b.tick(y, g, k, self.kind);
-        }
-        // A touch of DC removal keeps asymmetric drive from eating headroom.
-        (self.dc.process((y * self.out_trim) as f32) as f64) as f32
+        (self.run(0, l as f64) as f32, self.run(1, r as f64) as f32)
     }
 }
 
-/// A gentle fixed tone shaper used by drums (band emphasis without a full
-/// filter instance in the hot loop).
+/// A gentle fixed one-pole tone shaper.
 #[derive(Clone)]
 pub struct OnePole {
-    z: f32,
-    coef: f32,
+    z: f64,
+    coef: f64,
     cutoff: f64,
     hp: bool,
 }
 
 impl OnePole {
     pub fn lowpass(cutoff: f64, sr: f64) -> Self {
-        let coef = 1.0 - (-2.0 * std::f64::consts::PI * cutoff / sr).exp();
-        Self { z: 0.0, coef: coef as f32, cutoff, hp: false }
+        let mut p = Self { z: 0.0, coef: 0.0, cutoff, hp: false };
+        p.set_sample_rate(sr);
+        p
     }
 
     pub fn highpass(cutoff: f64, sr: f64) -> Self {
-        let coef = 1.0 - (-2.0 * std::f64::consts::PI * cutoff / sr).exp();
-        Self { z: 0.0, coef: coef as f32, cutoff, hp: true }
+        let mut p = Self { z: 0.0, coef: 0.0, cutoff, hp: true };
+        p.set_sample_rate(sr);
+        p
     }
 
-    /// Re-derive the coefficient for a new sample rate.
     pub fn set_sample_rate(&mut self, sr: f64) {
-        self.coef = (1.0 - (-2.0 * std::f64::consts::PI * self.cutoff / sr).exp()) as f32;
+        self.coef = 1.0 - (-2.0 * std::f64::consts::PI * self.cutoff / sr).exp();
     }
 
     pub fn reset(&mut self) {
@@ -247,71 +299,13 @@ impl OnePole {
 
     #[inline]
     pub fn tick(&mut self, x: f32) -> f32 {
-        self.z += (x - self.z) * self.coef;
-        if self.hp {
-            x - self.z
-        } else {
-            self.z
-        }
+        let x = x as f64;
+        self.z = flush(self.z + (x - self.z) * self.coef);
+        (if self.hp { x - self.z } else { self.z }) as f32
     }
 }
 
-/// A resonant 2-pole band-pass built from the TPT SVF, used for noise shaping
-/// in snares/claps.
-#[derive(Clone)]
-pub struct BandPass {
-    svf: Svf,
-    g: f64,
-    k: f64,
-    cutoff: f64,
-    q: f64,
-    sr: f64,
-    dirty: bool,
-}
-
-impl BandPass {
-    pub fn new(cutoff: f64, q: f64) -> Self {
-        let mut b = Self { svf: Svf::default(), g: 0.0, k: 0.0, cutoff, q, sr: super::SR, dirty: true };
-        b.recompute();
-        b
-    }
-
-    pub fn set_cutoff(&mut self, hz: f64) {
-        self.cutoff = hz;
-        self.dirty = true;
-    }
-
-    pub fn set_q(&mut self, q: f64) {
-        self.q = q;
-        self.dirty = true;
-    }
-
-    pub fn set_sample_rate(&mut self, sr: f64) {
-        self.sr = sr;
-        self.dirty = true;
-    }
-
-    fn recompute(&mut self) {
-        let fc = self.cutoff.clamp(20.0, self.sr * 0.45);
-        self.g = (std::f64::consts::PI * fc / self.sr).tan().clamp(1e-6, 20.0);
-        self.k = (1.0 / self.q.clamp(0.3, 24.0)).max(0.02);
-        self.dirty = false;
-    }
-
-    pub fn reset(&mut self) {
-        self.svf.reset();
-    }
-
-    #[inline]
-    pub fn tick(&mut self, x: f32) -> f32 {
-        if self.dirty {
-            self.recompute();
-        }
-        self.svf.tick(x as f64, self.g, self.k, FilterKind::BandPass) as f32
-    }
-}
-
-/// Convenience: a soft saturation used across drums.
+/// Convenience: a soft saturation with level compensation.
 #[inline]
 pub fn saturate(x: f32, amount: f32) -> f32 {
     if amount <= 0.0 {
@@ -323,41 +317,63 @@ pub fn saturate(x: f32, amount: f32) -> f32 {
 }
 
 #[cfg(test)]
-mod probe_tests {
-#[test]
-fn probe_filter_cutoff_changes_output() {
-    use crate::dsp::filter::{Filter, FilterKind};
+mod tests {
+    use super::*;
     use crate::dsp::osc::{Osc, Wave};
-    let render = |cut: f64| {
-        let mut o = Osc::new(Wave::Saw);
-        let mut f = Filter::new(FilterKind::LowPass, cut, 1.6);
-        let mut sum = 0.0f64;
-        for i in 0..4410 {
-            let x = o.tick(220.0, 44100.0);
-            let y = f.tick(x);
-            if i > 1000 { sum += (y as f64) * (y as f64); }
-        }
-        sum
-    };
-    let a = render(500.0);
-    let b = render(8000.0);
-    eprintln!("[filterprobe] low={a} high={b}");
-    assert!((a - b).abs() > 1e-6, "cutoff must change energy");
-}
 
-#[test]
-fn ladder_filter_is_stable_and_audible() {
-    use crate::dsp::filter::{Filter, FilterKind};
-    use crate::dsp::osc::{Osc, Wave};
-    let mut o = Osc::new(Wave::Saw);
-    let mut f = Filter::new(FilterKind::Ladder, 800.0, 2.5);
-    let mut peak = 0.0f32;
-    for _ in 0..44100 {
-        let y = f.tick(o.tick(110.0, 44100.0));
-        assert!(y.is_finite(), "ladder produced NaN/inf");
-        peak = peak.max(y.abs());
+    fn rms_through(kind: FilterKind, cut: f64, q: f64, poles: u8, f: f64) -> f64 {
+        let sr = 48_000.0;
+        let mut o = Osc::new(Wave::Sine);
+        let mut flt = Filter::new(kind, cut, q);
+        flt.set_sample_rate(sr);
+        flt.set_poles(poles);
+        let mut sum = 0.0;
+        let n = 48_000;
+        for i in 0..n {
+            let x = o.tick(f, sr);
+            let (y, _) = flt.tick_stereo(x, x);
+            if i > n / 2 {
+                sum += (y as f64).powi(2);
+            }
+        }
+        (sum / (n / 2) as f64).sqrt() * std::f64::consts::SQRT_2
     }
-    assert!(peak > 0.01, "ladder rendered silence");
-    assert!(peak < 10.0, "ladder blew up: {peak}");
-}
+
+    #[test]
+    fn lowpass_passes_low_and_cuts_high() {
+        let pass = rms_through(FilterKind::LowPass, 1000.0, 0.707, 2, 100.0);
+        let stop = rms_through(FilterKind::LowPass, 1000.0, 0.707, 2, 8000.0);
+        assert!((pass - 1.0).abs() < 0.05, "pass {pass}");
+        assert!(stop < 0.005, "stop {stop}");
+    }
+
+    #[test]
+    fn channels_have_independent_state() {
+        // L = signal, R = silence: R must stay exactly silent.
+        let mut f = Filter::new(FilterKind::LowPass, 800.0, 4.0);
+        let mut o = Osc::new(Wave::Saw);
+        for _ in 0..4410 {
+            let (_, r) = f.tick_stereo(o.tick(220.0, 44_100.0), 0.0);
+            assert_eq!(r, 0.0);
+        }
+    }
+
+    #[test]
+    fn ladder_is_stable_and_audible() {
+        let mut o = Osc::new(Wave::Saw);
+        let mut f = Filter::new(FilterKind::Ladder, 800.0, 20.0);
+        let mut peak = 0.0f32;
+        for _ in 0..44100 {
+            let y = f.tick(o.tick(110.0, 44100.0));
+            assert!(y.is_finite());
+            peak = peak.max(y.abs());
+        }
+        assert!(peak > 0.01 && peak < 4.0, "ladder peak {peak}");
+    }
+
+    #[test]
+    fn bandpass_is_unity_at_centre() {
+        let g = rms_through(FilterKind::BandPass, 1000.0, 4.0, 1, 1000.0);
+        assert!((g - 1.0).abs() < 0.05, "bp centre gain {g}");
+    }
 }

@@ -30,6 +30,30 @@ exhaustive reference. See also [`routes.md`](routes.md) for the equivalent REST 
 | `studio_arrangement_save` | `save_arrangement`, `create_arrangement` | arrangement (+ optional `id`) | `{ id, title }` |
 | `studio_arrangement_get` | `get_arrangement` | `{ id }` | arrangement with `tracks` + `clips` |
 | `studio_arrangement_delete` | `delete_arrangement` | `{ id, confirm:true }` | `{ id, title }` |
+| `studio_arrangement_edit` | `edit_arrangement`, `studio_edit` | `{ arrangement_id?, ops[] }` | summary + `id`, `applied[]` |
+| `studio_import_audio` | `import_song`, `add_audio_track`, `studio_add_song` | `{ path, arrangement_id?, create?, track_name?, start_beat?, match_tempo?, level? }` | `{ id, track_id, duration, bpm, project_bpm, … }` |
+| `studio_mix_analyze` | `analyze_mix`, `studio_arrangement_analyze` | `{ arrangement_id? }` | `{ id, master, trim_db, tracks[] }` |
+| `studio_export` | `export_song`, `studio_bounce`, `studio_arrangement_export` | `{ arrangement_id?, name?, bits? }` | `{ id, path, lufs, peak, duration_ms, … }` |
+| `studio_audio_info` | `audio_info`, `song_tempo` | `{ path? }` | file info, or `{ files[] }` without `path` |
+
+`arrangement_id` accepts a UUID or exact title; omitted, the most recently edited
+arrangement is used. Audio `path`s are relative to the user's Files home.
+
+### `studio_arrangement_edit` ops
+
+| Op | Fields |
+| --- | --- |
+| `set` | `title?`, `bpm?`, `length_beats?`, `master?`, `fx?` (merged key by key), `master_fx?`, `returns?` |
+| `add_track` | `name`, `id?`, `kind?`, `level?`, `pan?`, `mute?`, `solo?`, `sends?`, `fx?`, `color?`, `automation?` |
+| `update_track` | `track` (id or name) + any of `name`, `kind`, `level`, `pan`, `mute`, `solo`, `sends`, `fx`, `color` |
+| `remove_track` | `track` (its clips go too) |
+| `add_clip` | `track`, `start`, `pattern` or `audio`, `length_beats?`, `gain_db?`, `loop?` |
+| `update_clip` | `index` + any of `track`, `start`, `length_beats`, `gain_db`, `loop`, `pattern`, `audio` |
+| `remove_clip` | `index` |
+| `set_automation` | `track`, `param`, `points` (empty clears the lane) |
+
+The result is validated with `parse_arrangement` before it is stored, so a bad op
+changes nothing.
 
 Every tool also carries a `step_label` (shown while a tool runs, e.g. "Composing a studio
 track…") and a `humanize` string shown in the transcript (e.g. `Composed "Drums"`).
@@ -165,9 +189,9 @@ track, bass as another, …). Persists the validated config and the rendered WAV
   "steps": 16,
   "tuning": "edo12",
   "voices": [
-    { "kind": "bass", "rhythm": "", "octave": 2,
-      "notes": [ {"step":0,"length":3,"degree":0,"octave":2},
-                 {"step":4,"length":2,"degree":3,"octave":2} ],
+    { "kind": "bass", "rhythm": "", "octave": -2,
+      "notes": [ {"step":0,"length":3,"degree":0,"octave":-2},
+                 {"step":4,"length":2,"degree":3,"octave":-2} ],
       "synth": { "o1w": 2, "sub": 0.45, "cutoff": 620, "fenv": 1.8, "poles": 2, "glide": 0.03 } }
   ],
   "fx": { "reverb_mix": 0.03, "loudness": -14 }
@@ -361,7 +385,7 @@ Tools are registered in `src/plugin.rs` (`StudioPlugin::register`):
 ```rust
 for tool in [
     Arc::new(crate::tools::StudioList) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-    // …15 in total…
+    // …20 in total…
 ] {
     builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool));
 }
@@ -384,6 +408,11 @@ for tool in [
 | `studio_arrangement_delete` | `StudioArrangementDelete` | `src/tools/mod.rs` |
 | `studio_catalog` | `StudioCatalog` | `src/tools/mod.rs` |
 | `studio_analyze` | `StudioAnalyze` | `src/tools/mod.rs` |
+| `studio_import_audio` | `StudioImportAudio` | `src/tools/mix.rs` |
+| `studio_arrangement_edit` | `StudioArrangementEdit` | `src/tools/mix.rs` |
+| `studio_mix_analyze` | `StudioMixAnalyze` | `src/tools/mix.rs` |
+| `studio_export` | `StudioExport` | `src/tools/mix.rs` |
+| `studio_audio_info` | `StudioAudioInfo` | `src/tools/mix.rs` |
 
 Errors use `shiny_plugin_sdk::errors::AppError`: unknown ids return `NotFound`, malformed
 configs return `BadRequest` (from `parse_config`/`parse_arrangement`/`render_*`), and SQL

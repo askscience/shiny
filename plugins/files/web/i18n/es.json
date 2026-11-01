@@ -1,5 +1,5 @@
 {
-  "plugin.files.place.home": "Inicio",
+  "plugin.files.place.home": "Carpeta personal",
   "plugin.files.place.trash": "Papelera",
   "plugin.files.place.desktop": "Escritorio",
   "plugin.files.place.documents": "Documentos",
@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Público",
   "plugin.files.place.templates": "Plantillas",
   "plugin.files.place.videos": "Vídeos",
-
   "plugin.files.toolbar.search": "Buscar",
   "plugin.files.toolbar.menu": "Menú",
   "plugin.files.toolbar.back": "Atrás",
@@ -17,45 +16,37 @@
   "plugin.files.toolbar.toggleView": "Cambiar la vista",
   "plugin.files.toolbar.viewOptions": "Opciones de vista",
   "plugin.files.toolbar.pathActions": "Acciones de la ruta",
-
   "plugin.files.search.placeholder": "Buscar…",
   "plugin.files.search.clear": "Borrar",
-
   "plugin.files.empty.noResults": "No se han encontrado resultados",
   "plugin.files.empty.trash": "La papelera está vacía",
   "plugin.files.empty.folder": "La carpeta está vacía",
   "plugin.files.empty.noMatch": "Ningún archivo coincide con “{query}”.",
   "plugin.files.empty.dropHint": "Arrastra archivos aquí o usa el menú para subirlos.",
-
   "plugin.files.column.name": "Nombre",
   "plugin.files.column.size": "Tamaño",
   "plugin.files.column.modified": "Modificado",
-
   "plugin.files.status.folder": "Carpeta",
   "plugin.files.status.items.one": "{count} elemento",
   "plugin.files.status.items.many": "{count} elementos",
   "plugin.files.status.items.other": "{count} elementos",
-
+  "plugin.files.status.countSelected": "{count} · {selected} seleccionados",
   "plugin.files.when.today": "Hoy {time}",
   "plugin.files.when.yesterday": "Ayer {time}",
-
   "plugin.files.menu.newFolder": "Carpeta nueva",
   "plugin.files.menu.uploadFiles": "Subir archivos…",
   "plugin.files.menu.showHidden": "Mostrar los archivos ocultos",
   "plugin.files.menu.view": "Vista",
   "plugin.files.menu.copyPath": "Copiar la ruta",
   "plugin.files.menu.emptyTrash": "Vaciar la papelera",
-
   "plugin.files.view.grid": "Cuadrícula",
   "plugin.files.view.list": "Lista",
-
   "plugin.files.ctx.open": "Abrir",
   "plugin.files.ctx.download": "Descargar",
   "plugin.files.ctx.restore": "Restaurar",
   "plugin.files.ctx.deletePermanently": "Eliminar permanentemente",
   "plugin.files.ctx.rename": "Cambiar nombre…",
   "plugin.files.ctx.moveToTrash": "Mover a la papelera",
-
   "plugin.files.dialog.newFolderTitle": "Nombre de la carpeta nueva",
   "plugin.files.dialog.newFolderDefault": "Carpeta nueva",
   "plugin.files.dialog.renameTitle": "Cambiar el nombre a",
@@ -68,7 +59,6 @@
   "plugin.files.dialog.trashMany.many": "¿Mover {count} elementos a la papelera?",
   "plugin.files.dialog.trashMany.other": "¿Mover {count} elementos a la papelera?",
   "plugin.files.dialog.emptyTrash": "¿Vaciar la papelera? Esta acción no se puede deshacer.",
-
   "plugin.files.toast.openFailed": "No se ha podido abrir la carpeta",
   "plugin.files.toast.searchFailed": "La búsqueda ha fallado",
   "plugin.files.toast.pathCopied": "Ruta copiada",
@@ -87,7 +77,6 @@
   "plugin.files.toast.restored.other": "Se han restaurado {count} elementos",
   "plugin.files.toast.trashEmptied": "Papelera vaciada",
   "plugin.files.toast.emptyTrashFailed": "No se ha podido vaciar la papelera",
-
   "plugin.files.notify.downloading": "Descargando",
   "plugin.files.notify.uploadComplete": "Subida completada",
   "plugin.files.notify.uploaded.one": "Se ha añadido {count} archivo",
@@ -97,13 +86,11 @@
   "plugin.files.notify.movedItems.one": "{count} elemento",
   "plugin.files.notify.movedItems.many": "{count} elementos",
   "plugin.files.notify.movedItems.other": "{count} elementos",
-
   "plugin.files.player.seek": "Desplazar",
   "plugin.files.player.mute": "Silenciar",
   "plugin.files.player.fullscreen": "Pantalla completa",
   "plugin.files.player.thisFormat": "Este formato",
   "plugin.files.player.cannotDecode": "Este navegador no puede descodificar {codec}.",
-
   "plugin.files.preview.zoomHint": "Haz clic en la imagen para ampliarla",
   "plugin.files.preview.loading": "Cargando…",
   "plugin.files.preview.cannotPreview": "No se puede previsualizar: {message}",
@@ -115,7 +102,8 @@
   "plugin.files.preview.navHint.other": "{count} elementos · ← → para moverte",
   "plugin.files.preview.pdfFailed": "No se ha podido representar el PDF",
   "plugin.files.preview.page": "Página {n}",
-
+  "plugin.files.preview.prev": "Archivo anterior",
+  "plugin.files.preview.next": "Archivo siguiente",
   "plugin.files.meta.description": "Explorador de archivos — explora, previsualiza y gestiona tus carpetas personales",
   "plugin.files.meta.summary": "Explorador de archivos al estilo GNOME: cuadrícula o lista, miniaturas, vista previa rápida, subida de archivos y papelera",
   "plugin.files.meta.category": "Sistema"

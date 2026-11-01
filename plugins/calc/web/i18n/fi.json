@@ -1,31 +1,29 @@
 {
-  "plugin.calc.meta.description": "Taulukkolaskin — taulukot tallennetaan avoimina soluruudukoina ja niitä voi muokata Calc-ikkunassa",
+  "plugin.calc.meta.description": "Laskentataulukot — luo ja muokkaa taulukoita Calc-ikkunassa, tuo CSV- tai .ods-tiedostoja ja tallenna ne .ods-muodossa",
   "plugin.calc.meta.summary": "Calc: luo, muokkaa ja laske taulukoilla",
   "plugin.calc.meta.category": "Toimisto",
-
   "plugin.calc.bar.spreadsheets": "Taulukot",
-
+  "plugin.calc.bar.new": "Uusi",
   "plugin.calc.toolbar.newSheet": "Uusi taulukko",
   "plugin.calc.toolbar.importOds": "Tuo .ods",
   "plugin.calc.toolbar.importCsv": "Tuo CSV",
   "plugin.calc.toolbar.saveToDocuments": "Tallenna Asiakirjat-kansioon",
   "plugin.calc.toolbar.saveNow": "Tallenna nyt",
   "plugin.calc.toolbar.deleteSheet": "Poista taulukko",
-
   "plugin.calc.menu.noSheets": "Ei vielä taulukoita",
-
+  "plugin.calc.empty.body": "Aloita tyhjä taulukko, tuo CSV- tai .ods-tiedosto tai pyydä tekoälyä rakentamaan taulukko.",
   "plugin.calc.sheet.untitled": "Nimetön",
   "plugin.calc.sheet.importedCsv": "Tuotu CSV",
-
   "plugin.calc.formula.placeholder": "Arvo tai kaava (=SUM(A1:A5))",
-
   "plugin.calc.status.saving": "Tallennetaan…",
   "plugin.calc.status.dirty": "Tallentamattomia muutoksia",
+  "plugin.calc.status.unsaved": "Tallentamaton",
+  "plugin.calc.status.savedAt": "Tallennettu {time}",
+  "plugin.calc.status.cells.one": "{count} solu",
+  "plugin.calc.status.cells.other": "{count} solua",
   "plugin.calc.status.saved.one": "Tallennettu {time} · {count} solu",
   "plugin.calc.status.saved.other": "Tallennettu {time} · {count} solua",
-
   "plugin.calc.dialog.delete": "Poistetaanko \"{title}\"?",
-
   "plugin.calc.toast.saveFailed": "Tallennus epäonnistui",
   "plugin.calc.toast.openFailed": "Taulukkoa ei voitu avata",
   "plugin.calc.toast.createFailed": "Taulukkoa ei voitu luoda",

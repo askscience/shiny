@@ -2,7 +2,9 @@
   "plugin.calendar.meta.description": "Calendar — planifică, listează și organizează evenimente în fereastra Calendar",
   "plugin.calendar.meta.summary": "Calendar: planifică și organizează evenimente",
   "plugin.calendar.meta.category": "Birou",
-
+  "plugin.calendar.count.events.one": "{count} eveniment",
+  "plugin.calendar.count.events.few": "{count} evenimente",
+  "plugin.calendar.count.events.other": "{count} de evenimente",
   "plugin.calendar.month.january": "Ianuarie",
   "plugin.calendar.month.february": "Februarie",
   "plugin.calendar.month.march": "Martie",
@@ -15,7 +17,6 @@
   "plugin.calendar.month.october": "Octombrie",
   "plugin.calendar.month.november": "Noiembrie",
   "plugin.calendar.month.december": "Decembrie",
-
   "plugin.calendar.grid.sun": "Dum",
   "plugin.calendar.grid.mon": "Lun",
   "plugin.calendar.grid.tue": "Mar",
@@ -23,22 +24,16 @@
   "plugin.calendar.grid.thu": "Joi",
   "plugin.calendar.grid.fri": "Vin",
   "plugin.calendar.grid.sat": "Sâm",
-
   "plugin.calendar.event.allDay": "Toată ziua",
-
   "plugin.calendar.toolbar.previousMonth": "Luna precedentă",
   "plugin.calendar.toolbar.nextMonth": "Luna următoare",
   "plugin.calendar.toolbar.today": "Astăzi",
   "plugin.calendar.toolbar.newEvent": "Eveniment nou",
-
   "plugin.calendar.ctx.refresh": "Reîmprospătează",
-
   "plugin.calendar.detail.edit": "Editează",
   "plugin.calendar.detail.delete": "Șterge",
-
   "plugin.calendar.empty.noEvents": "Niciun eveniment",
   "plugin.calendar.empty.noEventsBody": "Nimic programat. Adaugă un eveniment sau cere AI-ului să programeze unul.",
-
   "plugin.calendar.dialog.title": "Eveniment",
   "plugin.calendar.dialog.editTitle": "Editează evenimentul",
   "plugin.calendar.dialog.titleField": "Titlu",
@@ -52,7 +47,6 @@
   "plugin.calendar.dialog.notesPlaceholder": "Note (opțional)",
   "plugin.calendar.dialog.cancel": "Anulează",
   "plugin.calendar.dialog.save": "Salvează evenimentul",
-
   "plugin.calendar.toast.titleRequired": "Titlul este obligatoriu",
   "plugin.calendar.toast.dateRequired": "Data este obligatorie",
   "plugin.calendar.toast.updated": "Eveniment actualizat",
@@ -61,8 +55,6 @@
   "plugin.calendar.toast.loadFailed": "Evenimentele nu au putut fi încărcate",
   "plugin.calendar.toast.saveFailed": "Evenimentul nu a putut fi salvat",
   "plugin.calendar.toast.deleteFailed": "Evenimentul nu a putut fi șters",
-
   "plugin.calendar.confirm.deleteEvent": "Ștergi \"{title}\"?",
-
   "plugin.calendar.notify.eventSoon": "Un eveniment începe în curând"
 }

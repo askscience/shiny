@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Avalik",
   "plugin.files.place.templates": "Mallid",
   "plugin.files.place.videos": "Videod",
-
   "plugin.files.toolbar.search": "Otsi",
   "plugin.files.toolbar.menu": "Menüü",
   "plugin.files.toolbar.back": "Tagasi",
@@ -17,44 +16,36 @@
   "plugin.files.toolbar.toggleView": "Vaheta vaadet",
   "plugin.files.toolbar.viewOptions": "Vaatevalikud",
   "plugin.files.toolbar.pathActions": "Asukohatee toimingud",
-
   "plugin.files.search.placeholder": "Otsi…",
   "plugin.files.search.clear": "Tühjenda",
-
   "plugin.files.empty.noResults": "Tulemusi ei leitud",
   "plugin.files.empty.trash": "Prügikast on tühi",
   "plugin.files.empty.folder": "Kaust on tühi",
   "plugin.files.empty.noMatch": "Ükski fail ei vasta otsingule “{query}”.",
   "plugin.files.empty.dropHint": "Lohista failid siia või kasuta üleslaadimiseks menüüd.",
-
   "plugin.files.column.name": "Nimi",
   "plugin.files.column.size": "Suurus",
   "plugin.files.column.modified": "Muudetud",
-
   "plugin.files.status.folder": "Kaust",
   "plugin.files.status.items.one": "{count} üksus",
   "plugin.files.status.items.other": "{count} üksust",
-
+  "plugin.files.status.countSelected": "{count} · {selected} valitud",
   "plugin.files.when.today": "Täna {time}",
   "plugin.files.when.yesterday": "Eile {time}",
-
   "plugin.files.menu.newFolder": "Uus kaust",
   "plugin.files.menu.uploadFiles": "Laadi failid üles…",
   "plugin.files.menu.showHidden": "Näita peidetud faile",
   "plugin.files.menu.view": "Vaade",
   "plugin.files.menu.copyPath": "Kopeeri asukohatee",
   "plugin.files.menu.emptyTrash": "Tühjenda prügikast",
-
   "plugin.files.view.grid": "Ruudustik",
   "plugin.files.view.list": "Loend",
-
   "plugin.files.ctx.open": "Ava",
   "plugin.files.ctx.download": "Laadi alla",
   "plugin.files.ctx.restore": "Taasta",
   "plugin.files.ctx.deletePermanently": "Kustuta jäädavalt",
   "plugin.files.ctx.rename": "Nimeta ümber…",
   "plugin.files.ctx.moveToTrash": "Vii prügikasti",
-
   "plugin.files.dialog.newFolderTitle": "Uue kausta nimi",
   "plugin.files.dialog.newFolderDefault": "Uus kaust",
   "plugin.files.dialog.renameTitle": "Nimeta ümber",
@@ -65,7 +56,6 @@
   "plugin.files.dialog.trashMany.one": "Viia {count} üksus prügikasti?",
   "plugin.files.dialog.trashMany.other": "Viia {count} üksust prügikasti?",
   "plugin.files.dialog.emptyTrash": "Tühjendada prügikast? Seda ei saa tagasi võtta.",
-
   "plugin.files.toast.openFailed": "Kausta ei saanud avada",
   "plugin.files.toast.searchFailed": "Otsing ebaõnnestus",
   "plugin.files.toast.pathCopied": "Asukohatee kopeeritud",
@@ -82,7 +72,6 @@
   "plugin.files.toast.restored.other": "Taastatud {count} üksust",
   "plugin.files.toast.trashEmptied": "Prügikast tühjendatud",
   "plugin.files.toast.emptyTrashFailed": "Prügikasti ei saanud tühjendada",
-
   "plugin.files.notify.downloading": "Allalaadimine",
   "plugin.files.notify.uploadComplete": "Üleslaadimine lõpetatud",
   "plugin.files.notify.uploaded.one": "{count} fail lisatud",
@@ -90,13 +79,11 @@
   "plugin.files.notify.movedToTrash": "Prügikasti viidud",
   "plugin.files.notify.movedItems.one": "{count} üksus",
   "plugin.files.notify.movedItems.other": "{count} üksust",
-
   "plugin.files.player.seek": "Kerimine",
   "plugin.files.player.mute": "Vaigista",
   "plugin.files.player.fullscreen": "Täisekraan",
   "plugin.files.player.thisFormat": "See vorming",
   "plugin.files.player.cannotDecode": "{codec} ei ole selles brauseris dekodeeritav.",
-
   "plugin.files.preview.zoomHint": "Suurendamiseks klõpsa pildil",
   "plugin.files.preview.loading": "Laadimine…",
   "plugin.files.preview.cannotPreview": "Eelvaade pole võimalik: {message}",
@@ -107,7 +94,8 @@
   "plugin.files.preview.navHint.other": "{count} üksust · liikumiseks ← →",
   "plugin.files.preview.pdfFailed": "PDF-i ei saanud kuvada",
   "plugin.files.preview.page": "Leht {n}",
-
+  "plugin.files.preview.prev": "Eelmine fail",
+  "plugin.files.preview.next": "Järgmine fail",
   "plugin.files.meta.description": "Failihaldur — sirvi, vaata eelvaadet ja halda oma kodukaustu",
   "plugin.files.meta.summary": "GNOME-stiilis failihaldur: ruudustik/loend, pisipildid, kiire eelvaade, üleslaadimine ja prügikast",
   "plugin.files.meta.category": "Süsteem"

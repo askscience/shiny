@@ -545,6 +545,28 @@ centre — and it comes back from that edge once the pointer insists there
 `top` dock also pushes the fullscreen window down by `--hud-header-total`, since
 only a bar above it would cover the app's own toolbar.
 
+The bar's **style** is a separate choice (`bar_style`, Settings → Appearance →
+"Top bar style"), published as `data-bar-style` and drawn entirely by
+`web/css/barStyles.css` (loaded after the theme's `app.css`). The DOM and the
+behaviour above stay the same, so every style docks to every position:
+
+- `rail` (the default) — the classic single pill; the stylesheet adds nothing;
+- `isles` — three pills along the edge: time (`.hud-group--time`), apps
+  (`.hud-group--apps`, centred, magnifying under the pointer) and status
+  (`#hud-top`). The two groups are `display: contents` in every other style, so
+  they cost nothing there;
+- `strip` — a thin (32 px) edge-to-edge strip flush with the edge; the plugin
+  tray is set in type (each button's `data-label`) with an accent rule under the
+  running plugins, and the voice bar rides it as a slim pill;
+- `capsule` — at rest only the clock, the running plugins and the battery; the
+  rest unfolds on hover, while keyboard focus is inside, or while one of its
+  menus is open, and folds back a moment after the pointer leaves.
+
+The shape changes follow the motion language (`--bar-morph`,
+`--bar-morph-ease` per `data-motion`). On a side dock, in every style, the
+clock keeps a compact time and the status chips stack their number under the
+icon.
+
 The top bar's own menus (clock, weather, and the systray chips: sound, network,
 Bluetooth, battery, power, clipboard) share `createMenu()`
 (`web/js/menuFactory.js`), which calls `placeMenu()` (`web/ui/popover.js`): a
@@ -776,16 +798,6 @@ never opens a window by itself.
 
 See [`web/js/preferences.js`](../../web/js/preferences.js) and
 [configuration](../configuration.md).
-
-## Desktop greeting
-
-[`deskGreeting.js`](../../web/js/deskGreeting.js) writes the time-of-day
-greeting into `#desk-greeting` as three stacked lines ("Good / afternoon, /
-Friday.") from the `desk.greeting.*` catalogue keys and the weekday in the
-interface language, refreshed every minute and on `locale:change`. Core keeps
-the element `display: none`; a theme shows and sets it (Dusk and Ink do, in
-`web/themes/editorial/app.css`). It sits with `#background`, under the window
-grid.
 
 ## Theming & notifications
 

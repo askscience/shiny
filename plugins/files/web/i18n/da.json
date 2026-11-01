@@ -9,7 +9,6 @@
   "plugin.files.place.public": "Offentlig",
   "plugin.files.place.templates": "Skabeloner",
   "plugin.files.place.videos": "Videoer",
-
   "plugin.files.toolbar.search": "Søg",
   "plugin.files.toolbar.menu": "Menu",
   "plugin.files.toolbar.back": "Tilbage",
@@ -17,44 +16,36 @@
   "plugin.files.toolbar.toggleView": "Skift visning",
   "plugin.files.toolbar.viewOptions": "Visningsindstillinger",
   "plugin.files.toolbar.pathActions": "Handlinger for stien",
-
   "plugin.files.search.placeholder": "Søg…",
   "plugin.files.search.clear": "Ryd",
-
   "plugin.files.empty.noResults": "Ingen resultater fundet",
   "plugin.files.empty.trash": "Papirkurven er tom",
   "plugin.files.empty.folder": "Mappen er tom",
   "plugin.files.empty.noMatch": "Ingen filer matcher “{query}”.",
   "plugin.files.empty.dropHint": "Træk filer hertil, eller brug menuen til at uploade.",
-
   "plugin.files.column.name": "Navn",
   "plugin.files.column.size": "Størrelse",
   "plugin.files.column.modified": "Ændret",
-
   "plugin.files.status.folder": "Mappe",
   "plugin.files.status.items.one": "{count} element",
   "plugin.files.status.items.other": "{count} elementer",
-
+  "plugin.files.status.countSelected": "{count} · {selected} valgt",
   "plugin.files.when.today": "I dag {time}",
   "plugin.files.when.yesterday": "I går {time}",
-
   "plugin.files.menu.newFolder": "Ny mappe",
   "plugin.files.menu.uploadFiles": "Upload filer…",
   "plugin.files.menu.showHidden": "Vis skjulte filer",
   "plugin.files.menu.view": "Visning",
   "plugin.files.menu.copyPath": "Kopiér sti",
   "plugin.files.menu.emptyTrash": "Tøm papirkurven",
-
   "plugin.files.view.grid": "Gitter",
   "plugin.files.view.list": "Liste",
-
   "plugin.files.ctx.open": "Åbn",
   "plugin.files.ctx.download": "Hent",
   "plugin.files.ctx.restore": "Gendan",
   "plugin.files.ctx.deletePermanently": "Slet permanent",
   "plugin.files.ctx.rename": "Omdøb…",
   "plugin.files.ctx.moveToTrash": "Flyt til papirkurven",
-
   "plugin.files.dialog.newFolderTitle": "Navn på ny mappe",
   "plugin.files.dialog.newFolderDefault": "Ny mappe",
   "plugin.files.dialog.renameTitle": "Omdøb til",
@@ -65,7 +56,6 @@
   "plugin.files.dialog.trashMany.one": "Flyt {count} element til papirkurven?",
   "plugin.files.dialog.trashMany.other": "Flyt {count} elementer til papirkurven?",
   "plugin.files.dialog.emptyTrash": "Tøm papirkurven? Det kan ikke fortrydes.",
-
   "plugin.files.toast.openFailed": "Kunne ikke åbne mappen",
   "plugin.files.toast.searchFailed": "Søgningen mislykkedes",
   "plugin.files.toast.pathCopied": "Stien er kopieret",
@@ -82,7 +72,6 @@
   "plugin.files.toast.restored.other": "Gendannede {count} elementer",
   "plugin.files.toast.trashEmptied": "Papirkurven er tømt",
   "plugin.files.toast.emptyTrashFailed": "Kunne ikke tømme papirkurven",
-
   "plugin.files.notify.downloading": "Overfører",
   "plugin.files.notify.uploadComplete": "Upload fuldført",
   "plugin.files.notify.uploaded.one": "{count} fil tilføjet",
@@ -90,13 +79,11 @@
   "plugin.files.notify.movedToTrash": "Flyttet til papirkurven",
   "plugin.files.notify.movedItems.one": "{count} element",
   "plugin.files.notify.movedItems.other": "{count} elementer",
-
   "plugin.files.player.seek": "Spol",
   "plugin.files.player.mute": "Dæmp",
   "plugin.files.player.fullscreen": "Fuldskærm",
   "plugin.files.player.thisFormat": "Dette format",
   "plugin.files.player.cannotDecode": "{codec} kan ikke afkodes af denne browser.",
-
   "plugin.files.preview.zoomHint": "Klik på billedet for at zoome",
   "plugin.files.preview.loading": "Indlæser…",
   "plugin.files.preview.cannotPreview": "Kan ikke vise forhåndsvisning: {message}",
@@ -107,7 +94,8 @@
   "plugin.files.preview.navHint.other": "{count} elementer · ← → for at flytte",
   "plugin.files.preview.pdfFailed": "Kunne ikke gengive PDF'en",
   "plugin.files.preview.page": "Side {n}",
-
+  "plugin.files.preview.prev": "Forrige fil",
+  "plugin.files.preview.next": "Næste fil",
   "plugin.files.meta.description": "Filhåndtering — gennemse, forhåndsvis og administrér dine hjemmemapper",
   "plugin.files.meta.summary": "Filhåndtering i GNOME-stil: gitter/liste, miniaturebilleder, hurtig forhåndsvisning, upload og papirkurv",
   "plugin.files.meta.category": "System"
