@@ -177,7 +177,7 @@ async fn apply_legacy_migration(
     sql: &str,
 ) -> Result<(), AppError> {
     match version {
-        3 | 9 => {
+        3 | 9 | 13 => {
             if version == 3 {
                 // A complete legacy migration must be adopted without running
                 // its data backfill again. A user may have intentionally kept
@@ -192,8 +192,9 @@ async fn apply_legacy_migration(
                     return Ok(());
                 }
             }
-            // Old releases applied these without a transaction. Recover partial
-            // application by guarding each ALTER, then run their idempotent tail.
+            // Old releases applied these without a transaction (or before the
+            // version table existed). Recover partial application by guarding
+            // each ALTER, then run their idempotent tail.
             for statement in sql.split(';') {
                 let Some(alter) = statement.find("ALTER TABLE ") else {
                     if !statement.trim().is_empty() {
