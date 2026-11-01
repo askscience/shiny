@@ -30,6 +30,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/browser/passwords"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/browser/sessions"
       },
       {
@@ -41,6 +46,11 @@
         "auth": "auth",
         "method": "Get",
         "path": "/api/browser/state"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/browser/vault"
       },
       {
         "auth": "auth",
@@ -95,6 +105,21 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/browser/passwords/remove"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/passwords/reveal"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/passwords/save"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/browser/preview"
       },
       {
@@ -111,6 +136,21 @@
         "auth": "auth",
         "method": "Post",
         "path": "/api/browser/settings"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/vault/lock"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/vault/reset"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/vault/unlock"
       }
     ],
     "tools": [
@@ -545,6 +585,11 @@
       "write_presentation"
     ]
   },
+  "installer": {
+    "api_level": 1,
+    "routes": [],
+    "tools": []
+  },
   "keyboard": {
     "api_level": 1,
     "routes": [],
@@ -656,6 +701,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/pdfs/:id/comments"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/pdfs/:id/export"
       },
       {
@@ -666,7 +716,7 @@
       {
         "auth": "auth",
         "method": "Get",
-        "path": "/api/pdfs/:id/pages/:page"
+        "path": "/api/pdfs/:id/marks"
       },
       {
         "auth": "auth",
@@ -691,7 +741,17 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/pdfs/:id/comments/edit"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/pdfs/:id/delete-pages"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/duplicate-page"
       },
       {
         "auth": "auth",
@@ -701,12 +761,52 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/pdfs/:id/extract"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/header-footer"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/ink"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/insert-blank"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/marks/remove"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/pdfs/:id/merge"
       },
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/pdfs/:id/redo"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/render-html"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/pdfs/:id/reorder"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/:id/replace-file"
       },
       {
         "auth": "auth",
@@ -721,6 +821,11 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/pdfs/:id/undo"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/pdfs/:id/watermark"
       },
       {
@@ -730,8 +835,18 @@
       },
       {
         "auth": "auth",
+        "method": "Post",
+        "path": "/api/pdfs/preview"
+      },
+      {
+        "auth": "auth",
         "method": "Put",
         "path": "/api/pdfs/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/pdfs/:id/source"
       }
     ],
     "tools": [
@@ -766,7 +881,9 @@
       "pdf_read",
       "pdf_reorder",
       "pdf_replace_text",
+      "pdf_revert",
       "pdf_rotate",
+      "pdf_undo",
       "pdf_watermark",
       "pdfs",
       "read_pdf",
@@ -775,6 +892,7 @@
       "reorder_pages",
       "rotate_pages",
       "rotate_pdf",
+      "undo_pdf",
       "watermark_pdf"
     ]
   },
@@ -842,7 +960,27 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/studio/audio/file"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/audio/info"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/audio/library"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/studio/catalog"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/studio/mix/stem/:key"
       },
       {
         "auth": "auth",
@@ -877,6 +1015,21 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/studio/export"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/mix/analyze"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/studio/mix/stems"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/studio/presets"
       },
       {
@@ -901,17 +1054,23 @@
       }
     ],
     "tools": [
+      "add_audio_track",
+      "analyze_mix",
       "analyze_track",
       "arrangements",
+      "audio_info",
       "check_mix",
       "compose_track",
       "create_arrangement",
       "delete_arrangement",
       "delete_preset",
       "delete_track",
+      "edit_arrangement",
       "edit_track",
+      "export_song",
       "get_arrangement",
       "get_track",
+      "import_song",
       "list_arrangements",
       "list_presets",
       "list_tracks",
@@ -925,17 +1084,28 @@
       "save_arrangement",
       "save_instrument",
       "save_preset",
+      "song_tempo",
+      "studio_add_song",
       "studio_analyze",
+      "studio_arrangement_analyze",
       "studio_arrangement_delete",
+      "studio_arrangement_edit",
+      "studio_arrangement_export",
       "studio_arrangement_get",
       "studio_arrangement_list",
       "studio_arrangement_save",
+      "studio_audio_info",
+      "studio_bounce",
       "studio_catalog",
       "studio_create",
       "studio_delete",
+      "studio_edit",
+      "studio_export",
       "studio_get",
+      "studio_import_audio",
       "studio_instruments",
       "studio_list",
+      "studio_mix_analyze",
       "studio_params",
       "studio_preset_delete",
       "studio_preset_list",
@@ -1097,8 +1267,23 @@
       },
       {
         "auth": "auth",
+        "method": "Get",
+        "path": "/api/documents/:id/page/:n"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/documents/:id/pages"
+      },
+      {
+        "auth": "auth",
         "method": "Post",
         "path": "/api/documents"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/documents/:id/opened"
       },
       {
         "auth": "auth",
@@ -1109,24 +1294,44 @@
         "auth": "auth",
         "method": "Put",
         "path": "/api/documents/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/documents/:id/design"
+      },
+      {
+        "auth": "public",
+        "method": "Get",
+        "path": "/api/word-fonts/:name"
       }
     ],
     "tools": [
+      "add_picture",
       "add_to_document",
       "append_text",
       "change_document",
       "create_document",
       "delete_document",
+      "doc_add_image",
       "doc_append",
       "doc_create",
       "doc_delete",
+      "doc_design",
       "doc_edit",
+      "doc_export",
+      "doc_insert_image",
+      "doc_layout",
       "doc_list",
       "doc_open",
       "doc_read",
+      "doc_save_as",
       "doc_write",
       "documents",
       "edit_document",
+      "export_document",
+      "format_document",
+      "insert_image",
       "list_documents",
       "modify_document",
       "new_document",
@@ -1134,6 +1339,8 @@
       "read_document",
       "remove_document",
       "replace_text",
+      "save_document_as",
+      "style_document",
       "update_document",
       "write_document"
     ]
