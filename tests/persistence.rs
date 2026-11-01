@@ -242,12 +242,25 @@ async fn tool_card_rows_are_stored_in_order_and_kept_out_of_the_model_history() 
         &serde_json::json!({ "expression": "2+2" }),
     );
     let events = vec![
-        ("approval".to_string(), "{\"command\":\"ls\",\"decision\":\"allow\"}".to_string()),
+        (
+            "approval".to_string(),
+            "{\"command\":\"ls\",\"decision\":\"allow\"}".to_string(),
+        ),
         ("tool".to_string(), card.to_string()),
-        ("media".to_string(), "{\"kind\":\"image\",\"url\":\"/x.png\"}".to_string()),
+        (
+            "media".to_string(),
+            "{\"kind\":\"image\",\"url\":\"/x.png\"}".to_string(),
+        ),
     ];
     chat_memory::save_turn_with_note(
-        &app.state.pool, "u", &conversation, "what is 2+2", "4", None, None, &events,
+        &app.state.pool,
+        "u",
+        &conversation,
+        "what is 2+2",
+        "4",
+        None,
+        None,
+        &events,
     )
     .await
     .unwrap();
