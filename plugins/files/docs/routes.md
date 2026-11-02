@@ -18,6 +18,7 @@ routes return bytes/streams directly). Registered in
 | `GET` | `/api/files/video-frame` | `?path=&t=&size=` | One video frame at `t` seconds via `ffmpeg`. |
 | `GET` | `/api/files/download` | `?path=` | Download with `Content-Disposition: attachment`. |
 | `GET` | `/api/files/search` | `?q=&path=` | Recursive name search. |
+| `GET` | `/api/files/recent` | `?limit=` (1–200, default 40) | Newest files of the classic home folders (Desktop, Documents, …), newest first; hidden entries skipped. The window's “Recent” place and the shell launcher read it. |
 | `POST` | `/api/files/upload` | multipart + `?path=&name=` | Save an upload into a folder (used by `saveOrDownload`). |
 | `POST` | `/api/files/write` | `{ path, content, append? }` | Write/append a text file. |
 | `POST` | `/api/files/mkdir` | `{ path }` | Create a folder. |

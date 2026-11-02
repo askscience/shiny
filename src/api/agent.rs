@@ -448,6 +448,8 @@ async fn prepare_agent(
     traveler: &Traveler,
     body: AgentRequest,
 ) -> Result<PreparedAgent, AppError> {
+    // Every agent turn (streamed or not) passes through here.
+    crate::services::ai_switch::require_enabled(&state.pool, &traveler.id).await?;
     let mode = body.mode.unwrap_or_else(|| "single".into());
     let lang = body.lang.unwrap_or_else(|| "en".into());
     let voice = body.voice;

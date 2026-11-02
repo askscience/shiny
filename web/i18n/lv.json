@@ -1268,5 +1268,10 @@
   "settings.appearance.terminal.glass": "Glass — caurspīdīgs, akcenta stars, kas met dzirksteles",
   "settings.appearance.terminal.paper": "Paper — komandu atzīmes malā, marķiera pēdas",
   "settings.appearance.terminal.blocks": "Blocks — katra komanda kā kartīte, atsperīgs bloka kursors",
-  "settings.appearance.terminal.hint": "Krāsas seko tēmai un jūsu akcentam. Komandu atzīmēm un blokiem nepieciešams bash vai zsh; samazināta kustība un enerģijas taupīšana izslēdz kursora pēdas."
+  "settings.appearance.terminal.hint": "Krāsas seko tēmai un jūsu akcentam. Komandu atzīmēm un blokiem nepieciešams bash vai zsh; samazināta kustība un enerģijas taupīšana izslēdz kursora pēdas.",
+  "hud.openLauncher": "Atvērt palaidēju",
+  "ctx.turnAiOn": "Ieslēgt MI…",
+  "settings.assistant.enabled": "MI",
+  "settings.assistant.enabledHint": "Izslēgts (“No slop”): bez tērzēšanas, aģenta un balss. Balss josla atver palaidēju.",
+  "voice.state.launcher": "Lietotnes"
 }

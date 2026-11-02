@@ -78,7 +78,9 @@ export async function filesFromEntries(realm, entries) {
 
 /** Is the Files plugin answering? One probe per session. */
 export async function pickerAvailable() {
-  if (available !== undefined) return available;
+  if (available) return true;
+  // Only a yes is remembered: a probe made before sign-in (or before the Files
+  // plugin was installed) must not hide the picker for the rest of the session.
   try {
     await apiFetch('/api/files/home');
     available = true;
@@ -347,4 +349,85 @@ export async function pickFilesFromShell({ accept = '', multiple = false } = {})
     });
     return [];
   }
+}
+
+/**
+ * Point every `<input type=file>` of a window (the app's own, or a web app's
+ * frame) at the shell's picker instead of the engine's dialog — in the kiosk
+ * that dialog is a foreign Qt window, or nothing at all. The user picks through
+ * the Files plugin, the bytes come back from it, and the input receives real
+ * `File` objects with `input`/`change` dispatched — exactly what its code
+ * listens for. App-agnostic: no surface needs code of its own.
+ *
+ * Both ways an input opens are covered: `input.click()` / `showPicker()` from
+ * code, and a click on the input itself or on its `<label>` (the label
+ * forwards a click to the input, so one capture listener catches both).
+ * An input marked `data-native-picker` keeps the engine's dialog — the fallback
+ * path used when the Files plugin is not answering.
+ */
+export function installFileInputShim(realm) {
+  if (!realm || realm.__shinyFileInput) return;
+  const proto = realm.HTMLInputElement?.prototype;
+  if (!proto) return;
+  realm.__shinyFileInput = true;
+
+  const nativeClick = proto.click;
+  const nativeShow = proto.showPicker;
+  const isFileInput = (el) => el instanceof realm.HTMLInputElement
+    && el.type === 'file' && !el.disabled && !el.hasAttribute?.('data-native-picker');
+
+  const fill = async (input) => {
+    const picked = await pickPaths({ accept: input.accept || '', multiple: !!input.multiple });
+    if (picked === null) {
+      // No Files plugin: hand the input back to the engine's own dialog.
+      input.setAttribute?.('data-native-picker', '');
+      try {
+        nativeClick.call(input);
+      } finally {
+        input.removeAttribute?.('data-native-picker');
+      }
+      return;
+    }
+    if (!picked.length) {
+      input.dispatchEvent(new realm.Event('cancel', { bubbles: false }));
+      return;
+    }
+    const files = await filesFromEntries(realm, picked);
+    const transfer = new realm.DataTransfer();
+    for (const file of files) transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new realm.Event('input', { bubbles: true }));
+    input.dispatchEvent(new realm.Event('change', { bubbles: true }));
+  };
+
+  const intercept = (input) => {
+    void fill(input).catch((error) => {
+      console.warn('file picker failed', error);
+    });
+  };
+
+  proto.click = function (...args) {
+    if (isFileInput(this)) {
+      intercept(this);
+      return undefined;
+    }
+    return nativeClick.apply(this, args);
+  };
+  if (typeof nativeShow === 'function') {
+    proto.showPicker = function (...args) {
+      if (isFileInput(this)) {
+        intercept(this);
+        return undefined;
+      }
+      return nativeShow.apply(this, args);
+    };
+  }
+  // A real click (on the input, or forwarded by its label): cancelling the
+  // click event is what stops the engine's dialog.
+  realm.document?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!isFileInput(target)) return;
+    event.preventDefault();
+    intercept(target);
+  }, true);
 }

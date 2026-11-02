@@ -11,7 +11,9 @@
   --settings-gutter: clamp(20px, 2.4cqw, 36px);
   --settings-radius: var(--radius-md);
   color: var(--text);
-  background: var(--bg-elevated);
+  /* No background of its own: the window surface comes from `.tile`
+     (tiles.css), which follows Appearance → Window opacity and Glass blur like
+     every other window. */
   font-family: var(--font-body);
 }
 

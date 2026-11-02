@@ -32,6 +32,9 @@ pub async fn put_preferences(
     crate::services::preferences::PreferenceStore::new(&state.pool)
         .put(&traveler.id, &body)
         .await?;
+    if let Some(value) = body.get(crate::services::ai_switch::PREF_KEY) {
+        crate::services::ai_switch::on_preference_change(value);
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

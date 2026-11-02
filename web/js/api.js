@@ -199,3 +199,27 @@ export function setVoiceLang(lang) {
 export function clearVoiceLang() {
   localStorage.removeItem(voiceLangKey());
 }
+
+/**
+ * After the interface language changed: move speech recognition and spoken
+ * replies to it when the voice stack has that language — even over a voice
+ * language picked earlier under Voice, since a new system language is the
+ * stronger signal. When it has not, the voice stays on the language it was
+ * using (pinned, so it does not drift onto one it cannot speak). `previous` is
+ * the voice language from before the change. Dispatches `voice:lang` when the
+ * resolved language moved, so the recogniser re-initialises.
+ */
+export async function syncVoiceLangWithLocale(previous) {
+  let codes;
+  try {
+    const res = await apiFetch('/api/voice/languages');
+    codes = (res?.data || []).map((entry) => entry?.code).filter(Boolean);
+  } catch (_) {
+    return;
+  }
+  const target = getLocale().split('-')[0];
+  if (codes.includes(target)) clearVoiceLang();
+  else if (!getVoiceLangExplicit() && previous && codes.includes(previous)) setVoiceLang(previous);
+  const lang = getVoiceLang();
+  if (lang !== previous) window.dispatchEvent(new CustomEvent('voice:lang', { detail: { lang } }));
+}

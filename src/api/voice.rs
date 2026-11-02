@@ -41,6 +41,9 @@ pub struct VoiceStatusResponse {
     pub qwen_downloads: serde_json::Value,
     /// Built-in CustomVoice speakers (for the Settings voice picker).
     pub qwen_speakers: serde_json::Value,
+    /// False on a "Text only" (or "No slop") install: the client must not
+    /// fetch speech models by itself; Settings → Voice still can.
+    pub auto_prepare: bool,
 }
 
 #[derive(Deserialize)]
@@ -182,6 +185,7 @@ pub async fn voice_status(
             .get("speakers")
             .cloned()
             .unwrap_or_else(|| json!([])),
+        auto_prepare: crate::services::ai_switch::voice_auto_prepare(),
     }))
 }
 

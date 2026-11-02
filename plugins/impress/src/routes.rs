@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts, Multipart};
+use axum::extract::{FromRequest, FromRequestParts};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::response::Response;
 use serde::de::DeserializeOwned;
@@ -20,7 +20,7 @@ use shiny_plugin_sdk::Slide;
 
 const MIME_ODP: &str = "application/vnd.oasis.opendocument.presentation";
 /// Largest imported deck accepted into memory.
-const MAX_UPLOAD: usize = 32 * 1024 * 1024;
+const MAX_UPLOAD: usize = 128 * 1024 * 1024;
 const MAX_SLIDES: usize = 200;
 const MAX_TEXT_LEN: usize = 10_000;
 
@@ -277,23 +277,7 @@ fn deck_import(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let (q, req) = take_query::<ImportQuery>(req).await?;
-            let mut multipart = Multipart::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
-
-            let mut bytes: Option<Vec<u8>> = None;
-            let mut original_name: Option<String> = None;
-            while let Some(field) = multipart
-                .next_field()
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
-            {
-                if field.name() == Some("file") {
-                    original_name = field.file_name().map(|f| f.to_string()).or(original_name);
-                    bytes = Some(shiny_plugin_sdk::field_bytes_capped(field, MAX_UPLOAD).await?);
-                }
-            }
-            let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+            let (data, original_name) = shiny_plugin_sdk::read_upload_file(req, MAX_UPLOAD).await?;
 
             let stem = original_name
                 .as_deref()

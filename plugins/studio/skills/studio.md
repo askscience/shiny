@@ -143,12 +143,13 @@ Prefer the shared returns (sends) over a reverb insert on every track.
   tracks: [{ id, name, kind: "instrument"|"audio", color, mute, solo, level, pan,
              fx: [ …inserts… ], sends: {reverb, delay},
              automation: { lanes: [ {param, points:[{beat,value}]} ] } }],
-  clips:  [{ track, start, length_beats?, loop?, gain_db?, pattern: {…} }
+  clips:  [{ track, start, length_beats?, loop?, offset_beats?, gain_db?, pattern: {…} }
           |{ track, start, length_beats?, gain_db?, audio: {src, offset?, fade_in?, fade_out?} }] }
 ```
 
 - Beats: 4 per bar. A pattern clip **loops** to fill `length_beats` (`loop:false` plays
-  once); without `length_beats` it plays the pattern once.
+  once); without `length_beats` it plays the pattern once. `offset_beats` starts playback
+  that far into the pattern (used when a clip is split).
 - `level` is linear (1.0 = 0 dB, 0.5 ≈ −6 dB); `pan` −1..1.
 - `sends` 0–1 post-fader into the shared returns; delay `sync` is in beats
   (0.75 = dotted 8th, 0.5 = 8th).

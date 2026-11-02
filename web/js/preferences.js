@@ -38,6 +38,7 @@ const IMAGE_MODEL_KEY = 'image.model';
 const IMAGE_QUALITY_KEY = 'image.quality';
 const MUSIC_QUALITY_KEY = 'music.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
+const AI_ENABLED_KEY = 'ai.enabled';
 const UI_LOCALE_KEY = 'ui.locale';
 const STORE_AUTO_UPDATE_KEY = 'store.autoUpdate';
 const DEFAULT_AI_NAME = 'Peak';
@@ -110,6 +111,7 @@ export async function loadUserPreferences() {
   applyImmersive();
   applyHudChips();
   applyHudWidgets();
+  applyLauncher();
   // An open Terminal window picks up the style stored on the server.
   announceTerminalStyle();
   // The interface language may have just arrived from the server; re-apply it
@@ -1039,6 +1041,27 @@ export function getEffectiveTtsEngine() {
   return isLowPowerAiActive() ? 'supertonic' : getTtsEngine();
 }
 
+/* ── AI on/off: "No slop" (per-user, server-backed) ───────── */
+
+/**
+ * Whether this user has any AI at all. Off ("No slop", chosen in the installer
+ * or here in Settings) means no chat, no agent, no voice: the voice bar opens
+ * the launcher instead. A missing value means on. The server seeds `false` for
+ * a new account on a "No slop" install and refuses chat/agent while it is off.
+ */
+export function isAiEnabled() {
+  return localStorage.getItem(scopedKey(AI_ENABLED_KEY)) !== 'false';
+}
+
+export function setAiEnabled(on) {
+  const key = scopedKey(AI_ENABLED_KEY);
+  if (on) localStorage.removeItem(key); // default is implicit
+  else localStorage.setItem(key, 'false');
+  persist(AI_ENABLED_KEY, on ? '' : 'false');
+  // app.js listens so the voice bar switches role without a reload.
+  window.dispatchEvent(new CustomEvent('ai:settings', { detail: { enabled: !!on } }));
+}
+
 /* ── Touch Bar (per-user, server-backed) ───────────────────── */
 
 /**
@@ -1072,8 +1095,9 @@ export function getUiLocale() {
 
 export function setUiLocale(code) {
   const value = (code || '').trim();
-  setLocalePreference(value);
+  const applied = setLocalePreference(value);
   persist(UI_LOCALE_KEY, value);
+  return applied;
 }
 
 function clamp(n, min, max) {
@@ -1129,6 +1153,60 @@ function announceTerminalStyle() {
   }
 }
 
+/* ── Plugin launcher (three-finger swipe down) ─────────────────
+ * Which launcher the gesture opens and what it shows besides the plugins.
+ * The look lives in css/launcher.css, the content in launcher.js; both read
+ * `html[data-launcher-style]`, and `launcher:change` re-renders an open one.
+ * ───────────────────────────────────────────────────────────── */
+
+const LAUNCHER_KEY = 'desktop.launcher';
+
+/**
+ * `grid` — the full-screen icon grid with a search field; `sheet` — a sheet
+ * hanging from the top bar, plugins by category beside the recent files;
+ * `command` — a keyboard-first palette born from the bar; `mosaic` — a bento
+ * of recent files above every plugin.
+ */
+export const LAUNCHER_STYLES = ['grid', 'sheet', 'command', 'mosaic'];
+
+const DEFAULT_LAUNCHER = {
+  style: 'grid',
+  /** Recent files (from the Files plugin, when installed). */
+  recents: true,
+  /** Live previews of the open windows — off by default: the window
+   *  overview (swipe up) already shows them. */
+  windows: false,
+};
+
+export function getLauncher() {
+  const stored = readJson(scopedKey(LAUNCHER_KEY), {});
+  const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+  const d = DEFAULT_LAUNCHER;
+  return {
+    style: LAUNCHER_STYLES.includes(src.style) ? src.style : d.style,
+    recents: src.recents === undefined ? d.recents : src.recents !== false,
+    windows: src.windows === undefined ? d.windows : src.windows === true,
+  };
+}
+
+export function setLauncher(patch) {
+  const merged = { ...getLauncher(), ...patch };
+  const raw = JSON.stringify(merged);
+  localStorage.setItem(scopedKey(LAUNCHER_KEY), raw);
+  persist(LAUNCHER_KEY, raw);
+  applyLauncher();
+}
+
+export function applyLauncher() {
+  const s = getLauncher();
+  const root = document.documentElement;
+  root.dataset.launcherStyle = s.style;
+  // Settings → Appearance draws its launcher preview from these.
+  root.dataset.launcherRecents = s.recents ? '1' : '0';
+  root.dataset.launcherWindows = s.windows ? '1' : '0';
+  window.dispatchEvent(new CustomEvent('launcher:change', { detail: s }));
+}
+
 /* ── Early surface application ─────────────────────────────────
  * `loadUserPreferences()` (which calls applyDesktopSurface()) only runs after
  * auth resolves, but the desktop can have already painted by then. Apply the
@@ -1141,4 +1219,5 @@ if (typeof document !== 'undefined') {
   applyDesktopSurface();
   applyDesktopGap();
   applyHudWidgets();
+  applyLauncher();
 }

@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod ai_switch;
 pub mod audio;
 pub mod battery;
 pub mod bluetooth;

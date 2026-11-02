@@ -22,8 +22,10 @@
   <link rel="stylesheet" href="/css/keyboard.css">
   <link rel="stylesheet" href="/css/background.css">
   <link rel="stylesheet" href="/css/settings.css">
+  <link rel="stylesheet" href="/css/settings-previews.css">
   <link rel="stylesheet" href="/css/plugins.css">
   <link rel="stylesheet" href="/css/overview.css">
+  <link rel="stylesheet" href="/css/launcher.css">
   <link rel="stylesheet" href="/css/boot.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
   <link rel="stylesheet" href="/ui/flow.css">
@@ -272,11 +274,13 @@
       <div id="reply-text" class="hidden"></div>
     </div>
 
-    <!-- Plugin launcher (three-finger swipe down): every installed plugin as a
-         full-screen icon grid over the blurred desktop — macOS Launchpad /
-         GNOME app grid, not a dialog. Drawn by launcher.js. -->
+    <!-- Plugin launcher (three-finger swipe down): every installed plugin,
+         the recent files and (opt-in) the open windows, in the layout picked
+         in Settings → Appearance (grid, sheet, command, mosaic). Drawn by
+         launcher.js, styled by css/launcher.css. -->
     <div id="plugin-launcher" class="plugin-launcher hidden" role="dialog" aria-modal="true" aria-label="Plugins" data-i18n-aria-label="hud.plugins">
-      <div id="plugin-launcher-grid" class="plugin-launcher-grid"></div>
+      <div class="launcher-veil" aria-hidden="true"></div>
+      <div id="plugin-launcher-body" class="launcher-body"></div>
     </div>
 
   </div>

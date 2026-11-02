@@ -1248,5 +1248,10 @@
   "settings.appearance.terminal.glass": "Glass — läpikuultava, kipinöivä korostusvärin säde",
   "settings.appearance.terminal.paper": "Paper — komentomerkit marginaalissa, korostuskynän jälki",
   "settings.appearance.terminal.blocks": "Blocks — jokainen komento korttina, joustava lohkokohdistin",
-  "settings.appearance.terminal.hint": "Värit seuraavat teemaa ja korostusväriäsi. Komentomerkit ja lohkot vaativat bashin tai zsh:n; vähennetty liike ja virransäästö poistavat kohdistimen jäljen käytöstä."
+  "settings.appearance.terminal.hint": "Värit seuraavat teemaa ja korostusväriäsi. Komentomerkit ja lohkot vaativat bashin tai zsh:n; vähennetty liike ja virransäästö poistavat kohdistimen jäljen käytöstä.",
+  "hud.openLauncher": "Avaa käynnistin",
+  "ctx.turnAiOn": "Ota tekoäly käyttöön…",
+  "settings.assistant.enabled": "Tekoäly",
+  "settings.assistant.enabledHint": "Pois (”No slop”): ei keskustelua, agenttia eikä ääntä. Äänipalkki avaa käynnistimen.",
+  "voice.state.launcher": "Sovellukset"
 }

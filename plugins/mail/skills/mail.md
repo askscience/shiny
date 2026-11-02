@@ -25,8 +25,17 @@ downloaded into the cache automatically. To pull in brand-new mail, call
 - `mail_read` — Fetch one full message from the cache. params:
   `{ account?: string, folder?: string = "INBOX", id: string }`. `id` is the
   message id returned by `mail_list`/`mail_search`. Returns subject, from, to,
-  cc, date, plain-text body (and HTML when available) plus attachment names.
+  cc, date, plain-text body (and HTML when available) plus `attachments`
+  (`index`, `filename`, `content_type`, `size`).
 - `mail_send` — Compose and send an email. params: `{ account?: string,
-  to: string[], cc?: string[], bcc?: string[], subject: string, body: string }`.
-  The sender address is the account's email. Sending always goes through the
-  mail server.
+  to: string[], cc?: string[], bcc?: string[], subject: string, body: string,
+  attachments?: string[] }`. The sender address is the account's email. Sending
+  always goes through the mail server. `attachments` are files in the user's
+  home as home-relative paths (`Documents/report.pdf`) — the paths the Files
+  tools list or a document/image tool reports after saving. 18 MB in total.
+  To forward an attachment you received, save it first with
+  `mail_save_attachment`, then attach the returned path.
+- `mail_save_attachment` — Save one attachment of a received message into the
+  user's home. params: `{ account?: string, folder?: string = "INBOX",
+  id: string, index?: number = 0, dir?: string = "Downloads" }`. `index` is the
+  attachment's position in `mail_read`'s list. Returns the saved `path`.

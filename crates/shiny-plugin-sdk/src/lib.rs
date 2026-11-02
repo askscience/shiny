@@ -42,7 +42,7 @@ pub use crons::{CronSpec, CronEntry};
 pub use plugin::{Plugin, PluginEntry, PLUGIN_ENTRY_SYMBOL};
 pub use odp::Slide;
 pub use db::{Db, Value as DbValue};
-pub use upload::field_bytes_capped;
+pub use upload::{field_bytes_capped, read_upload_file};
 
 /// The core API level. Plugins declare `api_level` in `plugin.toml`; the loader
 /// refuses to load a plugin built against a newer API than the running core.

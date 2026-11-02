@@ -676,6 +676,9 @@ WebEngineView {
     settings.playbackRequiresUserGesture: false
     settings.fullScreenSupportEnabled: true
     settings.javascriptCanOpenWindows: true
+    // Dark app theme: pages see `prefers-color-scheme: dark` (sites with a dark
+    // style switch to it), and the engine darkens the ones that have none.
+    settings.forceDarkMode: shell.darkPages
     layer.enabled: false
     layer.effect: MultiEffect { maskEnabled: true; maskSource: shell.maskItem }
 }
@@ -695,12 +698,17 @@ class Shell : public QObject {
     Q_PROPERTY(QObject *childBridge READ childBridge CONSTANT)
     Q_PROPERTY(QObject *maskItem READ maskItem CONSTANT)
     Q_PROPERTY(QObject *appChannel READ appChannel CONSTANT)
+    /// The app theme is dark: browsed pages render with the engine's dark mode,
+    /// which also makes them report `prefers-color-scheme: dark` (see
+    /// `peakd_qt_set_color_scheme`). Every page view binds its settings to it.
+    Q_PROPERTY(bool darkPages READ darkPages NOTIFY darkPagesChanged)
 
 signals:
     /// Emitted when `set_app_url` hands the scene its first URL. Declared before
     /// the setters on purpose: moc parses the class in one pass and rejects
     /// `emit` of a signal it has not seen yet.
     void appUrlChanged();
+    void darkPagesChanged();
 
 public:
     QUrl appUrl() const { return app_url_; }
@@ -711,6 +719,12 @@ public:
     QObject *childBridge() const { return child_bridge_; }
     QObject *maskItem() const { return mask_item_; }
     QObject *appChannel() const { return app_channel_; }
+    bool darkPages() const { return dark_pages_; }
+    void set_dark_pages(bool dark) {
+        if (dark_pages_ == dark) return;
+        dark_pages_ = dark;
+        emit darkPagesChanged();
+    }
 
     void set_app_url(const QUrl &url) {
         if (app_url_ == url) return;
@@ -999,6 +1013,7 @@ private:
     QObject *child_bridge_ = nullptr;
     QObject *mask_item_ = nullptr;
     QObject *app_channel_ = nullptr;
+    bool dark_pages_ = false;
 };
 
 Shell g_shell;
@@ -1438,10 +1453,18 @@ void peakd_qt_view_mask(const char *id, const char *holes_json) {
 // that results — a SIGSEGV in QXcbWindow::handleNativeEvent (reproduced on the
 // kiosk's display). A palette touches no window, and the app styles its pages
 // itself (the Browser plugin pushes the scheme for browsed pages).
+//
+// Browsed pages learn the scheme through the engine's per-view dark mode
+// (`settings.forceDarkMode`, bound to `shell.darkPages`): with it on, Blink
+// reports `prefers-color-scheme: dark`, so a site with its own dark style
+// switches to it, and only a site without one is darkened by the engine. It is
+// a WebEngine setting, so -- unlike setColorScheme -- no platform window is
+// touched.
 void peakd_qt_set_color_scheme(const char *scheme) {
     if (!scheme) return;
     const bool dark =
         QString::fromUtf8(scheme).compare(QStringLiteral("dark"), Qt::CaseInsensitive) == 0;
+    g_shell.set_dark_pages(dark);
     static int applied = -1; // -1 unset, 0 light, 1 dark
     if (applied == (dark ? 1 : 0)) return;
     applied = dark ? 1 : 0;

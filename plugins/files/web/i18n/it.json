@@ -1,5 +1,6 @@
 {
   "plugin.files.place.home": "Home",
+  "plugin.files.place.recent": "Recenti",
   "plugin.files.place.trash": "Cestino",
   "plugin.files.place.desktop": "Scrivania",
   "plugin.files.place.documents": "Documenti",
@@ -106,5 +107,7 @@
   "plugin.files.preview.next": "File successivo",
   "plugin.files.meta.description": "Esplora file — sfoglia, visualizza e gestisci le cartelle della tua home",
   "plugin.files.meta.summary": "Esplora file in stile GNOME: griglia/elenco, miniature, anteprima rapida, caricamento e cestino",
-  "plugin.files.meta.category": "Sistema"
+  "plugin.files.meta.category": "Sistema",
+  "plugin.files.empty.recent": "Nessun file recente",
+  "plugin.files.empty.recentHint": "Qui compaiono i file che salvi nelle cartelle della home."
 }

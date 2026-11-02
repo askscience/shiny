@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Gesture surfaces — the window overview and the plugin launcher.
+   Gesture surfaces — the window overview (the launcher: css/launcher.css).
 
    Both are opened by three-finger swipes (crates/peakd/src/gestures.rs →
    web/js/gestures.js) and are plain web layers, so they work the same on any
@@ -232,110 +232,6 @@ html[data-overview='open'] .overview-nav { pointer-events: auto; }
 body.workspace-sliding #tile-grid { overflow: hidden; }
 body.workspace-sliding .tile-splitters { visibility: hidden; }
 
-/* ── Plugin launcher ─────────────────────────────────────────── */
-
-/* The launcher is Launchpad, not a dialog: the whole screen, every plugin as a
-   big icon on the blurred desktop, no frame and no header. */
-.plugin-launcher {
-  position: fixed;
-  inset: 0;
-  z-index: 46;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6vh 5vw;
-  background: rgba(6, 8, 12, 0.45);
-  backdrop-filter: blur(22px) saturate(1.15);
-  -webkit-backdrop-filter: blur(22px) saturate(1.15);
-  /* launcher.js drives the whole entrance from `--launcher-p`. */
-  opacity: var(--launcher-p, 1);
-}
-
-.plugin-launcher-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 26px 18px;
-  width: min(1000px, 100%);
-  max-height: 100%;
-  align-content: center;
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: 10px;
-  /* Pulled down with the fingers: from a little above, slightly small. The
-     overshoot past either end (`--launcher-over`) stretches the travel. */
-  transform:
-    translateY(calc((1 - var(--launcher-p, 1)) * -56px + var(--launcher-over, 0) * 80px))
-    scale(calc(0.92 + var(--launcher-p, 1) * 0.08));
-  transform-origin: 50% 0;
-}
-
-.plugin-launcher-grid::-webkit-scrollbar { display: none; }
-
-.launcher-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 9px;
-  padding: 4px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  /* Rows land in a short cascade behind the panel. */
-  opacity: clamp(0, var(--launcher-p, 1) * 1.6 - 0.3, 1);
-}
-
-.launcher-item-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 76px;
-  height: 76px;
-  border-radius: 22px;
-  border: 1px solid var(--glass-border);
-  background: var(--surface);
-  color: var(--text-secondary);
-  box-shadow: var(--shadow-float);
-  transition:
-    transform var(--motion-feedback) var(--motion-ease),
-    border-color var(--motion-feedback) var(--motion-ease);
-}
-
-.launcher-item:hover .launcher-item-icon { transform: translateY(-3px) scale(1.05); }
-.launcher-item:active .launcher-item-icon { transform: scale(0.95); }
-.launcher-item.is-active .launcher-item-icon { border-color: var(--accent); color: var(--accent); }
-
-.launcher-item-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-/* A running app gets the dot under its name, the way an app grid marks it. */
-.launcher-item-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0;
-}
-
-.launcher-item.is-active .launcher-item-dot { opacity: 1; }
-
-.launcher-empty {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding: 24px;
-  text-align: center;
-  color: var(--muted);
-}
-
 @keyframes overviewDrift {
   from { translate: 0 -9px; }
   to { translate: 0 9px; }
@@ -345,8 +241,6 @@ body.workspace-sliding .tile-splitters { visibility: hidden; }
    the ambient drift and the hover easing are left to switch off here. */
 @media (prefers-reduced-motion: reduce) {
   .overview-backdrop,
-  .plugin-launcher,
-  .launcher-item,
   body.overview-active .tile--overview {
     animation: none !important;
     transition: none;

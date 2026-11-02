@@ -3555,6 +3555,22 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   font-size: 12px;
 }
 
+/* Received attachments carry Open / Save buttons; compose ones a Remove. */
+.mail-attachment .ui-btn--icon {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+.mail-attachment-label {
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mail-compose-attachments { padding: 0; }
+.mail-compose-attachments.hidden { display: none; }
+
 /* ── Footer ────────────────────────────────────────────────── */
 .mail-footer {
   flex: 0 0 auto;
@@ -8686,3 +8702,128 @@ button.files-path-crumb:hover { color: var(--text); }
 @media (max-width: 640px) {
   .studio-ai { right: 0; left: 0; width: auto !important; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   Studio — device chain (cards, hero knobs, type colours)
+   ════════════════════════════════════════════════════════════ */
+/* Device type colours: mixed from fixed hues toward the theme text colour so
+   they read on light and dark themes alike. */
+.studio-tile {
+  --studio-dev-osc: color-mix(in srgb, #4f8cff 78%, var(--text));
+  --studio-dev-filter: color-mix(in srgb, #ff8a3d 80%, var(--text));
+  --studio-dev-env: color-mix(in srgb, #3cc48e 78%, var(--text));
+  --studio-dev-lfo: color-mix(in srgb, #b46cff 78%, var(--text));
+  --studio-dev-voice: color-mix(in srgb, #2fb7c9 78%, var(--text));
+  --studio-dev-drum: color-mix(in srgb, #f2566b 80%, var(--text));
+  --studio-dev-dist: color-mix(in srgb, #e5484d 82%, var(--text));
+  --studio-dev-eq: color-mix(in srgb, #d6b23a 78%, var(--text));
+  --studio-dev-dyn: color-mix(in srgb, #8fb83c 78%, var(--text));
+  --studio-dev-delay: color-mix(in srgb, #3aa0e8 78%, var(--text));
+  --studio-dev-reverb: color-mix(in srgb, #7c7cf2 78%, var(--text));
+  --studio-dev-mod: color-mix(in srgb, #e46fc4 78%, var(--text));
+  --studio-dev-util: color-mix(in srgb, var(--text) 55%, transparent);
+}
+.studio-devices-page { overflow: auto; }
+.studio-devchain { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 8px 10px; }
+.studio-dev { flex: 0 1 auto; min-width: 150px; max-width: 420px; display: flex; flex-direction: column; border: 1px solid var(--studio-line); border-top: 2px solid var(--dev, var(--accent)); border-radius: var(--radius-sm, 6px); background: color-mix(in srgb, var(--dev, var(--accent)) 4%, transparent); }
+.studio-dev.is-bypassed { opacity: 0.55; }
+.studio-dev--instrument { min-width: 200px; }
+.studio-dev--macros { margin: 0 10px 10px; max-width: none; }
+.studio-dev--add { min-width: 140px; justify-content: center; padding: 10px; border-style: dashed; border-top-width: 1px; background: none; }
+.studio-dev-head { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 4px 2px 8px; border-bottom: 1px solid var(--studio-line); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); }
+.studio-dev-chip { flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--dev, var(--accent)); }
+.studio-dev-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-dev-power { flex: none; width: 22px; height: 14px; padding: 0; border: 1px solid var(--studio-line); border-radius: 7px; background: transparent; cursor: pointer; position: relative; }
+.studio-dev-power::after { content: ''; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: transform var(--motion-feedback, 120ms) ease; }
+.studio-dev-power.is-on { background: color-mix(in srgb, var(--dev, var(--accent)) 30%, transparent); }
+.studio-dev-power.is-on::after { transform: translateX(8px); background: var(--dev, var(--accent)); }
+.studio-dev-body { display: flex; align-items: flex-start; gap: 10px; padding: 8px; }
+.studio-dev-hero { flex: none; display: flex; align-items: center; justify-content: center; padding-right: 8px; border-right: 1px solid var(--studio-line); align-self: stretch; }
+.studio-dev-grid { flex: 1 1 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px 6px; min-width: 64px; align-items: start; justify-items: center; }
+.studio-dev-grid .studio-knob, .studio-dev-grid .studio-knob-wrap { width: 64px; }
+.studio-dev-choice { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; grid-column: span 2; }
+.studio-dev-choice-label { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-dev-choice .studio-select { width: 100%; min-width: 0; }
+/* knobs take the device colour */
+.studio-dev .ui-dial-arc { stroke: var(--dev, var(--accent)); }
+.studio-dev .ui-dial.is-set .ui-dial-value { color: var(--dev, var(--accent)); }
+.studio-dev .ui-dial.is-set .ui-dial-knob, .studio-dev .ui-dial.is-dragging .ui-dial-knob { background: color-mix(in srgb, var(--dev, var(--accent)) 14%, transparent); }
+.studio-dev .ui-dial-label { max-width: 62px; }
+.studio-dev .ui-dial-value { font-variant-numeric: tabular-nums; }
+/* the main parameter */
+.studio-knob--hero, .studio-knob--hero .studio-knob { width: 92px; }
+.studio-knob--hero .ui-dial { width: 92px; }
+.studio-knob--hero .ui-dial-knob { width: 76px; height: 76px; }
+.studio-knob--hero .ui-dial-value { font-size: 14px; }
+.studio-knob--hero .ui-dial-label { font-size: 10px; max-width: 88px; }
+.studio-knob--hero .ui-dial-track, .studio-knob--hero .ui-dial-arc { stroke-width: 3.5; }
+.studio-macro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; width: 100%; }
+.studio-macro-grid .studio-macro { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.studio-macro-grid .studio-macro-entries { width: 100%; display: flex; flex-direction: column; gap: 2px; }
+.studio-macro-grid .studio-macro-entry { display: grid; grid-template-columns: minmax(0, 1fr) 44px 18px; align-items: center; gap: 2px; }
+.studio-macro-grid .studio-macro-entry .studio-select { min-width: 0; }
+/* mixer readability */
+.studio-console .studio-mixer-strip { width: 104px; }
+.studio-console .studio-mixer-strip--return { width: 132px; }
+.studio-console .studio-mixer-strip--master { width: 148px; }
+.studio-mixer-name { max-width: 100%; text-align: center; }
+.studio-mixer-sends .studio-knob { width: 50px; transform: none; }
+.studio-mixer-sends .ui-dial { width: 50px; }
+.studio-mixer-sends .ui-dial-knob { width: 40px; height: 40px; }
+.studio-mixer-sends .ui-dial-label { max-width: 48px; }
+.studio-mixer-sends .ui-dial-value { font-size: 10px; }
+.studio-insert-editor .studio-knob-row { gap: 10px; }
+/* drag targets */
+.studio-arr-lane--target { background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.studio-arr-clip--ghost { opacity: 0.75; pointer-events: none; }
+.studio-arr-clip-resize--start { left: 0; right: auto; }
+.studio-arr-clip-resize--start::after { left: 2px; right: auto; }
+/* adaptive ruler + arrangement end */
+.studio-arr-ruler { position: sticky; top: 0; z-index: 3; height: 100%; background: var(--glass); border-bottom: 1px solid var(--glass-border); cursor: pointer; overflow: hidden; }
+.studio-arr-ruler-tick { position: absolute; top: 0; bottom: 0; padding: 3px 0 0 4px; border-left: 1px solid color-mix(in srgb, var(--text) 10%, transparent); font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+.studio-arr-ruler-tick.is-major { border-left-color: var(--glass-border); color: var(--text-secondary); }
+.studio-arr-ruler-tick.is-beat { top: 55%; padding-top: 0; font-size: 9px; border-left-color: color-mix(in srgb, var(--text) 7%, transparent); }
+.studio-arr-ruler-after { position: absolute; top: 0; bottom: 0; right: 0; background: color-mix(in srgb, var(--bg) 35%, transparent); pointer-events: none; }
+.studio-arr-ruler-loop { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); opacity: 0.7; pointer-events: none; }
+.studio-arr-endmarker { position: absolute; top: 0; bottom: 0; width: 9px; margin-left: -4px; cursor: ew-resize; z-index: 2; }
+.studio-arr-endmarker::after { content: ''; position: absolute; top: 2px; bottom: 2px; left: 3px; width: 3px; border-radius: 1px; background: var(--text); opacity: 0.6; }
+.studio-arr-endmarker:hover::after { opacity: 1; }
+.studio-arr-lane { background-image: repeating-linear-gradient(to right, color-mix(in srgb, var(--text) 7%, transparent) 0 1px, transparent 1px var(--ppbar, 224px)); }
+.studio-arr-corner { display: flex; align-items: center; justify-content: flex-end; gap: 1px; padding: 0 4px; }
+.studio-zoom-fit { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; padding: 0 4px; width: auto; }
+/* browser: grouped search + current project */
+.studio-browser-group { padding: 8px 14px 3px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.studio-browser-item--current .studio-browser-label { color: var(--accent); }
+/* device chain: one horizontal row (Bitwig-style), cards sized to content */
+.studio-devices-page { display: flex; flex-direction: column; overflow: hidden; }
+.studio-devices-page > .studio-device-voices { flex: none; }
+.studio-devchain { flex: 1 1 auto; min-height: 0; flex-wrap: nowrap; align-items: stretch; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.studio-dev { flex: none; width: max-content; min-width: 0; max-width: none; }
+.studio-dev--macros { margin: 0; }
+.studio-dev--add { width: 140px; align-self: stretch; }
+.studio-dev-body { flex: 1 1 auto; align-items: stretch; gap: 8px; padding: 8px; }
+.studio-dev-hero { align-items: center; }
+/* small tier: two rows, columns flow sideways */
+.studio-dev-grid { flex: none; display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: 60px; grid-template-columns: none; gap: 6px 4px; align-content: center; min-width: 0; }
+.studio-dev-grid .studio-knob, .studio-dev-grid .studio-knob-wrap { width: 60px; }
+.studio-dev-grid .ui-dial { width: 60px; }
+.studio-dev-grid .ui-dial-knob { width: 44px; height: 44px; }
+.studio-dev-grid .ui-dial-label { max-width: 58px; }
+/* fine tier: extra-small knobs, three rows, value on hover */
+.studio-dev-grid--fine { grid-template-rows: repeat(3, auto); grid-auto-columns: 44px; gap: 4px 2px; padding-left: 6px; border-left: 1px solid var(--studio-line); }
+.studio-knob--fine, .studio-knob--fine .studio-knob, .studio-dev-grid--fine .studio-knob-wrap { width: 44px; }
+.studio-knob--fine .ui-dial, .studio-dev-grid--fine .ui-dial { width: 44px; gap: 1px; }
+.studio-knob--fine .ui-dial-knob { width: 24px; height: 24px; }
+.studio-knob--fine .ui-dial-track, .studio-knob--fine .ui-dial-arc { stroke-width: 5; }
+.studio-knob--fine .ui-dial-value { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); padding: 0 3px; border-radius: 3px; background: var(--bg-elevated, var(--bg)); font-size: 9px; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 2; }
+.studio-knob--fine .ui-dial:hover .ui-dial-value, .studio-knob--fine .ui-dial.is-dragging .ui-dial-value, .studio-knob--fine .ui-dial:focus-visible .ui-dial-value { opacity: 1; }
+.studio-knob--fine .ui-dial-label { font-size: 8.5px; max-width: 44px; letter-spacing: 0.02em; }
+.studio-knob--fine .studio-knob-auto { display: none; }
+/* selects: their own narrow column */
+.studio-dev-choices { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 6px; width: 104px; }
+.studio-dev-choices .studio-dev-choice { grid-column: auto; }
+.studio-dev--instrument .studio-dev-grid { grid-auto-columns: minmax(60px, auto); }
+.studio-dev--instrument .studio-dev-choice { width: 120px; }
+.studio-macro-grid { display: grid; grid-auto-flow: column; grid-template-rows: none; grid-auto-columns: 132px; grid-template-columns: none; gap: 8px; width: max-content; }
+/* the arranger takes touch pinches itself */
+.studio-arr-scroll { touch-action: pan-x pan-y; }

@@ -3,7 +3,7 @@ import {
   ESP_BYTES, GIB, MIB, MIN_ROOT_BYTES,
   MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
   applyPreset, buildPlanModel, chooseDefaults, diskGaps, diskReasons,
-  diskSpans, layoutSpecsForPlan, placementForPlan, presetBytes,
+  diskOs, diskSpans, layoutSpecsForPlan, partitionOs, placementForPlan, presetBytes,
   resizeBoundary, selectedGap, summaryFor,
 } from './timeline-model.js';
 
@@ -262,6 +262,16 @@ check('the summary reports formatted and kept partitions', () => {
   assert.equal(summary.formattedPaths.length, 0);
   assert.equal(summary.keptCount, 2);
   assert.equal(summary.freeAfter, 0);
+});
+
+check('partitions are named after the system that owns them', () => {
+  assert.equal(partitionOs(disk.children[0]), 'windows');
+  assert.equal(partitionOs(disk.children[1]), 'linux');
+  assert.equal(partitionOs({ fstype: 'vfat', partflags: ['esp'] }), 'startup');
+  assert.equal(partitionOs({ fstype: 'apfs' }), 'macos');
+  assert.equal(partitionOs({ fstype: '' }), 'empty');
+  assert.equal(diskOs(disk), 'windows');
+  assert.equal(diskOs({ children: [] }), null);
 });
 
 console.log(`\n${checks} timeline-model checks passed`);

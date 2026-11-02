@@ -4,11 +4,12 @@ import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
 import { isPluginActive } from '../activePlugins.js';
-import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached } from '../preferences.js';
+import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
 import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
 import { pickFiles } from '../files.js';
-import { el, field, sliderField, heading } from './controls.js';
+import { el, field, sliderField, pageHeading, pageTabs } from './controls.js';
+import { stylePreview, windowPreview, barPreview, launcherPreview } from './previews.js';
 import { paintGlyph } from '../voiceGlyph.js';
 import { revealRegion, disposeMotion } from '../../ui/motion.js';
 
@@ -105,11 +106,12 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       const [file] = await pickFiles({ accept: 'image/*' });
       if (file) void uploadBackground(file, syncBackground);
     };
-    const uploadBtn = button({ label: t('settings.appearance.background.upload', null, 'Upload your own…'), variant: 'quiet', size: 'sm' });
+    // Uploading is the "Upload" card in the wallpaper grid itself; the row
+    // below only carries Remove once a photo of the user's own is set.
     const removeBtn = button({ label: t('settings.appearance.background.remove', null, 'Remove photo'), variant: 'danger', size: 'sm' });
     removeBtn.classList.add('hidden');
     const imageRow = el('div', 'background-image-row');
-    imageRow.append(uploadBtn, removeBtn);
+    imageRow.append(removeBtn);
     const imageHint = el('p', 'settings-hint');
 
     const imageControls = el('div', 'hidden');
@@ -149,7 +151,6 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       });
     };
 
-    on(uploadBtn, 'click', () => void pickBackgroundImage());
     on(removeBtn, 'click', () => void removeBackgroundImage(syncBackground));
 
     syncBackground();
@@ -245,7 +246,8 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
 
     return [
-      heading(t('settings.appearance.windowSurface', null, 'Window surface')),
+      pageHeading(t('settings.appearance.windowSurface', null, 'Window surface'), 'windows'),
+      windowPreview(),
       title.wrap,
       radius.wrap,
       opacity.wrap,
@@ -418,7 +420,8 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     syncAttached();
 
     return [
-      heading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar')),
+      pageHeading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar'), 'bar'),
+      barPreview(),
       autohideBar,
       field(t('settings.appearance.topBarStyle', null, 'Top bar style'), barStyle, {
         hint: t('settings.appearance.topBarStyleHint', null,
@@ -459,6 +462,43 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
   /* Content of the clock and weather chips: the clock's date and the weather
    * description can each be hidden, leaving the time and the icon + degrees —
    * see hudWidgetsShared.js + preferences.js. */
+  /** The plugin launcher the three-finger swipe down opens. */
+  function buildLauncherControls() {
+    const launcher = getLauncher();
+    const labels = {
+      grid: t('settings.appearance.launcher.grid', null, 'Grid — every plugin as a big icon, search on top'),
+      sheet: t('settings.appearance.launcher.sheet', null, 'Sheet — a sheet from the top bar, plugins by category'),
+      command: t('settings.appearance.launcher.command', null, 'Command — a palette from the bar, keyboard first'),
+      mosaic: t('settings.appearance.launcher.mosaic', null, 'Mosaic — recent files as tiles above every plugin'),
+    };
+    const style = select({
+      options: LAUNCHER_STYLES.map((value) => ({ value, label: labels[value] })),
+      onChange: (value) => setLauncher({ style: value }),
+    });
+    style.select.value = launcher.style;
+    const recents = toggleRow({
+      label: t('settings.appearance.launcher.recents', null, 'Show recent files'),
+      hint: t('settings.appearance.launcher.recentsHint', null, 'The newest files of your home folders, with their previews — the same list as Recent in Files (needs the Files plugin).'),
+      checked: launcher.recents,
+      onChange: (checked) => setLauncher({ recents: checked }),
+    });
+    const windows = toggleRow({
+      label: t('settings.appearance.launcher.windows', null, 'Show open windows'),
+      hint: t('settings.appearance.launcher.windowsHint', null, 'Previews of the open windows in the launcher. Off by default: swiping up already shows every window.'),
+      checked: launcher.windows,
+      onChange: (checked) => setLauncher({ windows: checked }),
+    });
+    return [
+      pageHeading(t('settings.appearance.launcher.heading', null, 'Launcher'), 'launcher'),
+      launcherPreview(),
+      field(t('settings.appearance.launcher.style', null, 'Launcher style'), style, {
+        hint: t('settings.appearance.launcher.styleHint', null, 'Swipe down with three fingers to open it. It follows your theme, icons and motion.'),
+      }),
+      recents,
+      windows,
+    ];
+  }
+
   function buildHudWidgetControls() {
     const widgets = getHudWidgets();
     const clockDate = toggleRow({
@@ -475,7 +515,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
 
     return [
-      heading(t('settings.appearance.topBarWidgets', null, 'Top bar widgets')),
+      pageHeading(t('settings.appearance.topBarWidgets', null, 'Top bar widgets'), 'bar'),
       el('p', 'settings-hint', t('settings.appearance.topBarWidgetsHint', null, 'Choose what the clock and weather buttons in the top bar show.')),
       clockDate,
       weatherText,
@@ -501,7 +541,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
 
     return [
-      heading(t('settings.appearance.hostStatusChips', null, 'Status buttons')),
+      pageHeading(t('settings.appearance.hostStatusChips', null, 'Status buttons'), 'bar'),
       el('p', 'settings-hint', t('settings.appearance.hostStatusChipsHint', null, 'Choose what the sound, network, Bluetooth and battery buttons in the top bar show.')),
       names,
       percent,
@@ -526,7 +566,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     style.select.value = getTerminalStyle();
     return [
-      heading(t('settings.appearance.terminal.heading', null, 'Terminal')),
+      pageHeading(t('settings.appearance.terminal.heading', null, 'Terminal'), 'style'),
       field(t('settings.appearance.terminal.style', null, 'Terminal style'), style, {
         hint: t('settings.appearance.terminal.hint', null, 'Colours follow the theme and your accent. Command marks and blocks need bash or zsh; reduced motion and the power saver turn the cursor trail off.'),
       }),
@@ -621,6 +661,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     const backgroundChildren = buildBackgroundControls();
     const windowSurfaceChildren = buildWindowSurfaceControls();
     const topBarChildren = buildTopBarControls();
+    const launcherChildren = buildLauncherControls();
     const hudWidgetChildren = buildHudWidgetControls();
     const hudChipChildren = buildHudChipControls();
 
@@ -701,7 +742,22 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     motion.select.value = getDesktopSurface().motion;
     const motionField = field(t('settings.appearance.motion.label', null, 'Motion'), motion);
 
+    const tabs = pageTabs({
+      id: 'appearance',
+      label: t('settings.appearance.pages', null, 'Appearance pages'),
+      pages: [
+        { value: 'style', label: t('settings.appearance.page.style', null, 'Style') },
+        { value: 'windows', label: t('settings.appearance.page.windows', null, 'Windows') },
+        { value: 'bar', label: t('settings.appearance.page.bar', null, 'Bar') },
+        { value: 'launcher', label: t('settings.appearance.page.launcher', null, 'Launcher') },
+        { value: 'background', label: t('settings.appearance.page.background', null, 'Background') },
+      ],
+    });
+
     return [
+      tabs,
+      pageHeading(t('settings.appearance.themeColours', null, 'Theme & colours'), 'style'),
+      stylePreview(),
       field(t('settings.appearance.theme', null, 'Theme'), theme),
       motionField,
       iconsetField,
@@ -711,13 +767,14 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       custom,
       fontField,
       ...buildTerminalControls(),
-      heading(t('common.display', null, 'Display')),
+      pageHeading(t('common.display', null, 'Display'), 'windows'),
       scaleField,
       ...windowSurfaceChildren,
       ...topBarChildren,
       ...hudWidgetChildren,
       ...hudChipChildren,
-      heading(t('settings.appearance.background.heading', null, 'Background')),
+      ...launcherChildren,
+      pageHeading(t('settings.appearance.background.heading', null, 'Background'), 'background'),
       el('p', 'settings-hint', t('settings.appearance.background.hint', null, 'The full-screen backdrop behind the desktop — the default mesh, your gradient, a photo, or a subtle animation.')),
       ...backgroundChildren,
     ];

@@ -695,6 +695,18 @@ body.compose-awaiting .compose-composer .compose-send {
   text-overflow: ellipsis;
 }
 
+/* "×N": the assistant repeated this same action N times (one card kept). */
+.tool-card-repeat {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-strong, var(--glass-strong));
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 .tool-card-open {
   flex: none;
   display: grid;

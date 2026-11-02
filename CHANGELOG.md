@@ -1,5 +1,74 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Launcher: the plugin launcher (three-finger swipe down) is rebuilt with four
+  layouts — grid (every plugin as a big icon), sheet (a sheet from the top
+  bar, plugins by category), command (a keyboard-first palette) and mosaic
+  (recent files as tiles above every plugin). It searches plugins and files,
+  and can show the running windows; style, recents and previews live under
+  Settings → Appearance → Launcher (`web/js/launcher.js`,
+  `css/launcher.css`).
+- Files: a Recent place — the most recently modified files of the classic home
+  folders (Desktop, Documents, …), hidden entries skipped and the walk bounded
+  so a huge Downloads folder cannot stall it; the launcher's mosaic reads the
+  same list (`files::fs_util::recent`).
+- Peakd gestures: two-finger pinch events (scale per step, recognised against
+  a two-finger scroll) reach the web layer beside swipes
+  (`crates/peakd/src/gestures.rs`).
+- "No slop": the AI can be switched off entirely
+  (`src/services/ai_switch.rs`). Per user the `ai.enabled` preference, per
+  machine a small state file the session script reads before the server
+  starts; with it off chat and agent requests are refused, no speech sidecar
+  starts and Ollama stays down. The voice bar opens the launcher instead, and
+  a context menu offers "Turn on the AI…"; switching it back on in Settings →
+  Assistant starts Ollama and lets the watchdog bring the voice sidecars up —
+  no restart.
+- `peakd-ollama-start` starts the local Ollama server, and both callers use
+  it: the login session (`peakd-live-session`) and the server when the AI is
+  switched back on.
+- Installer: the AI tier is chosen at install — off ("No slop"), none ("Text
+  only"), voice ("Voice pack"), local ("Local AI") — and written as
+  `PEAKD_AI_DEFAULT`; a fresh account inherits it. The disk timeline
+  describes partitions as a person would ("Windows stays untouched" rather
+  than "ntfs · /dev/nvme0n1p3") and names what is erased or kept at every
+  outcome.
+- Mail: attachments. Outgoing mail takes files by home-relative path (the
+  assistant's `mail_send`) or as uploaded multipart fields (the compose's
+  attach buttons); received attachments are read back and saved into the home
+  (`mail_attachment`, `mail_attachment_save`); either path shares the same
+  18 MB ceiling (`plugins/mail/src/attach.rs`).
+- Plugin SDK: `read_upload_file` parses multipart bodies directly (multer) —
+  axum's Multipart caps them at 2 MB. Calc, Impress, Word, PDF and Mail import
+  through it; Calc's import ceiling grows to 64 MB.
+- Settings → Appearance: schematic previews of the style, windows, bar and
+  launcher, drawn only with the theme's own tokens so they always match, and
+  the section is paginated — Style, Windows, Bar, Launcher, Background
+  (`web/js/settings/previews.js`, `css/settings-previews.css`).
+- Chat: identical repeated tool calls fold into one card, counted ("Done N
+  times"), kept where the first happened, instead of a stack of copies.
+- Studio: the arranger zooms (4–240 px per beat, the view grows as the user
+  scrolls right), a pattern clip can start offset into the beat
+  (`offset_beats`), the editor preview crossfades when the pattern changes,
+  and renders are coalesced — at most one render in flight with newer
+  requests taking over, plus a process-wide lock so a long project cannot
+  render several mixes at once against a ~3 GB buffer budget.
+- Dev helpers: `scripts/install-plugin-dev.sh` replaces a locally built plugin
+  atomically (library, manifest, skills, web) in both plugin roots with an
+  optional service restart, and `scripts/install-studio-dev.sh` does Studio
+  the same way.
+
+### Changed
+
+- Browsed pages follow the app's colour scheme: the shell binds WebEngine's
+  dark mode to it, so pages report `prefers-color-scheme: dark`, a site with
+  its own dark style switches to that, and only a page without one is
+  darkened by the engine.
+- The interface-language hint reflects that the voice follows the interface
+  language when a speech engine is available for it.
+
 ## [0.1.3] - 2026-11-01
 
 ### Added

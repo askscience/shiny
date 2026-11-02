@@ -1,0 +1,610 @@
+/* ─────────────────────────────────────────────────────────────
+   Plugin launcher (three-finger swipe down) — web/js/launcher.js.
+
+   Four layouts, picked in Settings → Appearance and set on the panel as
+   [data-style]: grid · sheet · command · mosaic. Every colour is a theme
+   token (Dusk light sheets, Ink near-black), the accent is the user's.
+
+   The whole launcher reads one progress value, --launcher-p (0..1, every
+   frame), plus --launcher-over for the rubber band past either end. Each
+   revealing element (.rv) carries a delay --d (0..1) and derives its own
+   local progress --lp from it, so a cascade is a pure function of the
+   finger position: scrub it, reverse it, it never desyncs. The motion
+   language (html[data-motion]) only changes *how* an element arrives.
+   ───────────────────────────────────────────────────────────── */
+
+/* How an element arrives, per motion language */
+:root,
+:root[data-motion='kinetic'] { --ln-ty: -26px; --ln-sc: 1; --ln-bl: 0px; --ln-spread: 0.5; }
+:root[data-motion='fluid']   { --ln-ty: -54px; --ln-sc: 0.62; --ln-bl: 0px; --ln-spread: 0.45; }
+:root[data-motion='depth']   { --ln-ty: 0px; --ln-sc: 1.16; --ln-bl: 9px; --ln-spread: 0.4; }
+
+/* ── The layer ───────────────────────────────────────────────── */
+.plugin-launcher {
+  --ln-veil: color-mix(in srgb, var(--bg) 58%, transparent);
+  --ln-tile: var(--bg-elevated);
+  --ln-line: var(--glass-border);
+  --ln-fill: var(--surface-strong);
+  --ln-shadow: 0 18px 34px -22px rgba(0, 0, 0, 0.5);
+  --ln-p: var(--launcher-p, 1);
+  --ln-over: var(--launcher-over, 0);
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+.plugin-launcher.hidden { display: none; }
+.launcher-body { position: absolute; inset: 0; }
+.launcher-mono {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The frosted desktop: a fixed blur whose *opacity* follows the fingers
+   (animating the blur radius would re-render the backdrop every frame). */
+.launcher-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--ln-veil);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel, 28px)) saturate(var(--glass-saturate, 1.4));
+  backdrop-filter: blur(var(--glass-blur-panel, 28px)) saturate(var(--glass-saturate, 1.4));
+  opacity: var(--ln-p);
+}
+
+/* The reveal grammar */
+.plugin-launcher .rv {
+  --lp: clamp(0, (var(--ln-p) - var(--d, 0) * var(--ln-spread)) / (1 - var(--ln-spread)), 1);
+  opacity: var(--lp);
+  transform:
+    translateY(calc((1 - var(--lp)) * var(--ln-ty)))
+    scale(calc(var(--ln-sc) + (1 - var(--ln-sc)) * var(--lp)));
+}
+/* Only Depth focuses things in from a blur (a filter on every item costs). */
+:root[data-motion='depth'] .plugin-launcher .rv { filter: blur(calc((1 - var(--lp)) * var(--ln-bl))); }
+
+/* ── Shared pieces ───────────────────────────────────────────── */
+.launcher-pick {
+  position: relative;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: opacity 0.3s var(--ease-out);
+}
+.launcher-pick.is-off { opacity: 0.16 !important; pointer-events: none; }
+.launcher-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.launcher-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px 0 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ln-tile) 82%, transparent);
+  border: 1px solid var(--ln-line);
+  box-shadow: var(--ln-shadow);
+  color: var(--muted);
+  cursor: text;
+}
+.launcher-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  caret-color: var(--accent);
+}
+.launcher-search-input::placeholder { color: var(--muted); }
+.launcher-search-input::-webkit-search-cancel-button { display: none; }
+.launcher-search-count:empty { display: none; }
+.launcher-kbd {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--glass-strong, rgba(127, 127, 127, 0.15));
+  color: var(--muted);
+}
+
+.launcher-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.launcher-section > span:first-child { flex: 1; }
+.launcher-section.hidden { display: none; }
+
+.launcher-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.launcher-text b { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.launcher-text > span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.launcher-hint { color: var(--accent); white-space: nowrap; }
+.launcher-empty { margin: 0; padding: 24px; text-align: center; color: var(--muted); }
+.launcher-empty.hidden { display: none; }
+
+/* Running plugin: a dot under it (the bar's and the workspaces' grammar) */
+.launcher-run {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+}
+.launcher-plugin.is-active .launcher-run { opacity: 1; }
+
+/* Plugin as a big icon */
+.launcher-plugin--tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  transform-origin: 50% 0;
+}
+.launcher-plugin--tile .launcher-plugin-icon {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 24px;
+  background: var(--ln-tile);
+  border: 1px solid var(--ln-line);
+  box-shadow: var(--ln-shadow);
+  color: var(--text-secondary);
+  transition: translate 0.35s var(--ease-out), scale 0.35s var(--ease-out), box-shadow 0.25s ease;
+}
+.launcher-plugin--tile:hover .launcher-plugin-icon { translate: 0 -4px; scale: 1.05; }
+.launcher-plugin--tile:active .launcher-plugin-icon { scale: 0.94; }
+.launcher-plugin--tile.is-sel .launcher-plugin-icon { box-shadow: 0 0 0 2px var(--ln-tile), 0 0 0 4px var(--accent), var(--ln-shadow); }
+.launcher-plugin-name {
+  max-width: 100%;
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Plugin / recent file as a row */
+.launcher-plugin--row,
+.launcher-recent--row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 12px;
+  transition: background 0.18s ease, opacity 0.3s var(--ease-out);
+}
+.launcher-plugin--row:hover,
+.launcher-recent--row:hover { background: var(--glass-hover); }
+.launcher-plugin--row.is-sel,
+.launcher-recent--row.is-sel { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.launcher-plugin--row .launcher-plugin-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--ln-fill);
+}
+.launcher-plugin--row .launcher-text { flex: 1; }
+.launcher-plugin--row .launcher-run { position: absolute; left: 24px; bottom: 3px; }
+
+/* Recent files wear Files' own thumbnails (css/tiles.css .files-thumb) */
+.launcher-thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+  color: var(--text-secondary);
+  background: var(--ln-fill);
+}
+.launcher-thumb.files-thumb { height: auto; margin: 0; background: var(--ln-fill); }
+.launcher-recent--row .launcher-thumb { width: 44px; height: 44px; border-radius: 10px; }
+.launcher-recent--row .launcher-thumb.files-thumb--mini { padding: 6px 7px 0; }
+.launcher-recent--row .files-thumb-play { width: 20px; height: 20px; }
+.launcher-recent--row .launcher-text { flex: 1; }
+.launcher-recent-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 9px; color: var(--muted); }
+.launcher-recent-meta > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.launcher-recent-meta > .ui-icon { flex: none; }
+
+/* Recent file as a card (grid) or a tile (mosaic) */
+.launcher-recent--card,
+.launcher-recent--tile {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--ln-tile);
+  border: 1px solid var(--ln-line);
+  box-shadow: var(--ln-shadow);
+  transition: translate 0.35s var(--ease-out), box-shadow 0.25s ease, opacity 0.3s var(--ease-out);
+}
+.launcher-recent--card:hover,
+.launcher-recent--tile:hover { translate: 0 -3px; }
+.launcher-recent--card.is-sel,
+.launcher-recent--tile.is-sel { box-shadow: 0 0 0 2px var(--accent), var(--ln-shadow); }
+.launcher-recent--card .launcher-thumb,
+.launcher-recent--tile .launcher-thumb { width: 100%; border-bottom: 1px solid var(--ln-line); }
+.launcher-recent--card .launcher-thumb { height: 96px; }
+.launcher-recent--card .launcher-text,
+.launcher-recent--tile .launcher-text { padding: 10px 12px 12px; gap: 5px; }
+.launcher-recent--card .files-grid-img,
+.launcher-recent--tile .files-grid-img { transition: transform var(--duration-slow, 0.7s) var(--ease-out); }
+.launcher-recent--card:hover .files-grid-img,
+.launcher-recent--tile:hover .files-grid-img { transform: scale(1.05); }
+
+/* An open window: a scaled, inert copy of its tile */
+.launcher-window {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: translate 0.35s var(--ease-out), opacity 0.3s var(--ease-out);
+}
+.launcher-window:hover { translate: 0 -3px; }
+.launcher-winprev {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--ln-line);
+  box-shadow: var(--ln-shadow);
+}
+.launcher-winprev > .tile { border-radius: 0; }
+.launcher-window.is-sel .launcher-winprev { box-shadow: 0 0 0 2px var(--accent), var(--ln-shadow); }
+.launcher-winprev-ph { display: block; background: var(--ln-fill); }
+.launcher-window-cap { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 550; }
+
+.launcher-strip { display: flex; gap: 14px; }
+
+/* "Manage" — the editorial grey pill with its arrow */
+.launcher-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 5px 0 15px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ln-fill);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+.launcher-manage-arrow {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg-elevated);
+  rotate: 90deg;
+  transition: rotate 0.4s var(--ease-out);
+}
+.launcher-manage:hover .launcher-manage-arrow { rotate: 45deg; }
+
+/* Picking: the chosen item swells towards you, the rest give way */
+.plugin-launcher.is-launching .launcher-pick:not(.is-launch) { opacity: 0.3; transition: opacity 0.18s ease; }
+.plugin-launcher .is-launch { animation: launcher-launch 0.32s var(--ease-out) forwards; z-index: 2; }
+:root[data-motion='kinetic'] .plugin-launcher .is-launch { animation-duration: 0.22s; }
+@keyframes launcher-launch { to { transform: scale(1.3); opacity: 0; } }
+
+/* ═══ grid ════════════════════════════════════════════════════ */
+.lg-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: max(9vh, 64px) 5vw 24px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  /* The whole sheet of icons rides the fingers and stretches past the ends */
+  transform: translateY(calc(var(--ln-over) * 90px));
+}
+.lg-wrap::-webkit-scrollbar { display: none; }
+.lg-wrap > .launcher-search { width: min(440px, 100%); flex: none; }
+.lg-wrap > .launcher-section { width: min(1000px, 100%); margin-top: 10px; }
+.lg-wrap > .launcher-strip { width: min(1000px, 100%); flex: none; }
+.lg-recents > .launcher-recent--card { flex: 1 1 0; min-width: 0; max-width: 180px; }
+.lg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 26px 18px;
+  width: min(1000px, 100%);
+  margin-top: 22px;
+}
+.lg-foot { margin: auto 0 0; padding-top: 24px; color: var(--muted); }
+
+/* ═══ sheet ═══════════════════════════════════════════════════ */
+.plugin-launcher[data-style='sheet'] {
+  --ln-veil: color-mix(in srgb, #000 22%, transparent);
+  --ln-edge: -1;
+  --ln-top: calc(var(--hud-bar-height, 44px) + 2 * var(--desktop-gap, 12px));
+}
+:root[data-bar-pos='bottom'] .plugin-launcher[data-style='sheet'] { --ln-edge: 1; }
+.plugin-launcher[data-style='sheet'] .launcher-veil {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.ls-sheet {
+  position: absolute;
+  top: var(--ln-top);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  width: min(1220px, calc(100vw - 48px));
+  height: min(800px, calc(100vh - var(--ln-top) - 24px));
+  border-radius: var(--window-radius, 22px);
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  /* Hangs from the bar: pulled out of its edge by the fingers. */
+  translate: -50% 0;
+  transform: translateY(calc((1 - var(--ln-p)) * 104% * var(--ln-edge) - var(--ln-over) * 70px * var(--ln-edge)));
+  clip-path: inset(0 0 calc((1 - var(--ln-p)) * 30%) 0 round var(--window-radius, 22px));
+}
+:root[data-bar-pos='bottom'] .ls-sheet {
+  top: auto;
+  bottom: var(--ln-top);
+  clip-path: inset(calc((1 - var(--ln-p)) * 30%) 0 0 0 round var(--window-radius, 22px));
+}
+:root[data-motion='depth'] .ls-sheet {
+  transform: translateY(calc((1 - var(--ln-p)) * 40px * var(--ln-edge))) scale(calc(0.9 + var(--ln-p) * 0.1));
+  opacity: var(--ln-p);
+  clip-path: none;
+}
+.ls-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--ln-line);
+}
+.ls-title { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ls-eyebrow { color: var(--muted); }
+.ls-title h1 {
+  margin: 0;
+  padding-bottom: 4px;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.4vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+/* Kinetic sets the title like a headline: it rises out of its baseline */
+:root[data-motion='kinetic'] .ls-title h1 { opacity: 1; transform: none; }
+:root[data-motion='kinetic'] .ls-title h1 > span { display: inline-block; transform: translateY(calc((1 - var(--lp)) * 110%)); }
+.ls-head .launcher-search { width: 300px; height: 40px; box-shadow: none; background: var(--ln-fill); border-color: transparent; }
+.ls-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+.ls-sheet.is-wide .ls-body { grid-template-columns: minmax(0, 1fr); }
+.ls-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 18px 40px 26px;
+  border-right: 1px solid var(--ln-line);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ls-aside > .launcher-section { padding: 8px 6px 4px; }
+.ls-aside > .launcher-window { padding: 4px 6px 8px; }
+.ls-cats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 32px;
+  padding: 20px 32px 56px;
+  align-content: start;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ls-sheet.is-wide .ls-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ls-cat { display: flex; flex-direction: column; gap: 6px; }
+.ls-cat > .launcher-section { padding-bottom: 8px; border-bottom: 1px solid var(--ln-line); }
+.ls-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+/* Kinetic wipes each row in, top to bottom, instead of fading it */
+:root[data-motion='kinetic'] .ls-list > .launcher-pick:not(.is-off) { opacity: 1; clip-path: inset(0 0 calc((1 - var(--lp)) * 100%) 0); }
+.ls-grab {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 0 12px;
+  font-size: 9px;
+  color: var(--muted);
+  background: linear-gradient(transparent, var(--bg-elevated) 50%);
+  pointer-events: none;
+}
+.ls-grab i { width: 44px; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.4; }
+:root[data-bar-pos='bottom'] .ls-grab { display: none; }
+
+/* ═══ command ═════════════════════════════════════════════════ */
+.plugin-launcher[data-style='command'] {
+  --ln-veil: color-mix(in srgb, #000 20%, transparent);
+  --ln-top: calc(var(--hud-bar-height, 44px) + 2 * var(--desktop-gap, 12px));
+}
+.plugin-launcher[data-style='command'] .launcher-veil {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+/* An always-dark island, like the bar and the menus */
+.lc-pal {
+  --text: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --muted: rgba(255, 255, 255, 0.5);
+  --glass-hover: rgba(255, 255, 255, 0.06);
+  --ln-line: rgba(255, 255, 255, 0.09);
+  --ln-fill: rgba(255, 255, 255, 0.07);
+  --ln-tile: rgba(255, 255, 255, 0.06);
+  --accent: var(--accent-on-dark);
+  position: absolute;
+  top: var(--ln-top);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  width: min(700px, calc(100vw - 32px));
+  max-height: calc(100vh - var(--ln-top) - 32px);
+  border-radius: 20px;
+  background: rgba(14, 14, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.75);
+  -webkit-backdrop-filter: blur(34px) saturate(1.5);
+  backdrop-filter: blur(34px) saturate(1.5);
+  color: var(--text);
+  translate: -50% 0;
+  /* Born from the bar: a bar-sized cut at the top grows into the palette. */
+  clip-path: inset(0 calc((1 - var(--ln-p)) * 30%) calc((1 - var(--ln-p)) * 92%) round 18px);
+  transform: translateY(calc((var(--ln-p) - 1) * 40px + var(--ln-over) * 60px));
+}
+:root[data-bar-pos='bottom'] .lc-pal {
+  top: auto;
+  bottom: var(--ln-top);
+  clip-path: inset(calc((1 - var(--ln-p)) * 92%) calc((1 - var(--ln-p)) * 30%) 0 round 18px);
+  transform: translateY(calc((1 - var(--ln-p)) * 40px - var(--ln-over) * 60px));
+}
+:root[data-motion='depth'] .lc-pal {
+  clip-path: none;
+  opacity: var(--ln-p);
+  transform: translateY(calc((var(--ln-p) - 1) * 30px)) scale(calc(0.92 + var(--ln-p) * 0.08));
+}
+.lc-pal > .launcher-search {
+  flex: none;
+  height: 64px;
+  padding: 0 18px 0 22px;
+  border: 0;
+  border-bottom: 1px solid var(--ln-line);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.lc-pal .launcher-search-input {
+  font-family: var(--font-display);
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+.lc-windows { padding: 12px 18px 2px; overflow-x: auto; scrollbar-width: none; }
+.lc-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 4px 10px 10px;
+}
+.lc-list > .launcher-section { padding: 14px 10px 6px; }
+.lc-list > .launcher-pick.is-off { display: none; }
+.lc-foot {
+  flex: none;
+  display: flex;
+  gap: 18px;
+  padding: 12px 22px;
+  border-top: 1px solid var(--ln-line);
+  color: var(--muted);
+  font-size: 9.5px;
+}
+.lc-sp { flex: 1; }
+
+/* ═══ mosaic ══════════════════════════════════════════════════ */
+.lm-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: max(8vh, 56px) 5vw 28px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  transform: translateY(calc(var(--ln-over) * 80px));
+  perspective: 1400px;
+}
+.lm-head,
+.lm-grid { width: min(1240px, 100%); }
+.lm-head { display: flex; align-items: flex-end; gap: 18px; padding-bottom: 18px; }
+.lm-head h1 {
+  flex: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.2vw, 42px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+.lm-date { color: var(--muted); padding-bottom: 12px; }
+.lm-head .launcher-search { width: 280px; height: 40px; }
+.lm-grid { display: flex; flex-direction: column; gap: 14px; }
+.lm-label { padding: 6px 2px 0; }
+.lm-windows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.lm-recents { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.lm-recents > .launcher-recent--tile { transform-origin: var(--ox, 50%) 0; }
+.lm-recents .launcher-thumb { height: 150px; }
+.lm-recents > .launcher-recent--tile:first-child { grid-column: span 2; }
+.lm-recents > .launcher-recent--tile:first-child .launcher-thumb { height: 150px; }
+.lm-recents > .launcher-recent--tile:first-child .launcher-text b { font-family: var(--font-display); font-size: 18px; letter-spacing: -0.03em; }
+:root[data-motion='depth'] .lm-recents > .rv,
+:root[data-motion='depth'] .lm-windows > .rv { transform: translateZ(calc((1 - var(--lp)) * 180px)); }
+.lm-all {
+  margin-top: 6px;
+  padding: 14px 16px 12px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--ln-tile) 55%, transparent);
+  border: 1px solid var(--ln-line);
+}
+.lm-all > .launcher-section { margin-bottom: 12px; }
+.lm-all .launcher-manage { height: 32px; font-size: 12px; }
+.lm-all .launcher-manage-arrow { width: 24px; height: 24px; }
+.lm-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 12px 4px; }
+.lm-apps .launcher-plugin--tile { padding: 6px 0 4px; border-radius: 14px; }
+.lm-apps .launcher-plugin--tile:hover,
+.lm-apps .launcher-plugin--tile.is-sel { background: var(--glass-hover); }
+.lm-apps .launcher-plugin-icon { width: 52px; height: 52px; border-radius: 16px; background: none; border: 0; box-shadow: none; }
+.lm-apps .launcher-plugin--tile.is-sel .launcher-plugin-icon { box-shadow: none; }
+
+/* The bar the sheet and the palette come out of stays on top of them. */
+:root[data-launcher][data-launcher-style='sheet'] #hud-header,
+:root[data-launcher][data-launcher-style='command'] #hud-header { z-index: 47; }
+
+/* ── Small screens ───────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .ls-body { grid-template-columns: minmax(0, 1fr); }
+  .ls-aside { display: none; }
+  .ls-cats, .ls-sheet.is-wide .ls-cats { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .ls-head { flex-wrap: wrap; padding: 20px 16px 14px; }
+  .ls-head .launcher-search { width: 100%; }
+  .lm-recents, .lm-windows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lm-head { flex-wrap: wrap; }
+  .lm-head .launcher-search { width: 100%; }
+  .lg-recents > .launcher-recent--card:nth-child(n + 4) { display: none; }
+}
+
+/* The progress itself jumps under reduced motion (gestureTransition.js). */
+@media (prefers-reduced-motion: reduce) {
+  .plugin-launcher .rv { filter: none !important; }
+  .plugin-launcher .is-launch { animation: none; }
+}

@@ -1268,5 +1268,10 @@
   "settings.appearance.terminal.glass": "Glass — translucide, un faisceau d'accent qui projette des étincelles",
   "settings.appearance.terminal.paper": "Paper — marques de commande dans la marge, une traînée de surligneur",
   "settings.appearance.terminal.blocks": "Blocks — chaque commande dans une carte, un curseur bloc élastique",
-  "settings.appearance.terminal.hint": "Les couleurs suivent le thème et votre accent. Les marques de commande et les blocs nécessitent bash ou zsh ; les animations réduites et l'économie d'énergie désactivent la traînée du curseur."
+  "settings.appearance.terminal.hint": "Les couleurs suivent le thème et votre accent. Les marques de commande et les blocs nécessitent bash ou zsh ; les animations réduites et l'économie d'énergie désactivent la traînée du curseur.",
+  "hud.openLauncher": "Ouvrir le lanceur",
+  "ctx.turnAiOn": "Activer l’IA…",
+  "settings.assistant.enabled": "IA",
+  "settings.assistant.enabledHint": "Désactivée (« No slop ») : ni chat, ni agent, ni voix. La barre vocale ouvre le lanceur.",
+  "voice.state.launcher": "Applis"
 }

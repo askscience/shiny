@@ -15,6 +15,7 @@
 import { setIcon, decodeText } from '../ui/index.js';
 import { toolIcon } from './toolIcons.js';
 import { t } from './i18n.js';
+import { isAiEnabled } from './preferences.js';
 
 /** The voice states (sphere.js) and the word the bar wears for each. */
 const STATE_LABELS = {
@@ -30,6 +31,10 @@ const STATE_LABELS = {
 
 /** The word for a voice state, in the interface language. */
 export function stateLabel(state) {
+  // "No slop": the resting bar is the launcher button, so it says so.
+  if ((state === 'idle' || !STATE_LABELS[state]) && !isAiEnabled()) {
+    return t('voice.state.launcher', null, 'Apps');
+  }
   const [key, fallback] = STATE_LABELS[state] || STATE_LABELS.idle;
   return t(key, null, fallback);
 }

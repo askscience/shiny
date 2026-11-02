@@ -22,6 +22,8 @@ pimalaya-stream = "0.0.1"
 io-smtp = "0.1"
 mail-builder = "0.5"
 mail-parser = "0.11"
+# The compose uploads attachments as multipart (see routes::read_multipart_send).
+multer = "3"
 url = "2"
 secrecy = "0.10"
 # Account passwords are encrypted at rest (AES-256-GCM) with a key file.

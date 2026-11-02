@@ -67,6 +67,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "files_restore" => restore(ctx),
         "files_empty_trash" => empty_trash(ctx),
         "files_search" => search(ctx),
+        "files_recent" => recent(ctx),
         _ => return None,
     })
 }
@@ -132,6 +133,12 @@ struct UploadQuery {
 struct SearchQuery {
     q: Option<String>,
     path: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RecentQuery {
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize, Default)]
@@ -886,6 +893,22 @@ fn search(ctx: Arc<PluginCtx>) -> RouteHandler {
             let start = fs_util::resolve(&home, &q.path.unwrap_or_default()).await?;
             let results = fs_util::search(&home, &start, needle.trim(), 200).await?;
             Ok(ok(json!({ "query": needle, "results": results })))
+        }
+    })
+}
+
+/// The most recently modified files in the classic home folders, newest first
+/// (the window's "Recent" place; the shell's launcher reads it too).
+fn recent(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let _ = &ctx;
+        async move {
+            let uid = user_id(&req)?;
+            let home = request_home(&uid, shiny_plugin_sdk::os_home_from_request(&req)).await?;
+            let (q, _req) = take_query::<RecentQuery>(req).await?;
+            let limit = q.limit.unwrap_or(40).clamp(1, 200);
+            let entries = fs_util::recent(&home, limit).await?;
+            Ok(ok(json!({ "entries": entries })))
         }
     })
 }

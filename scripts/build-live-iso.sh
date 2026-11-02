@@ -238,8 +238,11 @@ register_payload() {
     local pkg
     rm -rf "$reg"
     mkdir -p "$reg/first" "$reg/deps" "$reg/main"
+    # python3-venv + the bundled pip/setuptools wheels: the voice pack builds
+    # its own venvs (faster-whisper, Supertonic) on the first online start.
     for pkg in libqt6serialport6 libqt6webenginequick6 libqt6webchannelquick6 \
-        libqt6positioning6-plugins fonts-roboto-unhinted; do
+        libqt6positioning6-plugins fonts-roboto-unhinted \
+        python3-pip-whl python3-setuptools-whl python3.13-venv python3-venv; do
         local target="$reg/deps"
         [ "$pkg" = libqt6serialport6 ] && target="$reg/first"
         if ! compgen -G "$DEBS/${pkg}_*.deb" >/dev/null; then

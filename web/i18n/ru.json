@@ -1288,5 +1288,10 @@
   "settings.appearance.terminal.glass": "Glass — полупрозрачный, с лучом акцента, рассыпающим искры",
   "settings.appearance.terminal.paper": "Paper — метки команд на полях и след маркера",
   "settings.appearance.terminal.blocks": "Blocks — каждая команда в карточке, упругий блочный курсор",
-  "settings.appearance.terminal.hint": "Цвета следуют теме и вашему акценту. Метки команд и блоки требуют bash или zsh; при уменьшении движения и в режиме экономии энергии след курсора отключается."
+  "settings.appearance.terminal.hint": "Цвета следуют теме и вашему акценту. Метки команд и блоки требуют bash или zsh; при уменьшении движения и в режиме экономии энергии след курсора отключается.",
+  "hud.openLauncher": "Открыть панель запуска",
+  "ctx.turnAiOn": "Включить ИИ…",
+  "settings.assistant.enabled": "ИИ",
+  "settings.assistant.enabledHint": "Выключен («No slop»): без чата, агента и голоса. Голосовая панель открывает панель запуска.",
+  "voice.state.launcher": "Приложения"
 }

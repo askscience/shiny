@@ -11,7 +11,8 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use shiny_installer_protocol::{
-    InstallPlan, PartitionSpec, MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
+    InstallPlan, PartitionSpec, AI_TIER_LOCAL, AI_TIER_NONE, AI_TIER_OFF, AI_TIER_VOICE,
+    MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
 };
 
 const TARGET_MOUNT: &str = "/run/shiny-installer/target";
@@ -516,11 +517,12 @@ fn configure_target(
     let live_session = target.join("usr/local/bin/peakd-live-session");
     let target_session = target.join("usr/local/bin/peakd-session");
     if let Ok(text) = fs::read_to_string(&live_session) {
-        let text = text.replace("export SHINY_LIVE_INSTALLER=1", "export SHINY_LIVE_INSTALLER=0");
-        fs::write(&target_session, text).map_err(|e| format!("target session: {e}"))?;
+        fs::write(&target_session, target_session_text(&text, plan))
+            .map_err(|e| format!("target session: {e}"))?;
         set_exec(&target_session)?;
     }
     let _ = fs::remove_file(&live_session);
+    remove_ai_payload(plan, target);
     let desktop = target.join("usr/share/xsessions/peakd.desktop");
     if let Ok(text) = fs::read_to_string(&desktop) {
         fs::write(&desktop, text.replace("peakd-live-session", "peakd-session"))
@@ -667,6 +669,48 @@ fn install_bootloader(
     Ok(())
 }
 
+/// The installed session script, derived from the live one: no installer, and
+/// the AI tier chosen in the wizard. The script turns the tier into the
+/// server's switches (AI on/off, speech engines started/installed).
+fn target_session_text(live: &str, plan: &InstallPlan) -> String {
+    let tier = match plan.ai_tier.as_str() {
+        AI_TIER_OFF | AI_TIER_NONE | AI_TIER_VOICE | AI_TIER_LOCAL => plan.ai_tier.as_str(),
+        _ => AI_TIER_VOICE,
+    };
+    live.replace(
+        "export SHINY_LIVE_INSTALLER=1",
+        "export SHINY_LIVE_INSTALLER=0",
+    )
+    .replace(
+        "export PEAKD_AI_TIER=live",
+        &format!("export PEAKD_AI_TIER={tier}"),
+    )
+}
+
+/// "No slop" installs no AI at all: the Ollama runtime (binary, ~5 GB of
+/// GPU/CPU libraries, its service) is not copied to the target. Ollama can be
+/// installed again later from Updates.
+const OLLAMA_PATHS: &[&str] = &[
+    "usr/local/bin/ollama",
+    "usr/local/lib/ollama",
+    "var/lib/ollama",
+    "etc/systemd/system/ollama.service",
+];
+
+fn remove_ai_payload(plan: &InstallPlan, target: &Path) {
+    if plan.ai_tier != AI_TIER_OFF {
+        return;
+    }
+    for path in OLLAMA_PATHS {
+        let path = target.join(path);
+        if path.is_dir() {
+            let _ = fs::remove_dir_all(&path);
+        } else {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
+
 fn kernel_version(target: &Path, t2: bool) -> Result<String, String> {
     let mut versions = Vec::new();
     for entry in fs::read_dir(target.join("lib/modules")).map_err(|e| format!("modules: {e}"))?.flatten() {
@@ -756,6 +800,38 @@ mod tests {
         }));
         assert_eq!(free_space_start(&plan).unwrap(), 1024);
         assert_eq!(free_extent_end_mib(&plan).unwrap(), 3072);
+    }
+
+    #[test]
+    fn the_ai_tier_is_written_into_the_session() {
+        let live = "export SHINY_LIVE_INSTALLER=1\nexport PEAKD_AI_TIER=live\n";
+        let mut plan = manual_plan(None);
+        for tier in [AI_TIER_OFF, AI_TIER_NONE, AI_TIER_VOICE, AI_TIER_LOCAL] {
+            plan.ai_tier = tier.into();
+            let text = target_session_text(live, &plan);
+            assert!(text.contains("SHINY_LIVE_INSTALLER=0"));
+            assert!(text.contains(&format!("export PEAKD_AI_TIER={tier}\n")));
+        }
+        plan.ai_tier = "bogus".into();
+        assert!(target_session_text(live, &plan).contains("PEAKD_AI_TIER=voice"));
+    }
+
+    #[test]
+    fn no_slop_leaves_no_ollama_on_the_target() {
+        let dir = std::env::temp_dir().join(format!("peakd-ai-payload-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("usr/local/lib/ollama/vulkan")).unwrap();
+        fs::create_dir_all(dir.join("usr/local/bin")).unwrap();
+        fs::write(dir.join("usr/local/bin/ollama"), "bin").unwrap();
+        let mut plan = manual_plan(None);
+        plan.ai_tier = AI_TIER_NONE.into();
+        remove_ai_payload(&plan, &dir);
+        assert!(dir.join("usr/local/bin/ollama").exists(), "text-only keeps Ollama");
+        plan.ai_tier = AI_TIER_OFF.into();
+        remove_ai_payload(&plan, &dir);
+        assert!(!dir.join("usr/local/bin/ollama").exists());
+        assert!(!dir.join("usr/local/lib/ollama").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

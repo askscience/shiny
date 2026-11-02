@@ -239,12 +239,6 @@ html[data-overview] body::after {
   border-radius: 6px;
 }
 
-/* ── Launcher ───────────────────────────────────────────────── */
-#plugin-launcher {
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturate));
-}
-
 /* ── Settings ───────────────────────────────────────────────── */
 .settings-panel h2,
 .settings-section-title { font-family: var(--font-display); letter-spacing: -0.04em; }

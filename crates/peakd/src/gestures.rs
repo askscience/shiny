@@ -67,6 +67,11 @@ use parking_lot::Mutex;
 /// used to be the whole discrete swipe; the continuous one locks its axis at
 /// [`LOCK_FRACTION`] of it and reaches progress 1.0 at [`FULL_FACTOR`] times it.
 const SWIPE_FRACTION: f64 = 0.12;
+/// A pinch starts once the finger distance has changed by this fraction…
+const PINCH_START: f64 = 0.08;
+/// …unless the fingers' midpoint first travelled this fraction of the swipe
+/// threshold, which makes it a two-finger scroll.
+const PINCH_SCROLL_FRACTION: f64 = 0.6;
 /// The floor for a pad whose range could not be read (units are arbitrary).
 const SWIPE_MIN_UNITS: i64 = 120;
 /// The centre travel, as a fraction of the reference distance, at which three
@@ -170,6 +175,14 @@ pub struct GestureEvent {
     pub velocity: f64,
 }
 
+/// One step of a two-finger pinch: `scale` is the current finger distance over
+/// the distance when the pinch was recognised (1.0 at `begin`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PinchEvent {
+    pub phase: Phase,
+    pub scale: f64,
+}
+
 /// Called on the reader thread when a gesture goes live (`true`) or idle
 /// (`false`), so the shell can pump at frame rate only while fingers move.
 pub type Waker = fn(bool);
@@ -183,6 +196,7 @@ pub type Waker = fn(bool);
 #[derive(Clone, Default)]
 pub struct GestureBridge {
     queue: Arc<Mutex<Vec<GestureEvent>>>,
+    pinch: Arc<Mutex<Vec<PinchEvent>>>,
     waker: Option<Waker>,
 }
 
@@ -190,6 +204,7 @@ impl GestureBridge {
     fn with_waker(waker: Waker) -> Self {
         Self {
             queue: Arc::default(),
+            pinch: Arc::default(),
             waker: Some(waker),
         }
     }
@@ -218,6 +233,43 @@ impl GestureBridge {
     pub fn drain(&self) -> Vec<GestureEvent> {
         std::mem::take(&mut *self.queue.lock())
     }
+
+    /// Queue a pinch step; consecutive updates coalesce like swipe updates.
+    fn push_pinch(&self, event: PinchEvent) {
+        {
+            let mut queue = self.pinch.lock();
+            match queue.last_mut() {
+                Some(last) if last.phase == Phase::Update && event.phase == Phase::Update => {
+                    *last = event;
+                }
+                _ => queue.push(event),
+            }
+        }
+        if let Some(wake) = self.waker {
+            match event.phase {
+                Phase::Begin => wake(true),
+                Phase::End | Phase::Cancel => wake(false),
+                Phase::Update => {}
+            }
+        }
+    }
+
+    pub fn drain_pinch(&self) -> Vec<PinchEvent> {
+        std::mem::take(&mut *self.pinch.lock())
+    }
+}
+
+/// The page-side launch for one pinch step (`trackpad:pinch`). X11 never
+/// delivers trackpad pinches to the webview, so pages that zoom (the Studio
+/// timeline) listen for this instead.
+pub fn pinch_script(event: &PinchEvent) -> String {
+    let scale = if event.scale.is_finite() { event.scale } else { 1.0 };
+    format!(
+        "window.dispatchEvent(new CustomEvent('trackpad:pinch', \
+         {{ detail: {{ phase: \"{}\", scale: {:.4} }} }}));",
+        event.phase.as_str(),
+        scale,
+    )
 }
 
 /// The page-side launch for one swipe event. Kept in one place so the event
@@ -585,8 +637,22 @@ struct Reader {
     legacy: Option<(i32, i32)>,
     tool: [bool; 5], // 1..=4 fingers, from BTN_TOOL_*
     swipe: Option<Swipe>,
+    pinch: Option<Pinch>,
     /// A fixed clock for the tests; `None` reads the real one.
     clock: Option<Instant>,
+}
+
+/// An in-flight two-finger contact that may become a pinch.
+struct Pinch {
+    /// Finger distance and midpoint when the two fingers settled.
+    d0: f64,
+    mx0: f64,
+    my0: f64,
+    /// Distance when the pinch was recognised (scale reference), once live.
+    live: Option<f64>,
+    /// The midpoint travelled first: it is a two-finger scroll, not a pinch.
+    spent: bool,
+    sent: f64,
 }
 
 impl Reader {
@@ -649,8 +715,65 @@ impl Reader {
             legacy: None,
             tool: [false; 5],
             swipe: None,
+            pinch: None,
             clock: None,
         }
+    }
+
+    /// The two finger contacts, when exactly two fingers are down.
+    fn two_fingers(&self) -> Option<((f64, f64), (f64, f64))> {
+        let mut it = self.slots.iter().filter(|s| s.is_finger());
+        let a = it.next()?;
+        let b = it.next()?;
+        if it.next().is_some() {
+            return None;
+        }
+        Some(((a.x as f64, a.y as f64), (b.x as f64, b.y as f64)))
+    }
+
+    /// Recognise a two-finger pinch: the finger distance changes by
+    /// `PINCH_START` before the midpoint travels as far as a scroll would.
+    fn on_pinch_frame(&mut self) {
+        let Some(((ax, ay), (bx, by))) = self.two_fingers() else {
+            if let Some(p) = self.pinch.take() {
+                if p.live.is_some() {
+                    self.bridge.push_pinch(PinchEvent { phase: Phase::End, scale: p.sent });
+                }
+            }
+            return;
+        };
+        let d = ((ax - bx).powi(2) + (ay - by).powi(2)).sqrt().max(1.0);
+        let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
+        let Some(mut p) = self.pinch.take() else {
+            self.pinch = Some(Pinch { d0: d, mx0: mx, my0: my, live: None, spent: false, sent: 1.0 });
+            return;
+        };
+        if p.spent {
+            self.pinch = Some(p);
+            return;
+        }
+        match p.live {
+            None => {
+                let spread = (d - p.d0).abs();
+                let travel = ((mx - p.mx0).powi(2) + (my - p.my0).powi(2)).sqrt();
+                let scroll_limit = self.threshold_x.min(self.threshold_y) as f64 * PINCH_SCROLL_FRACTION;
+                if travel > scroll_limit && travel > spread {
+                    p.spent = true;
+                } else if spread / p.d0 >= PINCH_START && spread > travel * 1.5 {
+                    p.live = Some(d);
+                    p.sent = 1.0;
+                    self.bridge.push_pinch(PinchEvent { phase: Phase::Begin, scale: 1.0 });
+                }
+            }
+            Some(d_ref) => {
+                let scale = d / d_ref;
+                if (scale - p.sent).abs() >= 0.004 {
+                    p.sent = scale;
+                    self.bridge.push_pinch(PinchEvent { phase: Phase::Update, scale });
+                }
+            }
+        }
+        self.pinch = Some(p);
     }
 
     fn now(&self) -> Instant {
@@ -835,6 +958,7 @@ impl Reader {
         // thumb that drifted onto the pad mid-scroll must not become the third
         // finger that starts the gesture.
         self.classify_thumbs();
+        self.on_pinch_frame();
 
         let count = self.finger_count();
         if count < 3 {
@@ -970,6 +1094,11 @@ impl Reader {
         self.legacy = None;
         self.tool = [false; 5];
         self.swipe = None;
+        if let Some(p) = self.pinch.take() {
+            if p.live.is_some() {
+                self.bridge.push_pinch(PinchEvent { phase: Phase::Cancel, scale: p.sent });
+            }
+        }
     }
 
     fn handle(&mut self, type_: u16, code: u16, value: i32) {
@@ -1241,6 +1370,33 @@ B: ABS=67f800001000003
         frame(&mut r, &[(1000, 1000), (1200, 1000)]);
         frame(&mut r, &[(600, 1000), (800, 1000)]);
         assert!(r.bridge.drain().is_empty());
+    }
+
+    #[test]
+    fn spreading_two_fingers_is_a_pinch() {
+        let mut r = reader();
+        frame(&mut r, &[(1000, 1000), (1200, 1000)]);
+        for k in 1..=10 {
+            frame(&mut r, &[(1000 - k * 20, 1000), (1200 + k * 20, 1000)]);
+        }
+        lift(&mut r, 2);
+        let ev = r.bridge.drain_pinch();
+        assert_eq!(ev.first().map(|e| e.phase), Some(Phase::Begin));
+        assert_eq!(ev.last().map(|e| e.phase), Some(Phase::End));
+        let scale = ev.iter().rev().find(|e| e.phase == Phase::Update).map(|e| e.scale).unwrap();
+        assert!(scale > 1.5, "scale {scale}");
+        // Not a swipe.
+        assert!(r.bridge.drain().is_empty());
+    }
+
+    #[test]
+    fn a_two_finger_scroll_is_not_a_pinch() {
+        let mut r = reader();
+        for k in 0..12 {
+            frame(&mut r, &[(1000, 1000 + k * 30), (1200, 1000 + k * 30)]);
+        }
+        lift(&mut r, 2);
+        assert!(r.bridge.drain_pinch().is_empty());
     }
 
     #[test]

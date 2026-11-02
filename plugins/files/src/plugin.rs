@@ -40,6 +40,7 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/files/video-frame", "files_video_frame"),
         RouteSpec::get("/api/files/download", "files_download"),
         RouteSpec::get("/api/files/search", "files_search"),
+        RouteSpec::get("/api/files/recent", "files_recent"),
         RouteSpec::post("/api/files/upload", "files_upload"),
         RouteSpec::post("/api/files/write", "files_write"),
         RouteSpec::post("/api/files/mkdir", "files_mkdir"),

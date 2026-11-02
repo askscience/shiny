@@ -25,7 +25,7 @@ import {
  */
 import { apiFetch } from '../../js/api.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
-import { openContextMenu } from '../../js/contextMenu.js';
+import { openContextMenu, pluginWindowMenu } from '../../js/contextMenu.js';
 import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js';
 import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
@@ -2533,6 +2533,12 @@ function openPageContextMenu(tab, menu) {
     onClick: () => send('action', { verb: 'SelectAll' }),
   });
 
+  // Then the same window menu every other app shows on a right-click (window
+  // verbs plus this window's own entries), so a page is not the one place in
+  // the Browser without it.
+  const windowEntries = pluginWindowMenu(BROWSER_PLUGIN, { tile: tileEl, target: null });
+  if (windowEntries.length) entries.push({ type: 'separator' }, ...windowEntries);
+
   openContextMenu(entries, r.x + x / dpr, r.y + y / dpr);
 }
 
@@ -2960,6 +2966,7 @@ export function wireBrowserEvents() {
   window.addEventListener('settings:change', onSettingsChanged);
   // Keep the pages' `prefers-color-scheme` in step with the app theme.
   window.addEventListener('theme:change', pushSettings);
+  window.addEventListener('appearance:change', pushSettings);
   // The start page is a separate document holding the theme's resolved values.
   window.addEventListener('theme:change', refreshHomeTheme);
   window.addEventListener('appearance:change', refreshHomeTheme);

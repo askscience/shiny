@@ -1,4 +1,4 @@
-import { logoutSession } from '../api.js';
+import { getVoiceLang, logoutSession, syncVoiceLangWithLocale } from '../api.js';
 import { button, select, toast, toggleRow } from '../../ui/index.js';
 import { getAvailableLocales, t } from '../i18n.js';
 import { flushPreferencesNow, getLinkPlugin, getRemember, setLinkPlugin, setRemember, getUiLocale, setUiLocale } from '../preferences.js';
@@ -16,10 +16,15 @@ export function createSystemSection({ on, cleanups, resources }) {
         ...getAvailableLocales().map((l) => ({ value: l.code, label: l.name || l.code })),
       ],
       value: getUiLocale(),
-      onChange: (value) => setUiLocale(value),
+      onChange: (value) => {
+        // The voice (STT + TTS) follows a new system language whenever it
+        // has that language.
+        const previous = getVoiceLang();
+        void Promise.resolve(setUiLocale(value)).then(() => syncVoiceLangWithLocale(previous));
+      },
     });
     const localeField = field(t('settings.system.interfaceLanguage', null, 'Interface language'), locale, {
-      hint: t('settings.system.interfaceLanguage.hint', null, 'Applies to the interface — menus, window chrome and labels — and to the voice (speech recognition and replies) unless a different one is chosen under Voice.'),
+      hint: t('settings.system.interfaceLanguage.hint', null, 'Applies to the interface — menus, window chrome and labels — and moves the voice (speech recognition and replies) to it too when that language is available.'),
     });
 
     const remember = toggleRow({

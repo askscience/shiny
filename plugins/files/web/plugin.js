@@ -17,7 +17,7 @@ import {
 
 import { openContextMenu } from '../../js/contextMenu.js';
 import { copyText } from '../../js/clipboard.js';
-import { pluginForFile, openWithPlugin, pickFiles } from '../../js/files.js';
+import { pluginForFile, openWithPlugin, onOpenFromFiles, pickFiles } from '../../js/files.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 
@@ -64,8 +64,17 @@ const renderCache = new Map(); // rel -> Promise<render data | null> (office)
 const thumbCache = new Map();  // rel -> Promise<string|null> (dataURL)
 let observer = null;
 
+/** The virtual "Recent" place: the newest files of the classic folders
+ *  (GET /api/files/recent), not a directory. The shell's launcher lists the
+ *  same files, drawn with `renderFileThumb`. */
+const RECENT = '@recent';
+const isRecent = (p) => p === RECENT;
+/** Where a new folder / upload lands: Recent is not a folder, so Home. */
+const targetDir = () => (isRecent(cwd) ? '' : cwd);
+
 const PLACES = [
   { labelKey: 'plugin.files.place.home', path: '', icon: 'ui/home' },
+  { labelKey: 'plugin.files.place.recent', path: RECENT, icon: 'ui/history' },
   { labelKey: 'plugin.files.place.trash', path: '.Trash', icon: 'ui/trash' },
 ];
 const BOOKMARKS = [
@@ -137,6 +146,11 @@ const apiDelete = (path) => apiFetch('/api/files/delete', { method: 'POST', body
 const apiRename = (from, to) => apiFetch('/api/files/rename', { method: 'POST', body: JSON.stringify({ from, to }) });
 const apiRestore = (name) => apiFetch('/api/files/restore', { method: 'POST', body: JSON.stringify({ name }) });
 const apiEmptyTrash = () => apiFetch('/api/files/empty-trash', { method: 'POST' });
+/** The newest files of the classic home folders, newest first. */
+export async function apiRecent(limit = 40) {
+  const res = await apiFetch(`/api/files/recent?limit=${limit}`);
+  return res?.data?.entries || [];
+}
 async function apiSearch(q, path = '') {
   const res = await apiFetch(`/api/files/search?q=${enc(q)}&path=${enc(path)}`);
   return res?.data?.results || [];
@@ -192,6 +206,8 @@ function entryIcon(entry) {
 }
 function visibleEntries() {
   const list = entries.filter((e) => showHidden || !e.hidden);
+  // Recent keeps the server's newest-first order.
+  if (isRecent(cwd) && !searchMode) return list;
   return sortEntries(list);
 }
 function sortEntries(list) {
@@ -395,6 +411,17 @@ function renderOfficeMini(page, data) {
   }
 }
 
+/**
+ * Draw a file's preview into `host` — the very thumbnails of the grid (server
+ * PNG, PDF.js page, office mini, text mini, video poster, else the type
+ * glyph). Exported for the shell's launcher, which shows recent files with
+ * them; `host` gets the `.files-thumb` box (css/tiles.css).
+ */
+export function renderFileThumb(host, entry) {
+  host.classList.add('files-thumb');
+  hydrateThumb(host, entry);
+}
+
 function hydrateThumb(host, entry) {
   if (entry.kind === 'dir' || entry.kind === 'symlink') { thumbIcon(host, entry); return; }
   if (entry.is_image) { imageThumb(host, entry); return; }
@@ -555,6 +582,10 @@ function renderHeader() {
   void setIcon(viewBtn, view === 'grid' ? 'ui/grid' : 'ui/list', { size: 16 });
 
   pathbarEl.innerHTML = '';
+  if (isRecent(cwd)) {
+    pathbarEl.appendChild(crumb(t('plugin.files.place.recent', null, 'Recent'), null));
+    return;
+  }
   const segs = cwd.split('/').filter(Boolean);
   pathbarEl.appendChild(crumb(homeLabel, segs.length ? '' : null));
   let acc = '';
@@ -591,10 +622,14 @@ function render() {
         ? t('plugin.files.empty.noResults', null, 'No results found')
         : (isTrashPath(cwd)
           ? t('plugin.files.empty.trash', null, 'Trash is empty')
-          : t('plugin.files.empty.folder', null, 'Folder is empty')),
+          : isRecent(cwd)
+            ? t('plugin.files.empty.recent', null, 'No recent files')
+            : t('plugin.files.empty.folder', null, 'Folder is empty')),
       body: query
         ? t('plugin.files.empty.noMatch', { query }, `No files match “${query}”.`)
-        : t('plugin.files.empty.dropHint', null, 'Drag files here or use the menu to upload.'),
+        : isRecent(cwd)
+          ? t('plugin.files.empty.recentHint', null, 'Files you save in your home folders show up here.')
+          : t('plugin.files.empty.dropHint', null, 'Drag files here or use the menu to upload.'),
     }));
     return;
   }
@@ -768,7 +803,7 @@ async function navigate(rel, { push = true, clearForward = true } = {}) {
 async function load() {
   revealNext = true;
   try {
-    const data = await apiList(cwd);
+    const data = isRecent(cwd) ? { entries: await apiRecent() } : await apiList(cwd);
     if (!mounted) return;
     homeLabel = t('plugin.files.place.home', null, 'Home');
     allEntries = data?.entries || [];
@@ -947,7 +982,7 @@ function openPathMenu(anchor) {
 
 function copyPath() {
   // The central clipboard service records this in the top-bar history.
-  void copyText(cwd || t('plugin.files.place.home', null, 'Home'), { source: 'files' }).then((ok) => {
+  void copyText(targetDir() || t('plugin.files.place.home', null, 'Home'), { source: 'files' }).then((ok) => {
     toast(ok
       ? t('plugin.files.toast.pathCopied', null, 'Path copied')
       : t('plugin.files.toast.clipboardUnavailable', null, 'Clipboard unavailable'),
@@ -958,7 +993,7 @@ function copyPath() {
 /* ── mutations ──────────────────────────────────────────────── */
 
 async function newFolder() {
-  const directory = cwd;
+  const directory = targetDir();
   const name = await promptDialog(t('plugin.files.dialog.newFolderTitle', null, 'New folder name'),
     t('plugin.files.dialog.newFolderDefault', null, 'New folder'));
   if (!name) return;
@@ -978,7 +1013,7 @@ async function uploadFiles(files) {
   let ok = 0;
   for (const file of files) {
     try {
-      await apiFetch(`/api/files/upload?path=${enc(cwd)}&name=${enc(file.name)}`, { method: 'POST', body: file });
+      await apiFetch(`/api/files/upload?path=${enc(targetDir())}&name=${enc(file.name)}`, { method: 'POST', body: file });
       ok++;
     } catch (_) {
       toast(t('plugin.files.toast.uploadFailed', { name: file.name }, `Upload failed: ${file.name}`), { type: 'error' });
@@ -1658,7 +1693,13 @@ export function mountFilesTile() {
   tileEl.tabIndex = 0;
 
   mounted = true;
-  void load();
+  if (pendingReveal) {
+    const path = pendingReveal;
+    pendingReveal = null;
+    void revealFile({ path });
+  } else {
+    void load();
+  }
   return tileEl;
 }
 
@@ -1782,10 +1823,34 @@ function onAgentActions(e) {
   })();
 }
 
+/** A file asked for while the window was not mounted yet (see revealFile). */
+let pendingReveal = null;
+
+/**
+ * Show one file: open its folder, select it and quick-look it. Files is the
+ * opener of last resort — the launcher hands it recent files no other app
+ * owns (video, text, audio…) through the same `files:open` path the apps use.
+ */
+async function revealFile({ path }) {
+  if (!path) return;
+  if (!mounted) { pendingReveal = path; return; }
+  await navigate(parentOf(path));
+  const entry = allEntries.find((en) => en.path === path);
+  if (!entry || !mounted) return;
+  selection.clear();
+  selection.add(entry.path);
+  lastAnchor = entry.path;
+  syncSelectionDom();
+  updateStatus();
+  contentEl?.querySelector(`.files-entry[data-path="${cssEscape(entry.path)}"]`)?.scrollIntoView({ block: 'nearest' });
+  void openPreview(entry);
+}
+
 let wired = false;
 export function wireFilesEvents() {
   if (wired) return;
   wired = true;
+  onOpenFromFiles(FILES_PLUGIN, revealFile);
   window.addEventListener('agent:actions', onAgentActions);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('app:notification-action', (e) => {
@@ -1801,7 +1866,7 @@ export function wireFilesEvents() {
   window.addEventListener('files:changed', (e) => {
     if (!mounted) return;
     const dir = e.detail?.dir ?? '';
-    if (cwd === dir || cwd === '') void refresh();
+    if (cwd === dir || cwd === '' || isRecent(cwd)) void refresh();
   });
   // An embedded app (Craft suite) wrote a file itself: the shell reports the
   // absolute path, so the folder on screen may be the one it landed in.

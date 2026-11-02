@@ -56,6 +56,38 @@ export function isForeignPartition(part) {
     || typename.includes('raid');
 }
 
+const LINUX_FS = ['ext2', 'ext3', 'ext4', 'btrfs', 'xfs', 'f2fs', 'jfs', 'reiserfs'];
+
+/**
+ * What a person would call this partition: 'windows', 'macos', 'linux',
+ * 'encrypted', 'startup', 'swap', 'data', 'empty' or 'other'. Used for labels
+ * like "Windows stays untouched" instead of "ntfs · /dev/nvme0n1p3".
+ */
+export function partitionOs(part) {
+  const fstype = String(part?.fstype || '').toLowerCase();
+  const typename = String(part?.parttypename || '').toLowerCase();
+  if (isEsp(part)) return 'startup';
+  if (isSwap(part)) return 'swap';
+  if (fstype === 'ntfs' || fstype === 'bitlocker' || typename.includes('microsoft')
+    || typename.includes('windows') || typename.includes('bitlocker')) return 'windows';
+  if (fstype === 'apfs' || fstype.startsWith('hfs') || typename.includes('apfs')
+    || typename.includes('hfs') || typename.includes('apple')) return 'macos';
+  if (fstype === 'crypto_luks') return 'encrypted';
+  if (LINUX_FS.includes(fstype) || typename.includes('linux')) return 'linux';
+  if (['exfat', 'vfat', 'fat32', 'fat16'].includes(fstype)) return 'data';
+  if (!fstype) return 'empty';
+  return 'other';
+}
+
+/** The main system already on the disk (largest named partition), or null. */
+export function diskOs(disk) {
+  const named = (disk?.children || [])
+    .map((part) => ({ os: partitionOs(part), size: number(part.size_bytes) }))
+    .filter((item) => ['windows', 'macos', 'linux'].includes(item.os))
+    .sort((a, b) => b.size - a.size);
+  return named[0]?.os || null;
+}
+
 export function diskPaths(disk) {
   const paths = [];
   const walk = (node) => {

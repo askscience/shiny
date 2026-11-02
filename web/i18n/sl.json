@@ -1288,5 +1288,10 @@
   "settings.appearance.terminal.glass": "Glass — prosojno, poudarjen žarek, ki razsipa iskre",
   "settings.appearance.terminal.paper": "Paper — oznake ukazov na robu, sled označevalnika",
   "settings.appearance.terminal.blocks": "Blocks — vsak ukaz je kartica, prožen blokovni kazalec",
-  "settings.appearance.terminal.hint": "Barve sledijo temi in vašemu poudarku. Oznake ukazov in bloki zahtevajo bash ali zsh; zmanjšano gibanje in varčevanje z energijo izklopita sled kazalca."
+  "settings.appearance.terminal.hint": "Barve sledijo temi in vašemu poudarku. Oznake ukazov in bloki zahtevajo bash ali zsh; zmanjšano gibanje in varčevanje z energijo izklopita sled kazalca.",
+  "hud.openLauncher": "Odpri zaganjalnik",
+  "ctx.turnAiOn": "Vklopi UI…",
+  "settings.assistant.enabled": "UI",
+  "settings.assistant.enabledHint": "Izklopljeno (»No slop«): brez klepeta, agenta in glasu. Glasovna vrstica odpre zaganjalnik.",
+  "voice.state.launcher": "Aplikacije"
 }

@@ -1288,5 +1288,10 @@
   "settings.appearance.terminal.glass": "Glass — permatomas, akcento spindulys, skleidžiantis kibirkštis",
   "settings.appearance.terminal.paper": "Paper — komandų žymės paraštėje, žymeklio pėdsakas",
   "settings.appearance.terminal.blocks": "Blocks — kiekviena komanda kortelėje, spyruokliuojantis bloko žymeklis",
-  "settings.appearance.terminal.hint": "Spalvos atitinka temą ir jūsų akcentą. Komandų žymėms ir blokams reikia bash arba zsh; sumažintas judesys ir energijos taupymas išjungia žymeklio pėdsaką."
+  "settings.appearance.terminal.hint": "Spalvos atitinka temą ir jūsų akcentą. Komandų žymėms ir blokams reikia bash arba zsh; sumažintas judesys ir energijos taupymas išjungia žymeklio pėdsaką.",
+  "hud.openLauncher": "Atverti paleidiklį",
+  "ctx.turnAiOn": "Įjungti DI…",
+  "settings.assistant.enabled": "DI",
+  "settings.assistant.enabledHint": "Išjungta („No slop“): jokio pokalbio, agento ar balso. Balso juosta atveria paleidiklį.",
+  "voice.state.launcher": "Programos"
 }

@@ -226,7 +226,7 @@ fn apply_op(v: &mut Value, op: &Value) -> Result<String, AppError> {
             let i = track_index(v, key)?;
             let id = v["tracks"][i]["id"].clone();
             let mut c = json!({ "track": id, "start": op["start"].as_f64().unwrap_or(0.0) });
-            merge(&mut c, op, &["length_beats", "gain_db", "loop", "pattern", "audio"]);
+            merge(&mut c, op, &["length_beats", "gain_db", "loop", "offset_beats", "pattern", "audio"]);
             if c.get("pattern").is_none() && c.get("audio").is_none() {
                 return Err(AppError::BadRequest("add_clip needs a `pattern` or an `audio`".into()));
             }
@@ -251,7 +251,7 @@ fn apply_op(v: &mut Value, op: &Value) -> Result<String, AppError> {
                 let i = track_index(v, key)?;
                 v["clips"][idx]["track"] = v["tracks"][i]["id"].clone();
             }
-            merge(&mut v["clips"][idx], op, &["start", "length_beats", "gain_db", "loop", "pattern", "audio"]);
+            merge(&mut v["clips"][idx], op, &["start", "length_beats", "gain_db", "loop", "offset_beats", "pattern", "audio"]);
             Ok(format!("updated clip {idx}"))
         }
         "set_automation" => {

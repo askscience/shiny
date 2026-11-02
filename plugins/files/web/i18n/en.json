@@ -1,5 +1,6 @@
 {
   "plugin.files.place.home": "Home",
+  "plugin.files.place.recent": "Recent",
   "plugin.files.place.trash": "Trash",
   "plugin.files.place.desktop": "Desktop",
   "plugin.files.place.documents": "Documents",
@@ -98,5 +99,7 @@
   "plugin.files.preview.next": "Next file",
   "plugin.files.meta.description": "File browser — browse, preview and manage your home folders",
   "plugin.files.meta.summary": "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash",
-  "plugin.files.meta.category": "System"
+  "plugin.files.meta.category": "System",
+  "plugin.files.empty.recent": "No recent files",
+  "plugin.files.empty.recentHint": "Files you save in your home folders show up here."
 }

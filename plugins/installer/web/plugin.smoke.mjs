@@ -175,6 +175,7 @@ const t = (key, fallback, params) => {
 const formatBytes = (bytes) => `${Math.round(bytes / GIB)} GiB`;
 
 let selectedGap = null;
+const toggled = [];
 let commits = 0;
 let lastModel = null;
 
@@ -186,7 +187,7 @@ const panel = renderTimelinePanel({
   formatBytes,
   onSelectGap: (gap) => { selectedGap = gap; },
   onSelectPartition: () => {},
-  onPreset: () => {},
+  onToggle: (kind, on) => { toggled.push([kind, on]); },
   onRemovePartition: () => {},
   onCommit: (_nextState, model) => { commits += 1; lastModel = model; },
   onRequestRender: () => {},
@@ -245,6 +246,13 @@ windowStub.dispatch('pointermove', { pointerId: 2, clientX: 130 });
 windowStub.dispatch('keydown', { key: 'Escape' });
 windowStub.dispatch('pointerup', { pointerId: 2, clientX: 130 });
 assert.equal(state.manualSwapGiB, beforeCancel);
+
+const switches = byClass('installer-toggle');
+assert.equal(switches.length, 2, 'swap and home are two switches');
+assert.equal(switches[0].getAttribute('aria-checked'), 'true', 'swap starts on');
+switches[1].dispatch('click');
+assert.deepEqual(toggled.at(-1), ['home', true]);
+assert.ok(byClass('installer-handle-bubble').length >= 2, 'every handle shows its size');
 
 const placement = placementForPlan(disk, state);
 assert.equal(placement.start_bytes, freeStart);

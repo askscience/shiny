@@ -30,13 +30,14 @@ import { initPluginHud } from './pluginHud.js';
 import { initCraftStore } from './craftStore.js';
 import { initAppFileEvents } from './appSaves.js';
 import { installClipboard } from './clipboard.js';
+import { installFileInputShim } from './filePicker.js';
 import { initHudClipboard } from './clipboardMenu.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, openCoreWindow, getPluginTile } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
 import { initFullscreenBubble } from './fullscreenBubble.js';
 import { initOverview } from './overview.js';
-import { initLauncher } from './launcher.js';
+import { initLauncher, openLauncher } from './launcher.js';
 import { initGestures } from './gestures.js';
 import { initContextMenu } from './contextMenu.js';
 import { initLinkRouter } from './linkRouter.js';
@@ -46,8 +47,8 @@ import { initChatHistory } from './chatHistory.js';
 import { initThinkToggle } from './thinkToggle.js';
 import { initTouchBar } from './touchbar.js';
 import { reloadUserSession } from './session.js';
-import { loadUserPreferences, getRemember, getWakeWord } from './preferences.js';
-import { initI18n } from './i18n.js';
+import { loadUserPreferences, getRemember, getWakeWord, isAiEnabled } from './preferences.js';
+import { initI18n, t } from './i18n.js';
 import { initBackground } from './background.js';
 import { initSpokenReply } from './spokenReply.js';
 import { initShellMotion } from './shellMotion.js';
@@ -179,6 +180,9 @@ async function initApp() {
   // top-bar history menu. Installed before any plugin window can copy.
   installClipboard();
   initHudClipboard();
+  // Every `<input type=file>` in the app opens the shell's own picker (the
+  // Files-backed dialog Settings → Wallpaper uses), never the engine's Qt one.
+  installFileInputShim(window);
   initTileManager(); // plugin window shell — mounts tiles for any active plugin
   // Settings and Plugins are built-in windows now, opened from the HUD.
   document.getElementById('settings-btn')?.addEventListener('click', () => openCoreWindow('settings'));
@@ -205,10 +209,17 @@ async function initApp() {
   await reloadUserSession();
   refreshAppearance();
 
-  prepareVoice();
+  // "No slop": with the AI off nothing speech-related is prepared (no model
+  // downloads behind the user's back); turning it on in Settings prepares it.
+  applyAiMode();
+  if (isAiEnabled()) prepareVoice();
+  window.addEventListener('ai:settings', (event) => {
+    applyAiMode();
+    if (event.detail?.enabled) prepareVoice();
+  });
   wireSphere();
   wireVoiceResults();
-  initTouchBar({ talk: tapOrb });
+  initTouchBar({ talk: () => (isAiEnabled() ? tapOrb() : openLauncher()) });
   reveal();
 }
 
@@ -362,12 +373,34 @@ function typeOrb() {
   openTextInput();
 }
 
+/**
+ * The voice bar's role follows the AI switch: with "No slop" it is the
+ * launcher button (no chat, no listening), otherwise the assistant.
+ */
+function applyAiMode() {
+  const sphere = document.getElementById('sphere-container');
+  if (!sphere) return;
+  const on = isAiEnabled();
+  sphere.classList.toggle('is-launcher', !on);
+  // The i18n runtime re-applies aria labels from this key on a language change.
+  const key = on ? 'hud.voiceAssistant' : 'hud.openLauncher';
+  sphere.dataset.i18nAriaLabel = key;
+  sphere.setAttribute('aria-label', t(key));
+  if (!on) {
+    if (isListening()) cancelVoiceInput();
+    // Not "warming" or "disabled": the bar is a plain, ready button now.
+    setSphereState('idle');
+  }
+}
+
 function wireSphere() {
   // A single tap opens the keyboard. Text needs no speech model, so this works
-  // even while voice is still preparing (or unavailable).
-  onShortTap(typeOrb);
+  // even while voice is still preparing (or unavailable). With the AI off the
+  // bar is the launcher button instead.
+  onShortTap(() => (isAiEnabled() ? typeOrb() : openLauncher()));
 
   onLongPressStart(async () => {
+    if (!isAiEnabled()) return;
     if (isListening() || isComposeAwaiting()) return;
     if (!voiceReady()) {
       voiceNotReady();
@@ -394,6 +427,10 @@ function wireSphere() {
   // reactive conversation look back and let the wake window, the silence
   // timeout or a short tap end the session.
   onLongPressEnd(() => {
+    if (!isAiEnabled()) {
+      setSphereState('idle');
+      return;
+    }
     releaseWakeHold();
     if (isListening()) {
       setSphereState('conversation');
@@ -406,7 +443,7 @@ function wireSphere() {
 
   // Double-tap = listen once, with the same stop-and-rephrase behaviour as the
   // Touch Bar's "Ask" button.
-  onDoubleTap(tapOrb);
+  onDoubleTap(() => (isAiEnabled() ? tapOrb() : openLauncher()));
 }
 
 async function submitTextToAgent(text, handlers) {

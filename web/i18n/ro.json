@@ -1268,5 +1268,10 @@
   "settings.appearance.terminal.glass": "Glass — translucid, un fascicul de accent care aruncă scântei",
   "settings.appearance.terminal.paper": "Paper — marcaje de comenzi pe margine, o urmă de marker",
   "settings.appearance.terminal.blocks": "Blocks — fiecare comandă un card, un cursor bloc elastic",
-  "settings.appearance.terminal.hint": "Culorile urmează tema și accentul tău. Marcajele de comenzi și blocurile necesită bash sau zsh; mișcarea redusă și economisirea energiei dezactivează dâra cursorului."
+  "settings.appearance.terminal.hint": "Culorile urmează tema și accentul tău. Marcajele de comenzi și blocurile necesită bash sau zsh; mișcarea redusă și economisirea energiei dezactivează dâra cursorului.",
+  "hud.openLauncher": "Deschide lansatorul",
+  "ctx.turnAiOn": "Activează IA…",
+  "settings.assistant.enabled": "IA",
+  "settings.assistant.enabledHint": "Dezactivată („No slop”): fără chat, agent sau voce. Bara vocală deschide lansatorul.",
+  "voice.state.launcher": "Aplicații"
 }

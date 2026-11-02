@@ -11,9 +11,10 @@ use serde::Deserialize;
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, path_params_from_request, ok, user_id};
+use shiny_plugin_sdk::routes::{bridged_route, os_home_from_request, RouteHandler, path_params_from_request, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
+use crate::attach;
 use crate::cache;
 use crate::mail::{self, Account};
 
@@ -32,6 +33,8 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "mail_sync" => mail_sync(ctx),
         "mail_message" => mail_message(ctx),
         "mail_send" => mail_send(ctx),
+        "mail_attachment" => mail_attachment(ctx),
+        "mail_attachment_save" => mail_attachment_save(ctx),
         "mail_flag" => mail_flag(ctx),
         "mail_delete" => mail_delete(ctx),
         _ => return None,
@@ -468,19 +471,45 @@ struct SendBody {
     subject: String,
     body: String,
     html: Option<String>,
+    /// Files in the user's home to attach (home-relative paths).
+    #[serde(default)]
+    attachments: Vec<attach::AttachmentRef>,
 }
 
+/// Send a message. Two body shapes:
+///
+/// - `application/json` — `SendBody`; attachments as home paths.
+/// - `multipart/form-data` — a `message` field holding the same JSON, plus one
+///   `file` field per uploaded attachment (the window's compose).
 fn mail_send(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req| {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            let axum::Json(body) = axum::Json::<SendBody>::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+            let os_home = os_home_from_request(&req);
+            let multipart_boundary = req
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .filter(|ct| ct.starts_with("multipart/"))
+                .and_then(|ct| multer::parse_boundary(ct).ok());
+            let (body, mut uploaded) = match multipart_boundary {
+                Some(boundary) => read_multipart_send(req, boundary).await?,
+                None => {
+                    let axum::Json(body) = axum::Json::<SendBody>::from_request(req, &())
+                        .await
+                        .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+                    (body, Vec::new())
+                }
+            };
             if body.to.is_empty() {
                 return Err(AppError::BadRequest("at least one recipient required".into()));
             }
+            let already: usize = uploaded.iter().map(|a| a.bytes.len()).sum();
+            let mut attachments =
+                attach::load_refs(&uid, os_home.as_deref(), &body.attachments, already)?;
+            attachments.append(&mut uploaded);
+            let count = attachments.len();
             let a = mail::resolve_account(ctx.db(), &uid, body.account_id.as_deref())?;
             let sent = mail::send(
                 a,
@@ -491,9 +520,145 @@ fn mail_send(ctx: Arc<PluginCtx>) -> RouteHandler {
                 body.subject,
                 body.body,
                 body.html,
+                attachments,
             )
             .await?;
-            Ok(ok(json!({ "sent": sent })))
+            Ok(ok(json!({ "sent": sent, "attachments": count })))
+        }
+    })
+}
+
+/// Parse the compose's multipart body: the `message` JSON and every `file`.
+/// The size ceiling is enforced on the streamed chunks (see the SDK's
+/// `upload` module for why axum's own extractor is not used).
+async fn read_multipart_send(
+    req: axum::extract::Request,
+    boundary: String,
+) -> Result<(SendBody, Vec<attach::OutAttachment>), AppError> {
+    let mut multipart = multer::Multipart::new(req.into_body().into_data_stream(), boundary);
+    let mut body: Option<SendBody> = None;
+    let mut files = Vec::new();
+    let mut total = 0usize;
+    while let Some(mut field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("upload error: {e}")))?
+    {
+        match field.name() {
+            Some("message") => {
+                let text = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("upload error: {e}")))?;
+                body = Some(
+                    serde_json::from_str(&text)
+                        .map_err(|e| AppError::BadRequest(format!("invalid message: {e}")))?,
+                );
+            }
+            Some("file") => {
+                let filename = attach::safe_filename(field.file_name().unwrap_or("attachment"));
+                let content_type = field
+                    .content_type()
+                    .map(|m| m.essence_str().to_string())
+                    .filter(|m| m != "application/octet-stream")
+                    .unwrap_or_else(|| attach::guess_content_type(&filename).to_string());
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field
+                    .chunk()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("upload error: {e}")))?
+                {
+                    total += chunk.len();
+                    if total > attach::MAX_ATTACHMENTS_BYTES {
+                        return Err(attach::too_large());
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                files.push(attach::OutAttachment { filename, content_type, bytes });
+            }
+            _ => {}
+        }
+    }
+    let body = body.ok_or_else(|| AppError::BadRequest("missing 'message' field".into()))?;
+    Ok((body, files))
+}
+
+#[derive(Deserialize)]
+struct AttachmentQuery {
+    account: Option<String>,
+    folder: Option<String>,
+    id: Option<String>,
+    index: Option<usize>,
+    /// `1` = `Content-Disposition: attachment` (download) instead of inline.
+    download: Option<String>,
+}
+
+/// The bytes of one attachment of a received message.
+fn mail_attachment(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let (q, _req) = take_query::<AttachmentQuery>(req).await?;
+            let id = q.id.ok_or_else(|| AppError::BadRequest("message id required".into()))?;
+            let index = q.index.unwrap_or(0);
+            let a = mail::resolve_account(ctx.db(), &uid, q.account.as_deref())?;
+            let folder = q.folder.unwrap_or_else(|| "INBOX".into());
+            let att = attach::fetch_attachment(a, folder, id, index).await?;
+            let disposition = if q.download.as_deref() == Some("1") { "attachment" } else { "inline" };
+            // RFC 6266: an ASCII fallback plus the UTF-8 name.
+            let ascii: String = att
+                .filename
+                .chars()
+                .map(|c| if c.is_ascii_graphic() && c != '"' && c != '\\' || c == ' ' { c } else { '_' })
+                .collect();
+            let encoded = url::form_urlencoded::byte_serialize(att.filename.as_bytes())
+                .collect::<String>()
+                .replace('+', "%20");
+            let response = axum::http::Response::builder()
+                .header(axum::http::header::CONTENT_TYPE, att.content_type)
+                .header(
+                    axum::http::header::CONTENT_DISPOSITION,
+                    format!("{disposition}; filename=\"{ascii}\"; filename*=UTF-8''{encoded}"),
+                )
+                .header("X-Content-Type-Options", "nosniff")
+                // Mail content is untrusted: never let an HTML attachment run
+                // with the app's origin.
+                .header("Content-Security-Policy", "sandbox")
+                .header(axum::http::header::CACHE_CONTROL, "no-store")
+                .body(axum::body::Body::from(att.bytes))
+                .map_err(|e| AppError::Internal(format!("response error: {e}")))?;
+            Ok(response)
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct SaveAttachmentBody {
+    account_id: Option<String>,
+    folder: Option<String>,
+    id: String,
+    index: Option<usize>,
+    /// Home-relative folder; default `Downloads`.
+    dir: Option<String>,
+}
+
+/// Save one attachment of a received message into the user's home.
+fn mail_attachment_save(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let os_home = os_home_from_request(&req);
+            let axum::Json(body) = axum::Json::<SaveAttachmentBody>::from_request(req, &())
+                .await
+                .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+            let a = mail::resolve_account(ctx.db(), &uid, body.account_id.as_deref())?;
+            let folder = body.folder.unwrap_or_else(|| "INBOX".into());
+            let att = attach::fetch_attachment(a, folder, body.id, body.index.unwrap_or(0)).await?;
+            let dir = body.dir.unwrap_or_else(|| "Downloads".into());
+            let path = attach::save_into_home(&uid, os_home.as_deref(), &dir, &att.filename, &att.bytes)?;
+            Ok(ok(json!({ "path": path, "name": att.filename, "dir": dir, "size": att.bytes.len() })))
         }
     })
 }

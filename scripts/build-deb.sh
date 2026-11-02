@@ -30,6 +30,12 @@ for bin in shiny-auth shiny-server-mode; do
     [ -x "$REPO/target/release/$bin" ] && install -m 0755 "$REPO/target/release/$bin" "$PKG/usr/bin/$bin"
 done
 cp -a "$REPO/web/." "$PKG/usr/share/shiny/web/"
+# Voice, image and music helpers (download scripts, sidecar launchers). The
+# session runs the server from a per-user app directory that links here, so
+# their venvs and downloaded models land in the user's home.
+install -d "$PKG/usr/share/shiny/voice"
+cp -a "$REPO/voice/." "$PKG/usr/share/shiny/voice/"
+rm -rf "$PKG/usr/share/shiny/voice/__pycache__"
 [ -d "$REPO/web/backgrounds" ] && cp -a "$REPO/web/backgrounds/." "$PKG/usr/share/shiny/backgrounds/"
 
 for dir in "$REPO"/plugins/*/; do
@@ -62,7 +68,7 @@ Section: misc
 Priority: optional
 Architecture: amd64
 Maintainer: PEAK'D! <noreply@localhost>
-Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools
+Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools, python3-venv
 Recommends: lightdm, matchbox-window-manager, xinit
 Description: PEAK'D! AI desktop shell and server
  The PEAK'D! kiosk shell, the Shiny local server, the baseline plugins and the

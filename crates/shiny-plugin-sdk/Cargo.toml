@@ -9,6 +9,8 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 axum = { version = "0.7", features = ["macros", "multipart"] }
+# axum's Multipart caps plugin uploads at 2 MB; read_upload_file parses directly.
+multer = "3"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

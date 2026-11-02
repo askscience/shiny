@@ -1248,5 +1248,10 @@
   "settings.appearance.terminal.glass": "Glass — poolläbipaistev, sädemeid pilduv aktsendikiir",
   "settings.appearance.terminal.paper": "Paper — käsumärgid veerisel, markerijälg",
   "settings.appearance.terminal.blocks": "Blocks — iga käsk on kaart, vetruv plokk-kursor",
-  "settings.appearance.terminal.hint": "Värvid järgivad teemat ja sinu aktsenti. Käsumärgid ja plokid vajavad bashi või zsh-i; vähendatud liikumine ja energiasäästja lülitavad kursori jälje välja."
+  "settings.appearance.terminal.hint": "Värvid järgivad teemat ja sinu aktsenti. Käsumärgid ja plokid vajavad bashi või zsh-i; vähendatud liikumine ja energiasäästja lülitavad kursori jälje välja.",
+  "hud.openLauncher": "Ava käivitaja",
+  "ctx.turnAiOn": "Lülita tehisintellekt sisse…",
+  "settings.assistant.enabled": "Tehisintellekt",
+  "settings.assistant.enabledHint": "Väljas („No slop“): ei vestlust, agenti ega häält. Hääleriba avab käivitaja.",
+  "voice.state.launcher": "Rakendused"
 }

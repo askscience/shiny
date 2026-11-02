@@ -111,6 +111,7 @@ async fn run(state: AppState) {
         // A disabled engine stays disabled: `AUTO_START_*` is the user's own
         // statement about whether this machine runs it at all.
         if state.config.auto_start_supertonic
+            && crate::services::ai_switch::machine_on()
             && supertonic.observe(state.supertonic.is_available().await, now)
         {
             tracing::warn!(
@@ -122,6 +123,7 @@ async fn run(state: AppState) {
         }
 
         if state.config.auto_start_whisper
+            && crate::services::ai_switch::machine_on()
             && whisper.observe(state.whisper.health().await.is_some(), now)
         {
             tracing::warn!(
@@ -133,6 +135,7 @@ async fn run(state: AppState) {
         }
 
         if state.config.auto_start_qwen_tts
+            && crate::services::ai_switch::machine_on()
             && qwen.observe(state.qwen_tts.health().await.is_some(), now)
         {
             tracing::warn!(

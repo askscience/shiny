@@ -1248,5 +1248,10 @@
   "settings.appearance.terminal.glass": "Glass — durchscheinend, ein Akzentstrahl, der Funken sprüht",
   "settings.appearance.terminal.paper": "Paper — Befehlsmarken am Rand, eine Textmarker-Spur",
   "settings.appearance.terminal.blocks": "Blocks — jeder Befehl eine Karte, ein federnder Blockcursor",
-  "settings.appearance.terminal.hint": "Die Farben folgen dem Thema und Ihrem Akzent. Befehlsmarken und Blöcke erfordern bash oder zsh; reduzierte Bewegung und der Energiesparmodus schalten die Cursorspur aus."
+  "settings.appearance.terminal.hint": "Die Farben folgen dem Thema und Ihrem Akzent. Befehlsmarken und Blöcke erfordern bash oder zsh; reduzierte Bewegung und der Energiesparmodus schalten die Cursorspur aus.",
+  "hud.openLauncher": "Starter öffnen",
+  "ctx.turnAiOn": "KI einschalten…",
+  "settings.assistant.enabled": "KI",
+  "settings.assistant.enabledHint": "Aus („No slop“): kein Chat, kein Agent, keine Sprache. Die Sprachleiste öffnet den Starter.",
+  "voice.state.launcher": "Apps"
 }

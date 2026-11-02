@@ -20,7 +20,7 @@
  */
 
 import { apiFetch } from './api.js';
-import { pickPaths, filesFromEntries, readFileBytes } from './filePicker.js';
+import { installFileInputShim, readFileBytes } from './filePicker.js';
 import { getLocale } from './i18n.js';
 import { getActiveTheme, themeMode } from '../ui/theme-loader.js';
 
@@ -133,59 +133,11 @@ function attachControl(name, frame, surface) {
 }
 
 /**
- * In-app Open… for web apps. The kiosk's web engine has no handler for a classic
- * `<input type=file>`, so clicking Open did nothing at all. For the lifetime of
- * the frame's document, its file inputs are pointed at the shell's picker
- * (`filePicker.js`): the user picks through the Files plugin, the bytes come
- * back from it, and the app receives real `File` objects on its own input with
- * `input`/`change` dispatched — exactly what its code listens for.
- *
- * App-agnostic by construction: any web app that uses a file input gets this
- * with no code of its own.
+ * In-app Open… for web apps: the frame's file inputs use the shell's picker
+ * (`installFileInputShim` in `filePicker.js`) for the lifetime of its document.
  */
-function installFileInputShim(frame) {
-  const realm = frame.contentWindow;
-  if (!realm || realm.__shinyFileInput) return;
-  const proto = realm.HTMLInputElement?.prototype;
-  if (!proto) return;
-  realm.__shinyFileInput = true;
-
-  const nativeClick = proto.click;
-  const nativeShow = proto.showPicker;
-
-  const fill = async (input) => {
-    const picked = await pickPaths({ accept: input.accept || '', multiple: !!input.multiple });
-    if (!picked || !picked.length) return;
-    const files = await filesFromEntries(realm, picked);
-    const transfer = new realm.DataTransfer();
-    for (const file of files) transfer.items.add(file);
-    input.files = transfer.files;
-    input.dispatchEvent(new realm.Event('input', { bubbles: true }));
-    input.dispatchEvent(new realm.Event('change', { bubbles: true }));
-  };
-
-  const intercept = (input) => {
-    void fill(input).catch((error) => {
-      console.warn('web app file picker failed', error);
-    });
-  };
-
-  proto.click = function (...args) {
-    if (this instanceof realm.HTMLInputElement && this.type === 'file' && !this.disabled) {
-      intercept(this);
-      return undefined;
-    }
-    return nativeClick.apply(this, args);
-  };
-  if (typeof nativeShow === 'function') {
-    proto.showPicker = function (...args) {
-      if (this instanceof realm.HTMLInputElement && this.type === 'file' && !this.disabled) {
-        intercept(this);
-        return undefined;
-      }
-      return nativeShow.apply(this, args);
-    };
-  }
+function installFrameFileInputShim(frame) {
+  installFileInputShim(frame.contentWindow);
 }
 
 /**
@@ -256,7 +208,7 @@ function ensureSurface(name) {
   // the window the bridge was talking to, so re-attach on every load.
   frame.addEventListener('load', () => {
     attachControl(name, frame, surface);
-    installFileInputShim(frame);
+    installFrameFileInputShim(frame);
     applyHostContext(frame, { post: true });
     const pending = window.__pendingFileOpen;
     if (pending?.plugin === name) {

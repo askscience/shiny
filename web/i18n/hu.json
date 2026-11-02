@@ -1248,5 +1248,10 @@
   "settings.appearance.terminal.glass": "Glass — áttetsző, szikrákat szóró kiemelőszínű sugár",
   "settings.appearance.terminal.paper": "Paper — parancsjelek a margón, szövegkiemelő-csík",
   "settings.appearance.terminal.blocks": "Blocks — minden parancs egy kártya, rugalmas blokkurzor",
-  "settings.appearance.terminal.hint": "A színek a témát és a kiemelőszínt követik. A parancsjelekhez és blokkokhoz bash vagy zsh szükséges; a csökkentett mozgás és az energiatakarékos mód kikapcsolja a kurzorcsíkot."
+  "settings.appearance.terminal.hint": "A színek a témát és a kiemelőszínt követik. A parancsjelekhez és blokkokhoz bash vagy zsh szükséges; a csökkentett mozgás és az energiatakarékos mód kikapcsolja a kurzorcsíkot.",
+  "hud.openLauncher": "Indító megnyitása",
+  "ctx.turnAiOn": "MI bekapcsolása…",
+  "settings.assistant.enabled": "MI",
+  "settings.assistant.enabledHint": "Ki („No slop”): nincs csevegés, ügynök és hang. A hangsáv az indítót nyitja meg.",
+  "voice.state.launcher": "Appok"
 }

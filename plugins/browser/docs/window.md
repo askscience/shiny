@@ -219,7 +219,7 @@ re-pushes (and reloads the open page) when that save lands.
 | Prefix | Payload | Purpose |
 |---|---|---|
 | `peakd:view:` | `{ op, id, … }` | Native child-webview commands |
-| `peakd:settings:` | `{ adblock, downloadsDir, colorScheme }` | Shell settings |
+| `peakd:settings:` | `{ adblock, downloadsDir, colorScheme }` | Shell settings. `colorScheme: "dark"` turns on the engine's dark mode for every page view (`settings.forceDarkMode`, bound to `shell.darkPages`): pages report `prefers-color-scheme: dark`, so sites with a dark style use it and the rest are darkened. Re-sent on `theme:change` / `appearance:change`. |
 | `peakd:filter:` | `{ enabled }` | Live shield toggle |
 | `peakd:download:` | `{ id, action }` | `pause`/`resume`/`cancel`/`remove`/`clear` |
 | `peakd:downloads:list` | raw (no JSON) | Ask the shell to push its live list via `window.__peakdDownloads` |
@@ -358,8 +358,12 @@ core's `openContextMenu()` at the cursor. The `.ctx-menu` mask hole keeps it
 visible and clickable (see above). Entries map back to `peakd:view:` commands:
 `back` / `forward` / `reload`, Copy Link Address through the clipboard service
 (so it lands in the top-bar history), and the edit verbs — Cut / Copy / Paste /
-SelectAll — via the generic `action` op. Only the active tab's page opens a
-menu.
+SelectAll — via the generic `action` op. Below them comes the same window
+menu every app shows on a right-click (core's `pluginWindowMenu()`: window
+verbs plus `browserContextMenu()`). Only the active tab's page opens a menu.
+Core's menus ignore the app window's `blur` for a moment after opening: the
+right-click moves focus into the page, and that blur must not close the menu
+it raced with.
 
 ## Gotchas
 

@@ -27,6 +27,8 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::post("/api/mail/sync", "mail_sync"),
         RouteSpec::get("/api/mail/message", "mail_message"),
         RouteSpec::post("/api/mail/send", "mail_send"),
+        RouteSpec::get("/api/mail/attachment", "mail_attachment"),
+        RouteSpec::post("/api/mail/attachment/save", "mail_attachment_save"),
         RouteSpec::post("/api/mail/flag", "mail_flag"),
         RouteSpec::post("/api/mail/delete", "mail_delete"),
     ]
@@ -58,7 +60,9 @@ impl Plugin for MailPlugin {
             Arc::new(crate::tools::MailRead) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailSearch) as Arc<dyn Tool>,
             Arc::new(crate::tools::MailSync) as Arc<dyn Tool>,
-            Arc::new(crate::tools::MailSend) as Arc<dyn Tool>,]);
+            Arc::new(crate::tools::MailSend) as Arc<dyn Tool>,
+            Arc::new(crate::tools::MailSaveAttachment) as Arc<dyn Tool>,
+        ]);
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {

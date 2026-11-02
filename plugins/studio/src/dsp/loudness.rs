@@ -82,8 +82,8 @@ pub struct LoudnessReport {
 }
 
 /// Measure a stereo (or mono) render.
-pub fn measure(channels: &[Vec<f32>], sample_rate: f64) -> LoudnessReport {
-    let n = channels.first().map(|c| c.len()).unwrap_or(0);
+pub fn measure<C: AsRef<[f32]>>(channels: &[C], sample_rate: f64) -> LoudnessReport {
+    let n = channels.first().map(|c| c.as_ref().len()).unwrap_or(0);
     let mut peak = 0.0f32;
     let mut sum_sq = 0.0f64;
     let mut count = 0usize;
@@ -111,7 +111,7 @@ pub fn measure(channels: &[Vec<f32>], sample_rate: f64) -> LoudnessReport {
     // 75 % overlap the standard asks for) — one pass, no scratch buffers.
     let segs = n / step + 1;
     let mut seg_ms = vec![0.0f64; segs];
-    for (ci, ch) in channels.iter().enumerate() {
+    for (ci, ch) in channels.iter().map(|c| c.as_ref()).enumerate() {
         let (s1, s2) = &mut kf[ci];
         for (i, &s) in ch.iter().enumerate() {
             let x = s as f64;

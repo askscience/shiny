@@ -25,6 +25,7 @@ use shiny_plugin_sdk::db::{Db, Value};
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::util::{as_opt_text, as_text};
 
+use crate::attach::OutAttachment;
 use crate::cache;
 
 /// A mail account as stored per user (v1: credentials in plaintext, single-tenant).
@@ -361,6 +362,14 @@ fn io_addr_str(name: Option<&String>, email: &str) -> String {
 const MAX_MESSAGE_BYTES: usize = 32 * 1024 * 1024;
 
 pub async fn get_message(a: Account, folder: String, id: String) -> Result<Json, AppError> {
+    let raw = get_raw_message(a, folder, id.clone()).await?;
+    parse_message(&id, &raw)
+}
+
+/// The message's raw RFC 5322 bytes, live from the provider (bounded by
+/// `MAX_MESSAGE_BYTES`). Attachments are read from here: the cache keeps only
+/// their names and sizes.
+pub async fn get_raw_message(a: Account, folder: String, id: String) -> Result<Vec<u8>, AppError> {
     blocking(move || {
         let mut client = connect_imap(&a)?;
         let raw = client
@@ -372,7 +381,7 @@ pub async fn get_message(a: Account, folder: String, id: String) -> Result<Json,
                 MAX_MESSAGE_BYTES / (1024 * 1024)
             )));
         }
-        parse_message(&id, &raw)
+        Ok(raw.to_vec())
     })
     .await
 }
@@ -401,8 +410,10 @@ fn parse_message(id: &str, raw: &[u8]) -> Result<Json, AppError> {
 
     let attachments: Vec<Json> = msg
         .attachments()
-        .map(|att| {
+        .enumerate()
+        .map(|(index, att)| {
             json!({
+                "index": index,
                 "filename": att.attachment_name().unwrap_or("attachment"),
                 "content_type": att.content_type().map(|ct| ct.ctype().to_string()).unwrap_or_else(|| "application/octet-stream".into()),
                 "size": att.len(),
@@ -662,6 +673,7 @@ fn send_fingerprint(
     subject: &str,
     body: &str,
     html: Option<&str>,
+    attachments: &[OutAttachment],
 ) -> u64 {
     let mut h = DefaultHasher::new();
     // Scope the fingerprint per account and user: it is a process-global
@@ -675,6 +687,10 @@ fn send_fingerprint(
     subject.hash(&mut h);
     body.hash(&mut h);
     html.hash(&mut h);
+    for att in attachments {
+        att.filename.hash(&mut h);
+        att.bytes.hash(&mut h);
+    }
     h.finish()
 }
 
@@ -687,8 +703,9 @@ pub async fn send(
     subject: String,
     body: String,
     html: Option<String>,
+    attachments: Vec<OutAttachment>,
 ) -> Result<bool, AppError> {
-    let fp = send_fingerprint(&a.id, user_id, &to, &cc, &bcc, &subject, &body, html.as_deref());
+    let fp = send_fingerprint(&a.id, user_id, &to, &cc, &bcc, &subject, &body, html.as_deref(), &attachments);
     let now = chrono::Utc::now().timestamp_millis();
     {
         let mut recents = RECENT_SENDS.lock().unwrap_or_else(|e| e.into_inner());
@@ -715,6 +732,9 @@ pub async fn send(
             if !h.trim().is_empty() {
                 builder = builder.html_body(h);
             }
+        }
+        for att in attachments {
+            builder = builder.attachment(att.content_type, att.filename, att.bytes);
         }
         let raw = builder
             .write_to_vec()

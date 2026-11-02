@@ -43,6 +43,10 @@ pub const CUDA_LICENSE_URL: &str = "https://docs.nvidia.com/cuda/eula/index.html
 pub const NVIDIA_DEBIAN_COPYRIGHT_URL: &str =
     "https://launchpad.net/debian/sid/+source/nvidia-graphics-drivers/+copyright";
 
+/// "No slop": no AI at all — no chat, no agent, no models. The installed
+/// system starts with AI switched off and the bar's AI button opens the
+/// launcher; text AI and models can be turned on later from Settings.
+pub const AI_TIER_OFF: &str = "off";
 pub const AI_TIER_NONE: &str = "none";
 pub const AI_TIER_VOICE: &str = "voice";
 pub const AI_TIER_LOCAL: &str = "local";
@@ -435,11 +439,11 @@ impl InstallPlan {
         }
         if !matches!(
             self.ai_tier.as_str(),
-            AI_TIER_NONE | AI_TIER_VOICE | AI_TIER_LOCAL
+            AI_TIER_OFF | AI_TIER_NONE | AI_TIER_VOICE | AI_TIER_LOCAL
         ) {
             errors.push(format!("unknown AI tier: {}", self.ai_tier));
         }
-        if self.install_voice && self.ai_tier == AI_TIER_NONE {
+        if self.install_voice && matches!(self.ai_tier.as_str(), AI_TIER_OFF | AI_TIER_NONE) {
             errors.push("install_voice requires the voice AI tier".into());
         }
 
@@ -922,6 +926,19 @@ mod tests {
             .basic_errors()
             .iter()
             .any(|error| error.contains("NVIDIA driver license")));
+    }
+
+    #[test]
+    fn no_slop_tier_is_valid_without_voice() {
+        let mut plan = valid_plan();
+        plan.ai_tier = AI_TIER_OFF.into();
+        plan.install_voice = false;
+        assert!(plan.basic_errors().is_empty());
+        plan.install_voice = true;
+        assert!(plan
+            .basic_errors()
+            .iter()
+            .any(|error| error.contains("install_voice")));
     }
 
     #[test]

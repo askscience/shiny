@@ -59,6 +59,7 @@ pub async fn send_message(
     Extension(traveler): Extension<Traveler>,
     Json(body): Json<ChatMessageBody>,
 ) -> Result<Json<ChatResponse>, AppError> {
+    crate::services::ai_switch::require_enabled(&state.pool, &traveler.id).await?;
     sqlx::query(
         "INSERT INTO chat_messages (id, traveler_id, role, content, timestamp) \
          VALUES (?1, ?2, 'user', ?3, datetime('now'))",

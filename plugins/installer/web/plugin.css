@@ -394,9 +394,9 @@
 .installer-disk {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 22px;
+  grid-template-columns: minmax(0, 1fr) 22px;
   gap: 14px;
-  align-items: start;
+  align-items: center;
   width: 100%;
   padding: 14px 12px;
   border: 0;
@@ -427,9 +427,23 @@
 .installer-disk-title {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+
+.installer-disk-why {
+  display: block;
+  margin-top: 7px;
+  color: var(--error);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.installer-disk.has-reasons .installer-disk-name,
+.installer-disk.has-reasons .installer-disk-size {
+  color: var(--muted);
 }
 
 .installer-disk-name {
@@ -439,46 +453,11 @@
   word-break: break-word;
 }
 
-.installer-disk-model {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.installer-disk-meta {
-  margin-top: 4px;
-  white-space: normal;
-  line-height: 1.5;
-}
-
-.installer-disk-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 8px;
-}
-
-.installer-disk-badges .ui-badge {
-  padding: 2px 7px;
-  font-size: 9.5px;
-}
-
-.installer-disk-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-  min-width: 84px;
-  text-align: end;
-}
-
 .installer-disk-size {
+  flex: 0 0 auto;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -.03em;
   font-variant-numeric: tabular-nums;
@@ -535,7 +514,11 @@
 
 .installer-bar-seg--swap,
 .installer-legend-dot--swap {
-  background: color-mix(in srgb, var(--warn) 72%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface));
+}
+
+.installer-bar-seg--kept {
+  background: color-mix(in srgb, var(--glass-strong) 82%, var(--surface));
 }
 
 .installer-bar-seg--home,
@@ -644,6 +627,17 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0 14px;
   margin-top: 2px;
+}
+
+/* Four AI tiers: two by two, never three plus an orphan. */
+.installer-layout-choices--ai {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@container (max-width: 560px) {
+  .installer-layout-choices--ai {
+    grid-template-columns: 1fr;
+  }
 }
 
 .installer-choice {
@@ -1870,13 +1864,6 @@
     grid-template-columns: minmax(0, 1fr) 20px;
   }
 
-  .installer-disk-side {
-    grid-column: 1;
-    align-items: flex-start;
-    text-align: start;
-    min-width: 0;
-  }
-
   .installer-disk-check {
     grid-column: 2;
     grid-row: 1;
@@ -1924,10 +1911,10 @@
 }
 
 .installer-intent {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
   width: 100%;
   padding: 12px;
   border: 0;
@@ -1951,25 +1938,34 @@
   background: var(--installer-pill);
 }
 
+.installer-intent.is-danger.is-selected {
+  background: color-mix(in srgb, var(--error) 10%, var(--installer-pill));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--error) 45%, transparent) inset;
+}
+
 .installer-intent:disabled {
   cursor: not-allowed;
   opacity: .5;
 }
 
+.installer-intent-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
 .installer-intent-icon {
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
+  width: 18px;
+  height: 18px;
   color: var(--text-secondary);
 }
 
-.installer-intent-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+.installer-intent.is-danger .installer-intent-icon {
+  color: var(--error);
 }
 
 .installer-intent-title {
@@ -1977,16 +1973,76 @@
   font-weight: 500;
 }
 
-.installer-intent-desc {
+.installer-intent-why {
   color: var(--muted);
-  font-size: 11.5px;
-  line-height: 1.45;
+  font-size: 11px;
 }
 
-.installer-intent-copy .ui-badge {
-  align-self: flex-start;
-  margin-top: 3px;
-  font-size: 9px;
+/* Before → after pictogram, same colours as the timeline. */
+.installer-picto {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.installer-picto-bar {
+  display: flex;
+  flex: 1 1 0;
+  gap: 2px;
+  height: 10px;
+}
+
+.installer-picto-seg {
+  display: block;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--glass-strong) 82%, var(--surface));
+}
+
+.installer-picto-seg--free {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 3px,
+      var(--glass-border) 3px 4px
+    );
+  box-shadow: 0 0 0 1px var(--glass-border) inset;
+}
+
+.installer-picto-seg--doomed {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--error) 55%, var(--surface)) 0 3px,
+      color-mix(in srgb, var(--error) 22%, var(--surface)) 3px 6px
+    );
+}
+
+.installer-picto-seg--new {
+  background: var(--accent);
+}
+
+.installer-picto-arrow {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.installer-disks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.installer-disks-blocked-summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11.5px;
+  list-style-position: inside;
+}
+
+.installer-diskshelf--blocked {
+  margin-top: 8px;
 }
 
 .installer-timeline {
@@ -2000,59 +2056,11 @@
   background: transparent;
 }
 
-.installer-timeline-toolbar {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
 .installer-timeline-toolbar-copy {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-}
-
-.installer-timeline-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.installer-timeline-hint {
-  color: var(--muted);
-  font-size: 11.5px;
-  line-height: 1.45;
-}
-
-.installer-timeline-zoom {
-  display: flex;
-  gap: 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-}
-
-.installer-zoom-button {
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: .04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.installer-zoom-button:hover,
-.installer-zoom-button.is-selected {
-  background: var(--installer-pill);
-  color: var(--text);
 }
 
 .installer-timeline-scroll {
@@ -2065,45 +2073,6 @@
 .installer-timeline-content {
   position: relative;
   min-width: 100%;
-}
-
-.installer-ruler {
-  position: relative;
-  height: 27px;
-  margin-bottom: 5px;
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.installer-ruler-tick {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 0;
-}
-
-.installer-ruler-mark {
-  position: absolute;
-  top: 15px;
-  bottom: -6px;
-  left: 0;
-  width: 1px;
-  background: var(--glass-border);
-}
-
-.installer-ruler-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: translateX(-50%);
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.installer-ruler-tick:first-child .installer-ruler-label {
-  transform: none;
 }
 
 .installer-track-title {
@@ -2167,24 +2136,22 @@ button.installer-clip {
   color: var(--text-secondary);
 }
 
-.installer-clip--foreign {
-  background:
-    repeating-linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--glass-strong) 88%, var(--surface)) 0 5px,
-      var(--glass) 5px 10px
-    );
-  color: var(--text-secondary);
+.installer-clip-lock {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  align-self: center;
+  opacity: .7;
 }
 
 .installer-clip--doomed {
   background:
     repeating-linear-gradient(
       135deg,
-      color-mix(in srgb, var(--error) 22%, var(--surface)) 0 5px,
-      color-mix(in srgb, var(--error) 9%, var(--surface)) 5px 10px
+      color-mix(in srgb, var(--error) 34%, var(--surface)) 0 5px,
+      color-mix(in srgb, var(--error) 14%, var(--surface)) 5px 10px
     );
-  color: var(--text-secondary);
+  color: var(--text);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
@@ -2201,7 +2168,7 @@ button.installer-clip {
 }
 
 .installer-clip--planned.installer-clip--swap {
-  background: color-mix(in srgb, var(--warn) 72%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface));
   color: var(--text);
 }
 
@@ -2265,6 +2232,7 @@ button.installer-clip--free:hover {
 }
 
 .installer-clip-label {
+  flex: 0 0 auto;
   overflow: hidden;
   font-size: 10.5px;
   font-weight: 600;
@@ -2273,7 +2241,9 @@ button.installer-clip--free:hover {
 }
 
 .installer-clip-size {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font-size: 9.5px;
   opacity: .78;
   font-variant-numeric: tabular-nums;
@@ -2372,86 +2342,116 @@ button.installer-clip--free.is-selected .installer-gap-action {
   outline: none;
 }
 
+/* Live size while hovering, focusing or dragging an edge. */
+.installer-handle-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 7;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--ed-pill-dark, var(--text));
+  color: var(--ed-pill-dark-ink, var(--bg));
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity var(--motion-feedback) var(--motion-ease), transform var(--motion-feedback) var(--motion-ease);
+}
+
+.installer-handle.at-start .installer-handle-bubble {
+  left: 0;
+  transform: translate(0, 4px);
+}
+
+.installer-handle.at-end .installer-handle-bubble {
+  left: auto;
+  right: 0;
+  transform: translate(0, 4px);
+}
+
+.installer-handle:hover .installer-handle-bubble,
+.installer-handle:focus-visible .installer-handle-bubble,
+.installer-handle.is-dragging .installer-handle-bubble {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.installer-handle.at-start:hover .installer-handle-bubble,
+.installer-handle.at-start:focus-visible .installer-handle-bubble,
+.installer-handle.at-start.is-dragging .installer-handle-bubble,
+.installer-handle.at-end:hover .installer-handle-bubble,
+.installer-handle.at-end:focus-visible .installer-handle-bubble,
+.installer-handle.at-end.is-dragging .installer-handle-bubble {
+  transform: none;
+}
+
+.installer-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.installer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.installer-toggle-knob {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  transition: background var(--motion-feedback) var(--motion-ease);
+}
+
+.installer-toggle-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-elevated, #fff);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .2);
+  transition: transform var(--motion-feedback) var(--motion-ease);
+}
+
+.installer-toggle.is-on {
+  color: var(--text);
+}
+
+.installer-toggle.is-on .installer-toggle-knob {
+  background: var(--accent);
+}
+
+.installer-toggle.is-on .installer-toggle-knob::after {
+  transform: translateX(12px);
+}
+
+.installer-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .installer-handle:focus-visible .installer-handle-grip {
   width: 6px;
   box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent);
-}
-
-.installer-playhead {
-  position: absolute;
-  top: 33px;
-  bottom: 0;
-  z-index: 5;
-  width: 0;
-  border-left: 2px dashed var(--accent);
-  pointer-events: none;
-  transform: translateX(-1px);
-}
-
-.installer-playhead-label {
-  position: absolute;
-  top: -1px;
-  left: 4px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 8.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.installer-timeline-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 12px;
-}
-
-.installer-timeline-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 9.5px;
-}
-
-.installer-legend-dot--kept {
-  background: color-mix(in srgb, var(--glass-strong) 82%, var(--surface));
-}
-
-.installer-legend-dot--planned {
-  background: var(--accent);
-}
-
-.installer-legend-dot--reused {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
-  box-shadow: 0 0 0 1px var(--accent) inset;
-}
-
-.installer-legend-dot--formatted {
-  background: var(--accent);
-}
-
-.installer-timeline-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 0;
-  border: 0;
-  border-top: 1px solid var(--installer-line);
-  border-bottom: 1px solid var(--installer-line);
-  border-radius: 0;
-  background: transparent;
-}
-
-.installer-summary-line {
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: .04em;
-  line-height: 1.6;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
 }
 
 .installer-summary-errors {
@@ -2475,122 +2475,27 @@ button.installer-clip--free.is-selected .installer-gap-action {
   color: var(--warn);
 }
 
-.installer-preset-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.installer-preset {
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--installer-pill);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-}
-
-.installer-preset:hover {
-  background: var(--installer-pill-hover);
-  color: var(--text);
-}
-
-.installer-preset.is-selected {
-  background: var(--ed-pill-dark, var(--text));
-  color: var(--ed-pill-dark-ink, var(--bg));
-}
-
-.installer-preset--ghost {
-  margin-inline-start: auto;
-  background: transparent;
-  color: var(--muted);
-}
-
-.installer-exact {
-  border-top: 1px solid var(--glass-border);
-  padding-top: 8px;
-}
-
-.installer-exact-summary {
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 10.5px;
-  font-weight: 600;
-  list-style-position: inside;
-}
-
-.installer-exact-body {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding-top: 9px;
-}
-
-.installer-exact-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
-}
-
-.installer-exact-label {
-  color: var(--text-secondary);
-  font-size: 10.5px;
-}
-
-.installer-exact-value {
-  color: var(--text);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.installer-exact-select,
-.installer-exact-number {
-  min-width: 80px;
-  padding: 4px 7px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--text);
-  font: inherit;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.installer-exact-number {
-  width: 74px;
-}
-
-.installer-exact-number:disabled {
-  opacity: .5;
-}
-
-.installer-exact-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.installer-exact-suffix {
-  color: var(--muted);
-  font-size: 9.5px;
-}
-
-.installer-exact-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.45;
-}
-
 .installer-existing-confirm {
   display: flex;
-  flex-direction: column;
-  gap: 9px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm, 10px);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.installer-existing-mark {
+  display: grid;
+  place-items: center;
+  color: var(--error);
+}
+
+.installer-existing-text {
+  flex: 1 1 200px;
+  min-width: 0;
 }
 
 .installer-existing-actions {
@@ -2600,33 +2505,73 @@ button.installer-clip--free.is-selected .installer-gap-action {
   justify-content: flex-end;
 }
 
+/* One sentence under the bars: what stays, or what is lost. */
+.installer-outcome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--installer-line);
+  border-bottom: 1px solid var(--installer-line);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.installer-outcome[hidden] {
+  display: none;
+}
+
+.installer-outcome-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--installer-pill);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.installer-outcome--ok .installer-outcome-mark {
+  background: color-mix(in srgb, var(--ok, var(--accent)) 18%, transparent);
+  color: var(--ok, var(--accent));
+}
+
+.installer-outcome--danger {
+  color: var(--error);
+}
+
+.installer-outcome--danger .installer-outcome-mark {
+  background: var(--error);
+  color: var(--bg);
+}
+
+.installer-outcome--none {
+  color: var(--muted);
+}
+
+.installer-outcome-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.installer-outcome-size {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .installer-guided-notes {
   display: flex;
   flex-direction: column;
   gap: 9px;
-}
-
-.installer-list-fallback {
-  border: 0;
-  border-top: 1px solid var(--installer-line);
-  border-radius: 0;
-  background: transparent;
-  padding: 10px 0 0;
-}
-
-.installer-list-fallback-summary {
-  color: var(--muted);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 400;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  list-style-position: inside;
-}
-
-.installer-list-fallback .installer-partition-list {
-  margin-top: 9px;
 }
 
 @media (max-width: 720px) {
@@ -2636,6 +2581,7 @@ button.installer-clip--free.is-selected .installer-gap-action {
   }
 
   .installer-diskshelf .installer-disk {
+    flex: 0 0 auto;
     min-width: 0;
   }
 
@@ -2647,24 +2593,6 @@ button.installer-clip--free.is-selected .installer-gap-action {
     padding: 11px;
   }
 
-  .installer-timeline-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .installer-timeline-zoom {
-    align-self: flex-start;
-  }
-
-  .installer-preset--ghost {
-    margin-inline-start: 0;
-  }
-
-  .installer-exact-row {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

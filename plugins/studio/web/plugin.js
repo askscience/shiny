@@ -49,7 +49,11 @@ const MELODIC = new Set(['bass', 'pluck', 'lead', 'pad', 'sub', 'organ', 'ep', '
 const DEFAULT_LEVEL = { kick: 0.9, snare: 0.75, hat: 0.45, clap: 0.5, tom: 0.7, perc: 0.4, bass: 0.7, pluck: 0.5, lead: 0.55, pad: 0.5, sub: 0.7, organ: 0.5, ep: 0.5, bell: 0.5, strings: 0.6, brass: 0.6, synthme: 0.6, grid: 0.6, drumkit: 0.7 };
 const DEFAULT_PAN = { hat: 0.35, lead: -0.25, snare: 0.05, kick: -0.05, bass: 0, pluck: 0, organ: 0.1, ep: -0.1, strings: 0.15, brass: 0.1 };
 
-const PPB = 56;        // px per beat (arranger)
+let PPB = 56;          // px per beat (arranger zoom, 4…240)
+const PPB_MIN = 4;
+const PPB_MAX = 240;
+let viewExtraBeats = 0;  // extra room added as the user scrolls right
+let arrScrollEl = null;
 const HEAD_W = 168;    // track header column width
 const RULER_H = 26;    // ruler row height
 const TRACK_H = 52;    // track lane height
@@ -569,6 +573,7 @@ function serializeEffects(list) {
 function serializeClip(c) {
   const out = { track: c.track, start: c.start, gain_db: c.gain_db || 0, loop: c.loop !== false };
   if (Number.isFinite(c.length_beats)) out.length_beats = c.length_beats;
+  if (!c.audio && c.offset_beats > 0) out.offset_beats = c.offset_beats;
   if (c.audio) {
     out.audio = {
       src: c.audio.src, name: c.audio.name || '', offset: c.audio.offset || 0,
@@ -627,6 +632,7 @@ function normalizeArrangement(data) {
       length_beats: Number.isFinite(c.length_beats) ? c.length_beats : null,
       loop: c.loop !== false,
       gain_db: Number.isFinite(c.gain_db) ? c.gain_db : 0,
+      offset_beats: Number.isFinite(c.offset_beats) ? Math.max(0, c.offset_beats) : 0,
       audio: null,
       pattern: null,
     };
@@ -716,7 +722,10 @@ let prevSource = null;           // editor preview
 let prevPlaying = false;
 let prevStart = 0;
 let prevDur = 0;
+let prevSig = '';                // pattern signature the editor preview was rendered from
+let prevGain = null;              // crossfade gain of the editor preview
 let auditionSource = null;       // looping SynthMe / WaveMe preview
+let ctxClip = null;               // { index, beat } under the last right-click
 let pendingAiTrackId = null;     // AI-created track to drop in once mounted
 let lastConsumedAiTrackId = null; // de-dupe re-delivered agent:actions
 let metroOn = false;
@@ -1062,54 +1071,76 @@ async function mapLimit(items, n, fn) {
 }
 
 /* Render (or reuse) the mix for the current arrangement. */
+/* At most ONE /mix/stems request is in flight. A request for a newer state
+   while one runs is coalesced: it waits for the running one and then sends
+   only the latest arrangement (however many edits happened meanwhile). */
+let mixFollowup = null;          // promise of the coalesced next render
 async function ensureMix({ allowStale = false } = {}) {
   const payload = stemsPayload();
   const sig = JSON.stringify(payload);
   if (sig === mixManifestSig && mixManifest) return mixManifest;
   if (allowStale && mixManifest && !mixdownBuffer && contentSignature(payload) === mixContentSig) {
-    // Only live controls changed: play the stems we have right away and
-    // refresh the returns/loudness readout in the background.
-    void ensureMix().catch(() => {});
+    // Only live controls changed (fader/pan/mute/solo): play the stems we
+    // have — no render; returns refresh with the next content change.
     return mixManifest;
   }
-  if (mixInflight?.sig === sig) return mixInflight.promise;
+  if (mixInflight) {
+    if (mixInflight.sig === sig) return mixInflight.promise;
+    if (!mixFollowup) {
+      mixFollowup = mixInflight.promise.catch(() => {}).then(() => {
+        mixFollowup = null;
+        return ensureMix();
+      });
+    }
+    return mixFollowup;
+  }
   const promise = (async () => {
     const manifest = await api('/api/studio/mix/stems', { method: 'POST', body: JSON.stringify(payload) });
+    if (manifest?.superseded) throw Object.assign(new Error('superseded'), { superseded: true });
     const bytes = (manifest.frames || 0) * 2 * 4 * ((manifest.stems || []).filter((s) => !s.silent).length + 2);
     let mixdown = null;
     if (bytes > STEM_MEMORY_LIMIT) {
       // Too much audio to hold every stem: fall back to one mixed render
       // (mixer changes then apply on the next play).
+      stemBuffers = new Map();
       const blob = await apiFetch('/api/studio/arrangement/render', { method: 'POST', body: JSON.stringify(arrangementRenderPayload()), responseType: 'blob' });
       mixdown = await audioCtxOr().decodeAudioData(await blob.arrayBuffer());
-      stemBuffers = new Map();
     } else {
       const want = [
         ...(manifest.stems || []).filter((s) => !s.silent),
         ...['reverb', 'delay'].map((w) => manifest.returns?.[w]).filter(Boolean),
       ];
-      const missing = want.filter((s) => !stemBuffers.has(s.key));
-      const decoded = await mapLimit(missing, 3, (s) => fetchStem(s.url));
-      missing.forEach((s, i) => stemBuffers.set(s.key, decoded[i]));
+      // Drop buffers this mix no longer references before fetching new ones
+      // (playing sources keep their own reference until they stop).
       const keep = new Set(want.map((s) => s.key));
       for (const k of [...stemBuffers.keys()]) if (!keep.has(k)) stemBuffers.delete(k);
+      mixdownBuffer = null;
+      const missing = want.filter((s) => !stemBuffers.has(s.key));
+      const decoded = await mapLimit(missing, 2, (s) => fetchStem(s.url));
+      missing.forEach((s, i) => stemBuffers.set(s.key, decoded[i]));
     }
     return { manifest, mixdown, sig, content: contentSignature(payload) };
   })();
   mixInflight = { sig, promise };
   try {
     const r = await promise;
-    if (mixInflight?.sig === sig) {
-      mixManifest = r.manifest;
-      mixdownBuffer = r.mixdown;
-      mixManifestSig = r.sig;
-      mixContentSig = r.content;
-      updateMasterReadout();
-      if (detailPage === 'mixer') renderMixerReadouts();
-    }
+    mixManifest = r.manifest;
+    mixdownBuffer = r.mixdown;
+    mixManifestSig = r.sig;
+    mixContentSig = r.content;
+    updateMasterReadout();
+    if (detailPage === 'mixer') renderMixerReadouts();
     return r.manifest;
+  } catch (e) {
+    // Another client's newer request won on the server: retry once with
+    // the latest state, after anything already queued.
+    if (e?.superseded) {
+      mixInflight = null;
+      return mixFollowup || ensureMix();
+    }
+    throw e;
   } finally {
-    if (mixInflight?.sig === sig) mixInflight = null;
+    if (mixInflight?.promise === promise) mixInflight = null;
   }
 }
 
@@ -1149,8 +1180,21 @@ function clearArrPlayhead() {
 function fmtPosition(beats, sec) {
   return `${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1}.${Math.floor((beats % 1) * 4) + 1}  ${fmtTime(sec)}`;
 }
-function stopSources() {
-  for (const s of playSources) { try { s.onended = null; s.stop(); } catch (_) { /* noop */ } }
+/* Stop the playing sources — at once, or with a short fade at `at` (used
+   by the hot swap so the old and new renders crossfade without a click). */
+function stopSources(at = null, fade = 0.01) {
+  const ctx = audioCtx;
+  for (const p of playSources) {
+    try {
+      if (ctx && at != null) {
+        p.gain.gain.setValueAtTime(1, at);
+        p.gain.gain.linearRampToValueAtTime(0, at + fade);
+        p.src.stop(at + fade + 0.01);
+      } else {
+        p.src.stop();
+      }
+    } catch (_) { /* noop */ }
+  }
   playSources = [];
 }
 function stopPlayback() {
@@ -1168,11 +1212,12 @@ function stopPlayback() {
   updateStudioGlow();
 }
 
-/* Start every stem at `fromBeat`. */
-function startSources(manifest, fromBeat) {
+/* Start every stem at `fromBeat` (at audio time `at`, fading in over
+   `fade` seconds when hot-swapping). */
+function startSources(manifest, fromBeat, at = null, fade = 0) {
   const ctx = audioCtxOr();
   const spb = 60 / arrangement.bpm;
-  const when = ctx.currentTime + 0.06;
+  const when = at ?? ctx.currentTime + 0.06;
   const offset = Math.max(0, fromBeat * spb);
   playLoopEnd = arrangement.length_beats * spb;
   playTotal = Math.max(playLoopEnd, (manifest.frames || 0) / (manifest.sample_rate || 44100));
@@ -1181,9 +1226,12 @@ function startSources(manifest, fromBeat) {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     if (loop) { src.loop = true; src.loopStart = 0; src.loopEnd = Math.min(playLoopEnd, buf.duration); }
-    src.connect(dest);
+    const gain = ctx.createGain();
+    if (fade > 0) { gain.gain.setValueAtTime(0, when); gain.gain.linearRampToValueAtTime(1, when + fade); }
+    src.connect(gain);
+    gain.connect(dest);
     src.start(when, Math.min(offset, Math.max(0, buf.duration - 0.001)));
-    playSources.push(src);
+    playSources.push({ src, gain });
   };
   const keep = new Set();
   if (mixdownBuffer) {
@@ -1237,14 +1285,16 @@ async function renderArrangementAndPlay(fromBeat = arrStartBeat) {
     updateTransport();
   }
 }
-function beginTransport(manifest, fromBeat) {
-  const { when, offset, loop } = startSources(manifest, fromBeat);
+function beginTransport(manifest, fromBeat, { at = null, fade = 0, keepClock = false } = {}) {
+  const { when, offset, loop } = startSources(manifest, fromBeat, at, fade);
   arrPlaying = true;
   arrPlayStart = when;
   arrPlayOffset = offset;
-  playWraps = 0;
-  metroStop();
-  metroStart(when, arrangement.bpm, fromBeat);
+  playWraps = loop && playLoopEnd > 0 ? Math.floor(offset / playLoopEnd) : 0;
+  if (!keepClock) {
+    metroStop();
+    metroStart(when, arrangement.bpm, fromBeat);
+  }
   updateStudioGlow();
   startMeters();
   if (rafId) cancelAnimationFrame(rafId);
@@ -1273,9 +1323,9 @@ function beginTransport(manifest, fromBeat) {
   rafId = requestAnimationFrame(tick);
 }
 /* Current playhead position in beats (while playing). */
-function currentBeat() {
+function currentBeat(atTime = null) {
   if (!arrPlaying || !audioCtx) return arrStartBeat;
-  let pos = arrPlayOffset + Math.max(0, audioCtx.currentTime - arrPlayStart);
+  let pos = arrPlayOffset + Math.max(0, (atTime ?? audioCtx.currentTime) - arrPlayStart);
   if (arrLoop && playLoopEnd > 0) pos %= playLoopEnd;
   return pos / (60 / arrangement.bpm);
 }
@@ -1287,24 +1337,108 @@ function scheduleMixRefresh() {
   refreshLiveMix();
   if (!arrangement) return;
   if (mixRefreshTimer) clearTimeout(mixRefreshTimer);
-  mixRefreshTimer = setTimeout(async () => {
+  mixRefreshTimer = setTimeout(() => {
     mixRefreshTimer = 0;
-    if (!arrPlaying) return;   // rendered on the next play
-    const content = contentSignature(stemsPayload());
-    if (content === mixContentSig) return;
-    try {
-      setStatus('Rendering…');
-      const manifest = await ensureMix();
-      if (!arrPlaying) return;
-      const beat = currentBeat();
-      stopSources();
-      beginTransport(manifest, beat);
-      setStatus('Playing');
-    } catch (e) {
-      console.warn('studio: live re-render failed', e);
-      setStatus('error');
+    void hotSwapArrangement();
+    void hotSwapLoops();
+  }, 320);
+}
+/* While the arrangement plays, re-render what changed (the server reuses
+   every unchanged stem; the window downloads only new keys) and swap it in
+   at the current position: same sample position, 10 ms crossfade. */
+let hotSwapBusy = false;
+let hotSwapAgain = false;
+async function hotSwapArrangement() {
+  if (!arrPlaying) return;
+  if (hotSwapBusy) { hotSwapAgain = true; return; }
+  const content = contentSignature(stemsPayload());
+  if (content === mixContentSig) return;
+  hotSwapBusy = true;
+  try {
+    const manifest = await ensureMix();
+    if (!arrPlaying || !audioCtx) return;
+    const at = audioCtx.currentTime + 0.04;
+    const beat = currentBeat(at);
+    stopSources(at, 0.01);
+    beginTransport(manifest, beat, { at, fade: 0.01, keepClock: true });
+    setStatus('Playing');
+  } catch (e) {
+    console.warn('studio: live re-render failed', e);
+    setStatus('error');
+  } finally {
+    hotSwapBusy = false;
+    if (hotSwapAgain) { hotSwapAgain = false; void hotSwapArrangement(); }
+  }
+}
+/* Launcher loops and the editor preview: re-render a playing loop whose
+   pattern changed and crossfade it in at the same phase of the loop. */
+function loopSignature(cfg) { return JSON.stringify(cfg); }
+async function hotSwapLoops() {
+  const ctx = audioCtx;
+  if (!ctx) return;
+  const jobs = [];
+  for (const [trackId, lp] of Object.entries(trackLoops)) {
+    if (lp.state === 'stopping' || !lp.cfgOf) continue;
+    const cfg = lp.cfgOf();
+    if (!cfg || loopSignature(cfg) === lp.sig) continue;
+    jobs.push((async () => {
+      const sig = loopSignature(cfg);
+      lp.sig = sig;
+      const { src, decoded } = await previewPattern(cfg, { loop: true, bus: lp.bus });
+      if (trackLoops[trackId] !== lp || lp.sig !== sig) { try { src.disconnect(); } catch (_) { /* noop */ } return; }
+      crossfadeLoop(lp, src, decoded, cfg);
+    })().catch((e) => console.warn('studio: loop hot swap failed', e)));
+  }
+  if (prevPlaying && prevSource && current) {
+    const cfg = serializePattern(current);
+    const sig = loopSignature(cfg);
+    if (sig !== prevSig) {
+      prevSig = sig;
+      jobs.push((async () => {
+        const { src, decoded } = await previewPattern(cfg, { loop: false });
+        if (!prevPlaying || prevSig !== sig) return;
+        const at = ctx.currentTime + 0.03;
+        const pos = Math.max(0, at - prevStart);
+        if (pos >= decoded.duration) return;
+        const g = ctx.createGain();
+        src.disconnect();
+        src.connect(g);
+        g.connect(masterOut());
+        g.gain.setValueAtTime(0, at);
+        g.gain.linearRampToValueAtTime(1, at + 0.01);
+        try { prevGain?.gain.setValueAtTime(1, at); prevGain?.gain.linearRampToValueAtTime(0, at + 0.01); prevSource.onended = null; prevSource.stop(at + 0.02); } catch (_) { /* noop */ }
+        src.onended = endPreview;
+        src.start(at, pos);
+        prevSource = src;
+        prevGain = g;
+        prevDur = decoded.duration;
+      })().catch(() => {}));
     }
-  }, 400);
+  }
+  await Promise.all(jobs);
+}
+/* Swap a looping launcher source for `src` at the same loop phase. */
+function crossfadeLoop(lp, src, decoded, cfg) {
+  const ctx = audioCtx;
+  const loopDur = (Math.max(4, cfg.steps || 16) / 4) * 60 / (cfg.bpm || 120);
+  src.loopStart = 0;
+  src.loopEnd = Math.min(loopDur, decoded.duration);
+  const at = Math.max(ctx.currentTime + 0.03, lp.when);
+  const phase = ((at - lp.when) % loopDur + loopDur) % loopDur;
+  const g = ctx.createGain();
+  src.disconnect();
+  src.connect(g);
+  g.connect(lp.bus);
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(1, at + 0.01);
+  try {
+    lp.gain?.gain.setValueAtTime(1, at);
+    lp.gain?.gain.linearRampToValueAtTime(0, at + 0.01);
+    lp.source.stop(at + 0.02);
+  } catch (_) { /* noop */ }
+  src.start(at, phase);
+  lp.source = src;
+  lp.gain = g;
 }
 
 /* ── meters (run only while something plays) ── */
@@ -1440,8 +1574,11 @@ async function previewClipInEditor() {
   if (prevPlaying) { endPreview(); return; }
   setStatus('Rendering…');
   try {
-    const { src, decoded } = await previewPattern(serializePattern(current));
+    const cfg0 = serializePattern(current);
+    const { src, decoded } = await previewPattern(cfg0);
     clearPrevPlayhead();
+    prevSig = loopSignature(cfg0);
+    prevGain = null;
     prevSource = src;
     prevPlaying = true;
     prevStart = audioCtx.currentTime + 0.05;
@@ -1533,9 +1670,22 @@ async function launchClip(ti, si) {
   stopLauncherTrack(tr.id, true);
   setStatus('Rendering…');
   try {
-    const cfg = { ...serializePattern(normalizePattern(clip.pattern)), title: clip.title || 'Clip', bpm: launcher.bpm };
+    const cfgOf = () => {
+      const c = launcher.clips[key];
+      return c ? { ...serializePattern(normalizePattern(c.pattern)), title: c.title || 'Clip', bpm: launcher.bpm } : null;
+    };
+    const cfg = cfgOf();
     const ta = ensureTrackAudio(tr);
-    const { src } = await previewPattern(cfg, { loop: true, bus: ta.panner || ta.gain });
+    const bus = ta.panner || ta.gain;
+    const { src: raw, decoded } = await previewPattern(cfg, { loop: true, bus });
+    // Loop exactly one pattern pass (the render carries a release tail).
+    raw.loopStart = 0;
+    raw.loopEnd = Math.min(decoded.duration, (Math.max(4, cfg.steps || 16) / 4) * 60 / launcher.bpm);
+    const lgain = audioCtxOr().createGain();
+    raw.disconnect();
+    raw.connect(lgain);
+    lgain.connect(bus);
+    const src = raw;
     const ctx = audioCtxOr();
     if (!clockRunning) {
       clockRunning = true;
@@ -1545,7 +1695,7 @@ async function launchClip(ti, si) {
     }
     const when = nextBarTime();
     src.start(when);
-    trackLoops[tr.id] = { source: src, slotKey: key, when, state: 'queued' };
+    trackLoops[tr.id] = { source: src, slotKey: key, when, state: 'queued', cfgOf, sig: loopSignature(cfg), bus, gain: lgain };
     startMeters();
     setStatus('Queued');
   } catch (e) {
@@ -1635,16 +1785,19 @@ async function deleteTrack(id) {
   renderBrowser();
 }
 
+let editSeq = 0;                  // bumps on every edit (autosave race guard)
 async function saveArrangement() {
   const payload = arrangementPayload();
+  const seq = editSeq;
   let data;
   if (arrangement.id) {
     data = await api(`/api/studio/arrangement/${arrangement.id}`, { method: 'PUT', body: JSON.stringify(payload) });
   } else {
     data = await api('/api/studio/arrangement', { method: 'POST', body: JSON.stringify(payload) });
   }
-  arrangement.id = data?.id;
-  dirty = false;
+  arrangement.id = data?.id || arrangement.id;
+  // Edits made while the request was in flight keep the project dirty.
+  if (seq === editSeq) dirty = false; else scheduleAutosave();
   await refreshArrangements();
   renderBrowser();
   return data;
@@ -1661,6 +1814,85 @@ async function loadArrangement(id) {
   renderArranger();
   renderBrowser();
   setStatus('saved');
+}
+/* ── projects ── */
+async function confirmDiscard() {
+  if (!dirty || !arrangement?.clips?.length) return true;
+  return confirmDialog(t('plugin.studio.project.discard', { name: arrangement.title }, `"${arrangement.title}" has unsaved changes. Discard them?`));
+}
+async function openProject(id) {
+  if (arrangement?.id === id && !dirty) return;
+  if (!(await confirmDiscard())) return;
+  if (arrPlaying) stopPlayback();
+  try {
+    await loadArrangement(id);
+    if (titleInput) titleInput.value = arrangement.title;
+    if (bpmInput) bpmInput.value = String(Math.round(arrangement.bpm * 100) / 100);
+    viewExtraBeats = 0;
+    requestAnimationFrame(() => zoomToFit());
+  } catch (e) {
+    toast(e.message, { type: 'error' });
+  }
+}
+async function newProject() {
+  if (!(await confirmDiscard())) return;
+  if (arrPlaying) stopPlayback();
+  arrangement = blankArrangement();
+  arrangement.title = t('plugin.studio.project.untitled', null, 'Untitled project');
+  soloTracks = new Set();
+  invalidateMix();
+  sel = null;
+  syncSelection();
+  dirty = false;
+  if (titleInput) titleInput.value = arrangement.title;
+  PPB = 56;
+  viewExtraBeats = 0;
+  renderArranger();
+  renderBrowser();
+  setStatus('saved');
+}
+async function saveProjectAs() {
+  const base = arrangement.title || 'Untitled';
+  arrangement.id = null;
+  arrangement.title = arrangements.some((a) => a.title === base) ? `${base} (2)` : base;
+  if (titleInput) titleInput.value = arrangement.title;
+  await saveArrangement();
+  setStatus('saved');
+  toast(t('plugin.studio.project.savedAs', { name: arrangement.title }, `Saved as "${arrangement.title}"`), { type: 'success' });
+}
+async function renameProject(a, title) {
+  const name = title.trim();
+  if (!name || name === a.title) { renderBrowser(); return; }
+  try {
+    const data = await api(`/api/studio/arrangement/${a.id}`);
+    data.title = name;
+    await api(`/api/studio/arrangement/${a.id}`, { method: 'PUT', body: JSON.stringify(data) });
+    if (arrangement?.id === a.id) { arrangement.title = name; if (titleInput) titleInput.value = name; }
+    await refreshArrangements();
+  } catch (e) { toast(e.message, { type: 'error' }); }
+  renderBrowser();
+}
+async function duplicateProject(a) {
+  try {
+    const data = await api(`/api/studio/arrangement/${a.id}`);
+    delete data.id;
+    data.title = `${a.title} ${t('plugin.studio.project.copySuffix', null, '(copy)')}`;
+    await api('/api/studio/arrangement', { method: 'POST', body: JSON.stringify(data) });
+    await refreshArrangements();
+  } catch (e) { toast(e.message, { type: 'error' }); }
+  renderBrowser();
+}
+/* Autosave: a project that already lives in the Studio saves itself 3 s
+   after the last edit (new projects wait for an explicit Save). */
+let autosaveTimer = 0;
+function scheduleAutosave() {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  if (!arrangement?.id) return;
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = 0;
+    if (!dirty || !arrangement?.id || busy) return;
+    void saveArrangement().then(() => setStatus('saved')).catch((e) => console.warn('studio: autosave failed', e));
+  }, 3000);
 }
 async function deleteArrangement(id) {
   await api(`/api/studio/arrangement/${id}`, { method: 'DELETE' });
@@ -1760,9 +1992,11 @@ function setStatus(s) {
   statusEl.dataset.state = s === 'error' ? 'error' : (busy ? 'busy' : (isDirty ? 'dirty' : 'ok'));
 }
 function markDirty() {
+  editSeq += 1;
   dirty = true;
   setStatus('dirty');
   scheduleMixRefresh();
+  scheduleAutosave();
 }
 function updateTransport() {
   if (playBtn) {
@@ -1812,8 +2046,7 @@ function redrawClipPreviews() {
   if (!arrGridEl || !arrangement) return;
   arrangement.clips.forEach((clip, i) => {
     if (clip.audio) drawAudioClip(i);
-    else if (clip.peaks) drawClipWave(i);
-    else drawClipMidi(i);
+    else drawPatternClip(i);
   });
 }
 
@@ -1857,6 +2090,7 @@ function knob(label, min, max, step, value, onchange, resetTo) {
   });
   k.classList.add('studio-knob');
   k.dataset.param = label;
+  k.title = label;
   k._dial = k.dial;
   k._set = k.setValue;
   k.addEventListener('mouseenter', () => setReadout(t('plugin.studio.readout.param', { label, value: fmt(k.value) }, `${label} — ${fmt(k.value)}`)));
@@ -1891,7 +2125,7 @@ function clipDurBeats(c) {
     if (info?.duration) return Math.max(0.25, (info.duration - (c.audio.offset || 0)) * (arrangement?.bpm || 120) / 60);
     return 4;
   }
-  return patternBeats(c);
+  return Math.max(0.25, patternBeats(c) - (c.loop === false ? (c.offset_beats || 0) : 0));
 }
 /* Grow the arrangement so every clip fits. */
 function fitArrangementLength() {
@@ -2055,7 +2289,7 @@ function startAutoDrag(e, svg, tr, lane, pts, idx) {
     const rect = svg.getBoundingClientRect();
     const x = ev.clientX - rect.left;
     const y = ev.clientY - rect.top;
-    pt.beat = clamp(Math.round((x / PPB) * 4) / 4, 0, arrangement.length_beats);
+    pt.beat = Math.max(0, Math.round((x / PPB) * 4) / 4);
     pt.value = clamp(Math.round(autoValueY(min, max, y, h) * 100) / 100, min, max);
     drawAutomationSvg(svg, tr, lane);
   };
@@ -2105,7 +2339,7 @@ function renderAutomationLaneRow(tr, lane, catalog, beats, autoRow, isFirst, lan
   arrGridEl.appendChild(hd);
 
   const laneEl = h('div', 'studio-auto-lane');
-  laneEl.style.gridColumn = `2 / ${beats + 2}`;
+  laneEl.style.gridColumn = '2';
   laneEl.style.gridRow = String(autoRow);
   laneEl.style.setProperty('--track', trackColor(tr.color));
   if (lane) {
@@ -2117,7 +2351,7 @@ function renderAutomationLaneRow(tr, lane, catalog, beats, autoRow, isFirst, lan
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       const { min, max } = autoRange(tr, lane.param);
-      const beat = clamp(Math.round((x / PPB) * 4) / 4, 0, arrangement.length_beats);
+      const beat = Math.max(0, Math.round((x / PPB) * 4) / 4);
       const value = clamp(Math.round(autoValueY(min, max, y, AUTO_H) * 100) / 100, min, max);
       lane.points.push({ beat, value });
       markDirty();
@@ -2194,10 +2428,154 @@ function updateAutoKnobs(beat) {
   }
 }
 
+/* Beats the timeline shows: the arrangement, every clip, and at least 16
+   bars of open space after them (more as the user scrolls right). */
+function contentEndBeats() {
+  let end = arrangement.length_beats;
+  for (const c of arrangement.clips) end = Math.max(end, c.start + clipDurBeats(c));
+  return end;
+}
+function viewBeats() {
+  const room = Math.max(64, arrScrollEl ? Math.ceil((arrScrollEl.clientWidth - HEAD_W) / PPB) : 64);
+  return Math.ceil((contentEndBeats() + room + viewExtraBeats) / 4) * 4;
+}
+/* Horizontal zoom keeping the beat under `clientX` (default: view centre) still. */
+function zoomArranger(next, clientX = null) {
+  if (!arrScrollEl) return;
+  const ppb = clamp(next, PPB_MIN, PPB_MAX);
+  if (Math.abs(ppb - PPB) < 0.01) return;
+  const r = arrScrollEl.getBoundingClientRect();
+  const x = (clientX ?? (r.left + HEAD_W + (r.width - HEAD_W) / 2)) - r.left;
+  const beat = (arrScrollEl.scrollLeft + x - HEAD_W) / PPB;
+  PPB = ppb;
+  renderArranger();
+  if (arrPlaying) { const b = currentBeat(); if (arrPlayheadEl) { arrPlayheadEl.style.opacity = '1'; arrPlayheadEl.style.transform = `translateX(${HEAD_W + b * PPB}px)`; } }
+  arrScrollEl.scrollLeft = Math.max(0, beat * PPB + HEAD_W - x);
+}
+function zoomToFit() {
+  if (!arrScrollEl) return;
+  const end = Math.max(4, contentEndBeats());
+  viewExtraBeats = 0;
+  PPB = clamp((arrScrollEl.clientWidth - HEAD_W - 24) / end, PPB_MIN, PPB_MAX);
+  renderArranger();
+  arrScrollEl.scrollLeft = 0;
+}
+function onArrWheel(e) {
+  if (e.ctrlKey || e.metaKey) {
+    // Ctrl+wheel and trackpad pinch (Chromium sends pinch as ctrl+wheel).
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.004));
+    zoomArranger(PPB * factor, e.clientX);
+  } else if (e.shiftKey && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+    e.preventDefault();
+    arrScrollEl.scrollLeft += e.deltaY;
+  }
+}
+/* ── pinch zoom: every path a pinch can arrive by ──
+   1. ctrl+wheel (mouse, and Chromium's trackpad pinch where the platform
+      delivers it) — onArrWheel;
+   2. WebKit `gesturestart/gesturechange` (scale);
+   3. two touch pointers (touchscreens) via Pointer Events;
+   4. a shell-sent `trackpad:pinch` event { phase, scale } (the PEAK'D kiosk
+      runs Qt on X11, where touchpad pinches never reach the page);
+   5. last resort: visualViewport scale changes. */
+let arrPointer = { x: null, inside: false };
+const arrTouches = new Map();     // pointerId → { x, y }
+let pinchBase = null;             // { ppb, dist|scale, x }
+function arrPointerX() {
+  if (arrPointer.x != null) return arrPointer.x;
+  const r = arrScrollEl?.getBoundingClientRect();
+  return r ? r.left + HEAD_W + (r.width - HEAD_W) / 2 : 0;
+}
+function pinchBegin(x) { pinchBase = { ppb: PPB, x }; }
+function pinchScale(scale) {
+  if (!pinchBase || !Number.isFinite(scale) || scale <= 0) return;
+  zoomArranger(pinchBase.ppb * scale, pinchBase.x);
+}
+function wireArrPinch(el) {
+  el.addEventListener('pointermove', (e) => { arrPointer = { x: e.clientX, inside: true }; }, { passive: true });
+  el.addEventListener('pointerleave', () => { arrPointer.inside = false; }, { passive: true });
+  // WebKit gesture events.
+  el.addEventListener('gesturestart', (e) => { e.preventDefault(); pinchBegin(e.clientX ?? arrPointerX()); }, { passive: false });
+  el.addEventListener('gesturechange', (e) => { e.preventDefault(); pinchScale(e.scale); }, { passive: false });
+  el.addEventListener('gestureend', (e) => { e.preventDefault(); pinchBase = null; }, { passive: false });
+  // Two-finger touch pinch.
+  const dist = () => { const [a, b] = [...arrTouches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    arrTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (arrTouches.size === 2) {
+      const [a, b] = [...arrTouches.values()];
+      pinchBegin((a.x + b.x) / 2);
+      pinchBase.dist = Math.max(1, dist());
+    }
+  }, true);
+  el.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'touch' || !arrTouches.has(e.pointerId)) return;
+    arrTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (arrTouches.size === 2 && pinchBase?.dist) { e.preventDefault(); pinchScale(dist() / pinchBase.dist); }
+  }, true);
+  const lift = (e) => { if (arrTouches.delete(e.pointerId) && arrTouches.size < 2) pinchBase = null; };
+  el.addEventListener('pointerup', lift, true);
+  el.addEventListener('pointercancel', lift, true);
+}
+/* Shell bridge: window `trackpad:pinch` { phase: begin|update|end, scale }. */
+function onShellPinch(e) {
+  if (!arrScrollEl?.isConnected || !arrPointer.inside) return;
+  const d = e.detail || {};
+  if (d.phase === 'begin') pinchBegin(arrPointerX());
+  else if (d.phase === 'update') { if (!pinchBase) pinchBegin(arrPointerX()); pinchScale(Number(d.scale)); }
+  else pinchBase = null;
+}
+/* Last resort: the page itself got pinch-zoomed — follow it on the timeline. */
+let lastViewportScale = window.visualViewport?.scale || 1;
+function onViewportResize() {
+  const sc = window.visualViewport?.scale || 1;
+  if (sc === lastViewportScale) return;
+  const ratio = sc / lastViewportScale;
+  lastViewportScale = sc;
+  if (arrPointer.inside && arrScrollEl?.isConnected) zoomArranger(PPB * ratio, arrPointerX());
+}
+
+let arrExtendTimer = 0;
+function onArrScroll() {
+  const el = arrScrollEl;
+  if (!el || arrExtendTimer) return;
+  if (el.scrollLeft + el.clientWidth > el.scrollWidth - PPB * 8) {
+    arrExtendTimer = setTimeout(() => {
+      arrExtendTimer = 0;
+      const left = el.scrollLeft;
+      viewExtraBeats += 64;
+      renderArranger();
+      el.scrollLeft = left;
+    }, 60);
+  }
+}
+function startEndMarkerDrag(e, mk) {
+  e.preventDefault();
+  e.stopPropagation();
+  const startX = e.clientX;
+  const l0 = arrangement.length_beats;
+  try { mk.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+  const move = (ev) => {
+    const q = PPB >= 24 ? 1 : 4;
+    arrangement.length_beats = Math.max(4, Math.round((l0 + (ev.clientX - startX) / PPB) / q) * q);
+    mk.style.left = `${arrangement.length_beats * PPB}px`;
+  };
+  const up = (ev) => {
+    mk.removeEventListener('pointermove', move);
+    mk.removeEventListener('pointerup', up);
+    try { mk.releasePointerCapture(ev.pointerId); } catch (_) { /* noop */ }
+    if (arrangement.length_beats !== l0) { markDirty(); renderArranger(); }
+  };
+  mk.addEventListener('pointermove', move);
+  mk.addEventListener('pointerup', up);
+}
+
 function renderArranger() {
   if (!arrGridEl || !arrangement) return;
   arrGridEl.textContent = '';
-  const beats = Math.max(4, Math.round(arrangement.length_beats));
+  const beats = viewBeats();
   const n = arrangement.tracks.length;
   /* Rows: ruler, then each track's lane (+ automation lane when open), then add-track. */
   const rowFor = [];
@@ -2217,23 +2595,57 @@ function renderArranger() {
   }
   const addRow = rowHeights.length + 1;
   rowHeights.push(TRACK_H);
-  arrGridEl.style.gridTemplateColumns = `${HEAD_W}px repeat(${beats}, ${PPB}px)`;
+  arrGridEl.style.gridTemplateColumns = `${HEAD_W}px ${beats * PPB}px`;
+  arrGridEl.style.setProperty('--ppb', `${PPB}px`);
+  arrGridEl.style.setProperty('--ppbar', `${PPB * 4}px`);
   arrGridEl.style.gridTemplateRows = rowHeights.map((h) => `${h}px`).join(' ');
 
   arrGridEl.appendChild(h('div', 'studio-arr-corner'));
 
-  /* ruler — bar numbers + loop region; click sets the playback start */
-  for (let b = 0; b < beats; b++) {
-    const cell = h('div', 'studio-arr-ruler-cell');
-    if (b % 4 === 0) { cell.classList.add('studio-arr-ruler-bar'); cell.textContent = String(b / 4 + 1); }
-    if (arrLoop) cell.classList.add('studio-arr-ruler-cell--loop');
-    if (b === arrStartBeat) cell.classList.add('studio-arr-ruler-cell--start');
-    cell.style.gridColumn = String(b + 2);
-    cell.style.gridRow = '1';
-    cell.title = t('plugin.studio.arranger.playFromHere', null, 'Play from here');
-    cell.addEventListener('click', () => { arrStartBeat = b; renderArranger(); });
-    arrGridEl.appendChild(cell);
+  /* ruler — labels adapt to the zoom; click sets the play start, the end
+     marker (draggable) sets the arrangement/export length */
+  const ruler = h('div', 'studio-arr-ruler');
+  ruler.style.gridColumn = '2';
+  ruler.style.gridRow = '1';
+  ruler.title = t('plugin.studio.arranger.playFromHere', null, 'Play from here');
+  const barPx = PPB * 4;
+  const every = [1, 2, 4, 8, 16, 32, 64].find((n) => n * barPx >= 44) || 64;
+  for (let bar = 0; bar * 4 < beats; bar += 1) {
+    const major = bar % every === 0;
+    if (!major && barPx < 12) continue;
+    const tick = h('span', `studio-arr-ruler-tick${major ? ' is-major' : ''}`, major ? String(bar + 1) : '');
+    tick.style.left = `${bar * barPx}px`;
+    ruler.appendChild(tick);
+    if (PPB >= 36) {
+      for (let bt = 1; bt < 4; bt++) {
+        const sub = h('span', 'studio-arr-ruler-tick is-beat', PPB >= 70 ? `${bar + 1}.${bt + 1}` : '');
+        sub.style.left = `${(bar * 4 + bt) * PPB}px`;
+        ruler.appendChild(sub);
+      }
+    }
   }
+  const lenShade = h('span', 'studio-arr-ruler-after');
+  lenShade.style.left = `${arrangement.length_beats * PPB}px`;
+  ruler.appendChild(lenShade);
+  if (arrLoop) {
+    const lr = h('span', 'studio-arr-ruler-loop');
+    lr.style.width = `${arrangement.length_beats * PPB}px`;
+    ruler.appendChild(lr);
+  }
+  const endMk = h('span', 'studio-arr-endmarker');
+  endMk.style.left = `${arrangement.length_beats * PPB}px`;
+  endMk.title = t('plugin.studio.arranger.endMarker', null, 'Arrangement end (loop and export length) — drag to change');
+  endMk.addEventListener('pointerdown', (e) => startEndMarkerDrag(e, endMk));
+  ruler.appendChild(endMk);
+  ruler.addEventListener('click', (e) => {
+    if (e.target === endMk) return;
+    const r = ruler.getBoundingClientRect();
+    const q = PPB >= 24 ? 1 : 4;
+    arrStartBeat = Math.max(0, Math.floor(((e.clientX - r.left) / PPB) / q) * q);
+    renderArranger();
+    clearArrPlayhead();
+  });
+  arrGridEl.appendChild(ruler);
 
   /* track headers */
   for (let ti = 0; ti < n; ti++) {
@@ -2283,7 +2695,7 @@ function renderArranger() {
     /* lane background */
     const lane = h('div', 'studio-arr-lane');
     lane.dataset.trackId = tr.id;
-    lane.style.gridColumn = `2 / ${beats + 2}`;
+    lane.style.gridColumn = '2';
     lane.style.gridRow = String(rowFor[ti].track);
     lane.style.setProperty('--track', trackColor(tr.color));
     if (!arrTrackAudible(tr)) lane.classList.add('studio-arr-lane--muted');
@@ -2320,22 +2732,24 @@ function renderArranger() {
     const name = isAudio ? (clip.audio.name || clip.audio.src.split('/').pop()) : (clip.pattern?.title || tr.name);
     const el = h('div', `studio-arr-clip${isAudio ? ' studio-arr-clip--audio' : ''}`);
     // Absolute placement inside the lane row so fractional starts/lengths draw exactly.
-    el.style.gridColumn = `2 / ${beats + 2}`;
+    el.style.gridColumn = '2';
     el.style.gridRow = String(rowFor[tIndex].track);
     el.style.marginLeft = `${start * PPB}px`;
-    el.style.width = `${Math.max(6, Math.min(dur, beats - start) * PPB - 2)}px`;
+    el.style.width = `${Math.max(6, dur * PPB - 2)}px`;
     el.style.setProperty('--track', trackColor(tr.color));
     el.dataset.clipIndex = i;
-    el.title = t('plugin.studio.clip.hint2', { name }, `${name} — drag to move, drag the right edge to resize, double-click to edit`);
+    el.title = t('plugin.studio.clip.hint3', { name }, `${name} — drag to move (also to another track) · Ctrl-drag duplicates · edges trim · Alt-click splits · double-click edits`);
+    el.addEventListener('contextmenu', (ev) => { ctxClip = { index: i, beat: snapBeat(beatAtClientX(ev.clientX), { shiftKey: true }) }; });
     if (sel?.area === 'arr' && sel.clipIndex === i) el.classList.add('studio-arr-clip--sel');
     if (!arrTrackAudible(tr)) el.classList.add('studio-arr-clip--muted');
-    const melodic = !isAudio && patternIsMelodic(clip.pattern);
-    const cv = h('canvas', isAudio ? 'studio-arr-clip-wave studio-arr-clip-audio' : (melodic ? 'studio-arr-clip-midi' : 'studio-arr-clip-wave'));
+    const cv = h('canvas', isAudio ? 'studio-arr-clip-wave studio-arr-clip-audio' : 'studio-arr-clip-wave studio-arr-clip-pattern');
     el.appendChild(cv);
     /* loop repetitions of a pattern clip */
     if (!isAudio && clip.loop !== false) {
       const pass = patternBeats(clip);
-      for (let k = pass; k < dur - 0.01; k += pass) {
+      const off = (clip.offset_beats || 0) % pass;
+      for (let k = pass - off; k < dur - 0.01; k += pass) {
+        if (k <= 0.01) continue;
         const mark = h('span', 'studio-arr-clip-loopmark');
         mark.style.left = `${k * PPB}px`;
         el.appendChild(mark);
@@ -2368,6 +2782,10 @@ function renderArranger() {
     grip.title = t('plugin.studio.clip.resize', null, 'Drag to change the clip length');
     grip.addEventListener('pointerdown', (e) => startClipResize(e, i));
     el.appendChild(grip);
+    const trim = h('span', 'studio-arr-clip-resize studio-arr-clip-resize--start');
+    trim.title = t('plugin.studio.clip.trimStart', null, 'Drag to trim the clip start');
+    trim.addEventListener('pointerdown', (e) => startClipTrim(e, i));
+    el.appendChild(trim);
     el.addEventListener('click', () => selectArrClip(i));
     el.addEventListener('dblclick', () => selectArrClip(i, { openEditor: true }));
     el.addEventListener('pointerdown', (e) => startClipDrag(e, i));
@@ -2375,9 +2793,7 @@ function renderArranger() {
     if (isAudio) {
       if (audioInfo(clip.audio.src)) requestAnimationFrame(() => drawAudioClip(i));
       else void loadAudioInfo(clip.audio.src).then(() => renderArranger()).catch(() => {});
-    } else if (melodic) requestAnimationFrame(() => drawClipMidi(i));
-    else if (clip.peaks) requestAnimationFrame(() => drawClipWave(i));
-    else void loadWave(i);
+    } else requestAnimationFrame(() => drawPatternClip(i));
   }
 
   /* playhead + start marker */
@@ -2386,6 +2802,19 @@ function renderArranger() {
   arrGridEl.appendChild(arrPlayheadEl);
   const startMarkerEl = h('div', 'studio-arr-startmarker');
   startMarkerEl.style.transform = `translateX(${HEAD_W + Math.min(arrStartBeat, beats - 1) * PPB}px)`;
+  /* zoom controls in the corner */
+  const corner = arrGridEl.querySelector('.studio-arr-corner');
+  if (corner) {
+    const zo = iconCtl('ui/zoom-out', 'studio-head-btn', t('plugin.studio.arranger.zoomOut', null, 'Zoom out (Ctrl+wheel)'));
+    zo.addEventListener('click', () => zoomArranger(PPB / 1.5));
+    const fit = h('button', 'studio-head-btn studio-zoom-fit', t('plugin.studio.arranger.fit', null, 'Fit'));
+    fit.type = 'button';
+    fit.title = t('plugin.studio.arranger.fitHint', null, 'Zoom to fit (Z)');
+    fit.addEventListener('click', () => zoomToFit());
+    const zi = iconCtl('ui/zoom-in', 'studio-head-btn', t('plugin.studio.arranger.zoomIn', null, 'Zoom in (Ctrl+wheel)'));
+    zi.addEventListener('click', () => zoomArranger(PPB * 1.5));
+    corner.append(zo, fit, zi);
+  }
   startMarkerEl.title = t('plugin.studio.arranger.playStart', null, 'Play start (click the ruler to move)');
   arrGridEl.appendChild(startMarkerEl);
 }
@@ -2483,74 +2912,229 @@ function removeArrClip(i) {
 }
 
 function snapBeat(v, e) {
-  const q = e.shiftKey ? 0.25 : (e.altKey ? 4 : 1);
+  const q = e.shiftKey ? 0.25 : 1;
   return Math.round(v / q) * q;
 }
+/* Beat under a client X inside the arranger grid. */
+function beatAtClientX(x) {
+  const r = arrGridEl.getBoundingClientRect();
+  return Math.max(0, (x - r.left - HEAD_W) / PPB);
+}
+/* The track lane whose row contains client Y (automation rows excluded). */
+function laneAtClientY(y) {
+  for (const lane of arrGridEl.querySelectorAll('.studio-arr-lane')) {
+    const r = lane.getBoundingClientRect();
+    if (y >= r.top && y < r.bottom) return lane;
+  }
+  return null;
+}
+function cloneClip(c) {
+  return normalizeArrangement({ tracks: [], clips: [JSON.parse(JSON.stringify(serializeClip(c)))] }).clips[0];
+}
+/* Split a clip at an arrangement beat: the second half continues the
+   pattern (offset_beats) or the file (audio offset) from the split point. */
+function splitClipAt(i, beat) {
+  const c = arrangement.clips[i];
+  if (!c) return false;
+  const dur = clipDurBeats(c);
+  const at = Math.round(beat * 4) / 4;
+  if (at <= c.start + 0.1 || at >= c.start + dur - 0.1) return false;
+  const second = cloneClip(c);
+  const cut = at - c.start;
+  c.length_beats = cut;
+  second.start = at;
+  second.length_beats = dur - cut;
+  if (c.audio) {
+    second.audio.offset = (c.audio.offset || 0) + cut * 60 / arrangement.bpm;
+    second.audio.fade_in = 0.005;
+    c.audio.fade_out = 0.005;
+  } else {
+    second.offset_beats = (c.offset_beats || 0) + cut;
+    second.loop = true;
+    if (c.loop === false) { c.loop = true; }
+  }
+  arrangement.clips.splice(i + 1, 0, second);
+  if (sel?.area === 'arr' && sel.clipIndex > i) sel.clipIndex += 1;
+  selectArrClip(i + 1);
+  markDirty();
+  return true;
+}
+function playheadBeat() {
+  return arrPlaying ? currentBeat() : arrStartBeat;
+}
+function splitSelectedAtPlayhead() {
+  if (sel?.area !== 'arr') return;
+  if (!splitClipAt(sel.clipIndex, playheadBeat())) toast(t('plugin.studio.toast.splitOutside', null, 'Move the playhead inside the selected clip to split it'), { type: 'error' });
+}
+
 function startClipDrag(e, clipIndex) {
   if (e.button !== 0) return;
   e.preventDefault();
   e.stopPropagation();
-  const clip = arrangement.clips[clipIndex];
-  const el = e.currentTarget;
+  let clip = arrangement.clips[clipIndex];
+  let el = e.currentTarget;
   const startX = e.clientX;
   const startY = e.clientY;
   const startBeat = clip.start;
+  const clickBeat = beatAtClientX(e.clientX);
+  const copy = e.ctrlKey || e.metaKey;
+  const alt = e.altKey;
+  let duplicated = false;
   let moved = false;
+  let hot = null;
+  const target = el;   // keeps the pointer capture and the listeners
+  try { target.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
   const move = (ev) => {
-    const delta = (ev.clientX - startX) / PPB;
-    if (Math.abs(ev.clientX - startX) > 3) moved = true;
-    clip.start = Math.max(0, snapBeat(startBeat + delta, ev));
+    if (!moved && Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+    moved = true;
+    if ((copy || alt) && !duplicated) {
+      // Alt/Ctrl-drag: leave the original, drag a copy.
+      duplicated = true;
+      const dup = cloneClip(clip);
+      arrangement.clips.push(dup);
+      const ghost = el.cloneNode(true);
+      ghost.classList.add('studio-arr-clip--ghost');
+      el.parentNode.appendChild(ghost);
+      el = ghost;
+      clip = dup;
+    }
+    clip.start = Math.max(0, snapBeat(startBeat + (ev.clientX - startX) / PPB, ev));
     el.style.marginLeft = `${clip.start * PPB}px`;
-    // Vertical drag moves the clip to another track.
-    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.studio-arr-lane');
-    if (target && Math.abs(ev.clientY - startY) > TRACK_H / 2) {
-      const id = target.dataset.trackId;
-      if (id && id !== clip.track) { clip.track = id; moved = true; }
+    const lane = laneAtClientY(ev.clientY);
+    if (hot && hot !== lane) hot.classList.remove('studio-arr-lane--target');
+    hot = lane;
+    if (lane) {
+      lane.classList.add('studio-arr-lane--target');
+      el.style.gridRow = lane.style.gridRow;
+      const id = lane.dataset.trackId;
+      if (id) clip.track = id;
     }
   };
-  const up = () => {
-    window.removeEventListener('pointermove', move);
-    window.removeEventListener('pointerup', up);
-    if (moved) { fitArrangementLength(); markDirty(); renderArranger(); }
+  const up = (ev) => {
+    target.removeEventListener('pointermove', move);
+    target.removeEventListener('pointerup', up);
+    target.removeEventListener('pointercancel', up);
+    try { target.releasePointerCapture(ev.pointerId); } catch (_) { /* noop */ }
+    if (hot) hot.classList.remove('studio-arr-lane--target');
+    if (!moved) {
+      if (alt) splitClipAt(clipIndex, snapBeat(clickBeat, ev));
+      return;
+    }
+    fitArrangementLength();
+    if (duplicated) selectArrClip(arrangement.clips.length - 1);
+    markDirty();
+    renderArranger();
   };
-  window.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', up);
+  target.addEventListener('pointermove', move);
+  target.addEventListener('pointerup', up);
+  target.addEventListener('pointercancel', up);
 }
+/* Right edge: change the length. */
 function startClipResize(e, clipIndex) {
   if (e.button !== 0) return;
   e.preventDefault();
   e.stopPropagation();
   const clip = arrangement.clips[clipIndex];
-  const el = e.currentTarget.parentElement;
+  const grip = e.currentTarget;
+  const el = grip.parentElement;
   const startX = e.clientX;
   const startDur = clipDurBeats(clip);
   let maxDur = Infinity;
   if (clip.audio) {
     const info = audioInfo(clip.audio.src);
     if (info?.duration) maxDur = (info.duration - (clip.audio.offset || 0)) * arrangement.bpm / 60;
+  } else if (clip.loop === false) {
+    maxDur = Math.max(0.25, patternBeats(clip) - (clip.offset_beats || 0));
   }
   let changed = false;
+  try { grip.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
   const move = (ev) => {
     const d = clamp(snapBeat(startDur + (ev.clientX - startX) / PPB, ev), 0.25, maxDur);
     if (d !== clip.length_beats) { clip.length_beats = d; changed = true; }
     el.style.width = `${Math.max(6, d * PPB - 2)}px`;
+    if (clip.audio) drawAudioClip(clipIndex); else drawPatternClip(clipIndex);
   };
-  const up = () => {
-    window.removeEventListener('pointermove', move);
-    window.removeEventListener('pointerup', up);
+  const up = (ev) => {
+    grip.removeEventListener('pointermove', move);
+    grip.removeEventListener('pointerup', up);
+    try { grip.releasePointerCapture(ev.pointerId); } catch (_) { /* noop */ }
     if (changed) { fitArrangementLength(); markDirty(); renderArranger(); }
   };
-  window.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', up);
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up);
+}
+/* Left edge: trim the start (content stays in place on the timeline). */
+function startClipTrim(e, clipIndex) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const clip = arrangement.clips[clipIndex];
+  const grip = e.currentTarget;
+  const el = grip.parentElement;
+  const startX = e.clientX;
+  const s0 = clip.start;
+  const d0 = clipDurBeats(clip);
+  const spb = 60 / arrangement.bpm;
+  const off0 = clip.audio ? (clip.audio.offset || 0) / spb : (clip.offset_beats || 0);
+  // How far left we may extend: to the beginning of the content.
+  const minDelta = Math.max(-s0, -off0);
+  let changed = false;
+  try { grip.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+  const move = (ev) => {
+    const delta = clamp(snapBeat((ev.clientX - startX) / PPB, ev), minDelta, d0 - 0.25);
+    clip.start = s0 + delta;
+    clip.length_beats = d0 - delta;
+    if (clip.audio) clip.audio.offset = Math.max(0, (off0 + delta) * spb);
+    else clip.offset_beats = Math.max(0, off0 + delta);
+    changed = true;
+    el.style.marginLeft = `${clip.start * PPB}px`;
+    el.style.width = `${Math.max(6, clip.length_beats * PPB - 2)}px`;
+    if (clip.audio) drawAudioClip(clipIndex); else drawPatternClip(clipIndex);
+  };
+  const up = (ev) => {
+    grip.removeEventListener('pointermove', move);
+    grip.removeEventListener('pointerup', up);
+    try { grip.releasePointerCapture(ev.pointerId); } catch (_) { /* noop */ }
+    if (changed) { markDirty(); renderArranger(); }
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up);
 }
 
-/* clip previews — MIDI piano roll for melodic patterns, waveform for drums */
-function drawClipMidi(i) {
+/* Pattern clip content in one pass, in beats: melodic notes and drum hits
+   per lane, the way the engine schedules them. */
+function patternContent(p) {
+  const steps = Math.max(1, p?.steps || 16);
+  const notes = [];
+  const lanes = [];
+  for (const v of (p?.voices || [])) {
+    if (MELODIC.has(v.kind) || v.kind === 'grid') {
+      let ns = v.notes || [];
+      if (!ns.length && v.rhythm) {
+        ns = rhythmToCells(v.rhythm, steps).map((on, step) => (on ? { step, length: 1, degree: v.degree, octave: v.octave } : null)).filter(Boolean);
+      }
+      for (const n of ns) notes.push({ beat: n.step / 4, len: Math.max(1, n.length || 1) / 4, pitch: (n.degree || 0) + 12 * (n.octave || 0), vel: n.velocity ?? 0.8 });
+    } else if (v.kind === 'drumkit') {
+      const byPad = new Map();
+      if ((v.notes || []).length) {
+        for (const n of v.notes) { const pad = ((n.degree % 16) + 16) % 16; if (!byPad.has(pad)) byPad.set(pad, []); byPad.get(pad).push({ beat: n.step / 4, vel: n.velocity ?? 0.85 }); }
+      } else {
+        byPad.set(0, rhythmToCells(v.rhythm || '', steps).map((on, s) => (on ? { beat: s / 4, vel: 0.85 } : null)).filter(Boolean));
+      }
+      for (const pad of [...byPad.keys()].sort((a, b) => a - b)) lanes.push(byPad.get(pad));
+    } else {
+      lanes.push(rhythmToCells(v.rhythm || '', steps).map((on, s) => (on ? { beat: s / 4, vel: 0.85 } : null)).filter(Boolean));
+    }
+  }
+  return { notes, lanes, beats: steps / 4 };
+}
+/* Draw a pattern clip at true scale: its content repeated per loop pass
+   (starting `offset_beats` into the pattern), never stretched. */
+function drawPatternClip(i) {
   const clip = arrangement.clips[i];
-  if (!clip) return;
-  const cv = arrGridEl?.querySelector(`.studio-arr-clip[data-clip-index="${i}"] .studio-arr-clip-midi`);
+  if (!clip?.pattern) return;
+  const cv = arrGridEl?.querySelector(`.studio-arr-clip[data-clip-index="${i}"] .studio-arr-clip-pattern`);
   if (!cv) return;
-  const notes = clipMelodicNotes(clip.pattern);
   const dpr = window.devicePixelRatio || 1;
   const w = cv.clientWidth || 60;
   const hgt = cv.clientHeight || 24;
@@ -2559,36 +3143,48 @@ function drawClipMidi(i) {
   const ctx = cv.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, hgt);
-  if (!notes.length) return;
-  const steps = Math.max(1, clip.pattern?.steps || 16);
-  const degLo = Math.min(...notes.map((n) => n.degree));
-  const degHi = Math.max(...notes.map((n) => n.degree));
-  const lo = degLo - 1;
-  const span = Math.max(1, (degHi + 1) - lo);
-  const stepW = w / steps;
-  const pad = 2;
-  const innerH = hgt - pad * 2;
-  /* faint semitone lanes so it reads as a piano roll */
-  ctx.strokeStyle = canvasInk.ink;
-  ctx.globalAlpha = 0.08;
-  ctx.lineWidth = 1;
-  for (let d = degLo; d <= degHi + 1; d++) {
-    const y = pad + ((degHi + 1 - d) / span) * innerH;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(y) + 0.5);
-    ctx.lineTo(w, Math.round(y) + 0.5);
-    ctx.stroke();
+  const { notes, lanes, beats: pass } = patternContent(clip.pattern);
+  const dur = clipDurBeats(clip);
+  const off = clip.offset_beats || 0;
+  const loop = clip.loop !== false;
+  const top = 14;                       // leave room for the name
+  const innerH = Math.max(6, hgt - top - 3);
+  const melH = notes.length ? (lanes.length ? innerH * 0.6 : innerH) : 0;
+  const drumH = innerH - melH;
+  const passes = loop ? Math.ceil((dur + off) / pass) + 1 : 1;
+  const place = (beat, len, draw) => {
+    for (let n = 0; n < passes; n++) {
+      const local = beat + n * pass - off;
+      if (local >= dur || local + len <= 0) continue;
+      const x0 = Math.max(0, local) * PPB;
+      const x1 = Math.min(dur, local + len) * PPB;
+      draw(x0, Math.max(1, x1 - x0));
+    }
+  };
+  ctx.fillStyle = canvasInk.ink;
+  if (notes.length) {
+    let lo = Infinity, hi = -Infinity;
+    for (const n of notes) { lo = Math.min(lo, n.pitch); hi = Math.max(hi, n.pitch); }
+    const span = Math.max(1, hi - lo + 1);
+    const nh = Math.max(1.5, Math.min(5, melH / span - 0.5));
+    for (const n of notes) {
+      const y = top + ((hi - n.pitch) / span) * (melH - nh);
+      ctx.globalAlpha = 0.45 + 0.4 * Math.min(1, n.vel);
+      place(n.beat, n.len, (x, wd) => ctx.fillRect(x, y, Math.max(1.5, wd - 1), nh));
+    }
   }
-  for (const n of notes) {
-    const x = n.step * stepW;
-    const len = Math.max(1, n.length || 1);
-    const wid = Math.max(1.5, len * stepW - 1);
-    const y = pad + ((degHi + 1 - n.degree) / span) * innerH;
-    const nh = Math.max(2, innerH / span - 1);
-    ctx.fillStyle = canvasInk.ink;
-    ctx.globalAlpha = 0.62;
-    ctx.fillRect(x, y, wid, nh);
+  if (lanes.length) {
+    const lh = drumH / lanes.length;
+    const hw = Math.max(1.5, Math.min(4, PPB / 8 - 1));
+    lanes.forEach((hits, li) => {
+      const y = top + melH + li * lh;
+      for (const hit of hits) {
+        ctx.globalAlpha = 0.35 + 0.5 * Math.min(1, hit.vel);
+        place(hit.beat, 0.0001, (x) => ctx.fillRect(x, y + lh * 0.15, hw, Math.max(1, lh * 0.7)));
+      }
+    });
   }
+  ctx.globalAlpha = 1;
 }
 
 /* Audio clip: the file's waveform from `offset` for the clip's length. */
@@ -2610,7 +3206,7 @@ function drawAudioClip(i) {
   const secs = info.duration || 1;
   const spb = 60 / arrangement.bpm;
   const t0 = clip.audio.offset || 0;
-  const t1 = t0 + clipDurBeats(clip) * spb;
+  const t1 = t0 + (w / PPB) * spb;   // true time scale: one beat = PPB px
   const gain = dbToGain(clip.gain_db || 0);
   ctx.fillStyle = canvasInk.ink;
   ctx.globalAlpha = 0.42;
@@ -2627,48 +3223,6 @@ function drawAudioClip(i) {
   }
 }
 
-/* clip waveform previews */
-function drawClipWave(i) {
-  const clip = arrangement.clips[i];
-  if (!clip?.peaks) return;
-  const cv = arrGridEl?.querySelector(`.studio-arr-clip[data-clip-index="${i}"] .studio-arr-clip-wave`);
-  if (!cv) return;
-  const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 100;
-  const hgt = cv.clientHeight || 24;
-  cv.width = Math.max(1, Math.round(w * dpr));
-  cv.height = Math.max(1, Math.round(hgt * dpr));
-  const ctx = cv.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, hgt);
-  ctx.fillStyle = canvasInk.ink;
-  ctx.globalAlpha = 0.32;
-  const peaks = clip.peaks;
-  const nPk = peaks.length;
-  const bw = w / nPk;
-  const mid = hgt / 2;
-  for (let k = 0; k < nPk; k++) {
-    const mn = peaks[k][0];
-    const mx = peaks[k][1];
-    const y1 = mid - mx * mid;
-    const y2 = mid - mn * mid;
-    ctx.fillRect(k * bw, y1, Math.max(1, bw - 0.5), Math.max(1, y2 - y1));
-  }
-}
-async function loadWave(i) {
-  const clip = arrangement.clips[i];
-  if (!clip || clip.peaks || clip.waveLoading) return;
-  clip.waveLoading = true;
-  try {
-    const data = await api('/api/studio/waveform', { method: 'POST', body: JSON.stringify(serializePattern(normalizePattern(clip.pattern))) });
-    clip.peaks = data?.peaks || [];
-    clip.waveLoading = false;
-    requestAnimationFrame(() => drawClipWave(i));
-  } catch (_) {
-    clip.waveLoading = false;
-  }
-}
-
 /* Redraw the selected arranger clip's preview after an edit (cheap; MIDI is
    synchronous, waveform reuses cached peaks). */
 function refreshSelectedClipPreview() {
@@ -2676,8 +3230,8 @@ function refreshSelectedClipPreview() {
   const i = sel.clipIndex;
   const clip = arrangement.clips[i];
   if (!clip) return;
-  if (patternIsMelodic(clip.pattern)) drawClipMidi(i);
-  else if (clip.peaks) drawClipWave(i);
+  if (clip.audio) drawAudioClip(i);
+  else drawPatternClip(i);
 }
 
 /* ── clip launcher (tracks × scenes) ────────────────────────── */
@@ -2889,7 +3443,7 @@ function renderDetail() {
       : t('plugin.studio.hint.mixer', null, 'Click a strip to select its track · M/S mute & solo')) + keysHint());
   }
 }
-function keysHint() { return t('plugin.studio.hint.keys2', null, ' — Space play · Enter back to start · L loop · M/S mute/solo · Ctrl+D duplicate · Ctrl+S save · Ctrl+E export'); }
+function keysHint() { return t('plugin.studio.hint.keys3', null, ' — Space play · Enter back to start · L loop · M/S mute/solo · Ctrl+E split · Ctrl+D duplicate · Ctrl+S save · Ctrl+Shift+E export'); }
 
 /* ── editor page ────────────────────────────────────────────── */
 
@@ -3141,11 +3695,12 @@ function toggleCell(s, v) {
   if (MELODIC.has(vc.kind)) {
     const existing = noteAt(vc, s);
     if (existing) vc.notes = vc.notes.filter((nt) => nt !== existing);
-    else vc.notes.push({ step: s, length: 1, degree: vc.degree, octave: vc.octave });
+    else { vc.notes.push({ step: s, length: 1, degree: vc.degree, octave: vc.octave }); auditionNote(vc, vc.degree, vc.octave); }
     recomputeRhythmFromNotes(vc);
   } else {
     const cells = rhythmToCells(vc.rhythm, current.steps);
     cells[s] = !cells[s];
+    if (cells[s]) auditionNote(vc);
     vc.rhythm = cellsToRhythm(cells);
   }
   markDirty();
@@ -3195,6 +3750,7 @@ function renderDrumkitGrid(v) {
     head.style.gridRow = String(p + 2);
     head.style.setProperty('--track', trackColor(colorIdx));
     head.title = `${pad.name} (${KIND_LABELS[pad.kind]})`;
+    head.addEventListener('pointerdown', () => auditionNote(v, 0, 0, p));
     head.appendChild(h('span', 'studio-track-dot'));
     head.appendChild(h('span', 'studio-track-name', pad.name));
     gridEl.appendChild(head);
@@ -3216,7 +3772,7 @@ function renderDrumkitGrid(v) {
 function toggleDrumkitCell(v, pad, step) {
   const existing = drumkitNoteAt(v, pad, step);
   if (existing) v.notes = v.notes.filter((nt) => nt !== existing);
-  else v.notes.push({ step, length: 1, degree: pad, octave: 0 });
+  else { v.notes.push({ step, length: 1, degree: pad, octave: 0 }); auditionNote(v, 0, 0, pad); }
   markDirty();
   renderEditor();
 }
@@ -3244,29 +3800,79 @@ function prRowOf(degree) {
 
 /* ── click-to-audition (piano keys) ─────────────────────────── */
 
-let keyAuditionOsc = null;
-/* Short WebAudio pluck at a scale degree — instant feedback when clicking
-   piano-roll keys, no server round-trip. */
-function auditionKeyDegree(degree, tuning) {
+/* ── note audition with the voice's real sound ────────────────
+   A one-note, one-beat copy of the voice (same kind, synth, inserts; no
+   pattern bus) is rendered by /api/studio/preview and cached as a decoded
+   AudioBuffer per (voice sound, pitch/pad). Cached notes play at once;
+   uncached ones play as soon as they arrive (never blocking the UI). */
+const auditionCache = new Map();   // key → Promise<AudioBuffer>
+let auditionVoice = null;          // { src, gain }
+let auditionSeq = 0;
+let auditionFetching = false;
+let auditionNext = null;          // [voice, degree, octave, pad] asked for while fetching
+function auditionKey(v, degree, octave, pad) {
+  const { notes, rhythm, level, pan, accent, macros, midi, ...sound } = v;
+  return JSON.stringify([sound, macros, degree, octave, pad, current?.tuning, current?.bpm]);
+}
+function auditionConfig(v, degree, octave, pad) {
+  const voiceCfg = serializePattern({ title: 'audition', bpm: current?.bpm || 120, steps: 4, swing: 0, tuning: current?.tuning || 'edo12', voices: [v], fx: {} }).voices[0];
+  voiceCfg.midi = [];
+  voiceCfg.accent = 0;
+  voiceCfg.level = 0.8;
+  voiceCfg.pan = 0;
+  if (v.kind === 'drumkit') { voiceCfg.rhythm = ''; voiceCfg.notes = [{ step: 0, length: 1, degree: pad, octave: 0, velocity: 0.9 }]; }
+  else if (MELODIC.has(v.kind) || v.kind === 'grid') { voiceCfg.rhythm = ''; voiceCfg.notes = [{ step: 0, length: 4, degree, octave, velocity: 0.85 }]; }
+  else { voiceCfg.rhythm = 'x...'; voiceCfg.notes = []; }
+  return { title: 'audition', bpm: current?.bpm || 120, steps: 4, swing: 0, tuning: current?.tuning || 'edo12', voices: [voiceCfg], fx: {} };
+}
+function auditionNote(v, degree = 0, octave = 0, pad = 0) {
+  if (!v) return;
   const ctx = audioCtxOr();
   if (ctx.state === 'suspended') void ctx.resume();
-  try { keyAuditionOsc?.stop(); } catch (_) { /* noop */ }
-  let hz;
-  if (tuning === 'edo19') hz = 440 * Math.pow(2, degree / 19);
-  else hz = 440 * Math.pow(2, degree / 12);   // edo12 (and an approximation for ji7)
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'triangle';
-  osc.frequency.value = hz;
-  const now = ctx.currentTime;
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.25, now + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-  osc.connect(gain).connect(masterOut());
-  osc.start(now);
-  osc.stop(now + 0.55);
-  keyAuditionOsc = osc;
-  setReadout(t('plugin.studio.readout.note', { note: degreeLabel(degree, tuning), hz: Math.round(hz) }, `Note — ${degreeLabel(degree, tuning)} (${Math.round(hz)} Hz)`));
+  const key = auditionKey(v, degree, octave, pad);
+  let p = auditionCache.get(key);
+  if (!p && auditionFetching) {
+    // One audition render at a time: keep only the latest wish.
+    auditionNext = [v, degree, octave, pad];
+    auditionSeq += 1;
+    return;
+  }
+  if (!p) {
+    auditionFetching = true;
+    p = apiFetch('/api/studio/preview', { method: 'POST', body: JSON.stringify(auditionConfig(v, degree, octave, pad)), responseType: 'blob' })
+      .then((blob) => blob.arrayBuffer())
+      .then((buf) => ctx.decodeAudioData(buf));
+    p.catch(() => auditionCache.delete(key));
+    p.catch(() => {}).finally(() => {
+      auditionFetching = false;
+      const next = auditionNext;
+      auditionNext = null;
+      if (next) auditionNote(...next);
+    });
+    auditionCache.set(key, p);
+    if (auditionCache.size > 64) auditionCache.delete(auditionCache.keys().next().value);
+  }
+  const seq = ++auditionSeq;
+  void p.then((buffer) => {
+    if (seq !== auditionSeq) return;      // a newer note was asked for meanwhile
+    const now = ctx.currentTime;
+    if (auditionVoice) {
+      // 8 ms fade on the previous audition: no click when notes overlap.
+      try { auditionVoice.gain.gain.setTargetAtTime(0, now, 0.003); auditionVoice.src.stop(now + 0.03); } catch (_) { /* noop */ }
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = ctx.createGain();
+    src.connect(gain).connect(masterOut());
+    src.start(now);
+    auditionVoice = { src, gain };
+  }).catch(() => {});
+  if (MELODIC.has(v.kind)) setReadout(t('plugin.studio.readout.noteOnly', { note: degreeLabel(degree + 12 * octave, current?.tuning || 'edo12') }, `Note — ${degreeLabel(degree + 12 * octave, current?.tuning || 'edo12')}`));
+}
+/* Kept name for the piano-roll keys. */
+function auditionKeyDegree(degree) {
+  const v = current?.voices?.[selectedVoice];
+  auditionNote(v, degree, v?.octave ?? 0);
 }
 
 function renderPianoRoll() {
@@ -3296,7 +3902,7 @@ function renderPianoRoll() {
     k.style.gridRow = String(prRowOf(d) + 2);
     k.title = t('plugin.studio.piano.audition', null, 'Click to audition');
     k.addEventListener('pointerdown', () => {
-      auditionKeyDegree(d, current.tuning);
+      auditionKeyDegree(d);
       k.classList.add('studio-pr-key--pressed');
       setTimeout(() => k.classList.remove('studio-pr-key--pressed'), 160);
     });
@@ -3316,7 +3922,7 @@ function renderPianoRoll() {
     bar.style.top = `${prRowOf(nt.degree) * PR_ROW + 1}px`;
     bar.style.width = `${Math.max(1, nt.length || 1) * PR_COL - 2}px`;
     bar.style.height = `${PR_ROW - 2}px`;
-    bar.addEventListener('pointerdown', (e) => startNoteDrag(e, i, v));
+    bar.addEventListener('pointerdown', (e) => { auditionNote(v, nt.degree, nt.octave ?? v.octave); startNoteDrag(e, i, v); });
     bar.addEventListener('dblclick', (e) => { e.stopPropagation(); deleteNote(i); });
     notes.appendChild(bar);
   }
@@ -3341,6 +3947,7 @@ function addNote(step, degree) {
   const v = current.voices[selectedVoice];
   if (!v) return;
   v.notes.push({ step, length: 1, degree, octave: v.octave });
+  auditionNote(v, degree, v.octave);
   recomputeRhythmFromNotes(v);
   markDirty();
   renderPianoRoll();
@@ -3375,7 +3982,8 @@ function startNoteDrag(e, i, v) {
       nt.length = Math.max(1, Math.min(current.steps - nt.step, startLen + Math.round(dx / PR_COL)));
     } else {
       nt.step = Math.max(0, Math.min(current.steps - (nt.length || 1), startStep + Math.round(dx / PR_COL)));
-      nt.degree = Math.max(PR_DEG_LO, Math.min(PR_DEG_HI, startDeg - Math.round(dy / PR_ROW)));
+      const nd = Math.max(PR_DEG_LO, Math.min(PR_DEG_HI, startDeg - Math.round(dy / PR_ROW)));
+      if (nd !== nt.degree) { nt.degree = nd; auditionNote(v, nd, nt.octave ?? v.octave); }
     }
     bar.style.left = `${nt.step * PR_COL + 1}px`;
     bar.style.top = `${prRowOf(nt.degree) * PR_ROW + 1}px`;
@@ -3447,10 +4055,129 @@ function applyPreset(v, preset) {
   renderDevices();
 }
 
+/* ── devices page: a Bitwig-style device chain ────────────────
+   Each device is a card: a coloured header (type colour, name, on/off,
+   remove), then its parameters — the main one as a large knob, the rest in
+   a wrapping grid. The instrument is split into one card per parameter
+   group (Oscillator, Filter, Envelope, …) so every section has room. Card
+   colours come from the `--studio-dev-*` tokens (tiles.css). */
+
+const GROUP_DEV = { Oscillator: 'osc', Filter: 'filter', Envelope: 'env', LFO: 'lfo', Voice: 'voice', Drum: 'drum', Sampler: 'osc', Drive: 'dist' };
+const EFFECT_DEV = { distortion: 'dist', bitcrush: 'dist', filter: 'filter', eq: 'eq', compressor: 'dyn', delay: 'delay', reverb: 'reverb', chorus: 'mod', phaser: 'mod' };
+/* The parameter that gets the big knob, by group / effect kind. */
+const HERO_KEYS = {
+  Oscillator: ['a_level', 'fm_index'], Filter: ['cutoff'], Envelope: ['decay', 'release', 'attack'], LFO: ['lfo_rate'],
+  Voice: ['glide', 'poly'], Drum: ['pitch', 'tone', 'decay'], Sampler: ['program'],
+  distortion: ['drive'], bitcrush: ['bits'], filter: ['cutoff'], eq: ['mid_gain'], compressor: ['threshold'],
+  delay: ['mix', 'time'], reverb: ['mix', 'size'], chorus: ['mix', 'depth'], phaser: ['mix', 'rate'],
+};
+/* Fine-tuning ("atomic") parameters get the extra-small knob tier. */
+const FINE_KEYS = new Set([
+  // filter
+  'keytrack', 'fattack', 'fdecay', 'fsustain', 'frelease', 'vel_filter',
+  // envelope
+  'env_shape', 'vel_amp',
+  // oscillator
+  'pw', 'spread', 'b_semi', 'b_octave', 'fm_ratio', 'fm_index', 'ring', 'noise',
+  // lfo / voice
+  'lfo_pan', 'lfo_amp', 'analog', 'pan_spread', 'poly',
+  // drums
+  'hold', 'click', 'buzz', 'snap', 'metal', 'bell',
+]);
+const FINE_FX = {
+  distortion: ['tone', 'out'], filter: ['drive', 'poles'], compressor: ['knee', 'makeup', 'mix'],
+  delay: ['damp', 'mod', 'offset', 'ping_pong'], reverb: ['predelay', 'width', 'mod', 'damping'],
+  chorus: ['spread'], phaser: ['feedback', 'stages'], bitcrush: ['downsample'],
+};
+function devColor(type) { return `var(--studio-dev-${type}, var(--accent))`; }
+function pickHero(params, keys) {
+  const usable = params.filter((p) => !p.choices?.length);
+  for (const k of keys || []) { const p = usable.find((x) => x.key === k); if (p) return p; }
+  return usable[0] || null;
+}
+
+/* A device card shell. */
+function devCard(type, title, { bypassed = false, onBypass = null, onRemove = null, extra = [] } = {}) {
+  const card = h('div', `studio-dev studio-dev--${type}`);
+  card.style.setProperty('--dev', devColor(type));
+  card.classList.toggle('is-bypassed', bypassed);
+  const head = h('div', 'studio-dev-head');
+  head.appendChild(h('span', 'studio-dev-chip'));
+  const name = h('span', 'studio-dev-name', title);
+  name.title = title;
+  head.appendChild(name);
+  for (const x of extra) head.appendChild(x);
+  if (onBypass) {
+    const on = h('button', 'studio-dev-power', '');
+    on.type = 'button';
+    on.title = t('plugin.studio.device.bypass', null, 'Bypass');
+    on.setAttribute('aria-pressed', String(!bypassed));
+    on.classList.toggle('is-on', !bypassed);
+    on.addEventListener('click', onBypass);
+    head.appendChild(on);
+  }
+  if (onRemove) {
+    const rm = iconCtl('ui/close', 'studio-head-btn', t('plugin.studio.common.remove', null, 'Remove'));
+    rm.addEventListener('click', onRemove);
+    head.appendChild(rm);
+  }
+  card.appendChild(head);
+  const body = h('div', 'studio-dev-body');
+  card.appendChild(body);
+  return { card, body };
+}
+/* Fill a card body with three tiers: the main parameter as a large knob,
+   ordinary ones as small knobs, fine-tuning ones as extra-small knobs.
+   Columns flow horizontally so cards grow sideways, Bitwig-style. */
+function devParams(body, params, heroKeys, get, set, pathOf, fineKeys = null) {
+  const hero = pickHero(params, heroKeys);
+  const isFine = (p) => (fineKeys ? fineKeys.includes(p.key) : FINE_KEYS.has(p.key));
+  const control = (p, tier) => {
+    const value = get(p);
+    if (p.choices?.length) {
+      const cell = h('label', 'studio-dev-choice');
+      const lab = h('span', 'studio-dev-choice-label', p.label);
+      lab.title = p.label;
+      cell.append(lab, nativeSelect(p.choices.map((l, i) => [String(i), l]), String(Math.round(value)), (val) => set(p, parseFloat(val)), p.label));
+      return cell;
+    }
+    const k = pathOf
+      ? automatableKnob(p.label, pathOf(p), p.min, p.max, p.step, value, (n) => set(p, n), p.def)
+      : knob(p.label, p.min, p.max, p.step, value, (n) => set(p, n), p.def);
+    if (tier === 'hero') k.classList.add('studio-knob--hero');
+    if (tier === 'fine') k.classList.add('studio-knob--fine');
+    return k;
+  };
+  if (hero) {
+    const hb = h('div', 'studio-dev-hero');
+    hb.appendChild(control(hero, 'hero'));
+    body.appendChild(hb);
+  }
+  const rest = params.filter((p) => p !== hero);
+  const choices = rest.filter((p) => p.choices?.length);
+  const small = rest.filter((p) => !p.choices?.length && !isFine(p));
+  const fine = rest.filter((p) => !p.choices?.length && isFine(p));
+  if (choices.length) {
+    const col = h('div', 'studio-dev-choices');
+    for (const p of choices) col.appendChild(control(p, 'choice'));
+    body.appendChild(col);
+  }
+  if (small.length) {
+    const grid = h('div', 'studio-dev-grid');
+    for (const p of small) grid.appendChild(control(p, 'small'));
+    body.appendChild(grid);
+  }
+  if (fine.length) {
+    const grid = h('div', 'studio-dev-grid studio-dev-grid--fine');
+    for (const p of fine) grid.appendChild(control(p, 'fine'));
+    body.appendChild(grid);
+  }
+}
+
 function renderDevices() {
   if (!devicesEl || detailPage !== 'devices') return;
   devicesEl.textContent = '';
-  autoKnobs = [];   // rebuild the automation-follow registry with fresh DOM
+  autoKnobs = [];
   if (!current) {
     devicesEl.appendChild(h('div', 'studio-empty', t('plugin.studio.empty.selectClipDevices', null, 'Select a clip to see its devices.')));
     return;
@@ -3458,10 +4185,10 @@ function renderDevices() {
   const v = current.voices[selectedVoice];
   if (!v) return;
 
-  /* voice picker strip */
+  /* voice picker */
   const strip = h('div', 'studio-device-voices');
   current.voices.forEach((vc, i) => {
-    const b = h('button', 'studio-device-voice', KIND_INITIALS[vc.kind] || '?');
+    const b = h('button', 'studio-device-voice', KIND_LABELS[vc.kind] || vc.kind);
     b.type = 'button';
     b.style.setProperty('--track', trackColor(i));
     b.title = KIND_LABELS[vc.kind];
@@ -3471,43 +4198,43 @@ function renderDevices() {
   });
   devicesEl.appendChild(strip);
 
-  const chain = h('div', 'studio-chain');
-  chain.style.setProperty('--track', trackColor(selectedVoice));
+  const chain = h('div', 'studio-devchain');
+  const vi = selectedVoice;
+  const synthGet = (p) => (v.synth[p.key] != null ? v.synth[p.key] : p.def);
+  const synthSet = (p, n) => { v.synth[p.key] = n; markDirty(); };
 
-  /* instrument device */
-  const inst = h('div', 'studio-device');
-  inst.style.setProperty('--track', trackColor(selectedVoice));
-  const instHead = h('div', 'studio-device-head');
-  instHead.appendChild(h('span', 'studio-device-name', KIND_LABELS[v.kind]));
-  const instBtns = h('span', 'studio-device-head-btns');
-  const presetBtn = iconCtl('ui/chevron-down');
-  presetBtn.type = 'button';
-  presetBtn.title = t('plugin.studio.device.presets', null, 'Presets');
+  /* instrument header card: kind, pitch, presets */
+  const presetBtn = iconCtl('ui/chevron-down', 'studio-head-btn', t('plugin.studio.device.presets', null, 'Presets'));
   presetBtn.addEventListener('click', () => openBrowser('presets'));
-  instBtns.appendChild(presetBtn);
-  const sp = iconCtl('ui/star');
-  sp.type = 'button';
-  sp.title = t('plugin.studio.device.savePreset', null, 'Save preset');
+  const sp = iconCtl('ui/star', 'studio-head-btn', t('plugin.studio.device.savePreset', null, 'Save preset'));
   sp.addEventListener('click', () => void savePreset(v).catch((e) => toast(e.message, { type: 'error' })));
-  instBtns.appendChild(sp);
-  instHead.appendChild(instBtns);
-  inst.appendChild(instHead);
-  const instBody = h('div', 'studio-device-body');
-  instBody.appendChild(nativeSelect(KINDS.map((k) => [k, KIND_LABELS[k]]), v.kind, (val) => {
+  const instType = voices_isDrum(v.kind) ? 'drum' : 'osc';
+  const { card: inst, body: instBody } = devCard(instType, KIND_LABELS[v.kind] || v.kind, { extra: [presetBtn, sp] });
+  inst.classList.add('studio-dev--instrument');
+  const kindCell = h('label', 'studio-dev-choice');
+  kindCell.append(h('span', 'studio-dev-choice-label', t('plugin.studio.device.instrument', null, 'Instrument')), nativeSelect(KINDS.map((k) => [k, KIND_LABELS[k]]), v.kind, (val) => {
     v.kind = val;
     v.synth = { ...(CATALOG?.kinds?.find((k) => k.kind === val)?.defaults || {}) };
     markDirty();
     renderEditor();
     renderDevices();
-  }, 'Instrument'));
-  if (v.kind === 'bass') instBody.appendChild(nativeSelect(WAVES.map(([w, k]) => [w, t(k)]), v.wave, (val) => { v.wave = val; markDirty(); }, t('plugin.studio.param.wave', null, 'Wave')));
-  if (MELODIC.has(v.kind)) {
-    instBody.appendChild(numberField(t('plugin.studio.device.degreePlaceholder', null, 'deg'), v.degree, (n) => { v.degree = n; markDirty(); renderEditor(); }, t('plugin.studio.hint.scaleDegree', null, 'Scale degree')));
-    instBody.appendChild(numberField(t('plugin.studio.device.octavePlaceholder', null, 'oct'), v.octave, (n) => { v.octave = n; markDirty(); }, t('plugin.studio.hint.octave', null, 'Octave')));
+  }, t('plugin.studio.device.instrument', null, 'Instrument')));
+  const ig = h('div', 'studio-dev-grid');
+  ig.appendChild(kindCell);
+  if (v.kind === 'bass') {
+    const c = h('label', 'studio-dev-choice');
+    c.append(h('span', 'studio-dev-choice-label', t('plugin.studio.param.wave', null, 'Wave')), nativeSelect(WAVES.map(([w, k]) => [w, t(k)]), v.wave, (val) => { v.wave = val; markDirty(); }, t('plugin.studio.param.wave', null, 'Wave')));
+    ig.appendChild(c);
   }
-  if (v.kind === 'drumkit') {
-    renderPadGrid(v, instBody);
-  } else {
+  if (MELODIC.has(v.kind)) {
+    ig.appendChild(knob(t('plugin.studio.device.octave', null, 'Octave'), -4, 4, 1, v.octave ?? 0, (n) => { v.octave = n; markDirty(); renderEditor(); }, 0));
+    ig.appendChild(knob(t('plugin.studio.device.degree', null, 'Degree'), -24, 24, 1, v.degree ?? 0, (n) => { v.degree = n; markDirty(); renderEditor(); }, 0));
+  }
+  instBody.appendChild(ig);
+  if (v.kind === 'drumkit') renderPadGrid(v, instBody);
+  chain.appendChild(inst);
+
+  if (v.kind !== 'drumkit') {
     const groups = {};
     for (const p of (SYNTH[v.kind] || [])) {
       const g = p.group || PARAM_GROUP[p.key] || 'Other';
@@ -3517,137 +4244,97 @@ function renderDevices() {
     for (const g of order) {
       const params = groups[g];
       if (!params?.length) continue;
-      instBody.appendChild(h('span', 'studio-rack-label', g));
-      for (const p of params) {
-        const value = v.synth[p.key] != null ? v.synth[p.key] : p.def;
-        if (p.choices?.length) {
-          instBody.appendChild(nativeSelect(
-            p.choices.map((l, i) => [String(i), l]),
-            String(Math.round(value)),
-            (val) => { v.synth[p.key] = parseFloat(val); markDirty(); },
-            p.label,
-          ));
-        } else {
-          instBody.appendChild(automatableKnob(p.label, `voice.${selectedVoice}.${p.key}`, p.min, p.max, p.step, value, (n) => { v.synth[p.key] = n; markDirty(); }, p.def));
-        }
-      }
+      const type = GROUP_DEV[g] || (voices_isDrum(v.kind) ? 'drum' : 'util');
+      const { card, body } = devCard(type, g);
+      devParams(body, params, HERO_KEYS[g], synthGet, synthSet, (p) => `voice.${vi}.${p.key}`);
+      chain.appendChild(card);
     }
   }
-  inst.appendChild(instBody);
-  chain.appendChild(inst);
 
-  /* fx devices */
+  /* insert effects */
   v.fx.forEach((f, i) => {
-    const d = h('div', 'studio-device');
-    const head = h('div', 'studio-device-head');
-    head.appendChild(h('span', 'studio-device-name', EFFECTS[f.kind]?.label || f.kind));
-    const btns = h('span', 'studio-device-head-btns');
-    const bypass = h('button', 'studio-device-bypass', f.bypass ? 'OFF' : 'ON');
-    bypass.type = 'button';
-    bypass.title = t('plugin.studio.device.bypass', null, 'Bypass');
-    bypass.classList.toggle('studio-device-bypass--on', !f.bypass);
-    bypass.addEventListener('click', () => { f.bypass = !f.bypass; markDirty(); renderDevices(); });
-    btns.appendChild(bypass);
-    const rm = iconCtl('ui/close');
-    rm.type = 'button';
-    rm.title = t('plugin.studio.common.remove', null, 'Remove');
-    rm.addEventListener('click', () => { v.fx.splice(i, 1); markDirty(); renderDevices(); });
-    btns.appendChild(rm);
-    head.appendChild(btns);
-    d.appendChild(head);
-    const body = h('div', 'studio-device-body');
-    for (const p of (EFFECTS[f.kind]?.params || [])) {
-      const value = f.params[p.key] != null ? f.params[p.key] : p.def;
-      if (p.choices?.length) {
-        body.appendChild(nativeSelect(
-          p.choices.map((l, ci) => [String(ci), l]),
-          String(Math.round(value)),
-          (val) => { f.params[p.key] = parseFloat(val); markDirty(); },
-          p.label,
-        ));
-      } else {
-        body.appendChild(automatableKnob(p.label, `voice.${selectedVoice}.fx.${i}.${p.key}`, p.min, p.max, p.step, value, (n) => { f.params[p.key] = n; markDirty(); }, p.def));
-      }
-    }
-    d.appendChild(body);
-    chain.appendChild(d);
+    const type = EFFECT_DEV[f.kind] || 'util';
+    const { card, body } = devCard(type, EFFECTS[f.kind]?.label || f.kind, {
+      bypassed: !!f.bypass,
+      onBypass: () => { f.bypass = !f.bypass; markDirty(); renderDevices(); },
+      onRemove: () => { v.fx.splice(i, 1); markDirty(); renderDevices(); },
+    });
+    devParams(body, EFFECTS[f.kind]?.params || [], HERO_KEYS[f.kind],
+      (p) => (f.params[p.key] != null ? f.params[p.key] : p.def),
+      (p, n) => { f.params[p.key] = n; markDirty(); },
+      (p) => `voice.${vi}.fx.${i}.${p.key}`, FINE_FX[f.kind] || []);
+    chain.appendChild(card);
   });
 
-  /* add fx */
-  const add = h('div', 'studio-device studio-device--add');
-  const addSel = nativeSelect(EFFECT_KINDS.map((k) => [k, EFFECTS[k].label]), 'distortion', () => {});
-  const addBtn = plusLabel(h('button', 'studio-btn'), t('plugin.studio.synthme.addFx', null, '+ FX'));
-  addBtn.type = 'button';
-  addBtn.addEventListener('click', () => {
+  /* add effect */
+  const add = h('div', 'studio-dev studio-dev--add');
+  const addSel = nativeSelect([['', t('plugin.studio.device.addEffect', null, '+ Add effect')], ...EFFECT_KINDS.map((k) => [k, EFFECTS[k].label])], '', (kind) => {
+    if (!kind) return;
     if (v.fx.length >= 8) { toast(t('plugin.studio.toast.maxFx8', null, 'Max 8 effects per voice'), { type: 'error' }); return; }
-    v.fx.push({ kind: addSel.value, params: { ...(EFFECTS[addSel.value]?.defaults || {}) }, bypass: false });
+    v.fx.push({ kind, params: { ...(EFFECTS[kind]?.defaults || {}) }, bypass: false });
     markDirty();
     renderDevices();
-  });
-  add.append(addSel, addBtn);
+  }, t('plugin.studio.device.addEffect', null, '+ Add effect'));
+  add.appendChild(addSel);
   chain.appendChild(add);
 
-  /* output device */
-  const out = h('div', 'studio-device');
-  const outHead = h('div', 'studio-device-head');
-  outHead.appendChild(h('span', 'studio-device-name', t('plugin.studio.device.output', null, 'Output')));
-  out.appendChild(outHead);
-  const outBody = h('div', 'studio-device-body');
-  outBody.appendChild(automatableKnob(t('plugin.studio.param.level', null, 'Level'), `voice.${selectedVoice}.level`, 0, 2, 0.01, v.level != null ? v.level : (DEFAULT_LEVEL[v.kind] ?? 0.5), (n) => { v.level = n; markDirty(); }, DEFAULT_LEVEL[v.kind] ?? 0.5));
-  outBody.appendChild(automatableKnob(t('plugin.studio.param.pan', null, 'Pan'), `voice.${selectedVoice}.pan`, -1, 1, 0.01, v.pan != null ? v.pan : (DEFAULT_PAN[v.kind] ?? 0), (n) => { v.pan = n; markDirty(); }, DEFAULT_PAN[v.kind] ?? 0));
-  outBody.appendChild(automatableKnob(t('plugin.studio.param.accent', null, 'Accent'), `voice.${selectedVoice}.accent`, 0, 0.6, 0.01, v.accent ?? 0, (n) => { v.accent = n; markDirty(); }, 0));
-  out.appendChild(outBody);
+  /* output */
+  const { card: out, body: outBody } = devCard('util', t('plugin.studio.device.output', null, 'Output'));
+  const outParams = [
+    { key: 'level', label: t('plugin.studio.param.level', null, 'Level'), min: 0, max: 2, step: 0.01, def: DEFAULT_LEVEL[v.kind] ?? 0.5 },
+    { key: 'pan', label: t('plugin.studio.param.pan', null, 'Pan'), min: -1, max: 1, step: 0.01, def: DEFAULT_PAN[v.kind] ?? 0 },
+    { key: 'accent', label: t('plugin.studio.param.accent', null, 'Accent'), min: 0, max: 0.6, step: 0.01, def: 0 },
+  ];
+  devParams(outBody, outParams, ['level'],
+    (p) => (v[p.key] != null ? v[p.key] : p.def),
+    (p, n) => { v[p.key] = n; markDirty(); },
+    (p) => `voice.${vi}.${p.key}`, ['accent']);
   chain.appendChild(out);
 
-  /* master fx (pattern-level delay/reverb) */
-  const master = h('div', 'studio-device studio-device--master');
-  const mHead = h('div', 'studio-device-head');
-  mHead.appendChild(h('span', 'studio-device-name', t('plugin.studio.device.masterFx', null, 'Master FX')));
-  master.appendChild(mHead);
-  const mBody = h('div', 'studio-device-body');
-  for (const p of FX) {
-    const value = current.fx[p.key] != null ? current.fx[p.key] : p.def;
-    mBody.appendChild(automatableKnob(p.label, `master.${p.key}`, p.min, p.max, p.step, value, (n) => { current.fx[p.key] = n; markDirty(); }, p.def));
-  }
-  master.appendChild(mBody);
-  chain.appendChild(master);
+  /* pattern bus (reverb/delay mix → the track's sends in an arrangement) */
+  const { card: bus, body: busBody } = devCard('reverb', t('plugin.studio.device.patternBus', null, 'Pattern bus'));
+  bus.title = t('plugin.studio.device.patternBusHint', null, 'Pattern-level reverb/delay and bus settings. In the Arranger, reverb/delay mix become the track sends unless the mixer sets them.');
+  devParams(busBody, FX, ['reverb_mix'],
+    (p) => (current.fx[p.key] != null ? current.fx[p.key] : p.def),
+    (p, n) => { current.fx[p.key] = n; markDirty(); },
+    (p) => `master.${p.key}`);
+  chain.appendChild(bus);
 
+  chain.addEventListener('wheel', (e) => {
+    // Plain wheel scrolls the chain sideways (knobs keep their own wheel).
+    if (e.ctrlKey || e.metaKey || e.target.closest?.('.ui-dial, select')) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { chain.scrollLeft += e.deltaY; e.preventDefault(); }
+  }, { passive: false });
   devicesEl.appendChild(chain);
 
-  /* macro rack — each macro drives a list of parameters with per-mapping depth */
-  const macros = h('div', 'studio-rack');
-  macros.appendChild(h('span', 'studio-rack-label', t('plugin.studio.device.macros', null, 'Macros')));
+  /* macro rack */
+  const { card: macros, body: macBody } = devCard('mod', t('plugin.studio.device.macros', null, 'Macros'));
+  macros.classList.add('studio-dev--macros');
   const flat = flattenVoiceParams(v);
+  const mgrid = h('div', 'studio-macro-grid');
   for (let i = 0; i < 8; i++) {
     const mac = v.macros[i] || (v.macros[i] = { value: 0.5, entries: [] });
     const wrap = h('div', 'studio-macro');
-    const head = h('div', 'studio-macro-head');
-    head.appendChild(h('span', 'studio-macro-name', `M${i + 1}`));
     const k = knob(`M${i + 1}`, 0, 1, 0.01, macroValue(mac), (nv) => applyMacro(mac, flat, nv), 0.5);
-    head.appendChild(k);
-    wrap.appendChild(head);
+    wrap.appendChild(k);
     const list = h('div', 'studio-macro-entries');
     mac.entries.forEach((e, ei) => {
       const row = h('div', 'studio-macro-entry');
       row.appendChild(nativeSelect([['', '—'], ...flat.map((f) => [f.path, f.label])], e.path, (path) => {
-        const t = flat.find((f) => f.path === path);
+        const tt = flat.find((f) => f.path === path);
         e.path = path;
         e.amount = 1;
-        e.base = t ? t.get() : 0;
+        e.base = tt ? tt.get() : 0;
         markDirty();
         renderDevices();
       }, t('plugin.studio.hint.destination', null, 'Destination')));
       row.appendChild(knob(t('plugin.studio.device.amount', null, 'Amt'), -1, 1, 0.01, e.amount != null ? e.amount : 1, (n) => { e.amount = n; markDirty(); }, 1));
-      const rm = iconCtl('ui/close');
-      rm.type = 'button';
-      rm.title = t('plugin.studio.device.removeMapping', null, 'Remove mapping');
+      const rm = iconCtl('ui/close', 'studio-head-btn', t('plugin.studio.device.removeMapping', null, 'Remove mapping'));
       rm.addEventListener('click', () => { mac.entries.splice(ei, 1); markDirty(); renderDevices(); });
       row.appendChild(rm);
       list.appendChild(row);
     });
-    const addEntry = iconCtl('ui/plus', 'studio-btn');
-    addEntry.type = 'button';
-    addEntry.title = t('plugin.studio.device.addMapping', null, 'Add a parameter to this macro');
+    const addEntry = iconCtl('ui/plus', 'studio-head-btn', t('plugin.studio.device.addMapping', null, 'Add a parameter to this macro'));
     addEntry.addEventListener('click', () => {
       const first = flat[0];
       mac.entries.push({ path: first ? first.path : '', amount: 1, base: first ? first.get() : 0 });
@@ -3656,9 +4343,13 @@ function renderDevices() {
     });
     list.appendChild(addEntry);
     wrap.appendChild(list);
-    macros.appendChild(wrap);
+    mgrid.appendChild(wrap);
   }
-  devicesEl.appendChild(macros);
+  macBody.appendChild(mgrid);
+  chain.appendChild(macros);
+}
+function voices_isDrum(kind) {
+  return ['kick', 'snare', 'hat', 'clap', 'tom', 'perc', 'rim', 'cowbell', 'shaker', 'crash', 'ride', 'drumkit', 'sfkit'].includes(kind);
 }
 
 function renderPadGrid(v, container) {
@@ -3672,7 +4363,7 @@ function renderPadGrid(v, container) {
     b.classList.toggle('studio-pad--active', i === selectedPad);
     b.style.setProperty('--track', trackColor(KINDS.indexOf(pad.kind)));
     b.appendChild(h('span', null, pad.name));
-    b.addEventListener('click', () => { selectedPad = i; renderDevices(); });
+    b.addEventListener('click', () => { selectedPad = i; auditionNote(v, 0, 0, i); renderDevices(); });
     grid.appendChild(b);
   }
   container.appendChild(grid);
@@ -4007,7 +4698,7 @@ function effectiveSends(tr) {
 /* ── pop-up browser ─────────────────────────────────────────── */
 
 let browserQuery = '';
-const BROWSER_TABS = [['audio', 'plugin.studio.browser.tab.audio'], ['patterns', 'plugin.studio.browser.tab.patterns'], ['arrangements', 'plugin.studio.browser.tab.arrangements'], ['instruments', 'plugin.studio.browser.tab.instruments'], ['effects', 'plugin.studio.browser.tab.effects'], ['presets', 'plugin.studio.browser.tab.presets']];
+const BROWSER_TABS = [['arrangements', 'plugin.studio.browser.tab.projects'], ['audio', 'plugin.studio.browser.tab.audio'], ['patterns', 'plugin.studio.browser.tab.patterns'], ['instruments', 'plugin.studio.browser.tab.instruments'], ['effects', 'plugin.studio.browser.tab.effects'], ['presets', 'plugin.studio.browser.tab.presets']];
 
 function openBrowser(tab, mode = null) {
   browserTab = tab || browserTab;
@@ -4649,18 +5340,19 @@ function fmtBytes(n) {
   if (n >= 1048576) return `${(n / 1048576).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(n / 1024))} KB`;
 }
-function renderLibraryList(match) {
+function renderLibraryList(match, searching = false) {
   if (libraryFiles == null) {
-    browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.library.loading', null, 'Loading your audio…')));
+    if (!searching) browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.library.loading', null, 'Loading your audio…')));
     void refreshLibrary();
     return;
   }
-  browserListEl.appendChild(browserRow({
+  if (!searching) browserListEl.appendChild(browserRow({
     label: t('plugin.studio.library.generate', null, 'Generate a song with AI…'),
     lead: 'ui/magic-wand',
     onClick: () => { closeBrowser(); openAiPanel(); },
   }));
   if (!libraryFiles.length) {
+    if (searching) return;
     browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.library.empty', null, 'No WAV files in Music/ yet. Songs you generate with AI land in Music/Generated.')));
     return;
   }
@@ -4897,9 +5589,25 @@ function renderBrowserList() {
   });
   browserListEl.textContent = '';
   const q = browserQuery.trim().toLowerCase();
-  const match = (s) => !q || String(s).toLowerCase().includes(q);
+  const match = (s) => !q || String(s ?? '').toLowerCase().includes(q);
+  if (!q) { renderBrowserSection(match, false); return; }
+  // A search looks everywhere, grouped by type.
+  const saved = browserTab;
+  let any = false;
+  for (const [tab, label] of BROWSER_TABS) {
+    browserTab = tab;
+    const header = h('div', 'studio-browser-group', t(label));
+    browserListEl.appendChild(header);
+    const before = browserListEl.childElementCount;
+    renderBrowserSection(match, true);
+    if (browserListEl.childElementCount === before) header.remove(); else any = true;
+  }
+  browserTab = saved;
+  if (!any) browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.browser.noResults', null, 'Nothing matches your search.')));
+}
+function renderBrowserSection(match, searching) {
 
-  if (browserTab === 'audio') { renderLibraryList(match); return; }
+  if (browserTab === 'audio') { renderLibraryList(match, searching); return; }
 
   if (browserTab === 'patterns') {
     if (!tracks.length) { browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.empty.noPatterns', null, 'No saved patterns yet — save one from the Editor toolbar.'))); return; }
@@ -4922,29 +5630,38 @@ function renderBrowserList() {
   }
 
   if (browserTab === 'arrangements') {
-    browserListEl.appendChild(browserRow({
-      label: stripPlus(t('plugin.studio.browser.newArrangement', null, '+ New arrangement')),
-      lead: 'ui/plus',
-      onClick: () => {
-        arrangement = blankArrangement();
-        sel = arrangement.clips.length ? { area: 'arr', clipIndex: 0 } : null;
-        syncSelection();
-        dirty = false;
-        if (titleInput) titleInput.value = arrangement.title;
-        renderArranger();
-      },
-    }));
-    if (!arrangements.length) browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.empty.noneSaved', null, 'None saved.')));
+    if (!searching) {
+      browserListEl.appendChild(browserRow({
+        label: t('plugin.studio.project.new', null, 'New project'),
+        lead: 'ui/plus',
+        onClick: () => { closeBrowser(); void newProject(); },
+      }));
+    }
+    if (!arrangements.length && !searching) {
+      browserListEl.appendChild(h('div', 'studio-empty', t('plugin.studio.project.emptyHelp', null, 'No saved projects yet. Projects are saved in the Studio (this Projects tab) with Save; exported audio goes to Files → Music/Studio.')));
+    }
     for (const a of arrangements) {
       if (!match(a.title)) continue;
-      browserListEl.appendChild(browserRow({
+      const when = a.updated_at ? String(a.updated_at).replace('T', ' ').slice(0, 16) : '';
+      const open = arrangement?.id === a.id;
+      const row = browserRow({
         label: a.title,
-        sub: `${Math.round(a.bpm)} BPM`,
-        onClick: () => void loadArrangement(a.id).catch((e) => toast(e.message, { type: 'error' })),
-        actions: [smallBtn('ui/trash', t('plugin.studio.browser.deleteArrangement', null, 'Delete arrangement'), async () => {
-          if (await confirmDialog(t('plugin.studio.dialog.delete', { name: a.title }, `Delete "${a.title}"?`))) await deleteArrangement(a.id).catch((e) => toast(e.message, { type: 'error' }));
-        })],
-      }));
+        sub: `${Math.round(a.bpm)} BPM · ${tp('plugin.studio.project.tracks', a.tracks || 0, { count: a.tracks || 0 }, `${a.tracks || 0} tracks`)}${when ? ` · ${when}` : ''}${open ? ` · ${t('plugin.studio.project.open', null, 'open')}` : ''}`,
+        lead: 'ui/folder',
+        onClick: () => { closeBrowser(); void openProject(a.id); },
+        actions: [
+          smallBtn('ui/pencil', t('plugin.studio.project.rename', null, 'Rename'), () => {
+            const label = row.querySelector('.studio-browser-label');
+            if (label) inlineRename(label, a.title, (v) => void renameProject(a, v));
+          }),
+          smallBtn('ui/copy', t('plugin.studio.project.duplicate', null, 'Duplicate'), () => void duplicateProject(a)),
+          smallBtn('ui/trash', t('plugin.studio.browser.deleteArrangement', null, 'Delete arrangement'), async () => {
+            if (await confirmDialog(t('plugin.studio.dialog.delete', { name: a.title }, `Delete "${a.title}"?`))) await deleteArrangement(a.id).catch((e) => toast(e.message, { type: 'error' }));
+          }),
+        ],
+      });
+      row.classList.toggle('studio-browser-item--current', open);
+      browserListEl.appendChild(row);
     }
     return;
   }
@@ -5283,9 +6000,12 @@ function onStudioKeydown(e) {
   } else if (meta && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
     saveProjectNow();
-  } else if (meta && (e.key === 'e' || e.key === 'E')) {
+  } else if (meta && e.shiftKey && (e.key === 'e' || e.key === 'E')) {
     e.preventDefault();
     void exportWav();
+  } else if (meta && (e.key === 'e' || e.key === 'E')) {
+    e.preventDefault();
+    splitSelectedAtPlayhead();
   } else if (meta && (e.key === 'd' || e.key === 'D')) {
     e.preventDefault();
     duplicateSelectedClip();
@@ -5297,6 +6017,9 @@ function onStudioKeydown(e) {
     renderArranger();
     clearArrPlayhead();
     if (was) void renderArrangementAndPlay(0);
+  } else if (!meta && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    zoomToFit();
   } else if (!meta && !e.altKey && (e.key === 'l' || e.key === 'L')) {
     e.preventDefault();
     loopBtn?.click();
@@ -5502,7 +6225,7 @@ export function mountStudioTile() {
 
   const exportBtn = button({ variant: 'ghost', icon: 'ui/download', label: '', onClick: () => void exportWav() });
   exportBtn.classList.add('studio-transport');
-  exportBtn.title = t('plugin.studio.toolbar.exportMaster', null, 'Export the master to Music/Studio (Ctrl+E)');
+  exportBtn.title = t('plugin.studio.toolbar.exportMaster2', null, 'Export the master to Music/Studio (Ctrl+Shift+E)');
   exportBtn.setAttribute('aria-label', t('plugin.studio.toolbar.exportLabel', null, 'Export WAV to Music'));
 
   aiBtnEl = button({ variant: 'ghost', icon: 'ui/magic-wand', label: '', onClick: () => {
@@ -5517,6 +6240,18 @@ export function mountStudioTile() {
   mixBtn.title = t('plugin.studio.toolbar.mixer', null, 'Mixer');
   mixBtn.setAttribute('aria-label', t('plugin.studio.toolbar.mixer', null, 'Mixer'));
 
+  const newBtn = button({ variant: 'ghost', icon: 'ui/file', label: '', onClick: () => void newProject() });
+  newBtn.classList.add('studio-transport');
+  newBtn.title = t('plugin.studio.project.new', null, 'New project');
+  newBtn.setAttribute('aria-label', t('plugin.studio.project.new', null, 'New project'));
+  const projBtn = button({ variant: 'ghost', icon: 'ui/folder-open', label: '', onClick: () => { void refreshArrangements().then(renderBrowser).catch(() => {}); openBrowser('arrangements'); } });
+  projBtn.classList.add('studio-transport');
+  projBtn.title = t('plugin.studio.project.openHint', null, 'Open a project (Browser → Projects)');
+  projBtn.setAttribute('aria-label', t('plugin.studio.project.openLabel', null, 'Open project'));
+  const saveAsBtn = button({ variant: 'ghost', icon: 'ui/copy', label: '', onClick: () => void saveProjectAs().catch((e) => toast(e.message, { type: 'error' })) });
+  saveAsBtn.classList.add('studio-transport');
+  saveAsBtn.title = t('plugin.studio.project.saveAs', null, 'Save as a new project');
+  saveAsBtn.setAttribute('aria-label', t('plugin.studio.project.saveAs', null, 'Save as a new project'));
   const saveBtn = button({ variant: 'ghost', icon: 'ui/save', label: '', onClick: () => saveProjectNow() });
   saveBtn.classList.add('studio-transport');
   saveBtn.title = t('plugin.studio.toolbar.saveProject', null, 'Save project');
@@ -5549,7 +6284,7 @@ export function mountStudioTile() {
   // save dot. Every control keeps the shared 32px metrics.
   barEl.append(browserBtn, titleInput, viewSeg,
     h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
-    beatDotEl, timeEl, bpmInput, bpmLabel, h('span', 'studio-bar-sep'), aiBtnEl, mixBtn, exportBtn, saveBtn, statusEl, saveDotEl);
+    beatDotEl, timeEl, bpmInput, bpmLabel, h('span', 'studio-bar-sep'), aiBtnEl, mixBtn, exportBtn, h('span', 'studio-bar-sep'), newBtn, projBtn, saveBtn, saveAsBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
 
   /* ── body: arranger + launcher side by side ── */
@@ -5557,6 +6292,10 @@ export function mountStudioTile() {
 
   arrWrapEl = h('div', 'studio-panel studio-panel--arr');
   const arrScroll = h('div', 'studio-arr-scroll');
+  arrScrollEl = arrScroll;
+  arrScroll.addEventListener('wheel', onArrWheel, { passive: false });
+  arrScroll.addEventListener('scroll', onArrScroll, { passive: true });
+  wireArrPinch(arrScroll);
   arrGridEl = h('div', 'studio-arr-grid');
   arrScroll.appendChild(arrGridEl);
   arrWrapEl.appendChild(arrScroll);
@@ -5618,6 +6357,7 @@ export function mountStudioTile() {
   footerParamEl = h('span', 'studio-footer-param');
   footer.append(footerHintEl, footerParamEl);
   tileEl.appendChild(footer);
+  tileEl.addEventListener('contextmenu', () => { ctxClip = null; }, true);
   tileEl.addEventListener('mouseover', (e) => {
     const t = e.target.closest?.('[data-hint]');
     if (t) setReadout(t.dataset.hint);
@@ -5682,6 +6422,8 @@ export function mountStudioTile() {
   requestAnimationFrame(() => { if (tileEl?.isConnected) { readCanvasColors(); redrawClipPreviews(); } });
   void consumePendingAiTrack().catch(() => {});
   window.addEventListener('keydown', onStudioKeydown);
+  window.addEventListener('trackpad:pinch', onShellPinch);
+  window.visualViewport?.addEventListener('resize', onViewportResize);
   window.addEventListener('theme:change', onStudioThemeChange);
   window.addEventListener('appearance:change', onStudioThemeChange);
 
@@ -5692,6 +6434,10 @@ export function mountStudioTile() {
 export function unmountStudioTile() {
   tileEl?.querySelectorAll('.ui-dial').forEach(control => control.destroy());
   window.removeEventListener('keydown', onStudioKeydown);
+  window.removeEventListener('trackpad:pinch', onShellPinch);
+  window.visualViewport?.removeEventListener('resize', onViewportResize);
+  arrTouches.clear();
+  pinchBase = null;
   window.removeEventListener('theme:change', onStudioThemeChange);
   window.removeEventListener('appearance:change', onStudioThemeChange);
   canvasInkRead = false;
@@ -5706,7 +6452,8 @@ export function unmountStudioTile() {
   barEl = timeEl = titleInput = bpmInput = statusEl = saveDotEl = playBtn = loopBtn = metroBtn = null;
   viewSeg?.destroy?.();
   viewSeg = null;
-  bodyEl = arrWrapEl = arrGridEl = arrPlayheadEl = null;
+  bodyEl = arrWrapEl = arrGridEl = arrPlayheadEl = arrScrollEl = null;
+  if (arrExtendTimer) { clearTimeout(arrExtendTimer); arrExtendTimer = 0; }
   lchWrapEl = lchGridEl = detailEl = detailBodyEl = gridEl = pianoEl = devicesEl = mixerEl = null;
   synthmeWrapEl = null;
   synthmeDraft = null;
@@ -5715,6 +6462,7 @@ export function unmountStudioTile() {
   gridDraft = null;
   browserEl = browserListEl = footerHintEl = footerParamEl = edToolbarEl = editorPageEl = null;
   browserBtn = null;
+  if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = 0; }
   aiPanelEl = null;
   aiBtnEl = null;
   stopLibraryPreview();
@@ -5813,6 +6561,16 @@ export function studioContextMenu() {
       else launchScene(0);
     } },
     { type: 'item', label: t('plugin.studio.ctx.stop', null, 'Stop'), icon: 'ui/stop', onClick: () => { stopPlayback(); stopAllLauncher(); } },
+    ...(ctxClip && arrangement?.clips[ctxClip.index] ? (() => {
+      const cc = ctxClip;
+      return [
+        { type: 'separator' },
+        { type: 'item', label: t('plugin.studio.ctx.splitHere', null, 'Split clip here'), icon: 'ui/pencil', onClick: () => { splitClipAt(cc.index, cc.beat); } },
+        { type: 'item', label: t('plugin.studio.ctx.duplicateClip', null, 'Duplicate clip'), icon: 'ui/copy', onClick: () => { selectArrClip(cc.index); duplicateSelectedClip(); } },
+        { type: 'item', label: t('plugin.studio.ctx.deleteClip', null, 'Delete clip'), icon: 'ui/trash', onClick: () => removeArrClip(cc.index) },
+      ];
+    })() : []),
+    ...(sel?.area === 'arr' && !ctxClip ? [{ type: 'item', label: t('plugin.studio.ctx.splitPlayhead', null, 'Split clip at playhead'), icon: 'ui/pencil', onClick: () => splitSelectedAtPlayhead() }] : []),
     { type: 'separator' },
     { type: 'item', label: t('plugin.studio.ctx.saveProject', null, 'Save project'), icon: 'ui/save', disabled: !ready, onClick: () => saveProjectNow() },
     { type: 'item', label: t(browserOpen ? 'plugin.studio.ctx.closeBrowser' : 'plugin.studio.ctx.openBrowser', null, browserOpen ? 'Close browser' : 'Open browser'), icon: 'ui/search', checked: browserOpen, onClick: toggleBrowser },

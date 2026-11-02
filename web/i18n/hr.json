@@ -1268,5 +1268,10 @@
   "settings.appearance.terminal.glass": "Glass — prozirno, zraka u boji naglaska koja baca iskre",
   "settings.appearance.terminal.paper": "Paper — oznake naredbi na margini, trag markera",
   "settings.appearance.terminal.blocks": "Blocks — svaka naredba kao kartica, elastični blok-pokazivač",
-  "settings.appearance.terminal.hint": "Boje prate temu i vašu boju naglaska. Oznake naredbi i blokovi trebaju bash ili zsh; smanjeno kretanje i štednja energije isključuju trag pokazivača."
+  "settings.appearance.terminal.hint": "Boje prate temu i vašu boju naglaska. Oznake naredbi i blokovi trebaju bash ili zsh; smanjeno kretanje i štednja energije isključuju trag pokazivača.",
+  "hud.openLauncher": "Otvori pokretač",
+  "ctx.turnAiOn": "Uključi AI…",
+  "settings.assistant.enabled": "AI",
+  "settings.assistant.enabledHint": "Isključeno („No slop”): bez chata, agenta i glasa. Glasovna traka otvara pokretač.",
+  "voice.state.launcher": "Aplikacije"
 }

@@ -5,7 +5,7 @@ import { sanitizeHtml } from './sanitize.js';
 import { ensureMarked } from './vendorLoader.js';
 import { icon, button, cardEnter } from '../ui/index.js';
 import { t } from './i18n.js';
-import { renderToolCard } from './toolCards.js';
+import { renderToolCard, insertToolCard } from './toolCards.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
@@ -385,17 +385,18 @@ export function appendToolCard(record) {
   if (!conversationEl) return;
   const card = renderToolCard(record);
   if (!card) return;
-  conversationEl.insertBefore(card, liveCardAnchor());
+  // A repeat of the same action folds into the card already shown.
+  const folded = insertToolCard(conversationEl, card, liveCardAnchor());
   scrollConversation();
   // A card that arrives during the turn plays the motion language's entrance;
-  // cards rebuilt from a stored conversation do not.
-  void cardEnter(card);
+  // cards rebuilt from a stored conversation (and folded repeats) do not.
+  if (!folded) void cardEnter(card);
 }
 
 /** A tool card stored in the conversation. */
 function renderToolRecord(raw) {
   const card = renderToolCard(raw);
-  if (card) conversationEl?.insertBefore(card, composer || null);
+  if (card && conversationEl) insertToolCard(conversationEl, card, composer || null);
 }
 
 function clearConversation() {

@@ -597,6 +597,10 @@ function onTerminalKey(tab, event) {
   const key = (event.key || '').toLowerCase();
   if (key === 'c') return copySelection(tab) ? false : true;
   if (key === 'v') {
+    // Cancel the browser default: returning false only stops xterm's own key
+    // handling, the native `paste` event would still fire on xterm's textarea
+    // and paste the clipboard a second time.
+    event.preventDefault();
     void pasteFromClipboard(tab);
     return false;
   }

@@ -1248,5 +1248,10 @@
   "settings.appearance.terminal.glass": "Glass — doorschijnend, een accentstraal die vonken afgeeft",
   "settings.appearance.terminal.paper": "Paper — commandotekens in de marge, een markeerstiftspoor",
   "settings.appearance.terminal.blocks": "Blocks — elk commando een kaart, een verende blokcursor",
-  "settings.appearance.terminal.hint": "Kleuren volgen het thema en je accentkleur. Commandotekens en blokken vereisen bash of zsh; minder beweging en de energiebesparing schakelen het cursorspoor uit."
+  "settings.appearance.terminal.hint": "Kleuren volgen het thema en je accentkleur. Commandotekens en blokken vereisen bash of zsh; minder beweging en de energiebesparing schakelen het cursorspoor uit.",
+  "hud.openLauncher": "Starter openen",
+  "ctx.turnAiOn": "AI inschakelen…",
+  "settings.assistant.enabled": "AI",
+  "settings.assistant.enabledHint": "Uit (‘No slop’): geen chat, agent of spraak. De spraakbalk opent de starter.",
+  "voice.state.launcher": "Apps"
 }

@@ -2,7 +2,7 @@ import { ensureVosk } from '../vendorLoader.js';
 import { createVoicePlayback } from './playback.js';
 import { extractAfterWake, isStopPhrase } from './wake.js';
 import { floatTo16BitPCM, acquireMicrophone } from './capture.js';
-import { apiFetch, getVoiceLang, getVoiceLangExplicit } from '../api.js';
+import { apiFetch, getVoiceLang } from '../api.js';
 import { cleanTranscript, isSelfEcho } from '../transcriptGuard.js';
 import { setSphereState, setVoiceReady, setConversationMode } from '../sphere.js';
 import {
@@ -881,6 +881,15 @@ async function prepareVoiceInner() {
   let status = await fetchVoiceStatus(lang);
   sttLang = status?.stt_lang || lang;
 
+  // "Text only" install: no speech models are fetched behind the user's back.
+  // Voice works once one is installed from Settings → Voice; until then the
+  // bar is a text button (a short tap still opens the keyboard).
+  const installed = status?.vosk === 'ready' || status?.whisper === 'ready';
+  if (status?.auto_prepare === false && !installed) {
+    setSphereState('idle');
+    return;
+  }
+
   if (sttEngine === 'whisper') {
     status = await ensureWhisperReady(lang, status);
     whisperReady = status?.whisper === 'ready' && hasWhisperModel(status, whisperModel);
@@ -1220,7 +1229,7 @@ export function stopListening() {
  */
 function maybeReconfigureVoice() {
   const engineStale = getEffectiveSttEngine() !== sttEngine;
-  const langStale = !getVoiceLangExplicit() && getVoiceLang() !== voiceLang;
+  const langStale = getVoiceLang() !== voiceLang;
   if (!engineStale && !langStale) {
     pendingReconfigure = false;
     return;
@@ -1240,6 +1249,7 @@ function maybeReconfigureVoice() {
 
 window.addEventListener('power:changed', maybeReconfigureVoice);
 window.addEventListener('locale:change', maybeReconfigureVoice);
+window.addEventListener('voice:lang', maybeReconfigureVoice);
 
 export function cancelListening() {
   // An explicit cancel ends the conversation too: the next reply must not

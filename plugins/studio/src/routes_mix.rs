@@ -156,12 +156,23 @@ fn stems_manifest(a: &engine::Arrangement, m: &mix::MixResult) -> Value {
     })
 }
 
+/// Latest stems request number. The window asks for a new mix on every edit;
+/// a request that is still waiting when a newer one arrives is dropped
+/// (`superseded`) instead of rendering a mix nobody will hear.
+static STEMS_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn mix_stems() -> RouteHandler {
     bridged_route(move |req: Request| async move {
         let home = request_home(&req)?;
         let value = read_json(req).await?;
         let a = engine::parse_arrangement(&value).map_err(AppError::BadRequest)?;
+        let my_gen = STEMS_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
         blocking(move || {
+            // Wait for any running render, then check we are still wanted.
+            drop(mix::wait_idle());
+            if STEMS_GEN.load(std::sync::atomic::Ordering::SeqCst) != my_gen {
+                return Ok(ok(json!({ "superseded": true })));
+            }
             let res = HomeResolver { home };
             let m = mix::render_mix(&a, &res, &MixOptions::monitor()).map_err(AppError::BadRequest)?;
             Ok(ok(stems_manifest(&a, &m)))

@@ -107,6 +107,9 @@ function pickFilesWithInput({ accept = '', multiple = false } = {}) {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
+    // The engine's own dialog on purpose: this is the path taken when the
+    // shell's picker is unavailable (see `installFileInputShim`).
+    input.setAttribute('data-native-picker', '');
     if (accept) input.accept = accept;
     input.multiple = multiple;
     input.setAttribute('aria-hidden', 'true');

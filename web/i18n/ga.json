@@ -1308,5 +1308,10 @@
   "settings.appearance.terminal.glass": "Glass — tréshoilseach, léas aicinn a chaitheann drithlí",
   "settings.appearance.terminal.paper": "Paper — marcanna ordaithe san imeall, rian aibhsitheora",
   "settings.appearance.terminal.blocks": "Blocks — gach ordú ina chárta, cúrsóir bloc preabach",
-  "settings.appearance.terminal.hint": "Leanann na dathanna an téama agus d'aiceann. Teastaíonn bash nó zsh do mharcanna ordaithe agus blocanna; múchann gluaiseacht laghdaithe agus Sábháil Cumhachta rian an chúrsóra."
+  "settings.appearance.terminal.hint": "Leanann na dathanna an téama agus d'aiceann. Teastaíonn bash nó zsh do mharcanna ordaithe agus blocanna; múchann gluaiseacht laghdaithe agus Sábháil Cumhachta rian an chúrsóra.",
+  "hud.openLauncher": "Oscail an lainseálaí",
+  "ctx.turnAiOn": "Cuir an IS ar siúl…",
+  "settings.assistant.enabled": "IS",
+  "settings.assistant.enabledHint": "As (“No slop”): gan comhrá, gníomhaire ná guth. Osclaíonn an barra gutha an lainseálaí.",
+  "voice.state.launcher": "Aipeanna"
 }

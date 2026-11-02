@@ -1248,5 +1248,10 @@
   "settings.appearance.terminal.glass": "Glass — ημιδιαφανές, μια δέσμη στο χρώμα έμφασης που πετά σπίθες",
   "settings.appearance.terminal.paper": "Paper — σημάδια εντολών στο περιθώριο, ίχνος μαρκαδόρου",
   "settings.appearance.terminal.blocks": "Blocks — κάθε εντολή μια κάρτα, ένας ελαστικός δρομέας μπλοκ",
-  "settings.appearance.terminal.hint": "Τα χρώματα ακολουθούν το θέμα και το χρώμα έμφασης. Τα σημάδια εντολών και τα μπλοκ απαιτούν bash ή zsh· η μειωμένη κίνηση και η εξοικονόμηση ενέργειας απενεργοποιούν το ίχνος του δρομέα."
+  "settings.appearance.terminal.hint": "Τα χρώματα ακολουθούν το θέμα και το χρώμα έμφασης. Τα σημάδια εντολών και τα μπλοκ απαιτούν bash ή zsh· η μειωμένη κίνηση και η εξοικονόμηση ενέργειας απενεργοποιούν το ίχνος του δρομέα.",
+  "hud.openLauncher": "Άνοιγμα εκκίνησης εφαρμογών",
+  "ctx.turnAiOn": "Ενεργοποίηση AI…",
+  "settings.assistant.enabled": "AI",
+  "settings.assistant.enabledHint": "Ανενεργό («No slop»): χωρίς συνομιλία, πράκτορα ή φωνή. Η γραμμή φωνής ανοίγει την εκκίνηση εφαρμογών.",
+  "voice.state.launcher": "Εφαρμογές"
 }

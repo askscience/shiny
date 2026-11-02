@@ -452,6 +452,7 @@ async fn find_or_provision_linux_user(
 
     // Give plugins a chance to provision per-user state (e.g. the Files home).
     state.plugins.notify_user_registered(&id).await;
+    crate::services::ai_switch::seed_new_user(&state.pool, &id).await;
 
     sqlx::query_as::<_, Traveler>("SELECT * FROM travelers WHERE id = ?1")
         .bind(&id)
@@ -567,6 +568,7 @@ pub async fn register(
     // Give plugins a chance to provision per-user state for the new account.
     // The Files plugin creates the user's classic home folders here.
     state.plugins.notify_user_registered(&traveler.id).await;
+    crate::services::ai_switch::seed_new_user(&state.pool, &traveler.id).await;
 
     session_response(token, public, request_is_https(&headers))
 }

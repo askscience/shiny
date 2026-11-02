@@ -11,7 +11,8 @@ first verified account. List/search/read use the **local cache**; call
 | `mail_list` | `{ account?, folder?, page? }` | Up to 60 cached messages: subject, sender, date, `seen`. |
 | `mail_search` | `{ account?, folder?, query }` | Cached subject/sender/body search; omit `folder` to search all. |
 | `mail_read` | `{ account?, folder?, id }` | One full message: subject, from/to/cc, date, plain body (+HTML), attachment names. |
-| `mail_send` | `{ account?, to[], cc?, bcc?, subject, body }` | Sends via the account's SMTP; always goes to the server. |
+| `mail_send` | `{ account?, to[], cc?, bcc?, subject, body, attachments? }` | Sends via the account's SMTP; always goes to the server. `attachments`: home-relative file paths. |
+| `mail_save_attachment` | `{ account?, folder?, id, index?, dir? }` | Saves one attachment of a received message into the home (default `Downloads`) and returns its path. |
 
 ## Guidance
 

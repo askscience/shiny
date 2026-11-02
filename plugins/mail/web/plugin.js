@@ -23,6 +23,7 @@ import {
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { externalLinkUrl, isKiosk, openUrl } from '../../js/linkRouter.js';
+import { pickFiles, pluginForFile, openWithPlugin, revealInFiles, fileFromHome, SHINY_FILE_MIME } from '../../js/files.js';
 
 export const MAIL_PLUGIN = 'mail';
 
@@ -131,6 +132,9 @@ let composeCc = null;
 let composeBcc = null;
 let composeSubject = null;
 let composeBody = null;
+/** Files attached to the open compose (`File` objects) and their chip row. */
+let composeFiles = [];
+let composeAttachList = null;
 
 /* ── API ────────────────────────────────────────────────────── */
 
@@ -182,10 +186,41 @@ function markSeen(accountId, folder, ids, seen) {
   });
 }
 
-function sendMail(payload) {
-  return api('/api/mail/send', {
+/**
+ * Send a message. With attachments the body is multipart: a `message` field
+ * with the JSON payload plus one `file` per attached `File`.
+ */
+function sendMail(payload, files = []) {
+  if (!files.length) {
+    return api('/api/mail/send', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+  const form = new FormData();
+  form.append('message', JSON.stringify(payload));
+  for (const file of files) form.append('file', file, file.name);
+  return api('/api/mail/send', { method: 'POST', body: form });
+}
+
+function attachmentQuery(accountId, folder, id, index) {
+  const q = new URLSearchParams({ folder, id, index: String(index) });
+  if (accountId) q.set('account', accountId);
+  return q;
+}
+
+/** One received attachment as a `File` (forwarding attaches it again). */
+async function fetchAttachmentFile(accountId, folder, id, att, index) {
+  const q = attachmentQuery(accountId, folder, id, index);
+  const blob = await apiFetch(`/api/mail/attachment?${q}`, { responseType: 'blob' });
+  return new File([blob], att.filename || 'attachment', { type: att.content_type || blob.type || '' });
+}
+
+/** Save a received attachment into the home (default Downloads). */
+function saveAttachment(accountId, folder, id, index, dir = 'Downloads') {
+  return api('/api/mail/attachment/save', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ account_id: accountId, folder, id, index, dir }),
   });
 }
 
@@ -1066,12 +1101,56 @@ function renderMessage(msg) {
 
   if (msg.attachments && msg.attachments.length) {
     const atts = h('div', 'mail-attachments');
-    for (const att of msg.attachments) {
-      const chip = h('span', 'mail-attachment', `${att.filename || t('plugin.mail.reader.attachment', null, 'attachment')} · ${fmtSize(att.size)}`);
+    const account = pickAccount();
+    const folder = currentFolder;
+    msg.attachments.forEach((att, position) => {
+      const index = Number.isInteger(att.index) ? att.index : position;
+      const name = att.filename || t('plugin.mail.reader.attachment', null, 'attachment');
+      const chip = h('span', 'mail-attachment');
+      const label = h('span', 'mail-attachment-label', [name, att.size ? ` · ${fmtSize(att.size)}` : ''].join(''));
+      const openBtn = iconButton({
+        icon: 'ui/eye',
+        label: t('plugin.mail.reader.openAttachment', null, 'Open'),
+        size: 'sm',
+        onClick: () => void openAttachment(account, folder, msg.id, index, name),
+      });
+      const saveBtn = iconButton({
+        icon: 'ui/download',
+        label: t('plugin.mail.reader.saveAttachment', null, 'Save to Downloads'),
+        size: 'sm',
+        onClick: () => void saveAttachmentToFiles(account, folder, msg.id, index),
+      });
+      chip.append(icon('ui/file', { size: 14 }), label, openBtn, saveBtn);
       atts.appendChild(chip);
-    }
+    });
     readerEl.appendChild(atts);
   }
+}
+
+/** Save an attachment into Downloads and say where it went. */
+async function saveAttachmentToFiles(account, folder, id, index) {
+  try {
+    const res = await saveAttachment(account?.id, folder, id, index);
+    window.dispatchEvent(new CustomEvent('files:changed', { detail: { dir: res?.dir, path: res?.path } }));
+    toast(t('plugin.mail.toast.attachmentSaved', { path: res?.path || '' }, 'Saved to {path}'), { type: 'ok' });
+    return res;
+  } catch (e) {
+    toast(e.message || t('plugin.mail.toast.attachmentFailed', null, 'Could not get the attachment'), { type: 'error' });
+    return null;
+  }
+}
+
+/**
+ * Open an attachment: saved into Downloads first (the desktop's apps open
+ * home files), then handed to the app that owns its type — or revealed in
+ * Files when none does.
+ */
+async function openAttachment(account, folder, id, index, name) {
+  const res = await saveAttachmentToFiles(account, folder, id, index);
+  if (!res?.path) return;
+  const plugin = pluginForFile(res.name || name);
+  if (plugin && await openWithPlugin({ plugin, path: res.path, name: res.name || name })) return;
+  revealInFiles(res.dir || 'Downloads');
 }
 
 /* ── Reader frame links ─────────────────────────────────────── */
@@ -1144,10 +1223,38 @@ function openCompose(prefill = {}) {
       field({ label: t('plugin.mail.compose.bcc', null, 'Bcc'), control: composeBcc }),
     );
 
+    composeAttachList = h('div', 'mail-attachments mail-compose-attachments');
     const actions = h('div', 'mail-compose-actions');
     const sendBtn = withArrow(button({ label: t('plugin.mail.compose.send', null, 'Send'), variant: 'primary', size: 'sm' }));
+    const attachBtn = button({ label: t('plugin.mail.compose.attach', null, 'Attach files…'), icon: 'ui/plus', variant: 'quiet', size: 'sm' });
     const closeBtn = button({ label: t('plugin.mail.compose.discard', null, 'Discard'), variant: 'ghost', size: 'sm' });
-    actions.append(sendBtn, closeBtn);
+    actions.append(sendBtn, attachBtn, closeBtn);
+    attachBtn.addEventListener('click', async () => {
+      const files = await pickFiles({ multiple: true });
+      addComposeFiles(files);
+    });
+    // Files dragged in from the Files window (home paths) or from outside.
+    composeBody.addEventListener('dragover', (e) => {
+      const types = [...(e.dataTransfer?.types || [])];
+      if (types.includes(SHINY_FILE_MIME) || types.includes('Files')) e.preventDefault();
+    });
+    composeBody.addEventListener('drop', async (e) => {
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      const shiny = dt.getData(SHINY_FILE_MIME);
+      if (shiny) {
+        e.preventDefault();
+        try {
+          const { path, name } = JSON.parse(shiny);
+          addComposeFiles([await fileFromHome(path, name)]);
+        } catch (_) { /* not a file payload */ }
+        return;
+      }
+      if (dt.files?.length) {
+        e.preventDefault();
+        addComposeFiles([...dt.files]);
+      }
+    });
 
     composeModal = modal({
       title: t('plugin.mail.compose.title', null, 'New message'),
@@ -1157,6 +1264,7 @@ function openCompose(prefill = {}) {
         addressGrid,
         field({ label: t('plugin.mail.compose.subject', null, 'Subject'), control: composeSubject }),
         field({ label: t('plugin.mail.compose.message', null, 'Message'), control: composeBody }),
+        composeAttachList,
         actions,
       ],
     });
@@ -1177,7 +1285,7 @@ function openCompose(prefill = {}) {
           bcc: parseAddresses(composeBcc.value),
           subject: composeSubject.value.trim(),
           body: composeBody.value,
-        });
+        }, composeFiles);
         toast(t('plugin.mail.toast.sent', null, 'Message sent'), { type: 'info' });
         composeModal.close();
       } catch (e) {
@@ -1193,6 +1301,8 @@ function openCompose(prefill = {}) {
   composeBcc.value = prefill.bcc || '';
   composeSubject.value = prefill.subject || '';
   composeBody.value = prefill.body || '';
+  composeFiles = [];
+  renderComposeFiles();
   composeFrom.textContent = t('plugin.mail.compose.from', { email: pickAccount().email }, 'From: {email}');
   composeModal.open();
 }
@@ -1207,10 +1317,49 @@ function openReply(msg) {
 }
 
 function openForward(msg) {
+  const account = pickAccount();
+  const folder = currentFolder;
   openCompose({
     subject: t('plugin.mail.compose.forwardSubject', { subject: msg.subject || '' }, 'Fwd: {subject}'),
     body: quotedBody(msg),
   });
+  // A forward carries the original attachments along.
+  (msg.attachments || []).forEach((att, position) => {
+    const index = Number.isInteger(att.index) ? att.index : position;
+    fetchAttachmentFile(account?.id, folder, msg.id, att, index)
+      .then((file) => addComposeFiles([file]))
+      .catch(() => toast(t('plugin.mail.toast.attachmentFailed', null, 'Could not get the attachment'), { type: 'error' }));
+  });
+}
+
+/** Attach files to the open compose (de-duplicated by name + size). */
+function addComposeFiles(files) {
+  for (const file of files || []) {
+    if (!file) continue;
+    if (composeFiles.some((f) => f.name === file.name && f.size === file.size)) continue;
+    composeFiles.push(file);
+  }
+  renderComposeFiles();
+}
+
+function renderComposeFiles() {
+  if (!composeAttachList) return;
+  composeAttachList.textContent = '';
+  composeAttachList.classList.toggle('hidden', !composeFiles.length);
+  for (const file of composeFiles) {
+    const chip = h('span', 'mail-attachment');
+    const remove = iconButton({
+      icon: 'ui/close',
+      label: t('plugin.mail.compose.removeAttachment', null, 'Remove attachment'),
+      size: 'sm',
+      onClick: () => {
+        composeFiles = composeFiles.filter((f) => f !== file);
+        renderComposeFiles();
+      },
+    });
+    chip.append(icon('ui/file', { size: 14 }), h('span', 'mail-attachment-label', `${file.name} · ${fmtSize(file.size)}`), remove);
+    composeAttachList.appendChild(chip);
+  }
 }
 
 async function deleteCurrent(msg) {

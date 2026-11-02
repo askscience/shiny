@@ -1,10 +1,9 @@
 import {
-  ESP_BYTES, GIB, MIB, MIN_ROOT_BYTES,
+  GIB, MIB, MIN_ROOT_BYTES,
   MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
-  buildPlanModel, resizeBoundary, rootCandidates, summaryFor,
+  buildPlanModel, partitionOs, resizeBoundary, rootCandidates,
 } from './timeline-model.js';
 
-const ZOOM_LEVELS = [1, 2, 4, 8];
 const LAYOUT_FIELDS = [
   'manualSwapGiB', 'manualHome', 'manualHomeGiB', 'manualRootGiB', 'swapGiB', 'homeGiB',
 ];
@@ -35,14 +34,6 @@ function compact(bytes, formatBytes) {
   if (formatBytes) return formatBytes(bytes);
   if (bytes >= GIB) return `${Math.round(bytes / GIB)} GiB`;
   return `${Math.round(bytes / MIB)} MiB`;
-}
-
-function tickStep(total, zoom) {
-  const ticks = Math.max(4, Math.round(6 * Math.min(zoom, 4)));
-  const raw = total / ticks;
-  const units = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 4000]
-    .map((value) => value * GIB);
-  return units.find((unit) => unit >= raw) || units[units.length - 1];
 }
 
 function plannedLabel(kind, t) {
@@ -90,62 +81,45 @@ function boundaryInfo(model, id) {
   };
 }
 
+const OS_NAMES = {
+  windows: ['disk.os.windows', 'Windows'],
+  macos: ['disk.os.macos', 'macOS'],
+  linux: ['disk.os.linux', 'Linux'],
+  encrypted: ['disk.os.encrypted', 'Encrypted'],
+  startup: ['disk.timeline.plannedEfi', 'Startup'],
+  swap: ['disk.timeline.plannedSwap', 'Support memory'],
+  data: ['disk.os.data', 'Data'],
+  empty: ['disk.os.empty', 'Empty'],
+};
+
+/** "Windows", "macOS", "Linux"… for a system code from partitionOs/diskOs. */
+export function osLabel(os, t) {
+  const entry = OS_NAMES[os];
+  return entry ? t(entry[0], entry[1]) : '';
+}
+
+/** A human name for a partition: the system that owns it, else its filesystem. */
+export function partitionLabel(part, t) {
+  if (!part) return '';
+  const os = partitionOs(part);
+  if (os !== 'other') return osLabel(os, t);
+  return String(part.fstype || part.name || part.path || '').toUpperCase();
+}
+
 export function renderTimelinePanel(options) {
   const {
-    disk, state, model: initialModel, t, formatBytes,
-    onSelectGap, onSelectPartition, onPreset, onRemovePartition,
-    onCommit, onRequestRender,
+    disk, state, model: initialModel, t, formatBytes, icon,
+    onSelectGap, onSelectPartition, onToggle, onRemovePartition,
+    onCommit, onRequestRender, confirm = null,
   } = options;
   const wrap = el('div', 'installer-timeline');
-  let zoom = ZOOM_LEVELS.includes(Number(state.timelineZoom))
-    ? Number(state.timelineZoom)
-    : 1;
   let model = initialModel || buildPlanModel(disk, state);
-
-  const toolbar = el('div', 'installer-timeline-toolbar');
-  const toolbarCopy = el('div', 'installer-timeline-toolbar-copy');
-  toolbarCopy.append(
-    el('span', 'installer-timeline-title', t('disk.timeline.title', 'The disk, from start to end')),
-    el('span', 'installer-timeline-hint', t('disk.timeline.dragHint', 'Drag the edges of the new partitions. Existing partitions are locked.')),
-  );
-  toolbar.appendChild(toolbarCopy);
-
-  const zoomWrap = el('div', 'installer-timeline-zoom');
-  zoomWrap.setAttribute('role', 'group');
-  zoomWrap.setAttribute('aria-label', t('disk.timeline.zoom', 'Zoom'));
-  const zoomButtons = [];
-  for (const level of ZOOM_LEVELS) {
-    const button = el('button', 'installer-zoom-button', level === 1
-      ? t('disk.timeline.fit', 'Fit')
-      : `${level}×`);
-    button.type = 'button';
-    button.addEventListener('click', () => {
-      const anchor = scroll.scrollWidth
-        ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth
-        : 0;
-      zoom = level;
-      state.timelineZoom = level;
-      paint(model);
-      if (anchor) {
-        scroll.scrollLeft = Math.max(0, anchor * scroll.scrollWidth - scroll.clientWidth / 2);
-      }
-    });
-    zoomButtons.push([level, button]);
-    zoomWrap.appendChild(button);
-  }
-  toolbar.appendChild(zoomWrap);
-  wrap.appendChild(toolbar);
 
   const scroll = el('div', 'installer-timeline-scroll');
   scroll.dir = 'ltr';
   const content = el('div', 'installer-timeline-content');
-  content.style.width = `${zoom * 100}%`;
   scroll.appendChild(content);
   wrap.appendChild(scroll);
-
-  const ruler = el('div', 'installer-ruler');
-  ruler.setAttribute('aria-hidden', 'true');
-  content.appendChild(ruler);
 
   const nowTitle = el('div', 'installer-track-title');
   nowTitle.textContent = t('disk.timeline.now', 'Now');
@@ -165,15 +139,11 @@ export function renderTimelinePanel(options) {
   afterWrap.appendChild(afterTrack);
   content.appendChild(afterWrap);
 
-  const playhead = el('div', 'installer-playhead');
-  const playheadLabel = el('span', 'installer-playhead-label', t('disk.timeline.installHere', 'Install here'));
-  playhead.appendChild(playheadLabel);
-  content.appendChild(playhead);
-
   const handleLayer = el('div', 'installer-handle-layer');
   afterWrap.appendChild(handleLayer);
 
   const handles = new Map();
+  const bubbles = new Map();
   function addHandle(id) {
     const handle = el('button', 'installer-handle');
     handle.type = 'button';
@@ -182,6 +152,11 @@ export function renderTimelinePanel(options) {
     handle.setAttribute('aria-orientation', 'vertical');
     handle.tabIndex = 0;
     handle.appendChild(el('span', 'installer-handle-grip'));
+    // The size being dragged, shown above the grip while hovering or dragging.
+    const bubble = el('span', 'installer-handle-bubble');
+    bubble.setAttribute('aria-hidden', 'true');
+    handle.appendChild(bubble);
+    bubbles.set(id, bubble);
     handle.addEventListener('pointerdown', (event) => startDrag(event, id));
     handle.addEventListener('keydown', (event) => onHandleKey(event, id));
     handleLayer.appendChild(handle);
@@ -194,66 +169,44 @@ export function renderTimelinePanel(options) {
     if (state.partitionMode === MODE_MANUAL && model.sizes.root > 0) addHandle('root-end');
   }
 
-  const legend = el('div', 'installer-timeline-legend');
-  for (const [kind, key, fallback] of [
-    ['kept', 'disk.timeline.legendKept', 'Kept: not touched'],
-    ['planned', 'disk.timeline.legendPlanned', 'New partitions'],
-    ['free', 'disk.timeline.legendFree', 'Free space'],
-    ['reused', 'disk.timeline.legendReused', 'Startup partition reused'],
-    ['formatted', 'disk.timeline.legendFormatted', 'Will be formatted'],
-  ]) {
-    const item = el('span', 'installer-timeline-legend-item');
-    item.append(el('span', `installer-legend-dot installer-legend-dot--${kind}`), el('span', null, t(key, fallback)));
-    legend.appendChild(item);
-  }
-  wrap.appendChild(legend);
+  // Formatting an existing partition is confirmed right under the bars.
+  if (confirm) wrap.appendChild(confirm);
 
-  const summary = el('div', 'installer-timeline-summary');
-  const summaryFormatted = el('div', 'installer-summary-line');
-  const summaryKept = el('div', 'installer-summary-line');
-  const summaryFree = el('div', 'installer-summary-line');
+  // One outcome line: what survives (or what is lost) and how big PEAK'D! gets.
+  const outcome = el('div', 'installer-outcome');
+  const outcomeMark = el('span', 'installer-outcome-mark');
+  outcomeMark.setAttribute('aria-hidden', 'true');
+  const outcomeText = el('span', 'installer-outcome-text');
+  const outcomeSize = el('span', 'installer-outcome-size');
+  outcome.append(outcomeMark, outcomeText, outcomeSize);
+  wrap.appendChild(outcome);
   const summaryErrors = el('div', 'installer-summary-errors');
-  summary.append(summaryFormatted, summaryKept, summaryFree, summaryErrors);
-  wrap.appendChild(summary);
+  wrap.appendChild(summaryErrors);
 
+  // Two switches instead of presets and size tables: sizes are dragged.
+  const toggles = el('div', 'installer-toggles');
+  toggles.setAttribute('role', 'group');
+  const toggleRefs = {};
   if (state.partitionMode !== MODE_EXISTING) {
-    const presetRow = el('div', 'installer-preset-row');
-    const presetChoices = [
-      ['simple', 'disk.preset.simple.title', 'Minimal'],
-      ['swap', 'disk.preset.swap.title', 'Recommended'],
-      ['home', 'disk.preset.home.title', 'Separate home'],
-    ];
-    for (const [value, key, fallback] of presetChoices) {
-      const button = el('button', `installer-preset${state.layoutPreset === value ? ' is-selected' : ''}`, t(key, fallback));
+    for (const [kind, key, fallback] of [
+      ['swap', 'disk.timeline.plannedSwap', 'Support memory'],
+      ['home', 'disk.toggle.home', 'Separate personal files'],
+    ]) {
+      const button = el('button', 'installer-toggle');
       button.type = 'button';
-      button.setAttribute('aria-pressed', String(state.layoutPreset === value));
-      button.addEventListener('click', () => onPreset?.(value));
-      presetRow.appendChild(button);
+      button.setAttribute('role', 'switch');
+      const knob = el('span', 'installer-toggle-knob');
+      knob.setAttribute('aria-hidden', 'true');
+      button.append(knob, el('span', 'installer-toggle-label', t(key, fallback)));
+      button.addEventListener('click', () => {
+        onToggle?.(kind, button.getAttribute('aria-checked') !== 'true');
+      });
+      toggleRefs[kind] = button;
+      toggles.appendChild(button);
     }
-    const reset = el('button', 'installer-preset installer-preset--ghost', t('disk.timeline.reset', 'Reset to recommended'));
-    reset.type = 'button';
-    reset.addEventListener('click', () => onPreset?.('swap'));
-    presetRow.appendChild(reset);
-    wrap.appendChild(presetRow);
+    wrap.appendChild(toggles);
   }
 
-  const exact = el('details', 'installer-exact');
-  if (state.exactOpen) exact.open = true;
-  const exactSummary = el('summary', 'installer-exact-summary', t('disk.timeline.exact', 'Exact sizes'));
-  exact.appendChild(exactSummary);
-  const exactBody = el('div', 'installer-exact-body');
-  exact.appendChild(exactBody);
-  exact.addEventListener('toggle', () => {
-    state.exactOpen = exact.open;
-    if (exact.open) {
-      buildExactPanel();
-      paintExact();
-    }
-  });
-  wrap.appendChild(exact);
-
-  const exactRefs = {};
-  buildExactPanel();
   const live = el('div', 'installer-sr-only');
   live.setAttribute('aria-live', 'polite');
   wrap.appendChild(live);
@@ -266,159 +219,46 @@ export function renderTimelinePanel(options) {
     return model.gap || (model.gaps || [])[0] || null;
   }
 
-  function buildExactPanel() {
-    clear(exactBody);
-    exactRefs.swap = null;
-    exactRefs.home = null;
-    exactRefs.homeSize = null;
-    exactRefs.root = null;
-
-    const efiRow = el('div', 'installer-exact-row');
-    efiRow.append(
-      el('span', 'installer-exact-label', t('disk.timeline.plannedEfi', 'Startup')),
-      el('span', 'installer-exact-value', compact(ESP_BYTES, formatBytes)),
-    );
-    exactBody.appendChild(efiRow);
-
-    const zone = el('div', 'installer-exact-hint');
-    if (state.partitionMode === MODE_MANUAL && model.gap) {
-      zone.textContent = t('disk.timeline.zoneRange', 'Free space: {start} – {end}', {
-        start: compact(model.gap.start_bytes, formatBytes),
-        end: compact(model.gap.start_bytes + model.gap.size_bytes, formatBytes),
-      });
-    } else if (state.partitionMode === MODE_ERASE) {
-      zone.textContent = t('disk.timeline.wholeDisk', 'The whole disk will be used.');
-    } else if (state.partitionMode === MODE_EXISTING) {
-      zone.textContent = t('disk.timeline.existingZone', 'Only the chosen partition will be formatted.');
-    }
-    exactBody.appendChild(zone);
-
-    if (state.partitionMode === MODE_EXISTING) {
-      exactBody.appendChild(el('p', 'installer-exact-hint', t('disk.timeline.existingExact', 'The existing partition keeps its size; no new partition is created.')));
-      return;
-    }
-
-    const swapRow = el('label', 'installer-exact-row');
-    swapRow.appendChild(el('span', 'installer-exact-label', t('disk.timeline.plannedSwap', 'Support memory')));
-    const swap = el('select', 'installer-exact-select');
-    const maxSwap = Math.max(0, Math.floor((model.sizes.maxSwap || 0) / GIB));
-    const values = [...new Set([0, 4, 8, 16, 32, Math.round(model.sizes.swap / GIB)])]
-      .filter((value) => value <= maxSwap)
-      .sort((a, b) => a - b);
-    for (const value of values) {
-      const option = el('option', null, value === 0
-        ? t('disk.manual.none', 'Not created')
-        : `${value} GiB`);
-      option.value = String(value);
-      swap.appendChild(option);
-    }
-    swap.value = String(Math.round(model.sizes.swap / GIB));
-    swap.addEventListener('change', () => {
-      const value = Math.max(0, Number(swap.value) || 0);
-      if (state.partitionMode === MODE_MANUAL) {
-        state.manualSwapGiB = value;
-      } else {
-        state.swapGiB = value;
-        if (value > 0 && state.layoutPreset === 'simple') state.layoutPreset = 'swap';
-      }
-      onRequestRender?.();
-    });
-    exactRefs.swap = swap;
-    swapRow.appendChild(swap);
-    exactBody.appendChild(swapRow);
-
-    const homeRow = el('label', 'installer-exact-row');
-    homeRow.appendChild(el('span', 'installer-exact-label', t('disk.timeline.plannedHome', 'Personal files')));
-    const homeWrap = el('span', 'installer-exact-inline');
-    const home = el('input');
-    home.type = 'checkbox';
-    if (state.partitionMode === MODE_MANUAL) {
-      home.checked = !!state.manualHome;
-    } else {
-      home.checked = state.layoutPreset === 'home';
-    }
-    home.addEventListener('change', () => {
-      if (state.partitionMode === MODE_MANUAL) {
-        state.manualHome = home.checked;
-        if (home.checked && !(Number(state.manualHomeGiB) > 0)) {
-          state.manualHomeGiB = Math.max(1, Math.floor((model.sizes.afterSwap / 2) / GIB));
-        }
-      } else {
-        state.layoutPreset = home.checked ? 'home' : (model.sizes.swap > 0 ? 'swap' : 'simple');
-        state.homeGiB = 0;
-      }
-      onRequestRender?.();
-    });
-    const homeSize = el('input', 'installer-exact-number');
-    homeSize.type = 'number';
-    homeSize.min = '1';
-    homeSize.step = '1';
-    homeSize.value = state.partitionMode === MODE_MANUAL
-      ? String(Math.max(1, Math.round(model.sizes.home / GIB)))
-      : String(Math.max(1, Math.round(model.sizes.home / GIB)));
-    homeSize.disabled = !home.checked;
-    homeSize.setAttribute('aria-label', t('disk.manual.homeSize', 'Size for personal files in GiB'));
-    homeSize.addEventListener('change', () => {
-      const value = Math.max(1, Number(homeSize.value) || 1);
-      if (state.partitionMode === MODE_MANUAL) state.manualHomeGiB = value;
-      else state.homeGiB = value;
-      onRequestRender?.();
-    });
-    exactRefs.home = home;
-    exactRefs.homeSize = homeSize;
-    homeWrap.append(home, homeSize, el('span', 'installer-exact-suffix', 'GiB'));
-    homeRow.appendChild(homeWrap);
-    exactBody.appendChild(homeRow);
-
-    if (state.partitionMode === MODE_MANUAL) {
-      const rootRow = el('label', 'installer-exact-row');
-      rootRow.appendChild(el('span', 'installer-exact-label', t('disk.timeline.plannedRoot', "PEAK'D! system")));
-      const root = el('input', 'installer-exact-number');
-      root.type = 'number';
-      root.min = '20';
-      root.step = '1';
-      root.placeholder = t('disk.manual.rootAuto', 'Rest of free space');
-      root.value = state.manualRootGiB > 0 ? String(state.manualRootGiB) : '';
-      root.setAttribute('aria-label', t('disk.manual.rootSize', 'Size for the PEAK’D! system in GiB'));
-      root.addEventListener('change', () => {
-        state.manualRootGiB = Math.max(0, Number(root.value) || 0);
-        onRequestRender?.();
-      });
-      exactRefs.root = root;
-      rootRow.append(root, el('span', 'installer-exact-suffix', 'GiB'));
-      exactBody.appendChild(rootRow);
-      if (model.remaining > 0) {
-        exactBody.appendChild(el('p', 'installer-exact-hint', t('disk.timeline.remaining', 'Unused free space: {size}', {
-          size: compact(model.remaining, formatBytes),
-        })));
-      }
-    }
+  /** Will this existing partition be wiped? (Shown red on the "now" bar.) */
+  function isDoomed(segment) {
+    if (!segment.part) return false;
+    if (model.mode === MODE_ERASE) return true;
+    return model.mode === MODE_EXISTING && segment.part.path === state.existingRootPath;
   }
 
-  function segmentClass(segment) {
+  function segmentClass(segment, track) {
     if (segment.kind === 'free') return 'installer-clip installer-clip--free';
     if (segment.planned) return `installer-clip installer-clip--planned installer-clip--${segment.kind}`;
+    if (track === 'now' && isDoomed(segment)) return 'installer-clip installer-clip--doomed';
     if (segment.selectedRoot) return 'installer-clip installer-clip--formatted';
     if (segment.reused) return 'installer-clip installer-clip--reused';
-    if (model.mode === MODE_ERASE && segment.part) return 'installer-clip installer-clip--doomed';
     return `installer-clip installer-clip--kept installer-clip--${segment.kind}`;
   }
 
-  function clipBody(segment) {
-    let label = segment.label || '';
-    if (segment.planned) label = plannedLabel(segment.kind, t);
-    if (segment.kind === 'free') label = t('disk.free', 'Free space');
-    if (segment.selectedRoot) label = t('disk.timeline.plannedRoot', "PEAK'D! system");
-    if (segment.reused) label = t('disk.timeline.plannedEfi', 'Startup');
+  function segmentLabel(segment) {
+    if (segment.planned) return plannedLabel(segment.kind, t);
+    if (segment.kind === 'free') return t('disk.free', 'Free space');
+    if (segment.selectedRoot) return t('disk.timeline.plannedRoot', "PEAK'D! system");
+    if (segment.reused) return t('disk.timeline.plannedEfi', 'Startup');
+    return partitionLabel(segment.part, t) || segment.label || '';
+  }
+
+  function clipBody(segment, locked) {
     const body = el('span', 'installer-clip-copy');
+    if (locked && icon) {
+      const mark = el('span', 'installer-clip-lock');
+      mark.setAttribute('aria-hidden', 'true');
+      mark.appendChild(icon('ui/lock', { size: 10 }));
+      body.appendChild(mark);
+    }
     body.append(
-      el('span', 'installer-clip-label', label),
+      el('span', 'installer-clip-label', segmentLabel(segment)),
       el('span', 'installer-clip-size', compact(segment.size, formatBytes)),
     );
     return body;
   }
 
-  function appendSegment(track, segment) {
+  function appendSegment(track, segment, which) {
     const widthPct = pct(segment.size, disk.size_bytes);
     const isGap = segment.kind === 'free';
     const gapRecord = isGap && (model.gaps || []).find((gap) => (
@@ -427,9 +267,10 @@ export function renderTimelinePanel(options) {
     const canSelectGap = state.partitionMode !== MODE_ERASE
       && gapRecord?.eligible && segment.source === 'probe';
     const selected = isGap && model.gap && segment.start === model.gap.start_bytes;
+    const label = segmentLabel(segment);
     let node;
     if (isGap && canSelectGap) {
-      node = el('button', segmentClass(segment));
+      node = el('button', segmentClass(segment, which));
       node.type = 'button';
       node.setAttribute('aria-label', `${t('disk.timeline.gap', 'Free space')} ${compact(segment.size, formatBytes)} — ${t('disk.timeline.installHere', 'Install here')}`);
       node.addEventListener('click', () => onSelectGap?.(segment.gap || {
@@ -438,27 +279,30 @@ export function renderTimelinePanel(options) {
       }));
     } else if (segment.part && state.partitionMode !== MODE_ERASE
       && rootCandidates(disk).some((part) => part.path === segment.part.path)) {
-      node = el('button', segmentClass(segment));
+      node = el('button', segmentClass(segment, which));
       node.type = 'button';
-      node.setAttribute('aria-label', `${segment.label} — ${t('disk.existing.pickOne', 'Install PEAK’D! in this partition')}`);
+      node.setAttribute('aria-label', `${label} ${compact(segment.size, formatBytes)} — ${t('disk.existing.pickOne', 'Install PEAK’D! in this partition')}`);
       node.addEventListener('click', () => onSelectPartition?.(segment.part));
     } else {
-      node = el('div', segmentClass(segment));
+      node = el('div', segmentClass(segment, which));
     }
     node.style.left = `${pct(segment.start, disk.size_bytes)}%`;
     node.style.width = `${widthPct}%`;
     if (widthPct < 4) node.classList.add('is-tiny');
     if (selected) node.classList.add('is-selected');
+    const locked = !!segment.part && !segment.selectedRoot && !segment.reused
+      && !(which === 'now' && isDoomed(segment));
     if (isGap) {
-      if (canSelectGap) {
+      // Only point at a gap when there is more than one to choose from.
+      if (canSelectGap && !selected && which === 'now' && eligibleGapCount() > 1) {
         node.appendChild(el('span', 'installer-gap-action', t('disk.timeline.installHere', 'Install here')));
       }
-      node.appendChild(clipBody(segment));
+      node.appendChild(clipBody(segment, false));
       if (selected) {
         node.setAttribute('aria-current', 'true');
       }
     } else {
-      node.appendChild(clipBody(segment));
+      node.appendChild(clipBody(segment, locked));
       if (segment.planned && (segment.kind === 'swap' || segment.kind === 'home')) {
         const remove = el('span', 'installer-clip-remove', '×');
         remove.setAttribute('aria-hidden', 'true');
@@ -473,44 +317,22 @@ export function renderTimelinePanel(options) {
         node.appendChild(button);
       }
     }
-    const detail = segment.part?.path || (isGap ? t('disk.freeDetail', 'Not part of any partition') : '');
-    node.title = `${clipTitle(segment)}${detail ? ` · ${detail}` : ''}`;
+    const detail = segment.part?.path || '';
+    node.title = `${label} · ${compact(segment.size, formatBytes)}${detail ? ` · ${detail}` : ''}`;
     track.appendChild(node);
   }
 
-  function clipTitle(segment) {
-    if (segment.planned) return `${plannedLabel(segment.kind, t)} · ${compact(segment.size, formatBytes)}`;
-    if (segment.kind === 'free') return `${t('disk.free', 'Free space')} · ${compact(segment.size, formatBytes)}`;
-    return `${segment.label || segment.part?.path || ''} · ${compact(segment.size, formatBytes)}`;
+  function eligibleGapCount() {
+    return (model.gaps || []).filter((gap) => gap.eligible).length;
   }
 
   function paint(nextModel) {
     model = nextModel;
-    content.style.width = `${zoom * 100}%`;
-    clear(ruler);
-    const step = tickStep(disk.size_bytes, zoom);
-    for (let offset = 0; offset <= disk.size_bytes; offset += step) {
-      const tick = el('span', 'installer-ruler-tick');
-      tick.style.left = `${pct(offset, disk.size_bytes)}%`;
-      tick.append(
-        el('span', 'installer-ruler-mark'),
-        el('span', 'installer-ruler-label', offset === 0 ? '0' : compact(offset, formatBytes)),
-      );
-      ruler.appendChild(tick);
-    }
 
     clear(nowTrack);
-    for (const segment of model.now) appendSegment(nowTrack, segment);
+    for (const segment of model.now) appendSegment(nowTrack, segment, 'now');
     clear(afterTrack);
-    for (const segment of model.after) appendSegment(afterTrack, segment);
-
-    const gap = currentGap();
-    if (gap && (state.partitionMode === MODE_MANUAL || state.partitionMode === MODE_ERASE)) {
-      playhead.style.display = '';
-      playhead.style.left = `${pct(state.partitionMode === MODE_ERASE ? MIB : gap.start_bytes, disk.size_bytes)}%`;
-    } else {
-      playhead.style.display = 'none';
-    }
+    for (const segment of model.after) appendSegment(afterTrack, segment, 'after');
 
     for (const [id, handle] of handles) {
       const info = boundaryInfo(model, id);
@@ -529,30 +351,25 @@ export function renderTimelinePanel(options) {
       handle.setAttribute('aria-valuenow', String(Math.round(info.value / GIB)));
       handle.setAttribute('aria-valuetext', `${t(`disk.timeline.planned${info.label === 'swap' ? 'Swap' : info.label === 'home' ? 'Home' : 'Root'}`, info.label)} ${Math.round(info.value / GIB)} GiB`);
       handle.title = t('disk.timeline.keyboardHint', 'Drag or use the arrow keys');
-    }
-
-    for (const [level, button] of zoomButtons) {
-      button.classList.toggle('is-selected', level === zoom);
-      button.setAttribute('aria-pressed', String(level === zoom));
+      const bubble = bubbles.get(id);
+      if (bubble) {
+        bubble.textContent = `${plannedLabel(info.label === 'swap' ? 'swap' : info.label === 'home' ? 'home' : 'root', t)} · ${compact(info.value, formatBytes)}`;
+      }
     }
 
     paintSummary();
-    paintExact();
+    paintToggles();
   }
 
   function paintSummary() {
-    const summaryData = summaryFor(disk, state);
-    const formatted = summaryData.formattedPaths;
-    summaryFormatted.textContent = formatted.length
-      ? `${t('disk.summary.formatted', 'Will be formatted')}: ${formatted.join(', ')}`
-      : t('disk.summary.nothingTouched', 'No existing partition will be touched');
-    summaryKept.textContent = `${t('disk.summary.kept', 'Kept partitions')}: ${summaryData.keptCount} · ${compact(summaryData.keptBytes, formatBytes)}`;
-    const freeText = state.partitionMode === MODE_ERASE
-      ? t('disk.summary.erased', 'The whole disk is used by PEAK’D!.')
-      : state.partitionMode === MODE_EXISTING
-        ? t('disk.timeline.existingZone', 'Only the chosen partition will be formatted.')
-        : `${t('disk.summary.freeAfter', 'Free space after install')}: ${compact(freeAfterBytes(), formatBytes)}`;
-    summaryFree.textContent = freeText;
+    const result = outcomeFor();
+    outcome.className = `installer-outcome installer-outcome--${result.tone}`;
+    outcome.hidden = !result.text;
+    outcomeMark.textContent = result.tone === 'danger' ? '!' : result.tone === 'ok' ? '✓' : '→';
+    outcomeText.textContent = result.text;
+    outcomeSize.textContent = result.size
+      ? `PEAK’D! ${compact(result.size, formatBytes)}`
+      : '';
     clear(summaryErrors);
     for (const error of model.errors) {
       summaryErrors.appendChild(el('p', 'installer-summary-error installer-inline-error', errorLabel(error)));
@@ -560,6 +377,45 @@ export function renderTimelinePanel(options) {
     if (model.approx) {
       summaryErrors.appendChild(el('p', 'installer-summary-warn', t('disk.timeline.noOffsets', 'Partition positions are approximate; refresh the disks before changing the layout.')));
     }
+  }
+
+  /** The single sentence under the bars: what is kept, or what is lost. */
+  function outcomeFor() {
+    const pendingExisting = state.partitionMode === MODE_EXISTING
+      && state.pendingExistingPath && !state.existingConfirmed;
+    if (pendingExisting) return { tone: 'none', text: '', size: 0 };
+    const rootSize = model.mode === MODE_EXISTING
+      ? Number(model.formatted[0]?.size_bytes) || 0
+      : model.sizes.root;
+    const size = model.errors.length ? 0 : rootSize;
+
+    if (model.mode === MODE_ERASE) {
+      if (!(disk.children || []).length) {
+        return { tone: 'ok', text: t('disk.outcome.emptyDisk', 'The disk is empty: nothing is lost'), size };
+      }
+      return { tone: 'danger', text: t('disk.outcome.eraseAll', 'Everything on this disk will be erased'), size };
+    }
+    if (model.mode === MODE_EXISTING) {
+      const target = model.formatted[0];
+      if (!target) return { tone: 'none', text: t('disk.outcome.pickPartition', 'Choose the partition to replace'), size: 0 };
+      return {
+        tone: 'danger',
+        text: t('disk.outcome.replace', '{name} will be erased, the rest stays', {
+          name: `${partitionLabel(target, t)} ${compact(Number(target.size_bytes) || 0, formatBytes)}`,
+        }),
+        size,
+      };
+    }
+    if (!model.gap) return { tone: 'none', text: t('disk.outcome.pickGap', 'Choose a free space'), size: 0 };
+    const names = [...new Set(model.kept
+      .filter((part) => !['startup', 'swap', 'empty'].includes(partitionOs(part)))
+      .map((part) => partitionLabel(part, t))
+      .filter(Boolean))];
+    let text;
+    if (!names.length) text = t('disk.outcome.nothingTouched', 'Nothing on the disk is touched');
+    else if (names.length === 1) text = t('disk.outcome.keptOne', '{name} stays untouched', { name: names[0] });
+    else text = t('disk.outcome.keptMany', '{names} stay untouched', { names: names.join(' · ') });
+    return { tone: 'ok', text, size };
   }
 
   function freeAfterBytes() {
@@ -582,35 +438,11 @@ export function renderTimelinePanel(options) {
     return values[code] || code;
   }
 
-  function paintExact() {
-    if (exactRefs.swap) {
-      const value = String(Math.round(model.sizes.swap / GIB));
-      const options = Array.from(exactRefs.swap.children || []);
-      const known = options.some((option) => option.value === value);
-      if (!known && exact.open) {
-        const option = el('option', null, `${value} GiB`);
-        option.value = value;
-        exactRefs.swap.appendChild(option);
-      }
-      if ((known || exact.open) && document.activeElement !== exactRefs.swap) {
-        exactRefs.swap.value = value;
-      }
-    }
-    if (exactRefs.home) {
-      if (document.activeElement !== exactRefs.home) {
-        exactRefs.home.checked = state.partitionMode === MODE_MANUAL
-          ? !!state.manualHome
-          : state.layoutPreset === 'home';
-      }
-    }
-    if (exactRefs.homeSize) {
-      exactRefs.homeSize.disabled = !exactRefs.home?.checked;
-      if (document.activeElement !== exactRefs.homeSize) {
-        exactRefs.homeSize.value = String(Math.max(1, Math.round(model.sizes.home / GIB)));
-      }
-    }
-    if (exactRefs.root && document.activeElement !== exactRefs.root) {
-      exactRefs.root.value = state.manualRootGiB > 0 ? String(state.manualRootGiB) : '';
+  function paintToggles() {
+    for (const [kind, button] of Object.entries(toggleRefs)) {
+      const on = model.sizes[kind] > 0;
+      button.setAttribute('aria-checked', String(on));
+      button.classList.toggle('is-on', on);
     }
   }
 

@@ -7056,6 +7056,7 @@ dependencies = [
  "io-smtp",
  "mail-builder",
  "mail-parser",
+ "multer",
  "pimalaya-stream",
  "ring",
  "secrecy",
@@ -7082,7 +7083,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-pdf-plugin"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -7111,6 +7112,7 @@ dependencies = [
  "futures",
  "http",
  "libsqlite3-sys",
+ "multer",
  "reqwest 0.12.28",
  "roxmltree",
  "semver",

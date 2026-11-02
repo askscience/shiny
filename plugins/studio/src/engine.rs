@@ -1047,22 +1047,29 @@ pub fn pattern_beats(cfg: &TrackConfig) -> f64 {
 /// Per-voice event lists (frames relative to the clip start) for a pattern
 /// played for `clip_beats`: the pattern repeats when `looped`, events at or
 /// past the clip end are dropped and notes still held are released at it.
-fn build_events(cfg: &TrackConfig, sr: f64, bpm: f64, clip_beats: f64, looped: bool) -> Vec<Vec<Ev>> {
+fn build_events(cfg: &TrackConfig, sr: f64, bpm: f64, clip_beats: f64, looped: bool, offset_beats: f64) -> Vec<Vec<Ev>> {
     let steps = cfg.steps.clamp(4, 64);
     let loop_beats = steps as f64 / 4.0;
     let spb = sr * 60.0 / bpm;
     let clip_end = (clip_beats * spb).round().max(1.0) as usize;
-    let passes = if looped { (clip_beats / loop_beats).ceil().max(1.0) as usize } else { 1 };
+    // `offset_beats` starts playback inside the pattern (a clip split in two
+    // keeps the second half where it was in the loop).
+    let start_at = if looped { offset_beats.max(0.0) % loop_beats } else { offset_beats.max(0.0) };
+    let passes = if looped { ((start_at + clip_beats) / loop_beats).ceil().max(1.0) as usize } else { 1 };
     let mut out = Vec::with_capacity(cfg.voices.len());
     for v in &cfg.voices {
         let melodic = voices::is_melodic(&v.kind) || v.kind == "grid";
         let planned = plan_voice(v, steps);
         let mut evs: Vec<Ev> = Vec::new();
         for pass in 0..passes {
-            let offset = pass as f64 * loop_beats;
+            let offset = pass as f64 * loop_beats - start_at;
             for (ni, note) in planned.iter().enumerate() {
                 let swing = swing_offset_beats((note.start * 4.0).floor().max(0.0) as u32, cfg.swing);
-                let on = ((offset + note.start + swing) * spb).round().max(0.0) as usize;
+                let on_beat = offset + note.start + swing;
+                if on_beat < -1e-9 {
+                    continue; // starts before the clip's window into the pattern
+                }
+                let on = (on_beat * spb).round().max(0.0) as usize;
                 if on >= clip_end {
                     continue;
                 }
@@ -1104,6 +1111,7 @@ pub fn render_pattern_clip(
     base_beat: f64,
     clip_beats: f64,
     looped: bool,
+    offset_beats: f64,
     lanes: &[AutomationLane],
     seed: u64,
     sr: f64,
@@ -1118,7 +1126,7 @@ pub fn render_pattern_clip(
     for (vi, v) in cfg.voices.iter().enumerate() {
         channels.push(Channel::new(v, vi, seed, sr)?);
     }
-    for (c, evs) in channels.iter_mut().zip(build_events(cfg, sr, bpm, clip_beats, looped)) {
+    for (c, evs) in channels.iter_mut().zip(build_events(cfg, sr, bpm, clip_beats, looped, offset_beats)) {
         c.events = evs;
     }
     let mut targets: Vec<LaneTarget> = Vec::new();
@@ -1363,6 +1371,9 @@ fn default_track_level() -> f32 {
 fn default_true() -> bool {
     true
 }
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
 
 /// An audio region: a WAV file (relative to the user's Files home) placed on
 /// the timeline.
@@ -1399,6 +1410,10 @@ pub struct ArrangementClip {
     /// Clip gain in dB.
     #[serde(default)]
     pub gain_db: f64,
+    /// Where playback starts inside the pattern, in beats (set when a clip is
+    /// split or its start is trimmed).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub offset_beats: f64,
     /// Repeat the pattern to fill `length_beats` (default true).
     #[serde(default = "default_true", rename = "loop")]
     pub looped: bool,
@@ -1415,6 +1430,7 @@ impl Default for ArrangementClip {
             start: 0.0,
             length_beats: None,
             gain_db: 0.0,
+            offset_beats: 0.0,
             looped: true,
             audio: None,
             pattern: TrackConfig::default(),
@@ -1523,6 +1539,7 @@ pub fn parse_arrangement(value: &serde_json::Value) -> Result<Arrangement, Strin
             c.length_beats = Some(l.clamp(0.25, MAX_BEATS));
         }
         c.gain_db = c.gain_db.clamp(-60.0, 24.0);
+        c.offset_beats = if c.offset_beats.is_finite() { c.offset_beats.clamp(0.0, MAX_BEATS) } else { 0.0 };
         c.pattern.bpm = a.bpm;
         c.pattern.steps = c.pattern.steps.clamp(4, 64);
     }

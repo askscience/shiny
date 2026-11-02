@@ -1268,5 +1268,10 @@
   "settings.appearance.terminal.glass": "Glass — translúcido, com um feixe de destaque que solta faíscas",
   "settings.appearance.terminal.paper": "Paper — marcas de comando na margem e um rastro de marca-texto",
   "settings.appearance.terminal.blocks": "Blocks — cada comando é um cartão, com um cursor de bloco elástico",
-  "settings.appearance.terminal.hint": "As cores seguem o tema e sua cor de destaque. As marcas de comando e os blocos exigem bash ou zsh; o movimento reduzido e a economia de energia desativam o rastro do cursor."
+  "settings.appearance.terminal.hint": "As cores seguem o tema e sua cor de destaque. As marcas de comando e os blocos exigem bash ou zsh; o movimento reduzido e a economia de energia desativam o rastro do cursor.",
+  "hud.openLauncher": "Abrir o lançador",
+  "ctx.turnAiOn": "Ativar a IA…",
+  "settings.assistant.enabled": "IA",
+  "settings.assistant.enabledHint": "Desligada (“No slop”): sem chat, agente nem voz. A barra de voz abre o lançador.",
+  "voice.state.launcher": "Apps"
 }

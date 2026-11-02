@@ -292,7 +292,7 @@ fn render_track_stem(
         } else {
             let beats = clip.length_beats.unwrap_or_else(|| crate::engine::pattern_beats(&clip.pattern));
             let seed = 0x51D_1000 + *ci as u64 * 7919;
-            let (cl, cr) = render_pattern_clip(&clip.pattern, bpm, clip.start, beats, clip.looped, &t.automation.lanes, seed, sr)?;
+            let (cl, cr) = render_pattern_clip(&clip.pattern, bpm, clip.start, beats, clip.looped, clip.offset_beats, &t.automation.lanes, seed, sr)?;
             let n = cl.len().min(total - offset);
             for i in 0..n {
                 l[offset + i] += cl[i] * gain;
@@ -520,7 +520,26 @@ fn limit(pre_l: &[f32], pre_r: &[f32], gain: f32, ceiling_db: f64, sr: f64) -> (
 /* ── Entry point ────────────────────────────────────────────── */
 
 /// Render an arrangement: stems (cached), returns, master.
+/// Rough upper bound of the buffers one render holds at once (bytes).
+const MEMORY_BUDGET: f64 = 3.0e9;
+
+/// One render at a time per process: the window re-renders on every edit,
+/// and parallel renders of a long project multiply its memory (each holds
+/// every stem plus the master buffers). Queued callers wait their turn.
+fn render_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let m = LOCK.get_or_init(|| Mutex::new(()));
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Block until no render is running (the guard is dropped by the caller
+/// right away; `render_mix` takes the lock itself).
+pub fn wait_idle() -> std::sync::MutexGuard<'static, ()> {
+    render_lock()
+}
+
 pub fn render_mix(a: &Arrangement, resolver: &dyn AudioResolver, opts: &MixOptions) -> Result<MixResult, String> {
+    let _guard = render_lock();
     crate::dsp::util::denormals_off();
     let t0 = std::time::Instant::now();
     let trace = std::env::var_os("STUDIO_TRACE").is_some();
@@ -549,6 +568,16 @@ pub fn render_mix(a: &Arrangement, resolver: &dyn AudioResolver, opts: &MixOptio
         end_beats = end_beats.max(c.start + len);
     }
     let total = (end_beats * spb).ceil() as usize + (END_TAIL_SECS * sr) as usize;
+    // stems (2 per track) + sum/returns/post/limiter buffers (~12), f32.
+    let estimate = total as f64 * (a.tracks.len() as f64 * 2.0 + 12.0) * 4.0;
+    if estimate > MEMORY_BUDGET {
+        return Err(format!(
+            "the project is too long to render ({:.0} s × {} tracks needs ≈ {:.1} GB) — shorten it or render fewer tracks",
+            total as f64 / sr,
+            a.tracks.len(),
+            estimate / 1e9
+        ));
+    }
     let any_solo = a.tracks.iter().any(|t| t.solo);
 
     // Stems: from the cache, else rendered in parallel.
@@ -646,7 +675,7 @@ pub fn render_mix(a: &Arrangement, resolver: &dyn AudioResolver, opts: &MixOptio
         }
         if opts.stems {
             let (lufs, peak) = if audible {
-                let rep = loudness::measure(&[post_l.clone(), post_r.clone()], sr);
+                let rep = loudness::measure(&[&post_l[..], &post_r[..]], sr);
                 (rep.integrated_lufs, rep.peak)
             } else {
                 (-70.0, 0.0)
@@ -717,7 +746,7 @@ pub fn render_mix(a: &Arrangement, resolver: &dyn AudioResolver, opts: &MixOptio
     let ceiling = fx_val(&a.fx, "ceiling", -1.0).clamp(-24.0, 0.0);
     let (mut out_l, mut out_r) = limit(&sum_l, &sum_r, 1.0, ceiling, sr);
     tr("limit");
-    let pre = loudness::measure(&[out_l.clone(), out_r.clone()], sr).integrated_lufs;
+    let pre = loudness::measure(&[&out_l[..], &out_r[..]], sr).integrated_lufs;
     tr("measure");
     let mut trim_db = 0.0;
     let target = fx_val(&a.fx, "loudness", 0.0);
@@ -726,7 +755,7 @@ pub fn render_mix(a: &Arrangement, resolver: &dyn AudioResolver, opts: &MixOptio
         let mut gain_db = (target - pre).clamp(-30.0, 24.0);
         for _ in 0..4 {
             let (l, r) = limit(&sum_l, &sum_r, db_to_gain(gain_db), ceiling, sr);
-            let got = loudness::measure(&[l.clone(), r.clone()], sr).integrated_lufs;
+            let got = loudness::measure(&[&l[..], &r[..]], sr).integrated_lufs;
             out_l = l;
             out_r = r;
             if !got.is_finite() || (target - got).abs() < 0.2 {
@@ -939,6 +968,26 @@ mod tests {
             "clips":[{"track":"s","audio":{"src":"../x.wav"}}]})).unwrap();
         assert!(render_mix(&bad, &res, &MixOptions::export()).is_err());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn split_clips_continue_the_pattern() {
+        // One 8-beat clip == two 4-beat clips where the second starts 4 beats
+        // into the (8-beat) pattern.
+        let pat = json!({"steps":32,"voices":[{"kind":"lead","octave":0,"notes":[
+            {"step":0,"length":4,"degree":0},{"step":20,"length":4,"degree":7}]}]});
+        let whole = parse_arrangement(&json!({"bpm":120,"length_beats":8,"tracks":[{"id":"a"}],
+            "clips":[{"track":"a","start":0,"length_beats":8,"pattern":pat}]})).unwrap();
+        let split = parse_arrangement(&json!({"bpm":120,"length_beats":8,"tracks":[{"id":"a"}],
+            "clips":[{"track":"a","start":0,"length_beats":4,"pattern":pat},
+                     {"track":"a","start":4,"length_beats":4,"offset_beats":4,"pattern":pat}]})).unwrap();
+        let a = render_mix(&whole, &crate::audio::NoAudio, &MixOptions::monitor()).unwrap();
+        let b = render_mix(&split, &crate::audio::NoAudio, &MixOptions::monitor()).unwrap();
+        // The second note (beat 5) must be there in the split version.
+        let spb = 22_050usize;
+        let e = |s: &Stem| s.l[spb * 5..spb * 6].iter().map(|x| (*x as f64).powi(2)).sum::<f64>();
+        let (ea, eb) = (e(&a.tracks[0].stem), e(&b.tracks[0].stem));
+        assert!(ea > 1.0 && (ea - eb).abs() / ea < 0.05, "whole {ea} split {eb}");
     }
 
     #[test]

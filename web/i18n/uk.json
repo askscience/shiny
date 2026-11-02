@@ -1288,5 +1288,10 @@
   "settings.appearance.terminal.glass": "Glass — напівпрозорий, із променем акценту, що розсипає іскри",
   "settings.appearance.terminal.paper": "Paper — позначки команд на полях і слід маркера",
   "settings.appearance.terminal.blocks": "Blocks — кожна команда в картці, пружний блоковий курсор",
-  "settings.appearance.terminal.hint": "Кольори відповідають темі та вашому акценту. Позначки команд і блоки потребують bash або zsh; у режимі зменшеного руху та енергозбереження слід курсора вимикається."
+  "settings.appearance.terminal.hint": "Кольори відповідають темі та вашому акценту. Позначки команд і блоки потребують bash або zsh; у режимі зменшеного руху та енергозбереження слід курсора вимикається.",
+  "hud.openLauncher": "Відкрити панель запуску",
+  "ctx.turnAiOn": "Увімкнути ШІ…",
+  "settings.assistant.enabled": "ШІ",
+  "settings.assistant.enabledHint": "Вимкнено («No slop»): без чату, агента й голосу. Голосова панель відкриває панель запуску.",
+  "voice.state.launcher": "Застосунки"
 }

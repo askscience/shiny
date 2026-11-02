@@ -376,6 +376,7 @@ extern "C" fn on_pump(_userdata: *mut c_void) {
             .drain()
             .iter()
             .map(gestures::dispatch_script)
+            .chain(bridge.drain_pinch().iter().map(gestures::pinch_script))
             .collect();
         if !script.is_empty() {
             shim::main_run_js(&script, 0);

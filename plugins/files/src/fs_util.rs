@@ -494,3 +494,102 @@ pub async fn search(
     }
     Ok(out)
 }
+
+/// The most recently modified files under the classic home folders (Desktop,
+/// Documents, …), newest first — the Files window's "Recent" place and the
+/// launcher's recent files.
+///
+/// Only the classic folders are walked, never the whole home: a real OS home
+/// holds source trees and build output whose churn is not "recent work".
+/// Hidden entries are skipped, and the walk is bounded by depth and node count
+/// so a huge Downloads folder cannot stall the request.
+pub async fn recent(home: &Path, limit: usize) -> Result<Vec<Value>, AppError> {
+    const MAX_DEPTH: usize = 6;
+    const MAX_NODES: usize = 20_000;
+    let mut found: Vec<(SystemTime, PathBuf)> = Vec::new();
+    let mut stack: Vec<(PathBuf, usize)> =
+        CLASSIC_DIRS.iter().map(|dir| (home.join(dir), 0)).collect();
+    let mut visited = 0usize;
+
+    while let Some((dir, depth)) = stack.pop() {
+        if visited >= MAX_NODES {
+            break;
+        }
+        let mut rd = match tokio::fs::read_dir(&dir).await {
+            Ok(rd) => rd,
+            Err(_) => continue,
+        };
+        while let Some(entry) = rd.next_entry().await.ok().flatten() {
+            visited += 1;
+            if visited >= MAX_NODES {
+                break;
+            }
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            // `file_type` does not follow symlinks: a link is neither walked
+            // (no escaping the classic folders) nor listed.
+            let Ok(ft) = entry.file_type().await else {
+                continue;
+            };
+            if ft.is_dir() {
+                if depth < MAX_DEPTH {
+                    stack.push((entry.path(), depth + 1));
+                }
+            } else if ft.is_file() {
+                if let Ok(modified) = entry.metadata().await.and_then(|m| m.modified()) {
+                    found.push((modified, entry.path()));
+                }
+            }
+        }
+    }
+
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut out = Vec::with_capacity(limit.min(found.len()));
+    for (_, path) in found.into_iter().take(limit) {
+        if let Some(v) = entry_json(home, &path).await {
+            out.push(v);
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn recent_lists_newest_first_and_skips_hidden_and_outside_files() {
+        let home = std::env::temp_dir().join(format!("shiny-files-recent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join("Documents/Notes")).unwrap();
+        std::fs::create_dir_all(home.join("Pictures/.hidden")).unwrap();
+        std::fs::create_dir_all(home.join("src")).unwrap();
+
+        let older = home.join("Documents/old.odt");
+        let newer = home.join("Documents/Notes/new.txt");
+        std::fs::write(&older, b"old").unwrap();
+        std::fs::write(&newer, b"new").unwrap();
+        std::fs::write(home.join("Pictures/.hidden/secret.png"), b"x").unwrap();
+        std::fs::write(home.join("Documents/.dotfile"), b"x").unwrap();
+        // Outside the classic folders: never listed.
+        std::fs::write(home.join("src/main.rs"), b"fn main() {}").unwrap();
+
+        let past = SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options()
+            .write(true)
+            .open(&older)
+            .unwrap()
+            .set_modified(past)
+            .unwrap();
+
+        let list = recent(&home, 10).await.unwrap();
+        let paths: Vec<&str> = list.iter().filter_map(|v| v["path"].as_str()).collect();
+        assert_eq!(paths, vec!["Documents/Notes/new.txt", "Documents/old.odt"]);
+
+        let one = recent(&home, 1).await.unwrap();
+        assert_eq!(one.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+}

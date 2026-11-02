@@ -1,5 +1,5 @@
 //! Mail plugin tools: `mail_status`, `mail_list`, `mail_read`, `mail_search`,
-//! `mail_sync`, `mail_send`.
+//! `mail_sync`, `mail_send`, `mail_save_attachment`.
 //!
 //! List/read/search read from the LOCAL cache (`crate::cache`) so the AI never
 //! opens a fresh IMAP connection for mail that's already been downloaded;
@@ -13,7 +13,7 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
-use crate::{cache, mail};
+use crate::{attach, cache, mail};
 
 pub struct MailStatus;
 pub struct MailList;
@@ -21,6 +21,7 @@ pub struct MailRead;
 pub struct MailSearch;
 pub struct MailSync;
 pub struct MailSend;
+pub struct MailSaveAttachment;
 
 fn str_array(v: &Value) -> Vec<String> {
     v.as_array()
@@ -184,12 +185,15 @@ impl Tool for MailSend {
     fn name(&self) -> &str { "mail_send" }
     fn step_label(&self) -> &str { "Sending email…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `mail_send` — Compose and send an email. params: `{ account?: string, to: string[], cc?: string[], bcc?: string[], subject: string, body: string }`. The sender is the account's email.")
+        Some("- `mail_send` — Compose and send an email. params: `{ account?: string, to: string[], cc?: string[], bcc?: string[], subject: string, body: string, attachments?: string[] }`. The sender is the account's email. `attachments` are files in the user's home, as home-relative paths (e.g. `Documents/report.pdf`, the paths the Files tools return); 18 MB total at most.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let to = data.get("to").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default();
+        let attached = data.get("attachments").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
         if data.get("sent").and_then(|v| v.as_bool()) == Some(false) {
             format!("Email to {to} was already sent (skipped duplicate)")
+        } else if attached > 0 {
+            format!("Sent email to {to} with {attached} attachment(s)")
         } else {
             format!("Sent email to {to}")
         }
@@ -204,8 +208,51 @@ impl Tool for MailSend {
         let bcc = str_array(req.params.get("bcc").unwrap_or(&Value::Null));
         let subject = req.params.param_str("subject").unwrap_or_default();
         let body = req.params.param_str("body").unwrap_or_default();
+        // A single path is accepted as well as a list; objects may carry a
+        // display `filename` next to the `path`.
+        let refs: Vec<attach::AttachmentRef> = match req.params.get("attachments") {
+            Some(Value::String(p)) => vec![attach::AttachmentRef { path: p.clone(), filename: None }],
+            Some(Value::Array(items)) => items
+                .iter()
+                .filter_map(|item| match item {
+                    Value::String(p) => Some(attach::AttachmentRef { path: p.clone(), filename: None }),
+                    Value::Object(_) => serde_json::from_value(item.clone()).ok(),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let attachments = attach::load_refs(req.user_id, req.os_home, &refs, 0)?;
+        let names: Vec<String> = attachments.iter().map(|a| a.filename.clone()).collect();
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
-        let sent = mail::send(a, req.user_id, to.clone(), cc, bcc, subject, body, None).await?;
-        Ok(ActionOutcome::ok("mail_send", json!({ "to": to, "sent": sent })))
+        let sent = mail::send(a, req.user_id, to.clone(), cc, bcc, subject, body, None, attachments).await?;
+        Ok(ActionOutcome::ok("mail_send", json!({ "to": to, "sent": sent, "attachments": names })))
+    }
+}
+
+#[async_trait]
+impl Tool for MailSaveAttachment {
+    fn name(&self) -> &str { "mail_save_attachment" }
+    fn step_label(&self) -> &str { "Saving attachment…" }
+    fn doc_fragment(&self) -> Option<&str> {
+        Some("- `mail_save_attachment` — Save an attachment of a received message into the user's home. params: `{ account?: string, folder?: string, id: string, index?: number, dir?: string }`; `index` is the attachment's position in `mail_read`'s `attachments` (default 0), `dir` a home-relative folder (default `Downloads`). Returns the saved path — use it to open the file, or to attach it to a `mail_send`.")
+    }
+    fn humanize(&self, _r: &str, data: &Value) -> String {
+        let path = data.get("path").and_then(|v| v.as_str()).unwrap_or("");
+        format!("Saved attachment to {path}")
+    }
+    async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let account = req.params.param_str("account");
+        let folder = req.params.param_str("folder").unwrap_or_else(|| "INBOX".into());
+        let id = req.params.require_str("id")?;
+        let index = req.params.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let dir = req.params.param_str("dir").filter(|d| !d.trim().is_empty()).unwrap_or_else(|| "Downloads".into());
+        let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
+        let att = attach::fetch_attachment(a, folder, id, index).await?;
+        let path = attach::save_into_home(req.user_id, req.os_home, &dir, &att.filename, &att.bytes)?;
+        Ok(ActionOutcome::ok(
+            "mail_save_attachment",
+            json!({ "path": path, "name": att.filename, "size": att.bytes.len() }),
+        ))
     }
 }

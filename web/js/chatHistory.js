@@ -12,7 +12,7 @@ import {
   listConversations, loadConversationMessages, removeConversation,
 } from './agent.js';
 import { t } from './i18n.js';
-import { renderToolCard } from './toolCards.js';
+import { renderToolCard, insertToolCard } from './toolCards.js';
 
 let panel = null;
 let view = 'list'; // 'list' | 'messages'
@@ -146,7 +146,7 @@ async function openMessages(c) {
     // for housekeeping tools).
     if (m.role === 'tool') {
       const card = renderToolCard(m.content);
-      if (card) msgs.appendChild(card);
+      if (card) insertToolCard(msgs, card);
       continue;
     }
     const isUser = m.role === 'user';

@@ -29,27 +29,48 @@ export SHINY_LINUX_USERS=false
 export SHINY_HOME_MODE=virtual
 export SHINY_LOGIN_SELF_ONLY=false
 export SHINY_SESSION_TOKEN_FILE="$XDG_RUNTIME_DIR/shiny-session-token"
-export SUPERTONIC_AUTO_INSTALL=0
-export WHISPER_AUTO_INSTALL=0
 export RUST_LOG=info
 export PEAKD_APP_ORIGIN="http://127.0.0.1:8080"
 export PEAKD_DATA_DIR="$HOME/.local/share/shiny/peakd"
 export PEAKD_ADFILTER_DIR="$HOME/.local/share/shiny/adfilter"
 
+# AI tier chosen in the installer; the installer rewrites this line on the
+# target. "live" is the USB session itself: AI on, nothing installed to RAM.
+#   off   "No slop": no AI at all (chat/agent refused, no Ollama, no voice)
+#   none  "Text only": chat and agent, no speech engines
+#   voice "Voice pack": speech engines installed on the first online start
+#   local "Local AI": voice, plus the image/music models (Settings)
+export PEAKD_AI_TIER=live
+# Booleans spelled true/false: the server parses them as Rust bools ("0" does
+# not parse and would fall back to the default, which is "install").
+case "$PEAKD_AI_TIER" in
+    off) PEAKD_AI_DEFAULT=off; voice_start=false; voice_install=false ;;
+    none) PEAKD_AI_DEFAULT=on; voice_start=false; voice_install=false ;;
+    voice|local) PEAKD_AI_DEFAULT=on; voice_start=true; voice_install=true ;;
+    *) PEAKD_AI_DEFAULT=on; voice_start=true; voice_install=false ;;
+esac
+export PEAKD_AI_DEFAULT
+export AUTO_START_WHISPER=$voice_start AUTO_START_SUPERTONIC=$voice_start
+export WHISPER_AUTO_INSTALL=$voice_install SUPERTONIC_AUTO_INSTALL=$voice_install
+
+# "No slop": PEAKD_AI_DEFAULT=off comes from the tier above; the server keeps
+# $PEAKD_DATA_DIR/ai-state ("on"/"off") in step with Settings → Assistant.
+# The state file wins; without one the install-time default applies.
+ai_is_off() {
+    state="$(cat "$PEAKD_DATA_DIR/ai-state" 2>/dev/null)"
+    case "$state" in
+        off*) return 0 ;;
+        on*) return 1 ;;
+    esac
+    [ "${PEAKD_AI_DEFAULT:-on}" = off ]
+}
+
 start_ollama() {
-    [ -x /usr/local/bin/ollama ] || return 0
-    if curl -sf --max-time 1 "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+    if ai_is_off; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] AI switched off (No slop): ollama not started"
         return 0
     fi
-    mkdir -p "$HOME/.local/share/shiny/ollama-models"
-    OLLAMA_HOST=127.0.0.1:11434 \
-    OLLAMA_MODELS="$HOME/.local/share/shiny/ollama-models" \
-    OLLAMA_VULKAN=1 \
-    OLLAMA_FLASH_ATTENTION=1 \
-    OLLAMA_KEEP_ALIVE=15m \
-    LD_LIBRARY_PATH=/usr/local/lib/ollama/vulkan:/usr/local/lib/ollama \
-        /usr/local/bin/ollama serve >>"$LOG_DIR/ollama.log" 2>&1 &
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ollama pid=$!"
+    LOG_DIR="$LOG_DIR" /usr/local/bin/peakd-ollama-start
 }
 
 is_t2() {
@@ -120,8 +141,15 @@ start_audio() {
 start_ollama
 start_audio
 
+# The server runs its helpers as `voice/<script>` and keeps models under
+# `data/` relative to its working directory: give it a per-user one that links
+# the shipped scripts, so venvs and downloads land in the user's home.
+APP_HOME="$HOME/.local/share/shiny/app"
+mkdir -p "$APP_HOME"
+[ -d /usr/share/shiny/voice ] && ln -sfn /usr/share/shiny/voice "$APP_HOME/voice"
+
 start_server() {
-    /usr/bin/shiny >>"$LOG_DIR/shiny.log" 2>&1 &
+    (cd "$APP_HOME" && exec /usr/bin/shiny >>"$LOG_DIR/shiny.log" 2>&1) &
     SERVER_PID=$!
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] shiny pid=$SERVER_PID"
 }

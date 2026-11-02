@@ -815,11 +815,76 @@ export function parseToolRecord(raw) {
   return record;
 }
 
+/** JSON with object keys sorted, so equal params give equal text. */
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/**
+ * What makes two tool calls "the same action": the tool, its outcome and its
+ * parameters (reading the same file twice, re-running the same search). The
+ * result data is left out — a re-read may return fresher content, and the
+ * newest card is the one kept.
+ */
+export function toolCardKey(raw) {
+  const record = parseToolRecord(raw);
+  if (!record) return '';
+  const params = record.params && typeof record.params === 'object' ? record.params : {};
+  return `${toolName(record.action)}|${record.result || 'ok'}|${stableJson(params)}`;
+}
+
+/**
+ * Insert a card before `before` (or at the end of `container`), folding it into
+ * an identical card of the same run: when the assistant repeats one action
+ * several times in a row, the chat keeps a single card — the newest one, in
+ * the place of the first — with a "×N" count instead of a stack of copies.
+ * Returns true when the card was folded into an existing one.
+ */
+export function insertToolCard(container, card, before = null) {
+  if (!container || !card) return false;
+  const key = card.dataset.repeatKey || '';
+  let prev = before && before.parentElement === container ? before.previousElementSibling : container.lastElementChild;
+  while (key && prev && prev.classList.contains('tool-card')) {
+    if (prev.dataset.repeatKey === key) {
+      setRepeatCount(card, (Number(prev.dataset.repeat) || 1) + 1);
+      prev.replaceWith(card);
+      return true;
+    }
+    prev = prev.previousElementSibling;
+  }
+  container.insertBefore(card, before && before.parentElement === container ? before : null);
+  return false;
+}
+
+function setRepeatCount(card, count) {
+  card.dataset.repeat = String(count);
+  const head = card.querySelector('.tool-card-head');
+  if (!head) return;
+  let badge = head.querySelector('.tool-card-repeat');
+  if (!badge) {
+    badge = el('span', 'tool-card-repeat');
+    const open = head.querySelector('.tool-card-open');
+    head.insertBefore(badge, open || null);
+  }
+  badge.textContent = `×${count}`;
+  badge.title = t('chat.toolCard.repeated', { count }, `Done ${count} times`);
+}
+
 /**
  * The card for one tool record, or null when the tool gets none (housekeeping,
  * generated media, a malformed record).
  */
 export function renderToolCard(raw) {
+  const card = buildToolCard(raw);
+  if (card) card.dataset.repeatKey = toolCardKey(raw);
+  return card;
+}
+
+function buildToolCard(raw) {
   const record = parseToolRecord(raw);
   if (!record) return null;
   const name = toolName(record.action);

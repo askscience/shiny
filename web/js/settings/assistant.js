@@ -1,7 +1,7 @@
 import { apiFetch } from '../api.js';
-import { input, select, revealRegion, disposeMotion } from '../../ui/index.js';
+import { input, select, toggleRow, revealRegion, disposeMotion } from '../../ui/index.js';
 import { t, tp } from '../i18n.js';
-import { getAiName, setAiName, getAiProvider, setAiProvider, getOllamaModel, setOllamaModel, getOpenAiBaseUrl, setOpenAiBaseUrl, getOpenAiApiKey, setOpenAiApiKey, getOpenAiModel, setOpenAiModel, flushPreferencesNow } from '../preferences.js';
+import { getAiName, setAiName, getAiProvider, setAiProvider, getOllamaModel, setOllamaModel, getOpenAiBaseUrl, setOpenAiBaseUrl, getOpenAiApiKey, setOpenAiApiKey, getOpenAiModel, setOpenAiModel, flushPreferencesNow, isAiEnabled, setAiEnabled } from '../preferences.js';
 import { el, field } from './controls.js';
 
 /** Build the assistant section with resources owned by its current mount. */
@@ -112,7 +112,7 @@ export function createAssistantSection({ on, cleanups, resources }) {
     const providerDetails = el('div');
     providerDetails.append(ollamaFields, openaiFields);
 
-    return [
+    const rest = [
       field(t('settings.assistant.name', null, 'Assistant name'), nameInput),
       nameHint,
       field(t('settings.assistant.provider', null, 'AI provider'), provider, {
@@ -120,6 +120,30 @@ export function createAssistantSection({ on, cleanups, resources }) {
         hint: t('settings.assistant.providerHint', null, 'Ollama runs entirely on this device. An OpenAI-compatible endpoint works with OpenAI, OpenRouter, LM Studio, vLLM and other servers.'),
       }),
     ];
+
+    // "No slop": the whole assistant can be switched off. Off hides its
+    // settings; the voice bar then opens the launcher.
+    const syncAiVisibility = () => {
+      const on = isAiEnabled();
+      for (const node of rest) {
+        (node.closest?.('.ui-control-card') || node).classList.toggle('hidden', !on);
+      }
+    };
+    const aiToggle = toggleRow({
+      label: t('settings.assistant.enabled', null, 'AI'),
+      hint: t('settings.assistant.enabledHint', null, 'Off ("No slop"): no chat, no agent, no voice. The voice bar opens the launcher.'),
+      checked: isAiEnabled(),
+      onChange: async (checked) => {
+        setAiEnabled(checked);
+        syncAiVisibility();
+        await flushPreferencesNow();
+        if (checked) void loadAiModels();
+      },
+    });
+    // The rows are wrapped into cards after this returns.
+    requestAnimationFrame(syncAiVisibility);
+
+    return [aiToggle, ...rest];
   }
 
   /* ── Voice ──────────────────────────────────────────────────── */

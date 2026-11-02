@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts, Multipart};
+use axum::extract::{FromRequest, FromRequestParts};
 use axum::http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::response::Response;
 use serde::de::DeserializeOwned;
@@ -23,7 +23,7 @@ use crate::ops;
 use crate::store;
 
 const MIME_PDF: &str = "application/pdf";
-const MAX_UPLOAD: usize = 64 * 1024 * 1024;
+const MAX_UPLOAD: usize = 128 * 1024 * 1024;
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -295,23 +295,7 @@ fn pdf_import(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let (q, req) = take_query::<ImportQuery>(req).await?;
-            let mut multipart = Multipart::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
-
-            let mut bytes: Option<Vec<u8>> = None;
-            let mut original_name: Option<String> = None;
-            while let Some(field) = multipart
-                .next_field()
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
-            {
-                if field.name() == Some("file") {
-                    original_name = field.file_name().map(|f| f.to_string()).or(original_name);
-                    bytes = Some(shiny_plugin_sdk::field_bytes_capped(field, MAX_UPLOAD).await?);
-                }
-            }
-            let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+            let (data, original_name) = shiny_plugin_sdk::read_upload_file(req, MAX_UPLOAD).await?;
 
             let (data, count) = blocking(move || {
                 let count = ops::validate(&data)?;
@@ -1235,20 +1219,7 @@ fn pdf_replace_file(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let id = take_id(&req)?;
-            let mut multipart = Multipart::from_request(req, &())
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?;
-            let mut bytes: Option<Vec<u8>> = None;
-            while let Some(field) = multipart
-                .next_field()
-                .await
-                .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
-            {
-                if field.name() == Some("file") {
-                    bytes = Some(shiny_plugin_sdk::field_bytes_capped(field, MAX_UPLOAD).await?);
-                }
-            }
-            let data = bytes.ok_or_else(|| AppError::BadRequest("missing 'file' field".into()))?;
+            let (data, _) = shiny_plugin_sdk::read_upload_file(req, MAX_UPLOAD).await?;
             let (data, count) = blocking(move || {
                 let count = ops::validate(&data)?;
                 Ok::<_, AppError>((data, count))

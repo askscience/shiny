@@ -50,7 +50,9 @@ import { toggleWindowFullscreen } from './fullscreen.js';
 import {
   deactivatePlugin, activatePlugin, getPluginSurface, getPluginTile,
   isCoreWindow, closeCoreWindow, openCoreWindow, closePluginWindow,
+  openCoreWindowSection,
 } from './tiles.js';
+import { openLauncher } from './launcher.js';
 import { refreshGpsPosition } from './map.js';
 import { setIcon, toast } from '../ui/index.js';
 import { newChat, stopActiveTurn, isTurnActive } from './agent.js';
@@ -59,7 +61,7 @@ import { openTextInput, closeChat, isTextInputOpen } from './textInput.js';
 import { startListening, cancelListening, isListening } from './voice.js';
 import { getSphereState, waitForVoiceReady } from './sphere.js';
 import { readClipboardText } from './clipboard.js';
-import { getAiName, getWakeWord, setWakeWord, getThink, setThink } from './preferences.js';
+import { getAiName, getWakeWord, setWakeWord, getThink, setThink, isAiEnabled } from './preferences.js';
 import { canThink } from './thinkToggle.js';
 import { notifyMenuChange } from './menuState.js';
 import { t } from './i18n.js';
@@ -78,7 +80,7 @@ function wireGlobal() {
   globalWired = true;
   document.addEventListener('pointerdown', onGlobalPointerDown, true);
   document.addEventListener('keydown', onGlobalKeyDown, true);
-  window.addEventListener('blur', closeAllMenus);
+  window.addEventListener('blur', onGlobalBlur);
   window.addEventListener('resize', closeAllMenus);
   window.addEventListener('scroll', onGlobalScroll, true);
   // A keyboard/AI-driven workspace switch (or a fullscreen toggle) moves the
@@ -91,10 +93,26 @@ function unwireGlobal() {
   globalWired = false;
   document.removeEventListener('pointerdown', onGlobalPointerDown, true);
   document.removeEventListener('keydown', onGlobalKeyDown, true);
-  window.removeEventListener('blur', closeAllMenus);
+  window.removeEventListener('blur', onGlobalBlur);
   window.removeEventListener('resize', closeAllMenus);
   window.removeEventListener('scroll', onGlobalScroll, true);
   window.removeEventListener('desktop:changed', closeAllMenus);
+}
+
+/** When the newest root menu opened (performance.now()). */
+let openedAt = 0;
+/** A blur this soon after opening is the one that opened it, not a dismissal. */
+const BLUR_GRACE_MS = 400;
+
+/**
+ * The app losing focus closes its menus — except right after one opened. A
+ * right-click inside a Browser page (a native view in the shell's scene) moves
+ * focus to that page *and* asks the app for its menu; the two arrive in either
+ * order, and the blur must not close the menu it raced with.
+ */
+function onGlobalBlur() {
+  if (performance.now() - openedAt < BLUR_GRACE_MS) return;
+  closeAllMenus();
 }
 
 /** A scroll elsewhere invalidates the menu's anchor; a scroll inside the menu
@@ -156,6 +174,7 @@ function openMenu(entries, x, y) {
   const el = buildMenu(entries);
   document.body.appendChild(el);
   place(el, x, y);
+  openedAt = performance.now();
   pushMenu(el);
   return el;
 }
@@ -172,6 +191,15 @@ function openMenu(entries, x, y) {
 export function openContextMenu(entries, x, y) {
   closeAllMenus();
   return openMenu(entries, x, y);
+}
+
+/**
+ * The entries a right-click on a plugin window shows (window verbs plus the
+ * app's own `contextMenu()` items), for surfaces that open their menu from a
+ * place the DOM `contextmenu` never reaches — a Browser page is a native view.
+ */
+export function pluginWindowMenu(name, ctx = {}) {
+  return windowMenu(name, { plugin: name, source: 'window', ...ctx });
 }
 
 /** Text-like fields get the edit menu; a `<select>` is a picker, not a field. */
@@ -696,6 +724,19 @@ async function orbListen() {
 
 /** Right-click / long-press on the voice bar: the assistant and voice actions. */
 function orbMenu() {
+  // "No slop": the bar is the launcher button; the only way back to the
+  // assistant is the switch in Settings → Assistant.
+  if (!isAiEnabled()) {
+    return [
+      { type: 'item', label: t('hud.openLauncher', null, 'Open the launcher'), icon: 'ui/grid', onClick: () => openLauncher() },
+      {
+        type: 'item',
+        label: t('ctx.turnAiOn', null, 'Turn on the AI…'),
+        icon: 'ui/brain',
+        onClick: () => void openCoreWindowSection('settings', 'assistant'),
+      },
+    ];
+  }
   return [
     { type: 'heading', label: getAiName() },
     {

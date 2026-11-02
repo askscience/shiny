@@ -266,6 +266,8 @@ const onOpenUrl = (plugin, handler) => { linkHandlers[plugin] = handler; };
 /** Captures core context-menu opens, so the page menu can be asserted. */
 const openedMenus = [];
 const openContextMenu = (entries, x, y) => { openedMenus.push({ entries, x, y }); };
+/** Core's window menu for a plugin (window verbs + the app's entries). */
+const pluginWindowMenu = (name) => [{ type: 'heading', label: `window:${name}` }];
 
 /** Core chrome holes the real `nativeOccluders.js` would return. */
 let coreOccluderHoles = [];
@@ -313,6 +315,7 @@ const context = vm.createContext({
   openCoreWindow: () => {},
   copyText, readClipboardText,
   openContextMenu,
+  pluginWindowMenu,
   nativeOccluderHoles,
   watchNativeOccluders,
   createPasswordsPanel,
@@ -692,6 +695,11 @@ check(
     && opened?.entries?.some((e) => e.label === 'Reload')
     && opened?.entries?.some((e) => e.label === 'Select all')
     && opened?.entries?.find((e) => e.label === 'Copy')?.disabled === false,
+  JSON.stringify(opened?.entries?.map((e) => e.label)),
+);
+check(
+  'the page menu ends with the window menu every app shows',
+  opened?.entries?.some((e) => e.label === 'window:browser'),
   JSON.stringify(opened?.entries?.map((e) => e.label)),
 );
 const reloadsBefore = viewCommands().filter((c) => c.op === 'reload').length;

@@ -8,17 +8,18 @@ import {
   GIB, MIB,
   MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
   applyPreset, buildPlanModel, chooseDefaults,
-  diskGaps, diskReasons as baseDiskReasons, diskSpans, findEsp,
-  isEsp, isSwap, layoutSpecsForPlan, placementForPlan,
+  diskGaps, diskOs, diskReasons as baseDiskReasons, diskSpans, findEsp,
+  layoutSpecsForPlan, placementForPlan,
   rootCandidates,
 } from './timeline-model.js';
-import { renderTimelinePanel } from './timeline.js';
+import { osLabel, partitionLabel, renderTimelinePanel } from './timeline.js';
 
 const PLUGIN = 'installer';
 
 const STEPS = [
   { id: 'region', icon: 'ui/keyboard' },
-  { id: 'disk', icon: 'ui/monitor' },
+  // The disk step explains itself through the before/after bars.
+  { id: 'disk', icon: 'ui/monitor', subtitle: false },
   { id: 'account', icon: 'ui/user' },
   { id: 'profile', icon: 'ui/layers' },
   { id: 'review', icon: 'ui/list' },
@@ -151,8 +152,6 @@ function initialState() {
     manualHome: false,
     manualHomeGiB: 0,
     manualRootGiB: 0,
-    timelineZoom: 1,
-    exactOpen: false,
     gpuDriver: 'nouveau',
     installCuda: false,
     acceptedLicenses: {},
@@ -168,26 +167,6 @@ function initialState() {
 
 function selectedDisk() {
   return (state.probe?.disks || []).find((disk) => disk.path === state.selectedDiskPath) || null;
-}
-
-function diskPaths(disk) {
-  const paths = [];
-  const walk = (node) => {
-    if (node?.path) paths.push(node.path);
-    for (const child of node?.children || []) walk(child);
-  };
-  walk(disk);
-  return paths;
-}
-
-function diskHasMounts(disk) {
-  return (disk?.mountpoints?.length || 0) > 0
-    || (disk?.children || []).some(diskHasMounts);
-}
-
-function diskIsLive(disk) {
-  const live = state.probe?.live_medium;
-  return !!live && diskPaths(disk).includes(live);
 }
 
 function diskReasons(disk, mode = state.partitionMode) {
@@ -223,11 +202,16 @@ function modelBarSegment(segment) {
   else if (segment.kind === 'free') label = T('disk.free', 'Free space');
   else if (segment.selectedRoot) label = T('disk.root', "PEAK'D root");
   else if (segment.reused) label = T('disk.efi', 'EFI system');
-  else if (segment.part) {
-    label = segment.part.mountpoints?.[0] || segment.part.fstype || segment.part.name || segment.part.path;
-  }
+  else if (segment.part) label = partitionLabel(segment.part, T);
+  // Same colour language as the timeline: existing partitions are grey,
+  // whatever they hold; only PEAK'D!'s own pieces are coloured.
+  let kind = 'kept';
+  if (segment.planned) kind = segment.kind;
+  else if (segment.kind === 'free') kind = 'free';
+  else if (segment.selectedRoot) kind = 'root';
+  else if (segment.reused) kind = 'efi';
   return {
-    kind: segment.kind,
+    kind,
     size: segment.size,
     label: label || segment.kind,
     detail: segment.part?.path || (segment.kind === 'free' ? T('disk.freeDetail', 'Not part of any partition') : ''),
@@ -474,7 +458,7 @@ function localFieldErrors() {
   }
 
   if (!state.profile) add('profile', T('profile.required', 'Choose a kernel profile'));
-  if (!['none', 'voice', 'local'].includes(state.aiTier)) add('aiTier', T('profile.ai.required', 'Choose an AI tier'));
+  if (!['off', 'none', 'voice', 'local'].includes(state.aiTier)) add('aiTier', T('profile.ai.required', 'Choose an AI tier'));
 
   if (state.gpuDriver === 'nvidia') {
     if (!state.acceptedLicenses[NVIDIA_DRIVER_LICENSE.id]) {
@@ -617,7 +601,7 @@ function buildPlan() {
     username: state.username.trim(),
     password: state.password,
     hostname: state.hostname.trim(),
-    install_voice: state.aiTier !== 'none',
+    install_voice: state.aiTier === 'voice' || state.aiTier === 'local',
     ai_tier: state.aiTier,
     nvidia: buildNvidia(),
     licenses: acceptedLicenseList(),
@@ -635,6 +619,7 @@ function profileLabel(profile = state.profile) {
 }
 
 function aiLabel(tier = state.aiTier) {
+  if (tier === 'off') return T('profile.ai.off.title', 'No slop');
   if (tier === 'none') return T('profile.ai.none.title', 'Text only');
   if (tier === 'local') return T('profile.ai.local.title', 'Local AI');
   return T('profile.ai.voice.title', 'Voice pack');
@@ -646,10 +631,16 @@ function layoutLabel(preset = state.layoutPreset) {
   return T('disk.preset.swap.title', 'Recommended');
 }
 
+/** Same words as the choice cards on the disk step. */
 function modeLabel(mode = state.partitionMode) {
-  if (mode === MODE_EXISTING) return T('disk.mode.existing.title', 'Use a partition');
-  if (mode === MODE_MANUAL) return T('disk.mode.manual.title', 'Manual layout');
-  return T('disk.mode.erase.title', 'Erase disk');
+  if (mode === MODE_EXISTING) return T('disk.intent.replace', 'Replace a partition');
+  if (mode === MODE_MANUAL) {
+    const os = diskOs(selectedDisk());
+    return os
+      ? T('disk.intent.beside', 'Next to {os}', { os: osLabel(os, T) })
+      : T('disk.intent.free', 'Use the free space');
+  }
+  return T('disk.intent.erase', 'Erase the whole disk');
 }
 
 function gpuLabel() {
@@ -940,8 +931,10 @@ function stepHead(step) {
   const kicker = el('div', 'installer-step-kicker', index >= 0 ? counter(index + 1, STEPS.length) : 'INSTALL');
   const title = el('h2', 'installer-step-title', T(`steps.${step.id}.title`, step.id));
   title.tabIndex = -1;
-  const subtitle = el('p', 'installer-step-subtitle', T(`steps.${step.id}.subtitle`, ''));
-  head.append(kicker, title, subtitle);
+  head.append(kicker, title);
+  if (step.subtitle !== false) {
+    head.appendChild(el('p', 'installer-step-subtitle', T(`steps.${step.id}.subtitle`, '')));
+  }
   return head;
 }
 
@@ -1071,15 +1064,18 @@ function renderDisk() {
   }
 
   wrap.appendChild(renderIntentSelector(disk));
+  const pending = state.partitionMode === MODE_EXISTING && state.pendingExistingPath && !state.existingConfirmed;
   wrap.appendChild(renderTimelinePanel({
     disk,
     state,
     model,
     t: T,
     formatBytes,
+    icon,
+    confirm: pending ? renderExistingConfirm(disk) : null,
     onSelectGap: selectGap,
     onSelectPartition: selectExistingPartition,
-    onPreset: setLayoutPreset,
+    onToggle: toggleLayoutPart,
     onRemovePartition: removePlannedPartition,
     onCommit: (nextState, nextModel) => {
       state = nextState;
@@ -1098,11 +1094,8 @@ function renderDisk() {
     },
   }));
 
-  if (state.partitionMode === MODE_EXISTING && state.pendingExistingPath && !state.existingConfirmed) {
-    wrap.appendChild(renderExistingConfirm(disk));
-  }
-  wrap.appendChild(renderGuidedNotes(disk, model));
-  wrap.appendChild(renderPartitionListFallback(disk));
+  const notes = renderGuidedNotes(disk);
+  if (notes.children.length) wrap.appendChild(notes);
   return wrap;
 }
 
@@ -1112,31 +1105,65 @@ function updateTimelineSummaryState() {
   }
 }
 
+/** Usable disks up front; the ones that cannot be used fold into one line. */
 function renderDiskShelf(disks) {
   const wrap = el('section', 'installer-disks');
-  wrap.appendChild(sectionHeading(
-    T('disk.device', 'Installation disk'),
-    T('disk.deviceHint', 'Pick one disk. Before anything is written, the installer checks the disk\'s model, serial number and size again.'),
-  ));
+  const bySize = (a, b) => Number(b.size_bytes) - Number(a.size_bytes);
+  // Grouped by the least strict mode, so a disk does not jump between groups
+  // when the user switches between "next to", "erase" and "replace".
+  const usable = disks.filter((disk) => !diskReasons(disk, MODE_MANUAL).length).sort(bySize);
+  const blocked = disks.filter((disk) => diskReasons(disk, MODE_MANUAL).length).sort(bySize);
+
   const shelf = el('div', 'installer-diskshelf');
   shelf.setAttribute('role', 'radiogroup');
   shelf.setAttribute('aria-label', T('disk.device', 'Installation disk'));
-  const ordered = [...disks].sort((a, b) => {
-    const aBad = diskReasons(a).length ? 1 : 0;
-    const bBad = diskReasons(b).length ? 1 : 0;
-    return aBad - bBad || Number(b.size_bytes) - Number(a.size_bytes);
-  });
-  for (const disk of ordered) shelf.appendChild(diskCard(disk));
-  wrap.appendChild(shelf);
+  for (const disk of usable) shelf.appendChild(diskCard(disk));
+  if (usable.length) wrap.appendChild(shelf);
+
+  if (blocked.length) {
+    const details = el('details', 'installer-disks-blocked');
+    if (!usable.length || blocked.some((disk) => disk.path === state.selectedDiskPath)) details.open = true;
+    details.appendChild(el('summary', 'installer-disks-blocked-summary', T('disk.blocked', 'Not usable ({count})', {
+      count: blocked.length,
+    })));
+    const list = el('div', 'installer-diskshelf installer-diskshelf--blocked');
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', T('disk.blocked', 'Not usable ({count})', { count: blocked.length }));
+    for (const disk of blocked) list.appendChild(diskCard(disk));
+    details.appendChild(list);
+    wrap.appendChild(details);
+  }
   return wrap;
 }
 
+/**
+ * A tiny "before → after" drawing for each choice, in the same colours as the
+ * big bars: grey = kept, hatched = free, red = erased, accent = PEAK'D!.
+ */
+const INTENT_PICTOS = {
+  [MODE_MANUAL]: [[['kept', 3], ['free', 2]], [['kept', 3], ['new', 2]]],
+  [MODE_ERASE]: [[['doomed', 3], ['doomed', 2]], [['new', 5]]],
+  [MODE_EXISTING]: [[['kept', 2], ['doomed', 1.6], ['kept', 1.4]], [['kept', 2], ['new', 1.6], ['kept', 1.4]]],
+};
+
+function intentPicto(mode) {
+  const picto = el('span', 'installer-picto');
+  picto.setAttribute('aria-hidden', 'true');
+  const [before, after] = INTENT_PICTOS[mode];
+  const bar = (segments) => {
+    const node = el('span', 'installer-picto-bar');
+    for (const [kind, weight] of segments) {
+      const seg = el('span', `installer-picto-seg installer-picto-seg--${kind}`);
+      seg.style.flex = `${weight} 1 0`;
+      node.appendChild(seg);
+    }
+    return node;
+  };
+  picto.append(bar(before), el('span', 'installer-picto-arrow', '→'), bar(after));
+  return picto;
+}
+
 function renderIntentSelector(disk) {
-  const wrap = el('section', 'installer-intent-wrap');
-  wrap.appendChild(sectionHeading(
-    T('disk.intent.title', 'What should happen to the files?'),
-    T('disk.intent.hint', 'The timeline shows exactly where PEAK’D! will live.'),
-  ));
   const choices = el('div', 'installer-intent-row');
   choices.setAttribute('role', 'radiogroup');
   choices.setAttribute('aria-label', T('disk.intent.title', 'What should happen to the files?'));
@@ -1144,55 +1171,53 @@ function renderIntentSelector(disk) {
   const gaps = diskGaps(disk).filter((gap) => gap.eligible);
   const roots = rootCandidates(disk);
   const esp = findEsp(disk);
+  const os = diskOs(disk);
   const options = [
     {
       mode: MODE_MANUAL,
       iconName: 'ui/layers',
-      title: T('disk.intent.free', 'Use the free space'),
-      desc: gaps.length
-        ? T('disk.intent.free.desc', 'Install next to the existing partitions. Nothing already on the disk is resized or moved.')
-        : T('disk.intent.free.none', 'There is no usable free space on this disk.'),
-      badge: gaps.length ? T('disk.intent.recommended', 'Recommended') : '',
+      title: os
+        ? T('disk.intent.beside', 'Next to {os}', { os: osLabel(os, T) })
+        : T('disk.intent.free', 'Use the free space'),
+      why: T('disk.intent.free.noneShort', 'No free space'),
       disabled: !gaps.length,
     },
     {
       mode: MODE_ERASE,
       iconName: 'ui/trash',
       title: T('disk.intent.erase', 'Erase the whole disk'),
-      desc: T('disk.intent.erase.desc', 'Start from zero. Every partition on this disk will be deleted.'),
+      why: diskReasons(disk, MODE_ERASE).map(reasonLabel).join(' · '),
       disabled: diskReasons(disk, MODE_ERASE).length > 0,
+      danger: true,
     },
     {
       mode: MODE_EXISTING,
-      iconName: 'ui/monitor',
-      title: T('disk.intent.partition', 'Use one partition'),
-      desc: roots.length && esp
-        ? T('disk.intent.partition.desc', 'Format one existing partition and keep the others.')
-        : T('disk.intent.partition.none', 'This disk has no suitable partition, or no startup partition.'),
+      iconName: 'ui/refresh',
+      title: T('disk.intent.replace', 'Replace a partition'),
+      why: T('disk.intent.partition.noneShort', 'No suitable partition'),
       disabled: !roots.length || !esp,
     },
   ];
 
   for (const option of options) {
-    const card = el('button', `installer-intent${state.partitionMode === option.mode ? ' is-selected' : ''}`);
+    const selected = state.partitionMode === option.mode;
+    const card = el('button', `installer-intent${selected ? ' is-selected' : ''}${option.danger ? ' is-danger' : ''}`);
     card.type = 'button';
     card.disabled = option.disabled;
     card.setAttribute('role', 'radio');
-    card.setAttribute('aria-checked', String(state.partitionMode === option.mode));
+    card.setAttribute('aria-checked', String(selected));
     card.addEventListener('click', () => setPartitionMode(option.mode));
+    const head = el('span', 'installer-intent-head');
     const mark = el('span', 'installer-intent-icon');
-    mark.appendChild(icon(option.iconName, { size: 18 }));
-    const copy = el('span', 'installer-intent-copy');
-    copy.append(
-      el('span', 'installer-intent-title', option.title),
-      el('span', 'installer-intent-desc', option.desc),
-    );
-    if (option.badge) copy.appendChild(badge(option.badge, { tone: 'accent' }));
-    card.append(mark, copy);
+    mark.appendChild(icon(option.iconName, { size: 16 }));
+    head.append(mark, el('span', 'installer-intent-title', option.title));
+    card.append(head, intentPicto(option.mode));
+    if (option.disabled && option.why) {
+      card.appendChild(el('span', 'installer-intent-why', option.why));
+    }
     choices.appendChild(card);
   }
-  wrap.appendChild(choices);
-  return wrap;
+  return choices;
 }
 
 function setPartitionMode(mode) {
@@ -1300,13 +1325,11 @@ function cancelExisting() {
 function renderExistingConfirm(disk) {
   const part = (disk.children || []).find((item) => item.path === state.pendingExistingPath);
   const wrap = el('section', 'installer-existing-confirm');
-  wrap.appendChild(alertBlock(
-    'warn',
-    T('disk.existing.confirmTitle', 'This partition will be formatted'),
-    T('disk.existing.confirmBody', 'Everything stored in {path} will be deleted. The other partitions are not touched.', {
-      path: part?.path || state.pendingExistingPath,
-    }),
-  ));
+  wrap.setAttribute('role', 'alert');
+  const mark = el('span', 'installer-existing-mark');
+  mark.appendChild(icon('ui/warning', { size: 15 }));
+  const name = part ? `${partitionLabel(part, T)} ${formatBytes(part.size_bytes)}` : state.pendingExistingPath;
+  wrap.append(mark, el('span', 'installer-existing-text', T('disk.existing.confirmShort', 'Everything in {name} will be erased', { name })));
   const actions = el('div', 'installer-existing-actions');
   actions.append(
     button({
@@ -1348,7 +1371,8 @@ function removePlannedPartition(kind) {
   renderManifest();
 }
 
-function renderGuidedNotes(disk, model) {
+/** Only the notes that block the install; everything else is on the bars. */
+function renderGuidedNotes(disk) {
   const wrap = el('div', 'installer-guided-notes');
   const roots = rootCandidates(disk);
   const gaps = diskGaps(disk).filter((gap) => gap.eligible);
@@ -1358,26 +1382,6 @@ function renderGuidedNotes(disk, model) {
       'ui/warning',
       T('disk.guided.noSpaceTitle', 'No room for PEAK’D!'),
       T('disk.guided.noSpaceBody', 'This disk has no usable free space and no partition PEAK’D! can reuse. Erase the disk or free some space from the other system, then refresh.'),
-    ));
-  }
-  if ((disk.children || []).some((part) => {
-    const fstype = String(part.fstype || '').toLowerCase();
-    const typename = String(part.parttypename || '').toLowerCase();
-    return fstype === 'apfs' || fstype === 'hfs' || typename.includes('apfs') || typename.includes('hfs');
-  })) {
-    wrap.appendChild(note(
-      'accent',
-      'ui/info',
-      T('disk.guided.apfsTitle', 'Apple partitions stay untouched'),
-      T('disk.guided.apfsBody', 'APFS and HFS partitions are preserved. PEAK’D! can only use the free space or a partition you choose.'),
-    ));
-  }
-  if (model.approx) {
-    wrap.appendChild(note(
-      'warn',
-      'ui/warning',
-      T('disk.timeline.approxTitle', 'Approximate disk map'),
-      T('disk.timeline.noOffsets', 'Partition positions are approximate; refresh the disks before changing the layout.'),
     ));
   }
   if (!findEsp(disk) && state.partitionMode === MODE_EXISTING) {
@@ -1390,103 +1394,33 @@ function renderGuidedNotes(disk, model) {
   return wrap;
 }
 
-function renderPartitionListFallback(disk) {
-  const roots = rootCandidates(disk);
-  const details = el('details', 'installer-list-fallback');
-  details.appendChild(el('summary', 'installer-list-fallback-summary', T('disk.view.list', 'Partition list')));
-  if (!roots.length) {
-    details.appendChild(el('p', 'installer-hint', T('disk.existing.noRootBody', 'This disk has no unused or formattable partition with at least 20 GiB. Choose “Erase the whole disk” or “Create the partitions” instead.')));
-    return details;
-  }
-  const list = el('div', 'installer-partition-list');
-  list.setAttribute('role', 'radiogroup');
-  list.setAttribute('aria-label', T('disk.existing.pickTitle', 'Where should PEAK’D! live?'));
-  for (const part of roots) list.appendChild(partitionCard(disk, part));
-  details.appendChild(list);
-  return details;
-}
-
-function partitionCard(disk, part) {
-  const active = state.existingRootPath === part.path;
-  const card = controlButton();
-  card.type = 'button';
-  card.className = `installer-partition${active ? ' is-selected' : ''}`;
-  card.setAttribute('role', 'radio');
-  card.setAttribute('aria-checked', String(active));
-  card.setAttribute('aria-label', `${T('disk.existing.pickOne', 'Install PEAK’D! in this partition')}: ${part.name || part.path}`);
-  card.addEventListener('click', () => selectExistingPartition(part));
-  const mark = el('span', 'installer-partition-icon');
-  mark.appendChild(icon('ui/layers', { size: 17 }));
-  const main = el('div', 'installer-partition-main');
-  const title = part.mountpoints?.[0] || `${T('disk.partition.label', 'Partition')} ${part.name || part.path.split('/').pop()}`;
-  main.append(
-    el('span', 'installer-partition-title', title),
-    el('span', 'installer-partition-meta ui-meta', `${formatBytes(part.size_bytes)} · ${part.fstype || T('disk.partition.blank', 'not formatted')}`),
-    el('span', 'installer-partition-detail', active
-      ? T('disk.existing.selected', 'PEAK’D! will be installed here. This partition will be formatted.')
-      : T('disk.existing.other', 'Your files stay here. This partition will not be touched.')),
-    el('span', 'installer-partition-path ui-meta', part.path),
-  );
-  const badges = el('div', 'installer-partition-badges');
-  if (active) badges.appendChild(badge(T('disk.existing.selectedBadge', 'Selected'), { tone: 'accent' }));
-  if (isEsp(part)) badges.appendChild(badge(T('disk.partition.esp', 'Startup'), { tone: 'neutral' }));
-  if (isSwap(part)) badges.appendChild(badge(T('disk.partition.swap', 'Swap'), { tone: 'warn' }));
-  if ((part.mountpoints || []).length) badges.appendChild(badge(T('disk.badge.mounted', 'In use'), { tone: 'warn' }));
-  if ((part.holders || []).length) badges.appendChild(badge(T('disk.partition.busy', 'Busy'), { tone: 'error' }));
-  if (badges.children.length) main.appendChild(badges);
-  const check = el('span', 'installer-partition-check');
-  if (active) check.appendChild(icon('ui/check', { size: 12 }));
-  card.append(mark, main, check);
-  return card;
-}
-
 function diskCard(disk) {
   const active = disk.path === state.selectedDiskPath;
-  const reasons = diskReasons(disk);
+  const blocked = diskReasons(disk, MODE_MANUAL);
   const card = controlButton();
   card.type = 'button';
-  card.className = `installer-disk${active ? ' is-selected' : ''}${reasons.length ? ' has-reasons' : ''}`;
+  card.className = `installer-disk${active ? ' is-selected' : ''}${blocked.length ? ' has-reasons' : ''}`;
   card.setAttribute('role', 'radio');
   card.setAttribute('aria-checked', String(active));
   card.addEventListener('click', () => selectDisk(disk.path));
+  // Technical identity stays one hover away; the review step shows it in full.
+  card.title = [disk.path, disk.serial, disk.tran ? disk.tran.toUpperCase() : ''].filter(Boolean).join(' · ');
 
   const main = el('div', 'installer-disk-main');
   const title = el('div', 'installer-disk-title');
   title.append(
     el('span', 'installer-disk-name', disk.model || T('disk.unknownModel', 'Disk')),
+    el('span', 'installer-disk-size', formatBytes(disk.size_bytes)),
   );
   main.appendChild(title);
-  const freeGap = diskGaps(disk)
-    .filter((gap) => gap.eligible)
-    .sort((a, b) => b.size_bytes - a.size_bytes)[0];
-  // Mono metadata: path, size, serial first, then the bus and the layout facts.
-  const meta = [
-    disk.path,
-    formatBytes(disk.size_bytes),
-    disk.serial || T('disk.noSerial', 'No serial number reported'),
-    disk.tran ? disk.tran.toUpperCase() : '',
-    `${(disk.children || []).length} ${T('disk.partitionCount', 'partitions')}`,
-    freeGap
-      ? `${T('disk.free', 'Free space')} ${formatBytes(freeGap.size_bytes)}`
-      : T('disk.noFreeShort', 'No free space'),
-  ].filter(Boolean).join(' · ');
-  if (reasons.length) card.title = reasons.map(reasonLabel).join(' · ');
-  main.appendChild(el('div', 'installer-disk-meta ui-meta', meta));
-  const badges = el('div', 'installer-disk-badges');
-  if (diskHasMounts(disk)) badges.appendChild(badge(T('disk.badge.mounted', 'Mounted'), { tone: 'warn' }));
-  if (disk.removable) badges.appendChild(badge(T('disk.badge.removable', 'Removable'), { tone: 'warn' }));
-  if (disk.read_only) badges.appendChild(badge(T('disk.badge.readOnly', 'Read-only'), { tone: 'warn' }));
-  if (diskIsLive(disk)) badges.appendChild(badge(T('disk.badge.live', 'Installer drive'), { tone: 'error' }));
-  if (!reasons.length) badges.appendChild(badge(T('disk.badge.eligible', 'Eligible'), { tone: 'ok' }));
-  else badges.appendChild(badge(T('disk.badge.notEligible', 'Not eligible'), { tone: 'error' }));
-  main.appendChild(badges);
   main.appendChild(segmentBar(existingSegments(disk), { mini: true, label: T('disk.currentBar', 'Current partition layout for {path}', { path: disk.path }) }));
+  if (blocked.length) {
+    main.appendChild(el('span', 'installer-disk-why', blocked.map(reasonLabel).join(' · ')));
+  }
 
-  const side = el('div', 'installer-disk-side');
-  side.append(el('span', 'installer-disk-size', formatBytes(disk.size_bytes)));
   const check = el('span', 'installer-disk-check');
   if (active) check.appendChild(icon('ui/check', { size: 14 }));
-  card.append(main, side, check);
+  card.append(main, check);
   return card;
 }
 
@@ -1529,14 +1463,25 @@ function selectDisk(path) {
   renderManifest();
 }
 
-function setLayoutPreset(value) {
+/**
+ * The two switches under the disk bars. Swap and a separate /home map onto
+ * the presets the plan already knows; sizes are then dragged on the bar.
+ */
+function toggleLayoutPart(kind, on) {
   const disk = selectedDisk();
   if (!disk) return;
   const model = buildPlanModel(disk, state);
+  const swapOn = kind === 'swap' ? on : model.sizes.swap > 0;
+  const homeOn = kind === 'home' ? on : model.sizes.home > 0;
+  const preset = homeOn ? 'home' : swapOn ? 'swap' : 'simple';
   const rawBytes = state.partitionMode === MODE_MANUAL
     ? (model.gap?.size_bytes || 0)
     : disk.size_bytes;
-  applyPreset(state, state.partitionMode, value, rawBytes);
+  applyPreset(state, state.partitionMode, preset, rawBytes);
+  if (!swapOn) {
+    if (state.partitionMode === MODE_MANUAL) state.manualSwapGiB = 0;
+    else state.swapGiB = 0;
+  }
   state.confirmSerial = '';
   state.confirmed = false;
   state.showErrors = false;
@@ -1735,6 +1680,7 @@ function renderProfile() {
   tiers.setAttribute('role', 'radiogroup');
   tiers.setAttribute('aria-label', T('profile.ai.title', 'AI tier'));
   const aiOptions = [
+    ['off', 'ui/brain-off', T('profile.ai.off.title', 'No slop'), T('profile.ai.off.desc', 'No AI at all. The AI button opens the launcher.'), T('profile.ai.off.meta', 'You can turn it on later')],
     ['none', 'ui/keyboard', T('profile.ai.none.title', 'Text only'), T('profile.ai.none.desc', 'Chat and agent, no voice models.'), T('profile.ai.none.meta', 'Smallest footprint')],
     ['voice', 'ui/download', T('profile.ai.voice.title', 'Voice pack'), T('profile.ai.voice.desc', 'Speech recognition and neural voices.'), T('profile.ai.voice.meta', 'Recommended')],
     ['local', 'ui/layers', T('profile.ai.local.title', 'Local AI'), T('profile.ai.local.desc', 'Voice plus local image and music models.'), T('profile.ai.local.meta', 'Needs more disk')],
@@ -2563,38 +2509,24 @@ function renderManifest() {
   target.appendChild(el('span', 'installer-manifest-label', T('manifest.target', 'Disk')));
   const model = disk ? buildPlanModel(disk, state) : null;
   if (disk) {
-    const root = selectedExistingRoot();
-    const esp = selectedExistingEsp();
     target.append(
       el('strong', 'installer-manifest-value', disk.model || disk.path),
-      el('span', 'installer-manifest-sub', `${disk.path} · ${formatBytes(disk.size_bytes)}`),
-      segmentBar(existingSegments(disk), { mini: true, label: T('disk.currentBar', 'Current partition layout for {path}', { path: disk.path }) }),
-      el('span', 'installer-manifest-meta ui-meta', disk.serial || T('disk.noSerial', 'No serial number reported')),
+      el('span', 'installer-manifest-sub', formatBytes(disk.size_bytes)),
     );
-    if (model?.gap) {
-      target.appendChild(el('span', 'installer-manifest-sub', `${T('disk.timeline.zone', 'Install zone')}: ${formatBytes(model.gap.start_bytes)} – ${formatBytes(model.gap.start_bytes + model.gap.size_bytes)}`));
-    }
-    if (state.partitionMode === MODE_EXISTING) {
-      target.appendChild(el('span', 'installer-manifest-sub', `${T('disk.existing.rootTitle', 'Root partition')}: ${root?.path || '—'}`));
-      target.appendChild(el('span', 'installer-manifest-sub', `${T('disk.existing.esp', 'EFI system')}: ${esp?.path || '—'}`));
-    }
   } else {
     target.appendChild(el('span', 'installer-manifest-empty', T('manifest.noTarget', 'No disk selected')));
   }
   manifest.appendChild(target);
 
+  // The plan as one picture: the "after" bar and how big PEAK'D! gets.
   const layoutSection = el('section', 'installer-manifest-section');
   layoutSection.appendChild(el('span', 'installer-manifest-label', T('manifest.layout', 'Layout')));
   layoutSection.appendChild(el('strong', 'installer-manifest-value', modeLabel()));
-  if (model && state.partitionMode === MODE_EXISTING) {
-    layoutSection.appendChild(el('span', 'installer-manifest-sub', `${T('review.rootPartition', 'Root partition')}: ${selectedExistingRoot()?.path || '—'}`));
-    layoutSection.appendChild(el('span', 'installer-manifest-sub', `${T('review.preserved', 'Preserved partitions')}: ${model.kept.length}`));
-  } else if (model) {
-    layoutSection.appendChild(el('span', 'installer-manifest-sub', `${T('disk.efi', 'EFI system')} ${formatBytes(model.sizes.efi)} · ${T('disk.swapSegment', 'Swap')} ${formatBytes(model.sizes.swap)}`));
-    layoutSection.appendChild(el('span', 'installer-manifest-sub', `${T('disk.root', "PEAK'D root")} ${formatBytes(model.sizes.root)}${model.sizes.home ? ` · ${T('disk.home', 'Home')} ${formatBytes(model.sizes.home)}` : ''}`));
-    if (model.remaining > 0) {
-      layoutSection.appendChild(el('span', 'installer-manifest-sub', `${T('disk.summary.freeAfter', 'Free space after install')}: ${formatBytes(model.remaining)}`));
-    }
+  if (model) {
+    const rootBytes = state.partitionMode === MODE_EXISTING
+      ? Number(selectedExistingRoot()?.size_bytes) || 0
+      : model.sizes.root;
+    if (rootBytes) layoutSection.appendChild(el('span', 'installer-manifest-sub', `PEAK’D! ${formatBytes(rootBytes)}`));
   }
   layoutSection.appendChild(segmentBar(plannedSegments(), { mini: true, label: T('disk.afterBar', 'Planned partition layout') }));
   manifest.appendChild(layoutSection);
