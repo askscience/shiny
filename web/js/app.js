@@ -43,7 +43,7 @@ import { initContextMenu } from './contextMenu.js';
 import { initLinkRouter } from './linkRouter.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
 import { initControlCenter } from './controlCenter.js';
-import { initPhoneShell } from './phoneShell.js';
+import { initPhoneShell, setPhoneBarActions } from './phoneShell.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
 import { initThinkToggle } from './thinkToggle.js';
@@ -448,6 +448,10 @@ function wireSphere() {
   // Double-tap = listen once, with the same stop-and-rephrase behaviour as the
   // Touch Bar's "Ask" button.
   onDoubleTap(() => (isAiEnabled() ? tapOrb() : openLauncher()));
+
+  // A phone has no voice bar on screen: its bottom bar carries the same two
+  // actions (a swipe up types, a swipe up and hold listens).
+  setPhoneBarActions({ chat: typeOrb, voice: tapOrb, enabled: isAiEnabled });
 }
 
 async function submitTextToAgent(text, handlers) {

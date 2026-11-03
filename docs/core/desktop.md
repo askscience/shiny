@@ -25,7 +25,8 @@ arrangement, never a rewrite of it.
 | `web/js/fullscreen.js` | Real (browser) fullscreen, dedicated workspace, chrome reveal |
 | `web/js/fullscreenBubble.js` | Top-bar bubble for a fullscreen window (close / exit) |
 | `web/js/coreWindows.js` | Registry of built-in windows (`settings`, `plugins`) |
-| `web/js/overview.js` | Window overview, strip or cloud (three-finger swipe up) |
+| `web/js/overview.js` | Window overview: a grid of the open windows (three-finger swipe up; the phone's switcher) |
+| `web/js/overviewGrid.js` | The overview's card geometry and per-motion easing (pure, tested) |
 | `web/js/launcher.js` | Full-screen plugin launcher (three-finger swipe down) |
 | `web/js/gestures.js` | Trackpad gesture → desktop action vocabulary |
 | `web/js/gestureTransition.js` | Progress-driven transitions: commit/rollback decision, settle animation |
@@ -33,7 +34,7 @@ arrangement, never a rewrite of it.
 | `web/js/contextMenu.js` | Right-click / long-press menus and the popup engine |
 | `web/js/nativeOccluders.js` | Core HTML surfaces that must punch through a native page's mask |
 | `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait and landscape) |
-| `web/js/phoneShell.js` | Phone: home screen, dock handle, one-finger gestures, Back goes home |
+| `web/js/phoneShell.js` | Phone: home screen, the bottom bar (home, switcher, chat and voice by gesture), Back goes home |
 | `web/js/controlCenter.js` | Phone: the host status chips and bar actions in a sheet |
 | `web/js/preferences.js` | Per-user storage for all of the above |
 
@@ -44,25 +45,37 @@ stored desktop preferences are never rewritten, and they come back with the
 screen.
 
 - **Effective preferences** — `effectiveImmersive()` and `effectiveLauncher()`
-  (`preferences.js`) put the bar on top in the rail style, unscaled and never
-  hiding, the voice bar alone at the bottom edge, and the launcher in its grid
-  style. `<html data-mobile="1">` marks the layout (`MOBILE_QUERY`); the matching
+  (`preferences.js`) put the bar on top in the rail style — which
+  `css/mobile.css` lays flat on the edge, no rounding and no gap under it —
+  unscaled and never hiding, and the launcher in its grid style.
+  `<html data-mobile="1">` marks the layout (`MOBILE_QUERY`); the matching
   Settings rows rest (`.settings-desktop-only`).
 - **Status bar and control centre** — the top bar keeps time, weather and the
-  apps; the host's status chips and the bar actions move, as the same `#hud-top`
-  node, into a sheet dropped from the bar's control button (`controlCenter.js`).
-- **One window at a time** — windows fill the screen between the bar and the
-  dock (`tile-grid--phone`, `css/mobile.css`). `showPhoneWindow()`,
+  control button; the app icons are not there (the home screen opens apps,
+  the switcher moves between them). The host's status chips and the bar
+  actions move, as the same `#hud-top` node, into a sheet that unfolds from
+  the bar (`controlCenter.js`).
+- **One window at a time** — windows fill the screen from the status bar to
+  the bottom bar (`tile-grid--phone`, `css/mobile.css`). `showPhoneWindow()`,
   `showPhoneHome()` and `stepPhoneWindow()` (`tiles.js`) drive it, and
   `<html data-phone-home="1">` marks the home screen.
 - **Home** — with no window on screen the launcher grid is the home screen; it
   stays up until a window takes the screen (`data-launcher-home`).
-- **Dock and gestures** (`phoneShell.js`, `<html data-phone="1">`) — the strip
-  around the voice bar has no buttons: tapping its handle goes home, holding it
-  opens the switcher (the overview); on the strip a swipe up goes home, a swipe
-  up and hold (or a long swipe) opens the switcher, a swipe left/right moves to
-  the next/previous window. With a window up, the browser's Back (Android's back
-  gesture) goes home: one history entry is held and given back on the way home.
+- **The bottom bar** (`phoneShell.js`, `<html data-phone="1">`) — one thin
+  strip along the bottom edge with a line in it and no buttons; the voice bar
+  does not show on a phone, the bar carries its actions. A tap goes home
+  (while the assistant listens, it stops listening), a press and hold opens
+  the switcher (the overview), a swipe up opens the chat, a swipe up and hold
+  listens once. A drag left/right is the workspace carousel's gesture for
+  windows (`beginPhoneSlide()` in `tiles.js`): the window on screen follows
+  the finger while the next/previous one comes in beside it, and a release
+  past half-way, or a flick, switches (`shouldCommit`), otherwise it springs
+  back. With
+  the AI off a swipe up goes home and a swipe up and hold opens the switcher.
+  The assistant's actions come from `app.js` (`setPhoneBarActions`); the line
+  takes the assistant's colour while `<html data-voice>` is busy.
+- **Back** — with a window up, the browser's Back (Android's back gesture)
+  goes home: one history entry is held and given back on the way home.
 - **Compact app bars** — see `compactToolbar` in
   [ui-components.md](ui-components.md#responsive-layout).
 
@@ -736,22 +749,28 @@ document survives. At `beginOverview()` each tile is measured once and pinned
 frame interpolates a transform from that rect to the tile's target (FLIP), in a
 short cascade. Windows of other workspaces fly in from the side their workspace
 lives on. Closing animates back and restores every tile's inline style exactly
-as it was, then re-tiles. The arrangement comes from the theme's
-`"overview"` key in `theme.json` (default `strip`):
+as it was, then re-tiles.
 
-- `strip` — a horizontal row of equal boxes, windows on a common baseline, a
-  `.overview-label` under each (index, title, `WS n`), `.overview-nav` with
-  Prev / Next (and `←` / `→`) to scroll it, and a large two-line
-  `.overview-title` ("N windows, M spaces.") bottom-left.
-- `cloud` — windows scattered at different depths, with perspective, around a
-  centred headline; they drift gently while open, and the one under the
-  pointer comes forward fully lit. Each window carries a `WS n` badge in its
-  header.
+The windows are laid out as a grid of cards (`overviewGrid.js`
+`gridLayout()`): on a phone two columns in portrait and three in landscape; on
+a desktop the column count that gives the biggest cards with every window on
+screen, capped at 42% of the width, and a 200 px minimum past which the grid
+scrolls (wheel, or a drag on a touch screen). Rows are centred and a grid that
+fits is centred vertically. Under each card a small `.overview-label` carries
+the title, the workspace number (only with more than one workspace) and a
+close button (`.overview-label-close`), which closes that window and lets the
+others close ranks.
+
+How the cards travel follows the motion language (`<html data-motion>`,
+`MOTION` in `overviewGrid.js`): `kinetic` arrives fast and exponentially in a
+pronounced cascade, `fluid` on a spring that overshoots a little, `depth` on
+a soft curve out of a blur. Windows that were not on screen (the phone's other
+windows) grow in from a little smaller as they fade in.
 
 For theming, the document element carries `--overview-p` (0..1, every frame),
-`data-overview="opening|open|closing"` and `data-overview-style`. The chrome
+and `data-overview="opening|open|closing"`. The chrome
 classes are styled structurally from tokens only (`web/css/overview.css`).
-Clicking a window closes the overview and then focuses it (switching to its
+A tap on a card (released without dragging) closes the overview and then focuses it (switching to its
 workspace, which slides); Escape or a click outside the windows closes. The
 overview exits real fullscreen first (which it cannot represent honestly) and
 blurs focus so typing cannot reach a window behind it.

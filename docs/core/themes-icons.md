@@ -31,7 +31,6 @@ carried over by `theme-loader.js` / `early-theme.js`.
 | Key | Meaning |
 |---|---|
 | `defaultBackground` | The built-in wallpaper (`background.js` preset id) used while the user has not picked one. |
-| `overview` | The window-overview layout: `strip` (Dusk) or `cloud` (Ink). |
 | `icons` | `false`, `true`, or the list of icon names the theme ships under `icons/` (only those are looked up there). |
 
 ### Centralized scrollbar

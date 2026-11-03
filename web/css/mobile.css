@@ -2,13 +2,13 @@
    Phone layout — `html[data-mobile="1"]` (preferences.js → applyImmersive,
    from viewport.js's MOBILE_QUERY).
 
-   A phone reads PEAK'D! like a mobile OS: the top bar is a status bar (time,
-   weather, the apps, one control button), the host's status chips and the
-   bar's actions live in the control centre that drops from that button
-   (js/controlCenter.js), and the voice bar holds the bottom edge on its own.
-   The effective chrome settings (bar on top, rail style, no scale, no
-   autohide) come from effectiveImmersive(); this sheet only draws them for a
-   finger. Loaded last, so it has the final word over the themes and the bar
+   A phone reads PEAK'D! like a mobile OS: the top bar is a status bar flush
+   with the top edge (time, weather, one control button), the host's status
+   chips and the bar's actions live in the control centre that drops from that
+   button (js/controlCenter.js), and the voice bar rides the phone's bar at
+   the bottom (js/phoneShell.js). The effective chrome settings (bar on top,
+   rail style, no scale, no autohide) come from effectiveImmersive(); this
+   sheet flattens the rail onto the edge and draws it all for a finger. Loaded last, so it has the final word over the themes and the bar
    styles.
    ───────────────────────────────────────────────────────────── */
 
@@ -19,12 +19,36 @@
 
 /* ── Status bar ──────────────────────────────────────────────── */
 
-html[data-mobile='1'] #hud-header {
-  padding-left: max(10px, env(safe-area-inset-left));
-  padding-right: max(10px, env(safe-area-inset-right));
+/* Flush with the top edge, no float and no gap under it: the notch's inset
+   is the only room above, and the windows start right below. */
+html[data-mobile='1'] {
+  --hud-bar-height: 40px;
+  --hud-header-pad: env(safe-area-inset-top, 0px);
+  --hud-header-total: calc(env(safe-area-inset-top, 0px) + var(--hud-bar-height));
+  --hud-bar-extent: var(--hud-bar-height);
 }
 
-html[data-mobile='1'] .hud-header-main { padding: 0 2px; }
+html[data-mobile='1'] #hud-header {
+  gap: 0;
+  padding: 0;
+}
+
+/* The rail's pill, laid flat on the edge: it reaches under the notch, and
+   only a hairline separates it from the window below. */
+html[data-mobile='1'] .hud-header-main {
+  height: var(--hud-header-total);
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0px) max(4px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+  border-width: 0 0 1px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* No app icons up here: the home screen opens apps and the switcher moves
+   between them. The apps' group keeps its room so the control button stays
+   at the far end. */
+html[data-mobile='1'] #hud-plugins { display: none; }
+html[data-mobile='1'] .hud-group--apps { flex: 1 1 auto; }
 
 html[data-mobile='1'] #hud-control {
   display: flex;
@@ -41,11 +65,8 @@ html[data-mobile='1'] #hud-control.is-open {
   color: var(--text);
 }
 
-/* Targets a finger can hit: 40px inside the 44px bar. The tray scrolls when
-   the apps outnumber the room. */
-html[data-mobile='1'] .hud-plugin-btn { width: 40px; height: 40px; }
+/* Targets a finger can hit: the bar's full height. */
 html[data-mobile='1'] :is(.hud-clock, .hud-meteo) { height: 40px; padding: 0 8px; }
-html[data-mobile='1'] #hud-plugins { gap: 0; }
 
 /* The fullscreen bubble is the way out of a fullscreen window: finger-sized. */
 html[data-mobile='1'] #fullscreen-bubble .fullscreen-bubble-btn { width: 40px; height: 40px; }
@@ -56,14 +77,14 @@ html[data-mobile='1'] .control-center {
   display: block;
   position: fixed;
   top: var(--hud-header-total);
-  left: max(10px, env(safe-area-inset-left));
-  right: max(10px, env(safe-area-inset-right));
+  left: 0;
+  right: 0;
   /* Above the bar and the windows, below the chips' own menus (z-hud + 2). */
   z-index: calc(var(--z-hud) + 1);
   max-height: calc(100dvh - var(--hud-header-total) - max(16px, env(safe-area-inset-bottom)));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px;
+  padding: 12px max(12px, env(safe-area-inset-right)) 14px max(12px, env(safe-area-inset-left));
   box-sizing: border-box;
   /* The bar's own plate and ink (theme tokens), so the sheet reads as the
      bar unfolding; themes without them fall back to the glass surface. */
@@ -72,15 +93,17 @@ html[data-mobile='1'] .control-center {
   --cc-tile: var(--ed-bar-hover, var(--glass));
   color: var(--cc-ink);
   background: var(--ed-bar-bg, var(--surface));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg, 22px);
+  /* The bar unfolding: flush with the sides, rounded only where it ends. */
+  border: 0;
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: 0 0 var(--radius-lg, 22px) var(--radius-lg, 22px);
   -webkit-backdrop-filter: blur(var(--glass-blur-panel, var(--glass-blur))) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur-panel, var(--glass-blur))) saturate(var(--glass-saturate));
   box-shadow: var(--shadow-float, 0 24px 60px rgba(0, 0, 0, 0.45));
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px) scale(0.98);
-  transform-origin: top right;
+  transform: translateY(-10px);
+  transform-origin: top center;
   transition:
     opacity var(--motion-reveal, 0.22s) var(--motion-ease, ease),
     transform var(--motion-reveal, 0.22s) var(--motion-ease, ease),
@@ -166,18 +189,22 @@ html[data-mobile='1'] .settings-desktop-only {
   pointer-events: none;
 }
 
-/* ── Dock, home screen, switcher (js/phoneShell.js) ──────────────
+/* ── The bar, home screen, switcher (js/phoneShell.js) ───────────
    `html[data-phone="1"]`: the one-window phone layout (viewport.js
-   PHONE_QUERY). The dock is the bottom strip around the voice bar, with no
-   buttons: its handle goes home on a tap and opens the switcher on a hold,
-   and the whole strip takes the one-finger swipes. It sits just under the
-   voice bar (z 35), so a tap on the voice bar stays the voice bar's. */
+   PHONE_QUERY). The phone's bar is one thin strip along the bottom edge with
+   a line in it and no buttons: it goes home, opens the switcher, the chat
+   and the microphone by its gestures, so the voice bar stands down. The line
+   takes the assistant's colour while it is busy. */
 
 .phone-dock { display: none; }
 
 html[data-phone='1'] {
-  --phone-dock-h: calc(env(safe-area-inset-bottom) + 58px);
+  --phone-dock-h: max(24px, calc(env(safe-area-inset-bottom) + 16px));
 }
+
+/* The bar is the assistant here (a swipe up types, a swipe up and hold
+   listens): no second bar for it. */
+html[data-phone='1'] #sphere-container { display: none !important; }
 
 html[data-phone='1'] .phone-dock {
   display: block;
@@ -187,46 +214,59 @@ html[data-phone='1'] .phone-dock {
   bottom: 0;
   z-index: 34;
   height: var(--phone-dock-h);
-  /* The page must not scroll or zoom under a dock swipe. */
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* The handle: a line under the voice bar, with a finger-sized hit area. */
-html[data-phone='1'] .phone-dock-handle {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 180px;
-  height: max(18px, calc(env(safe-area-inset-bottom) + 6px));
-  margin-left: -90px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
+  /* The page must not scroll or zoom under a swipe on the bar. */
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-html[data-phone='1'] .phone-dock-handle::before {
+
+/* The line. */
+html[data-phone='1'] .phone-dock::before {
   content: '';
   position: absolute;
-  left: 30px;
-  right: 30px;
-  bottom: max(5px, calc(env(safe-area-inset-bottom) - 4px));
+  left: 50%;
+  bottom: max(8px, calc(env(safe-area-inset-bottom) - 2px));
+  width: 120px;
   height: 4px;
+  margin-left: -60px;
   border-radius: 999px;
   background: var(--ed-bar-muted, var(--muted));
   opacity: 0.6;
-  transition: opacity var(--motion-feedback, 0.15s), transform var(--motion-feedback, 0.15s);
+  transition:
+    opacity var(--motion-feedback, 0.15s),
+    transform var(--motion-feedback, 0.15s),
+    background-color var(--motion-reveal, 0.22s),
+    box-shadow var(--motion-reveal, 0.22s);
 }
-html[data-phone='1'] .phone-dock-handle:active::before { opacity: 1; transform: scaleX(1.08); }
-html[data-phone='1'] .phone-dock-handle:focus-visible::before { opacity: 1; background: var(--accent); }
+html[data-phone='1'] .phone-dock:active::before { opacity: 1; transform: scaleX(1.08); }
+html[data-phone='1'] .phone-dock:focus-visible::before { opacity: 1; background: var(--accent); }
 
-/* Windows are the screen: edge to edge between the status bar and the
-   dock, square, no frame — one app at a time, like a phone. */
+/* The assistant at work: the line in its colour, breathing while it listens. */
+html[data-phone='1']:is([data-voice='listening'], [data-voice='conversation'], [data-voice='processing'], [data-voice='speaking']) .phone-dock::before {
+  opacity: 1;
+  background: var(--voice-color, var(--accent));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--voice-color, var(--accent)) 60%, transparent);
+}
+html[data-phone='1']:is([data-voice='listening'], [data-voice='conversation']) .phone-dock::before {
+  animation: phoneBarListen 1.2s ease-in-out infinite alternate;
+}
+@keyframes phoneBarListen {
+  from { transform: scaleX(0.85); }
+  to { transform: scaleX(1.15); }
+}
+
+/* The status dock (running tasks) hangs just over the bar. */
+html[data-phone='1'] #artifact-dock { bottom: calc(var(--phone-dock-h) + 8px); }
+
+/* Windows are the screen: edge to edge from the status bar to the bar,
+   square, no frame — one app at a time, like a phone. */
 html[data-phone='1'] #tile-grid {
-  top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 6px);
+  top: var(--hud-header-total);
   left: 0;
   right: 0;
   bottom: var(--phone-dock-h);
@@ -234,18 +274,17 @@ html[data-phone='1'] #tile-grid {
 }
 html[data-phone='1'] #tile-grid.tile-grid--phone .tile {
   border-radius: 0;
-  border-width: 1px 0 0;
+  border-width: 0;
   box-shadow: none;
 }
 
-/* A landscape phone is short: a slimmer dock. */
-@media (orientation: landscape) {
-  html[data-phone='1'] { --phone-dock-h: calc(env(safe-area-inset-bottom) + 50px); }
+@media (prefers-reduced-motion: reduce) {
+  html[data-phone='1'] .phone-dock::before { animation: none !important; }
 }
 
 /* Home screen: the launcher grid on its frosted veil (the labels stay
-   legible on any wallpaper), under the status bar, the dock and the control
-   centre; its content stays between the bar and the dock. */
+   legible on any wallpaper), under the status bar, the bar and the control
+   centre; its content stays between the two bars. */
 html[data-phone='1'][data-launcher-home='1'] .plugin-launcher {
   z-index: calc(var(--z-hud) - 1);
 }
@@ -256,8 +295,8 @@ html[data-phone='1'][data-launcher-home='1'] .lg-wrap {
   padding-bottom: calc(var(--phone-dock-h) + 8px);
 }
 
-/* The switcher (the overview) has its own Prev / Next along the bottom: the
-   dock steps aside while it is up — a card or the backdrop leaves it. */
+/* The switcher (the overview) owns the screen: the bar steps aside while it
+   is up — a card or the backdrop leaves it. */
 html[data-phone='1'][data-overview] .phone-dock { visibility: hidden; }
 html[data-phone='1'] .lg-grid {
   grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));

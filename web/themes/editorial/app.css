@@ -215,9 +215,7 @@ html[data-overview] body::after {
   pointer-events: none;
 }
 /* The overview chrome sits on the dimmed desktop on both themes: white ink. */
-.overview-title,
-.overview-label,
-.overview-nav {
+.overview-label {
   --text: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.74);
   --muted: rgba(255, 255, 255, 0.5);
@@ -227,9 +225,7 @@ html[data-overview] body::after {
   --glass-hover: rgba(255, 255, 255, 0.18);
   color: #ffffff;
 }
-.overview-title { font-weight: 600; letter-spacing: -0.055em; }
 .overview-label-name { font-weight: 500; letter-spacing: -0.02em; }
-.overview-badge,
 .overview-label-ws {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;

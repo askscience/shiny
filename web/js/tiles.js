@@ -45,6 +45,7 @@ import { webAppSurface, forgetWebAppSurface } from './webAppSurface.js';
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
 import { compactToolbar } from '../ui/compact.js';
 import { createWorkspaceSlide } from './desktop/workspaceSlide.js';
+import { createTransition } from './gestureTransition.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
 
@@ -802,6 +803,7 @@ function renderTiles() {
   // out of its hands. Both re-render when they let go.
   if (document.documentElement.dataset.overview) return;
   if (slide?.holdsRender()) return;
+  if (phoneSlide) { phoneSlide.held = true; return; }
   const names = surfacePlugins();
 
   // Names appearing for the first time are windows being opened now.
@@ -942,6 +944,72 @@ export function showPhoneHome() {
   if (!PHONE_QUERY.matches || phoneHome) return;
   phoneHome = true;
   renderTiles();
+}
+
+/** Between the leaving and the arriving window of a phone slide. */
+const PHONE_SLIDE_GAP = 24;
+/** The phone's window slide under the finger, if one is running. */
+let phoneSlide = null;
+
+/**
+ * Phone: a finger-driven slide to the next (`dir` +1) or previous (−1)
+ * window, the workspace carousel's gesture for one window at a time. The
+ * window on screen leaves with the finger while its neighbour comes in from
+ * the edge, a screen width plus a gap away, wrapping like `stepPhoneWindow`.
+ * Nothing changes until the release: a commit makes the neighbour the window
+ * on screen, a rollback leaves everything as it was. Returns a transition for
+ * the caller to drive (`update(p)`, `end(velocity)`), or null when there is
+ * no other window to go to.
+ */
+export function beginPhoneSlide(dir) {
+  if (!grid || !PHONE_QUERY.matches || phoneHome || phoneSlide || !dir) return null;
+  if (document.documentElement.dataset.overview) return null;
+  const list = phoneOrder;
+  const at = list.indexOf(activePhonePlugin);
+  if (list.length < 2 || at < 0) return null;
+  const sign = Math.sign(dir);
+  const nextName = list[(at + sign + list.length) % list.length];
+  const outEl = getPluginTile(activePhonePlugin);
+  const inEl = getPluginTile(nextName);
+  if (!outEl || !inEl || outEl === inEl) return null;
+
+  const span = (grid.clientWidth || window.innerWidth) + PHONE_SLIDE_GAP;
+  const pinned = [outEl, inEl].map((el) => ({ el, saved: el.style.cssText, wasHidden: el.classList.contains('hidden') }));
+  for (const { el } of pinned) {
+    el.classList.remove('hidden');
+    el.classList.add('tile--sliding');
+    el.style.position = 'absolute';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.margin = '0';
+  }
+  // Native Browser pages cannot follow the DOM: they hide while it slides.
+  document.body.classList.add('workspace-sliding');
+
+  const apply = (p) => {
+    const shift = -sign * p * span;
+    outEl.style.transform = `translate3d(${shift.toFixed(1)}px, 0, 0)`;
+    inEl.style.transform = `translate3d(${(shift + sign * span).toFixed(1)}px, 0, 0)`;
+  };
+  phoneSlide = { held: false };
+  apply(0);
+  return createTransition({
+    apply,
+    finish: (committed) => {
+      for (const { el, saved, wasHidden } of pinned) {
+        el.classList.remove('tile--sliding');
+        el.style.cssText = saved;
+        el.classList.toggle('hidden', wasHidden);
+      }
+      document.body.classList.remove('workspace-sliding');
+      const held = phoneSlide?.held;
+      phoneSlide = null;
+      if (committed) showPhoneWindow(nextName);
+      else if (held) renderTiles();
+    },
+  });
 }
 
 /** Phone: the next (`dir` +1) or previous (−1) open window, wrapping; from

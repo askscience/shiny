@@ -12,8 +12,8 @@
 
    The overview does not clone windows: overview.js pins the real tiles at
    their rects and moves them with transforms, which is why `#tile-grid` is
-   lifted above the rest of the chrome while it is up. The arrangement comes
-   from the theme (`html[data-overview-style="strip|cloud"]`).
+   lifted above the rest of the chrome while it is up. The cards sit in a grid
+   (js/overviewGrid.js) and travel in the user's motion language.
    ───────────────────────────────────────────────────────────── */
 
 .overview-backdrop {
@@ -40,56 +40,27 @@ body.overview-active #tile-grid {
   overflow: visible;
 }
 
-html[data-overview-style='cloud'] body.overview-active #tile-grid {
-  perspective: 1500px;
-}
-
-/* Every frame writes the transform; nothing may ease it a second time. */
+/* Every frame writes the transform (and depth's blur); nothing may ease them
+   a second time. */
 body.overview-active .tile--overview {
   position: absolute;
   margin: 0;
   transform-origin: 0 0;
   will-change: transform;
   animation: none;
-  transition:
-    box-shadow var(--motion-reveal) var(--motion-ease),
-    filter var(--motion-reveal) var(--motion-ease);
+  transition: box-shadow var(--motion-reveal) var(--motion-ease);
   box-shadow: var(--shadow-float);
   cursor: pointer;
 }
 
-/* Cloud: the windows sit back a little and drift while the overview is open;
-   the one under the pointer comes forward, fully lit. */
-html[data-overview-style='cloud'] body.overview-active .tile--overview {
-  filter: brightness(calc(1 - var(--overview-p, 0) * 0.3));
+/* A card is picked whole: nothing inside the window takes the pointer. */
+body.overview-active .tile--overview > * { pointer-events: none; }
+
+html[data-overview='open'] body.overview-active .tile--overview:hover {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-float);
 }
 
-html[data-overview='open'][data-overview-style='cloud'] body.overview-active .tile--overview {
-  animation: overviewDrift 5.5s ease-in-out calc(var(--overview-i, 0) * -1.7s) infinite alternate;
-}
-
-html[data-overview='open'][data-overview-style='cloud'] body.overview-active .tile--overview:hover {
-  filter: none;
-  z-index: 999 !important;
-}
-
-/* The "WS n" chip in each window's own header (cloud — the strip labels the
-   windows underneath instead). */
-.overview-badge {
-  flex: none;
-  margin-left: 8px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-/* ── Overview chrome: labels, headline, strip navigation ─────── */
+/* ── Overview chrome: a label under each card ─────────────────── */
 
 /* Structure only, from theme tokens; each theme skins it. */
 .overview-chrome {
@@ -103,121 +74,55 @@ html[data-overview='open'][data-overview-style='cloud'] body.overview-active .ti
 
 .overview-chrome.hidden { display: none; }
 
-/* The cloud floats its windows around the headline: keep the words behind
-   them (over the backdrop, under the lifted grid). */
-.overview-chrome[data-style='cloud'] { z-index: 44; }
-
 .overview-label {
   position: absolute;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  padding-top: 4px;
+  box-sizing: border-box;
   white-space: nowrap;
   opacity: 0;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 11.5px;
-  color: var(--muted);
+  font-size: 12.5px;
+  color: var(--text);
 }
 
 .overview-label-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: var(--font-display, inherit);
-  font-size: 15px;
   font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--text);
 }
 
 .overview-label-ws {
   flex: none;
-  margin-left: auto;
-  padding: 2px 6px;
+  min-width: 18px;
+  padding: 1px 5px;
+  box-sizing: border-box;
   border-radius: var(--radius-xs, 6px);
   background: var(--glass, rgba(255, 255, 255, 0.12));
   border: 1px solid var(--glass-border, transparent);
-}
-
-.overview-chrome[data-style='cloud'] .overview-labels { display: none; }
-
-/* The headline: each line rises out of its own mask as the overview opens. */
-.overview-title {
-  position: absolute;
-  margin: 0;
-  font-family: var(--font-display, inherit);
-  font-weight: 600;
-  line-height: 0.9;
-  letter-spacing: -0.05em;
-  color: var(--text);
-}
-
-.overview-title-line {
-  display: block;
-  overflow: clip;
-  padding-bottom: 0.06em;
-  margin-bottom: -0.06em;
-}
-
-.overview-title-line > span {
-  display: inline-block;
-  transform: translateY(calc(clamp(0, 1 - var(--overview-p, 0) * 1.6 + var(--i, 0) * 0.3, 1) * 108%));
-}
-
-.overview-title-line:last-child > span { color: var(--muted); }
-
-.overview-chrome[data-style='strip'] .overview-title {
-  left: max(24px, 5.3vw);
-  bottom: 6vh;
-  font-size: clamp(40px, 6.4vw, 92px);
-}
-
-.overview-chrome[data-style='cloud'] .overview-title {
-  left: 0;
-  right: 0;
-  top: 50%;
-  translate: 0 -50%;
+  color: var(--muted);
+  font-size: 10.5px;
   text-align: center;
-  font-size: clamp(44px, 8.2vw, 118px);
 }
 
-.overview-nav {
-  position: absolute;
-  right: max(24px, 5.3vw);
-  bottom: 6vh;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: var(--overview-p, 0);
-}
-
-html[data-overview='open'] .overview-nav { pointer-events: auto; }
-.overview-nav.hidden { display: none; }
-
-.overview-nav-count {
-  margin-right: 14px;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 11.5px;
+.overview-label-close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
   color: var(--muted);
 }
 
-.overview-nav-btn {
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border, transparent);
-  background: var(--glass, rgba(255, 255, 255, 0.12));
-  backdrop-filter: var(--glass-blur, none);
-  -webkit-backdrop-filter: var(--glass-blur, none);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background var(--motion-feedback) var(--motion-ease), opacity var(--motion-feedback) var(--motion-ease);
-}
+html[data-overview='open'] .overview-label-close { pointer-events: auto; }
+.overview-label-close:hover { color: var(--text); }
 
-.overview-nav-btn:hover:not(:disabled) { background: var(--glass-hover, var(--glass, rgba(255, 255, 255, 0.2))); }
-.overview-nav-btn:disabled { opacity: 0.4; cursor: default; }
+/* A finger needs a bigger target than the cursor. */
+html[data-phone='1'] .overview-label-close { width: 30px; height: 30px; }
 
 /* ── Workspace slide ─────────────────────────────────────────── */
 
@@ -232,13 +137,8 @@ html[data-overview='open'] .overview-nav { pointer-events: auto; }
 body.workspace-sliding #tile-grid { overflow: hidden; }
 body.workspace-sliding .tile-splitters { visibility: hidden; }
 
-@keyframes overviewDrift {
-  from { translate: 0 -9px; }
-  to { translate: 0 9px; }
-}
-
 /* The progress itself jumps under reduced motion (gestureTransition.js); only
-   the ambient drift and the hover easing are left to switch off here. */
+   the hover easing is left to switch off here. */
 @media (prefers-reduced-motion: reduce) {
   .overview-backdrop,
   body.overview-active .tile--overview {

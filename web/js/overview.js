@@ -1,56 +1,53 @@
 /**
- * overview.js — the window overview (three-finger swipe up).
+ * overview.js — the window overview (three-finger swipe up; the phone's
+ * window switcher).
  *
- * Mission-Control for the desktop: every open plugin window, from every
- * workspace, over a dimmed backdrop. The windows are the real tiles — nothing
- * is cloned and no iframe is torn down, so a running video or a half-typed
- * document survives the trip. Clicking a window focuses it (switching to its
- * workspace) and closes the overview.
+ * Every open window, from every workspace, as a grid of cards over a dimmed
+ * backdrop. The cards are the real tiles — nothing is cloned and no iframe is
+ * torn down, so a running video or a half-typed document survives the trip.
+ * A tap on a card goes to that window (switching to its workspace); its ✕
+ * closes it; a tap outside, Escape or the gesture back closes the overview.
  *
  * The overview is one progress value, 0 = the desktop and 1 = open. A swipe
  * drives it with the fingers (gestures.js → `overviewTransition`), a discrete
  * open/close animates the same path. At `beginOverview()` every tile is
  * measured once and pinned (absolutely positioned at its current rect, so any
  * layout mode works); each frame then interpolates a transform from that rect
- * to the tile's overview target (FLIP). Windows of other workspaces fly in
- * from the side their workspace lives on. Closing animates back and restores
- * each tile's inline style exactly as it was.
+ * to the tile's card (FLIP). How a card travels follows the user's motion
+ * language (`<html data-motion>`, overviewGrid.js `MOTION`): kinetic arrives
+ * fast in a cascade, fluid on a spring, depth out of a blur. Windows of other
+ * workspaces come in from the side their workspace lives on. Closing animates
+ * back and restores each tile's inline style exactly as it was.
  *
- * The active theme picks the arrangement (`overview` in theme.json):
- *
- *   strip — a horizontal row of equal boxes, windows on a common baseline,
- *           a label under each and Prev / Next (or ← / →) to scroll it;
- *   cloud — windows scattered at different depths around a centred
- *           headline, drifting gently while open.
- *
- * Themes style the rest from `--overview-p` (0..1, every frame) and
- * `html[data-overview="opening|open|closing"]` / `[data-overview-style]` on
- * the document element. Escape or a click outside the windows closes.
+ * The grid scrolls (wheel, or a drag on a touch screen) when the cards do not
+ * fit. Themes style the rest from `--overview-p` (0..1, every frame) and
+ * `html[data-overview="opening|open|closing"]`.
  */
 import { focusWindow, getWorkspacesList, activeWorkspaceIndex } from './desktop.js';
-import { refreshTiles, showPhoneWindow } from './tiles.js';
+import { refreshTiles, showPhoneWindow, closePluginWindow } from './tiles.js';
 import { PHONE_QUERY } from './viewport.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
-import { getThemeManifest } from '../ui/theme-loader.js';
-import { controlButton } from '../ui/components/button.js';
-import { createTransition, animateValue, clamp01 } from './gestureTransition.js';
-import { t, tp } from './i18n.js';
+import { iconButton } from '../ui/components/button.js';
+import { createTransition, clamp01 } from './gestureTransition.js';
+import { gridLayout, motionFor, blurFor, LABEL_H } from './overviewGrid.js';
+import { t } from './i18n.js';
 
-const STYLES = new Set(['strip', 'cloud']);
-const STRIP_GAP = 26;
-const LABEL_GAP = 14;
+/** Pointer travel (px) that turns a tap into a scroll. */
+const DRAG_PX = 8;
 
 let grid = null;
 let backdrop = null;
 let chrome = null;
 let open = false;
-/** The pinned tiles and their targets while the overview is on screen. */
+/** The pinned tiles and their cards while the overview is on screen. */
 let stage = null;
 /** The current openness, 0..1. */
 let progress = 0;
 /** The discrete open/close in flight, if any. */
 let running = null;
 let swallowNextClick = false;
+/** A pointer down on the grid: a tap picks, a drag scrolls. */
+let press = null;
 
 export function isOverviewOpen() {
   return open;
@@ -66,9 +63,8 @@ function tiles() {
   return grid ? [...grid.querySelectorAll(':scope > .tile[data-plugin]')] : [];
 }
 
-function overviewStyle() {
-  const style = getThemeManifest()?.overview;
-  return STYLES.has(style) ? style : 'strip';
+function motionName() {
+  return document.documentElement.dataset.motion || 'kinetic';
 }
 
 function setPhase(phase) {
@@ -84,231 +80,136 @@ function windowTitle(el) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-function wsLabel(index) {
-  return index >= 0
-    ? t('desktop.overviewWs', { n: index + 1 }, `WS ${index + 1}`)
-    : t('desktop.overviewWsNone', null, 'WS');
-}
-
-/** A "WS n" chip in each window's own header (the cloud has no labels). */
-function addBadge(el, index) {
-  const header = el.querySelector(':scope > .tile-header');
-  if (!header) return;
-  const badge = document.createElement('span');
-  badge.className = 'overview-badge';
-  badge.textContent = wsLabel(index);
-  badge.dataset.overview = 'badge';
-  header.appendChild(badge);
-}
-
-function clearBadges() {
-  grid?.querySelectorAll('.overview-badge').forEach((b) => b.remove());
-}
-
-/* ── Targets ──────────────────────────────────────────────────── */
+/* ── Cards ────────────────────────────────────────────────────── */
 
 /** Fit a `w`×`h` window into a box, keeping its aspect. */
 const fit = (w, h, boxW, boxH) => Math.min(boxW / Math.max(1, w), boxH / Math.max(1, h));
 
-function stripGeometry(W, H, n) {
-  const pad = Math.max(24, Math.round(W * 0.053));
-  let boxH = Math.round(H * 0.36);
-  let boxW = Math.round(boxH * 1.3);
-  if (boxW > W - pad * 2) {
-    boxW = W - pad * 2;
-    boxH = Math.round(boxW / 1.3);
-  }
-  const top = Math.round(H * 0.12);
-  const visible = Math.max(1, Math.floor((W - pad * 2 + STRIP_GAP) / (boxW + STRIP_GAP)));
-  return { pad, boxW, boxH, top, visible, max: Math.max(0, n - visible) };
-}
-
-function stripTargets(items, W, H, strip) {
-  const g = stripGeometry(W, H, items.length);
-  return items.map((it, i) => {
-    const s = fit(it.src.w, it.src.h, g.boxW, g.boxH);
-    const boxX = g.pad + (i - strip) * (g.boxW + STRIP_GAP);
+function computeTargets() {
+  if (!stage) return;
+  const { W, H } = stage;
+  const layout = gridLayout(stage.items.length, W, H, { phone: PHONE_QUERY.matches });
+  stage.maxScroll = layout.maxScroll;
+  stage.scroll = Math.min(stage.scroll, stage.maxScroll);
+  stage.targets = stage.items.map((it, i) => {
+    const card = layout.cards[i];
+    const s = fit(it.src.w, it.src.h, card.w, card.h);
+    const w = it.src.w * s;
+    const h = it.src.h * s;
+    // On the card's bottom edge, so every label sits right under its window.
     return {
-      x: boxX + (g.boxW - it.src.w * s) / 2,
-      y: g.top + g.boxH - it.src.h * s,
-      s, z: 0, ry: 0,
-      label: { x: boxX, y: g.top + g.boxH + LABEL_GAP, w: g.boxW },
+      x: card.x + (card.w - w) / 2,
+      y: card.y + card.h - h,
+      s,
+      label: { x: card.x + (card.w - w) / 2, y: card.y + card.h, w },
     };
   });
 }
 
-/** Depths (px towards the viewer) and a little turn, cycled over the windows. */
-const CLOUD_DEPTH = [-60, 90, -160, 40, 120, -240, 10, -110];
-
-function cloudTargets(items, W, H) {
-  const n = items.length;
-  const boxW = Math.min(W, H * 1.6) * (n <= 3 ? 0.34 : n <= 6 ? 0.28 : 0.22);
-  const boxH = boxW * 0.7;
-  const rx = W * 0.36;
-  const ry = H * 0.34;
-  return items.map((it, i) => {
-    // Around the centred headline, starting top-left; a little irregular so
-    // it reads as scattered rather than as a clock face.
-    const a = -Math.PI * 0.75 + (i / n) * Math.PI * 2 + Math.sin(i * 2.4) * 0.18;
-    const s = fit(it.src.w, it.src.h, boxW, boxH);
-    const w = it.src.w * s;
-    const h = it.src.h * s;
-    const cx = W / 2 + Math.cos(a) * rx;
-    const cy = H / 2 + Math.sin(a) * ry;
-    const x = Math.min(Math.max(0, cx - w / 2), Math.max(0, W - w));
-    const y = Math.min(Math.max(0, cy - h / 2), Math.max(0, H - h));
-    return { x, y, s, z: CLOUD_DEPTH[i % CLOUD_DEPTH.length], ry: -Math.cos(a) * 8, label: null };
-  });
-}
-
-function computeTargets() {
-  if (!stage) return;
-  const { W, H } = stage;
-  stage.targets = stage.style === 'cloud'
-    ? cloudTargets(stage.items, W, H)
-    : stripTargets(stage.items, W, H, stage.strip);
-}
-
-/* ── Chrome: labels, headline, strip navigation ───────────────── */
+/* ── Chrome: a label (and a close button) under each card ─────── */
 
 function buildChrome() {
   if (!chrome) {
     chrome = document.createElement('div');
     chrome.className = 'overview-chrome';
-    chrome.setAttribute('aria-hidden', 'true');
     grid.after(chrome);
   }
   chrome.textContent = '';
-  chrome.dataset.style = stage.style;
-
-  const labels = document.createElement('div');
-  labels.className = 'overview-labels';
-  stage.items.forEach((it, i) => {
+  const spaces = getWorkspacesList().length;
+  stage.items.forEach((it) => {
     const label = document.createElement('div');
     label.className = 'overview-label';
-    const index = document.createElement('span');
-    index.className = 'overview-label-index';
-    index.textContent = String(i + 1).padStart(2, '0');
+    label.style.height = `${LABEL_H}px`;
+    const title = windowTitle(it.el);
     const name = document.createElement('span');
     name.className = 'overview-label-name';
-    name.textContent = windowTitle(it.el);
-    const ws = document.createElement('span');
-    ws.className = 'overview-label-ws';
-    ws.textContent = wsLabel(it.ws);
-    label.append(index, name, ws);
-    labels.appendChild(label);
+    name.textContent = title;
+    label.appendChild(name);
+    // Which workspace, only where there is more than one to tell apart.
+    if (spaces > 1 && it.ws >= 0 && !PHONE_QUERY.matches) {
+      const ws = document.createElement('span');
+      ws.className = 'overview-label-ws';
+      ws.textContent = String(it.ws + 1);
+      label.appendChild(ws);
+    }
+    const close = iconButton({
+      icon: 'ui/close',
+      size: 'sm',
+      iconSize: 14,
+      label: t('desktop.closeWindow', { name: title }, `Close ${title}`),
+      className: 'overview-label-close',
+      onClick: (e) => { e.stopPropagation(); closeCard(it); },
+    });
+    label.appendChild(close);
+    chrome.appendChild(label);
     it.label = label;
   });
-
-  const title = document.createElement('div');
-  title.className = 'overview-title';
-  const spaces = Math.max(1, getWorkspacesList().length);
-  [
-    tp('desktop.overviewWindows', stage.items.length, null, `${stage.items.length} windows,`),
-    tp('desktop.overviewSpaces', spaces, null, `${spaces} spaces.`),
-  ].forEach((text, i) => {
-    const line = document.createElement('span');
-    line.className = 'overview-title-line';
-    line.style.setProperty('--i', String(i));
-    const inner = document.createElement('span');
-    inner.textContent = text;
-    line.appendChild(inner);
-    title.appendChild(line);
-  });
-
-  chrome.append(labels, title);
-
-  if (stage.style === 'strip') {
-    const nav = document.createElement('div');
-    nav.className = 'overview-nav';
-    const count = document.createElement('span');
-    count.className = 'overview-nav-count';
-    const prev = controlButton();
-    prev.className = 'overview-nav-btn';
-    prev.dataset.dir = '-1';
-    prev.textContent = `← ${t('desktop.overviewPrev', null, 'Prev')}`;
-    const next = controlButton();
-    next.className = 'overview-nav-btn';
-    next.dataset.dir = '1';
-    next.textContent = `${t('desktop.overviewNext', null, 'Next')} →`;
-    nav.append(count, prev, next);
-    nav.addEventListener('click', (e) => {
-      const btn = e.target.closest?.('.overview-nav-btn');
-      if (btn) scrollStrip(Number(btn.dataset.dir));
-    });
-    chrome.appendChild(nav);
-    stage.nav = { el: nav, count, prev, next };
-  }
   chrome.classList.remove('hidden');
 }
 
-function syncNav() {
-  const nav = stage?.nav;
-  if (!nav) return;
-  const { max } = stripGeometry(stage.W, stage.H, stage.items.length);
-  const at = Math.round(stage.stripTo);
-  nav.el.classList.toggle('hidden', max === 0);
-  nav.count.textContent = `${String(at + 1).padStart(2, '0')} — ${String(stage.items.length).padStart(2, '0')}`;
-  nav.prev.disabled = at <= 0;
-  nav.next.disabled = at >= max;
+/** Close one window from the overview; the others close ranks. */
+function closeCard(it) {
+  if (!stage || !open) return;
+  const name = it.el.dataset.plugin;
+  stage.items = stage.items.filter((x) => x !== it);
+  it.label?.remove();
+  it.el.classList.remove('tile--overview');
+  it.el.style.cssText = it.saved;
+  it.el.classList.add('hidden');
+  if (name) closePluginWindow(name);
+  if (stage.items.length === 0) {
+    closeOverview();
+    return;
+  }
+  computeTargets();
+  render();
 }
 
-/** Scroll the strip by whole windows (Prev / Next, ← / →). */
-function scrollStrip(dir) {
-  if (!stage || stage.style !== 'strip' || !dir) return;
-  const { max } = stripGeometry(stage.W, stage.H, stage.items.length);
-  const to = Math.min(max, Math.max(0, Math.round(stage.stripTo) + Math.sign(dir)));
-  if (to === stage.stripTo) return;
-  stage.stripTo = to;
-  stage.stopStrip?.();
-  stage.stopStrip = animateValue({
-    from: stage.strip,
-    to,
-    duration: 420,
-    onFrame: (v) => {
-      if (!stage) return;
-      stage.strip = v;
-      computeTargets();
-      render();
-    },
-  });
-  syncNav();
+/** Scroll the grid by `dy` px (clamped). */
+function scrollBy(dy) {
+  if (!stage || !stage.maxScroll) return;
+  const next = Math.min(stage.maxScroll, Math.max(0, stage.scroll + dy));
+  if (next === stage.scroll) return;
+  stage.scroll = next;
+  render();
 }
 
 /* ── Rendering ────────────────────────────────────────────────── */
-
-const easeOut = (k) => 1 - (1 - k) ** 3;
 
 /** Paint the overview at the current progress. */
 function render() {
   if (!stage) return;
   const n = stage.items.length;
-  // The windows leave in a short cascade, the first one first.
-  const stagger = n > 1 ? Math.min(0.06, 0.36 / (n - 1)) : 0;
+  const motion = motionFor(stage.motion);
+  // The cards move in a short cascade, the first one first.
+  const stagger = n > 1 ? Math.min(motion.stagger, 0.36 / (n - 1)) : 0;
   const span = 1 - (n - 1) * stagger;
   const p = progress;
   const ox = stage.box.left;
-  const oy = stage.box.top;
+  const oy = stage.box.top - stage.scroll;
   stage.items.forEach((it, i) => {
     const target = stage.targets[i];
     const q = clamp01((p - i * stagger) / span);
     // Outside 0..1 (a rubber band) the whole stage stretches a little.
-    const e = p > 1 ? 1 + (p - 1) : p < 0 ? p : easeOut(q);
+    const e = p > 1 ? 1 + (p - 1) : p < 0 ? p : motion.ease(q);
     const away = it.side * stage.W * (1 - clamp01(e));
     const tx = (target.x - it.src.x) * e + away;
-    const ty = (target.y - it.src.y) * e;
-    const scale = 1 + (target.s - 1) * e;
-    it.el.style.transform = `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, ${(target.z * e).toFixed(1)}px)`
-      + ` rotateY(${(target.ry * e).toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+    const ty = (target.y - stage.scroll - it.src.y) * e;
+    // A window that was not on screen grows in from a little smaller.
+    const from = it.fade ? target.s * 0.85 : 1;
+    const scale = from + (target.s - from) * e;
+    it.el.style.transform = `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
     if (it.fade) it.el.style.opacity = clamp01(e).toFixed(3);
+    const blur = blurFor(stage.motion, e);
+    it.el.style.filter = blur ? `blur(${blur}px)` : '';
     if (it.label) {
       const lt = target.label;
-      if (lt) {
-        it.label.style.left = `${Math.round(ox + lt.x)}px`;
-        it.label.style.top = `${Math.round(oy + lt.y)}px`;
-        it.label.style.width = `${Math.round(lt.w)}px`;
-      }
-      it.label.style.opacity = lt ? clamp01((q - 0.55) / 0.45).toFixed(3) : '0';
+      const l = clamp01((q - 0.6) / 0.4);
+      it.label.style.left = `${Math.round(ox + lt.x)}px`;
+      it.label.style.top = `${Math.round(oy + lt.y)}px`;
+      it.label.style.width = `${Math.round(lt.w)}px`;
+      it.label.style.opacity = l.toFixed(3);
+      it.label.style.transform = l < 1 ? `translateY(${((1 - l) * 6).toFixed(1)}px)` : '';
     }
   });
   document.documentElement.style.setProperty('--overview-p', clamp01(p).toFixed(4));
@@ -373,19 +274,11 @@ export function beginOverview() {
   stage = {
     items, W, H,
     box: grid.getBoundingClientRect(),
-    style: overviewStyle(),
-    strip: 0,
-    stripTo: 0,
+    motion: motionName(),
+    scroll: 0,
+    maxScroll: 0,
     targets: [],
-    nav: null,
-    stopStrip: null,
   };
-  // Start the strip on the first window of the active workspace.
-  if (stage.style === 'strip') {
-    const first = items.findIndex((it) => it.ws === active);
-    const { max } = stripGeometry(W, H, items.length);
-    stage.strip = stage.stripTo = Math.min(max, Math.max(0, first));
-  }
   computeTargets();
 
   items.forEach((it, i) => {
@@ -399,18 +292,14 @@ export function beginOverview() {
     el.style.top = `${src.y}px`;
     el.style.width = `${src.w}px`;
     el.style.height = `${src.h}px`;
-    el.style.zIndex = String(10 + (stage.style === 'cloud' ? stage.targets[i].z + 300 : i));
+    el.style.zIndex = String(10 + i);
     el.style.setProperty('--overview-i', String(i));
-    if (stage.style === 'cloud') addBadge(el, it.ws);
   });
 
-  const root = document.documentElement;
-  root.dataset.overviewStyle = stage.style;
   setPhase('opening');
   document.body.classList.add('overview-active');
   backdrop?.classList.remove('hidden');
   buildChrome();
-  syncNav();
   progress = 0;
   render();
   return true;
@@ -440,10 +329,9 @@ export function endOverview(openAtEnd) {
   }
   open = false;
   const items = stage.items;
-  stage.stopStrip?.();
   stage = null;
+  press = null;
   progress = 0;
-  clearBadges();
   chrome?.classList.add('hidden');
   if (chrome) chrome.textContent = '';
   for (const it of items) {
@@ -454,7 +342,6 @@ export function endOverview(openAtEnd) {
   backdrop?.classList.add('hidden');
   const root = document.documentElement;
   setPhase(null);
-  delete root.dataset.overviewStyle;
   root.style.removeProperty('--overview-p');
   // Re-tile: re-applies the layout and hides the other workspaces' windows.
   refreshTiles();
@@ -519,8 +406,8 @@ export function initOverview() {
   backdrop = document.getElementById('overview-backdrop');
   if (!grid) return;
 
-  // Capture-phase so a click selects the window instead of reaching a button
-  // inside it. Pointer, not click, so a drag inside a window cannot start.
+  // Capture-phase so a tap selects the window instead of reaching a button
+  // inside it. A tap picks on release; a drag scrolls a grid that overflows.
   grid.addEventListener('pointerdown', (e) => {
     if (!stage) {
       // Clear any stale swallow from a previous pointerdown that never
@@ -530,10 +417,32 @@ export function initOverview() {
     }
     e.preventDefault();
     e.stopPropagation();
-    if (!open) return;
-    // Outside every window is the backdrop: leave.
-    if (!pick(e.target)) closeOverview();
+    if (!open || e.button > 0) return;
+    press = { id: e.pointerId, y: e.clientY, lastY: e.clientY, target: e.target, dragging: false };
+    try { grid.setPointerCapture(e.pointerId); } catch (_) { /* synthetic events */ }
   }, true);
+  grid.addEventListener('pointermove', (e) => {
+    if (!stage) return;
+    e.stopPropagation();
+    if (!press || e.pointerId !== press.id) return;
+    if (!press.dragging && Math.abs(e.clientY - press.y) > DRAG_PX) press.dragging = true;
+    if (press.dragging) {
+      scrollBy(press.lastY - e.clientY);
+      press.lastY = e.clientY;
+    }
+  }, true);
+  grid.addEventListener('pointerup', (e) => {
+    if (!stage) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!press || e.pointerId !== press.id) return;
+    const { dragging, target } = press;
+    press = null;
+    if (dragging || !open) return;
+    // Outside every window is the backdrop: leave.
+    if (!pick(target)) closeOverview();
+  }, true);
+  grid.addEventListener('pointercancel', () => { press = null; }, true);
   grid.addEventListener('click', (e) => {
     if (!stage && !swallowNextClick) return;
     swallowNextClick = false;
@@ -541,12 +450,15 @@ export function initOverview() {
     e.stopPropagation();
   }, true);
 
-  // No scrolling a window while picking one.
-  grid.addEventListener('wheel', (e) => {
+  // No scrolling a window while picking one: the wheel scrolls the grid.
+  const onWheel = (e) => {
     if (!stage) return;
     e.preventDefault();
     e.stopPropagation();
-  }, { capture: true, passive: false });
+    if (open) scrollBy(e.deltaY);
+  };
+  grid.addEventListener('wheel', onWheel, { capture: true, passive: false });
+  backdrop?.addEventListener('wheel', onWheel, { passive: false });
 
   backdrop?.addEventListener('click', () => closeOverview());
 
@@ -558,13 +470,6 @@ export function initOverview() {
       e.preventDefault();
       e.stopImmediatePropagation();
       closeOverview();
-      return;
-    }
-    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && stage?.style === 'strip'
-        && !e.altKey && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      scrollStrip(e.key === 'ArrowLeft' ? -1 : 1);
     }
   }, true);
 
@@ -573,21 +478,14 @@ export function initOverview() {
     if (stage && e.detail?.which !== 'overview') closeOverview();
   });
 
-  // A resize or theme change while open re-flows the targets.
+  // A resize while open re-flows the cards; a motion change applies to the
+  // next trip.
   const reflow = () => {
     if (!stage) return;
     stage.W = grid.clientWidth || window.innerWidth;
     stage.H = grid.clientHeight || window.innerHeight;
     stage.box = grid.getBoundingClientRect();
-    const style = overviewStyle();
-    if (style !== stage.style && open) {
-      // A different arrangement needs its own chrome: rebuild from scratch.
-      endOverview(false);
-      if (beginOverview()) endOverview(true);
-      return;
-    }
     computeTargets();
-    syncNav();
     render();
   };
   window.addEventListener('resize', reflow);

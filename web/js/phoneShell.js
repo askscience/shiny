@@ -1,5 +1,5 @@
 /**
- * phoneShell.js — the phone's home screen, dock and one-finger gestures.
+ * phoneShell.js — the phone's home screen, its bar and one-finger gestures.
  *
  * A phone shows one window at a time (tiles.js). On top of that this module
  * gives it the shape of a mobile OS:
@@ -7,25 +7,32 @@
  *  - Home screen: with no window on screen (none open, or the user went
  *    home) the launcher grid is the home screen. It stays up until a window
  *    takes the screen — nothing else dismisses it (launcher.js `isHome`).
- *  - Dock: the strip along the bottom edge, around the voice bar, with a
- *    handle under it. No buttons: the handle is the control —
- *      tap the handle         → home
- *      press and hold it      → window switcher (the overview)
- *    and the whole strip takes the swipes —
- *      swipe up               → home
- *      swipe up and hold      → window switcher (also: a long swipe up)
- *      swipe left / right     → next / previous window
+ *  - The bar: one thin strip along the bottom edge with a line in it, and no
+ *    buttons. It is both the way around and the assistant (the voice bar does
+ *    not show on a phone; the line takes its colour while the assistant is
+ *    busy):
+ *      tap                    → home (while listening: stop listening)
+ *      press and hold         → window switcher (the overview)
+ *      swipe up               → the chat (type to the assistant)
+ *      swipe up and hold      → talk (listen once)
+ *      drag left / right      → the window follows the finger and the
+ *                               next / previous one comes in beside it
+ *                               (the workspace carousel's gesture); let go
+ *                               past half-way, or flick, to switch
+ *    With the AI switched off a swipe up goes home and a swipe up and hold
+ *    opens the switcher.
  *  - Back: with a window on screen the browser's Back (Android's back
  *    gesture) goes home instead of leaving the page — one history entry is
  *    held while a window is up and given back on the way home.
  *
- * Everything is keyed to the phone breakpoint (`PHONE_QUERY`, the one
- * tiles.js uses for its one-window layout) and mirrored on `html[data-phone]`
- * for css/mobile.css.
+ * The assistant's actions come from app.js (`setPhoneBarActions`), which owns
+ * the voice bar's own. Everything is keyed to the phone breakpoint
+ * (`PHONE_QUERY`, the one tiles.js uses for its one-window layout) and
+ * mirrored on `html[data-phone]` for css/mobile.css.
  */
 
 import { PHONE_QUERY } from './viewport.js';
-import { showPhoneHome, stepPhoneWindow } from './tiles.js';
+import { showPhoneHome, stepPhoneWindow, beginPhoneSlide } from './tiles.js';
 import { openLauncher, closeLauncher, isLauncherActive } from './launcher.js';
 import { openOverview, closeOverview, isOverviewActive } from './overview.js';
 import { closeControlCenter } from './controlCenter.js';
@@ -35,32 +42,45 @@ import { t } from './i18n.js';
 const SWIPE_PX = 36;
 /** Sideways travel (px) that switches window. */
 const SIDE_PX = 60;
-/** A pause this long, once swiping up, opens the switcher. */
+/** A pause this long, once swiping up, is "swipe up and hold". */
 const HOLD_MS = 320;
 /** Movement (px) that counts as "still moving", not holding. */
 const STILL_PX = 8;
-/** An upward swipe longer than this share of the screen opens the switcher. */
-const LONG_SWIPE = 0.3;
-/** Holding the handle this long opens the switcher. */
+/** Pressing the bar this long without moving opens the switcher. */
 const LONG_PRESS_MS = 450;
 /** After the home launcher closed without a window coming (a failed
  *  activation, say), put the home screen back after this long. */
 const HOME_RECOVER_MS = 1500;
+/** Voice states in which a tap on the bar stops listening. */
+const LISTENING = new Set(['listening', 'conversation']);
 
 let dock = null;
-let handle = null;
 /** A history entry is held for the window on screen (Back goes home). */
 let heldEntry = false;
 /** The launcher is up because it is the home screen. */
 let homeLaunched = false;
 let recoverTimer = null;
 let ready = false;
+/** The assistant's actions (app.js); null until wired, or with the AI off. */
+let actions = { chat: null, voice: null, enabled: () => false };
 
 function root() { return document.documentElement; }
 
 function isPhone() { return PHONE_QUERY.matches; }
 
 function isHome() { return isPhone() && root().dataset.phoneHome === '1'; }
+
+/**
+ * The assistant behind the bar: `chat()` opens the keyboard, `voice()` listens
+ * once (or stops a listen in progress), `enabled()` says whether the AI is on.
+ */
+export function setPhoneBarActions({ chat = null, voice = null, enabled = () => true } = {}) {
+  actions = { chat, voice, enabled };
+}
+
+function aiOn() {
+  try { return !!actions.enabled?.(); } catch (_) { return false; }
+}
 
 /** Keep the launcher in step with the home screen. */
 function syncHome() {
@@ -95,6 +115,38 @@ function toggleSwitcher() {
   else openOverview();
 }
 
+/** Swipe up: the chat, or home with the AI off. */
+function swipeUp() {
+  closeControlCenter();
+  if (aiOn() && actions.chat) {
+    if (isOverviewActive()) closeOverview();
+    actions.chat();
+  } else {
+    goHome();
+  }
+}
+
+/** Swipe up and hold: talk, or the switcher with the AI off. */
+function swipeHold() {
+  navigator.vibrate?.(10);
+  if (aiOn() && actions.voice) {
+    closeControlCenter();
+    if (isOverviewActive()) closeOverview();
+    actions.voice();
+  } else {
+    toggleSwitcher();
+  }
+}
+
+/** Tap: home — unless the assistant is listening, then the tap stops it. */
+function tap() {
+  if (aiOn() && actions.voice && LISTENING.has(root().dataset.voice)) {
+    actions.voice();
+    return;
+  }
+  goHome();
+}
+
 /* ── Gestures ──────────────────────────────────────────────── */
 
 let gesture = null;
@@ -102,117 +154,116 @@ let gesture = null;
 function endGesture() {
   if (!gesture) return;
   clearTimeout(gesture.holdTimer);
+  clearTimeout(gesture.pressTimer);
+  // A slide still under the finger (a cancelled pointer) rolls back.
+  gesture.slide?.cancel();
   gesture = null;
+}
+
+/** Progress of a sideways drag: the share of the screen travelled. */
+function slideProgress(g, x) {
+  return (g.slideDir * (g.x - x)) / Math.max(1, window.innerWidth);
 }
 
 function onPointerDown(e) {
   if (!isPhone() || e.button > 0) return;
-  if (e.target instanceof Element && e.target.closest('.phone-dock-handle') && e.target !== dock) return;
   endGesture();
-  gesture = {
+  const g = {
     id: e.pointerId,
     x: e.clientX,
     y: e.clientY,
     lastX: e.clientX,
     lastY: e.clientY,
     holdTimer: null,
+    pressTimer: null,
+    moved: false,
     done: false,
+    /** The window slide this drag drives, once it turned sideways. */
+    slide: null,
+    slideDir: 0,
+    /** Recent progress samples, for the release velocity. */
+    samples: [],
   };
+  // Held still: the switcher.
+  g.pressTimer = setTimeout(() => {
+    if (gesture !== g || g.moved || g.done) return;
+    g.done = true;
+    navigator.vibrate?.(10);
+    toggleSwitcher();
+  }, LONG_PRESS_MS);
+  gesture = g;
   try { dock.setPointerCapture(e.pointerId); } catch (_) { /* synthetic events */ }
 }
 
 function onPointerMove(e) {
-  if (!gesture || e.pointerId !== gesture.id || gesture.done) return;
-  const up = gesture.y - e.clientY;
-  const side = e.clientX - gesture.x;
-  if (up > SWIPE_PX && up > Math.abs(side)) {
-    if (up > window.innerHeight * LONG_SWIPE) {
-      gesture.done = true;
-      clearTimeout(gesture.holdTimer);
-      toggleSwitcher();
-      return;
+  const g = gesture;
+  if (!g || e.pointerId !== g.id || g.done) return;
+  const up = g.y - e.clientY;
+  const side = e.clientX - g.x;
+  if (!g.moved && Math.hypot(up, side) > STILL_PX * 2) {
+    g.moved = true;
+    clearTimeout(g.pressTimer);
+    // Sideways first: the window follows the finger from here on.
+    if (Math.abs(side) > Math.abs(up)) {
+      g.slideDir = side < 0 ? 1 : -1;
+      closeControlCenter();
+      g.slide = beginPhoneSlide(g.slideDir);
+      if (!g.slide) g.slideDir = 0;
     }
-    // Swiping up: a pause here is the "hold" that asks for the switcher.
-    const moved = Math.hypot(e.clientX - gesture.lastX, e.clientY - gesture.lastY);
-    if (moved > STILL_PX || !gesture.holdTimer) {
-      gesture.lastX = e.clientX;
-      gesture.lastY = e.clientY;
-      clearTimeout(gesture.holdTimer);
-      gesture.holdTimer = setTimeout(() => {
-        if (!gesture || gesture.done) return;
-        gesture.done = true;
-        toggleSwitcher();
+  }
+  if (g.slide) {
+    const p = slideProgress(g, e.clientX);
+    g.slide.update(p);
+    const now = performance.now();
+    g.samples.push({ p, t: now });
+    while (g.samples.length > 2 && now - g.samples[0].t > 100) g.samples.shift();
+    return;
+  }
+  if (up > SWIPE_PX && up > Math.abs(side)) {
+    // Swiping up: a pause here is the "hold".
+    const moved = Math.hypot(e.clientX - g.lastX, e.clientY - g.lastY);
+    if (moved > STILL_PX || !g.holdTimer) {
+      g.lastX = e.clientX;
+      g.lastY = e.clientY;
+      clearTimeout(g.holdTimer);
+      g.holdTimer = setTimeout(() => {
+        if (gesture !== g || g.done) return;
+        g.done = true;
+        swipeHold();
       }, HOLD_MS);
     }
   }
 }
 
 function onPointerUp(e) {
-  if (!gesture || e.pointerId !== gesture.id) return;
-  const { done } = gesture;
-  const up = gesture.y - e.clientY;
-  const side = e.clientX - gesture.x;
+  const g = gesture;
+  if (!g || e.pointerId !== g.id) return;
+  const up = g.y - e.clientY;
+  const side = e.clientX - g.x;
+  if (g.slide) {
+    // Commit past half-way or on a flick towards the neighbour.
+    const first = g.samples[0];
+    const last = g.samples[g.samples.length - 1];
+    const dt = first && last ? (last.t - first.t) / 1000 : 0;
+    const velocity = dt > 0 ? (last.p - first.p) / dt : 0;
+    const { slide } = g;
+    g.slide = null;
+    endGesture();
+    slide.update(slideProgress(g, e.clientX));
+    slide.end(velocity);
+    return;
+  }
   endGesture();
-  if (done) return;
-  if (up > SWIPE_PX && up > Math.abs(side)) {
-    goHome();
+  if (g.done) return;
+  if (!g.moved) {
+    tap();
+  } else if (up > SWIPE_PX && up > Math.abs(side)) {
+    swipeUp();
   } else if (Math.abs(side) > SIDE_PX && Math.abs(side) > Math.abs(up)) {
     closeControlCenter();
     // Like turning pages: a swipe to the left brings the next window.
     stepPhoneWindow(side < 0 ? 1 : -1);
   }
-}
-
-/* ── The handle: tap = home, hold = switcher ──────────────── */
-
-let press = null;
-
-function onHandleDown(e) {
-  if (!isPhone() || e.button > 0) return;
-  e.stopPropagation();
-  clearTimeout(press?.timer);
-  press = {
-    id: e.pointerId,
-    x: e.clientX,
-    y: e.clientY,
-    held: false,
-    timer: setTimeout(() => {
-      if (!press) return;
-      press.held = true;
-      navigator.vibrate?.(10);
-      toggleSwitcher();
-    }, LONG_PRESS_MS),
-  };
-  try { handle.setPointerCapture(e.pointerId); } catch (_) { /* synthetic events */ }
-}
-
-function onHandleMove(e) {
-  if (!press || e.pointerId !== press.id || press.held) return;
-  // A finger that travels is a swipe, which the dock reads on its own.
-  if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > STILL_PX * 2) {
-    clearTimeout(press.timer);
-    const start = press;
-    press = null;
-    try { handle.releasePointerCapture(e.pointerId); } catch (_) { /* gone */ }
-    onPointerDown({ pointerId: start.id, clientX: start.x, clientY: start.y, button: 0, target: dock });
-    onPointerMove(e);
-  }
-}
-
-function onHandleUp(e) {
-  if (!press || e.pointerId !== press.id) {
-    onPointerUp(e);
-    return;
-  }
-  clearTimeout(press.timer);
-  const { held } = press;
-  press = null;
-  if (!held) goHome();
-}
-
-function onHandleCancel() {
-  clearTimeout(press?.timer);
-  press = null;
 }
 
 /* ── Back goes home ────────────────────────────────────────── */
@@ -238,9 +289,9 @@ function onPopState() {
 /* ── Setup ─────────────────────────────────────────────────── */
 
 function relabel() {
-  const label = t('hud.homeHandle', null, 'Home — hold for open windows');
-  handle.title = label;
-  handle.setAttribute('aria-label', label);
+  const label = t('hud.phoneBar', null, 'Home — hold for open windows, swipe up for the chat');
+  dock.title = label;
+  dock.setAttribute('aria-label', label);
 }
 
 function syncScreen() {
@@ -254,32 +305,22 @@ function syncScreen() {
 
 export function initPhoneShell() {
   if (dock) return;
-  dock = document.createElement('div');
+  dock = document.createElement('button');
+  dock.type = 'button';
   dock.id = 'phone-dock';
   dock.className = 'phone-dock';
-  dock.setAttribute('role', 'toolbar');
-  handle = document.createElement('button');
-  handle.type = 'button';
-  handle.id = 'phone-dock-handle';
-  handle.className = 'phone-dock-handle';
-  // Keyboard and screen readers: Enter goes home, the context menu key (or
-  // a long press) opens the switcher.
-  handle.addEventListener('keydown', (e) => {
+  // Keyboard and screen readers: Enter goes home, the context menu key (or a
+  // long press) opens the switcher.
+  dock.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
   });
-  handle.addEventListener('contextmenu', (e) => { e.preventDefault(); });
-  handle.addEventListener('pointerdown', onHandleDown);
-  handle.addEventListener('pointermove', onHandleMove);
-  handle.addEventListener('pointerup', onHandleUp);
-  handle.addEventListener('pointercancel', onHandleCancel);
-  dock.append(handle);
-  document.body.appendChild(dock);
-  relabel();
-
+  dock.addEventListener('contextmenu', (e) => { e.preventDefault(); });
   dock.addEventListener('pointerdown', onPointerDown);
   dock.addEventListener('pointermove', onPointerMove);
   dock.addEventListener('pointerup', onPointerUp);
   dock.addEventListener('pointercancel', endGesture);
+  document.body.appendChild(dock);
+  relabel();
 
   // The home flag lives on <html> (tiles.js sets it on every layout pass).
   new MutationObserver(() => { syncHome(); syncHistory(); })

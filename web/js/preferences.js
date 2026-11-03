@@ -597,8 +597,9 @@ export function orbIsAttached(immersive = getImmersive()) {
 
 /**
  * The chrome settings as the screen actually wears them. A phone gets one
- * layout, like a mobile OS: a status bar along the top, the voice bar alone at
- * the bottom edge, nothing hiding and nothing scaled — the side rails, the
+ * layout, like a mobile OS: a status bar flush along the top edge (the rail,
+ * flattened by css/mobile.css), the phone's own bar at the bottom edge
+ * (phoneShell.js), nothing hiding and nothing scaled — the side rails, the
  * hover-driven capsule and the pointer-revealed autohide have no meaning under
  * a finger. Only the view changes: `getImmersive()` (and every setter that
  * merges over it) keeps the stored desktop choice, which comes back with the

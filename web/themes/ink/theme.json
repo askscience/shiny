@@ -9,7 +9,6 @@
   "defaultAccent": "#ff6a3d",
   "defaultGradient": "ember",
   "defaultBackground": "ink",
-  "overview": "cloud",
   "accents": [
     { "id": "ember",  "label": "Ember",  "value": "#ff6a3d" },
     { "id": "white",  "label": "White",  "value": "#f2f2f0" },

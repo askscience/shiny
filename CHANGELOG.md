@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Window overview: the windows are a grid of cards with a small title and a
+  close button under each, instead of the strip or the cloud — no headline,
+  no Prev / Next, no drift. The grid scrolls when the windows outnumber the
+  screen (wheel or drag), and the cards travel in the motion language picked
+  in Settings → Appearance → Motion: kinetic in a fast cascade, fluid on a
+  spring, depth out of a blur (`web/js/overviewGrid.js`). Themes no longer
+  pick an overview layout (`overview` in `theme.json` is gone).
+- Phone: the top bar is flush with the top edge (no rounding, no gap under
+  it) and carries no app icons; the control centre unfolds from it edge to
+  edge.
+- Phone: one bar at the bottom. The thin strip with its line is also the
+  assistant, and the voice bar no longer shows on a phone: a tap goes home
+  (or stops a listen), a press and hold opens the switcher, a swipe up opens
+  the chat, a swipe up and hold listens. Dragging sideways moves the window
+  with the finger while the next one comes in beside it, like the workspace
+  carousel on a desktop; let go past half-way, or flick, to switch.
+  The line takes the assistant's colour while it is busy.
+- Phone: windows fill the screen from the status bar to the bottom bar.
+
 ## [0.1.5] - 2026-11-03
 
 ### Added
