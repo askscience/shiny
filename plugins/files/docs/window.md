@@ -75,9 +75,16 @@ export default {
   outside this plugin — an embedded web app (the Craft suite) saving through its
   own picker. That path is absolute and may live anywhere, so the listing is
   simply reloaded rather than matched against the current directory.
-- `filesContextMenu(ctx)` contributes right-click entries (open, rename, copy,
-  paste, delete, new folder, upload, empty trash) between core's window menu
-  items.
+- `filesContextMenu(ctx)` contributes right-click entries (open, share link,
+  rename, copy, paste, delete, new folder, upload, empty trash) between core's
+  window menu items.
+- **Share link…** (one selected file or folder) and **Shared links** (app
+  menu) live in [`web/share.js`](../web/share.js). The dialog asks for expiry,
+  download limit and an optional password, polls the upload job and shows the
+  link with a Copy button. The list dialog shows download counts and offers
+  Copy and Revoke. Turning sharing on or off and choosing Tailscale Funnel or
+  a custom URL happen in Settings → Remote → File sharing; both dialogs link
+  there when sharing is off. Routes are in [routes.md](routes.md#link-sharing-gokapi).
 - Other plugins import [`web/js/files.js`](../../../web/js/files.js):
   `saveOrDownload(blob, { name, dir, app })` uploads via `/api/files/upload`
   and falls back to a browser download when Files is not installed;

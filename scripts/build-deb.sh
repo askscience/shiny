@@ -15,7 +15,7 @@ die() { echo "error: $*" >&2; exit 1; }
 [ -x "$REPO/target/release/peakd" ] || die "target/release/peakd missing"
 [ -x "$REPO/target/release/shiny" ] || die "target/release/shiny missing"
 mkdir -p "$OUT"
-rm -f "$OUT"/peakd_*.deb "$OUT"/peakd-archive-keyring_*.deb "$OUT"/SHA256SUMS
+rm -f "$OUT"/peakd_*.deb "$OUT"/peakd-archive-keyring_*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT"/SHA256SUMS
 
 rm -rf "$PKG"
 mkdir -p "$PKG/DEBIAN" \
@@ -53,12 +53,80 @@ for dir in "$REPO"/plugins/*/; do
     cp -a "$so" "$dest/"
 done
 
+# ── Gokapi (AGPL-3.0): link sharing in the Files plugin ──────────────────
+# Unmodified upstream release binaries, verified against pinned SHA-256s. The
+# Corresponding Source of each binary is published next to the .deb on the
+# same GitHub Release (AGPL-3.0 §6(d)); see packaging/gokapi.sh.
+# shellcheck source=../packaging/gokapi.sh
+. "$REPO/packaging/gokapi.sh"
+CACHE=${PEAKD_DOWNLOAD_CACHE:-$BUILD/cache}
+mkdir -p "$CACHE"
+fetch() { # url sha256 dest
+    local url=$1 sum=$2 dest=$3
+    if ! { [ -f "$dest" ] && echo "$sum  $dest" | sha256sum -c --status; }; then
+        curl -fsSL --retry 3 -o "$dest.part" "$url" || die "download failed: $url"
+        mv "$dest.part" "$dest"
+    fi
+    echo "$sum  $dest" | sha256sum -c --status || die "checksum mismatch: $url"
+}
+unzip_one() { # zip member dest
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -p "$1" "$2" > "$3"
+    else
+        python3 -I -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' "$1" "$2" > "$3"
+    fi
+    [ -s "$3" ] || die "could not extract $2 from $1"
+}
+GOKAPI_SRC="gokapi-${GOKAPI_VERSION}-source.tar.gz"
+GOKAPI_CLI_SRC="gokapi-cli-${GOKAPI_CLI_VERSION}-source.tar.gz"
+fetch "$GOKAPI_RELEASE_URL/$GOKAPI_SERVER_ZIP" "$GOKAPI_SERVER_SHA256" "$CACHE/$GOKAPI_SERVER_ZIP"
+fetch "$GOKAPI_RELEASE_URL/$GOKAPI_CLI_ZIP" "$GOKAPI_CLI_SHA256" "$CACHE/$GOKAPI_CLI_ZIP"
+fetch "$GOKAPI_SERVER_SRC_URL" "$GOKAPI_SERVER_SRC_SHA256" "$CACHE/$GOKAPI_SRC"
+fetch "$GOKAPI_CLI_SRC_URL" "$GOKAPI_CLI_SRC_SHA256" "$CACHE/$GOKAPI_CLI_SRC"
+
+GOKAPI_BIN_DIR="$PKG/usr/libexec/shiny/gokapi"
+GOKAPI_DOC_DIR="$PKG/usr/share/doc/peakd/gokapi"
+install -d "$GOKAPI_BIN_DIR" "$GOKAPI_DOC_DIR"
+unzip_one "$CACHE/$GOKAPI_SERVER_ZIP" gokapi "$GOKAPI_BIN_DIR/gokapi"
+unzip_one "$CACHE/$GOKAPI_CLI_ZIP" gokapi-cli "$GOKAPI_BIN_DIR/gokapi-cli"
+chmod 0755 "$GOKAPI_BIN_DIR/gokapi" "$GOKAPI_BIN_DIR/gokapi-cli"
+tar -xzOf "$CACHE/$GOKAPI_SRC" --wildcards '*/LICENSE.md' > "$GOKAPI_DOC_DIR/LICENSE"
+[ -s "$GOKAPI_DOC_DIR/LICENSE" ] || die "Gokapi LICENSE.md not found in $GOKAPI_SRC"
+cat > "$GOKAPI_DOC_DIR/NOTICE" <<NOTICE
+Gokapi — https://github.com/Forceu/Gokapi
+Copyright (c) Marc Ole Bulling and contributors.
+Licensed under the GNU Affero General Public License v3.0 (see LICENSE).
+
+This package includes unmodified upstream release binaries, used by the Files
+plugin to serve public share links:
+
+  /usr/libexec/shiny/gokapi/gokapi      Gokapi ${GOKAPI_VERSION}
+      built from ${GOKAPI_SERVER_REV}
+  /usr/libexec/shiny/gokapi/gokapi-cli  Gokapi CLI ${GOKAPI_CLI_VERSION}
+      built from ${GOKAPI_CLI_REV}
+
+Corresponding Source is distributed alongside this package on the same GitHub
+Release as ${GOKAPI_SRC} and ${GOKAPI_CLI_SRC}:
+
+  https://github.com/askscience/shiny/releases/tag/v${VERSION}
+
+The same source is available from upstream:
+
+  ${GOKAPI_SERVER_SRC_URL}
+  ${GOKAPI_CLI_SRC_URL}
+
+Go module dependencies are pinned by go.sum in each archive.
+NOTICE
+cp -a "$CACHE/$GOKAPI_SRC" "$CACHE/$GOKAPI_CLI_SRC" "$OUT/"
+
 cat > "$PKG/usr/share/doc/peakd/README.md" <<'EOF'
 # PEAK'D!
 
 Application payload for PEAK'D! (`peakd` shell plus the `shiny` server and
 plugins). The package intentionally contains no user database, API endpoints,
 model weights, Tailscale state or live-only installer configuration.
+
+Third-party: Gokapi (AGPL-3.0) for Files link sharing; see gokapi/NOTICE.
 EOF
 
 cat > "$PKG/DEBIAN/control" <<EOF
@@ -114,5 +182,5 @@ Public keyring for the PEAK'D! APT repository. The private key is never shipped.
 EOF
 dpkg-deb --root-owner-group --build "$KEYRING" "$OUT/peakd-archive-keyring_${VERSION}_all.deb" >/dev/null
 
-( cd "$OUT" && sha256sum *.deb > SHA256SUMS )
-ls -lh "$OUT"/*.deb "$OUT/SHA256SUMS"
+( cd "$OUT" && sha256sum *.deb gokapi-*-source.tar.gz > SHA256SUMS )
+ls -lh "$OUT"/*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT/SHA256SUMS"

@@ -20,6 +20,7 @@ import { copyText } from '../../js/clipboard.js';
 import { pluginForFile, openWithPlugin, onOpenFromFiles, pickFiles } from '../../js/files.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
+import { openShareDialog, openSharesDialog } from './share.js';
 
 export const FILES_PLUGIN = 'files';
 
@@ -953,6 +954,7 @@ function openAppMenu(anchor) {
   openContextMenu([
     { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
     { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload files…'), icon: 'ui/upload', onClick: pickUpload },
+    { type: 'item', label: t('plugin.files.menu.sharedLinks', null, 'Shared links'), icon: 'ui/link', onClick: () => void openSharesDialog() },
     { type: 'separator' },
     { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
     { type: 'item', label: t('plugin.files.menu.view', null, 'View'), icon: view === 'grid' ? 'ui/grid' : 'ui/list', onClick: toggleView },
@@ -1899,6 +1901,7 @@ export function filesContextMenu(ctx) {
     items.push({ type: 'item', label: t('plugin.files.ctx.restore', null, 'Restore'), icon: 'ui/refresh', disabled: !targets.length, onClick: () => void restoreEntries(targets) });
     items.push({ type: 'item', label: t('plugin.files.ctx.deletePermanently', null, 'Delete permanently'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
   } else {
+    items.push({ type: 'item', label: t('plugin.files.ctx.shareLink', null, 'Share link…'), icon: 'ui/link', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void openShareDialog(targets[0]) });
     items.push({ type: 'item', label: t('plugin.files.ctx.rename', null, 'Rename…'), icon: 'ui/pencil', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void renameEntry(targets[0]) });
     items.push({ type: 'item', label: t('plugin.files.ctx.moveToTrash', null, 'Move to Trash'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, false) });
   }

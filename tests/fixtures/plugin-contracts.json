@@ -366,6 +366,21 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/files/share/job"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/share/status"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/shares"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/files/text"
       },
       {
@@ -407,6 +422,31 @@
         "auth": "auth",
         "method": "Post",
         "path": "/api/files/restore"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/share"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/share/disable"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/share/install"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/share/revoke"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/share/setup"
       },
       {
         "auth": "auth",
@@ -616,6 +656,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/mail/attachment"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/mail/folders"
       },
       {
@@ -651,6 +696,11 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/mail/attachment/save"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/mail/delete"
       },
       {
@@ -677,6 +727,7 @@
     "tools": [
       "mail_list",
       "mail_read",
+      "mail_save_attachment",
       "mail_search",
       "mail_send",
       "mail_status",

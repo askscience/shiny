@@ -659,7 +659,7 @@ WebEngineView {
         : WebEngineView.LifecycleState.Active
     onTitleChanged: shell.viewTitle(pageId, title)
     onUrlChanged: shell.viewUrl(pageId, url)
-    onLoadingChanged: (info) => shell.viewLoad(pageId, info.status)
+    onLoadingChanged: (info) => { applyZoom(); shell.viewLoad(pageId, info.status) }
     onRenderProcessTerminated: (status, code) => shell.viewCrashed(pageId, status, code)
     onNewWindowRequested: (request) => shell.newWindow(pageId, request.requestedUrl)
     onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
@@ -679,6 +679,13 @@ WebEngineView {
     // Dark app theme: pages see `prefers-color-scheme: dark` (sites with a dark
     // style switch to it), and the engine darkens the ones that have none.
     settings.forceDarkMode: shell.darkPages
+    // Browsed pages follow the interface scale, like the app view itself.
+    // Assigned rather than bound: Chromium keeps zoom per host and may reset
+    // it on a cross-site navigation, so it is re-applied on every load too
+    // (setting an unchanged value would not re-trigger a binding).
+    function applyZoom() { if (zoomFactor !== shell.pageZoom) zoomFactor = shell.pageZoom }
+    Component.onCompleted: applyZoom()
+    Connections { target: shell; function onPageZoomChanged() { view.applyZoom() } }
     layer.enabled: false
     layer.effect: MultiEffect { maskEnabled: true; maskSource: shell.maskItem }
 }
@@ -702,6 +709,9 @@ class Shell : public QObject {
     /// which also makes them report `prefers-color-scheme: dark` (see
     /// `peakd_qt_set_color_scheme`). Every page view binds its settings to it.
     Q_PROPERTY(bool darkPages READ darkPages NOTIFY darkPagesChanged)
+    /// The interface scale (`peakd_qt_main_zoom`): every page view takes it as
+    /// its zoom, so browsed pages scale with the app around them.
+    Q_PROPERTY(double pageZoom READ pageZoom NOTIFY pageZoomChanged)
 
 signals:
     /// Emitted when `set_app_url` hands the scene its first URL. Declared before
@@ -709,6 +719,7 @@ signals:
     /// `emit` of a signal it has not seen yet.
     void appUrlChanged();
     void darkPagesChanged();
+    void pageZoomChanged();
 
 public:
     QUrl appUrl() const { return app_url_; }
@@ -724,6 +735,12 @@ public:
         if (dark_pages_ == dark) return;
         dark_pages_ = dark;
         emit darkPagesChanged();
+    }
+    double pageZoom() const { return page_zoom_; }
+    void set_page_zoom(double factor) {
+        if (page_zoom_ == factor) return;
+        page_zoom_ = factor;
+        emit pageZoomChanged();
     }
 
     void set_app_url(const QUrl &url) {
@@ -1014,6 +1031,7 @@ private:
     QObject *mask_item_ = nullptr;
     QObject *app_channel_ = nullptr;
     bool dark_pages_ = false;
+    double page_zoom_ = 1.0;
 };
 
 Shell g_shell;
@@ -1292,6 +1310,7 @@ void peakd_qt_main_load(const char *url) {
 
 void peakd_qt_main_zoom(double factor) {
     if (g_ctx && g_ctx->app_view) g_ctx->app_view->setProperty("zoomFactor", factor);
+    g_shell.set_page_zoom(factor);
 }
 
 void peakd_qt_main_run_js(const char *script, int callback_id) {

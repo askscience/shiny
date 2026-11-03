@@ -1,8 +1,8 @@
 //! Files plugin — a GNOME-style file browser over the user's real home.
 //!
-//! Self-contained: no database, no core edits beyond the documented
-//! `on_user_registered` lifecycle hook. It ships the window surface, its REST
-//! routes and its agent tools, and provisions each account's classic home
+//! Self-contained: no core edits beyond the documented lifecycle hooks. Its
+//! only table is `file_shares` (link sharing, see `share/mod.rs`). It ships
+//! the window surface, its REST routes and its agent tools, and provisions each account's classic home
 //! folders (`Desktop`, `Documents`, …) under `$HOME/.shiny/home/<user-id>/`.
 
 use std::sync::Arc;
@@ -24,8 +24,7 @@ use crate::tools::{
 shiny_plugin_sdk::ctx_plugin!(FilesPlugin);
 
 /// Persona fragment the agent system prompt sees when this plugin is active.
-pub const PERSONA: &str =
-    "a file manager; browse, preview and organize the user's home folders";
+pub const PERSONA: &str = "a file manager; browse, preview and organize the user's home folders";
 
 fn route_specs() -> Vec<RouteSpec> {
     vec![
@@ -48,6 +47,15 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::post("/api/files/delete", "files_delete"),
         RouteSpec::post("/api/files/restore", "files_restore"),
         RouteSpec::post("/api/files/empty-trash", "files_empty_trash"),
+        // Link sharing through the managed Gokapi server (src/share).
+        RouteSpec::get("/api/files/share/status", "files_share_status"),
+        RouteSpec::post("/api/files/share/install", "files_share_install"),
+        RouteSpec::post("/api/files/share/setup", "files_share_setup"),
+        RouteSpec::post("/api/files/share/disable", "files_share_disable"),
+        RouteSpec::post("/api/files/share", "files_share_create"),
+        RouteSpec::get("/api/files/share/job", "files_share_job"),
+        RouteSpec::get("/api/files/shares", "files_share_list"),
+        RouteSpec::post("/api/files/share/revoke", "files_share_revoke"),
     ]
 }
 
@@ -82,7 +90,32 @@ impl Plugin for FilesPlugin {
             Arc::new(FileDelete) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(FileRestore) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(FileSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
-            Arc::new(FileInfo) as Arc<dyn shiny_plugin_sdk::tools::Tool>,]);
+            Arc::new(FileInfo) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
+        ]);
+    }
+
+    /// Create `file_shares` if its migration has not run, and bring the
+    /// Gokapi server and its public gate back up when sharing was left enabled.
+    ///
+    /// `on_load` runs on the host executor: the supervisor's `tokio::spawn`
+    /// must happen inside an `rt::spawn` job on the plugin runtime.
+    async fn on_load(&self, ctx: Arc<PluginCtx>) {
+        crate::share::store::ensure_schema(ctx.db());
+        if crate::share::server::load_instance()
+            .map(|i| i.enabled)
+            .unwrap_or(false)
+        {
+            // Spawned onto the plugin runtime, not awaited in the job, so the
+            // Funnel call never holds up the plugin's serial route worker.
+            shiny_plugin_sdk::rt::spawn(async {
+                tokio::spawn(crate::share::server::resume());
+            });
+        }
+    }
+
+    /// Stop the Gokapi child with the plugin.
+    async fn on_unload(&self, _ctx: Arc<PluginCtx>) {
+        let _ = shiny_plugin_sdk::rt::bridge(crate::share::server::stop_server()).await;
     }
 
     fn route_handler(&self, tag: &str) -> Option<RouteHandler> {
@@ -94,10 +127,8 @@ impl Plugin for FilesPlugin {
     /// host runtime.
     async fn on_user_registered(&self, _ctx: Arc<PluginCtx>, user_id: &str) {
         let uid = user_id.to_string();
-        let _ = shiny_plugin_sdk::rt::bridge(async move {
-            crate::fs_util::ensure_home(&uid).await
-        })
-        .await;
+        let _ =
+            shiny_plugin_sdk::rt::bridge(async move { crate::fs_util::ensure_home(&uid).await })
+                .await;
     }
 }
-

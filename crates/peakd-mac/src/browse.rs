@@ -229,6 +229,9 @@ impl ViewBus {
 pub struct Views {
     bus: ViewBus,
     live: HashMap<String, WebView>,
+    /// The interface scale: browsed pages take it as their page zoom, so they
+    /// scale with the app around them.
+    zoom: f64,
 }
 
 impl Views {
@@ -236,6 +239,17 @@ impl Views {
         Self {
             bus,
             live: HashMap::new(),
+            zoom: 1.0,
+        }
+    }
+
+    /// Apply the interface scale to every open page and to the ones opened later.
+    pub fn set_zoom(&mut self, zoom: f64) {
+        self.zoom = zoom;
+        for view in self.live.values() {
+            if let Err(err) = view.zoom(zoom) {
+                tracing::debug!("peakd: could not zoom a browser view: {err}");
+            }
         }
     }
 
@@ -425,7 +439,12 @@ impl Views {
         }
 
         match builder.build_as_child(window) {
-            Ok(view) => Some(view),
+            Ok(view) => {
+                if let Err(err) = view.zoom(self.zoom) {
+                    tracing::debug!("peakd: could not zoom a browser view: {err}");
+                }
+                Some(view)
+            }
             Err(err) => {
                 tracing::warn!("peakd: could not create a browser view: {err}");
                 None

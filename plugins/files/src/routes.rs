@@ -68,7 +68,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "files_empty_trash" => empty_trash(ctx),
         "files_search" => search(ctx),
         "files_recent" => recent(ctx),
-        _ => return None,
+        other => return crate::share::routes::handle(&ctx, other),
     })
 }
 
@@ -79,10 +79,10 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 /// Takes owned inputs (not `&Request`) because the request body is not `Sync`
 /// and a shared borrow held across the `await` would make the handler future
 /// non-`Send`.
-async fn request_home(uid: &str, os_home: Option<String>) -> Result<std::path::PathBuf, AppError> {
+pub(crate) async fn request_home(uid: &str, os_home: Option<String>) -> Result<std::path::PathBuf, AppError> {
     fs_util::ensure_home_for(uid, os_home.as_deref()).await
 }
-async fn take_query<T: DeserializeOwned + Send + 'static>(
+pub(crate) async fn take_query<T: DeserializeOwned + Send + 'static>(
     req: Request,
 ) -> Result<(T, Request), AppError> {
     let (mut parts, body) = req.into_parts();

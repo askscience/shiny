@@ -403,6 +403,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
     if let Err(err) = webview.zoom(applied) {
         eprintln!("peakd: could not set the interface scale: {err}");
     }
+    views.set_zoom(applied);
     let display_runtime = cfg.display_runtime_file.clone();
     display::write_runtime(&display_runtime, applied, panel);
     println!("peakd: interface scale {:.0}%", applied * 100.0);
@@ -455,6 +456,7 @@ fn run(cfg: PeakdConfig) -> Result<(), String> {
                 if let Err(err) = webview.zoom(scale) {
                     eprintln!("peakd: could not set the interface scale: {err}");
                 }
+                views.set_zoom(scale);
                 display::write_runtime(&display_runtime, scale, panel);
                 println!("peakd: interface scale changed to {:.0}%", scale * 100.0);
             }

@@ -1,7 +1,7 @@
 # Files
 
-The Files plugin is a file browser over the user's own home folder. It owns no
-database — everything is real files on disk, sandboxed to the signed-in user's
+The Files plugin is a file browser over the user's own home folder. Everything
+is real files on disk, sandboxed to the signed-in user's
 home directory (`$HOME/.shiny/home/<user-id>/`). Deleting moves entries to a `.Trash`
 folder inside that home; nothing is ever removed permanently except with
 `file_empty_trash`.
@@ -17,3 +17,10 @@ The classic home folders (`Desktop`, `Documents`, `Downloads`, `Music`,
 - Read before you write when the user's intent depends on current content.
 - Prefer `file_list` to discover what exists instead of guessing names.
 - `file_delete` moves to Trash (recoverable with `file_restore`).
+
+## Share links
+
+Public download links are made from the Files window: right-click a file or
+folder and choose **Share link…**. **Shared links** in the window menu lists
+and revokes them. No agent tool creates links yet. If the user asks for one,
+tell them where to find it in the window.

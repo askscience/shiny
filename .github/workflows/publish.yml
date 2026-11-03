@@ -50,7 +50,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential pkg-config \
-            libsqlite3-dev libgtk-3-dev cmake nasm xz-utils \
+            libsqlite3-dev libgtk-3-dev cmake nasm xz-utils unzip \
             libclang-dev \
             qt6-base-dev qt6-declarative-dev qt6-webchannel-dev qt6-webengine-dev
 
@@ -163,7 +163,9 @@ jobs:
           version="${{ needs.build.outputs.version }}"
           tag="${GITHUB_REF_NAME}"
           shopt -s nullglob
-          files=(deb-out/out/*.deb deb-out/out/SHA256SUMS)
+          # Gokapi's Corresponding Source rides on the same Release as the
+          # .deb that bundles its binaries (AGPL-3.0 §6(d)).
+          files=(deb-out/out/*.deb deb-out/out/gokapi-*-source.tar.gz deb-out/out/SHA256SUMS)
           [ "${#files[@]}" -gt 0 ] || { echo "no release assets" >&2; exit 1; }
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${files[@]}" --clobber

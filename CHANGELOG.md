@@ -27,8 +27,23 @@
   (80–160%) — pill, icons, type and spacing — with everything that docks to it
   following its footprint (`--hud-bar-scale`, `--hud-bar-extent`).
 
+- Files: public share links. **Share link…** (right-click a file or folder)
+  uploads it to a bundled Gokapi server with expiry, download limit and an
+  optional password; **Shared links** lists, copies and revokes them. Settings →
+  Remote → File sharing turns it on and publishes the links through Tailscale
+  Funnel or a custom URL. Only Gokapi's download pages are public, through a
+  share gate that answers 404 to everything else (`plugins/files/src/share/`).
+- Packaging: the `.deb` bundles the unmodified Gokapi release binaries
+  (pinned SHA-256s, `packaging/gokapi.sh`), with its license and NOTICE; the
+  release publishes Gokapi's Corresponding Source next to the package
+  (AGPL-3.0 §6(d)).
+- Peakd: browsed pages follow the interface scale, like the app view around
+  them (Linux and macOS shells).
+
 ### Changed
 
+- Remote settings: the Tailscale hints give the exact command to run
+  (`sudo tailscale up --operator=$USER`).
 - Word reflows the document to a phone-narrow window at 100% instead of
   shrinking an A4 page to 40%; rulers and page guides step aside there.
 - Mail shows one pane at a time in a narrow window: the list, or the message.

@@ -359,6 +359,9 @@ const context = vm.createContext({
   pluginForFile: () => null,
   openWithPlugin: async () => false,
   pickFiles: async () => [],
+  // ./share.js (link sharing dialogs) is not under test here.
+  openShareDialog: async () => {},
+  openSharesDialog: async () => {},
   apiFetch,
   // A key with no English text in the shim still renders its fallback.
   t: (key, params, fallback) => fallback ?? key,

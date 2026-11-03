@@ -4,6 +4,7 @@ pub mod fs_util;
 pub mod plugin;
 pub mod preview;
 pub mod routes;
+pub mod share;
 pub mod tools;
 
 pub use plugin::FilesPlugin;

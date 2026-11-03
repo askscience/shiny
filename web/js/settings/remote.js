@@ -4,6 +4,7 @@ import { t, tp } from '../i18n.js';
 import { getRemoteAllowTerminal, setRemoteAllowTerminal } from '../preferences.js';
 import { copyText } from '../clipboard.js';
 import { el, heading } from './controls.js';
+import { createFileSharingBlock } from './fileSharing.js';
 
 /** Build the remote section with resources owned by its current mount. */
 export function createRemoteSection({ on, cleanups, resources }) {
@@ -72,7 +73,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
       checked: false,
       onChange: setTailscale,
     });
-    const tsMissing = el('p', 'settings-hint', t('settings.remote.tailscaleMissing', null, 'Tailscale is not installed on this machine.'));
+    const tsMissing = el('p', 'settings-hint', t('settings.remote.tailscaleMissing', null, 'Tailscale is not installed on this machine. Install it from tailscale.com/download, then run “sudo tailscale up --operator=$USER” once so Shiny can manage Funnel.'));
     const tsStatus = el('p', 'settings-hint', '');
     const tsUrlEl = el('code', 'remote-ticket');
     const tsQrEl = el('img', 'remote-qr');
@@ -139,7 +140,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
       const on = !!ts.funnel;
       tsToggle.toggle.setChecked(on, { silent: true });
       let line;
-      if (!ts.up) line = t('settings.remote.tailscaleDown', null, 'Installed, but not connected — run `tailscale up` on this machine.');
+      if (!ts.up) line = t('settings.remote.tailscaleDown', null, 'Installed, but not connected — run “sudo tailscale up --operator=$USER” on this machine.');
       else if (on) line = t('settings.remote.tailscaleOn', { host: ts.hostname || t('settings.remote.thisDevice', null, 'this device') }, `On — ${ts.hostname || 'this device'}`);
       else line = t('settings.remote.tailscaleOff', null, 'Off. The app is reachable only locally and over Iroh.');
       if (ts.error) line += t('settings.remote.errorNote', { error: ts.error }, ` (${ts.error})`);
@@ -254,6 +255,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
       tsStatus,
       tsUrlBox,
       tsActions,
+      ...createFileSharingBlock({ on, resources }),
       heading(t('settings.remote.remoteControl', null, 'Remote control')),
       terminalToggle,
     ];

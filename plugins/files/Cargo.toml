@@ -22,3 +22,14 @@ photon-rs = { version = "0.3.3", default-features = false }
 # Header-dimension pre-check before a hostile image can make the decoder
 # allocate an enormous pixel buffer.
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff"] }
+# Link sharing through a managed Gokapi server (src/share). Same versions the
+# workspace already locks, so these add no new crates to the tree.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+sha2 = "0.10"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+getrandom = "0.2"
+libc = "0.2"
+# End-to-end registry bootstrap (src/share/e2e.rs): AES-256-GCM and base64,
+# both already in the workspace lock (mail, browser).
+ring = "0.17"
+base64 = "0.22"
