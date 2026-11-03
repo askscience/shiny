@@ -51,6 +51,16 @@ class Element extends Target {
   get innerHTML() { return this.textContent; }
   appendChild(child) { this.children.push(child); child.parentElement = this; return child; }
   append(...children) { children.forEach((child) => this.appendChild(typeof child === 'string' ? new Element('text') : child)); }
+  prepend(...children) {
+    const nodes = children.map((child) => (typeof child === 'string' ? new Element('text') : child));
+    nodes.forEach((child) => { child.parentElement = this; });
+    this.children.unshift(...nodes);
+  }
+  closest(selector) {
+    const matches = (node) => selector.startsWith('.') ? node.classList?.contains(selector.slice(1)) : node.tagName === selector.toUpperCase();
+    for (let node = this; node; node = node.parentElement) if (matches(node)) return node;
+    return null;
+  }
   replaceChildren(...children) { this.children = []; this.append(...children); }
   remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter((child) => child !== this); }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }

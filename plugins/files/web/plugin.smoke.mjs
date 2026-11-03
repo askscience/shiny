@@ -359,6 +359,7 @@ const context = vm.createContext({
   pluginForFile: () => null,
   openWithPlugin: async () => false,
   pickFiles: async () => [],
+  onOpenFromFiles: () => {},
   // ./share.js (link sharing dialogs) is not under test here.
   openShareDialog: async () => {},
   openSharesDialog: async () => {},
