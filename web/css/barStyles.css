@@ -373,3 +373,68 @@ html[data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']):
   rotate: 180deg;
   max-height: 100%;
 }
+
+/* ═══ Size ════════════════════════════════════════════════════
+   Settings → Appearance → Top bar size scales the whole bar — pill, icons,
+   type and spacing — with the `scale` property rather than `zoom`: on the
+   kiosk's Chromium (122) `zoom` makes getBoundingClientRect report unzoomed
+   boxes, which would misplace the status menus and the native-view mask
+   holes; a transform measures true. `scale` composes with the autohide
+   `transform` (translate first, then scale), so the slide still clears the
+   edge.
+
+   The header is laid out at 1/scale of the edge it spans and scaled about the
+   corner it docks to, so it covers the same edge at the new size. Everything
+   outside it reads its footprint from `--hud-header-total` and
+   `--hud-bar-extent` (theme tokens), which carry the scale. */
+
+html[data-bar-scaled] #hud-header {
+  scale: var(--hud-bar-scale, 1);
+  transform-origin: top left;
+}
+
+html[data-bar-scaled]:is([data-bar-pos='top'], [data-bar-pos='center'], [data-bar-pos='bottom']) #hud-header {
+  right: auto;
+  width: calc(100% / var(--hud-bar-scale, 1));
+}
+
+html[data-bar-scaled][data-bar-pos='bottom'] #hud-header { transform-origin: bottom left; }
+
+html[data-bar-scaled]:is([data-bar-pos='left'], [data-bar-pos='right']) #hud-header {
+  bottom: auto;
+  height: calc(100% / var(--hud-bar-scale, 1));
+}
+
+html[data-bar-scaled][data-bar-pos='right'] #hud-header { transform-origin: top right; }
+
+/* The voice bar riding the row scales with it, from the same corner and at
+   the scaled offsets, so it stays in the slot the header leaves for it. */
+html[data-bar-scaled][data-orb-pos='top-left'] #sphere-container {
+  scale: var(--hud-bar-scale, 1);
+}
+
+html[data-bar-scaled][data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center']) #sphere-container {
+  transform-origin: top left;
+  top: calc(var(--hud-header-pad) * var(--hud-bar-scale, 1));
+  left: calc(var(--desktop-gap, 14px) * var(--hud-bar-scale, 1));
+}
+
+html[data-bar-scaled][data-orb-pos='top-left'][data-bar-pos='bottom'] #sphere-container {
+  transform-origin: bottom left;
+  bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) * var(--hud-bar-scale, 1));
+  left: calc(var(--desktop-gap, 14px) * var(--hud-bar-scale, 1));
+}
+
+html[data-bar-scaled][data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']) #sphere-container {
+  top: calc(max(10px, env(safe-area-inset-top)) * var(--hud-bar-scale, 1));
+}
+
+html[data-bar-scaled][data-orb-pos='top-left'][data-bar-pos='left'] #sphere-container {
+  transform-origin: top left;
+  left: calc(8px * var(--hud-bar-scale, 1));
+}
+
+html[data-bar-scaled][data-orb-pos='top-left'][data-bar-pos='right'] #sphere-container {
+  transform-origin: top right;
+  right: calc(8px * var(--hud-bar-scale, 1));
+}

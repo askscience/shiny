@@ -1,5 +1,5 @@
 import { apiFetch, getTraveler } from './api.js';
-import { isMobilePortrait } from './viewport.js';
+import { isMobilePortrait, isMobileScreen, MOBILE_QUERY } from './viewport.js';
 import { normalizeTouchBarSetting } from './touchbarShared.js';
 import { DEFAULT_HUD_CHIPS, normalizeHudChips, hudChipsDataset } from './hudChipsShared.js';
 import { DEFAULT_HUD_WIDGETS, normalizeHudWidgets, hudWidgetsDataset } from './hudWidgetsShared.js';
@@ -511,10 +511,17 @@ export const ORB_POSITIONS = ['bottom-center', 'bottom-left', 'bottom-right', 't
 /** The one position that rides the top bar instead of holding an edge alone. */
 export const ORB_ATTACHED = 'top-left';
 
+/** Range of the top bar size, in percent of the theme's own (Settings →
+ *  Appearance → Top bar size). The whole bar scales: pill, icons and type. */
+export const BAR_SCALE_MIN = 80;
+export const BAR_SCALE_MAX = 160;
+
 const DEFAULT_IMMERSIVE = {
   autohide_bar: false,
   bar_position: 'bottom',
   bar_style: 'rail',
+  /** Size of the top bar in percent of the theme's (and the style's) own. */
+  bar_scale: 100,
   autohide_orb: false,
   orb_position: 'top-left',
   /** Width and height of the bar on its own edge. Riding the top bar it takes
@@ -544,11 +551,15 @@ export function getImmersive() {
   const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
   const width = Number(src.orb_width);
   const height = Number(src.orb_height);
+  const barScale = Number(src.bar_scale);
   const d = DEFAULT_IMMERSIVE;
   return {
     autohide_bar: src.autohide_bar === undefined ? d.autohide_bar : src.autohide_bar !== false,
     bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : d.bar_position,
     bar_style: BAR_STYLES.includes(src.bar_style) ? src.bar_style : d.bar_style,
+    bar_scale: Number.isFinite(barScale)
+      ? Math.round(clamp(barScale, BAR_SCALE_MIN, BAR_SCALE_MAX))
+      : d.bar_scale,
     autohide_orb: src.autohide_orb === undefined ? d.autohide_orb : src.autohide_orb !== false,
     orb_position: ORB_POSITIONS.includes(src.orb_position) ? src.orb_position : d.orb_position,
     orb_width: Number.isFinite(width) ? Math.round(clamp(width, 64, 400)) : d.orb_width,
@@ -584,6 +595,28 @@ export function orbIsAttached(immersive = getImmersive()) {
   return effectiveOrbPosition(immersive) === ORB_ATTACHED;
 }
 
+/**
+ * The chrome settings as the screen actually wears them. A phone gets one
+ * layout, like a mobile OS: a status bar along the top, the voice bar alone at
+ * the bottom edge, nothing hiding and nothing scaled — the side rails, the
+ * hover-driven capsule and the pointer-revealed autohide have no meaning under
+ * a finger. Only the view changes: `getImmersive()` (and every setter that
+ * merges over it) keeps the stored desktop choice, which comes back with the
+ * screen.
+ */
+export function effectiveImmersive(immersive = getImmersive()) {
+  if (!isMobileScreen()) return immersive;
+  return {
+    ...immersive,
+    bar_position: 'top',
+    bar_style: 'rail',
+    bar_scale: 100,
+    autohide_bar: false,
+    autohide_orb: false,
+    orb_position: 'bottom-center',
+  };
+}
+
 export function setImmersive(patch) {
   const merged = { ...getImmersive(), ...patch };
   const raw = JSON.stringify(merged);
@@ -594,10 +627,17 @@ export function setImmersive(patch) {
 
 /** Publish the immersion settings to CSS and the fullscreen controller. */
 export function applyImmersive() {
-  const s = getImmersive();
+  const s = effectiveImmersive();
   const root = document.documentElement;
+  // The phone layout (css/mobile.css) keys off this one attribute.
+  root.dataset.mobile = isMobileScreen() ? '1' : '0';
   root.dataset.barPos = s.bar_position;
   root.dataset.barStyle = s.bar_style;
+  // The bar scales as a whole (css/barStyles.css → "Size"); at 100% nothing
+  // is transformed at all.
+  root.style.setProperty('--hud-bar-scale', String(s.bar_scale / 100));
+  if (s.bar_scale === 100) delete root.dataset.barScaled;
+  else root.dataset.barScaled = '1';
   root.dataset.orbPos = effectiveOrbPosition(s);
   root.dataset.orbAttached = orbIsAttached(s) ? '1' : '0';
   root.dataset.orbColor = s.orb_color;
@@ -1197,8 +1237,18 @@ export function setLauncher(patch) {
   applyLauncher();
 }
 
+/**
+ * The launcher as the screen shows it: the keyboard-first palette needs a
+ * keyboard, so a phone opens the full-screen grid instead (its home screen).
+ * The stored choice is kept for the desktop.
+ */
+export function effectiveLauncher(launcher = getLauncher()) {
+  if (!isMobileScreen() || launcher.style !== 'command') return launcher;
+  return { ...launcher, style: 'grid' };
+}
+
 export function applyLauncher() {
-  const s = getLauncher();
+  const s = effectiveLauncher();
   const root = document.documentElement;
   root.dataset.launcherStyle = s.style;
   // Settings → Appearance draws its launcher preview from these.
@@ -1206,6 +1256,13 @@ export function applyLauncher() {
   root.dataset.launcherWindows = s.windows ? '1' : '0';
   window.dispatchEvent(new CustomEvent('launcher:change', { detail: s }));
 }
+
+// Turning a phone (or resizing a window across the breakpoint) swaps the
+// effective chrome and launcher; the stored choices are untouched.
+MOBILE_QUERY?.addEventListener?.('change', () => {
+  applyImmersive();
+  applyLauncher();
+});
 
 /* ── Early surface application ─────────────────────────────────
  * `loadUserPreferences()` (which calls applyDesktopSurface()) only runs after

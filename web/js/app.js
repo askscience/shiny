@@ -42,6 +42,8 @@ import { initGestures } from './gestures.js';
 import { initContextMenu } from './contextMenu.js';
 import { initLinkRouter } from './linkRouter.js';
 import { initKeyboard, refreshKeyboard } from './keyboard.js';
+import { initControlCenter } from './controlCenter.js';
+import { initPhoneShell } from './phoneShell.js';
 import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from './textInput.js';
 import { initChatHistory } from './chatHistory.js';
 import { initThinkToggle } from './thinkToggle.js';
@@ -195,6 +197,8 @@ async function initApp() {
   initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
   initLinkRouter();  // every link opens in the browser plugin (kiosk only)
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
+  initControlCenter(); // phone: the status chips + bar actions move into a sheet
+  initPhoneShell();    // phone: home screen, dock and one-finger gestures
 
   await applyTravelerActivation();
   await refreshKeyboard();

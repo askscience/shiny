@@ -117,7 +117,10 @@
   /* HUD layout */
   --hud-bar-height: 44px;
   --hud-header-pad: max(var(--desktop-gap, 10px), env(safe-area-inset-top));
-  --hud-header-total: calc(var(--hud-header-pad) + var(--hud-bar-height) + var(--desktop-gap, 12px));
+  /* The bar's footprint on screen: the whole header scales with
+     Settings → Appearance → Top bar size (css/barStyles.css → "Size"). */
+  --hud-header-total: calc((var(--hud-header-pad) + var(--hud-bar-height) + var(--desktop-gap, 12px)) * var(--hud-bar-scale, 1));
+  --hud-bar-extent: calc(var(--hud-bar-height) * var(--hud-bar-scale, 1));
 
   /* Layering */
   --z-map: 0;

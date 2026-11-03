@@ -1,0 +1,313 @@
+/* ─────────────────────────────────────────────────────────────
+   Phone layout — `html[data-mobile="1"]` (preferences.js → applyImmersive,
+   from viewport.js's MOBILE_QUERY).
+
+   A phone reads PEAK'D! like a mobile OS: the top bar is a status bar (time,
+   weather, the apps, one control button), the host's status chips and the
+   bar's actions live in the control centre that drops from that button
+   (js/controlCenter.js), and the voice bar holds the bottom edge on its own.
+   The effective chrome settings (bar on top, rail style, no scale, no
+   autohide) come from effectiveImmersive(); this sheet only draws them for a
+   finger. Loaded last, so it has the final word over the themes and the bar
+   styles.
+   ───────────────────────────────────────────────────────────── */
+
+/* The control button exists only on a phone; on a desktop the chips are in
+   the bar itself. */
+#hud-control { display: none; }
+.control-center { display: none; }
+
+/* ── Status bar ──────────────────────────────────────────────── */
+
+html[data-mobile='1'] #hud-header {
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
+}
+
+html[data-mobile='1'] .hud-header-main { padding: 0 2px; }
+
+html[data-mobile='1'] #hud-control {
+  display: flex;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-left: 2px;
+  border-color: transparent;
+  background: transparent;
+}
+html[data-mobile='1'] #hud-control.is-open {
+  background: var(--glass-hover);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+
+/* Targets a finger can hit: 40px inside the 44px bar. The tray scrolls when
+   the apps outnumber the room. */
+html[data-mobile='1'] .hud-plugin-btn { width: 40px; height: 40px; }
+html[data-mobile='1'] :is(.hud-clock, .hud-meteo) { height: 40px; padding: 0 8px; }
+html[data-mobile='1'] #hud-plugins { gap: 0; }
+
+/* The fullscreen bubble is the way out of a fullscreen window: finger-sized. */
+html[data-mobile='1'] #fullscreen-bubble .fullscreen-bubble-btn { width: 40px; height: 40px; }
+
+/* ── Control centre ──────────────────────────────────────────── */
+
+html[data-mobile='1'] .control-center {
+  display: block;
+  position: fixed;
+  top: var(--hud-header-total);
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  /* Above the bar and the windows, below the chips' own menus (z-hud + 2). */
+  z-index: calc(var(--z-hud) + 1);
+  max-height: calc(100dvh - var(--hud-header-total) - max(16px, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  box-sizing: border-box;
+  /* The bar's own plate and ink (theme tokens), so the sheet reads as the
+     bar unfolding; themes without them fall back to the glass surface. */
+  --cc-ink: var(--ed-bar-text, var(--text));
+  --cc-muted: var(--ed-bar-muted, var(--text-secondary));
+  --cc-tile: var(--ed-bar-hover, var(--glass));
+  color: var(--cc-ink);
+  background: var(--ed-bar-bg, var(--surface));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg, 22px);
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel, var(--glass-blur))) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur-panel, var(--glass-blur))) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-float, 0 24px 60px rgba(0, 0, 0, 0.45));
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px) scale(0.98);
+  transform-origin: top right;
+  transition:
+    opacity var(--motion-reveal, 0.22s) var(--motion-ease, ease),
+    transform var(--motion-reveal, 0.22s) var(--motion-ease, ease),
+    visibility 0s linear var(--motion-reveal, 0.22s);
+}
+html[data-mobile='1'][data-control-center='open'] .control-center {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* The bar's own `#hud-top`, moved in: four columns — a status chip takes
+   two, an action one. */
+html[data-mobile='1'] .control-center #hud-top {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  height: auto;
+  margin: 0;
+  padding: 0;
+}
+html[data-mobile='1'] .control-center #hud-top > .hud-divider { display: none; }
+
+html[data-mobile='1'] .control-center #hud-top > :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-battery, .hud-updates) {
+  grid-column: span 2;
+  justify-content: flex-start;
+  gap: 10px;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  height: 60px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: var(--cc-tile);
+  color: var(--cc-ink);
+  font-size: 14px;
+}
+html[data-mobile='1'] .control-center #hud-top > :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-battery, .hud-updates).is-open,
+html[data-mobile='1'] .control-center #hud-top > .icon-btn.is-open {
+  border-color: var(--cc-muted);
+}
+/* A tile has room for the device and its number, whatever the bar shows. */
+html[data-mobile='1'] .control-center #hud-top :is(.hud-network-label, .hud-audio-label, .hud-bluetooth-label, .hud-battery-label) {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  text-align: start;
+}
+html[data-mobile='1'] .control-center #hud-top :is(.hud-network-pct, .hud-audio-pct, .hud-bluetooth-pct, .hud-battery-pct) {
+  display: inline;
+  margin-left: auto;
+}
+
+html[data-mobile='1'] .control-center #hud-top > .icon-btn {
+  width: auto;
+  height: 60px;
+  border-radius: 18px;
+  background: var(--cc-tile);
+  border: 1px solid transparent;
+  color: var(--cc-ink);
+}
+
+/* A landscape phone is short: one row of chips, one of actions. */
+@media (orientation: landscape) {
+  html[data-mobile='1'] .control-center #hud-top { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  html[data-mobile='1'] .control-center #hud-top > :is(.hud-network, .hud-audio, .hud-bluetooth, .hud-battery, .hud-updates),
+  html[data-mobile='1'] .control-center #hud-top > .icon-btn { height: 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-mobile='1'] .control-center { transition-duration: 0s; transform: none; }
+}
+
+/* ── Settings ────────────────────────────────────────────────── */
+
+/* Desktop-only bar choices (position, style, size, autohide, voice-bar
+   placement) stay visible but resting: the phone layout decides them. */
+html[data-mobile='1'] .settings-desktop-only {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── Dock, home screen, switcher (js/phoneShell.js) ──────────────
+   `html[data-phone="1"]`: the one-window phone layout (viewport.js
+   PHONE_QUERY). The dock is the bottom strip around the voice bar, with no
+   buttons: its handle goes home on a tap and opens the switcher on a hold,
+   and the whole strip takes the one-finger swipes. It sits just under the
+   voice bar (z 35), so a tap on the voice bar stays the voice bar's. */
+
+.phone-dock { display: none; }
+
+html[data-phone='1'] {
+  --phone-dock-h: calc(env(safe-area-inset-bottom) + 58px);
+}
+
+html[data-phone='1'] .phone-dock {
+  display: block;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 34;
+  height: var(--phone-dock-h);
+  /* The page must not scroll or zoom under a dock swipe. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The handle: a line under the voice bar, with a finger-sized hit area. */
+html[data-phone='1'] .phone-dock-handle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 180px;
+  height: max(18px, calc(env(safe-area-inset-bottom) + 6px));
+  margin-left: -90px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-phone='1'] .phone-dock-handle::before {
+  content: '';
+  position: absolute;
+  left: 30px;
+  right: 30px;
+  bottom: max(5px, calc(env(safe-area-inset-bottom) - 4px));
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ed-bar-muted, var(--muted));
+  opacity: 0.6;
+  transition: opacity var(--motion-feedback, 0.15s), transform var(--motion-feedback, 0.15s);
+}
+html[data-phone='1'] .phone-dock-handle:active::before { opacity: 1; transform: scaleX(1.08); }
+html[data-phone='1'] .phone-dock-handle:focus-visible::before { opacity: 1; background: var(--accent); }
+
+/* Windows are the screen: edge to edge between the status bar and the
+   dock, square, no frame — one app at a time, like a phone. */
+html[data-phone='1'] #tile-grid {
+  top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 6px);
+  left: 0;
+  right: 0;
+  bottom: var(--phone-dock-h);
+  gap: 0;
+}
+html[data-phone='1'] #tile-grid.tile-grid--phone .tile {
+  border-radius: 0;
+  border-width: 1px 0 0;
+  box-shadow: none;
+}
+
+/* A landscape phone is short: a slimmer dock. */
+@media (orientation: landscape) {
+  html[data-phone='1'] { --phone-dock-h: calc(env(safe-area-inset-bottom) + 50px); }
+}
+
+/* Home screen: the launcher grid on its frosted veil (the labels stay
+   legible on any wallpaper), under the status bar, the dock and the control
+   centre; its content stays between the bar and the dock. */
+html[data-phone='1'][data-launcher-home='1'] .plugin-launcher {
+  z-index: calc(var(--z-hud) - 1);
+}
+html[data-phone='1'][data-launcher-home='1'] .lg-foot { display: none; }
+html[data-phone='1'] .lg-wrap { padding-left: 16px; padding-right: 16px; }
+html[data-phone='1'][data-launcher-home='1'] .lg-wrap {
+  padding-top: calc(var(--hud-header-total) + 8px);
+  padding-bottom: calc(var(--phone-dock-h) + 8px);
+}
+
+/* The switcher (the overview) has its own Prev / Next along the bottom: the
+   dock steps aside while it is up — a card or the backdrop leaves it. */
+html[data-phone='1'][data-overview] .phone-dock { visibility: hidden; }
+html[data-phone='1'] .lg-grid {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 20px 10px;
+  margin-top: 8px;
+}
+
+/* ═══ Apps on a phone ═══════════════════════════════════════════
+   One window fills the screen, so every app drops what a desktop window
+   needs and a phone does not: focus mode, status lines, side-by-side panes.
+   The layout inside each app comes from ui/responsive.css (the
+   `plugin-window` container queries); these rules only simplify. */
+
+/* Window chrome: finger-high. */
+html[data-phone='1'] .tile .tile-header { min-height: 44px; }
+
+/* Status lines: the desktop's running commentary, not the phone's. */
+html[data-phone='1'] .tile :is(.word-status, .calc-status, .pdf-status, .mail-footer, .terminal-status, .files-statusline, .settings-footer) { display: none; }
+
+/* ── Terminal: the keys a phone keyboard lacks ───────────────── */
+.terminal-keys { display: none; }
+html[data-phone='1'] .terminal-keys {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-top: 1px solid var(--terminal-line);
+  background: var(--glass);
+  touch-action: pan-x;
+}
+html[data-phone='1'] .terminal-keys::-webkit-scrollbar { display: none; }
+html[data-phone='1'] .terminal-key {
+  flex: none;
+  min-width: 44px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: 13px var(--font-mono);
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-phone='1'] .terminal-key:active { background: var(--glass-hover); }
+html[data-phone='1'] .terminal-key.is-armed { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast, #000); }
+
+/* ── Calendar: the month on top, the day under it with room to read ── */
+html[data-phone='1'] .calendar-detail { max-height: 42%; }
+
+/* ── Studio: the arranger first; the detail panel opens as a sheet over it ── */
+html[data-phone='1'] .studio-detail { max-height: 50%; }

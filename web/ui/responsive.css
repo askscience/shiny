@@ -97,6 +97,11 @@
 @container plugin-window (max-width: 560px) {
   .mail-chrome-status { display: none; }
   .mail-footer-note { display: none; }
+  /* One message at a time: the open message takes the whole window and its
+     actions ride the window bar (plugin.js placeReaderActions). */
+  .mail-shell.has-reader { grid-template-rows: minmax(0, 1fr); }
+  .mail-shell.has-reader :is(.mail-rail, .mail-stage) { display: none; }
+  .mail-shell.has-reader .mail-reader { border: 0; }
   .mail-hero { padding-top: 12px; }
   .mail-reader-head { padding-top: 16px; }
   .files-shell { flex-direction: column; }
@@ -106,8 +111,11 @@
   .files-place { width: auto; flex-shrink: 0; }
   .files-place-sep { display: none; }
   .files-main { min-height: 0; }
-  .files-header { flex-wrap: wrap; }
-  .files-pathbar { flex-basis: 100%; order: 1; }
+  /* Phone header: back · forward · path · view on one row, the search on
+     its own full-width row under it. */
+  .files-header { flex-wrap: wrap; row-gap: 8px; }
+  .files-pathbar { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .files-search.ui-search { flex: 1 1 100%; order: 1; margin-left: 0; min-width: 0; }
   .pdf-main { flex-direction: column; }
   .pdf-rail { flex-direction: row; width: auto; max-height: 88px; overflow-x: auto; overflow-y: hidden; padding: 6px; }
   .pdf-thumb { width: 60px; }
@@ -119,6 +127,23 @@
   .calendar-detail-item { flex-wrap: wrap; gap: 6px; }
   .calendar-detail-actions { margin-inline-start: auto; }
   .word-editor { padding: 16px; }
+  /* A phone reflows the document to the window: one continuous column of
+     text at its own size (plugin.js fitWidth keeps the zoom at 100%), no
+     paper, rulers or page guides. The print preview still shows pages. */
+  /* The sheet fills the window, so the whole view is paper to write on. */
+  .word-stage { display: flex; flex-direction: column; min-width: 0; min-height: 100%; padding: 0; }
+  .word-sheets { flex: 1 1 auto; align-items: stretch; gap: 12px; }
+  .word-sheet--body { flex: 1 1 auto; }
+  .word-sheet {
+    width: auto;
+    min-height: 0 !important;
+    padding: 20px 18px 28px;
+    border-width: 1px 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .word-ruler,
+  .word-guide { display: none; }
   .image-dock-body { padding: 8px; gap: 8px; }
 }
 /* Landscape phones must retain phone window switching and enough content height. */
@@ -176,3 +201,51 @@
 .ui-dialog-form { gap: 16px; }
 .ui-dialog-actions { gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .pdf-annot-bar { flex-wrap: wrap; max-width: calc(100dvw - 16px); }
+
+/* ── Compact toolbars (ui/compact.js) ─────────────────────────
+   A bar marked `.ui-compact-bar` is `.is-compact` in a narrow window: icon
+   actions drop their text (the label is the tooltip), captions and status
+   text step back, and the actions that still do not fit sit in the shared
+   "More" menu (`.ui-overflow-menu`) as the same buttons, in a column with
+   their names. Desktop-wide bars are untouched. */
+.ui-compact-bar { position: relative; }
+.ui-compact-bar.is-compact { gap: 2px; }
+.ui-compact-bar.is-compact .ui-btn:not(.ui-menu-trigger):has(> .ui-icon) > :is(span:not(.ui-icon,.ui-spinner), .ui-btn-arrow) { display: none; }
+.ui-compact-bar.is-compact .ui-btn:not(.ui-menu-trigger,.ui-btn--icon):has(> .ui-icon) { width: 34px; height: 34px; min-width: 34px; min-height: 34px; padding: 0; justify-content: center; border-radius: var(--radius-sm); }
+.ui-compact-bar.is-compact .ui-menu-trigger .ui-menu-trigger-label { display: none; }
+.ui-compact-bar.is-compact .ui-menu-trigger.ui-btn { padding: 0 6px; }
+.ui-compact-bar.is-compact :is(.mail-chrome-status, .mail-chrome-title, .calc-save-state, .impress-meta, .pdf-freshness, .word-state) { display: none; }
+.ui-compact-bar.is-compact .ui-segmented > button { padding: 4px 9px; font-size: 12px; }
+.ui-compact-bar.is-compact > input { flex: 1 1 60px; min-width: 60px; width: auto; }
+/* The window bar no longer needs to scroll once it folds; a bar that opted
+   out of folding (tab strips) keeps the scrolling row from above. */
+.tile .tile-header--merged > .ui-compact-bar.is-compact { overflow: hidden; }
+.ui-overflow-btn { flex: none; margin-inline-start: auto; }
+.ui-overflow-btn[hidden] { display: none; }
+
+.ui-overflow-menu { min-width: 200px; max-width: min(280px, calc(100vw - 16px)); }
+.ui-overflow-list { display: flex; flex-direction: column; gap: 2px; }
+.ui-overflow-list > .ui-btn,
+.ui-overflow-list > .ui-tool.ui-btn,
+.ui-overflow-list > .ui-btn.ui-btn--icon {
+  width: 100%; min-width: 0; height: auto; min-height: 40px; padding: 8px 12px;
+  justify-content: flex-start; gap: 10px;
+  border-radius: var(--radius-sm); border-color: transparent; background: transparent;
+  font-weight: 500; font-size: 13.5px; color: var(--text);
+}
+.ui-overflow-list > .ui-btn:hover, .ui-overflow-list > .ui-btn:focus-visible { background: var(--glass-hover); }
+.ui-overflow-list > .ui-btn > span:not(.ui-icon) { display: inline; }
+.ui-overflow-list > .ui-btn:not(:has(> span:not(.ui-icon,.ui-spinner,.ui-btn-arrow)))::after { content: attr(aria-label); }
+.ui-overflow-list > .ui-btn .ui-icon { color: var(--muted); }
+.ui-overflow-list > .ui-btn[aria-pressed="true"] { color: var(--accent); }
+.ui-overflow-list > .ui-btn:disabled { opacity: .5; }
+
+/* Word's formatting row: the selects shrink before the tools fold. */
+.word-format.is-compact .word-select--block { width: 96px; }
+.word-format.is-compact .word-select--font { width: 112px; }
+.word-format.is-compact .word-select--size { width: 74px; }
+.word-format.is-compact { overflow: hidden; }
+
+/* Mail's message actions on the window bar: a plain group, Close first. */
+.mail-reader-actions--bar { display: flex; flex: none; align-items: center; gap: 2px; padding: 0; margin: 0 2px; flex-wrap: nowrap; }
+.mail-reader-actions--bar .mail-reader-close { order: -1; margin-inline-start: 0; }

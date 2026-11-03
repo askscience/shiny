@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Copy",
   "plugin.terminal.ctx.paste": "Paste",
   "plugin.terminal.ctx.clearScrollback": "Clear scrollback",
-  "plugin.terminal.ctx.closeTab": "Close tab"
+  "plugin.terminal.ctx.closeTab": "Close tab",
+  "plugin.terminal.keys.label": "Terminal keys"
 }

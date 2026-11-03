@@ -61,6 +61,8 @@ const MAX_TABS = 8;
 let tileEl = null;
 let tabstripEl = null;
 let statusEl = null;
+let keysEl = null;            // phone: the key row (Esc, Tab, Ctrl, arrows) under the terminal
+let ctrlArmed = false;        // phone: the next typed letter is sent as a control character
 
 /** The active style (see fx.js) and the line spacing each one sets. */
 let terminalStyle = readTerminalStyle();
@@ -366,8 +368,68 @@ function buildTile() {
   statusShown = t('plugin.terminal.status.starting', null, 'starting terminal…');
   statusMainEl.textContent = statusShown;
 
-  tileEl.append(tabstripEl, statusEl);
+  keysEl = buildKeyRow();
+  tileEl.append(tabstripEl, keysEl, statusEl);
   return tileEl;
+}
+
+/* ── Phone key row ─────────────────────────────────────────────
+ * A phone keyboard has no Esc, Tab, Ctrl or arrows, and a shell is unusable
+ * without them. The row sits under the terminal (css/mobile.css shows it on
+ * a phone only) and feeds the active tab the same bytes the keys would send.
+ * Ctrl is sticky: it arms, and the next typed letter goes as its control
+ * character (Ctrl+C → \x03). */
+const PHONE_KEYS = [
+  ['Esc', '\x1b'], ['Tab', '\t'], ['Ctrl', null],
+  ['↑', '\x1b[A'], ['↓', '\x1b[B'], ['←', '\x1b[D'], ['→', '\x1b[C'],
+  ['-', '-'], ['/', '/'], ['|', '|'], ['~', '~'],
+];
+
+function buildKeyRow() {
+  const row = document.createElement('div');
+  row.className = 'terminal-keys';
+  row.setAttribute('role', 'toolbar');
+  row.setAttribute('aria-label', t('plugin.terminal.keys.label', null, 'Terminal keys'));
+  for (const [label, data] of PHONE_KEYS) {
+    const btn = controlButton();
+    btn.type = 'button';
+    btn.className = 'terminal-key';
+    btn.textContent = label;
+    if (data === null) {
+      btn.classList.add('terminal-key--ctrl');
+      btn.setAttribute('aria-pressed', 'false');
+    }
+    // pointerdown, not click: the terminal keeps its focus (and the phone
+    // keyboard stays up) because the button never takes it.
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      // Not the window's: a held arrow must not open the context menu.
+      e.stopPropagation();
+      const tab = activeTab();
+      if (data === null) {
+        ctrlArmed = !ctrlArmed;
+        btn.setAttribute('aria-pressed', ctrlArmed ? 'true' : 'false');
+        btn.classList.toggle('is-armed', ctrlArmed);
+      } else if (tab) {
+        queueInput(tab, data);
+      }
+      tab?.term?.focus?.();
+    });
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    row.appendChild(btn);
+  }
+  return row;
+}
+
+/** Typed input, with a sticky Ctrl applied to the next letter. */
+function withCtrl(data) {
+  if (!ctrlArmed) return data;
+  ctrlArmed = false;
+  keysEl?.querySelector('.terminal-key--ctrl')?.classList.remove('is-armed');
+  keysEl?.querySelector('.terminal-key--ctrl')?.setAttribute('aria-pressed', 'false');
+  if (data.length !== 1) return data;
+  const code = data.toUpperCase().charCodeAt(0) - 64;
+  return code >= 1 && code <= 26 ? String.fromCharCode(code) : data;
 }
 
 function buildTabStrip() {
@@ -380,6 +442,7 @@ function buildTabStrip() {
   // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
   // and the centered "Terminal" label is dropped — the browser's arrangement.
   strip.dataset.windowBar = '';
+  strip.dataset.compact = 'off';
   strip.dataset.terminalStyle = terminalStyle;
   return strip;
 }
@@ -480,7 +543,7 @@ function createTerminalFor(tab) {
     flashResizing();
   });
 
-  term.onData((data) => queueInput(tab, data));
+  term.onData((data) => queueInput(tab, withCtrl(data)));
   // Ctrl/Cmd+C and Ctrl/Cmd+V have to be decided by the terminal, not the
   // browser: without this, Ctrl+C is always a SIGINT (xterm sends \x03) and a
   // selection cannot be copied — xterm's WebGL selection is not a DOM
@@ -662,7 +725,7 @@ function createTab({ sessionId = null, activate = true } = {}) {
   };
   tab.hostEl = document.createElement('div');
   tab.hostEl.className = 'terminal-host';
-  tileEl.insertBefore(tab.hostEl, statusEl);
+  tileEl.insertBefore(tab.hostEl, keysEl || statusEl);
   tabs.push(tab);
   // Activate before opening the terminal: xterm measures its font from the
   // live DOM, and a terminal opened inside a `display: none` host would
@@ -1104,6 +1167,8 @@ export function unmountTerminalTile() {
   tileEl = null;
   tabstripEl = null;
   statusEl = null;
+  keysEl = null;
+  ctrlArmed = false;
   statusMainEl = null;
   statusSideEl = null;
   statusShown = '';

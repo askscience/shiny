@@ -272,12 +272,12 @@ html[data-bar-pos='bottom'][data-autohide-bar='1'] body.fs-top #hud-header {
    view: only a fullscreen window there takes the side of the screen too. */
 html[data-bar-pos='left'] body:not(.fs-active) #tile-grid {
   top: max(8px, env(safe-area-inset-top));
-  left: calc(var(--hud-bar-height) + 32px);
+  left: calc(var(--hud-bar-extent, var(--hud-bar-height)) + 32px);
 }
 
 html[data-bar-pos='right'] body:not(.fs-active) #tile-grid {
   top: max(8px, env(safe-area-inset-top));
-  right: calc(var(--hud-bar-height) + 32px);
+  right: calc(var(--hud-bar-extent, var(--hud-bar-height)) + 32px);
 }
 
 /* A bottom bar takes the bottom band instead of the top one — the desktop keeps

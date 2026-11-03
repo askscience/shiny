@@ -129,8 +129,21 @@ needs the same adaptation as a phone. Use viewport height queries for short
 landscape screens and `pointer: coarse` for touch target sizing. Do not hide
 commands just because a window is narrow.
 
-A direct child marked `data-window-bar` merges into the core title bar. On narrow
-or short windows, long toolbars scroll horizontally as one row. Inputs and
+A direct child marked `data-window-bar` merges into the core title bar, and the
+tile manager makes it a compact toolbar (`compactToolbar`, `web/ui/compact.js`):
+in a window up to 700px wide, or on a phone, every `.ui-btn` with an icon drops
+its text (the label becomes its tooltip and accessible name), menu captions and
+status text step back, and the trailing actions that still do not fit move — as
+the same elements — into one shared "More" menu (⋯) at the end of the bar. Nothing
+is removed and no bar scrolls sideways. Actions fold from the end of the bar
+backwards, so put the primary ones first; mark an action `data-keep` to pin it,
+and mark a bar `data-compact="off"` when its children are tabs rather than
+actions (the browser and terminal strips). A window applies the same helper to a
+secondary row it owns (`compactToolbar(row)`, as Word's formatting row does), and
+may move contextual actions onto its window bar while the bar is compact
+(`bar.__compact.isCompact()`, the `compact:change` event — Mail's message
+actions). Desktop-wide bars are untouched. Tab strips that opt out keep the
+scrolling row below. Inputs and
 selects inside toolbars use compact widths instead of full-form width. Settings
 keeps its rail, stage and manifest while the window is wide, drops the manifest
 below 1080px, turns the rail into a horizontal scrolling strip below 820px, and

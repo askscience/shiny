@@ -341,7 +341,7 @@
 .plugin-launcher[data-style='sheet'] {
   --ln-veil: color-mix(in srgb, #000 22%, transparent);
   --ln-edge: -1;
-  --ln-top: calc(var(--hud-bar-height, 44px) + 2 * var(--desktop-gap, 12px));
+  --ln-top: calc(var(--hud-bar-extent, var(--hud-bar-height, 44px)) + 2 * var(--desktop-gap, 12px) * var(--hud-bar-scale, 1));
 }
 :root[data-bar-pos='bottom'] .plugin-launcher[data-style='sheet'] { --ln-edge: 1; }
 .plugin-launcher[data-style='sheet'] .launcher-veil {
@@ -448,7 +448,7 @@
 /* ═══ command ═════════════════════════════════════════════════ */
 .plugin-launcher[data-style='command'] {
   --ln-veil: color-mix(in srgb, #000 20%, transparent);
-  --ln-top: calc(var(--hud-bar-height, 44px) + 2 * var(--desktop-gap, 12px));
+  --ln-top: calc(var(--hud-bar-extent, var(--hud-bar-height, 44px)) + 2 * var(--desktop-gap, 12px) * var(--hud-bar-scale, 1));
 }
 .plugin-launcher[data-style='command'] .launcher-veil {
   -webkit-backdrop-filter: blur(4px);

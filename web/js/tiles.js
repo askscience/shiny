@@ -43,6 +43,7 @@ import { loadPluginCatalog } from './i18n.js';
 import { webAppSurface, forgetWebAppSurface } from './webAppSurface.js';
 
 import { PHONE_QUERY, MOBILE_PORTRAIT_QUERY } from './viewport.js';
+import { compactToolbar } from '../ui/compact.js';
 import { createWorkspaceSlide } from './desktop/workspaceSlide.js';
 
 const MAP_TILE_PLUGIN = 'traveler';
@@ -80,6 +81,8 @@ let mapTileEl = null;          // the tile hosting the map DOM
 let mapRimEl = null;           // the map's on-top ambient rim glow
 let mapGlowTimer = null;       // debounce for the map glow sample
 let activePhonePlugin = null;  // the window shown on a phone (one at a time)
+let phoneHome = false;         // phone: the home screen is up, every window behind it
+let phoneOrder = [];           // phone: the windows of the active workspace, in order
 let lastWsIndex = null;        // last workspace index seen (for slide direction)
 let slide = null;              // the workspace carousel (desktop/workspaceSlide.js)
 
@@ -203,6 +206,8 @@ export function openCoreWindow(name) {
   void ensureCoreSurface(name).then(() => {
     renderTiles();
     if (alreadyOpen) focusWindow(name);
+    // A phone shows one window: the one just asked for.
+    if (PHONE_QUERY.matches) showPhoneWindow(name);
   });
 }
 
@@ -218,6 +223,7 @@ export async function openCoreWindowSection(name, section) {
   await ensureCoreSurface(name);
   renderTiles();
   if (alreadyOpen) focusWindow(name);
+  if (PHONE_QUERY.matches) showPhoneWindow(name);
   surfaceModules.get(name)?.selectSection?.(section);
 }
 
@@ -724,6 +730,9 @@ function ensureWindowChrome(el, name) {
   if (pluginBar) {
     header.classList.add('tile-header--merged');
     header.append(controls, pluginBar);
+    // Narrow windows: icon-only actions and one shared "More" menu for what
+    // does not fit (ui/compact.js). Tab strips opt out: a tab is not an action.
+    if (pluginBar.dataset.compact !== 'off') compactToolbar(pluginBar);
   } else {
     const title = document.createElement('span');
     title.className = 'tile-header-title';
@@ -848,14 +857,18 @@ function renderTiles() {
   const items = [];
   if (phone) {
     // Navigation always lives on the map — surface it if a route is live.
-    if (document.body.classList.contains('navigator-active')) activePhonePlugin = MAP_TILE_PLUGIN;
+    if (document.body.classList.contains('navigator-active')) {
+      activePhonePlugin = MAP_TILE_PLUGIN;
+      phoneHome = false;
+    }
     if (!visible.includes(activePhonePlugin)) activePhonePlugin = visible[0] || null;
+    phoneOrder = visible.slice();
 
     // Keep every window mounted (hidden, not detached) so their chrome — the
     // traveler dock, tile sheets — stays inside its own window.
     for (const { name, el } of ordered) {
       const inActiveWs = visible.includes(name);
-      const shown = inActiveWs && name === activePhonePlugin;
+      const shown = inActiveWs && name === activePhonePlugin && !phoneHome;
       el.classList.remove('tile--full', 'tile--master', 'tile--stack', 'tile--window');
       el.style.gridColumn = '';
       el.style.gridRow = '';
@@ -882,6 +895,11 @@ function renderTiles() {
 
   grid.classList.toggle('hidden', names.length === 0);
   document.body.classList.toggle('tiles-active', names.length > 0);
+  // The phone's home screen (js/phoneShell.js): up when asked for, and
+  // whenever no window is left to show.
+  const home = PHONE_QUERY.matches && (phoneHome || !activePhonePlugin || names.length === 0);
+  if (home) document.documentElement.dataset.phoneHome = '1';
+  else delete document.documentElement.dataset.phoneHome;
   // After the grid is shown: a first window opens into a grid that was hidden.
   if (!phone) animateOpenings(opening, items, names);
   renderWorkspaceBar();
@@ -909,6 +927,38 @@ export function beginWorkspaceSlide(dir) {
   return slide?.begin(dir) || null;
 }
 
+/* ── Phone: home screen and window switching ──────────────── */
+
+/** Phone: bring `name` to the screen (the home screen steps back). */
+export function showPhoneWindow(name) {
+  if (!name) return;
+  activePhonePlugin = name;
+  phoneHome = false;
+  renderTiles();
+}
+
+/** Phone: go to the home screen; the windows stay open behind it. */
+export function showPhoneHome() {
+  if (!PHONE_QUERY.matches || phoneHome) return;
+  phoneHome = true;
+  renderTiles();
+}
+
+/** Phone: the next (`dir` +1) or previous (−1) open window, wrapping; from
+ *  the home screen +1 is the first window and −1 the last. False when there
+ *  is no other window to go to. */
+export function stepPhoneWindow(dir) {
+  const list = phoneOrder;
+  if (!PHONE_QUERY.matches || list.length === 0) return false;
+  const at = phoneHome ? -1 : list.indexOf(activePhonePlugin);
+  if (!phoneHome && list.length < 2) return false;
+  const next = at < 0
+    ? (dir > 0 ? 0 : list.length - 1)
+    : (at + (dir > 0 ? 1 : -1) + list.length) % list.length;
+  showPhoneWindow(list[next]);
+  return true;
+}
+
 /* ── Full-screen focus ─────────────────────────────────────── */
 
 function focusPlugin(name) {
@@ -917,8 +967,7 @@ function focusPlugin(name) {
 
   // Phone: one window at a time — switching is the whole gesture.
   if (PHONE_QUERY.matches) {
-    activePhonePlugin = name;
-    renderTiles();
+    showPhoneWindow(name);
     return;
   }
 
@@ -946,8 +995,7 @@ function revealPlugin(name) {
 
   // Phone: one window at a time — switching is the whole gesture.
   if (PHONE_QUERY.matches) {
-    activePhonePlugin = name;
-    renderTiles();
+    showPhoneWindow(name);
     return;
   }
 

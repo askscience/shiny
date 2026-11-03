@@ -28,7 +28,8 @@
  * the document element. Escape or a click outside the windows closes.
  */
 import { focusWindow, getWorkspacesList, activeWorkspaceIndex } from './desktop.js';
-import { refreshTiles } from './tiles.js';
+import { refreshTiles, showPhoneWindow } from './tiles.js';
+import { PHONE_QUERY } from './viewport.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
 import { getThemeManifest } from '../ui/theme-loader.js';
 import { controlButton } from '../ui/components/button.js';
@@ -458,6 +459,7 @@ export function endOverview(openAtEnd) {
   // Re-tile: re-applies the layout and hides the other workspaces' windows.
   refreshTiles();
   window.dispatchEvent(new Event('map:resize'));
+  window.dispatchEvent(new Event('overview:closed'));
 }
 
 /**
@@ -503,7 +505,10 @@ function pick(target) {
   // Back to the desktop first, then to the window — on another workspace that
   // is a workspace slide, so the window is seen arriving where it lives.
   closeOverview(() => {
-    if (name) focusWindow(name);
+    if (!name) return;
+    // A phone shows one window at a time: picking one is switching to it.
+    if (PHONE_QUERY.matches) showPhoneWindow(name);
+    focusWindow(name);
   });
   return true;
 }

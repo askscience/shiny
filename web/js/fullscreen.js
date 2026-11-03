@@ -45,7 +45,7 @@ import {
   getFocus, getFullscreen, toggleFullscreen, clearFullscreen,
   isolateInNewWorkspace, restoreFromNewWorkspace, hasFullscreenWindow,
 } from './desktop.js';
-import { getImmersive, applyImmersive, effectiveOrbPosition, orbIsAttached } from './preferences.js';
+import { effectiveImmersive as getImmersive, applyImmersive, effectiveOrbPosition, orbIsAttached } from './preferences.js';
 import { isPluginActive } from './activePlugins.js';
 
 const EDGE_ZONE = 120;     // px from the edge that keeps the bar up once shown

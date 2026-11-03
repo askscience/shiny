@@ -36,7 +36,7 @@ import { apiFetch } from './api.js';
 import { createTransition, clamp01 } from './gestureTransition.js';
 import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import { pluginIconEl } from './pluginIcon.js';
-import { getLauncher } from './preferences.js';
+import { effectiveLauncher as getLauncher } from './preferences.js';
 import { pluginForFile, openWithPlugin } from './files.js';
 import { openCoreWindow } from './tiles.js';
 import { setIcon } from '../ui/index.js';
@@ -623,9 +623,16 @@ function move(key) {
   if (best) select(best);
 }
 
+/** The launcher is the phone's home screen (js/phoneShell.js): it stays up
+ *  until a window takes the screen, so nothing but a pick dismisses it. */
+function isHome() {
+  return document.documentElement.dataset.launcherHome === '1';
+}
+
 function onKey(e) {
   if (!staged) return;
   if (e.key === 'Escape') {
+    if (isHome()) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     closeLauncher();
@@ -724,6 +731,7 @@ export function endLauncher(openAtEnd) {
   // Drop the DOM (and any window copies) while hidden.
   if (body) body.textContent = '';
   signature = '';
+  window.dispatchEvent(new Event('launcher:closed'));
 }
 
 /**
@@ -767,7 +775,7 @@ export function initLauncher() {
       return;
     }
     // A click on the frosted desktop (outside every surface) leaves.
-    if (!e.target.closest('.launcher-surface, .launcher-search, .launcher-manage, .launcher-section, .launcher-strip, .lg-grid, .lm-grid, .lm-head')) {
+    if (!isHome() && !e.target.closest('.launcher-surface, .launcher-search, .launcher-manage, .launcher-section, .launcher-strip, .lg-grid, .lm-grid, .lm-head')) {
       closeLauncher();
     }
   });

@@ -316,13 +316,13 @@ html[data-orb-pos='top-left'] #artifact-dock {
 }
 
 html[data-orb-pos='top-left']:is([data-bar-pos='top'], [data-bar-pos='center']) #artifact-dock {
-  top: calc(var(--hud-header-pad) + var(--hud-bar-height) + 12px);
+  top: calc(var(--hud-header-pad) * var(--hud-bar-scale, 1) + var(--hud-bar-extent, var(--hud-bar-height)) + 12px);
   bottom: auto;
 }
 
 html[data-orb-pos='top-left'][data-bar-pos='bottom'] #artifact-dock {
   top: auto;
-  bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) + var(--hud-bar-height) + 12px);
+  bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) * var(--hud-bar-scale, 1) + var(--hud-bar-extent, var(--hud-bar-height)) + 12px);
   --orb-glide-y: calc(100% + 24px);
 }
 

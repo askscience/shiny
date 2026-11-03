@@ -798,6 +798,7 @@ function buildTabStrip() {
   // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
   // and the centered "Browser" label is dropped.
   strip.dataset.windowBar = '';
+  strip.dataset.compact = 'off';
   return strip;
 }
 

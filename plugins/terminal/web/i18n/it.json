@@ -22,5 +22,6 @@
   "plugin.terminal.ctx.copy": "Copia",
   "plugin.terminal.ctx.paste": "Incolla",
   "plugin.terminal.ctx.clearScrollback": "Cancella la cronologia di scorrimento",
-  "plugin.terminal.ctx.closeTab": "Chiudi scheda"
+  "plugin.terminal.ctx.closeTab": "Chiudi scheda",
+  "plugin.terminal.keys.label": "Tasti del terminale"
 }

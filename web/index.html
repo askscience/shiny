@@ -2,12 +2,13 @@
 <html lang="en" data-theme="dusk" data-bar-pos="bottom" data-orb-pos="top-left" data-orb-color="accent" data-orb-border="palette" data-orb-attached="1" data-orb-style="bar" data-orb-status="state" data-motion="kinetic" data-autohide-bar="0" data-autohide-orb="0" style="--voice-bar-width:64px;--voice-bar-height:24px">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#07080a">
   <title>PEAK'D!</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
   <!-- The theme links get their href from the bootstrap below, so the correct
        theme is already loading before the first paint. -->
   <link id="theme-tokens" rel="stylesheet">
@@ -33,6 +34,8 @@
   <!-- After the theme's app.css: the bar styles restyle the editorial rail. -->
   <link rel="stylesheet" href="/css/barStyles.css">
   <link rel="stylesheet" href="/ui/responsive.css">
+  <!-- Last: the phone layout (html[data-mobile="1"]) has the final word. -->
+  <link rel="stylesheet" href="/css/mobile.css">
   <!-- Apply the stored theme synchronously: theme-loader.js swaps these links
        after boot, which would flash a different theme first. The
        installed-theme index is cached by listThemes() for the check here.

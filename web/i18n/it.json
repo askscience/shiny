@@ -3,6 +3,7 @@
   "common.back": "Indietro",
   "common.cancel": "Annulla",
   "common.ok": "OK",
+  "common.more": "Altro",
   "common.close": "Chiudi",
   "common.clear": "Cancella",
   "common.copy": "Copia",
@@ -57,6 +58,8 @@
   "hud.clipboard": "Appunti",
   "hud.clipboardHistory": "Cronologia degli appunti",
   "hud.settings": "Impostazioni",
+  "hud.controlCenter": "Centro di controllo",
+  "hud.homeHandle": "Home — tieni premuto per le finestre aperte",
   "hud.power": "Alimentazione",
   "hud.workspaces": "Spazi di lavoro",
   "hud.navigation": "Navigazione",
@@ -1311,5 +1314,6 @@
   "ctx.turnAiOn": "Attiva l’AI…",
   "settings.assistant.enabled": "AI",
   "settings.assistant.enabledHint": "Spenta (“No slop”): niente chat, agente o voce. La barra vocale apre il launcher.",
-  "voice.state.launcher": "App"
+  "voice.state.launcher": "App",
+  "settings.appearance.topBarSize": "Dimensione della barra superiore"
 }

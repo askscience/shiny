@@ -4,7 +4,7 @@ import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
 import { isPluginActive } from '../activePlugins.js';
-import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
+import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, BAR_SCALE_MIN, BAR_SCALE_MAX, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
 import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
 import { pickFiles } from '../files.js';
@@ -289,6 +289,19 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
       onChange: (value) => setImmersive({ bar_style: value }),
     });
     barStyle.select.value = immersive.bar_style;
+
+    const barSizeControl = slider({
+      min: BAR_SCALE_MIN, max: BAR_SCALE_MAX, step: 5, value: immersive.bar_scale,
+      onInput: (value) => {
+        barSize.value.textContent = `${Math.round(value)}%`;
+        setImmersive({ bar_scale: Number(value) });
+      },
+    });
+    const barSize = sliderField(
+      t('settings.appearance.topBarSize', null, 'Top bar size'),
+      `${immersive.bar_scale}%`,
+      barSizeControl,
+    );
     const autohideOrb = toggleRow({
       label: t('settings.appearance.autohideOrb', null, 'Autohide the voice bar'),
       hint: t('settings.appearance.autohideOrbHint', null, 'Slide the voice bar away until the pointer reaches the edge it docks to.'),
@@ -419,22 +432,26 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     }
     syncAttached();
 
+    // On a phone the layout decides these (preferences.js → effectiveImmersive);
+    // css/mobile.css rests them there.
+    const desktopOnly = (node) => { node.classList.add('settings-desktop-only'); return node; };
     return [
       pageHeading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar'), 'bar'),
       barPreview(),
-      autohideBar,
-      field(t('settings.appearance.topBarStyle', null, 'Top bar style'), barStyle, {
+      desktopOnly(autohideBar),
+      desktopOnly(field(t('settings.appearance.topBarStyle', null, 'Top bar style'), barStyle, {
         hint: t('settings.appearance.topBarStyleHint', null,
           'Every style works in every position, and the voice bar moves with the top bar when it is placed there.'),
-      }),
-      field(t('settings.appearance.topBarPosition', null, 'Top bar position'), barPosition),
-      autohideOrb,
-      field(t('settings.appearance.orbPosition', null, 'Voice bar position'), orbPosition, {
+      })),
+      desktopOnly(field(t('settings.appearance.topBarPosition', null, 'Top bar position'), barPosition)),
+      desktopOnly(barSize.wrap),
+      desktopOnly(autohideOrb),
+      desktopOnly(field(t('settings.appearance.orbPosition', null, 'Voice bar position'), orbPosition, {
         hint: t('settings.appearance.orbPositionHint', null,
           'In the top bar, the voice bar sits in the top bar\'s row, takes its height and rounding, '
           + 'and moves and hides with it — even when the top bar is docked to the bottom edge. '
           + 'Width, height and the voice bar\'s own autohide apply only in the other positions.'),
-      }),
+      })),
       field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor, {
         hint: t('settings.appearance.orbColorHint', null,
           '“All accents” uses every accent the theme declares at once — the same palette as the '

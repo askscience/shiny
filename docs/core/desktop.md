@@ -33,7 +33,38 @@ arrangement, never a rewrite of it.
 | `web/js/contextMenu.js` | Right-click / long-press menus and the popup engine |
 | `web/js/nativeOccluders.js` | Core HTML surfaces that must punch through a native page's mask |
 | `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait and landscape) |
+| `web/js/phoneShell.js` | Phone: home screen, dock handle, one-finger gestures, Back goes home |
+| `web/js/controlCenter.js` | Phone: the host status chips and bar actions in a sheet |
 | `web/js/preferences.js` | Per-user storage for all of the above |
+
+## Phone shell
+
+On a phone the desktop reads like a mobile OS. Everything is a *view*: the
+stored desktop preferences are never rewritten, and they come back with the
+screen.
+
+- **Effective preferences** — `effectiveImmersive()` and `effectiveLauncher()`
+  (`preferences.js`) put the bar on top in the rail style, unscaled and never
+  hiding, the voice bar alone at the bottom edge, and the launcher in its grid
+  style. `<html data-mobile="1">` marks the layout (`MOBILE_QUERY`); the matching
+  Settings rows rest (`.settings-desktop-only`).
+- **Status bar and control centre** — the top bar keeps time, weather and the
+  apps; the host's status chips and the bar actions move, as the same `#hud-top`
+  node, into a sheet dropped from the bar's control button (`controlCenter.js`).
+- **One window at a time** — windows fill the screen between the bar and the
+  dock (`tile-grid--phone`, `css/mobile.css`). `showPhoneWindow()`,
+  `showPhoneHome()` and `stepPhoneWindow()` (`tiles.js`) drive it, and
+  `<html data-phone-home="1">` marks the home screen.
+- **Home** — with no window on screen the launcher grid is the home screen; it
+  stays up until a window takes the screen (`data-launcher-home`).
+- **Dock and gestures** (`phoneShell.js`, `<html data-phone="1">`) — the strip
+  around the voice bar has no buttons: tapping its handle goes home, holding it
+  opens the switcher (the overview); on the strip a swipe up goes home, a swipe
+  up and hold (or a long swipe) opens the switcher, a swipe left/right moves to
+  the next/previous window. With a window up, the browser's Back (Android's back
+  gesture) goes home: one history entry is held and given back on the way home.
+- **Compact app bars** — see `compactToolbar` in
+  [ui-components.md](ui-components.md#responsive-layout).
 
 ## Window lifecycle
 

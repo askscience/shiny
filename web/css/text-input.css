@@ -631,13 +631,13 @@ body.compose-awaiting .compose-composer .compose-send {
   }
 
   html[data-orb-pos='top-left'][data-bar-pos='bottom'] body.compose-active .compose-conversation {
-    bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) + var(--hud-bar-height) + 12px);
+    bottom: calc(max(var(--desktop-gap, 12px), env(safe-area-inset-bottom)) * var(--hud-bar-scale, 1) + var(--hud-bar-extent, var(--hud-bar-height)) + 12px);
   }
 
   /* A left dock is a column at that edge: the thread keeps clear of it too,
      since the panel hugs the left side of the screen. */
   html[data-orb-pos='top-left'][data-bar-pos='left'] body.compose-active .compose-conversation {
-    left: calc(var(--hud-bar-height) + 24px);
+    left: calc(var(--hud-bar-extent, var(--hud-bar-height)) + 24px);
   }
 }
 

@@ -523,6 +523,19 @@ check('the chosen bar style reaches CSS', documentElement.dataset.barStyle === '
 localStorage.setItem('desktop.immersive', JSON.stringify({ bar_style: 'nope' }));
 check('an unknown bar style falls back to the rail', prefs.getImmersive().bar_style === 'rail');
 
+/* Top bar size (Settings → Appearance → "Top bar size"). */
+check('the top bar keeps the theme size by default', prefs.getImmersive().bar_scale === 100);
+localStorage.setItem('desktop.immersive', JSON.stringify({ bar_scale: 999 }));
+check('the top bar size is clamped', prefs.getImmersive().bar_scale === prefs.BAR_SCALE_MAX);
+localStorage.setItem('desktop.immersive', JSON.stringify({ bar_scale: 125 }));
+prefs.applyImmersive();
+check('the chosen bar size reaches CSS',
+  documentElement.style.getPropertyValue('--hud-bar-scale') === '1.25'
+  && documentElement.dataset.barScaled === '1');
+localStorage.setItem('desktop.immersive', JSON.stringify({ bar_scale: 100 }));
+prefs.applyImmersive();
+check('the theme size transforms nothing', documentElement.dataset.barScaled === undefined);
+
 /* ── 14. Closing a window (close ≠ deactivate) ─────────────────
    The window's X closes the window: it leaves every workspace, focus mode,
    fullscreen and the saved arrangement — the plugin's activation is not this

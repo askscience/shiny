@@ -79,6 +79,8 @@ const PROVIDER_HELP = {
 
 let tileEl = null;
 let chromeStatusEl = null;
+let chromeEl = null;          // the window bar (data-window-bar)
+let readerActionsEl = null;   // the open message's actions, wherever they sit
 /** The folder name in the window bar — fades in as the large title scrolls away. */
 let chromeTitleEl = null;
 let barAccountBtn = null;
@@ -540,6 +542,24 @@ function onListScroll() {
 /** The reader only takes room while a message is selected. */
 function syncReaderOpen() {
   shellEl?.classList.toggle('has-reader', !!selectedMessageId);
+  placeReaderActions();
+}
+
+/** Where the open message's actions live: in a narrow window on the window
+ *  bar (right after the account menu, in place of the title), otherwise in
+ *  the reader under its head. */
+function placeReaderActions() {
+  if (!readerActionsEl || !chromeEl || !readerEl) return;
+  const compact = !!chromeEl.__compact?.isCompact?.();
+  const inBar = readerActionsEl.parentNode === chromeEl;
+  if (compact && !inBar) {
+    readerActionsEl.classList.add('mail-reader-actions--bar');
+    chromeEl.insertBefore(readerActionsEl, chromeStatusEl);
+  } else if (!compact && inBar) {
+    readerActionsEl.classList.remove('mail-reader-actions--bar');
+    const head = readerEl.querySelector('.mail-reader-head');
+    if (head) head.after(readerActionsEl); else readerEl.prepend(readerActionsEl);
+  }
 }
 
 function closeReader() {
@@ -1048,6 +1068,8 @@ function renderReaderEmpty() {
 
 function resetReader() {
   currentMessage = null;
+  readerActionsEl?.remove();
+  readerActionsEl = null;
   renderReaderEmpty();
   syncReaderOpen();
 }
@@ -1071,6 +1093,10 @@ function renderMessage(msg) {
   const delBtn = button({ icon: 'ui/trash', label: t('plugin.mail.reader.delete', null, 'Delete'), variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
   const closeBtn = toolButton('ui/close', t('plugin.mail.reader.close', null, 'Close message'), closeReader, { className: 'mail-reader-close' });
   actions.append(withArrow(replyBtn), fwdBtn, delBtn, closeBtn);
+  // On the window bar these stay while the bar's own tools fold away.
+  for (const b of [replyBtn, fwdBtn, delBtn, closeBtn]) b.dataset.keep = '';
+  readerActionsEl?.remove();
+  readerActionsEl = actions;
 
   const details = h('div', 'mail-reader-details');
   details.append(
@@ -1080,6 +1106,7 @@ function renderMessage(msg) {
   if (msg.date) details.appendChild(detailRow(t('plugin.mail.reader.dateLabel', null, 'Date'), fmtDate(msg.date)));
 
   readerEl.append(head, actions, details);
+  placeReaderActions();
 
   const content = h('div', 'mail-reader-content');
   const hasHtml = !!msg.html && msg.html.trim();
@@ -1576,6 +1603,10 @@ export function mountMailTile() {
   /* Window chrome: account menu, live status and window actions. */
   const chrome = h('div', 'mail-chrome');
   chrome.dataset.windowBar = '';
+  chromeEl = chrome;
+  // Narrow window: the open message's actions ride the window bar (icon
+  // only); the bar's own trailing tools fold into "More" (ui/compact.js).
+  chrome.addEventListener('compact:change', () => placeReaderActions());
 
   barAccountBtn = menuButton({
     label: t('plugin.mail.bar.accounts', null, 'Accounts'),

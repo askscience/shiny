@@ -3,6 +3,7 @@
   "common.back": "Back",
   "common.cancel": "Cancel",
   "common.ok": "OK",
+  "common.more": "More",
   "common.close": "Close",
   "common.clear": "Clear",
   "common.copy": "Copy",
@@ -57,6 +58,8 @@
   "hud.clipboard": "Clipboard",
   "hud.clipboardHistory": "Clipboard history",
   "hud.settings": "Settings",
+  "hud.controlCenter": "Control centre",
+  "hud.homeHandle": "Home — hold for open windows",
   "hud.power": "Power",
   "hud.workspaces": "Workspaces",
   "hud.navigation": "Navigation",
@@ -1291,5 +1294,6 @@
   "ctx.turnAiOn": "Turn on the AI…",
   "settings.assistant.enabled": "AI",
   "settings.assistant.enabledHint": "Off (“No slop”): no chat, no agent, no voice. The voice bar opens the launcher.",
-  "voice.state.launcher": "Apps"
+  "voice.state.launcher": "Apps",
+  "settings.appearance.topBarSize": "Top bar size"
 }

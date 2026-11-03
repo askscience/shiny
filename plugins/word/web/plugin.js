@@ -1,8 +1,7 @@
 import {
   menuSurface, menuItem, confirmDialog, promptDialog, menuButton, toolbar, input as uiInput, toolButton,
   button, toast, select, setIcon, modal, field, toggleRow, segmented, controlButton, placePopover,
-  setTileGlow, glowGradient,
-} from '../../ui/index.js';
+  setTileGlow, glowGradient, compactToolbar } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t, tp, getLocale } from '../../js/i18n.js';
 import { formatMenuDate, formatMenuTime, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
@@ -99,6 +98,9 @@ let popup = null;        // the one open body-level popup (export, AI, colours)
 let popupAnchor = null;
 
 const MIN_ZOOM = 0.3;
+/** Window width (px) at or under which the page reflows to it (keep in step
+ *  with the `plugin-window` 560px container query in ui/responsive.css). */
+const REFLOW_MAX = 560;
 const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 /** Fit the page to the window until the user picks a zoom. */
 let zoomFit = readPref('word.zoom', 'fit') === 'fit';
@@ -684,6 +686,13 @@ function zoomBy(dir) {
 function fitWidth() {
   const g = geometry(currentDoc?.design);
   const host = view === 'preview' ? previewEl : deskEl;
+  // A phone-narrow window reflows the text to its width instead of shrinking
+  // a whole page into it (responsive.css, `plugin-window` ≤ 560px): there
+  // "fit" is simply the text at its own size.
+  if (view !== 'preview' && host && host.clientWidth && host.clientWidth <= REFLOW_MAX) {
+    setZoom(1, { fit: true });
+    return;
+  }
   const avail = (host?.clientWidth || 800) - (window.matchMedia?.('(pointer: coarse)').matches ? 24 : 72);
   setZoom(Math.min(1, avail / (g.w * MM)), { fit: true });
 }
@@ -1486,6 +1495,7 @@ function buildBar() {
     onChange: (v) => setView(v),
   });
   viewSwitch.classList.add('word-view-switch');
+  viewSwitch.dataset.keep = '';
 
   const aiBtn = button({ label: t('plugin.word.ai.button', null, 'AI'), icon: 'ui/magic-wand', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => openAiMenu(aiBtn) });
   aiBtn.classList.add('word-ai');
@@ -1595,6 +1605,9 @@ function buildFormatRow() {
     spacer,
     navBtn,
   );
+  // Narrow windows: the trailing tools fold into the shared "More" menu
+  // instead of the row scrolling sideways (ui/compact.js).
+  compactToolbar(formatRow);
   return formatRow;
 }
 

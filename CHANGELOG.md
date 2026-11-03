@@ -1,5 +1,45 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Phone shell: on a phone PEAK'D! reads like a mobile OS. The top bar is a
+  status bar (time, weather, the apps, a control button); the host status chips
+  and the bar actions live in a control centre sheet (`web/js/controlCenter.js`).
+  Windows fill the screen one at a time; with none on screen the launcher grid
+  is the home screen. The dock around the voice bar has no buttons: tap its
+  handle for home, hold it for the window switcher; swipe up for home, swipe up
+  and hold for the switcher, swipe sideways for the next/previous window; the
+  browser's Back goes home (`web/js/phoneShell.js`, `web/css/mobile.css`).
+- Phone preferences are a view: the bar on top, rail style, no scale or
+  autohide, the voice bar alone at the bottom, the grid launcher
+  (`effectiveImmersive()`, `effectiveLauncher()`); stored desktop choices are
+  untouched and the matching Settings rows rest on a phone.
+- Compact toolbars (`compactToolbar`, `web/ui/compact.js`): in a window up to
+  700px or on a phone every window bar shows icon-only actions and folds what
+  does not fit into one shared "More" menu — same elements, nothing lost, no
+  sideways scrolling. Word's formatting row uses it too; Mail puts the open
+  message's actions on the window bar.
+- Terminal: a key row on phones — Esc, Tab, a sticky Ctrl, arrows, `- / | ~`.
+- PWA manifest and `viewport-fit=cover` (safe areas on notched phones).
+- Top bar size: Settings → Appearance → Top bar size scales the whole bar
+  (80–160%) — pill, icons, type and spacing — with everything that docks to it
+  following its footprint (`--hud-bar-scale`, `--hud-bar-extent`).
+
+### Changed
+
+- Word reflows the document to a phone-narrow window at 100% instead of
+  shrinking an A4 page to 40%; rulers and page guides step aside there.
+- Mail shows one pane at a time in a narrow window: the list, or the message.
+- Files: the phone header keeps navigation on one row and the search under it.
+
+### Fixed
+
+- Settings and Plugins opened on a phone now come to the screen instead of
+  staying behind the window already shown.
+- Files: the grid/list icon no longer fills its whole button.
+
 ## [0.1.4] - 2026-11-02
 
 ### Added

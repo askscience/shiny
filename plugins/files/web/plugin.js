@@ -579,7 +579,9 @@ function renderHeader() {
   navFwd.disabled = forward.length === 0;
   navBack.classList.toggle('is-disabled', history.length === 0);
   navFwd.classList.toggle('is-disabled', forward.length === 0);
-  void setIcon(viewBtn, view === 'grid' ? 'ui/grid' : 'ui/list', { size: 16 });
+  // The glyph inside the button, not the button: painted onto the button the
+  // icon would take the button's whole box (44px under a finger).
+  void setIcon(viewBtn.querySelector('.ui-icon') || viewBtn, view === 'grid' ? 'ui/grid' : 'ui/list', { size: 16 });
 
   pathbarEl.innerHTML = '';
   if (isRecent(cwd)) {
