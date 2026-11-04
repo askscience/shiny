@@ -1,8 +1,9 @@
 import { apiFetch, getTraveler } from '../api.js';
-import { toast, button, input } from '../../ui/index.js';
-import { t } from '../i18n.js';
+import { toast, button, input, toggleRow, select, revealRegion, disposeMotion, controlCard } from '../../ui/index.js';
+import { t, tp } from '../i18n.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from '../userProfiles.js';
-import { el, field } from './controls.js';
+import { getLockScreen, setLockScreen, LOCK_AFTER_CHOICES } from '../preferences.js';
+import { el, field, heading } from './controls.js';
 
 /** Build the account section with resources owned by its current mount. */
 export function createAccountSection({ on, cleanups, resources }) {
@@ -76,6 +77,52 @@ export function createAccountSection({ on, cleanups, resources }) {
       upload,
       field(t('settings.account.displayName', null, 'Display name'), nameInput),
       row,
+      ...buildLock(),
+    ];
+  }
+
+  /* ── Lock screen (js/lockScreen.js) ─────────────────────────── */
+
+  function buildLock() {
+    const lock = getLockScreen();
+
+    const after = select({
+      options: LOCK_AFTER_CHOICES.map((m) => ({
+        value: String(m),
+        label: tp('settings.lock.minutes', m, { count: m }, `${m} min`),
+      })),
+      onChange: (value) => setLockScreen({ after: Number(value) }),
+    });
+    after.select.value = String(lock.after);
+
+    const password = toggleRow({
+      label: t('settings.lock.password', null, 'Ask for the password'),
+      checked: lock.password,
+      onChange: (on) => setLockScreen({ password: on }),
+    });
+
+    // The details only matter while the lock screen is on.
+    const details = el('div', 'settings-lock-details');
+    cleanups.push(() => disposeMotion(details));
+    details.append(password, field(t('settings.lock.after', null, 'Lock after'), after));
+
+    const enabled = toggleRow({
+      label: t('settings.lock.enabled', null, 'Lock screen'),
+      checked: lock.enabled,
+      onChange: (on) => {
+        setLockScreen({ enabled: on });
+        revealRegion(details, on);
+      },
+    });
+    revealRegion(details, lock.enabled, { animate: false });
+
+    const card = controlCard({ wide: true });
+    card.classList.add('settings-field');
+    card.append(enabled, details);
+
+    return [
+      heading(t('settings.lock.title', null, 'Lock screen')),
+      card,
     ];
   }
 

@@ -9,6 +9,9 @@ import {
 import { resetUserSession } from './session.js';
 import { hideBootScreen } from './bootScreen.js';
 import { t } from './i18n.js';
+import {
+  gateChrome, gateEnter, gateExit, gateReveal, gateShake, gateLookFor, applyGateLook,
+} from './gate.js';
 
 const overlay = document.getElementById('login-overlay');
 const appEl = document.getElementById('app');
@@ -78,6 +81,9 @@ function showError(msg) {
   errorEl.classList.remove('is-status');
   errorEl.textContent = msg;
   errorEl.classList.remove('hidden');
+  // The field of the step on screen says no, in the motion language.
+  const step = [stepPassword, stepRegister].find((s) => s && !s.classList.contains('hidden'));
+  gateShake(step?.querySelector('.gate-field'));
 }
 
 function hideError() {
@@ -107,11 +113,17 @@ function resetStarting() {
   hideError();
 }
 
+/** Set while the stage's own entrance plays, so a step does not arrive twice. */
+let entering = false;
+
 function showStep(step) {
+  const wasHidden = { pick: stepPick, password: stepPassword, register: stepRegister }[step]?.classList.contains('hidden');
   stepPick?.classList.toggle('hidden', step !== 'pick');
   stepPassword?.classList.toggle('hidden', step !== 'password');
   stepRegister?.classList.toggle('hidden', step !== 'register');
   hideError();
+  const el = { pick: stepPick, password: stepPassword, register: stepRegister }[step];
+  if (wasHidden && !entering) void gateReveal(el);
 }
 
 export function showLogin() {
@@ -120,6 +132,11 @@ export function showLogin() {
   appEl?.classList.add('hidden');
   selectedUser = null;
   registerAvatarData = null;
+  // The stage: clock, date, weather — and the look of the last profile signed
+  // in on this device (accent, gradient, motion), until another is picked.
+  gateChrome(overlay.querySelector('[data-gate-aside]'));
+  applyGateLook(gateLookFor(null));
+  entering = true;
   // Resolve the host's Linux accounts first, then render. On a stock install
   // the request returns `enabled:false` and the picker uses saved profiles.
   loadUnixUsers().finally(() => {
@@ -134,66 +151,84 @@ export function showLogin() {
       // account" and told their own username is taken.
       showManualLoginStep();
     }
+    void gateEnter(overlay).finally(() => { entering = false; });
   });
 }
 
 export function hideLogin() {
+  overlay.querySelector('[data-gate-aside]')?.__gate?.destroy();
   overlay.classList.add('hidden');
 }
 
 function onAuthSuccess(traveler) {
   saveKnownUser(traveler);
-  hideLogin();
   appEl?.classList.remove('hidden');
   window.dispatchEvent(new CustomEvent('auth:success'));
+  // The stage leaves over the desktop that is already starting behind it.
+  void gateExit(overlay).then(hideLogin);
+}
+
+const ARROW_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+/** One row of the profile index: number, avatar, name in display type, arrow. */
+function indexRow(index, avatarFill, name, ariaLabel) {
+  const btn = controlButton();
+  btn.type = 'button';
+  btn.className = 'profile-tile gate-row';
+  btn.setAttribute('role', 'listitem');
+  btn.setAttribute('data-gate-in', '');
+  btn.setAttribute('aria-label', ariaLabel);
+
+  const num = document.createElement('span');
+  num.className = 'gate-row-num';
+  num.textContent = String(index).padStart(2, '0');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'profile-avatar';
+  avatarFill(avatar);
+
+  const label = document.createElement('span');
+  label.className = 'profile-tile-name';
+  label.textContent = name;
+
+  const arrow = document.createElement('span');
+  arrow.className = 'gate-row-arrow';
+  arrow.innerHTML = ARROW_SVG;
+
+  btn.append(num, avatar, label, arrow);
+  return btn;
 }
 
 function renderProfilePicker() {
   if (!profilePicker) return;
   profilePicker.innerHTML = '';
 
-  pickerUsers().forEach((user) => {
-    const btn = controlButton();
-    btn.type = 'button';
-    btn.className = 'profile-tile';
-    btn.setAttribute('aria-label', t('auth.signInAs', { name: user.name }, `Sign in as ${user.name}`));
-
-    const avatar = document.createElement('div');
-    avatar.className = 'profile-avatar';
-    renderAvatarEl(avatar, user);
-
-    const label = document.createElement('span');
-    label.className = 'profile-tile-name';
-    label.textContent = user.name || user.username;
-
-    btn.append(avatar, label);
+  const users = pickerUsers();
+  users.forEach((user, i) => {
+    const btn = indexRow(i + 1, (avatar) => renderAvatarEl(avatar, user), user.name || user.username,
+      t('auth.signInAs', { name: user.name }, `Sign in as ${user.name}`));
     btn.addEventListener('click', () => selectUser(user));
+    // The stage takes the look this profile chose while it is pointed at.
+    btn.addEventListener('pointerenter', () => applyGateLook(gateLookFor(user)));
+    btn.addEventListener('focus', () => applyGateLook(gateLookFor(user)));
     profilePicker.appendChild(btn);
   });
 
   // Linux accounts cannot be created from the web — hide "Add user".
   if (linuxMode) return;
 
-  const addBtn = controlButton();
-  addBtn.type = 'button';
-  addBtn.className = 'profile-tile profile-tile-add';
-  addBtn.setAttribute('aria-label', t('auth.addNewUser', null, 'Add new user'));
-
-  const addAvatar = document.createElement('div');
-  addAvatar.className = 'profile-avatar profile-avatar-add';
-  addAvatar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
-
-  const addLabel = document.createElement('span');
-  addLabel.className = 'profile-tile-name';
-  addLabel.textContent = t('auth.addUser', null, 'Add user');
-
-  addBtn.append(addAvatar, addLabel);
+  const addBtn = indexRow(users.length + 1, (avatar) => {
+    avatar.classList.add('profile-avatar-add');
+    avatar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+  }, t('auth.addUser', null, 'Add user'), t('auth.addNewUser', null, 'Add new user'));
+  addBtn.classList.add('profile-tile-add');
   addBtn.addEventListener('click', () => showRegisterStep());
   profilePicker.appendChild(addBtn);
 }
 
 function selectUser(user) {
   selectedUser = user;
+  applyGateLook(gateLookFor(user));
   selectedProfileEl?.classList.remove('hidden');
   renderAvatarEl(selectedAvatarEl, user);
   if (selectedNameEl) selectedNameEl.textContent = user.name || user.username;

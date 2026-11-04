@@ -1449,41 +1449,8 @@ body.orb-speaking #artifact-dock {
   visibility: hidden;
 }
 
-/* ── Login ─────────────────────────────────────────────────── */
-#login-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
-  background: var(--gradient-mesh), rgba(0, 0, 0, 0.9);
-  animation: overlayIn var(--duration-slow) var(--ease-out) both;
-}
-
-.login-card {
-  position: relative;
-  background: var(--surface-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: 40px 32px 32px;
-  width: min(460px, 100%);
-  text-align: center;
-  box-shadow: var(--shadow-float);
-  animation: cardIn var(--duration-slow) var(--ease-out) 0.08s both;
-  overflow: hidden;
-}
-.login-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 50%;
-  transform: translateX(-50%);
-  width: 60%; height: 1px;
-  background: var(--gradient-accent);
-  opacity: 0.6;
-}
-
+/* ── Login ─────────────────────────────────────────────────
+   The sign-in screen and the lock screen are the gate stage: css/gate.css. */
 .brand-mark { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 24px; }
 /* Bare brand glyph — no plate behind it, just the mark itself. */
 .brand-logo { width: 72px; height: 72px; color: var(--text); }
@@ -1504,8 +1471,6 @@ body.orb-speaking #artifact-dock {
 
 .login-step-label { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
 .login-back { margin-bottom: 14px; }
-.login-card .ui-input { margin-bottom: 10px; text-align: center; }
-.login-card .ui-btn--block { margin-top: 4px; }
 /* The quiet escape hatch between the sign-in and create-profile steps. It must
    read as secondary to the primary action, but still be a real tap target. */
 .login-link { display: block; width: 100%; margin-top: 10px; text-align: center; }

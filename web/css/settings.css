@@ -395,6 +395,15 @@
   background: transparent;
 }
 
+/* Account → Lock screen: the details under the switch, one row apart. */
+.settings-lock-details {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 14px;
+}
+.settings-lock-details > .ui-control-card { margin-top: 0; }
+
 /* ── Footer: a mono status line on a hairline (as in Files) ── */
 .settings-footer {
   position: relative;

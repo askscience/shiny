@@ -479,6 +479,39 @@ export function applyDesktopSurface() {
   root.dataset.motion = s.motion;
 }
 
+/* ── Lock screen ─────────────────────────────────────────────
+ * Settings → Account → Lock screen. `enabled` turns the lock screen on (an
+ * idle desk locks itself after `after` minutes, and it locks before a
+ * suspend and on demand); `password` asks for the account password to
+ * unlock — without it a swipe up, a key or a mouse move is enough.
+ * js/lockScreen.js reads these and follows `lock:settings`.
+ * ───────────────────────────────────────────────────────────── */
+
+const LOCK_SCREEN_KEY = 'lock.screen';
+
+/** Minutes of inactivity Settings offers before the desk locks itself. */
+export const LOCK_AFTER_CHOICES = [1, 2, 5, 10, 15, 30, 60];
+
+const DEFAULT_LOCK_SCREEN = { enabled: true, password: true, after: 5 };
+
+export function getLockScreen() {
+  const stored = readJson(scopedKey(LOCK_SCREEN_KEY), {});
+  const src = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+  return {
+    enabled: src.enabled === undefined ? DEFAULT_LOCK_SCREEN.enabled : src.enabled !== false,
+    password: src.password === undefined ? DEFAULT_LOCK_SCREEN.password : src.password !== false,
+    after: LOCK_AFTER_CHOICES.includes(Number(src.after)) ? Number(src.after) : DEFAULT_LOCK_SCREEN.after,
+  };
+}
+
+export function setLockScreen(patch) {
+  const merged = { ...getLockScreen(), ...patch };
+  const raw = JSON.stringify(merged);
+  localStorage.setItem(scopedKey(LOCK_SCREEN_KEY), raw);
+  persist(LOCK_SCREEN_KEY, raw);
+  window.dispatchEvent(new CustomEvent('lock:settings', { detail: merged }));
+}
+
 /* ── Fullscreen immersion (autohide + bar position) ───────────
  * While a window is fullscreen the desktop chrome steps aside. These
  * preferences decide what steps aside, and from which edge the top bar comes

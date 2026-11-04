@@ -143,6 +143,8 @@ function nativeShouldShow(tab) {
     if (body.classList.contains('overview-active')) return false;
     if (body.classList.contains('launcher-active')) return false;
     if (body.classList.contains('workspace-sliding')) return false;
+    // The lock screen covers the desktop: the page must not paint over it.
+    if (body.classList.contains('lock-active')) return false;
   }
   return true;
 }
@@ -2616,6 +2618,12 @@ function openPageContextMenu(tab, menu) {
  * runs (a navigation can complete while the window is still mounting).
  */
 window.__peakdViewEvent = function (event) {
+  // The page is native: its input never reaches the app's DOM. A navigation
+  // is someone using it, so the lock screen's idle clock hears about it.
+  if (event && typeof CustomEvent === 'function'
+    && ['url', 'load', 'title', 'new-window', 'context-menu', 'download'].includes(event.type)) {
+    window.dispatchEvent(new CustomEvent('user:activity'));
+  }
   if (!event || typeof event !== 'object') return;
   // Download events are not tab-scoped; handle them before the tab lookup.
   if (event.type === 'download') {

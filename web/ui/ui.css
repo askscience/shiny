@@ -220,7 +220,7 @@
 
 /* Toggle — button[role="switch"] */
 .ui-toggle {
-  position: relative; width: 44px; height: 26px; flex-shrink: 0;
+  position: relative; width: 44px; height: 26px; flex-shrink: 0; font: inherit;
   border-radius: 999px; border: 1px solid transparent; cursor: pointer; padding: 0;
   transition: background var(--motion-feedback), border-color var(--motion-feedback);
 }

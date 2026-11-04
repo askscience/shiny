@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="/css/overview.css">
   <link rel="stylesheet" href="/css/launcher.css">
   <link rel="stylesheet" href="/css/boot.css">
+  <link rel="stylesheet" href="/css/gate.css">
   <link id="theme-app" rel="stylesheet" href="" disabled>
   <link rel="stylesheet" href="/ui/flow.css">
   <link rel="stylesheet" href="/ui/motion.css">
@@ -67,49 +68,55 @@
   <div id="grain" aria-hidden="true"></div>
 
   <!-- Login overlay -->
-  <div id="login-overlay" class="hidden">
-    <div class="login-card glass-blur">
-      <div class="brand-mark">
-        <span class="app-icon brand-logo" aria-hidden="true"></span>
-        <h1>PEAK'D!</h1>
+  <!-- Sign-in: the gate stage (js/gate.js, css/gate.css) — the time set large
+       beside an editorial panel. The lock screen (js/lockScreen.js) is the
+       same stage. auth.js drives the steps; ids are its contract. -->
+  <div id="login-overlay" class="gate gate--login hidden">
+    <div class="gate-aura" aria-hidden="true"><span></span><span></span></div>
+    <aside class="gate-aside" data-gate-aside></aside>
+
+    <main class="gate-panel login-card">
+      <div id="login-step-pick" class="gate-step">
+        <p class="gate-kicker" data-gate-in><span class="gate-kicker-num">01</span><span data-i18n="login.whoIsSigningIn">Who&rsquo;s signing in?</span></p>
+        <div id="profile-picker" class="profile-picker gate-index" role="list" aria-label="Saved profiles" data-i18n-aria-label="login.savedProfiles"></div>
       </div>
 
-      <div id="login-step-pick">
-        <p class="login-step-label" data-i18n="login.whoIsSigningIn">Who&rsquo;s signing in?</p>
-        <div id="profile-picker" class="profile-picker" role="list" aria-label="Saved profiles" data-i18n-aria-label="login.savedProfiles"></div>
-      </div>
-
-      <div id="login-step-password" class="hidden">
-        <button type="button" id="login-back-pick" class="login-back ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.back">← Back</button>
-        <div class="profile-selected">
+      <div id="login-step-password" class="gate-step hidden">
+        <button type="button" id="login-back-pick" class="login-back gate-back" data-gate-in data-i18n="login.back">← Back</button>
+        <p class="gate-kicker" data-gate-in><span class="gate-kicker-num">02</span><span data-i18n="login.password">Password</span></p>
+        <div class="profile-selected" data-gate-in>
           <div id="login-selected-avatar" class="profile-avatar"></div>
           <span id="login-selected-name" class="profile-selected-name"></span>
         </div>
         <!-- Shown only when signing in with a typed username (no saved
              profile on this device), so the field can never be silently
              ignored. -->
-        <input type="text" id="login-username" class="ui-input hidden" placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off" spellcheck="false">
-        <input type="password" id="login-password" class="ui-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="current-password">
-        <button id="login-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.signIn">Sign in</button>
-        <button type="button" id="login-to-register" class="login-link ui-btn ui-btn--quiet ui-btn--sm hidden" data-i18n="login.createProfileLink">New here? Create a profile</button>
+        <input type="text" id="login-username" class="ui-input gate-input hidden" data-gate-in placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <div class="gate-field" data-gate-in>
+          <input type="password" id="login-password" class="ui-input gate-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="current-password">
+          <button type="button" id="login-btn" class="gate-go" aria-label="Sign in" data-i18n-aria-label="login.signIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <button type="button" id="login-to-register" class="login-link gate-link hidden" data-gate-in data-i18n="login.createProfileLink">New here? Create a profile</button>
       </div>
 
-      <div id="login-step-register" class="hidden">
-        <button type="button" id="login-back-from-register" class="login-back ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.back">← Back</button>
-        <p class="login-step-label" data-i18n="login.createProfile">Create your profile</p>
-        <label class="profile-avatar-upload">
+      <div id="login-step-register" class="gate-step hidden">
+        <button type="button" id="login-back-from-register" class="login-back gate-back" data-gate-in data-i18n="login.back">← Back</button>
+        <p class="gate-kicker" data-gate-in><span class="gate-kicker-num">01</span><span data-i18n="login.createProfile">Create your profile</span></p>
+        <label class="profile-avatar-upload" data-gate-in>
           <input type="file" id="register-avatar" accept="image/*" hidden>
           <div id="register-avatar-preview" class="profile-avatar profile-avatar--placeholder profile-avatar--large">+</div>
           <span class="profile-avatar-label" data-i18n="login.addPhoto">Add photo</span>
         </label>
-        <input type="text" id="register-username" class="ui-input" placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off">
-        <input type="password" id="register-password" class="ui-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="new-password">
-        <button id="register-btn" class="ui-btn ui-btn--primary ui-btn--block" data-i18n="login.createAccount">Create profile</button>
-        <button type="button" id="register-to-login" class="login-link ui-btn ui-btn--quiet ui-btn--sm" data-i18n="login.haveProfile">Already have a profile? Sign in</button>
+        <input type="text" id="register-username" class="ui-input gate-input" data-gate-in placeholder="Username" data-i18n-placeholder="login.username" autocomplete="username" autocapitalize="off">
+        <div class="gate-field" data-gate-in>
+          <input type="password" id="register-password" class="ui-input gate-input" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="new-password">
+          <button type="button" id="register-btn" class="gate-go" aria-label="Create profile" data-i18n-aria-label="login.createAccount"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <button type="button" id="register-to-login" class="login-link gate-link" data-gate-in data-i18n="login.haveProfile">Already have a profile? Sign in</button>
       </div>
 
-      <p id="login-error" class="app-error hidden"></p>
-    </div>
+      <p id="login-error" class="app-error gate-error hidden" role="alert"></p>
+    </main>
   </div>
 
   <!-- Main navigator -->

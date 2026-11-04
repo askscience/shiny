@@ -53,6 +53,7 @@ import { loadUserPreferences, getRemember, getWakeWord, isAiEnabled } from './pr
 import { initI18n, t } from './i18n.js';
 import { initBackground } from './background.js';
 import { initSpokenReply } from './spokenReply.js';
+import { initLockScreen } from './lockScreen.js';
 import { initShellMotion } from './shellMotion.js';
 import { hideBootScreen } from './bootScreen.js';
 
@@ -199,6 +200,7 @@ async function initApp() {
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle
   initControlCenter(); // phone: the status chips + bar actions move into a sheet
   initPhoneShell();    // phone: home screen, dock and one-finger gestures
+  initLockScreen();    // idle / on-demand lock with the sign-in stage (gate.js)
 
   await applyTravelerActivation();
   await refreshKeyboard();

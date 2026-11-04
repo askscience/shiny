@@ -483,6 +483,47 @@ With nothing focused the skills cover the whole active set, as before.
 only bring a window to the front, and inside it they are gated as described
 above.
 
+## Sign-in and lock screen
+
+The sign-in screen and the lock screen are one stage, the **gate**
+(`web/js/gate.js`, `web/css/gate.css`): the time set very large in the theme's
+display face (an accent colon, AM/PM as a mono suffix), the date as a mono
+kicker, the weather, the brand, and an accent aura behind them — beside an
+editorial panel (a numbered kicker, the profile index in display type with
+arrow pills, a password on a hairline with a round accent "go"). It is opaque:
+nothing of the desktop shows through.
+
+- **Shared pieces.** `gateChrome(host)` fills a `[data-gate-aside]` box with
+  the brand, clock, date and weather and keeps them current; `gateEnter`,
+  `gateExit`, `gateReveal` (a panel step arriving) and `gateShake` (a wrong
+  password) move it in the motion language: kinetic wipes behind masks and
+  rolls the clock's digits, fluid rides the springs, depth comes out of a blur,
+  follows the pointer and leaves through the viewer. The aura drifts, breathes
+  or parallaxes the same way.
+- **Weather.** The top bar's (`weather:update`); the last reading is kept
+  unscoped (`gate.weather`, six hours) so the sign-in screen has one before any
+  session exists.
+- **Sign-in look.** The theme is global; the accent, gradient and motion are a
+  user's own. `gateLookFor(user)` reads them from that profile's scoped
+  preferences on this device and `applyGateLook()` applies them without storing
+  anything: the screen opens in the last signed-in profile's look and takes the
+  look of whichever profile is pointed at or picked. `auth.js` keeps every id of
+  the old form (`#login-btn`, `#login-password`, …) as its contract.
+- **Lock screen** (`web/js/lockScreen.js`). Settings → Account → Lock screen:
+  on/off, *Ask for the password*, *Lock after* 1–60 idle minutes
+  (`lock.screen`, `getLockScreen()` / `setLockScreen()`, `lock:settings`). It
+  locks after the idle time (a suspend shows up as a jump in the idle clock),
+  before a suspend from the power menu, from the power menu's **Lock**, on
+  `Super+L` / `Ctrl+Alt+L`, and on a `lock:now` event. Once the stage covers
+  the desktop, `#app` is made inert and invisible and `body.lock-active` sends
+  the Browser's native page away; keys typed on the stage never reach the
+  desktop's shortcuts. A phone (or any coarse pointer) swipes up to wake — the
+  stage follows the finger and leaves from there; a desktop wakes on a mouse
+  move, a click, a scroll or a key. With the password off that unlocks; with it
+  on the panel asks for it, checked by `POST /api/auth/verify-password` (PAM or
+  the stored hash, throttled server-side, no new session). Esc or 30 s alone
+  return to the quiet clock. With the lock screen off nothing runs.
+
 ## Keyboard shortcuts
 
 `wireShortcuts()` binds these on `document` (`Alt` is the "Super" mod). Keys are
@@ -501,6 +542,7 @@ browser — except `Ctrl/Cmd+Shift+V`, which opens the Clipboard menu
 | `Ctrl+Alt+←` / `Ctrl+Alt+→` | Next / previous workspace (the horizontal swipes) |
 | `Alt+Shift+N` | Remove the active workspace |
 | `Ctrl/Cmd+Shift+V` | Open / close the top-bar Clipboard menu (copied-items history) |
+| `Super+L` / `Ctrl+Alt+L` | Lock the screen, when the lock screen is on (`lockScreen.js`) |
 
 `Alt+Enter` only announces the gesture; `fullscreen.js` owns the action, so the
 shortcut and the window's own button agree. The same operations are reachable
@@ -874,6 +916,7 @@ and the `notify()` helper.
 | [`web/js/nativeOccluders.js`](../../web/js/nativeOccluders.js) | Core surfaces cut out of a native page's mask. |
 | [`web/js/hudLeft.js`](../../web/js/hudLeft.js), [`hudPlugins.js`](../../web/js/hudPlugins.js), [`hud*.js`](../../web/js) | HUD sections + chips. |
 | [`web/js/keyboard.js`](../../web/js/keyboard.js) | Virtual keyboard chrome. |
+| [`web/js/gate.js`](../../web/js/gate.js), [`lockScreen.js`](../../web/js/lockScreen.js), [`css/gate.css`](../../web/css/gate.css) | Sign-in and lock screen stage; the lock screen. |
 | [`web/ui/appearance.js`](../../web/ui/appearance.js) | Accent/gradient, and the focus palette (`--focus-ring`, `--focus-bar`). |
 | [`web/js/settingsWindow.js`](../../web/js/settingsWindow.js), [`pluginsWindow.js`](../../web/js/pluginsWindow.js) | Built-in windows. |
 

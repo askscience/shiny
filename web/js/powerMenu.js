@@ -17,6 +17,7 @@ import { apiFetch } from './api.js';
 import { button, emptyState, icon, modal, setIcon, toast } from '../ui/index.js';
 import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
+import { getLockScreen } from './preferences.js';
 
 const chipEl = document.getElementById('hud-power');
 const iconEl = document.getElementById('hud-power-icon');
@@ -135,6 +136,8 @@ async function refresh() {
 
 async function run(action) {
   busy = action.id;
+  // A suspended desk wakes up locked (when the lock screen is on).
+  if (action.id === 'suspend') window.dispatchEvent(new CustomEvent('lock:now'));
   try {
     await apiFetch(`/api/power/${action.id}`, { method: 'POST', body: '{}' });
     // A reboot or shutdown tears the session down; the toast is best-effort.
@@ -148,9 +151,24 @@ async function run(action) {
 
 /* ── Rendering ─────────────────────────────────────────────── */
 
+/** Lock the screen now — offered whenever the lock screen is on. */
+function lockRow() {
+  const row = controlButton();
+  row.type = 'button';
+  row.className = 'ui-hud-menu-item';
+  row.title = t('lock.lockDetail', null, 'Lock the screen (Super+L)');
+  row.append(icon('ui/lock', { size: 16 }), el('span', 'ui-hud-menu-item-label', t('lock.lock', null, 'Lock')));
+  row.addEventListener('click', () => {
+    closePowerMenu();
+    window.dispatchEvent(new CustomEvent('lock:now'));
+  });
+  return row;
+}
+
 function render() {
   if (!body) return;
   body.textContent = '';
+  if (getLockScreen().enabled) body.appendChild(lockRow());
 
   if (!status) {
     body.appendChild(emptyState({ title: t('power.reading') }));

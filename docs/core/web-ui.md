@@ -89,6 +89,7 @@ The shell is split by concern. Grouped:
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
 | `files.js` | `saveOrDownload` / `openWithPlugin` desktop integration. |
 | `api.js`, `auth.js`, `session.js` | Fetch wrapper, auth, session bootstrap. |
+| `gate.js`, `lockScreen.js` | The sign-in / lock stage (clock, weather, motion, per-profile look) and the lock screen ([desktop.md](desktop.md#sign-in-and-lock-screen)). |
 
 ### Settings & plugins
 

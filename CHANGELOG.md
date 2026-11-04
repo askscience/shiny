@@ -2,8 +2,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- Lock screen, on the desktop and on a phone: the time set large, the date and
+  the weather, in the theme, the accent and the motion language. It locks after
+  an idle time, before a suspend, from the power menu's **Lock** and on
+  `Super+L` / `Ctrl+Alt+L`; the desktop behind it is hidden (inert, invisible,
+  the Browser's native page sent away). A phone swipes up to unlock, a desktop
+  moves the mouse or presses a key; the account password is asked only when
+  Settings → Account → Lock screen says so, checked without opening a new
+  session (`/api/auth/verify-password`). The lock screen itself and the idle
+  time (1–60 minutes) are set there too (`web/js/lockScreen.js`).
+
 ### Changed
 
+- Sign-in screen: an editorial stage instead of the card — the time set very
+  large with an accent colon, the date and the weather beside a numbered profile
+  index in display type with arrow pills, and the password on a hairline with a
+  round accent "go". It opens in the look of the last profile signed in on this
+  device (accent, gradient, motion) and takes the look of the profile pointed
+  at; it arrives, changes step, refuses a wrong password and leaves over the
+  desktop in the chosen motion language (kinetic masks, fluid springs, depth
+  blur and parallax). The lock screen is the same stage (`web/js/gate.js`,
+  `web/css/gate.css`).
 - Window overview: the windows are a grid of cards with a small title and a
   close button under each, instead of the strip or the cloud — no headline,
   no Prev / Next, no drift. The grid scrolls when the windows outnumber the
